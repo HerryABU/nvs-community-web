@@ -1,0 +1,334 @@
+/**
+ * Markdown 全局渲染修复 & 扩展样式
+ * 覆盖范围：Cherry 预览区 .cherry-previewer + 阅读器 .reader-md
+ *          + 评论 .comment-md + 论坛 .thread-content / .post-content
+ */
+
+/* ═══ KaTeX 数学公式 — 全局渲染保障（含阅读端/评论端）═══ */
+.katex,
+.markdown-body .katex,
+.reader-md .katex,
+.comment-md .katex,
+.thread-content .katex,
+.post-content .katex {
+  font-size: 1.1em !important;
+  line-height: 1.2 !important;
+  text-indent: 0 !important;
+}
+.katex-display,
+.markdown-body .katex-display,
+.reader-md .katex-display {
+  margin: 1.2em 0 !important;
+  text-align: center !important;
+  text-indent: 0 !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.katex-display > .katex {
+  display: inline-block !important;
+  text-indent: 0 !important;
+}
+/* 确保 KaTeX 字体可见（暗色主题下） */
+[data-theme="dark"] .katex,
+[data-theme="dark"] .katex *,
+[data-theme="dark"] .markdown-body .katex,
+[data-theme="dark"] .markdown-body .katex *,
+[data-theme="dark"] .reader-md .katex,
+[data-theme="dark"] .reader-md .katex *,
+[data-theme="dark"] .comment-md .katex,
+[data-theme="dark"] .comment-md .katex * {
+  color: #e2e8f0 !important;
+}
+
+/* ═══ Mermaid 图表 — 全局容器样式（含阅读端）═══ */
+.mermaid-container,
+.markdown-body .mermaid-container,
+.reader-md .mermaid-container,
+.comment-md .mermaid-container,
+.thread-content .mermaid-container,
+.post-content .mermaid-container {
+  text-align: center;
+  margin: 1.2em 0;
+  text-indent: 0;
+  overflow-x: auto;
+}
+/* Mermaid SVG 内文字可读性保障 */
+.mermaid-container svg,
+.markdown-body .mermaid-container svg,
+.reader-md .mermaid-container svg {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+/* 暗色主题下确保 SVG text 反色可见 */
+[data-theme="dark"] .mermaid-container svg {
+  background: #fff !important;
+}
+/* 深色模式下的 flow 线等适配 */
+[data-theme="dark"] .mermaid-container svg .edgeLabel rect,
+[data-theme="dark"] .mermaid-container svg .label foreignObject {
+  fill: #1e293b !important;
+  color: #e2e8f0 !important;
+}
+
+/* ═══ 自定义容器 ::  tip/warning/danger/details ═══ */
+.custom-block {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 6px;
+  border-left: 4px solid;
+}
+.custom-block.tip {
+  background: #f0fdf4;
+  border-color: #22c55e;
+  color: #166534;
+}
+.custom-block.warning {
+  background: #fffbeb;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+.custom-block.danger {
+  background: #fef2f2;
+  border-color: #ef4444;
+  color: #991b1b;
+}
+.custom-block-title {
+  font-weight: 700;
+  margin: 0 0 4px 0;
+}
+[data-theme="dark"] .custom-block.tip {
+  background: rgba(34,197,94,.1);
+  color: #86efac;
+}
+[data-theme="dark"] .custom-block.warning {
+  background: rgba(245,158,11,.1);
+  color: #fcd34d;
+}
+[data-theme="dark"] .custom-block.danger {
+  background: rgba(239,68,68,.1);
+  color: #fca5a5;
+}
+
+/* ═══ 表格样式 ═══ */
+.markdown-body table,
+.reader-md table,
+.comment-md table,
+.thread-content table,
+.post-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+}
+.markdown-body th, .markdown-body td,
+.reader-md th, .reader-md td,
+.comment-md th, .comment-md td,
+.thread-content th, .thread-content td,
+.post-content th, .post-content td {
+  border: 1px solid #d1d5db;
+  padding: 6px 12px;
+  text-align: left;
+}
+.markdown-body th,
+.reader-md th,
+.comment-md th,
+.thread-content th,
+.post-content th {
+  background: #f3f4f6;
+  font-weight: 600;
+}
+[data-theme="dark"] .markdown-body th,
+[data-theme="dark"] .reader-md th,
+[data-theme="dark"] .comment-md th,
+[data-theme="dark"] .thread-content th,
+[data-theme="dark"] .post-content th {
+  background: #374151;
+  border-color: #4b5563;
+}
+[data-theme="dark"] .markdown-body td,
+[data-theme="dark"] .reader-md td,
+[data-theme="dark"] .comment-md td,
+[data-theme="dark"] .thread-content td,
+[data-theme="dark"] .post-content td {
+  border-color: #4b5563;
+}
+
+/* ═══ 任务列表 ═══ */
+.markdown-body .task-list-item,
+.comment-md .task-list-item,
+.reader-md .task-list-item {
+  list-style: none;
+}
+.markdown-body .task-list-item input[type="checkbox"],
+.comment-md .task-list-item input[type="checkbox"],
+.reader-md .task-list-item input[type="checkbox"] {
+  margin-right: 6px;
+}
+
+/* ═══ 脚注 ═══ */
+.markdown-body .footnotes,
+.reader-md .footnotes {
+  margin-top: 2em;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 1em;
+  font-size: .9em;
+}
+[data-theme="dark"] .markdown-body .footnotes,
+[data-theme="dark"] .reader-md .footnotes {
+  border-top-color: #334155;
+}
+
+/* ═══ 定义列表 ═══ */
+.markdown-body dl,
+.comment-md dl,
+.reader-md dl {
+  margin: 12px 0;
+}
+.markdown-body dt,
+.comment-md dt,
+.reader-md dt {
+  font-weight: 700;
+}
+.markdown-body dd,
+.comment-md dd,
+.reader-md dd {
+  margin-left: 24px;
+  color: #4b5563;
+}
+
+/* ═══ 目录 ═══ */
+.table-of-contents {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin: 16px 0;
+}
+.table-of-contents .toc-list {
+  list-style: none;
+  padding-left: 0;
+}
+.table-of-contents .toc-list li {
+  margin: 4px 0;
+}
+[data-theme="dark"] .table-of-contents {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+/* ═══ KaTeX 字体加载保障（确保不因 font-family 覆盖导致空白）═══ */
+.katex .mathrm,
+.katex .textrm,
+.katex .text,
+.katex .textnormal {
+  font-family: KaTeX_Main, 'Times New Roman', serif;
+}
+.katex .mathit {
+  font-family: KaTeX_Math, 'Times New Roman', serif;
+  font-style: italic;
+}
+
+/* ═══ Cherry 预览区样式兼容 ═══ */
+/* Cherry 生成的预览 HTML 也用 .cherry-previewer 包裹 */
+.cherry-previewer .katex,
+.cherry-previewer .katex-display {
+  font-size: 1.1em !important;
+  text-indent: 0 !important;
+}
+.cherry-previewer .katex-display {
+  margin: 1.2em 0 !important;
+  text-align: center !important;
+  overflow-x: auto;
+}
+.cherry-previewer .mermaid-container {
+  text-align: center;
+  margin: 1.2em 0;
+  overflow-x: auto;
+}
+.cherry-previewer .mermaid-container svg {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+/* Cherry 编辑器内部代码块字体 */
+.cherry-previewer pre code {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  font-size: 0.9em;
+}
+
+/* Cherry 编辑器内部表格 */
+.cherry-previewer table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+}
+.cherry-previewer th,
+.cherry-previewer td {
+  border: 1px solid #d1d5db;
+  padding: 6px 12px;
+  text-align: left;
+}
+.cherry-previewer th {
+  background: #f3f4f6;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .cherry-previewer th {
+  background: #374151;
+  border-color: #4b5563;
+}
+[data-theme="dark"] .cherry-previewer td {
+  border-color: #4b5563;
+}
+
+/* ═══ 定义列表 (Definition Lists) — 预处理生成的 dl/dt/dd ═══ */
+.cherry-previewer dl,
+.reader-md dl,
+.comment-md dl,
+.thread-content dl,
+.post-content dl {
+  margin: 1em 0;
+}
+.cherry-previewer dt,
+.reader-md dt,
+.comment-md dt,
+.thread-content dt,
+.post-content dt {
+  font-weight: 700;
+  margin-top: 0.8em;
+  color: var(--primary-color, #409eff);
+}
+.cherry-previewer dd,
+.reader-md dd,
+.comment-md dd,
+.thread-content dd,
+.post-content dd {
+  margin-left: 1.5em;
+  padding-left: 0.5em;
+  border-left: 3px solid #e5e7eb;
+  color: #4b5563;
+}
+[data-theme="dark"] .cherry-previewer dd,
+[data-theme="dark"] .reader-md dd,
+[data-theme="dark"] .comment-md dd,
+[data-theme="dark"] .thread-content dd,
+[data-theme="dark"] .post-content dd {
+  border-left-color: #334155;
+  color: #94a3b8;
+}
+
+/* ═══ 缩写 (Abbreviations) — 预处理生成的 abbr ═══ */
+.cherry-previewer abbr,
+.reader-md abbr,
+.comment-md abbr,
+.thread-content abbr,
+.post-content abbr {
+  text-decoration: underline dotted;
+  cursor: help;
+  border-bottom: none;
+}
+
+/* ═══ Mermaid 图表样式 ═══ */
+/* 注：字体由 Mermaid 的 fontFamily 配置控制，不要用 CSS 覆盖，
+   否则会导致文字测量不一致，节点中文字位置偏移 */

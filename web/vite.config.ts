@@ -8,10 +8,11 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, 'src'),
     },
+    // 去重：确保 katex 和 mermaid 使用根目录版本，避免 Cherry 内部版本冲突
+    dedupe: ['katex', 'mermaid'],
   },
-  // 构建产物输出到 server/dist，方便 Go embed 直接嵌入
   build: {
-    outDir: '../server/dist',
+    outDir: '../dist',
     emptyOutDir: true,
   },
   server: {

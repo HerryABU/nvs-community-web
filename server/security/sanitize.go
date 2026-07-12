@@ -1,4 +1,4 @@
-package utils
+package security
 
 import (
 	"regexp"
@@ -44,9 +44,9 @@ func init() {
 		"blockquote", "pre", "code", "a", "img",
 		"details", "summary", "figure", "figcaption",
 	)
-	// 允许安全的属性
+	// 允许安全的属性（含 style，用于 KaTeX 行内样式和 Mermaid SVG）
 	markdownPolicy.AllowAttrs("class", "id", "href", "src", "alt", "title", "lang", "dir",
-		"target", "rel", "type").OnElements("a", "img", "kbd", "span", "div", "pre", "code", "mark")
+		"target", "rel", "type", "style").OnElements("a", "img", "kbd", "span", "div", "pre", "code", "mark")
 
 	// 只允许 http/https/ftp/mailto 链接
 	markdownPolicy.AllowURLSchemes("http", "https", "ftp", "mailto")
@@ -82,7 +82,7 @@ func SanitizeScriptTag(content string) string {
 	// 2. 移除 javascript: 协议（常见 XSS 向量）
 	result = jsProtoRe.ReplaceAllString(result, "blocked:")
 
-	// 剩下几个在 Markdown 上下文中不太可能出现（因为 markdown-it 会转义），
+	// 剩下几个在 Markdown 上下文中不太可能出现（因为 Cherry Markdown 会过滤），
 	// 但作为防御层仍然保留：
 
 	// 3. 移除数据 URI（可能包含 SVG XSS）

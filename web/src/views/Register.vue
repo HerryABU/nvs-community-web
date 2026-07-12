@@ -20,6 +20,19 @@
         <el-form-item label="邮箱" prop="email">
           <el-input v-model="form.email" placeholder="请输入邮箱" prefix-icon="Message" />
         </el-form-item>
+        <!-- 邮箱验证码（仅当站长开启时显示） -->
+        <el-form-item v-if="emailVerifyRequired" label="验证码" prop="verifyCode">
+          <div class="verify-row">
+            <el-input v-model="form.verifyCode" placeholder="邮箱验证码" maxlength="6" style="flex:1" />
+            <el-button :disabled="codeCountdown > 0" @click="sendCode" :loading="sendingCode" style="margin-left:8px;min-width:120px">
+              {{ codeCountdown > 0 ? `${codeCountdown}s 后重发` : '发送验证码' }}
+            </el-button>
+          </div>
+        </el-form-item>
+        <!-- 滑块验证码（仅当站长开启且邮箱验证未开启时显示） -->
+        <el-form-item v-if="captchaRequired" label="安全验证" prop="captchaVerified">
+          <SlideCaptcha ref="slideCaptchaRef" @verified="onCaptchaVerified" />
+        </el-form-item>
         <el-form-item label="密码" prop="password">
           <el-input
             v-model="form.password"
@@ -94,17 +107,29 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
+import { ref, reactive, onUnmounted, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { authApi } from '@/api/auth';
+import { publicApi } from '@/api/admin';
 import { ElMessage } from 'element-plus';
+import SlideCaptcha from '@/components/SlideCaptcha.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
 
 const formRef = ref();
+const slideCaptchaRef = ref<InstanceType<typeof SlideCaptcha> | null>(null);
 const submitting = ref(false);
 const showGuidelines = ref(false);
+const sendingCode = ref(false);
+const codeCountdown = ref(0);
+let countdownTimer: ReturnType<typeof setInterval> | null = null;
+
+// 站长配置：邮箱验证 / 滑块验证码
+const emailVerifyRequired = ref(false);
+const captchaRequired = ref(false);
+const captchaVerified = ref(false);
 
 const form = reactive({
   username: '',
@@ -112,6 +137,7 @@ const form = reactive({
   email: '',
   password: '',
   confirmPassword: '',
+  verifyCode: '',
   agreeToGuidelines: false,
 });
 
@@ -132,6 +158,10 @@ const rules = {
     { required: true, message: '请输入邮箱', trigger: 'blur' },
     { type: 'email', message: '请输入有效的邮箱地址', trigger: 'blur' },
   ],
+  verifyCode: [
+    { required: emailVerifyRequired.value, message: '请输入邮箱验证码', trigger: 'blur' },
+    { len: 6, message: '验证码为6位数字', trigger: 'blur' },
+  ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 6, message: '密码至少6位', trigger: 'blur' },
@@ -151,6 +181,54 @@ const rules = {
   ],
 };
 
+async function loadSiteConfig() {
+  try {
+    const res = await publicApi.getSiteInfo();
+    if (res.data.code === 0) {
+      const d = res.data.data;
+      emailVerifyRequired.value = !!d.email_verify;
+      captchaRequired.value = !!d.captcha_enabled;
+    }
+  } catch { /* use defaults: both off */ }
+}
+
+function onCaptchaVerified(val: boolean) {
+  captchaVerified.value = val;
+}
+
+onMounted(() => {
+  loadSiteConfig();
+});
+
+async function sendCode() {
+  // 先验证邮箱格式
+  if (!form.email) { ElMessage.warning('请先输入邮箱'); return; }
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRe.test(form.email)) { ElMessage.warning('请输入有效的邮箱地址'); return; }
+
+  sendingCode.value = true;
+  try {
+    await authApi.sendVerificationCode(form.email);
+    ElMessage.success('验证码已发送，请查收邮件');
+    codeCountdown.value = 60;
+    countdownTimer = setInterval(() => {
+      codeCountdown.value--;
+      if (codeCountdown.value <= 0) {
+        if (countdownTimer) clearInterval(countdownTimer);
+        countdownTimer = null;
+      }
+    }, 1000);
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || '发送失败');
+  } finally {
+    sendingCode.value = false;
+  }
+}
+
+onUnmounted(() => {
+  if (countdownTimer) clearInterval(countdownTimer);
+});
+
 async function handleRegister() {
   const valid = await formRef.value?.validate().catch(() => false);
   if (!valid) return;
@@ -158,6 +236,22 @@ async function handleRegister() {
   if (!form.agreeToGuidelines) {
     ElMessage.warning('请先阅读并同意平台指南');
     return;
+  }
+
+  // 滑块验证码检查
+  if (captchaRequired.value && !captchaVerified.value) {
+    ElMessage.warning('请先完成滑块验证');
+    return;
+  }
+
+  // 邮箱验证码检查（仅当站长开启时）
+  if (emailVerifyRequired.value) {
+    try {
+      await authApi.verifyEmailCode(form.email, form.verifyCode);
+    } catch (e: any) {
+      ElMessage.error(e.response?.data?.message || '验证码错误');
+      return;
+    }
   }
 
   submitting.value = true;
@@ -244,6 +338,12 @@ function agreeGuidelines() {
   text-align: center;
   font-weight: 600;
   color: var(--primary-color);
+}
+
+.verify-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
 }
 </style>
 

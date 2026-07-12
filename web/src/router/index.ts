@@ -53,6 +53,7 @@ const router = createRouter({
       name: 'category',
       component: () => import('@/views/CategoryView.vue'),
     },
+    // 公开作者主页（新版，含统计图表）
     {
       path: '/author/:id',
       name: 'author-home',
@@ -62,6 +63,12 @@ const router = createRouter({
       path: '/forums',
       name: 'forums',
       component: () => import('@/views/Forums.vue'),
+    },
+    {
+      path: '/bookshelf',
+      name: 'bookshelf',
+      component: () => import('@/views/Bookshelf.vue'),
+      meta: { requiresAuth: true },
     },
     {
       path: '/forum/:id',

@@ -11,6 +11,7 @@ import (
 
 	"nvs-server/config"
 	"nvs-server/models"
+	"nvs-server/security"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -29,6 +30,8 @@ type CreateNovelInput struct {
 	Summary         string   `json:"summary"`
 	PricePerChapter float64  `json:"price_per_chapter"`
 	Status          string   `json:"status"`
+	SourceType      string   `json:"source_type"`     // original / reprint
+	CreationMethod  string   `json:"creation_method"` // human / ai / human_ai_assisted
 }
 
 type UpdateNovelInput struct {
@@ -40,6 +43,8 @@ type UpdateNovelInput struct {
 	CoverURL        string   `json:"cover_url"`
 	PricePerChapter float64  `json:"price_per_chapter"`
 	Status          string   `json:"status"`
+	SourceType      string   `json:"source_type"`     // original / reprint
+	CreationMethod  string   `json:"creation_method"` // human / ai / human_ai_assisted
 }
 
 var htmlSanitizer = bluemonday.UGCPolicy()
@@ -106,7 +111,7 @@ func CreateNovel(c *gin.Context) {
 	// 如果用户是 reader，自动升级为 author（首次发布作品时）
 	if userRole == "reader" {
 		// 生成签名密钥
-		signingKey, _ := utils.GenerateSigningKey()
+		signingKey, _ := security.GenerateSigningKey()
 		updates := map[string]interface{}{"role": "author"}
 		if signingKey != "" {
 			updates["signing_key"] = signingKey
@@ -143,6 +148,15 @@ func CreateNovel(c *gin.Context) {
 		tags = "[]"
 	}
 
+	sourceType := input.SourceType
+	if sourceType == "" {
+		sourceType = "original"
+	}
+	creationMethod := input.CreationMethod
+	if creationMethod == "" {
+		creationMethod = "human"
+	}
+
 	novel := &models.Novel{
 		AuthorID:        userID,
 		Title:           input.Title,
@@ -151,6 +165,8 @@ func CreateNovel(c *gin.Context) {
 		Summary:         input.Summary,
 		PricePerChapter: input.PricePerChapter,
 		Status:          status,
+		SourceType:      sourceType,
+		CreationMethod:  creationMethod,
 	}
 
 	if err := models.CreateNovel(novel); err != nil {
@@ -239,6 +255,12 @@ func UpdateNovel(c *gin.Context) {
 	}
 	if input.Status != "" {
 		novel.Status = input.Status
+	}
+	if input.SourceType != "" {
+		novel.SourceType = input.SourceType
+	}
+	if input.CreationMethod != "" {
+		novel.CreationMethod = input.CreationMethod
 	}
 
 	if err := models.UpdateNovel(novel); err != nil {

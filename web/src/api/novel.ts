@@ -11,6 +11,8 @@ export interface Novel {
   cover_url: string;
   price_per_chapter: number;
   status: string;
+  source_type?: string;       // original / reprint
+  creation_method?: string;   // human / ai / human_ai_assisted
   total_words: number;
   total_chapters: number;
   created_at: string;

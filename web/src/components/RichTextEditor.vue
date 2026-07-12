@@ -24,6 +24,7 @@ import { useEditor, EditorContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
+import TextAlign from '@tiptap/extension-text-align';
 import Placeholder from '@tiptap/extension-placeholder';
 import { watch, onBeforeUnmount, ref } from 'vue';
 
@@ -50,6 +51,10 @@ const editor = useEditor({
     }),
     Placeholder.configure({
       placeholder: props.placeholder || '开始写作...',
+    }),
+    TextAlign.configure({
+      types: ['heading', 'paragraph'],
+      alignments: ['left', 'center', 'right'],
     }),
   ],
   onUpdate: ({ editor }) => {
@@ -122,6 +127,25 @@ watch(
         isActive: () => ed.isActive('heading', { level: 3 }),
       },
       separator2: { type: 'separator' },
+      alignLeft: {
+        title: '左对齐',
+        icon: '⇤',
+        action: () => ed.chain().focus().setTextAlign('left').run(),
+        isActive: () => ed.isActive({ textAlign: 'left' }),
+      },
+      alignCenter: {
+        title: '居中',
+        icon: '⇔',
+        action: () => ed.chain().focus().setTextAlign('center').run(),
+        isActive: () => ed.isActive({ textAlign: 'center' }),
+      },
+      alignRight: {
+        title: '右对齐',
+        icon: '⇥',
+        action: () => ed.chain().focus().setTextAlign('right').run(),
+        isActive: () => ed.isActive({ textAlign: 'right' }),
+      },
+      separator2b: { type: 'separator' },
       bulletList: {
         title: '无序列表',
         icon: '•',

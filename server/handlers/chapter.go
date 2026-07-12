@@ -11,7 +11,9 @@ import (
 	"strconv"
 
 	"nvs-server/config"
+	"nvs-server/markdown"
 	"nvs-server/models"
+	"nvs-server/security"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -60,13 +62,13 @@ func GetChapterContent(c *gin.Context) {
 	signatureVerified := false
 	if novel, _ := models.GetNovelByID(chapter.NovelID); novel != nil {
 		if author, _ := models.GetUserByID(novel.AuthorID); author != nil && author.SigningKey != "" {
-			signatureVerified = utils.VerifySignature(string(content), chapter.ContentSignature, author.SigningKey)
+			signatureVerified = security.VerifySignature(string(content), chapter.ContentSignature, author.SigningKey)
 		}
 	}
 
 	chapter.Content = string(content)
 	// 后端渲染 Markdown → HTML
-	htmlContent := utils.RenderMarkdown(string(content))
+	htmlContent := markdown.RenderMarkdown(string(content))
 
 	utils.Success(c, gin.H{
 		"chapter":            chapter,
@@ -108,7 +110,7 @@ func CreateChapter(c *gin.Context) {
 	}
 
 	contentPath := filepath.Join(authorDir, fmt.Sprintf("%d.html", nextNum))
-	// 直接存储原始 Markdown 内容，前端 v-md-preview 负责渲染
+	// 直接存储原始 Markdown 内容，前端 Cherry Markdown 负责渲染
 	if err := os.WriteFile(contentPath, []byte(req.Content), 0644); err != nil {
 		utils.InternalError(c, "写入文件失败")
 		return
@@ -120,7 +122,7 @@ func CreateChapter(c *gin.Context) {
 	// 用作者签名密钥生成 HMAC-SHA256 防篡改签名
 	contentSignature := ""
 	if author, err := models.GetUserByID(userID); err == nil && author.SigningKey != "" {
-		contentSignature = utils.SignContent(req.Content, author.SigningKey)
+		contentSignature = security.SignContent(req.Content, author.SigningKey)
 	}
 
 	wordCount := len([]rune(stripHTML(req.Content)))
@@ -186,7 +188,7 @@ func UpdateChapter(c *gin.Context) {
 		chapter.ContentHash = computeSHA256(req.Content)
 		// 用作者签名密钥生成 HMAC-SHA256 防篡改签名
 		if author, err := models.GetUserByID(userID); err == nil && author.SigningKey != "" {
-			chapter.ContentSignature = utils.SignContent(req.Content, author.SigningKey)
+			chapter.ContentSignature = security.SignContent(req.Content, author.SigningKey)
 		}
 		chapter.WordCount = len([]rune(stripHTML(req.Content)))
 	}
@@ -295,7 +297,7 @@ func updateIndexJSON(authorID, novelID uint) {
 	data := IndexData{
 		NovelID:   novelID,
 		Chapters:  entries,
-		UpdatedAt: utils.NowString(),
+		UpdatedAt: security.NowString(),
 	}
 
 	jsonBytes, _ := json.MarshalIndent(data, "", "  ")
@@ -350,7 +352,7 @@ func generateChecksums(authorID, novelID uint) {
 
 	checksums := map[string]interface{}{
 		"novel_id":    novelID,
-		"updated_at":  utils.NowString(),
+		"updated_at":  security.NowString(),
 		"chapters":    entries,
 	}
 
@@ -391,7 +393,7 @@ func VerifyChapter(c *gin.Context) {
 	signatureVerified := false
 	if novel, _ := models.GetNovelByID(chapter.NovelID); novel != nil {
 		if author, _ := models.GetUserByID(novel.AuthorID); author != nil && author.SigningKey != "" {
-			signatureVerified = utils.VerifySignature(string(content), chapter.ContentSignature, author.SigningKey)
+			signatureVerified = security.VerifySignature(string(content), chapter.ContentSignature, author.SigningKey)
 		}
 	}
 

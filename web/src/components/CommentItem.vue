@@ -11,7 +11,7 @@
       「{{ comment.quote_text }}」
     </div>
     <div class="comment-content">
-      <v-md-preview :text="comment.content" />
+      <div class="comment-md" v-html="renderedComment"></div>
     </div>
     <div class="comment-actions">
       <el-button v-if="authStore.isLoggedIn" size="small" text @click="showReply = !showReply">
@@ -59,10 +59,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import type { Comment } from '@/api/novel';
-import VMdPreview from '@kangc/v-md-editor/lib/preview';
+import { renderMarkdown } from '@/markdown/renderer';
 
 const props = defineProps<{
   comment: Comment & { children?: Comment[] };
@@ -77,6 +77,7 @@ const emit = defineEmits<{
 
 const authStore = useAuthStore();
 const showReply = ref(false);
+const renderedComment = computed(() => renderMarkdown(props.comment.content));
 const replyContent = ref('');
 
 function formatTime(dateStr: string) {
@@ -152,7 +153,7 @@ function doReply() {
 .comment-content {
   font-size: 0.95rem;
   line-height: 1.7;
-  color: #333;
+  color: #1a1a2e;
 }
 
 .comment-actions {
@@ -198,6 +199,6 @@ function doReply() {
   color: #94a3b8;
 }
 [data-theme="dark"] .comment-content {
-  color: #cbd5e1;
+  color: #e2e8f0;
 }
 </style>

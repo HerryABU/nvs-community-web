@@ -13,6 +13,7 @@ import (
 	"nvs-server/handlers"
 	"nvs-server/middleware"
 	"nvs-server/models"
+	"nvs-server/security"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -77,6 +78,7 @@ func main() {
 		&models.PlatformConfig{},
 		&models.FederatedSite{},
 		&models.FederatedNovel{},
+		&models.BookShelf{},
 	); err != nil {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}
@@ -84,6 +86,14 @@ func main() {
 	models.InitPlatformConfigs()
 	initDefaultAdmin()
 	log.Println("数据库迁移完成")
+
+	// 设置 SMTP 配置提供者（从平台配置读取）
+	utils.SMTPConfigProvider = func() utils.SMTPConfig {
+		host, port, user, pass, from := models.GetSMTPConfigFromDB()
+		return utils.SMTPConfig{
+			Host: host, Port: port, User: user, Password: pass, From: from,
+		}
+	}
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
@@ -127,11 +137,14 @@ func main() {
 	public := r.Group("/api")
 	{
 		public.POST("/auth/register", handlers.Register)
-		public.POST("/auth/login", middleware.RateLimit(5, 60), handlers.Login)
+		public.POST("/auth/login", security.RateLimit(5, 60), handlers.Login)
 		public.POST("/auth/logout", handlers.Logout)
+		public.POST("/auth/send-code", handlers.SendVerificationCode)
+		public.POST("/auth/verify-code", handlers.VerifyEmailCode)
 		public.GET("/categories", handlers.ListCategories)
 		public.GET("/categories/stats", handlers.ListCategoryStats)
-		public.GET("/novels", middleware.RateLimit(100, 60), handlers.ListNovels)
+		public.GET("/wall-zone/:zone", handlers.GetPublicZoneDetail)
+		public.GET("/novels", security.RateLimit(100, 60), handlers.ListNovels)
 		public.GET("/novels/:id", handlers.GetNovel)
 		public.GET("/novels/:id/chapters", handlers.GetChapters)
 		public.GET("/novels/:id/chapters/:num", handlers.GetChapterContent)
@@ -150,7 +163,7 @@ func main() {
 	protected.Use(middleware.AuthRequired())
 	{
 		protected.GET("/auth/me", handlers.GetCurrentUser)
-		protected.POST("/comments", middleware.RateLimit(20, 60), handlers.CreateComment)
+		protected.POST("/comments", security.RateLimit(20, 60), handlers.CreateComment)
 		protected.DELETE("/comments/:id", handlers.DeleteComment)
 		protected.POST("/novels", handlers.CreateNovel)
 		protected.PUT("/novels/:id", handlers.UpdateNovel)
@@ -178,6 +191,17 @@ func main() {
 		// 收益
 		protected.GET("/author/earnings", handlers.GetEarnings)
 		protected.POST("/author/withdraw", handlers.RequestWithdraw)
+	}
+
+	// 书架路由
+	bookshelf := r.Group("/api/bookshelf")
+	bookshelf.Use(middleware.AuthRequired())
+	{
+		bookshelf.GET("", handlers.ListShelf)
+		bookshelf.POST("", handlers.AddToShelf)
+		bookshelf.DELETE("/:id", handlers.RemoveFromShelf)
+		bookshelf.GET("/check/:id", handlers.CheckShelf)
+		bookshelf.POST("/progress", handlers.UpdateShelfProgress)
 	}
 
 	// 管理员路由

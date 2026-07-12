@@ -16,6 +16,84 @@
       </div>
     </div>
 
+    <!-- ====== 搜索结果区域 ====== -->
+    <div v-if="searchKeyword" class="search-results-section">
+      <div class="search-header">
+        <h2>
+          <el-icon><Search /></el-icon>
+          搜索结果：<span class="search-keyword">"{{ searchKeyword }}"</span>
+          <span class="search-count">共 {{ searchTotal }} 部作品</span>
+        </h2>
+        <el-button text type="primary" @click="clearSearch">✕ 清除搜索</el-button>
+      </div>
+
+      <!-- 搜索加载与结果 -->
+      <div v-loading="searchLoading">
+        <!-- 平铺视图 -->
+        <div v-if="novelView === 'grid' && searchResults.length > 0" class="card-grid">
+          <NovelCard
+            v-for="novel in searchResults"
+            :key="novel.id"
+            :novel="novel"
+            @click="$router.push(`/novel/${novel.id}`)"
+          />
+        </div>
+
+        <!-- 表式视图 -->
+        <el-table
+          v-else-if="novelView === 'table' && searchResults.length > 0"
+          :data="searchResults" stripe size="small"
+          @row-click="(r:any)=>$router.push(`/novel/${r.id}`)" style="cursor:pointer"
+        >
+          <el-table-column label="封面" width="70">
+            <template #default="{ row }">
+              <el-image v-if="row.cover_url" :src="row.cover_url" fit="cover"
+                style="width:40px;height:54px;border-radius:4px" />
+              <div v-else style="width:40px;height:54px;border-radius:4px;background:#e0e0e0;display:flex;align-items:center;justify-content:center;font-size:12px;color:#999">封</div>
+            </template>
+          </el-table-column>
+          <el-table-column label="作品" min-width="180">
+            <template #default="{ row }">
+              <div>
+                <div style="font-weight:500">{{ row.title }}</div>
+                <div style="font-size:0.8rem;color:#999;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px">{{ row.summary }}</div>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="作者" width="100">
+            <template #default="{ row }">
+              <router-link :to="`/author/${row.author_id}`" @click.stop>
+                {{ row.author_name || row.author?.nickname || '未知' }}
+              </router-link>
+            </template>
+          </el-table-column>
+          <el-table-column label="分类" width="90">
+            <template #default="{ row }">
+              <span>{{ (row.categories && row.categories.length > 0) ? row.categories[0] : (row.category || '—') }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="total_words" label="字数" width="80" />
+          <el-table-column prop="total_chapters" label="章节" width="60" />
+          <el-table-column label="更新" width="110">
+            <template #default="{ row }">{{ formatDate(row.updated_at) }}</template>
+          </el-table-column>
+        </el-table>
+
+        <el-empty v-if="!searchLoading && searchResults.length === 0" description="没有找到匹配的作品，试试其他关键词" />
+      </div>
+
+      <!-- 搜索分页 -->
+      <div class="pagination" v-if="searchTotal > searchPageSize">
+        <el-pagination
+          v-model:current-page="searchPage"
+          :page-size="searchPageSize"
+          :total="searchTotal"
+          layout="prev, pager, next"
+          @current-change="doSearch"
+        />
+      </div>
+    </div>
+
     <div class="page-container">
       <div class="home-top-bar" v-if="authStore.isLoggedIn">
         <el-button type="primary" size="large" @click="$router.push('/author/editor')">
@@ -122,14 +200,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { novelApi, type Novel } from '@/api/novel';
 import { publicApi } from '@/api/admin';
 import { useAuthStore } from '@/stores/auth';
 import NovelCard from '@/components/NovelCard.vue';
-import { Grid, List, Plus, ArrowRight } from '@element-plus/icons-vue';
+import { Grid, List, Plus, ArrowRight, Search } from '@element-plus/icons-vue';
 
 const authStore = useAuthStore();
+const route = useRoute();
+const router = useRouter();
 const categories = ref<string[]>([]);
 const loading = ref(false);
 const total = ref(0);
@@ -139,6 +220,14 @@ const sortBy = ref<'featured'|'newest'|'updated'>('featured');
 const categoryGroups = ref<Record<string,Novel[]>>({});
 const catStats = ref<Record<string,{novel_count:number;novels:Novel[]}>>({});
 const siteName = ref('星海文学');
+
+// ====== 搜索模式 ======
+const searchKeyword = ref('');
+const searchResults = ref<Novel[]>([]);
+const searchLoading = ref(false);
+const searchTotal = ref(0);
+const searchPage = ref(1);
+const searchPageSize = 12;
 
 function formatDate(d?:string){return d?new Date(d).toLocaleDateString('zh-CN'):''}
 
@@ -196,10 +285,128 @@ onMounted(async()=>{
   loadSiteName();
   await Promise.all([fetchCatStats(),reloadAll()]);
 });
+
+// ====== 搜索功能 ======
+async function doSearch() {
+  if (!searchKeyword.value) return;
+  searchLoading.value = true;
+  try {
+    const res = await novelApi.getNovels({
+      page: searchPage.value,
+      page_size: searchPageSize,
+      search: searchKeyword.value,
+    });
+    searchResults.value = res.data.data.list || [];
+    searchTotal.value = res.data.data.total || 0;
+  } catch (e) {
+    console.error(e);
+  } finally {
+    searchLoading.value = false;
+  }
+}
+
+function clearSearch() {
+  searchKeyword.value = '';
+  searchResults.value = [];
+  searchTotal.value = 0;
+  searchPage.value = 1;
+  router.replace({ query: {} });
+  // 也同步更新 NavBar 中的搜索框（通过 URL 清除）
+}
+
+// 监听 URL 搜索参数变化
+watch(
+  () => route.query.search,
+  (newSearch) => {
+    if (newSearch && typeof newSearch === 'string' && newSearch.trim()) {
+      searchKeyword.value = newSearch.trim();
+      searchPage.value = 1;
+      doSearch();
+    } else if (!newSearch) {
+      // URL 中搜索参数被清除时也重置状态
+      searchKeyword.value = '';
+      searchResults.value = [];
+      searchTotal.value = 0;
+    }
+  },
+  { immediate: true }
+);
 </script>
 
 <style scoped>
 /* ====== Hero Carousel — 2024 Modern ====== */
+/* ====== Search Results Section ====== */
+.search-results-section {
+  max-width: var(--page-max-width, 1280px);
+  margin: 0 auto 24px;
+  padding: 0 20px;
+}
+
+.search-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 16px 20px;
+  background: var(--card-bg, #fff);
+  border-radius: var(--radius-lg, 12px);
+  border: 1px solid var(--border-color, #e5e7eb);
+}
+
+.search-header h2 {
+  font-size: 1.2rem;
+  color: var(--primary-color);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  flex-wrap: wrap;
+}
+
+.search-keyword {
+  color: var(--accent-color, #6366f1);
+  font-weight: 600;
+}
+
+.search-count {
+  font-size: 0.85rem;
+  color: var(--text-light, #999);
+  font-weight: 400;
+  margin-left: 4px;
+}
+
+.search-results-section .card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.search-results-section .pagination {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+  margin-bottom: 8px;
+}
+
+/* Dark mode for search */
+[data-theme="dark"] .search-header {
+  background: rgba(255,255,255,.04);
+  border-color: rgba(255,255,255,.08);
+}
+
+[data-theme="dark"] .search-header h2 {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .search-keyword {
+  color: #818cf8;
+}
+
+[data-theme="dark"] .search-count {
+  color: rgba(255,255,255,.5);
+}
+
 /* ====== Hero Section ====== */
 .hero-section {
   position: relative;

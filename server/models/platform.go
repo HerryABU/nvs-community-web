@@ -181,19 +181,82 @@ func GetCategories() []string {
 	return cats
 }
 
+// ZoneDetail 单个敏感分区的详细配置
+type ZoneDetail struct {
+	Name              string   `json:"name"`
+	Steps             int      `json:"steps"`               // 确认步数 (1-5)，默认3
+	ConfirmText       string   `json:"confirm_text"`        // 最终确认语（空=不要求输入）
+	Warnings          []string `json:"warnings"`            // 自定义警告语
+	IntroText         string   `json:"intro_text"`          // 第一步显示的自定义介绍
+	CrossDomainExtra  int      `json:"cross_domain_extra"`  // 跨域额外步数，默认2
+}
+
 // WallConfig 隔离墙配置
 type WallConfig struct {
-	Zones              []string `json:"zones"`
-	Enabled            bool     `json:"enabled"`
-	CrossDomainWarning bool     `json:"cross_domain_warning"`
+	Zones              []string     `json:"zones"`
+	ZoneDetails        []ZoneDetail `json:"zone_details"` // 每个 zone 的详细配置
+	Enabled            bool         `json:"enabled"`
+	CrossDomainWarning bool         `json:"cross_domain_warning"`
 }
 
 // DefaultWallConfig 返回默认隔离墙配置
 func DefaultWallConfig() WallConfig {
 	return WallConfig{
-		Zones:              []string{"同人区", "政治文学区"},
+		Zones: []string{"同人区", "政治文学区"},
+		ZoneDetails: []ZoneDetail{
+			{
+				Name:         "同人区",
+				Steps:        3,
+				ConfirmText:  "我承诺承担全部阅读责任",
+				Warnings:     []string{"同人区内容可能涉及成人题材或争议性内容。如果您对这类内容敏感，建议立即离开。"},
+				IntroText:    "您即将进入「同人区」分区。该分区内容属于同人创作，可能包含成人向或争议性内容。",
+				CrossDomainExtra: 2,
+			},
+			{
+				Name:         "政治文学区",
+				Steps:        4,
+				ConfirmText:  "我承诺承担全部法律与阅读责任",
+				Warnings:     []string{"该分区内容可能涉及政治隐喻或社会议题。请确保您理解并尊重多元观点。"},
+				IntroText:    "您即将进入「政治文学区」分区。该分区内容涉及政治隐喻或社会议题，可能引发强烈情感反应。",
+				CrossDomainExtra: 2,
+			},
+		},
 		Enabled:            true,
 		CrossDomainWarning: true,
+	}
+}
+
+// GetZoneDetail 获取指定 zone 的详细配置，没有则返回默认值
+func (wc WallConfig) GetZoneDetail(zoneName string) ZoneDetail {
+	for _, d := range wc.ZoneDetails {
+		if d.Name == zoneName {
+			// 填充默认值
+			if d.Steps <= 0 {
+				d.Steps = 3
+			}
+			if d.ConfirmText == "" {
+				d.ConfirmText = "我承诺承担全部阅读责任"
+			}
+			if len(d.Warnings) == 0 {
+				d.Warnings = []string{"该分区内容属于敏感题材，请谨慎阅读。"}
+			}
+			if d.IntroText == "" {
+				d.IntroText = "您即将进入「" + zoneName + "」分区。该分区内容属于敏感题材。"
+			}
+			if d.CrossDomainExtra < 0 {
+				d.CrossDomainExtra = 2
+			}
+			return d
+		}
+	}
+	// 默认配置
+	return ZoneDetail{
+		Name:             zoneName,
+		Steps:            3,
+		ConfirmText:      "我承诺承担全部阅读责任",
+		Warnings:         []string{"该分区内容属于敏感题材，请谨慎阅读。"},
+		IntroText:        "您即将进入「" + zoneName + "」分区。",
+		CrossDomainExtra: 2,
 	}
 }
 
@@ -222,9 +285,11 @@ func SetWallConfig(cfg WallConfig) error {
 // InitPlatformConfigs 初始化默认平台配置（仅在不存在时写入）
 func InitPlatformConfigs() {
 	defaults := map[string]string{
-		"site_name":   "星海文学",
-		"vip_enabled": "true",
-		"categories":  `["硬科幻","奇幻","推演文学","架空历史","现实主义","悬疑推理","实验文学","同人区","政治区","讽刺文学","泛二次元区","其他"]`,
+		"site_name":      "星海文学",
+		"vip_enabled":    "true",
+		"email_verify":   "false",
+		"captcha_enabled": "false",
+		"categories":     `["硬科幻","奇幻","推演文学","架空历史","现实主义","悬疑推理","实验文学","同人区","政治区","讽刺文学","泛二次元区","其他"]`,
 	}
 	for k, v := range defaults {
 		var count int64
@@ -233,4 +298,33 @@ func InitPlatformConfigs() {
 			DB.Create(&PlatformConfig{Key: k, Value: v, UpdatedAt: time.Now()})
 		}
 	}
+}
+
+// IsEmailVerifyEnabled 检查邮箱验证是否开启
+func IsEmailVerifyEnabled() bool {
+	return GetPlatformConfig("email_verify") == "true"
+}
+
+// IsCaptchaEnabled 检查滑块验证码是否开启
+func IsCaptchaEnabled() bool {
+	return GetPlatformConfig("captcha_enabled") == "true"
+}
+
+// GetSMTPConfigFromDB 从平台配置获取 SMTP 配置
+func GetSMTPConfigFromDB() (host, port, user, pass, from string) {
+	host = GetPlatformConfig("smtp_host")
+	port = GetPlatformConfig("smtp_port")
+	user = GetPlatformConfig("smtp_user")
+	pass = GetPlatformConfig("smtp_password")
+	from = GetPlatformConfig("smtp_from")
+	if host == "" {
+		host = "smtp.qq.com"
+	}
+	if port == "" {
+		port = "587"
+	}
+	if from == "" {
+		from = user
+	}
+	return
 }

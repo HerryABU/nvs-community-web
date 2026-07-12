@@ -64,16 +64,12 @@
           />
         </div>
 
-        <!-- Markdown 编辑器 -->
-        <div v-show="editorMode === 'md'" class="ce-md-editor">
-          <v-md-editor
-            v-model="chapterContent"
-            :height="editorHeight + 'px'"
-            :toolbar="mdToolbar"
-            left-toolbar="undo redo clear | h bold italic strikethrough quote | ul ol table | link image code | katex mermaid | tip emoji"
-            right-toolbar="preview toc sync-scroll fullscreen"
-            :include-level="[2, 3, 4]"
-          />
+        <!-- Cherry Markdown 编辑器 -->
+        <div
+          v-show="editorMode === 'md'"
+          class="ce-md-wrapper"
+        >
+          <div ref="cherryContainer" class="ce-cherry-container"></div>
         </div>
 
         <!-- 富文本编辑器 -->
@@ -89,13 +85,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { novelApi, type Chapter } from '@/api/novel';
 import { ElMessage } from 'element-plus';
 import { ArrowLeft, Plus, Delete } from '@element-plus/icons-vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import TurndownService from 'turndown';
+import { renderMarkdown, engineConfig } from '@/markdown/renderer';
+import katex from 'katex';
+
+// mhchem 副作用注册（与 renderer.ts 保持一致）
+import 'katex/dist/contrib/mhchem.mjs';
 
 const route = useRoute();
 const router = useRouter();
@@ -106,11 +107,16 @@ const currentNum = ref(Number(route.params.num) || 1);
 const novelTitle = ref('');
 const chapters = ref<Chapter[]>([]);
 const chapterTitle = ref('');
-const chapterContent = ref('');
-const richTextContent = ref('');
+const chapterContent = ref('');       // Markdown 源文本
+const richTextContent = ref('');      // 富文本 HTML 内容
 const editorMode = ref<'md' | 'richtext'>('md');
 const saving = ref(false);
 const lastSaved = ref('');
+
+// Cherry 编辑器实例
+const cherryContainer = ref<HTMLDivElement | null>(null);
+let cherryInstance: any = null;
+let cherryReady = false;
 
 // turndown 实例（HTML → Markdown）
 const turndown = new TurndownService({
@@ -120,14 +126,97 @@ const turndown = new TurndownService({
   codeBlockStyle: 'fenced',
 });
 
-// 编辑器高度：窗口高度减去工具栏和标题栏
-const editorHeight = computed(() => window.innerHeight - 140);
+// 获取当前要保存的内容（富文本模式先转换）
+function getContentToSave(): string {
+  if (editorMode.value === 'richtext' && richTextContent.value.trim()) {
+    return htmlToMd(richTextContent.value);
+  }
+  // MD 模式：如果 Cherry 已初始化，从 Cherry 取值；否则用 chapterContent
+  if (editorMode.value === 'md' && cherryInstance) {
+    return cherryInstance.getValue() || chapterContent.value;
+  }
+  return chapterContent.value;
+}
 
-// MD 工具栏配置
-const mdToolbar = {
-  katex: true,
-  mermaid: true,
-};
+// HTML → Markdown 转换
+function htmlToMd(html: string): string {
+  if (!html) return '';
+  return turndown.turndown(html);
+}
+
+// ─── Cherry 编辑器初始化 ───
+
+async function initCherryEditor() {
+  if (!cherryContainer.value) return;
+  const Cherry = (await import('cherry-markdown')).default;
+  cherryInstance = new Cherry({
+    el: cherryContainer.value,
+    value: chapterContent.value,
+    editor: {
+      defaultModel: 'edit&preview',
+      height: `${editorHeight.value}px`,
+    },
+    toolbars: {
+      toolbar: [
+        'undo', 'redo', '|',
+        'bold', 'italic', 'strikethrough', 'underline', '|',
+        'header', '|',
+        'ul', 'ol', 'checklist', 'quote', 'code', '|',
+        'table', '|',
+        'formula', 'graph', '|',
+        'image', 'link', '|',
+        'hr', '|',
+        'toc', 'switchModel', 'fullScreen',
+      ],
+      toolbarRight: ['togglePreview'],
+    },
+    // 使用与阅读器相同的引擎配置
+    ...engineConfig,
+    // 编辑器独有的配置
+    callback: {
+      afterChange: (text: string) => {
+        chapterContent.value = text;
+      },
+    },
+  });
+  cherryReady = true;
+}
+
+function destroyCherryEditor() {
+  if (cherryInstance) {
+    try { cherryInstance.destroy?.(); } catch {}
+    cherryInstance = null;
+  }
+  cherryReady = false;
+}
+
+// 编辑器高度
+const editorHeight = computed(() => window.innerHeight - 160);
+
+// ─── 模式切换 ───
+
+function onModeChange(mode: string) {
+  if (mode === 'richtext') {
+    // Markdown → 富文本：从 Cherry 或 chapterContent 取 Markdown，转为 HTML
+    const mdContent = cherryInstance ? (cherryInstance.getValue() || '') : chapterContent.value;
+    richTextContent.value = renderMarkdown(mdContent);
+  } else if (mode === 'md') {
+    // 富文本 → Markdown
+    if (richTextContent.value.trim()) {
+      const md = htmlToMd(richTextContent.value);
+      chapterContent.value = md;
+      if (cherryInstance) {
+        cherryInstance.setValue(md);
+      }
+    }
+    // 确保 Cherry 编辑器已初始化
+    if (!cherryReady) {
+      nextTick(() => initCherryEditor());
+    }
+  }
+}
+
+// ─── 章节操作 ───
 
 async function loadNovel() {
   try {
@@ -138,7 +227,6 @@ async function loadNovel() {
     novelTitle.value = novelRes.data.data.title;
     chapters.value = chaptersRes.data.data || [];
 
-    // 如果没有章节，自动新建第一章
     if (chapters.value.length === 0) {
       chapters.value = [{
         id: 0, novel_id: novelId.value, chapter_number: 1,
@@ -146,10 +234,8 @@ async function loadNovel() {
         created_at: '',
       }];
     }
-
-    // 加载当前章节内容
     loadCurrentChapter();
-  } catch (e: any) {
+  } catch {
     ElMessage.error('加载作品失败');
     router.push('/author');
   }
@@ -157,95 +243,31 @@ async function loadNovel() {
 
 async function loadCurrentChapter() {
   try {
-    const num = currentNum.value;
-    const res = await novelApi.getChapter(novelId.value, num);
+    const res = await novelApi.getChapter(novelId.value, currentNum.value);
     const detail = res.data.data;
     const ch = detail.chapter;
     chapterTitle.value = ch.title || '';
-    chapterContent.value = ch.content || '';
-    // 富文本模式加载时转为 HTML（使用简单的 Markdown→HTML 转换）
-    richTextContent.value = mdToHtml(ch.content || '');
+    const content = ch.content || '';
+    chapterContent.value = content;
+
+    if (editorMode.value === 'md' && cherryInstance) {
+      cherryInstance.setValue(content);
+    } else if (editorMode.value === 'md' && !cherryReady) {
+      // 等待 Cherry 初始化后再设置值——通过 chapterContent 同步
+    }
+    richTextContent.value = renderMarkdown(content);
   } catch {
-    // 新章节，使用默认值
     chapterTitle.value = `第${currentNum.value}章`;
     chapterContent.value = '';
     richTextContent.value = '';
-  }
-}
-
-// 模式切换处理
-function onModeChange(mode: string) {
-  if (mode === 'richtext') {
-    // Markdown → 富文本：将 Markdown 转为 HTML
-    richTextContent.value = mdToHtml(chapterContent.value);
-  } else if (mode === 'md') {
-    // 富文本 → Markdown：将 HTML 转为 Markdown
-    if (richTextContent.value.trim()) {
-      chapterContent.value = htmlToMd(richTextContent.value);
+    if (editorMode.value === 'md' && cherryInstance) {
+      cherryInstance.setValue('');
     }
   }
 }
 
-// 简单的 Markdown → HTML 转换（用于富文本编辑器初始加载）
-function mdToHtml(md: string): string {
-  if (!md) return '';
-  // 使用简单的正则转换（不依赖完整的 markdown-it，因为我们只需要基本转换）
-  let html = md;
-
-  // 代码块
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
-
-  // 标题
-  html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
-  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-
-  // 粗体和斜体
-  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-
-  // 删除线
-  html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
-
-  // 高亮
-  html = html.replace(/==(.+?)==/g, '<mark>$1</mark>');
-
-  // 引用
-  html = html.replace(/^> (.+)$/gm, '<blockquote><p>$1</p></blockquote>');
-
-  // 分割线
-  html = html.replace(/^---$/gm, '<hr>');
-
-  // 链接
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-
-  // 无序列表
-  html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
-  html = html.replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>');
-
-  // 段落：空行分割
-  const paragraphs = html.split(/\n\n+/);
-  html = paragraphs.map(p => {
-    const trimmed = p.trim();
-    if (!trimmed) return '';
-    if (trimmed.startsWith('<')) return trimmed;
-    return `<p>${trimmed.replace(/\n/g, '<br>')}</p>`;
-  }).join('\n');
-
-  return html;
-}
-
-// HTML → Markdown 转换（用于保存时）
-function htmlToMd(html: string): string {
-  if (!html) return '';
-  return turndown.turndown(html);
-}
-
 async function switchChapter(num: number) {
   if (num === currentNum.value) return;
-  // 先保存当前章节再切换
   await saveChapterSilent();
   currentNum.value = num;
   router.replace(`/author/editor/${novelId.value}/chapter/${num}`);
@@ -259,7 +281,9 @@ async function addChapter() {
     : 1;
   chapterTitle.value = `第${newNum}章`;
   chapterContent.value = '';
+  richTextContent.value = '';
   currentNum.value = newNum;
+  if (cherryInstance) cherryInstance.setValue('');
   chapters.value.push({
     id: 0, novel_id: novelId.value, chapter_number: newNum,
     title: chapterTitle.value, content: '', word_count: 0, status: 'draft',
@@ -268,20 +292,11 @@ async function addChapter() {
   router.replace(`/author/editor/${novelId.value}/chapter/${newNum}`);
 }
 
-// 获取当前要保存的内容（富文本模式先转换）
-function getContentToSave(): string {
-  if (editorMode.value === 'richtext' && richTextContent.value.trim()) {
-    return htmlToMd(richTextContent.value);
-  }
-  return chapterContent.value;
-}
-
 async function saveChapter() {
   if (!chapterTitle.value.trim()) {
     ElMessage.warning('请输入章节标题');
     return;
   }
-  // 富文本模式先转换
   const contentToSave = getContentToSave();
   saving.value = true;
   try {
@@ -297,12 +312,11 @@ async function saveChapter() {
         content: contentToSave,
       });
     }
-    // 更新本地列表中的标题和字数
     const idx = chapters.value.findIndex(c => c.chapter_number === currentNum.value);
     if (idx >= 0) {
       chapters.value[idx].title = chapterTitle.value;
       chapters.value[idx].word_count = contentToSave.length;
-      if (chapters.value[idx].id === 0) chapters.value[idx].id = -1; // mark as saved
+      if (chapters.value[idx].id === 0) chapters.value[idx].id = -1;
     }
     const now = new Date();
     lastSaved.value = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
@@ -341,7 +355,7 @@ async function deleteChapterItem(num: number) {
       switchChapter(chapters.value[0].chapter_number);
     }
     ElMessage.success('已删除');
-  } catch (e: any) {
+  } catch {
     ElMessage.error('删除失败');
   }
 }
@@ -351,11 +365,8 @@ function goBack() {
   router.push(`/author/editor/${novelId.value}`);
 }
 
-onMounted(() => {
-  loadNovel();
-});
+// ─── 快捷键 ───
 
-// 键盘快捷键 Ctrl+S
 function onKeyDown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key === 's') {
     e.preventDefault();
@@ -363,8 +374,20 @@ function onKeyDown(e: KeyboardEvent) {
   }
 }
 
+// ─── 生命周期 ───
+
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown);
+  loadNovel();
+  // 初始模式为 MD 时初始化 Cherry
+  if (editorMode.value === 'md') {
+    nextTick(() => initCherryEditor());
+  }
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeyDown);
+  destroyCherryEditor();
 });
 </script>
 
@@ -451,31 +474,33 @@ onMounted(() => {
 .ce-chapter-list {
   flex: 1;
   overflow-y: auto;
+  padding: 4px 0;
 }
 
 .ce-chapter-item {
   display: flex;
   align-items: center;
-  padding: 10px 12px;
+  padding: 8px 16px;
   cursor: pointer;
-  border-bottom: 1px solid #f0f0f0;
-  transition: background 0.15s;
+  font-size: 0.85rem;
   gap: 8px;
+  transition: background 0.15s;
 }
 
 .ce-chapter-item:hover {
-  background: #f0f4ff;
+  background: #f0f0f0;
 }
 
 .ce-chapter-item.active {
-  background: #e8f0ff;
-  border-left: 3px solid var(--primary-color);
+  background: #e6f7ff;
+  color: var(--primary-color);
 }
 
 .ce-ch-num {
   font-weight: 600;
   min-width: 24px;
-  color: var(--primary-color);
+  text-align: center;
+  color: #999;
 }
 
 .ce-ch-title {
@@ -483,24 +508,23 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.85rem;
 }
 
 .ce-ch-words {
   font-size: 0.75rem;
-  color: #999;
+  color: #bbb;
+  flex-shrink: 0;
 }
 
 .ce-ch-del {
-  opacity: 0;
-  transition: opacity 0.15s;
+  visibility: hidden;
 }
 
 .ce-chapter-item:hover .ce-ch-del {
-  opacity: 1;
+  visibility: visible;
 }
 
-/* 编辑区 */
+/* 主编辑区 */
 .ce-main {
   flex: 1;
   display: flex;
@@ -509,23 +533,93 @@ onMounted(() => {
 }
 
 .ce-editor-header {
-  padding: 12px 16px 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #e8e8e8;
   flex-shrink: 0;
 }
 
-.ce-title-input {
-  font-size: 1.1rem;
+.ce-title-input :deep(.el-input__inner) {
+  border: none !important;
+  font-size: 1.15rem;
+  font-weight: 600;
+  padding-left: 0;
 }
 
-.ce-md-editor {
-  flex: 1;
-  overflow: hidden;
-}
-
-.ce-richtext-editor {
+/* Cherry 编辑器容器 */
+.ce-md-wrapper {
   flex: 1;
   overflow: hidden;
   display: flex;
-  flex-direction: column;
+}
+
+.ce-cherry-container {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* 富文本编辑器容器 */
+.ce-richtext-editor {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+</style>
+
+<!-- 非 scoped 样式（Cherry 主题适配） -->
+<style>
+/* Cherry 暗色主题适配 */
+[data-theme="dark"] .chapter-editor {
+  background: #1a1a2e;
+}
+
+[data-theme="dark"] .ce-toolbar {
+  background: #16213e;
+  border-bottom-color: rgba(255,255,255,.06);
+}
+
+[data-theme="dark"] .ce-novel-title {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .ce-sidebar {
+  background: #16213e;
+  border-right-color: rgba(255,255,255,.06);
+}
+
+[data-theme="dark"] .ce-sidebar-header {
+  border-bottom-color: rgba(255,255,255,.06);
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .ce-chapter-item:hover {
+  background: rgba(255,255,255,.04);
+}
+
+[data-theme="dark"] .ce-chapter-item.active {
+  background: rgba(66,133,244,.15);
+}
+
+[data-theme="dark"] .ce-editor-header {
+  border-bottom-color: rgba(255,255,255,.06);
+}
+
+/* Cherry 编辑器内部暗色主题 */
+[data-theme="dark"] .cherry {
+  background: #1a1a2e !important;
+}
+
+[data-theme="dark"] .cherry-editor {
+  background: #1a1a2e !important;
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .cherry-previewer {
+  background: #1e293b !important;
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .cherry-toolbar {
+  background: #16213e !important;
+  border-bottom-color: rgba(255,255,255,.06) !important;
 }
 </style>

@@ -1,4 +1,4 @@
-package utils
+package security
 
 import (
 	"crypto/hmac"
@@ -10,14 +10,14 @@ import (
 
 // GenerateSigningKey 生成32字节 AES-256 签名密钥，返回 base64 编码
 func GenerateSigningKey() (string, error) {
-	key := make([]byte, 32) // AES-256 = 32 bytes
+	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
 		return "", err
 	}
 	return base64.StdEncoding.EncodeToString(key), nil
 }
 
-// SignContent 用作者签名密钥对内容进行 HMAC-SHA256 签名
+// SignContent 用签名密钥对内容进行 HMAC-SHA256 签名
 func SignContent(content string, signingKeyBase64 string) string {
 	if signingKeyBase64 == "" {
 		return ""

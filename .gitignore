@@ -12,6 +12,12 @@ server/*.exe
 web/node_modules/
 web/dist/
 
+# Build artifacts
+dist/
+server/dist/
+nvs-server.exe
+*.exe
+
 # IDE
 .vscode/
 .idea/

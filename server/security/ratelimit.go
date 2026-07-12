@@ -1,4 +1,4 @@
-package middleware
+package security
 
 import (
 	"sync"
@@ -10,7 +10,7 @@ import (
 )
 
 type rateLimiterEntry struct {
-	count    int
+	count       int
 	windowStart time.Time
 }
 
@@ -31,9 +31,8 @@ func RateLimit(maxRequests int, windowSecs int) gin.HandlerFunc {
 		rateLimitMu.Lock()
 		entry, exists := rateLimitStore[ip]
 		if !exists || now.Sub(entry.windowStart) > window {
-			// 新窗口
 			rateLimitStore[ip] = &rateLimiterEntry{
-				count:    1,
+				count:       1,
 				windowStart: now,
 			}
 			rateLimitMu.Unlock()

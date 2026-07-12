@@ -20,7 +20,7 @@
           <h1 class="novel-title">{{ novel.title }}</h1>
           <div class="novel-meta">
             <el-tag size="small" type="warning">{{ novel.category }}</el-tag>
-            <span class="meta-item">作者：{{ novel.author_name || '未知' }}</span>
+            <span class="meta-item">作者：<router-link :to="`/author/${novel.author_id}`" class="author-link">{{ novel.author_name || '未知' }}</router-link></span>
             <span class="meta-item">{{ novel.total_words?.toLocaleString() || 0 }} 字</span>
             <span class="meta-item">{{ novel.total_chapters || 0 }} 章</span>
             <span class="meta-item">更新：{{ formatDate(novel.updated_at) }}</span>
@@ -31,7 +31,9 @@
           </div>
           <div class="novel-actions">
             <el-button type="primary" @click="startReading">开始阅读</el-button>
-            <el-button>加入书架</el-button>
+            <el-button @click="toggleShelf" :loading="shelfLoading">
+              {{ onShelf ? '已加入书架' : '加入书架' }}
+            </el-button>
           </div>
         </div>
       </div>
@@ -83,6 +85,7 @@
 import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { novelApi, type Novel, type Chapter } from '@/api/novel';
+import { bookshelfApi } from '@/api/bookshelf';
 import CommentSection from '@/components/CommentSection.vue';
 import StarRating from '@/components/StarRating.vue';
 import SensitiveZoneGuard from '@/components/SensitiveZoneGuard.vue';
@@ -96,6 +99,8 @@ const authStore = useAuthStore();
 const loading = ref(false);
 const novel = ref<Novel | null>(null);
 const chapters = ref<Chapter[]>([]);
+const onShelf = ref(false);
+const shelfLoading = ref(false);
 
 // 敏感分区确认
 const showZoneGuard = ref(false);
@@ -110,6 +115,28 @@ function formatDate(dateStr?: string) {
 function startReading() {
   if (chapters.value.length > 0) {
     router.push(`/novel/${novel.value!.id}/read/${chapters.value[0].chapter_number}`);
+  }
+}
+
+async function toggleShelf() {
+  if (!authStore.isLoggedIn) {
+    router.push('/login');
+    return;
+  }
+  if (!novel.value || shelfLoading.value) return;
+  shelfLoading.value = true;
+  try {
+    if (onShelf.value) {
+      await bookshelfApi.remove(novel.value.id);
+      onShelf.value = false;
+    } else {
+      await bookshelfApi.add(novel.value.id);
+      onShelf.value = true;
+    }
+  } catch {
+    // ignore
+  } finally {
+    shelfLoading.value = false;
   }
 }
 
@@ -154,6 +181,14 @@ onMounted(async () => {
     ]);
     novel.value = novelRes.data.data;
     chapters.value = chaptersRes.data.data || [];
+
+    // 检查书架状态
+    if (authStore.isLoggedIn && novel.value) {
+      try {
+        const shelfRes = await bookshelfApi.check(novel.value.id);
+        onShelf.value = shelfRes.data.data?.on_shelf || false;
+      } catch { /* ignore */ }
+    }
 
     // 内容确认机制：检查所有分类
     if (novel.value) {
@@ -281,6 +316,15 @@ onMounted(async () => {
   font-size: 0.85rem;
   min-width: 80px;
   text-align: right;
+}
+
+.author-link {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 500;
+}
+.author-link:hover {
+  text-decoration: underline;
 }
 
 @media (max-width: 768px) {

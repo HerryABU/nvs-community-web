@@ -47,6 +47,25 @@
             <el-radio value="published">发布</el-radio>
           </el-radio-group>
         </el-form-item>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="作品来源">
+              <el-radio-group v-model="form.source_type">
+                <el-radio value="original">原创</el-radio>
+                <el-radio value="reprint">转载</el-radio>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="创作方式">
+              <el-radio-group v-model="form.creation_method">
+                <el-radio value="human">人工</el-radio>
+                <el-radio value="ai">AI</el-radio>
+                <el-radio value="human_ai_assisted">人工借助AI</el-radio>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+        </el-row>
       </el-form>
     </el-card>
 
@@ -184,6 +203,8 @@ const form = reactive<Partial<Novel>>({
   cover_url: '',
   price_per_chapter: 0,
   status: 'draft',
+  source_type: 'original',
+  creation_method: 'human',
 });
 
 // 导入相关
@@ -212,6 +233,8 @@ async function loadNovel() {
       cover_url: novel.cover_url,
       price_per_chapter: novel.price_per_chapter,
       status: novel.status,
+      source_type: novel.source_type || 'original',
+      creation_method: novel.creation_method || 'human',
     });
     chapters.value = chaptersRes.data.data || [];
   } catch (e) {
