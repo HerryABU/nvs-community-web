@@ -14,6 +14,8 @@ type Novel struct {
 	CoverURL        string    `gorm:"size:512;default:''" json:"cover_url"`
 	PricePerChapter float64   `gorm:"type:decimal(10,2);default:0.00" json:"price_per_chapter"`
 	Status          string    `gorm:"size:16;default:draft;index" json:"status"`
+	SourceType      string    `gorm:"size:16;default:original" json:"source_type"`        // original / reprint
+	CreationMethod  string    `gorm:"size:16;default:human" json:"creation_method"`       // human / ai / human_ai_assisted
 	TotalWords      int       `gorm:"default:0" json:"total_words"`
 	TotalChapters   int       `gorm:"default:0" json:"total_chapters"`
 	CreatedAt       time.Time `json:"created_at"`
@@ -70,7 +72,8 @@ func GetNovels(category, search string, page, pageSize int) ([]Novel, int64, err
 
 	if search != "" {
 		like := "%" + search + "%"
-		query = query.Where("title LIKE ? OR summary LIKE ?", like, like)
+		query = query.Joins("LEFT JOIN users ON users.id = novels.author_id").
+			Where("(novels.title LIKE ? OR novels.summary LIKE ? OR novels.tags LIKE ? OR users.nickname LIKE ?)", like, like, like, like)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
@@ -106,7 +109,8 @@ func GetNovelsSorted(category, search, sortBy string, page, pageSize int) ([]Nov
 
 	if search != "" {
 		like := "%" + search + "%"
-		query = query.Where("title LIKE ? OR summary LIKE ?", like, like)
+		query = query.Joins("LEFT JOIN users ON users.id = novels.author_id").
+			Where("(novels.title LIKE ? OR novels.summary LIKE ? OR novels.tags LIKE ? OR users.nickname LIKE ?)", like, like, like, like)
 	}
 
 	if err := query.Count(&total).Error; err != nil {

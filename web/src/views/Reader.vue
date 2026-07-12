@@ -27,13 +27,15 @@
         </el-result>
       </div>
       <div v-else class="reader-content">
-        <div v-if="chapter?.content" class="reader-md-wrap">
-          <div v-if="htmlContent" class="reader-html" v-html="htmlContent"></div>
-          <div class="reader-md" v-show="!htmlContent">
-            <v-md-preview :text="chapter!.content" />
-          </div>
+        <!-- 诊断：数据状态 -->
+        <div v-if="chapter" style="padding:8px 16px;margin-bottom:12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;font-size:12px;color:#0369a1">
+          DEBUG: chapter={{ chapter.title }} | content长度={{ chapter.content?.length || 0 }} | loading={{ loading }}
         </div>
-        <p v-else style="text-align:center;color:#999">暂无内容</p>
+        <div v-if="chapter?.content" class="reader-md-wrap">
+          <div class="reader-md markdown-body" v-html="renderedHtml" ref="mdContainer"></div>
+        </div>
+        <p v-else-if="chapter" style="text-align:center;color:#f59e0b">章节已加载但内容为空（content长度=0）</p>
+        <p v-else style="text-align:center;color:#999">暂无内容（chapter 为 null）</p>
       </div>
     </div>
 
@@ -61,10 +63,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { novelApi, type Chapter } from '@/api/novel';
+import { bookshelfApi } from '@/api/bookshelf';
 import { useAuthStore } from '@/stores/auth';
+import { renderMarkdown, renderMermaidBlocks } from '@/markdown/renderer';
 import CommentSection from '@/components/CommentSection.vue';
 import SensitiveZoneGuard from '@/components/SensitiveZoneGuard.vue';
 import { shouldShowGuard, markZoneConfirmed, setLastZone, recordZoneVisit } from '@/utils/sensitiveZone';
@@ -119,8 +123,17 @@ async function loadChapter() {
     );
     window.scrollTo(0, 0);
 
+    // 同步阅读进度到后端书架（静默失败）
+    if (authStore.isLoggedIn) {
+      try {
+        await bookshelfApi.updateProgress(novelId.value, chapterNum.value);
+      } catch {
+        // 书架同步失败不阻断阅读
+      }
+    }
+
     // 敏感分区检查
-    checkSensitiveZone();
+    await checkSensitiveZone();
   } catch (e) {
     console.error(e);
   } finally {
@@ -128,12 +141,12 @@ async function loadChapter() {
   }
 }
 
-function checkSensitiveZone() {
+async function checkSensitiveZone() {
   const cat = novelCategory.value;
   if (!cat) return;
   // 记录该区访问（用于读者倾向检测）
   recordZoneVisit(cat);
-  const guard = shouldShowGuard(cat, {
+  const guard = await shouldShowGuard(cat, {
     authorId: novelAuthorId.value,
     userId: authStore.user?.id,
   });
@@ -162,6 +175,26 @@ watch(
     loadChapter();
   }
 );
+
+// ── Markdown 渲染 + Mermaid 异步处理 ──
+const mdContainer = ref<HTMLElement | null>(null);
+const renderedHtml = ref('');
+
+watch(() => chapter.value?.content, (content) => {
+  console.log('[NVS] Reader: content changed, length=', content?.length || 0);
+  if (!content) { renderedHtml.value = ''; return; }
+  try {
+    const html = renderMarkdown(content);
+    console.log('[NVS] Reader: rendered, html length=', html.length);
+    renderedHtml.value = html;
+  } catch (e: any) {
+    console.error('[NVS] Reader: renderMarkdown error:', e);
+    renderedHtml.value = '<p style=color:red>渲染失败: ' + (e.message || String(e)) + '</p>';
+  }
+  nextTick(() => {
+    if (mdContainer.value) renderMermaidBlocks(mdContainer.value);
+  });
+});
 
 onMounted(() => {
   loadChapter();
@@ -234,64 +267,176 @@ onMounted(() => {
 .reader-html :deep(p) {
   margin-bottom: 1em;
   text-indent: 2em;
+  color: #1a1a2e;
 }
 
-.reader-html :deep(h1),
-.reader-html :deep(h2),
+[data-theme="dark"] .reader-html :deep(p) {
+  color: #e2e8f0;
+}
+
+.reader-html :deep(h1) {
+  font-size: 2.2rem;
+  text-align: center;
+  margin: 2em 0 1em;
+  text-indent: 0;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+.reader-html :deep(h2) {
+  font-size: 1.7rem;
+  text-align: center;
+  margin: 1.8em 0 0.8em;
+  text-indent: 0;
+  font-weight: 700;
+  color: #1a1a2e;
+}
 .reader-html :deep(h3) {
+  font-size: 1.4rem;
+  text-align: center;
+  margin: 1.5em 0 0.6em;
+  text-indent: 0;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+.reader-html :deep(h4),
+.reader-html :deep(h5),
+.reader-html :deep(h6) {
   margin: 1.5em 0 0.8em;
   text-indent: 0;
   font-weight: 700;
+  color: #1a1a2e;
 }
 
 [data-theme="dark"] .reader-html :deep(h1),
 [data-theme="dark"] .reader-html :deep(h2),
 [data-theme="dark"] .reader-html :deep(h3) {
-  color: #e2e8f0;
+  color: #f1f5f9;
+}
+[data-theme="dark"] .reader-html :deep(h4),
+[data-theme="dark"] .reader-html :deep(h5),
+[data-theme="dark"] .reader-html :deep(h6) {
+  color: #f1f5f9;
 }
 
-.reader-html :deep(pre) {
-  background: #f5f5f5;
-  padding: 16px;
-  border-radius: 6px;
-  overflow-x: auto;
-  margin: 12px 0;
+.reader-html :deep(ul),
+.reader-html :deep(ol) {
+  padding-left: 1.5em;
+  margin-bottom: 1em;
 }
 
-[data-theme="dark"] .reader-html :deep(pre) {
-  background: #0f172a;
-  color: #cbd5e1;
+.reader-html :deep(li) {
+  margin-bottom: 0.3em;
+}
+
+.reader-html :deep(a) {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+[data-theme="dark"] .reader-html :deep(a) {
+  color: #60a5fa;
+}
+
+.reader-html :deep(strong) {
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+[data-theme="dark"] .reader-html :deep(strong) {
+  color: #f1f5f9;
 }
 
 .reader-html :deep(blockquote) {
   border-left: 4px solid #e67e22;
-  padding: 8px 16px;
-  margin: 12px 0;
+  padding: 10px 18px;
+  margin: 14px 0;
   background: #fef9f3;
+  color: #4a4a5a;
+  border-radius: 0 6px 6px 0;
 }
 
 [data-theme="dark"] .reader-html :deep(blockquote) {
   background: #1e293b;
   color: #cbd5e1;
+  border-left-color: #f59e0b;
 }
 
-.reader-content :deep(.v-md-editor-preview) {
-  color: #333 !important;
+.reader-html :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 14px 0;
+}
+
+.reader-html :deep(th),
+.reader-html :deep(td) {
+  border: 1px solid #d1d5db;
+  padding: 8px 14px;
+  text-align: left;
+}
+
+[data-theme="dark"] .reader-html :deep(th),
+[data-theme="dark"] .reader-html :deep(td) {
+  border-color: #374151;
+}
+
+.reader-html :deep(th) {
+  background: #f3f4f6;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .reader-html :deep(th) {
+  background: #1f2937;
+}
+
+.reader-html :deep(hr) {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 24px 0;
+}
+
+[data-theme="dark"] .reader-html :deep(hr) {
+  border-top-color: #374151;
+}
+
+/* Markdown 正文排版（基于 .markdown-body） */
+.markdown-body {
+  color: #1a1a2e;
   font-size: 1.05rem;
   line-height: 2;
-  min-height: 100px;
+}
+[data-theme="dark"] .markdown-body {
+  color: #e2e8f0;
 }
 
-[data-theme="dark"] .reader-content :deep(.v-md-editor-preview) {
-  color: #cbd5e1 !important;
-}
+/* KaTeX 公式 */
+.markdown-body .katex { font-size: 1.1em; text-indent: 0; }
+.markdown-body .katex-display { margin: 1.2em 0; text-align: center; }
+.markdown-body .katex-display > .katex { display: inline-block; }
 
-.reader-content :deep(.v-md-editor-preview) * {
-  color: #333 !important;
+/* Mermaid 图表容器 */
+.markdown-body .mermaid-container {
+  text-align: center;
+  margin: 1em 0;
+  overflow-x: auto;
+  background: #fff;
 }
+.markdown-body .mermaid-container svg { max-width: 100%; height: auto; }
+[data-theme="dark"] .markdown-body .mermaid-container { background: #1e293b; }
 
-[data-theme="dark"] .reader-content :deep(.v-md-editor-preview) * {
-  color: #cbd5e1 !important;
+/* 代码块（Prism） */
+.markdown-body pre {
+  background: #1e1e1e;
+  border-radius: 8px;
+  padding: 16px 20px;
+  overflow-x: auto;
+  margin: 14px 0;
+}
+[data-theme="dark"] .markdown-body pre { background: #111827; }
+.markdown-body pre code {
+  color: #e0e0e0;
+  font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+  font-size: 0.9rem;
+  line-height: 1.6;
 }
 
 .reader-footer {
@@ -334,4 +479,5 @@ onMounted(() => {
 [data-theme="dark"] .trial-notice .el-result__subtitle {
   color: #94a3b8;
 }
+/* Mermaid / KaTeX 背景/颜色修复已统一在 markdown/global-fix.css */
 </style>

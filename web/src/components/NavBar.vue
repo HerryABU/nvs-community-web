@@ -27,6 +27,9 @@
       <!-- 论坛入口 -->
       <router-link to="/forums" class="nav-link">论坛</router-link>
 
+      <!-- 书架入口（需登录） -->
+      <router-link v-if="authStore.isLoggedIn" to="/bookshelf" class="nav-link">📚 书架</router-link>
+
       <!-- 远程站点 -->
       <el-dropdown v-if="federatedSites.length > 0" trigger="click">
         <span class="nav-link">
@@ -100,6 +103,9 @@
             </span>
             <template #dropdown>
               <el-dropdown-menu>
+                <el-dropdown-item v-if="isAuthor" @click="goAuthorHome">
+                  <el-icon><User /></el-icon> 我的作者主页
+                </el-dropdown-item>
                 <el-dropdown-item v-if="authStore.user?.role === 'admin'" @click="$router.push('/admin')">
                   管理员面板
                 </el-dropdown-item>
@@ -118,13 +124,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, computed, onMounted, watch } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useThemeStore } from '@/stores/theme';
 import { publicApi } from '@/api/admin';
 
 const router = useRouter();
+const route = useRoute();
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
 
@@ -133,11 +140,43 @@ const searchText = ref('');
 const siteName = ref('星海文学');
 const federatedSites = ref<any[]>([]);
 
-function handleSearch() {
-  if (searchText.value.trim()) {
-    router.push({ path: '/', query: { search: searchText.value.trim() } });
+const isAuthor = computed(() => {
+  const role = authStore.user?.role;
+  return role === 'author' || role === 'vip_author' || role === 'admin';
+});
+
+function goAuthorHome() {
+  if (authStore.user?.id) {
+    router.push(`/author/${authStore.user.id}`);
   }
 }
+
+function handleSearch() {
+  const q = searchText.value.trim();
+  if (q) {
+    // 如果当前在首页，用 replace 避免多余历史记录；其他页面用 push
+    const nav = route.path === '/' ? router.replace : router.push;
+    nav({ path: '/', query: { search: q } });
+  } else {
+    // 空搜索：清除搜索参数
+    if (route.path === '/') {
+      router.replace({ path: '/', query: {} });
+    }
+  }
+}
+
+// 同步 URL 中的搜索参数到搜索框（例如从搜索结果页"清除搜索"后同步清空）
+watch(
+  () => route.query.search,
+  (val) => {
+    if (!val) {
+      searchText.value = '';
+    } else if (typeof val === 'string') {
+      searchText.value = val;
+    }
+  },
+  { immediate: true }
+);
 
 function openFederated(site: any) {
   window.open(site.url, '_blank');

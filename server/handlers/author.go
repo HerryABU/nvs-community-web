@@ -45,12 +45,94 @@ func GetAuthorProfile(c *gin.Context) {
 		totalChapters += n.TotalChapters
 	}
 
+	// 收集作者所有作品的ID，用于统计
+	var novelIDs []uint
+	for _, n := range novels {
+		novelIDs = append(novelIDs, n.ID)
+	}
+
+	var totalComments int64
+	if len(novelIDs) > 0 {
+		models.DB.Model(&models.Comment{}).Where("novel_id IN ?", novelIDs).Count(&totalComments)
+	}
+
+	// 最近7天章节增长趋势
+	now := time.Now()
+	dates := make([]string, 7)
+	for i := 0; i < 7; i++ {
+		dates[6-i] = now.AddDate(0, 0, -i).Format("2006-01-02")
+	}
+
+	type dayCount struct {
+		Date  string
+		Count int64
+	}
+	var dailyChapters []dayCount
+	if len(novelIDs) > 0 {
+		models.DB.Raw(
+			"SELECT date(chapters.created_at) AS date, COUNT(*) AS count "+
+				"FROM chapters JOIN novels ON novels.id = chapters.novel_id "+
+				"WHERE novels.author_id = ? AND chapters.created_at >= ? "+
+				"GROUP BY date(chapters.created_at) ORDER BY date",
+			authorID, dates[0],
+		).Scan(&dailyChapters)
+	}
+	chapterMap := make(map[string]int64)
+	for _, r := range dailyChapters {
+		chapterMap[r.Date] = r.Count
+	}
+	chapterTrendCounts := make([]int64, 7)
+	for i, d := range dates {
+		chapterTrendCounts[i] = chapterMap[d]
+	}
+
+	// 最近7天评论趋势
+	var dailyComments []dayCount
+	if len(novelIDs) > 0 {
+		models.DB.Raw(
+			"SELECT date(comments.created_at) AS date, COUNT(*) AS count "+
+				"FROM comments JOIN novels ON novels.id = comments.novel_id "+
+				"WHERE novels.author_id = ? AND comments.created_at >= ? "+
+				"GROUP BY date(comments.created_at) ORDER BY date",
+			authorID, dates[0],
+		).Scan(&dailyComments)
+	}
+	commentMap := make(map[string]int64)
+	for _, r := range dailyComments {
+		commentMap[r.Date] = r.Count
+	}
+	commentTrendCounts := make([]int64, 7)
+	for i, d := range dates {
+		commentTrendCounts[i] = commentMap[d]
+	}
+
+	// 计算平均评分
+	var avgRating float64
+	if len(novelIDs) > 0 {
+		models.DB.Raw(
+			"SELECT COALESCE(AVG((type_completion + narrative_quality + thought_depth + community_reputation + update_stability) / 5.0), 0) "+
+				"FROM ratings JOIN novels ON novels.id = ratings.novel_id "+
+				"WHERE novels.author_id = ?",
+			authorID,
+		).Scan(&avgRating)
+	}
+
 	utils.Success(c, gin.H{
-		"author":         user,
-		"novels":         novels,
-		"total_novels":   totalNovels,
-		"total_words":    totalWords,
-		"total_chapters": totalChapters,
+		"author":          user,
+		"novels":          novels,
+		"total_novels":    totalNovels,
+		"total_words":     totalWords,
+		"total_chapters":  totalChapters,
+		"total_comments":  totalComments,
+		"avg_rating":      avgRating,
+		"chapter_trend": gin.H{
+			"dates": dates,
+			"counts": chapterTrendCounts,
+		},
+		"comment_trend": gin.H{
+			"dates": dates,
+			"counts": commentTrendCounts,
+		},
 	})
 }
 
@@ -236,15 +318,33 @@ func GetAuthorDashboard(c *gin.Context) {
 		).Scan(&avgRating)
 	}
 
+	// 构建前端兼容的趋势格式: chapter_trend {dates, counts}, comment_trend {dates, counts}
+	chapterTrendCounts := make([]int64, 7)
+	for i, d := range dates {
+		chapterTrendCounts[i] = chapterMap[d]
+	}
+	commentTrendCounts := make([]int64, 7)
+	for i, d := range dates {
+		commentTrendCounts[i] = commentMap[d]
+	}
+
 	utils.Success(c, gin.H{
-		"overview": gin.H{
-			"total_novels":   totalNovels,
+		"stats": gin.H{
+			"novels":         totalNovels,
 			"total_words":    totalWords,
 			"total_chapters": totalChapters,
 			"total_comments": totalComments,
 		},
-		"trend_chapters":  trendChapters,
-		"trend_comments":  trendComments,
+		"trend_chapters": trendChapters,
+		"trend_comments": trendComments,
+		"chapter_trend": gin.H{
+			"dates": dates,
+			"counts": chapterTrendCounts,
+		},
+		"comment_trend": gin.H{
+			"dates": dates,
+			"counts": commentTrendCounts,
+		},
 		"novel_stats":     novelStats,
 		"completion_rate": completionRate,
 		"avg_rating":      avgRating,

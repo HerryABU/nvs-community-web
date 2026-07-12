@@ -154,6 +154,54 @@ func GetCurrentUser(c *gin.Context) {
 	utils.Success(c, user)
 }
 
+// ============ 邮箱验证码 ============
+
+// POST /api/auth/send-code — 发送邮箱验证码
+func SendVerificationCode(c *gin.Context) {
+	var req struct {
+		Email string `json:"email" binding:"required,email"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "请提供有效的邮箱地址")
+		return
+	}
+
+	email := strings.TrimSpace(strings.ToLower(req.Email))
+
+	// 检查是否可以发送（60秒内只能发一次）
+	code := utils.GenerateVerificationCode()
+	utils.StoreVerificationCode(email, code)
+
+	if err := utils.SendVerificationEmail(email, code); err != nil {
+		utils.InternalError(c, "发送验证码失败: "+err.Error())
+		return
+	}
+
+	utils.SuccessMessage(c, "验证码已发送，请查收邮件", nil)
+}
+
+// POST /api/auth/verify-code — 验证邮箱验证码
+func VerifyEmailCode(c *gin.Context) {
+	var req struct {
+		Email string `json:"email" binding:"required,email"`
+		Code  string `json:"code" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+
+	email := strings.TrimSpace(strings.ToLower(req.Email))
+
+	if !utils.VerifyCode(email, req.Code) {
+		utils.BadRequest(c, "验证码错误或已过期")
+		return
+	}
+
+	utils.DeleteVerificationCode(email)
+	utils.SuccessMessage(c, "验证成功", gin.H{"email": email})
+}
+
 // POST /api/auth/logout
 func Logout(c *gin.Context) {
 	middleware.ClearTokenCookie(c)

@@ -54,28 +54,50 @@
       <!-- 底部：折叠面板 -->
       <div class="bottom-panels">
         <el-collapse v-model="activePanels" class="glass-collapse">
-          <!-- 站点设置 -->
-          <el-collapse-item title="站点设置" name="site">
-            <div class="panel-body">
-              <el-form :model="configForm" label-width="100px" @submit.prevent="saveConfig">
-                <el-form-item label="站点名称">
-                  <el-input v-model="configForm.site_name" placeholder="星海文学" maxlength="64" />
-                </el-form-item>
-                <el-form-item label="VIP 付费">
-                  <el-switch
-                    v-model="vipEnabled"
-                    active-text="开启"
-                    inactive-text="关闭"
-                    @change="onVipToggle"
-                  />
-                  <span class="hint-text">关闭后，作者无法申请 VIP 付费功能</span>
-                </el-form-item>
-                <el-form-item>
-                  <el-button type="primary" @click="saveConfig" :loading="savingConfig">保存设置</el-button>
-                </el-form-item>
-              </el-form>
-            </div>
-          </el-collapse-item>
+           <!-- 站点设置 -->
+           <el-collapse-item title="站点设置" name="site">
+             <div class="panel-body">
+               <el-form :model="configForm" label-width="120px" @submit.prevent="saveConfig">
+                 <el-form-item label="站点名称">
+                   <el-input v-model="configForm.site_name" placeholder="星海文学" maxlength="64" />
+                 </el-form-item>
+                 <el-form-item label="VIP 付费">
+                   <el-switch v-model="vipEnabled" active-text="开启" inactive-text="关闭" @change="onVipToggle" />
+                   <span class="hint-text">关闭后，作者无法申请 VIP 付费功能</span>
+                 </el-form-item>
+                 <el-divider />
+                 <h3 style="margin:0 0 12px 0;font-size:1rem;">邮件验证设置</h3>
+                 <el-form-item label="邮箱验证">
+                   <el-switch v-model="configForm.email_verify" active-text="开启" inactive-text="关闭" />
+                   <span class="hint-text">开启后注册需验证邮箱，关闭则跳过验证</span>
+                 </el-form-item>
+                 <el-form-item label="SMTP 服务器">
+                   <el-input v-model="configForm.smtp_host" placeholder="smtp.qq.com" style="width:220px" />
+                 </el-form-item>
+                 <el-form-item label="SMTP 端口">
+                   <el-input v-model="configForm.smtp_port" placeholder="587" style="width:120px" />
+                 </el-form-item>
+                 <el-form-item label="发件邮箱">
+                   <el-input v-model="configForm.smtp_user" placeholder="your-email@qq.com" style="width:280px" />
+                 </el-form-item>
+                 <el-form-item label="SMTP 密码/授权码">
+                   <el-input v-model="configForm.smtp_password" type="password" show-password placeholder="授权码" style="width:260px" />
+                 </el-form-item>
+                 <el-form-item label="发件人地址">
+                   <el-input v-model="configForm.smtp_from" placeholder="同发件邮箱" style="width:280px" />
+                 </el-form-item>
+                 <el-divider />
+                 <h3 style="margin:0 0 12px 0;font-size:1rem;">安全设置</h3>
+                 <el-form-item label="滑块验证码">
+                   <el-switch v-model="configForm.captcha_enabled" active-text="开启" inactive-text="关闭" />
+                   <span class="hint-text">在注册/登录时显示滑块验证码</span>
+                 </el-form-item>
+                 <el-form-item>
+                   <el-button type="primary" @click="saveConfig" :loading="savingConfig">保存设置</el-button>
+                 </el-form-item>
+               </el-form>
+             </div>
+           </el-collapse-item>
 
           <!-- 分类管理 -->
           <el-collapse-item title="书目分类管理" name="category">
@@ -114,29 +136,65 @@
             </div>
           </el-collapse-item>
 
-          <!-- 隔离墙配置 -->
-          <el-collapse-item title="隔离墙配置" name="wall">
-            <div class="panel-body">
-              <p class="hint-text">管理敏感分区列表，开启后这些分区的作品将受到访问限制。</p>
-              <el-form label-width="100px">
-                <el-form-item label="启用隔离墙">
-                  <el-switch v-model="wallEnabled" @change="saveWallConfig" />
-                </el-form-item>
-                <el-form-item label="跨域警告">
-                  <el-switch v-model="wallCrossDomainWarning" @change="saveWallConfig" />
-                </el-form-item>
-                <el-form-item label="敏感分区">
-                  <div class="tag-list">
-                    <el-tag v-for="(z, i) in wallZones" :key="i" closable type="danger" @close="removeWallZone(i)">{{ z }}</el-tag>
-                  </div>
-                  <div class="add-zone-row">
-                    <el-input v-model="newWallZone" placeholder="输入分区名称后回车添加" size="small" style="width:240px" @keyup.enter="addWallZone" />
-                    <el-button size="small" type="primary" @click="addWallZone" :icon="Plus" style="margin-left:8px">添加</el-button>
-                  </div>
-                </el-form-item>
-              </el-form>
-            </div>
-          </el-collapse-item>
+           <!-- 隔离墙配置 -->
+           <el-collapse-item title="隔离墙配置" name="wall">
+             <div class="panel-body">
+               <p class="hint-text">管理敏感分区列表及其确认流程。点击分区名称展开/收起详细配置。</p>
+               <el-form label-width="100px">
+                 <el-form-item label="启用隔离墙">
+                   <el-switch v-model="wallEnabled" @change="saveWallConfig" />
+                 </el-form-item>
+                 <el-form-item label="跨域警告">
+                   <el-switch v-model="wallCrossDomainWarning" @change="saveWallConfig" />
+                 </el-form-item>
+               </el-form>
+
+               <!-- 敏感分区列表 + 详情 -->
+               <div class="wall-zone-list">
+                 <div v-for="(z, i) in wallZones" :key="i" class="wall-zone-card">
+                   <div class="wzc-header" @click="toggleZoneDetail(i)">
+                     <el-icon class="wzc-arrow" :class="{ rotated: expandedZoneIdx === i }"><ArrowRight /></el-icon>
+                     <el-tag type="danger" size="large">{{ z }}</el-tag>
+                     <el-button size="small" type="danger" text @click.stop="removeWallZone(i)" style="margin-left:auto">删除</el-button>
+                   </div>
+                   <div v-if="expandedZoneIdx === i" class="wzc-body">
+                     <el-form label-width="110px" size="small">
+                       <el-form-item label="确认步数">
+                         <el-input-number v-model="zoneDetails[i].steps" :min="1" :max="5" />
+                         <span class="hint-text" style="margin-left:8px">需要用户确认几次（1~5步，默认3）</span>
+                       </el-form-item>
+                       <el-form-item label="最终确认语">
+                         <el-input v-model="zoneDetails[i].confirm_text" placeholder="如：我承诺承担全部阅读责任" />
+                         <span class="hint-text" style="margin-left:8px">最后一步要求输入的文字（留空则不要求输入）</span>
+                       </el-form-item>
+                       <el-form-item label="跨域额外步数">
+                         <el-input-number v-model="zoneDetails[i].cross_domain_extra" :min="0" :max="5" />
+                         <span class="hint-text" style="margin-left:8px">从其他敏感区跨入时的额外步数</span>
+                       </el-form-item>
+                       <el-form-item label="介绍文案">
+                         <el-input v-model="zoneDetails[i].intro_text" type="textarea" :rows="2" placeholder="第一步显示的介绍内容" />
+                       </el-form-item>
+                       <el-form-item label="警告列表">
+                         <div class="warning-list">
+                           <div v-for="(w, wi) in zoneDetails[i].warnings" :key="wi" class="warning-row">
+                             <el-input v-model="zoneDetails[i].warnings[wi]" placeholder="警告内容" style="flex:1" />
+                             <el-button size="small" type="danger" text @click="zoneDetails[i].warnings.splice(wi,1)"><el-icon><Delete /></el-icon></el-button>
+                           </div>
+                         </div>
+                         <el-button size="small" @click="zoneDetails[i].warnings.push('')" :icon="Plus" style="margin-top:4px">添加警告</el-button>
+                       </el-form-item>
+                     </el-form>
+                   </div>
+                 </div>
+               </div>
+
+               <div class="add-zone-row" style="margin-top:12px">
+                 <el-input v-model="newWallZone" placeholder="输入分区名称后回车添加" size="small" style="width:240px" @keyup.enter="addWallZone" />
+                 <el-button size="small" type="primary" @click="addWallZone" :icon="Plus" style="margin-left:8px">添加分区</el-button>
+                 <el-button size="small" type="success" @click="saveWallConfig" :loading="savingWall" style="margin-left:8px">保存配置</el-button>
+               </div>
+             </div>
+           </el-collapse-item>
 
           <!-- 远程站点互通 -->
           <el-collapse-item title="远程站点互通" name="sites">
@@ -203,7 +261,7 @@ import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   User, Document, ChatLineRound, Connection,
-  Plus, Refresh
+  Plus, Refresh, ArrowRight, Delete
 } from '@element-plus/icons-vue';
 import AnimatedNumber from '@/components/AnimatedNumber.vue';
 import DashboardCharts from '@/components/DashboardCharts.vue';
@@ -254,7 +312,16 @@ const categoryPieData = ref<any>({
 
 // 站点设置
 const vipEnabled = ref(true);
-const configForm = reactive({ site_name: '星海文学' });
+const configForm = reactive({
+  site_name: '星海文学',
+  email_verify: false,
+  captcha_enabled: false,
+  smtp_host: '',
+  smtp_port: '',
+  smtp_user: '',
+  smtp_password: '',
+  smtp_from: '',
+});
 const savingConfig = ref(false);
 
 // 分类管理
@@ -279,6 +346,17 @@ const wallEnabled = ref(false);
 const wallCrossDomainWarning = ref(false);
 const wallZones = ref<string[]>([]);
 const newWallZone = ref('');
+const savingWall = ref(false);
+const expandedZoneIdx = ref<number | null>(null);
+interface ZoneDetail {
+  name: string;
+  steps: number;
+  confirm_text: string;
+  warnings: string[];
+  intro_text: string;
+  cross_domain_extra: number;
+}
+const zoneDetails = ref<ZoneDetail[]>([]);
 
 // ===== 数据加载 =====
 async function loadDashboard() {
@@ -363,6 +441,13 @@ async function loadConfig() {
       const cfg = res.data.data;
       configForm.site_name = cfg.site_name || '星海文学';
       vipEnabled.value = cfg.vip_enabled !== 'false';
+      configForm.email_verify = cfg.email_verify === 'true';
+      configForm.captcha_enabled = cfg.captcha_enabled === 'true';
+      configForm.smtp_host = cfg.smtp_host || '';
+      configForm.smtp_port = cfg.smtp_port || '';
+      configForm.smtp_user = cfg.smtp_user || '';
+      configForm.smtp_password = cfg.smtp_password || '';
+      configForm.smtp_from = cfg.smtp_from || '';
       if (cfg.categories) {
         try {
           const parsed = JSON.parse(cfg.categories);
@@ -397,6 +482,23 @@ async function loadWallConfig() {
       wallEnabled.value = !!cfg.enabled;
       wallCrossDomainWarning.value = !!cfg.cross_domain_warning;
       wallZones.value = Array.isArray(cfg.zones) ? [...cfg.zones] : [];
+      // 加载 zone_details
+      if (Array.isArray(cfg.zone_details)) {
+        zoneDetails.value = cfg.zone_details.map((d: any) => ({
+          name: d.name || '',
+          steps: d.steps || 3,
+          confirm_text: d.confirm_text || '我承诺承担全部阅读责任',
+          warnings: Array.isArray(d.warnings) ? [...d.warnings] : ['该分区内容属于敏感题材。'],
+          intro_text: d.intro_text || '',
+          cross_domain_extra: d.cross_domain_extra ?? 2,
+        }));
+      } else {
+        // 为现有 zones 创建默认 detail
+        zoneDetails.value = wallZones.value.map(z => ({
+          name: z, steps: 3, confirm_text: '我承诺承担全部阅读责任',
+          warnings: ['该分区内容属于敏感题材。'], intro_text: '', cross_domain_extra: 2,
+        }));
+      }
     }
   } catch { /* ignore */ }
 }
@@ -415,6 +517,13 @@ async function saveConfig() {
     await adminApi.updateConfig({
       site_name: configForm.site_name,
       vip_enabled: vipEnabled.value ? 'true' : 'false',
+      email_verify: configForm.email_verify ? 'true' : 'false',
+      captcha_enabled: configForm.captcha_enabled ? 'true' : 'false',
+      smtp_host: configForm.smtp_host,
+      smtp_port: configForm.smtp_port,
+      smtp_user: configForm.smtp_user,
+      smtp_password: configForm.smtp_password,
+      smtp_from: configForm.smtp_from,
     });
     ElMessage.success('设置已保存');
   } catch { ElMessage.error('保存失败'); }
@@ -474,10 +583,22 @@ function resetCategories() {
 }
 
 // ===== 隔离墙 =====
+function toggleZoneDetail(idx: number) {
+  expandedZoneIdx.value = expandedZoneIdx.value === idx ? null : idx;
+}
+
 async function saveWallConfig() {
+  savingWall.value = true;
   try {
+    // 同步 zone_details 的 name 与 zones 列表
+    const details = wallZones.value.map((z, i) => {
+      const existing = zoneDetails.value[i] || { name: z, steps: 3, confirm_text: '我承诺承担全部阅读责任', warnings: ['该分区内容属于敏感题材。'], intro_text: '', cross_domain_extra: 2 };
+      return { name: z, steps: existing.steps || 3, confirm_text: existing.confirm_text || '', warnings: existing.warnings?.filter((w: string) => w.trim()) || [], intro_text: existing.intro_text || '', cross_domain_extra: existing.cross_domain_extra ?? 2 };
+    });
+    zoneDetails.value = details;
     await adminApi.updateWallConfig({
       zones: wallZones.value,
+      zone_details: details,
       enabled: wallEnabled.value,
       cross_domain_warning: wallCrossDomainWarning.value,
     });
@@ -485,6 +606,7 @@ async function saveWallConfig() {
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '保存失败');
   }
+  savingWall.value = false;
 }
 
 function addWallZone() {
@@ -492,12 +614,16 @@ function addWallZone() {
   if (!name) return;
   if (wallZones.value.includes(name)) { ElMessage.warning('该分区已存在'); return; }
   wallZones.value.push(name);
+  zoneDetails.value.push({ name, steps: 3, confirm_text: '我承诺承担全部阅读责任', warnings: ['该分区内容属于敏感题材。'], intro_text: '', cross_domain_extra: 2 });
   newWallZone.value = '';
   saveWallConfig();
 }
 
 function removeWallZone(idx: number) {
   wallZones.value.splice(idx, 1);
+  zoneDetails.value.splice(idx, 1);
+  if (expandedZoneIdx.value === idx) expandedZoneIdx.value = null;
+  else if (expandedZoneIdx.value !== null && expandedZoneIdx.value > idx) expandedZoneIdx.value--;
   saveWallConfig();
 }
 
@@ -845,6 +971,79 @@ onMounted(() => {
 
 .cat-edit-input {
   width: 100px;
+}
+
+/* ===== 隔离墙 Zone 卡片 ===== */
+.wall-zone-list {
+  margin: 12px 0;
+}
+
+.wall-zone-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+[data-theme="light"] .wall-zone-card {
+  background: #fafafa;
+  border-color: #e5e7eb;
+}
+
+.wzc-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.wzc-header:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="light"] .wzc-header:hover {
+  background: #f0f0f0;
+}
+
+.wzc-arrow {
+  transition: transform 0.2s;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.wzc-arrow.rotated {
+  transform: rotate(90deg);
+}
+
+[data-theme="light"] .wzc-arrow {
+  color: #999;
+}
+
+.wzc-body {
+  padding: 14px 18px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="light"] .wzc-body {
+  border-top-color: #e5e7eb;
+  background: #f5f5f5;
+}
+
+.warning-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.warning-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .add-zone-row {

@@ -6,7 +6,4 @@ declare module '*.vue' {
   export default component;
 }
 
-declare module '@kangc/v-md-editor';
-declare module '@kangc/v-md-editor/lib/theme/vuepress.js';
-declare module 'markdown-it-mark';
 declare module 'turndown';

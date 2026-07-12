@@ -681,7 +681,7 @@ a:hover {
 /* ===== Reader Tables ===== */
 .reader-content table,
 .reader-html table,
-.v-md-editor-preview table {
+.cherry-previewer table {
   border-collapse: collapse;
   width: 100%;
   margin: 1em 0;
@@ -694,8 +694,8 @@ a:hover {
 .reader-content td,
 .reader-html th,
 .reader-html td,
-.v-md-editor-preview th,
-.v-md-editor-preview td {
+.cherry-previewer th,
+.cherry-previewer td {
   border: 1px solid #ddd;
   padding: 8px 12px;
   text-align: left;
@@ -703,34 +703,34 @@ a:hover {
 
 .reader-content th,
 .reader-html th,
-.v-md-editor-preview th {
+.cherry-previewer th {
   background: #f0f0f0;
   font-weight: 500;
 }
 
 .reader-content del,
 .reader-html del,
-.v-md-editor-preview del {
+.cherry-previewer del {
   color: #999;
 }
 
 .reader-content sup,
 .reader-html sup,
-.v-md-editor-preview sup {
+.cherry-previewer sup {
   font-size: 0.75em;
   vertical-align: super;
 }
 
 .reader-content sub,
 .reader-html sub,
-.v-md-editor-preview sub {
+.cherry-previewer sub {
   font-size: 0.75em;
   vertical-align: sub;
 }
 
 .reader-content hr,
 .reader-html hr,
-.v-md-editor-preview hr {
+.cherry-previewer hr {
   border: none;
   border-top: 2px solid #e0e0e0;
   margin: 24px 0;
@@ -738,7 +738,7 @@ a:hover {
 
 .reader-content img,
 .reader-html img,
-.v-md-editor-preview img {
+.cherry-previewer img {
   max-width: 100%;
   height: auto;
   border-radius: var(--radius-sm);
@@ -1042,38 +1042,38 @@ kbd {
 
 [data-theme="dark"] .reader-content table,
 [data-theme="dark"] .reader-html table,
-[data-theme="dark"] .v-md-editor-preview table {
+[data-theme="dark"] .cherry-previewer table {
   border-color: #334155;
 }
 
 [data-theme="dark"] .reader-content th,
 [data-theme="dark"] .reader-html th,
-[data-theme="dark"] .v-md-editor-preview th {
+[data-theme="dark"] .cherry-previewer th {
   background: #1a1d27;
   color: #e2e8f0;
 }
 
 [data-theme="dark"] .reader-content td,
 [data-theme="dark"] .reader-html td,
-[data-theme="dark"] .v-md-editor-preview td,
+[data-theme="dark"] .cherry-previewer td,
 [data-theme="dark"] .reader-content th,
 [data-theme="dark"] .reader-content td,
 [data-theme="dark"] .reader-html th,
 [data-theme="dark"] .reader-html td,
-[data-theme="dark"] .v-md-editor-preview th,
-[data-theme="dark"] .v-md-editor-preview td {
+[data-theme="dark"] .cherry-previewer th,
+[data-theme="dark"] .cherry-previewer td {
   border-color: #334155;
 }
 
 [data-theme="dark"] .reader-content del,
 [data-theme="dark"] .reader-html del,
-[data-theme="dark"] .v-md-editor-preview del {
+[data-theme="dark"] .cherry-previewer del {
   color: #64748b;
 }
 
 [data-theme="dark"] .reader-content hr,
 [data-theme="dark"] .reader-html hr,
-[data-theme="dark"] .v-md-editor-preview hr {
+[data-theme="dark"] .cherry-previewer hr {
   border-top-color: #334155;
 }
 
@@ -1122,3 +1122,63 @@ kbd {
 [data-theme="dark"] .el-tabs__item.is-active {
   color: var(--primary-color);
 }
+
+/* ===== Mermaid 图表 — 容器居中 + 透明背景（主题色由 mermaid 自身控制） ===== */
+.cherry-previewer .v-md-mermaid {
+  text-align: center;
+  margin: 1em 0;
+  overflow-x: auto;
+  text-indent: 0;
+}
+.cherry-previewer svg[id^="mermaid-"] {
+  max-width: 100%;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+/* ===== KaTeX 数学公式 — 全局渲染保障 ===== */
+.cherry-previewer .katex {
+  font-size: 1.1em;
+  line-height: 1.2;
+  text-indent: 0;
+}
+.cherry-previewer .katex-display {
+  margin: 1.2em 0;
+  text-align: center;
+  text-indent: 0;
+}
+.cherry-previewer .katex-display > .katex {
+  display: inline-block;
+  text-indent: 0;
+}
+
+/* ===== Markdown 扩展语法样式 ===== */
+
+/* Footnotes 脚注 */
+.cherry-previewer .footnotes { margin-top: 2em; border-top: 1px solid var(--border-color); padding-top: 1em; font-size: 0.9em; }
+.cherry-previewer .footnotes ol { padding-left: 1.5em; }
+.cherry-previewer .footnotes li { margin: 0.3em 0; }
+.cherry-previewer a.footnote-ref { font-size: 0.85em; vertical-align: super; text-decoration: none; }
+.cherry-previewer a.footnote-backref { text-decoration: none; margin-left: 0.3em; }
+
+/* Definition Lists 定义列表 */
+.cherry-previewer dl { margin: 1em 0; }
+.cherry-previewer dt { font-weight: 600; margin-top: 0.8em; color: var(--primary-color); }
+.cherry-previewer dd { margin-left: 1.5em; padding-left: 0.5em; border-left: 3px solid var(--border-color); color: var(--text-light); }
+[data-theme="dark"] .cherry-previewer dd { border-left-color: #334155; }
+
+/* Abbreviations 缩写 */
+.cherry-previewer abbr { text-decoration: underline dotted; cursor: help; }
+
+/* Insert 插入文本 */
+.cherry-previewer ins { text-decoration: underline; color: var(--success-color); }
+
+/* Table of Contents 目录 */
+.cherry-previewer .table-of-contents { background: var(--bg-soft); border-radius: var(--radius-sm); padding: 1em 1.5em; margin: 1em 0; }
+[data-theme="dark"] .cherry-previewer .table-of-contents { background: #1e293b; }
+.cherry-previewer .toc-list { list-style: none; padding-left: 0; }
+.cherry-previewer .toc-list li { margin: 0.4em 0; }
+.cherry-previewer .toc-list a { color: var(--primary-color); text-decoration: none; }
+.cherry-previewer .toc-list a:hover { text-decoration: underline; }
+
+

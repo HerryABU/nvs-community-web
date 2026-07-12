@@ -46,4 +46,14 @@ export const authApi = {
   logout() {
     return api.post('/auth/logout');
   },
+
+  // 发送邮箱验证码
+  sendVerificationCode(email: string) {
+    return api.post<{ code: number; message: string }>('/auth/send-code', { email });
+  },
+
+  // 验证邮箱验证码
+  verifyEmailCode(email: string, code: string) {
+    return api.post<{ code: number; message: string }>('/auth/verify-code', { email, code });
+  },
 };

@@ -98,7 +98,7 @@ func CreateThread(c *gin.Context) {
 		ForumID: uint(forumID),
 		UserID:  userID,
 		Title:   req.Title,
-		Content: req.Content, // 直接存储原始 Markdown，XSS 由前端 markdown-it 转义防护
+		Content: req.Content, // 直接存储原始 Markdown，XSS 由前端 Cherry Markdown 防护
 	}
 
 	if err := models.CreateThread(thread); err != nil {
@@ -155,7 +155,7 @@ func CreatePost(c *gin.Context) {
 	post := &models.Post{
 		ThreadID: uint(threadID),
 		UserID:   userID,
-		Content:  req.Content, // 直接存储原始 Markdown，XSS 由前端 markdown-it 转义防护
+		Content:  req.Content, // 直接存储原始 Markdown，XSS 由前端 Cherry Markdown 防护
 	}
 
 	if err := models.CreatePost(post); err != nil {

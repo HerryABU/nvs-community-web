@@ -1,10 +1,31 @@
 /**
  * 敏感分区检测工具
+ * 从后端 API 动态获取敏感分区配置
  */
 
-const SENSITIVE_ZONES = ['同人区', '政治文学区', '政治区', '讽刺文学', '泛二次元区'];
+import { publicApi } from '@/api/admin';
+
+let SENSITIVE_ZONES: string[] = [];
+let zonesLoaded = false;
+
 const CONFIRMED_KEY = 'nvs-confirmed-zones';
 const VISIT_KEY = 'nvs-zone-visits';
+
+/** 从后端加载敏感分区列表 */
+async function loadZones(): Promise<string[]> {
+  if (zonesLoaded) return SENSITIVE_ZONES;
+  try {
+    const res = await publicApi.getSiteInfo();
+    if (res.data.code === 0) {
+      const data = res.data.data;
+      if (data.wall_enabled && Array.isArray(data.wall_zones)) {
+        SENSITIVE_ZONES = data.wall_zones;
+      }
+    }
+  } catch { /* fallback to empty */ }
+  zonesLoaded = true;
+  return SENSITIVE_ZONES;
+}
 
 /** 获取用户已确认过的分区集合 */
 function getConfirmedZones(): Set<string> {
@@ -47,11 +68,12 @@ export function setLastZone(zone: string) {
   sessionStorage.setItem('nvs-last-zone', zone);
 }
 
-/** 判断是否需要确认弹窗 */
-export function shouldShowGuard(
+/** 判断是否需要确认弹窗（同步版本，确保 zones 已加载） */
+export async function shouldShowGuard(
   zone: string,
   opts?: { authorId?: number; userId?: number },
-): { needed: boolean; isCrossDomain: boolean; zoneName: string } | null {
+): Promise<{ needed: boolean; isCrossDomain: boolean; zoneName: string } | null> {
+  await loadZones();
   if (!SENSITIVE_ZONES.includes(zone)) return null;
 
   // 作者豁免：如果当前用户就是该区作品的作者，不需要确认

@@ -71,7 +71,7 @@ export const adminApi = {
   getWallConfig() {
     return api.get('/admin/wall-config');
   },
-  updateWallConfig(data: { zones: string[]; enabled: boolean; cross_domain_warning: boolean }) {
+  updateWallConfig(data: { zones: string[]; zone_details?: any[]; enabled: boolean; cross_domain_warning: boolean }) {
     return api.put('/admin/wall-config', data);
   },
 

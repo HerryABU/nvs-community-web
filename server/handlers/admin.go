@@ -124,13 +124,14 @@ func HandleReport(c *gin.Context) {
 // GET /api/admin/stats — 平台统计
 func GetAdminStats(c *gin.Context) {
 	if !ensureAdmin(c) { return }
-	var userCount, novelCount, commentCount int64
+	var userCount, novelCount, commentCount, forumCount int64
 	models.DB.Model(&models.User{}).Count(&userCount)
 	models.DB.Model(&models.Novel{}).Count(&novelCount)
 	models.DB.Model(&models.Comment{}).Count(&commentCount)
+	models.DB.Model(&models.Forum{}).Count(&forumCount)
 
 	utils.Success(c, gin.H{
-		"users": userCount, "novels": novelCount, "comments": commentCount,
+		"users": userCount, "novels": novelCount, "comments": commentCount, "forums": forumCount,
 	})
 }
 
@@ -278,16 +279,35 @@ func GetDashboardStats(c *gin.Context) {
 		})
 	}
 
+	// 构建前端兼容的趋势格式: user_trend {dates, new_users}, chapter_trend {dates, counts}
+	userTrendDates := dates
+	userTrendNewUsers := make([]int64, 7)
+	for i, d := range dates {
+		userTrendNewUsers[i] = userMap[d]
+	}
+	chapterTrendCounts := make([]int64, 7)
+	for i, d := range dates {
+		chapterTrendCounts[i] = chapterMap[d]
+	}
+
 	utils.Success(c, gin.H{
-		"overview": gin.H{
+		"stats": gin.H{
 			"users":    userCount,
 			"novels":   novelCount,
 			"comments": commentCount,
 			"forums":   forumCount,
 		},
-		"trend_visits":         trendVisits,
-		"trend_chapters":       trendChapters,
-		"top_novels":           topNovels,
+		"trend_visits":   trendVisits,
+		"trend_chapters": trendChapters,
+		"user_trend": gin.H{
+			"dates":     userTrendDates,
+			"new_users": userTrendNewUsers,
+		},
+		"chapter_trend": gin.H{
+			"dates": dates,
+			"counts": chapterTrendCounts,
+		},
+		"top_novels":            topNovels,
 		"category_distribution": categoryDistribution,
 	})
 }
@@ -391,9 +411,16 @@ func UpdatePlatformConfig(c *gin.Context) {
 	}
 
 	allowed := map[string]bool{
-		"site_name":   true,
-		"vip_enabled": true,
-		"categories":  true,
+		"site_name":         true,
+		"vip_enabled":       true,
+		"categories":        true,
+		"email_verify":      true,
+		"captcha_enabled":   true,
+		"smtp_host":         true,
+		"smtp_port":         true,
+		"smtp_user":         true,
+		"smtp_password":     true,
+		"smtp_from":         true,
 	}
 
 	for k, v := range req {
@@ -671,9 +698,22 @@ func ListPublicSites(c *gin.Context) {
 
 // GET /api/site-info — 获取站点公开信息（站名等，无需登录）
 func GetSiteInfo(c *gin.Context) {
+	wallCfg := models.GetWallConfig()
 	utils.Success(c, gin.H{
-		"site_name": models.GetSiteName(),
+		"site_name":      models.GetSiteName(),
+		"wall_zones":     wallCfg.Zones,
+		"wall_enabled":   wallCfg.Enabled,
+		"email_verify":   models.IsEmailVerifyEnabled(),
+		"captcha_enabled": models.IsCaptchaEnabled(),
 	})
+}
+
+// GET /api/wall-zone/:zone — 获取某个分区的隔离墙详细配置（公开，无需登录）
+func GetPublicZoneDetail(c *gin.Context) {
+	zoneName := c.Param("zone")
+	cfg := models.GetWallConfig()
+	detail := cfg.GetZoneDetail(zoneName)
+	utils.Success(c, detail)
 }
 
 // ============ 辅助 ============

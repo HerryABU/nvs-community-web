@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"nvs-server/models"
+	"nvs-server/security"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -43,13 +44,13 @@ func CreateComment(c *gin.Context) {
 	}
 
 	// 直接存储原始内容，不做后端正则过滤。
-	// XSS 防护由前端 markdown-it 渲染时自动转义 HTML（默认 html: false）。
+	// XSS 防护由前端 Cherry Markdown（DOMPurify）渲染引擎自动处理。
 	comment := &models.Comment{
 		UserID:        userID,
 		NovelID:       req.NovelID,
 		ChapterNumber: req.ChapterNumber,
 		Content:       req.Content,
-		QuoteText:     utils.SanitizePlainText(req.QuoteText),
+		QuoteText:     security.SanitizePlainText(req.QuoteText),
 		IsMarkdown:    true,
 	}
 	if req.ParentID != nil {

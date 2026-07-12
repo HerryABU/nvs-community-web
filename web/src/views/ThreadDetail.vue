@@ -12,7 +12,7 @@
 
       <!-- 主帖内容 -->
       <div class="thread-content">
-        <v-md-preview :text="thread.content" />
+        <div v-html="renderMarkdown(thread.content)"></div>
       </div>
 
       <!-- 回复列表 -->
@@ -24,7 +24,7 @@
             <span class="post-time">{{ formatTime(p.created_at) }}</span>
           </div>
           <div class="post-content">
-            <v-md-preview :text="p.content" />
+            <div v-html="renderMarkdown(p.content)"></div>
           </div>
         </div>
         <el-empty v-if="posts.length === 0" description="暂无回复" />
@@ -50,7 +50,7 @@ import { useRoute } from 'vue-router';
 import { novelApi } from '@/api/novel';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage } from 'element-plus';
-import VMdPreview from '@kangc/v-md-editor/lib/preview';
+import { renderMarkdown } from '@/markdown/renderer';
 
 const route = useRoute();
 const authStore = useAuthStore();

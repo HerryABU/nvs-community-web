@@ -14,6 +14,7 @@ import (
 
 	"nvs-server/config"
 	"nvs-server/models"
+	"nvs-server/security"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -100,7 +101,7 @@ func ImportNovel(c *gin.Context) {
 	// 如果用户是 reader，自动升级为 author 并生成签名密钥
 	var user models.User
 	if err := models.DB.First(&user, userID).Error; err == nil && user.Role == "reader" {
-		signingKey, _ := utils.GenerateSigningKey()
+		signingKey, _ := security.GenerateSigningKey()
 		updates := map[string]interface{}{"role": "author"}
 		if signingKey != "" {
 			updates["signing_key"] = signingKey
@@ -168,7 +169,7 @@ func ImportNovel(c *gin.Context) {
 		}
 	}
 
-	// 写入各章节（保留原始 Markdown，前端 v-md-preview 渲染）
+	// 写入各章节（保留原始 Markdown，前端 Cherry Markdown 渲染）
 	createdChapters := make([]gin.H, 0)
 	for i, ch := range chapters {
 		num := startNum + i
@@ -183,7 +184,7 @@ func ImportNovel(c *gin.Context) {
 		contentHash := computeSHA256(rawContent)
 		contentSignature := ""
 		if signingKey != "" {
-			contentSignature = utils.SignContent(rawContent, signingKey)
+			contentSignature = security.SignContent(rawContent, signingKey)
 		}
 
 		chapter := &models.Chapter{
