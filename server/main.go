@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -284,12 +287,143 @@ func main() {
 		c.Data(http.StatusOK, "text/html; charset=utf-8", indexContent)
 	})
 
-	addr := fmt.Sprintf("0.0.0.0:%s", config.ServerPort)
-	log.Printf("服务器启动于 http://localhost:%s（监听所有网卡）", config.ServerPort)
+	// ==================== 启动服务器 ====================
+
+	// 构建监听地址
+	var listenAddr string
+	if config.EnableIPv6 {
+		// IPv6 双栈：[::] 在 Windows 上需要 syscall 设置才能同时接受 IPv4
+		listenAddr = fmt.Sprintf("[%s]:%s", config.BindIPv6, config.ServerPort)
+	} else {
+		listenAddr = fmt.Sprintf("%s:%s", config.BindIPv4, config.ServerPort)
+	}
+
+	log.Println("========================================")
+	log.Printf("  NVS Server v1.0.0")
+	log.Printf("  监听地址: %s", listenAddr)
+	log.Println("========================================")
+
+	// 列出所有可访问的 URL
+	listAccessURLs(config.ServerPort)
+
+	// 尝试配置 Windows 防火墙（静默进行，失败不影响启动）
+	configureFirewall(config.ServerPort)
+
 	log.Println("前端已内嵌，无需额外启动 Nginx 或 npm run dev")
-	if err := r.Run(addr); err != nil {
+
+	if err := r.Run(listenAddr); err != nil {
 		log.Fatalf("服务器启动失败: %v", err)
 	}
+}
+
+// listAccessURLs 扫描所有网卡 IP 并输出可访问的 URL
+func listAccessURLs(port string) {
+	ips := collectNonLoopbackIPs()
+	if len(ips) == 0 {
+		return
+	}
+
+	log.Println("----------------------------------------")
+	log.Println("  可访问地址：")
+	log.Printf("    本机:   http://localhost:%s", port)
+	log.Printf("    本机:   http://127.0.0.1:%s", port)
+	for _, ip := range ips {
+		isV6 := strings.Contains(ip, ":")
+		if isV6 {
+			log.Printf("    局域网: http://[%s]:%s", ip, port)
+		} else {
+			log.Printf("    局域网: http://%s:%s", ip, port)
+		}
+	}
+	log.Println("----------------------------------------")
+}
+
+// collectNonLoopbackIPs 收集所有非回环的网卡 IP 地址
+func collectNonLoopbackIPs() []string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+
+	var ips []string
+	for _, iface := range ifaces {
+		// 跳过未启用的接口
+		if iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+		// 跳过回环接口
+		if iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			ipNet, ok := addr.(*net.IPNet)
+			if !ok {
+				continue
+			}
+			ip := ipNet.IP
+			if ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+				continue
+			}
+			// 优先私有地址
+			if ip.To4() != nil && ip.IsPrivate() {
+				ips = append(ips, ip.String())
+			} else if ip.IsGlobalUnicast() {
+				ips = append(ips, ip.String())
+			}
+		}
+	}
+	return ips
+}
+
+// configureFirewall 尝试在 Windows 防火墙上为 nvs-server.exe 开放端口
+func configureFirewall(port string) {
+	if runtime.GOOS != "windows" {
+		return
+	}
+
+	exePath, err := os.Executable()
+	if err != nil {
+		return
+	}
+
+	ruleName := "NVS Server (nvs-server.exe)"
+
+	// 检查规则是否已存在
+	checkCmd := exec.Command("netsh", "advfirewall", "firewall", "show", "rule",
+		"name="+ruleName)
+	if err := checkCmd.Run(); err == nil {
+		return // 规则已存在，跳过
+	}
+
+	// 尝试添加入站规则（需要管理员权限）
+	addCmd := exec.Command("netsh", "advfirewall", "firewall", "add", "rule",
+		"name="+ruleName,
+		"dir=in",
+		"action=allow",
+		"program="+exePath,
+		"protocol=TCP",
+		"localport="+port,
+		"enable=yes",
+		"profile=any",
+	)
+
+	output, err := addCmd.CombinedOutput()
+	if err != nil {
+		// 没有管理员权限，给出友好提示
+		log.Println("----------------------------------------")
+		log.Println("  ⚠ 未能自动配置 Windows 防火墙（可能需要管理员权限）")
+		log.Println("  请以管理员身份运行以下命令以允许外部访问：")
+		log.Printf("    netsh advfirewall firewall add rule name=\"NVS Server\" dir=in action=allow program=\"%s\" protocol=TCP localport=%s enable=yes profile=any", exePath, port)
+		log.Println("----------------------------------------")
+		return
+	}
+	_ = output
+	log.Println("[firewall] Windows 防火墙规则已添加")
 }
 
 // initDefaultAdmin 如果数据库中没有管理员，自动创建默认管理员账号
