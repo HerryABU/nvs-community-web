@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -76,10 +77,13 @@ var (
 	DBUser     string
 	DBPassword string
 	DBName     string
+	DBMemory   bool
 
 	// Redis
-	RedisHost string
-	RedisPort string
+	RedisHost     string
+	RedisPort     string
+	RedisPassword string
+	RedisDB       int
 
 	// JWT
 	JWTSecret      string
@@ -121,9 +125,12 @@ func Init() {
 	DBUser = getEnv("DB_USER", "nvs_user")
 	DBPassword = getEnv("DB_PASSWORD", "nvs_pass_2026")
 	DBName = getEnv("DB_NAME", "nvs")
+	DBMemory = getEnvBool("DB_MEMORY", false)
 
 	RedisHost = getEnv("REDIS_HOST", "127.0.0.1")
 	RedisPort = getEnv("REDIS_PORT", "6379")
+	RedisPassword = getEnv("REDIS_PASSWORD", "")
+	RedisDB = getEnvInt("REDIS_DB", 0)
 
 	JWTSecret = getEnv("JWT_SECRET", "change-me-in-production")
 	JWTExpireHours = getEnv("JWT_EXPIRE_HOURS", "72")
@@ -250,6 +257,18 @@ func getEnv(key, fallback string) string {
 		return val
 	}
 	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
+	val, ok := os.LookupEnv(key)
+	if !ok || val == "" {
+		return fallback
+	}
+	result, err := strconv.Atoi(val)
+	if err != nil {
+		return fallback
+	}
+	return result
 }
 
 func getEnvBool(key string, fallback bool) bool {

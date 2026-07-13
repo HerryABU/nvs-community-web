@@ -43,7 +43,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { novelApi, type Comment } from '@/api/novel';
+import { novelApi, commentApi, type Comment } from '@/api/novel';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { shouldShowGuard } from '@/utils/sensitiveZone';
@@ -53,6 +53,7 @@ const props = defineProps<{
   novelId: number;
   chapterNumber?: number;
   novelCategory?: string;
+  blogId?: number;
 }>();
 
 const authStore = useAuthStore();
@@ -90,8 +91,9 @@ const displayComments = computed(() => {
 async function fetchComments(reset = false) {
   if (reset) page.value = 1;
   try {
-    const res = await novelApi.getComments({
-      novel_id: props.novelId,
+    const res = await commentApi.getComments({
+      novel_id: props.blogId ? 0 : props.novelId,
+      blog_id: props.blogId || 0,
       chapter_number: props.chapterNumber,
       page: page.value,
     });
@@ -159,8 +161,9 @@ async function submitComment() {
 
   submitting.value = true;
   try {
-    await novelApi.createComment({
-      novel_id: props.novelId,
+    await commentApi.createComment({
+      novel_id: props.blogId ? 0 : props.novelId,
+      blog_id: props.blogId || 0,
       chapter_number: props.chapterNumber,
       content: newComment.value.trim(),
     });
@@ -178,8 +181,9 @@ async function handleReply(parentId: number, content: string) {
   const allowed = await crossDomainCheck();
   if (!allowed) return;
   try {
-    await novelApi.createComment({
-      novel_id: props.novelId,
+    await commentApi.createComment({
+      novel_id: props.blogId ? 0 : props.novelId,
+      blog_id: props.blogId || 0,
       chapter_number: props.chapterNumber,
       content,
       parent_id: parentId,
@@ -197,7 +201,7 @@ async function handleDelete(id: number) {
       confirmButtonText: '确认删除',
       type: 'warning',
     });
-    await novelApi.deleteComment(id);
+    await commentApi.deleteComment(id);
     comments.value = comments.value.filter(c => c.id !== id);
     ElMessage.success('已删除');
   } catch {

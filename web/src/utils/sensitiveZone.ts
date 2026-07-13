@@ -8,8 +8,24 @@ import { publicApi } from '@/api/admin';
 let SENSITIVE_ZONES: string[] = [];
 let zonesLoaded = false;
 
+/** 检查文本是否匹配任意敏感分区（支持子串匹配） */
+function matchZone(text: string): string | null {
+  if (!text) return null;
+  if (SENSITIVE_ZONES.includes(text)) return text;
+  for (const zone of SENSITIVE_ZONES) {
+    if (text.includes(zone)) return zone;
+    if (zone.includes(text) && text.length >= 2) return zone;
+  }
+  return null;
+}
+
 const CONFIRMED_KEY = 'nvs-confirmed-zones';
-const VISIT_KEY = 'nvs-zone-visits';
+const CONFIRMED_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 小时后需重新确认
+
+interface ConfirmedEntry {
+  zone: string;
+  time: number;
+}
 
 /** 从后端加载敏感分区列表 */
 async function loadZones(): Promise<string[]> {
@@ -27,35 +43,35 @@ async function loadZones(): Promise<string[]> {
   return SENSITIVE_ZONES;
 }
 
-/** 获取用户已确认过的分区集合 */
+/** 获取已确认分区（带过期时间） */
 function getConfirmedZones(): Set<string> {
   try {
     const raw = localStorage.getItem(CONFIRMED_KEY);
-    return raw ? new Set(JSON.parse(raw)) : new Set();
+    if (!raw) return new Set();
+    const entries: ConfirmedEntry[] = JSON.parse(raw);
+    const now = Date.now();
+    const valid = entries.filter(e => now - e.time < CONFIRMED_EXPIRY_MS);
+    // 清理过期条目
+    if (valid.length !== entries.length) {
+      localStorage.setItem(CONFIRMED_KEY, JSON.stringify(valid));
+    }
+    return new Set(valid.map(e => e.zone));
   } catch { return new Set(); }
-}
-
-/** 获取分区访问计数 */
-function getZoneVisits(): Record<string, number> {
-  try {
-    const raw = localStorage.getItem(VISIT_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
-}
-
-/** 记录一次分区访问 */
-export function recordZoneVisit(zone: string) {
-  if (!SENSITIVE_ZONES.includes(zone)) return;
-  const visits = getZoneVisits();
-  visits[zone] = (visits[zone] || 0) + 1;
-  localStorage.setItem(VISIT_KEY, JSON.stringify(visits));
 }
 
 /** 标记分区为已确认 */
 export function markZoneConfirmed(zone: string) {
-  const zones = getConfirmedZones();
-  zones.add(zone);
-  localStorage.setItem(CONFIRMED_KEY, JSON.stringify([...zones]));
+  try {
+    const raw = localStorage.getItem(CONFIRMED_KEY);
+    const entries: ConfirmedEntry[] = raw ? JSON.parse(raw) : [];
+    // 移除旧条目（如果有）
+    const filtered = entries.filter(e => e.zone !== zone);
+    filtered.push({ zone, time: Date.now() });
+    // 清理过期
+    const now = Date.now();
+    const valid = filtered.filter(e => now - e.time < CONFIRMED_EXPIRY_MS);
+    localStorage.setItem(CONFIRMED_KEY, JSON.stringify(valid));
+  } catch {}
 }
 
 /** 获取上一访问分区 */
@@ -68,32 +84,29 @@ export function setLastZone(zone: string) {
   sessionStorage.setItem('nvs-last-zone', zone);
 }
 
-/** 判断是否需要确认弹窗（同步版本，确保 zones 已加载） */
+/** 判断是否需要确认弹窗 */
 export async function shouldShowGuard(
   zone: string,
-  opts?: { authorId?: number; userId?: number },
+  opts?: { authorId?: number; userId?: number; wallEnabled?: boolean },
 ): Promise<{ needed: boolean; isCrossDomain: boolean; zoneName: string } | null> {
   await loadZones();
-  if (!SENSITIVE_ZONES.includes(zone)) return null;
+  const matchedZone = matchZone(zone);
+  if (!matchedZone) return null;
+  zone = matchedZone;
+
+  // 作者关闭了隔离墙 → 跳过
+  if (opts?.wallEnabled === false) return null;
 
   // 作者豁免：如果当前用户就是该区作品的作者，不需要确认
   if (opts?.authorId && opts?.userId && opts.authorId === opts.userId) {
     return null;
   }
 
+  // 已确认过（24小时内） → 跳过
   const confirmed = getConfirmedZones();
-
-  // 已确认过这个分区 → 跳过
   if (confirmed.has(zone)) return null;
 
-  // 读者倾向检测：访问 ≥ 3 次视为常客，跳过
-  const visits = getZoneVisits();
-  if ((visits[zone] || 0) >= 3) {
-    return null;
-  }
-
   const lastZone = getLastZone();
-  // 跨域移动（从一个敏感区到另一个敏感区）
   const isCrossDomain = SENSITIVE_ZONES.includes(lastZone) && lastZone !== zone;
 
   return {

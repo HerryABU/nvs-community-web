@@ -18,6 +18,9 @@ export const adminApi = {
   getDashboardStats() {
     return api.get('/admin/dashboard');
   },
+  getCommunity() {
+    return api.get('/admin/community');
+  },
 
   // 作者仪表盘数据
   getAuthorDashboard() {
@@ -25,11 +28,14 @@ export const adminApi = {
   },
 
   // 用户管理
-  getUsers(page: number = 1) {
-    return api.get('/admin/users', { params: { page } });
+  getUsers(page: number = 1, search?: string) {
+    return api.get('/admin/users', { params: search ? { page, search } : { page } });
   },
-  updateUser(id: number, data: { role?: string }) {
+  updateUser(id: number, data: { role?: string; nickname?: string; email?: string }) {
     return api.put(`/admin/users/${id}`, data);
+  },
+  deleteUser(id: number) {
+    return api.delete(`/admin/users/${id}`);
   },
 
   // VIP 申请
@@ -57,7 +63,7 @@ export const adminApi = {
   getForums(type?: string) {
     return api.get('/admin/forums', { params: { type } });
   },
-  createForum(data: { name: string; description: string; type: string; ref_id?: string; sort_order?: number }) {
+  createForum(data: { name: string; description: string; type: string; zone?: string; ref_id?: string; sort_order?: number }) {
     return api.post('/admin/forums', data);
   },
   updateForum(id: number, data: Record<string, any>) {

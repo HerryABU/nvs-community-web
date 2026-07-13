@@ -27,6 +27,9 @@
       <!-- 论坛入口 -->
       <router-link to="/forums" class="nav-link">论坛</router-link>
 
+      <!-- 博客入口 -->
+      <router-link to="/blogs" class="nav-link">博客</router-link>
+
       <!-- 书架入口（需登录） -->
       <router-link v-if="authStore.isLoggedIn" to="/bookshelf" class="nav-link">📚 书架</router-link>
 
@@ -179,7 +182,8 @@ watch(
 );
 
 function openFederated(site: any) {
-  window.open(site.url, '_blank');
+  // 通过本地代理路径访问外部站点内容: /{site-id}/...
+  window.open(`/${site.id}`, '_blank');
 }
 
 async function loadSiteInfo() {

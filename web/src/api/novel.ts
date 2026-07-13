@@ -1,102 +1,29 @@
 import api from './index';
 
-export interface Novel {
-  id: number;
-  author_id: number;
-  title: string;
-  category: string;
-  categories?: string[];
-  tags: string[];
-  summary: string;
-  cover_url: string;
-  price_per_chapter: number;
-  status: string;
-  source_type?: string;       // original / reprint
-  creation_method?: string;   // human / ai / human_ai_assisted
-  total_words: number;
-  total_chapters: number;
-  created_at: string;
-  updated_at: string;
-  author_name?: string;
-  author?: {
-    id: number;
-    username: string;
-    nickname: string;
-    avatar_url: string;
-  };
-}
+// 类型定义从 types.ts 导入并重新导出
+export type { Novel, Chapter, ChapterDetail, ChapterVerify, Comment, NovelListParams } from './novel/types';
 
-export interface Chapter {
-  id: number;
-  novel_id: number;
-  chapter_number: number;
-  title: string;
-  content?: string;
-  content_hash?: string;
-  word_count: number;
-  status: string;
-  created_at: string;
-}
-
-export interface ChapterDetail {
-  chapter: Chapter;
-  html_content?: string;
-  hash: string;
-  hash_match: boolean;
-  signature_verified?: boolean;
-  file_size: number;
-  modified_at: number;
-}
-
-export interface ChapterVerify {
-  novel_id: number;
-  chapter_number: number;
-  title: string;
-  hash_db: string;
-  hash_current: string;
-  hash_verified: boolean;
-  file_size: number;
-  modified_at: number;
-  message: string;
-}
-
-export interface Comment {
-  id: number;
-  user_id: number;
-  novel_id: number;
-  chapter_number: number;
-  content: string;
-  quote_text: string;
-  parent_id: number;
-  username?: string;
-  created_at: string;
-}
-
-export interface NovelListParams {
-  page?: number;
-  page_size?: number;
-  category?: string;
-  search?: string;
-  status?: string;
-}
+// 子模块重新导出（保持向后兼容）
+export { chapterApi } from './novel/chapters';
+export { commentApi } from './novel/comments';
+export { forumApi } from './forums';
 
 export const novelApi = {
-  // 作品
-  getNovels(params?: NovelListParams) {
-    return api.get<{ code: number; data: { list: Novel[]; total: number } }>('/novels', {
-      params,
-    });
+  // ============ 作品 CRUD ============
+
+  getNovels(params?: { page?: number; page_size?: number; category?: string; search?: string; status?: string }) {
+    return api.get<{ code: number; data: { list: import('./novel/types').Novel[]; total: number } }>('/novels', { params });
   },
 
   getNovel(id: number) {
-    return api.get<{ code: number; data: Novel }>(`/novels/${id}`);
+    return api.get<{ code: number; data: import('./novel/types').Novel }>(`/novels/${id}`);
   },
 
-  createNovel(data: Partial<Novel>) {
+  createNovel(data: Partial<import('./novel/types').Novel>) {
     return api.post('/novels', data);
   },
 
-  updateNovel(id: number, data: Partial<Novel>) {
+  updateNovel(id: number, data: Partial<import('./novel/types').Novel>) {
     return api.put(`/novels/${id}`, data);
   },
 
@@ -104,64 +31,17 @@ export const novelApi = {
     return api.delete(`/novels/${id}`);
   },
 
-  // 章节
-  getChapters(novelId: number) {
-    return api.get<{ code: number; data: Chapter[] }>(`/novels/${novelId}/chapters`);
-  },
+  // ============ 作者面板 ============
 
-  getChapter(novelId: number, chapterNum: number) {
-    return api.get<{ code: number; data: ChapterDetail }>(
-      `/novels/${novelId}/chapters/${chapterNum}`
-    );
-  },
-
-  verifyChapter(novelId: number, chapterNum: number) {
-    return api.get<{ code: number; data: ChapterVerify }>(
-      `/novels/${novelId}/chapters/${chapterNum}/verify`
-    );
-  },
-
-  createChapter(novelId: number, data: { title: string; content: string }) {
-    return api.post(`/novels/${novelId}/chapters`, data);
-  },
-
-  updateChapter(novelId: number, chapterNum: number, data: Partial<Chapter>) {
-    return api.put(`/novels/${novelId}/chapters/${chapterNum}`, data);
-  },
-
-  deleteChapter(novelId: number, chapterNum: number) {
-    return api.delete(`/novels/${novelId}/chapters/${chapterNum}`);
-  },
-
-  // 评论
-  getComments(params: { novel_id: number; chapter_number?: number; page?: number }) {
-    return api.get<{ code: number; data: { list: Comment[]; total: number } }>('/comments', {
-      params,
-    });
-  },
-
-  createComment(data: {
-    novel_id: number;
-    chapter_number?: number;
-    content: string;
-    quote_text?: string;
-    parent_id?: number;
-  }) {
-    return api.post('/comments', data);
-  },
-
-  deleteComment(id: number) {
-    return api.delete(`/comments/${id}`);
-  },
-
-  // 作者面板
   getMyNovels() {
-    return api.get<{ code: number; data: Novel[] }>('/author/novels');
+    return api.get<{ code: number; data: import('./novel/types').Novel[] }>('/author/novels');
   },
 
   getNovelStats(id: number) {
     return api.get<{ code: number; data: Record<string, number> }>(`/author/novels/${id}/stats`);
   },
+
+  // ============ 导入导出 ============
 
   exportNovel(id: number) {
     return api.post(`/novels/${id}/export`, {}, { responseType: 'blob' });
@@ -203,34 +83,17 @@ export const novelApi = {
     );
   },
 
-  // 评分
+  // ============ 评分 ============
+
   getNovelRating(id: number) {
     return api.get<{ code: number; data: { dimensions: Record<string, number>; overall: number; count: number } }>(`/novels/${id}/rating`);
   },
+
   submitRating(data: { novel_id: number; type_completion: number; narrative_quality: number; thought_depth: number; community_reputation: number; update_stability: number }) {
     return api.post('/ratings', data);
   },
+
   getUserRating(novelId: number) {
     return api.get('/ratings', { params: { novel_id: novelId } });
-  },
-
-  // 论坛
-  getForums(type?: string) {
-    return api.get('/forums', { params: { type } });
-  },
-  getForum(id: number, page?: number) {
-    return api.get(`/forums/${id}`, { params: { page } });
-  },
-  getNovelForum(novelId: number) {
-    return api.get(`/novels/${novelId}/forum`);
-  },
-  createThread(forumId: number, data: { title: string; content: string }) {
-    return api.post(`/forums/${forumId}/threads`, data);
-  },
-  getThread(id: number, page?: number) {
-    return api.get(`/threads/${id}`, { params: { page } });
-  },
-  createPost(threadId: number, data: { content: string }) {
-    return api.post(`/threads/${threadId}/posts`, data);
   },
 };

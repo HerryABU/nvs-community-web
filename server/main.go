@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"log"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,6 +23,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -41,11 +44,21 @@ func main() {
 			config.DBUser, config.DBPassword, config.DBHost, config.DBPort, config.DBName)
 		dialector = mysql.Open(dsn)
 		log.Println("使用 MySQL 数据库")
-	default:
+	case "sqlite":
 		dbPath := "data/nvs.db"
-		os.MkdirAll("data", 0755)
+		if config.DBMemory {
+			dbPath = ":memory:"
+			log.Println("使用 SQLite 内存数据库（重启数据丢失）")
+		} else {
+			os.MkdirAll("data", 0755)
+			log.Printf("使用 SQLite 数据库: %s", dbPath)
+		}
 		dialector = sqlite.Open(dbPath)
-		log.Printf("使用 SQLite 数据库: %s", dbPath)
+	default:
+		// 未知驱动，默认 SQLite
+		os.MkdirAll("data", 0755)
+		dialector = sqlite.Open("data/nvs.db")
+		log.Println("使用 SQLite 数据库: data/nvs.db")
 	}
 
 	var err error
@@ -61,6 +74,26 @@ func main() {
 		sqlDB.SetMaxIdleConns(10)
 		sqlDB.SetMaxOpenConns(100)
 		sqlDB.SetConnMaxLifetime(time.Hour)
+
+		// MySQL 模式 → 自动启用 Redis 缓存
+		if config.RedisHost != "" {
+			utils.RedisClient = redis.NewClient(&redis.Options{
+				Addr:     fmt.Sprintf("%s:%s", config.RedisHost, config.RedisPort),
+				Password: config.RedisPassword,
+				DB:       config.RedisDB,
+			})
+			_, err := utils.RedisClient.Ping(context.Background()).Result()
+			if err != nil {
+				log.Printf("[Redis] 连接失败: %v，验证码将使用内存存储", err)
+				utils.RedisClient = nil
+			} else {
+				log.Printf("[Redis] 已连接 %s:%s (DB %d)，验证码/限流使用 Redis 存储", config.RedisHost, config.RedisPort, config.RedisDB)
+			}
+		}
+	}
+
+	if config.DBDriver == "sqlite" && config.DBMemory {
+		log.Println("[SQLite] 内存模式：验证码和限流使用进程内存储")
 	}
 
 	if err := models.DB.AutoMigrate(
@@ -82,6 +115,8 @@ func main() {
 		&models.FederatedSite{},
 		&models.FederatedNovel{},
 		&models.BookShelf{},
+		&models.Follow{},
+		&models.AuthorBlog{},
 	); err != nil {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}
@@ -93,8 +128,12 @@ func main() {
 	// 设置 SMTP 配置提供者（从平台配置读取）
 	utils.SMTPConfigProvider = func() utils.SMTPConfig {
 		host, port, user, pass, from := models.GetSMTPConfigFromDB()
+		portInt := 587
+		if p, err := strconv.Atoi(port); err == nil {
+			portInt = p
+		}
 		return utils.SMTPConfig{
-			Host: host, Port: port, User: user, Password: pass, From: from,
+			Host: host, Port: fmt.Sprintf("%d", portInt), User: user, Password: pass, From: from,
 		}
 	}
 
@@ -144,6 +183,8 @@ func main() {
 		public.POST("/auth/logout", handlers.Logout)
 		public.POST("/auth/send-code", handlers.SendVerificationCode)
 		public.POST("/auth/verify-code", handlers.VerifyEmailCode)
+		public.POST("/auth/forgot-password", security.RateLimit(3, 60), handlers.ForgotPassword)
+		public.POST("/auth/reset-password", security.RateLimit(3, 60), handlers.ResetPassword)
 		public.GET("/categories", handlers.ListCategories)
 		public.GET("/categories/stats", handlers.ListCategoryStats)
 		public.GET("/wall-zone/:zone", handlers.GetPublicZoneDetail)
@@ -160,6 +201,7 @@ func main() {
 		public.GET("/threads/:id", handlers.GetThread)
 		public.GET("/author/profile/:id", handlers.GetAuthorProfile)
 		public.GET("/author/forum/:id", handlers.GetAuthorForum)
+		public.GET("/search/authors", handlers.SearchAuthors)
 	}
 
 	protected := r.Group("/api")
@@ -194,6 +236,28 @@ func main() {
 		// 收益
 		protected.GET("/author/earnings", handlers.GetEarnings)
 		protected.POST("/author/withdraw", handlers.RequestWithdraw)
+		// 作者头像上传
+		protected.POST("/author/avatar", handlers.UploadAvatar)
+		// 作者签名状态
+		protected.GET("/author/signature-status", handlers.GetSignatureStatus)
+		// 作者上传图片（重新编码防马）
+		protected.POST("/author/image", handlers.UploadImage)
+		// 作者更新资料（签名、隔离开关）
+		protected.PUT("/author/profile", handlers.UpdateAuthorProfile)
+		// 论坛置顶
+		protected.POST("/threads/:id/pin", handlers.PinThread)
+		protected.POST("/threads/:id/unpin", handlers.UnpinThread)
+		// 关注作者
+		protected.POST("/follow/:id", handlers.FollowAuthor)
+		protected.DELETE("/follow/:id", handlers.UnfollowAuthor)
+		protected.GET("/following", handlers.ListFollowing)
+		protected.GET("/followers", handlers.ListFollowers)
+		protected.GET("/follow/check/:id", handlers.CheckFollow)
+		protected.GET("/follow/stats", handlers.GetFollowStats)
+		// 作者博客（创建、编辑、删除需登录）
+		protected.POST("/blogs", handlers.CreateBlog)
+		protected.PUT("/blogs/:id", handlers.UpdateBlog)
+		protected.DELETE("/blogs/:id", handlers.DeleteBlog)
 	}
 
 	// 书架路由
@@ -213,8 +277,10 @@ func main() {
 	{
 		admin.GET("/stats", handlers.GetAdminStats)
 		admin.GET("/dashboard", handlers.GetDashboardStats)
+		admin.GET("/community", handlers.GetCommunityDashboard)
 		admin.GET("/users", handlers.ListUsers)
 		admin.PUT("/users/:id", handlers.UpdateUser)
+		admin.DELETE("/users/:id", handlers.DeleteUser)
 		admin.GET("/vip-applications", handlers.ListVipApplications)
 		admin.POST("/vip-applications/:id/approve", handlers.ApproveVip)
 		admin.GET("/reports", handlers.ListReports)
@@ -244,6 +310,10 @@ func main() {
 		r.GET("/api/federated/novels", handlers.ListFederatedNovels)
 		r.GET("/api/federated/sites", handlers.ListPublicSites)
 		r.GET("/api/site-info", handlers.GetSiteInfo)
+		// 博客公开读取
+		r.GET("/api/blogs", handlers.ListPublicBlogs)
+		r.GET("/api/blogs/:id", handlers.GetBlog)
+		r.GET("/api/author/:id/blogs", handlers.ListAuthorBlogs)
 	}
 
 	// ==================== 静态文件服务 ====================
@@ -273,12 +343,36 @@ func main() {
 		f, err := frontendFS.Open(cleanPath)
 		if err == nil {
 			f.Close()
-			// 文件存在，使用标准 FileServer 服务（自动处理 MIME、缓存等）
 			http.FileServer(http.FS(frontendFS)).ServeHTTP(c.Writer, c.Request)
 			return
 		}
 
-		// 文件不存在 → SPA fallback：返回 index.html
+		// 外联站代理回退：/{numeric-id}/some-path → 重试内部同路径
+		firstSlash := strings.IndexByte(cleanPath, '/')
+		if firstSlash > 0 {
+			prefix := cleanPath[:firstSlash]
+			if isNumeric(prefix) {
+				innerPath := cleanPath[firstSlash:] // "/rest/of/path"
+				// 尝试在嵌入文件系统中查找
+				f2, err2 := frontendFS.Open(innerPath)
+				if err2 == nil {
+					f2.Close()
+					http.FileServer(http.FS(frontendFS)).ServeHTTP(c.Writer, c.Request)
+					return
+				}
+				// 也尝试 index.html（SPA fallback for the inner path）
+				c.Set("outside_web_id", prefix)
+				indexContent, err := fs.ReadFile(frontendFS, "index.html")
+				if err != nil {
+					c.String(http.StatusInternalServerError, "前端资源缺失")
+					return
+				}
+				c.Data(http.StatusOK, "text/html; charset=utf-8", indexContent)
+				return
+			}
+		}
+
+		// 文件不存在 → SPA fallback
 		indexContent, err := fs.ReadFile(frontendFS, "index.html")
 		if err != nil {
 			c.String(http.StatusInternalServerError, "前端资源缺失")
@@ -459,4 +553,12 @@ func initDefaultAdmin() {
 	log.Println("  密码: admin123")
 	log.Println("  请登录后立即修改密码！")
 	log.Println("========================================")
+}
+
+// isNumeric 检查字符串是否全为数字
+func isNumeric(s string) bool {
+	for _, c := range s {
+		if c < '0' || c > '9' { return false }
+	}
+	return len(s) > 0
 }

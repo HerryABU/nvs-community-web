@@ -48,7 +48,7 @@
         </el-table-column>
         <el-table-column label="作者" width="100">
           <template #default="{ row }">
-            <router-link :to="`/author/${row.author_id}`" @click.stop>{{ row.author_name || row.author?.nickname || '未知' }}</router-link>
+            <router-link :to="`/author/${row.author_id}`" @click.stop>{{ row.author_name || row.author?.nickname || row.author?.username || '未知' }}</router-link>
           </template>
         </el-table-column>
         <el-table-column prop="total_words" label="字数" width="90" sortable />

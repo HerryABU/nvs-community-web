@@ -20,7 +20,7 @@
           <h1 class="novel-title">{{ novel.title }}</h1>
           <div class="novel-meta">
             <el-tag size="small" type="warning">{{ novel.category }}</el-tag>
-            <span class="meta-item">作者：<router-link :to="`/author/${novel.author_id}`" class="author-link">{{ novel.author_name || '未知' }}</router-link></span>
+            <span class="meta-item">作者：<router-link :to="`/author/${novel.author_id}`" class="author-link">{{ novel.author_name || novel.author?.nickname || novel.author?.username || '未知' }}</router-link></span>
             <span class="meta-item">{{ novel.total_words?.toLocaleString() || 0 }} 字</span>
             <span class="meta-item">{{ novel.total_chapters || 0 }} 章</span>
             <span class="meta-item">更新：{{ formatDate(novel.updated_at) }}</span>
@@ -41,16 +41,34 @@
       <!-- 章节列表 -->
       <h2 class="section-title">目录（共 {{ chapters.length }} 章）</h2>
       <div class="chapter-list" v-if="chapters.length > 0">
+        <template v-for="(ch, idx) in displayChapters" :key="ch.chapter_number">
+          <!-- 折叠分隔线：在第5个后（即前5和后5之间）插入展开按钮 -->
+          <div
+            v-if="idx === 5 && chapters.length > 10 && !showAllChapters"
+            class="chapter-collapse-row"
+            @click="showAllChapters = true"
+          >
+            <el-icon><ArrowDown /></el-icon>
+            <span>展开全部章节（中间省略 {{ chapters.length - 10 }} 章）</span>
+          </div>
+          <div
+            class="chapter-item"
+            @click="$router.push(`/novel/${novel.id}/read/${ch.chapter_number}`)"
+          >
+            <span class="chapter-num">第{{ ch.chapter_number }}章</span>
+            <span class="chapter-title">{{ ch.title }}</span>
+            <span class="chapter-words">{{ ch.word_count?.toLocaleString() }}字</span>
+            <span class="chapter-date">{{ formatDate(ch.created_at) }}</span>
+          </div>
+        </template>
+        <!-- 收起按钮：全部展开后显示在末尾 -->
         <div
-          v-for="ch in chapters"
-          :key="ch.chapter_number"
-          class="chapter-item"
-          @click="$router.push(`/novel/${novel.id}/read/${ch.chapter_number}`)"
+          v-if="chapters.length > 10 && showAllChapters"
+          class="chapter-collapse-row"
+          @click="showAllChapters = false"
         >
-          <span class="chapter-num">第{{ ch.chapter_number }}章</span>
-          <span class="chapter-title">{{ ch.title }}</span>
-          <span class="chapter-words">{{ ch.word_count?.toLocaleString() }}字</span>
-          <span class="chapter-date">{{ formatDate(ch.created_at) }}</span>
+          <el-icon><ArrowUp /></el-icon>
+          <span>收起目录，仅显示头尾章节</span>
         </div>
       </div>
       <el-empty v-else description="暂无章节" />
@@ -75,6 +93,7 @@
       :visible="showZoneGuard"
       :zone-name="zoneGuardName"
       :is-cross-domain="zoneGuardCross"
+      :custom-warning="novel?.wall_warning"
       @confirm="onZoneConfirmed"
       @cancel="onZoneCancelled"
     />
@@ -82,15 +101,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { novelApi, type Novel, type Chapter } from '@/api/novel';
+import { novelApi, chapterApi, forumApi, type Novel, type Chapter } from '@/api/novel';
 import { bookshelfApi } from '@/api/bookshelf';
 import CommentSection from '@/components/CommentSection.vue';
 import StarRating from '@/components/StarRating.vue';
 import SensitiveZoneGuard from '@/components/SensitiveZoneGuard.vue';
 import { useAuthStore } from '@/stores/auth';
-import { shouldShowGuard, markZoneConfirmed, setLastZone, recordZoneVisit } from '@/utils/sensitiveZone';
+import { shouldShowGuard, markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';
 
 const route = useRoute();
 const router = useRouter();
@@ -101,6 +120,16 @@ const novel = ref<Novel | null>(null);
 const chapters = ref<Chapter[]>([]);
 const onShelf = ref(false);
 const shelfLoading = ref(false);
+
+// 目录折叠：章节 > 10 时只展示头尾各5章，中间可展开
+const COLLAPSE_THRESHOLD = 10;
+const showAllChapters = ref(false);
+const displayChapters = computed(() => {
+  if (chapters.value.length <= COLLAPSE_THRESHOLD || showAllChapters.value) {
+    return chapters.value;
+  }
+  return chapters.value.slice(0, 5).concat(chapters.value.slice(-5));
+});
 
 // 敏感分区确认
 const showZoneGuard = ref(false);
@@ -143,7 +172,7 @@ async function toggleShelf() {
 async function goToForum() {
   if (!novel.value) return;
   try {
-    const res = await novelApi.getNovelForum(novel.value.id);
+    const res = await forumApi.getNovelForum(novel.value.id);
     const forumId = res.data.data?.forum?.id;
     if (forumId) router.push(`/forum/${forumId}`);
   } catch {
@@ -151,8 +180,8 @@ async function goToForum() {
   }
 }
 
-function checkSensitiveZone(category: string) {
-  const guard = shouldShowGuard(category);
+async function checkSensitiveZone(category: string) {
+  const guard = await shouldShowGuard(category);
   if (guard?.needed) {
     zoneGuardName.value = guard.zoneName;
     zoneGuardCross.value = guard.isCrossDomain;
@@ -177,7 +206,7 @@ onMounted(async () => {
   try {
     const [novelRes, chaptersRes] = await Promise.all([
       novelApi.getNovel(id),
-      novelApi.getChapters(id),
+      chapterApi.getChapters(id),
     ]);
     novel.value = novelRes.data.data;
     chapters.value = chaptersRes.data.data || [];
@@ -196,12 +225,12 @@ onMounted(async () => {
         ? novel.value.categories
         : (novel.value.category ? [novel.value.category] : []);
       for (const cat of cats) {
-        recordZoneVisit(cat);
-        const guard = shouldShowGuard(cat, {
+        const guard = await shouldShowGuard(cat, {
           authorId: novel.value.author_id,
           userId: authStore.user?.id,
+          wallEnabled: novel.value.wall_enabled,
         });
-        if (guard?.needed) {
+        if (guard?.needed && guard) {
           zoneGuardName.value = guard.zoneName;
           zoneGuardCross.value = guard.isCrossDomain;
           showZoneGuard.value = true;
@@ -300,6 +329,28 @@ onMounted(async () => {
   border-bottom: none;
 }
 
+/* 目录折叠行 */
+.chapter-collapse-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 0;
+  margin: 4px 0;
+  cursor: pointer;
+  color: var(--primary-color);
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-radius: 6px;
+  background: linear-gradient(135deg, rgba(64, 158, 255, 0.04), rgba(64, 158, 255, 0.02));
+  transition: background 0.2s, color 0.2s;
+  user-select: none;
+}
+.chapter-collapse-row:hover {
+  background: rgba(64, 158, 255, 0.08);
+  color: #2563eb;
+}
+
 .chapter-num {
   color: var(--text-light);
   min-width: 80px;
@@ -363,6 +414,17 @@ onMounted(async () => {
 }
 [data-theme="dark"] .chapter-item:hover {
   background: #1e293b;
+}
+[data-theme="dark"] .chapter-collapse-row {
+  background: rgba(64, 158, 255, 0.06);
+  color: #60a5fa;
+}
+[data-theme="dark"] .chapter-collapse-row:hover {
+  background: rgba(96, 165, 250, 0.12);
+  color: #93c5fd;
+}
+[data-theme="dark"] .chapter-item:last-child {
+  border-bottom: none;
 }
 [data-theme="dark"] .chapter-num {
   color: #94a3b8;

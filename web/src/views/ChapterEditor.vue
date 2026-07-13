@@ -87,7 +87,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { novelApi, type Chapter } from '@/api/novel';
+import { novelApi, chapterApi, type Chapter } from '@/api/novel';
 import { ElMessage } from 'element-plus';
 import { ArrowLeft, Plus, Delete } from '@element-plus/icons-vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
@@ -222,7 +222,7 @@ async function loadNovel() {
   try {
     const [novelRes, chaptersRes] = await Promise.all([
       novelApi.getNovel(novelId.value),
-      novelApi.getChapters(novelId.value),
+      chapterApi.getChapters(novelId.value),
     ]);
     novelTitle.value = novelRes.data.data.title;
     chapters.value = chaptersRes.data.data || [];
@@ -243,7 +243,7 @@ async function loadNovel() {
 
 async function loadCurrentChapter() {
   try {
-    const res = await novelApi.getChapter(novelId.value, currentNum.value);
+    const res = await chapterApi.getChapter(novelId.value, currentNum.value);
     const detail = res.data.data;
     const ch = detail.chapter;
     chapterTitle.value = ch.title || '';
@@ -302,12 +302,12 @@ async function saveChapter() {
   try {
     const existing = chapters.value.find(c => c.chapter_number === currentNum.value && c.id > 0);
     if (existing) {
-      await novelApi.updateChapter(novelId.value, currentNum.value, {
+      await chapterApi.updateChapter(novelId.value, currentNum.value, {
         title: chapterTitle.value,
         content: contentToSave,
       });
     } else {
-      await novelApi.createChapter(novelId.value, {
+      await chapterApi.createChapter(novelId.value, {
         title: chapterTitle.value,
         content: contentToSave,
       });
@@ -334,12 +334,12 @@ async function saveChapterSilent() {
   try {
     const existing = chapters.value.find(c => c.chapter_number === currentNum.value && c.id > 0);
     if (existing) {
-      await novelApi.updateChapter(novelId.value, currentNum.value, {
+      await chapterApi.updateChapter(novelId.value, currentNum.value, {
         title: chapterTitle.value,
         content: contentToSave,
       });
     } else if (chapterTitle.value.trim()) {
-      await novelApi.createChapter(novelId.value, {
+      await chapterApi.createChapter(novelId.value, {
         title: chapterTitle.value,
         content: contentToSave,
       });
@@ -349,7 +349,7 @@ async function saveChapterSilent() {
 
 async function deleteChapterItem(num: number) {
   try {
-    await novelApi.deleteChapter(novelId.value, num);
+    await chapterApi.deleteChapter(novelId.value, num);
     chapters.value = chapters.value.filter(c => c.chapter_number !== num);
     if (currentNum.value === num && chapters.value.length > 0) {
       switchChapter(chapters.value[0].chapter_number);

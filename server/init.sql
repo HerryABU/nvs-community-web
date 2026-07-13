@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS novels (
     status ENUM('draft', 'published', 'hidden') DEFAULT 'draft',
     total_words INT DEFAULT 0,
     total_chapters INT DEFAULT 0,
+    wall_enabled TINYINT(1) DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE,

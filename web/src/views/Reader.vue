@@ -56,6 +56,7 @@
       :visible="showZoneGuard"
       :zone-name="zoneGuardName"
       :is-cross-domain="zoneGuardCross"
+      :custom-warning="novelWallWarning"
       @confirm="onZoneConfirmed"
       @cancel="onZoneCancelled"
     />
@@ -65,13 +66,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { novelApi, type Chapter } from '@/api/novel';
+import { novelApi, chapterApi, type Chapter } from '@/api/novel';
 import { bookshelfApi } from '@/api/bookshelf';
 import { useAuthStore } from '@/stores/auth';
 import { renderMarkdown, renderMermaidBlocks } from '@/markdown/renderer';
 import CommentSection from '@/components/CommentSection.vue';
 import SensitiveZoneGuard from '@/components/SensitiveZoneGuard.vue';
-import { shouldShowGuard, markZoneConfirmed, setLastZone, recordZoneVisit } from '@/utils/sensitiveZone';
+import { shouldShowGuard, markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';
 
 const authStore = useAuthStore();
 
@@ -86,6 +87,8 @@ const htmlContent = ref('');
 const novelTitle = ref('');
 const novelCategory = ref('');
 const novelAuthorId = ref(0);
+const novelWallEnabled = ref(true);
+const novelWallWarning = ref('');
 const totalChapters = ref(0);
 
 // 敏感分区确认
@@ -104,7 +107,7 @@ async function loadChapter() {
   loading.value = true;
   try {
     const [chRes, novelRes] = await Promise.all([
-      novelApi.getChapter(novelId.value, chapterNum.value),
+      chapterApi.getChapter(novelId.value, chapterNum.value),
       novelApi.getNovel(novelId.value),
     ]);
     const detail = chRes.data.data;
@@ -116,6 +119,8 @@ async function loadChapter() {
     novelTitle.value = novelRes.data.data.title;
     novelCategory.value = novelRes.data.data.category || '';
     novelAuthorId.value = novelRes.data.data.author_id || 0;
+    novelWallEnabled.value = novelRes.data.data.wall_enabled !== false;
+    novelWallWarning.value = novelRes.data.data.wall_warning || '';
     totalChapters.value = novelRes.data.data.total_chapters;
     localStorage.setItem(
       `reading-progress-${novelId.value}`,
@@ -144,11 +149,9 @@ async function loadChapter() {
 async function checkSensitiveZone() {
   const cat = novelCategory.value;
   if (!cat) return;
-  // 记录该区访问（用于读者倾向检测）
-  recordZoneVisit(cat);
   const guard = await shouldShowGuard(cat, {
     authorId: novelAuthorId.value,
-    userId: authStore.user?.id,
+    userId: authStore.user?.id, wallEnabled: novelWallEnabled.value,
   });
   if (guard?.needed) {
     zoneGuardName.value = guard.zoneName;

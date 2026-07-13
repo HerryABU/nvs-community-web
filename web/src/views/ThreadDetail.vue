@@ -47,7 +47,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { novelApi } from '@/api/novel';
+import { novelApi, forumApi } from '@/api/novel';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage } from 'element-plus';
 import { renderMarkdown } from '@/markdown/renderer';
@@ -68,7 +68,7 @@ function formatTime(s: string) {
 async function load() {
   loading.value = true;
   try {
-    const res = await novelApi.getThread(Number(route.params.id));
+    const res = await forumApi.getThread(Number(route.params.id));
     const d = res.data.data;
     thread.value = d.thread;
     posts.value = d.posts || [];
@@ -84,7 +84,7 @@ async function submitReply() {
   if (!replyContent.value.trim()) return;
   replying.value = true;
   try {
-    await novelApi.createPost(Number(route.params.id), { content: replyContent.value });
+    await forumApi.createPost(Number(route.params.id), { content: replyContent.value });
     ElMessage.success('回复成功');
     replyContent.value = '';
     load();

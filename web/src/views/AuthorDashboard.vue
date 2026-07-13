@@ -7,10 +7,18 @@
           <span class="title-glow">创作数据大屏</span>
         </h1>
         <p class="dashboard-subtitle">跟踪创作数据 · 管理作品</p>
-        <el-button class="create-btn" size="large" @click="$router.push('/author/editor')">
-          <el-icon><EditPen /></el-icon>新建作品
-        </el-button>
+        <div class="hero-buttons">
+          <el-button class="create-btn" size="large" @click="$router.push('/author/editor')">
+            <el-icon><EditPen /></el-icon>新建作品
+          </el-button>
+          <el-button size="large" @click="$router.push('/author/blog/new')">
+            <el-icon><Edit /></el-icon>写博客
+          </el-button>
+        </div>
       </div>
+
+      <!-- 作者名片：头像 + 签名状态 -->
+      <AuthorCard />
 
       <!-- 第一行：统计卡片 -->
       <el-row :gutter="20" class="stats-row">
@@ -41,18 +49,52 @@
         </el-col>
       </el-row>
 
-      <!-- 第三行：仪表盘 + 仪表盘 + 评论趋势 -->
+      <!-- 第三行：收藏 + 阅读（柱状图） -->
       <el-row :gutter="20" class="chart-row">
-        <el-col :xs="24" :md="8">
-          <DashboardCharts :completion-gauge="completionRate" />
+        <el-col :xs="24" :md="12">
+          <DashboardCharts :novel-bars="bookshelfBarData" />
         </el-col>
-        <el-col :xs="24" :md="8">
+        <el-col :xs="24" :md="12">
+          <DashboardCharts :novel-bars="viewsBarData" />
+        </el-col>
+      </el-row>
+
+      <!-- 第四行：评分 + 评论 -->
+      <el-row :gutter="20" class="chart-row">
+        <el-col :xs="24" :md="12">
           <DashboardCharts :rating-gauge="avgRating" />
         </el-col>
-        <el-col :xs="24" :md="8">
+        <el-col :xs="24" :md="12">
           <DashboardCharts :visitor-trend="commentTrend" />
         </el-col>
       </el-row>
+
+      <!-- 博客管理 -->
+      <div class="novels-section">
+        <h2 class="section-title-bar">
+          <span class="title-bar-text">我的博客</span>
+          <span class="title-bar-count">{{ myBlogs.length }} 篇</span>
+        </h2>
+        <div v-loading="loadingBlogs" style="min-height:60px">
+          <el-empty v-if="!loadingBlogs && myBlogs.length === 0" description="还没有博客文章，点击上方「写博客」开始吧！" />
+          <div v-else class="blog-list-dash">
+            <div v-for="blog in myBlogs" :key="blog.id" class="blog-item-dash">
+              <div class="blog-item-main">
+                <el-tag v-if="blog.is_pinned" size="small" type="danger" style="margin-right:6px">置顶</el-tag>
+                <span class="blog-item-title-dash">{{ blog.title }}</span>
+                <span class="blog-item-meta">{{ formatDate(blog.created_at) }} · {{ blog.view_count }} 阅读</span>
+              </div>
+              <div class="blog-item-actions">
+                <el-button size="small" text type="primary" @click="$router.push(`/blog/${blog.id}`)">查看</el-button>
+                <el-button size="small" text type="primary" @click="$router.push(`/author/blog/${blog.id}`)">编辑</el-button>
+                <el-popconfirm title="确定删除？" @confirm="deleteMyBlog(blog.id)">
+                  <template #reference><el-button size="small" text type="danger">删除</el-button></template>
+                </el-popconfirm>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- 底部：作品管理卡片列表 -->
       <div class="novels-section">
@@ -85,6 +127,19 @@
                     <el-tag size="small" v-for="cat in novel.categories" :key="cat" class="cat-tag">{{ cat }}</el-tag>
                   </template>
                   <el-tag size="small" v-else class="cat-tag">{{ novel.category }}</el-tag>
+                </div>
+                <!-- 隔离墙开关（仅敏感分类作品显示） -->
+                <div v-if="isSensitiveCategory(novel)" class="wall-toggle-row">
+                  <span style="font-size:0.8rem;color:#999">隔离确认</span>
+                  <el-switch
+                    :model-value="novel.wall_enabled !== false"
+                    size="small"
+                    :loading="wallToggling === novel.id"
+                    @change="(val: boolean) => toggleWall(novel, val)"
+                  />
+                  <span style="font-size:0.75rem" :style="{color: novel.wall_enabled !== false ? '#22c55e' : '#999'}">
+                    {{ novel.wall_enabled !== false ? '已启用' : '已关闭' }}
+                  </span>
                 </div>
                 <div class="novel-card-meta">
                   <span><el-icon><Collection /></el-icon>{{ novel.total_chapters || 0 }} 章</span>
@@ -120,27 +175,56 @@
         </div>
       </div>
     </div>
+
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
 import { novelApi, type Novel } from '@/api/novel';
+import { authApi } from '@/api/auth';
 import { adminApi } from '@/api/admin';
+import { blogApi } from '@/api/social';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
-  ArrowDown, EditPen, Document, Collection, MagicStick,
+  ArrowDown, EditPen, Document, Collection, MagicStick, UserFilled, Camera,
   Edit, View, Download, Delete, Notebook, DataLine, Files, ChatLineRound
 } from '@element-plus/icons-vue';
 import AnimatedNumber from '@/components/AnimatedNumber.vue';
 import DashboardCharts from '@/components/DashboardCharts.vue';
+import RichTextEditor from '@/components/RichTextEditor.vue';
 
 const route = useRoute();
+const authStore = useAuthStore();
 
 const novels = ref<Novel[]>([]);
 const loadingNovels = ref(false);
 const exportingId = ref(0);
+
+// 隔离墙开关
+const wallToggling = ref(0);
+const sensitiveZones = ref<string[]>([]);
+
+// 博客管理
+const myBlogs = ref<any[]>([]);
+const loadingBlogs = ref(false);
+
+function formatDate(d?: string) { if (!d) return ''; return new Date(d).toLocaleString('zh-CN'); }
+async function loadMyBlogs() {
+  if (!authStore.user) return;
+  loadingBlogs.value = true;
+  try {
+    const res = await blogApi.listByAuthor(authStore.user.id);
+    if (res.data.code === 0) { myBlogs.value = res.data.data.list || []; }
+  } catch { /* ignore */ }
+  finally { loadingBlogs.value = false; }
+}
+async function deleteMyBlog(id: number) {
+  try { await blogApi.delete(id); ElMessage.success('已删除'); loadMyBlogs(); }
+  catch { ElMessage.error('删除失败'); }
+}
 
 // 统计数据
 const statsCards = reactive([
@@ -179,8 +263,23 @@ const commentTrend = ref<any>({
   seriesName: '评论数',
 });
 
-const completionRate = ref<number | null>(null);
+const bookshelfCount = ref(0);
+const totalViews = ref(0);
 const avgRating = ref<number | null>(null);
+
+const bookshelfBarData = computed(() => ({
+  title: '总收藏',
+  labels: ['收藏'],
+  values: [bookshelfCount.value],
+  seriesName: '收藏数',
+}));
+
+const viewsBarData = computed(() => ({
+  title: '总阅读量',
+  labels: ['阅读'],
+  values: [totalViews.value],
+  seriesName: '阅读量',
+}));
 
 const exportFormats: Record<string, { label: string; ext: string; mime: string; fn: (id: number) => Promise<any> }> = {
   zip: { label: 'ZIP 打包', ext: 'zip', mime: 'application/zip', fn: novelApi.exportNovel },
@@ -220,9 +319,8 @@ async function loadDashboard() {
         };
       }
 
-      if (d.completion_rate !== undefined) {
-        completionRate.value = d.completion_rate;
-      }
+      bookshelfCount.value = d.bookshelf_count || 0;
+      totalViews.value = d.total_views || 0;
 
       if (d.avg_rating !== undefined) {
         avgRating.value = d.avg_rating;
@@ -254,11 +352,7 @@ async function loadNovels() {
       statsCards[2].value = novels.value.reduce((sum, n) => sum + (n.total_chapters || 0), 0);
     }
 
-    // Compute completion rate if not provided
-    if (completionRate.value === null && novels.value.length > 0) {
-      const completed = novels.value.filter(n => n.status === 'published').length;
-      completionRate.value = completed / novels.value.length;
-    }
+    // Use bookshelf data from API; fallback to 0
   } catch (e) {
     console.error(e);
   } finally {
@@ -299,20 +393,58 @@ async function handleDelete(novel: Novel) {
   } catch { /* cancelled */ }
 }
 
+function matchZone(cat: string): boolean {
+  if (sensitiveZones.value.includes(cat)) return true;
+  for (const zone of sensitiveZones.value) {
+    if (cat.includes(zone) || (zone.includes(cat) && cat.length >= 2)) return true;
+  }
+  return false;
+}
+
+function isSensitiveCategory(novel: any): boolean {
+  const cats = novel.categories?.length ? novel.categories : (novel.category ? [novel.category] : []);
+  return cats.some((c: string) => matchZone(c));
+}
+
+async function toggleWall(novel: any, enabled: boolean) {
+  wallToggling.value = novel.id;
+  try {
+    await authApi.put('/author/profile', { wall_enabled: enabled, novel_id: novel.id });
+    novel.wall_enabled = enabled;
+    ElMessage.success(enabled ? '隔离确认已启用' : '隔离确认已关闭');
+  } catch (e: any) {
+    ElMessage.error('操作失败');
+  }
+  wallToggling.value = 0;
+}
+
+async function loadSensitiveZones() {
+  try {
+    const res = await authApi.get('/site-info');
+    const d = res.data?.data;
+    // 必须 wall_enabled=true 且 wall_zones 存在才启用隔离墙
+    if (d?.wall_enabled && Array.isArray(d.wall_zones)) {
+      sensitiveZones.value = d.wall_zones;
+    }
+  } catch {}
+}
+
 onMounted(() => {
   loadDashboard();
   loadNovels();
+  loadSensitiveZones();
+  loadMyBlogs();
 });
 
 // 从编辑页面返回时自动刷新
 let lastPath = route.fullPath;
-import { watch } from 'vue';
 watch(
   () => route.fullPath,
   (newPath) => {
     if (newPath === '/author' && lastPath !== '/author') {
       loadDashboard();
       loadNovels();
+      loadMyBlogs();
     }
     lastPath = newPath;
   }
@@ -668,4 +800,22 @@ watch(
 [data-theme="light"] .novel-card-actions {
   border-top-color: var(--border-color);
 }
+
+/* 博客管理列表 */
+.blog-list-dash { display: flex; flex-direction: column; gap: 6px; }
+.blog-item-dash {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; background: rgba(255,255,255,0.04); border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.blog-item-main { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.blog-item-title-dash { font-weight: 500; font-size: 0.9rem; }
+.blog-item-meta { font-size: 0.75rem; color: #999; white-space: nowrap; }
+.blog-item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+[data-theme="light"] .blog-item-dash {
+  background: #fafafa; border-color: #eee;
+}
+
+/* 博客 Cherry 编辑器 */
+.blog-cherry-container { min-height: 360px; }
 </style>
