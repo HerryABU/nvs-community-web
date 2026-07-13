@@ -24,9 +24,15 @@
             <el-rate v-model="avgRatingDisplay" disabled show-score text-color="#f59e0b" />
           </div>
           <!-- 进入作者大论坛 -->
-          <el-button type="primary" text size="small" @click="goForum" style="margin-top:8px">
-            进入 {{ author.nickname || author.username }} 的讨论区
-          </el-button>
+          <div class="author-actions" style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <el-button v-if="authStore.isLoggedIn" :type="isFollowing ? 'default' : 'primary'" size="small" @click="toggleFollow" :loading="followLoading">
+              {{ isFollowing ? '已关注' : '+ 关注' }}
+            </el-button>
+            <span style="color:#999;font-size:0.85rem">{{ followStats.followers }} 粉丝 · {{ followStats.following }} 关注</span>
+            <el-button type="primary" text size="small" @click="goForum">
+              进入 {{ author.nickname || author.username }} 的讨论区
+            </el-button>
+          </div>
         </div>
       </div>
 
@@ -77,6 +83,24 @@
       </div>
       <el-empty v-else description="暂无作品" />
 
+      <!-- 作者博客 -->
+      <h2 class="section-title" style="margin-top:32px">作者博客</h2>
+      <div class="blog-list" v-if="blogs.length > 0">
+        <div v-for="blog in blogs" :key="blog.id" class="blog-item" @click="$router.push(`/blog/${blog.id}`)">
+          <div class="blog-title-row">
+            <el-tag v-if="blog.is_pinned" size="small" type="danger" style="margin-right:6px">置顶</el-tag>
+            <span class="blog-item-title">{{ blog.title }}</span>
+          </div>
+          <div class="blog-meta">
+            <span>{{ formatDate(blog.created_at) }}</span>
+            <span>{{ blog.view_count }} 次阅读</span>
+          </div>
+          <p class="blog-summary" v-if="blog.summary">{{ blog.summary }}</p>
+        </div>
+      </div>
+      <div v-else style="color:#999;font-size:0.9rem;padding:12px 0">暂无博客文章</div>
+      <el-button v-if="showMoreBlogs" text size="small" @click="loadMoreBlogs" style="margin-top:8px">查看更多</el-button>
+
       <!-- 作者评论区 -->
       <h2 class="section-title" style="margin-top:32px">读者留言</h2>
       <!-- 评论区：使用第一个公开作品的 ID -->
@@ -90,18 +114,35 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { publicApi } from '@/api/admin';
+import { followApi, blogApi } from '@/api/social';
+import { useAuthStore } from '@/stores/auth';
+import { ElMessage } from 'element-plus';
 import CommentSection from '@/components/CommentSection.vue';
 import VChart from 'vue-echarts';
 import { useThemeStore } from '@/stores/theme';
 
 const route = useRoute();
 const router = useRouter();
+const authStore = useAuthStore();
 const themeStore = useThemeStore();
 
 const authorId = ref(Number(route.params.id));
 const loading = ref(false);
 const author = ref<any>(null);
 const data = ref<any>({});
+
+// 关注
+const isFollowing = ref(false);
+const followLoading = ref(false);
+const followStats = ref({ followers: 0, following: 0 });
+
+// 博客
+const blogs = ref<any[]>([]);
+const blogPage = ref(1);
+const blogTotal = ref(0);
+const showMoreBlogs = ref(false);
+
+function formatDate(d?: string) { if (!d) return ''; return new Date(d).toLocaleString('zh-CN'); }
 
 const baseTextColor = computed(() => themeStore.isDark ? '#cbd5e1' : '#475569');
 const gridLineColor = computed(() => themeStore.isDark ? 'rgba(71,85,105,0.3)' : 'rgba(0,0,0,0.08)');
@@ -196,6 +237,55 @@ async function load() {
   } finally {
     loading.value = false;
   }
+  // 同时加载关注状态和博客
+  loadFollowStatus();
+  loadBlogs();
+}
+
+async function loadFollowStatus() {
+  if (!authStore.isLoggedIn) return;
+  try {
+    const [checkRes, statsRes] = await Promise.all([
+      followApi.check(authorId.value),
+      followApi.stats(),
+    ]);
+    isFollowing.value = checkRes.data.data?.is_following || false;
+    followStats.value = statsRes.data.data || { followers: 0, following: 0 };
+  } catch { /* ignore */ }
+}
+
+async function toggleFollow() {
+  followLoading.value = true;
+  try {
+    if (isFollowing.value) {
+      await followApi.unfollow(authorId.value);
+      ElMessage.success('已取消关注');
+    } else {
+      await followApi.follow(authorId.value);
+      ElMessage.success('关注成功');
+    }
+    isFollowing.value = !isFollowing.value;
+    loadFollowStatus();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+  followLoading.value = false;
+}
+
+async function loadBlogs() {
+  try {
+    const res = await blogApi.listByAuthor(authorId.value, blogPage.value);
+    if (res.data.code === 0) {
+      blogs.value = res.data.data.list || [];
+      blogTotal.value = res.data.data.total || 0;
+      showMoreBlogs.value = blogTotal.value > blogs.value.length;
+    }
+  } catch { /* ignore */ }
+}
+
+function loadMoreBlogs() {
+  blogPage.value++;
+  loadBlogs();
 }
 
 async function goForum() {
@@ -361,4 +451,18 @@ onMounted(load);
   background: #334155;
   color: #64748b;
 }
+
+/* 博客列表 */
+.blog-list { display: flex; flex-direction: column; gap: 8px; }
+.blog-item {
+  padding: 14px 16px; background: #fff; border-radius: 10px;
+  border: 1px solid #eee; cursor: pointer; transition: box-shadow 0.2s;
+}
+.blog-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.blog-title-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.blog-item-title { font-weight: 600; font-size: 0.95rem; }
+.blog-meta { font-size: 0.75rem; color: #999; display: flex; gap: 16px; }
+.blog-summary { font-size: 0.85rem; color: #666; margin-top: 4px; }
+[data-theme="dark"] .blog-item { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .blog-summary { color: #94a3b8; }
 </style>

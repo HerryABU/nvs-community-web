@@ -65,7 +65,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { novelApi } from '@/api/novel';
+import { novelApi, forumApi } from '@/api/novel';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage } from 'element-plus';
 
@@ -87,7 +87,7 @@ function formatTime(s: string) {
 async function load() {
   loading.value = true;
   try {
-    const res = await novelApi.getForum(Number(route.params.id));
+    const res = await forumApi.getForum(Number(route.params.id));
     const d = res.data.data;
     forum.value = d.forum;
     threads.value = d.threads || [];
@@ -106,7 +106,7 @@ async function submitThread() {
   }
   posting.value = true;
   try {
-    await novelApi.createThread(Number(route.params.id), { title: newTitle.value, content: newContent.value });
+    await forumApi.createThread(Number(route.params.id), { title: newTitle.value, content: newContent.value });
     ElMessage.success('发布成功');
     showNewThread.value = false;
     newTitle.value = '';

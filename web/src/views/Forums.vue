@@ -44,6 +44,22 @@
         <div class="forum-meta"><span>{{ forum.thread_count }} 个帖子</span></div>
       </el-card>
     </div>
+
+    <!-- 敏感分区论坛（带隔离墙确认） -->
+    <h2 v-if="sensitiveForums.length > 0" class="section-title" style="margin-top:32px;color:#dc2626;">⚠ 敏感分区论坛</h2>
+    <p v-if="sensitiveForums.length > 0" style="color:#999;font-size:0.85rem;margin-bottom:12px">以下论坛涉及敏感内容，点击后将触发确认弹窗</p>
+    <div class="forum-grid" v-if="sensitiveForums.length > 0">
+      <el-card v-for="forum in sensitiveForums" :key="forum.id"
+        class="forum-card forum-card-sensitive" shadow="hover" @click="enterForum(forum)">
+        <h3><span style="color:#dc2626;">⚠</span> {{ forum.name }}</h3>
+        <p>{{ forum.description }}</p>
+        <div class="forum-meta">
+          <el-tag type="danger" size="small">敏感内容</el-tag>
+          <span style="margin-left:8px">{{ forum.thread_count }} 个帖子</span>
+        </div>
+      </el-card>
+    </div>
+
     <el-empty v-if="!loading && allForums.length === 0" description="暂无论坛" />
 
     <!-- 敏感分区确认弹窗 -->
@@ -60,7 +76,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { novelApi } from '@/api/novel';
+import { novelApi, forumApi } from '@/api/novel';
 import SensitiveZoneGuard from '@/components/SensitiveZoneGuard.vue';
 import { shouldShowGuard, markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';
 
@@ -80,6 +96,7 @@ const authorForums = computed(() => allForums.value.filter(f => f.type === 'auth
 const raForums = computed(() => allForums.value.filter(f => f.type === 'reader_author'));
 const readerForums = computed(() => allForums.value.filter(f => f.type === 'reader'));
 const generalForums = computed(() => allForums.value.filter(f => f.type === 'general'));
+const sensitiveForums = computed(() => allForums.value.filter(f => f.type === 'sensitive'));
 
 // 敏感分区确认
 const showZoneGuard = ref(false);
@@ -87,8 +104,8 @@ const zoneGuardName = ref('');
 const zoneGuardCross = ref(false);
 let pendingForumId: number | null = null;
 
-function enterForum(forum: Forum) {
-  const guard = shouldShowGuard(forum.name);
+async function enterForum(forum: Forum) {
+  const guard = await shouldShowGuard((forum as any).zone || forum.name);
   if (guard?.needed) {
     zoneGuardName.value = forum.name;
     zoneGuardCross.value = guard.isCrossDomain;
@@ -112,7 +129,7 @@ function onZoneConfirmed() {
 onMounted(async () => {
   loading.value = true;
   try {
-    const res = await novelApi.getForums('all');
+    const res = await forumApi.getForums('all');
     allForums.value = res.data.data || [];
   } catch (e) {
     console.error(e);
@@ -133,6 +150,10 @@ onMounted(async () => {
   cursor: pointer;
 }
 
+.forum-card-sensitive {
+  border-color: rgba(220, 38, 38, 0.3);
+}
+
 .forum-card h3 {
   font-size: 1.1rem;
   color: var(--primary-color);
@@ -148,6 +169,8 @@ onMounted(async () => {
 .forum-meta {
   font-size: 0.8rem;
   color: var(--text-light);
+  display: flex;
+  align-items: center;
 }
 </style>
 
@@ -155,6 +178,9 @@ onMounted(async () => {
 [data-theme="dark"] .forum-card {
   background: #1e293b;
   border-color: rgba(255,255,255,.08);
+}
+[data-theme="dark"] .forum-card-sensitive {
+  border-color: rgba(220, 38, 38, 0.4);
 }
 [data-theme="dark"] .forum-card h3 {
   color: #e2e8f0;

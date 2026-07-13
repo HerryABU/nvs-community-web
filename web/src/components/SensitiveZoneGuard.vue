@@ -9,35 +9,57 @@
   >
     <!-- 第 1 步：介绍 -->
     <div v-if="step === 1">
-      <div class="sz-title">⚠️ 内容提醒</div>
+      <div :class="['sz-title', isCrossDomain ? 'sz-title-cross' : '']">
+        {{ isCrossDomain ? '🔀 跨域访问提醒' : '⚠️ 内容提醒' }}
+      </div>
       <div class="sz-body">
         <p>{{ detail.intro_text || `您即将进入「${zoneName}」分区。` }}</p>
         <p>该分区内容属于敏感题材，请确认您已做好心理准备，并愿意以开放心态阅读。</p>
+        <div v-if="customWarning" class="sz-custom-warning">
+          <p><strong>📝 作者提醒：</strong></p>
+          <p>{{ customWarning }}</p>
+        </div>
+        <div v-if="isCrossDomain" class="sz-cross-banner">
+          <p><strong>🔴 跨域警告：</strong>您正在从一个敏感分区跨越到另一个敏感分区。</p>
+          <p>不同分区具有不同的文化背景和内容规范，跨域访问可能涉及额外的法律与心理风险。</p>
+        </div>
       </div>
       <div style="text-align:right;margin-top:20px">
         <el-button @click="$emit('cancel')">离开</el-button>
-        <el-button type="primary" @click="currentStep = 2">我已知晓，继续</el-button>
+        <el-button :type="isCrossDomain ? 'warning' : 'primary'" @click="currentStep = 2">
+          {{ isCrossDomain ? '我已知晓风险，继续' : '我已知晓，继续' }}
+        </el-button>
       </div>
     </div>
 
     <!-- 警告步骤 -->
     <div v-if="step === 2">
-      <div class="sz-title sz-title-warn">🚫 警告</div>
+      <div :class="['sz-title', isCrossWarning ? 'sz-title-cross' : 'sz-title-warn']">
+        {{ isCrossWarning ? '🔴 跨域法律风险告知' : '🚫 警告' }}
+      </div>
       <div class="sz-body">
         <p>{{ currentWarning }}</p>
+        <div v-if="isCrossWarning" class="sz-cross-banner" style="margin-top:12px">
+          <p>跨域移动意味着您自愿承担一切潜在的法律与心理后果。</p>
+          <p>请确保您理解并尊重不同分区的文化差异与社区规范。</p>
+        </div>
         <p style="margin-top:12px;color:#999;font-size:0.85rem">
           这是第 <strong>{{ currentStep }}</strong> 步，共 <strong>{{ totalSteps }}</strong> 步。
         </p>
       </div>
       <div style="text-align:right;margin-top:20px">
         <el-button @click="$emit('cancel')">离开</el-button>
-        <el-button type="warning" @click="currentStep++">继续</el-button>
+        <el-button :type="isCrossWarning ? 'danger' : 'warning'" @click="currentStep++">
+          {{ isCrossWarning ? '我承担全部责任，继续' : '继续' }}
+        </el-button>
       </div>
     </div>
 
     <!-- 最后一步：输入确认 -->
     <div v-if="step === 3">
-      <div class="sz-title sz-title-danger">🔴 最终确认</div>
+      <div class="sz-title sz-title-danger">
+        {{ isCrossDomain ? '🔴 跨域最终确认（法律约束）' : '🔴 最终确认' }}
+      </div>
       <div class="sz-body">
         <p>您必须手动输入以下确认语以继续：</p>
         <p class="sz-confirm-text">{{ detail.confirm_text || '我承诺承担全部阅读责任' }}</p>
@@ -50,7 +72,7 @@
           @drop.prevent
         />
         <p style="margin-top:8px;color:#999;font-size:0.8rem">
-          输入即视为您已充分了解该分区内容的性质，并自愿承担一切法律与心理后果。
+          {{ isCrossDomain ? '输入即视为您已充分了解跨域访问的法律风险，并自愿承担一切法律与心理后果。' : '输入即视为您已充分了解该分区内容的性质，并自愿承担一切法律与心理后果。' }}
         </p>
       </div>
       <div style="text-align:right;margin-top:20px">
@@ -62,6 +84,16 @@
         >
           确认进入
         </el-button>
+      </div>
+      <!-- 跨域法律声明（最终确认步骤底部） -->
+      <div v-if="isCrossDomain" class="sz-legal-notice">
+        <p><strong>⚖️ 法律免责声明</strong></p>
+        <p>您即将执行的「跨域移动」操作将记录于系统日志中。您确认：</p>
+        <ul>
+          <li>已阅读并理解目标分区的社区规范与内容警告</li>
+          <li>自愿跨越分区边界，并承担由此产生的一切法律与心理后果</li>
+          <li>不会将因跨域阅读产生的情绪反应归咎于平台或作者</li>
+        </ul>
       </div>
     </div>
   </el-dialog>
@@ -75,7 +107,11 @@ const props = defineProps<{
   visible: boolean;
   zoneName: string;
   isCrossDomain: boolean;
+  customWarning?: string;
 }>();
+
+// 当前警告步骤来自跨域额外警告组
+const crossWarningBaseIdx = computed(() => detail.value.steps);
 
 const emit = defineEmits<{
   confirm: [];
@@ -123,16 +159,22 @@ const totalSteps = computed(() => {
 const currentStep = ref(1);
 const confirmInput = ref('');
 
+const isCrossWarning = computed(() => {
+  // 判断当前警告步骤是否属于跨域额外警告
+  if (!props.isCrossDomain) return false;
+  return currentStep.value > (detail.value.steps || 3);
+});
+
 const currentWarning = computed(() => {
   const idx = currentStep.value - 2;
   if (idx >= 0 && idx < detail.value.warnings.length) {
     return detail.value.warnings[idx];
   }
-  // 如果警告不够，用跨域额外警告填充
+  // 如果警告不够，用跨域额外警告填充（增强版）
   const crossIdx = idx - detail.value.warnings.length;
   if (crossIdx >= 0 && props.isCrossDomain) {
     const crossWarnings = [
-      '您正在从一个分区跨越到另一个敏感分区。请确保您理解并尊重不同分区的文化差异。',
+      '跨域移动第一级警告：您正在从一个分区跨越到另一个敏感分区。不同分区具有不同的文化背景、内容规范与法律边界。请确保您理解并尊重这些差异。',
       '跨域移动意味着您自愿承担一切潜在的法律与心理后果。',
     ];
     if (crossIdx < crossWarnings.length) return crossWarnings[crossIdx];
@@ -168,6 +210,12 @@ watch(() => props.visible, async (val) => {
   color: #e6a23c;
   margin-bottom: 16px;
 }
+/* 跨域专用标题——红色系 */
+.sz-title-cross {
+  color: #dc2626;
+  border-left: 4px solid #dc2626;
+  padding-left: 12px;
+}
 .sz-title-warn {
   color: #f56c6c;
 }
@@ -196,6 +244,50 @@ watch(() => props.visible, async (val) => {
   font-size: 1.1rem;
   letter-spacing: 2px;
 }
+
+/* 跨域警告横幅 */
+.sz-cross-banner {
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.08), rgba(245, 108, 108, 0.06));
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-top: 12px;
+  font-size: 0.9rem;
+  color: #b91c1c;
+}
+.sz-cross-banner p {
+  margin: 4px 0;
+}
+
+/* 法律免责声明 */
+.sz-legal-notice {
+  margin-top: 20px;
+  padding: 16px;
+  background: rgba(245, 108, 108, 0.06);
+  border: 1px dashed rgba(245, 108, 108, 0.3);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #999;
+  line-height: 1.7;
+}
+.sz-legal-notice ul {
+  padding-left: 18px;
+  margin: 8px 0 0;
+}
+.sz-legal-notice li {
+  margin: 4px 0;
+}
+
+.sz-custom-warning {
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: #2563eb;
+}
+.sz-custom-warning p { margin: 4px 0; }
 </style>
 
 <style>

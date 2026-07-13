@@ -7,9 +7,14 @@
           <span class="title-glow">管理员数据大屏</span>
         </h1>
         <p class="dashboard-subtitle">实时监控平台数据 · 管理站点配置</p>
-        <el-button class="refresh-btn" @click="refreshAll" :loading="refreshing" size="default">
-          <el-icon><Refresh /></el-icon>刷新数据
-        </el-button>
+        <div class="hero-buttons">
+          <el-button class="refresh-btn" @click="refreshAll" :loading="refreshing" size="default">
+            <el-icon><Refresh /></el-icon>刷新数据
+          </el-button>
+          <el-button type="success" size="default" @click="$router.push('/admin/users')">
+            <el-icon><User /></el-icon>用户管理
+          </el-button>
+        </div>
       </div>
 
       <!-- 第一行：统计卡片 -->
@@ -54,87 +59,7 @@
       <!-- 底部：折叠面板 -->
       <div class="bottom-panels">
         <el-collapse v-model="activePanels" class="glass-collapse">
-           <!-- 站点设置 -->
-           <el-collapse-item title="站点设置" name="site">
-             <div class="panel-body">
-               <el-form :model="configForm" label-width="120px" @submit.prevent="saveConfig">
-                 <el-form-item label="站点名称">
-                   <el-input v-model="configForm.site_name" placeholder="星海文学" maxlength="64" />
-                 </el-form-item>
-                 <el-form-item label="VIP 付费">
-                   <el-switch v-model="vipEnabled" active-text="开启" inactive-text="关闭" @change="onVipToggle" />
-                   <span class="hint-text">关闭后，作者无法申请 VIP 付费功能</span>
-                 </el-form-item>
-                 <el-divider />
-                 <h3 style="margin:0 0 12px 0;font-size:1rem;">邮件验证设置</h3>
-                 <el-form-item label="邮箱验证">
-                   <el-switch v-model="configForm.email_verify" active-text="开启" inactive-text="关闭" />
-                   <span class="hint-text">开启后注册需验证邮箱，关闭则跳过验证</span>
-                 </el-form-item>
-                 <el-form-item label="SMTP 服务器">
-                   <el-input v-model="configForm.smtp_host" placeholder="smtp.qq.com" style="width:220px" />
-                 </el-form-item>
-                 <el-form-item label="SMTP 端口">
-                   <el-input v-model="configForm.smtp_port" placeholder="587" style="width:120px" />
-                 </el-form-item>
-                 <el-form-item label="发件邮箱">
-                   <el-input v-model="configForm.smtp_user" placeholder="your-email@qq.com" style="width:280px" />
-                 </el-form-item>
-                 <el-form-item label="SMTP 密码/授权码">
-                   <el-input v-model="configForm.smtp_password" type="password" show-password placeholder="授权码" style="width:260px" />
-                 </el-form-item>
-                 <el-form-item label="发件人地址">
-                   <el-input v-model="configForm.smtp_from" placeholder="同发件邮箱" style="width:280px" />
-                 </el-form-item>
-                 <el-divider />
-                 <h3 style="margin:0 0 12px 0;font-size:1rem;">安全设置</h3>
-                 <el-form-item label="滑块验证码">
-                   <el-switch v-model="configForm.captcha_enabled" active-text="开启" inactive-text="关闭" />
-                   <span class="hint-text">在注册/登录时显示滑块验证码</span>
-                 </el-form-item>
-                 <el-form-item>
-                   <el-button type="primary" @click="saveConfig" :loading="savingConfig">保存设置</el-button>
-                 </el-form-item>
-               </el-form>
-             </div>
-           </el-collapse-item>
-
-          <!-- 分类管理 -->
-          <el-collapse-item title="书目分类管理" name="category">
-            <div class="panel-body">
-              <p class="hint-text">定义平台的书目分类类型，读者可按分类浏览作品。双击标签重命名，点击 × 删除，修改后点击保存。</p>
-              <div class="tag-list">
-                <el-tag
-                  v-for="(cat, idx) in editableCategories"
-                  :key="idx"
-                  closable
-                  size="large"
-                  class="category-tag-item"
-                  @close="removeCategory(idx)"
-                >
-                  <template v-if="editingCatIdx === idx">
-                    <el-input
-                      v-model="editCatName"
-                      size="small"
-                      class="cat-edit-input"
-                      @blur="saveCatName(idx)"
-                      @keyup.enter="saveCatName(idx)"
-                      @keyup.escape="cancelEditCat"
-                      ref="catEditRef"
-                    />
-                  </template>
-                  <template v-else>
-                    <span @dblclick="startEditCat(idx, cat)">{{ cat }}</span>
-                  </template>
-                </el-tag>
-              </div>
-              <div style="margin-top: 12px">
-                <el-button type="primary" @click="addCategory" :icon="Plus">添加分类</el-button>
-                <el-button type="primary" @click="saveCategories" :loading="savingCategories">保存分类</el-button>
-                <el-button @click="resetCategories" :disabled="savingCategories">重置</el-button>
-              </div>
-            </div>
-          </el-collapse-item>
+          <AdminSiteSettings />
 
            <!-- 隔离墙配置 -->
            <el-collapse-item title="隔离墙配置" name="wall">
@@ -225,9 +150,37 @@
               </el-table>
             </div>
           </el-collapse-item>
-        </el-collapse>
-      </div>
 
+           <!-- 论坛板块管理 -->
+           <el-collapse-item title="论坛板块管理" name="forums">
+             <div class="panel-body">
+               <div style="margin-bottom:12px">
+                 <el-button type="primary" size="small" @click="showAddForum = true">新增板块</el-button>
+               </div>
+               <el-table :data="adminForums" v-loading="loadingForums" style="width:100%">
+                 <el-table-column prop="id" label="ID" width="60" />
+                 <el-table-column prop="name" label="板块名称" min-width="140" />
+                 <el-table-column label="类型" width="110">
+                   <template #default="{ row }">
+                     <el-tag size="small" :type="forumTypeTag(row.type)">{{ forumTypeLabel(row.type) }}</el-tag>
+                   </template>
+                 </el-table-column>
+                 <el-table-column prop="description" label="描述" min-width="180" show-overflow-tooltip />
+                 <el-table-column prop="thread_count" label="帖子数" width="80" />
+                 <el-table-column prop="sort_order" label="排序" width="70" />
+                 <el-table-column label="操作" width="160" fixed="right">
+                   <template #default="{ row }">
+                     <el-button size="small" @click="editForum(row)">编辑</el-button>
+                     <el-button size="small" type="danger" @click="deleteForum(row)">删除</el-button>
+                   </template>
+                 </el-table-column>
+               </el-table>
+             </div>
+            </el-collapse-item>
+          <AdminCommunity />
+         </el-collapse>
+      </div>
+     
       <!-- 添加/编辑站点弹窗 -->
       <el-dialog v-model="showAddSite" :title="editingSite ? '编辑站点' : '添加远程站点'" width="520px">
         <el-form :model="siteForm" label-width="100px">
@@ -251,6 +204,40 @@
           </el-button>
         </template>
       </el-dialog>
+
+      <!-- 添加/编辑论坛弹窗 -->
+      <el-dialog v-model="showAddForum" :title="editingForum ? '编辑板块' : '新增板块'" width="480px">
+        <el-form :model="forumForm" label-width="90px">
+          <el-form-item label="板块名称" required>
+            <el-input v-model="forumForm.name" placeholder="如：创作交流区" maxlength="64" />
+          </el-form-item>
+          <el-form-item label="板块类型" required>
+            <el-select v-model="forumForm.type" style="width:100%">
+              <el-option label="综合讨论 (general)" value="general" />
+              <el-option label="读者区 (reader)" value="reader" />
+              <el-option label="读者-作者 (reader_author)" value="reader_author" />
+              <el-option label="作者区 (author)" value="author" />
+              <el-option label="敏感区 (sensitive) ⚠" value="sensitive" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="forumForm.type === 'sensitive'" label="绑定分区">
+            <el-input v-model="forumForm.zone" placeholder="如：同人区、政治文学区" maxlength="64" />
+            <span class="hint-text">填写隔离墙分区名，进入论坛时将触发确认弹窗</span>
+          </el-form-item>
+          <el-form-item label="排序权重">
+            <el-input-number v-model="forumForm.sort_order" :min="0" :max="999" />
+          </el-form-item>
+          <el-form-item label="描述">
+            <el-input v-model="forumForm.description" type="textarea" :rows="2" placeholder="可选：板块简介" />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="showAddForum = false">取消</el-button>
+          <el-button type="primary" @click="submitForum" :loading="submittingForum">
+            {{ editingForum ? '保存' : '创建' }}
+          </el-button>
+        </template>
+      </el-dialog>
     </div>
   </div>
 </template>
@@ -265,6 +252,8 @@ import {
 } from '@element-plus/icons-vue';
 import AnimatedNumber from '@/components/AnimatedNumber.vue';
 import DashboardCharts from '@/components/DashboardCharts.vue';
+import AdminSiteSettings from '@/components/admin/AdminSiteSettings.vue';
+import AdminCommunity from '@/components/admin/AdminCommunity.vue';
 
 const refreshing = ref(false);
 const activePanels = ref<string[]>([]);
@@ -299,8 +288,8 @@ const chapterTrend = ref<any>({
 // 柱状图数据
 const topNovelBars = ref<any>({
   title: 'Top 6 作品字数对比',
-  labels: [],
-  values: [],
+  labels: [] as string[],
+  values: [] as number[],
   seriesName: '字数',
 });
 
@@ -309,278 +298,6 @@ const categoryPieData = ref<any>({
   title: '分类分布',
   data: [],
 });
-
-// 站点设置
-const vipEnabled = ref(true);
-const configForm = reactive({
-  site_name: '星海文学',
-  email_verify: false,
-  captcha_enabled: false,
-  smtp_host: '',
-  smtp_port: '',
-  smtp_user: '',
-  smtp_password: '',
-  smtp_from: '',
-});
-const savingConfig = ref(false);
-
-// 分类管理
-const editableCategories = ref<string[]>([]);
-const originalCategories = ref<string[]>([]);
-const savingCategories = ref(false);
-const editingCatIdx = ref<number | null>(null);
-const editCatName = ref('');
-const catEditRef = ref<any>(null);
-
-// 远程站点
-const federatedSites = ref<any[]>([]);
-const loadingSites = ref(false);
-const syncingId = ref<number | null>(null);
-const showAddSite = ref(false);
-const editingSite = ref<any>(null);
-const siteForm = reactive({ name: '', url: '', api_url: '', description: '' });
-const submittingSite = ref(false);
-
-// 隔离墙
-const wallEnabled = ref(false);
-const wallCrossDomainWarning = ref(false);
-const wallZones = ref<string[]>([]);
-const newWallZone = ref('');
-const savingWall = ref(false);
-const expandedZoneIdx = ref<number | null>(null);
-interface ZoneDetail {
-  name: string;
-  steps: number;
-  confirm_text: string;
-  warnings: string[];
-  intro_text: string;
-  cross_domain_extra: number;
-}
-const zoneDetails = ref<ZoneDetail[]>([]);
-
-// ===== 数据加载 =====
-async function loadDashboard() {
-  try {
-    const res = await adminApi.getDashboardStats();
-    if (res.data.code === 0) {
-      const d = res.data.data;
-
-      if (d.stats) {
-        Object.assign(stats, {
-          users: d.stats.users || 0,
-          novels: d.stats.novels || 0,
-          comments: d.stats.comments || 0,
-          forums: d.stats.forums || 0,
-        });
-      }
-
-      if (d.user_trend) {
-        userTrend.value = {
-          title: '用户增长趋势（近7天）',
-          dates: d.user_trend.dates || [],
-          values: d.user_trend.new_users || [],
-          seriesName: '新增用户',
-          secondValues: d.user_trend.active_users || [],
-          secondName: '活跃用户',
-        };
-      }
-
-      if (d.chapter_trend) {
-        chapterTrend.value = {
-          title: '章节增长趋势（近7天）',
-          dates: d.chapter_trend.dates || [],
-          values: d.chapter_trend.counts || [],
-          seriesName: '新增章节',
-        };
-      }
-
-      if (d.top_novels) {
-        topNovelBars.value = {
-          title: 'Top 6 作品字数对比',
-          labels: d.top_novels.map((n: any) => n.title || '未命名'),
-          values: d.top_novels.map((n: any) => n.total_words || 0),
-          seriesName: '字数',
-        };
-      }
-
-      if (d.category_distribution) {
-        categoryPieData.value = {
-          title: '分类分布',
-          data: d.category_distribution.map((c: any) => ({
-            name: c.name || '未分类',
-            value: c.count || 0,
-          })),
-        };
-      }
-    }
-  } catch {
-    // fallback: load stats separately
-    await loadStats();
-  }
-}
-
-async function loadStats() {
-  try {
-    const res = await adminApi.getStats();
-    if (res.data.code === 0) {
-      const d = res.data.data;
-      Object.assign(stats, {
-        users: d.users || 0,
-        novels: d.novels || 0,
-        comments: d.comments || 0,
-        forums: d.forums || 0,
-      });
-    }
-  } catch { /* ignore */ }
-}
-
-async function loadConfig() {
-  try {
-    const res = await adminApi.getConfig();
-    if (res.data.code === 0) {
-      const cfg = res.data.data;
-      configForm.site_name = cfg.site_name || '星海文学';
-      vipEnabled.value = cfg.vip_enabled !== 'false';
-      configForm.email_verify = cfg.email_verify === 'true';
-      configForm.captcha_enabled = cfg.captcha_enabled === 'true';
-      configForm.smtp_host = cfg.smtp_host || '';
-      configForm.smtp_port = cfg.smtp_port || '';
-      configForm.smtp_user = cfg.smtp_user || '';
-      configForm.smtp_password = cfg.smtp_password || '';
-      configForm.smtp_from = cfg.smtp_from || '';
-      if (cfg.categories) {
-        try {
-          const parsed = JSON.parse(cfg.categories);
-          if (Array.isArray(parsed)) {
-            editableCategories.value = [...parsed];
-            originalCategories.value = [...parsed];
-          }
-        } catch { /* ignore */ }
-      }
-      if (editableCategories.value.length === 0) {
-        editableCategories.value = ['硬科幻', '奇幻', '推演文学', '架空历史', '现实主义', '悬疑推理', '实验文学', '同人区', '其他'];
-        originalCategories.value = [...editableCategories.value];
-      }
-    }
-  } catch { /* ignore */ }
-}
-
-async function loadSites() {
-  loadingSites.value = true;
-  try {
-    const res = await adminApi.getSites();
-    if (res.data.code === 0) federatedSites.value = res.data.data;
-  } catch { /* ignore */ }
-  loadingSites.value = false;
-}
-
-async function loadWallConfig() {
-  try {
-    const res = await adminApi.getWallConfig();
-    if (res.data.code === 0) {
-      const cfg = res.data.data;
-      wallEnabled.value = !!cfg.enabled;
-      wallCrossDomainWarning.value = !!cfg.cross_domain_warning;
-      wallZones.value = Array.isArray(cfg.zones) ? [...cfg.zones] : [];
-      // 加载 zone_details
-      if (Array.isArray(cfg.zone_details)) {
-        zoneDetails.value = cfg.zone_details.map((d: any) => ({
-          name: d.name || '',
-          steps: d.steps || 3,
-          confirm_text: d.confirm_text || '我承诺承担全部阅读责任',
-          warnings: Array.isArray(d.warnings) ? [...d.warnings] : ['该分区内容属于敏感题材。'],
-          intro_text: d.intro_text || '',
-          cross_domain_extra: d.cross_domain_extra ?? 2,
-        }));
-      } else {
-        // 为现有 zones 创建默认 detail
-        zoneDetails.value = wallZones.value.map(z => ({
-          name: z, steps: 3, confirm_text: '我承诺承担全部阅读责任',
-          warnings: ['该分区内容属于敏感题材。'], intro_text: '', cross_domain_extra: 2,
-        }));
-      }
-    }
-  } catch { /* ignore */ }
-}
-
-async function refreshAll() {
-  refreshing.value = true;
-  await Promise.all([loadDashboard(), loadConfig(), loadSites(), loadWallConfig()]);
-  refreshing.value = false;
-  ElMessage.success('已刷新');
-}
-
-// ===== 站点设置 =====
-async function saveConfig() {
-  savingConfig.value = true;
-  try {
-    await adminApi.updateConfig({
-      site_name: configForm.site_name,
-      vip_enabled: vipEnabled.value ? 'true' : 'false',
-      email_verify: configForm.email_verify ? 'true' : 'false',
-      captcha_enabled: configForm.captcha_enabled ? 'true' : 'false',
-      smtp_host: configForm.smtp_host,
-      smtp_port: configForm.smtp_port,
-      smtp_user: configForm.smtp_user,
-      smtp_password: configForm.smtp_password,
-      smtp_from: configForm.smtp_from,
-    });
-    ElMessage.success('设置已保存');
-  } catch { ElMessage.error('保存失败'); }
-  savingConfig.value = false;
-}
-
-function onVipToggle(val: boolean) {
-  vipEnabled.value = val;
-}
-
-// ===== 分类管理 =====
-function addCategory() {
-  editableCategories.value.push('新分类');
-}
-
-function removeCategory(idx: number) {
-  editableCategories.value.splice(idx, 1);
-  if (editingCatIdx.value === idx) editingCatIdx.value = null;
-}
-
-async function startEditCat(idx: number, name: string) {
-  editingCatIdx.value = idx;
-  editCatName.value = name;
-  await nextTick();
-  catEditRef.value?.focus?.();
-}
-
-function saveCatName(idx: number) {
-  const trimmed = editCatName.value.trim();
-  if (trimmed) editableCategories.value[idx] = trimmed;
-  editingCatIdx.value = null;
-  editCatName.value = '';
-}
-
-function cancelEditCat() {
-  editingCatIdx.value = null;
-  editCatName.value = '';
-}
-
-async function saveCategories() {
-  if (editableCategories.value.length === 0) { ElMessage.warning('至少保留一个分类'); return; }
-  savingCategories.value = true;
-  try {
-    await adminApi.updateConfig({ categories: JSON.stringify(editableCategories.value) });
-    originalCategories.value = [...editableCategories.value];
-    ElMessage.success('分类已保存');
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.message || '保存失败');
-  }
-  savingCategories.value = false;
-}
-
-function resetCategories() {
-  editableCategories.value = [...originalCategories.value];
-  editingCatIdx.value = null;
-  editCatName.value = '';
-}
 
 // ===== 隔离墙 =====
 function toggleZoneDetail(idx: number) {
@@ -692,11 +409,152 @@ async function deleteSite(site: any) {
   } catch { /* cancelled */ }
 }
 
+// ===== 论坛板块管理 =====
+async function loadForums() {
+  loadingForums.value = true;
+  try {
+    const res = await adminApi.getForums();
+    adminForums.value = res.data.data || [];
+  } catch { /* ignore */ }
+  loadingForums.value = false;
+}
+
+function editForum(forum: any) {
+  editingForum.value = forum;
+  forumForm.name = forum.name || '';
+  forumForm.type = forum.type || 'general';
+  forumForm.zone = forum.zone || '';
+  forumForm.description = forum.description || '';
+  forumForm.sort_order = forum.sort_order || 0;
+  showAddForum.value = true;
+}
+
+async function submitForum() {
+  if (!forumForm.name) { ElMessage.warning('请填写板块名称'); return; }
+  submittingForum.value = true;
+  try {
+    if (editingForum.value) {
+      await adminApi.updateForum(editingForum.value.id, {
+        name: forumForm.name,
+        type: forumForm.type,
+        zone: forumForm.zone,
+        description: forumForm.description,
+        sort_order: forumForm.sort_order,
+      });
+      ElMessage.success('板块已更新');
+    } else {
+      await adminApi.createForum({
+        name: forumForm.name,
+        type: forumForm.type,
+        zone: forumForm.zone,
+        description: forumForm.description,
+        sort_order: forumForm.sort_order,
+      });
+      ElMessage.success('板块已创建');
+    }
+    showAddForum.value = false;
+    resetForumForm();
+    await loadForums();
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || '操作失败');
+  }
+  submittingForum.value = false;
+}
+
+function resetForumForm() {
+  editingForum.value = null;
+  forumForm.name = '';
+  forumForm.type = 'general';
+  forumForm.zone = '';
+  forumForm.description = '';
+  forumForm.sort_order = 0;
+}
+
+async function deleteForum(forum: any) {
+  try {
+    await ElMessageBox.confirm(`确定要删除板块「${forum.name}」吗？关联帖子将保留但不可见。`, '确认删除', { type: 'warning' });
+    await adminApi.deleteForum(forum.id);
+    ElMessage.success('已删除');
+    await loadForums();
+  } catch { /* cancelled */ }
+}
+
+// ===== 仪表盘数据 =====
+async function loadDashboard() {
+  try {
+    const res = await adminApi.getDashboardStats();
+    const d = res.data.data;
+    if (d?.stats) {
+      stats.users = d.stats.users || 0;
+      stats.novels = d.stats.novels || 0;
+      stats.comments = d.stats.comments || 0;
+      stats.forums = d.stats.forums || 0;
+    }
+    const ut = d?.user_trend;
+    if (ut) {
+      userTrend.value = { title: '用户增长趋势（近7天）', dates: ut.dates || [], values: ut.new_users || [], seriesName: '新增用户' };
+    }
+    const ct = d?.chapter_trend;
+    if (ct) {
+      chapterTrend.value = { title: '章节增长趋势（近7天）', dates: ct.dates || [], values: ct.counts || [], seriesName: '新增章节' };
+    }
+    const tn = d?.top_novels;
+    if (tn) {
+      topNovelBars.value = { title: 'Top 6 作品字数对比', labels: tn.map((n: any) => n.title), values: tn.map((n: any) => n.total_words), seriesName: '字数' };
+    }
+    const cd = d?.category_distribution;
+    if (cd) {
+      categoryPieData.value = { title: '分类分布', data: cd.map((c: any) => ({ name: c.name, value: c.count })) };
+    }
+  } catch { /* ignore */ }
+}
+
+async function refreshAll() {
+  refreshing.value = true;
+  await loadDashboard();
+  await loadSites();
+  await loadForums();
+  refreshing.value = false;
+}
+
+// ===== 远程站点 =====
+const sites = ref<any[]>([]);
+const loadingSites = ref(false);
+const showAddSite = ref(false);
+const editingSite = ref<any>(null);
+const submittingSite = ref(false);
+const syncingId = ref(0);
+const siteForm = reactive({ name: '', url: '', api_url: '', description: '' });
+
+async function loadSites() {
+  try { const res = await adminApi.getSites(); sites.value = res.data.data || []; } catch { /* ignore */ }
+}
+
+// ===== 隔离墙配置 =====
+const wallZones = ref<string[]>([]);
+const wallEnabled = ref(false);
+const wallCrossDomainWarning = ref(false);
+const savingWall = ref(false);
+const expandedZoneIdx = ref<number | null>(null);
+const newWallZone = ref('');
+const zoneDetails = ref<any[]>([]);
+
+async function loadWallConfig() {
+  try {
+    const res = await adminApi.getWallConfig();
+    const cfg = res.data.data || res.data || {};
+    wallZones.value = cfg.zones || [];
+    wallEnabled.value = cfg.enabled !== false;
+    wallCrossDomainWarning.value = cfg.cross_domain_warning !== false;
+    zoneDetails.value = (cfg.zone_details || wallZones.value.map((z: string) => ({ name: z, warnings: [] })));
+  } catch { /* ignore */ }
+}
+
 onMounted(() => {
   loadDashboard();
-  loadConfig();
   loadSites();
   loadWallConfig();
+  loadForums();
 });
 </script>
 

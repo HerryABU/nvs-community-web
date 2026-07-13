@@ -3,6 +3,10 @@ import axios from 'axios';
 const api = axios.create({
   baseURL: '/api',
   withCredentials: true,
+  // 通用 postForm 方法
+  postForm(url: string, formData: FormData) {
+    return this.post(url, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
   timeout: 15000,
 });
 

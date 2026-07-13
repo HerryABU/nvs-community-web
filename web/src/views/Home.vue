@@ -17,82 +17,15 @@
     </div>
 
     <!-- ====== 搜索结果区域 ====== -->
-    <div v-if="searchKeyword" class="search-results-section">
-      <div class="search-header">
-        <h2>
-          <el-icon><Search /></el-icon>
-          搜索结果：<span class="search-keyword">"{{ searchKeyword }}"</span>
-          <span class="search-count">共 {{ searchTotal }} 部作品</span>
-        </h2>
-        <el-button text type="primary" @click="clearSearch">✕ 清除搜索</el-button>
-      </div>
-
-      <!-- 搜索加载与结果 -->
-      <div v-loading="searchLoading">
-        <!-- 平铺视图 -->
-        <div v-if="novelView === 'grid' && searchResults.length > 0" class="card-grid">
-          <NovelCard
-            v-for="novel in searchResults"
-            :key="novel.id"
-            :novel="novel"
-            @click="$router.push(`/novel/${novel.id}`)"
-          />
-        </div>
-
-        <!-- 表式视图 -->
-        <el-table
-          v-else-if="novelView === 'table' && searchResults.length > 0"
-          :data="searchResults" stripe size="small"
-          @row-click="(r:any)=>$router.push(`/novel/${r.id}`)" style="cursor:pointer"
-        >
-          <el-table-column label="封面" width="70">
-            <template #default="{ row }">
-              <el-image v-if="row.cover_url" :src="row.cover_url" fit="cover"
-                style="width:40px;height:54px;border-radius:4px" />
-              <div v-else style="width:40px;height:54px;border-radius:4px;background:#e0e0e0;display:flex;align-items:center;justify-content:center;font-size:12px;color:#999">封</div>
-            </template>
-          </el-table-column>
-          <el-table-column label="作品" min-width="180">
-            <template #default="{ row }">
-              <div>
-                <div style="font-weight:500">{{ row.title }}</div>
-                <div style="font-size:0.8rem;color:#999;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px">{{ row.summary }}</div>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="作者" width="100">
-            <template #default="{ row }">
-              <router-link :to="`/author/${row.author_id}`" @click.stop>
-                {{ row.author_name || row.author?.nickname || '未知' }}
-              </router-link>
-            </template>
-          </el-table-column>
-          <el-table-column label="分类" width="90">
-            <template #default="{ row }">
-              <span>{{ (row.categories && row.categories.length > 0) ? row.categories[0] : (row.category || '—') }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="total_words" label="字数" width="80" />
-          <el-table-column prop="total_chapters" label="章节" width="60" />
-          <el-table-column label="更新" width="110">
-            <template #default="{ row }">{{ formatDate(row.updated_at) }}</template>
-          </el-table-column>
-        </el-table>
-
-        <el-empty v-if="!searchLoading && searchResults.length === 0" description="没有找到匹配的作品，试试其他关键词" />
-      </div>
-
-      <!-- 搜索分页 -->
-      <div class="pagination" v-if="searchTotal > searchPageSize">
-        <el-pagination
-          v-model:current-page="searchPage"
-          :page-size="searchPageSize"
-          :total="searchTotal"
-          layout="prev, pager, next"
-          @current-change="doSearch"
-        />
-      </div>
-    </div>
+    <HomeSearchResults
+      v-if="searchKeyword"
+      :keyword="searchKeyword" :results="searchResults" :authors="searchAuthors"
+      :author-total="searchAuthorTotal" :total="searchTotal" :loading="searchLoading"
+      :view="novelView" :page-size="searchPageSize"
+      v-model:current-page="searchPage"
+      @clear="clearSearch"
+      @page-change="doSearch"
+    />
 
     <div class="page-container">
       <div class="home-top-bar" v-if="authStore.isLoggedIn">
@@ -178,7 +111,7 @@
                 </template>
               </el-table-column>
               <el-table-column label="作品" min-width="180"><template #default="{row}"><span style="font-weight:500">{{row.title}}</span></template></el-table-column>
-              <el-table-column label="作者" width="90"><template #default="{row}"><router-link :to="`/author/${row.author_id}`" @click.stop>{{row.author_name||'—'}}</router-link></template></el-table-column>
+              <el-table-column label="作者" width="90"><template #default="{row}"><router-link :to="`/author/${row.author_id}`" @click.stop>{{row.author_name || row.author?.nickname || row.author?.username || '—'}}</router-link></template></el-table-column>
               <el-table-column prop="total_words" label="字数" width="80"/>
               <el-table-column prop="total_chapters" label="章节" width="60"/>
               <el-table-column label="更新" width="90"><template #default="{row}">{{formatDate(row.updated_at)}}</template></el-table-column>
@@ -206,6 +139,7 @@ import { novelApi, type Novel } from '@/api/novel';
 import { publicApi } from '@/api/admin';
 import { useAuthStore } from '@/stores/auth';
 import NovelCard from '@/components/NovelCard.vue';
+import HomeSearchResults from '@/components/HomeSearchResults.vue';
 import { Grid, List, Plus, ArrowRight, Search } from '@element-plus/icons-vue';
 
 const authStore = useAuthStore();
@@ -224,6 +158,8 @@ const siteName = ref('星海文学');
 // ====== 搜索模式 ======
 const searchKeyword = ref('');
 const searchResults = ref<Novel[]>([]);
+const searchAuthors = ref<any[]>([]);
+const searchAuthorTotal = ref(0);
 const searchLoading = ref(false);
 const searchTotal = ref(0);
 const searchPage = ref(1);
@@ -291,13 +227,16 @@ async function doSearch() {
   if (!searchKeyword.value) return;
   searchLoading.value = true;
   try {
-    const res = await novelApi.getNovels({
-      page: searchPage.value,
-      page_size: searchPageSize,
-      search: searchKeyword.value,
-    });
-    searchResults.value = res.data.data.list || [];
-    searchTotal.value = res.data.data.total || 0;
+    const [novelRes, authorRes] = await Promise.all([
+      novelApi.getNovels({ page: searchPage.value, page_size: searchPageSize, search: searchKeyword.value }),
+      fetch(`/api/search/authors?search=${encodeURIComponent(searchKeyword.value)}&page=1&page_size=6`).then(r => r.json()),
+    ]);
+    searchResults.value = novelRes.data.data.list || [];
+    searchTotal.value = novelRes.data.data.total || 0;
+    if (authorRes.code === 0) {
+      searchAuthors.value = authorRes.data.list || [];
+      searchAuthorTotal.value = authorRes.data.total || 0;
+    }
   } catch (e) {
     console.error(e);
   } finally {
@@ -406,6 +345,18 @@ watch(
 [data-theme="dark"] .search-count {
   color: rgba(255,255,255,.5);
 }
+
+.author-search-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.author-chip {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px;
+  background: #fff; border-radius: 10px;
+  border: 1px solid #eee;
+  cursor: pointer; transition: box-shadow 0.2s;
+}
+.author-chip:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.author-chip-name { font-weight: 500; font-size: 0.9rem; }
+[data-theme="dark"] .author-chip { background: #1e293b; border-color: #334155; }
 
 /* ====== Hero Section ====== */
 .hero-section {

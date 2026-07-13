@@ -66,6 +66,17 @@
             </el-form-item>
           </el-col>
         </el-row>
+        <!-- 隔离墙开关（仅编辑模式可见） -->
+        <template v-if="isEditing">
+          <el-divider content-position="left">隔离墙设置</el-divider>
+          <el-form-item label="启用隔离">
+            <el-switch v-model="form.wall_enabled" size="small" />
+            <span style="margin-left:8px;font-size:0.8rem;color:#999">{{ form.wall_enabled !== false ? '已启用 - 读者进入需确认' : '已关闭 - 读者可直接阅读' }}</span>
+          </el-form-item>
+          <el-form-item label="警告语" v-if="form.wall_enabled !== false">
+            <el-input v-model="form.wall_warning" type="textarea" :rows="3" placeholder="自定义读者进入时的隔离警告语（如：本作品涉及敏感题材，请确认您年满18周岁并愿意承担阅读风险）" maxlength="512" show-word-limit />
+          </el-form-item>
+        </template>
       </el-form>
     </el-card>
 
@@ -177,10 +188,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { novelApi, type Novel, type Chapter } from '@/api/novel';
+import { novelApi, chapterApi, type Novel, type Chapter } from '@/api/novel';
 import { publicApi } from '@/api/admin';
+import { authApi } from '@/api/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Upload, Plus, UploadFilled } from '@element-plus/icons-vue';
 
@@ -196,6 +208,8 @@ const saving = ref(false);
 const chapters = ref<Chapter[]>([]);
 
 const form = reactive<Partial<Novel>>({
+  wall_enabled: true,
+  wall_warning: '',
   title: '',
   category: '其他',
   categories: [] as string[],
@@ -217,12 +231,29 @@ const importPreviewData = ref<any>(null);
 const importChapters = ref<{ title: string; words: number }[]>([]);
 const importForm = reactive({ title: '', splitRule: '' });
 
+const sensitiveZones = ref<string[]>([]);
+const showWallToggle = computed(() => {
+  const cats = form.categories?.length ? form.categories : (form.category ? [form.category] : []);
+  return cats.some((c: string) => {
+    if (sensitiveZones.value.includes(c)) return true;
+    return sensitiveZones.value.some(z => c.includes(z) || (z.includes(c) && c.length >= 2));
+  });
+});
+
+async function loadSensitiveZones() {
+  try {
+    const res = await authApi.get('/site-info');
+    const d = res.data?.data;
+    if (d?.wall_enabled && Array.isArray(d.wall_zones)) { sensitiveZones.value = d.wall_zones; }
+  } catch {}
+}
+
 async function loadNovel() {
   if (!novelId.value) return;
   try {
     const [novelRes, chaptersRes] = await Promise.all([
       novelApi.getNovel(novelId.value),
-      novelApi.getChapters(novelId.value),
+      chapterApi.getChapters(novelId.value),
     ]);
     const novel = novelRes.data.data;
     Object.assign(form, {
@@ -235,6 +266,8 @@ async function loadNovel() {
       status: novel.status,
       source_type: novel.source_type || 'original',
       creation_method: novel.creation_method || 'human',
+      wall_enabled: novel.wall_enabled !== false,
+      wall_warning: novel.wall_warning || '',
     });
     chapters.value = chaptersRes.data.data || [];
   } catch (e) {
@@ -281,7 +314,7 @@ async function deleteChapter(ch: Chapter) {
       confirmButtonText: '确认删除',
       type: 'warning',
     });
-    await novelApi.deleteChapter(novelId.value!, ch.chapter_number);
+    await chapterApi.deleteChapter(novelId.value!, ch.chapter_number);
     chapters.value = chapters.value.filter(c => c.chapter_number !== ch.chapter_number);
     ElMessage.success('已删除');
   } catch { /* 取消 */ }
@@ -353,7 +386,7 @@ async function doImport() {
     }
 
     if (novelId.value) {
-      const chaptersRes = await novelApi.getChapters(novelId.value);
+      const chaptersRes = await chapterApi.getChapters(novelId.value);
       chapters.value = chaptersRes.data.data || [];
     }
   } catch (e: any) {
@@ -376,6 +409,7 @@ async function loadCategories() {
 
 onMounted(() => {
   loadCategories();
+  loadSensitiveZones();
   if (isEditing) loadNovel();
 });
 </script>

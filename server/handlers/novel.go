@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"archive/zip"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -15,93 +14,8 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
-	"github.com/microcosm-cc/bluemonday"
 	"gorm.io/gorm"
 )
-
-// 分类列表（从数据库动态读取，不再硬编码）
-// 使用 models.GetCategories() 替代
-
-type CreateNovelInput struct {
-	Title           string   `json:"title" binding:"required,max=256"`
-	Category        string   `json:"category"`
-	Categories      []string `json:"categories"`
-	Tags            string   `json:"tags"`
-	Summary         string   `json:"summary"`
-	PricePerChapter float64  `json:"price_per_chapter"`
-	Status          string   `json:"status"`
-	SourceType      string   `json:"source_type"`     // original / reprint
-	CreationMethod  string   `json:"creation_method"` // human / ai / human_ai_assisted
-}
-
-type UpdateNovelInput struct {
-	Title           string   `json:"title"`
-	Category        string   `json:"category"`
-	Categories      []string `json:"categories"`
-	Tags            string   `json:"tags"`
-	Summary         string   `json:"summary"`
-	CoverURL        string   `json:"cover_url"`
-	PricePerChapter float64  `json:"price_per_chapter"`
-	Status          string   `json:"status"`
-	SourceType      string   `json:"source_type"`     // original / reprint
-	CreationMethod  string   `json:"creation_method"` // human / ai / human_ai_assisted
-}
-
-var htmlSanitizer = bluemonday.UGCPolicy()
-
-// GET /api/novels
-func ListNovels(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	category := c.Query("category")
-	search := c.Query("search")
-	sortBy := c.DefaultQuery("sort_by", "featured")
-	// 白名单校验 sort_by 值，防止 SQL 注入
-	if sortBy != "featured" && sortBy != "created_at" && sortBy != "updated_at" {
-		sortBy = "featured"
-	}
-
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
-	}
-
-	novels, total, err := models.GetNovelsSorted(category, search, sortBy, page, pageSize)
-	if err != nil {
-		utils.InternalError(c, "获取作品列表失败")
-		return
-	}
-
-	utils.Success(c, gin.H{
-		"list":      novels,
-		"total":     total,
-		"page":      page,
-		"page_size": pageSize,
-	})
-}
-
-// GET /api/novels/:id
-func GetNovel(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.BadRequest(c, "无效的作品 ID")
-		return
-	}
-
-	novel, err := models.GetNovelByID(uint(id))
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			utils.NotFound(c, "作品不存在")
-			return
-		}
-		utils.InternalError(c, "获取作品失败")
-		return
-	}
-
-	utils.Success(c, novel)
-}
 
 // POST /api/novels
 func CreateNovel(c *gin.Context) {
@@ -323,99 +237,6 @@ func DeleteNovel(c *gin.Context) {
 	utils.SuccessMessage(c, "删除成功", nil)
 }
 
-// GET /api/categories
-func ListCategories(c *gin.Context) {
-	utils.Success(c, models.GetCategories())
-}
-
-// GET /api/categories/stats — 每个分类的作品数 + 前3部预览
-func ListCategoryStats(c *gin.Context) {
-	cats := models.GetCategories()
-	result := make([]gin.H, 0, len(cats))
-	for _, cat := range cats {
-		novels, total, err := models.GetNovelsSorted(cat, "", "featured", 1, 3)
-		if err != nil {
-			continue
-		}
-		result = append(result, gin.H{
-			"name":        cat,
-			"novel_count": total,
-			"novels":      novels,
-		})
-	}
-	utils.Success(c, result)
-}
-
-// POST /api/novels/:id/export
-func ExportNovel(c *gin.Context) {
-	userID := c.GetUint("userID")
-	userRole := c.GetString("userRole")
-
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.BadRequest(c, "无效的作品 ID")
-		return
-	}
-
-	novel, err := models.GetNovelByID(uint(id))
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			utils.NotFound(c, "作品不存在")
-			return
-		}
-		utils.InternalError(c, "获取作品失败")
-		return
-	}
-
-	if novel.AuthorID != userID && userRole != "admin" {
-		utils.Forbidden(c, "无权导出此作品")
-		return
-	}
-
-	chapters, err := models.GetChaptersByNovel(uint(id))
-	if err != nil {
-		utils.InternalError(c, "获取章节列表失败")
-		return
-	}
-
-	// 创建临时 ZIP 文件
-	tmpFile, err := os.CreateTemp("", fmt.Sprintf("novel_%d_*.zip", id))
-	if err != nil {
-		utils.InternalError(c, "创建临时文件失败")
-		return
-	}
-	defer os.Remove(tmpFile.Name())
-
-	zipWriter := zip.NewWriter(tmpFile)
-
-	// 添加作品信息
-	novelJSON, _ := json.MarshalIndent(novel, "", "  ")
-	w, _ := zipWriter.Create("novel_info.json")
-	w.Write(novelJSON)
-
-	// 添加各章节
-	for _, ch := range chapters {
-		// 读取章节内容文件
-		if ch.ContentPath != "" {
-			content, err := os.ReadFile(ch.ContentPath)
-			if err == nil {
-				fileName := fmt.Sprintf("chapter_%04d.html", ch.ChapterNumber)
-				w, _ := zipWriter.Create(fileName)
-				w.Write(content)
-			}
-		}
-	}
-
-	zipWriter.Close()
-	tmpFile.Close()
-
-	// 设置下载响应头
-	fileName := fmt.Sprintf("%s.zip", novel.Title)
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fileName))
-	c.Header("Content-Type", "application/zip")
-	c.File(tmpFile.Name())
-}
-
 // novelOwnershipCheck 检查当前用户是否是作品的作者
 func novelOwnershipCheck(c *gin.Context, novelID uint) (*models.Novel, bool) {
 	userID := c.GetUint("userID")
@@ -495,4 +316,3 @@ func loadCategoryNames(novelID uint) []string {
 	}
 	return result
 }
-

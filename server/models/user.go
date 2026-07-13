@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -54,4 +55,28 @@ func GetUserByID(id uint) (*User, error) {
 
 func UpdateUser(user *User) error {
 	return DB.Save(user).Error
+}
+
+// SanitizeUserEmails 对用户列表进行邮箱脱敏处理
+func SanitizeUserEmails(users []User) {
+	for i := range users {
+		users[i].Email = sanitizeEmail(users[i].Email)
+	}
+}
+
+// sanitizeEmail 邮箱脱敏：只显示前3位和域名
+func sanitizeEmail(email string) string {
+	if email == "" {
+		return ""
+	}
+	parts := strings.SplitN(email, "@", 2)
+	if len(parts) != 2 {
+		return email
+	}
+	local := parts[0]
+	domain := parts[1]
+	if len(local) <= 3 {
+		return local + "***@" + domain
+	}
+	return local[:3] + "***@" + domain
 }

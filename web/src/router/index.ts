@@ -59,6 +59,12 @@ const router = createRouter({
       name: 'author-home',
       component: () => import('@/views/AuthorHome.vue'),
     },
+    // 作者博客列表
+    {
+      path: '/author/:id/blogs',
+      name: 'author-blogs',
+      component: () => import('@/views/AuthorBlogs.vue'),
+    },
     {
       path: '/forums',
       name: 'forums',
@@ -84,6 +90,34 @@ const router = createRouter({
       path: '/admin',
       name: 'admin-dashboard',
       component: () => import('@/views/AdminDashboard.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/users',
+      name: 'admin-users',
+      component: () => import('@/views/UserManagement.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/blogs',
+      name: 'blog-list',
+      component: () => import('@/views/BlogList.vue'),
+    },
+    {
+      path: '/blog/:id',
+      name: 'blog-detail',
+      component: () => import('@/views/BlogDetail.vue'),
+    },
+    {
+      path: '/author/blog/new',
+      name: 'blog-new',
+      component: () => import('@/views/BlogEditor.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/author/blog/:id',
+      name: 'blog-edit',
+      component: () => import('@/views/BlogEditor.vue'),
       meta: { requiresAuth: true },
     },
   ],

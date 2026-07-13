@@ -194,3 +194,29 @@ func GetNovelForum(c *gin.Context) {
 		"total":   total,
 	})
 }
+
+// POST /api/threads/:id/pin — 置顶帖子
+func PinThread(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	thread, err := models.GetThreadByID(uint(id))
+	if err != nil {
+		utils.NotFound(c, "帖子不存在")
+		return
+	}
+	thread.IsPinned = true
+	models.DB.Save(thread)
+	utils.Success(c, gin.H{"message": "置顶成功"})
+}
+
+// POST /api/threads/:id/unpin — 取消置顶
+func UnpinThread(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	thread, err := models.GetThreadByID(uint(id))
+	if err != nil {
+		utils.NotFound(c, "帖子不存在")
+		return
+	}
+	thread.IsPinned = false
+	models.DB.Save(thread)
+	utils.Success(c, gin.H{"message": "已取消置顶"})
+}

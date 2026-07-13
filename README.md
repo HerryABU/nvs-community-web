@@ -37,8 +37,8 @@
 ## ✨ 特性
 
 ### 部署与运维
-- 🌍 **全平台全CPU支持** — Windows / Linux / macOS × x86 / x64 / ARM / ARM64 / MIPS64 / RISC-V（13 个预编译目标）
-- 🚀 **下载即用** — 选择对应平台二进制文件，直接运行，零依赖安装
+- 🌍 **全平台全CPU支持** — Windows / Linux / macOS × x86 / x64 / ARM / ARM64 / MIPS64 / RISC-V（10 个预编译目标；`windows/386`、`windows/arm`、`linux/mips64` 受限于底层 SQLite CGo 库暂不支持）
+- 🚀 **下载即用** — 选择对应平台二进制文件，直接运行，零依赖安装（31.6 MB）
 - ⚙️ **自动创建 .env** — 首次启动自动生成配置文件，自动检测本机 IPv4/IPv6 地址填入
 - 🔌 **配置化绑定** — 支持配置 `BIND_IPV4` / `BIND_IPV6` / `ENABLE_IPV6`，灵活控制监听网卡
 - 🌐 **启动时列出所有访问地址** — 扫描所有网卡，输出 `localhost` + 局域网 IP 的完整 URL 列表
@@ -55,7 +55,7 @@
 
 ### 作品创作
 - 📝 **12 大分类** — 硬科幻 / 奇幻 / 推演文学 / 架空历史 / 现实主义 / 悬疑推理 / 实验文学 / 同人区 / 政治区 / 讽刺文学 / 泛二次元区 / 其他
-- 🎨 **TipTap 富文本编辑器** — 支持 Markdown / LaTeX 公式（KaTeX）/ Mermaid 图表 / 颜色标记
+- 🎨 **Cherry Markdown 编辑器** — 支持 Markdown / LaTeX 公式（KaTeX）/ Mermaid 图表 / 颜色标记 · 一键切换富文本模式
 - 📂 **文件系统存储** — 小说正文以 HTML 存于文件系统，数据库仅存路径索引
 - 🔗 **内容可验证** — 每章自动计算 SHA256 哈希 + HMAC-SHA256 作者签名，前端可验证章节完整性
 - 📤 **多格式导出** — ZIP / Markdown / EPUB / TXT 一键导出
@@ -66,8 +66,10 @@
 - ⭐ **多维度评分** — 类型完成度 / 叙事质量 / 思想深度 / 社区口碑 / 更新稳定性
 - 📚 **书架** — 收藏追读，自动记录阅读进度
 - 🏠 **论坛双轨制** — 公共论坛广场 + 作品专属子论坛 + 作者专属论坛
-- 👑 **作者后台** — 仪表盘、作品管理、收益统计、提现申请
-- 🛡️ **管理员面板** — 数据大屏（ECharts）、用户管理、举报处理、站长配置
+- 👑 **作者工作台** — 仪表盘（2×2 图表布局）、作品管理、收益统计、收藏/阅读数据、提现申请
+- 📝 **作者博客** — 认证作者可发布博客文章，支持置顶，独立博客列表页（`/author/:id/blogs`）
+- 🛡️ **管理员面板** — 数据大屏（2×2 ECharts 图表）、社区动态仪表盘、用户管理、分类管理、举报处理、站长配置
+- 🏘️ **社区动态** — 管理员可查看最近注册用户、最新作品、最近评论、论坛新帖
 
 ### 安全与合规
 - 🧱 **敏感区隔离墙** — 同人区/政治区需 3~5 步确认弹窗，可动态配置步骤数、警告语
@@ -105,17 +107,17 @@
 | 平台 | 文件 | 适用设备 |
 |------|------|----------|
 | Windows | `nvs-win-x64.exe` | 64位 Windows（最常用） |
-| Windows | `nvs-win-x32.exe` | 32位 Windows |
 | Windows | `nvs-win-arm64.exe` | ARM64 Windows（Surface Pro X 等） |
-| Windows | `nvs-win-arm32.exe` | ARM32 Windows |
 | Linux | `nvs-linux-x64` | 64位 Linux（x86_64） |
+| Linux | `nvs-linux-x32` | 32位 Linux |
 | Linux | `nvs-linux-arm64` | ARM64 Linux（树莓派4/5、鲲鹏等） |
-| Linux | `nvs-linux-armv6` / `arm32` | ARM Linux（树莓派1/2/3、Zero） |
-| Linux | `nvs-linux-mips64` | MIPS64（龙芯等） |
+| Linux | `nvs-linux-arm32` | ARM32 v7 Linux（树莓派3/4） |
+| Linux | `nvs-linux-armv6` | ARM32 v6 Linux（树莓派1/2/Zero） |
 | Linux | `nvs-linux-riscv64` | RISC-V 64（VisionFive、LicheePi 等） |
 | macOS | `nvs-mac-x64` | Intel Mac |
 | macOS | `nvs-mac-arm64` | Apple Silicon Mac (M1/M2/M3) |
-| Windows | `nvs-win-x96/` | x32+x64 组合包（自动选择） |
+
+> 注：`windows/386`、`windows/arm`、`linux/mips64` 三个目标因 `modernc.org/sqlite` CGo 库暂不支持对应架构而不可用。
 
 下载后运行即可：
 
@@ -204,7 +206,7 @@ npm run dev
 
 ### 全平台交叉编译
 
-项目提供 `build-all.ps1` 脚本，自动为 **13 个目标平台** 生成预编译二进制文件：
+项目提供 `build-all.ps1` 脚本，自动为 **10 个目标平台** 生成预编译二进制文件：
 
 ```bash
 # Windows（需 PowerShell）
@@ -215,20 +217,16 @@ npm run dev
 
 ```
 release/
-├── nvs-win-x32.exe          # Windows 32-bit (x86)
 ├── nvs-win-x64.exe          # Windows 64-bit (x86_64)
-├── nvs-win-arm32.exe        # Windows ARM32 (v7)
 ├── nvs-win-arm64.exe        # Windows ARM64
 ├── nvs-linux-x32            # Linux 32-bit
 ├── nvs-linux-x64            # Linux 64-bit
 ├── nvs-linux-arm32          # Linux ARM32 (v7)
 ├── nvs-linux-armv6          # Linux ARM32 (v6 — 树莓派1/Zero)
 ├── nvs-linux-arm64          # Linux ARM64 (树莓派4/5)
-├── nvs-linux-mips64         # Linux MIPS64
 ├── nvs-linux-riscv64        # Linux RISC-V 64
 ├── nvs-mac-x64              # macOS Intel
-├── nvs-mac-arm64            # macOS Apple Silicon
-└── nvs-win-x96/             # Windows x32+x64 组合包 + 启动器
+└── nvs-mac-arm64            # macOS Apple Silicon
 ```
 
 手动单目标编译：
@@ -333,7 +331,7 @@ nvs/
 │   │                              #   / EarningsRecord / PlatformConfig / FederatedSite
 │   │                              #   / FederatedNovel / BlacklistIP / WallConfig
 │   │
-│   ├── handlers/                  # API 处理器（11 个模块）
+│   ├── handlers/                  # API 处理器（按功能拆分，20+ 文件）
 │   │   ├── auth.go                # 注册 / 登录 / 登出 / 发送验证码 / 验证邮箱
 │   │   ├── novel.go               # 作品 CRUD / 分类列表 / 分类统计
 │   │   ├── chapter.go             # 章节 CRUD / 内容哈希 / 作者签名 / 验证
@@ -366,25 +364,28 @@ nvs/
 │   ├── vite.config.ts             # outDir → ../dist / dev 代理 /api → 8080
 │   ├── package.json               # TipTap · ECharts · KaTeX · Mermaid · Element Plus
 │   └── src/
-│       ├── router/index.ts        # 15 路由 + JWT 路由守卫
+│       ├── router/index.ts        # 17 路由 + JWT 路由守卫
 │       ├── stores/                # Pinia
 │       │   ├── auth.ts            # 用户认证状态
 │       │   └── theme.ts           # 主题切换（亮/暗）
 │       ├── api/                   # axios 封装
-│       ├── views/                 # 15 个页面组件
+│       ├── views/                 # 20 个页面组件
 │       │   ├── Home.vue / Login.vue / Register.vue
 │       │   ├── NovelDetail.vue / Reader.vue
 │       │   ├── Editor.vue / ChapterEditor.vue
-│       │   ├── AuthorDashboard.vue / AuthorHome.vue
-│       │   ├── CategoryView.vue / Bookshelf.vue
+│       │   ├── AuthorDashboard.vue / AuthorHome.vue / AuthorBlogs.vue
+│       │   ├── BlogList.vue / BlogDetail.vue / BlogEditor.vue
+│       │   ├── CategoryView.vue / Bookshelf.vue / Follows.vue
 │       │   ├── Forums.vue / ForumDetail.vue / ThreadDetail.vue
-│       │   └── AdminDashboard.vue
-│       └── components/            # 10 个通用组件
-│           ├── NavBar.vue / NovelCard.vue
+│       │   ├── AdminDashboard.vue / UserManagement.vue
+│       │   └── Login.vue / Register.vue
+│       └── components/            # 15 个通用组件
+│           ├── NavBar.vue / NovelCard.vue / HomeSearchResults.vue
 │           ├── CommentSection.vue / CommentItem.vue
-│           ├── StarRating.vue / SensitiveZoneGuard.vue
-│           ├── RichTextEditor.vue / AnimatedNumber.vue
-│           ├── DashboardCharts.vue / SlideCaptcha.vue
+│           ├── StarRating.vue / SensitiveZoneGuard.vue / SlideCaptcha.vue
+│           ├── RichTextEditor.vue / AnimatedNumber.vue / DashboardCharts.vue
+│           ├── admin/ — AdminSiteSettings.vue / AdminCommunity.vue
+│           └── author/ — AuthorCard.vue
 │       └── styles/                # 全局样式（含 dark mode）
 │
 ├── dist/                          # [自动生成] 前端构建产物（项目根目录）
@@ -498,7 +499,8 @@ nvs/
 | 方法 | 端点 | 认证 | 说明 |
 |------|------|------|------|
 | GET | `/api/admin/stats` | 管理员 | 基础统计 |
-| GET | `/api/admin/dashboard` | 管理员 | 数据大屏（7天趋势） |
+| GET | `/api/admin/dashboard` | 管理员 | 数据大屏（7天趋势、2×2 图表） |
+| GET | `/api/admin/community` | 管理员 | 社区动态（最新用户/作品/评论/帖子） |
 | GET | `/api/admin/users` | 管理员 | 用户列表 |
 | PUT | `/api/admin/users/:id` | 管理员 | 修改用户 |
 | GET | `/api/admin/vip-applications` | 管理员 | VIP 申请列表 |
@@ -542,7 +544,7 @@ nvs/
 - [x] **Phase 1 MVP** — 注册登录、作品 CRUD、章节读写（含哈希签名）、分类体系、评论、多维度评分、论坛、导入预览/追加/导出、作者后台、管理后台
 - [x] **Phase 1.5 安全与合规** — 敏感区隔离墙（可配置 3~5 步确认）、HMAC-SHA256 内容签名、章节完整性验证、举报系统、IP 黑名单、跨域评论限速
 - [x] **Phase 2 生态增强** — 书架收藏与阅读进度、邮箱验证码、滑块验证码、站点联邦互通
-- [x] **Phase 2.5 部署体验** — 自动创建 .env、IPv4/IPv6 网络配置、网卡 IP 自动扫描、Windows 防火墙自动配置
+- [x] **Phase 2.5 部署体验** — 自动创建 .env、IPv4/IPv6 网络配置、网卡 IP 自动扫描、Windows 防火墙自动配置、代码模块化拆分（后端22文件/前端15组件）、社区动态仪表盘、作者博客分页、收藏/阅读数据图表
 - [ ] **Phase 3 高级功能** — 付费阅读闭环、打赏 UI、EPUB 封面增强、反商业爬虫、自动备份
 - [ ] **Phase 4 治理与扩展** — 社区仲裁员选举、财务公开面板、API 开放平台、移动端 PWA
 
