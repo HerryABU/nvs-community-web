@@ -8,6 +8,7 @@
 .katex,
 .markdown-body .katex,
 .reader-md .katex,
+.blog-content .katex,
 .comment-md .katex,
 .thread-content .katex,
 .post-content .katex {
@@ -17,7 +18,8 @@
 }
 .katex-display,
 .markdown-body .katex-display,
-.reader-md .katex-display {
+.reader-md .katex,
+.blog-content .katex-display {
   margin: 1.2em 0 !important;
   text-align: center !important;
   text-indent: 0 !important;
@@ -34,16 +36,177 @@
 [data-theme="dark"] .markdown-body .katex,
 [data-theme="dark"] .markdown-body .katex *,
 [data-theme="dark"] .reader-md .katex,
-[data-theme="dark"] .reader-md .katex *,
+[data-theme="dark"] .blog-content .katex,
+[data-theme="dark"] .reader-md .katex,
+[data-theme="dark"] .blog-content .katex *,
 [data-theme="dark"] .comment-md .katex,
 [data-theme="dark"] .comment-md .katex * {
   color: #e2e8f0 !important;
+}
+
+/* ═══ 阅读器标题 / 段落 — 与 Cherry 编辑器预览统一 ═══ */
+/* 标题颜色：默认黑色，与 Cherry 预览区一致（--base-font-color） */
+.reader-md h1,
+.blog-content h1,
+.reader-md h2,
+.blog-content h2,
+.reader-md h3,
+.blog-content h3,
+.reader-md h4,
+.blog-content h4,
+.reader-md h5,
+.blog-content h5,
+.reader-md h6,
+.blog-content h6 {
+  color: #1a1a2e !important;  /* 深黑，与 Cherry 默认预览匹配 */
+  font-weight: 700 !important;
+  margin-top: 1.2em !important;
+  margin-bottom: 0.6em !important;
+  line-height: 1.35 !important;
+}
+.reader-md h1,
+.blog-content h1 { font-size: 1.75em !important; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.3em; }
+.reader-md h2,
+.blog-content h2 { font-size: 1.45em !important; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.25em; }
+.reader-md h3,
+.blog-content h3 { font-size: 1.2em !important; }
+.reader-md h4,
+.blog-content h4 { font-size: 1.05em !important; }
+.reader-md h5,
+.blog-content h5 { font-size: 0.95em !important; }
+.reader-md h6,
+.blog-content h6 { font-size: 0.85em !important; color: #555 !important; }
+
+/* 暗色主题下标题颜色 */
+[data-theme="dark"] .reader-md h1,
+[data-theme="dark"] .blog-content h1,
+[data-theme="dark"] .reader-md h2,
+[data-theme="dark"] .blog-content h2,
+[data-theme="dark"] .reader-md h3,
+[data-theme="dark"] .blog-content h3,
+[data-theme="dark"] .reader-md h4,
+[data-theme="dark"] .blog-content h4,
+[data-theme="dark"] .reader-md h5,
+[data-theme="dark"] .blog-content h5,
+[data-theme="dark"] .reader-md h6,
+[data-theme="dark"] .blog-content h6 {
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .reader-md h1,
+[data-theme="dark"] .blog-content h1,
+[data-theme="dark"] .reader-md h2,
+[data-theme="dark"] .blog-content h2 {
+  border-bottom-color: #334155 !important;
+}
+[data-theme="dark"] .reader-md h6,
+[data-theme="dark"] .blog-content h6 {
+  color: #94a3b8 !important;
+}
+
+/* 阅读器段落样式 */
+.reader-md p,
+.blog-content p {
+  margin: 0.8em 0 !important;
+  line-height: 1.8 !important;
+  color: #1a1a2e !important;
+}
+[data-theme="dark"] .reader-md p,
+[data-theme="dark"] .blog-content p {
+  color: #cbd5e1 !important;
+}
+
+/* ═══ 正文排版 — 衬线字体 + 首行缩进 + 标题居中（阅读器 & 博客统一）═══ */
+.reader-md,
+.blog-content {
+  font-family: Georgia, 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', serif !important;
+  font-size: 1.1rem !important;
+  line-height: 2 !important;
+  color: #1a1a2e !important;
+}
+.reader-md p,
+.blog-content p {
+  text-indent: 2em !important;
+  margin-bottom: 1em !important;
+}
+.reader-md h1,
+.reader-md h2,
+.reader-md h3,
+.blog-content h1,
+.blog-content h2,
+.blog-content h3 {
+  text-align: center !important;
+  text-indent: 0 !important;
+}
+.reader-md h4,
+.reader-md h5,
+.reader-md h6,
+.blog-content h4,
+.blog-content h5,
+.blog-content h6 {
+  text-indent: 0 !important;
+}
+[data-theme="dark"] .reader-md,
+[data-theme="dark"] .blog-content {
+  color: #cbd5e1 !important;
+}
+
+/* ═══ 引用块 (blockquote) — 与 Cherry 编辑器预览统一 ═══ */
+/* Cherry 默认: padding:10px 15px; border-left:10px solid #dfe6ee; background:rgba(102,128,153,0.05) */
+.reader-md blockquote,
+.blog-content blockquote,
+.comment-md blockquote,
+.thread-content blockquote,
+.post-content blockquote {
+  margin: 0 0 1em 0 !important;
+  padding: 10px 15px !important;
+  border-left: 10px solid #dfe6ee !important;
+  background: rgba(102, 128, 153, 0.05) !important;
+  color: #3f4a56 !important;
+  border-radius: 0 6px 6px 0 !important;
+}
+.reader-md blockquote p,
+.blog-content blockquote p,
+.comment-md blockquote p,
+.thread-content blockquote p,
+.post-content blockquote p {
+  margin: 0 !important;
+  color: inherit !important;
+}
+/* 嵌套引用 */
+.reader-md blockquote blockquote,
+.blog-content blockquote blockquote,
+.comment-md blockquote blockquote,
+.thread-content blockquote blockquote,
+.post-content blockquote blockquote {
+  margin-top: 8px !important;
+  border-left-color: #c4c9d0 !important;
+}
+
+/* 暗色主题 */
+[data-theme="dark"] .reader-md blockquote,
+[data-theme="dark"] .blog-content blockquote,
+[data-theme="dark"] .blog-content blockquote,
+[data-theme="dark"] .comment-md blockquote,
+[data-theme="dark"] .thread-content blockquote,
+[data-theme="dark"] .post-content blockquote {
+  border-left-color: #475569 !important;
+  background: rgba(102, 128, 153, 0.08) !important;
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .reader-md blockquote blockquote,
+[data-theme="dark"] .blog-content blockquote blockquote,
+[data-theme="dark"] .blog-content blockquote blockquote,
+[data-theme="dark"] .comment-md blockquote blockquote,
+[data-theme="dark"] .thread-content blockquote blockquote,
+[data-theme="dark"] .post-content blockquote blockquote {
+  border-left-color: #334155 !important;
 }
 
 /* ═══ Mermaid 图表 — 全局容器样式（含阅读端）═══ */
 .mermaid-container,
 .markdown-body .mermaid-container,
 .reader-md .mermaid-container,
+.blog-content .mermaid-container,
 .comment-md .mermaid-container,
 .thread-content .mermaid-container,
 .post-content .mermaid-container {
@@ -55,7 +218,8 @@
 /* Mermaid SVG 内文字可读性保障 */
 .mermaid-container svg,
 .markdown-body .mermaid-container svg,
-.reader-md .mermaid-container svg {
+.reader-md .mermaid,
+.blog-content .mermaid-container svg {
   max-width: 100%;
   height: auto;
   border-radius: 8px;
@@ -113,6 +277,7 @@
 /* ═══ 表格样式 ═══ */
 .markdown-body table,
 .reader-md table,
+.blog-content table,
 .comment-md table,
 .thread-content table,
 .post-content table {
@@ -121,7 +286,9 @@
   margin: 12px 0;
 }
 .markdown-body th, .markdown-body td,
-.reader-md th, .reader-md td,
+.reader-md th,
+.blog-content th, .reader-md td,
+.blog-content td,
 .comment-md th, .comment-md td,
 .thread-content th, .thread-content td,
 .post-content th, .post-content td {
@@ -131,6 +298,7 @@
 }
 .markdown-body th,
 .reader-md th,
+.blog-content th,
 .comment-md th,
 .thread-content th,
 .post-content th {
@@ -139,6 +307,7 @@
 }
 [data-theme="dark"] .markdown-body th,
 [data-theme="dark"] .reader-md th,
+[data-theme="dark"] .blog-content th,
 [data-theme="dark"] .comment-md th,
 [data-theme="dark"] .thread-content th,
 [data-theme="dark"] .post-content th {
@@ -147,6 +316,7 @@
 }
 [data-theme="dark"] .markdown-body td,
 [data-theme="dark"] .reader-md td,
+[data-theme="dark"] .blog-content td,
 [data-theme="dark"] .comment-md td,
 [data-theme="dark"] .thread-content td,
 [data-theme="dark"] .post-content td {
@@ -174,24 +344,27 @@
   font-size: .9em;
 }
 [data-theme="dark"] .markdown-body .footnotes,
-[data-theme="dark"] .reader-md .footnotes {
+[data-theme="dark"] .reader-md, [data-theme="dark"] .blog-content .footnotes {
   border-top-color: #334155;
 }
 
 /* ═══ 定义列表 ═══ */
 .markdown-body dl,
 .comment-md dl,
-.reader-md dl {
+.reader-md dl,
+.blog-content dl {
   margin: 12px 0;
 }
 .markdown-body dt,
 .comment-md dt,
-.reader-md dt {
+.reader-md dt,
+.blog-content dt {
   font-weight: 700;
 }
 .markdown-body dd,
 .comment-md dd,
-.reader-md dd {
+.reader-md dd,
+.blog-content dd {
   margin-left: 24px;
   color: #4b5563;
 }
@@ -285,6 +458,7 @@
 /* ═══ 定义列表 (Definition Lists) — 预处理生成的 dl/dt/dd ═══ */
 .cherry-previewer dl,
 .reader-md dl,
+.blog-content dl,
 .comment-md dl,
 .thread-content dl,
 .post-content dl {
@@ -292,6 +466,7 @@
 }
 .cherry-previewer dt,
 .reader-md dt,
+.blog-content dt,
 .comment-md dt,
 .thread-content dt,
 .post-content dt {
@@ -301,6 +476,7 @@
 }
 .cherry-previewer dd,
 .reader-md dd,
+.blog-content dd,
 .comment-md dd,
 .thread-content dd,
 .post-content dd {
@@ -311,6 +487,7 @@
 }
 [data-theme="dark"] .cherry-previewer dd,
 [data-theme="dark"] .reader-md dd,
+[data-theme="dark"] .blog-content dd,
 [data-theme="dark"] .comment-md dd,
 [data-theme="dark"] .thread-content dd,
 [data-theme="dark"] .post-content dd {
@@ -321,6 +498,7 @@
 /* ═══ 缩写 (Abbreviations) — 预处理生成的 abbr ═══ */
 .cherry-previewer abbr,
 .reader-md abbr,
+.blog-content abbr,
 .comment-md abbr,
 .thread-content abbr,
 .post-content abbr {

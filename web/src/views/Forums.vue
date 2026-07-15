@@ -105,6 +105,14 @@ const zoneGuardCross = ref(false);
 let pendingForumId: number | null = null;
 
 async function enterForum(forum: Forum) {
+  // type===sensitive 直接触发隔离，否则走系统分区匹配
+  if (forum.type === 'sensitive') {
+    zoneGuardName.value = (forum as any).zone || forum.name;
+    zoneGuardCross.value = false;
+    pendingForumId = forum.id;
+    showZoneGuard.value = true;
+    return;
+  }
   const guard = await shouldShowGuard((forum as any).zone || forum.name);
   if (guard?.needed) {
     zoneGuardName.value = forum.name;

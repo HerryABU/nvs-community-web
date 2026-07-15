@@ -59,11 +59,20 @@ const router = createRouter({
       name: 'author-home',
       component: () => import('@/views/AuthorHome.vue'),
     },
+    {
+      path: '/author/:id/blog',
+      redirect: to => ({ name: 'author-blogs', params: { id: to.params.id } }),
+    },
     // 作者博客列表
     {
       path: '/author/:id/blogs',
       name: 'author-blogs',
       component: () => import('@/views/AuthorBlogs.vue'),
+    },
+    {
+      path: '/author/:id/blogs/:blogId',
+      name: 'author-blog-detail',
+      component: () => import('@/views/BlogDetail.vue'),
     },
     {
       path: '/forums',

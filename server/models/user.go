@@ -17,6 +17,7 @@ type User struct {
 	PasswordHash    string     `gorm:"size:256;not null" json:"-"`
 	Nickname        string     `gorm:"size:64;default:''" json:"nickname"`
 	AvatarURL       string     `gorm:"size:512;default:''" json:"avatar_url"`
+	Signature       string     `gorm:"size:256;default:''" json:"signature"`
 	Bio             string     `gorm:"type:text" json:"bio"`
 	Role            string     `gorm:"size:32;default:reader" json:"role"`
 	SigningKey      string     `gorm:"size:64;default:''" json:"-"` // base64(AES-256 key), only set for authors

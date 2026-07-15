@@ -36,13 +36,13 @@
         </el-col>
       </el-row>
 
-      <!-- 第二行：折线图 -->
+      <!-- 第二行：趋势图（多指标切换） -->
       <el-row :gutter="20" class="chart-row">
         <el-col :xs="24" :md="12">
-          <DashboardCharts :visitor-trend="userTrend" />
+          <DashboardCharts :metrics="adminTrendMetrics" />
         </el-col>
         <el-col :xs="24" :md="12">
-          <DashboardCharts :visitor-trend="chapterTrend" />
+          <DashboardCharts :metrics="adminTrendMetrics" />
         </el-col>
       </el-row>
 
@@ -298,6 +298,36 @@ const categoryPieData = ref<any>({
   title: '分类分布',
   data: [],
 });
+// ── 多指标选项：管理员趋势图 ──
+// 用户增长 / 章节增长 / 评论增长（可切换）
+const adminTrendMetrics = computed(() => {
+  const opts: any[] = [
+    { label: '用户增长趋势', data: userTrend.value },
+    { label: '章节增长趋势', data: chapterTrend.value },
+  ];
+  if (wordCountTrend.value?.dates?.length) {
+    opts.push({ label: '字数增长趋势', data: wordCountTrend.value });
+  }
+  if (commentTrend.value?.dates?.length) {
+    opts.push({ label: '评论增长趋势', data: commentTrend.value });
+  }
+  return opts;
+});
+
+// 管理员评论趋势（从 API 加载）
+const commentTrend = ref<any>({
+  title: '评论增长趋势（近7天）',
+  dates: [],
+  values: [],
+  seriesName: '新增评论',
+});
+
+const wordCountTrend = ref<any>({
+  title: '字数增长趋势（近7天）',
+  dates: [],
+  values: [],
+  seriesName: '新增字数',
+});
 
 // ===== 隔离墙 =====
 function toggleZoneDetail(idx: number) {
@@ -410,6 +440,13 @@ async function deleteSite(site: any) {
 }
 
 // ===== 论坛板块管理 =====
+const adminForums = ref<any[]>([]);
+const loadingForums = ref(false);
+const showAddForum = ref(false);
+const editingForum = ref<any>(null);
+const submittingForum = ref(false);
+const forumForm = reactive({ name: '', type: 'general', zone: '', description: '', sort_order: 0 });
+
 async function loadForums() {
   loadingForums.value = true;
   try {
@@ -479,6 +516,17 @@ async function deleteForum(forum: any) {
   } catch { /* cancelled */ }
 }
 
+function forumTypeTag(t: string) {
+  const map: Record<string, string> = { general: 'info', reader: 'success', reader_author: 'warning', author: 'primary', sensitive: 'danger' };
+  return map[t] || 'info';
+}
+
+function forumTypeLabel(t: string) {
+  const map: Record<string, string> = { general: '综合讨论', reader: '读者区', reader_author: '读者-作者', author: '作者区', sensitive: '敏感区' };
+  return map[t] || t;
+}
+
+
 // ===== 仪表盘数据 =====
 async function loadDashboard() {
   try {
@@ -497,6 +545,14 @@ async function loadDashboard() {
     const ct = d?.chapter_trend;
     if (ct) {
       chapterTrend.value = { title: '章节增长趋势（近7天）', dates: ct.dates || [], values: ct.counts || [], seriesName: '新增章节' };
+    }
+    const cmt = d?.comment_trend;
+    if (cmt) {
+      commentTrend.value = { title: '评论增长趋势（近7天）', dates: cmt.dates || [], values: cmt.counts || [], seriesName: '新增评论' };
+    }
+    const wct = d?.word_count_trend;
+    if (wct) {
+      wordCountTrend.value = { title: '字数增长趋势（近7天）', dates: wct.dates || [], values: wct.counts || [], seriesName: '每日新增', secondValues: wct.cumulative || [], secondName: '累计总字数' };
     }
     const tn = d?.top_novels;
     if (tn) {

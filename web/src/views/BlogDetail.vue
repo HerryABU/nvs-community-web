@@ -13,7 +13,7 @@
         </div>
       </div>
 
-      <div class="blog-content markdown-body" v-html="htmlContent"></div>
+      <div class="blog-content markdown-body" v-html="htmlContent" ref="blogContentRef"></div>
 
       <div class="blog-footer">
         <el-button @click="$router.back()">返回</el-button>
@@ -31,16 +31,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { blogApi } from '@/api/social';
-import { renderMarkdown } from '@/markdown/renderer';
+import { renderMarkdown, renderMermaidBlocks, renderChemfigBlocks } from '@/markdown/renderer';
 import CommentSection from '@/components/CommentSection.vue';
 
 const route = useRoute();
 const blog = ref<any>(null);
 const htmlContent = ref('');
 const loading = ref(false);
+const blogContentRef = ref<HTMLElement | null>(null);
 
 function formatDate(d?: string) {
   if (!d) return '';
@@ -48,13 +49,26 @@ function formatDate(d?: string) {
 }
 
 onMounted(async () => {
-  const id = Number(route.params.id);
+  // 兼容两种路由：/blog/:id 和 /author/:id/blogs/:blogId
+  const blogId = Number(route.params.blogId || route.params.id);
   loading.value = true;
   try {
-    const res = await blogApi.getBlog(id);
+    let res;
+    if (route.params.blogId) {
+      const authorId = Number(route.params.id);
+      res = await blogApi.getAuthorBlog(authorId, blogId);
+    } else {
+      res = await blogApi.getBlog(blogId);
+    }
     if (res.data.code === 0) {
       blog.value = res.data.data;
       htmlContent.value = renderMarkdown(blog.value.content || '');
+      nextTick(() => {
+        if (blogContentRef.value) {
+          renderMermaidBlocks(blogContentRef.value);
+          renderChemfigBlocks(blogContentRef.value);
+        }
+      });
     }
   } catch { /* ignore */ }
   finally { loading.value = false; }

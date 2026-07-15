@@ -39,33 +39,23 @@
         </el-col>
       </el-row>
 
-      <!-- 第二行：折线图 + 柱状图 -->
+      <!-- 第二行：趋势图（多指标切换）+ 柱状图（多指标切换）-->
       <el-row :gutter="20" class="chart-row">
         <el-col :xs="24" :md="12">
-          <DashboardCharts :visitor-trend="chapterTrend" />
+          <DashboardCharts :metrics="authorTrendMetrics" />
         </el-col>
         <el-col :xs="24" :md="12">
-          <DashboardCharts :novel-bars="novelWordBars" />
+          <DashboardCharts :metrics="novelBarMetrics" />
         </el-col>
       </el-row>
 
-      <!-- 第三行：收藏 + 阅读（柱状图） -->
+      <!-- 第三行：收藏/阅读（合并切换）+ 评分仪表盘 -->
       <el-row :gutter="20" class="chart-row">
         <el-col :xs="24" :md="12">
-          <DashboardCharts :novel-bars="bookshelfBarData" />
+          <DashboardCharts :metrics="statBarMetrics" />
         </el-col>
-        <el-col :xs="24" :md="12">
-          <DashboardCharts :novel-bars="viewsBarData" />
-        </el-col>
-      </el-row>
-
-      <!-- 第四行：评分 + 评论 -->
-      <el-row :gutter="20" class="chart-row">
         <el-col :xs="24" :md="12">
           <DashboardCharts :rating-gauge="avgRating" />
-        </el-col>
-        <el-col :xs="24" :md="12">
-          <DashboardCharts :visitor-trend="commentTrend" />
         </el-col>
       </el-row>
 
@@ -263,6 +253,13 @@ const commentTrend = ref<any>({
   seriesName: '评论数',
 });
 
+const wordCountTrend = ref<any>({
+  title: '字数增长趋势（近7天）',
+  dates: [],
+  values: [],
+  seriesName: '新增字数',
+});
+
 const bookshelfCount = ref(0);
 const totalViews = ref(0);
 const avgRating = ref<number | null>(null);
@@ -280,6 +277,36 @@ const viewsBarData = computed(() => ({
   values: [totalViews.value],
   seriesName: '阅读量',
 }));
+
+// ── 多指标选项（统一 metrics 格式）──
+
+// 趋势图：章节增长 / 字数增长 / 评论趋势
+const authorTrendMetrics = computed(() => [
+  { label: '章节增长趋势', data: chapterTrend.value },
+  { label: '字数增长趋势', data: wordCountTrend.value },
+  { label: '评论趋势', data: commentTrend.value },
+]);
+
+// 柱状/趋势图：作品字数 / 作品章节（可切换折线/柱状）
+const novelBarMetrics = computed(() => {
+  const wordsData = { ...novelWordBars.value };
+  const chaptersData = {
+    title: '各作品章节数对比',
+    labels: novelWordBars.value.labels,
+    values: novels.value.map(n => n.total_chapters || 0),
+    seriesName: '章节数',
+  };
+  return [
+    { label: '各作品字数', data: wordsData },
+    { label: '各作品章节数', data: chaptersData },
+  ];
+});
+
+// 柱状/趋势图：收藏 / 阅读
+const statBarMetrics = computed(() => [
+  { label: '总收藏', data: bookshelfBarData.value },
+  { label: '总阅读', data: viewsBarData.value },
+]);
 
 const exportFormats: Record<string, { label: string; ext: string; mime: string; fn: (id: number) => Promise<any> }> = {
   zip: { label: 'ZIP 打包', ext: 'zip', mime: 'application/zip', fn: novelApi.exportNovel },
@@ -316,6 +343,17 @@ async function loadDashboard() {
           dates: d.comment_trend.dates || [],
           values: d.comment_trend.counts || [],
           seriesName: '评论数',
+        };
+      }
+
+      if (d.word_count_trend) {
+        wordCountTrend.value = {
+          title: '字数增长趋势（近7天）',
+          dates: d.word_count_trend.dates || [],
+          values: d.word_count_trend.counts || [],
+          seriesName: '每日新增',
+          secondValues: d.word_count_trend.cumulative || [],
+          secondName: '累计总字数',
         };
       }
 

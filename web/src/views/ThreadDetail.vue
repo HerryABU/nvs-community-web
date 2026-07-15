@@ -41,6 +41,14 @@
         <router-link to="/login">登录</router-link> 后即可回复
       </div>
     </template>
+    <!-- 敏感区隔离弹窗 -->
+    <SensitiveZoneGuard
+      :visible="showZoneGuard"
+      :zone-name="zoneGuardName"
+      :is-cross-domain="zoneGuardCross"
+      @confirm="onZoneConfirmed"
+      @cancel="showZoneGuard = false"
+    />
   </div>
 </template>
 
@@ -51,6 +59,8 @@ import { novelApi, forumApi } from '@/api/novel';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage } from 'element-plus';
 import { renderMarkdown } from '@/markdown/renderer';
+import SensitiveZoneGuard from '@/components/SensitiveZoneGuard.vue';
+import { markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';
 
 const route = useRoute();
 const authStore = useAuthStore();
@@ -60,6 +70,27 @@ const posts = ref<any[]>([]);
 const total = ref(0);
 const replyContent = ref('');
 const replying = ref(false);
+
+// 敏感区隔离
+const showZoneGuard = ref(false);
+const zoneGuardName = ref('');
+const zoneGuardCross = ref(false);
+
+function checkSensitiveForum() {
+  const forum = thread.value?.forum;
+  if (!forum) return;
+  if (forum.type === 'sensitive' || forum.zone) {
+    zoneGuardName.value = forum.zone || forum.name;
+    zoneGuardCross.value = false;
+    showZoneGuard.value = true;
+  }
+}
+
+function onZoneConfirmed() {
+  markZoneConfirmed(zoneGuardName.value);
+  setLastZone(zoneGuardName.value);
+  showZoneGuard.value = false;
+}
 
 function formatTime(s: string) {
   return new Date(s).toLocaleDateString('zh-CN');
@@ -71,6 +102,7 @@ async function load() {
     const res = await forumApi.getThread(Number(route.params.id));
     const d = res.data.data;
     thread.value = d.thread;
+    checkSensitiveForum();
     posts.value = d.posts || [];
     total.value = d.total || 0;
   } catch (e) {

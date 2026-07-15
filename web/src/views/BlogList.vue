@@ -8,7 +8,7 @@
     <div v-loading="loading" class="bl-list">
       <el-empty v-if="!loading && blogs.length === 0" description="暂无博客文章" />
 
-      <div v-for="blog in blogs" :key="blog.id" class="bl-card" @click="$router.push(`/blog/${blog.id}`)">
+      <div v-for="blog in blogs" :key="blog.id" class="bl-card" @click="$router.push(`/author/${blog.author_id}/blogs/${blog.id}`)">
         <!-- 置顶标记 -->
         <el-tag v-if="blog.is_pinned" type="danger" size="small" class="bl-pin">置顶</el-tag>
 

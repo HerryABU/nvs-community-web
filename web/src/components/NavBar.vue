@@ -106,6 +106,7 @@
             </span>
             <template #dropdown>
               <el-dropdown-menu>
+                <el-dropdown-item @click="triggerAvatarUpload"><el-icon><Camera /></el-icon> 更换头像</el-dropdown-item>
                 <el-dropdown-item v-if="isAuthor" @click="goAuthorHome">
                   <el-icon><User /></el-icon> 我的作者主页
                 </el-dropdown-item>
@@ -124,6 +125,7 @@
       </div>
     </div>
   </nav>
+  <input ref="avatarInput" type="file" accept="image/png,image/jpeg,image/gif" style="display:none" @change="onAvatarChange" />
 </template>
 
 <script setup lang="ts">
@@ -132,7 +134,11 @@ import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useThemeStore } from '@/stores/theme';
 import { publicApi } from '@/api/admin';
+import { authApi } from '@/api/auth';
+import { ElMessage } from 'element-plus';
+import { Camera } from '@element-plus/icons-vue';
 
+const avatarInput = ref<HTMLInputElement>();
 const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
@@ -151,6 +157,26 @@ const isAuthor = computed(() => {
 function goAuthorHome() {
   if (authStore.user?.id) {
     router.push(`/author/${authStore.user.id}`);
+  }
+}
+
+function triggerAvatarUpload() { avatarInput.value?.click(); }
+
+async function onAvatarChange(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('avatar', file);
+  try {
+    const res = await authApi.uploadAvatar(fd);
+    if (res.data.code === 0) {
+      authStore.user!.avatar_url = res.data.data.avatar_url;
+      ElMessage.success('头像已更新');
+    } else {
+      ElMessage.error(res.data.message || '上传失败');
+    }
+  } catch {
+    ElMessage.error('上传失败，请使用 JPG/PNG/GIF 格式');
   }
 }
 

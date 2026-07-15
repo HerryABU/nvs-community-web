@@ -11,7 +11,8 @@ type Forum struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
 	Name        string    `gorm:"size:128;not null" json:"name"`
 	Description string    `gorm:"type:text" json:"description"`
-	Type        string    `gorm:"size:16;default:general;index" json:"type"` // sub/topic/general
+	Type        string    `gorm:"size:16;default:general;index" json:"type"` // general/reader/reader_author/author/sensitive
+	Zone        string    `gorm:"size:64;default:''" json:"zone"`            // 敏感区绑定的隔离墙分区名
 	RefID       string    `gorm:"size:64;default:''" json:"ref_id"`          // novel_id 或 category
 	ParentID    *uint     `gorm:"default:null;index" json:"parent_id"`       // 父论坛ID，null为顶级论坛
 	SortOrder   int       `gorm:"default:0" json:"sort_order"`
@@ -165,12 +166,18 @@ func InitDefaultForums() {
 		{"跨界灵感碰撞", "general", "跨类型的创意交流、写作技巧分享、灵感启发"},
 		{"创作急诊室", "general", "写作难题求助、情节推演、设定检验"},
 		{"资源共享库", "general", "写作工具、参考资料、行业资讯分享"},
+		{"同人创作区", "sensitive", "同人作品交流与讨论（需确认年龄和阅读风险）"},
+		{"政治文学区", "sensitive", "政治题材文学创作与讨论（需确认法律风险）"},
 	}
 	for i, d := range defaults {
 		var count int64
 		DB.Model(&Forum{}).Where("type = ? AND name = ?", d.ftype, d.name).Count(&count)
 		if count == 0 {
-			DB.Create(&Forum{Name: d.name, Description: d.desc, Type: d.ftype, SortOrder: i})
+			zone := ""
+		if d.ftype == "sensitive" {
+			zone = d.name
+		}
+		DB.Create(&Forum{Name: d.name, Description: d.desc, Type: d.ftype, Zone: zone, SortOrder: i})
 		}
 	}
 }

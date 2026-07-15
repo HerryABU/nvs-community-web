@@ -176,6 +176,22 @@ func GetDashboardStats(c *gin.Context) {
 		chapterMap[r.Date] = r.Count
 	}
 	trendChapters := make([]gin.H, 0, 7)
+
+	// 每日字数增长趋势
+	type trendWordRow struct {
+		Date  string
+		Count int64
+	}
+	var dailyWords []trendWordRow
+	models.DB.Raw(
+		"SELECT date(created_at) AS date, COALESCE(SUM(word_count),0) AS count FROM chapters WHERE created_at >= ? GROUP BY date ORDER BY date",
+		dates[0],
+	).Scan(&dailyWords)
+
+	wordsMap := make(map[string]int64)
+	for _, r := range dailyWords {
+		wordsMap[r.Date] = r.Count
+	}
 	for _, d := range dates {
 		trendChapters = append(trendChapters, gin.H{
 			"date":  d,
@@ -235,6 +251,14 @@ func GetDashboardStats(c *gin.Context) {
 	for i, d := range dates {
 		chapterTrendCounts[i] = chapterMap[d]
 	}
+	wordsTrendCounts := make([]int64, 7)
+	cumulativeWordsCounts := make([]int64, 7)
+	var cumSum int64
+	for i, d := range dates {
+		wordsTrendCounts[i] = wordsMap[d]
+		cumSum += wordsMap[d]
+		cumulativeWordsCounts[i] = cumSum
+	}
 
 	utils.Success(c, gin.H{
 		"stats": gin.H{
@@ -252,6 +276,11 @@ func GetDashboardStats(c *gin.Context) {
 		"chapter_trend": gin.H{
 			"dates": dates,
 			"counts": chapterTrendCounts,
+		},
+		"word_count_trend": gin.H{
+			"dates": dates,
+			"counts": wordsTrendCounts,
+			"cumulative": cumulativeWordsCounts,
 		},
 		"top_novels":            topNovels,
 		"category_distribution": categoryDistribution,

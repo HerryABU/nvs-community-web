@@ -45,6 +45,12 @@ func GetAuthorDashboard(c *gin.Context) {
 	if len(novelIDs) > 0 {
 		models.DB.Raw("SELECT date(comments.created_at) AS date, COUNT(*) AS count FROM comments JOIN novels ON novels.id = comments.novel_id WHERE novels.author_id = ? AND comments.created_at >= ? GROUP BY date(comments.created_at) ORDER BY date", userID, dates[0]).Scan(&dailyComments)
 	}
+
+	// 每日字数增长趋势
+	var dailyWords []dayCount
+	if len(novelIDs) > 0 {
+		models.DB.Raw("SELECT date(chapters.created_at) AS date, COALESCE(SUM(chapters.word_count),0) AS count FROM chapters JOIN novels ON novels.id = chapters.novel_id WHERE novels.author_id = ? AND chapters.created_at >= ? GROUP BY date(chapters.created_at) ORDER BY date", userID, dates[0]).Scan(&dailyWords)
+	}
 	commentMap := make(map[string]int64)
 	for _, r := range dailyComments { commentMap[r.Date] = r.Count }
 	trendComments := make([]gin.H, 0, 7)
@@ -75,12 +81,24 @@ func GetAuthorDashboard(c *gin.Context) {
 	commentTrendCounts := make([]int64, 7)
 	for i, d := range dates { commentTrendCounts[i] = commentMap[d] }
 
+	wordsMap := make(map[string]int64)
+	for _, r := range dailyWords { wordsMap[r.Date] = r.Count }
+	wordsTrendCounts := make([]int64, 7)
+	cumulativeWordsCounts := make([]int64, 7)
+	var cumSum int64
+	for i, d := range dates {
+		wordsTrendCounts[i] = wordsMap[d]
+		cumSum += wordsMap[d]
+		cumulativeWordsCounts[i] = cumSum
+	}
+
 	utils.Success(c, gin.H{
 		"stats": gin.H{"novels": totalNovels, "total_words": totalWords, "total_chapters": totalChapters, "total_comments": totalComments},
 		"trend_chapters": trendChapters, "trend_comments": trendComments,
 		"bookshelf_count": bookshelfCount, "total_views": totalViews,
 		"chapter_trend":   gin.H{"dates": dates, "counts": chapterTrendCounts},
 		"comment_trend":   gin.H{"dates": dates, "counts": commentTrendCounts},
+		"word_count_trend": gin.H{"dates": dates, "counts": wordsTrendCounts, "cumulative": cumulativeWordsCounts},
 		"novel_stats":     novelStats, "avg_rating": avgRating,
 	})
 }

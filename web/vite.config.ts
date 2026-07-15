@@ -12,7 +12,7 @@ export default defineConfig({
     dedupe: ['katex', 'mermaid'],
   },
   build: {
-    outDir: '../server/dist',
+    outDir: '../dist',
     emptyOutDir: true,
   },
   server: {

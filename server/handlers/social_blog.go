@@ -1,16 +1,32 @@
 package handlers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 
+	"nvs-server/config"
 	"nvs-server/models"
+	"nvs-server/security"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
-	"github.com/microcosm-cc/bluemonday"
 )
 
 // ============ 作者博客 ============
+
+// 博客文件存储根目录：data/blogs
+func blogDataDir() string {
+	return filepath.Join(filepath.Dir(config.NovelDataDir), "blogs")
+}
+
+func computeBlogHash(content string) string {
+	h := sha256.Sum256([]byte(content))
+	return hex.EncodeToString(h[:])
+}
 
 type CreateBlogInput struct {
 	Title   string `json:"title" binding:"required,max=256"`
@@ -34,18 +50,54 @@ func CreateBlog(c *gin.Context) {
 		return
 	}
 
-	sanitizer := bluemonday.UGCPolicy()
+	// 净化内容
+	content := security.SanitizeUserContent(req.Content)
+	title := security.SanitizePlainText(req.Title)
+	summary := security.SanitizePlainText(req.Summary)
+
+	// 先创建数据库记录获取 ID
 	blog := &models.AuthorBlog{
 		AuthorID: userID,
-		Title:    sanitizer.Sanitize(req.Title),
-		Content:  sanitizer.Sanitize(req.Content),
-		Summary:  sanitizer.Sanitize(req.Summary),
+		Title:    title,
+		Summary:  summary,
 	}
 	if err := models.CreateBlog(blog); err != nil {
 		utils.InternalError(c, "创建失败")
 		return
 	}
+
+	// 写入文件系统
+	authorDir := filepath.Join(blogDataDir(), fmt.Sprintf("%d", userID))
+	os.MkdirAll(authorDir, 0755)
+	contentPath := filepath.Join(authorDir, fmt.Sprintf("%d.md", blog.ID))
+	if err := os.WriteFile(contentPath, []byte(content), 0644); err != nil {
+		utils.InternalError(c, "写入文件失败")
+		return
+	}
+
+	// 更新路径和哈希到数据库
+	contentHash := computeBlogHash(content)
+	models.DB.Model(blog).Updates(map[string]interface{}{
+		"content_path": contentPath,
+		"content_hash": contentHash,
+	})
+	blog.ContentPath = contentPath
+	blog.ContentHash = contentHash
+	blog.Content = content
+
 	utils.Success(c, blog)
+}
+
+// 辅助：从文件系统加载博客内容
+func loadBlogContent(blog *models.AuthorBlog) {
+	if blog.ContentPath == "" {
+		return
+	}
+	data, err := os.ReadFile(blog.ContentPath)
+	if err != nil {
+		return
+	}
+	blog.Content = string(data)
 }
 
 // GET /api/blogs — 公开博客列表
@@ -69,7 +121,35 @@ func GetBlog(c *gin.Context) {
 		utils.NotFound(c, "博客不存在")
 		return
 	}
+	loadBlogContent(blog)
 	models.IncrementBlogView(uint(id))
+	if blog.Author != nil {
+		blog.Author.Email = ""
+	}
+	utils.Success(c, blog)
+}
+
+// GET /api/author/:id/blogs/:blogId — 获取某作者的某篇博客详情（独立 URL）
+func GetAuthorBlog(c *gin.Context) {
+	authorID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || authorID == 0 {
+		utils.BadRequest(c, "无效的作者ID")
+		return
+	}
+	blogID, err := strconv.ParseUint(c.Param("blogId"), 10, 64)
+	if err != nil || blogID == 0 {
+		utils.BadRequest(c, "无效的博客ID")
+		return
+	}
+
+	blog, err := models.GetBlogByID(uint(blogID))
+	if err != nil || blog.AuthorID != uint(authorID) {
+		utils.NotFound(c, "博客不存在")
+		return
+	}
+
+	loadBlogContent(blog)
+	models.IncrementBlogView(uint(blogID))
 	if blog.Author != nil {
 		blog.Author.Email = ""
 	}
@@ -111,24 +191,37 @@ func UpdateBlog(c *gin.Context) {
 		return
 	}
 
-	sanitizer := bluemonday.UGCPolicy()
+	updates := map[string]interface{}{}
 	if req.Title != "" {
-		blog.Title = sanitizer.Sanitize(req.Title)
+		blog.Title = security.SanitizePlainText(req.Title)
+		updates["title"] = blog.Title
 	}
 	if req.Content != "" {
-		blog.Content = sanitizer.Sanitize(req.Content)
+		content := security.SanitizeUserContent(req.Content)
+		if blog.ContentPath != "" {
+			os.WriteFile(blog.ContentPath, []byte(content), 0644)
+		}
+		contentHash := computeBlogHash(content)
+		blog.ContentHash = contentHash
+		updates["content_hash"] = contentHash
 	}
 	if req.Summary != "" {
-		blog.Summary = sanitizer.Sanitize(req.Summary)
+		blog.Summary = security.SanitizePlainText(req.Summary)
+		updates["summary"] = blog.Summary
 	}
 	if req.IsPinned != nil {
 		blog.IsPinned = *req.IsPinned
+		updates["is_pinned"] = *req.IsPinned
 	}
 
-	if err := models.UpdateBlog(blog); err != nil {
-		utils.InternalError(c, "更新失败")
-		return
+	if len(updates) > 0 {
+		if err := models.DB.Model(blog).Updates(updates).Error; err != nil {
+			utils.InternalError(c, "更新失败")
+			return
+		}
 	}
+
+	loadBlogContent(blog)
 	utils.Success(c, blog)
 }
 
@@ -141,6 +234,11 @@ func DeleteBlog(c *gin.Context) {
 	if err != nil || blog.AuthorID != userID {
 		utils.Forbidden(c, "无权删除此博客")
 		return
+	}
+
+	// 删除文件
+	if blog.ContentPath != "" {
+		os.Remove(blog.ContentPath)
 	}
 
 	if err := models.DeleteBlog(uint(id)); err != nil {

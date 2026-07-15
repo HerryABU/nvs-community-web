@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -30,6 +31,13 @@ import (
 )
 
 func main() {
+	// 确保工作目录为 exe 所在目录（双击启动时 Windows 工作目录可能不是 exe 目录）
+	if exePath, err := os.Executable(); err == nil {
+		if dir := filepath.Dir(exePath); dir != "" {
+			os.Chdir(dir)
+		}
+	}
+
 	config.Init()
 
 	// 确保数据目录存在
@@ -139,7 +147,7 @@ func main() {
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
-	r.Use(gin.Logger(), gin.Recovery())
+	r.Use(gin.Logger(), middleware.SecureRecovery())
 
 	// 健康检查：浏览器 → HTML 页面，API 请求 → JSON
 	r.GET("/health", func(c *gin.Context) {
@@ -313,6 +321,7 @@ func main() {
 		// 博客公开读取
 		r.GET("/api/blogs", handlers.ListPublicBlogs)
 		r.GET("/api/blogs/:id", handlers.GetBlog)
+		r.GET("/api/author/:id/blogs/:blogId", handlers.GetAuthorBlog)
 		r.GET("/api/author/:id/blogs", handlers.ListAuthorBlogs)
 	}
 

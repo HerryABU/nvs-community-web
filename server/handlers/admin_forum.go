@@ -32,6 +32,7 @@ func AdminCreateForum(c *gin.Context) {
 		Name        string `json:"name" binding:"required"`
 		Description string `json:"description"`
 		Type        string `json:"type"`
+		Zone        string `json:"zone"`
 		ParentID    *uint  `json:"parent_id"`
 		SortOrder   int    `json:"sort_order"`
 	}
@@ -47,6 +48,7 @@ func AdminCreateForum(c *gin.Context) {
 		Name:        req.Name,
 		Description: req.Description,
 		Type:        req.Type,
+		Zone:        req.Zone,
 		ParentID:    req.ParentID,
 		SortOrder:   req.SortOrder,
 	}
@@ -79,6 +81,7 @@ func AdminUpdateForum(c *gin.Context) {
 		Name        *string `json:"name"`
 		Description *string `json:"description"`
 		Type        *string `json:"type"`
+		Zone        *string `json:"zone"`
 		ParentID    *uint   `json:"parent_id"`
 		SortOrder   *int    `json:"sort_order"`
 	}
@@ -95,6 +98,9 @@ func AdminUpdateForum(c *gin.Context) {
 	}
 	if req.Type != nil {
 		forum.Type = *req.Type
+	}
+	if req.Zone != nil {
+		forum.Zone = *req.Zone
 	}
 	if req.ParentID != nil {
 		forum.ParentID = req.ParentID
