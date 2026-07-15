@@ -92,11 +92,8 @@ import { ElMessage } from 'element-plus';
 import { ArrowLeft, Plus, Delete } from '@element-plus/icons-vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import TurndownService from 'turndown';
+// engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
 import { renderMarkdown, engineConfig } from '@/markdown/renderer';
-import katex from 'katex';
-
-// mhchem 副作用注册（与 renderer.ts 保持一致）
-import 'katex/dist/contrib/mhchem.mjs';
 
 const route = useRoute();
 const router = useRouter();

@@ -24,8 +24,9 @@ import 'katex/dist/katex.min.css';
 // 全局 Markdown 渲染修复样式
 import './global-fix.css';
 
-// 导出渲染器（供 Reader / Comment / Thread 使用）
-export { renderMarkdown, renderMermaidBlocks } from './renderer';
+// 导出渲染器（供 Reader / Comment / Thread / Blog 使用）
+// engineConfig + physicsKatex 供编辑器使用，确保渲染统一
+export { renderMarkdown, renderMermaidBlocks, renderChemfigBlocks, engineConfig, physicsKatex } from './renderer';
 
 /**
  * Cherry 编辑器工厂函数

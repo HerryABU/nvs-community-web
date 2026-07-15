@@ -7,7 +7,8 @@ import (
 type Comment struct {
 	ID             uint      `gorm:"primaryKey" json:"id"`
 	UserID         uint      `gorm:"not null;index" json:"user_id"`
-	NovelID        uint      `gorm:"not null;index" json:"novel_id"`
+	NovelID        uint      `gorm:"default:0;index" json:"novel_id"`
+	BlogID         uint      `gorm:"default:0;index" json:"blog_id"`
 	ChapterNumber  int       `gorm:"default:0" json:"chapter_number"`
 	Content        string    `gorm:"type:text;not null" json:"content"`
 	QuoteText      string    `gorm:"size:1024;default:''" json:"quote_text"`
@@ -68,4 +69,20 @@ func GetCommentByID(id uint) (*Comment, error) {
 
 func DeleteComment(id uint) error {
 	return DB.Delete(&Comment{}, id).Error
+}
+
+// GetCommentsByBlog 获取博客评论
+func GetCommentsByBlog(blogID uint, page, pageSize int) ([]Comment, int64, error) {
+	var comments []Comment
+	var total int64
+	query := DB.Model(&Comment{}).Where("blog_id = ?", blogID)
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	offset := (page - 1) * pageSize
+	if err := query.Preload("User").Preload("Parent").
+		Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&comments).Error; err != nil {
+		return nil, 0, err
+	}
+	return comments, total, nil
 }

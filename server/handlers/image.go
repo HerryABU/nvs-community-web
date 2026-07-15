@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"bytes"
 	"fmt"
 	"image"
 	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -41,9 +43,9 @@ func UploadImage(c *gin.Context) {
 
 	// 安全检查：只允许图片类型
 	ext := strings.ToLower(filepath.Ext(header.Filename))
-	allowedExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true, ".bmp": true}
+	allowedExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true}
 	if !allowedExts[ext] {
-		utils.BadRequest(c, "只支持 JPG/PNG/GIF/WebP/BMP 格式的图片")
+		utils.BadRequest(c, "只支持 JPG/PNG/GIF 格式的图片")
 		return
 	}
 
@@ -54,15 +56,22 @@ func UploadImage(c *gin.Context) {
 		return
 	}
 
-	// 验证是否是有效图片（防图片马核心）
+	// 验证文件头魔术字节（magic bytes），防止伪造扩展名
+	if !hasImageMagicBytes(rawData, ext) {
+		log.Printf("[SECURITY] 文件头不匹配：声称扩展名 %s，但实际文件头为 %X", ext, rawData[:minInt(12, len(rawData))])
+		utils.BadRequest(c, "文件内容与扩展名不匹配，可能是恶意文件")
+		return
+	}
+
+	// 验证 MIME 类型（第二层防护）
 	contentType := http.DetectContentType(rawData)
 	if !strings.HasPrefix(contentType, "image/") {
 		utils.BadRequest(c, "文件不是有效的图片格式")
 		return
 	}
 
-	// 重新编码：解码 → 编码为 PNG（丢弃所有元数据、隐藏payload）
-	img, format, err := image.Decode(strings.NewReader(string(rawData)))
+	// 重新编码：解码 → 丢弃所有元数据和隐藏 payload → 重新编码
+	img, format, err := image.Decode(bytes.NewReader(rawData))
 	if err != nil {
 		utils.BadRequest(c, "无法解码图片，文件可能已损坏")
 		return
@@ -73,39 +82,65 @@ func UploadImage(c *gin.Context) {
 	imgDir := filepath.Join(config.UploadDir, "images")
 	os.MkdirAll(imgDir, 0755)
 
-	// 生成唯一文件名
-	filename := fmt.Sprintf("img_%d_%d.png", userID, time.Now().UnixNano())
-	imgPath := filepath.Join(imgDir, filename)
-
-	// 以 PNG 格式重新编码写入
-	outFile, err := os.Create(imgPath)
-	if err != nil {
-		utils.InternalError(c, "创建图片文件失败")
-		return
-	}
-	defer outFile.Close()
-
-	if err := png.Encode(outFile, img); err != nil {
-		// PNG 编码失败，尝试 JPEG
-		outFile.Seek(0, 0)
-		outFile.Truncate(0)
-		if err2 := jpeg.Encode(outFile, img, &jpeg.Options{Quality: 90}); err2 != nil {
-			// JPEG 也失败，尝试 GIF
-			outFile.Seek(0, 0)
-			outFile.Truncate(0)
-			if err3 := gif.Encode(outFile, img, nil); err3 != nil {
+	// 先编码到内存 buffer，确定最终格式后再写文件（避免后缀不一致）
+	var buf bytes.Buffer
+	outExt := ".png"
+	encodeErr := png.Encode(&buf, img)
+	if encodeErr != nil {
+		buf.Reset()
+		encodeErr = jpeg.Encode(&buf, img, &jpeg.Options{Quality: 90})
+		if encodeErr != nil {
+			buf.Reset()
+			encodeErr = gif.Encode(&buf, img, nil)
+			if encodeErr != nil {
 				utils.InternalError(c, "图片编码失败")
 				return
 			}
+			outExt = ".gif"
+		} else {
+			outExt = ".jpg"
 		}
 	}
 
-	// 返回 URL
+	filename := fmt.Sprintf("img_%d_%d%s", userID, time.Now().UnixNano(), outExt)
+	imgPath := filepath.Join(imgDir, filename)
+
+	if err := os.WriteFile(imgPath, buf.Bytes(), 0644); err != nil {
+		utils.InternalError(c, "保存图片失败")
+		return
+	}
+
 	imageURL := fmt.Sprintf("/uploads/images/%s", filename)
 	utils.Success(c, gin.H{
 		"url":     imageURL,
 		"message": "图片上传成功",
 	})
+}
+
+// hasImageMagicBytes 验证文件头魔术字节是否匹配声称的扩展名
+func hasImageMagicBytes(data []byte, ext string) bool {
+	switch ext {
+	case ".jpg", ".jpeg":
+		return data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF
+	case ".png":
+		return data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 &&
+			data[4] == 0x0D && data[5] == 0x0A && data[6] == 0x1A && data[7] == 0x0A
+	case ".gif":
+		return data[0] == 'G' && data[1] == 'I' && data[2] == 'F' && data[3] == '8'
+	case ".webp":
+		return data[0] == 'R' && data[1] == 'I' && data[2] == 'F' && data[3] == 'F'
+	case ".bmp":
+		return data[0] == 'B' && data[1] == 'M'
+	default:
+		return false
+	}
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // PUT /api/author/profile — 更新作者资料（签名、隔离开关）

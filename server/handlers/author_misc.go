@@ -1,7 +1,12 @@
 package handlers
 
 import (
+	"bytes"
 	"fmt"
+	"image"
+	"image/gif"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"net/http"
 	"os"
@@ -36,36 +41,69 @@ func UploadAvatar(c *gin.Context) {
 
 	// 安全检查：只允许图片类型
 	ext := strings.ToLower(filepath.Ext(header.Filename))
-	allowedExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true}
+	allowedExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true}
 	if !allowedExts[ext] {
-		utils.BadRequest(c, "只支持 JPG/PNG/GIF/WebP 格式的头像")
+		utils.BadRequest(c, "只支持 JPG/PNG/GIF 格式的头像")
 		return
 	}
 
-	// 读取文件数据
-	data, err := io.ReadAll(file)
+	// 读取原始数据
+	rawData, err := io.ReadAll(file)
 	if err != nil {
 		utils.InternalError(c, "读取头像文件失败")
 		return
 	}
 
-	// 验证是否是有效图片（防止非图片文件伪装）
-	contentType := http.DetectContentType(data)
+	// 验证文件头魔术字节（防止伪造扩展名的图片马）
+	if !hasImageMagicBytes(rawData, ext) {
+		utils.BadRequest(c, "文件内容与扩展名不匹配，可能是恶意文件")
+		return
+	}
+
+	// 验证 MIME 类型（第二层防护）
+	contentType := http.DetectContentType(rawData)
 	if !strings.HasPrefix(contentType, "image/") {
 		utils.BadRequest(c, "文件不是有效的图片格式")
 		return
 	}
 
+	// 重新编码：解码 → 编码为 PNG（丢弃所有元数据、隐藏payload）
+	img, format, err := image.Decode(bytes.NewReader(rawData))
+	if err != nil {
+		utils.BadRequest(c, "无法解码图片，文件可能已损坏")
+		return
+	}
+	_ = format
+
 	// 创建上传目录
 	avatarDir := filepath.Join(config.UploadDir, "avatars")
 	os.MkdirAll(avatarDir, 0755)
 
-	// 生成文件名：user_{id}_{timestamp}.{ext}
-	filename := fmt.Sprintf("user_%d_%d%s", userID, time.Now().Unix(), ext)
+	// 先编码到内存 buffer，确定最终格式后再写文件（避免后缀不一致）
+	var buf bytes.Buffer
+	ext = ".png"
+	encodeErr := png.Encode(&buf, img)
+	if encodeErr != nil {
+		buf.Reset()
+		encodeErr = jpeg.Encode(&buf, img, &jpeg.Options{Quality: 90})
+		if encodeErr != nil {
+			buf.Reset()
+			encodeErr = gif.Encode(&buf, img, nil)
+			if encodeErr != nil {
+				utils.InternalError(c, "图片编码失败")
+				return
+			}
+			ext = ".gif"
+		} else {
+			ext = ".jpg"
+		}
+	}
+
+	// 根据最终编码格式生成正确的文件名和后缀
+	filename := fmt.Sprintf("user_%d_%d%s", userID, time.Now().UnixNano(), ext)
 	avatarPath := filepath.Join(avatarDir, filename)
 
-	// 写入文件
-	if err := os.WriteFile(avatarPath, data, 0644); err != nil {
+	if err := os.WriteFile(avatarPath, buf.Bytes(), 0644); err != nil {
 		utils.InternalError(c, "保存头像失败")
 		return
 	}

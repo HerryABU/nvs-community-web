@@ -18,6 +18,7 @@ type Novel struct {
 	CreationMethod  string    `gorm:"size:16;default:human" json:"creation_method"`       // human / ai / human_ai_assisted
 	TotalWords      int       `gorm:"default:0" json:"total_words"`
 	TotalChapters   int       `gorm:"default:0" json:"total_chapters"`
+	ViewCount       int       `gorm:"default:0" json:"view_count"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 
@@ -73,7 +74,7 @@ func GetNovels(category, search string, page, pageSize int) ([]Novel, int64, err
 	if search != "" {
 		like := "%" + search + "%"
 		query = query.Joins("LEFT JOIN users ON users.id = novels.author_id").
-			Where("(novels.title LIKE ? OR novels.summary LIKE ? OR novels.tags LIKE ? OR users.nickname LIKE ?)", like, like, like, like)
+			Where("(novels.title LIKE ? OR novels.summary LIKE ? OR novels.tags LIKE ? OR users.nickname LIKE ? OR users.username LIKE ?)", like, like, like, like, like)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
@@ -81,7 +82,7 @@ func GetNovels(category, search string, page, pageSize int) ([]Novel, int64, err
 	}
 
 	offset := (page - 1) * pageSize
-	if err := query.Preload("Author").Order("updated_at DESC").Offset(offset).Limit(pageSize).Find(&novels).Error; err != nil {
+	if err := query.Preload("Author").Order("novels.updated_at DESC").Offset(offset).Limit(pageSize).Find(&novels).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -110,21 +111,21 @@ func GetNovelsSorted(category, search, sortBy string, page, pageSize int) ([]Nov
 	if search != "" {
 		like := "%" + search + "%"
 		query = query.Joins("LEFT JOIN users ON users.id = novels.author_id").
-			Where("(novels.title LIKE ? OR novels.summary LIKE ? OR novels.tags LIKE ? OR users.nickname LIKE ?)", like, like, like, like)
+			Where("(novels.title LIKE ? OR novels.summary LIKE ? OR novels.tags LIKE ? OR users.nickname LIKE ? OR users.username LIKE ?)", like, like, like, like, like)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	orderClause := "updated_at DESC"
+	orderClause := "novels.updated_at DESC"
 	switch sortBy {
 	case "created_at":
-		orderClause = "created_at DESC"
+		orderClause = "novels.created_at DESC"
 	case "updated_at":
-		orderClause = "updated_at DESC"
+		orderClause = "novels.updated_at DESC"
 	case "featured":
-		orderClause = "total_chapters DESC, updated_at DESC"
+		orderClause = "novels.total_chapters DESC, novels.updated_at DESC"
 	}
 
 	offset := (page - 1) * pageSize

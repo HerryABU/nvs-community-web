@@ -1,11 +1,11 @@
 package handlers
 
 import (
+	"nvs-server/models"
+	"nvs-server/security"
+	"nvs-server/utils"
 	"strconv"
 	"strings"
-
-	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -83,11 +83,23 @@ func GetForum(c *gin.Context) {
 // POST /api/forums/:id/threads — 发帖
 func CreateThread(c *gin.Context) {
 	userID := c.GetUint("userID")
-	forumID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	forumID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || forumID == 0 {
+		utils.BadRequest(c, "无效的论坛ID")
+		return
+	}
+
+	// 验证论坛是否存在
+	forum, err := models.GetForumByID(uint(forumID))
+	if err != nil {
+		utils.NotFound(c, "论坛不存在")
+		return
+	}
+	_ = forum
 
 	var req struct {
-		Title   string `json:"title" binding:"required"`
-		Content string `json:"content" binding:"required"`
+		Title   string `json:"title" binding:"required,max=256"`
+		Content string `json:"content" binding:"required,max=65536"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请填写标题和内容")
@@ -97,8 +109,8 @@ func CreateThread(c *gin.Context) {
 	thread := &models.Thread{
 		ForumID: uint(forumID),
 		UserID:  userID,
-		Title:   req.Title,
-		Content: req.Content, // 直接存储原始 Markdown，XSS 由前端 Cherry Markdown 防护
+		Title:   strings.TrimSpace(req.Title),
+		Content: security.SanitizeUserContent(req.Content),
 	}
 
 	if err := models.CreateThread(thread); err != nil {
@@ -142,10 +154,25 @@ func GetThread(c *gin.Context) {
 // POST /api/threads/:id/posts — 回复帖子
 func CreatePost(c *gin.Context) {
 	userID := c.GetUint("userID")
-	threadID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	threadID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || threadID == 0 {
+		utils.BadRequest(c, "无效的帖子ID")
+		return
+	}
+
+	// 验证帖子是否存在且未被锁定
+	thread, err := models.GetThreadByID(uint(threadID))
+	if err != nil {
+		utils.NotFound(c, "帖子不存在")
+		return
+	}
+	if thread.IsLocked {
+		utils.Forbidden(c, "帖子已被锁定，无法回复")
+		return
+	}
 
 	var req struct {
-		Content string `json:"content" binding:"required"`
+		Content string `json:"content" binding:"required,max=65536"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请输入回复内容")
@@ -155,7 +182,7 @@ func CreatePost(c *gin.Context) {
 	post := &models.Post{
 		ThreadID: uint(threadID),
 		UserID:   userID,
-		Content:  req.Content, // 直接存储原始 Markdown，XSS 由前端 Cherry Markdown 防护
+		Content:  security.SanitizeUserContent(req.Content),
 	}
 
 	if err := models.CreatePost(post); err != nil {

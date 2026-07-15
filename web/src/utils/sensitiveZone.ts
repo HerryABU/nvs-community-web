@@ -9,12 +9,18 @@ let SENSITIVE_ZONES: string[] = [];
 let zonesLoaded = false;
 
 /** 检查文本是否匹配任意敏感分区（支持子串匹配） */
-function matchZone(text: string): string | null {
-  if (!text) return null;
-  if (SENSITIVE_ZONES.includes(text)) return text;
-  for (const zone of SENSITIVE_ZONES) {
-    if (text.includes(zone)) return zone;
-    if (zone.includes(text) && text.length >= 2) return zone;
+function matchZone(textOrArray: string | string[]): string | null {
+  const texts = Array.isArray(textOrArray) ? textOrArray : [textOrArray];
+  for (const text of texts) {
+    if (!text) continue;
+    if (SENSITIVE_ZONES.includes(text)) return text;
+    const t = text.toLowerCase();
+    for (const zone of SENSITIVE_ZONES) {
+      const z = zone.toLowerCase();
+      if (t.includes(z) || z.includes(t)) return zone;
+      if (t.length >= 2 && z.includes(t)) return zone;
+      if (z.length >= 2 && t.includes(z)) return zone;
+    }
   }
   return null;
 }
@@ -86,13 +92,13 @@ export function setLastZone(zone: string) {
 
 /** 判断是否需要确认弹窗 */
 export async function shouldShowGuard(
-  zone: string,
+  zoneOrZones: string | string[],
   opts?: { authorId?: number; userId?: number; wallEnabled?: boolean },
 ): Promise<{ needed: boolean; isCrossDomain: boolean; zoneName: string } | null> {
   await loadZones();
-  const matchedZone = matchZone(zone);
+  const matchedZone = matchZone(zoneOrZones);
   if (!matchedZone) return null;
-  zone = matchedZone;
+  const zone = matchedZone;
 
   // 作者关闭了隔离墙 → 跳过
   if (opts?.wallEnabled === false) return null;

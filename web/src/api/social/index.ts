@@ -33,6 +33,9 @@ export const blogApi = {
   listByAuthor(authorId: number, page: number = 1) {
     return api.get(`/author/${authorId}/blogs`, { params: { page } });
   },
+  getAuthorBlog(authorId: number, blogId: number) {
+    return api.get(`/author/${authorId}/blogs/${blogId}`);
+  },
   create(data: { title: string; content: string; summary?: string }) {
     return api.post('/blogs', data);
   },

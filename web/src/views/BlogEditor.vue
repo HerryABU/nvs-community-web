@@ -52,9 +52,8 @@ import { ElMessage } from 'element-plus';
 import { ArrowLeft } from '@element-plus/icons-vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import TurndownService from 'turndown';
+// engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
 import { renderMarkdown, engineConfig } from '@/markdown/renderer';
-import katex from 'katex';
-import 'katex/dist/contrib/mhchem.mjs';
 
 const route = useRoute();
 const router = useRouter();

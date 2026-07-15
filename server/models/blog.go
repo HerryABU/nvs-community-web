@@ -4,15 +4,17 @@ import "time"
 
 // AuthorBlog 作者博客文章
 type AuthorBlog struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	AuthorID  uint      `gorm:"not null;index:idx_author_blog" json:"author_id"`
-	Title     string    `gorm:"size:256;not null" json:"title"`
-	Content   string    `gorm:"type:longtext" json:"content"`
-	Summary   string    `gorm:"size:512;default:''" json:"summary"`
-	IsPinned  bool      `gorm:"default:false;index" json:"is_pinned"`
-	ViewCount int       `gorm:"default:0" json:"view_count"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	AuthorID    uint      `gorm:"not null;index:idx_author_blog" json:"author_id"`
+	Title       string    `gorm:"size:256;not null" json:"title"`
+	Content     string    `gorm:"-" json:"content,omitempty"`
+	ContentPath string    `gorm:"size:512;not null" json:"-"`
+	ContentHash string    `gorm:"size:64;default:''" json:"content_hash,omitempty"`
+	Summary     string    `gorm:"size:512;default:''" json:"summary"`
+	IsPinned    bool      `gorm:"default:false;index" json:"is_pinned"`
+	ViewCount   int       `gorm:"default:0" json:"view_count"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 
 	Author *User `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
 }
@@ -20,7 +22,8 @@ type AuthorBlog struct {
 func (AuthorBlog) TableName() string { return "author_blogs" }
 
 func CreateBlog(blog *AuthorBlog) error {
-	return DB.Create(blog).Error
+	err := DB.Create(blog).Error
+	return err
 }
 
 func GetBlogByID(id uint) (*AuthorBlog, error) {

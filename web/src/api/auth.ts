@@ -19,6 +19,7 @@ export interface User {
   email: string;
   nickname: string;
   avatar_url: string;
+  signature: string;
   bio: string;
   role: string;
   created_at: string;

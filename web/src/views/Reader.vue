@@ -27,10 +27,6 @@
         </el-result>
       </div>
       <div v-else class="reader-content">
-        <!-- 诊断：数据状态 -->
-        <div v-if="chapter" style="padding:8px 16px;margin-bottom:12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;font-size:12px;color:#0369a1">
-          DEBUG: chapter={{ chapter.title }} | content长度={{ chapter.content?.length || 0 }} | loading={{ loading }}
-        </div>
         <div v-if="chapter?.content" class="reader-md-wrap">
           <div class="reader-md markdown-body" v-html="renderedHtml" ref="mdContainer"></div>
         </div>
@@ -69,7 +65,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { novelApi, chapterApi, type Chapter } from '@/api/novel';
 import { bookshelfApi } from '@/api/bookshelf';
 import { useAuthStore } from '@/stores/auth';
-import { renderMarkdown, renderMermaidBlocks } from '@/markdown/renderer';
+import { renderMarkdown, renderMermaidBlocks, renderChemfigBlocks } from '@/markdown/renderer';
 import CommentSection from '@/components/CommentSection.vue';
 import SensitiveZoneGuard from '@/components/SensitiveZoneGuard.vue';
 import { shouldShowGuard, markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';
@@ -86,6 +82,7 @@ const chapter = ref<Chapter | null>(null);
 const htmlContent = ref('');
 const novelTitle = ref('');
 const novelCategory = ref('');
+const novelCategories = ref<string[]>([]);
 const novelAuthorId = ref(0);
 const novelWallEnabled = ref(true);
 const novelWallWarning = ref('');
@@ -118,6 +115,7 @@ async function loadChapter() {
     }
     novelTitle.value = novelRes.data.data.title;
     novelCategory.value = novelRes.data.data.category || '';
+    novelCategories.value = novelRes.data.data.categories || (novelRes.data.data.category ? [novelRes.data.data.category] : []);
     novelAuthorId.value = novelRes.data.data.author_id || 0;
     novelWallEnabled.value = novelRes.data.data.wall_enabled !== false;
     novelWallWarning.value = novelRes.data.data.wall_warning || '';
@@ -147,9 +145,16 @@ async function loadChapter() {
 }
 
 async function checkSensitiveZone() {
-  const cat = novelCategory.value;
-  if (!cat) return;
-  const guard = await shouldShowGuard(cat, {
+  // author custom wall: if wall_warning present and wall_enabled, trigger directly
+  if (novelWallEnabled.value !== false && novelWallWarning.value) {
+    zoneGuardName.value = novelCategory.value || novelTitle.value || 'wall';
+    zoneGuardCross.value = false;
+    showZoneGuard.value = true;
+    return;
+  }
+  const cats = novelCategories.value.length > 0 ? novelCategories.value : (novelCategory.value ? [novelCategory.value] : []);
+  if (cats.length === 0) return;
+  const guard = await shouldShowGuard(cats, {
     authorId: novelAuthorId.value,
     userId: authStore.user?.id, wallEnabled: novelWallEnabled.value,
   });
@@ -195,7 +200,10 @@ watch(() => chapter.value?.content, (content) => {
     renderedHtml.value = '<p style=color:red>渲染失败: ' + (e.message || String(e)) + '</p>';
   }
   nextTick(() => {
-    if (mdContainer.value) renderMermaidBlocks(mdContainer.value);
+    if (mdContainer.value) {
+      renderMermaidBlocks(mdContainer.value);
+      renderChemfigBlocks(mdContainer.value);
+    }
   });
 });
 
@@ -256,28 +264,28 @@ onMounted(() => {
   min-height: 200px;
 }
 
-.reader-html {
+.reader-md {
   font-family: Georgia, 'Noto Serif SC', serif;
   font-size: 1.1rem;
   line-height: 2;
   color: #333;
 }
 
-[data-theme="dark"] .reader-html {
+[data-theme="dark"] .reader-md {
   color: #cbd5e1;
 }
 
-.reader-html :deep(p) {
+.reader-md :deep(p) {
   margin-bottom: 1em;
   text-indent: 2em;
   color: #1a1a2e;
 }
 
-[data-theme="dark"] .reader-html :deep(p) {
+[data-theme="dark"] .reader-md :deep(p) {
   color: #e2e8f0;
 }
 
-.reader-html :deep(h1) {
+.reader-md :deep(h1) {
   font-size: 2.2rem;
   text-align: center;
   margin: 2em 0 1em;
@@ -285,7 +293,7 @@ onMounted(() => {
   font-weight: 700;
   color: #1a1a2e;
 }
-.reader-html :deep(h2) {
+.reader-md :deep(h2) {
   font-size: 1.7rem;
   text-align: center;
   margin: 1.8em 0 0.8em;
@@ -293,7 +301,7 @@ onMounted(() => {
   font-weight: 700;
   color: #1a1a2e;
 }
-.reader-html :deep(h3) {
+.reader-md :deep(h3) {
   font-size: 1.4rem;
   text-align: center;
   margin: 1.5em 0 0.6em;
@@ -301,55 +309,55 @@ onMounted(() => {
   font-weight: 700;
   color: #1a1a2e;
 }
-.reader-html :deep(h4),
-.reader-html :deep(h5),
-.reader-html :deep(h6) {
+.reader-md :deep(h4),
+.reader-md :deep(h5),
+.reader-md :deep(h6) {
   margin: 1.5em 0 0.8em;
   text-indent: 0;
   font-weight: 700;
   color: #1a1a2e;
 }
 
-[data-theme="dark"] .reader-html :deep(h1),
-[data-theme="dark"] .reader-html :deep(h2),
-[data-theme="dark"] .reader-html :deep(h3) {
+[data-theme="dark"] .reader-md :deep(h1),
+[data-theme="dark"] .reader-md :deep(h2),
+[data-theme="dark"] .reader-md :deep(h3) {
   color: #f1f5f9;
 }
-[data-theme="dark"] .reader-html :deep(h4),
-[data-theme="dark"] .reader-html :deep(h5),
-[data-theme="dark"] .reader-html :deep(h6) {
+[data-theme="dark"] .reader-md :deep(h4),
+[data-theme="dark"] .reader-md :deep(h5),
+[data-theme="dark"] .reader-md :deep(h6) {
   color: #f1f5f9;
 }
 
-.reader-html :deep(ul),
-.reader-html :deep(ol) {
+.reader-md :deep(ul),
+.reader-md :deep(ol) {
   padding-left: 1.5em;
   margin-bottom: 1em;
 }
 
-.reader-html :deep(li) {
+.reader-md :deep(li) {
   margin-bottom: 0.3em;
 }
 
-.reader-html :deep(a) {
+.reader-md :deep(a) {
   color: #2563eb;
   text-decoration: none;
 }
 
-[data-theme="dark"] .reader-html :deep(a) {
+[data-theme="dark"] .reader-md :deep(a) {
   color: #60a5fa;
 }
 
-.reader-html :deep(strong) {
+.reader-md :deep(strong) {
   font-weight: 700;
   color: #1a1a2e;
 }
 
-[data-theme="dark"] .reader-html :deep(strong) {
+[data-theme="dark"] .reader-md :deep(strong) {
   color: #f1f5f9;
 }
 
-.reader-html :deep(blockquote) {
+.reader-md :deep(blockquote) {
   border-left: 4px solid #e67e22;
   padding: 10px 18px;
   margin: 14px 0;
@@ -358,46 +366,46 @@ onMounted(() => {
   border-radius: 0 6px 6px 0;
 }
 
-[data-theme="dark"] .reader-html :deep(blockquote) {
+[data-theme="dark"] .reader-md :deep(blockquote) {
   background: #1e293b;
   color: #cbd5e1;
   border-left-color: #f59e0b;
 }
 
-.reader-html :deep(table) {
+.reader-md :deep(table) {
   border-collapse: collapse;
   width: 100%;
   margin: 14px 0;
 }
 
-.reader-html :deep(th),
-.reader-html :deep(td) {
+.reader-md :deep(th),
+.reader-md :deep(td) {
   border: 1px solid #d1d5db;
   padding: 8px 14px;
   text-align: left;
 }
 
-[data-theme="dark"] .reader-html :deep(th),
-[data-theme="dark"] .reader-html :deep(td) {
+[data-theme="dark"] .reader-md :deep(th),
+[data-theme="dark"] .reader-md :deep(td) {
   border-color: #374151;
 }
 
-.reader-html :deep(th) {
+.reader-md :deep(th) {
   background: #f3f4f6;
   font-weight: 600;
 }
 
-[data-theme="dark"] .reader-html :deep(th) {
+[data-theme="dark"] .reader-md :deep(th) {
   background: #1f2937;
 }
 
-.reader-html :deep(hr) {
+.reader-md :deep(hr) {
   border: none;
   border-top: 1px solid #e5e7eb;
   margin: 24px 0;
 }
 
-[data-theme="dark"] .reader-html :deep(hr) {
+[data-theme="dark"] .reader-md :deep(hr) {
   border-top-color: #374151;
 }
 
