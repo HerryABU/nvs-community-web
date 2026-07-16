@@ -216,6 +216,7 @@ func main() {
 	protected.Use(middleware.AuthRequired())
 	{
 		protected.GET("/auth/me", handlers.GetCurrentUser)
+		protected.POST("/auth/change-password", handlers.ChangePassword)
 		protected.POST("/comments", security.RateLimit(20, 60), handlers.CreateComment)
 		protected.DELETE("/comments/:id", handlers.DeleteComment)
 		protected.POST("/novels", handlers.CreateNovel)

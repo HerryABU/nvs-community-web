@@ -95,6 +95,14 @@ export const authApi = {
     return api.put<{ code: number; message: string }>('/author/profile', data);
   },
 
+  // 修改密码（需登录）
+  changePassword(oldPassword: string, newPassword: string) {
+    return api.post<{ code: number; message: string }>('/auth/change-password', {
+      old_password: oldPassword,
+      new_password: newPassword,
+    });
+  },
+
   // 获取签名状态
   getSignatureStatus() {
     return api.get<{

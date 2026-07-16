@@ -136,7 +136,54 @@ func ResetPassword(c *gin.Context) {
 }
 
 // POST /api/auth/change-password — 登录后修改密码
-// TODO: 实现 ChangePassword 功能
 func ChangePassword(c *gin.Context) {
-	utils.BadRequest(c, "该功能暂未实现")
+	var req struct {
+		OldPassword string `json:"old_password" binding:"required"`
+		NewPassword string `json:"new_password" binding:"required,min=6,max=128"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误: 新密码长度至少6位")
+		return
+	}
+
+	// 获取当前登录用户
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "未登录")
+		return
+	}
+
+	user, err := models.GetUserByID(userID.(uint))
+	if err != nil || user == nil {
+		utils.NotFound(c, "用户不存在")
+		return
+	}
+
+	// 验证旧密码
+	if !utils.CheckPassword(req.OldPassword, user.PasswordHash) {
+		utils.BadRequest(c, "原密码不正确")
+		return
+	}
+
+	// 新旧密码不能相同
+	if req.OldPassword == req.NewPassword {
+		utils.BadRequest(c, "新密码不能与原密码相同")
+		return
+	}
+
+	// 哈希新密码
+	hash, err := utils.HashPassword(req.NewPassword)
+	if err != nil {
+		utils.InternalError(c, "密码处理失败")
+		return
+	}
+
+	// 更新密码
+	user.PasswordHash = hash
+	if err := models.UpdateUser(user); err != nil {
+		utils.InternalError(c, "修改密码失败")
+		return
+	}
+
+	utils.SuccessMessage(c, "密码修改成功", nil)
 }

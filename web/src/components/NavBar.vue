@@ -113,6 +113,9 @@
                 <el-dropdown-item v-if="authStore.user?.role === 'admin'" @click="$router.push('/admin')">
                   管理员面板
                 </el-dropdown-item>
+                <el-dropdown-item @click="$router.push('/settings')">
+                  <el-icon><Setting /></el-icon> 账号设置
+                </el-dropdown-item>
                 <el-dropdown-item @click="authStore.logout()">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -136,7 +139,7 @@ import { useThemeStore } from '@/stores/theme';
 import { publicApi } from '@/api/admin';
 import { authApi } from '@/api/auth';
 import { ElMessage } from 'element-plus';
-import { Camera } from '@element-plus/icons-vue';
+import { Camera, Setting } from '@element-plus/icons-vue';
 
 const avatarInput = ref<HTMLInputElement>();
 const router = useRouter();
