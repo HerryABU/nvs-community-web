@@ -142,6 +142,18 @@ const engine = new CherryEngine(engineConfig as any);
 // 也需传入包装后的 katex 以确保预览渲染一致。
 export { physicsKatex, physicsMacros };
 
+// ═══ 预处理：展开/收起控件 ═══
+function preprocessExpand(md: string): string {
+  return md.replace(/\[expand(?:\s+title="([^"]*)")?\]\s*([\s\S]*?)\s*\[\/expand\]/g,
+    (_f: string, title: string, body: string) => {
+      const label = title || '展开内容';
+      const id = 'exp' + Math.random().toString(36).slice(2, 8);
+      return `<div class="expand-block" style="border:1px solid var(--border-color,#ddd);border-radius:8px;margin:12px 0;overflow:hidden">
+<details id="${id}"><summary style="cursor:pointer;padding:10px 16px;background:var(--card-bg,#f5f5f5);font-weight:600;user-select:none">📋 ${label}</summary>
+<div style="padding:12px 16px">${body}</div></details></div>`;
+    });
+}
+
 // ═══ 预处理：缩写 + 定义列表 + physics 快捷替换 ═══
 function preprocessMD(md: string): string {
   if (!md) return '';
@@ -236,7 +248,7 @@ export function renderMarkdown(content: string): string {
     // 3) 预处理缩写/定义列表
     // 4) CherryEngine 渲染（DOMPurify 会做最终 XSS 防护）
     const decoded = unescapeHTML(content);
-    const html = engine.makeHtml(preprocessMD(preprocessChemfig(decoded))) as string;
+    const html = engine.makeHtml(preprocessExpand(preprocessMD(preprocessChemfig(decoded)))) as string;
     return html;
   } catch (e) {
     console.error('[NVS] renderMarkdown error:', e);

@@ -33,6 +33,10 @@ JWT_EXPIRE_HOURS=72
 NOVEL_DATA_DIR=./data/novels
 UPLOAD_DIR=./data/uploads
 
+# ==================== 用户自定义内容 ====================
+USER_FRAME_DIR=./data/userframe
+USER_HTML_DIR=./data/userhtml
+
 # ==================== 服务端口与网络 ====================
 SERVER_PORT=8080
 
@@ -93,6 +97,10 @@ var (
 	NovelDataDir string
 	UploadDir    string
 
+	// User custom content
+	UserFrameDir string
+	UserHTMLDir  string
+
 	// Server
 	ServerPort string
 
@@ -137,6 +145,9 @@ func Init() {
 
 	NovelDataDir = getEnv("NOVEL_DATA_DIR", "./data/novels")
 	UploadDir = getEnv("UPLOAD_DIR", "./data/uploads")
+
+	UserFrameDir = getEnv("USER_FRAME_DIR", "./data/userframe")
+	UserHTMLDir = getEnv("USER_HTML_DIR", "./data/userhtml")
 
 	ServerPort = getEnv("SERVER_PORT", "8080")
 
