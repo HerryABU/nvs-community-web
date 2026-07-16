@@ -20,14 +20,35 @@ const router = createRouter({
       name: 'register',
       component: () => import('@/views/Register.vue'),
     },
+    // 旧路径（兼容）
     {
       path: '/novel/:id',
       name: 'novel-detail',
       component: () => import('@/views/NovelDetail.vue'),
     },
+    // 旧路径（兼容，Reader内部获取作者后自动替换URL）
     {
       path: '/novel/:id/read/:chapter',
       name: 'reader',
+      component: () => import('@/views/Reader.vue'),
+    },
+    // 公开作者主页（新版，含统计图表）
+    {
+      path: '/author/:id',
+      name: 'author-home',
+      component: () => import('@/views/AuthorHome.vue'),
+    },
+    // 新路径（推荐）：/author/:authorId/novel/:id
+    {
+      path: '/author/:authorId/novel/:id',
+      name: 'novel-detail-new',
+      component: () => import('@/views/NovelDetail.vue'),
+      alias: '/author/:authorId/novel/:id/',  // 尾斜杠兼容
+    },
+    // 新路径（推荐）：/author/:authorId/novel/:id/read/:chapter
+    {
+      path: '/author/:authorId/novel/:id/read/:chapter',
+      name: 'reader-new',
       component: () => import('@/views/Reader.vue'),
     },
     {
@@ -52,12 +73,6 @@ const router = createRouter({
       path: '/category/:name',
       name: 'category',
       component: () => import('@/views/CategoryView.vue'),
-    },
-    // 公开作者主页（新版，含统计图表）
-    {
-      path: '/author/:id',
-      name: 'author-home',
-      component: () => import('@/views/AuthorHome.vue'),
     },
     {
       path: '/author/:id/blog',
@@ -133,6 +148,46 @@ const router = createRouter({
       path: '/settings',
       name: 'settings',
       component: () => import('@/views/Settings.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/docs',
+      name: 'docs',
+      component: () => import('@/views/DocsPage.vue'),
+    },
+    // ========== 用户自定义内容（frame/html/wasm 沙盒） ==========
+    {
+      path: '/frames',
+      name: 'frame-manager',
+      component: () => import('@/views/frame/FrameManager.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/author/templates',
+      name: 'author-templates',
+      component: () => import('@/views/AuthorTemplateSettings.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/plaza',
+      name: 'html-plaza',
+      component: () => import('@/views/HtmlPlaza.vue'),
+    },
+    {
+      path: '/htmls',
+      name: 'html-manager',
+      component: () => import('@/views/frame/HTMLManager.vue'),
+      meta: { requiresAuth: false },
+    },
+    {
+      path: '/run/:htmlId',
+      name: 'html-runner',
+      component: () => import('@/views/frame/HtmlRunner.vue'),
+    },
+    {
+      path: '/wasm',
+      name: 'wasm-runner',
+      component: () => import('@/views/frame/WasmRunner.vue'),
       meta: { requiresAuth: true },
     },
   ],

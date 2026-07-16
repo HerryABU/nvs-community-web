@@ -83,6 +83,105 @@
 - 🌐 **联邦站点** — 支持远程站点互联与跨站作品同步（模仿 alist）
 - 🔗 **公开 API** — `/api/site-info`、`/api/federated/novels`、`/api/federated/sites`
 
+### 🎨 自定义 HTML-UI 美化
+
+NVS 允许作者通过自定义 HTML 模板深度美化作品展示页面和作者主页。模板在独立 iframe 沙盒中运行，安全隔离。
+
+**模板类型**
+
+| 类型 | 显示位置 | 说明 |
+|------|----------|------|
+| 📖 阅读模板 | 小说阅读页（章节正文上方/下方） | 可调用平台小说 API，支持按钮/表单等交互控件 |
+| 👤 作者展现模板 | 作者主页 `/author/:id` | 纯展示或交互，不依赖具体作品 |
+
+**平台 JavaScript API（`window.NVS`）**
+
+| 方法 | 说明 |
+|------|------|
+| `window.NVS.getNovelData(novelId?)` | 获取小说元数据+完整章节列表，返回 `Promise` |
+| `window.NVS.getCurrentChapter()` | 从 iframe URL 解析当前阅读章节号 |
+| `window.NVS.sendMessage(type, data)` | 通过 `postMessage` 向父页面发送消息 |
+| `window.addEventListener('nvs-message', fn)` | 监听父页面发来的消息 |
+
+**沙盒安全级别**
+
+| 级别 | iframe sandbox 属性 | 适用 |
+|------|---------------------|------|
+| strict（只读） | `allow-scripts allow-same-origin` | 纯展示 |
+| interactive（交互） | + `allow-forms allow-popups` | 含按钮/表单 |
+
+**模板设置入口**：用户头像下拉 → 「🎨 模板设置」→ 分Tab管理阅读模板和作者展现模板
+
+---
+
+### 📦 自定义 HTML 托管（扩展应用）
+
+上传 ZIP 包将完整的 HTML 应用部署到 NVS 平台，在独立沙盒中运行。支持任意前端技术栈（Vue/React/原生 JS），可包含 WASM 模块。
+
+**上传流程**
+
+```
+编写应用（HTML+CSS+JS+WASM）→ 打包 ZIP → 上传到扩展应用 → 自动解压+安全扫描 → 沙盒运行
+```
+
+**ZIP 包规范**
+
+| 限制项 | 值 |
+|--------|-----|
+| 压缩包大小 | ≤ 20 MB |
+| 解压后总大小 | ≤ 50 MB |
+| 压缩比 | ≤ 100:1（防 ZIP 炸弹） |
+| 文件数量 | ≤ 500 |
+| 允许扩展名 | .html .css .js .wasm .json .png .jpg .svg .woff2 等 |
+| 入口文件 | 默认 index.html，可手动选择 |
+
+**运行方式**
+
+| 方式 | 路径 | 说明 |
+|------|------|------|
+| 完整运行 | `/app/:id` | 全屏沙盒，虚拟路径隐藏真实存储 |
+| 弹窗预览 | 卡片「预览」按钮 | 对话框内 iframe 预览 |
+| 广场运行 | 广场卡片点击 | 新标签页全屏运行 |
+
+**HTML 应用广场**
+
+作者设置项目为「公开」后，项目出现在广场 Tab 中。上传 ZIP 时自动提取首张图片作为缩略图。作者可设置「允许下载」，访客可下载原始 ZIP 包。
+
+**端口代理**
+
+扩展应用可分配独立端口（49152-65535 高位优先），通过命名路径 `/sandbox/proxy/{作者ID}/{项目名}/` 反向代理访问，端口号不在 URL 中暴露。
+
+**虚拟文件系统 (VFS)**
+
+沙盒应用可通过 REST API 在内存中读写数据，完全隔离于真实文件系统：
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/api/sandbox-vfs/:id/write` | 写入 `{key, value}`，单值≤1MB，总量≤10MB/100键 |
+| GET | `/api/sandbox-vfs/:id/read?key=` | 读取键值 |
+| GET | `/api/sandbox-vfs/:id/list` | 列出所有键 |
+
+**多层安全防护**
+
+1. **上传前** — 23条内容安全扫描（提权命令/Shell注入/木马/挖矿/僵尸网络/数据窃取/钓鱼）
+2. **解压中** — ZIP 炸弹检测（压缩比+总大小+文件数+路径穿越）
+3. **解压后** — 目录锁定（文件→0444只读，目录→0755可写）
+4. **运行时** — 写入拦截中间件（允许数据文件，禁止脚本文件）
+5. **通信** — CSP + iframe sandbox 双重隔离
+6. **路径隐藏** — `/app/:id` 虚拟路径，沙盒内无法探测真实存储位置
+
+**WASM 支持**
+
+- 上传时勾选「允许 WASM」
+- 系统自动设置 `Cross-Origin-Embedder-Policy: require-corp`（启用 SharedArrayBuffer）
+- 自动设置 `Cross-Origin-Opener-Policy: same-origin`
+- CSP 启用 `'wasm-unsafe-eval'`
+- `.wasm` 文件返回正确的 `Content-Type: application/wasm`
+
+**展开/收起控件**
+
+Markdown/富文本编辑器支持 `[expand title="标题"]...[/expand]` 语法，渲染为可点击展开的 `<details>` 折叠块。
+
 ---
 
 ## 🛠 技术栈
@@ -93,7 +192,9 @@
 | 前端 | Vue 3 · Vite · Element Plus · TypeScript · TipTap · Cherry Markdown 0.11 · ECharts · KaTeX (physics/mhchem) · Mermaid · smiles-drawer (chemfig) |
 | 数据库 | SQLite（默认，零配置） / MySQL 8.0 |
 | 缓存 | Redis 7（可选，MySQL 模式推荐） |
-| 存储 | 文件系统（HTML + JSON） |
+| 存储 | 文件系统（HTML + JSON） + 内存 VFS（沙盒虚拟文件系统） |
+| 扩展 | 自定义 HTML-UI 模板 · ZIP 托管 · WASM · 端口代理 · 虚拟路径 |
+| 安全 | 内容扫描（23条规则）· ZIP炸弹检测 · CSP · iframe sandbox · 目录锁定 |
 | 构建 | Go `embed` 前端 → 单二进制文件 |
 
 ---
@@ -559,6 +660,52 @@ nvs/
 | `/health` | 健康检查（HTML/JSON 双格式） |
 | `/*` | SPA fallback → Vue Router |
 
+### 🎨 自定义 UI 模板 (UserFrame)
+| 方法 | 端点 | 认证 | 说明 |
+|------|------|------|------|
+| GET | `/api/userframes` | JWT | 我的模板列表 |
+| POST | `/api/userframes` | JWT | 创建模板（含 HTML 内容） |
+| GET | `/api/userframes/:id` | JWT | 模板详情+内容 |
+| PUT | `/api/userframes/:id` | JWT | 更新模板 |
+| DELETE | `/api/userframes/:id` | JWT | 删除模板 |
+| GET | `/api/userframes/public` | — | 浏览公开模板 |
+| GET | `/api/userframes/:id/preview` | — | 模板沙盒预览（HTML 页面） |
+| GET | `/api/novels/:id/frames` | — | 作品关联的阅读模板 |
+| GET | `/api/author/:id/frames` | — | 作者展现模板 |
+| GET | `/api/template/novel/:id` | — | 小说数据 API（模板内 JS 调用） |
+
+### 📦 扩展 HTML 托管 (UserHTML)
+| 方法 | 端点 | 认证 | 说明 |
+|------|------|------|------|
+| GET | `/api/userhtmls` | JWT | 我的扩展列表 |
+| POST | `/api/userhtmls/upload` | JWT | 上传 ZIP（multipart/form-data，含安全扫描） |
+| GET | `/api/userhtmls/:id` | JWT | 扩展详情+文件列表 |
+| PUT | `/api/userhtmls/:id` | JWT | 更新扩展元数据（名称/入口/公开/可下载） |
+| DELETE | `/api/userhtmls/:id` | JWT | 删除扩展及全部文件 |
+| GET | `/api/userhtmls/:id/preview` | — | 扩展沙盒预览 |
+| GET | `/api/userhtmls/:id/download` | — | 下载原始 ZIP（需作者允许） |
+| GET | `/api/novels/:id/htmls` | — | 作品关联的扩展 |
+| GET | `/api/author/:id/htmls` | — | 作者的公开扩展 |
+| GET | `/api/htmls/public` | — | 广场：所有公开扩展（分页） |
+
+### ⚙️ 端口代理 & VFS
+| 方法 | 端点 | 认证 | 说明 |
+|------|------|------|------|
+| POST | `/api/port/allocate` | JWT | 分配代理端口（需项目名） |
+| POST | `/api/port/release` | JWT | 释放端口 |
+| GET | `/api/port/list` | JWT | 已分配端口列表 |
+| GET | `/api/sandbox/info` | — | 沙盒系统信息 |
+| POST | `/api/sandbox-vfs/:id/write` | — | VFS 写入 {key, value} |
+| GET | `/api/sandbox-vfs/:id/read?key=` | — | VFS 读取 |
+| GET | `/api/sandbox-vfs/:id/list` | — | VFS 键列表 |
+
+### 🔒 虚拟沙盒
+| 方法 | 端点 | 认证 | 说明 |
+|------|------|------|------|
+| GET | `/app/:htmlId` | — | 虚拟沙盒入口（全屏运行，隐藏真实路径） |
+| GET | `/app/:htmlId/*` | — | 虚拟沙盒静态资源 |
+| ANY | `/sandbox/proxy/:uid/:name/*` | — | 命名端口反向代理 |
+
 ---
 
 ## 🗺 开发路线图
@@ -567,8 +714,9 @@ nvs/
 - [x] **Phase 1.5 安全与合规** — 敏感区隔离墙（可配置 3~5 步确认）、HMAC-SHA256 内容签名、章节完整性验证、举报系统、IP 黑名单、跨域评论限速
 - [x] **Phase 2 生态增强** — 书架收藏与阅读进度、邮箱验证码、滑块验证码、站点联邦互通
 - [x] **Phase 2.5 部署体验** — 自动创建 .env、IPv4/IPv6 网络配置、网卡 IP 自动扫描、Windows 防火墙自动配置、代码模块化拆分（后端22文件/前端15组件）、社区动态仪表盘、作者博客分页、收藏/阅读数据图表
-- [x] **Phase 2.6 创作增强** — Cherry Markdown 统一渲染引擎（physics 物理宏包 + mhchem 化学式 + chemfig 结构图）、图表自定义切换（折线柱状+多指标选择）、搜索增强（书名+作者名）、隔离墙三级体系（系统/论坛/作者）、字数趋势（每日+累计）、博客 MD 渲染与小说统一
-- [ ] **Phase 3高级功能** — 付费阅读闭环、打赏 UI、EPUB 封面增强、反商业爬虫、自动备份
+- [x] **Phase 2.6 创作增强** — Cherry Markdown 统一渲染引擎、图表切换、搜索增强、隔离墙三级体系、字数趋势、博客 MD 渲染
+- [x] **Phase 2.7 个性化 & 扩展** — 自定义 HTML-UI 模板（阅读+作者展现）、ZIP 扩展托管、HTML 应用广场、WASM 沙盒支持、VFS 虚拟文件系统、端口代理、23条内容安全扫描、虚拟路径隐藏、展开/收起控件
+- [ ] **Phase 3 高级功能** — 付费阅读闭环、打赏 UI、EPUB 封面增强、反商业爬虫、自动备份
 - [ ] **Phase 4 治理与扩展** — 社区仲裁员选举、财务公开面板、API 开放平台、移动端 PWA
 
 ---

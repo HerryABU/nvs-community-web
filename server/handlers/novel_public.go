@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 
 	"nvs-server/models"
 	"nvs-server/utils"
@@ -145,4 +147,51 @@ func ListCategoryStats(c *gin.Context) {
 		})
 	}
 	utils.Success(c, result)
+}
+
+// RedirectNovelReader 小说阅读路径301重定向
+// /novel/:id/read/:chapter → /author/:authorId/novel/:id/read/:chapter
+func RedirectNovelReader(c *gin.Context) {
+	novelIDStr := c.Param("id")
+	chapter := c.Param("chapter")
+
+	// 如果参数为空，尝试从路径直接解析
+	if novelIDStr == "" || chapter == "" {
+		// Gin 可能没有正确解析参数，回退到手动解析
+		path := c.Request.URL.Path
+		// /novel/{id}/read/{chapter}
+		parts := strings.Split(strings.Trim(path, "/"), "/")
+		if len(parts) >= 4 && parts[0] == "novel" && parts[2] == "read" {
+			novelIDStr = parts[1]
+			chapter = parts[3]
+		}
+	}
+
+	authorID := uint(0)
+	if nid, err := strconv.ParseUint(novelIDStr, 10, 64); err == nil && nid > 0 {
+		if novel, err := models.GetNovelByID(uint(nid)); err == nil {
+			authorID = novel.AuthorID
+		}
+	}
+
+	target := fmt.Sprintf("/author/%d/novel/%s/read/%s", authorID, novelIDStr, chapter)
+	c.Header("Location", target)
+	c.Status(301)
+	c.Abort()
+}
+
+// RedirectNovelDetail 作品详情路径301重定向
+// /novel/:id → /author/:authorId/novel/:id
+func RedirectNovelDetail(c *gin.Context) {
+	novelIDStr := c.Param("id")
+	authorID := uint(0)
+	if nid, err := strconv.ParseUint(novelIDStr, 10, 64); err == nil && nid > 0 {
+		if novel, err := models.GetNovelByID(uint(nid)); err == nil {
+			authorID = novel.AuthorID
+		}
+	}
+	target := fmt.Sprintf("/author/%d/novel/%s", authorID, novelIDStr)
+	c.Header("Location", target)
+	c.Status(301)
+	c.Abort()
 }

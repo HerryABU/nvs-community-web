@@ -30,6 +30,26 @@
       <!-- 博客入口 -->
       <router-link to="/blogs" class="nav-link">博客</router-link>
 
+      <!-- 扩展应用（管理+广场） -->
+      <router-link to="/htmls" class="nav-link nav-link-create">🔌 扩展应用</router-link>
+
+      <!-- 自定义内容入口（需登录） -->
+      <el-dropdown v-if="authStore.isLoggedIn" trigger="click">
+        <span class="nav-link">
+          <el-icon><Brush /></el-icon> 自定义
+        </span>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item @click="$router.push('/frames')">
+              🎨 UI模板管理
+            </el-dropdown-item>
+            <el-dropdown-item @click="$router.push('/wasm')">
+              ⚙️ WASM 说明
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+
       <!-- 书架入口（需登录） -->
       <router-link v-if="authStore.isLoggedIn" to="/bookshelf" class="nav-link">📚 书架</router-link>
 
@@ -107,8 +127,14 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item @click="triggerAvatarUpload"><el-icon><Camera /></el-icon> 更换头像</el-dropdown-item>
-                <el-dropdown-item v-if="isAuthor" @click="goAuthorHome">
+                <el-dropdown-item @click="goAuthorHome">
                   <el-icon><User /></el-icon> 我的作者主页
+                </el-dropdown-item>
+                <el-dropdown-item @click="$router.push('/author/templates')">
+                  <el-icon><Brush /></el-icon> 模板设置
+                </el-dropdown-item>
+                <el-dropdown-item @click="$router.push('/docs')">
+                  <el-icon><Document /></el-icon> 格式使用文档
                 </el-dropdown-item>
                 <el-dropdown-item v-if="authStore.user?.role === 'admin'" @click="$router.push('/admin')">
                   管理员面板
@@ -139,7 +165,7 @@ import { useThemeStore } from '@/stores/theme';
 import { publicApi } from '@/api/admin';
 import { authApi } from '@/api/auth';
 import { ElMessage } from 'element-plus';
-import { Camera, Setting } from '@element-plus/icons-vue';
+import { Camera, Setting, Brush, Document } from '@element-plus/icons-vue';
 
 const avatarInput = ref<HTMLInputElement>();
 const router = useRouter();

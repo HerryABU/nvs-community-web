@@ -43,6 +43,8 @@ func main() {
 	// 确保数据目录存在
 	os.MkdirAll(config.NovelDataDir, 0755)
 	os.MkdirAll(config.UploadDir, 0755)
+	os.MkdirAll(config.UserFrameDir, 0755)
+	os.MkdirAll(config.UserHTMLDir, 0755)
 
 	// 根据驱动连接数据库
 	var dialector gorm.Dialector
@@ -125,6 +127,8 @@ func main() {
 		&models.BookShelf{},
 		&models.Follow{},
 		&models.AuthorBlog{},
+		&models.UserFrame{},
+		&models.UserHTML{},
 	); err != nil {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}
@@ -148,6 +152,7 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Logger(), middleware.SecureRecovery())
+	r.Use(middleware.SandboxWriteProtect()) // 🔒 允许数据文件，拦截脚本
 
 	// 健康检查：浏览器 → HTML 页面，API 请求 → JSON
 	r.GET("/health", func(c *gin.Context) {
@@ -210,6 +215,16 @@ func main() {
 		public.GET("/author/profile/:id", handlers.GetAuthorProfile)
 		public.GET("/author/forum/:id", handlers.GetAuthorForum)
 		public.GET("/search/authors", handlers.SearchAuthors)
+		public.GET("/userframes/public", handlers.ListPublicFrames)
+		public.GET("/template/novel/:id", handlers.GetTemplateAPI)
+		public.GET("/novels/:id/frames", handlers.GetNovelFrames)
+		public.GET("/author/:id/frames", handlers.GetAuthorFrames)
+		public.GET("/novels/:id/htmls", handlers.GetNovelHTMLs)
+		// 沙盒虚拟文件系统
+		public.GET("/sandbox-vfs/:htmlId/read", handlers.VFSRead)
+		public.POST("/sandbox-vfs/:htmlId/write", handlers.VFSWrite)
+		public.DELETE("/sandbox-vfs/:htmlId/delete", handlers.VFSDelete)
+		public.GET("/sandbox-vfs/:htmlId/list", handlers.VFSList)
 	}
 
 	protected := r.Group("/api")
@@ -267,6 +282,27 @@ func main() {
 		protected.POST("/blogs", handlers.CreateBlog)
 		protected.PUT("/blogs/:id", handlers.UpdateBlog)
 		protected.DELETE("/blogs/:id", handlers.DeleteBlog)
+		// 用户自定义 UI-HTML 模板 (UserFrame)
+		protected.GET("/userframes", handlers.ListFrames)
+		protected.POST("/userframes", handlers.CreateFrame)
+		protected.GET("/userframes/:id", handlers.GetFrame)
+		protected.PUT("/userframes/:id", handlers.UpdateFrame)
+		protected.DELETE("/userframes/:id", handlers.DeleteFrame)
+		// 用户自定义 HTML (UserHTML)
+		protected.GET("/userhtmls", handlers.ListHTMLs)
+		protected.GET("/userhtmls/:id", handlers.GetHTML)
+		protected.PUT("/userhtmls/:id", handlers.UpdateHTML)
+		protected.DELETE("/userhtmls/:id", handlers.DeleteHTML)
+		protected.POST("/userhtmls/upload", handlers.UploadZipHTML)
+	}
+
+	// 端口分配API
+	port := r.Group("/api/port")
+	port.Use(middleware.AuthRequired())
+	{
+		port.POST("/allocate", handlers.AllocatePort)
+		port.POST("/release", handlers.ReleasePort)
+		port.GET("/list", handlers.ListPorts)
 	}
 
 	// 书架路由
@@ -324,12 +360,44 @@ func main() {
 		r.GET("/api/blogs/:id", handlers.GetBlog)
 		r.GET("/api/author/:id/blogs/:blogId", handlers.GetAuthorBlog)
 		r.GET("/api/author/:id/blogs", handlers.ListAuthorBlogs)
+
+		// 沙盒预览 & WASM
+		r.GET("/api/sandbox/info", handlers.GetSandboxInfo)
+		r.GET("/api/userframes/:id/preview", handlers.GetFramePreview)
+		r.GET("/api/userhtmls/:id/preview", handlers.GetHTMLPreview)
+		r.GET("/api/userhtmls/:id/download", handlers.DownloadHTMLZip)
+		r.GET("/api/htmls/public", handlers.ListPublicHTMLs)
+		r.GET("/api/author/:id/htmls", handlers.GetAuthorPublicHTMLs)
 	}
+
+	// 🔀 小说路径重定向：旧格式 → 新格式 /author/:authorId/novel/:id
+	r.GET("/novel/:id/read/:chapter", handlers.RedirectNovelReader)
+
+	// 🔒 虚拟沙盒路径：隐藏真实存储路径，沙盒内无法探测 /api/userhtmls/
+	r.GET("/app/:htmlId", handlers.ServeAppHTML)
+	r.GET("/app/:htmlId/*filepath", handlers.ServeAppResource)
 
 	// ==================== 静态文件服务 ====================
 
 	// 小说正文静态文件（文件系统存储）
 	r.StaticFS("/novels", gin.Dir(config.NovelDataDir, false))
+
+	sandboxGroup := r.Group("/sandbox")
+	sandboxGroup.Use(
+		middleware.SandboxFrameHeaders(),
+		middleware.WasmContentType(),
+	)
+	sandboxGroup.StaticFS("/userframe", gin.Dir(config.UserFrameDir, false))
+	sandboxGroup.StaticFS("/userhtml", gin.Dir(config.UserHTMLDir, false))
+	sandboxGroup.GET("/frame/:userID/*filepath", handlers.ServeSandboxPreview)
+	// 端口反向代理（/sandbox/proxy/:port/*path） + 严格安全
+	// 命名代理（/sandbox/proxy/{authorId}/{projectName}/*path）— 隐藏端口号防打洞
+	proxyGroup := r.Group("/sandbox/proxy")
+	proxyGroup.Use(
+		middleware.PortProxySecurity(),
+		middleware.SandboxWriteProtect(),
+	)
+	proxyGroup.Any("/:authorId/:projectName/*path", middleware.NamedProxyHandler())
 
 	// 上传资源静态文件
 	r.StaticFS("/uploads", gin.Dir(config.UploadDir, false))

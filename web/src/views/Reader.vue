@@ -16,6 +16,18 @@
       </div>
     </div>
 
+    <!-- 自定义模板Header区域 -->
+    <div v-if="headerFrames.length > 0" class="template-zone template-header">
+      <div v-for="f in headerFrames" :key="f.id" class="template-frame-wrapper">
+        <iframe
+          :src="previewUrl(f.id) + '?chapter=' + chapterNum + '&novel=' + novelId"
+          :sandbox="f.has_controls ? 'allow-scripts allow-same-origin allow-forms allow-popups' : 'allow-scripts allow-same-origin'"
+          class="template-iframe"
+          @load="onFrameLoaded($event)"
+        />
+      </div>
+    </div>
+
     <!-- 正文 -->
     <div class="reader-body">
       <div v-if="isTrialExceeded" class="trial-notice">
@@ -39,6 +51,18 @@
     <div v-if="!isTrialExceeded" class="reader-footer">
       <el-button :disabled="chapterNum <= 1" @click="goChapter(chapterNum - 1)">上一章</el-button>
       <el-button :disabled="chapterNum >= totalChapters" @click="goChapter(chapterNum + 1)">下一章</el-button>
+    </div>
+
+    <!-- 自定义模板Footer区域 -->
+    <div v-if="footerFrames.length > 0" class="template-zone template-footer">
+      <div v-for="f in footerFrames" :key="f.id" class="template-frame-wrapper">
+        <iframe
+          :src="previewUrl(f.id) + '?chapter=' + chapterNum + '&novel=' + novelId"
+          :sandbox="f.has_controls ? 'allow-scripts allow-same-origin allow-forms allow-popups' : 'allow-scripts allow-same-origin'"
+          class="template-iframe"
+          @load="onFrameLoaded($event)"
+        />
+      </div>
     </div>
 
     <!-- 评论 -->
@@ -69,6 +93,7 @@ import { renderMarkdown, renderMermaidBlocks, renderChemfigBlocks } from '@/mark
 import CommentSection from '@/components/CommentSection.vue';
 import SensitiveZoneGuard from '@/components/SensitiveZoneGuard.vue';
 import { shouldShowGuard, markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';
+import { frameApi } from '@/api/frame';
 
 const authStore = useAuthStore();
 
@@ -88,6 +113,38 @@ const novelWallEnabled = ref(true);
 const novelWallWarning = ref('');
 const totalChapters = ref(0);
 
+// 自定义模板
+const headerFrames = ref<any[]>([]);
+const footerFrames = ref<any[]>([]);
+const frameLoaded = ref<Record<number, boolean>>({});
+
+function previewUrl(frameId: number) { return frameApi.getPreview(frameId); }
+function onFrameLoaded(e: Event) {
+  const iframe = e.target as HTMLIFrameElement;
+  try {
+    // 自适应高度：根据iframe内部内容调整
+    const body = iframe.contentDocument?.body;
+    if (body) {
+      const h = body.scrollHeight;
+      if (h > 60) iframe.style.height = h + 'px';
+    }
+  } catch {
+    // 跨域限制下无法读取contentDocument，使用默认高度
+    iframe.style.height = '200px';
+  }
+}
+
+async function loadFrames() {
+  try {
+    const res = await frameApi.getByNovel(novelId.value);
+    if (res.data.code === 0) {
+      const frames = res.data.data || [];
+      headerFrames.value = frames.filter((f: any) => f.position !== 'bottom');
+      footerFrames.value = frames.filter((f: any) => f.position === 'bottom');
+    }
+  } catch { /* 静默失败，模板非必需 */ }
+}
+
 // 敏感分区确认
 const showZoneGuard = ref(false);
 const zoneGuardName = ref('');
@@ -97,7 +154,7 @@ const trialLimit = computed(() => Math.min(5, Math.ceil(totalChapters.value * 0.
 const isTrialExceeded = computed(() => !authStore.isLoggedIn && chapterNum.value > trialLimit.value);
 
 function goChapter(num: number) {
-  router.push(`/novel/${novelId.value}/read/${num}`);
+  router.push(`/author/${novelAuthorId.value}/novel/${novelId.value}/read/${num}`);
 }
 
 async function loadChapter() {
@@ -125,6 +182,9 @@ async function loadChapter() {
       JSON.stringify({ chapter: chapterNum.value, time: Date.now() })
     );
     window.scrollTo(0, 0);
+
+    // 加载自定义模板
+    loadFrames();
 
     // 同步阅读进度到后端书架（静默失败）
     if (authStore.isLoggedIn) {
@@ -208,6 +268,13 @@ watch(() => chapter.value?.content, (content) => {
 });
 
 onMounted(() => {
+  // 🔀 旧URL格式重定向：/novel/:id → 先获取作者再跳转
+  if (!route.params.authorId) {
+    novelApi.getNovel(novelId.value).then(res => {
+      const aid = res.data?.data?.author_id;
+      if (aid) router.replace(`/author/${aid}/novel/${novelId.value}/read/${chapterNum.value}`);
+    }).catch(() => {});
+  }
   loadChapter();
 });
 </script>
@@ -244,6 +311,23 @@ onMounted(() => {
 
 .reader-body {
   padding: 40px 16px;
+}
+
+.template-zone {
+  max-width: 800px;
+  margin: 0 auto 12px;
+}
+.template-header { padding: 0 16px; margin-top: 8px; }
+.template-footer { padding: 0 16px; margin-bottom: 16px; }
+.template-frame-wrapper {
+  border-radius: 8px; overflow: hidden;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  margin-bottom: 8px;
+}
+.template-iframe {
+  width: 100%; min-height: 150px; border: none;
+  display: block;
 }
 
 .reader-content {
