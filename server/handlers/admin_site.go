@@ -33,6 +33,7 @@ func UpdatePlatformConfig(c *gin.Context) {
 		"email_verify": true, "captcha_enabled": true,
 		"smtp_host": true, "smtp_port": true, "smtp_user": true,
 		"smtp_password": true, "smtp_from": true,
+		"robots_txt": true,
 	}
 	for k, v := range req {
 		if !allowed[k] { continue }

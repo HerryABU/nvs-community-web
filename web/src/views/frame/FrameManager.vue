@@ -22,6 +22,9 @@
             <el-tag v-if="f.uses_novel_api" type="success" size="small">API</el-tag>
             <el-tag v-if="f.has_controls" type="warning" size="small">控件</el-tag>
             <el-tag :type="f.sandbox_level === 'interactive' ? 'primary' : 'info'" size="small">{{ f.sandbox_level === 'interactive' ? '交互' : '只读' }}</el-tag>
+            <el-tag v-if="f.run_mode === 'inline'" type="danger" size="small">非沙盒</el-tag>
+            <el-tag v-if="f.review_status === 'pending'" type="warning" size="small">待复核</el-tag>
+            <el-tag v-else-if="f.review_status === 'rejected'" type="danger" size="small">已驳回</el-tag>
             <el-tag v-if="f.is_public" type="success" size="small">公开</el-tag>
             <el-tag v-if="!f.is_active" type="info" size="small">禁用</el-tag>
           </div>
@@ -69,6 +72,15 @@
               </el-radio-group>
             </el-form-item>
           </el-col>
+          <el-col :span="8">
+            <el-form-item label="运行模式">
+              <el-radio-group v-model="form.run_mode">
+                <el-radio value="sandbox">沙盒</el-radio>
+                <el-radio value="inline">非沙盒</el-radio>
+              </el-radio-group>
+              <div class="run-mode-hint">非沙盒模式仅在您本人的页面直接注入 HTML</div>
+            </el-form-item>
+          </el-col>
           <el-col :span="16" style="display:flex;align-items:flex-end;padding-bottom:18px;gap:16px">
             <el-checkbox v-model="form.uses_novel_api">调用平台小说API</el-checkbox>
             <el-checkbox v-model="form.has_controls">包含按钮/控件</el-checkbox>
@@ -104,6 +116,7 @@ interface Frame {
   id: number; name: string; description: string; novel_id: number | null;
   is_active: boolean; is_public: boolean; version: number; updated_at: string;
   has_controls: boolean; uses_novel_api: boolean; sandbox_level: string; frame_type: string;
+  run_mode: string; review_status: string;
 }
 
 const frames = ref<Frame[]>([]);
@@ -112,10 +125,10 @@ const showCreate = ref(false); const showPreview = ref(false);
 const previewSrc = ref(''); const previewName = ref(''); const previewPolicy = ref('allow-scripts allow-same-origin');
 const editing = ref<Frame | null>(null);
 
-const form = ref({ name: '', description: '', novel_id: undefined as number | undefined, content: '', is_public: false, has_controls: false, uses_novel_api: false, sandbox_level: 'strict', frame_type: 'reader' });
+const form = ref({ name: '', description: '', novel_id: undefined as number | undefined, content: '', is_public: false, has_controls: false, uses_novel_api: false, sandbox_level: 'strict', frame_type: 'reader', run_mode: 'sandbox' });
 
 function resetForm() {
-  form.value = { name: '', description: '', novel_id: undefined, content: '', is_public: false, has_controls: false, uses_novel_api: false, sandbox_level: 'strict', frame_type: 'reader' };
+  form.value = { name: '', description: '', novel_id: undefined, content: '', is_public: false, has_controls: false, uses_novel_api: false, sandbox_level: 'strict', frame_type: 'reader', run_mode: 'sandbox' };
   editing.value = null;
 }
 
@@ -129,7 +142,7 @@ async function load() {
 
 function edit(f: Frame) {
   editing.value = f;
-  form.value = { name: f.name, description: f.description, novel_id: f.novel_id ?? undefined, content: '', is_public: f.is_public, has_controls: f.has_controls, uses_novel_api: f.uses_novel_api, sandbox_level: f.sandbox_level, frame_type: f.frame_type || 'reader' };
+  form.value = { name: f.name, description: f.description, novel_id: f.novel_id ?? undefined, content: '', is_public: f.is_public, has_controls: f.has_controls, uses_novel_api: f.uses_novel_api, sandbox_level: f.sandbox_level, frame_type: f.frame_type || 'reader', run_mode: f.run_mode || 'sandbox' };
   showCreate.value = true;
   frameApi.get(f.id).then(r => { if (r.data.code === 0) form.value.content = r.data.data.content; });
 }
@@ -185,4 +198,5 @@ function fmtDate(d: string) { return new Date(d).toLocaleDateString('zh-CN'); }
 .card-actions { display: flex; gap: 6px; justify-content: flex-end; }
 .empty-state { padding: 40px 0; display: flex; justify-content: center; }
 .code-input :deep(textarea) { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.85rem; line-height: 1.5; }
+.run-mode-hint { font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; line-height: 1.4; }
 </style>

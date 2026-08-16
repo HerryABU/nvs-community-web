@@ -4,10 +4,20 @@
       <div class="forum-header">
         <h1>{{ forum.name }}</h1>
         <p class="forum-desc">{{ forum.description }}</p>
-        <el-button type="primary" @click="showNewThread = true" v-if="authStore.isLoggedIn">
+        <el-button type="primary" @click="showNewThread = true" v-if="authStore.isLoggedIn && !locked">
           发布新帖
         </el-button>
-        <router-link v-else-if="!authStore.loading" to="/login" class="login-link">登录后即可发帖</router-link>
+        <router-link v-else-if="!authStore.loading && !locked" to="/login" class="login-link">登录后即可发帖</router-link>
+      </div>
+
+      <!-- 密码门禁 -->
+      <div v-if="locked" class="password-gate">
+        <el-result icon="lock" title="该论坛需要密码" sub-title="请输入进入密码以查看帖子">
+          <template #extra>
+            <el-input v-model="passwordInput" type="password" placeholder="进入密码" style="width:240px" show-password @keyup.enter="submitPassword" />
+            <el-button type="primary" style="margin-left:8px" :loading="verifying" @click="submitPassword">进入</el-button>
+          </template>
+        </el-result>
       </div>
 
       <!-- 发帖表单 -->
@@ -64,12 +74,13 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { novelApi, forumApi } from '@/api/novel';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage } from 'element-plus';
 
 const route = useRoute();
+const router = useRouter();
 const authStore = useAuthStore();
 const loading = ref(false);
 const forum = ref<any>(null);
@@ -80,6 +91,11 @@ const newTitle = ref('');
 const newContent = ref('');
 const posting = ref(false);
 
+// 密码门禁
+const locked = ref(false);
+const passwordInput = ref('');
+const verifying = ref(false);
+
 function formatTime(s: string) {
   return new Date(s).toLocaleDateString('zh-CN');
 }
@@ -87,15 +103,34 @@ function formatTime(s: string) {
 async function load() {
   loading.value = true;
   try {
-    const res = await forumApi.getForum(Number(route.params.id));
+    const password = (route.query.password as string) || '';
+    const res = await forumApi.getForum(Number(route.params.id), undefined, password);
     const d = res.data.data;
     forum.value = d.forum;
+    locked.value = !!d.locked;
     threads.value = d.threads || [];
     subForums.value = d.sub_forums || [];
   } catch (e) {
     console.error(e);
   } finally {
     loading.value = false;
+  }
+}
+
+async function submitPassword() {
+  if (!passwordInput.value.trim()) { ElMessage.warning('请输入密码'); return; }
+  verifying.value = true;
+  try {
+    const res = await forumApi.verifyPassword(Number(route.params.id), passwordInput.value);
+    if (res.data.code === 0) {
+      locked.value = false;
+      router.replace({ query: { password: passwordInput.value } });
+      await load();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '密码错误');
+  } finally {
+    verifying.value = false;
   }
 }
 
@@ -215,6 +250,11 @@ onMounted(load);
 .login-link {
   color: var(--primary-color);
   font-size: 0.9rem;
+}
+
+.password-gate {
+  padding: 40px 0;
+  text-align: center;
 }
 </style>
 

@@ -1,6 +1,7 @@
 package security
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -239,6 +240,56 @@ func ScanContentStrict(content string, filename string) (bool, string) {
 			len(result.Threats), strings.Join(threats, "\n"))
 	}
 	return true, ""
+}
+
+// isBlockingSeverity 判断某严重级别是否需要直接阻断（宽松审查仅阻断 critical/high）
+func isBlockingSeverity(severity string) bool {
+	switch severity {
+	case "critical", "high":
+		return true
+	default: // medium / low / 空
+		return false
+	}
+}
+
+// ClassifyScan 宽松安全审查：critical/high 直接阻断，medium/low 仅产生告警。
+// 返回 blocked（是否阻断）、threats（阻断级威胁）、warnings（告警级威胁）。
+// 用于自定义 HTML 模板/扩展的"宽松自动化安全审查"——不误伤普通内容，但保留人工复核线索。
+func ClassifyScan(content string, filename string) (blocked bool, threats []Threat, warnings []Threat) {
+	result := ScanContent(content, filename)
+	for _, t := range result.Threats {
+		if isBlockingSeverity(t.Severity) {
+			blocked = true
+			threats = append(threats, t)
+		} else {
+			warnings = append(warnings, t)
+		}
+	}
+	return blocked, threats, warnings
+}
+
+// ThreatsToJSON 将威胁/告警列表序列化为 JSON 字符串（用于落库）
+func ThreatsToJSON(threats []Threat) string {
+	if len(threats) == 0 {
+		return ""
+	}
+	b, err := json.Marshal(threats)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+// ThreatsFromJSON 将 JSON 字符串反序列化为威胁/告警列表
+func ThreatsFromJSON(s string) []Threat {
+	if s == "" {
+		return nil
+	}
+	var threats []Threat
+	if err := json.Unmarshal([]byte(s), &threats); err != nil {
+		return nil
+	}
+	return threats
 }
 
 // removeComments 移除JS/HTML注释以减少干扰

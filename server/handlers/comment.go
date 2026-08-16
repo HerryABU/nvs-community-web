@@ -43,6 +43,11 @@ func GetComments(c *gin.Context) {
 func CreateComment(c *gin.Context) {
 	userID := c.GetUint("userID")
 
+	// 全局禁言检查
+	if checkUserMuted(c) {
+		return
+	}
+
 	var req struct {
 		NovelID       uint   `json:"novel_id"`
 		BlogID        uint   `json:"blog_id"`

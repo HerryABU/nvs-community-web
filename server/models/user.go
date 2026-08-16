@@ -24,12 +24,19 @@ type User struct {
 	RealNameVerified bool      `gorm:"default:false" json:"real_name_verified"`
 	LoginFailCount  int        `gorm:"default:0" json:"-"`
 	LockedUntil     *time.Time `json:"-"`
+	MutedUntil      *time.Time `json:"muted_until"`                    // 全局禁言截止时间（null/过去=未禁言）
+	MuteReason      string     `gorm:"size:256;default:''" json:"mute_reason"` // 禁言原因
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 func (User) TableName() string {
 	return "users"
+}
+
+// IsMuted 是否处于全局禁言状态
+func (u *User) IsMuted() bool {
+	return u.MutedUntil != nil && u.MutedUntil.After(time.Now())
 }
 
 func CreateUser(user *User) error {

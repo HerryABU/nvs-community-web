@@ -34,6 +34,7 @@ func CreateFrame(c *gin.Context) {
 		UsesNovelAPI bool   `json:"uses_novel_api"`
 		SandboxLevel string `json:"sandbox_level"`
 		FrameType    string `json:"frame_type"`
+		RunMode      string `json:"run_mode"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
@@ -56,6 +57,13 @@ func CreateFrame(c *gin.Context) {
 	if req.FrameType != "reader" && req.FrameType != "author" {
 		req.FrameType = "reader"
 	}
+	// run_mode 校验：默认 sandbox，仅允许 sandbox / inline
+	if req.RunMode == "" {
+		req.RunMode = "sandbox"
+	}
+	if req.RunMode != "sandbox" && req.RunMode != "inline" {
+		req.RunMode = "sandbox"
+	}
 
 	userDir := filepath.Join(config.UserFrameDir, fmt.Sprintf("%d", userID))
 	os.MkdirAll(userDir, 0755)
@@ -64,10 +72,17 @@ func CreateFrame(c *gin.Context) {
 	filename := fmt.Sprintf("%s_%d.html", safeName, timestamp)
 	filePath := filepath.Join(userDir, filename)
 
-	// 🔍 内容安全扫描
-	if passed, reason := security.ScanContentStrict(req.Content, safeName+".html"); !passed {
-		utils.BadRequest(c, reason)
+	// 🔍 宽松自动化安全审查：critical/high 阻断，medium/low 仅告警（转人工复核）
+	blocked, _, warnings := security.ClassifyScan(req.Content, safeName+".html")
+	if blocked {
+		utils.BadRequest(c, "内容安全扫描未通过：检测到高危代码（提权/木马/窃取等），已拒绝保存")
 		return
+	}
+	reviewStatus := "approved"
+	scanWarnings := ""
+	if len(warnings) > 0 {
+		reviewStatus = "pending"
+		scanWarnings = security.ThreatsToJSON(warnings)
 	}
 
 	// 注入模板API桥接代码（如果使用平台API）
@@ -93,6 +108,9 @@ func CreateFrame(c *gin.Context) {
 		UsesNovelAPI: req.UsesNovelAPI,
 		SandboxLevel: req.SandboxLevel,
 		FrameType:    req.FrameType,
+		RunMode:      req.RunMode,
+		ReviewStatus: reviewStatus,
+		ScanWarnings: scanWarnings,
 	}
 	if err := models.DB.Create(frame).Error; err != nil {
 		os.Remove(filePath)
@@ -157,6 +175,7 @@ func UpdateFrame(c *gin.Context) {
 		UsesNovelAPI *bool   `json:"uses_novel_api"`
 		SandboxLevel *string `json:"sandbox_level"`
 		FrameType    *string `json:"frame_type"`
+		RunMode      *string `json:"run_mode"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
@@ -179,11 +198,15 @@ func UpdateFrame(c *gin.Context) {
 	if req.FrameType != nil && (*req.FrameType == "reader" || *req.FrameType == "author") {
 		frame.FrameType = *req.FrameType
 	}
+	if req.RunMode != nil && (*req.RunMode == "sandbox" || *req.RunMode == "inline") {
+		frame.RunMode = *req.RunMode
+	}
 
 	if req.Content != nil {
-		// 🔍 内容安全扫描
-		if passed, reason := security.ScanContentStrict(*req.Content, frame.Name+".html"); !passed {
-			utils.BadRequest(c, reason)
+		// 🔍 宽松自动化安全审查：critical/high 阻断，medium/low 告警转人工复核
+		blocked, _, warnings := security.ClassifyScan(*req.Content, frame.Name+".html")
+		if blocked {
+			utils.BadRequest(c, "内容安全扫描未通过：检测到高危代码，已拒绝更新")
 			return
 		}
 		content := *req.Content
@@ -195,6 +218,15 @@ func UpdateFrame(c *gin.Context) {
 			return
 		}
 		frame.Version++
+		// 更新审查状态与告警
+		if len(warnings) > 0 {
+			frame.ReviewStatus = "pending"
+			frame.ScanWarnings = security.ThreatsToJSON(warnings)
+			frame.ReviewNote = ""
+		} else {
+			frame.ReviewStatus = "approved"
+			frame.ScanWarnings = ""
+		}
 	}
 
 	if err := models.DB.Save(&frame).Error; err != nil {

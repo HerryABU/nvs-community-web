@@ -123,6 +123,54 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/settings',
+      name: 'admin-settings',
+      component: () => import('@/views/admin/AdminSettings.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/categories',
+      name: 'admin-categories',
+      component: () => import('@/views/admin/AdminCategories.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/wall',
+      name: 'admin-wall',
+      component: () => import('@/views/admin/AdminWall.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/sites',
+      name: 'admin-sites',
+      component: () => import('@/views/admin/AdminSites.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/forums',
+      name: 'admin-forums',
+      component: () => import('@/views/admin/AdminForums.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/reports',
+      name: 'admin-reports',
+      component: () => import('@/views/admin/AdminReports.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/html-review',
+      name: 'admin-html-review',
+      component: () => import('@/views/admin/AdminHtmlReview.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/community',
+      name: 'admin-community',
+      component: () => import('@/views/admin/AdminCommunity.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/blogs',
       name: 'blog-list',
       component: () => import('@/views/BlogList.vue'),
@@ -148,6 +196,12 @@ const router = createRouter({
       path: '/settings',
       name: 'settings',
       component: () => import('@/views/Settings.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/reports',
+      name: 'my-reports',
+      component: () => import('@/views/MyReports.vue'),
       meta: { requiresAuth: true },
     },
     {

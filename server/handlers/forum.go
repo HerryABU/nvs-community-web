@@ -12,6 +12,7 @@ import (
 
 // GET /api/forums — 论坛列表
 func ListForums(c *gin.Context) {
+	userID := c.GetUint("userID") // 公开路由未登录时为 0
 	ftype := c.DefaultQuery("type", "general")
 	parentIDStr := c.Query("parent_id")
 
@@ -31,10 +32,28 @@ func ListForums(c *gin.Context) {
 		return
 	}
 
+	// 仅查询自建论坛
+	if ftype == "custom" {
+		forums := listCustomForums(userID)
+		utils.Success(c, forums)
+		return
+	}
+
 	var forums []models.Forum
 	var err error
 	if ftype == "all" {
-		forums, err = models.ListAllForums("")
+		all, e := models.ListAllForums("")
+		if e != nil {
+			utils.InternalError(c, "获取论坛列表失败")
+			return
+		}
+		// 系统论坛（非 custom）+ 自建论坛（公开非驳回 + 本人创建的）
+		for _, f := range all {
+			if f.Type != "custom" {
+				forums = append(forums, f)
+			}
+		}
+		forums = append(forums, listCustomForums(userID)...)
 	} else if strings.Contains(ftype, ",") {
 		types := strings.Split(ftype, ",")
 		forums, err = models.GetForumsByTypes(types)
@@ -48,8 +67,19 @@ func ListForums(c *gin.Context) {
 	utils.Success(c, forums)
 }
 
+// listCustomForums 返回大厅自建区可见的论坛：公开且未驳回 + 本人创建的（含隐藏）
+func listCustomForums(userID uint) []models.Forum {
+	var forums []models.Forum
+	q := models.DB.Where("type = ?", "custom").
+		Where("(is_public = ? AND review_status != ?) OR creator_id = ?", true, "rejected", userID).
+		Order("id DESC")
+	q.Find(&forums)
+	return forums
+}
+
 // GET /api/forums/:id — 论坛详情+帖子列表+子论坛
 func GetForum(c *gin.Context) {
+	userID := c.GetUint("userID")
 	forumID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if page < 1 {
@@ -60,6 +90,22 @@ func GetForum(c *gin.Context) {
 	if err != nil {
 		utils.NotFound(c, "论坛不存在")
 		return
+	}
+
+	// 密码门禁：有密码且非创建者/管理员时，需提供正确密码才能读取帖子
+	if forum.HasPassword && forum.CreatorID != userID && !isAdminUser(c) {
+		password := c.Query("password")
+		if !utils.CheckPassword(password, forum.PasswordHash) {
+			utils.Success(c, gin.H{
+				"forum":      forum,
+				"locked":     true,
+				"threads":    []models.Thread{},
+				"total":      0,
+				"page":       page,
+				"sub_forums": []models.Forum{},
+			})
+			return
+		}
 	}
 
 	threads, total, err := models.GetThreadsByForum(uint(forumID), page, 20)
@@ -86,6 +132,15 @@ func CreateThread(c *gin.Context) {
 	forumID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || forumID == 0 {
 		utils.BadRequest(c, "无效的论坛ID")
+		return
+	}
+
+	// 禁言检查（全局 + 论坛级）
+	if checkUserMuted(c) {
+		return
+	}
+	if models.IsForumMuted(uint(forumID), userID) {
+		utils.Forbidden(c, "您已被本论坛禁言，无法发帖")
 		return
 	}
 
@@ -168,6 +223,15 @@ func CreatePost(c *gin.Context) {
 	}
 	if thread.IsLocked {
 		utils.Forbidden(c, "帖子已被锁定，无法回复")
+		return
+	}
+
+	// 禁言检查（全局 + 论坛级）
+	if checkUserMuted(c) {
+		return
+	}
+	if models.IsForumMuted(thread.ForumID, userID) {
+		utils.Forbidden(c, "您已被本论坛禁言，无法回复")
 		return
 	}
 

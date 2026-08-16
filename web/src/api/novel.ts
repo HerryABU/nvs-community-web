@@ -59,12 +59,17 @@ export const novelApi = {
     return api.post(`/novels/${id}/export/txt`, {}, { responseType: 'blob' });
   },
 
-  importNovel(file: File, title?: string, category?: string, novelId?: number) {
+  exportNovelDOCX(id: number) {
+    return api.post(`/novels/${id}/export/docx`, {}, { responseType: 'blob' });
+  },
+
+  importNovel(file: File, title?: string, category?: string, novelId?: number, splitRule?: string) {
     const formData = new FormData();
     formData.append('file', file);
     if (title) formData.append('title', title);
     if (category) formData.append('category', category);
     if (novelId) formData.append('novel_id', String(novelId));
+    if (splitRule) formData.append('split_rule', splitRule);
     return api.post<{ code: number; data: { novel_id: number; title: string; chapters_count: number; chapters: { num: number; title: string }[] } }>(
       '/novels/import',
       formData,
@@ -78,6 +83,19 @@ export const novelApi = {
     if (splitRule) formData.append('split_rule', splitRule);
     return api.post<{ code: number; data: { total: number; chapters: { num: number; title: string; preview: string; words: number }[] } }>(
       '/novels/import/preview',
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+  },
+
+  // 批量导入多个 Word/Markdown 文件（合并为一部作品）
+  importBatch(files: File[], title?: string, category?: string) {
+    const formData = new FormData();
+    for (const f of files) formData.append('files', f);
+    if (title) formData.append('title', title);
+    if (category) formData.append('category', category);
+    return api.post<{ code: number; data: { novel_id: number; title: string; files_count: number; chapters_count: number } }>(
+      '/novels/import/batch',
       formData,
       { headers: { 'Content-Type': 'multipart/form-data' } },
     );

@@ -17,6 +17,11 @@
       <el-button v-if="authStore.isLoggedIn" size="small" text @click="showReply = !showReply">
         {{ showReply ? '取消回复' : '回复' }}
       </el-button>
+      <ReportButton
+        v-if="authStore.isLoggedIn && authStore.user?.id !== comment.user_id"
+        target-type="comment"
+        :target-id="comment.id"
+      />
       <el-button
         v-if="authStore.user?.id === comment.user_id"
         size="small"
@@ -63,6 +68,7 @@ import { ref, computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import type { Comment } from '@/api/novel';
 import { renderMarkdown } from '@/markdown/renderer';
+import ReportButton from './ReportButton.vue';
 
 const props = defineProps<{
   comment: Comment & { children?: Comment[] };

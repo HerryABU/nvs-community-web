@@ -53,6 +53,17 @@ foreach ($t in $targets) {
     Pop-Location
 
     if ($rc -eq 0) {
+        # UPX compress (skip macOS Mach-O and Windows ARM64 PE)
+        $upxExe = "$root\..\upx\upx-5.2.0-win64\upx.exe"
+        $skipUpx = ($t.OS -eq "darwin") -or ($t.OS -eq "windows" -and $t.Arch -eq "arm64")
+        if (-not $skipUpx -and (Test-Path $upxExe)) {
+            $upxResult = & $upxExe --best --force $outFile 2>&1 | Out-String
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "UPX skipped (unsupported format)" -ForegroundColor Yellow
+            }
+        } elseif ($skipUpx) {
+            # silently skip unsupported platforms
+        }
         $sz = [math]::Round((Get-Item $outFile).Length / 1MB, 1)
         Write-Host "OK  (${sz} MB)" -ForegroundColor Green
         $ok++

@@ -133,6 +133,9 @@
                 <el-dropdown-item @click="$router.push('/author/templates')">
                   <el-icon><Brush /></el-icon> 模板设置
                 </el-dropdown-item>
+                <el-dropdown-item @click="$router.push('/reports')">
+                  <el-icon><Warning /></el-icon> 我的举报
+                </el-dropdown-item>
                 <el-dropdown-item @click="$router.push('/docs')">
                   <el-icon><Document /></el-icon> 格式使用文档
                 </el-dropdown-item>
@@ -165,7 +168,7 @@ import { useThemeStore } from '@/stores/theme';
 import { publicApi } from '@/api/admin';
 import { authApi } from '@/api/auth';
 import { ElMessage } from 'element-plus';
-import { Camera, Setting, Brush, Document } from '@element-plus/icons-vue';
+import { Camera, Setting, Brush, Document, Warning } from '@element-plus/icons-vue';
 
 const avatarInput = ref<HTMLInputElement>();
 const router = useRouter();

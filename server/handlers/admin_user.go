@@ -3,8 +3,10 @@ package handlers
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"nvs-server/models"
+	"nvs-server/security"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -73,4 +75,40 @@ func DeleteUser(c *gin.Context) {
 
 	models.DB.Delete(&models.User{}, id)
 	utils.Success(c, gin.H{"message": "用户已删除"})
+}
+
+// POST /api/admin/users/:id/mute — 全局禁言用户
+func MuteUser(c *gin.Context) {
+	if !ensureAdmin(c) { return }
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+
+	var req struct {
+		DurationHours int    `json:"duration_hours"` // 0=永久
+		Reason        string `json:"reason"`
+	}
+	c.ShouldBindJSON(&req)
+
+	var until *time.Time
+	if req.DurationHours > 0 {
+		t := time.Now().Add(time.Duration(req.DurationHours) * time.Hour)
+		until = &t
+	}
+
+	models.DB.Model(&models.User{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"muted_until": until,
+		"mute_reason": security.SanitizePlainText(req.Reason),
+	})
+	utils.Success(c, gin.H{"message": "已禁言"})
+}
+
+// POST /api/admin/users/:id/unmute — 解除全局禁言
+func UnmuteUser(c *gin.Context) {
+	if !ensureAdmin(c) { return }
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+
+	models.DB.Model(&models.User{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"muted_until": nil,
+		"mute_reason": "",
+	})
+	utils.Success(c, gin.H{"message": "已解除禁言"})
 }

@@ -33,11 +33,16 @@ func UploadZipHTML(c *gin.Context) {
 	allowWasm := c.PostForm("allow_wasm") == "true"
 	isPublic := c.PostForm("is_public") == "true"
 	isDownloadable := c.PostForm("is_downloadable") == "true"
+	runMode := c.PostForm("run_mode")
 	novelIDStr := c.PostForm("novel_id")
 
 	if name == "" {
 		utils.BadRequest(c, "扩展名称不能为空")
 		return
+	}
+	// run_mode 校验：默认 sandbox
+	if runMode != "inline" {
+		runMode = "sandbox"
 	}
 
 	file, header, err := c.Request.FormFile("file")
@@ -106,18 +111,26 @@ func UploadZipHTML(c *gin.Context) {
 		}
 	}
 
-	// 🔍 内容安全扫描：逐文件检测恶意代码（提权/木马/僵尸/窃取）
+	// 🔍 宽松自动化安全审查：逐文件检测，critical/high 阻断，medium/low 告警转人工复核
+	var allWarnings []security.Threat
 	for _, entry := range entries {
 		content, err := os.ReadFile(entry.Path)
 		if err != nil {
 			continue
 		}
-		passed, reason := security.ScanContentStrict(string(content), entry.Name)
-		if !passed {
+		blocked, _, warnings := security.ClassifyScan(string(content), entry.Name)
+		if blocked {
 			os.RemoveAll(extractDir) // 清理恶意内容
-			utils.BadRequest(c, reason)
+			utils.BadRequest(c, "内容安全扫描未通过：文件 "+entry.Name+" 含高危代码，已拒绝上传")
 			return
 		}
+		allWarnings = append(allWarnings, warnings...)
+	}
+	reviewStatus := "approved"
+	scanWarnings := ""
+	if len(allWarnings) > 0 {
+		reviewStatus = "pending"
+		scanWarnings = security.ThreatsToJSON(allWarnings)
 	}
 
 	// 保存原始ZIP
@@ -164,6 +177,9 @@ func UploadZipHTML(c *gin.Context) {
 		IsPublic:       isPublic,
 		IsDownloadable: isDownloadable,
 		ThumbURL:       findThumbPath(entries, extractDir, userID, safeName, timestamp),
+		RunMode:        runMode,
+		ReviewStatus:   reviewStatus,
+		ScanWarnings:   scanWarnings,
 	}
 	if err := models.DB.Create(htmlItem).Error; err != nil {
 		os.RemoveAll(extractDir)

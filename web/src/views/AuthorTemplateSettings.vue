@@ -10,7 +10,11 @@
         <div v-if="readerFrames.length===0" class="empty"><el-empty description="还没有阅读模板"><el-button type="primary" @click="openCreate('reader')">创建阅读模板</el-button></el-empty></div>
         <div v-else class="frame-grid">
           <div v-for="f in readerFrames" :key="f.id" class="frame-card">
-            <div class="card-hd"><span>{{ f.name }}</span><el-tag size="small" :type="f.is_active?'success':'info'">{{ f.is_active?'启用':'停用' }}</el-tag></div>
+            <div class="card-hd"><span>{{ f.name }}</span><el-tag size="small" :type="f.is_active?'success':'info'">{{ f.is_active?'启用':'停用' }}</el-tag>
+              <el-tag v-if="f.run_mode==='inline'" size="small" type="danger">非沙盒</el-tag>
+              <el-tag v-if="f.review_status==='pending'" size="small" type="warning">待复核</el-tag>
+              <el-tag v-else-if="f.review_status==='rejected'" size="small" type="danger">已驳回</el-tag>
+            </div>
             <div class="card-bd"><p>{{ f.description||'无描述' }}</p><span class="meta">v{{f.version}} · {{fmt(f.updated_at)}}</span></div>
             <div class="card-ft">
               <el-button size="small" @click="preview(f)">预览</el-button>
@@ -27,7 +31,11 @@
         <div v-if="authorFrames.length===0" class="empty"><el-empty description="还没有作者展现模板"><el-button type="primary" @click="openCreate('author')">创建作者展现模板</el-button></el-empty></div>
         <div v-else class="frame-grid">
           <div v-for="f in authorFrames" :key="f.id" class="frame-card">
-            <div class="card-hd"><span>{{ f.name }}</span><el-tag size="small" :type="f.is_active?'success':'info'">{{ f.is_active?'启用':'停用' }}</el-tag></div>
+            <div class="card-hd"><span>{{ f.name }}</span><el-tag size="small" :type="f.is_active?'success':'info'">{{ f.is_active?'启用':'停用' }}</el-tag>
+              <el-tag v-if="f.run_mode==='inline'" size="small" type="danger">非沙盒</el-tag>
+              <el-tag v-if="f.review_status==='pending'" size="small" type="warning">待复核</el-tag>
+              <el-tag v-else-if="f.review_status==='rejected'" size="small" type="danger">已驳回</el-tag>
+            </div>
             <div class="card-bd"><p>{{ f.description||'无描述' }}</p><span class="meta">v{{f.version}} · {{fmt(f.updated_at)}}</span></div>
             <div class="card-ft">
               <el-button size="small" @click="preview(f)">预览</el-button>
@@ -52,6 +60,12 @@
           <el-checkbox v-model="form.uses_novel_api">平台API</el-checkbox>
           <el-checkbox v-model="form.is_public">公开分享</el-checkbox>
         </el-space>
+        <el-form-item label="运行模式" style="margin-top:12px">
+          <el-radio-group v-model="form.run_mode">
+            <el-radio value="sandbox">沙盒隔离（默认）</el-radio>
+            <el-radio value="inline">非沙盒注入（仅限本人页面）</el-radio>
+          </el-radio-group>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showEdit=false">取消</el-button>
@@ -75,9 +89,9 @@ const readerFrames = ref<any[]>([]);
 const authorFrames = ref<any[]>([]);
 const showEdit = ref(false); const showPreview = ref(false); const saving = ref(false);
 const editing = ref<any>(null); const previewSrc = ref('');
-const form = ref({ name:'', novel_id:undefined as number|undefined, content:'', has_controls:false, uses_novel_api:false, is_public:false, sandbox_level:'strict', frame_type:'reader' });
+const form = ref({ name:'', novel_id:undefined as number|undefined, content:'', has_controls:false, uses_novel_api:false, is_public:false, sandbox_level:'strict', frame_type:'reader', run_mode:'sandbox' });
 
-function resetForm(){ form.value={ name:'', novel_id:undefined, content:'', has_controls:false, uses_novel_api:false, is_public:false, sandbox_level:'strict', frame_type:'reader' }; editing.value=null; }
+function resetForm(){ form.value={ name:'', novel_id:undefined, content:'', has_controls:false, uses_novel_api:false, is_public:false, sandbox_level:'strict', frame_type:'reader', run_mode:'sandbox' }; editing.value=null; }
 function fmt(d:string){return new Date(d).toLocaleDateString('zh-CN')}
 
 onMounted(load);
@@ -94,7 +108,7 @@ async function load(){
 }
 
 function openCreate(type:string){ form.value.frame_type=type; showEdit.value=true; }
-function edit(f:any){ editing.value=f; form.value={name:f.name,novel_id:f.novel_id??undefined,content:'',has_controls:f.has_controls,uses_novel_api:f.uses_novel_api,is_public:f.is_public,sandbox_level:f.sandbox_level,frame_type:f.frame_type}; showEdit.value=true; frameApi.get(f.id).then(r=>{if(r.data.code===0)form.value.content=r.data.data.content}) }
+function edit(f:any){ editing.value=f; form.value={name:f.name,novel_id:f.novel_id??undefined,content:'',has_controls:f.has_controls,uses_novel_api:f.uses_novel_api,is_public:f.is_public,sandbox_level:f.sandbox_level,frame_type:f.frame_type,run_mode:f.run_mode||'sandbox'}; showEdit.value=true; frameApi.get(f.id).then(r=>{if(r.data.code===0)form.value.content=r.data.data.content}) }
 
 async function save(){
   if(!form.value.name||!form.value.content){ElMessage.warning('请填写完整');return}

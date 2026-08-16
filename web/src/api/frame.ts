@@ -8,7 +8,7 @@ export const frameApi = {
     name: string; description?: string; novel_id?: number;
     content: string; is_public?: boolean; tags?: string;
     has_controls?: boolean; uses_novel_api?: boolean; sandbox_level?: string;
-    frame_type?: string;
+    frame_type?: string; run_mode?: string;
   }) { return api.post('/userframes', data); },
   update(id: number, data: Record<string, unknown>) { return api.put(`/userframes/${id}`, data); },
   delete(id: number) { return api.delete(`/userframes/${id}`); },

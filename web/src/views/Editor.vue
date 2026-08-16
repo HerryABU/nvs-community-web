@@ -90,6 +90,9 @@
               <el-button type="success" size="small" @click="showImportDialog = true">
                 <el-icon><Upload /></el-icon>导入文件
               </el-button>
+              <el-button type="warning" size="small" @click="showBatchDialog = true">
+                <el-icon><Upload /></el-icon>批量导入
+              </el-button>
               <el-button type="primary" size="small" @click="goWriteFirst">
                 <el-icon><Plus /></el-icon>新增章节
               </el-button>
@@ -124,16 +127,16 @@
             :limit="1"
             :on-change="onFileChange"
             :on-remove="onFileRemove"
-            accept=".md,.txt,.html"
+            accept=".md,.txt,.html,.docx,.doc"
             drag
           >
             <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
             <div class="el-upload__text">
-              将 MD / TXT 文件拖到此处，或<em>点击上传</em>
+              将 MD / TXT / Word 文件拖到此处，或<em>点击上传</em>
             </div>
             <template #tip>
               <div class="el-upload__tip">
-                支持 Markdown (.md)、纯文本 (.txt)。上传后可预览章节划分并调整分割规则。
+                支持 Word (.docx)、Markdown (.md)、纯文本 (.txt)。上传后可预览章节划分并调整分割规则。
               </div>
             </template>
           </el-upload>
@@ -184,6 +187,37 @@
         <el-button v-else type="primary" :loading="importing" @click="doImport">确认导入</el-button>
       </template>
     </el-dialog>
+
+    <!-- 批量导入对话框 -->
+    <el-dialog v-model="showBatchDialog" title="批量导入（Word / Markdown）" width="600px" destroy-on-close>
+      <el-form label-width="80px">
+        <el-form-item label="作品标题">
+          <el-input v-model="batchForm.title" placeholder="合并为一部作品（可选）" />
+        </el-form-item>
+        <el-form-item label="选择文件">
+          <el-upload
+            ref="batchUploadRef"
+            :auto-upload="false"
+            multiple
+            :on-change="onBatchFileChange"
+            accept=".md,.txt,.docx,.doc"
+            drag
+          >
+            <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+            <div class="el-upload__text">将多个 Word / Markdown 文件拖到此处</div>
+            <template #tip>
+              <div class="el-upload__tip">可一次选择多个 .docx / .md / .txt 文件，按顺序合并为一部作品的章节</div>
+            </template>
+          </el-upload>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showBatchDialog = false">取消</el-button>
+        <el-button type="primary" :loading="batchImporting" :disabled="batchFiles.length === 0" @click="doBatchImport">
+          批量导入
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -230,6 +264,40 @@ const importFile = ref<File | null>(null);
 const importPreviewData = ref<any>(null);
 const importChapters = ref<{ title: string; words: number }[]>([]);
 const importForm = reactive({ title: '', splitRule: '' });
+
+// 批量导入
+const showBatchDialog = ref(false);
+const batchImporting = ref(false);
+const batchUploadRef = ref();
+const batchFiles = ref<File[]>([]);
+const batchForm = reactive({ title: '' });
+
+function onBatchFileChange(file: any) {
+  if (file.raw) batchFiles.value.push(file.raw);
+}
+
+async function doBatchImport() {
+  if (batchFiles.value.length === 0) { ElMessage.warning('请选择文件'); return; }
+  batchImporting.value = true;
+  try {
+    const res = await novelApi.importBatch(batchFiles.value, batchForm.title.trim() || undefined);
+    const data = res.data.data;
+    ElMessage.success(`批量导入成功！${data.files_count} 个文件，共 ${data.chapters_count} 章`);
+    showBatchDialog.value = false;
+    batchFiles.value = [];
+    batchForm.title = '';
+    batchUploadRef.value?.clearFiles();
+    // 刷新章节列表
+    if (novelId.value) {
+      const cr = await chapterApi.getChapters(novelId.value);
+      chapters.value = cr.data.data || [];
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '批量导入失败');
+  } finally {
+    batchImporting.value = false;
+  }
+}
 
 const sensitiveZones = ref<string[]>([]);
 const showWallToggle = computed(() => {
@@ -376,6 +444,7 @@ async function doImport() {
       importForm.title || importFile.value.name.replace(/\.[^.]+$/, ''),
       (form.categories && form.categories.length > 0) ? form.categories[0] : '其他',
       targetNovelId,
+      importForm.splitRule || undefined,
     );
     const data = res.data.data;
     ElMessage.success(`导入成功！共 ${data.chapters_count} 章`);

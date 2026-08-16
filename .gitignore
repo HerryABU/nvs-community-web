@@ -31,3 +31,14 @@ desktop.ini
 *.tmp
 *.swp
 ~$*
+
+# Vite 运行时临时文件
+web/vite.config.ts.timestamp-*.mjs
+web/*.timestamp-*.mjs
+
+# WorkBuddy 项目本地数据（记忆/日志）
+.workbuddy/
+
+# 日志
+*.log
+logs/

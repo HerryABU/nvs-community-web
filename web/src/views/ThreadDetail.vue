@@ -8,6 +8,22 @@
           <span>{{ formatTime(thread.created_at) }}</span>
           <span>{{ thread.view_count }} 浏览 · {{ thread.post_count }} 回复</span>
         </div>
+        <div class="thread-actions">
+          <ReportButton
+            v-if="authStore.isLoggedIn && authStore.user?.id !== thread.user_id"
+            target-type="thread"
+            :target-id="thread.id"
+          />
+          <el-button
+            v-if="canDeleteThread"
+            size="small"
+            text
+            type="danger"
+            @click="deleteThread"
+          >
+            删除帖子
+          </el-button>
+        </div>
       </div>
 
       <!-- 主帖内容 -->
@@ -22,6 +38,25 @@
           <div class="post-header">
             <strong>{{ p.user?.username || '匿名' }}</strong>
             <span class="post-time">{{ formatTime(p.created_at) }}</span>
+            <span class="post-actions">
+              <ReportButton
+                v-if="authStore.isLoggedIn && authStore.user?.id !== p.user_id"
+                target-type="post"
+                :target-id="p.id"
+              />
+              <el-button
+                v-if="authStore.user?.id === p.user_id"
+                size="small" text type="danger" @click="deletePost(p.id)"
+              >删除</el-button>
+              <el-button
+                v-if="isModerator && authStore.user?.id !== p.user_id"
+                size="small" text type="warning" @click="muteUser(p)"
+              >禁言</el-button>
+              <el-button
+                v-if="isModerator && authStore.user?.id !== p.user_id"
+                size="small" text type="danger" @click="deletePost(p.id)"
+              >删除</el-button>
+            </span>
           </div>
           <div class="post-content">
             <div v-html="renderMarkdown(p.content)"></div>
@@ -53,16 +88,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { ref, computed, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { novelApi, forumApi } from '@/api/novel';
 import { useAuthStore } from '@/stores/auth';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { renderMarkdown } from '@/markdown/renderer';
 import SensitiveZoneGuard from '@/components/SensitiveZoneGuard.vue';
+import ReportButton from '@/components/ReportButton.vue';
 import { markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';
 
 const route = useRoute();
+const router = useRouter();
 const authStore = useAuthStore();
 const loading = ref(false);
 const thread = ref<any>(null);
@@ -75,6 +112,56 @@ const replying = ref(false);
 const showZoneGuard = ref(false);
 const zoneGuardName = ref('');
 const zoneGuardCross = ref(false);
+
+// 论坛创建者 / 管理员权限
+const isModerator = computed(() => {
+  const forum = thread.value?.forum;
+  if (!forum) return false;
+  if (authStore.user?.role === 'admin') return true;
+  return forum.creator_id && forum.creator_id === authStore.user?.id;
+});
+const canDeleteThread = computed(() => {
+  if (!thread.value) return false;
+  if (authStore.user?.role === 'admin') return true;
+  return thread.value.user_id === authStore.user?.id || isModerator.value;
+});
+
+async function deleteThread() {
+  try {
+    await ElMessageBox.confirm('确定删除该帖子及其全部回复？', '删除确认', { type: 'warning', confirmButtonText: '删除' });
+    await forumApi.deleteThread(thread.value.id);
+    ElMessage.success('帖子已删除');
+    router.push(`/forum/${thread.value.forum_id}`);
+  } catch (e: any) {
+    if (e !== 'cancel') ElMessage.error(e?.response?.data?.message || '删除失败');
+  }
+}
+
+async function deletePost(postId: number) {
+  try {
+    await ElMessageBox.confirm('确定删除该回帖？', '删除确认', { type: 'warning', confirmButtonText: '删除' });
+    await forumApi.deletePost(postId);
+    ElMessage.success('回帖已删除');
+    load();
+  } catch (e: any) {
+    if (e !== 'cancel') ElMessage.error(e?.response?.data?.message || '删除失败');
+  }
+}
+
+async function muteUser(post: any) {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      `对用户「${post.user?.username || post.user_id}」禁言。请输入禁言时长（小时，0=永久）：`,
+      '禁言',
+      { confirmButtonText: '确认禁言', cancelButtonText: '取消', inputValue: '24', inputPattern: /^\d+$/, inputErrorMessage: '请输入数字（小时）' }
+    );
+    const hours = parseInt(value || '24', 10);
+    await forumApi.muteUser(thread.value.forum_id, { user_id: post.user_id, duration_hours: hours, reason: '违规内容' });
+    ElMessage.success('已禁言');
+  } catch (e: any) {
+    if (e !== 'cancel') ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
 
 function checkSensitiveForum() {
   const forum = thread.value?.forum;
@@ -167,6 +254,18 @@ onMounted(load);
   gap: 12px;
   align-items: center;
   margin-bottom: 6px;
+}
+
+.post-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.thread-actions {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
 }
 
 .post-time {
