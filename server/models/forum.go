@@ -11,16 +11,42 @@ type Forum struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
 	Name        string    `gorm:"size:128;not null" json:"name"`
 	Description string    `gorm:"type:text" json:"description"`
-	Type        string    `gorm:"size:16;default:general;index" json:"type"` // general/reader/reader_author/author/sensitive
+	Type        string    `gorm:"size:16;default:general;index" json:"type"` // general/reader/reader_author/author/sensitive/custom
 	Zone        string    `gorm:"size:64;default:''" json:"zone"`            // 敏感区绑定的隔离墙分区名
 	RefID       string    `gorm:"size:64;default:''" json:"ref_id"`          // novel_id 或 category
 	ParentID    *uint     `gorm:"default:null;index" json:"parent_id"`       // 父论坛ID，null为顶级论坛
 	SortOrder   int       `gorm:"default:0" json:"sort_order"`
 	ThreadCount int       `gorm:"default:0" json:"thread_count"`
-	CreatedAt   time.Time `json:"created_at"`
+	// 用户自建论坛
+	CreatorID    uint   `gorm:"default:0;index" json:"creator_id"`                        // 创建者用户ID，0=系统/管理员
+	IsPublic     bool   `gorm:"default:false" json:"is_public"`                           // 是否在大厅自建区公开显示
+	PasswordHash string `gorm:"size:128;default:''" json:"-"`                             // 进入密码哈希（空=无密码）
+	ReviewStatus string `gorm:"size:16;default:approved;index" json:"review_status"`      // approved/pending/rejected（自建论坛默认 pending 待管理员审查）
+	ReviewNote   string `gorm:"size:512;default:''" json:"review_note"`                   // 管理员审查意见
+	CreatedAt    time.Time `json:"created_at"`
+
+	HasPassword bool `gorm:"-" json:"has_password"` // 是否有进入密码（运行时计算，不落库）
 }
 
 func (Forum) TableName() string { return "forums" }
+
+// AfterFind 查询后计算派生字段
+func (f *Forum) AfterFind(tx *gorm.DB) error {
+	f.HasPassword = f.PasswordHash != ""
+	return nil
+}
+
+// ForumMute 论坛级禁言（自建论坛创建者可对违规用户在本论坛禁言）
+type ForumMute struct {
+	ID         uint       `gorm:"primaryKey" json:"id"`
+	ForumID    uint       `gorm:"not null;index" json:"forum_id"`
+	UserID     uint       `gorm:"not null;index" json:"user_id"`
+	MutedUntil *time.Time `json:"muted_until"`
+	Reason     string     `gorm:"size:256;default:''" json:"reason"`
+	CreatedAt  time.Time  `json:"created_at"`
+}
+
+func (ForumMute) TableName() string { return "forum_mutes" }
 
 func GetOrCreateForum(name, ftype, refID, desc string) (*Forum, error) {
 	var forum Forum
@@ -195,4 +221,24 @@ func UpdateForum(forum *Forum) error {
 // DeleteForum 删除论坛
 func DeleteForum(id uint) error {
 	return DB.Delete(&Forum{}, id).Error
+}
+
+// IsForumMuted 用户是否在某论坛被禁言（未过期）
+func IsForumMuted(forumID, userID uint) bool {
+	var count int64
+	DB.Model(&ForumMute{}).
+		Where("forum_id = ? AND user_id = ? AND muted_until > ?", forumID, userID, time.Now()).
+		Count(&count)
+	return count > 0
+}
+
+// GetForumMute 获取用户在论坛的禁言记录（未过期）
+func GetForumMute(forumID, userID uint) (*ForumMute, error) {
+	var m ForumMute
+	err := DB.Where("forum_id = ? AND user_id = ? AND muted_until > ?", forumID, userID, time.Now()).
+		Order("muted_until DESC").First(&m).Error
+	if err != nil {
+		return nil, err
+	}
+	return &m, nil
 }

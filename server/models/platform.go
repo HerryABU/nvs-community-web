@@ -4,20 +4,53 @@ import "time"
 
 // Report 举报
 type Report struct {
-	ID         uint      `gorm:"primaryKey" json:"id"`
-	ReporterID uint      `gorm:"not null;index" json:"reporter_id"`
-	TargetType string    `gorm:"size:16;not null" json:"target_type"` // novel/comment/thread
-	TargetID   uint      `gorm:"not null" json:"target_id"`
-	Reason     string    `gorm:"size:64;not null" json:"reason"`
-	Detail     string    `gorm:"type:text" json:"detail"`
-	Status     string    `gorm:"size:16;default:pending" json:"status"` // pending/accepted/rejected
-	HandlerID  *uint     `json:"handler_id"`
-	Verdict    string    `gorm:"type:text" json:"verdict"`
-	CreatedAt  time.Time `json:"created_at"`
-	Reporter   *User     `gorm:"foreignKey:ReporterID" json:"reporter,omitempty"`
+	ID         uint       `gorm:"primaryKey" json:"id"`
+	ReporterID uint       `gorm:"not null;index" json:"reporter_id"`
+	TargetType string     `gorm:"size:16;not null" json:"target_type"` // novel/comment/thread
+	TargetID   uint       `gorm:"not null" json:"target_id"`
+	ReasonCode string     `gorm:"size:32;default:''" json:"reason_code"` // 预置理由编码
+	Reason     string     `gorm:"size:64;not null" json:"reason"`        // 理由展示文本
+	Detail     string     `gorm:"type:text" json:"detail"`
+	Status     string     `gorm:"size:16;default:pending;index" json:"status"` // pending/accepted/rejected
+	HandlerID  *uint      `json:"handler_id"`
+	Verdict    string     `gorm:"type:text" json:"verdict"`
+	ResolvedAt *time.Time `json:"resolved_at"`
+	CreatedAt  time.Time  `json:"created_at"`
+	Reporter   *User      `gorm:"foreignKey:ReporterID" json:"reporter,omitempty"`
 }
 
 func (Report) TableName() string { return "reports" }
+
+// ReportReason 预置举报理由
+type ReportReason struct {
+	Code  string `json:"code"`
+	Label string `json:"label"`
+	Desc  string `json:"desc"`
+}
+
+// PredefinedReportReasons 平台预置举报理由（供前端选择）
+func PredefinedReportReasons() []ReportReason {
+	return []ReportReason{
+		{Code: "spam", Label: "垃圾广告", Desc: "广告、刷屏、外链推广等无关内容"},
+		{Code: "abuse", Label: "辱骂攻击", Desc: "人身攻击、侮辱谩骂、网络暴力"},
+		{Code: "porn", Label: "色情低俗", Desc: "色情、淫秽或低俗内容"},
+		{Code: "violence", Label: "暴力血腥", Desc: "宣扬暴力、血腥、恐怖内容"},
+		{Code: "illegal", Label: "违法违规", Desc: "违反法律法规或危害国家安全的内容"},
+		{Code: "infringement", Label: "抄袭侵权", Desc: "抄袭、盗用他人原创作品或版权内容"},
+		{Code: "misleading", Label: "虚假误导", Desc: "虚假信息、误导性陈述"},
+		{Code: "other", Label: "其他", Desc: "其他需要说明的问题"},
+	}
+}
+
+// LookupReportReason 根据编码查找预置理由，未命中返回 false
+func LookupReportReason(code string) (ReportReason, bool) {
+	for _, r := range PredefinedReportReasons() {
+		if r.Code == code {
+			return r, true
+		}
+	}
+	return ReportReason{}, false
+}
 
 // WithdrawalRequest 提现申请
 type WithdrawalRequest struct {

@@ -19,7 +19,16 @@
     <!-- 自定义模板Header区域 -->
     <div v-if="headerFrames.length > 0" class="template-zone template-header">
       <div v-for="f in headerFrames" :key="f.id" class="template-frame-wrapper">
+        <!-- 非沙盒注入：作者本人页面直接同源嵌入（无 sandbox 限制） -->
         <iframe
+          v-if="isInlineFrame(f)"
+          :src="previewUrl(f.id) + '?chapter=' + chapterNum + '&novel=' + novelId"
+          class="template-iframe"
+          @load="onFrameLoaded($event)"
+        />
+        <!-- 沙盒模式：受限 iframe -->
+        <iframe
+          v-else
           :src="previewUrl(f.id) + '?chapter=' + chapterNum + '&novel=' + novelId"
           :sandbox="f.has_controls ? 'allow-scripts allow-same-origin allow-forms allow-popups' : 'allow-scripts allow-same-origin'"
           class="template-iframe"
@@ -57,6 +66,13 @@
     <div v-if="footerFrames.length > 0" class="template-zone template-footer">
       <div v-for="f in footerFrames" :key="f.id" class="template-frame-wrapper">
         <iframe
+          v-if="isInlineFrame(f)"
+          :src="previewUrl(f.id) + '?chapter=' + chapterNum + '&novel=' + novelId"
+          class="template-iframe"
+          @load="onFrameLoaded($event)"
+        />
+        <iframe
+          v-else
           :src="previewUrl(f.id) + '?chapter=' + chapterNum + '&novel=' + novelId"
           :sandbox="f.has_controls ? 'allow-scripts allow-same-origin allow-forms allow-popups' : 'allow-scripts allow-same-origin'"
           class="template-iframe"
@@ -119,6 +135,12 @@ const footerFrames = ref<any[]>([]);
 const frameLoaded = ref<Record<number, boolean>>({});
 
 function previewUrl(frameId: number) { return frameApi.getPreview(frameId); }
+
+// 非沙盒注入判定：仅当模板声明 inline 且当前访问者是模板作者本人时生效
+function isInlineFrame(f: any): boolean {
+  return f.run_mode === 'inline' && authStore.user?.id === f.user_id;
+}
+
 function onFrameLoaded(e: Event) {
   const iframe = e.target as HTMLIFrameElement;
   try {

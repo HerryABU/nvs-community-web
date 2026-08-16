@@ -130,6 +130,42 @@ func ExportTXT(c *gin.Context) {
 	c.FileAttachment(txtPath, fmt.Sprintf("%s.txt", novel.Title))
 }
 
+// POST /api/novels/:id/export/docx — 导出 Word (.docx)
+func ExportDOCX(c *gin.Context) {
+	userID := c.GetUint("userID")
+	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+
+	novel, err := models.GetNovelByID(uint(novelID))
+	if err != nil || novel.AuthorID != userID {
+		utils.NotFound(c, "作品不存在")
+		return
+	}
+
+	chapters, err := models.GetChaptersByNovel(uint(novelID))
+	if err != nil {
+		utils.InternalError(c, "获取章节失败")
+		return
+	}
+
+	exports := make([]chapterForExport, 0, len(chapters))
+	for _, ch := range chapters {
+		content, _ := os.ReadFile(ch.ContentPath)
+		exports = append(exports, chapterForExport{
+			Title:   fmt.Sprintf("第%d章 %s", ch.ChapterNumber, ch.Title),
+			Content: string(content),
+		})
+	}
+
+	data, err := buildDocx(novel.Title, exports)
+	if err != nil {
+		utils.InternalError(c, "生成 Word 文档失败")
+		return
+	}
+
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.docx\"", novel.Title))
+	c.Data(200, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", data)
+}
+
 // POST /api/novels/:id/export/markdown — 导出合并 Markdown
 func ExportMarkdown(c *gin.Context) {
 	userID := c.GetUint("userID")

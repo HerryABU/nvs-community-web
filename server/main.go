@@ -22,6 +22,7 @@ import (
 	"nvs-server/security"
 	"nvs-server/utils"
 
+	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/redis/go-redis/v9"
@@ -116,6 +117,7 @@ func main() {
 		&models.Forum{},
 		&models.Thread{},
 		&models.Post{},
+		&models.ForumMute{},
 		&models.VipApplication{},
 		&models.Report{},
 		&models.WithdrawalRequest{},
@@ -151,8 +153,12 @@ func main() {
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
-	r.Use(gin.Logger(), middleware.SecureRecovery())
+	r.Use(gin.Logger(), middleware.HeaderLogger(), middleware.SecureRecovery())
+	r.Use(gzip.Gzip(gzip.DefaultCompression))
 	r.Use(middleware.SandboxWriteProtect()) // 🔒 允许数据文件，拦截脚本
+
+	// 注入 gin 引擎供 API 聚合中间层（/api/batch）内存内转发使用
+	handlers.BatchEngine = r
 
 	// 健康检查：浏览器 → HTML 页面，API 请求 → JSON
 	r.GET("/health", func(c *gin.Context) {
@@ -207,6 +213,9 @@ func main() {
 		public.GET("/novels/:id/chapters/:num", handlers.GetChapterContent)
 		public.GET("/novels/:id/chapters/:num/verify", handlers.VerifyChapter)
 		public.GET("/comments", handlers.GetComments)
+		public.GET("/reports/reasons", handlers.GetReportReasons)
+		// API 聚合中间层（一次请求批量获取多个接口数据，向后兼容原有独立调用）
+		public.POST("/batch", security.RateLimit(30, 60), handlers.BatchHandler)
 		public.GET("/novels/:id/rating", handlers.GetNovelRating)
 		public.GET("/forums", handlers.ListForums)
 		public.GET("/forums/:id", handlers.GetForum)
@@ -248,15 +257,26 @@ func main() {
 		protected.GET("/ratings", handlers.GetUserRating)
 		protected.POST("/forums/:id/threads", handlers.CreateThread)
 		protected.POST("/threads/:id/posts", handlers.CreatePost)
+		protected.DELETE("/threads/:id", handlers.DeleteThreadByModerator)
+		protected.DELETE("/posts/:id", handlers.DeletePostByModerator)
+		// 用户自建论坛
+		protected.POST("/forums", handlers.CreateUserForum)
+		protected.GET("/forums/mine", handlers.ListMyForums)
+		protected.POST("/forums/:id/verify", handlers.VerifyForumPassword)
+		protected.POST("/forums/:id/mute", handlers.ForumMuteUser)
+		protected.POST("/forums/:id/unmute", handlers.ForumUnmuteUser)
 		// VIP & 导入导出
 		protected.POST("/author/apply-vip", handlers.ApplyVip)
 		protected.POST("/novels/import/preview", handlers.ImportPreview)
 		protected.POST("/novels/import", handlers.ImportNovel)
+		protected.POST("/novels/import/batch", handlers.ImportBatch)
 		protected.POST("/novels/:id/export/epub", handlers.ExportEPUB)
 		protected.POST("/novels/:id/export/markdown", handlers.ExportMarkdown)
 		protected.POST("/novels/:id/export/txt", handlers.ExportTXT)
+		protected.POST("/novels/:id/export/docx", handlers.ExportDOCX)
 		// 举报
 		protected.POST("/reports", handlers.CreateReport)
+		protected.GET("/reports/mine", handlers.ListMyReports)
 		// 收益
 		protected.GET("/author/earnings", handlers.GetEarnings)
 		protected.POST("/author/withdraw", handlers.RequestWithdraw)
@@ -326,10 +346,16 @@ func main() {
 		admin.GET("/users", handlers.ListUsers)
 		admin.PUT("/users/:id", handlers.UpdateUser)
 		admin.DELETE("/users/:id", handlers.DeleteUser)
+		admin.POST("/users/:id/mute", handlers.MuteUser)
+		admin.POST("/users/:id/unmute", handlers.UnmuteUser)
 		admin.GET("/vip-applications", handlers.ListVipApplications)
 		admin.POST("/vip-applications/:id/approve", handlers.ApproveVip)
 		admin.GET("/reports", handlers.ListReports)
 		admin.POST("/reports/:id/handle", handlers.HandleReport)
+		// HTML 内容审查（人工复核）
+		admin.GET("/html-reviews", handlers.ListHTMLReviews)
+		admin.GET("/html-reviews/:type/:id", handlers.GetHTMLReview)
+		admin.POST("/html-reviews/:type/:id/review", handlers.ReviewHTML)
 		admin.GET("/finance", handlers.GetFinanceOverview)
 		// 站长配置
 		admin.GET("/config", handlers.GetPlatformConfigs)
@@ -348,6 +374,7 @@ func main() {
 		admin.POST("/forums", handlers.AdminCreateForum)
 		admin.PUT("/forums/:id", handlers.AdminUpdateForum)
 		admin.DELETE("/forums/:id", handlers.AdminDeleteForum)
+		admin.POST("/forums/:id/review", handlers.AdminReviewForum)
 	}
 
 	// 远程站点公开接口
@@ -410,6 +437,15 @@ func main() {
 
 	r.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
+
+		// robots.txt（站长可在后台自定义，兼容尾斜杠/大小写变体）
+		normalizedPath := strings.ToLower(strings.TrimSuffix(path, "/"))
+		if normalizedPath == "/robots.txt" || normalizedPath == "/robot.txt" {
+			c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+			c.Header("Pragma", "no-cache")
+			c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(models.GetRobotsTxt()))
+			return
+		}
 
 		// SPA 路由请求（Vue Router），检查是否匹配到前端静态资源
 		cleanPath := strings.TrimPrefix(path, "/")

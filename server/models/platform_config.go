@@ -81,6 +81,15 @@ func GetCategories() []string {
 	return cats
 }
 
+// GetRobotsTxt 获取 robots.txt 内容，站长可自定义
+func GetRobotsTxt() string {
+	txt := GetPlatformConfig("robots_txt")
+	if txt == "" {
+		return "User-agent: *\nAllow: /\n"
+	}
+	return txt
+}
+
 // InitPlatformConfigs 初始化默认平台配置（仅在不存在时写入）
 func InitPlatformConfigs() {
 	defaults := map[string]string{
@@ -89,6 +98,7 @@ func InitPlatformConfigs() {
 		"email_verify":    "false",
 		"captcha_enabled": "false",
 		"categories":      `["硬科幻","奇幻","推演文学","架空历史","现实主义","悬疑推理","实验文学","同人区","政治区","讽刺文学","泛二次元区","其他"]`,
+		"robots_txt":      "User-agent: *\nAllow: /\n",
 	}
 	for k, v := range defaults {
 		var count int64

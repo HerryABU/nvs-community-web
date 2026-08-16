@@ -343,3 +343,13 @@ func ensureAdmin(c *gin.Context) bool {
 	}
 	return true
 }
+
+// isAdminUser 非阻断式判断当前用户是否为管理员
+func isAdminUser(c *gin.Context) bool {
+	userID := c.GetUint("userID")
+	if userID == 0 {
+		return false
+	}
+	user, _ := models.GetUserByID(userID)
+	return user != nil && user.Role == "admin"
+}

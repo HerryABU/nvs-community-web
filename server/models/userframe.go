@@ -21,6 +21,11 @@ type UserFrame struct {
 	UsesNovelAPI bool  `gorm:"default:false" json:"uses_novel_api"`      // 是否调用平台小说API
 	SandboxLevel string `gorm:"size:16;default:strict" json:"sandbox_level"` // strict(只读) / interactive(含控件)
 	FrameType    string `gorm:"size:16;default:reader;index" json:"frame_type"` // reader(阅读模版) / author(作者展现模版)
+	// 审查与运行模式
+	ReviewStatus string `gorm:"size:16;default:approved;index" json:"review_status"` // approved(通过) / pending(待复核) / rejected(驳回)
+	ReviewNote   string `gorm:"size:512" json:"review_note"`                        // 管理员复核意见
+	ScanWarnings string `gorm:"type:text" json:"scan_warnings"`                     // 自动扫描告警（JSON 数组）
+	RunMode      string `gorm:"size:16;default:sandbox;index" json:"run_mode"`      // sandbox(沙盒) / inline(非沙盒直接注入，仅限本人页面)
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 
@@ -51,8 +56,13 @@ type UserHTML struct {
 	IsPublic       bool   `gorm:"default:false" json:"is_public"`           // 是否在广场展示
 	IsDownloadable bool   `gorm:"default:false" json:"is_downloadable"`    // 是否允许下载ZIP
 	ThumbURL       string `gorm:"size:512" json:"thumb_url"`              // 缩略图URL
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	// 审查与运行模式
+	ReviewStatus string `gorm:"size:16;default:approved;index" json:"review_status"` // approved / pending / rejected
+	ReviewNote   string `gorm:"size:512" json:"review_note"`                        // 管理员复核意见
+	ScanWarnings string `gorm:"type:text" json:"scan_warnings"`                     // 自动扫描告警（JSON 数组）
+	RunMode      string `gorm:"size:16;default:sandbox;index" json:"run_mode"`      // sandbox / inline
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 
 	User  *User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	Novel *Novel `gorm:"foreignKey:NovelID" json:"novel,omitempty"`

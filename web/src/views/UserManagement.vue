@@ -31,9 +31,17 @@
       <el-table-column prop="created_at" label="注册时间" width="170">
         <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="260" fixed="right">
+      <el-table-column label="禁言" width="100">
+        <template #default="{ row }">
+          <el-tag v-if="isMuted(row)" type="danger" size="small">已禁言</el-tag>
+          <span v-else class="muted">—</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="340" fixed="right">
         <template #default="{ row }">
           <el-button size="small" type="primary" plain @click="openEdit(row)">编辑</el-button>
+          <el-button v-if="!isMuted(row)" size="small" type="warning" plain @click="openMute(row)">禁言</el-button>
+          <el-button v-else size="small" type="success" plain @click="doUnmute(row)">解禁</el-button>
           <el-popconfirm
             title="确定要删除该用户吗？此操作不可恢复。"
             confirm-button-text="删除"
@@ -85,7 +93,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { adminApi } from '@/api/admin';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 
 interface UserRow {
   id: number;
@@ -94,6 +102,8 @@ interface UserRow {
   email: string;
   role: string;
   created_at: string;
+  muted_until?: string;
+  mute_reason?: string;
 }
 
 const users = ref<UserRow[]>([]);
@@ -181,6 +191,37 @@ async function doDelete(id: number) {
   }
 }
 
+// 禁言
+function isMuted(row: UserRow) {
+  return !!row.muted_until && new Date(row.muted_until).getTime() > Date.now();
+}
+
+async function openMute(row: UserRow) {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      `对用户「${row.nickname || row.username}」禁言。请输入时长（小时，0=永久）：`,
+      '全局禁言',
+      { confirmButtonText: '确认禁言', cancelButtonText: '取消', inputValue: '24', inputPattern: /^\d+$/, inputErrorMessage: '请输入数字（小时）' }
+    );
+    const hours = parseInt(value || '24', 10);
+    await adminApi.muteUser(row.id, { duration_hours: hours, reason: '违规行为' });
+    ElMessage.success('已禁言');
+    loadUsers();
+  } catch (e: any) {
+    if (e !== 'cancel') ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
+async function doUnmute(row: UserRow) {
+  try {
+    await adminApi.unmuteUser(row.id);
+    ElMessage.success('已解除禁言');
+    loadUsers();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
 onMounted(() => {
   loadUsers();
 });
@@ -192,4 +233,5 @@ onMounted(() => {
 .um-header h2 { margin: 0; }
 .um-actions { display: flex; align-items: center; gap: 8px; }
 .um-pagination { margin-top: 16px; display: flex; justify-content: center; }
+.muted { color: var(--text-light); }
 </style>

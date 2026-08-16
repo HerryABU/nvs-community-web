@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"nvs-server/models"
+	"nvs-server/security"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -133,4 +134,41 @@ func AdminDeleteForum(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{"message": "论坛已删除"})
+}
+
+// POST /api/admin/forums/:id/review — 审查自建论坛（通过/驳回）
+func AdminReviewForum(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的论坛ID")
+		return
+	}
+
+	var req struct {
+		Action string `json:"action" binding:"required"` // approve / reject
+		Note   string `json:"note"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	if req.Action != "approve" && req.Action != "reject" {
+		utils.BadRequest(c, "无效的操作")
+		return
+	}
+
+	status := "approved"
+	if req.Action == "reject" {
+		status = "rejected"
+	}
+
+	models.DB.Model(&models.Forum{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"review_status": status,
+		"review_note":   security.SanitizePlainText(req.Note),
+	})
+	utils.Success(c, gin.H{"message": "已审查"})
 }

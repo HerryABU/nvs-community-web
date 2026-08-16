@@ -37,6 +37,12 @@ export const adminApi = {
   deleteUser(id: number) {
     return api.delete(`/admin/users/${id}`);
   },
+  muteUser(id: number, data: { duration_hours?: number; reason?: string }) {
+    return api.post(`/admin/users/${id}/mute`, data);
+  },
+  unmuteUser(id: number) {
+    return api.post(`/admin/users/${id}/unmute`);
+  },
 
   // VIP 申请
   getVipApplications() {
@@ -47,11 +53,22 @@ export const adminApi = {
   },
 
   // 举报
-  getReports() {
-    return api.get('/admin/reports');
+  getReports(status?: string) {
+    return api.get('/admin/reports', { params: status ? { status } : {} });
   },
-  handleReport(id: number, data: { status: string; verdict: string }) {
+  handleReport(id: number, data: { status: string; verdict: string; delete_target?: boolean }) {
     return api.post(`/admin/reports/${id}/handle`, data);
+  },
+
+  // HTML 内容审查
+  getHtmlReviews(params?: { status?: string; type?: string }) {
+    return api.get('/admin/html-reviews', { params });
+  },
+  getHtmlReview(type: string, id: number) {
+    return api.get(`/admin/html-reviews/${type}/${id}`);
+  },
+  reviewHtml(type: string, id: number, data: { action: string; note?: string }) {
+    return api.post(`/admin/html-reviews/${type}/${id}/review`, data);
   },
 
   // 财务
@@ -71,6 +88,9 @@ export const adminApi = {
   },
   deleteForum(id: number) {
     return api.delete(`/admin/forums/${id}`);
+  },
+  reviewForum(id: number, data: { action: string; note?: string }) {
+    return api.post(`/admin/forums/${id}/review`, data);
   },
 
   // 隔离墙配置
