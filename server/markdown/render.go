@@ -10,7 +10,6 @@ import (
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/renderer/html"
 )
 
 // goldmark 实例（全局复用）
@@ -25,7 +24,8 @@ var md = goldmark.New(
 		extension.Typographer,     // 智能引号/破折号/省略号
 	),
 	goldmark.WithRendererOptions(
-		html.WithUnsafe(), // 允许原始 HTML（KaTeX/Mermaid 恢复后需要）
+		// 不开启 WithUnsafe：内联 HTML 会被转义为文本，防止 XSS。
+		// KaTeX/Mermaid 通过占位符保护，不受影响。
 	),
 )
 

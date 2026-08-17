@@ -14,6 +14,7 @@
 
 import CherryEngine from 'cherry-markdown/dist/cherry-markdown.engine.core.esm.js';
 import katex from 'katex';
+import DOMPurify from 'dompurify';
 import 'katex/dist/contrib/mhchem.mjs';
 
 // ═══ physics 物理宏包 ────────────────────────────────────────────
@@ -119,9 +120,15 @@ const physicsKatex = createPhysicsKatex(katex);
 
 // ═══ 共享引擎配置（编辑器 + 阅读器统一）═══
 // 所有使用 Cherry 的地方都必须引用此配置，确保渲染一致。
+
+// 危险标签黑名单：禁脚本/外链/表单/资源等，
+// 放行颜色（span/font）、折叠（details/summary/div）、跳转（a）、按钮（button）。
+const HTML_BLACKLIST =
+  'script|iframe|object|embed|svg|math|link|meta|base|form|input|textarea|select|option|applet|audio|video|source|track|noscript|template|marquee';
+
 export const engineConfig = {
   engine: {
-    global: { classicBr: false },
+    global: { classicBr: false, htmlBlackList: HTML_BLACKLIST },
     syntax: {
       mathBlock: { engine: 'katex' as const },
       inlineMath: { engine: 'katex' as const },
@@ -129,6 +136,7 @@ export const engineConfig = {
       header: { anchorStyle: 'none' as const },
       table: { enableChart: false },
       fontEmphasis: { allowWhitespace: false },
+      htmlBlock: { filterStyle: true },
     },
   },
   // 使用包装后的 katex，自动注入 physics macros
@@ -142,15 +150,21 @@ const engine = new CherryEngine(engineConfig as any);
 // 也需传入包装后的 katex 以确保预览渲染一致。
 export { physicsKatex, physicsMacros };
 
+// ═══ 编辑器专用引擎配置 ──────────────────────────────────────────
+// 编辑器（ChapterEditor / BlogEditor）实时预览与阅读器一致：
+// 放行颜色/折叠/跳转/按钮，禁用危险标签（script/iframe/表单等）与 style 危险 CSS。
+export const editorEngineConfig = {
+  ...engineConfig,
+} as const;
+
 // ═══ 预处理：展开/收起控件 ═══
 function preprocessExpand(md: string): string {
   return md.replace(/\[expand(?:\s+title="([^"]*)")?\]\s*([\s\S]*?)\s*\[\/expand\]/g,
     (_f: string, title: string, body: string) => {
       const label = title || '展开内容';
       const id = 'exp' + Math.random().toString(36).slice(2, 8);
-      return `<div class="expand-block" style="border:1px solid var(--border-color,#ddd);border-radius:8px;margin:12px 0;overflow:hidden">
-<details id="${id}"><summary style="cursor:pointer;padding:10px 16px;background:var(--card-bg,#f5f5f5);font-weight:600;user-select:none">📋 ${label}</summary>
-<div style="padding:12px 16px">${body}</div></details></div>`;
+      return `<details class="expand-block" id="${id}"><summary class="expand-summary">📋 ${label}</summary>
+<div class="expand-body">${body}</div></details>`;
     });
 }
 
@@ -224,18 +238,58 @@ function preprocessMD(md: string): string {
   return md;
 }
 
-// ═══ XSS 实体反转义 ──────────────────────────────────────────────
-// 后端 bluemonday 会对用户内容做 HTML 实体编码（& → &amp; 等），
-// 在输入 CherryEngine 之前需要反转义，否则 < > & 等字符会被
-// 当作实体保留，破坏 Markdown/KaTeX/Mermaid 语法解析。
-function unescapeHTML(str: string): string {
-  return str
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ');
+// ═══ XSS 防护 ══════════════════════════════════════════
+// 后端 bluemonday 会把用户内容的裸 `&` 转义为 `&amp;`。
+// 这里只反转义 `&amp;` → `&`（恢复 KaTeX 矩阵分隔符 `&` 等），
+// 而 **不** 反转义 `&lt;` / `&gt;`，避免把后端转义的 HTML 标签
+// 还原成可执行标签（那正是 XSS 的根源之一）。
+function unescapeAmp(str: string): string {
+  return str.replace(/&amp;/g, '&');
+}
+
+// DOMPurify 兜底净化：禁危险标签（脚本/外链/表单/资源），放行颜色/折叠/跳转/按钮。
+// style 通过 hook 精细过滤（只留颜色），事件属性 DOMPurify 默认移除。
+const DOMPURIFY_CONFIG = {
+  FORBID_TAGS: [
+    'style', 'script', 'iframe', 'object', 'embed', 'form', 'input',
+    'textarea', 'select', 'option', 'link', 'meta', 'base', 'applet', 'audio',
+    'video', 'source', 'track', 'noscript', 'template', 'svg', 'math', 'marquee',
+  ],
+} as const;
+
+// style 精细过滤 hook：只保留颜色相关 CSS，移除 position/url/expression 等危险 CSS
+let styleHookInstalled = false;
+function installStyleHook() {
+  if (styleHookInstalled) return;
+  styleHookInstalled = true;
+  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    if (!node.hasAttribute || !node.hasAttribute('style')) return;
+    const style = node.getAttribute('style') || '';
+    const cleaned = style
+      .split(';')
+      .filter((s) => {
+        const t = s.trim().toLowerCase();
+        return (
+          (t.startsWith('color') || t.startsWith('background-color')) &&
+          !t.includes('url(') &&
+          !t.includes('expression')
+        );
+      })
+      .join(';');
+    if (cleaned.trim()) node.setAttribute('style', cleaned);
+    else node.removeAttribute('style');
+  });
+}
+installStyleHook();
+
+function sanitizeMarkdown(html: string): string {
+  try {
+    return DOMPurify.sanitize(html, DOMPURIFY_CONFIG as any) as string;
+  } catch (e) {
+    console.error('[NVS] DOMPurify sanitize error:', e);
+    // 降级：全量转义，保证不输出任何 HTML
+    return html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
 }
 
 // ═══ 公共 API ═══
@@ -243,13 +297,13 @@ function unescapeHTML(str: string): string {
 export function renderMarkdown(content: string): string {
   if (!content) return '';
   try {
-    // 1) 反转义 HTML 实体（后端 bluemonday 引入的）
-    // 2) 预处理 chemfig
-    // 3) 预处理缩写/定义列表
-    // 4) CherryEngine 渲染（DOMPurify 会做最终 XSS 防护）
-    const decoded = unescapeHTML(content);
+    // 1) 反转义 `&amp;`（后端引入的），保持 `&lt;`/`&gt;` 转义
+    // 2) 预处理 chemfig / 缩写 / 定义列表 / 展开控件
+    // 3) CherryEngine 渲染（内置白名单放行颜色/折叠/跳转/按钮，转义危险标签）
+    // 4) DOMPurify 兜底白名单
+    const decoded = unescapeAmp(content);
     const html = engine.makeHtml(preprocessExpand(preprocessMD(preprocessChemfig(decoded)))) as string;
-    return html;
+    return sanitizeMarkdown(html);
   } catch (e) {
     console.error('[NVS] renderMarkdown error:', e);
     return `<pre>${content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`;
@@ -301,7 +355,7 @@ export async function renderMermaidBlocks(container: HTMLElement) {
 // ═══ Chemfig 化学结构图渲染 ────────────────────────────────────────
 // 使用 smiles-drawer 将 \chemfig{SMILES} 转为 SVG 结构图
 
-// 预处理：\chemfig{CCO} → 占位 div
+// 预处理：\chemfig{CCO} → 占位 span
 function preprocessChemfig(md: string): string {
   if (!md) return md;
   // 匹配 \chemfig{SMILES字符串}
@@ -309,8 +363,8 @@ function preprocessChemfig(md: string): string {
     const s = smiles.trim();
     if (!s) return _m;
     const hash = simpleHash(s).toString(36).slice(0, 8);
-    // 使用 img + data URI 占位，在 renderChemfigBlocks 中替换为 canvas
-    return `<div class="chemfig-container" data-smiles="${encodeURIComponent(s)}" data-hash="${hash}" style="display:inline-block;margin:4px;vertical-align:middle"><canvas class="chemfig-canvas" width="300" height="300" style="display:none"></canvas></div>`;
+    // 使用 span + canvas 占位，在 renderChemfigBlocks 中替换为 canvas
+    return `<span class="chemfig-container" data-smiles="${encodeURIComponent(s)}" data-hash="${hash}"><canvas class="chemfig-canvas" width="300" height="300"></canvas></span>`;
   });
 }
 

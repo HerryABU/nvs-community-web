@@ -221,8 +221,8 @@ func writeParsedChapters(novel *models.Novel, chapters []parsedChapter, startNum
 		num := startNum + i
 		contentPath := filepath.Join(authorDir, fmt.Sprintf("%d.html", num))
 
-		// 直接存储原始 Markdown 内容，不做 HTML 转义
-		rawContent := ch.content
+		// XSS 防护：移除内联 HTML 标签（保留 Markdown 语法与文本内容）
+		rawContent := security.SanitizeUserContent(ch.content)
 		if err := os.WriteFile(contentPath, []byte(rawContent), 0644); err != nil {
 			continue
 		}

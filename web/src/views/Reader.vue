@@ -3,7 +3,10 @@
     <!-- 顶部导航 -->
     <div class="reader-toolbar">
       <el-button text @click="$router.push(`/novel/${novelId}`)">
-        <el-icon><ArrowLeft /></el-icon> 返回目录
+        <el-icon><ArrowLeft /></el-icon> 返回
+      </el-button>
+      <el-button text @click="openToc">
+        <el-icon><List /></el-icon> 目录
       </el-button>
       <span class="reader-title">{{ novelTitle }} · 第{{ chapterNum }}章 {{ chapter?.title }}</span>
       <div class="reader-nav" v-if="!isTrialExceeded">
@@ -36,6 +39,34 @@
         />
       </div>
     </div>
+
+    <!-- 章节目录抽屉 -->
+    <el-drawer
+      v-model="showToc"
+      title="目录"
+      direction="ltr"
+      size="320px"
+      :with-header="true"
+      class="toc-drawer"
+    >
+      <div class="toc-header-info">
+        <span>{{ novelTitle }}</span>
+        <span class="toc-count">共 {{ chapters.length }} 章</span>
+      </div>
+      <div v-loading="tocLoading" class="toc-list">
+        <div
+          v-for="ch in chapters"
+          :key="ch.chapter_number"
+          class="toc-item"
+          :class="{ active: ch.chapter_number === chapterNum }"
+          @click="jumpToChapter(ch.chapter_number)"
+        >
+          <span class="toc-num">第{{ ch.chapter_number }}章</span>
+          <span class="toc-title">{{ ch.title }}</span>
+        </div>
+        <el-empty v-if="!tocLoading && chapters.length === 0" description="暂无章节" :image-size="60" />
+      </div>
+    </el-drawer>
 
     <!-- 正文 -->
     <div class="reader-body">
@@ -110,6 +141,7 @@ import CommentSection from '@/components/CommentSection.vue';
 import SensitiveZoneGuard from '@/components/SensitiveZoneGuard.vue';
 import { shouldShowGuard, markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';
 import { frameApi } from '@/api/frame';
+import { ArrowLeft, List } from '@element-plus/icons-vue';
 
 const authStore = useAuthStore();
 
@@ -128,6 +160,39 @@ const novelAuthorId = ref(0);
 const novelWallEnabled = ref(true);
 const novelWallWarning = ref('');
 const totalChapters = ref(0);
+
+// 章节目录抽屉
+const showToc = ref(false);
+const tocLoading = ref(false);
+const chapters = ref<Chapter[]>([]);
+
+async function openToc() {
+  showToc.value = true;
+  if (chapters.value.length === 0) {
+    tocLoading.value = true;
+    try {
+      const res = await chapterApi.getChapters(novelId.value);
+      chapters.value = res.data.data || [];
+      await nextTick();
+      scrollToActiveChapter();
+    } catch { /* 目录加载失败静默 */ }
+    tocLoading.value = false;
+  } else {
+    await nextTick();
+    scrollToActiveChapter();
+  }
+}
+
+function scrollToActiveChapter() {
+  const el = document.querySelector('.toc-item.active');
+  if (el) el.scrollIntoView({ block: 'center' });
+}
+
+function jumpToChapter(num: number) {
+  showToc.value = false;
+  if (num === chapterNum.value) return;
+  goChapter(num);
+}
 
 // 自定义模板
 const headerFrames = ref<any[]>([]);
@@ -567,6 +632,66 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   padding: 60px 16px;
+}
+
+/* 章节目录抽屉 */
+.toc-header-info {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 4px 4px 12px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: var(--text-color);
+}
+.toc-count {
+  font-size: 0.8rem;
+  color: var(--text-light);
+  font-weight: 400;
+}
+.toc-list {
+  max-height: calc(100vh - 160px);
+  overflow-y: auto;
+}
+.toc-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.toc-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+[data-theme="dark"] .toc-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.toc-item.active {
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+}
+[data-theme="dark"] .toc-item.active {
+  background: rgba(96, 165, 250, 0.16);
+  color: #60a5fa;
+}
+.toc-num {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  color: var(--text-light);
+}
+.toc-item.active .toc-num {
+  color: inherit;
+}
+.toc-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 768px) {

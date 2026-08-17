@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import Home from '@/views/Home.vue';
 import { useAuthStore } from '@/stores/auth';
+import api from '@/api';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -19,6 +20,16 @@ const router = createRouter({
       path: '/register',
       name: 'register',
       component: () => import('@/views/Register.vue'),
+    },
+    // 建站向导（仅未安装时可进入，安装后永久关闭；/install 为规范入口，/setup 兼容重定向）
+    {
+      path: '/install',
+      name: 'install',
+      component: () => import('@/views/SetupWizard.vue'),
+    },
+    {
+      path: '/setup',
+      redirect: '/install',
     },
     // 旧路径（兼容）
     {
@@ -165,9 +176,33 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/security',
+      name: 'admin-security',
+      component: () => import('@/views/admin/AdminSecurity.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/emergency',
+      name: 'admin-emergency',
+      component: () => import('@/views/admin/AdminEmergency.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/community',
       name: 'admin-community',
       component: () => import('@/views/admin/AdminCommunity.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/database',
+      name: 'admin-database',
+      component: () => import('@/views/admin/AdminDatabase.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/health',
+      name: 'admin-health',
+      component: () => import('@/views/admin/AdminHealth.vue'),
       meta: { requiresAuth: true },
     },
     {
@@ -247,8 +282,34 @@ const router = createRouter({
   ],
 });
 
-// 路由守卫：需要登录的页面自动跳转
+// 建站向导状态缓存（进程内只查询一次 /api/setup/status）
+const setupState = { checked: false, installed: true };
+let setupPromise: Promise<void> | null = null;
+
+async function ensureSetupState() {
+  if (setupState.checked) return;
+  if (!setupPromise) {
+    setupPromise = (async () => {
+      try {
+        const res = await api.get('/setup/status');
+        setupState.installed = !!res.data?.data?.installed;
+      } catch {
+        setupState.installed = true; // 网络异常时放行，避免误伤
+      } finally {
+        setupState.checked = true;
+      }
+    })();
+  }
+  return setupPromise;
+}
+
+// 路由守卫：未安装 → 强制进入建站向导；需要登录的页面自动跳转
 router.beforeEach(async (to, _from, next) => {
+  await ensureSetupState();
+  if (!setupState.installed && to.path !== '/install') {
+    next('/install');
+    return;
+  }
   if (to.meta.requiresAuth) {
     const authStore = useAuthStore();
     // 如果用户信息还没加载，先尝试恢复

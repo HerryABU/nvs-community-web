@@ -93,6 +93,40 @@ export const adminApi = {
     return api.post(`/admin/forums/${id}/review`, data);
   },
 
+  // XSS 正则规则库
+  getXssRules() {
+    return api.get('/admin/xss-rules');
+  },
+  createXssRule(data: { name: string; pattern: string; action?: string; replacement?: string; enabled?: boolean; description?: string }) {
+    return api.post('/admin/xss-rules', data);
+  },
+  updateXssRule(id: number, data: { name?: string; pattern?: string; action?: string; replacement?: string; enabled?: boolean; description?: string }) {
+    return api.put(`/admin/xss-rules/${id}`, data);
+  },
+  deleteXssRule(id: number) {
+    return api.delete(`/admin/xss-rules/${id}`);
+  },
+  testXssRule(data: { pattern: string; action?: string; replacement?: string; text: string }) {
+    return api.post('/admin/xss-rules/test', data);
+  },
+
+  // 内容抢救台（二级密码 + 应急预览/硬删除）
+  setEmergencyPassword(data: { old_password?: string; new_password: string }) {
+    return api.post('/admin/emergency/set-password', data);
+  },
+  unlockEmergency(data: { password: string }) {
+    return api.post('/admin/emergency/unlock', data);
+  },
+  previewEmergencyContent(path: string, token: string) {
+    return api.get('/admin/emergency/preview', { params: { path, token } });
+  },
+  deleteEmergencyContent(path: string, token: string) {
+    return api.delete('/admin/emergency/content', { params: { path, token } });
+  },
+  getEmergencyAudit() {
+    return api.get('/admin/emergency/audit');
+  },
+
   // 隔离墙配置
   getWallConfig() {
     return api.get('/admin/wall-config');
@@ -117,10 +151,46 @@ export const adminApi = {
   syncSite(id: number) {
     return api.post(`/admin/sites/${id}/sync`);
   },
+
+  // 数据库管理（健康检查 / 迁移 / 备份 / 恢复 / 定时备份）
+  getDbHealth() {
+    return api.get('/admin/db/health');
+  },
+  getDbCurrent() {
+    return api.get('/admin/db/current');
+  },
+  migrateDb(data: { driver: string; host?: string; port?: string; user?: string; password?: string; name?: string; path?: string }) {
+    return api.post('/admin/db/migrate', data);
+  },
+  backupDb() {
+    return api.post('/admin/db/backup');
+  },
+  getDbJob(id: string) {
+    return api.get(`/admin/db/job/${id}`);
+  },
+  getBackups() {
+    return api.get('/admin/db/backups');
+  },
+  deleteBackup(name: string) {
+    return api.delete(`/admin/db/backups/${encodeURIComponent(name)}`);
+  },
+  restoreDb(name: string) {
+    return api.post('/admin/db/restore', { name });
+  },
+  getBackupConfig() {
+    return api.get('/admin/db/backup-config');
+  },
+  updateBackupConfig(data: { enabled?: boolean; interval?: number }) {
+    return api.put('/admin/db/backup-config', data);
+  },
 };
 
 // 公开接口
 export const publicApi = {
+  // 全面健康检查（服务器/数据库/Redis/网络/业务API/前端）
+  getHealth() {
+    return api.get('/health');
+  },
   getSiteInfo() {
     return api.get('/site-info');
   },

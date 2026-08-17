@@ -38,6 +38,9 @@ func CreateChapter(c *gin.Context) {
 		return
 	}
 
+	// XSS 防护：移除内联 HTML 标签（保留 Markdown 语法与文本内容）
+	req.Content = security.SanitizeUserContent(req.Content)
+
 	nextNum, _ := models.GetMaxChapterNumber(uint(novelID))
 	nextNum++
 
@@ -112,6 +115,11 @@ func UpdateChapter(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请求参数错误")
 		return
+	}
+
+	// XSS 防护：移除内联 HTML 标签（保留 Markdown 语法与文本内容）
+	if req.Content != "" {
+		req.Content = security.SanitizeUserContent(req.Content)
 	}
 
 	if req.Title != "" {

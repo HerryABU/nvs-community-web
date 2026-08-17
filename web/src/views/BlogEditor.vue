@@ -53,7 +53,7 @@ import { ArrowLeft } from '@element-plus/icons-vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import TurndownService from 'turndown';
 // engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
-import { renderMarkdown, engineConfig } from '@/markdown/renderer';
+import { renderMarkdown, editorEngineConfig } from '@/markdown/renderer';
 
 const route = useRoute();
 const router = useRouter();
@@ -97,7 +97,7 @@ async function initCherryEditor() {
         'hr', '|', 'toc', 'switchModel', 'fullScreen'],
       toolbarRight: ['togglePreview'],
     },
-    ...engineConfig,
+    ...editorEngineConfig,
     callback: { afterChange: (text: string) => { blogContent.value = text; } },
   });
   cherryReady = true;
