@@ -81,6 +81,7 @@ var (
 	DBUser     string
 	DBPassword string
 	DBName     string
+	DBPath     string // SQLite 文件路径（默认 data/nvs.db）
 	DBMemory   bool
 
 	// Redis
@@ -133,7 +134,13 @@ func Init() {
 	DBUser = getEnv("DB_USER", "nvs_user")
 	DBPassword = getEnv("DB_PASSWORD", "nvs_pass_2026")
 	DBName = getEnv("DB_NAME", "nvs")
+	DBPath = getEnv("DB_PATH", "data/nvs.db")
 	DBMemory = getEnvBool("DB_MEMORY", false)
+
+	// 4. 优先加载加密的数据库配置（覆盖 .env，密码不落明文）
+	if sc, err := LoadSecureConfig(); err == nil && sc != nil {
+		ApplySecureConfig(sc)
+	}
 
 	RedisHost = getEnv("REDIS_HOST", "127.0.0.1")
 	RedisPort = getEnv("REDIS_PORT", "6379")

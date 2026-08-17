@@ -93,7 +93,7 @@ import { ArrowLeft, Plus, Delete } from '@element-plus/icons-vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import TurndownService from 'turndown';
 // engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
-import { renderMarkdown, engineConfig } from '@/markdown/renderer';
+import { renderMarkdown, editorEngineConfig } from '@/markdown/renderer';
 
 const route = useRoute();
 const router = useRouter();
@@ -168,7 +168,7 @@ async function initCherryEditor() {
       toolbarRight: ['togglePreview'],
     },
     // 使用与阅读器相同的引擎配置
-    ...engineConfig,
+    ...editorEngineConfig,
     // 编辑器独有的配置
     callback: {
       afterChange: (text: string) => {

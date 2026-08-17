@@ -510,3 +510,57 @@
 /* ═══ Mermaid 图表样式 ═══ */
 /* 注：字体由 Mermaid 的 fontFamily 配置控制，不要用 CSS 覆盖，
    否则会导致文字测量不一致，节点中文字位置偏移 */
+
+/* ═══ 展开/收起控件（[expand] 语法，样式由类定义，避免内联 style 被 XSS 净化移除）═══ */
+.cherry-previewer details.expand-block,
+.reader-md details.expand-block,
+.blog-content details.expand-block,
+.comment-md details.expand-block,
+.thread-content details.expand-block,
+.post-content details.expand-block {
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 8px;
+  margin: 12px 0;
+  overflow: hidden;
+}
+.cherry-previewer .expand-summary,
+.reader-md .expand-summary,
+.blog-content .expand-summary,
+.comment-md .expand-summary,
+.thread-content .expand-summary,
+.post-content .expand-summary {
+  cursor: pointer;
+  padding: 10px 16px;
+  background: var(--card-bg, #f5f5f5);
+  font-weight: 600;
+  user-select: none;
+}
+.cherry-previewer .expand-body,
+.reader-md .expand-body,
+.blog-content .expand-body,
+.comment-md .expand-body,
+.thread-content .expand-body,
+.post-content .expand-body {
+  padding: 12px 16px;
+}
+
+/* ═══ Chemfig 化学结构图（\chemfig 语法，样式由类定义）═══ */
+.cherry-previewer .chemfig-container,
+.reader-md .chemfig-container,
+.blog-content .chemfig-container,
+.comment-md .chemfig-container,
+.thread-content .chemfig-container,
+.post-content .chemfig-container {
+  display: inline-block;
+  margin: 4px;
+  vertical-align: middle;
+}
+.cherry-previewer .chemfig-canvas,
+.reader-md .chemfig-canvas,
+.blog-content .chemfig-canvas,
+.comment-md .chemfig-canvas,
+.thread-content .chemfig-canvas,
+.post-content .chemfig-canvas {
+  display: none;
+}
+

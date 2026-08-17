@@ -87,7 +87,7 @@ import { adminApi } from '@/api/admin';
 import {
   User, Document, ChatLineRound, Connection,
   Refresh, ArrowRight, Setting, Collection, Lock, ChatDotRound,
-  Warning, Cpu, TrendCharts
+  Warning, Cpu, TrendCharts, Key, WarningFilled, DataLine, Monitor
 } from '@element-plus/icons-vue';
 import AnimatedNumber from '@/components/AnimatedNumber.vue';
 import DashboardCharts from '@/components/DashboardCharts.vue';
@@ -104,15 +104,19 @@ const statCardDefs = computed(() => [
   { label: '论坛数', value: stats.forums, icon: Connection, gradient: 'var(--gradient-accent)' },
 ]);
 
-// 管理功能入口
+// 管理功能入口（4×3 网格，12 项）
 const adminMenus = [
   { title: '站点设置', desc: '站点名称、SMTP、robots.txt、安全设置', path: '/admin/settings', icon: Setting, color: 'var(--gradient-blue)' },
+  { title: '数据库管理', desc: 'SQLite↔MySQL 迁移 / 多库备份', path: '/admin/database', icon: DataLine, color: 'var(--gradient-teal)' },
+  { title: '健康检查', desc: '服务器 / 数据库 / 网络 / 前端 API', path: '/admin/health', icon: Monitor, color: 'var(--gradient-success)' },
   { title: '书目分类管理', desc: '平台书目分类的增删改', path: '/admin/categories', icon: Collection, color: 'var(--gradient-purple)' },
   { title: '隔离墙配置', desc: '敏感分区列表与确认流程', path: '/admin/wall', icon: Lock, color: 'var(--gradient-accent)' },
   { title: '远程站点互通', desc: '远程 NVS 站点互联与作品同步', path: '/admin/sites', icon: Connection, color: 'var(--gradient-teal)' },
   { title: '论坛板块管理', desc: '板块增删、审查、排序', path: '/admin/forums', icon: ChatDotRound, color: 'var(--gradient-blue)' },
   { title: '举报处理', desc: '审核举报、删除违规内容', path: '/admin/reports', icon: Warning, color: 'var(--gradient-accent)' },
   { title: 'HTML 内容审查', desc: '自定义 HTML 模板/扩展人工复核', path: '/admin/html-review', icon: Cpu, color: 'var(--gradient-purple)' },
+  { title: 'XSS 规则库', desc: '维护 XSS 防御正则规则（动态更新）', path: '/admin/security', icon: Key, color: 'var(--gradient-accent)' },
+  { title: '内容抢救台', desc: '二级密码应急预览/硬删除违规内容', path: '/admin/emergency', icon: WarningFilled, color: 'var(--gradient-accent)' },
   { title: '社区动态', desc: '最近用户、作品、评论、帖子', path: '/admin/community', icon: TrendCharts, color: 'var(--gradient-teal)' },
 ];
 
@@ -414,8 +418,18 @@ onMounted(loadDashboard);
 
 .admin-menu-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
+}
+
+@media (max-width: 1000px) {
+  .admin-menu-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 760px) {
+  .admin-menu-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .admin-menu-grid { grid-template-columns: 1fr; }
 }
 
 .admin-menu-card {

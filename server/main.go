@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io/fs"
 	"log"
@@ -10,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -25,11 +25,13 @@ import (
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
-	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+// frontendBundleRe 匹配内嵌前端打包产物文件名（index-xxxx.js）
+var frontendBundleRe = regexp.MustCompile(`index-[A-Za-z0-9_-]+\.js`)
 
 func main() {
 	// 确保工作目录为 exe 所在目录（双击启动时 Windows 工作目录可能不是 exe 目录）
@@ -47,97 +49,20 @@ func main() {
 	os.MkdirAll(config.UserFrameDir, 0755)
 	os.MkdirAll(config.UserHTMLDir, 0755)
 
-	// 根据驱动连接数据库
-	var dialector gorm.Dialector
-	switch config.DBDriver {
-	case "mysql":
-		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-			config.DBUser, config.DBPassword, config.DBHost, config.DBPort, config.DBName)
-		dialector = mysql.Open(dsn)
-		log.Println("使用 MySQL 数据库")
-	case "sqlite":
-		dbPath := "data/nvs.db"
-		if config.DBMemory {
-			dbPath = ":memory:"
-			log.Println("使用 SQLite 内存数据库（重启数据丢失）")
-		} else {
-			os.MkdirAll("data", 0755)
-			log.Printf("使用 SQLite 数据库: %s", dbPath)
+	// 未完成建站向导 → 进入安装模式（不连接数据库，门禁中间件拦截业务 API）
+	// 已完成安装 → 连接数据库 + 迁移 + 初始化默认数据
+	if config.IsInstalled() {
+		if err := initDatabase(); err != nil {
+			log.Fatalf("数据库初始化失败: %v", err)
 		}
-		dialector = sqlite.Open(dbPath)
-	default:
-		// 未知驱动，默认 SQLite
-		os.MkdirAll("data", 0755)
-		dialector = sqlite.Open("data/nvs.db")
-		log.Println("使用 SQLite 数据库: data/nvs.db")
+	} else {
+		setupKey := config.GetOrCreateSetupKey()
+		log.Println("========================================")
+		log.Println("  首次运行：进入建站向导模式（尚未连接数据库）")
+		log.Printf("  向导地址: http://localhost:%s/install", config.ServerPort)
+		log.Printf("  安装密钥（一次性，仅显示一次，切勿泄露）: %s", setupKey)
+		log.Println("========================================")
 	}
-
-	var err error
-	models.DB, err = gorm.Open(dialector, &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn),
-	})
-	if err != nil {
-		log.Fatalf("数据库连接失败: %v", err)
-	}
-
-	if config.DBDriver == "mysql" {
-		sqlDB, _ := models.DB.DB()
-		sqlDB.SetMaxIdleConns(10)
-		sqlDB.SetMaxOpenConns(100)
-		sqlDB.SetConnMaxLifetime(time.Hour)
-
-		// MySQL 模式 → 自动启用 Redis 缓存
-		if config.RedisHost != "" {
-			utils.RedisClient = redis.NewClient(&redis.Options{
-				Addr:     fmt.Sprintf("%s:%s", config.RedisHost, config.RedisPort),
-				Password: config.RedisPassword,
-				DB:       config.RedisDB,
-			})
-			_, err := utils.RedisClient.Ping(context.Background()).Result()
-			if err != nil {
-				log.Printf("[Redis] 连接失败: %v，验证码将使用内存存储", err)
-				utils.RedisClient = nil
-			} else {
-				log.Printf("[Redis] 已连接 %s:%s (DB %d)，验证码/限流使用 Redis 存储", config.RedisHost, config.RedisPort, config.RedisDB)
-			}
-		}
-	}
-
-	if config.DBDriver == "sqlite" && config.DBMemory {
-		log.Println("[SQLite] 内存模式：验证码和限流使用进程内存储")
-	}
-
-	if err := models.DB.AutoMigrate(
-		&models.User{},
-		&models.Novel{},
-		&models.NovelCategory{},
-		&models.Chapter{},
-		&models.Comment{},
-		&models.Rating{},
-		&models.Forum{},
-		&models.Thread{},
-		&models.Post{},
-		&models.ForumMute{},
-		&models.VipApplication{},
-		&models.Report{},
-		&models.WithdrawalRequest{},
-		&models.EarningsRecord{},
-		&models.BlacklistIP{},
-		&models.PlatformConfig{},
-		&models.FederatedSite{},
-		&models.FederatedNovel{},
-		&models.BookShelf{},
-		&models.Follow{},
-		&models.AuthorBlog{},
-		&models.UserFrame{},
-		&models.UserHTML{},
-	); err != nil {
-		log.Fatalf("数据库迁移失败: %v", err)
-	}
-	models.InitDefaultForums()
-	models.InitPlatformConfigs()
-	initDefaultAdmin()
-	log.Println("数据库迁移完成")
 
 	// 设置 SMTP 配置提供者（从平台配置读取）
 	utils.SMTPConfigProvider = func() utils.SMTPConfig {
@@ -157,17 +82,35 @@ func main() {
 	r.Use(gzip.Gzip(gzip.DefaultCompression))
 	r.Use(middleware.SandboxWriteProtect()) // 🔒 允许数据文件，拦截脚本
 
+	// 建站向导门禁：未完成安装时，除 /api/setup/* 与 /health 外，拦截所有业务 API（严防死守）
+	r.Use(func(c *gin.Context) {
+		if config.IsInstalled() {
+			c.Next()
+			return
+		}
+		p := c.Request.URL.Path
+		if strings.HasPrefix(p, "/api/setup") || p == "/health" || p == "/api/health" {
+			c.Next()
+			return
+		}
+		if strings.HasPrefix(p, "/api/") {
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
+				"code":    5,
+				"message": "系统尚未完成初始化，请先完成建站向导",
+				"data":    gin.H{"setup_required": true},
+			})
+			return
+		}
+		c.Next()
+	})
+
 	// 注入 gin 引擎供 API 聚合中间层（/api/batch）内存内转发使用
 	handlers.BatchEngine = r
 
-	// 健康检查：浏览器 → HTML 页面，API 请求 → JSON
+	// 健康检查：浏览器 → HTML 页面，API 请求 → 完整 JSON 健康报告
 	r.GET("/health", func(c *gin.Context) {
 		if strings.Contains(c.GetHeader("Accept"), "application/json") {
-			c.JSON(http.StatusOK, gin.H{
-				"status":  "ok",
-				"service": "nvs-server",
-				"version": "1.0.0",
-			})
+			c.JSON(http.StatusOK, handlers.CollectHealth())
 			return
 		}
 		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(`<!DOCTYPE html>
@@ -192,6 +135,22 @@ func main() {
 </div>
 </body></html>`))
 	})
+
+	// /api/health：始终返回 JSON 健康报告（供前端/监控调用）
+	r.GET("/api/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, handlers.CollectHealth())
+	})
+
+	// 建站向导路由：status 始终可用（供前端判断是否已安装）；
+	// 安装/环境检查/测试连接接口仅在未安装时挂载，安装完成后由 setupGuard 直接 404（路由级注销）。
+	r.GET("/api/setup/status", handlers.SetupStatus)
+	if !config.IsInstalled() {
+		setupGroup := r.Group("/api/setup")
+		setupGroup.Use(setupGuard())
+		setupGroup.GET("/env-check", handlers.SetupEnvCheck)
+		setupGroup.POST("/db-test", handlers.SetupDBTest)
+		setupGroup.POST("/install", handlers.SetupInstall)
+	}
 
 	// ==================== API 路由 ====================
 
@@ -375,6 +334,30 @@ func main() {
 		admin.PUT("/forums/:id", handlers.AdminUpdateForum)
 		admin.DELETE("/forums/:id", handlers.AdminDeleteForum)
 		admin.POST("/forums/:id/review", handlers.AdminReviewForum)
+		// XSS 正则规则库（管理员维护）
+		admin.GET("/xss-rules", handlers.ListXssRules)
+		admin.POST("/xss-rules", handlers.CreateXssRule)
+		admin.PUT("/xss-rules/:id", handlers.UpdateXssRule)
+		admin.DELETE("/xss-rules/:id", handlers.DeleteXssRule)
+		admin.POST("/xss-rules/test", handlers.TestXssRule)
+		// 内容抢救台（二级密码 + 应急预览/硬删除；unlock 加 IP 限流防爆破）
+		admin.POST("/emergency/set-password", handlers.SetEmergencyPassword)
+		admin.POST("/emergency/unlock", security.RateLimit(10, 60), handlers.UnlockEmergency)
+		admin.GET("/emergency/preview", handlers.PreviewEmergencyContent)
+		admin.DELETE("/emergency/content", handlers.DeleteEmergencyContent)
+		admin.GET("/emergency/audit", handlers.ListEmergencyAudit)
+		// 数据库管理（健康检查 / 迁移 / 备份 / 恢复 / 定时备份）
+		admin.GET("/db/health", handlers.AdminDBHealth)
+		admin.GET("/db/current", handlers.AdminDBCurrent)
+		admin.POST("/db/migrate", handlers.AdminDBMigrate)
+		admin.POST("/db/backup", handlers.AdminDBBackup)
+		admin.GET("/db/job/:id", handlers.AdminDBJob)
+		admin.GET("/db/backups", handlers.AdminDBListBackups)
+		admin.DELETE("/db/backups/:name", handlers.AdminDBDeleteBackup)
+		admin.GET("/db/backups/:name/download", handlers.AdminDBDownloadBackup)
+		admin.POST("/db/restore", handlers.AdminDBRestore)
+		admin.GET("/db/backup-config", handlers.AdminDBBackupConfigGet)
+		admin.PUT("/db/backup-config", handlers.AdminDBBackupConfigPut)
 	}
 
 	// 远程站点公开接口
@@ -435,8 +418,31 @@ func main() {
 		log.Fatalf("前端资源加载失败（dist 目录不存在，请先运行 npm run build）: %v", err)
 	}
 
+	// 注入前端资源探针（供 /health 检查前端 SPA 是否可服务）
+	handlers.FrontendProbe = func() (string, bool) {
+		indexBytes, err := fs.ReadFile(frontendFS, "index.html")
+		if err != nil {
+			return "", false
+		}
+		re := frontendBundleRe.FindString(string(indexBytes))
+		if re == "" {
+			return "", false
+		}
+		if _, err := fs.Stat(frontendFS, "assets/"+re); err != nil {
+			return re, false
+		}
+		return re, true
+	}
+
 	r.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
+
+		// 安装完成后：向导入口与安装 API 一律 404（路由级注销，连判断文件存在的机会都不给）
+		if config.IsInstalled() &&
+			(strings.HasPrefix(path, "/api/setup") || path == "/install" || path == "/setup") {
+			c.Status(http.StatusNotFound)
+			return
+		}
 
 		// robots.txt（站长可在后台自定义，兼容尾斜杠/大小写变体）
 		normalizedPath := strings.ToLower(strings.TrimSuffix(path, "/"))
@@ -518,6 +524,9 @@ func main() {
 	configureFirewall(config.ServerPort)
 
 	log.Println("前端已内嵌，无需额外启动 Nginx 或 npm run dev")
+
+	// 启动定时备份调度器（按平台配置 interval 自动备份）
+	models.StartBackupScheduler()
 
 	if err := r.Run(listenAddr); err != nil {
 		log.Fatalf("服务器启动失败: %v", err)
@@ -632,6 +641,77 @@ func configureFirewall(port string) {
 	}
 	_ = output
 	log.Println("[firewall] Windows 防火墙规则已添加")
+}
+
+// setupGuard 建站向导路由守卫：安装完成后直接 404（路由级注销，不触达任何 handler）
+func setupGuard() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if config.IsInstalled() {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
+		c.Next()
+	}
+}
+
+// initDatabase 连接数据库、执行迁移、初始化默认数据与默认管理员
+func initDatabase() error {
+	var dialector gorm.Dialector
+	switch config.DBDriver {
+	case "mysql":
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+			config.DBUser, config.DBPassword, config.DBHost, config.DBPort, config.DBName)
+		dialector = mysql.Open(dsn)
+		log.Println("使用 MySQL 数据库")
+	case "sqlite":
+		dbPath := config.DBPath
+		if dbPath == "" {
+			dbPath = "data/nvs.db"
+		}
+		if config.DBMemory {
+			dbPath = ":memory:"
+			log.Println("使用 SQLite 内存数据库（重启数据丢失）")
+		} else {
+			os.MkdirAll(filepath.Dir(dbPath), 0755)
+			log.Printf("使用 SQLite 数据库: %s", dbPath)
+		}
+		dialector = sqlite.Open(dbPath)
+	default:
+		os.MkdirAll("data", 0755)
+		dialector = sqlite.Open("data/nvs.db")
+		log.Println("使用 SQLite 数据库: data/nvs.db")
+	}
+
+	var err error
+	models.DB, err = gorm.Open(dialector, &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Warn),
+	})
+	if err != nil {
+		return err
+	}
+
+	if config.DBDriver == "mysql" {
+		sqlDB, _ := models.DB.DB()
+		sqlDB.SetMaxIdleConns(10)
+		sqlDB.SetMaxOpenConns(100)
+		sqlDB.SetConnMaxLifetime(time.Hour)
+		// MySQL 模式 → 自动启用 Redis 缓存
+		utils.ConnectRedis(config.RedisHost, config.RedisPort, config.RedisPassword, config.RedisDB)
+	}
+
+	if config.DBDriver == "sqlite" && config.DBMemory {
+		log.Println("[SQLite] 内存模式：验证码和限流使用进程内存储")
+	}
+
+	if err := models.AutoMigrateAll(models.DB); err != nil {
+		return err
+	}
+	models.InitDefaultForums()
+	models.InitPlatformConfigs()
+	handlers.ReloadXssRules() // 加载管理员配置的 XSS 正则规则
+	initDefaultAdmin()
+	log.Println("数据库迁移完成")
+	return nil
 }
 
 // initDefaultAdmin 如果数据库中没有管理员，自动创建默认管理员账号
