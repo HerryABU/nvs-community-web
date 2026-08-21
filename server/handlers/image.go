@@ -25,7 +25,7 @@ import (
 
 // POST /api/author/image — 作者上传图片（重新编码防图片马）
 func UploadImage(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 
 	file, header, err := c.Request.FormFile("image")
 	if err != nil {
@@ -145,7 +145,7 @@ func minInt(a, b int) int {
 
 // PUT /api/author/profile — 更新作者资料（签名、隔离开关）
 func UpdateAuthorProfile(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 
 	var req struct {
 		Signature   *string `json:"signature"`

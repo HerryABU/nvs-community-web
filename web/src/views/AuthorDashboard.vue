@@ -197,6 +197,34 @@
           </div>
         </div>
       </div>
+
+      <!-- 封禁内容（176号令合规告知） -->
+      <div class="novels-section banned-section" v-if="bannedContent.novels.length > 0 || bannedContent.chapters.length > 0">
+        <h2 class="section-title-bar">
+          <span class="title-bar-text">已封禁内容</span>
+          <span class="title-bar-count">{{ bannedContent.novels.length + bannedContent.chapters.length }} 项</span>
+        </h2>
+        <el-alert type="warning" :closable="false" show-icon style="margin-bottom: 12px"
+          title="以下内容因违反平台合规规范（176号令）被封禁，如有异议请联系平台申诉。" />
+        <div class="banned-list">
+          <div v-for="n in bannedContent.novels" :key="'n' + n.id" class="banned-item">
+            <div class="banned-head">
+              <el-tag type="danger" size="small">小说</el-tag>
+              <span class="banned-title">《{{ n.title }}》</span>
+            </div>
+            <div class="banned-reason"><span class="banned-label">封禁原因：</span>{{ n.ban_reason || '未填写' }}</div>
+            <div class="banned-time">封禁时间：{{ formatDate(n.banned_at) }}</div>
+          </div>
+          <div v-for="c in bannedContent.chapters" :key="'c' + c.id" class="banned-item">
+            <div class="banned-head">
+              <el-tag type="danger" size="small">章节</el-tag>
+              <span class="banned-title">《{{ c.novel_title }}》第{{ c.chapter_number }}章 {{ c.title }}</span>
+            </div>
+            <div class="banned-reason"><span class="banned-label">封禁原因：</span>{{ c.ban_reason || '未填写' }}</div>
+            <div class="banned-time">封禁时间：{{ formatDate(c.banned_at) }}</div>
+          </div>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -226,6 +254,21 @@ const authStore = useAuthStore();
 const novels = ref<Novel[]>([]);
 const loadingNovels = ref(false);
 const exportingId = ref(0);
+
+// 被封禁（176号令）的小说/章节及原因
+const bannedContent = ref<{ novels: any[]; chapters: any[] }>({ novels: [], chapters: [] });
+async function loadBannedContent() {
+  try {
+    const res = await novelApi.getBannedContent();
+    if (res.data.code === 0) {
+      const d = res.data.data || {};
+      bannedContent.value = {
+        novels: Array.isArray(d.novels) ? d.novels : [],
+        chapters: Array.isArray(d.chapters) ? d.chapters : [],
+      };
+    }
+  } catch { /* ignore */ }
+}
 
 // 隔离墙开关
 const wallToggling = ref(0);
@@ -526,6 +569,7 @@ onMounted(() => {
   loadSensitiveZones();
   loadMyBlogs();
   loadHtmlStats();
+  loadBannedContent();
 });
 
 // 从编辑页面返回时自动刷新
@@ -538,6 +582,7 @@ watch(
       loadNovels();
       loadMyBlogs();
       loadHtmlStats();
+      loadBannedContent();
     }
     lastPath = newPath;
   }
@@ -749,6 +794,24 @@ watch(
   color: var(--text-light);
   background: var(--bg-color);
 }
+
+/* ===== 封禁内容（176号令） ===== */
+.banned-section { margin-top: 32px; }
+.banned-list { display: flex; flex-direction: column; gap: 12px; }
+.banned-item {
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+}
+.banned-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.banned-title { font-weight: 600; color: #e2e8f0; }
+[data-theme="light"] .banned-title { color: var(--text-color); }
+.banned-reason { font-size: 0.88rem; color: #fca5a5; line-height: 1.5; }
+[data-theme="light"] .banned-reason { color: #b91c1c; }
+.banned-label { font-weight: 600; }
+.banned-time { font-size: 0.78rem; color: rgba(255,255,255,0.45); margin-top: 4px; }
+[data-theme="light"] .banned-time { color: var(--text-light); }
 
 /* ===== 作品卡片 ===== */
 .novel-card-grid {

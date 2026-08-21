@@ -48,6 +48,10 @@ var htmlSanitizer = bluemonday.UGCPolicy()
 
 // GET /api/novels
 func ListNovels(c *gin.Context) {
+	// 联邦同步会携带 source_name/source_url 自报身份，此时记录入站连接（谁连了我）
+	if c.Query("source_name") != "" || c.Query("source_url") != "" {
+		recordInbound(c, "novels")
+	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	category := c.Query("category")

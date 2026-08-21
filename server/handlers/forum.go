@@ -12,7 +12,7 @@ import (
 
 // GET /api/forums — 论坛列表
 func ListForums(c *gin.Context) {
-	userID := c.GetUint("userID") // 公开路由未登录时为 0
+	userID := currentUserID(c) // 公开路由未登录时为 0
 	ftype := c.DefaultQuery("type", "general")
 	parentIDStr := c.Query("parent_id")
 
@@ -79,7 +79,7 @@ func listCustomForums(userID uint) []models.Forum {
 
 // GET /api/forums/:id — 论坛详情+帖子列表+子论坛
 func GetForum(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	forumID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if page < 1 {
@@ -128,7 +128,7 @@ func GetForum(c *gin.Context) {
 
 // POST /api/forums/:id/threads — 发帖
 func CreateThread(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	forumID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || forumID == 0 {
 		utils.BadRequest(c, "无效的论坛ID")
@@ -208,7 +208,7 @@ func GetThread(c *gin.Context) {
 
 // POST /api/threads/:id/posts — 回复帖子
 func CreatePost(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	threadID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || threadID == 0 {
 		utils.BadRequest(c, "无效的帖子ID")

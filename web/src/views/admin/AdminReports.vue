@@ -1,11 +1,8 @@
 <template>
   <div class="admin-page">
-    <div class="admin-page-header">
-      <el-button text @click="$router.push('/admin')"><el-icon><ArrowLeft /></el-icon> 返回后台</el-button>
-      <h2>举报处理</h2>
-    </div>
-    <div class="admin-page-body">
-      <p class="hint-text">处理用户举报：判定成立/不成立，成立时可选择删除被举报内容。</p>
+    <AdminHeader title="举报处理" subtitle="审核举报、删除违规内容（软删除留证）" :icon="Warning" />
+    <div class="admin-page-body admin-panel">
+      <p class="hint-text">处理用户举报：判定成立/不成立，成立时可选择删除被举报内容（删除会先归档到 softdel 表再软删除，全程留证）。</p>
 
       <div class="toolbar">
         <el-radio-group v-model="filterStatus" @change="load">
@@ -82,7 +79,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { ArrowLeft, Refresh } from '@element-plus/icons-vue';
+import { Refresh, Warning } from '@element-plus/icons-vue';
+import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage } from 'element-plus';
 

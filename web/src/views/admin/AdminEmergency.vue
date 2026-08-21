@@ -1,18 +1,14 @@
 <template>
   <div class="admin-page">
-    <div class="admin-page-header">
-      <el-button text @click="$router.push('/admin')"><el-icon><ArrowLeft /></el-icon> 返回后台</el-button>
-      <h2>内容抢救台</h2>
-    </div>
-
-    <div class="admin-page-body">
+    <AdminHeader title="内容抢救台" subtitle="二级密码应急预览 / 软删除留证" :icon="WarningFilled" color="var(--gradient-accent)" />
+    <div class="admin-page-body admin-panel">
       <el-alert
         type="warning"
         :closable="false"
         show-icon
         style="margin-bottom: 16px"
         title="隔离的应急窗口 · 强入口封锁"
-        description="无需知道内部 ID——直接粘贴站内 URL 路径（如 /thread/123、/blog/5、/novel/3）即可定位并预览，确认后硬删除。所有操作需先通过二级密码解锁（5 分钟有效），删除走后端业务 API（含日志与统计回退），物理删除后不可恢复。"
+        description="无需知道内部 ID——直接粘贴站内 URL 路径（如 /novel/3、/thread/123、/blog/5）即可定位并预览，确认后软删除（留证）。输入小说/博客 URL 会展示其全部评论，输入帖子 URL 会展示全部回复。所有操作需先通过二级密码解锁（5 分钟有效），删除会先将完整内容快照归档到 softdel_ 表再软删除，全程可追溯。"
       />
 
       <!-- 二级密码解锁 -->
@@ -48,7 +44,8 @@
           />
           <el-button type="primary" :loading="previewing" @click="doPreview">拉取预览</el-button>
           <div class="em-path-hint">
-            支持：/thread/:id /post/:id /comment/:id /blog/:id /novel/:id /forum/:id，也兼容 /author/:aid/... 与完整 URL
+            支持：/thread/:id /post/:id /comment/:id /blog/:id /novel/:id /chapter/:id /novel/:id/read/:num /forum/:id，也兼容 /author/:aid/... 与完整 URL
+            · 输入小说 / 博客 / 帖子 URL 会展示其全部评论或回复，输入章节 URL 会展示章节正文
           </div>
         </div>
 
@@ -64,6 +61,38 @@
           </div>
 
           <div v-if="preview.title" class="em-title">标题：{{ preview.title }}</div>
+
+          <!-- 关联评论 / 回复（小说/博客/帖子等）——输入 URL 优先展示所有评论 -->
+          <div v-if="preview.comments" class="em-comments">
+            <div class="em-comments-head">
+              全部评论 / 回复（共 {{ preview.comments.length }} 条）
+              <span class="em-comments-tip">每条评论可独立切换「纯文本 / iframe 沙箱」隔离渲染</span>
+            </div>
+            <el-empty v-if="preview.comments.length === 0" description="暂无评论" :image-size="60" />
+            <div v-for="c in preview.comments" :key="c.id" class="em-comment-item">
+              <div class="em-comment-meta">
+                <span class="em-comment-author">{{ c.author || '匿名' }}</span>
+                <el-tag v-if="c.chapter" size="small" type="info">第{{ c.chapter }}章</el-tag>
+                <el-tag size="small" type="info" effect="plain">{{ c.type === 'post' ? '回复' : '评论' }}</el-tag>
+                <span class="em-comment-id">#{{ c.id }}</span>
+                <span class="em-comment-time">{{ formatTime(c.created_at) }}</span>
+                <el-button
+                  size="small" type="danger" text
+                  :loading="deletingId === c.id"
+                  @click="deleteSubItem(c)"
+                >删除</el-button>
+              </div>
+              <!-- 单条评论：纯文本 / iframe 沙箱 隔离渲染切换 -->
+              <div class="em-comment-view-switch">
+                <el-radio-group :model-value="commentMode(c.id)" size="small" @update:model-value="commentModes[c.id] = $event">
+                  <el-radio-button value="plain">纯文本</el-radio-button>
+                  <el-radio-button value="iframe">iframe 渲染</el-radio-button>
+                </el-radio-group>
+              </div>
+              <pre v-if="commentMode(c.id) === 'plain'" class="em-comment-plain">{{ c.content_plain || c.content }}</pre>
+              <iframe v-else :srcdoc="c.content || ''" sandbox="allow-same-origin allow-scripts" class="em-comment-iframe" title="评论渲染预览" />
+            </div>
+          </div>
 
           <!-- 纯文本 / iframe 沙箱 切换 -->
           <div class="em-view-switch">
@@ -87,10 +116,10 @@
             <div class="em-iframe-tip">已用 sandbox 隔离（禁顶层跳转、禁表单），恶意脚本无法逃逸或影响后台。</div>
           </div>
 
-          <!-- 硬删除 -->
+          <!-- 软删除（留证） -->
           <div class="em-danger">
             <el-button type="danger" :loading="deleting" @click="doDelete">
-              硬删除（物理删除，不可恢复）
+              软删除（归档留证，可追溯）
             </el-button>
           </div>
         </template>
@@ -145,7 +174,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onBeforeUnmount, onMounted } from 'vue';
-import { ArrowLeft, Lock, Search, WarningFilled } from '@element-plus/icons-vue';
+import { Lock, Search, WarningFilled } from '@element-plus/icons-vue';
+import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
@@ -161,6 +191,13 @@ const previewing = ref(false);
 const preview = ref<any>(null);
 const viewMode = ref('plain');
 const deleting = ref(false);
+const deletingId = ref<number | null>(null);
+
+// 每条评论独立的「纯文本 / iframe 沙箱」渲染模式（按评论 id 记录）
+const commentModes = reactive<Record<number, string>>({});
+function commentMode(id: number) {
+  return commentModes[id] || 'plain';
+}
 
 const showSetPassword = ref(false);
 const setting = ref(false);
@@ -222,13 +259,13 @@ async function doDelete() {
   if (!preview.value) { ElMessage.warning('请先拉取内容预览'); return; }
   try {
     await ElMessageBox.confirm(
-      `确定要物理删除这条${typeLabel(preview.value.type)}（${preview.value.path || preview.value.id}）吗？此操作不可恢复！`,
+      `确定要软删除这条${typeLabel(preview.value.type)}（${preview.value.path || preview.value.id}）吗？删除前会归档留证到 softdel 表，原始记录软删除（可追溯）。`,
       '危险操作确认',
-      { type: 'error', confirmButtonText: '硬删除', cancelButtonText: '取消' },
+      { type: 'error', confirmButtonText: '软删除并留证', cancelButtonText: '取消' },
     );
     deleting.value = true;
     await adminApi.deleteEmergencyContent(contentPath.value.trim(), token.value);
-    ElMessage.success('已物理删除');
+    ElMessage.success('已软删除并留证');
     preview.value = null;
     contentPath.value = '';
   } catch (e: any) {
@@ -236,6 +273,31 @@ async function doDelete() {
     ElMessage.error(e?.response?.data?.message || '删除失败');
   }
   deleting.value = false;
+}
+
+// 删除预览列表中的单条评论 / 回复（归档留证 + 软删除）
+async function deleteSubItem(item: any) {
+  if (!unlocked.value) { ElMessage.warning('请先解锁二级密码'); return; }
+  if (!token.value) { ElMessage.warning('二级密码 token 已失效，请重新解锁'); return; }
+  const kind = item.type === 'post' ? '回复' : '评论';
+  try {
+    await ElMessageBox.confirm(
+      `确定要软删除这条${kind}（#${item.id}，作者 ${item.author || '未知'}）吗？删除前会归档留证到 softdel 表。`,
+      '危险操作确认',
+      { type: 'error', confirmButtonText: '软删除', cancelButtonText: '取消' },
+    );
+    deletingId.value = item.id;
+    const path = `/${item.type === 'post' ? 'post' : 'comment'}/${item.id}`;
+    await adminApi.deleteEmergencyContent(path, token.value);
+    ElMessage.success('已软删除并留证');
+    if (preview.value?.comments) {
+      preview.value.comments = preview.value.comments.filter((x: any) => x.id !== item.id);
+    }
+  } catch (e: any) {
+    if (e === 'cancel' || e === 'close') return;
+    ElMessage.error(e?.response?.data?.message || '删除失败');
+  }
+  deletingId.value = null;
 }
 
 async function doSetPassword() {
@@ -263,7 +325,7 @@ async function doSetPassword() {
 }
 
 function typeLabel(t: string) {
-  const map: Record<string, string> = { comment: '评论', thread: '帖子', post: '回复', blog: '博客', novel: '作品', forum: '论坛板块' };
+  const map: Record<string, string> = { comment: '评论', thread: '帖子', post: '回复', blog: '博客', novel: '作品', chapter: '章节', forum: '论坛板块', user: '用户', report: '举报' };
   return map[t] || t;
 }
 
@@ -277,11 +339,21 @@ async function loadAudit() {
 }
 
 function actionTag(a: string) {
-  const map: Record<string, string> = { unlock: 'success', unlock_fail: 'danger', preview: 'info', delete: 'danger', set_password: 'warning' };
+  const map: Record<string, string> = {
+    unlock: 'success', unlock_fail: 'danger', preview: 'info', delete: 'danger', set_password: 'warning',
+    content_delete: 'danger', content_hide: 'warning', content_restore: 'success',
+    user_mute: 'warning', user_unmute: 'success', user_ban: 'danger', user_unban: 'success',
+    report_handle: 'info',
+  };
   return (map[a] as any) || 'info';
 }
 function actionLabel(a: string) {
-  const map: Record<string, string> = { unlock: '解锁', unlock_fail: '解锁失败', preview: '预览', delete: '删除', set_password: '改密码' };
+  const map: Record<string, string> = {
+    unlock: '解锁', unlock_fail: '解锁失败', preview: '预览', delete: '软删除', set_password: '改密码',
+    content_delete: '删除内容', content_hide: '屏蔽内容', content_restore: '恢复内容',
+    user_mute: '禁言', user_unmute: '解除禁言', user_ban: '封禁', user_unban: '解封',
+    report_handle: '举报处理',
+  };
   return map[a] || a;
 }
 function formatTime(s?: string) {
@@ -303,6 +375,21 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer); });
 .em-unlock, .em-fetch { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .em-path-hint { width: 100%; font-size: 0.78rem; color: var(--text-light, #999); }
 .em-title { margin-bottom: 10px; font-weight: 600; color: var(--text-color, #333); }
+.em-comments { margin-bottom: 12px; }
+.em-comments-head { font-weight: 600; color: var(--text-color, #333); margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color, #e5e7eb); }
+.em-comment-item { padding: 8px 10px; margin-bottom: 8px; background: #f8fafc; border: 1px solid #eef2f7; border-radius: 6px; }
+.em-comment-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.em-comment-author { font-weight: 600; color: #4f46e5; }
+.em-comment-id { color: var(--text-light, #999); font-size: 0.8rem; }
+.em-comment-time { color: var(--text-light, #999); font-size: 0.8rem; margin-left: auto; }
+.em-comment-content { color: var(--text-color, #333); font-size: 0.88rem; white-space: pre-wrap; word-break: break-all; }
+.em-comments-tip { font-weight: 400; font-size: 0.75rem; color: var(--text-light, #999); margin-left: 8px; }
+.em-comment-view-switch { margin: 4px 0 6px; }
+.em-comment-plain { margin: 0; padding: 8px 10px; background: #f8fafc; border: 1px solid #eef2f7; border-radius: 6px; font-size: 0.86rem; white-space: pre-wrap; word-break: break-all; color: #333; }
+.em-comment-iframe { width: 100%; height: 180px; border: 1px solid #ccc; border-radius: 6px; background: #fff; }
+[data-theme="dark"] .em-comment-item { background: #0f172a; border-color: #334155; }
+[data-theme="dark"] .em-comment-content { color: #cbd5e1; }
+[data-theme="dark"] .em-comment-plain { background: #0f172a; border-color: #334155; color: #cbd5e1; }
 .em-meta { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; color: var(--text-color, #333); }
 .em-meta code { background: #eef2ff; color: #4f46e5; padding: 1px 6px; border-radius: 4px; font-size: 0.85rem; }
 .em-view-switch { margin-bottom: 12px; }

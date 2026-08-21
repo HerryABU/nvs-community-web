@@ -43,13 +43,13 @@
           <el-button v-if="!isMuted(row)" size="small" type="warning" plain @click="openMute(row)">禁言</el-button>
           <el-button v-else size="small" type="success" plain @click="doUnmute(row)">解禁</el-button>
           <el-popconfirm
-            title="确定要删除该用户吗？此操作不可恢复。"
-            confirm-button-text="删除"
+            title="确定要封禁该用户吗？将软删除并留证到 softdel 表（可追溯）。"
+            confirm-button-text="封禁"
             cancel-button-text="取消"
             @confirm="doDelete(row.id)"
           >
             <template #reference>
-              <el-button size="small" type="danger" plain>删除</el-button>
+              <el-button size="small" type="danger" plain>封禁</el-button>
             </template>
           </el-popconfirm>
         </template>
@@ -184,10 +184,10 @@ async function doSave() {
 async function doDelete(id: number) {
   try {
     await adminApi.deleteUser(id);
-    ElMessage.success('已删除');
+    ElMessage.success('已封禁（软删除并留证）');
     loadUsers();
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.message || '删除失败');
+    ElMessage.error(e?.response?.data?.message || '操作失败');
   }
 }
 

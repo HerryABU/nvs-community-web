@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -34,6 +35,19 @@ func ListUsers(c *gin.Context) {
 	utils.Success(c, gin.H{"list": users, "total": total})
 }
 
+// GET /api/admin/users/audit — 用户行为审计日志（176号令合规查询，可按 user_id/action 筛选）
+func ListUserAuditLogs(c *gin.Context) {
+	if !ensureAdmin(c) { return }
+	userID, _ := strconv.ParseUint(c.Query("user_id"), 10, 64)
+	action := c.Query("action")
+	logs, err := models.ListUserAuditLogs(uint(userID), action, 500)
+	if err != nil {
+		utils.InternalError(c, "获取审计日志失败")
+		return
+	}
+	utils.Success(c, logs)
+}
+
 // PUT /api/admin/users/:id — 修改用户（支持 role、nickname、email）
 func UpdateUser(c *gin.Context) {
 	if !ensureAdmin(c) { return }
@@ -61,20 +75,27 @@ func UpdateUser(c *gin.Context) {
 	utils.Success(c, gin.H{"message": "更新成功"})
 }
 
-// DELETE /api/admin/users/:id — 删除用户
+// DELETE /api/admin/users/:id — 删除/封禁用户（软删除 + 留证）
 func DeleteUser(c *gin.Context) {
 	if !ensureAdmin(c) { return }
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	// 不能删除自己
-	adminID := c.GetUint("userID")
+	adminID := currentUserID(c)
 	if uint(id) == adminID {
 		utils.BadRequest(c, "不能删除自己的账户")
 		return
 	}
 
-	models.DB.Delete(&models.User{}, id)
-	utils.Success(c, gin.H{"message": "用户已删除"})
+	if err := softDeleteContent(c, "user", uint(id), "管理员封禁/删除用户", "admin", "ban"); err != nil {
+		if err == errContentNotFound {
+			utils.NotFound(c, "用户不存在")
+		} else {
+			utils.InternalError(c, err.Error())
+		}
+		return
+	}
+	utils.Success(c, gin.H{"message": "用户已封禁（软删除并留证）"})
 }
 
 // POST /api/admin/users/:id/mute — 全局禁言用户
@@ -98,6 +119,14 @@ func MuteUser(c *gin.Context) {
 		"muted_until": until,
 		"mute_reason": security.SanitizePlainText(req.Reason),
 	})
+	// 合规审计：禁言用户
+	duration := "永久"
+	if req.DurationHours > 0 {
+		duration = fmt.Sprintf("%d 小时", req.DurationHours)
+	}
+	auditEmergency(c, models.AuditUserMute, "user", uint(id),
+		fmt.Sprintf("管理员禁言用户ID %d，时长 %s，原因：%s",
+			id, duration, security.SanitizePlainText(req.Reason)))
 	utils.Success(c, gin.H{"message": "已禁言"})
 }
 
@@ -110,5 +139,8 @@ func UnmuteUser(c *gin.Context) {
 		"muted_until": nil,
 		"mute_reason": "",
 	})
+	// 合规审计：解除禁言
+	auditEmergency(c, models.AuditUserUnmute, "user", uint(id),
+		fmt.Sprintf("管理员解除禁言用户ID %d", id))
 	utils.Success(c, gin.H{"message": "已解除禁言"})
 }

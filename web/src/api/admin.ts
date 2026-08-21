@@ -31,6 +31,9 @@ export const adminApi = {
   getUsers(page: number = 1, search?: string) {
     return api.get('/admin/users', { params: search ? { page, search } : { page } });
   },
+  getUserAuditLogs(params?: { user_id?: number; action?: string }) {
+    return api.get('/admin/users/audit', { params });
+  },
   updateUser(id: number, data: { role?: string; nickname?: string; email?: string }) {
     return api.put(`/admin/users/${id}`, data);
   },
@@ -110,7 +113,7 @@ export const adminApi = {
     return api.post('/admin/xss-rules/test', data);
   },
 
-  // 内容抢救台（二级密码 + 应急预览/硬删除）
+  // 内容抢救台（二级密码 + 应急预览/软删除留证）
   setEmergencyPassword(data: { old_password?: string; new_password: string }) {
     return api.post('/admin/emergency/set-password', data);
   },
@@ -127,6 +130,25 @@ export const adminApi = {
     return api.get('/admin/emergency/audit');
   },
 
+  // 内容治理（软删除 + softdel_ 留证）
+  getSoftDel(type?: string) {
+    return api.get('/admin/softdel', { params: type ? { type } : {} });
+  },
+  moderateContent(data: { type: string; id: number; reason?: string; action?: string }) {
+    return api.post('/admin/softdel', data);
+  },
+  restoreContent(data: { type: string; id: number }) {
+    return api.post('/admin/softdel/restore', data);
+  },
+
+  // 小说/章节封禁管理（管理员视角，含封禁状态）
+  getAdminNovels(params?: { search?: string; page?: number; page_size?: number }) {
+    return api.get('/admin/novels', { params });
+  },
+  getAdminChapters(novelId: number) {
+    return api.get(`/admin/novels/${novelId}/chapters`);
+  },
+
   // 隔离墙配置
   getWallConfig() {
     return api.get('/admin/wall-config');
@@ -138,6 +160,9 @@ export const adminApi = {
   // 远程站点互通
   getSites() {
     return api.get('/admin/sites');
+  },
+  getInboundSites() {
+    return api.get('/admin/sites/inbound');
   },
   createSite(data: { name: string; url: string; api_url: string; description?: string }) {
     return api.post('/admin/sites', data);

@@ -194,6 +194,18 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/softdel',
+      name: 'admin-softdel',
+      component: () => import('@/views/admin/AdminSoftDel.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/ban',
+      name: 'admin-ban',
+      component: () => import('@/views/admin/AdminBan.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/database',
       name: 'admin-database',
       component: () => import('@/views/admin/AdminDatabase.vue'),

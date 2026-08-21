@@ -41,6 +41,11 @@ export const novelApi = {
     return api.get<{ code: number; data: Record<string, number> }>(`/author/novels/${id}/stats`);
   },
 
+  // 获取作者被封禁（176号令）的小说/章节及原因
+  getBannedContent() {
+    return api.get<{ code: number; data: { novels: any[]; chapters: any[] } }>('/author/banned-content');
+  },
+
   // ============ 导入导出 ============
 
   exportNovel(id: number) {

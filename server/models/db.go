@@ -31,8 +31,11 @@ func AllModels() []interface{} {
 		&User{}, &Novel{}, &NovelCategory{}, &Chapter{}, &Comment{}, &Rating{},
 		&Forum{}, &Thread{}, &Post{}, &ForumMute{}, &VipApplication{}, &Report{},
 		&WithdrawalRequest{}, &EarningsRecord{}, &BlacklistIP{}, &PlatformConfig{},
-		&FederatedSite{}, &FederatedNovel{}, &BookShelf{}, &Follow{}, &AuthorBlog{},
-		&UserFrame{}, &UserHTML{}, &XssRule{}, &EmergencyAuditLog{},
+		&FederatedSite{}, &FederatedNovel{}, &FederatedInbound{}, &BookShelf{}, &Follow{}, &AuthorBlog{},
+		&UserFrame{}, &UserHTML{}, &XssRule{}, &EmergencyAuditLog{}, &UserAuditLog{},
+		// 软删除留证表（softdel_*，合规证据留存）
+		&SoftDelComment{}, &SoftDelNovel{}, &SoftDelChapter{}, &SoftDelUser{},
+		&SoftDelThread{}, &SoftDelPost{}, &SoftDelBlog{}, &SoftDelForum{},
 	}
 }
 

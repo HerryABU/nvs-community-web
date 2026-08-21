@@ -89,7 +89,7 @@ func ImportPreview(c *gin.Context) {
 
 // POST /api/novels/import — 导入 TXT/Markdown（支持追加到已有小说）
 func ImportNovel(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 
 	title := c.PostForm("title")
 	category := c.PostForm("category")
@@ -254,7 +254,7 @@ func writeParsedChapters(novel *models.Novel, chapters []parsedChapter, startNum
 
 // ImportBatch POST /api/novels/import/batch — 批量导入多个 Word/Markdown 文件（合并为一部作品）
 func ImportBatch(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 
 	title := c.PostForm("title")
 	category := c.PostForm("category")

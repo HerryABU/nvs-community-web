@@ -11,7 +11,7 @@ import (
 
 // POST /api/ratings — 提交或更新评分
 func UpsertRating(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 
 	var req struct {
 		NovelID             uint `json:"novel_id" binding:"required"`
@@ -52,7 +52,7 @@ func UpsertRating(c *gin.Context) {
 
 // GET /api/ratings — 获取某用户对某作品的评分
 func GetUserRating(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	novelID, _ := strconv.ParseUint(c.Query("novel_id"), 10, 64)
 
 	rating, err := models.GetRatingByUserNovel(userID, uint(novelID))

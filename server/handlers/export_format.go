@@ -20,7 +20,7 @@ import (
 
 // POST /api/novels/:id/export/epub — 导出 EPUB
 func ExportEPUB(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	novel, err := models.GetNovelByID(uint(novelID))
@@ -90,7 +90,7 @@ func ExportEPUB(c *gin.Context) {
 
 // POST /api/novels/:id/export/txt — 导出纯文本
 func ExportTXT(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	novel, err := models.GetNovelByID(uint(novelID))
@@ -132,7 +132,7 @@ func ExportTXT(c *gin.Context) {
 
 // POST /api/novels/:id/export/docx — 导出 Word (.docx)
 func ExportDOCX(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	novel, err := models.GetNovelByID(uint(novelID))
@@ -168,7 +168,7 @@ func ExportDOCX(c *gin.Context) {
 
 // POST /api/novels/:id/export/markdown — 导出合并 Markdown
 func ExportMarkdown(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	novel, err := models.GetNovelByID(uint(novelID))

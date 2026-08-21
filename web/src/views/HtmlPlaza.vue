@@ -23,6 +23,11 @@
             <el-button size="small" type="primary" @click="openRunner(h)">▶ 运行</el-button>
             <el-button size="small" @click="openPreview(h)">👁 预览</el-button>
             <el-button v-if="h.is_downloadable" size="small" @click="download(h)">📥 下载</el-button>
+            <ReportButton
+              v-if="authStore.isLoggedIn && authStore.user?.id !== h.user_id"
+              target-type="userhtml"
+              :target-id="h.id"
+            />
           </div>
         </div>
       </div>
@@ -37,8 +42,11 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '@/api/index';
+import ReportButton from '@/components/ReportButton.vue';
+import { useAuthStore } from '@/stores/auth';
 
 const router = useRouter();
+const authStore = useAuthStore();
 const items = ref<any[]>([]);
 const loading = ref(false);
 const total = ref(0);

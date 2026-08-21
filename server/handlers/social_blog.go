@@ -43,7 +43,7 @@ type UpdateBlogInput struct {
 
 // POST /api/blogs — 创建博客
 func CreateBlog(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	var req CreateBlogInput
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -176,7 +176,7 @@ func ListAuthorBlogs(c *gin.Context) {
 
 // PUT /api/blogs/:id — 更新博客
 func UpdateBlog(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	blog, err := models.GetBlogByID(uint(id))
@@ -227,7 +227,7 @@ func UpdateBlog(c *gin.Context) {
 
 // DELETE /api/blogs/:id — 删除博客
 func DeleteBlog(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	blog, err := models.GetBlogByID(uint(id))
@@ -236,11 +236,7 @@ func DeleteBlog(c *gin.Context) {
 		return
 	}
 
-	// 删除文件
-	if blog.ContentPath != "" {
-		os.Remove(blog.ContentPath)
-	}
-
+	// 合规留存：软删除，保留正文文件（不物理移除），审计可追溯原始内容
 	if err := models.DeleteBlog(uint(id)); err != nil {
 		utils.InternalError(c, "删除失败")
 		return

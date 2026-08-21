@@ -18,6 +18,24 @@ type EmergencyAuditLog struct {
 
 func (EmergencyAuditLog) TableName() string { return "emergency_audit_logs" }
 
+// 审计动作枚举（176号令合规：规范化 action 与 detail 填写）
+// detail 格式建议：操作描述 | 违规内容摘要 | 处置依据 | 是否报告
+const (
+	AuditSetPassword    = "set_password"   // 设置/修改抢救台二级密码
+	AuditUnlock         = "unlock"         // 抢救台解锁
+	AuditUnlockFail     = "unlock_fail"    // 抢救台解锁失败
+	AuditPreview        = "preview"        // 抢救台内容预览
+	AuditEmergencyDelete = "delete"        // 抢救台物理硬删除
+	AuditContentDelete  = "content_delete" // 内容删除（管理员/版主处置）
+	AuditContentHide    = "content_hide"   // 内容屏蔽
+	AuditContentRestore = "content_restore" // 内容恢复（误删恢复）
+	AuditUserMute       = "user_mute"      // 禁言用户
+	AuditUserUnmute     = "user_unmute"    // 解除禁言
+	AuditUserBan        = "user_ban"       // 封禁/删除用户
+	AuditUserUnban      = "user_unban"     // 解封用户
+	AuditReportHandle   = "report_handle"  // 举报处理
+)
+
 // RecordEmergencyAudit 写入一条抢救台审计日志
 func RecordEmergencyAudit(log *EmergencyAuditLog) {
 	_ = DB.Create(log).Error

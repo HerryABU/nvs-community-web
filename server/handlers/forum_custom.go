@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -17,7 +18,7 @@ import (
 
 // CreateUserForum POST /api/forums — 用户创建自建论坛（先创建直接可用，后续管理员审查）
 func CreateUserForum(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 
 	var req struct {
 		Name        string `json:"name" binding:"required,max=128"`
@@ -66,7 +67,7 @@ func CreateUserForum(c *gin.Context) {
 
 // ListMyForums GET /api/forums/mine — 我创建的自建论坛
 func ListMyForums(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	var forums []models.Forum
 	models.DB.Where("creator_id = ? AND type = ?", userID, "custom").
 		Order("id DESC").Find(&forums)
@@ -108,7 +109,7 @@ func isForumModerator(c *gin.Context, forum *models.Forum) bool {
 	if ensureAdmin(c) {
 		return true
 	}
-	return forum.CreatorID != 0 && forum.CreatorID == c.GetUint("userID")
+	return forum.CreatorID != 0 && forum.CreatorID == currentUserID(c)
 }
 
 // ForumMuteUser POST /api/forums/:id/mute — 禁言（论坛创建者或管理员）
@@ -186,7 +187,7 @@ func ForumUnmuteUser(c *gin.Context) {
 
 // DeleteThreadByModerator DELETE /api/threads/:id — 删除帖子（作者/论坛创建者/管理员）
 func DeleteThreadByModerator(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	threadID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	thread, err := models.GetThreadByID(uint(threadID))
@@ -211,12 +212,16 @@ func DeleteThreadByModerator(c *gin.Context) {
 		models.DB.Model(&models.Forum{}).Where("id = ?", thread.ForumID).
 			UpdateColumn("thread_count", gorm.Expr("CASE WHEN thread_count > 0 THEN thread_count - 1 ELSE 0 END"))
 	}
+	// 合规审计：内容删除处置（含作者/所属论坛）
+	auditEmergency(c, models.AuditContentDelete, "thread", uint(threadID),
+		fmt.Sprintf("管理员删除帖子：%s（作者ID：%d，ForumID：%d）",
+			security.SanitizePlainText(thread.Title), thread.UserID, thread.ForumID))
 	utils.Success(c, gin.H{"message": "帖子已删除"})
 }
 
 // DeletePostByModerator DELETE /api/posts/:id — 删除回帖（作者/论坛创建者/管理员）
 func DeletePostByModerator(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	postID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	var post models.Post
@@ -241,12 +246,15 @@ func DeletePostByModerator(c *gin.Context) {
 	models.DB.Delete(&models.Post{}, uint(postID))
 	models.DB.Model(&models.Thread{}).Where("id = ?", post.ThreadID).
 		UpdateColumn("post_count", gorm.Expr("CASE WHEN post_count > 0 THEN post_count - 1 ELSE 0 END"))
+	// 合规审计：内容删除处置（含作者/所属帖子）
+	auditEmergency(c, models.AuditContentDelete, "post", uint(postID),
+		fmt.Sprintf("管理员删除回帖（作者ID：%d，ThreadID：%d）", post.UserID, post.ThreadID))
 	utils.Success(c, gin.H{"message": "回帖已删除"})
 }
 
 // checkUserMuted 全局禁言检查（评论/发帖/回帖前调用），返回 true 表示已拦截
 func checkUserMuted(c *gin.Context) bool {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	user, err := models.GetUserByID(userID)
 	if err != nil || user == nil {
 		return false

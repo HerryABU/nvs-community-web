@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 // AuthorBlog 作者博客文章
 type AuthorBlog struct {
@@ -15,6 +19,7 @@ type AuthorBlog struct {
 	ViewCount   int       `gorm:"default:0" json:"view_count"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
 	Author *User `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
 }

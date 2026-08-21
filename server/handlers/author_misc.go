@@ -24,7 +24,7 @@ import (
 
 // POST /api/author/avatar — 作者上传头像
 func UploadAvatar(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 
 	file, header, err := c.Request.FormFile("avatar")
 	if err != nil {
@@ -122,7 +122,7 @@ func UploadAvatar(c *gin.Context) {
 
 // GET /api/author/signature-status — 获取作者签名状态与密钥信息
 func GetSignatureStatus(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 
 	user, err := models.GetUserByID(userID)
 	if err != nil {

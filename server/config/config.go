@@ -71,6 +71,16 @@ SITE_NAME=NVS 类型文学平台
 EMAIL_VERIFY_ENABLED=false
 # 滑块验证码开关（true/false）
 CAPTCHA_ENABLED=false
+
+# ==================== 安全 / 反向代理 ====================
+# 信任的反向代理地址（逗号分隔的 IP 或 CIDR，如 127.0.0.1,10.0.0.0/8）。
+# 留空 = 不信任任何代理，客户端 IP 取真实 TCP 对端地址（默认，可防 X-Forwarded-For 伪造越权）。
+# 仅当部署在反向代理（如 nginx）之后且需记录真实客户端 IP 时，才填写代理地址。
+TRUSTED_PROXIES=
+
+# 建站向导 / 安装接口是否仅允许本机(localhost)访问（true/false，默认 true）。
+# 防止反向代理/公网直连越权进入安装向导；如需从局域网远程初始化可设为 false。
+SETUP_LOCAL_ONLY=true
 `
 
 var (
@@ -111,6 +121,10 @@ var (
 	EnableIPv6 bool
 	LocalIPv4  string
 	LocalIPv6  string
+
+	// Security / reverse proxy
+	TrustedProxies []string // 信任的反向代理 IP/CIDR 列表；空=不信任任何代理（默认，防 X-Forwarded-For 伪造越权）
+	SetupLocalOnly bool      // 建站向导仅允许本机(localhost)访问（默认 true）
 )
 
 // Init 初始化配置：自动加载/创建 .env，然后读取环境变量
@@ -164,6 +178,10 @@ func Init() {
 	EnableIPv6 = getEnvBool("ENABLE_IPV6", false)
 	LocalIPv4 = getEnv("LOCAL_IPV4", "")
 	LocalIPv6 = getEnv("LOCAL_IPV6", "")
+
+	// 反向代理信任与建站向导本地保护
+	TrustedProxies = parseList(getEnv("TRUSTED_PROXIES", ""))
+	SetupLocalOnly = getEnvBool("SETUP_LOCAL_ONLY", true)
 }
 
 // createDefaultEnv 基于内嵌模板自动创建 .env 文件，自动检测本机 IP 填入
@@ -275,6 +293,18 @@ func getEnv(key, fallback string) string {
 		return val
 	}
 	return fallback
+}
+
+// parseList 解析逗号分隔的字符串列表，去除空白与空项
+func parseList(s string) []string {
+	var out []string
+	for _, part := range strings.Split(s, ",") {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func getEnvInt(key string, fallback int) int {

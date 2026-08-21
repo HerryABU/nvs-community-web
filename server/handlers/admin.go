@@ -20,7 +20,7 @@ func ApplyVip(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 
 	user, err := models.GetUserByID(userID)
 	if err != nil || (user.Role != "author" && user.Role != "vip_author") {
@@ -210,6 +210,7 @@ func GetDashboardStats(c *gin.Context) {
 	models.DB.Raw(
 		"SELECT n.title, n.total_words, n.total_chapters, u.nickname AS author_name "+
 			"FROM novels n JOIN users u ON u.id = n.author_id "+
+			"WHERE n.deleted_at IS NULL "+
 			"ORDER BY n.total_words DESC LIMIT 6",
 	).Scan(&topNovelsRaw)
 
@@ -291,7 +292,7 @@ func GetDashboardStats(c *gin.Context) {
 
 // POST /api/author/withdraw — 申请提现
 func RequestWithdraw(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	var req struct {
 		Amount  float64 `json:"amount" binding:"required"`
 		Method  string  `json:"method"`
@@ -309,7 +310,7 @@ func RequestWithdraw(c *gin.Context) {
 
 // GET /api/author/earnings — 我的收益
 func GetEarnings(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	var total float64
 	models.DB.Model(&models.EarningsRecord{}).Where("user_id = ?", userID).Select("COALESCE(SUM(amount),0)").Scan(&total)
 	utils.Success(c, gin.H{"total_earnings": total})
@@ -334,7 +335,7 @@ func GetFinanceOverview(c *gin.Context) {
 // ============ 辅助 ============
 
 func ensureAdmin(c *gin.Context) bool {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	user, _ := models.GetUserByID(userID)
 	if user == nil || user.Role != "admin" {
 		utils.Forbidden(c, "需要管理员权限")
@@ -346,7 +347,7 @@ func ensureAdmin(c *gin.Context) bool {
 
 // isAdminUser 非阻断式判断当前用户是否为管理员
 func isAdminUser(c *gin.Context) bool {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	if userID == 0 {
 		return false
 	}

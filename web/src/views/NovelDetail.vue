@@ -34,6 +34,11 @@
             <el-button @click="toggleShelf" :loading="shelfLoading">
               {{ onShelf ? '已加入书架' : '加入书架' }}
             </el-button>
+            <ReportButton
+              v-if="authStore.isLoggedIn && authStore.user?.id !== novel.author_id"
+              target-type="novel"
+              :target-id="novel.id"
+            />
           </div>
         </div>
       </div>
@@ -108,6 +113,7 @@ import { bookshelfApi } from '@/api/bookshelf';
 import CommentSection from '@/components/CommentSection.vue';
 import StarRating from '@/components/StarRating.vue';
 import SensitiveZoneGuard from '@/components/SensitiveZoneGuard.vue';
+import ReportButton from '@/components/ReportButton.vue';
 import { useAuthStore } from '@/stores/auth';
 import { shouldShowGuard, markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';
 

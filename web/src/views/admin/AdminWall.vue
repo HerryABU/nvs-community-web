@@ -1,10 +1,7 @@
 <template>
   <div class="admin-page">
-    <div class="admin-page-header">
-      <el-button text @click="$router.push('/admin')"><el-icon><ArrowLeft /></el-icon> 返回后台</el-button>
-      <h2>隔离墙配置</h2>
-    </div>
-    <div class="admin-page-body">
+    <AdminHeader title="隔离墙配置" subtitle="敏感分区列表与确认流程" :icon="Lock" />
+    <div class="admin-page-body admin-panel">
       <p class="hint-text">管理敏感分区列表及其确认流程。点击分区名称展开/收起详细配置。</p>
       <el-form label-width="100px">
         <el-form-item label="启用隔离墙">
@@ -64,7 +61,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { ArrowLeft, ArrowRight, Delete, Plus } from '@element-plus/icons-vue';
+import { ArrowRight, Delete, Plus, Lock } from '@element-plus/icons-vue';
+import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage } from 'element-plus';
 

@@ -10,7 +10,7 @@ import (
 
 // AddToShelf POST /api/bookshelf
 func AddToShelf(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 
 	var req struct {
 		NovelID uint `json:"novel_id" binding:"required"`
@@ -30,7 +30,7 @@ func AddToShelf(c *gin.Context) {
 
 // RemoveFromShelf DELETE /api/bookshelf/:id  (id = novel_id)
 func RemoveFromShelf(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	novelID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
 		utils.BadRequest(c, "无效的作品ID")
@@ -47,7 +47,7 @@ func RemoveFromShelf(c *gin.Context) {
 
 // CheckShelf GET /api/bookshelf/check/:id  (id = novel_id)
 func CheckShelf(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	novelID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
 		utils.BadRequest(c, "无效的作品ID")
@@ -60,7 +60,7 @@ func CheckShelf(c *gin.Context) {
 
 // ListShelf GET /api/bookshelf
 func ListShelf(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "50"))
@@ -108,7 +108,7 @@ func ListShelf(c *gin.Context) {
 
 // UpdateShelfProgress POST /api/bookshelf/progress
 func UpdateShelfProgress(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 
 	var req struct {
 		NovelID         uint `json:"novel_id" binding:"required"`

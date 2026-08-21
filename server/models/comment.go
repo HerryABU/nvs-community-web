@@ -2,6 +2,8 @@ package models
 
 import (
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type Comment struct {
@@ -17,6 +19,8 @@ type Comment struct {
 	IsMarkdown     bool      `gorm:"default:true" json:"is_markdown"`
 	Username       string    `gorm:"-" json:"username,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
 	// 关联
 	User   *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
@@ -65,6 +69,21 @@ func GetCommentByID(id uint) (*Comment, error) {
 		return nil, err
 	}
 	return &comment, nil
+}
+
+// GetAllCommentsByNovel 获取作品的「全部」评论（书评 + 所有章评，按时间倒序）。
+// 供内容抢救台等场景一次性拉取作品下所有评论，便于审核/排查。
+func GetAllCommentsByNovel(novelID uint, limit int) ([]Comment, error) {
+	if limit <= 0 {
+		limit = 500
+	}
+	var comments []Comment
+	err := DB.Where("novel_id = ?", novelID).
+		Preload("User").
+		Order("created_at DESC").
+		Limit(limit).
+		Find(&comments).Error
+	return comments, err
 }
 
 func DeleteComment(id uint) error {

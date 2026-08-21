@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"html"
 	"strconv"
 	"time"
@@ -19,7 +20,7 @@ func GetReportReasons(c *gin.Context) {
 
 // CreateReport POST /api/reports — 提交举报（理由选择 + 提交）
 func CreateReport(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	var req struct {
 		TargetType string `json:"target_type" binding:"required"`
 		TargetID   uint   `json:"target_id" binding:"required"`
@@ -32,9 +33,9 @@ func CreateReport(c *gin.Context) {
 		return
 	}
 
-	// 目标类型白名单
+	// 目标类型白名单（小说/论坛/评论区/博客/章节/用户/HTML 托管等）
 	switch req.TargetType {
-	case "novel", "comment", "thread", "post":
+	case "novel", "comment", "thread", "post", "blog", "forum", "chapter", "user", "userframe", "userhtml":
 	default:
 		utils.BadRequest(c, "不支持的举报对象类型")
 		return
@@ -76,7 +77,7 @@ func CreateReport(c *gin.Context) {
 
 // ListMyReports GET /api/reports/mine — 我的举报（状态追踪）
 func ListMyReports(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	var reports []models.Report
 	models.DB.Where("reporter_id = ?", userID).
 		Order("created_at DESC").Limit(200).Find(&reports)
@@ -119,6 +120,22 @@ func targetPreview(targetType string, targetID uint) string {
 		if err := models.DB.First(&p, targetID).Error; err == nil {
 			return truncate(p.Content)
 		}
+	case "blog":
+		if b, err := models.GetBlogByID(targetID); err == nil {
+			return truncate(b.Title)
+		}
+	case "forum":
+		if f, err := models.GetForumByID(targetID); err == nil {
+			return truncate(f.Name)
+		}
+	case "chapter":
+		if ch, err := models.GetChapterByID(targetID); err == nil {
+			return truncate(ch.Title)
+		}
+	case "user":
+		if u, err := models.GetUserByID(targetID); err == nil {
+			return truncate(u.Nickname + "(@" + u.Username + ")")
+		}
 	}
 	return ""
 }
@@ -143,7 +160,7 @@ func HandleReport(c *gin.Context) {
 	if !ensureAdmin(c) {
 		return
 	}
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	var req struct {
@@ -166,32 +183,23 @@ func HandleReport(c *gin.Context) {
 		return
 	}
 
-	// 判定成立且要求删除目标内容时，执行删除
+	// 判定成立且要求删除目标内容时，执行软删除 + 留证归档
 	if req.Status == "accepted" && req.DeleteTarget {
-		deleteReportTarget(report.TargetType, report.TargetID)
+		_ = softDeleteContent(c, report.TargetType, report.TargetID,
+			"举报成立删除违规内容", "report", "delete")
 	}
 
+	verdict := bluemonday.UGCPolicy().Sanitize(req.Verdict)
 	now := time.Now()
 	models.DB.Model(&models.Report{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status":      req.Status,
 		"handler_id":  userID,
-		"verdict":     bluemonday.UGCPolicy().Sanitize(req.Verdict),
+		"verdict":     verdict,
 		"resolved_at": &now,
 	})
+	// 合规审计：举报处理（target 关联举报记录本身）
+	auditEmergency(c, models.AuditReportHandle, "report", uint(id),
+		fmt.Sprintf("举报处理：%s，判定：%s，删除目标：%v", req.Status, verdict, req.DeleteTarget))
 	utils.Success(c, gin.H{"message": "已处理"})
 }
 
-// deleteReportTarget 删除被举报的目标内容（管理员判定成立时）
-func deleteReportTarget(targetType string, targetID uint) {
-	switch targetType {
-	case "comment":
-		_ = models.DeleteComment(targetID)
-	case "thread":
-		models.DB.Delete(&models.Thread{}, targetID)
-		models.DB.Where("thread_id = ?", targetID).Delete(&models.Post{})
-	case "post":
-		models.DB.Delete(&models.Post{}, targetID)
-	case "novel":
-		_ = models.DeleteNovel(targetID)
-	}
-}

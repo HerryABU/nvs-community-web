@@ -1,10 +1,7 @@
 <template>
   <div class="admin-page">
-    <div class="admin-page-header">
-      <el-button text @click="$router.push('/admin')"><el-icon><ArrowLeft /></el-icon> 返回后台</el-button>
-      <h2>远程站点互通</h2>
-    </div>
-    <div class="admin-page-body">
+    <AdminHeader title="远程站点互通" subtitle="远程 NVS 站点互联与作品同步" :icon="Connection" />
+    <div class="admin-page-body admin-panel">
       <p class="hint-text">模仿 AList 的站点互联：添加远程 NVS 站点后可同步作品列表。</p>
       <div style="margin-bottom:12px">
         <el-button type="primary" size="small" @click="showAddSiteDialog">添加站点</el-button>
@@ -29,6 +26,36 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <!-- 谁连了我（入站连接） -->
+      <div class="inbound-block">
+        <div class="inbound-head">
+          <h3>谁连了我（入站连接）</h3>
+          <el-button text size="small" @click="loadInbound">刷新</el-button>
+        </div>
+        <p class="hint-text">
+          当其它 NVS 站点通过联邦接口同步/访问本站时，这里会记录对方的身份（站点名、地址、来源 IP 与访问次数）。
+          对方需在「API 地址」填到 <code>/api/federated</code>，同步时会自动向本站自报身份。
+        </p>
+        <el-table :data="inbound" v-loading="loadingInbound" size="small" style="width:100%">
+          <el-table-column prop="name" label="站点名" min-width="120">
+            <template #default="{ row }">
+              <strong>{{ row.name || '（未自报）' }}</strong>
+            </template>
+          </el-table-column>
+          <el-table-column prop="url" label="站点地址" min-width="200" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.url || '—' }}</template>
+          </el-table-column>
+          <el-table-column prop="ip" label="来源 IP" width="140" />
+          <el-table-column label="接口" width="140">
+            <template #default="{ row }"><code>{{ row.endpoint }}</code></template>
+          </el-table-column>
+          <el-table-column prop="count" label="访问次数" width="90" />
+          <el-table-column label="最近访问" width="170">
+            <template #default="{ row }">{{ formatTime(row.last_seen) }}</template>
+          </el-table-column>
+        </el-table>
+      </div>
     </div>
 
     <!-- 添加/编辑站点弹窗 -->
@@ -42,6 +69,7 @@
         </el-form-item>
         <el-form-item label="API 地址" required>
           <el-input v-model="siteForm.api_url" placeholder="如：https://nvs.example.com/api" />
+          <div class="form-tip">对方站点 API 根地址（以 <code>/api</code> 结尾）。同步时会调用其 <code>/api/novels</code> 公开作品列表接口。</div>
         </el-form-item>
         <el-form-item label="描述">
           <el-input v-model="siteForm.description" type="textarea" :rows="2" />
@@ -59,7 +87,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
-import { ArrowLeft } from '@element-plus/icons-vue';
+import { Connection } from '@element-plus/icons-vue';
+import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
@@ -71,10 +100,24 @@ const submittingSite = ref(false);
 const syncingId = ref(0);
 const siteForm = reactive({ name: '', url: '', api_url: '', description: '' });
 
+const inbound = ref<any[]>([]);
+const loadingInbound = ref(false);
+
 async function loadSites() {
   loadingSites.value = true;
   try { const res = await adminApi.getSites(); sites.value = res.data.data || []; } catch { /* ignore */ }
   loadingSites.value = false;
+}
+
+async function loadInbound() {
+  loadingInbound.value = true;
+  try { const res = await adminApi.getInboundSites(); inbound.value = res.data.data || []; } catch { /* ignore */ }
+  loadingInbound.value = false;
+}
+
+function formatTime(s?: string) {
+  if (!s) return '';
+  return new Date(s).toLocaleString('zh-CN');
 }
 
 function showAddSiteDialog() { resetSiteForm(); showAddSite.value = true; }
@@ -141,7 +184,7 @@ async function deleteSite(site: any) {
   } catch { /* cancelled */ }
 }
 
-onMounted(loadSites);
+onMounted(() => { loadSites(); loadInbound(); });
 </script>
 
 <style scoped>
@@ -150,6 +193,14 @@ onMounted(loadSites);
 .admin-page-header h2 { margin: 0; font-size: 1.3rem; color: var(--text-color, #333); }
 .admin-page-body { max-width: 1100px; }
 .hint-text { color: var(--text-light, #666); font-size: 0.85rem; margin-bottom: 12px; }
+.form-tip { width: 100%; font-size: 0.78rem; color: var(--text-light, #999); line-height: 1.5; }
+.form-tip code { background: #eef2ff; color: #4f46e5; padding: 1px 6px; border-radius: 4px; font-size: 0.85rem; }
+.inbound-block { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border-color, #e5e7eb); }
+.inbound-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.inbound-head h3 { margin: 0; font-size: 1.05rem; color: var(--text-color, #333); }
+.inbound-block code { background: #eef2ff; color: #4f46e5; padding: 1px 6px; border-radius: 4px; font-size: 0.85rem; }
 [data-theme="dark"] .admin-page { background: #0f172a; }
 [data-theme="dark"] .admin-page-header h2 { color: #e2e8f0; }
+[data-theme="dark"] .inbound-head h3 { color: #e2e8f0; }
+[data-theme="dark"] .inbound-block { border-color: #334155; }
 </style>

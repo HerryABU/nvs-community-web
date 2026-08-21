@@ -22,12 +22,17 @@ type User struct {
 	Role            string     `gorm:"size:32;default:reader" json:"role"`
 	SigningKey      string     `gorm:"size:64;default:''" json:"-"` // base64(AES-256 key), only set for authors
 	RealNameVerified bool      `gorm:"default:false" json:"real_name_verified"`
+	// 合规留存：注册IP / 最后登录IP / 最后登录时间（176号令用户信息追溯）
+	RegistrationIP string     `gorm:"size:45;default:''" json:"-"`
+	LastLoginIP    string     `gorm:"size:45;default:''" json:"-"`
+	LastLoginAt    *time.Time `json:"-"`
 	LoginFailCount  int        `gorm:"default:0" json:"-"`
 	LockedUntil     *time.Time `json:"-"`
 	MutedUntil      *time.Time `json:"muted_until"`                    // 全局禁言截止时间（null/过去=未禁言）
 	MuteReason      string     `gorm:"size:256;default:''" json:"mute_reason"` // 禁言原因
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
+	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：封禁/删除用户采用软删除（可追溯）
 }
 
 func (User) TableName() string {
