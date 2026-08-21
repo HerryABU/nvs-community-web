@@ -72,7 +72,7 @@ func clearEmergencyFailures(ip string) {
 
 // auditEmergency 记录抢救台审计日志（谁/IP/何时/什么操作/目标）
 func auditEmergency(c *gin.Context, action, targetType string, targetID uint, detail string) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	operator := ""
 	if userID > 0 {
 		if u, err := models.GetUserByID(userID); err == nil && u != nil {
@@ -200,6 +200,53 @@ func toPlainText(content string) string {
 	return strings.TrimSpace(s)
 }
 
+// buildCommentList 将评论切片转换为统一的预览列表（含作者/纯文本/章节号）
+func buildCommentList(comments []models.Comment) []gin.H {
+	list := make([]gin.H, 0, len(comments))
+	for _, cm := range comments {
+		author := ""
+		if cm.User != nil {
+			author = cm.User.Username
+		}
+		if author == "" && cm.Username != "" {
+			author = cm.Username
+		}
+		item := gin.H{
+			"id":            cm.ID,
+			"type":          "comment",
+			"author":        author,
+			"content":       cm.Content,
+			"content_plain": toPlainText(cm.Content),
+			"created_at":    cm.CreatedAt,
+		}
+		if cm.ChapterNumber > 0 {
+			item["chapter"] = cm.ChapterNumber
+		}
+		list = append(list, item)
+	}
+	return list
+}
+
+// buildPostList 将帖子回复切片转换为统一的预览列表
+func buildPostList(posts []models.Post) []gin.H {
+	list := make([]gin.H, 0, len(posts))
+	for _, p := range posts {
+		author := ""
+		if p.User != nil {
+			author = p.User.Username
+		}
+		list = append(list, gin.H{
+			"id":            p.ID,
+			"type":          "post",
+			"author":        author,
+			"content":       p.Content,
+			"content_plain": toPlainText(p.Content),
+			"created_at":    p.CreatedAt,
+		})
+	}
+	return list
+}
+
 // resolveContentPath 将站内 URL 路径解析为 (类型, ID)。
 // 站长不需要知道内部 ID，直接粘贴站内路径即可定位内容。
 // 支持：/thread/:id /post/:id /comment/:id /blog/:id
@@ -241,6 +288,10 @@ func resolveContentPath(path string) (ctype string, id uint64, ok bool) {
 		if n, ok := parseID(parts[1]); ok {
 			return "comment", n, true
 		}
+	case parts[0] == "chapter" && len(parts) == 2:
+		if n, ok := parseID(parts[1]); ok {
+			return "chapter", n, true
+		}
 	case parts[0] == "blog" && len(parts) == 2:
 		if n, ok := parseID(parts[1]); ok {
 			return "blog", n, true
@@ -252,6 +303,15 @@ func resolveContentPath(path string) (ctype string, id uint64, ok bool) {
 	case parts[0] == "novel" && len(parts) == 2:
 		if n, ok := parseID(parts[1]); ok {
 			return "novel", n, true
+		}
+	case parts[0] == "novel" && len(parts) == 4 && parts[2] == "read":
+		// /novel/:id/read/:chapter → 定位到具体章节（返回 chapter 类型）
+		if novelID, ok1 := parseID(parts[1]); ok1 {
+			if num, ok2 := parseID(parts[3]); ok2 {
+				if ch, err := models.GetChapterByNovelAndNumber(uint(novelID), int(num)); err == nil && ch != nil {
+					return "chapter", uint64(ch.ID), true
+				}
+			}
 		}
 	case parts[0] == "author" && len(parts) == 4:
 		if parts[2] == "blog" || parts[2] == "blogs" {
@@ -340,6 +400,10 @@ func PreviewEmergencyContent(c *gin.Context) {
 		preview["content_raw"] = t.Content
 		preview["content_plain"] = toPlainText(t.Content)
 		preview["created_at"] = t.CreatedAt
+		// 帖子下的全部回复
+		if posts, _, err := models.GetPostsByThread(uint(id), 1, 500); err == nil {
+			preview["comments"] = buildPostList(posts)
+		}
 	case "post":
 		var p models.Post
 		if err := models.DB.Preload("User").First(&p, id).Error; err != nil {
@@ -370,6 +434,9 @@ func PreviewEmergencyContent(c *gin.Context) {
 		preview["content_raw"] = content
 		preview["content_plain"] = toPlainText(content)
 		preview["created_at"] = b.CreatedAt
+		if blogComments, _, err := models.GetCommentsByBlog(uint(id), 1, 500); err == nil {
+			preview["comments"] = buildCommentList(blogComments)
+		}
 	case "novel":
 		n, err := models.GetNovelByID(uint(id))
 		if err != nil {
@@ -385,6 +452,32 @@ func PreviewEmergencyContent(c *gin.Context) {
 		preview["content_raw"] = n.Summary
 		preview["content_plain"] = n.Summary
 		preview["created_at"] = n.CreatedAt
+		// 输入小说 URL 时，重点展示该作品的全部评论（而非仅标题）
+		if comments, err := models.GetAllCommentsByNovel(uint(id), 500); err == nil {
+			preview["comments"] = buildCommentList(comments)
+		}
+	case "chapter":
+		ch, err := models.GetChapterByID(uint(id))
+		if err != nil {
+			utils.NotFound(c, "章节不存在")
+			return
+		}
+		author := ""
+		novelTitle := ""
+		if n, err := models.GetNovelByID(ch.NovelID); err == nil && n != nil {
+			novelTitle = n.Title
+			if n.Author != nil {
+				author = n.Author.Username
+			}
+		}
+		content := loadFileContent(ch.ContentPath)
+		preview["author"] = author
+		preview["title"] = ch.Title
+		preview["novel_title"] = novelTitle
+		preview["chapter_number"] = ch.ChapterNumber
+		preview["content_raw"] = content
+		preview["content_plain"] = toPlainText(content)
+		preview["created_at"] = ch.CreatedAt
 	case "forum":
 		var f models.Forum
 		if err := models.DB.First(&f, id).Error; err != nil {
@@ -397,7 +490,7 @@ func PreviewEmergencyContent(c *gin.Context) {
 		preview["content_plain"] = f.Description
 		preview["created_at"] = f.CreatedAt
 	default:
-		utils.BadRequest(c, "无法识别的类型（支持 comment/thread/post/blog/novel/forum）")
+		utils.BadRequest(c, "无法识别的类型（支持 comment/thread/post/blog/novel/chapter/forum）")
 		return
 	}
 	auditEmergency(c, "preview", ctype, uint(id), buildContentPath(ctype, id))
@@ -413,6 +506,8 @@ func buildContentPath(ctype string, id uint64) string {
 		return "/post/" + strconv.FormatUint(id, 10)
 	case "comment":
 		return "/comment/" + strconv.FormatUint(id, 10)
+	case "chapter":
+		return "/chapter/" + strconv.FormatUint(id, 10)
 	case "blog":
 		return "/blog/" + strconv.FormatUint(id, 10)
 	case "novel":
@@ -424,8 +519,10 @@ func buildContentPath(ctype string, id uint64) string {
 	}
 }
 
-// DELETE /api/admin/emergency/content — 硬删除内容（物理删除 + 统计回退 + 日志）
+// DELETE /api/admin/emergency/content — 软删除内容（归档留证 + 软删除 + 统计回退 + 日志）
 // 参数：path（站内 URL 路径）或 type+id（兼容）
+// 说明：删除前先将完整快照归档到 softdel_ 表（留证），再软删除原始记录（保留 deleted_at），
+//       不再物理移除正文文件，确保任何应急处置均可在 softdel_ 表中追溯。
 func DeleteEmergencyContent(c *gin.Context) {
 	if !ensureAdmin(c) {
 		return
@@ -440,25 +537,43 @@ func DeleteEmergencyContent(c *gin.Context) {
 		return
 	}
 
+	operatorID := currentUserID(c)
+	operator := ""
+	if operatorID > 0 {
+		if u, err := models.GetUserByID(operatorID); err == nil && u != nil {
+			operator = u.Username
+		}
+	}
+	archive := func(t string, originalID uint, reason, summary string, snapshot interface{}) error {
+		return models.ArchiveSoftDelete("emergency", t, originalID, operatorID, operator, reason, summary, snapshot)
+	}
+
 	switch ctype {
 	case "comment":
-		if cm, err := models.GetCommentByID(uint(id)); err == nil {
-			if err := models.DeleteComment(uint(id)); err != nil {
-				utils.InternalError(c, "删除失败")
-				return
-			}
-			auditEmergency(c, "delete", ctype, uint(id), "删除评论（作者 "+userOf(cm.UserID)+"）")
-		} else {
+		cm, err := models.GetCommentByID(uint(id))
+		if err != nil {
 			utils.NotFound(c, "评论不存在")
 			return
 		}
+		if err := archive("comment", uint(id), "", truncateRunes(toPlainText(cm.Content), 200), cm); err != nil {
+			utils.InternalError(c, "留证归档失败")
+			return
+		}
+		if err := models.DeleteComment(uint(id)); err != nil {
+			utils.InternalError(c, "删除失败")
+			return
+		}
+		auditEmergency(c, "delete", ctype, uint(id), "删除评论（作者 "+userOf(cm.UserID)+"）")
 	case "thread":
 		t, err := models.GetThreadByID(uint(id))
 		if err != nil {
 			utils.NotFound(c, "帖子不存在")
 			return
 		}
-		// 回退论坛帖子计数
+		if err := archive("thread", uint(id), "", t.Title, t); err != nil {
+			utils.InternalError(c, "留证归档失败")
+			return
+		}
 		if t.ForumID > 0 {
 			models.DB.Model(&models.Forum{}).Where("id = ?", t.ForumID).
 				UpdateColumn("thread_count", models.DB.Raw("CASE WHEN thread_count > 0 THEN thread_count - 1 ELSE 0 END"))
@@ -470,6 +585,10 @@ func DeleteEmergencyContent(c *gin.Context) {
 		var p models.Post
 		if err := models.DB.First(&p, id).Error; err != nil {
 			utils.NotFound(c, "回复不存在")
+			return
+		}
+		if err := archive("post", uint(id), "", truncateRunes(toPlainText(p.Content), 200), p); err != nil {
+			utils.InternalError(c, "留证归档失败")
 			return
 		}
 		models.DB.Delete(&models.Post{}, id)
@@ -484,14 +603,12 @@ func DeleteEmergencyContent(c *gin.Context) {
 			utils.NotFound(c, "博客不存在")
 			return
 		}
-		if err := models.DeleteBlog(uint(id)); err != nil {
-			utils.InternalError(c, "删除失败")
+		if err := archive("blog", uint(id), "", b.Title, b); err != nil {
+			utils.InternalError(c, "留证归档失败")
 			return
 		}
+		models.DB.Delete(&models.AuthorBlog{}, id)
 		models.DB.Where("blog_id = ?", id).Delete(&models.Comment{})
-		if b.ContentPath != "" {
-			_ = os.Remove(b.ContentPath)
-		}
 		auditEmergency(c, "delete", ctype, uint(id), "删除博客《"+b.Title+"》（作者 "+userOf(b.AuthorID)+"）")
 	case "novel":
 		n, err := models.GetNovelByID(uint(id))
@@ -499,40 +616,54 @@ func DeleteEmergencyContent(c *gin.Context) {
 			utils.NotFound(c, "作品不存在")
 			return
 		}
-		// 删除章节及其正文文件
-		var chapters []models.Chapter
-		models.DB.Where("novel_id = ?", id).Find(&chapters)
-		for _, ch := range chapters {
-			if ch.ContentPath != "" {
-				_ = os.Remove(ch.ContentPath)
-			}
+		if err := archive("novel", uint(id), "", n.Title, n); err != nil {
+			utils.InternalError(c, "留证归档失败")
+			return
 		}
 		models.DB.Where("novel_id = ?", id).Delete(&models.Chapter{})
 		models.DB.Where("novel_id = ?", id).Delete(&models.Comment{})
 		models.DB.Where("novel_id = ?", id).Delete(&models.Rating{})
 		models.DB.Where("novel_id = ?", id).Delete(&models.BookShelf{})
 		models.DB.Where("novel_id = ?", id).Delete(&models.NovelCategory{})
-		models.DeleteNovel(uint(id))
+		models.DB.Delete(&models.Novel{}, id)
 		auditEmergency(c, "delete", ctype, uint(id), "删除作品《"+n.Title+"》及其章节/评论/评分（作者 "+userOf(n.AuthorID)+"）")
+	case "chapter":
+		ch, err := models.GetChapterByID(uint(id))
+		if err != nil {
+			utils.NotFound(c, "章节不存在")
+			return
+		}
+		novelTitle := ""
+		if n, err := models.GetNovelByID(ch.NovelID); err == nil && n != nil {
+			novelTitle = n.Title
+		}
+		if err := archive("chapter", uint(id), "", "《"+novelTitle+"》"+ch.Title, ch); err != nil {
+			utils.InternalError(c, "留证归档失败")
+			return
+		}
+		if err := models.DeleteChapter(uint(id)); err != nil {
+			utils.InternalError(c, "删除失败")
+			return
+		}
+		auditEmergency(c, "delete", ctype, uint(id), "删除章节《"+ch.Title+"》（第 "+strconv.Itoa(ch.ChapterNumber)+" 章）")
 	case "forum":
 		var f models.Forum
 		if err := models.DB.First(&f, id).Error; err != nil {
 			utils.NotFound(c, "论坛板块不存在")
 			return
 		}
-		var threads []models.Thread
-		models.DB.Where("forum_id = ?", id).Find(&threads)
-		for _, t := range threads {
-			models.DB.Where("thread_id = ?", t.ID).Delete(&models.Post{})
+		if err := archive("forum", uint(id), "", f.Name, f); err != nil {
+			utils.InternalError(c, "留证归档失败")
+			return
 		}
 		models.DB.Where("forum_id = ?", id).Delete(&models.Thread{})
-		models.DeleteForum(uint(id))
+		models.DB.Delete(&models.Forum{}, id)
 		auditEmergency(c, "delete", ctype, uint(id), "删除论坛板块「"+f.Name+"」及其下帖子/回复")
 	default:
-		utils.BadRequest(c, "无法识别的类型（支持 comment/thread/post/blog/novel/forum）")
+		utils.BadRequest(c, "无法识别的类型（支持 comment/thread/post/blog/novel/chapter/forum）")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已物理删除"})
+	utils.Success(c, gin.H{"message": "已软删除并留证"})
 }
 
 func userOf(userID uint) string {

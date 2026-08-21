@@ -1,10 +1,7 @@
 <template>
   <div class="admin-page">
-    <div class="admin-page-header">
-      <el-button text @click="$router.push('/admin')"><el-icon><ArrowLeft /></el-icon> 返回后台</el-button>
-      <h2>HTML 内容审查</h2>
-    </div>
-    <div class="admin-page-body">
+    <AdminHeader title="HTML 内容审查" subtitle="自定义 HTML 模板/扩展人工复核" :icon="Cpu" />
+    <div class="admin-page-body admin-panel">
       <p class="hint-text">对用户上传的自定义 HTML（主题模板 + 扩展应用）进行人工复核。自动扫描仅阻断高危代码，中等/低危告警在此人工判定。</p>
 
       <div class="toolbar">
@@ -88,7 +85,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
-import { ArrowLeft, Refresh } from '@element-plus/icons-vue';
+import { Refresh, Cpu } from '@element-plus/icons-vue';
+import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage } from 'element-plus';
 

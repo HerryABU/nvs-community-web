@@ -24,7 +24,7 @@ import (
 // UploadZipHTML POST /api/userhtmls/upload
 // 接收ZIP文件，安全检测，解压到文件系统
 func UploadZipHTML(c *gin.Context) {
-	userID := c.GetUint("user_id")
+	userID := currentUserID(c)
 
 	// 接收多部分表单
 	name := c.PostForm("name")
@@ -196,7 +196,7 @@ func UploadZipHTML(c *gin.Context) {
 
 // ListHTMLs GET /api/userhtmls
 func ListHTMLs(c *gin.Context) {
-	userID := c.GetUint("user_id")
+	userID := currentUserID(c)
 	var htmls []models.UserHTML
 	models.DB.Where("user_id = ?", userID).Order("updated_at DESC").Find(&htmls)
 	utils.Success(c, htmls)
@@ -204,7 +204,7 @@ func ListHTMLs(c *gin.Context) {
 
 // GetHTML GET /api/userhtmls/:id
 func GetHTML(c *gin.Context) {
-	userID := c.GetUint("user_id")
+	userID := currentUserID(c)
 	htmlID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	var htmlItem models.UserHTML
@@ -224,7 +224,7 @@ func GetHTML(c *gin.Context) {
 
 // UpdateHTML PUT /api/userhtmls/:id
 func UpdateHTML(c *gin.Context) {
-	userID := c.GetUint("user_id")
+	userID := currentUserID(c)
 	htmlID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	var htmlItem models.UserHTML
@@ -268,7 +268,7 @@ func UpdateHTML(c *gin.Context) {
 
 // DeleteHTML DELETE /api/userhtmls/:id
 func DeleteHTML(c *gin.Context) {
-	userID := c.GetUint("user_id")
+	userID := currentUserID(c)
 	htmlID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	var htmlItem models.UserHTML
@@ -277,8 +277,7 @@ func DeleteHTML(c *gin.Context) {
 		return
 	}
 
-	// 删除整个解压目录
-	os.RemoveAll(htmlItem.ExtractDir)
+	// 合规留存：软删除，保留 ZIP 与解压目录（不物理移除），可追溯原始内容
 	models.DB.Delete(&htmlItem)
 	utils.Success(c, gin.H{"message": "扩展已删除"})
 }

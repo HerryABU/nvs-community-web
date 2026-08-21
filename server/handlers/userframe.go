@@ -21,7 +21,7 @@ import (
 
 // CreateFrame POST /api/userframes
 func CreateFrame(c *gin.Context) {
-	userID := c.GetUint("user_id")
+	userID := currentUserID(c)
 
 	var req struct {
 		Name         string `json:"name" binding:"required"`
@@ -123,7 +123,7 @@ func CreateFrame(c *gin.Context) {
 
 // ListFrames GET /api/userframes
 func ListFrames(c *gin.Context) {
-	userID := c.GetUint("user_id")
+	userID := currentUserID(c)
 	var frames []models.UserFrame
 	models.DB.Where("user_id = ?", userID).Order("updated_at DESC").Find(&frames)
 	utils.Success(c, frames)
@@ -131,7 +131,7 @@ func ListFrames(c *gin.Context) {
 
 // GetFrame GET /api/userframes/:id
 func GetFrame(c *gin.Context) {
-	userID := c.GetUint("user_id")
+	userID := currentUserID(c)
 	frameID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	var frame models.UserFrame
@@ -154,7 +154,7 @@ func GetFrame(c *gin.Context) {
 
 // UpdateFrame PUT /api/userframes/:id
 func UpdateFrame(c *gin.Context) {
-	userID := c.GetUint("user_id")
+	userID := currentUserID(c)
 	frameID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	var frame models.UserFrame
@@ -238,7 +238,7 @@ func UpdateFrame(c *gin.Context) {
 
 // DeleteFrame DELETE /api/userframes/:id
 func DeleteFrame(c *gin.Context) {
-	userID := c.GetUint("user_id")
+	userID := currentUserID(c)
 	frameID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	var frame models.UserFrame
@@ -247,7 +247,7 @@ func DeleteFrame(c *gin.Context) {
 		return
 	}
 
-	os.Remove(frame.FilePath)
+	// 合规留存：软删除，保留模板文件（不物理移除），可追溯原始内容
 	models.DB.Delete(&frame)
 	utils.Success(c, gin.H{"message": "模板已删除"})
 }

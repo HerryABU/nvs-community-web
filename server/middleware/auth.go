@@ -24,9 +24,9 @@ func AuthRequired() gin.HandlerFunc {
 			return
 		}
 
-		c.Set("userID", claims.UserID)
-		c.Set("userEmail", claims.Email)
-		c.Set("userRole", claims.Role)
+		c.Set(CtxUserID, claims.UserID)
+		c.Set(CtxUserEmail, claims.Email)
+		c.Set(CtxUserRole, claims.Role)
 		c.Next()
 	}
 }
@@ -34,14 +34,13 @@ func AuthRequired() gin.HandlerFunc {
 // AuthorRequired 要求作者角色（author / vip_author）
 func AuthorRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		role, exists := c.Get("userRole")
-		if !exists {
+		roleStr := UserRole(c)
+		if roleStr == "" {
 			utils.Forbidden(c, "需要作者权限")
 			c.Abort()
 			return
 		}
 
-		roleStr := role.(string)
 		if roleStr != "author" && roleStr != "vip_author" && roleStr != "admin" {
 			utils.Forbidden(c, "需要作者权限")
 			c.Abort()

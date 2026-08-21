@@ -14,7 +14,7 @@ import (
 
 // GetMyNovels 获取我的作品列表
 func GetMyNovels(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	novels, _, err := models.GetNovelsByAuthor(userID, 1, 1000)
 	if err != nil {
 		utils.InternalError(c, "获取作品列表失败")
@@ -176,7 +176,7 @@ func GetAuthorForum(c *gin.Context) {
 
 // GetNovelStats 获取作品统计
 func GetNovelStats(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	novel, err := models.GetNovelByID(uint(novelID))
@@ -194,4 +194,42 @@ func GetNovelStats(c *gin.Context) {
 	}
 
 	utils.Success(c, stats)
+}
+
+// GetAuthorBannedContent 获取作者被封禁（176号令）的小说/章节及封禁原因。
+// 采用 Unscoped 查询软删除记录，作者可看到「被封禁的内容 + 原因 + 时间」，满足合规告知要求。
+func GetAuthorBannedContent(c *gin.Context) {
+	userID := currentUserID(c)
+
+	type bannedNovel struct {
+		ID        uint       `json:"id"`
+		Title     string     `json:"title"`
+		BanReason string     `json:"ban_reason"`
+		BannedAt  *time.Time `json:"banned_at"`
+	}
+	novels := make([]bannedNovel, 0)
+	models.DB.Unscoped().Model(&models.Novel{}).
+		Select("id, title, ban_reason, deleted_at AS banned_at").
+		Where("author_id = ? AND deleted_at IS NOT NULL", userID).
+		Order("deleted_at DESC").
+		Scan(&novels)
+
+	type bannedChapter struct {
+		ID            uint       `json:"id"`
+		NovelID       uint       `json:"novel_id"`
+		NovelTitle    string     `json:"novel_title"`
+		ChapterNumber int        `json:"chapter_number"`
+		Title         string     `json:"title"`
+		BanReason     string     `json:"ban_reason"`
+		BannedAt      *time.Time `json:"banned_at"`
+	}
+	chapters := make([]bannedChapter, 0)
+	models.DB.Unscoped().Model(&models.Chapter{}).
+		Select("chapters.id, chapters.novel_id, chapters.chapter_number, chapters.title, chapters.ban_reason, chapters.deleted_at AS banned_at, novels.title AS novel_title").
+		Joins("JOIN novels ON novels.id = chapters.novel_id").
+		Where("novels.author_id = ? AND chapters.deleted_at IS NOT NULL", userID).
+		Order("chapters.deleted_at DESC").
+		Scan(&chapters)
+
+	utils.Success(c, gin.H{"novels": novels, "chapters": chapters})
 }

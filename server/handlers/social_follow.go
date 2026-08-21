@@ -13,7 +13,7 @@ import (
 
 // POST /api/follow/:id — 关注作者
 func FollowAuthor(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	authorID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	if uint(authorID) == userID {
@@ -35,7 +35,7 @@ func FollowAuthor(c *gin.Context) {
 
 // DELETE /api/follow/:id — 取消关注
 func UnfollowAuthor(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	authorID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	if err := models.DeleteFollow(userID, uint(authorID)); err != nil {
@@ -47,7 +47,7 @@ func UnfollowAuthor(c *gin.Context) {
 
 // GET /api/following — 我关注的人列表
 func ListFollowing(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 
 	users, total, err := models.GetFollowingList(userID, page, 20)
@@ -63,7 +63,7 @@ func ListFollowing(c *gin.Context) {
 
 // GET /api/followers — 关注我的人列表
 func ListFollowers(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 
 	users, total, err := models.GetFollowerList(userID, page, 20)
@@ -79,7 +79,7 @@ func ListFollowers(c *gin.Context) {
 
 // GET /api/follow/check/:id — 检查是否已关注某人
 func CheckFollow(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	authorID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	isFollow := models.IsFollowing(userID, uint(authorID))
 	utils.Success(c, gin.H{"is_following": isFollow})
@@ -87,7 +87,7 @@ func CheckFollow(c *gin.Context) {
 
 // GET /api/follow/stats — 关注统计
 func GetFollowStats(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	following := models.GetFollowingCount(userID)
 	followers := models.GetFollowersCount(userID)
 	utils.Success(c, gin.H{"following": following, "followers": followers})

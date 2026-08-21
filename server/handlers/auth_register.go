@@ -36,6 +36,12 @@ func Register(c *gin.Context) {
 		return
 	}
 
+	// 邮箱域名黑白名单校验（黑名单禁止、白名单放行）
+	if allowed, reason := models.CheckEmailDomainAllowed(input.Email); !allowed {
+		utils.BadRequest(c, reason)
+		return
+	}
+
 	// 检查邮箱是否已注册
 	existing, err := models.GetUserByEmail(input.Email)
 	if err == nil && existing != nil {
@@ -61,11 +67,12 @@ func Register(c *gin.Context) {
 
 	// 新用户默认都是读者；首次发布作品时自动升级为作者
 	user := &models.User{
-		Username:     input.Username,
-		Email:        input.Email,
-		PasswordHash: hash,
-		Nickname:     nickname,
-		Role:         "reader",
+		Username:       input.Username,
+		Email:          input.Email,
+		PasswordHash:   hash,
+		Nickname:       nickname,
+		Role:           "reader",
+		RegistrationIP: c.ClientIP(), // 合规留存：注册 IP（支持 X-Forwarded-For / X-Real-Ip）
 	}
 
 	if err := models.CreateUser(user); err != nil {
@@ -76,6 +83,9 @@ func Register(c *gin.Context) {
 		utils.InternalError(c, "注册失败")
 		return
 	}
+
+	// 合规审计：注册成功
+	recordUserAudit(c, user.ID, models.AuditRegister, "新用户注册，邮箱 "+user.Email, "success")
 
 	// 生成 JWT 并设置 Cookie
 	token, err := utils.GenerateToken(user.ID, user.Email, user.Role)

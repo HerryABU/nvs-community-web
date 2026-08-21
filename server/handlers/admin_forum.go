@@ -117,7 +117,7 @@ func AdminUpdateForum(c *gin.Context) {
 	utils.Success(c, forum)
 }
 
-// DELETE /api/admin/forums/:id — 删除论坛（管理员）
+// DELETE /api/admin/forums/:id — 删除论坛（软删除 + 留证）
 func AdminDeleteForum(c *gin.Context) {
 	if !ensureAdmin(c) {
 		return
@@ -129,11 +129,15 @@ func AdminDeleteForum(c *gin.Context) {
 		return
 	}
 
-	if err := models.DeleteForum(uint(id)); err != nil {
-		utils.InternalError(c, "删除论坛失败")
+	if err := softDeleteContent(c, "forum", uint(id), "管理员删除论坛", "admin", "delete"); err != nil {
+		if err == errContentNotFound {
+			utils.NotFound(c, "论坛不存在")
+		} else {
+			utils.InternalError(c, err.Error())
+		}
 		return
 	}
-	utils.Success(c, gin.H{"message": "论坛已删除"})
+	utils.Success(c, gin.H{"message": "论坛已删除（留证）"})
 }
 
 // POST /api/admin/forums/:id/review — 审查自建论坛（通过/驳回）

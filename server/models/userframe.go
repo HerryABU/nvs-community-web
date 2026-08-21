@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 // UserFrame 用户自定义UI模板（用于美化小说渲染页面）
 // 模板可调用平台格式API获取小说数据，支持沙盒内按钮等控件
@@ -28,6 +32,7 @@ type UserFrame struct {
 	RunMode      string `gorm:"size:16;default:sandbox;index" json:"run_mode"`      // sandbox(沙盒) / inline(非沙盒直接注入，仅限本人页面)
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
 	User  *User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	Novel *Novel `gorm:"foreignKey:NovelID" json:"novel,omitempty"`
@@ -63,6 +68,7 @@ type UserHTML struct {
 	RunMode      string `gorm:"size:16;default:sandbox;index" json:"run_mode"`      // sandbox / inline
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
 	User  *User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	Novel *Novel `gorm:"foreignKey:NovelID" json:"novel,omitempty"`

@@ -6,6 +6,7 @@ import 'element-plus/dist/index.css';
 import App from './App.vue';
 import router from './router';
 import './styles/global.css';
+import './styles/admin.css';
 
 // ====== 创建并挂载应用（核心，不依赖重量级组件） ======
 try {

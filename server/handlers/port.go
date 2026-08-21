@@ -28,7 +28,7 @@ func AllocatePort(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetUint("user_id")
+	userID := currentUserID(c)
 
 	// 检查同一用户下项目名唯一
 	var existing models.UserHTML
@@ -79,7 +79,7 @@ func ReleasePort(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetUint("user_id")
+	userID := currentUserID(c)
 
 	// 注销命名代理
 	if req.ProjectName != "" {
@@ -102,7 +102,7 @@ func ReleasePort(c *gin.Context) {
 
 // ListPorts GET /api/port/list
 func ListPorts(c *gin.Context) {
-	userID := c.GetUint("user_id")
+	userID := currentUserID(c)
 
 	var htmls []models.UserHTML
 	models.DB.Where("user_id = ? AND port > 0 AND is_active = ?", userID, true).Find(&htmls)

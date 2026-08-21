@@ -34,3 +34,53 @@ type FederatedNovel struct {
 }
 
 func (FederatedNovel) TableName() string { return "federated_novels" }
+
+// FederatedInbound 入站联邦连接记录 —— 记录「谁连接了我」。
+// 当远程站点访问本站公开联邦接口（/api/federated/novels 等）时，登记对方身份，
+// 让被连的一方也能看到是哪个站点在同步/连接自己。
+type FederatedInbound struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Name      string    `gorm:"size:128" json:"name"`       // 对方自称的站点名（source_name）
+	URL       string    `gorm:"size:512" json:"url"`        // 对方自称的站点地址（source_url）
+	IP        string    `gorm:"size:64;index" json:"ip"`    // 来源 IP
+	UserAgent string    `gorm:"size:512" json:"user_agent"` // User-Agent
+	Endpoint  string    `gorm:"size:64" json:"endpoint"`    // 命中的公开接口
+	Count     int       `gorm:"default:1" json:"count"`     // 累计访问次数
+	FirstSeen time.Time `json:"first_seen"`
+	LastSeen  time.Time `json:"last_seen"`
+}
+
+func (FederatedInbound) TableName() string { return "federated_inbound" }
+
+// RecordFederatedInbound 记录一次入站联邦访问（按 IP+名称+端点 聚合计数）
+func RecordFederatedInbound(name, url, ip, userAgent, endpoint string) {
+	now := time.Now()
+	var rec FederatedInbound
+	err := DB.Where("ip = ? AND name = ? AND endpoint = ?", ip, name, endpoint).First(&rec).Error
+	if err != nil {
+		DB.Create(&FederatedInbound{
+			Name: name, URL: url, IP: ip, UserAgent: userAgent, Endpoint: endpoint,
+			Count: 1, FirstSeen: now, LastSeen: now,
+		})
+		return
+	}
+	rec.Count++
+	rec.LastSeen = now
+	if url != "" {
+		rec.URL = url
+	}
+	if userAgent != "" {
+		rec.UserAgent = userAgent
+	}
+	DB.Save(&rec)
+}
+
+// ListFederatedInbound 列出入站连接记录（最近 N 条）
+func ListFederatedInbound(limit int) ([]FederatedInbound, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	var list []FederatedInbound
+	err := DB.Order("last_seen DESC").Limit(limit).Find(&list).Error
+	return list, err
+}

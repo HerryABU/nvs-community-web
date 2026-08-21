@@ -24,6 +24,7 @@ type Forum struct {
 	ReviewStatus string `gorm:"size:16;default:approved;index" json:"review_status"`      // approved/pending/rejected（自建论坛默认 pending 待管理员审查）
 	ReviewNote   string `gorm:"size:512;default:''" json:"review_note"`                   // 管理员审查意见
 	CreatedAt    time.Time `json:"created_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：论坛软删除
 
 	HasPassword bool `gorm:"-" json:"has_password"` // 是否有进入密码（运行时计算，不落库）
 }
@@ -111,6 +112,7 @@ type Thread struct {
 	PostCount int       `gorm:"default:0" json:"post_count"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 	User      *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	Forum     *Forum    `gorm:"foreignKey:ForumID" json:"forum,omitempty"`
 }
@@ -152,6 +154,8 @@ type Post struct {
 	UserID    uint      `gorm:"not null" json:"user_id"`
 	Content   string    `gorm:"type:text;not null" json:"content"`
 	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 	User      *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
 

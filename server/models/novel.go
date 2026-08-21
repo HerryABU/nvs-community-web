@@ -2,6 +2,8 @@ package models
 
 import (
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type Novel struct {
@@ -19,8 +21,10 @@ type Novel struct {
 	TotalWords      int       `gorm:"default:0" json:"total_words"`
 	TotalChapters   int       `gorm:"default:0" json:"total_chapters"`
 	ViewCount       int       `gorm:"default:0" json:"view_count"`
+	BanReason       string    `gorm:"size:512;default:''" json:"ban_reason"` // 176号令封禁原因（封禁时写入，作者端可查）
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
+	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
 	// 关联
 	Author       *User           `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
@@ -195,8 +199,10 @@ type Chapter struct {
 	ContentSignature string `gorm:"size:64;default:''" json:"content_signature"` // HMAC-SHA256 作者签名
 	WordCount        int    `gorm:"default:0" json:"word_count"`
 	Status        string    `gorm:"size:16;default:draft" json:"status"`
+	BanReason     string    `gorm:"size:512;default:''" json:"ban_reason"` // 176号令封禁原因（封禁时写入）
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
+	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 }
 
 func (Chapter) TableName() string {
@@ -205,6 +211,15 @@ func (Chapter) TableName() string {
 
 func CreateChapter(chapter *Chapter) error {
 	return DB.Create(chapter).Error
+}
+
+func GetChapterByID(id uint) (*Chapter, error) {
+	var chapter Chapter
+	err := DB.First(&chapter, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &chapter, nil
 }
 
 func GetChapterByNovelAndNumber(novelID uint, chapterNumber int) (*Chapter, error) {

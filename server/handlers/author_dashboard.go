@@ -12,7 +12,7 @@ import (
 
 // GET /api/author/dashboard — 作者端数据大屏
 func GetAuthorDashboard(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 
 	var novelIDs []uint
 	models.DB.Model(&models.Novel{}).Where("author_id = ?", userID).Pluck("id", &novelIDs)

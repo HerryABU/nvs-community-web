@@ -1,11 +1,7 @@
 <template>
   <div class="admin-page">
-    <div class="admin-page-header">
-      <el-button text @click="$router.push('/admin')"><el-icon><ArrowLeft /></el-icon> 返回后台</el-button>
-      <h2>健康检查</h2>
-    </div>
-
-    <div class="admin-page-body">
+    <AdminHeader title="健康检查" subtitle="服务器 / 数据库 / 网络 / 前端 API" :icon="Monitor" />
+    <div class="admin-page-body admin-panel">
       <div class="toolbar">
         <el-button type="primary" :icon="Refresh" :loading="loading" @click="loadHealth">立即检测</el-button>
         <el-switch v-model="autoRefresh" active-text="自动刷新（30s）" />
@@ -78,7 +74,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
-import { ArrowLeft, Refresh, Monitor, Coin, Connection } from '@element-plus/icons-vue';
+import { Refresh, Monitor, Coin, Connection } from '@element-plus/icons-vue';
+import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { publicApi } from '@/api/admin';
 import { ElMessage } from 'element-plus';
 

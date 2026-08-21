@@ -1,11 +1,7 @@
 <template>
   <div class="admin-page">
-    <div class="admin-page-header">
-      <el-button text @click="$router.push('/admin')"><el-icon><ArrowLeft /></el-icon> 返回后台</el-button>
-      <h2>数据库管理</h2>
-    </div>
-
-    <div class="admin-page-body">
+    <AdminHeader title="数据库管理" subtitle="SQLite ↔ MySQL 迁移 · 多库备份" :icon="DataLine" />
+    <div class="admin-page-body admin-panel">
       <el-tabs v-model="activeTab">
         <!-- ==================== 数据库迁移 ==================== -->
         <el-tab-pane label="数据库迁移" name="migrate">
@@ -98,7 +94,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue';
-import { ArrowLeft, Box, Download, Delete } from '@element-plus/icons-vue';
+import { Box, Download, Delete, DataLine } from '@element-plus/icons-vue';
+import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
 

@@ -1,10 +1,7 @@
 <template>
   <div class="admin-page">
-    <div class="admin-page-header">
-      <el-button text @click="$router.push('/admin')"><el-icon><ArrowLeft /></el-icon> 返回后台</el-button>
-      <h2>站点设置</h2>
-    </div>
-    <div class="admin-page-body">
+    <AdminHeader title="站点设置" subtitle="站点名称 · SMTP · robots.txt · 安全设置" :icon="Setting" />
+    <div class="admin-page-body admin-panel">
       <el-form :model="configForm" label-width="120px" @submit.prevent="saveConfig">
         <el-form-item label="站点名称">
           <el-input v-model="configForm.site_name" placeholder="星海文学" maxlength="64" />
@@ -40,6 +37,24 @@
           <el-switch v-model="captchaEnabled" active-text="开启" inactive-text="关闭" />
           <span class="hint-text">在注册/登录时显示滑块验证码</span>
         </el-form-item>
+        <el-form-item label="邮箱域名黑名单">
+          <el-input
+            v-model="emailDomainBlacklist"
+            type="textarea"
+            :rows="3"
+            placeholder="例：qq.com, gmail.com, 163.com"
+          />
+          <span class="hint-text">黑名单域名禁止注册（逗号或换行分隔，留空则不限制）</span>
+        </el-form-item>
+        <el-form-item label="邮箱域名白名单">
+          <el-input
+            v-model="emailDomainWhitelist"
+            type="textarea"
+            :rows="3"
+            placeholder="例：company.com, university.edu"
+          />
+          <span class="hint-text">白名单开启后仅允许这些域名注册（留空则不限制）；黑名单优先级高于白名单</span>
+        </el-form-item>
         <el-divider />
         <h3 class="sec-title">SEO 设置</h3>
         <el-form-item label="robots.txt">
@@ -55,7 +70,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
-import { ArrowLeft } from '@element-plus/icons-vue';
+import { Setting } from '@element-plus/icons-vue';
+import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage } from 'element-plus';
 
@@ -67,6 +83,24 @@ const vipEnabled = ref(false);
 const emailVerifyEnabled = ref(false);
 const captchaEnabled = ref(false);
 const savingConfig = ref(false);
+
+// 邮箱域名黑白名单（逗号/换行分隔文本，保存时转 JSON 数组）
+const emailDomainBlacklist = ref('');
+const emailDomainWhitelist = ref('');
+
+function textToJsonList(text: string): string {
+  const items = text.split(/[,，\n;；\s]+/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+  return JSON.stringify(items);
+}
+function jsonListToText(json: string): string {
+  if (!json) return '';
+  try {
+    const arr = JSON.parse(json);
+    return Array.isArray(arr) ? arr.join(', ') : json;
+  } catch {
+    return json;
+  }
+}
 
 async function loadConfig() {
   try {
@@ -82,6 +116,8 @@ async function loadConfig() {
     configForm.smtp_password = data.smtp_password || '';
     configForm.smtp_from = data.smtp_from || '';
     configForm.robots_txt = data.robots_txt || '';
+    emailDomainBlacklist.value = jsonListToText(data.email_domain_blacklist || '');
+    emailDomainWhitelist.value = jsonListToText(data.email_domain_whitelist || '');
   } catch { /* ignore */ }
 }
 
@@ -99,6 +135,8 @@ async function saveConfig() {
       smtp_password: configForm.smtp_password,
       smtp_from: configForm.smtp_from,
       robots_txt: configForm.robots_txt,
+      email_domain_blacklist: textToJsonList(emailDomainBlacklist.value),
+      email_domain_whitelist: textToJsonList(emailDomainWhitelist.value),
     });
     ElMessage.success('配置已保存');
   } catch { ElMessage.error('保存失败'); }

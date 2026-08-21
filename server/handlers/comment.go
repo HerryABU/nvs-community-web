@@ -41,7 +41,7 @@ func GetComments(c *gin.Context) {
 }
 
 func CreateComment(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 
 	// 全局禁言检查
 	if checkUserMuted(c) {
@@ -92,7 +92,7 @@ func CreateComment(c *gin.Context) {
 }
 
 func DeleteComment(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	commentID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	comment, err := models.GetCommentByID(uint(commentID))

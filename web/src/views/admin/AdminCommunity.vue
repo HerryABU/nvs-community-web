@@ -1,10 +1,7 @@
 <template>
   <div class="admin-page">
-    <div class="admin-page-header">
-      <el-button text @click="$router.push('/admin')"><el-icon><ArrowLeft /></el-icon> 返回后台</el-button>
-      <h2>社区动态</h2>
-    </div>
-    <div class="admin-page-body">
+    <AdminHeader title="社区动态" subtitle="最近用户、作品、评论、帖子" :icon="TrendCharts" />
+    <div class="admin-page-body admin-panel">
       <el-row :gutter="20">
         <el-col :xs="24" :md="12">
           <h4 class="sec-title">👤 最近注册用户</h4>
@@ -66,7 +63,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
-import { ArrowLeft } from '@element-plus/icons-vue';
+import { TrendCharts } from '@element-plus/icons-vue';
+import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 
 const data = reactive({ recent_users: [] as any[], recent_novels: [] as any[], recent_comments: [] as any[], recent_threads: [] as any[] });

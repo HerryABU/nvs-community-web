@@ -6,7 +6,7 @@ import "time"
 type Report struct {
 	ID         uint       `gorm:"primaryKey" json:"id"`
 	ReporterID uint       `gorm:"not null;index" json:"reporter_id"`
-	TargetType string     `gorm:"size:16;not null" json:"target_type"` // novel/comment/thread
+	TargetType string     `gorm:"size:16;not null" json:"target_type"` // novel/comment/thread/post/blog/forum/chapter/user/userframe/userhtml
 	TargetID   uint       `gorm:"not null" json:"target_id"`
 	ReasonCode string     `gorm:"size:32;default:''" json:"reason_code"` // 预置理由编码
 	Reason     string     `gorm:"size:64;not null" json:"reason"`        // 理由展示文本
@@ -36,8 +36,15 @@ func PredefinedReportReasons() []ReportReason {
 		{Code: "porn", Label: "色情低俗", Desc: "色情、淫秽或低俗内容"},
 		{Code: "violence", Label: "暴力血腥", Desc: "宣扬暴力、血腥、恐怖内容"},
 		{Code: "illegal", Label: "违法违规", Desc: "违反法律法规或危害国家安全的内容"},
+		{Code: "politics", Label: "涉政敏感", Desc: "涉及政治敏感、危害社会稳定等红线内容"},
 		{Code: "infringement", Label: "抄袭侵权", Desc: "抄袭、盗用他人原创作品或版权内容"},
-		{Code: "misleading", Label: "虚假误导", Desc: "虚假信息、误导性陈述"},
+		{Code: "misleading", Label: "虚假误导", Desc: "虚假信息、误导性陈述、谣言"},
+		{Code: "privacy", Label: "泄露隐私", Desc: "泄露他人姓名、住址、联系方式等个人隐私"},
+		{Code: "threat", Label: "人身威胁", Desc: "威胁恐吓、骚扰、人肉搜索等行为"},
+		{Code: "gambling", Label: "赌博诈骗", Desc: "赌博、诈骗、传销、非法集资等违法内容"},
+		{Code: "minors", Label: "危害未成年人", Desc: "危害未成年人身心健康的有害内容"},
+		{Code: "baiting", Label: "恶意引战", Desc: "跨区引战、挑动对立、恶意炒作"},
+		{Code: "malware", Label: "恶意代码", Desc: "含病毒、木马、钓鱼或恶意脚本的 HTML/扩展"},
 		{Code: "other", Label: "其他", Desc: "其他需要说明的问题"},
 	}
 }

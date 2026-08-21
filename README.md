@@ -45,6 +45,10 @@
 - 🛡️ **Windows 防火墙自动配置** — 尝试自动添加 `netsh` 入站规则，管理员权限不足时输出命令行供复制
 - 📦 **前端内嵌** — Vue 3 前端编译进 Go 二进制，单文件部署
 - 🗄️ **SQLite 零配置** — 首次运行时自动创建数据库，无需安装或配置
+- 🧭 **建站向导** — 首次运行进入可视化安装向导（环境检查 / 数据库连通测试 / 站点名与管理员设置），一次性安装密钥仅控制台显示一次
+- 🔐 **数据库配置加密** — 数据库连接信息（含密码）经 AES-256-GCM 加密落盘 `secure-config.json`，不写明文 `.env`
+- 🔄 **数据库在线热迁移** — SQLite ↔ MySQL 双向热切换，全程无需重启，逐表复制并上报进度
+- 💾 **备份 / 恢复 / 定时备份** — SQLite `VACUUM INTO` 无损快照 / MySQL 全表 JSON 快照，支持按间隔定时调度
 
 ### 用户系统
 - 🔐 **JWT HttpOnly Cookie 认证** — `SameSite=Lax`，72h 过期
@@ -52,6 +56,8 @@
 - 📧 **邮箱验证码** — 支持 QQ邮箱/Gmail/163 SMTP，6位数字验证码，10分钟有效
 - 🧩 **滑块验证码** — `ENABLE_CAPTCHA` 开关控制
 - 👥 **用户分级** — 普通用户 / 作者 / VIP作者 / 管理员 / 仲裁员
+- 📍 **注册/登录 IP 留存** — 记录 `registration_ip` / `last_login_ip` / `last_login_at`（176号令合规）
+- 🕵️ **用户行为审计日志** — 登录成功/失败、登出、改密、注册全记录（含 IP / User-Agent）
 
 ### 作品创作
 - 📝 **12 大分类** — 硬科幻 / 奇幻 / 推演文学 / 架空历史 / 现实主义 / 悬疑推理 / 实验文学 / 同人区 / 政治区 / 讽刺文学 / 泛二次元区 / 其他
@@ -75,13 +81,20 @@
 - 🧱 **敏感区三级隔离墙** — 系统级（管理员配置敏感分区）+ 论坛级（敏感论坛自动触发）+ 作者级（自定义警告语），3~5步确认弹窗含手动输入，动态配置步骤数/警告语/跨域额外步数
 - 🚫 **IP 黑名单** — 管理员可封禁 IP，支持过期时间
 - 🚦 **IP 限流** — 滑动窗口算法，内存存储，登录 5次/60s，评论 20次/60s
-- 🧹 **XSS 防护** — bluemonday 白名单净化 + 正则移除危险标签和事件处理器
+- 🧹 **XSS 防护** — bluemonday 白名单净化 + 动态正则规则引擎（管理员后台可维护、可测试）+ 正则移除危险标签和事件处理器
 - 🔏 **内容签名** — HMAC-SHA256 作者签名，章节完整性可验证
 - 📋 **举报系统** — 支持举报作品/评论/帖子，管理员处理
+- 🗑️ **内容软删除** — 8 张内容表软删除（`deleted_at`），删除不物理移除、正文归档到 `.deleted/`，随时可追溯原始内容
+- 📊 **访问日志关联 user_id** — JSON 一行含 `user_id`/方法/路径/IP/状态/耗时，按天滚动，可追溯到具体用户
+- 🔐 **日志完整性保护** — 每日 SHA256 校验 + gzip 归档 + 只读权限（0444）+ 6 个月保留
+- 🛡️ **内容安全扫描（23 条规则）** — 提权 / Shell注入 / 木马 / 挖矿 / 僵尸网络 / 数据窃取 / 钓鱼，上传即自动审查
+- 🚨 **内容抢救台** — 二级密码 + 短时 token 应急窗口，粘贴 URL 即可预览全部评论/回复并物理硬删除，全程审计留痕
 
 ### 站点互通
 - 🌐 **联邦站点** — 支持远程站点互联与跨站作品同步（模仿 alist）
 - 🔗 **公开 API** — `/api/site-info`、`/api/federated/novels`、`/api/federated/sites`
+- 📡 **联邦入站记录** — 记录「谁连接了我」（对方站点名/地址/IP/User-Agent/访问次数），被连方可见连接来源
+- 🔁 **联邦同步自报身份** — 同步时向对方自报本站名与地址，便于对方追溯
 
 ### 🎨 自定义 HTML-UI 美化
 
@@ -190,11 +203,11 @@ Markdown/富文本编辑器支持 `[expand title="标题"]...[/expand]` 语法�
 |------|------|
 | 后端 | Go 1.22+ · Gin · GORM (SQLite/MySQL) |
 | 前端 | Vue 3 · Vite · Element Plus · TypeScript · TipTap · Cherry Markdown 0.11 · ECharts · KaTeX (physics/mhchem) · Mermaid · smiles-drawer (chemfig) |
-| 数据库 | SQLite（默认，零配置） / MySQL 8.0 |
+| 数据库 | SQLite（默认，零配置） / MySQL 8.0（支持在线热迁移） |
 | 缓存 | Redis 7（可选，MySQL 模式推荐） |
 | 存储 | 文件系统（HTML + JSON） + 内存 VFS（沙盒虚拟文件系统） |
 | 扩展 | 自定义 HTML-UI 模板 · ZIP 托管 · WASM · 端口代理 · 虚拟路径 |
-| 安全 | 内容扫描（23条规则）· ZIP炸弹检测 · CSP · iframe sandbox · 目录锁定 |
+| 安全 | 内容扫描（23条规则）· 动态 XSS 规则引擎 · 软删除（8表）· 审计日志 · 访问日志关联 user_id · 日志完整性保护 · ZIP炸弹检测 · CSP · iframe sandbox · 目录锁定 · 数据库配置 AES-256 加密 |
 | 构建 | Go `embed` 前端 → 单二进制文件 |
 
 ---
@@ -231,7 +244,15 @@ chmod +x nvs-linux-x64
 nvs-win-x64.exe
 ```
 
-首次启动自动创建 `.env` 文件，浏览器打开日志中列出的任一地址即可。例如：
+首次启动自动创建 `.env` 文件，并进入**建站向导**。控制台会打印**一次性安装密钥**（仅显示一次），浏览器打开日志中列出的地址完成安装：
+
+```
+  首次运行：进入建站向导模式
+  向导地址: http://localhost:8080/install
+  安装密钥（一次性，仅显示一次，切勿泄露）: xxxxxxxxxxxxxxxx
+```
+
+向导中依次完成：环境检查 → 数据库设置（SQLite 零配置 / MySQL）→ 站点名称与管理员账号。安装完成后数据库连接信息会 **AES-256-GCM 加密落盘**（不写明文 `.env`），随后正常启动：
 
 ```
   可访问地址：
@@ -271,6 +292,10 @@ cd server && go build -ldflags="-s -w" -o nvs-server.exe . && cd ..
 ---
 
 ## 🔐 默认管理员
+
+> 通过**建站向导**安装时，可在向导中自定义管理员账号与密码（推荐）。
+
+若未自定义（如直接使用已有数据库初始化），系统自动回退创建默认管理员：
 
 | 字段 | 值 |
 |------|-----|
@@ -358,6 +383,8 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 | `DB_PASSWORD` | `nvs_pass_2026` | MySQL 密码 |
 | `DB_NAME` | `nvs` | MySQL 数据库名 |
 
+> 🔐 **数据库密码加密存储**：通过建站向导或后台「数据库迁移」设置的 MySQL 连接信息（含密码）会经 **AES-256-GCM** 加密写入 `data/secure-config.json`（密钥存 `data/.secret.key`，仅本机可读），并自动从 `.env` 移除明文 `DB_*` 行，避免密码明文残留。`config.Init()` 启动时会优先解密加载该加密配置覆盖内存变量。
+
 ### 网络与端口
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
@@ -419,45 +446,91 @@ nvs/
 │   ├── go.mod / go.sum
 │   │
 │   ├── config/
-│   │   └── config.go              # 自动创建 .env + 加载 + IPv4/IPv6 检测
+│   │   ├── config.go              # 自动创建 .env + 加载 + IPv4/IPv6 检测
+│   │   ├── secure.go              # 数据库配置 AES-256-GCM 加密存储（.secret.key + secure-config.json）
+│   │   └── setup.go               # 建站向导状态 / 一次性安装密钥
 │   │
-│   ├── models/                    # 数据层（19 个结构体）
-│   │   ├── user.go                # User + 管理员 / VIP 检查
-│   │   ├── novel.go               # Novel + Chapter + NovelCategory
-│   │   ├── comment.go             # Comment
-│   │   ├── forum.go               # Forum / Thread / Post
+│   ├── models/                    # 数据层（26 个结构体）
+│   │   ├── user.go                # User + 管理员 / VIP 检查（含注册/登录 IP）
+│   │   ├── novel.go               # Novel + Chapter + NovelCategory（软删除）
+│   │   ├── comment.go             # Comment（软删除）
+│   │   ├── forum.go               # Forum / Thread / Post / ForumMute（软删除）
+│   │   ├── blog.go                # AuthorBlog 作者博客（软删除）
 │   │   ├── bookshelf.go           # BookShelf（收藏 + 阅读进度）
 │   │   ├── rating.go              # Rating 五维度评分
-│   │   └── platform.go            # VipApplication / Report / WithdrawalRequest
-│   │                              #   / EarningsRecord / PlatformConfig / FederatedSite
-│   │                              #   / FederatedNovel / BlacklistIP / WallConfig
+│   │   ├── follow.go              # Follow 关注关系
+│   │   ├── userframe.go           # UserFrame / UserHTML 自定义模板与扩展（软删除）
+│   │   ├── platform.go            # VipApplication / Report / WithdrawalRequest
+│   │   │                          #   / EarningsRecord / BlacklistIP
+│   │   ├── platform_config.go     # PlatformConfig 站长配置键值
+│   │   ├── platform_federated.go  # FederatedSite / FederatedNovel / FederatedInbound
+│   │   ├── platform_wall.go       # WallConfig 隔离墙配置
+│   │   ├── user_audit.go          # UserAuditLog 用户行为审计日志
+│   │   ├── emergency_audit.go     # EmergencyAuditLog 管理员审计日志
+│   │   ├── log_archive.go         # 访问日志归档调度（SHA256 + gzip + 6个月保留）
+│   │   ├── xss_rule.go            # XssRule 动态 XSS 正则规则
+│   │   ├── backup.go              # 备份 / 恢复 / 定时备份调度器
+│   │   └── db.go                  # AllModels 迁移 + 跨库复制 + 热切换
 │   │
-│   ├── handlers/                  # API 处理器（按功能拆分，20+ 文件）
-│   │   ├── auth.go                # 注册 / 登录 / 登出 / 发送验证码 / 验证邮箱
-│   │   ├── novel.go               # 作品 CRUD / 分类列表 / 分类统计
-│   │   ├── chapter.go             # 章节 CRUD / 内容哈希 / 作者签名 / 验证
-│   │   ├── comment.go             # 评论 CRUD
-│   │   ├── rating.go              # 评分 upsert / 查询
+│   ├── handlers/                  # API 处理器（按功能拆分，40+ 文件）
+│   │   ├── auth_register.go       # 注册（记录注册 IP + 审计）
+│   │   ├── auth_login.go          # 登录 / 登出 / 当前用户（登录 IP + 审计）
+│   │   ├── auth_password.go       # 邮箱验证码 / 忘记重置密码 / 改密码（审计）
+│   │   ├── novel.go               # 作品 CRUD / 分类列表 / 分类统计（软删除）
+│   │   ├── novel_public.go        # 公开作品列表 / 搜索 / 旧路径 301
+│   │   ├── chapter_read.go        # 章节读取 / 完整性校验
+│   │   ├── chapter_write.go       # 章节 CRUD / SHA256 + HMAC 签名（软删除归档）
+│   │   ├── comment.go             # 评论 CRUD（软删除）
+│   │   ├── rating.go              # 五维评分 upsert / 查询
 │   │   ├── forum.go               # 论坛 / 帖子 / 回帖
+│   │   ├── forum_custom.go        # 用户自建论坛 / 版主删除（审计）
 │   │   ├── bookshelf.go           # 书架管理 + 阅读进度
-│   │   ├── author.go              # 作者后台 / 收益 / 提现 / 作者主页
+│   │   ├── social_follow.go       # 关注 / 取关 / 统计
+│   │   ├── social_blog.go         # 作者博客 CRUD（软删除）
+│   │   ├── author_profile.go      # 作者主页 / 头像 / 资料
+│   │   ├── author_dashboard.go    # 作者数据大屏
 │   │   ├── import_export.go       # 导入预览 / 多格式导入导出
-│   │   ├── admin.go               # 管理后台（统计/大屏/用户/VIP/举报/财务/配置/站点）
-│   │   └── admin_forum.go         # 论坛管理
+│   │   ├── export_format.go       # EPUB / Markdown / TXT / DOCX 导出
+│   │   ├── setup.go               # 建站向导（环境检查 / DB 测试 / 安装）
+│   │   ├── db_admin.go            # 数据库健康 / 在线热迁移 / 备份恢复
+│   │   ├── admin.go               # 管理后台（统计/大屏/社区动态）
+│   │   ├── admin_user.go          # 用户管理 / 禁言 / 封禁（审计）+ 用户审计查询
+│   │   ├── admin_report.go        # 举报处理（审计）
+│   │   ├── admin_forum.go         # 论坛管理 / 审查
+│   │   ├── admin_site.go          # 站长配置 / 隔离墙 / 联邦站点 / 入站记录
+│   │   ├── emergency.go           # 内容抢救台（二级密码 + 硬删除 + 审计）
+│   │   ├── userframe.go           # UserFrame 模板 CRUD
+│   │   ├── userhtml.go            # UserHTML 扩展 ZIP 上传 / CRUD
+│   │   ├── html_review.go         # HTML 内容人工复核
+│   │   ├── sandbox_vfs.go         # 沙盒虚拟文件系统 VFS
+│   │   ├── port.go                # 端口分配 / 命名代理
+│   │   ├── xss_rule.go            # XSS 规则库 CRUD / 测试
+│   │   ├── batch.go               # API 聚合（一次请求批量获取）
+│   │   └── context.go             # 鉴权上下文统一封装（currentUserID 等）
 │   │
 │   ├── middleware/
-│   │   └── auth.go                # JWT 鉴权 + 角色检查 + Cookie 管理
+│   │   ├── auth.go                # JWT 鉴权 + 角色检查 + Cookie 管理
+│   │   ├── context.go             # 鉴权上下文 key 常量 + getter（单一权威来源）
+│   │   ├── access_log.go          # 访问日志（JSON + user_id + 按天滚动）
+│   │   ├── header_logger.go       # 请求头日志（敏感头脱敏）
+│   │   ├── recovery.go            # panic 恢复（不泄露堆栈）
+│   │   ├── sandbox.go             # 沙盒安全头（CSP / COOP / COEP）
+│   │   ├── sandbox_fs.go          # 沙盒写入保护 / 脚本扩展名拦截
+│   │   └── portproxy.go           # 命名端口反向代理
 │   │
 │   ├── security/
 │   │   ├── ratelimit.go           # IP 滑动窗口限流（内存）
-│   │   ├── sanitize.go            # bluemonday XSS 净化 + 危险标签移除
-│   │   └── sign.go                # HMAC-SHA256 内容签名
+│   │   ├── sanitize.go            # bluemonday XSS 净化 + 动态规则 + 危险标签移除
+│   │   ├── sign.go                # HMAC-SHA256 内容签名 + 作者签名密钥
+│   │   ├── content_scan.go        # 内容安全扫描（23 条规则）
+│   │   └── sandbox_fs.go          # 沙盒目录锁定 / 路径穿越防护
 │   │
 │   ├── utils/
 │   │   ├── jwt.go                 # JWT 生成/解析
 │   │   ├── password.go            # bcrypt 密码哈希
 │   │   ├── response.go            # 统一 JSON 响应格式
-│   │   └── email.go               # SMTP 验证码发送与校验
+│   │   ├── email.go               # SMTP 验证码发送与校验
+│   │   └── zipbomb.go             # ZIP 炸弹检测（压缩比/大小/数量/穿越）
 │   │
 │   └── dist/                      # [自动生成] 前端构建产物（Go embed 使用）
 │
@@ -514,6 +587,11 @@ nvs/
 | POST | `/api/auth/send-code` | — | 发送邮箱验证码 |
 | POST | `/api/auth/verify-code` | — | 验证邮箱验证码 |
 | GET | `/api/auth/me` | JWT | 当前用户信息 |
+
+### API 聚合
+| 方法 | 端点 | 认证 | 说明 |
+|------|------|------|------|
+| POST | `/api/batch` | — | 一次请求批量并发获取多个接口数据（限流 30次/60s） |
 
 ### 作品
 | 方法 | 端点 | 认证 | 说明 |
@@ -625,7 +703,11 @@ nvs/
 | GET | `/api/admin/dashboard` | 管理员 | 数据大屏（7天趋势、2×2 图表） |
 | GET | `/api/admin/community` | 管理员 | 社区动态（最新用户/作品/评论/帖子） |
 | GET | `/api/admin/users` | 管理员 | 用户列表 |
+| GET | `/api/admin/users/audit` | 管理员 | 用户行为审计日志（可按 user_id/action 筛选） |
 | PUT | `/api/admin/users/:id` | 管理员 | 修改用户 |
+| DELETE | `/api/admin/users/:id` | 管理员 | 删除/封禁用户 |
+| POST | `/api/admin/users/:id/mute` | 管理员 | 禁言用户 |
+| POST | `/api/admin/users/:id/unmute` | 管理员 | 解除禁言 |
 | GET | `/api/admin/vip-applications` | 管理员 | VIP 申请列表 |
 | POST | `/api/admin/vip-applications/:id/approve` | 管理员 | 批准 VIP |
 | GET | `/api/admin/reports` | 管理员 | 举报列表 |
@@ -636,6 +718,7 @@ nvs/
 | GET | `/api/admin/wall-config` | 管理员 | 隔离墙配置 |
 | PUT | `/api/admin/wall-config` | 管理员 | 更新隔离墙配置 |
 | GET | `/api/admin/sites` | 管理员 | 远程站点列表 |
+| GET | `/api/admin/sites/inbound` | 管理员 | 入站连接记录（谁连了我） |
 | POST | `/api/admin/sites` | 管理员 | 添加远程站点 |
 | PUT | `/api/admin/sites/:id` | 管理员 | 更新远程站点 |
 | DELETE | `/api/admin/sites/:id` | 管理员 | 删除远程站点 |
@@ -644,6 +727,47 @@ nvs/
 | POST | `/api/admin/forums` | 管理员 | 创建论坛 |
 | PUT | `/api/admin/forums/:id` | 管理员 | 编辑论坛 |
 | DELETE | `/api/admin/forums/:id` | 管理员 | 删除论坛 |
+| POST | `/api/admin/forums/:id/review` | 管理员 | 自建论坛审查 |
+| GET | `/api/admin/xss-rules` | 管理员 | XSS 动态规则库 |
+| POST | `/api/admin/xss-rules` | 管理员 | 新增 XSS 规则 |
+| PUT | `/api/admin/xss-rules/:id` | 管理员 | 更新 XSS 规则 |
+| DELETE | `/api/admin/xss-rules/:id` | 管理员 | 删除 XSS 规则 |
+| POST | `/api/admin/xss-rules/test` | 管理员 | 测试规则正则 |
+| GET | `/api/admin/html-reviews` | 管理员 | HTML 内容审查列表 |
+| GET | `/api/admin/html-reviews/:type/:id` | 管理员 | 审查详情 |
+| POST | `/api/admin/html-reviews/:type/:id/review` | 管理员 | 复核 HTML 内容 |
+
+### 🔧 内容抢救台（应急窗口）
+| 方法 | 端点 | 认证 | 说明 |
+|------|------|------|------|
+| POST | `/api/admin/emergency/set-password` | 管理员 | 设置/修改二级密码 |
+| POST | `/api/admin/emergency/unlock` | 管理员 | 二级密码解锁（限流 10次/60s，失败锁定 15 分钟） |
+| GET | `/api/admin/emergency/preview` | 二级密码 token | 拉取内容预览（粘贴 URL，小说/博客/帖子返回全部评论/回复） |
+| DELETE | `/api/admin/emergency/content` | 二级密码 token | 物理硬删除（不可恢复） |
+| GET | `/api/admin/emergency/audit` | 管理员 | 抢救台审计日志 |
+
+### 🗄️ 数据库管理
+| 方法 | 端点 | 认证 | 说明 |
+|------|------|------|------|
+| GET | `/api/admin/db/health` | 管理员 | 数据库健康检查 |
+| GET | `/api/admin/db/current` | 管理员 | 当前连接摘要（密码脱敏） |
+| POST | `/api/admin/db/migrate` | 管理员 | SQLite ↔ MySQL 在线热迁移（无需重启） |
+| GET | `/api/admin/db/job/:id` | 管理员 | 迁移任务进度 |
+| POST | `/api/admin/db/backup` | 管理员 | 立即备份 |
+| GET | `/api/admin/db/backups` | 管理员 | 备份列表 |
+| DELETE | `/api/admin/db/backups/:name` | 管理员 | 删除备份 |
+| GET | `/api/admin/db/backups/:name/download` | 管理员 | 下载备份 |
+| POST | `/api/admin/db/restore` | 管理员 | 恢复备份（仅 SQLite） |
+| GET | `/api/admin/db/backup-config` | 管理员 | 定时备份配置 |
+| PUT | `/api/admin/db/backup-config` | 管理员 | 更新定时备份配置 |
+
+### 🧭 建站向导
+| 方法 | 端点 | 认证 | 说明 |
+|------|------|------|------|
+| GET | `/api/setup/status` | — | 安装状态 |
+| GET | `/api/setup/env-check` | 安装密钥 | 环境检查 |
+| POST | `/api/setup/db-test` | 安装密钥 | 测试数据库连通 |
+| POST | `/api/setup/install` | 安装密钥 | 执行安装（装后路由注销） |
 
 ### 远程站点
 | 方法 | 端点 | 认证 | 说明 |
@@ -651,6 +775,8 @@ nvs/
 | GET | `/api/federated/novels` | — | 联邦作品列表 |
 | GET | `/api/federated/sites` | — | 公开站点列表 |
 | GET | `/api/site-info` | — | 本站信息 |
+
+> 📡 上述联邦公开接口会记录「谁连接了我」（入站连接：对方站点名/地址/IP/User-Agent/访问次数），被连方可在后台「远程站点互通 → 谁连了我」查看。联邦同步时本站会向对方自报身份（`source_name`/`source_url`）。
 
 ### 文件服务
 | 路径 | 说明 |
@@ -713,10 +839,11 @@ nvs/
 - [x] **Phase 1 MVP** — 注册登录、作品 CRUD、章节读写（含哈希签名）、分类体系、评论、多维度评分、论坛、导入预览/追加/导出、作者后台、管理后台
 - [x] **Phase 1.5 安全与合规** — 敏感区隔离墙（可配置 3~5 步确认）、HMAC-SHA256 内容签名、章节完整性验证、举报系统、IP 黑名单、跨域评论限速
 - [x] **Phase 2 生态增强** — 书架收藏与阅读进度、邮箱验证码、滑块验证码、站点联邦互通
-- [x] **Phase 2.5 部署体验** — 自动创建 .env、IPv4/IPv6 网络配置、网卡 IP 自动扫描、Windows 防火墙自动配置、代码模块化拆分（后端22文件/前端15组件）、社区动态仪表盘、作者博客分页、收藏/阅读数据图表
+- [x] **Phase 2.5 部署体验** — 自动创建 .env、IPv4/IPv6 网络配置、网卡 IP 自动扫描、Windows 防火墙自动配置、代码模块化拆分、社区动态仪表盘、作者博客分页、收藏/阅读数据图表
 - [x] **Phase 2.6 创作增强** — Cherry Markdown 统一渲染引擎、图表切换、搜索增强、隔离墙三级体系、字数趋势、博客 MD 渲染
 - [x] **Phase 2.7 个性化 & 扩展** — 自定义 HTML-UI 模板（阅读+作者展现）、ZIP 扩展托管、HTML 应用广场、WASM 沙盒支持、VFS 虚拟文件系统、端口代理、23条内容安全扫描、虚拟路径隐藏、展开/收起控件
-- [ ] **Phase 3 高级功能** — 付费阅读闭环、打赏 UI、EPUB 封面增强、反商业爬虫、自动备份
+- [x] **Phase 2.8 部署与合规（176号令）** — 建站向导（一次性安装密钥 + 数据库加密配置）、SQLite ↔ MySQL 在线热迁移、自动备份/恢复、注册/登录 IP 留存、内容软删除（8 表）、用户行为审计日志、访问日志关联 user_id、日志完整性保护（SHA256 归档 + 6 个月保留）、管理员审核日志规范、联邦入站记录
+- [ ] **Phase 3 高级功能** — 付费阅读闭环、打赏 UI、EPUB 封面增强、反商业爬虫
 - [ ] **Phase 4 治理与扩展** — 社区仲裁员选举、财务公开面板、API 开放平台、移动端 PWA
 
 ---

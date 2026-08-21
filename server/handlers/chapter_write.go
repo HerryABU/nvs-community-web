@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"time"
 
 	"nvs-server/config"
 	"nvs-server/models"
@@ -20,7 +21,7 @@ import (
 )
 
 func CreateChapter(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	novel, err := models.GetNovelByID(uint(novelID))
@@ -92,7 +93,7 @@ func CreateChapter(c *gin.Context) {
 }
 
 func UpdateChapter(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	chapterNum, _ := strconv.Atoi(c.Param("num"))
 
@@ -152,7 +153,7 @@ func UpdateChapter(c *gin.Context) {
 }
 
 func DeleteChapter(c *gin.Context) {
-	userID := c.GetUint("userID")
+	userID := currentUserID(c)
 	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	chapterNum, _ := strconv.Atoi(c.Param("num"))
 
@@ -168,22 +169,28 @@ func DeleteChapter(c *gin.Context) {
 		return
 	}
 
-	os.Remove(chapter.ContentPath)
+	// 合规留存：软删除。正文文件移入 .deleted/ 目录归档保留（避免后续编号复用覆盖原始内容），
+	// 不再物理删除文件、不再重排编号，保证任何时候都能追溯原始正文。
+	authorDir := filepath.Join(config.NovelDataDir, "authors", fmt.Sprintf("%d", userID), fmt.Sprintf("%d", novelID))
+	deletedDir := filepath.Join(authorDir, ".deleted")
+	os.MkdirAll(deletedDir, 0755)
+	deletedPath := filepath.Join(deletedDir, fmt.Sprintf("%d_%d.html", chapterNum, time.Now().Unix()))
+	if chapter.ContentPath != "" {
+		if err := os.Rename(chapter.ContentPath, deletedPath); err == nil {
+			models.DB.Model(&models.Chapter{}).Where("id = ?", chapter.ID).Update("content_path", deletedPath)
+		}
+	}
 
 	if err := models.DeleteChapter(chapter.ID); err != nil {
 		utils.InternalError(c, "删除章节失败")
 		return
 	}
 
-	// 自动重排：将后续章节编号前移
-	authorDir := filepath.Join(config.NovelDataDir, "authors", fmt.Sprintf("%d", userID), fmt.Sprintf("%d", novelID))
-	renumberChapters(uint(novelID), chapterNum, authorDir)
-
 	models.UpdateNovelStats(uint(novelID))
 	updateIndexJSON(uint(userID), uint(novelID))
 	generateChecksums(uint(userID), uint(novelID))
 
-	utils.Success(c, gin.H{"message": "章节已删除，编号已自动重排"})
+	utils.Success(c, gin.H{"message": "章节已删除（软删除，正文已归档保留）"})
 }
 
 // renumberChapters 将章节编号 >= deletedNum 的章节前移一位，并重命名文件

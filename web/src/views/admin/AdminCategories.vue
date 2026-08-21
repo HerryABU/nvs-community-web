@@ -1,10 +1,7 @@
 <template>
   <div class="admin-page">
-    <div class="admin-page-header">
-      <el-button text @click="$router.push('/admin')"><el-icon><ArrowLeft /></el-icon> 返回后台</el-button>
-      <h2>书目分类管理</h2>
-    </div>
-    <div class="admin-page-body">
+    <AdminHeader title="书目分类管理" subtitle="平台书目分类的增删改" :icon="Collection" />
+    <div class="admin-page-body admin-panel">
       <p class="hint-text">定义平台的书目分类类型，读者可按分类浏览作品。双击标签重命名，点击 × 删除，修改后点击保存。</p>
       <div class="tag-list">
         <el-tag
@@ -42,7 +39,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { ArrowLeft, Plus } from '@element-plus/icons-vue';
+import { Plus, Collection } from '@element-plus/icons-vue';
+import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage } from 'element-plus';
 

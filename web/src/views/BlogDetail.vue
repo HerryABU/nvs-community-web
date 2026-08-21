@@ -20,6 +20,11 @@
         <router-link :to="`/author/${blog.author_id}`">
           <el-button type="primary" plain>查看作者主页</el-button>
         </router-link>
+        <ReportButton
+          v-if="authStore.isLoggedIn && authStore.user?.id !== blog.author_id"
+          target-type="blog"
+          :target-id="blog.id"
+        />
       </div>
 
       <!-- 评论区 -->
@@ -36,8 +41,11 @@ import { useRoute } from 'vue-router';
 import { blogApi } from '@/api/social';
 import { renderMarkdown, renderMermaidBlocks, renderChemfigBlocks } from '@/markdown/renderer';
 import CommentSection from '@/components/CommentSection.vue';
+import ReportButton from '@/components/ReportButton.vue';
+import { useAuthStore } from '@/stores/auth';
 
 const route = useRoute();
+const authStore = useAuthStore();
 const blog = ref<any>(null);
 const htmlContent = ref('');
 const loading = ref(false);

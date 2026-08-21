@@ -33,6 +33,26 @@ import (
 // frontendBundleRe 匹配内嵌前端打包产物文件名（index-xxxx.js）
 var frontendBundleRe = regexp.MustCompile(`index-[A-Za-z0-9_-]+\.js`)
 
+// knownSPARoots 前端 Vue Router 根段白名单（首段路径）。
+// 用于严格 SPA 回退：仅这些根段才回退到 index.html，其余（代理前缀 /go-nvs、数字前缀 /123、
+// 以及任意未知前缀）一律 404，杜绝任何形式的代理/前缀造成的组件穿越。
+var knownSPARoots = map[string]bool{
+	"admin": true, "author": true, "blog": true, "blogs": true,
+	"bookshelf": true, "category": true, "docs": true, "forum": true,
+	"forums": true, "frames": true, "htmls": true, "install": true,
+	"login": true, "novel": true, "plaza": true, "register": true,
+	"reports": true, "run": true, "settings": true, "setup": true,
+	"thread": true, "wasm": true,
+}
+
+// firstPathSegment 返回去前导斜杠后的路径首段，如 "novel/1"→"novel"，"admin"→"admin"
+func firstPathSegment(cleanPath string) string {
+	if i := strings.IndexByte(cleanPath, '/'); i >= 0 {
+		return cleanPath[:i]
+	}
+	return cleanPath
+}
+
 func main() {
 	// 确保工作目录为 exe 所在目录（双击启动时 Windows 工作目录可能不是 exe 目录）
 	if exePath, err := os.Executable(); err == nil {
@@ -78,7 +98,12 @@ func main() {
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
+	// 🔒 反向代理越权防护：默认不信任任何代理头（X-Forwarded-For/X-Real-IP），
+	// ClientIP 取真实 TCP 对端地址，防止攻击者伪造 X-Forwarded-For: 127.0.0.1 绕过限流/黑名单/建站保护。
+	// 部署在 nginx 等反向代理后时，可通过 .env 的 TRUSTED_PROXIES 显式信任代理地址。
+	_ = r.SetTrustedProxies(config.TrustedProxies)
 	r.Use(gin.Logger(), middleware.HeaderLogger(), middleware.SecureRecovery())
+	r.Use(middleware.AccessLog()) // 合规：访问日志关联 user_id（按天滚动写入 logs/）
 	r.Use(gzip.Gzip(gzip.DefaultCompression))
 	r.Use(middleware.SandboxWriteProtect()) // 🔒 允许数据文件，拦截脚本
 
@@ -146,10 +171,11 @@ func main() {
 	r.GET("/api/setup/status", handlers.SetupStatus)
 	if !config.IsInstalled() {
 		setupGroup := r.Group("/api/setup")
-		setupGroup.Use(setupGuard())
+		// 双重防护：安装完成后 404 + 仅本机(localhost)可访问 + 接口级限流
+		setupGroup.Use(setupGuard(), setupLocalOnlyGuard())
 		setupGroup.GET("/env-check", handlers.SetupEnvCheck)
-		setupGroup.POST("/db-test", handlers.SetupDBTest)
-		setupGroup.POST("/install", handlers.SetupInstall)
+		setupGroup.POST("/db-test", security.RateLimit(30, 60), handlers.SetupDBTest)
+		setupGroup.POST("/install", security.RateLimit(10, 60), handlers.SetupInstall)
 	}
 
 	// ==================== API 路由 ====================
@@ -210,6 +236,7 @@ func main() {
 		protected.DELETE("/novels/:id/chapters/:num", handlers.DeleteChapter)
 		protected.GET("/author/novels", handlers.GetMyNovels)
 		protected.GET("/author/novels/:id/stats", handlers.GetNovelStats)
+		protected.GET("/author/banned-content", handlers.GetAuthorBannedContent)
 		protected.GET("/author/dashboard", handlers.GetAuthorDashboard)
 		protected.POST("/novels/:id/export", handlers.ExportNovel)
 		protected.POST("/ratings", handlers.UpsertRating)
@@ -303,6 +330,7 @@ func main() {
 		admin.GET("/dashboard", handlers.GetDashboardStats)
 		admin.GET("/community", handlers.GetCommunityDashboard)
 		admin.GET("/users", handlers.ListUsers)
+		admin.GET("/users/audit", handlers.ListUserAuditLogs)
 		admin.PUT("/users/:id", handlers.UpdateUser)
 		admin.DELETE("/users/:id", handlers.DeleteUser)
 		admin.POST("/users/:id/mute", handlers.MuteUser)
@@ -324,6 +352,7 @@ func main() {
 		admin.PUT("/wall-config", handlers.UpdateWallConfig)
 		// 远程站点互通
 		admin.GET("/sites", handlers.ListFederatedSites)
+		admin.GET("/sites/inbound", handlers.ListInboundSites)
 		admin.POST("/sites", handlers.CreateFederatedSite)
 		admin.PUT("/sites/:id", handlers.UpdateFederatedSite)
 		admin.DELETE("/sites/:id", handlers.DeleteFederatedSite)
@@ -346,6 +375,13 @@ func main() {
 		admin.GET("/emergency/preview", handlers.PreviewEmergencyContent)
 		admin.DELETE("/emergency/content", handlers.DeleteEmergencyContent)
 		admin.GET("/emergency/audit", handlers.ListEmergencyAudit)
+		// 内容治理：删除/封禁任意内容（软删除 + softdel_ 留证）
+		admin.GET("/softdel", handlers.AdminListSoftDel)
+		admin.POST("/softdel", handlers.AdminModerateContent)
+		admin.POST("/softdel/restore", handlers.AdminRestoreContent)
+		// 小说/章节封禁管理（管理员视角列表 + 封禁 + 解封）
+		admin.GET("/novels", handlers.AdminListNovels)
+		admin.GET("/novels/:id/chapters", handlers.AdminListChapters)
 		// 数据库管理（健康检查 / 迁移 / 备份 / 恢复 / 定时备份）
 		admin.GET("/db/health", handlers.AdminDBHealth)
 		admin.GET("/db/current", handlers.AdminDBCurrent)
@@ -437,11 +473,28 @@ func main() {
 	r.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
 
-		// 安装完成后：向导入口与安装 API 一律 404（路由级注销，连判断文件存在的机会都不给）
-		if config.IsInstalled() &&
-			(strings.HasPrefix(path, "/api/setup") || path == "/install" || path == "/setup") {
+		// 1) 未匹配路由的 /api/* 一律 404（JSON），绝不落入 SPA fallback。
+		//    防止任意 /api/xxx（含被反向代理污染的前缀，如 /api/go-nvs/...，以及 ../ 穿越）被当作前端路由返回 200。
+		if strings.HasPrefix(path, "/api/") {
+			c.JSON(http.StatusNotFound, gin.H{"code": utils.CodeNotFound, "message": "接口不存在", "data": nil})
+			return
+		}
+
+		// 2) 拒绝路径穿越：URL 中含 ".." 的请求一律 404（防止目录穿越/路径混淆）
+		if strings.Contains(path, "..") {
 			c.Status(http.StatusNotFound)
 			return
+		}
+
+		// 3) 安装完成后：建站向导根段（install / setup，含任意子路径）一律 404。
+		//    用首段匹配而非精确匹配，堵住 /install/xxx、/setup/xxx 等子路径穿越
+		//    （此前 path=="/install" 精确匹配，/install/xxx 会绕过并落入 SPA 白名单返回 200）。
+		if config.IsInstalled() {
+			seg := firstPathSegment(strings.TrimPrefix(path, "/"))
+			if seg == "install" || seg == "setup" {
+				c.Status(http.StatusNotFound)
+				return
+			}
 		}
 
 		// robots.txt（站长可在后台自定义，兼容尾斜杠/大小写变体）
@@ -467,29 +520,12 @@ func main() {
 			return
 		}
 
-		// 外联站代理回退：/{numeric-id}/some-path → 重试内部同路径
-		firstSlash := strings.IndexByte(cleanPath, '/')
-		if firstSlash > 0 {
-			prefix := cleanPath[:firstSlash]
-			if isNumeric(prefix) {
-				innerPath := cleanPath[firstSlash:] // "/rest/of/path"
-				// 尝试在嵌入文件系统中查找
-				f2, err2 := frontendFS.Open(innerPath)
-				if err2 == nil {
-					f2.Close()
-					http.FileServer(http.FS(frontendFS)).ServeHTTP(c.Writer, c.Request)
-					return
-				}
-				// 也尝试 index.html（SPA fallback for the inner path）
-				c.Set("outside_web_id", prefix)
-				indexContent, err := fs.ReadFile(frontendFS, "index.html")
-				if err != nil {
-					c.String(http.StatusInternalServerError, "前端资源缺失")
-					return
-				}
-				c.Data(http.StatusOK, "text/html; charset=utf-8", indexContent)
-				return
-			}
+		// 严格 SPA 回退白名单：仅允许已知前端路由根段回退到 index.html；
+		// 其余（代理前缀 /go-nvs/xxx、数字前缀 /123/xxx、以及任意未知前缀）一律 404，
+		// 彻底禁止任何形式的代理/前缀造成的 /install 等组件穿越。
+		if !knownSPARoots[firstPathSegment(cleanPath)] {
+			c.Status(http.StatusNotFound)
+			return
 		}
 
 		// 文件不存在 → SPA fallback
@@ -527,6 +563,9 @@ func main() {
 
 	// 启动定时备份调度器（按平台配置 interval 自动备份）
 	models.StartBackupScheduler()
+
+	// 启动访问日志归档调度器（每日 sha256 + gzip + 只读 + 6个月保留，176号令合规）
+	models.StartLogArchiver()
 
 	if err := r.Run(listenAddr); err != nil {
 		log.Fatalf("服务器启动失败: %v", err)
@@ -654,6 +693,27 @@ func setupGuard() gin.HandlerFunc {
 	}
 }
 
+// setupLocalOnlyGuard 建站向导仅本机访问守卫（反向代理越权防护）。
+// 使用 RemoteIP（真实 TCP 对端地址，不受 X-Forwarded-For 伪造影响）判断是否回环，
+// 默认禁止公网/局域网直连访问安装向导；可通过 .env 的 SETUP_LOCAL_ONLY=false 放开（需自担风险）。
+func setupLocalOnlyGuard() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !config.SetupLocalOnly {
+			c.Next()
+			return
+		}
+		ip := net.ParseIP(c.RemoteIP())
+		if ip != nil && ip.IsLoopback() {
+			c.Next()
+			return
+		}
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"code":    3,
+			"message": "建站向导仅允许本机（localhost）访问，如需远程初始化请设置 SETUP_LOCAL_ONLY=false",
+		})
+	}
+}
+
 // initDatabase 连接数据库、执行迁移、初始化默认数据与默认管理员
 func initDatabase() error {
 	var dialector gorm.Dialector
@@ -747,12 +807,4 @@ func initDefaultAdmin() {
 	log.Println("  密码: admin123")
 	log.Println("  请登录后立即修改密码！")
 	log.Println("========================================")
-}
-
-// isNumeric 检查字符串是否全为数字
-func isNumeric(s string) bool {
-	for _, c := range s {
-		if c < '0' || c > '9' { return false }
-	}
-	return len(s) > 0
 }

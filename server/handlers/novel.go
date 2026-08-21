@@ -19,8 +19,8 @@ import (
 
 // POST /api/novels
 func CreateNovel(c *gin.Context) {
-	userID := c.GetUint("userID")
-	userRole := c.GetString("userRole")
+	userID := currentUserID(c)
+	userRole := currentUserRole(c)
 
 	// 如果用户是 reader，自动升级为 author（首次发布作品时）
 	if userRole == "reader" {
@@ -35,7 +35,7 @@ func CreateNovel(c *gin.Context) {
 			return
 		}
 		userRole = "author"
-		c.Set("userRole", "author")
+		setCurrentUserRole(c, "author")
 	}
 
 	if userRole != "author" && userRole != "vip_author" && userRole != "admin" {
@@ -118,8 +118,8 @@ func CreateNovel(c *gin.Context) {
 
 // PUT /api/novels/:id
 func UpdateNovel(c *gin.Context) {
-	userID := c.GetUint("userID")
-	userRole := c.GetString("userRole")
+	userID := currentUserID(c)
+	userRole := currentUserRole(c)
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
@@ -201,8 +201,8 @@ func UpdateNovel(c *gin.Context) {
 
 // DELETE /api/novels/:id
 func DeleteNovel(c *gin.Context) {
-	userID := c.GetUint("userID")
-	userRole := c.GetString("userRole")
+	userID := currentUserID(c)
+	userRole := currentUserRole(c)
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
@@ -230,17 +230,14 @@ func DeleteNovel(c *gin.Context) {
 		return
 	}
 
-	// 清理文件
-	novelDir := filepath.Join(config.NovelDataDir, "authors", fmt.Sprintf("%d", novel.AuthorID), fmt.Sprintf("%d", id))
-	os.RemoveAll(novelDir)
-
+	// 合规留存：软删除，保留正文文件（不物理移除），审计可追溯原始内容
 	utils.SuccessMessage(c, "删除成功", nil)
 }
 
 // novelOwnershipCheck 检查当前用户是否是作品的作者
 func novelOwnershipCheck(c *gin.Context, novelID uint) (*models.Novel, bool) {
-	userID := c.GetUint("userID")
-	userRole := c.GetString("userRole")
+	userID := currentUserID(c)
+	userRole := currentUserRole(c)
 
 	novel, err := models.GetNovelByID(novelID)
 	if err != nil {

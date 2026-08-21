@@ -9,7 +9,7 @@ export interface ReportReason {
 export interface ReportItem {
   id: number;
   reporter_id: number;
-  target_type: string; // novel / comment / thread / post
+  target_type: string; // novel / comment / thread / post / blog / forum / chapter / user / userframe / userhtml
   target_id: number;
   reason_code: string;
   reason: string;

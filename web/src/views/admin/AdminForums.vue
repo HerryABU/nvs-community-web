@@ -1,10 +1,7 @@
 <template>
   <div class="admin-page">
-    <div class="admin-page-header">
-      <el-button text @click="$router.push('/admin')"><el-icon><ArrowLeft /></el-icon> 返回后台</el-button>
-      <h2>论坛板块管理</h2>
-    </div>
-    <div class="admin-page-body">
+    <AdminHeader title="论坛板块管理" subtitle="板块增删、审查、排序" :icon="ChatDotRound" />
+    <div class="admin-page-body admin-panel">
       <div style="margin-bottom:12px">
         <el-button type="primary" size="small" @click="showAddForum = true">新增板块</el-button>
       </div>
@@ -78,7 +75,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue';
-import { ArrowLeft } from '@element-plus/icons-vue';
+import { ChatDotRound } from '@element-plus/icons-vue';
+import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
 

@@ -132,6 +132,9 @@ func ResetPassword(c *gin.Context) {
 	// 清除已验证的验证码
 	utils.DeleteVerificationCode(email)
 
+	// 合规审计：重置密码
+	recordUserAudit(c, user.ID, models.AuditChangePassword, "通过邮箱验证码重置密码", "success")
+
 	utils.SuccessMessage(c, "密码重置成功，请重新登录", nil)
 }
 
@@ -147,13 +150,13 @@ func ChangePassword(c *gin.Context) {
 	}
 
 	// 获取当前登录用户
-	userID, exists := c.Get("userID")
-	if !exists {
+	userID := currentUserID(c)
+	if userID == 0 {
 		utils.Unauthorized(c, "未登录")
 		return
 	}
 
-	user, err := models.GetUserByID(userID.(uint))
+	user, err := models.GetUserByID(userID)
 	if err != nil || user == nil {
 		utils.NotFound(c, "用户不存在")
 		return
@@ -184,6 +187,9 @@ func ChangePassword(c *gin.Context) {
 		utils.InternalError(c, "修改密码失败")
 		return
 	}
+
+	// 合规审计：修改密码
+	recordUserAudit(c, user.ID, models.AuditChangePassword, "修改登录密码", "success")
 
 	utils.SuccessMessage(c, "密码修改成功", nil)
 }

@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"nvs-server/models"
@@ -34,6 +36,7 @@ func UpdatePlatformConfig(c *gin.Context) {
 		"smtp_host": true, "smtp_port": true, "smtp_user": true,
 		"smtp_password": true, "smtp_from": true,
 		"robots_txt": true,
+		"email_domain_whitelist": true, "email_domain_blacklist": true,
 	}
 	for k, v := range req {
 		if !allowed[k] { continue }
@@ -107,27 +110,83 @@ func DeleteFederatedSite(c *gin.Context) {
 	utils.Success(c, gin.H{"message": "已删除"})
 }
 
+// selfPublicURL 返回本站对外访问地址（供联邦互通报给对方识别是谁在连）。
+// 优先使用站长配置的 site_url，否则从当前请求的 Host + Scheme 推导。
+func selfPublicURL(c *gin.Context) string {
+	if cfg := models.GetPlatformConfig("site_url"); cfg != "" {
+		return strings.TrimRight(cfg, "/")
+	}
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+	if xfp := c.GetHeader("X-Forwarded-Proto"); xfp != "" {
+		scheme = xfp
+	}
+	host := c.Request.Host
+	if host == "" {
+		host = "localhost"
+	}
+	return scheme + "://" + host
+}
+
+// recordInbound 记录远程站点访问本站公开联邦接口的身份信息（谁连了我）
+func recordInbound(c *gin.Context, endpoint string) {
+	name := c.Query("source_name")
+	srcURL := c.Query("source_url")
+	models.RecordFederatedInbound(name, srcURL, c.ClientIP(), c.Request.UserAgent(), endpoint)
+}
+
 func SyncFederatedSite(c *gin.Context) {
 	if !ensureAdmin(c) { return }
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var site models.FederatedSite
 	if err := models.DB.First(&site, id).Error; err != nil { utils.NotFound(c, "站点不存在"); return }
-	resp, err := http.Get(site.APIURL + "/novels?page_size=50")
+	// 向对方自报身份，让被连的站能看到是谁在连它
+	query := url.Values{}
+	query.Set("page_size", "50")
+	query.Set("source_name", models.GetSiteName())
+	query.Set("source_url", selfPublicURL(c))
+	// 同步对方站的「真实作品列表」：调用其公开接口 /api/novels（返回 author 为 User 对象）。
+	// API 地址应为对方站 API 根地址（以 /api 结尾），此处拼接 /novels 即命中 /api/novels。
+	resp, err := http.Get(strings.TrimRight(site.APIURL, "/") + "/novels?" + query.Encode())
 	if err != nil { utils.InternalError(c, "连接远程站点失败: "+err.Error()); return }
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		utils.InternalError(c, fmt.Sprintf("远程站点返回异常状态码 %d（请确认 API 地址填到对方站 /api 根地址）", resp.StatusCode))
+		return
+	}
 	var result struct {
-		Code int `json:"code"`
-		Data struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    struct {
 			List []struct {
-				ID uint `json:"id"`; Title, Category, Summary, CoverURL string
-				Author struct{ Nickname string `json:"nickname"` } `json:"author"`
+				ID       uint   `json:"id"`
+				Title    string `json:"title"`
+				Category string `json:"category"`
+				Summary  string `json:"summary"`
+				CoverURL string `json:"cover_url"`
+				Author   struct {
+					Nickname string `json:"nickname"`
+				} `json:"author"`
 			} `json:"list"`
 			Total int64 `json:"total"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil { utils.InternalError(c, "解析远程数据失败: "+err.Error()); return }
+	if result.Code != 0 {
+		msg := result.Message
+		if msg == "" {
+			msg = "远程站点返回错误"
+		}
+		utils.InternalError(c, msg)
+		return
+	}
 	synced := 0
 	for _, item := range result.Data.List {
+		if item.ID == 0 {
+			continue
+		}
 		var existing models.FederatedNovel
 		if models.DB.Where("site_id = ? AND remote_id = ?", id, item.ID).First(&existing).Error == nil { continue }
 		authorName := ""; if item.Author.Nickname != "" { authorName = item.Author.Nickname }
@@ -141,12 +200,14 @@ func SyncFederatedSite(c *gin.Context) {
 }
 
 func ListPublicSites(c *gin.Context) {
+	recordInbound(c, "federated/sites")
 	var sites []models.FederatedSite
 	models.DB.Where("status = ?", "active").Order("id ASC").Find(&sites)
 	utils.Success(c, sites)
 }
 
 func ListFederatedNovels(c *gin.Context) {
+	recordInbound(c, "federated/novels")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1")); pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	siteID, _ := strconv.ParseUint(c.Query("site_id"), 10, 64)
 	query := models.DB.Model(&models.FederatedNovel{})
@@ -160,8 +221,17 @@ func ListFederatedNovels(c *gin.Context) {
 // ============ 公共 API ============
 
 func GetSiteInfo(c *gin.Context) {
+	recordInbound(c, "site-info")
 	wallCfg := models.GetWallConfig()
 	utils.Success(c, gin.H{"site_name": models.GetSiteName(), "wall_zones": wallCfg.Zones, "wall_enabled": wallCfg.Enabled, "email_verify": models.IsEmailVerifyEnabled(), "captcha_enabled": models.IsCaptchaEnabled()})
+}
+
+// ListInboundSites 列出「谁连接了我」的入站记录（管理员）
+func ListInboundSites(c *gin.Context) {
+	if !ensureAdmin(c) { return }
+	list, err := models.ListFederatedInbound(200)
+	if err != nil { utils.InternalError(c, "获取入站连接记录失败"); return }
+	utils.Success(c, list)
 }
 
 func GetPublicZoneDetail(c *gin.Context) {

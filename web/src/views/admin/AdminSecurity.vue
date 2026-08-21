@@ -1,11 +1,7 @@
 <template>
   <div class="admin-page">
-    <div class="admin-page-header">
-      <el-button text @click="$router.push('/admin')"><el-icon><ArrowLeft /></el-icon> 返回后台</el-button>
-      <h2>XSS 规则库</h2>
-    </div>
-
-    <div class="admin-page-body">
+    <AdminHeader title="XSS 规则库" subtitle="维护 XSS 防御正则规则（动态更新）" :icon="Key" />
+    <div class="admin-page-body admin-panel">
       <el-alert
         type="info"
         :closable="false"
@@ -138,7 +134,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
-import { ArrowLeft, Plus, Search, Refresh } from '@element-plus/icons-vue';
+import { Plus, Search, Refresh, Key } from '@element-plus/icons-vue';
+import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
 

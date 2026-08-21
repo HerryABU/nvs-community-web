@@ -13,8 +13,8 @@ import (
 )
 
 func ExportNovel(c *gin.Context) {
-	userID := c.GetUint("userID")
-	userRole := c.GetString("userRole")
+	userID := currentUserID(c)
+	userRole := currentUserRole(c)
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
