@@ -203,6 +203,9 @@ func DeleteChapter(c *gin.Context) {
 		return
 	}
 
+	// 标记为「用户自删」（区别于管理员封禁：deleted_by='admin'）
+	_ = models.DB.Unscoped().Model(&models.Chapter{}).Where("id = ?", chapter.ID).Update("deleted_by", "user")
+
 	// 编号补齐：删除章节后，后续章节 chapter_number 前移重排（正文文件同步重命名），
 	// 保证「第N章」连续无空洞（章节管理/阅读器均按新编号展示）。
 	renumberChapters(uint(novelID), chapterNum, authorDir)

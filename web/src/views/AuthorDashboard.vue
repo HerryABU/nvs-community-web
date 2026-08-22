@@ -71,8 +71,9 @@
             <div v-for="blog in myBlogs" :key="blog.id" class="blog-item-dash">
               <div class="blog-item-main">
                 <el-tag v-if="blog.is_pinned" size="small" type="danger" style="margin-right:6px">置顶</el-tag>
+                <el-tag v-if="blog.category" size="small" style="margin-right:6px">{{ blog.category }}</el-tag>
                 <span class="blog-item-title-dash">{{ blog.title }}</span>
-                <span class="blog-item-meta">{{ formatDate(blog.created_at) }} · {{ blog.view_count }} 阅读</span>
+                <span class="blog-item-meta">{{ formatDate(blog.created_at) }} · {{ blog.view_count }} 阅读<template v-if="blog.like_count"> · 👍 {{ blog.like_count }}</template></span>
               </div>
               <div class="blog-item-actions">
                 <el-button size="small" text type="primary" @click="$router.push(`/blog/${blog.id}`)">查看</el-button>
@@ -219,6 +220,30 @@
         </div>
       </div>
 
+      <!-- 回收站（用户自删内容，可恢复；管理员封禁的不可自行恢复） -->
+      <div class="novels-section" v-if="recycle.novels.length > 0 || recycle.blogs.length > 0">
+        <h2 class="section-title-bar">
+          <span class="title-bar-text">🗑 回收站</span>
+          <span class="title-bar-count">{{ recycle.novels.length + recycle.blogs.length }} 项</span>
+        </h2>
+        <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px"
+          title="以下内容由您自己删除，可随时恢复；被管理员封禁的内容不在此处，请联系平台申诉。" />
+        <div class="recycle-list">
+          <div v-for="n in recycle.novels" :key="'rn' + n.id" class="recycle-item">
+            <el-tag type="warning" size="small">小说</el-tag>
+            <span class="recycle-title">《{{ n.title }}》</span>
+            <span class="recycle-meta">{{ n.total_chapters || 0 }} 章 · {{ (n.total_words || 0).toLocaleString() }} 字</span>
+            <el-button size="small" type="success" plain @click="restoreRecycle('novel', n.id)">恢复</el-button>
+          </div>
+          <div v-for="b in recycle.blogs" :key="'rb' + b.id" class="recycle-item">
+            <el-tag type="warning" size="small">博客</el-tag>
+            <span class="recycle-title">{{ b.title }}</span>
+            <span class="recycle-meta">{{ formatDate(b.created_at) }}</span>
+            <el-button size="small" type="success" plain @click="restoreRecycle('blog', b.id)">恢复</el-button>
+          </div>
+        </div>
+      </div>
+
       <!-- 封禁内容（176号令合规告知） -->
       <div class="novels-section banned-section" v-if="bannedContent.novels.length > 0 || bannedContent.chapters.length > 0">
         <h2 class="section-title-bar">
@@ -289,6 +314,33 @@ async function loadBannedContent() {
       };
     }
   } catch { /* ignore */ }
+}
+
+// 回收站（用户自删内容，可恢复；管理员封禁的不可自行恢复）
+const recycle = ref<{ novels: any[]; blogs: any[] }>({ novels: [], blogs: [] });
+async function loadRecycle() {
+  try {
+    const res = await novelApi.getRecycle();
+    if (res.data.code === 0) {
+      const d = res.data.data || {};
+      recycle.value = {
+        novels: Array.isArray(d.novels) ? d.novels : [],
+        blogs: Array.isArray(d.blogs) ? d.blogs : [],
+      };
+    }
+  } catch { /* ignore */ }
+}
+async function restoreRecycle(type: string, id: number) {
+  try {
+    await ElMessageBox.confirm('确定恢复这项内容吗？', '恢复确认', {
+      confirmButtonText: '恢复', type: 'warning',
+    });
+    await novelApi.restoreRecycle({ type, id });
+    ElMessage.success('已恢复');
+    loadRecycle();
+    loadNovels();
+    loadMyBlogs();
+  } catch { /* 取消 */ }
 }
 
 // 隔离墙开关
@@ -611,6 +663,7 @@ onMounted(() => {
   loadMyForums();
   loadHtmlStats();
   loadBannedContent();
+  loadRecycle();
 });
 
 // 从编辑页面返回时自动刷新
@@ -624,6 +677,7 @@ watch(
       loadMyBlogs();
       loadHtmlStats();
       loadBannedContent();
+      loadRecycle();
     }
     lastPath = newPath;
   }
@@ -839,6 +893,19 @@ watch(
 /* ===== 封禁内容（176号令） ===== */
 .banned-section { margin-top: 32px; }
 .banned-list { display: flex; flex-direction: column; gap: 12px; }
+
+/* ===== 回收站 ===== */
+.recycle-list { display: flex; flex-direction: column; gap: 10px; }
+.recycle-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; border-radius: 10px;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  flex-wrap: wrap;
+}
+.recycle-title { font-weight: 600; color: #e2e8f0; flex: 1; min-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-theme="light"] .recycle-title { color: var(--text-color); }
+.recycle-meta { font-size: 0.78rem; color: var(--text-light, #999); white-space: nowrap; }
 .forum-admin-list { display: flex; flex-direction: column; gap: 10px; }
 .forum-admin-item {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;

@@ -180,17 +180,10 @@ func ImportNovel(c *gin.Context) {
 		saveNovelCategories(novel.ID, cats, category)
 	}
 
-	// 获取已有章节的最大编号（追加模式）
+	// 获取已有章节的最大编号（追加模式；含软删除章节，避免串号）
 	startNum := 1
 	if isAppend {
-		existingChapters, _ := models.GetChaptersByNovel(novel.ID)
-		if len(existingChapters) > 0 {
-			maxNum := 0
-			for _, ch := range existingChapters {
-				if ch.ChapterNumber > maxNum {
-					maxNum = ch.ChapterNumber
-				}
-			}
+		if maxNum, err := models.GetMaxChapterNumber(novel.ID); err == nil {
 			startNum = maxNum + 1
 		}
 	}
@@ -254,7 +247,8 @@ func writeParsedChapters(novel *models.Novel, chapters []parsedChapter, startNum
 
 // ImportBatch POST /api/novels/import/batch — 批量导入多个 Word/Markdown 文件（合并为一部作品）
 // form 参数：
-//   title / category：作品标题与分类
+//   title / category：作品标题与分类（仅新建作品时使用）
+//   novel_id：可选，传入后追加到已有小说（作者本人），不再新建书本
 //   mode：file(默认，一个文件一章) | rule(自定义正则拆分) | auto(自动识别标题拆分)
 //   split_rule：mode=rule 时的正则表达式
 //   title_prefix：on 时章节标题加「第N章 」前缀
@@ -263,6 +257,7 @@ func ImportBatch(c *gin.Context) {
 
 	title := c.PostForm("title")
 	category := c.PostForm("category")
+	novelIDStr := c.PostForm("novel_id")
 	mode := c.PostForm("mode")
 	splitRule := c.PostForm("split_rule")
 	titlePrefix := c.PostForm("title_prefix") == "on"
@@ -347,21 +342,46 @@ func ImportBatch(c *gin.Context) {
 		models.DB.Model(&user).Updates(updates)
 	}
 
-	novel := &models.Novel{
-		AuthorID: userID, Title: title, Category: category,
-		Status: "draft",
-	}
-	if err := models.CreateNovel(novel); err != nil {
-		utils.InternalError(c, "创建作品失败")
-		return
+	var novel *models.Novel
+	var isAppend bool
+
+	// 传入 novel_id 且属于当前作者 → 追加到已有小说（不再新建书本）
+	if novelIDStr != "" {
+		if nid, parseErr := strconv.ParseUint(novelIDStr, 10, 64); parseErr == nil {
+			existingNovel, err := models.GetNovelByID(uint(nid))
+			if err == nil && existingNovel.AuthorID == userID {
+				novel = existingNovel
+				isAppend = true
+			}
+		}
 	}
 
-	createdChapters := writeParsedChapters(novel, allChapters, 1, userID)
+	if !isAppend {
+		novel = &models.Novel{
+			AuthorID: userID, Title: title, Category: category,
+			Status: "draft",
+		}
+		if err := models.CreateNovel(novel); err != nil {
+			utils.InternalError(c, "创建作品失败")
+			return
+		}
+	}
+
+	// 追加模式：从已有最大章节号后开始编号（含软删除章节，避免串号）
+	startNum := 1
+	if isAppend {
+		if maxNum, err := models.GetMaxChapterNumber(novel.ID); err == nil {
+			startNum = maxNum + 1
+		}
+	}
+
+	createdChapters := writeParsedChapters(novel, allChapters, startNum, userID)
 
 	utils.Success(c, gin.H{
 		"novel_id":       novel.ID,
-		"title":          title,
+		"title":          novel.Title,
 		"mode":           mode,
+		"is_append":      isAppend,
 		"files_count":    len(files),
 		"chapters_count": len(createdChapters),
 		"chapters":       createdChapters,

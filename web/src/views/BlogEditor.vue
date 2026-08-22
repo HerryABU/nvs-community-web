@@ -56,6 +56,12 @@
       <el-input v-model="blogTitle" placeholder="博客标题" size="large" class="be-title-input" />
       <div class="be-header-row">
         <el-input v-model="blogSummary" placeholder="摘要（选填）" size="small" class="be-summary-input" />
+        <el-select v-model="blogCategoryId" placeholder="选择分类（可选）" size="small" clearable class="be-cat-select">
+          <el-option-group v-for="cat in categoryTree" :key="cat.id" :label="cat.name">
+            <el-option :value="cat.id" :label="cat.name" />
+            <el-option v-for="sub in cat.children || []" :key="sub.id" :value="sub.id" :label="`　└ ${sub.name}`" />
+          </el-option-group>
+        </el-select>
         <div class="be-pinned">
           <el-switch v-model="blogPinned" size="small" />
           <span class="be-pinned-label">置顶</span>
@@ -127,11 +133,20 @@ const editingId = ref(Number(route.params.id) || 0);
 const blogTitle = ref('');
 const blogSummary = ref('');
 const blogPinned = ref(false);
+const blogCategoryId = ref<number | undefined>(undefined);
+const categoryTree = ref<any[]>([]);
 const blogContent = ref('');
 const richTextContent = ref('');
 const editorMode = ref<'md' | 'richtext'>('md');
 const saving = ref(false);
 const lastSaved = ref('');
+
+async function loadCategories() {
+  try {
+    const res = await blogApi.getCategories();
+    if (res.data.code === 0) categoryTree.value = res.data.data || [];
+  } catch { /* ignore */ }
+}
 
 const cherryContainer = ref<HTMLDivElement | null>(null);
 let cherryInstance: any = null;
@@ -194,6 +209,7 @@ async function loadBlog() {
       blogContent.value = b.content || '';
       blogSummary.value = b.summary || '';
       blogPinned.value = b.is_pinned || false;
+      blogCategoryId.value = b.category_id || undefined;
       if (editorMode.value === 'md') {
         if (cherryInstance) cherryInstance.setValue(b.content || '');
       } else {
@@ -210,9 +226,9 @@ async function saveBlog() {
   saving.value = true;
   try {
     if (editingId.value) {
-      await blogApi.update(editingId.value, { title: blogTitle.value, content, summary: blogSummary.value, is_pinned: blogPinned.value });
+      await blogApi.update(editingId.value, { title: blogTitle.value, content, summary: blogSummary.value, is_pinned: blogPinned.value, category_id: blogCategoryId.value });
     } else {
-      const res = await blogApi.create({ title: blogTitle.value, content, summary: blogSummary.value });
+      const res = await blogApi.create({ title: blogTitle.value, content, summary: blogSummary.value, category_id: blogCategoryId.value });
       editingId.value = res.data.data.id;
       router.replace(`/author/blog/${editingId.value}`);
     }
@@ -229,6 +245,7 @@ function onKeyDown(e: KeyboardEvent) {
 
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown);
+  loadCategories();
   loadBlog();
   if (editorMode.value === 'md') nextTick(() => initCherryEditor());
 });
@@ -267,6 +284,7 @@ onBeforeUnmount(() => {
 .be-title-input { --el-input-focus-border-color: var(--primary-color); }
 .be-header-row { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
 .be-summary-input { flex: 1; }
+.be-cat-select { width: 200px; flex-shrink: 0; }
 .be-pinned { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .be-pinned-label { font-size: 0.8rem; color: #999; white-space: nowrap; }
 
@@ -296,6 +314,10 @@ onBeforeUnmount(() => {
   }
   .be-header-row {
     flex-wrap: wrap;
+  }
+  .be-cat-select {
+    width: 100%;
+    flex: 1 0 100%;
   }
   .be-editor {
     padding: 0 10px 10px;

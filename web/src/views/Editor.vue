@@ -118,7 +118,11 @@
     <el-dialog v-model="showImportDialog" title="导入文件" width="700px" destroy-on-close @closed="resetImport">
       <el-form label-width="80px" v-if="!importPreviewData">
         <el-form-item label="作品标题">
-          <el-input v-model="importForm.title" placeholder="导入后作品标题（可选）" />
+          <el-input v-model="importForm.title" :placeholder="isEditing ? '追加到当前作品（标题无需填写）' : '导入后作品标题（可选）'" />
+          <div class="import-rule-hint" style="width:100%">
+            <template v-if="isEditing">当前处于编辑模式：导入章节将<strong>追加到《{{ form.title }}》</strong>末尾，不会新建作品。</template>
+            <template v-else>新建作品模式下将创建一部新作品。</template>
+          </div>
         </el-form-item>
         <el-form-item label="选择文件">
           <el-upload
@@ -192,7 +196,11 @@
     <el-dialog v-model="showBatchDialog" title="批量导入（Word / Markdown）" width="620px" destroy-on-close>
       <el-form label-width="80px">
         <el-form-item label="作品标题">
-          <el-input v-model="batchForm.title" placeholder="合并为一部作品（可选）" />
+          <el-input v-model="batchForm.title" :placeholder="isEditing ? '追加到当前作品（标题无需填写）' : '合并为一部作品（可选）'" />
+          <div class="import-rule-hint" style="width:100%">
+            <template v-if="isEditing">当前处于编辑模式：导入章节将<strong>追加到《{{ form.title }}》</strong>末尾，不会新建作品。</template>
+            <template v-else>新建作品模式下将创建一部新作品。</template>
+          </div>
         </el-form-item>
         <el-form-item label="导入方式">
           <el-radio-group v-model="batchForm.mode">
@@ -310,9 +318,10 @@ async function doBatchImport() {
       batchForm.mode,
       batchForm.mode === 'rule' ? batchForm.splitRule.trim() : undefined,
       batchForm.titlePrefix,
+      novelId.value || undefined, // 编辑模式：追加到当前小说，不再新建书本
     );
     const data = res.data.data;
-    ElMessage.success(`批量导入成功！${data.files_count} 个文件，共 ${data.chapters_count} 章`);
+    ElMessage.success(`批量导入成功！${data.files_count} 个文件，共 ${data.chapters_count} 章${data.is_append ? '（已追加到当前作品）' : ''}`);
     showBatchDialog.value = false;
     batchFiles.value = [];
     batchForm.title = '';
@@ -320,7 +329,7 @@ async function doBatchImport() {
     batchForm.splitRule = '';
     batchForm.titlePrefix = false;
     batchUploadRef.value?.clearFiles();
-    // 新建作品则跳转到编辑页；编辑已有作品则刷新章节列表
+    // 追加到当前小说则刷新章节列表；新建作品则跳转到编辑页
     if (novelId.value && data.novel_id === novelId.value) {
       const cr = await chapterApi.getChapters(novelId.value);
       chapters.value = cr.data.data || [];

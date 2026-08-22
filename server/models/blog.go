@@ -15,8 +15,12 @@ type AuthorBlog struct {
 	ContentPath string    `gorm:"size:512;not null" json:"-"`
 	ContentHash string    `gorm:"size:64;default:''" json:"content_hash,omitempty"`
 	Summary     string    `gorm:"size:512;default:''" json:"summary"`
+	CategoryID  uint      `gorm:"default:0;index:idx_blog_category" json:"category_id"` // 博客分类（blog_categories 表，0=未分类）
+	Category    string    `gorm:"-" json:"category,omitempty"`                         // 运行时填充：分类名（含父级前缀）
+	LikeCount   int       `gorm:"default:0" json:"like_count"`                         // 点赞数（blog_likes 冗余计数）
 	IsPinned    bool      `gorm:"default:false;index" json:"is_pinned"`
 	ViewCount   int       `gorm:"default:0" json:"view_count"`
+	DeletedBy   string    `gorm:"size:16;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
@@ -61,11 +65,16 @@ func DeleteBlog(id uint) error {
 	return DB.Delete(&AuthorBlog{}, id).Error
 }
 
-func ListAllBlogs(page, pageSize int) ([]AuthorBlog, int64, error) {
+// ListAllBlogs 博客列表（categoryID>0 时按分类过滤；一级分类自动包含其下二级分类）
+func ListAllBlogs(categoryID uint, page, pageSize int) ([]AuthorBlog, int64, error) {
 	var blogs []AuthorBlog
 	var total int64
 
 	query := DB.Model(&AuthorBlog{})
+	if categoryID > 0 {
+		// 一级分类 → 包含其下所有二级分类的博客
+		query = query.Where("category_id = ? OR category_id IN (SELECT id FROM blog_categories WHERE parent_id = ?)", categoryID, categoryID)
+	}
 	query.Count(&total)
 
 	offset := (page - 1) * pageSize

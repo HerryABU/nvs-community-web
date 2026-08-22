@@ -87,7 +87,7 @@ import { adminApi } from '@/api/admin';
 import {
   User, Document, ChatLineRound, Connection,
   Refresh, ArrowRight, Setting, Collection, Lock, ChatDotRound,
-  Warning, Cpu, TrendCharts, Key, WarningFilled, DataLine, Monitor, Box
+  Warning, Cpu, TrendCharts, Key, WarningFilled, DataLine, Monitor, Box, Notebook
 } from '@element-plus/icons-vue';
 import AnimatedNumber from '@/components/AnimatedNumber.vue';
 import DashboardCharts from '@/components/DashboardCharts.vue';
@@ -120,6 +120,7 @@ const adminMenus = [
   { title: '内容抢救台', desc: '二级密码应急预览/软删除留证', path: '/admin/emergency', icon: WarningFilled, color: 'var(--gradient-accent)' },
   { title: '内容封禁', desc: '小说/章节封禁 · 记录176原因 · 可解封', path: '/admin/ban', icon: Lock, color: 'var(--gradient-danger)' },
   { title: '内容留证', desc: 'softdel 回收站 · 删除/封禁可追溯', path: '/admin/softdel', icon: Box, color: 'var(--gradient-purple)' },
+  { title: '博客分类与回收站', desc: '博客分类管理 · 全站用户自删内容监管', path: '/admin/blog-categories', icon: Notebook, color: 'var(--gradient-teal)' },
   { title: '社区动态', desc: '最近用户、作品、评论、帖子', path: '/admin/community', icon: TrendCharts, color: 'var(--gradient-teal)' },
 ];
 

@@ -118,5 +118,7 @@ func DeleteComment(c *gin.Context) {
 		return
 	}
 
+	// 标记为「用户自删」（区别于管理员删除：deleted_by='admin'）
+	_ = models.DB.Unscoped().Model(&models.Comment{}).Where("id = ?", commentID).Update("deleted_by", "user")
 	utils.Success(c, gin.H{"message": "评论已删除"})
 }

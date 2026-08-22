@@ -170,6 +170,25 @@ export const adminApi = {
     return api.post('/admin/softdel/restore', data);
   },
 
+  // 回收站监管（管理员查看全站用户自删内容）
+  getAdminRecycle(type?: string) {
+    return api.get('/admin/recycle', { params: type ? { type } : {} });
+  },
+
+  // 博客分类管理（一级/二级）
+  getBlogCategories() {
+    return api.get('/admin/blog-categories');
+  },
+  createBlogCategory(data: { name: string; parent_id?: number; sort_order?: number }) {
+    return api.post('/admin/blog-categories', data);
+  },
+  updateBlogCategory(id: number, data: { name?: string; parent_id?: number; sort_order?: number }) {
+    return api.put(`/admin/blog-categories/${id}`, data);
+  },
+  deleteBlogCategory(id: number) {
+    return api.delete(`/admin/blog-categories/${id}`);
+  },
+
   // 小说/章节封禁管理（管理员视角，含封禁状态）
   getAdminNovels(params?: { search?: string; page?: number; page_size?: number }) {
     return api.get('/admin/novels', { params });

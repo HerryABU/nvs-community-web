@@ -22,6 +22,7 @@ type Novel struct {
 	TotalChapters   int       `gorm:"default:0" json:"total_chapters"`
 	ViewCount       int       `gorm:"default:0" json:"view_count"`
 	BanReason       string    `gorm:"size:512;default:''" json:"ban_reason"` // 176号令封禁原因（封禁时写入，作者端可查）
+	DeletedBy       string    `gorm:"size:16;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
@@ -200,6 +201,7 @@ type Chapter struct {
 	WordCount        int    `gorm:"default:0" json:"word_count"`
 	Status        string    `gorm:"size:16;default:draft" json:"status"`
 	BanReason     string    `gorm:"size:512;default:''" json:"ban_reason"` // 176号令封禁原因（封禁时写入）
+	DeletedBy     string    `gorm:"size:16;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
