@@ -4,8 +4,8 @@ export const forumApi = {
   getForums(type?: string) {
     return api.get('/forums', { params: { type } });
   },
-  getForum(id: number, page?: number, password?: string) {
-    return api.get(`/forums/${id}`, { params: { page, password } });
+  getForum(id: number, page?: number, password?: string, room?: string) {
+    return api.get(`/forums/${id}`, { params: { page, password, room } });
   },
   getNovelForum(novelId: number) {
     return api.get(`/novels/${novelId}/forum`);
@@ -27,7 +27,7 @@ export const forumApi = {
   },
 
   // ===== 用户自建论坛 =====
-  createForum(data: { name: string; description?: string; is_public?: boolean; password?: string }) {
+  createForum(data: { name: string; description?: string; is_public?: boolean; password?: string; room_code?: string }) {
     return api.post('/forums', data);
   },
   listMyForums() {
@@ -36,12 +36,19 @@ export const forumApi = {
   verifyPassword(id: number, password: string) {
     return api.post(`/forums/${id}/verify`, { password });
   },
+  // 房间号进入（不可见论坛的唯一入口凭证；有密码的论坛需同时传密码）
+  enterByRoomCode(roomCode: string, password?: string) {
+    return api.post('/forums/enter-by-code', { room_code: roomCode, password: password || '' });
+  },
   // 论坛创建者/管理员：禁言、审核
   muteUser(forumId: number, data: { user_id: number; duration_hours?: number; reason?: string }) {
     return api.post(`/forums/${forumId}/mute`, data);
   },
   unmuteUser(forumId: number, userId: number) {
     return api.post(`/forums/${forumId}/unmute`, { user_id: userId });
+  },
+  listMutes(forumId: number) {
+    return api.get(`/forums/${forumId}/mutes`);
   },
   deleteThread(threadId: number) {
     return api.delete(`/threads/${threadId}`);

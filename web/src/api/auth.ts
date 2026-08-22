@@ -11,6 +11,7 @@ export interface RegisterParams {
   password: string;
   nickname?: string;
   agree_to_guidelines: boolean;
+  verify_code?: string;
 }
 
 export interface User {
@@ -72,12 +73,11 @@ export const authApi = {
     });
   },
 
-  // 上传头像
+  // 上传头像（FormData 不手动设置 Content-Type，避免丢失 boundary）
   uploadAvatar(formData: FormData) {
     return api.post<{ code: number; message: string; data: { avatar_url: string } }>(
       '/author/avatar',
-      formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } }
+      formData
     );
   },
 
@@ -85,13 +85,12 @@ export const authApi = {
   uploadImage(formData: FormData) {
     return api.post<{ code: number; message: string; data: { url: string } }>(
       '/author/image',
-      formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } }
+      formData
     );
   },
 
-  // 更新作者资料
-  updateProfile(data: { signature?: string; wall_enabled?: boolean }) {
+  // 更新作者资料（昵称/签名/隔离开关）
+  updateProfile(data: { nickname?: string; signature?: string; wall_enabled?: boolean }) {
     return api.put<{ code: number; message: string }>('/author/profile', data);
   },
 

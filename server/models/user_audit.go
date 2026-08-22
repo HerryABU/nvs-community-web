@@ -6,13 +6,13 @@ import "time"
 // 记录登录成功/失败、登出、改密码、改邮箱、改资料、注册等操作，含 IP 与 User-Agent。
 type UserAuditLog struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
-	UserID    uint      `gorm:"not null;index" json:"user_id"`
+	UserID    uint      `gorm:"not null;index:idx_user_audit_user_time,priority:1" json:"user_id"`
 	Action    string    `gorm:"size:30;not null;index" json:"action"` // login_success/login_fail/logout/change_password/change_email/change_profile/register
 	IP        string    `gorm:"size:45" json:"ip"`
 	UserAgent string    `gorm:"type:text" json:"user_agent"`
 	Detail    string    `gorm:"type:text" json:"detail"`
 	Result    string    `gorm:"size:20" json:"result"` // success / fail
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt time.Time `gorm:"index:idx_user_audit_user_time,priority:2" json:"created_at"`
 }
 
 func (UserAuditLog) TableName() string { return "user_audit_logs" }

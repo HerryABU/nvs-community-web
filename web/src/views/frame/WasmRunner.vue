@@ -63,4 +63,15 @@ import { Upload } from '@element-plus/icons-vue';
 .header-left h2 { margin: 0; font-size: 1.4rem; }
 .subtitle { color: var(--text-secondary); margin: 4px 0 0; font-size: 0.9rem; }
 .zip-struct { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.85rem; line-height: 1.7; overflow-x: auto; }
+
+/* ====== 移动端 WASM 说明适配 ====== */
+@media (max-width: 640px) {
+  .page-container {
+    padding: 16px 12px;
+  }
+  .zip-struct {
+    font-size: 0.75rem;
+    padding: 10px;
+  }
+}
 </style>

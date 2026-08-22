@@ -289,4 +289,17 @@ async function doInstall() {
 .test-ok { color: #10b981; font-size: 0.9rem; }
 .test-bad { color: #ef4444; font-size: 0.9rem; }
 .step-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px; }
+
+/* ====== 移动端建站向导适配 ====== */
+@media (max-width: 640px) {
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .step-actions {
+    flex-wrap: wrap;
+  }
+  .step-actions .el-button {
+    flex: 1;
+  }
+}
 </style>

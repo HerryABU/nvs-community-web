@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"nvs-server/models"
 	"nvs-server/utils"
@@ -82,6 +83,11 @@ func softDeleteContent(c *gin.Context, ctype string, id uint, reason, source, ac
 	if action == "ban" {
 		auditAction = models.AuditUserBan
 	}
+	// 封禁原因兜底：ban_reason 是「封禁 vs 作者自删」的区分标记（GetAuthorBannedContent
+	// 仅展示 ban_reason 非空的记录），管理员封禁未填写原因时写默认值，保证语义清晰。
+	if (ctype == "novel" || ctype == "chapter") && strings.TrimSpace(reason) == "" {
+		reason = "违反平台合规规范（176号令）"
+	}
 
 	switch ctype {
 	case "comment":
@@ -153,6 +159,10 @@ func softDeleteContent(c *gin.Context, ctype string, id uint, reason, source, ac
 		}
 		if err := models.ArchiveSoftDelete(source, "thread", id, operatorID, operator, reason, t.Title, t); err != nil {
 			return err
+		}
+		// 方案A：posts 无 deleted_at，级联删回帖前先批量归档留证，再物理删除
+		if _, aerr := models.ArchivePostsByThread(models.DB, id, operatorID, operator, reason, source); aerr != nil {
+			return aerr
 		}
 		models.DB.Where("thread_id = ?", id).Delete(&models.Post{})
 		if t.ForumID > 0 {

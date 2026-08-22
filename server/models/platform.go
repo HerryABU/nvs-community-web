@@ -6,8 +6,8 @@ import "time"
 type Report struct {
 	ID         uint       `gorm:"primaryKey" json:"id"`
 	ReporterID uint       `gorm:"not null;index" json:"reporter_id"`
-	TargetType string     `gorm:"size:16;not null" json:"target_type"` // novel/comment/thread/post/blog/forum/chapter/user/userframe/userhtml
-	TargetID   uint       `gorm:"not null" json:"target_id"`
+	TargetType string     `gorm:"size:16;not null;index:idx_reports_target,priority:1" json:"target_type"` // novel/comment/thread/post/blog/forum/chapter/user/userframe/userhtml
+	TargetID   uint       `gorm:"not null;index:idx_reports_target,priority:2" json:"target_id"`
 	ReasonCode string     `gorm:"size:32;default:''" json:"reason_code"` // 预置理由编码
 	Reason     string     `gorm:"size:64;not null" json:"reason"`        // 理由展示文本
 	Detail     string     `gorm:"type:text" json:"detail"`

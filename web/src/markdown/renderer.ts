@@ -1,9 +1,16 @@
 /**
- * Markdown 渲染器 — 统一使用 Cherry Markdown Engine
+ * Markdown 渲染器 — Cherry Markdown 完整版（v0.11.9）
  *
  * 这是整个平台唯一的 Markdown 渲染入口。
  * 编辑器（ChapterEditor / BlogEditor）和阅读器（Reader / BlogDetail / 评论 / 论坛）
  * 全部共享同一个 engineConfig 和 renderMarkdown。
+ *
+ * ⚠️ 完整版说明（重要）：本模块直接导入 cherry-markdown 的【完整版】
+ * （cherry-markdown.esm.js，即 `import Cherry from 'cherry-markdown'`，
+ * 与编辑器 `await import('cherry-markdown')` 完全同一构建产物——完整版 = 引擎 + 编辑器 UI）。
+ * 阅读器/渲染器通过 headless 实例（隐藏容器）复用完整版内部的同一引擎类
+ * （cherry.engine.makeHtml），因此阅读器渲染与编辑器预览引擎 100% 同源、
+ * 构建产物 100% 相同，杜绝任何「核心版与完整版行为差异」的可能。
  *
  * 支持的扩展：
  *   - KaTeX 数学公式（含 mhchem 化学式 + physics 物理宏包）
@@ -12,7 +19,7 @@
  *   - 自定义：定义列表 / 缩写 / 脚注 / 提示块
  */
 
-import CherryEngine from 'cherry-markdown/dist/cherry-markdown.engine.core.esm.js';
+import Cherry from 'cherry-markdown';
 import katex from 'katex';
 import DOMPurify from 'dompurify';
 import 'katex/dist/contrib/mhchem.mjs';
@@ -143,7 +150,39 @@ export const engineConfig = {
   externals: { katex: physicsKatex },
 } as const;
 
-const engine = new CherryEngine(engineConfig as any);
+// ═══ Cherry 完整版 headless 渲染引擎（单例）══════════════════════
+// 与编辑器（ChapterEditor / BlogEditor）使用同一构建产物 cherry-markdown.esm.js，
+// 通过一个隐藏容器实例化完整版 Cherry，仅取其 engine.makeHtml 做纯渲染，
+// 保证「编辑器预览 = 阅读器渲染」引擎与产物 100% 一致。
+let headlessEngine: any = null;
+let headlessEngineFailed = false;
+
+function getHeadlessEngine(): any {
+  if (headlessEngine) return headlessEngine;
+  if (headlessEngineFailed) return null;
+  try {
+    const host = document.createElement('div');
+    host.setAttribute('data-cherry-headless', '1');
+    host.style.cssText =
+      'position:fixed;left:-99999px;top:0;width:10px;height:10px;overflow:hidden;visibility:hidden;pointer-events:none;';
+    document.body.appendChild(host);
+    const cherry = new Cherry({
+      el: host,
+      value: '',
+      editor: { defaultModel: 'previewOnly', height: '0px' },
+      ...engineConfig,
+    } as any);
+    if (!cherry || !cherry.engine || typeof cherry.engine.makeHtml !== 'function') {
+      throw new Error('Cherry 完整版实例未暴露 engine.makeHtml');
+    }
+    headlessEngine = cherry.engine;
+    return headlessEngine;
+  } catch (e) {
+    console.error('[NVS] Cherry 完整版 headless 初始化失败:', e);
+    headlessEngineFailed = true;
+    return null;
+  }
+}
 
 // ═══ 导出 physicsKatex ────────────────────────────────────────────
 // 编辑器（ChapterEditor / BlogEditor）创建 Cherry 实例时，
@@ -299,9 +338,13 @@ export function renderMarkdown(content: string): string {
   try {
     // 1) 反转义 `&amp;`（后端引入的），保持 `&lt;`/`&gt;` 转义
     // 2) 预处理 chemfig / 缩写 / 定义列表 / 展开控件
-    // 3) CherryEngine 渲染（内置白名单放行颜色/折叠/跳转/按钮，转义危险标签）
+    // 3) Cherry 完整版引擎渲染（内置白名单放行颜色/折叠/跳转/按钮，转义危险标签）
     // 4) DOMPurify 兜底白名单
     const decoded = unescapeAmp(content);
+    const engine = getHeadlessEngine();
+    if (!engine) {
+      throw new Error('Cherry 引擎不可用');
+    }
     const html = engine.makeHtml(preprocessExpand(preprocessMD(preprocessChemfig(decoded)))) as string;
     return sanitizeMarkdown(html);
   } catch (e) {

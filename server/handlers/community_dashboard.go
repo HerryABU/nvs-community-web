@@ -36,6 +36,7 @@ func GetCommunityDashboard(c *gin.Context) {
 	models.DB.Raw(
 		"SELECT c.id, c.content, c.created_at, c.user_id, u.nickname AS username, c.novel_id, n.title AS novel_title "+
 			"FROM comments c JOIN users u ON u.id = c.user_id JOIN novels n ON n.id = c.novel_id "+
+			"WHERE n.deleted_at IS NULL AND c.deleted_at IS NULL "+
 			"ORDER BY c.created_at DESC LIMIT 5",
 	).Scan(&recentComments)
 
@@ -52,6 +53,7 @@ func GetCommunityDashboard(c *gin.Context) {
 	models.DB.Raw(
 		"SELECT t.id, t.title, t.created_at, t.user_id, u.nickname AS username, t.forum_id, f.name AS forum_name "+
 			"FROM threads t JOIN users u ON u.id = t.user_id JOIN forums f ON f.id = t.forum_id "+
+			"WHERE t.deleted_at IS NULL AND f.deleted_at IS NULL "+
 			"ORDER BY t.created_at DESC LIMIT 5",
 	).Scan(&recentThreads)
 

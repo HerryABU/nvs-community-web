@@ -78,7 +78,6 @@ export const novelApi = {
     return api.post<{ code: number; data: { novel_id: number; title: string; chapters_count: number; chapters: { num: number; title: string }[] } }>(
       '/novels/import',
       formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
     );
   },
 
@@ -89,20 +88,23 @@ export const novelApi = {
     return api.post<{ code: number; data: { total: number; chapters: { num: number; title: string; preview: string; words: number }[] } }>(
       '/novels/import/preview',
       formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
     );
   },
 
   // 批量导入多个 Word/Markdown 文件（合并为一部作品）
-  importBatch(files: File[], title?: string, category?: string) {
+  // mode: file(默认，一个文件一章) | rule(自定义正则拆分) | auto(自动识别标题拆分)
+  // splitRule: mode=rule 时的正则；titlePrefix: 章节标题加「第N章 」前缀
+  importBatch(files: File[], title?: string, category?: string, mode?: string, splitRule?: string, titlePrefix?: boolean) {
     const formData = new FormData();
     for (const f of files) formData.append('files', f);
     if (title) formData.append('title', title);
     if (category) formData.append('category', category);
-    return api.post<{ code: number; data: { novel_id: number; title: string; files_count: number; chapters_count: number } }>(
+    if (mode) formData.append('mode', mode);
+    if (splitRule) formData.append('split_rule', splitRule);
+    if (titlePrefix) formData.append('title_prefix', 'on');
+    return api.post<{ code: number; data: { novel_id: number; title: string; mode: string; files_count: number; chapters_count: number } }>(
       '/novels/import/batch',
       formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
     );
   },
 

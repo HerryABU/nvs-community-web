@@ -16,7 +16,7 @@
     "@tiptap/starter-kit": "^3.27.3",
     "@tiptap/vue-3": "^3.27.3",
     "axios": "^1.7.2",
-    "cherry-markdown": "^0.11.0",
+    "cherry-markdown": "^0.11.9",
     "echarts": "^6.1.0",
     "element-plus": "^2.7.6",
     "katex": "^0.17.0",
@@ -31,7 +31,10 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.5",
     "typescript": "^5.5.3",
+    "unplugin-auto-import": "^21.1.0",
+    "unplugin-vue-components": "^32.1.0",
     "vite": "^5.3.3",
+    "vite-plugin-compression2": "^2.5.3",
     "vue-tsc": "^2.0.24"
   }
 }

@@ -182,6 +182,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/badwords',
+      name: 'admin-badwords',
+      component: () => import('@/views/admin/AdminBadWords.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/emergency',
       name: 'admin-emergency',
       component: () => import('@/views/admin/AdminEmergency.vue'),
@@ -243,6 +249,18 @@ const router = createRouter({
       path: '/settings',
       name: 'settings',
       component: () => import('@/views/Settings.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/messages',
+      name: 'messages',
+      component: () => import('@/views/MessageCenter.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/reading',
+      name: 'reading',
+      component: () => import('@/views/ReadingNotes.vue'),
       meta: { requiresAuth: true },
     },
     {

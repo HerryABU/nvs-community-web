@@ -23,11 +23,16 @@ func SendVerificationCode(c *gin.Context) {
 
 	email := strings.TrimSpace(strings.ToLower(req.Email))
 
-	// 检查是否可以发送（60秒内只能发一次）
+	// 60 秒内只能发一次（防邮箱轰炸 / 验证码被频繁覆盖）
 	code := utils.GenerateVerificationCode()
-	utils.StoreVerificationCode(email, code)
+	if err := utils.StoreVerificationCode(email, code); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
 
 	if err := utils.SendVerificationEmail(email, code); err != nil {
+		// 发送失败则回滚已写入的验证码，避免用户拿到无效码
+		utils.DeleteVerificationCode(email)
 		utils.InternalError(c, "发送验证码失败: "+err.Error())
 		return
 	}

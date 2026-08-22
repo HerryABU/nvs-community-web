@@ -199,4 +199,22 @@ function fmtDate(d: string) { return new Date(d).toLocaleDateString('zh-CN'); }
 .empty-state { padding: 40px 0; display: flex; justify-content: center; }
 .code-input :deep(textarea) { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.85rem; line-height: 1.5; }
 .run-mode-hint { font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; line-height: 1.4; }
+
+/* ====== 移动端模板管理适配 ====== */
+@media (max-width: 640px) {
+  .page-container {
+    padding: 16px 12px;
+  }
+  .frame-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .card-meta {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+  }
+  .card-actions {
+    flex-wrap: wrap;
+  }
+}
 </style>

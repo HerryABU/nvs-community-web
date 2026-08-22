@@ -34,7 +34,7 @@ func GetAuthorDashboard(c *gin.Context) {
 	type dayCount struct{ Date string; Count int64 }
 	var dailyChapters []dayCount
 	if len(novelIDs) > 0 {
-		models.DB.Raw("SELECT date(chapters.created_at) AS date, COUNT(*) AS count FROM chapters JOIN novels ON novels.id = chapters.novel_id WHERE novels.author_id = ? AND chapters.created_at >= ? GROUP BY date(chapters.created_at) ORDER BY date", userID, dates[0]).Scan(&dailyChapters)
+		models.DB.Raw("SELECT date(chapters.created_at) AS date, COUNT(*) AS count FROM chapters JOIN novels ON novels.id = chapters.novel_id WHERE novels.author_id = ? AND novels.deleted_at IS NULL AND chapters.deleted_at IS NULL AND chapters.created_at >= ? GROUP BY date(chapters.created_at) ORDER BY date", userID, dates[0]).Scan(&dailyChapters)
 	}
 	chapterMap := make(map[string]int64)
 	for _, r := range dailyChapters { chapterMap[r.Date] = r.Count }
@@ -43,13 +43,13 @@ func GetAuthorDashboard(c *gin.Context) {
 
 	var dailyComments []dayCount
 	if len(novelIDs) > 0 {
-		models.DB.Raw("SELECT date(comments.created_at) AS date, COUNT(*) AS count FROM comments JOIN novels ON novels.id = comments.novel_id WHERE novels.author_id = ? AND comments.created_at >= ? GROUP BY date(comments.created_at) ORDER BY date", userID, dates[0]).Scan(&dailyComments)
+		models.DB.Raw("SELECT date(comments.created_at) AS date, COUNT(*) AS count FROM comments JOIN novels ON novels.id = comments.novel_id WHERE novels.author_id = ? AND novels.deleted_at IS NULL AND comments.deleted_at IS NULL AND comments.created_at >= ? GROUP BY date(comments.created_at) ORDER BY date", userID, dates[0]).Scan(&dailyComments)
 	}
 
 	// 每日字数增长趋势
 	var dailyWords []dayCount
 	if len(novelIDs) > 0 {
-		models.DB.Raw("SELECT date(chapters.created_at) AS date, COALESCE(SUM(chapters.word_count),0) AS count FROM chapters JOIN novels ON novels.id = chapters.novel_id WHERE novels.author_id = ? AND chapters.created_at >= ? GROUP BY date(chapters.created_at) ORDER BY date", userID, dates[0]).Scan(&dailyWords)
+		models.DB.Raw("SELECT date(chapters.created_at) AS date, COALESCE(SUM(chapters.word_count),0) AS count FROM chapters JOIN novels ON novels.id = chapters.novel_id WHERE novels.author_id = ? AND novels.deleted_at IS NULL AND chapters.deleted_at IS NULL AND chapters.created_at >= ? GROUP BY date(chapters.created_at) ORDER BY date", userID, dates[0]).Scan(&dailyWords)
 	}
 	commentMap := make(map[string]int64)
 	for _, r := range dailyComments { commentMap[r.Date] = r.Count }
@@ -58,7 +58,7 @@ func GetAuthorDashboard(c *gin.Context) {
 
 	type novelStatRow struct{ Title string; TotalWords int; TotalChapters int; Status string }
 	var novelStatsRaw []novelStatRow
-	models.DB.Raw("SELECT title, total_words, total_chapters, status FROM novels WHERE author_id = ? ORDER BY updated_at DESC", userID).Scan(&novelStatsRaw)
+	models.DB.Raw("SELECT title, total_words, total_chapters, status FROM novels WHERE author_id = ? AND deleted_at IS NULL ORDER BY updated_at DESC", userID).Scan(&novelStatsRaw)
 	novelStats := make([]gin.H, 0, len(novelStatsRaw))
 	for _, r := range novelStatsRaw {
 		novelStats = append(novelStats, gin.H{"title": r.Title, "total_words": r.TotalWords, "total_chapters": r.TotalChapters, "status": r.Status})
@@ -73,7 +73,7 @@ func GetAuthorDashboard(c *gin.Context) {
 
 	var avgRating float64
 	if len(novelIDs) > 0 {
-		models.DB.Raw("SELECT COALESCE(AVG((type_completion + narrative_quality + thought_depth + community_reputation + update_stability) / 5.0), 0) FROM ratings JOIN novels ON novels.id = ratings.novel_id WHERE novels.author_id = ?", userID).Scan(&avgRating)
+		models.DB.Raw("SELECT COALESCE(AVG((type_completion + narrative_quality + thought_depth + community_reputation + update_stability) / 5.0), 0) FROM ratings JOIN novels ON novels.id = ratings.novel_id WHERE novels.author_id = ? AND novels.deleted_at IS NULL", userID).Scan(&avgRating)
 	}
 
 	chapterTrendCounts := make([]int64, 7)

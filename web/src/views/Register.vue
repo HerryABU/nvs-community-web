@@ -69,35 +69,7 @@
 
     <!-- 平台指南弹窗 -->
     <el-dialog v-model="showGuidelines" title="平台指南" width="600px" top="5vh">
-      <div class="guidelines-content">
-        <h3>欢迎加入星海文学</h3>
-        <p>本平台致力于打造一个聚焦<strong>高质量类型文学</strong>的创作与阅读社区。在注册之前，请仔细阅读以下指南：</p>
-
-        <h4>1. 创作自由与责任</h4>
-        <p>作者拥有作品的完整版权，平台不占有任何作品权利。您可以随时导出、迁移您的作品。同时，您应对所发布的内容承担全部法律责任。</p>
-
-        <h4>2. 社区规范</h4>
-        <ul>
-          <li>禁止发布违法内容（包括但不限于：危害国家安全、宣扬暴力恐怖、侵犯他人隐私等）。</li>
-          <li>禁止人身攻击、恶意辱骂、歧视性言论。</li>
-          <li>禁止发布商业广告、垃圾信息。</li>
-          <li>尊重知识产权，不得抄袭、盗用他人作品。</li>
-        </ul>
-
-        <h4>3. 内容分类与调性</h4>
-        <p>平台聚焦硬科幻、奇幻、推演文学、架空历史、现实主义、悬疑推理、实验文学等深度类型。不设立「爽文」「水文」等分类。请将作品发布在合适的分类下。</p>
-
-        <h4>4. 跨区提醒</h4>
-        <p>部分分区（如同人区、政治文学区）设有内容确认机制，进入前会有弹窗提示。这是为了保护读者和作者，而非限制创作。</p>
-
-        <h4>5. 定价与收益</h4>
-        <p>作者可自主定价。平台统一抽取 10% 用于服务器运营，打赏金额全额转交作者（扣除支付通道费）。</p>
-
-        <h4>6. 违规处理</h4>
-        <p>违反社区规范的内容将被下架，严重违规者将被封禁账号。对处理结果有异议可通过举报/申诉渠道反馈。</p>
-
-        <p class="guidelines-footer">点击"同意"即表示您已阅读、理解并承诺遵守以上所有条款。</p>
-      </div>
+      <div class="guidelines-content" v-html="guidelinesHtml || defaultGuidelines"></div>
       <template #footer>
         <el-button @click="showGuidelines = false">关闭</el-button>
         <el-button type="primary" @click="agreeGuidelines">同意并继续</el-button>
@@ -126,10 +98,33 @@ const sendingCode = ref(false);
 const codeCountdown = ref(0);
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
 
-// 站长配置：邮箱验证 / 滑块验证码
+// 站长配置：邮箱验证 / 滑块验证码 / 平台指南
 const emailVerifyRequired = ref(false);
 const captchaRequired = ref(false);
 const captchaVerified = ref(false);
+const guidelinesHtml = ref('');
+
+// 内置默认平台指南（站长未配置时展示）
+const defaultGuidelines = `<h3>欢迎加入星海文学</h3>
+<p>本平台致力于打造一个聚焦<strong>高质量类型文学</strong>的创作与阅读社区。在注册之前，请仔细阅读以下指南：</p>
+<h4>1. 创作自由与责任</h4>
+<p>作者拥有作品的完整版权，平台不占有任何作品权利。您可以随时导出、迁移您的作品。同时，您应对所发布的内容承担全部法律责任。</p>
+<h4>2. 社区规范</h4>
+<ul>
+  <li>禁止发布违法内容（包括但不限于：危害国家安全、宣扬暴力恐怖、侵犯他人隐私等）。</li>
+  <li>禁止人身攻击、恶意辱骂、歧视性言论。</li>
+  <li>禁止发布商业广告、垃圾信息。</li>
+  <li>尊重知识产权，不得抄袭、盗用他人作品。</li>
+</ul>
+<h4>3. 内容分类与调性</h4>
+<p>平台聚焦硬科幻、奇幻、推演文学、架空历史、现实主义、悬疑推理、实验文学等深度类型。不设立「爽文」「水文」等分类。请将作品发布在合适的分类下。</p>
+<h4>4. 跨区提醒</h4>
+<p>部分分区（如同人区、政治文学区）设有内容确认机制，进入前会有弹窗提示。这是为了保护读者和作者，而非限制创作。</p>
+<h4>5. 定价与收益</h4>
+<p>作者可自主定价。平台统一抽取 10% 用于服务器运营，打赏金额全额转交作者（扣除支付通道费）。</p>
+<h4>6. 违规处理</h4>
+<p>违反社区规范的内容将被下架，严重违规者将被封禁账号。对处理结果有异议可通过举报/申诉渠道反馈。</p>
+<p class="guidelines-footer">点击"同意"即表示您已阅读、理解并承诺遵守以上所有条款。</p>`;
 
 const form = reactive({
   username: '',
@@ -188,6 +183,7 @@ async function loadSiteConfig() {
       const d = res.data.data;
       emailVerifyRequired.value = !!d.email_verify;
       captchaRequired.value = !!d.captcha_enabled;
+      guidelinesHtml.value = d.guidelines || '';
     }
   } catch { /* use defaults: both off */ }
 }
@@ -244,20 +240,18 @@ async function handleRegister() {
     return;
   }
 
-  // 邮箱验证码检查（仅当站长开启时）
-  if (emailVerifyRequired.value) {
-    try {
-      await authApi.verifyEmailCode(form.email, form.verifyCode);
-    } catch (e: any) {
-      ElMessage.error(e.response?.data?.message || '验证码错误');
-      return;
-    }
-  }
-
   submitting.value = true;
   try {
     const nickname = form.nickname || form.username;
-    const res = await authStore.register(form.username, form.email, form.password, nickname, form.agreeToGuidelines);
+    // 邮箱验证码随注册请求一并提交后端强制校验（站长开启时必填）
+    const res = await authStore.register(
+      form.username,
+      form.email,
+      form.password,
+      nickname,
+      form.agreeToGuidelines,
+      emailVerifyRequired.value ? form.verifyCode : undefined
+    );
     if (res.code === 0) {
       ElMessage.success('注册成功');
       router.push('/');
@@ -344,6 +338,24 @@ function agreeGuidelines() {
   display: flex;
   align-items: center;
   width: 100%;
+}
+
+/* ====== 移动端注册页适配 ====== */
+@media (max-width: 640px) {
+  .auth-page {
+    padding: 24px 12px;
+  }
+  .verify-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .verify-row .el-input {
+    flex: 1;
+    min-width: 120px;
+  }
+  .verify-row .el-button {
+    flex-shrink: 0;
+  }
 }
 </style>
 

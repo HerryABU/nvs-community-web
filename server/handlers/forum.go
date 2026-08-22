@@ -92,6 +92,25 @@ func GetForum(c *gin.Context) {
 		return
 	}
 
+	// 房间号门禁：非公开（不可见）自建论坛，非创建者/管理员须凭房间号进入。
+	// 有密码的论坛还需同时提供正确密码（room + password）。
+	if !forum.IsPublic && forum.CreatorID != userID && !isAdminUser(c) {
+		room := c.Query("room")
+		pass := c.Query("password")
+		if !strings.EqualFold(strings.TrimSpace(room), forum.RoomCode) ||
+			(forum.HasPassword && !utils.CheckPassword(pass, forum.PasswordHash)) {
+			utils.Success(c, gin.H{
+				"forum":      forum,
+				"locked":     true,
+				"threads":    []models.Thread{},
+				"total":      0,
+				"page":       page,
+				"sub_forums": []models.Forum{},
+			})
+			return
+		}
+	}
+
 	// 密码门禁：有密码且非创建者/管理员时，需提供正确密码才能读取帖子
 	if forum.HasPassword && forum.CreatorID != userID && !isAdminUser(c) {
 		password := c.Query("password")
@@ -161,17 +180,23 @@ func CreateThread(c *gin.Context) {
 		return
 	}
 
+	raw := security.SanitizeUserContent(req.Content)
+	cleaned, badHits := processBadWords(raw, "forum")
+
 	thread := &models.Thread{
 		ForumID: uint(forumID),
 		UserID:  userID,
 		Title:   strings.TrimSpace(req.Title),
-		Content: security.SanitizeUserContent(req.Content),
+		Content: cleaned,
 	}
 
 	if err := models.CreateThread(thread); err != nil {
 		utils.InternalError(c, "发帖失败")
 		return
 	}
+
+	// 违禁词 mark 动作命中 → 写入待审标记记录
+	flagBadWords(badHits, "thread", thread.ID, userID, raw, thread.Title)
 
 	utils.Success(c, thread)
 }
@@ -243,16 +268,22 @@ func CreatePost(c *gin.Context) {
 		return
 	}
 
+	raw := security.SanitizeUserContent(req.Content)
+	cleaned, badHits := processBadWords(raw, "forum")
+
 	post := &models.Post{
 		ThreadID: uint(threadID),
 		UserID:   userID,
-		Content:  security.SanitizeUserContent(req.Content),
+		Content:  cleaned,
 	}
 
 	if err := models.CreatePost(post); err != nil {
 		utils.InternalError(c, "回复失败")
 		return
 	}
+
+	// 违禁词 mark 动作命中 → 写入待审标记记录
+	flagBadWords(badHits, "post", post.ID, userID, raw, "")
 
 	if user, err := models.GetUserByID(userID); err == nil {
 		post.User = user

@@ -158,3 +158,31 @@ onMounted(() => {
   color: var(--text-light);
 }
 </style>
+
+<style>
+/* ====== 移动端评分组件适配（不 scoped，覆盖 el-rate 图标） ====== */
+@media (max-width: 640px) {
+  .star-rating {
+    padding: 12px;
+  }
+  .dim-row {
+    gap: 8px;
+  }
+  .dim-label {
+    width: 64px;
+    font-size: 0.78rem;
+    text-align: left;
+  }
+  .dim-avg {
+    width: 26px;
+    font-size: 0.78rem;
+  }
+  .dim-stars {
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    display: flex;
+    align-items: center;
+  }
+}
+</style>

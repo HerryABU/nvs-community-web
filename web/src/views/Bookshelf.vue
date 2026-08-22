@@ -266,4 +266,30 @@ onMounted(() => {
 .follow-name { font-weight: 600; font-size: 0.95rem; }
 .follow-bio { color: #999; font-size: 0.8rem; margin-top: 2px; }
 .empty-hint { text-align: center; padding: 48px; color: #999; }
+
+/* ====== 移动端书架适配 ====== */
+@media (max-width: 640px) {
+  .shelf-card {
+    padding: 12px;
+    gap: 12px;
+  }
+  .shelf-cover {
+    width: 64px;
+    height: 85px;
+  }
+  .shelf-title {
+    font-size: 0.95rem;
+  }
+  .shelf-remove-btn {
+    opacity: 1;
+  }
+  .follow-card {
+    padding: 12px;
+    gap: 10px;
+  }
+  .shelf-pagination .el-pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
 </style>

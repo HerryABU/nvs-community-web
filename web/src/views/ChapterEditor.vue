@@ -91,9 +91,9 @@ import { novelApi, chapterApi, type Chapter } from '@/api/novel';
 import { ElMessage } from 'element-plus';
 import { ArrowLeft, Plus, Delete } from '@element-plus/icons-vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
-import TurndownService from 'turndown';
 // engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
 import { renderMarkdown, editorEngineConfig } from '@/markdown/renderer';
+import { htmlToMarkdown } from '@/utils/turndown';
 
 const route = useRoute();
 const router = useRouter();
@@ -115,30 +115,16 @@ const cherryContainer = ref<HTMLDivElement | null>(null);
 let cherryInstance: any = null;
 let cherryReady = false;
 
-// turndown 实例（HTML → Markdown）
-const turndown = new TurndownService({
-  headingStyle: 'atx',
-  hr: '---',
-  bulletListMarker: '-',
-  codeBlockStyle: 'fenced',
-});
-
 // 获取当前要保存的内容（富文本模式先转换）
-function getContentToSave(): string {
+async function getContentToSave(): Promise<string> {
   if (editorMode.value === 'richtext' && richTextContent.value.trim()) {
-    return htmlToMd(richTextContent.value);
+    return await htmlToMarkdown(richTextContent.value);
   }
   // MD 模式：如果 Cherry 已初始化，从 Cherry 取值；否则用 chapterContent
   if (editorMode.value === 'md' && cherryInstance) {
     return cherryInstance.getValue() || chapterContent.value;
   }
   return chapterContent.value;
-}
-
-// HTML → Markdown 转换
-function htmlToMd(html: string): string {
-  if (!html) return '';
-  return turndown.turndown(html);
 }
 
 // ─── Cherry 编辑器初始化 ───
@@ -192,7 +178,7 @@ const editorHeight = computed(() => window.innerHeight - 160);
 
 // ─── 模式切换 ───
 
-function onModeChange(mode: string) {
+async function onModeChange(mode: string) {
   if (mode === 'richtext') {
     // Markdown → 富文本：从 Cherry 或 chapterContent 取 Markdown，转为 HTML
     const mdContent = cherryInstance ? (cherryInstance.getValue() || '') : chapterContent.value;
@@ -200,7 +186,7 @@ function onModeChange(mode: string) {
   } else if (mode === 'md') {
     // 富文本 → Markdown
     if (richTextContent.value.trim()) {
-      const md = htmlToMd(richTextContent.value);
+      const md = await htmlToMarkdown(richTextContent.value);
       chapterContent.value = md;
       if (cherryInstance) {
         cherryInstance.setValue(md);
@@ -294,7 +280,7 @@ async function saveChapter() {
     ElMessage.warning('请输入章节标题');
     return;
   }
-  const contentToSave = getContentToSave();
+  const contentToSave = await getContentToSave();
   saving.value = true;
   try {
     const existing = chapters.value.find(c => c.chapter_number === currentNum.value && c.id > 0);
@@ -326,7 +312,7 @@ async function saveChapter() {
 }
 
 async function saveChapterSilent() {
-  const contentToSave = getContentToSave();
+  const contentToSave = await getContentToSave();
   if (!chapterTitle.value.trim() && !contentToSave.trim()) return;
   try {
     const existing = chapters.value.find(c => c.chapter_number === currentNum.value && c.id > 0);
@@ -618,5 +604,44 @@ onBeforeUnmount(() => {
 [data-theme="dark"] .cherry-toolbar {
   background: #16213e !important;
   border-bottom-color: rgba(255,255,255,.06) !important;
+}
+
+/* ====== 移动端章节编辑器适配 ====== */
+@media (max-width: 768px) {
+  .chapter-editor {
+    top: 62px;
+  }
+  .ce-toolbar {
+    height: auto;
+    min-height: 48px;
+    padding: 6px 8px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .ce-novel-title {
+    display: none;
+  }
+  .ce-saved-time {
+    display: none;
+  }
+  .ce-toolbar-center {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
+  /* 侧栏收窄，只保留编号 */
+  .ce-sidebar {
+    width: 140px;
+  }
+  .ce-ch-words,
+  .ce-ch-del {
+    display: none;
+  }
+  .ce-chapter-item {
+    padding: 10px 10px;
+  }
+  .ce-editor-header {
+    padding: 8px;
+  }
 }
 </style>

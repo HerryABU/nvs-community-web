@@ -425,4 +425,23 @@ function fmtDate(d: string) { return new Date(d).toLocaleDateString('zh-CN'); }
 .plaza-title{font-weight:600;font-size:.95rem;margin-bottom:2px}
 .plaza-author{color:var(--text-secondary);font-size:.8rem;margin-bottom:6px}
 .plaza-actions{display:flex;gap:4px}
+
+/* ====== 移动端扩展应用管理适配 ====== */
+@media (max-width: 640px) {
+  .page-container {
+    padding: 16px 12px;
+  }
+  .html-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .plaza-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .card-meta {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+  }
+}
 </style>

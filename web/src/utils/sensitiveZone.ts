@@ -4,6 +4,7 @@
  */
 
 import { publicApi } from '@/api/admin';
+import api from '@/api';
 
 let SENSITIVE_ZONES: string[] = [];
 let zonesLoaded = false;
@@ -77,6 +78,10 @@ export function markZoneConfirmed(zone: string) {
     const now = Date.now();
     const valid = filtered.filter(e => now - e.time < CONFIRMED_EXPIRY_MS);
     localStorage.setItem(CONFIRMED_KEY, JSON.stringify(valid));
+    // 176号令合规：向后端上报「进入隔离墙时间」，供审计追溯（best-effort，不阻塞前端确认）
+    try {
+      api.post('/zone/enter', { zone }).catch(() => {});
+    } catch {}
   } catch {}
 }
 

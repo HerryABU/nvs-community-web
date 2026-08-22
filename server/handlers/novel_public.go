@@ -84,7 +84,6 @@ func ListNovels(c *gin.Context) {
 }
 
 // GET /api/search/authors — 搜索作者（公开）
-// GET /api/search/authors — 搜索作者（公开）
 func SearchAuthors(c *gin.Context) {
 	search := c.Query("search")
 	if search == "" {
@@ -107,6 +106,54 @@ func SearchAuthors(c *gin.Context) {
 	// 脱敏
 	models.SanitizeUserEmails(users)
 	utils.Success(c, gin.H{"list": users, "total": total})
+}
+
+// GET /api/search — 统一搜索（公开）：作品 / 作者 / 博客 / HTML 扩展
+func UnifiedSearch(c *gin.Context) {
+	q := strings.TrimSpace(c.Query("q"))
+	if q == "" {
+		utils.Success(c, gin.H{"q": "", "novels": []models.Novel{}, "authors": []models.User{}, "blogs": []models.AuthorBlog{}, "htmls": []models.UserHTML{}})
+		return
+	}
+	like := "%" + q + "%"
+	const limit = 10
+
+	// 1) 作品：书名 / 简介 / tag / 作者名
+	var novels []models.Novel
+	models.DB.Model(&models.Novel{}).Where("status = ?", "published").
+		Joins("LEFT JOIN users ON users.id = novels.author_id").
+		Where("(novels.title LIKE ? OR novels.summary LIKE ? OR novels.tags LIKE ? OR users.nickname LIKE ? OR users.username LIKE ?)",
+			like, like, like, like, like).
+		Preload("Author").Order("novels.updated_at DESC").Limit(limit).Find(&novels)
+
+	// 2) 作者：用户名 / 昵称
+	var authors []models.User
+	models.DB.Model(&models.User{}).Where("role IN ('author','vip_author')").
+		Where("(username LIKE ? OR nickname LIKE ?)", like, like).
+		Order("nickname ASC").Limit(limit).Find(&authors)
+	models.SanitizeUserEmails(authors)
+
+	// 3) 博客：标题 / 摘要（含关键词）
+	var blogs []models.AuthorBlog
+	models.DB.Model(&models.AuthorBlog{}).
+		Where("(title LIKE ? OR summary LIKE ?)", like, like).
+		Preload("Author").Order("created_at DESC").Limit(limit).Find(&blogs)
+	for i := range blogs {
+		if blogs[i].Author != nil {
+			blogs[i].Author.Email = ""
+		}
+	}
+
+	// 4) HTML 扩展应用：名称 / 描述 / 项目名（仅公开且已审查）
+	var htmls []models.UserHTML
+	models.DB.Model(&models.UserHTML{}).
+		Where("(name LIKE ? OR description LIKE ? OR project_name LIKE ?) AND is_public = ? AND review_status = ?",
+			like, like, like, true, "approved").
+		Preload("User").Order("created_at DESC").Limit(limit).Find(&htmls)
+
+	utils.Success(c, gin.H{
+		"q": q, "novels": novels, "authors": authors, "blogs": blogs, "htmls": htmls,
+	})
 }
 
 // GET /api/novels/:id

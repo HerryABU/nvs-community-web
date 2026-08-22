@@ -3,13 +3,30 @@
     <!-- 顶部导航 -->
     <div class="reader-toolbar">
       <el-button text @click="$router.push(`/novel/${novelId}`)">
-        <el-icon><ArrowLeft /></el-icon> 返回
+        <el-icon><ArrowLeft /></el-icon><span class="desktop-only"> 返回</span>
       </el-button>
       <el-button text @click="openToc">
-        <el-icon><List /></el-icon> 目录
+        <el-icon><List /></el-icon><span class="desktop-only"> 目录</span>
       </el-button>
       <span class="reader-title">{{ novelTitle }} · 第{{ chapterNum }}章 {{ chapter?.title }}</span>
-      <div class="reader-nav" v-if="!isTrialExceeded">
+      <!-- 精读：书签 / 批注 -->
+      <template v-if="authStore.isLoggedIn && !isTrialExceeded">
+        <el-button
+          text
+          :class="{ 'note-active': myBookmark }"
+          :title="myBookmark ? '已收藏，点击删除书签' : '收藏本章（精读书签）'"
+          @click="toggleBookmark"
+        >
+          <el-icon><Star /></el-icon><span class="desktop-only"> {{ myBookmark ? '已书签' : '书签' }}</span>
+        </el-button>
+        <el-button text :disabled="!hasSelection" :title="hasSelection ? '为选中内容添加批注' : '先选中正文文字再批注'" @click="openAnnotationDialog">
+          <el-icon><EditPen /></el-icon><span class="desktop-only"> 批注</span>
+        </el-button>
+        <el-button text title="我的精读（书签+批注）" @click="$router.push('/reading')">
+          <el-icon><Notebook /></el-icon><span class="desktop-only"> 精读</span>
+        </el-button>
+      </template>
+      <div class="reader-nav desktop-only" v-if="!isTrialExceeded">
         <el-button size="small" :disabled="chapterNum <= 1" @click="goChapter(chapterNum - 1)">
           上一章
         </el-button>
@@ -80,7 +97,7 @@
       </div>
       <div v-else class="reader-content">
         <div v-if="chapter?.content" class="reader-md-wrap">
-          <div class="reader-md markdown-body" v-html="renderedHtml" ref="mdContainer"></div>
+          <div class="reader-md markdown-body cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" v-html="renderedHtml" ref="mdContainer" @click="onMdClick"></div>
         </div>
         <p v-else-if="chapter" style="text-align:center;color:#f59e0b">章节已加载但内容为空（content长度=0）</p>
         <p v-else style="text-align:center;color:#999">暂无内容（chapter 为 null）</p>
@@ -92,6 +109,21 @@
       <el-button :disabled="chapterNum <= 1" @click="goChapter(chapterNum - 1)">上一章</el-button>
       <el-button :disabled="chapterNum >= totalChapters" @click="goChapter(chapterNum + 1)">下一章</el-button>
     </div>
+
+    <!-- 选区浮动批注按钮：鼠标/手指拉取选中正文文字后，出现在选区旁 -->
+    <transition name="anno-float">
+      <div
+        v-if="showAnnoFloat && authStore.isLoggedIn && !isTrialExceeded"
+        class="anno-float-btn"
+        :style="{ left: annoFloatPos.x + 'px', top: annoFloatPos.y + 'px' }"
+        @mousedown.prevent
+        @touchstart.prevent.stop
+        @click.stop="onAnnoFloatClick"
+      >
+        <el-icon :size="14"><EditPen /></el-icon>
+        <span>批注</span>
+      </div>
+    </transition>
 
     <!-- 自定义模板Footer区域 -->
     <div v-if="footerFrames.length > 0" class="template-zone template-footer">
@@ -118,6 +150,58 @@
       <CommentSection :novel-id="novelId" :chapter-number="chapterNum" :novel-category="novelCategory" />
     </div>
 
+    <!-- 书签对话框 -->
+    <el-dialog v-model="showBookmarkDialog" title="🔖 添加书签" width="420px">
+      <el-form label-width="72px">
+        <el-form-item label="位置">第 {{ chapterNum }} 章 · {{ chapter?.title }}</el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="bookmarkContent" type="textarea" :rows="3" maxlength="500" placeholder="这本书写到哪里了？可留空" />
+        </el-form-item>
+        <el-form-item label="可见性">
+          <el-switch v-model="bookmarkPublic" active-text="公开" inactive-text="私密" />
+          <span class="note-hint">公开书签会展示在作品页/精读广场</span>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showBookmarkDialog = false">取消</el-button>
+        <el-button type="primary" :loading="savingNote" @click="saveBookmark">保存书签</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 批注对话框（新建） -->
+    <el-dialog v-model="showAnnotationDialog" title="📝 添加批注" width="460px">
+      <div class="note-selected">{{ annotationSelection }}</div>
+      <el-input v-model="annotationContent" type="textarea" :rows="4" maxlength="2000" placeholder="写下你的批注/想法…" />
+      <div class="note-vis-row">
+        <el-switch v-model="annotationPublic" active-text="公开" inactive-text="私密" />
+        <span class="note-hint">公开批注对所有人可见</span>
+      </div>
+      <template #footer>
+        <el-button @click="showAnnotationDialog = false">取消</el-button>
+        <el-button type="primary" :loading="savingNote" @click="saveAnnotation">保存批注</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 批注详情（查看/编辑/删除） -->
+    <el-dialog v-model="showNoteDetail" :title="detailNote?.type === 'bookmark' ? '🔖 书签' : '📝 批注'" width="460px">
+      <div v-if="detailNote?.selected_text" class="note-selected">{{ detailNote.selected_text }}</div>
+      <el-input v-if="detailNote?.user_id === authStore.user?.id" v-model="detailContent" type="textarea" :rows="4" maxlength="2000" />
+      <p v-else class="note-detail-content">{{ detailNote?.content || '（无内容）' }}</p>
+      <div v-if="detailNote?.user_id === authStore.user?.id" class="note-vis-row">
+        <el-switch v-model="detailPublic" active-text="公开" inactive-text="私密" />
+        <span class="note-hint">切换可见性</span>
+      </div>
+      <div class="note-meta">
+        <span v-if="detailNote?.username">{{ detailNote.username }} · </span>
+        {{ formatNoteTime(detailNote?.created_at) }}
+      </div>
+      <template #footer>
+        <el-button v-if="detailNote?.user_id === authStore.user?.id" type="danger" plain @click="deleteDetailNote">删除</el-button>
+        <el-button v-if="detailNote?.user_id === authStore.user?.id" type="primary" :loading="savingNote" @click="updateDetailNote">保存修改</el-button>
+        <el-button @click="showNoteDetail = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 敏感分区确认弹窗 -->
     <SensitiveZoneGuard
       :visible="showZoneGuard"
@@ -131,17 +215,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { novelApi, chapterApi, type Chapter } from '@/api/novel';
 import { bookshelfApi } from '@/api/bookshelf';
+import { readingApi, type ReadingNote } from '@/api/reading';
 import { useAuthStore } from '@/stores/auth';
 import { renderMarkdown, renderMermaidBlocks, renderChemfigBlocks } from '@/markdown/renderer';
 import CommentSection from '@/components/CommentSection.vue';
 import SensitiveZoneGuard from '@/components/SensitiveZoneGuard.vue';
 import { shouldShowGuard, markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';
 import { frameApi } from '@/api/frame';
-import { ArrowLeft, List } from '@element-plus/icons-vue';
+import { ElMessage } from 'element-plus';
+import { ArrowLeft, List, Star, EditPen, Notebook } from '@element-plus/icons-vue';
 
 const authStore = useAuthStore();
 
@@ -284,6 +370,9 @@ async function loadChapter() {
 
     // 敏感分区检查
     await checkSensitiveZone();
+
+    // 精读：加载本章书签/批注 + 公开批注（渲染后高亮）
+    loadNotes();
   } catch (e) {
     console.error(e);
   } finally {
@@ -335,11 +424,36 @@ watch(
 const mdContainer = ref<HTMLElement | null>(null);
 const renderedHtml = ref('');
 
+// 章节标题大字（明确需求，不可去掉）：
+// 阅读器正文必须与编辑器/管理列表一样显示章节标题的大字（一级标题）。
+// 规则：
+//   1. 参照上传的 md 文件——若正文首个非空行已是标题且包含章节标题 → 原样保留（不重复、不删除）；
+//   2. 用户输入/存量数据库章节——正文没有标题时，渲染期前置注入「# 第N章 标题」一级标题。
+// 说明：注入发生在渲染期，不改写数据库内容文件，不影响哈希/签名校验；
+// 因此「之前已在数据库的章节」同样自动生效，无需逐一改数据。
+function ensureChapterTitle(md: string, num: number, title: string): string {
+  const t = (title || '').trim();
+  if (!t || !md) return md;
+  // 首个非空行
+  const firstLine = (md.replace(/^\s+/, '').split('\n').find((l) => l.trim() !== '') || '').trim();
+  if (/^#{1,6}\s+/.test(firstLine)) {
+    const heading = firstLine.replace(/^#{1,6}\s+/, '').replace(/[*_`~#]/g, '').trim();
+    if (heading && (heading.includes(t) || t.includes(heading))) {
+      return md; // md 已自带标题（上传文件场景），保持原样
+    }
+  }
+  // 前置注入一级标题（用户输入/存量数据兜底）
+  const prefix = `第${num}章`;
+  const display = t.startsWith(prefix) ? t : `${prefix} ${t}`;
+  return `# ${display}\n\n${md}`;
+}
+
 watch(() => chapter.value?.content, (content) => {
   console.log('[NVS] Reader: content changed, length=', content?.length || 0);
   if (!content) { renderedHtml.value = ''; return; }
   try {
-    const html = renderMarkdown(content);
+    const md = ensureChapterTitle(content, chapterNum.value, chapter.value?.title || '');
+    const html = renderMarkdown(md);
     console.log('[NVS] Reader: rendered, html length=', html.length);
     renderedHtml.value = html;
   } catch (e: any) {
@@ -354,6 +468,250 @@ watch(() => chapter.value?.content, (content) => {
   });
 });
 
+// ── 精读：书签 + 批注（公开/私密） ──
+const myBookmark = ref<ReadingNote | null>(null);
+const myAnnotations = ref<ReadingNote[]>([]);
+const publicNotes = ref<ReadingNote[]>([]);
+
+const showBookmarkDialog = ref(false);
+const bookmarkContent = ref('');
+const bookmarkPublic = ref(false);
+const showAnnotationDialog = ref(false);
+const annotationSelection = ref('');
+const annotationContent = ref('');
+const annotationPublic = ref(false);
+const showNoteDetail = ref(false);
+const detailNote = ref<ReadingNote | null>(null);
+const detailContent = ref('');
+const detailPublic = ref(false);
+const savingNote = ref(false);
+
+// 是否已选中正文文字（批注按钮可用）
+const hasSelection = computed(() => {
+  const sel = window.getSelection?.();
+  const txt = sel?.toString()?.trim();
+  return !!txt && !!mdContainer.value && mdContainer.value.contains(sel!.anchorNode);
+});
+
+// ====== 选区浮动批注按钮 ======
+// 用户用光标/手指拉取选中正文中的一段文字后，在选区旁弹出「批注」按钮，
+// 点击即打开批注弹窗（无需到顶部工具栏找灰色按钮）。
+const showAnnoFloat = ref(false);
+const annoFloatPos = ref({ x: 0, y: 0 });
+
+function updateAnnoFloat() {
+  const sel = window.getSelection?.();
+  const txt = sel?.toString()?.trim();
+  if (!txt || !mdContainer.value || !mdContainer.value.contains(sel!.anchorNode)) {
+    showAnnoFloat.value = false;
+    return;
+  }
+  try {
+    const range = sel!.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    // 选区上方：x 对齐选区末尾，y 在选区上方 8px
+    let x = rect.right;
+    let y = rect.top - 8;
+    // 超出视口右/上边缘时折回，保证按钮可见
+    if (x > window.innerWidth - 90) x = rect.left - 8;
+    if (y < 70) y = rect.bottom + 10; // 顶部 70px 为工具栏区域
+    annoFloatPos.value = { x: Math.max(8, x), y: Math.max(70, y) };
+    showAnnoFloat.value = true;
+  } catch {
+    showAnnoFloat.value = false;
+  }
+}
+
+function onReaderMouseUp(e: MouseEvent) {
+  // 点击批注划线等非选区操作不弹出
+  if ((e.target as HTMLElement)?.closest?.('mark.note-ann')) return;
+  // 稍作延迟，等待浏览器确定选区
+  setTimeout(updateAnnoFloat, 20);
+}
+
+function onAnnoFloatClick() {
+  showAnnoFloat.value = false;
+  openAnnotationDialog();
+}
+
+// 点击页面其他区域时收起浮动按钮（正文容器外）
+function onGlobalMouseDown() {
+  showAnnoFloat.value = false;
+}
+
+function formatNoteTime(iso?: string) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+// 加载本章我的书签/批注 + 公开批注，并注入高亮
+async function loadNotes() {
+  try {
+    if (authStore.isLoggedIn) {
+      const [mineRes, pubRes] = await Promise.all([
+        readingApi.listMine({ novel_id: novelId.value, chapter_number: chapterNum.value }),
+        readingApi.listPublic({ novel_id: novelId.value, chapter_number: chapterNum.value }),
+      ]);
+      const mine = mineRes.data.data || [];
+      myBookmark.value = mine.find((n) => n.type === 'bookmark') || null;
+      myAnnotations.value = mine.filter((n) => n.type === 'annotation');
+      publicNotes.value = pubRes.data.data || [];
+    } else {
+      const pubRes = await readingApi.listPublic({ novel_id: novelId.value, chapter_number: chapterNum.value });
+      publicNotes.value = pubRes.data.data || [];
+      myBookmark.value = null;
+      myAnnotations.value = [];
+    }
+  } catch {
+    publicNotes.value = [];
+    myAnnotations.value = [];
+    myBookmark.value = null;
+  }
+  await nextTick();
+  applyNoteHighlights();
+}
+
+// 在渲染后的正文中注入 <mark> 划线（每笔记标第一个匹配片段）
+// 划线批注语义：选中某句子 → 生成下划线标记；公开批注对所有人可见，
+// 点击划线可查看「批注内容 + 批注人 + 时间」（悬浮 title 也显示批注人）。
+function applyNoteHighlights() {
+  const root = mdContainer.value;
+  if (!root) return;
+  // 清除旧标记（还原文本）
+  root.querySelectorAll('mark.note-ann').forEach((el) => {
+    const parent = el.parentNode;
+    if (parent) {
+      parent.replaceChild(document.createTextNode(el.textContent || ''), el);
+      parent.normalize();
+    }
+  });
+  const anns = [...myAnnotations.value, ...publicNotes.value];
+  for (const n of anns) {
+    const target = (n.selected_text || '').trim();
+    if (!target) continue;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node: Text | null;
+    while ((node = walker.nextNode() as Text | null)) {
+      const idx = node.textContent?.indexOf(target) ?? -1;
+      if (idx < 0) continue;
+      const range = document.createRange();
+      range.setStart(node, idx);
+      range.setEnd(node, idx + target.length);
+      const mark = document.createElement('mark');
+      mark.className = 'note-ann' + (n.user_id === authStore.user?.id ? ' note-mine' : ' note-public');
+      mark.dataset.noteId = String(n.id);
+      // 划线悬浮提示：公开批注显示批注人，私有批注标注"仅自己可见"
+      const who = n.username || '匿名用户';
+      mark.title = n.visibility === 'public'
+        ? `✏️ ${who} 的公开批注（点击查看）`
+        : `✏️ ${who} 的批注（仅自己可见）`;
+      mark.textContent = target;
+      try {
+        range.deleteContents();
+        range.insertNode(mark);
+      } catch { /* 忽略单个失败 */ }
+      break;
+    }
+  }
+}
+
+// 正文点击委托：点中批注高亮 → 打开详情
+function onMdClick(e: MouseEvent) {
+  const el = e.target as HTMLElement;
+  const mark = el.closest?.('mark.note-ann');
+  if (!mark) return;
+  const id = Number(mark.dataset.noteId);
+  const note = [...myAnnotations.value, ...publicNotes.value].find((n) => n.id === id);
+  if (!note) return;
+  detailNote.value = note;
+  detailContent.value = note.content || '';
+  detailPublic.value = note.visibility === 'public';
+  showNoteDetail.value = true;
+}
+
+// 书签：已收藏则删除，未收藏则弹窗
+function toggleBookmark() {
+  if (myBookmark.value) {
+    readingApi.remove(myBookmark.value.id).then(() => {
+      myBookmark.value = null;
+      ElMessage.success('已取消书签');
+    }).catch(() => ElMessage.error('操作失败'));
+    return;
+  }
+  bookmarkContent.value = '';
+  bookmarkPublic.value = false;
+  showBookmarkDialog.value = true;
+}
+
+async function saveBookmark() {
+  savingNote.value = true;
+  try {
+    await readingApi.create({
+      novel_id: novelId.value, chapter_number: chapterNum.value, type: 'bookmark',
+      content: bookmarkContent.value, visibility: bookmarkPublic.value ? 'public' : 'private',
+    });
+    ElMessage.success('书签已保存');
+    showBookmarkDialog.value = false;
+    await loadNotes();
+  } catch { ElMessage.error('保存失败'); }
+  finally { savingNote.value = false; }
+}
+
+function openAnnotationDialog() {
+  const sel = window.getSelection?.();
+  const txt = sel?.toString()?.trim() || '';
+  if (!txt || !mdContainer.value?.contains(sel!.anchorNode)) {
+    ElMessage.warning('请先在正文中选中文字，再点「批注」');
+    return;
+  }
+  annotationSelection.value = txt;
+  annotationContent.value = '';
+  annotationPublic.value = false;
+  showAnnotationDialog.value = true;
+}
+
+async function saveAnnotation() {
+  if (!annotationContent.value.trim()) { ElMessage.warning('请填写批注内容'); return; }
+  savingNote.value = true;
+  try {
+    await readingApi.create({
+      novel_id: novelId.value, chapter_number: chapterNum.value, type: 'annotation',
+      content: annotationContent.value, selected_text: annotationSelection.value,
+      visibility: annotationPublic.value ? 'public' : 'private',
+    });
+    ElMessage.success('批注已保存');
+    showAnnotationDialog.value = false;
+    await loadNotes();
+  } catch { ElMessage.error('保存失败'); }
+  finally { savingNote.value = false; }
+}
+
+async function updateDetailNote() {
+  if (!detailNote.value) return;
+  savingNote.value = true;
+  try {
+    await readingApi.update(detailNote.value.id, {
+      content: detailContent.value,
+      visibility: detailPublic.value ? 'public' : 'private',
+    });
+    ElMessage.success('已更新');
+    showNoteDetail.value = false;
+    await loadNotes();
+  } catch { ElMessage.error('更新失败'); }
+  finally { savingNote.value = false; }
+}
+
+async function deleteDetailNote() {
+  if (!detailNote.value) return;
+  try {
+    await readingApi.remove(detailNote.value.id);
+    ElMessage.success('已删除');
+    showNoteDetail.value = false;
+    await loadNotes();
+  } catch { ElMessage.error('删除失败'); }
+}
+
 onMounted(() => {
   // 🔀 旧URL格式重定向：/novel/:id → 先获取作者再跳转
   if (!route.params.authorId) {
@@ -363,6 +721,14 @@ onMounted(() => {
     }).catch(() => {});
   }
   loadChapter();
+  // 选区浮动批注按钮：正文 mouseup 检测选区，document mousedown 收起
+  document.addEventListener('mouseup', onReaderMouseUp);
+  document.addEventListener('mousedown', onGlobalMouseDown);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mouseup', onReaderMouseUp);
+  document.removeEventListener('mousedown', onGlobalMouseDown);
 });
 </script>
 
@@ -435,70 +801,10 @@ onMounted(() => {
   min-height: 200px;
 }
 
-.reader-md {
-  font-family: Georgia, 'Noto Serif SC', serif;
-  font-size: 1.1rem;
-  line-height: 2;
-  color: #333;
-}
-
-[data-theme="dark"] .reader-md {
-  color: #cbd5e1;
-}
-
-.reader-md :deep(p) {
-  margin-bottom: 1em;
-  text-indent: 2em;
-  color: #1a1a2e;
-}
-
-[data-theme="dark"] .reader-md :deep(p) {
-  color: #e2e8f0;
-}
-
-.reader-md :deep(h1) {
-  font-size: 2.2rem;
-  text-align: center;
-  margin: 2em 0 1em;
-  text-indent: 0;
-  font-weight: 700;
-  color: #1a1a2e;
-}
-.reader-md :deep(h2) {
-  font-size: 1.7rem;
-  text-align: center;
-  margin: 1.8em 0 0.8em;
-  text-indent: 0;
-  font-weight: 700;
-  color: #1a1a2e;
-}
-.reader-md :deep(h3) {
-  font-size: 1.4rem;
-  text-align: center;
-  margin: 1.5em 0 0.6em;
-  text-indent: 0;
-  font-weight: 700;
-  color: #1a1a2e;
-}
-.reader-md :deep(h4),
-.reader-md :deep(h5),
-.reader-md :deep(h6) {
-  margin: 1.5em 0 0.8em;
-  text-indent: 0;
-  font-weight: 700;
-  color: #1a1a2e;
-}
-
-[data-theme="dark"] .reader-md :deep(h1),
-[data-theme="dark"] .reader-md :deep(h2),
-[data-theme="dark"] .reader-md :deep(h3) {
-  color: #f1f5f9;
-}
-[data-theme="dark"] .reader-md :deep(h4),
-[data-theme="dark"] .reader-md :deep(h5),
-[data-theme="dark"] .reader-md :deep(h6) {
-  color: #f1f5f9;
-}
+/* 正文渲染完全跟随 Cherry 默认（与编辑器预览一致）：字体/字号/行距/段落样式
+   由 cherry-markdown.min.css 提供，这里不再覆盖。
+   标题大字（h1-h6 2em→0.9em 居中）由 global-fix.css 以 !important 统一控制，
+   阅读器 / 博客详情 / 评论 / 论坛全部一致，任何 scoped 样式都无法覆盖。 */
 
 .reader-md :deep(ul),
 .reader-md :deep(ol) {
@@ -510,77 +816,11 @@ onMounted(() => {
   margin-bottom: 0.3em;
 }
 
-.reader-md :deep(a) {
-  color: #2563eb;
-  text-decoration: none;
-}
+/* 引用块 / 表格 / 分隔线 / 链接 / 加粗：与 Cherry 编辑器预览统一，
+   样式由 cherry-markdown.min.css + global-fix.css 提供（.cherry-markdown 类），
+   此处不再单独覆盖，保证浏览端与编辑器「所见即所得」。 */
 
-[data-theme="dark"] .reader-md :deep(a) {
-  color: #60a5fa;
-}
-
-.reader-md :deep(strong) {
-  font-weight: 700;
-  color: #1a1a2e;
-}
-
-[data-theme="dark"] .reader-md :deep(strong) {
-  color: #f1f5f9;
-}
-
-.reader-md :deep(blockquote) {
-  border-left: 4px solid #e67e22;
-  padding: 10px 18px;
-  margin: 14px 0;
-  background: #fef9f3;
-  color: #4a4a5a;
-  border-radius: 0 6px 6px 0;
-}
-
-[data-theme="dark"] .reader-md :deep(blockquote) {
-  background: #1e293b;
-  color: #cbd5e1;
-  border-left-color: #f59e0b;
-}
-
-.reader-md :deep(table) {
-  border-collapse: collapse;
-  width: 100%;
-  margin: 14px 0;
-}
-
-.reader-md :deep(th),
-.reader-md :deep(td) {
-  border: 1px solid #d1d5db;
-  padding: 8px 14px;
-  text-align: left;
-}
-
-[data-theme="dark"] .reader-md :deep(th),
-[data-theme="dark"] .reader-md :deep(td) {
-  border-color: #374151;
-}
-
-.reader-md :deep(th) {
-  background: #f3f4f6;
-  font-weight: 600;
-}
-
-[data-theme="dark"] .reader-md :deep(th) {
-  background: #1f2937;
-}
-
-.reader-md :deep(hr) {
-  border: none;
-  border-top: 1px solid #e5e7eb;
-  margin: 24px 0;
-}
-
-[data-theme="dark"] .reader-md :deep(hr) {
-  border-top-color: #374151;
-}
-
-/* Markdown 正文排版（基于 .markdown-body） */
+/* Markdown 正文排版（基于 .markdown-body，与 Cherry 编辑器预览统一） */
 .markdown-body {
   color: #1a1a2e;
   font-size: 1.05rem;
@@ -605,17 +845,15 @@ onMounted(() => {
 .markdown-body .mermaid-container svg { max-width: 100%; height: auto; }
 [data-theme="dark"] .markdown-body .mermaid-container { background: #1e293b; }
 
-/* 代码块（Prism） */
-.markdown-body pre {
-  background: #1e1e1e;
+/* 代码块：统一走 Cherry 默认主题（cherry-markdown 类），亮色浅底 + Prism token 高亮与编辑器一致；
+   仅保留圆角/边距/横滚等布局微调，颜色样式完全跟随 Cherry（所见即所得）。 */
+.markdown-body pre.cherry-code-block-wrapper,
+.cherry-markdown div[data-type="codeBlock"] > pre {
   border-radius: 8px;
-  padding: 16px 20px;
   overflow-x: auto;
   margin: 14px 0;
 }
-[data-theme="dark"] .markdown-body pre { background: #111827; }
 .markdown-body pre code {
-  color: #e0e0e0;
   font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
   font-size: 0.9rem;
   line-height: 1.6;
@@ -626,6 +864,40 @@ onMounted(() => {
   justify-content: center;
   gap: 24px;
   padding: 24px;
+}
+
+/* ====== 选区浮动批注按钮 ====== */
+.anno-float-btn {
+  position: fixed;
+  transform: translateY(-100%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--gradient-primary);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+  transition: transform 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+}
+.anno-float-btn:hover {
+  transform: translateY(-100%) scale(1.05);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+}
+.anno-float-enter-active,
+.anno-float-leave-active {
+  transition: opacity 0.15s, transform 0.15s;
+}
+.anno-float-enter-from,
+.anno-float-leave-to {
+  opacity: 0;
+  transform: translateY(-100%) scale(0.85);
 }
 
 .trial-notice {
@@ -697,18 +969,103 @@ onMounted(() => {
 @media (max-width: 768px) {
   .reader-toolbar {
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 4px;
+    padding: 6px 10px;
+  }
+  .reader-toolbar .el-button {
+    padding: 8px 9px;
+    font-size: 1.05rem;
   }
   .reader-title {
     width: 100%;
     order: -1;
     text-align: center;
     font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .reader-body {
+    padding: 24px 10px;
   }
   .reader-content {
-    padding: 16px;
+    padding: 20px 14px;
+    border-radius: 6px;
+  }
+  /* 移动端阅读字号与行距优化 */
+  .reader-md,
+  .markdown-body {
+    font-size: 1.1rem;
+    line-height: 2.05;
+  }
+  /* 标题大字由 global-fix.css !important 统一控制（2em），不在此覆盖 */
+  /* 底部翻页按钮：大按钮均分全宽，方便拇指点击 */
+  .reader-footer {
+    gap: 12px;
+    padding: 14px 12px calc(20px + env(safe-area-inset-bottom));
+  }
+  .reader-footer .el-button {
+    flex: 1;
+    height: 44px;
+    font-size: 0.95rem;
+  }
+  /* 目录抽屉标题区域 */
+  .toc-header-info {
+    padding: 2px 4px 10px;
+  }
+  .toc-item {
+    padding: 12px 10px;
+  }
+  /* 模板 iframe 容器窄屏留边 */
+  .template-header,
+  .template-footer {
+    padding: 0 10px;
+  }
+  /* 精读弹窗备注提示换行 */
+  .note-hint {
+    display: block;
+    margin: 6px 0 0;
   }
 }
+
+/* ====== 精读：书签 / 批注 ====== */
+.note-active { color: #f59e0b !important; }
+/* ====== 划线批注：选中句子 → 下划线标记 ======
+   我的批注：蓝色实线；公开批注（他人）：琥珀色点线；
+   文字保持原色（不遮背景），悬浮浅色底提示可点击查看批注内容与批注人 */
+mark.note-ann {
+  background: transparent;
+  border-bottom: 2px solid rgba(245, 158, 11, 0.55);
+  border-radius: 0;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+mark.note-mine {
+  border-bottom: 2px solid #3b82f6; /* 我的批注：蓝色实线 */
+}
+mark.note-public {
+  border-bottom: 2px dotted #f59e0b; /* 他人公开批注：琥珀色点线 */
+}
+mark.note-ann:hover,
+mark.note-ann:active {
+  background: rgba(245, 158, 11, 0.14);
+}
+[data-theme="dark"] mark.note-public { border-bottom-color: #fbbf24; }
+[data-theme="dark"] mark.note-mine { border-bottom-color: #60a5fa; }
+[data-theme="dark"] mark.note-ann:hover,
+[data-theme="dark"] mark.note-ann:active { background: rgba(251, 191, 36, 0.16); }
+.note-hint { margin-left: 8px; font-size: 0.75rem; color: #999; }
+.note-selected {
+  background: #f5f5f5; border-left: 3px solid #f59e0b; padding: 8px 12px;
+  margin-bottom: 12px; color: #666; font-size: 0.85rem; border-radius: 4px;
+  max-height: 80px; overflow: auto; white-space: pre-wrap;
+}
+.note-vis-row { margin-top: 10px; display: flex; align-items: center; }
+.note-meta { margin-top: 10px; font-size: 0.78rem; color: #999; }
+.note-detail-content { white-space: pre-wrap; color: var(--text-color, #333); line-height: 1.7; }
+[data-theme="dark"] .note-selected { background: rgba(255,255,255,0.06); color: #cbd5e1; border-left-color: #f59e0b; }
 </style>
 
 <style>

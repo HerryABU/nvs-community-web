@@ -116,6 +116,7 @@ const adminMenus = [
   { title: '举报处理', desc: '审核举报、删除违规内容', path: '/admin/reports', icon: Warning, color: 'var(--gradient-accent)' },
   { title: 'HTML 内容审查', desc: '自定义 HTML 模板/扩展人工复核', path: '/admin/html-review', icon: Cpu, color: 'var(--gradient-purple)' },
   { title: 'XSS 规则库', desc: '维护 XSS 防御正则规则（动态更新）', path: '/admin/security', icon: Key, color: 'var(--gradient-accent)' },
+  { title: '违禁词库', desc: '标记/删除/替换 · 关键词+正则双模式', path: '/admin/badwords', icon: Warning, color: 'var(--gradient-danger)' },
   { title: '内容抢救台', desc: '二级密码应急预览/软删除留证', path: '/admin/emergency', icon: WarningFilled, color: 'var(--gradient-accent)' },
   { title: '内容封禁', desc: '小说/章节封禁 · 记录176原因 · 可解封', path: '/admin/ban', icon: Lock, color: 'var(--gradient-danger)' },
   { title: '内容留证', desc: 'softdel 回收站 · 删除/封禁可追溯', path: '/admin/softdel', icon: Box, color: 'var(--gradient-purple)' },
@@ -510,5 +511,42 @@ onMounted(loadDashboard);
 
 [data-theme="light"] .amc-arrow {
   color: var(--text-light);
+}
+
+/* ====== 移动端管理员仪表盘适配 ====== */
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 20px 12px 40px;
+  }
+  .dashboard-hero {
+    margin-bottom: 24px;
+  }
+  .dashboard-main-title {
+    font-size: 1.5rem;
+  }
+  .dashboard-subtitle {
+    font-size: 0.85rem;
+  }
+  .hero-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+  .hero-buttons .el-button {
+    flex: 1;
+    min-width: 120px;
+    margin-left: 0 !important;
+  }
+  .stats-row .el-col,
+  .chart-row .el-col {
+    margin-bottom: 14px;
+  }
+  .stats-row .glass-stat-card {
+    padding: 14px;
+  }
+  .menu-section {
+    padding: 0 2px;
+  }
 }
 </style>

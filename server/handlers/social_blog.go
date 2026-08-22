@@ -4,9 +4,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"nvs-server/config"
 	"nvs-server/models"
@@ -41,6 +43,103 @@ type UpdateBlogInput struct {
 	IsPinned *bool  `json:"is_pinned"`
 }
 
+// POST /api/blogs/import/batch — 批量导入博客（multipart，每个文件一篇博客，标题取文件名去扩展名）
+func ImportBlogs(c *gin.Context) {
+	userID := currentUserID(c)
+
+	form, err := c.MultipartForm()
+	if err != nil {
+		utils.BadRequest(c, "请上传文件")
+		return
+	}
+	files := form.File["files"]
+	if len(files) == 0 {
+		utils.BadRequest(c, "请至少上传一个文件")
+		return
+	}
+
+	authorDir := filepath.Join(blogDataDir(), fmt.Sprintf("%d", userID))
+	os.MkdirAll(authorDir, 0755)
+
+	created := make([]gin.H, 0, len(files))
+	skipped := 0
+	for _, fh := range files {
+		f, err := fh.Open()
+		if err != nil {
+			skipped++
+			continue
+		}
+		data, err := io.ReadAll(f)
+		f.Close()
+		if err != nil {
+			skipped++
+			continue
+		}
+		content, err := readImportContent(data, fh.Filename)
+		if err != nil {
+			skipped++
+			continue
+		}
+		content = strings.TrimSpace(content)
+		if content == "" {
+			skipped++
+			continue
+		}
+
+		title := security.SanitizePlainText(stripExt(fh.Filename))
+		if title == "" {
+			title = "未命名博客"
+		}
+		content = security.SanitizeUserContent(content)
+		raw := content
+		content, badHits := processBadWords(raw, "blog")
+		summary := ""
+		if len(content) > 120 {
+			runes := []rune(content)
+			summary = string(runes[:120])
+		}
+
+		blog := &models.AuthorBlog{
+			AuthorID: userID,
+			Title:    title,
+			Summary:  summary,
+		}
+		if err := models.CreateBlog(blog); err != nil {
+			skipped++
+			continue
+		}
+		// 违禁词 mark 动作命中 → 写入待审标记记录
+		flagBadWords(badHits, "blog", blog.ID, userID, raw, title)
+		contentPath := filepath.Join(authorDir, fmt.Sprintf("%d.md", blog.ID))
+		if err := os.WriteFile(contentPath, []byte(content), 0644); err != nil {
+			skipped++
+			continue
+		}
+		contentHash := computeBlogHash(content)
+		models.DB.Model(blog).Updates(map[string]interface{}{
+			"content_path": contentPath,
+			"content_hash": contentHash,
+		})
+		created = append(created, gin.H{
+			"id":       blog.ID,
+			"title":    title,
+			"summary":  summary,
+			"words":    len([]rune(content)),
+		})
+	}
+
+	if len(created) == 0 {
+		utils.BadRequest(c, "未能从上传文件中解析出任何博客内容")
+		return
+	}
+	utils.Success(c, gin.H{
+		"count":    len(created),
+		"skipped":  skipped,
+		"created":  created,
+		"message":  fmt.Sprintf("成功导入 %d 篇博客", len(created)),
+	})
+}
+
 // POST /api/blogs — 创建博客
 func CreateBlog(c *gin.Context) {
 	userID := currentUserID(c)
@@ -50,8 +149,9 @@ func CreateBlog(c *gin.Context) {
 		return
 	}
 
-	// 净化内容
-	content := security.SanitizeUserContent(req.Content)
+	// 净化内容（XSS + 违禁词库）
+	raw := security.SanitizeUserContent(req.Content)
+	content, badHits := processBadWords(raw, "blog")
 	title := security.SanitizePlainText(req.Title)
 	summary := security.SanitizePlainText(req.Summary)
 
@@ -65,6 +165,9 @@ func CreateBlog(c *gin.Context) {
 		utils.InternalError(c, "创建失败")
 		return
 	}
+
+	// 违禁词 mark 动作命中 → 写入待审标记记录
+	flagBadWords(badHits, "blog", blog.ID, userID, raw, blog.Title)
 
 	// 写入文件系统
 	authorDir := filepath.Join(blogDataDir(), fmt.Sprintf("%d", userID))
@@ -198,12 +301,17 @@ func UpdateBlog(c *gin.Context) {
 	}
 	if req.Content != "" {
 		content := security.SanitizeUserContent(req.Content)
+		raw := content
+		var badHits []security.BadWordHit
+		content, badHits = processBadWords(raw, "blog")
 		if blog.ContentPath != "" {
 			os.WriteFile(blog.ContentPath, []byte(content), 0644)
 		}
 		contentHash := computeBlogHash(content)
 		blog.ContentHash = contentHash
 		updates["content_hash"] = contentHash
+		// 违禁词 mark 动作命中 → 写入待审标记记录
+		flagBadWords(badHits, "blog", blog.ID, userID, raw, blog.Title)
 	}
 	if req.Summary != "" {
 		blog.Summary = security.SanitizePlainText(req.Summary)

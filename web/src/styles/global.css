@@ -1181,4 +1181,172 @@ kbd {
 .cherry-previewer .toc-list a { color: var(--primary-color); text-decoration: none; }
 .cherry-previewer .toc-list a:hover { text-decoration: underline; }
 
+/* =================================================================
+   移动端浏览支持 — 全局响应式基础层
+   ================================================================= */
+
+/* 防横向滚动溢出 */
+body {
+  overflow-x: hidden;
+}
+
+/* ---- 页面容器：窄屏收紧内边距 ---- */
+@media (max-width: 768px) {
+  .page-container {
+    padding: 16px 12px;
+  }
+  .section-title {
+    font-size: 1.25rem;
+  }
+}
+
+/* ---- 卡片网格：手机双列，平板三列 ---- */
+@media (max-width: 640px) {
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+  }
+}
+
+/* ---- Dialog / MessageBox：窄屏强制限宽，防止横向溢出 ----
+   Element Plus 的宽度通过 --el-dialog-width / inline width 控制，
+   用 max-width 兜底约束即可（不冲突，无需 !important）。 */
+@media (max-width: 768px) {
+  .el-overlay-dialog {
+    padding: 12px;
+    overflow-y: auto;
+  }
+  .el-dialog,
+  .el-message-box {
+    max-width: calc(100vw - 24px) !important;
+    margin: 8px auto !important;
+    border-radius: var(--radius-md) !important;
+  }
+  .el-dialog__header {
+    padding: 18px 18px 0 !important;
+  }
+  .el-dialog__body {
+    padding: 14px 18px !important;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  .el-dialog__footer {
+    padding: 4px 18px 18px !important;
+  }
+  /* 抽屉：任何 inline width 都被视口宽度约束 */
+  .el-drawer.ltr,
+  .el-drawer.rtl,
+  .el-drawer.ttb,
+  .el-drawer.btt {
+    max-width: 92vw;
+  }
+  /* 弹窗类表单标签置顶，提升窄屏可用性 */
+  .el-form--label-left .el-form-item__label,
+  .el-form--default .el-form-item__label {
+    float: none;
+    display: block;
+    text-align: left;
+    width: auto !important;
+    margin-bottom: 4px;
+  }
+  .el-form-item {
+    display: block;
+  }
+  .el-form-item__content {
+    margin-left: 0 !important;
+    display: block;
+  }
+}
+
+/* ---- 桌面端隐藏 / 移动端专属工具类 ---- */
+.mobile-only {
+  display: none !important;
+}
+
+@media (max-width: 768px) {
+  .mobile-only {
+    display: initial !important;
+  }
+  .desktop-only {
+    display: none !important;
+  }
+}
+
+/* ---- 编辑器 / 后台表格横向滚动兜底 ---- */
+@media (max-width: 768px) {
+  .el-table {
+    font-size: 0.85rem;
+  }
+  .el-table th.el-table__cell,
+  .el-table .el-table__cell {
+    padding: 10px 8px !important;
+  }
+  /* 富文本/文档代码块窄屏横向滚动 */
+  .cherry-previewer pre,
+  .markdown-body pre,
+  .reader-md pre,
+  .docs-page pre,
+  .blog-detail pre {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+}
+
+/* =================================================================
+   移动端细节补丁（第二轮完善）
+   ================================================================= */
+
+/* 卡片内边距窄屏收窄 */
+@media (max-width: 768px) {
+  .el-card__body {
+    padding: 14px !important;
+  }
+  .el-card__header {
+    padding: 14px 16px !important;
+  }
+  /* 分页窄屏换行居中 */
+  .el-pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+  }
+  .el-pagination .el-pager {
+    overflow-x: auto;
+    max-width: calc(100vw - 120px);
+  }
+  /* 面包屑 / 描述列表压缩 */
+  .el-descriptions__body .el-descriptions__table {
+    table-layout: auto;
+  }
+  .el-descriptions__label {
+    padding: 8px 10px !important;
+  }
+  .el-descriptions__content {
+    padding: 8px 10px !important;
+  }
+  /* 步骤条窄屏可横滚（迁移向导等） */
+  .el-steps--horizontal {
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  /* el-tabs 标签过多时允许横滚 */
+  .el-tabs__nav-wrap {
+    overflow-x: auto;
+  }
+  .el-tabs__nav {
+    flex-wrap: nowrap !important;
+  }
+  /* 对话框内表单两列收窄 */
+  .el-dialog .el-form-item__label {
+    white-space: normal;
+  }
+  /* 提示/结果区域留白 */
+  .el-result {
+    padding: 24px 12px;
+  }
+  .el-result__title {
+    font-size: 1rem;
+  }
+}
+
 

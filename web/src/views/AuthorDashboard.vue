@@ -198,6 +198,27 @@
         </div>
       </div>
 
+      <!-- 我创建的论坛（可管理：禁言/解禁，管理员封禁的仅管理员可解） -->
+      <div class="novels-section" v-if="myForums.length > 0">
+        <h2 class="section-title-bar">
+          <span class="title-bar-text">我创建的论坛</span>
+          <span class="title-bar-count">{{ myForums.length }} 个</span>
+        </h2>
+        <div class="forum-admin-list">
+          <div v-for="f in myForums" :key="f.id" class="forum-admin-item">
+            <div class="forum-admin-main">
+              <span class="forum-admin-name">{{ f.name }}</span>
+              <el-tag v-if="f.room_code" size="small" style="cursor:pointer" title="点击复制房间号" @click="copyRoomCode(f.room_code)">🚪 {{ f.room_code }}</el-tag>
+              <el-tag v-if="f.has_password" size="small" type="warning">🔒 密码</el-tag>
+              <el-tag v-if="f.review_status === 'pending'" size="small" type="info">待审查</el-tag>
+              <el-tag v-if="f.review_status === 'rejected'" size="small" type="danger">已驳回</el-tag>
+              <span class="forum-admin-meta">{{ f.thread_count }} 个帖子</span>
+            </div>
+            <el-button size="small" type="primary" plain @click="$router.push(`/forum/${f.id}`)">管理</el-button>
+          </div>
+        </div>
+      </div>
+
       <!-- 封禁内容（176号令合规告知） -->
       <div class="novels-section banned-section" v-if="bannedContent.novels.length > 0 || bannedContent.chapters.length > 0">
         <h2 class="section-title-bar">
@@ -234,7 +255,7 @@
 import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
-import { novelApi, type Novel } from '@/api/novel';
+import { novelApi, forumApi, type Novel } from '@/api/novel';
 import { authApi } from '@/api/auth';
 import { adminApi } from '@/api/admin';
 import { blogApi } from '@/api/social';
@@ -294,6 +315,25 @@ async function loadHtmlStats() {
       htmlStats.value.htmlPending = htmls.filter((h: any) => h.review_status === 'pending').length;
     }
   } catch { /* ignore */ }
+}
+
+// 我创建的论坛（管理：禁言/解禁）
+const myForums = ref<any[]>([]);
+
+async function loadMyForums() {
+  try {
+    const res = await forumApi.listMyForums();
+    if (res.data.code === 0) myForums.value = res.data.data || [];
+  } catch { /* ignore */ }
+}
+
+async function copyRoomCode(code: string) {
+  try {
+    await navigator.clipboard.writeText(code);
+    ElMessage.success('房间号已复制：' + code);
+  } catch {
+    ElMessage.warning('复制失败，请手动复制：' + code);
+  }
 }
 
 function formatDate(d?: string) { if (!d) return ''; return new Date(d).toLocaleString('zh-CN'); }
@@ -568,6 +608,7 @@ onMounted(() => {
   loadNovels();
   loadSensitiveZones();
   loadMyBlogs();
+  loadMyForums();
   loadHtmlStats();
   loadBannedContent();
 });
@@ -798,6 +839,15 @@ watch(
 /* ===== 封禁内容（176号令） ===== */
 .banned-section { margin-top: 32px; }
 .banned-list { display: flex; flex-direction: column; gap: 12px; }
+.forum-admin-list { display: flex; flex-direction: column; gap: 10px; }
+.forum-admin-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 12px 16px; border-radius: 10px;
+  background: var(--bg-card, #fff); border: 1px solid var(--glass-border, #e5e7eb);
+}
+.forum-admin-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.forum-admin-name { font-weight: 600; color: var(--text-color, #333); font-size: 0.95rem; }
+.forum-admin-meta { font-size: 0.78rem; color: var(--text-light, #999); }
 .banned-item {
   padding: 14px 16px;
   border-radius: 10px;
@@ -1012,4 +1062,64 @@ watch(
 .hmc-desc { font-size: 0.82rem; color: rgba(255,255,255,0.45); margin: 4px 0 8px; }
 [data-theme="light"] .hmc-desc { color: var(--text-light); }
 .hmc-meta { display: flex; gap: 6px; }
+
+/* ====== 移动端作者工作台适配 ====== */
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 20px 12px 40px;
+  }
+  .dashboard-hero {
+    margin-bottom: 24px;
+  }
+  .dashboard-main-title {
+    font-size: 1.5rem;
+  }
+  .dashboard-subtitle {
+    font-size: 0.85rem;
+  }
+  .hero-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+  .hero-buttons .el-button {
+    flex: 1;
+    min-width: 120px;
+    margin-left: 0 !important;
+  }
+  /* 博客/论坛管理列表：行式改纵向 */
+  .blog-item-dash,
+  .forum-admin-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .blog-item-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .blog-item-main {
+    flex-wrap: wrap;
+  }
+  .blog-item-meta {
+    white-space: normal;
+  }
+  /* 作品卡片网格：窄屏单列 */
+  .novel-card-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .html-mgr-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .stats-row .el-col,
+  .chart-row .el-col {
+    margin-bottom: 14px;
+  }
+  .stats-row .glass-stat-card {
+    padding: 14px;
+  }
+}
 </style>

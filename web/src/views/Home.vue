@@ -21,6 +21,7 @@
       v-if="searchKeyword"
       :keyword="searchKeyword" :results="searchResults" :authors="searchAuthors"
       :author-total="searchAuthorTotal" :total="searchTotal" :loading="searchLoading"
+      :blogs="searchBlogs" :htmls="searchHtmls"
       :view="novelView" :page-size="searchPageSize"
       v-model:current-page="searchPage"
       @clear="clearSearch"
@@ -160,6 +161,8 @@ const searchKeyword = ref('');
 const searchResults = ref<Novel[]>([]);
 const searchAuthors = ref<any[]>([]);
 const searchAuthorTotal = ref(0);
+const searchBlogs = ref<any[]>([]);
+const searchHtmls = ref<any[]>([]);
 const searchLoading = ref(false);
 const searchTotal = ref(0);
 const searchPage = ref(1);
@@ -227,15 +230,16 @@ async function doSearch() {
   if (!searchKeyword.value) return;
   searchLoading.value = true;
   try {
-    const [novelRes, authorRes] = await Promise.all([
-      novelApi.getNovels({ page: searchPage.value, page_size: searchPageSize, search: searchKeyword.value }),
-      fetch(`/api/search/authors?search=${encodeURIComponent(searchKeyword.value)}&page=1&page_size=6`).then(r => r.json()),
-    ]);
-    searchResults.value = novelRes.data.data.list || [];
-    searchTotal.value = novelRes.data.data.total || 0;
-    if (authorRes.code === 0) {
-      searchAuthors.value = authorRes.data.list || [];
-      searchAuthorTotal.value = authorRes.data.total || 0;
+    // 统一搜索：一次返回 作品 / 作者 / 博客 / HTML 扩展
+    const res = await fetch(`/api/search?q=${encodeURIComponent(searchKeyword.value)}`).then(r => r.json());
+    if (res.code === 0) {
+      const d = res.data;
+      searchResults.value = d.novels || [];
+      searchAuthors.value = d.authors || [];
+      searchBlogs.value = d.blogs || [];
+      searchHtmls.value = d.htmls || [];
+      searchTotal.value = (d.novels || []).length;
+      searchAuthorTotal.value = (d.authors || []).length;
     }
   } catch (e) {
     console.error(e);
@@ -249,6 +253,8 @@ function clearSearch() {
   searchResults.value = [];
   searchTotal.value = 0;
   searchPage.value = 1;
+  searchBlogs.value = [];
+  searchHtmls.value = [];
   router.replace({ query: {} });
   // 也同步更新 NavBar 中的搜索框（通过 URL 清除）
 }
@@ -892,5 +898,83 @@ watch(
 [data-theme="dark"] .novel-section [style*="background:#e0e0e0"] {
   background: #334155 !important;
   color: #64748b !important;
+}
+
+/* ====== 移动端首页适配 ====== */
+@media (max-width: 768px) {
+  .hero-section {
+    height: 150px;
+    margin-bottom: 16px;
+  }
+  .hero-glass {
+    padding: 18px 16px;
+    width: calc(100% - 24px);
+  }
+  .hero-glass h1 {
+    font-size: 1.3rem;
+    margin-bottom: 4px;
+  }
+  .hero-glass p {
+    font-size: 0.8rem;
+    margin-bottom: 10px;
+  }
+  .hero-cat-chip {
+    padding: 4px 12px;
+    font-size: 0.75rem;
+  }
+  .category-zone {
+    padding: 16px 14px;
+    margin-bottom: 18px;
+  }
+  .cz-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .cz-header h2 {
+    font-size: 1.1rem;
+  }
+  .cat-blocks {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+  }
+  .global-toolbar {
+    padding: 12px 10px;
+    gap: 8px;
+  }
+  .global-toolbar .el-radio-group {
+    width: 100%;
+    display: flex;
+  }
+  .global-toolbar .el-radio-group .el-radio-button {
+    flex: 1;
+  }
+  .global-toolbar .el-radio-group .el-radio-button__inner {
+    width: 100%;
+  }
+  .ns-header {
+    margin-bottom: 10px;
+  }
+  .ns-header h3 {
+    font-size: 1rem;
+  }
+  .home-top-bar .el-button {
+    width: 100%;
+  }
+  /* 浮动切换按钮：避开底部安全区 */
+  .view-toggle-float {
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    right: 16px;
+  }
+  .view-toggle-float .el-button {
+    width: 48px;
+    height: 48px;
+  }
+  /* 首页表格视图窄屏允许横向滚动 */
+  .novel-section .el-table {
+    min-width: 560px;
+  }
+  .novel-section {
+    overflow-x: auto;
+  }
 }
 </style>

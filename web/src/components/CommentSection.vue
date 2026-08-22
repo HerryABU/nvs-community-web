@@ -21,6 +21,11 @@
       <router-link to="/login">登录</router-link> 后即可发表评论
     </div>
 
+    <!-- 新评论提示条 -->
+    <div v-if="newComments > 0" class="new-comments-bar" @click="fetchComments(true)">
+      🔔 有 {{ newComments }} 条新评论，点击查看
+    </div>
+
     <!-- 评论列表（嵌套展示） -->
     <div class="comment-list" v-if="displayComments.length > 0">
       <template v-for="comment in displayComments" :key="comment.id">
@@ -42,7 +47,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { novelApi, commentApi, type Comment } from '@/api/novel';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -100,6 +105,8 @@ async function fetchComments(reset = false) {
     const data = res.data.data;
     if (reset) {
       comments.value = data.list || [];
+      latestTotal.value = Number(data.total) || comments.value.length;
+      newComments.value = 0;
     } else {
       comments.value.push(...(data.list || []));
     }
@@ -108,6 +115,35 @@ async function fetchComments(reset = false) {
     console.error(e);
   }
 }
+
+// ====== 新评论轮询提示（30s 检测，不自动刷新打断浏览） ======
+const latestTotal = ref(0);
+const newComments = ref(0);
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+async function pollNewComments() {
+  try {
+    const res = await commentApi.getComments({
+      novel_id: props.blogId ? 0 : props.novelId,
+      blog_id: props.blogId || 0,
+      chapter_number: props.chapterNumber,
+      page: 1,
+    });
+    const cur = Number(res.data.data?.total) || 0;
+    if (cur > latestTotal.value) {
+      newComments.value = cur - latestTotal.value;
+    }
+  } catch { /* 忽略 */ }
+}
+
+onMounted(() => {
+  fetchComments(true);
+  pollTimer = setInterval(pollNewComments, 30000);
+});
+
+onUnmounted(() => {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+});
 
 // 跨域评论警告：敏感分区评论需两级确认（文化差异 + 法律风险）
 async function crossDomainCheck(): Promise<boolean> {
@@ -215,8 +251,6 @@ async function loadMore() {
   await fetchComments(false);
   loadingMore.value = false;
 }
-
-onMounted(() => fetchComments(true));
 </script>
 
 <style scoped>
@@ -247,6 +281,20 @@ onMounted(() => fetchComments(true));
   margin-top: 16px;
 }
 
+.new-comments-bar {
+  margin: 10px 0;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px dashed var(--primary-color);
+  color: var(--primary-color);
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+.new-comments-bar:hover { background: rgba(99, 102, 241, 0.18); }
+
 .load-more {
   text-align: center;
   margin-top: 16px;
@@ -259,5 +307,19 @@ onMounted(() => fetchComments(true));
 }
 [data-theme="dark"] .tip-text {
   color: #94a3b8;
+}
+
+/* ====== 移动端评论区适配 ====== */
+@media (max-width: 640px) {
+  .form-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .form-actions .el-button {
+    flex: 1;
+  }
+  .comment-section {
+    padding: 0 2px;
+  }
 }
 </style>

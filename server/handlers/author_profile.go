@@ -73,7 +73,7 @@ func GetAuthorProfile(c *gin.Context) {
 		models.DB.Raw(
 			"SELECT date(chapters.created_at) AS date, COUNT(*) AS count "+
 				"FROM chapters JOIN novels ON novels.id = chapters.novel_id "+
-				"WHERE novels.author_id = ? AND chapters.created_at >= ? "+
+				"WHERE novels.author_id = ? AND novels.deleted_at IS NULL AND chapters.deleted_at IS NULL AND chapters.created_at >= ? "+
 				"GROUP BY date(chapters.created_at) ORDER BY date",
 			authorID, dates[0],
 		).Scan(&dailyChapters)
@@ -93,7 +93,7 @@ func GetAuthorProfile(c *gin.Context) {
 		models.DB.Raw(
 			"SELECT date(comments.created_at) AS date, COUNT(*) AS count "+
 				"FROM comments JOIN novels ON novels.id = comments.novel_id "+
-				"WHERE novels.author_id = ? AND comments.created_at >= ? "+
+				"WHERE novels.author_id = ? AND novels.deleted_at IS NULL AND comments.deleted_at IS NULL AND comments.created_at >= ? "+
 				"GROUP BY date(comments.created_at) ORDER BY date",
 			authorID, dates[0],
 		).Scan(&dailyComments)
@@ -113,7 +113,7 @@ func GetAuthorProfile(c *gin.Context) {
 		models.DB.Raw(
 			"SELECT COALESCE(AVG((type_completion + narrative_quality + thought_depth + community_reputation + update_stability) / 5.0), 0) "+
 				"FROM ratings JOIN novels ON novels.id = ratings.novel_id "+
-				"WHERE novels.author_id = ?",
+				"WHERE novels.author_id = ? AND novels.deleted_at IS NULL",
 			authorID,
 		).Scan(&avgRating)
 	}
@@ -198,6 +198,8 @@ func GetNovelStats(c *gin.Context) {
 
 // GetAuthorBannedContent 获取作者被封禁（176号令）的小说/章节及封禁原因。
 // 采用 Unscoped 查询软删除记录，作者可看到「被封禁的内容 + 原因 + 时间」，满足合规告知要求。
+// 注意：仅当 ban_reason 非空才视为「管理员封禁」——作者自己删除的记录（软删除但无封禁原因）
+// 不应展示 176 号令封禁横幅，避免误报。
 func GetAuthorBannedContent(c *gin.Context) {
 	userID := currentUserID(c)
 
@@ -210,7 +212,7 @@ func GetAuthorBannedContent(c *gin.Context) {
 	novels := make([]bannedNovel, 0)
 	models.DB.Unscoped().Model(&models.Novel{}).
 		Select("id, title, ban_reason, deleted_at AS banned_at").
-		Where("author_id = ? AND deleted_at IS NOT NULL", userID).
+		Where("author_id = ? AND deleted_at IS NOT NULL AND ban_reason IS NOT NULL AND ban_reason <> ''", userID).
 		Order("deleted_at DESC").
 		Scan(&novels)
 
@@ -227,7 +229,7 @@ func GetAuthorBannedContent(c *gin.Context) {
 	models.DB.Unscoped().Model(&models.Chapter{}).
 		Select("chapters.id, chapters.novel_id, chapters.chapter_number, chapters.title, chapters.ban_reason, chapters.deleted_at AS banned_at, novels.title AS novel_title").
 		Joins("JOIN novels ON novels.id = chapters.novel_id").
-		Where("novels.author_id = ? AND chapters.deleted_at IS NOT NULL", userID).
+		Where("novels.author_id = ? AND chapters.deleted_at IS NOT NULL AND chapters.ban_reason IS NOT NULL AND chapters.ban_reason <> ''", userID).
 		Order("chapters.deleted_at DESC").
 		Scan(&chapters)
 

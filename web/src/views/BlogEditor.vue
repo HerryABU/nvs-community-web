@@ -16,9 +16,40 @@
       </div>
       <div class="be-toolbar-right">
         <span v-if="lastSaved" class="be-saved-time">已保存 {{ lastSaved }}</span>
+        <el-button :loading="batchImporting" @click="showBatchDialog = true" title="批量导入多个文件为多篇博客">
+          <el-icon><UploadFilled /></el-icon><span class="desktop-only"> 批量导入</span>
+        </el-button>
         <el-button type="primary" :loading="saving" @click="saveBlog">保存</el-button>
       </div>
     </div>
+
+    <!-- 批量导入对话框 -->
+    <el-dialog v-model="showBatchDialog" title="批量导入博客" width="560px" destroy-on-close>
+      <el-form label-width="80px">
+        <el-form-item label="选择文件">
+          <el-upload
+            ref="batchUploadRef"
+            :auto-upload="false"
+            multiple
+            :on-change="onBatchFileChange"
+            accept=".md,.txt,.docx,.doc"
+            drag
+          >
+            <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+            <div class="el-upload__text">将多个 Word / Markdown / 文本文件拖到此处</div>
+            <template #tip>
+              <div class="el-upload__tip">每个文件将创建为一篇独立博客，标题取文件名（去扩展名）</div>
+            </template>
+          </el-upload>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showBatchDialog = false">取消</el-button>
+        <el-button type="primary" :loading="batchImporting" :disabled="batchFiles.length === 0" @click="doBatchImport">
+          批量创建（{{ batchFiles.length }} 篇）
+        </el-button>
+      </template>
+    </el-dialog>
 
     <!-- 标题区 -->
     <div class="be-header">
@@ -49,14 +80,47 @@ import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { blogApi } from '@/api/social';
 import { ElMessage } from 'element-plus';
-import { ArrowLeft } from '@element-plus/icons-vue';
+import { ArrowLeft, UploadFilled } from '@element-plus/icons-vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
-import TurndownService from 'turndown';
 // engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
 import { renderMarkdown, editorEngineConfig } from '@/markdown/renderer';
+import { htmlToMarkdown } from '@/utils/turndown';
 
 const route = useRoute();
 const router = useRouter();
+
+// ====== 批量导入 ======
+const showBatchDialog = ref(false);
+const batchImporting = ref(false);
+const batchUploadRef = ref();
+const batchFiles = ref<File[]>([]);
+
+function onBatchFileChange(file: any) {
+  if (file.raw) batchFiles.value.push(file.raw);
+}
+
+async function doBatchImport() {
+  if (batchFiles.value.length === 0) { ElMessage.warning('请选择文件'); return; }
+  batchImporting.value = true;
+  try {
+    const res = await blogApi.importBatch(batchFiles.value);
+    if (res.data.code === 0) {
+      const d = res.data.data;
+      ElMessage.success(d.message || `成功导入 ${d.count} 篇博客`);
+      showBatchDialog.value = false;
+      batchFiles.value = [];
+      batchUploadRef.value?.clearFiles();
+      // 回到作者工作台，可看到新博客列表
+      setTimeout(() => router.push('/author'), 600);
+    } else {
+      ElMessage.error(res.data.message || '批量导入失败');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '批量导入失败');
+  } finally {
+    batchImporting.value = false;
+  }
+}
 
 const editingId = ref(Number(route.params.id) || 0);
 
@@ -73,10 +137,8 @@ const cherryContainer = ref<HTMLDivElement | null>(null);
 let cherryInstance: any = null;
 let cherryReady = false;
 
-const turndown = new TurndownService({ headingStyle: 'atx', hr: '---', bulletListMarker: '-', codeBlockStyle: 'fenced' });
-
-function getContentToSave(): string {
-  if (editorMode.value === 'richtext' && richTextContent.value.trim()) return turndown.turndown(richTextContent.value);
+async function getContentToSave(): Promise<string> {
+  if (editorMode.value === 'richtext' && richTextContent.value.trim()) return await htmlToMarkdown(richTextContent.value);
   if (editorMode.value === 'md' && cherryInstance) return cherryInstance.getValue() || blogContent.value;
   return blogContent.value;
 }
@@ -108,13 +170,13 @@ function destroyCherryEditor() {
   cherryReady = false;
 }
 
-function onModeChange(mode: string) {
+async function onModeChange(mode: string) {
   if (mode === 'richtext') {
     const md = cherryInstance ? (cherryInstance.getValue() || '') : blogContent.value;
     richTextContent.value = renderMarkdown(md);
   } else if (mode === 'md') {
     if (richTextContent.value.trim()) {
-      const md = turndown.turndown(richTextContent.value);
+      const md = await htmlToMarkdown(richTextContent.value);
       blogContent.value = md;
       if (cherryInstance) cherryInstance.setValue(md);
     }
@@ -143,7 +205,7 @@ async function loadBlog() {
 
 async function saveBlog() {
   if (!blogTitle.value.trim()) { ElMessage.warning('请输入标题'); return; }
-  const content = getContentToSave();
+  const content = await getContentToSave();
   if (!content.trim()) { ElMessage.warning('请输入内容'); return; }
   saving.value = true;
   try {
@@ -213,4 +275,30 @@ onBeforeUnmount(() => {
 .be-md-wrapper { flex: 1; overflow: hidden; display: flex; }
 .be-cherry-container { flex: 1; overflow: hidden; }
 .be-richtext-editor { flex: 1; overflow: auto; }
+
+/* ====== 移动端博客编辑器适配 ====== */
+@media (max-width: 768px) {
+  .be-toolbar {
+    height: auto;
+    min-height: 52px;
+    padding: 6px 10px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .be-page-title {
+    display: none;
+  }
+  .be-saved-time {
+    display: none;
+  }
+  .be-header {
+    padding: 10px 10px 0;
+  }
+  .be-header-row {
+    flex-wrap: wrap;
+  }
+  .be-editor {
+    padding: 0 10px 10px;
+  }
+}
 </style>

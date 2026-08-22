@@ -24,7 +24,6 @@ export const htmlApi = {
   get(id: number) { return api.get(`/userhtmls/${id}`); },
   upload(formData: FormData) {
     return api.post('/userhtmls/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 60000,
     });
   },

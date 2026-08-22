@@ -184,8 +184,11 @@ func AdminRestoreContent(c *gin.Context) {
 		_ = models.DB.Unscoped().Model(&models.Thread{}).Where("id = ?", req.ID).
 			Update("deleted_at", nil).Error
 	case "post":
+		// 方案A：posts 无 deleted_at（删除即物理删除，仅 softdel_posts 留证可追溯），
+		// 回帖无法解封恢复；如留证记录存在，则同步清除其封禁原因标记（如适用）。
+		// 保留分支以兼容旧请求，不执行 deleted_at 更新。
 		_ = models.DB.Unscoped().Model(&models.Post{}).Where("id = ?", req.ID).
-			Update("deleted_at", nil).Error
+			Updates(map[string]interface{}{"ban_reason": ""}).Error
 	case "blog":
 		_ = models.DB.Unscoped().Model(&models.AuthorBlog{}).Where("id = ?", req.ID).
 			Update("deleted_at", nil).Error

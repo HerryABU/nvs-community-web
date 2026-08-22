@@ -66,12 +66,16 @@ func CreateComment(c *gin.Context) {
 		return
 	}
 
+	// XSS 净化 + 违禁词库净化（delete/replace 动作直接改写文本）
+	raw := security.SanitizeUserContent(req.Content)
+	cleaned, badHits := processBadWords(raw, "comment")
+
 	comment := &models.Comment{
 		UserID:        userID,
 		NovelID:       req.NovelID,
 		BlogID:        req.BlogID,
 		ChapterNumber: req.ChapterNumber,
-		Content:       security.SanitizeUserContent(req.Content),
+		Content:       cleaned,
 		QuoteText:     security.SanitizePlainText(req.QuoteText),
 		IsMarkdown:    true,
 	}
@@ -83,6 +87,9 @@ func CreateComment(c *gin.Context) {
 		utils.InternalError(c, "发表评论失败")
 		return
 	}
+
+	// 违禁词 mark 动作命中 → 写入待审标记记录
+	flagBadWords(badHits, "comment", comment.ID, userID, raw, "")
 
 	if user, err := models.GetUserByID(userID); err == nil {
 		comment.Username = user.Username

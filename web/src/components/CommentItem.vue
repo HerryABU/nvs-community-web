@@ -11,7 +11,7 @@
       「{{ comment.quote_text }}」
     </div>
     <div class="comment-content">
-      <div class="comment-md" v-html="renderedComment"></div>
+      <div class="comment-md cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" v-html="renderedComment"></div>
     </div>
     <div class="comment-actions">
       <el-button v-if="authStore.isLoggedIn" size="small" text @click="showReply = !showReply">
@@ -206,5 +206,20 @@ function doReply() {
 }
 [data-theme="dark"] .comment-content {
   color: #e2e8f0;
+}
+
+/* ====== 移动端评论项适配 ====== */
+@media (max-width: 640px) {
+  .comment-item {
+    padding: 12px 0;
+  }
+  .comment-header {
+    flex-wrap: wrap;
+    gap: 6px 10px;
+  }
+  .child-comment {
+    margin-left: 14px;
+    padding-left: 10px;
+  }
 }
 </style>

@@ -1,12 +1,19 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
-import ElementPlus from 'element-plus';
-import 'element-plus/dist/index.css';
 
 import App from './App.vue';
 import router from './router';
 import './styles/global.css';
 import './styles/admin.css';
+
+// ====== Element Plus 命令式组件样式（按需引入模式下必须显式引入） ======
+// 模板组件（<el-dialog> 等）由 unplugin-vue-components 自动注入样式；
+// 但代码中显式 `import { ElMessage } from 'element-plus'` 的 API 组件
+// 不会被解析器处理，需在此全局引入其样式，否则弹窗无样式（裸文本）。
+import 'element-plus/es/components/message/style/css';
+import 'element-plus/es/components/message-box/style/css';
+import 'element-plus/es/components/notification/style/css';
+import 'element-plus/es/components/loading/style/css';
 
 // ====== 创建并挂载应用（核心，不依赖重量级组件） ======
 try {
@@ -14,7 +21,6 @@ try {
   (window as any).__nvs_app = app; // 供动态导入的模块注册全局组件
   app.use(createPinia());
   app.use(router);
-  app.use(ElementPlus);
   app.mount('#app');
 } catch (e: any) {
   console.error('[NVS] 应用初始化失败:', e);

@@ -141,4 +141,28 @@ async function del(f:any){
 .card-ft{display:flex;gap:6px;justify-content:flex-end}
 .empty{padding:40px 0;text-align:center}
 .code-input :deep(textarea){font-family:monospace;font-size:.85rem}
+
+/* ====== 移动端作者模板设置适配 ====== */
+@media (max-width: 640px) {
+  .page-container {
+    padding: 16px 12px;
+  }
+  .page-container h2 {
+    font-size: 1.25rem;
+  }
+  .frame-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .card-hd {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .card-ft {
+    flex-wrap: wrap;
+  }
+  .card-ft .el-button {
+    flex: 1;
+  }
+}
 </style>

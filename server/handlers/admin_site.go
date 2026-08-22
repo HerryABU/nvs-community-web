@@ -35,14 +35,80 @@ func UpdatePlatformConfig(c *gin.Context) {
 		"email_verify": true, "captcha_enabled": true,
 		"smtp_host": true, "smtp_port": true, "smtp_user": true,
 		"smtp_password": true, "smtp_from": true,
+		"smtp_insecure_skip_verify": true, // 跳过 TLS 证书校验（内网/自签名 SMTP，默认关闭）
 		"robots_txt": true,
+		"guidelines": true, // 平台指南（注册页展示，支持基础 HTML 排版）
 		"email_domain_whitelist": true, "email_domain_blacklist": true,
 	}
 	for k, v := range req {
 		if !allowed[k] { continue }
+		// 平台指南是 HTML 内容，保存时用宽松策略消毒，防存储型 XSS
+		if k == "guidelines" {
+			policy := bluemonday.UGCPolicy()
+			policy.AllowElements("h1", "h2", "h3", "h4", "h5", "p", "ul", "ol", "li", "strong", "b", "em", "i", "u", "br", "hr", "blockquote", "a")
+			policy.AllowAttrs("href", "target", "rel").OnElements("a")
+			v = policy.Sanitize(v)
+		}
 		if err := models.SetPlatformConfig(k, v); err != nil { utils.InternalError(c, "保存配置失败: "+k); return }
 	}
 	utils.Success(c, gin.H{"message": "配置已更新"})
+}
+
+// ============ SMTP 测试与诊断 ============
+
+// TestSMTP 测试 SMTP 配置并逐阶段诊断（管理员专用）。
+// POST /api/admin/smtp/test
+// 入参：to 必填（测试收件邮箱）；host/port/user/password/from 可选，
+// 为空时使用已保存的平台配置（password 为空时沿用已保存的授权码，不回显）。
+func TestSMTP(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	var req struct {
+		To       string `json:"to" binding:"required,email"`
+		Host     string `json:"host"`
+		Port     string `json:"port"`
+		User     string `json:"user"`
+		Password string `json:"password"`
+		From     string `json:"from"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "请提供有效的测试收件邮箱")
+		return
+	}
+
+	// 优先取已保存的平台配置，请求内的非空字段覆盖之
+	host, port, user, pass, from := models.GetSMTPConfigFromDB()
+	if req.Host != "" {
+		host = req.Host
+	}
+	if req.Port != "" {
+		port = req.Port
+	}
+	if req.User != "" {
+		user = req.User
+	}
+	if req.Password != "" {
+		pass = req.Password
+	}
+	if req.From != "" {
+		from = req.From
+	}
+	portInt := 587
+	if p, err := strconv.Atoi(port); err == nil {
+		portInt = p
+	}
+	cfg := utils.SMTPConfig{
+		Host: host, Port: fmt.Sprintf("%d", portInt), User: user, Password: pass, From: from,
+		InsecureSkipVerify: models.GetPlatformConfig("smtp_insecure_skip_verify") == "true",
+	}
+
+	steps, ok := utils.DiagnoseSMTP(cfg, strings.TrimSpace(strings.ToLower(req.To)))
+	msg := "SMTP 测试通过，邮件已发送"
+	if !ok {
+		msg = "SMTP 测试未通过，请根据下方诊断定位问题"
+	}
+	utils.Success(c, gin.H{"ok": ok, "steps": steps, "message": msg})
 }
 
 // ============ 隔离墙配置 ============
@@ -223,7 +289,16 @@ func ListFederatedNovels(c *gin.Context) {
 func GetSiteInfo(c *gin.Context) {
 	recordInbound(c, "site-info")
 	wallCfg := models.GetWallConfig()
-	utils.Success(c, gin.H{"site_name": models.GetSiteName(), "wall_zones": wallCfg.Zones, "wall_enabled": wallCfg.Enabled, "email_verify": models.IsEmailVerifyEnabled(), "captcha_enabled": models.IsCaptchaEnabled()})
+	// 平台指南：公开可读（注册页展示），消毒后返回
+	guidelines := models.GetPlatformConfig("guidelines")
+	if guidelines != "" {
+		guidelines = bluemonday.UGCPolicy().Sanitize(guidelines)
+	}
+	utils.Success(c, gin.H{
+		"site_name": models.GetSiteName(), "wall_zones": wallCfg.Zones, "wall_enabled": wallCfg.Enabled,
+		"email_verify": models.IsEmailVerifyEnabled(), "captcha_enabled": models.IsCaptchaEnabled(),
+		"guidelines": guidelines,
+	})
 }
 
 // ListInboundSites 列出「谁连接了我」的入站记录（管理员）

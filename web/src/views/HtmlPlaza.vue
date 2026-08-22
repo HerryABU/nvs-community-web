@@ -87,4 +87,21 @@ function fmtSize(b: number) { if (b<1024) return b+'B'; if (b<1048576) return (b
 .card-meta{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--text-secondary);margin-bottom:8px}
 .card-actions{display:flex;gap:4px}
 .empty{padding:60px 0;display:flex;justify-content:center}
+
+/* ====== 移动端 HTML 应用广场适配 ====== */
+@media (max-width: 640px) {
+  .page-container {
+    padding: 16px 12px;
+  }
+  .plaza-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .card-thumb {
+    height: 140px;
+  }
+  .card-actions {
+    flex-wrap: wrap;
+  }
+}
 </style>
