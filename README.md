@@ -83,6 +83,7 @@
 - 🚫 **IP 黑名单** — 管理员可封禁 IP，支持过期时间
 - 🚦 **IP 限流** — 滑动窗口算法，内存存储，登录 5次/60s，评论 20次/60s
 - 🧹 **XSS 防护** — bluemonday 白名单净化 + 动态正则规则引擎（管理员后台可维护、可测试）+ 正则移除危险标签和事件处理器
+- 🚫 **违禁词库** — 管理员后台动态维护，**三种动作**：标记（内容正常发布但进入待审列表，管理员确认违规[可连带软删留证]/放行）/ 删除（直接移除匹配内容）/ 替换（替换为指定文本）；**双匹配模式**：关键词（字面匹配自动转义，填词即用）与正则（Go RE2 全方位：`(?i)` 忽略大小写、`(?m)` 多行、`\p{Han}` Unicode 属性）；**可配置适用范围**（章节 / 评论 / 论坛 / 博客 / 全部）；规则即时生效无需改代码，内置实时测试工具，mark 命中自动写入待审记录（去重）
 - 🔏 **内容签名** — HMAC-SHA256 作者签名，章节完整性可验证
 - 📋 **举报系统** — 支持举报作品/评论/帖子，管理员处理
 - 🗑️ **内容软删除** — 8 张内容表软删除（`deleted_at`），删除不物理移除、正文归档到 `.deleted/`，随时可追溯原始内容；**所有统计均排除软删除数据**（分类分布 / 章节趋势 / 字数趋势 / 评论趋势等管理端与作者端统计全部 `JOIN novels` + `deleted_at IS NULL` 双过滤，已删除作品的章节/字数/评论不再计入）
@@ -217,7 +218,7 @@ Markdown/富文本编辑器支持 `[expand title="标题"]...[/expand]` 语法�
 | 缓存 | Redis 7（可选，MySQL 模式推荐） |
 | 存储 | 文件系统（HTML + JSON） + 内存 VFS（沙盒虚拟文件系统） |
 | 扩展 | 自定义 HTML-UI 模板 · ZIP 托管 · WASM · 端口代理 · 虚拟路径 |
-| 安全 | 内容扫描（23条规则）· 动态 XSS 规则引擎 · 软删除（8表）· 审计日志 · 访问日志关联 user_id · 日志完整性保护 · ZIP炸弹检测 · CSP · iframe sandbox · 目录锁定 · 数据库配置 AES-256 加密 |
+| 安全 | 内容扫描（23条规则）· 动态 XSS 规则引擎 · 违禁词库（标记/删除/替换 + 关键词/正则）· 软删除（8表）· 审计日志 · 访问日志关联 user_id · 日志完整性保护 · ZIP炸弹检测 · CSP · iframe sandbox · 目录锁定 · 数据库配置 AES-256 加密 |
 | 构建 | Go `embed` 前端 → 单二进制文件 |
 
 ---
@@ -460,7 +461,7 @@ nvs/
 │   │   ├── secure.go              # 数据库配置 AES-256-GCM 加密存储（.secret.key + secure-config.json）
 │   │   └── setup.go               # 建站向导状态 / 一次性安装密钥
 │   │
-│   ├── models/                    # 数据层（26 个结构体）
+│   ├── models/                    # 数据层（40 个结构体）
 │   │   ├── user.go                # User + 管理员 / VIP 检查（含注册/登录 IP）
 │   │   ├── novel.go               # Novel + Chapter + NovelCategory（软删除）
 │   │   ├── comment.go             # Comment（软删除）
@@ -479,10 +480,11 @@ nvs/
 │   │   ├── emergency_audit.go     # EmergencyAuditLog 管理员审计日志
 │   │   ├── log_archive.go         # 访问/数据库日志归档调度（SHA256 + gzip + 6个月保留，适配小时文件）
 │   │   ├── xss_rule.go            # XssRule 动态 XSS 正则规则
+│   │   ├── badword.go             # BadWord 违禁词规则 + BadWordFlag 标记待审记录
 │   │   ├── backup.go              # 备份 / 恢复 / 定时备份调度器
 │   │   └── db.go                  # AllModels 迁移 + 跨库复制 + 热切换
 │   │
-│   ├── handlers/                  # API 处理器（按功能拆分，40+ 文件）
+│   ├── handlers/                  # API 处理器（按功能拆分，60+ 文件）
 │   │   ├── auth_register.go       # 注册（记录注册 IP + 审计）
 │   │   ├── auth_login.go          # 登录 / 登出 / 当前用户（登录 IP + 审计）
 │   │   ├── auth_password.go       # 邮箱验证码 / 忘记重置密码 / 改密码（审计）
@@ -515,6 +517,7 @@ nvs/
 │   │   ├── sandbox_vfs.go         # 沙盒虚拟文件系统 VFS
 │   │   ├── port.go                # 端口分配 / 命名代理
 │   │   ├── xss_rule.go            # XSS 规则库 CRUD / 测试
+│   │   ├── badword.go             # 违禁词库 CRUD / 测试 + 标记待审处理（确认/删除/放行）
 │   │   ├── batch.go               # API 聚合（一次请求批量获取）
 │   │   └── context.go             # 鉴权上下文统一封装（currentUserID 等）
 │   │
@@ -533,6 +536,7 @@ nvs/
 │   │   ├── sanitize.go            # bluemonday XSS 净化 + 动态规则 + 危险标签移除
 │   │   ├── sign.go                # HMAC-SHA256 内容签名 + 作者签名密钥
 │   │   ├── content_scan.go        # 内容安全扫描（23 条规则）
+│   │   ├── badwords.go            # 违禁词引擎（关键词/正则编译缓存 + 扫描/净化 + 范围过滤）
 │   │   └── sandbox_fs.go          # 沙盒目录锁定 / 路径穿越防护
 │   │
 │   ├── utils/
@@ -548,12 +552,12 @@ nvs/
 │   ├── vite.config.ts             # outDir → ../dist / dev 代理 /api → 8080
 │   ├── package.json               # TipTap · ECharts · KaTeX · Mermaid · Element Plus
 │   └── src/
-│       ├── router/index.ts        # 17 路由 + JWT 路由守卫
+│       ├── router/index.ts        # 18 路由 + JWT 路由守卫
 │       ├── stores/                # Pinia
 │       │   ├── auth.ts            # 用户认证状态
 │       │   └── theme.ts           # 主题切换（亮/暗）
 │       ├── api/                   # axios 封装
-│       ├── views/                 # 20 个页面组件
+│       ├── views/                 # 30+ 页面组件
 │       │   ├── Home.vue / Login.vue / Register.vue
 │       │   ├── NovelDetail.vue / Reader.vue
 │       │   ├── Editor.vue / ChapterEditor.vue
@@ -562,6 +566,7 @@ nvs/
 │       │   ├── CategoryView.vue / Bookshelf.vue / Follows.vue
 │       │   ├── Forums.vue / ForumDetail.vue / ThreadDetail.vue
 │       │   ├── AdminDashboard.vue / UserManagement.vue
+│       │   ├── admin/ — AdminSecurity(XSS规则库) / AdminBadWords(违禁词库) / AdminReports / AdminSoftDel / AdminBan 等
 │       │   └── Login.vue / Register.vue
 │       └── components/            # 15 个通用组件
 │           ├── NavBar.vue / NovelCard.vue / HomeSearchResults.vue
@@ -788,6 +793,13 @@ nvs/
 | PUT | `/api/admin/xss-rules/:id` | 管理员 | 更新 XSS 规则 |
 | DELETE | `/api/admin/xss-rules/:id` | 管理员 | 删除 XSS 规则 |
 | POST | `/api/admin/xss-rules/test` | 管理员 | 测试规则正则 |
+| GET | `/api/admin/bad-words` | 管理员 | 违禁词库规则列表 |
+| POST | `/api/admin/bad-words` | 管理员 | 新增违禁词规则 |
+| PUT | `/api/admin/bad-words/:id` | 管理员 | 更新违禁词规则 |
+| DELETE | `/api/admin/bad-words/:id` | 管理员 | 删除违禁词规则 |
+| POST | `/api/admin/bad-words/test` | 管理员 | 测试违禁词规则（关键词/正则 × 标记/删除/替换） |
+| GET | `/api/admin/bad-word-flags` | 管理员 | 违禁词标记待审列表（status 过滤 + 分页） |
+| PUT | `/api/admin/bad-word-flags/:id` | 管理员 | 处理标记（确认违规[可选删除内容留证] / 放行） |
 | GET | `/api/admin/html-reviews` | 管理员 | HTML 内容审查列表 |
 | GET | `/api/admin/html-reviews/:type/:id` | 管理员 | 审查详情 |
 | POST | `/api/admin/html-reviews/:type/:id/review` | 管理员 | 复核 HTML 内容 |
@@ -902,6 +914,7 @@ nvs/
 - [x] **Phase 3.5 移动端浏览** — 全站响应式布局、汉堡菜单导航、阅读器移动优化、弹窗限宽、表格横滚、触控友好
 - [x] **Phase 3.6 渲染统一与统计准确性** — Cherry 0.11.9 完整版统一引擎（阅读器/博客/评论/论坛与编辑器预览同源同主题）、章节标题大字（h1-h6 !important 全阶统一）、浏览端 Cherry 主题副作用修复（.cherry-previewer 分屏 50% 宽度回归）、全量统计排除软删除数据（分类分布 / 章节 / 字数 / 评论趋势）、删除章节编号自动补齐（renumberChapters）
 - [x] **Phase 3.7 阅读器完整版渲染 + 标题大字 + 日志小时切分** — 渲染器/阅读器切换为 Cherry 完整版构建产物（cherry-markdown.esm.js headless 实例，与编辑器 100% 同源同产物）、阅读器正文自动注入「第N章 标题」一级标题大字（参照上传 md 已有标题则不重复；存量数据库章节渲染期自动生效，不改文件不破坏签名）、日志按小时切分且 request/database 分文件夹（log/requests/<日期>/<小时>.log）、归档与 SHA256 适配小时文件、社区最近帖子统计排除软删除
+- [x] **Phase 3.8 内容治理：违禁词库** — 动态违禁词规则引擎（关键词+正则双匹配、标记/删除/替换三动作、章节/评论/论坛/博客可配置范围）、章节/评论/帖子/博客 7 处写入点自动净化 + mark 命中进待审队列（去重）、管理员后台「违禁词库」页面（规则 CRUD + 实时测试 + 待审处理[确认违规可连带软删留证/放行] + 分页）、引擎单测覆盖
 - [ ] **Phase 4 治理与扩展** — 社区仲裁员选举、财务公开面板、API 开放平台、移动端 PWA（离线缓存 / 安装到主屏）
 
 ---
