@@ -1,1 +1,0 @@
-import{r as o}from"./index-DbLYb1ew.js";const t={getList(e=1,r=50){return o.get("/bookshelf",{params:{page:e,page_size:r}})},add(e){return o.post("/bookshelf",{novel_id:e})},remove(e){return o.delete(`/bookshelf/${e}`)},check(e){return o.get(`/bookshelf/check/${e}`)},updateProgress(e,r){return o.post("/bookshelf/progress",{novel_id:e,last_read_chapter:r})}};export{t as b};
