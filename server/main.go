@@ -249,6 +249,8 @@ func main() {
 		protected.GET("/author/novels", handlers.GetMyNovels)
 		protected.GET("/author/novels/:id/stats", handlers.GetNovelStats)
 		protected.GET("/author/banned-content", handlers.GetAuthorBannedContent)
+		protected.GET("/author/recycle", handlers.ListAuthorRecycle)              // 回收站：用户自删内容
+		protected.POST("/author/recycle/restore", handlers.RestoreAuthorRecycle) // 恢复自己删除的内容
 		protected.GET("/author/dashboard", handlers.GetAuthorDashboard)
 		protected.POST("/novels/:id/export", handlers.ExportNovel)
 		protected.POST("/zone/enter", handlers.RecordZoneEnter) // 记录进入隔离墙（敏感分区）时间，176号令合规
@@ -304,6 +306,7 @@ func main() {
 		protected.POST("/blogs/import/batch", handlers.ImportBlogs)
 		protected.PUT("/blogs/:id", handlers.UpdateBlog)
 		protected.DELETE("/blogs/:id", handlers.DeleteBlog)
+		protected.POST("/blogs/:id/like", handlers.ToggleBlogLike) // 博客点赞/取消
 		// 用户自定义 UI-HTML 模板 (UserFrame)
 		protected.GET("/userframes", handlers.ListFrames)
 		protected.POST("/userframes", handlers.CreateFrame)
@@ -406,6 +409,13 @@ func main() {
 		admin.GET("/softdel", handlers.AdminListSoftDel)
 		admin.POST("/softdel", handlers.AdminModerateContent)
 		admin.POST("/softdel/restore", handlers.AdminRestoreContent)
+		// 回收站监管：管理员查看全站用户自删内容
+		admin.GET("/recycle", handlers.AdminListRecycle)
+		// 博客分类管理（一级/二级）
+		admin.GET("/blog-categories", handlers.AdminListBlogCategories)
+		admin.POST("/blog-categories", handlers.AdminCreateBlogCategory)
+		admin.PUT("/blog-categories/:id", handlers.AdminUpdateBlogCategory)
+		admin.DELETE("/blog-categories/:id", handlers.AdminDeleteBlogCategory)
 		// 小说/章节封禁管理（管理员视角列表 + 封禁 + 解封）
 		admin.GET("/novels", handlers.AdminListNovels)
 		admin.GET("/novels/:id/chapters", handlers.AdminListChapters)
@@ -435,6 +445,8 @@ func main() {
 		// 博客公开读取
 		r.GET("/api/blogs", handlers.ListPublicBlogs)
 		r.GET("/api/blogs/:id", handlers.GetBlog)
+		r.GET("/api/blogs/:id/likes", handlers.GetBlogLikes) // 博客点赞数+当前用户状态
+		r.GET("/api/blog-categories", handlers.ListBlogCategories) // 博客分类树（公开）
 		r.GET("/api/author/:id/blogs/:blogId", handlers.GetAuthorBlog)
 		r.GET("/api/author/:id/blogs", handlers.ListAuthorBlogs)
 

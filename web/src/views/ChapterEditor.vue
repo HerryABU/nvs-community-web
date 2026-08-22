@@ -283,23 +283,27 @@ async function saveChapter() {
   const contentToSave = await getContentToSave();
   saving.value = true;
   try {
+    let chapterId = 0;
     const existing = chapters.value.find(c => c.chapter_number === currentNum.value && c.id > 0);
     if (existing) {
       await chapterApi.updateChapter(novelId.value, currentNum.value, {
         title: chapterTitle.value,
         content: contentToSave,
       });
+      chapterId = existing.id;
     } else {
-      await chapterApi.createChapter(novelId.value, {
+      const res = await chapterApi.createChapter(novelId.value, {
         title: chapterTitle.value,
         content: contentToSave,
       });
+      chapterId = Number(res.data?.data?.id) || 0;
     }
     const idx = chapters.value.findIndex(c => c.chapter_number === currentNum.value);
     if (idx >= 0) {
       chapters.value[idx].title = chapterTitle.value;
       chapters.value[idx].word_count = contentToSave.length;
-      if (chapters.value[idx].id === 0) chapters.value[idx].id = -1;
+      // 用真实章节 ID 标记（>0），后续保存走更新而非重复创建
+      if (chapters.value[idx].id <= 0 && chapterId > 0) chapters.value[idx].id = chapterId;
     }
     const now = new Date();
     lastSaved.value = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;

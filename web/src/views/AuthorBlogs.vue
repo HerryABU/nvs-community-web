@@ -22,8 +22,10 @@
             {{ blog.author?.nickname?.[0] || authorName?.[0] || 'A' }}
           </el-avatar>
           <span class="bl-author-name">{{ blog.author?.nickname || blog.author?.username || authorName }}</span>
+          <el-tag v-if="blog.category" size="small">{{ blog.category }}</el-tag>
           <span class="bl-date">{{ formatDate(blog.created_at) }}</span>
           <span class="bl-views">{{ blog.view_count }} 阅读</span>
+          <span v-if="blog.like_count" class="bl-views">👍 {{ blog.like_count }}</span>
         </div>
 
         <h2 class="bl-title">{{ blog.title }}</h2>

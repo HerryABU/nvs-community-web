@@ -37,6 +37,10 @@ func AdminListNovels(c *gin.Context) {
 		query = query.Joins("LEFT JOIN users ON users.id = novels.author_id").
 			Where("novels.title LIKE ? OR users.nickname LIKE ? OR users.username LIKE ?", like, like, like)
 	}
+	// 可选过滤：deleted_by=user 只看用户自删（回收站视角）；deleted_by=admin 只看管理员封禁
+	if db := c.Query("deleted_by"); db != "" {
+		query = query.Where("novels.deleted_by = ?", db)
+	}
 
 	var total int64
 	query.Count(&total)
@@ -56,6 +60,7 @@ func AdminListNovels(c *gin.Context) {
 		TotalChapters int        `json:"total_chapters"`
 		Status        string     `json:"status"`
 		BanReason     string     `json:"ban_reason"`
+		DeletedBy     string     `json:"deleted_by"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除
 		Banned        bool       `json:"banned"`
 		BannedAt      *time.Time `json:"banned_at"`
 		CreatedAt     time.Time  `json:"created_at"`
@@ -78,6 +83,7 @@ func AdminListNovels(c *gin.Context) {
 			TotalChapters: n.TotalChapters,
 			Status:        n.Status,
 			BanReason:     n.BanReason,
+			DeletedBy:     n.DeletedBy,
 			Banned:        n.DeletedAt.Valid,
 			CreatedAt:     n.CreatedAt,
 		}
@@ -117,6 +123,7 @@ func AdminListChapters(c *gin.Context) {
 		WordCount     int        `json:"word_count"`
 		Status        string     `json:"status"`
 		BanReason     string     `json:"ban_reason"`
+		DeletedBy     string     `json:"deleted_by"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除
 		Banned        bool       `json:"banned"`
 		BannedAt      *time.Time `json:"banned_at"`
 		CreatedAt     time.Time  `json:"created_at"`
@@ -131,6 +138,7 @@ func AdminListChapters(c *gin.Context) {
 			WordCount:     ch.WordCount,
 			Status:        ch.Status,
 			BanReason:     ch.BanReason,
+			DeletedBy:     ch.DeletedBy,
 			Banned:        ch.DeletedAt.Valid,
 			CreatedAt:     ch.CreatedAt,
 		}
@@ -160,7 +168,7 @@ func AdminRestoreContent(c *gin.Context) {
 	}
 	clearDeleted := func(table interface{}, id uint) error {
 		return models.DB.Unscoped().Model(table).Where("id = ?", id).
-			Updates(map[string]interface{}{"deleted_at": nil, "ban_reason": ""}).Error
+			Updates(map[string]interface{}{"deleted_at": nil, "ban_reason": "", "deleted_by": ""}).Error
 	}
 
 	switch req.Type {
@@ -171,7 +179,7 @@ func AdminRestoreContent(c *gin.Context) {
 			return
 		}
 		_ = models.DB.Unscoped().Model(&models.Chapter{}).Where("novel_id = ?", req.ID).
-			Updates(map[string]interface{}{"deleted_at": nil, "ban_reason": ""}).Error
+			Updates(map[string]interface{}{"deleted_at": nil, "ban_reason": "", "deleted_by": ""}).Error
 	case "chapter":
 		if err := clearDeleted(&models.Chapter{}, req.ID); err != nil {
 			utils.InternalError(c, "解封失败")
@@ -179,10 +187,10 @@ func AdminRestoreContent(c *gin.Context) {
 		}
 	case "comment":
 		_ = models.DB.Unscoped().Model(&models.Comment{}).Where("id = ?", req.ID).
-			Update("deleted_at", nil).Error
+			Updates(map[string]interface{}{"deleted_at": nil, "deleted_by": ""}).Error
 	case "thread":
 		_ = models.DB.Unscoped().Model(&models.Thread{}).Where("id = ?", req.ID).
-			Update("deleted_at", nil).Error
+			Updates(map[string]interface{}{"deleted_at": nil, "deleted_by": ""}).Error
 	case "post":
 		// 方案A：posts 无 deleted_at（删除即物理删除，仅 softdel_posts 留证可追溯），
 		// 回帖无法解封恢复；如留证记录存在，则同步清除其封禁原因标记（如适用）。
@@ -191,10 +199,10 @@ func AdminRestoreContent(c *gin.Context) {
 			Updates(map[string]interface{}{"ban_reason": ""}).Error
 	case "blog":
 		_ = models.DB.Unscoped().Model(&models.AuthorBlog{}).Where("id = ?", req.ID).
-			Update("deleted_at", nil).Error
+			Updates(map[string]interface{}{"deleted_at": nil, "deleted_by": ""}).Error
 	case "forum":
 		_ = models.DB.Unscoped().Model(&models.Forum{}).Where("id = ?", req.ID).
-			Update("deleted_at", nil).Error
+			Updates(map[string]interface{}{"deleted_at": nil, "deleted_by": ""}).Error
 	case "user":
 		_ = models.DB.Unscoped().Model(&models.User{}).Where("id = ?", req.ID).
 			Update("deleted_at", nil).Error

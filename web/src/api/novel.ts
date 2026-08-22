@@ -46,6 +46,14 @@ export const novelApi = {
     return api.get<{ code: number; data: { novels: any[]; chapters: any[] } }>('/author/banned-content');
   },
 
+  // 回收站：用户自删内容（小说/博客）+ 恢复
+  getRecycle() {
+    return api.get<{ code: number; data: { novels: any[]; novel_total: number; blogs: any[]; blog_total: number } }>('/author/recycle');
+  },
+  restoreRecycle(data: { type: string; id: number }) {
+    return api.post('/author/recycle/restore', data);
+  },
+
   // ============ 导入导出 ============
 
   exportNovel(id: number) {
@@ -91,10 +99,10 @@ export const novelApi = {
     );
   },
 
-  // 批量导入多个 Word/Markdown 文件（合并为一部作品）
+  // 批量导入多个 Word/Markdown 文件（合并为一部作品；传 novelId 则追加到已有小说）
   // mode: file(默认，一个文件一章) | rule(自定义正则拆分) | auto(自动识别标题拆分)
   // splitRule: mode=rule 时的正则；titlePrefix: 章节标题加「第N章 」前缀
-  importBatch(files: File[], title?: string, category?: string, mode?: string, splitRule?: string, titlePrefix?: boolean) {
+  importBatch(files: File[], title?: string, category?: string, mode?: string, splitRule?: string, titlePrefix?: boolean, novelId?: number) {
     const formData = new FormData();
     for (const f of files) formData.append('files', f);
     if (title) formData.append('title', title);
@@ -102,7 +110,8 @@ export const novelApi = {
     if (mode) formData.append('mode', mode);
     if (splitRule) formData.append('split_rule', splitRule);
     if (titlePrefix) formData.append('title_prefix', 'on');
-    return api.post<{ code: number; data: { novel_id: number; title: string; mode: string; files_count: number; chapters_count: number } }>(
+    if (novelId) formData.append('novel_id', String(novelId));
+    return api.post<{ code: number; data: { novel_id: number; title: string; mode: string; files_count: number; chapters_count: number; is_append?: boolean } }>(
       '/novels/import/batch',
       formData,
     );

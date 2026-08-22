@@ -31,16 +31,18 @@ func computeBlogHash(content string) string {
 }
 
 type CreateBlogInput struct {
-	Title   string `json:"title" binding:"required,max=256"`
-	Content string `json:"content" binding:"required"`
-	Summary string `json:"summary"`
+	Title      string `json:"title" binding:"required,max=256"`
+	Content    string `json:"content" binding:"required"`
+	Summary    string `json:"summary"`
+	CategoryID uint   `json:"category_id"`
 }
 
 type UpdateBlogInput struct {
-	Title    string `json:"title"`
-	Content  string `json:"content"`
-	Summary  string `json:"summary"`
-	IsPinned *bool  `json:"is_pinned"`
+	Title      string `json:"title"`
+	Content    string `json:"content"`
+	Summary    string `json:"summary"`
+	IsPinned   *bool  `json:"is_pinned"`
+	CategoryID *uint  `json:"category_id"`
 }
 
 // POST /api/blogs/import/batch — 批量导入博客（multipart，每个文件一篇博客，标题取文件名去扩展名）
@@ -145,7 +147,7 @@ func CreateBlog(c *gin.Context) {
 	userID := currentUserID(c)
 	var req CreateBlogInput
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		utils.BadRequest(c, "请填写博客标题和内容")
 		return
 	}
 
@@ -160,6 +162,12 @@ func CreateBlog(c *gin.Context) {
 		AuthorID: userID,
 		Title:    title,
 		Summary:  summary,
+	}
+	if req.CategoryID > 0 {
+		var cat models.BlogCategory
+		if err := models.DB.First(&cat, req.CategoryID).Error; err == nil {
+			blog.CategoryID = req.CategoryID
+		}
 	}
 	if err := models.CreateBlog(blog); err != nil {
 		utils.InternalError(c, "创建失败")
@@ -187,6 +195,7 @@ func CreateBlog(c *gin.Context) {
 	blog.ContentPath = contentPath
 	blog.ContentHash = contentHash
 	blog.Content = content
+	blog.Category = models.GetBlogCategoryName(blog.CategoryID)
 
 	utils.Success(c, blog)
 }
@@ -203,16 +212,18 @@ func loadBlogContent(blog *models.AuthorBlog) {
 	blog.Content = string(data)
 }
 
-// GET /api/blogs — 公开博客列表
+// GET /api/blogs — 公开博客列表（支持分类过滤：category_id，传一级分类则包含其下二级）
 func ListPublicBlogs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "12"))
+	categoryID, _ := strconv.ParseUint(c.DefaultQuery("category_id", "0"), 10, 64)
 
-	blogs, total, err := models.ListAllBlogs(page, pageSize)
+	blogs, total, err := models.ListAllBlogs(uint(categoryID), page, pageSize)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
 	}
+	fillBlogCategories(blogs)
 	utils.Success(c, gin.H{"list": blogs, "total": total})
 }
 
@@ -226,6 +237,7 @@ func GetBlog(c *gin.Context) {
 	}
 	loadBlogContent(blog)
 	models.IncrementBlogView(uint(id))
+	blog.Category = models.GetBlogCategoryName(blog.CategoryID)
 	if blog.Author != nil {
 		blog.Author.Email = ""
 	}
@@ -253,6 +265,7 @@ func GetAuthorBlog(c *gin.Context) {
 
 	loadBlogContent(blog)
 	models.IncrementBlogView(uint(blogID))
+	blog.Category = models.GetBlogCategoryName(blog.CategoryID)
 	if blog.Author != nil {
 		blog.Author.Email = ""
 	}
@@ -269,6 +282,7 @@ func ListAuthorBlogs(c *gin.Context) {
 		utils.InternalError(c, "查询失败")
 		return
 	}
+	fillBlogCategories(blogs)
 	for i := range blogs {
 		if blogs[i].Author != nil {
 			blogs[i].Author.Email = ""
@@ -321,6 +335,18 @@ func UpdateBlog(c *gin.Context) {
 		blog.IsPinned = *req.IsPinned
 		updates["is_pinned"] = *req.IsPinned
 	}
+	if req.CategoryID != nil {
+		cid := *req.CategoryID
+		if cid > 0 {
+			var cat models.BlogCategory
+			if err := models.DB.First(&cat, cid).Error; err != nil {
+				utils.BadRequest(c, "分类不存在")
+				return
+			}
+		}
+		blog.CategoryID = cid
+		updates["category_id"] = cid
+	}
 
 	if len(updates) > 0 {
 		if err := models.DB.Model(blog).Updates(updates).Error; err != nil {
@@ -330,6 +356,7 @@ func UpdateBlog(c *gin.Context) {
 	}
 
 	loadBlogContent(blog)
+	blog.Category = models.GetBlogCategoryName(blog.CategoryID)
 	utils.Success(c, blog)
 }
 
@@ -349,5 +376,8 @@ func DeleteBlog(c *gin.Context) {
 		utils.InternalError(c, "删除失败")
 		return
 	}
+
+	// 标记为「用户自删」（区别于管理员封禁：deleted_by='admin'），回收站据此区分
+	_ = models.DB.Unscoped().Model(&models.AuthorBlog{}).Where("id = ?", id).Update("deleted_by", "user")
 	utils.Success(c, gin.H{"message": "已删除"})
 }

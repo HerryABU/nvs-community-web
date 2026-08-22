@@ -49,6 +49,13 @@ func CreateNovel(c *gin.Context) {
 		return
 	}
 
+	// 标题必填（trim 后判空，避免纯空格标题入库）
+	input.Title = strings.TrimSpace(input.Title)
+	if input.Title == "" {
+		utils.BadRequest(c, "请输入作品标题")
+		return
+	}
+
 	// 净化 HTML
 	input.Summary = htmlSanitizer.Sanitize(input.Summary)
 
@@ -233,6 +240,9 @@ func DeleteNovel(c *gin.Context) {
 		utils.InternalError(c, "删除失败")
 		return
 	}
+
+	// 标记为「用户自删」（区别于管理员封禁：deleted_by='admin'），回收站据此区分
+	_ = models.DB.Unscoped().Model(&models.Novel{}).Where("id = ?", id).Update("deleted_by", "user")
 
 	// 合规留存：软删除，保留正文文件（不物理移除），审计可追溯原始内容
 	utils.SuccessMessage(c, "删除成功", nil)

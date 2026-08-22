@@ -19,6 +19,7 @@ type Comment struct {
 	ParentID       *uint     `gorm:"index:idx_comments_parent" json:"parent_id"`
 	IsMarkdown     bool      `gorm:"default:true" json:"is_markdown"`
 	Username       string    `gorm:"-" json:"username,omitempty"`
+	DeletedBy      string    `gorm:"size:16;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
 	CreatedAt      time.Time `gorm:"index:idx_comments_novel_created,priority:2" json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记

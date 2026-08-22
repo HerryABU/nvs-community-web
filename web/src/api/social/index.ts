@@ -24,8 +24,8 @@ export const followApi = {
 
 // 作者博客
 export const blogApi = {
-  listPublic(page: number = 1, pageSize: number = 12) {
-    return api.get('/blogs', { params: { page, page_size: pageSize } });
+  listPublic(page: number = 1, pageSize: number = 12, categoryId?: number) {
+    return api.get('/blogs', { params: { page, page_size: pageSize, category_id: categoryId || undefined } });
   },
   getBlog(id: number) {
     return api.get(`/blogs/${id}`);
@@ -36,7 +36,7 @@ export const blogApi = {
   getAuthorBlog(authorId: number, blogId: number) {
     return api.get(`/author/${authorId}/blogs/${blogId}`);
   },
-  create(data: { title: string; content: string; summary?: string }) {
+  create(data: { title: string; content: string; summary?: string; category_id?: number }) {
     return api.post('/blogs', data);
   },
   // 批量导入博客：每个文件一篇，标题取文件名（去扩展名）
@@ -48,13 +48,33 @@ export const blogApi = {
       formData,
     );
   },
-  update(id: number, data: { title?: string; content?: string; summary?: string; is_pinned?: boolean }) {
+  update(id: number, data: { title?: string; content?: string; summary?: string; is_pinned?: boolean; category_id?: number }) {
     return api.put(`/blogs/${id}`, data);
   },
   delete(id: number) {
     return api.delete(`/blogs/${id}`);
   },
+  // ===== 分类（树）=====
+  getCategories() {
+    return api.get<{ code: number; data: BlogCategoryNode[] }>('/blog-categories');
+  },
+  // ===== 点赞 =====
+  getLikes(id: number) {
+    return api.get<{ code: number; data: { count: number; liked: boolean } }>(`/blogs/${id}/likes`);
+  },
+  toggleLike(id: number) {
+    return api.post<{ code: number; data: { liked: boolean; count: number } }>(`/blogs/${id}/like`);
+  },
 };
+
+export interface BlogCategoryNode {
+  id: number;
+  parent_id: number;
+  name: string;
+  sort_order: number;
+  blog_count: number;
+  children?: BlogCategoryNode[];
+}
 
 export interface AuthorBlog {
   id: number;

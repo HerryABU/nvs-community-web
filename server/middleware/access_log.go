@@ -26,19 +26,30 @@ func AccessLog() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 
-		// 读取请求体（带上限保护，避免大文件如上传占用内存），并还原以便后续 handler 复用。
+		// 读取请求体（带上限保护，避免大文件如上传占用内存），并完整还原以便后续 handler 复用。
+		// ⚠️ 历史 bug：曾用 64KB LimitReader 读取后再整体还原 → 超过 64KB 的 JSON 正文
+		// （长章节/长博客）被截断成非法 JSON，导致 handler 的 ShouldBindJSON 报
+		// 「请填写章节标题和内容 / 参数错误」（用户明明填了标题却保存失败）。
+		// 修复：只缓冲前 maxBodyReadCap 字节用于日志取样，未读完部分保留在原 Body 流中，
+		// 用 io.MultiReader 将「已读部分 + 剩余流」拼接还原 —— 任意大小的正文都能完整传给 handler。
 		// ⚠️ multipart/form-data（文件上传）请求绝不读取 body——读取再还原会截断大文件，
 		// 导致后续 gin 解析 multipart 报「boundary 缺失」（历史 bug：上传 >64KB 必失败）。
+		const maxBodyReadCap = 4 * 1024 * 1024 // 4MB：日志取样上限（仅缓冲此大小）
 		var bodySnippet string
 		ct := c.Request.Header.Get("Content-Type")
 		if strings.HasPrefix(strings.ToLower(ct), "multipart/form-data") {
 			bodySnippet = "[multipart/form-data 文件上传]"
 		} else if c.Request.Body != nil {
-			raw, err := io.ReadAll(io.LimitReader(c.Request.Body, 64*1024))
+			raw, err := io.ReadAll(io.LimitReader(c.Request.Body, maxBodyReadCap))
 			if err == nil {
-				c.Request.Body = io.NopCloser(bytes.NewReader(raw))
+				// 完整还原：已读部分 + 未读剩余部分（MultiReader 先读完 raw 再续读原 Body）
+				c.Request.Body = io.NopCloser(io.MultiReader(bytes.NewReader(raw), c.Request.Body))
 				bodySnippet = redactSensitive(string(raw))
 			}
+		}
+		// 日志只保留前 64KB，防止超长正文撑爆日志（脱敏已在 redactSensitive 内完成）
+		if len(bodySnippet) > 64*1024 {
+			bodySnippet = bodySnippet[:64*1024] + "...(truncated)"
 		}
 
 		c.Next()

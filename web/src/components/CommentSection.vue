@@ -61,6 +61,9 @@ const props = defineProps<{
   blogId?: number;
 }>();
 
+// loaded(total)：评论总数变化时通知父组件（如博客详情页统计条数）
+const emit = defineEmits<{ (e: 'loaded', total: number): void }>();
+
 const authStore = useAuthStore();
 
 const comments = ref<Comment[]>([]);
@@ -111,6 +114,7 @@ async function fetchComments(reset = false) {
       comments.value.push(...(data.list || []));
     }
     hasMore.value = (data.list?.length || 0) >= 20;
+    emit('loaded', Number(data.total) || comments.value.length);
   } catch (e) {
     console.error(e);
   }

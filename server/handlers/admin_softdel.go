@@ -221,6 +221,24 @@ func softDeleteContent(c *gin.Context, ctype string, id uint, reason, source, ac
 	default:
 		return fmt.Errorf("不支持的内容类型: %s", ctype)
 	}
+
+	// 标记 deleted_by='admin'：管理员封禁/删除与用户自删（deleted_by='user'）区分。
+	// 回收站只允许恢复 deleted_by='user' 的记录；被封禁内容仅管理员可恢复。
+	deletedByMark := map[string]interface{}{
+		"comment": &models.Comment{},
+		"novel":   &models.Novel{},
+		"chapter": &models.Chapter{},
+		"thread":  &models.Thread{},
+		"blog":    &models.AuthorBlog{},
+		"forum":   &models.Forum{},
+	}
+	if m, ok := deletedByMark[ctype]; ok {
+		_ = models.DB.Unscoped().Model(m).Where("id = ?", id).Update("deleted_by", "admin")
+	}
+	// 管理员封禁作品时，其级联软删的章节同样标记为 admin
+	if ctype == "novel" {
+		_ = models.DB.Unscoped().Model(&models.Chapter{}).Where("novel_id = ?", id).Update("deleted_by", "admin")
+	}
 	return nil
 }
 
