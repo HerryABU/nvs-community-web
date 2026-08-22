@@ -221,6 +221,13 @@ async function doResetPassword() {
   color: var(--text-light);
   font-size: 0.9rem;
 }
+
+/* ====== 移动端登录页适配 ====== */
+@media (max-width: 640px) {
+  .auth-page {
+    padding: 24px 12px;
+  }
+}
 </style>
 
 <style>

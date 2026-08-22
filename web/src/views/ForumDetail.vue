@@ -4,18 +4,53 @@
       <div class="forum-header">
         <h1>{{ forum.name }}</h1>
         <p class="forum-desc">{{ forum.description }}</p>
-        <el-button type="primary" @click="showNewThread = true" v-if="authStore.isLoggedIn && !locked">
-          发布新帖
-        </el-button>
-        <router-link v-else-if="!authStore.loading && !locked" to="/login" class="login-link">登录后即可发帖</router-link>
+        <div class="forum-actions">
+          <el-button v-if="isModerator" size="small" @click="openMuteManage">禁言管理</el-button>
+          <el-button type="primary" @click="showNewThread = true" v-if="authStore.isLoggedIn && !locked">
+            发布新帖
+          </el-button>
+          <router-link v-else-if="!authStore.loading && !locked" to="/login" class="login-link">登录后即可发帖</router-link>
+        </div>
       </div>
+
+      <!-- 禁言管理弹窗（创建者/管理员） -->
+      <el-dialog v-model="showMuteManage" title="🚫 禁言管理" width="560px">
+        <el-empty v-if="!muteLoading && mutes.length === 0" description="暂无禁言记录" />
+        <div v-else v-loading="muteLoading" class="mute-list">
+          <div v-for="m in mutes" :key="m.id" class="mute-item">
+            <div class="mute-main">
+              <span class="mute-user">{{ m.username || ('用户#' + m.user_id) }}</span>
+              <el-tag v-if="m.admin_ban" type="danger" size="small">管理员封禁</el-tag>
+              <el-tag v-else type="warning" size="small">创建者禁言</el-tag>
+              <span class="mute-reason">{{ m.reason || '未填原因' }}</span>
+            </div>
+            <div class="mute-meta">
+              <span v-if="m.muted_until">{{ m.banned_by }} · 至 {{ formatMuteTime(m.muted_until) }}</span>
+              <span v-else>{{ m.banned_by }} · 永久</span>
+            </div>
+            <el-button
+              size="small"
+              type="danger"
+              plain
+              :disabled="m.admin_ban && !isAdmin"
+              :title="m.admin_ban && !isAdmin ? '管理员封禁的禁言仅管理员可解除' : ''"
+              @click="unmuteUser(m)"
+            >
+              解禁
+            </el-button>
+          </div>
+        </div>
+      </el-dialog>
 
       <!-- 密码门禁 -->
       <div v-if="locked" class="password-gate">
-        <el-result icon="lock" title="该论坛需要密码" sub-title="请输入进入密码以查看帖子">
+        <el-result icon="lock" :title="needRoom ? '该论坛不可见' : '该论坛需要密码'" :sub-title="needRoom ? '请输入房间号（有密码的论坛还需密码）以进入' : '请输入进入密码以查看帖子'">
           <template #extra>
-            <el-input v-model="passwordInput" type="password" placeholder="进入密码" style="width:240px" show-password @keyup.enter="submitPassword" />
-            <el-button type="primary" style="margin-left:8px" :loading="verifying" @click="submitPassword">进入</el-button>
+            <div style="display:flex;flex-direction:column;gap:8px;align-items:center">
+              <el-input v-if="needRoom" v-model="roomInput" placeholder="房间号（创建者分享给你）" style="width:240px" @keyup.enter="submitPassword" />
+              <el-input v-model="passwordInput" :type="forum?.has_password ? 'password' : 'text'" :placeholder="forum?.has_password ? '进入密码' : '无需密码，仅填房间号'" style="width:240px" show-password @keyup.enter="submitPassword" />
+              <el-button type="primary" style="margin-left:8px" :loading="verifying" @click="submitPassword">进入</el-button>
+            </div>
           </template>
         </el-result>
       </div>
@@ -73,15 +108,57 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { novelApi, forumApi } from '@/api/novel';
 import { useAuthStore } from '@/stores/auth';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+
+// 论坛管理者：管理员 或 论坛创建者
+const isAdmin = computed(() => authStore.user?.role === 'admin');
+const isModerator = computed(() => {
+  const f = forum.value;
+  if (!f) return false;
+  if (isAdmin.value) return true;
+  return f.type === 'custom' && f.creator_id && f.creator_id === authStore.user?.id;
+});
+
+// ====== 禁言管理 ======
+const showMuteManage = ref(false);
+const mutes = ref<any[]>([]);
+const muteLoading = ref(false);
+
+async function openMuteManage() {
+  showMuteManage.value = true;
+  muteLoading.value = true;
+  mutes.value = [];
+  try {
+    const res = await forumApi.listMutes(Number(route.params.id));
+    if (res.data.code === 0) mutes.value = res.data.data || [];
+  } catch { ElMessage.error('加载禁言列表失败'); }
+  finally { muteLoading.value = false; }
+}
+
+function formatMuteTime(iso: string) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+async function unmuteUser(m: any) {
+  try {
+    await ElMessageBox.confirm(`确定解除「${m.username || ('用户#' + m.user_id)}」的禁言？`, '解除禁言', { type: 'warning' });
+    await forumApi.unmuteUser(Number(route.params.id), m.user_id);
+    ElMessage.success('已解除禁言');
+    openMuteManage();
+  } catch (e: any) {
+    if (e !== 'cancel') ElMessage.error(e?.response?.data?.message || '解禁失败');
+  }
+}
 const loading = ref(false);
 const forum = ref<any>(null);
 const threads = ref<any[]>([]);
@@ -94,7 +171,14 @@ const posting = ref(false);
 // 密码门禁
 const locked = ref(false);
 const passwordInput = ref('');
+const roomInput = ref('');
 const verifying = ref(false);
+// 不可见（非公开）论坛需凭房间号进入；管理员/创建者豁免
+const needRoom = computed(() => {
+  const f = forum.value;
+  if (isModerator.value) return false;
+  return !!f && !f.is_public && f.type === 'custom';
+});
 
 function formatTime(s: string) {
   return new Date(s).toLocaleDateString('zh-CN');
@@ -104,7 +188,8 @@ async function load() {
   loading.value = true;
   try {
     const password = (route.query.password as string) || '';
-    const res = await forumApi.getForum(Number(route.params.id), undefined, password);
+    const room = (route.query.room as string) || '';
+    const res = await forumApi.getForum(Number(route.params.id), undefined, password, room);
     const d = res.data.data;
     forum.value = d.forum;
     locked.value = !!d.locked;
@@ -118,9 +203,22 @@ async function load() {
 }
 
 async function submitPassword() {
-  if (!passwordInput.value.trim()) { ElMessage.warning('请输入密码'); return; }
+  const f = forum.value;
+  if (f?.has_password && !passwordInput.value.trim()) { ElMessage.warning('请输入密码'); return; }
+  if (needRoom.value && !roomInput.value.trim()) { ElMessage.warning('请输入房间号'); return; }
   verifying.value = true;
   try {
+    // 不可见论坛：先校验房间号（enter-by-code），有密码则顺带校验
+    if (needRoom.value) {
+      const code = roomInput.value.trim().toUpperCase();
+      const r = await forumApi.enterByRoomCode(code, passwordInput.value);
+      if (r.data.code === 0) {
+        locked.value = false;
+        router.replace({ query: { room: code, password: passwordInput.value || undefined } });
+        await load();
+        return;
+      }
+    }
     const res = await forumApi.verifyPassword(Number(route.params.id), passwordInput.value);
     if (res.data.code === 0) {
       locked.value = false;
@@ -223,6 +321,18 @@ onMounted(load);
   margin-bottom: 16px;
 }
 
+.forum-actions { display: flex; align-items: center; gap: 8px; }
+.mute-list { display: flex; flex-direction: column; gap: 8px; }
+.mute-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border-radius: 8px; background: var(--bg-card, #f7f7f7);
+  border: 1px solid var(--glass-border, #e5e7eb);
+}
+.mute-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.mute-user { font-weight: 600; color: var(--text-color, #333); }
+.mute-reason { font-size: 0.82rem; color: var(--text-light, #666); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mute-meta { font-size: 0.75rem; color: #999; flex-shrink: 0; }
+
 .thread-item {
   padding: 16px;
   border-bottom: 1px solid #f0f0f0;
@@ -255,6 +365,24 @@ onMounted(load);
 .password-gate {
   padding: 40px 0;
   text-align: center;
+}
+
+/* ====== 移动端论坛详情适配 ====== */
+@media (max-width: 640px) {
+  .sub-forum-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .thread-meta {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+  }
+  .forum-actions {
+    flex-wrap: wrap;
+  }
+  .mute-main {
+    flex-wrap: wrap;
+  }
 }
 </style>
 

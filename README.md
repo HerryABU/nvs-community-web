@@ -61,11 +61,12 @@
 
 ### 作品创作
 - 📝 **12 大分类** — 硬科幻 / 奇幻 / 推演文学 / 架空历史 / 现实主义 / 悬疑推理 / 实验文学 / 同人区 / 政治区 / 讽刺文学 / 泛二次元区 / 其他
-- 🎨 **Cherry Markdown 编辑器** — 统一渲染引擎（编辑器 = 阅读器），支持 Markdown / KaTeX 公式（含 physics 物理宏包 + mhchem 化学式）/ Mermaid 图表 / chemfig 化学结构图（SMILES）/ 颜色标记 · 一键切换富文本模式
+- 🎨 **Cherry Markdown 编辑器（0.11.9 完整版）** — 统一渲染引擎（编辑器 = 阅读器 100% 同源），支持 Markdown / KaTeX 公式（含 physics 物理宏包 + mhchem 化学式）/ Mermaid 图表 / chemfig 化学结构图（SMILES）/ 颜色标记 · 一键切换富文本模式；阅读器 / 博客 / 评论 / 论坛浏览端与编辑器预览共用同一 Cherry 主题样式，章节标题以大字显示（h1 2em 居中，h1-h6 全阶统一）
 - 📂 **文件系统存储** — 小说正文以 HTML 存于文件系统，数据库仅存路径索引
 - 🔗 **内容可验证** — 每章自动计算 SHA256 哈希 + HMAC-SHA256 作者签名，前端可验证章节完整性
 - 📤 **多格式导出** — ZIP / Markdown / EPUB / TXT 一键导出
 - 📥 **多格式导入** — 支持 ZIP / Markdown / TXT 导入，自动解析章节结构，支持预览确认
+- 📦 **批量导入** — 小说批量导入支持三种模式：**一个文件一章**（标题取文件名，默认）/ 自定义正则拆分（快捷规则：第X章 / Markdown 标题 / 分割线）/ 自动识别标题；可选项「章节标题加第N章前缀」；**博客批量导入**：多文件一键创建多篇博客
 
 ### 社区互动
 - 💬 **评论系统** — 支持章评和书评，IP 限流保护
@@ -84,9 +85,9 @@
 - 🧹 **XSS 防护** — bluemonday 白名单净化 + 动态正则规则引擎（管理员后台可维护、可测试）+ 正则移除危险标签和事件处理器
 - 🔏 **内容签名** — HMAC-SHA256 作者签名，章节完整性可验证
 - 📋 **举报系统** — 支持举报作品/评论/帖子，管理员处理
-- 🗑️ **内容软删除** — 8 张内容表软删除（`deleted_at`），删除不物理移除、正文归档到 `.deleted/`，随时可追溯原始内容
-- 📊 **访问日志关联 user_id** — JSON 一行含 `user_id`/方法/路径/IP/状态/耗时，按天滚动，可追溯到具体用户
-- 🔐 **日志完整性保护** — 每日 SHA256 校验 + gzip 归档 + 只读权限（0444）+ 6 个月保留
+- 🗑️ **内容软删除** — 8 张内容表软删除（`deleted_at`），删除不物理移除、正文归档到 `.deleted/`，随时可追溯原始内容；**所有统计均排除软删除数据**（分类分布 / 章节趋势 / 字数趋势 / 评论趋势等管理端与作者端统计全部 `JOIN novels` + `deleted_at IS NULL` 双过滤，已删除作品的章节/字数/评论不再计入）
+- 📊 **访问日志关联 user_id** — JSON 一行含 `user_id`/方法/路径/IP/状态/耗时，可追溯到具体用户；**按小时切分**（每天内每小时一个文件），且 **request / database 分文件夹**（`log/requests/<日期>/<小时>.log` 与 `log/database/<日期>/<小时>.log`）
+- 🔐 **日志完整性保护** — 每小时文件每日 SHA256 校验 + gzip 归档 + 只读权限（0444）+ 6 个月保留
 - 🛡️ **内容安全扫描（23 条规则）** — 提权 / Shell注入 / 木马 / 挖矿 / 僵尸网络 / 数据窃取 / 钓鱼，上传即自动审查
 - 🚨 **内容抢救台** — 二级密码 + 短时 token 应急窗口，粘贴 URL 即可预览全部评论/回复并物理硬删除，全程审计留痕
 
@@ -95,6 +96,15 @@
 - 🔗 **公开 API** — `/api/site-info`、`/api/federated/novels`、`/api/federated/sites`
 - 📡 **联邦入站记录** — 记录「谁连接了我」（对方站点名/地址/IP/User-Agent/访问次数），被连方可见连接来源
 - 🔁 **联邦同步自报身份** — 同步时向对方自报本站名与地址，便于对方追溯
+
+### 📱 移动端浏览支持
+- 🍔 **响应式导航栏** — 窄屏自动收起为汉堡菜单 + 侧滑抽屉（分类 / 论坛 / 博客 / 书架 / 搜索 / 账号全入口）
+- 📖 **阅读器移动优化** — 工具栏图标化、正文大字大行距、底部全宽翻页按钮、目录抽屉视口适配
+- 📐 **全站响应式** — 首页 / 作品详情 / 分类 / 书架 / 论坛 / 博客 / 消息 / 登录注册等 30+ 页面窄屏布局适配，卡片双列、行式布局纵向堆叠
+- 🎛️ **控制面板移动适配** — 管理后台（15 个 admin 页面）+ 作者工作台 / 管理员仪表盘 + 作品 / 章节 / 博客编辑器窄屏可用：工具条自动换行、表单栅格单列、步骤条可横滚、输入框限宽、统计卡双列
+- 💬 **弹窗限宽** — 所有 Dialog / Drawer 在窄屏自动限制在视口内，杜绝横向溢出
+- 📊 **表格横滚** — 管理后台与列表表格窄屏自动启用横向滚动
+- 🧩 **触控友好** — 翻页按钮 / 操作按钮加大、底部安全区适配（`env(safe-area-inset-bottom)`）、表单标签置顶、分页换行居中
 
 ### 🎨 自定义 HTML-UI 美化
 
@@ -202,7 +212,7 @@ Markdown/富文本编辑器支持 `[expand title="标题"]...[/expand]` 语法�
 | 层级 | 技术 |
 |------|------|
 | 后端 | Go 1.22+ · Gin · GORM (SQLite/MySQL) |
-| 前端 | Vue 3 · Vite · Element Plus · TypeScript · TipTap · Cherry Markdown 0.11 · ECharts · KaTeX (physics/mhchem) · Mermaid · smiles-drawer (chemfig) |
+| 前端 | Vue 3 · Vite · Element Plus · TypeScript · TipTap · Cherry Markdown 0.11.9（完整版，编辑器/阅读器同源引擎） · ECharts · KaTeX (physics/mhchem) · Mermaid · smiles-drawer (chemfig) |
 | 数据库 | SQLite（默认，零配置） / MySQL 8.0（支持在线热迁移） |
 | 缓存 | Redis 7（可选，MySQL 模式推荐） |
 | 存储 | 文件系统（HTML + JSON） + 内存 VFS（沙盒虚拟文件系统） |
@@ -467,7 +477,7 @@ nvs/
 │   │   ├── platform_wall.go       # WallConfig 隔离墙配置
 │   │   ├── user_audit.go          # UserAuditLog 用户行为审计日志
 │   │   ├── emergency_audit.go     # EmergencyAuditLog 管理员审计日志
-│   │   ├── log_archive.go         # 访问日志归档调度（SHA256 + gzip + 6个月保留）
+│   │   ├── log_archive.go         # 访问/数据库日志归档调度（SHA256 + gzip + 6个月保留，适配小时文件）
 │   │   ├── xss_rule.go            # XssRule 动态 XSS 正则规则
 │   │   ├── backup.go              # 备份 / 恢复 / 定时备份调度器
 │   │   └── db.go                  # AllModels 迁移 + 跨库复制 + 热切换
@@ -511,7 +521,7 @@ nvs/
 │   ├── middleware/
 │   │   ├── auth.go                # JWT 鉴权 + 角色检查 + Cookie 管理
 │   │   ├── context.go             # 鉴权上下文 key 常量 + getter（单一权威来源）
-│   │   ├── access_log.go          # 访问日志（JSON + user_id + 按天滚动）
+│   │   ├── access_log.go          # 访问日志（JSON + user_id + 按小时滚动，log/requests/ 文件夹）
 │   │   ├── header_logger.go       # 请求头日志（敏感头脱敏）
 │   │   ├── recovery.go            # panic 恢复（不泄露堆栈）
 │   │   ├── sandbox.go             # 沙盒安全头（CSP / COOP / COEP）
@@ -571,6 +581,49 @@ nvs/
 └── nginx/
     └── nginx.conf                 # Docker 模式 Nginx 配置
 ```
+
+---
+
+## 🗄️ 数据字典与数据库改进
+
+### 外键约束
+- SQLite 连接通过 DSN `_pragma=foreign_keys(1)` **每连接自动启用外键约束**（启动时校验 `PRAGMA foreign_keys = 1` 否则拒绝启动）；MySQL 原生启用。
+- 热迁移（SQLite ↔ MySQL）复制期间临时关闭外键检查（`PRAGMA foreign_keys=OFF` / `SET FOREIGN_KEY_CHECKS=0`），完成后恢复，避免表复制顺序触发外键失败。
+- 启用后删除被引用记录会被拒绝（如删除仍有回帖/评论的用户），由业务层先级联处理或归档。
+
+### posts 表删除语义（方案A：统一走 softdel_posts）
+- **posts 表不再有 `deleted_at` 列**：回帖删除 = 先 `ArchiveSoftDelete` 归档完整快照到 `softdel_posts` 留证表，再物理删除原始记录。
+- 与 novels/chapters/comments/threads 等「软删除 + softdel_* 留证」双轨逻辑语义一致，消除 `deleted_at` 与 `softdel_posts` 两套删除逻辑并存的混乱。
+- 升级迁移：启动时 `DropPostDeletedAt` 自动检测并重建 posts 表（SQLite 建新表→拷贝→重命名，保留全部数据与自增序列；MySQL 直接 `DROP COLUMN`），幂等可重复执行。
+- `softdel_posts` 及其余 `softdel_*` 留证表保持不动。
+- ⚠️ 回帖删除后不可解封恢复（物理删除），管理员「解封/恢复」对 post 类型仅清除封禁原因标记。
+
+### 核心索引
+启动迁移自动创建缺失索引并清理被替代的旧索引：
+
+| 表 | 索引 | 用途 |
+|----|------|------|
+| novels | `idx_novels_author_status` | 按作者查作品并筛选状态 |
+| posts | `idx_posts_thread_created` / `idx_posts_user_id` | 帖内回帖列表 / 按用户查回帖 |
+| threads | `idx_threads_forum_created` | 按版块查主题帖 |
+| comments | `idx_comments_novel_created` / `idx_comments_parent` | 作品评论列表 / 子评论 |
+| notifications | `idx_notifications_user_read_created` | 未读通知倒序 |
+| reports | `idx_reports_target` | 按目标查举报 |
+| user_audit_logs | `idx_user_audit_user_time` | 按用户查审计日志 |
+| zone_access_logs | `idx_zone_access_user_zone` | 按用户+分区查隔离墙记录 |
+| forum_mutes | `idx_forum_mutes_forum_user` | 论坛内禁言查询 |
+
+（chapters 由唯一复合索引 `uk_novel_chapter(novel_id, chapter_number)` 覆盖，无需重复索引；follows / bookshelf / ratings / federated_novels 已有等价索引。）
+
+### 预留表 / 字段（功能未开发）
+以下表与字段当前仅建表占位，**无业务代码**，请勿误用：
+
+| 表 | 字段/表 | 状态 | 说明 |
+|----|---------|------|------|
+| users | `real_name` / `id_card` / `bank_card` | 预留 | 企业版实名认证与支付绑定，暂未启用 |
+| vip_applications | 整表 | 预留 | VIP 会员申请体系，暂未开发 |
+| earnings_records | 整表 | 预留 | 作者收益记录，暂未开发 |
+| withdrawal_requests | 整表 | 预留 | 提现申请流程，暂未开发 |
 
 ---
 
@@ -686,6 +739,8 @@ nvs/
 |------|------|------|------|
 | POST | `/api/novels/import/preview` | JWT | 导入预览 |
 | POST | `/api/novels/import` | JWT | 导入（支持追加模式） |
+| POST | `/api/novels/import/batch` | JWT | 批量导入（一个文件一章 / 自定义正则 / 自动识别） |
+| POST | `/api/blogs/import/batch` | JWT | 博客批量导入（每个文件一篇，标题取文件名） |
 | POST | `/api/novels/:id/export` | JWT | 导出 ZIP |
 | POST | `/api/novels/:id/export/epub` | JWT | 导出 EPUB |
 | POST | `/api/novels/:id/export/markdown` | JWT | 导出 Markdown |
@@ -844,7 +899,10 @@ nvs/
 - [x] **Phase 2.7 个性化 & 扩展** — 自定义 HTML-UI 模板（阅读+作者展现）、ZIP 扩展托管、HTML 应用广场、WASM 沙盒支持、VFS 虚拟文件系统、端口代理、23条内容安全扫描、虚拟路径隐藏、展开/收起控件
 - [x] **Phase 2.8 部署与合规（176号令）** — 建站向导（一次性安装密钥 + 数据库加密配置）、SQLite ↔ MySQL 在线热迁移、自动备份/恢复、注册/登录 IP 留存、内容软删除（8 表）、用户行为审计日志、访问日志关联 user_id、日志完整性保护（SHA256 归档 + 6 个月保留）、管理员审核日志规范、联邦入站记录
 - [ ] **Phase 3 高级功能** — 付费阅读闭环、打赏 UI、EPUB 封面增强、反商业爬虫
-- [ ] **Phase 4 治理与扩展** — 社区仲裁员选举、财务公开面板、API 开放平台、移动端 PWA
+- [x] **Phase 3.5 移动端浏览** — 全站响应式布局、汉堡菜单导航、阅读器移动优化、弹窗限宽、表格横滚、触控友好
+- [x] **Phase 3.6 渲染统一与统计准确性** — Cherry 0.11.9 完整版统一引擎（阅读器/博客/评论/论坛与编辑器预览同源同主题）、章节标题大字（h1-h6 !important 全阶统一）、浏览端 Cherry 主题副作用修复（.cherry-previewer 分屏 50% 宽度回归）、全量统计排除软删除数据（分类分布 / 章节 / 字数 / 评论趋势）、删除章节编号自动补齐（renumberChapters）
+- [x] **Phase 3.7 阅读器完整版渲染 + 标题大字 + 日志小时切分** — 渲染器/阅读器切换为 Cherry 完整版构建产物（cherry-markdown.esm.js headless 实例，与编辑器 100% 同源同产物）、阅读器正文自动注入「第N章 标题」一级标题大字（参照上传 md 已有标题则不重复；存量数据库章节渲染期自动生效，不改文件不破坏签名）、日志按小时切分且 request/database 分文件夹（log/requests/<日期>/<小时>.log）、归档与 SHA256 适配小时文件、社区最近帖子统计排除软删除
+- [ ] **Phase 4 治理与扩展** — 社区仲裁员选举、财务公开面板、API 开放平台、移动端 PWA（离线缓存 / 安装到主屏）
 
 ---
 

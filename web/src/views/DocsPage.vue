@@ -471,4 +471,23 @@ async function verifyChapter(novelId, chapterNum) {
 .code{background:#1e1e2e;color:#cdd6f4;border:1px solid #313244;border-radius:8px;padding:14px 16px;font-family:'SF Mono',Fira Code,Cascadia Code,monospace;font-size:.78rem;line-height:1.6;overflow-x:auto;white-space:pre;max-height:420px;overflow-y:auto}
 :deep(.el-timeline__item) h4{margin:0 0 4px}
 :deep(.el-timeline__item) p{margin:0;color:var(--text-secondary);font-size:.88rem}
+
+/* ====== 移动端文档页适配 ====== */
+@media (max-width: 768px) {
+  .page-container {
+    padding: 16px 12px;
+  }
+  .code {
+    font-size: 0.72rem;
+    padding: 10px 12px;
+    max-height: 320px;
+  }
+  /* 表格横向滚动 */
+  .page-container :deep(.el-table) {
+    min-width: 560px;
+  }
+  .page-container :deep(.el-table__wrapper) {
+    overflow-x: auto;
+  }
+}
 </style>

@@ -189,10 +189,33 @@
     </el-dialog>
 
     <!-- 批量导入对话框 -->
-    <el-dialog v-model="showBatchDialog" title="批量导入（Word / Markdown）" width="600px" destroy-on-close>
+    <el-dialog v-model="showBatchDialog" title="批量导入（Word / Markdown）" width="620px" destroy-on-close>
       <el-form label-width="80px">
         <el-form-item label="作品标题">
           <el-input v-model="batchForm.title" placeholder="合并为一部作品（可选）" />
+        </el-form-item>
+        <el-form-item label="导入方式">
+          <el-radio-group v-model="batchForm.mode">
+            <el-radio-button value="file">一个文件一章</el-radio-button>
+            <el-radio-button value="rule">自定义规则</el-radio-button>
+            <el-radio-button value="auto">自动识别标题</el-radio-button>
+          </el-radio-group>
+          <div class="import-rule-hint" style="width:100%">
+            <template v-if="batchForm.mode === 'file'">每个文件作为一章，章节标题取文件名（去扩展名），按文件名顺序编号</template>
+            <template v-else-if="batchForm.mode === 'auto'">自动识别文件内的「第X章 / HTML标题 / Markdown 标题」拆分为多章</template>
+          </div>
+        </el-form-item>
+        <el-form-item v-if="batchForm.mode === 'rule'" label="拆分规则">
+          <el-input v-model="batchForm.splitRule" placeholder="正则表达式，如 (?m)^第[一二三四五六七八九十百千\d]+章" />
+          <div class="import-rule-hint">
+            快捷规则：
+            <el-button size="small" text type="primary" @click="batchForm.splitRule='(?m)^第[一二三四五六七八九十百千\\d]+章'">第X章</el-button>
+            <el-button size="small" text type="primary" @click="batchForm.splitRule='(?m)^#{1,3}\\s'"># / ## / ###</el-button>
+            <el-button size="small" text type="primary" @click="batchForm.splitRule='(?m)^-{3,}$'">--- 分割线</el-button>
+          </div>
+        </el-form-item>
+        <el-form-item label="标题前缀">
+          <el-switch v-model="batchForm.titlePrefix" active-text="章节标题加「第N章 」前缀" inactive-text="使用原名" />
         </el-form-item>
         <el-form-item label="选择文件">
           <el-upload
@@ -206,7 +229,7 @@
             <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
             <div class="el-upload__text">将多个 Word / Markdown 文件拖到此处</div>
             <template #tip>
-              <div class="el-upload__tip">可一次选择多个 .docx / .md / .txt 文件，按顺序合并为一部作品的章节</div>
+              <div class="el-upload__tip">可一次选择多个 .docx / .md / .txt 文件，按所选方式合并为一部作品的章节</div>
             </template>
           </el-upload>
         </el-form-item>
@@ -270,7 +293,7 @@ const showBatchDialog = ref(false);
 const batchImporting = ref(false);
 const batchUploadRef = ref();
 const batchFiles = ref<File[]>([]);
-const batchForm = reactive({ title: '' });
+const batchForm = reactive({ title: '', mode: 'file', splitRule: '', titlePrefix: false });
 
 function onBatchFileChange(file: any) {
   if (file.raw) batchFiles.value.push(file.raw);
@@ -280,17 +303,29 @@ async function doBatchImport() {
   if (batchFiles.value.length === 0) { ElMessage.warning('请选择文件'); return; }
   batchImporting.value = true;
   try {
-    const res = await novelApi.importBatch(batchFiles.value, batchForm.title.trim() || undefined);
+    const res = await novelApi.importBatch(
+      batchFiles.value,
+      batchForm.title.trim() || undefined,
+      undefined,
+      batchForm.mode,
+      batchForm.mode === 'rule' ? batchForm.splitRule.trim() : undefined,
+      batchForm.titlePrefix,
+    );
     const data = res.data.data;
     ElMessage.success(`批量导入成功！${data.files_count} 个文件，共 ${data.chapters_count} 章`);
     showBatchDialog.value = false;
     batchFiles.value = [];
     batchForm.title = '';
+    batchForm.mode = 'file';
+    batchForm.splitRule = '';
+    batchForm.titlePrefix = false;
     batchUploadRef.value?.clearFiles();
-    // 刷新章节列表
-    if (novelId.value) {
+    // 新建作品则跳转到编辑页；编辑已有作品则刷新章节列表
+    if (novelId.value && data.novel_id === novelId.value) {
       const cr = await chapterApi.getChapters(novelId.value);
       chapters.value = cr.data.data || [];
+    } else if (!novelId.value && data.novel_id) {
+      router.push(`/author/editor/${data.novel_id}`);
     }
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '批量导入失败');
@@ -586,7 +621,61 @@ onMounted(() => {
 
 .import-ch-words {
   font-size: 0.8rem;
-  color: #999;
-  white-space: nowrap;
+  color: #999;  white-space: nowrap;
+}
+
+/* ====== 移动端作品编辑器适配 ====== */
+@media (max-width: 768px) {
+  .editor-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .editor-header h1 {
+    font-size: 1.25rem;
+  }
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  /* 表单栅格单列 */
+  .editor-section .el-row > .el-col {
+    width: 100% !important;
+    flex: 0 0 100% !important;
+    margin-bottom: 6px;
+  }
+  .section-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .section-actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .section-actions .el-button {
+    flex: 1;
+    margin-left: 0 !important;
+  }
+  /* 章节行：压缩为可换行布局 */
+  .chapter-item {
+    flex-wrap: wrap;
+    padding: 10px 0;
+  }
+  .ch-num {
+    min-width: 0;
+    font-size: 0.85rem;
+  }
+  .ch-words {
+    margin-right: auto;
+  }
+  .ch-title {
+    order: 3;
+    width: 100%;
+    flex: none;
+    padding-left: 0;
+  }
+  /* 导入预览列表横滚 */
+  .import-chapter-list {
+    max-height: 260px;
+  }
 }
 </style>

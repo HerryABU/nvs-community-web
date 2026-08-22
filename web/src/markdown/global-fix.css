@@ -65,17 +65,17 @@
   line-height: 1.35 !important;
 }
 .reader-md h1,
-.blog-content h1 { font-size: 1.75em !important; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.3em; }
+.blog-content h1 { font-size: 2em !important; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.3em; }
 .reader-md h2,
-.blog-content h2 { font-size: 1.45em !important; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.25em; }
+.blog-content h2 { font-size: 1.6em !important; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.25em; }
 .reader-md h3,
-.blog-content h3 { font-size: 1.2em !important; }
+.blog-content h3 { font-size: 1.35em !important; }
 .reader-md h4,
-.blog-content h4 { font-size: 1.05em !important; }
+.blog-content h4 { font-size: 1.15em !important; }
 .reader-md h5,
-.blog-content h5 { font-size: 0.95em !important; }
+.blog-content h5 { font-size: 1em !important; }
 .reader-md h6,
-.blog-content h6 { font-size: 0.85em !important; color: #555 !important; }
+.blog-content h6 { font-size: 0.9em !important; color: #555 !important; }
 
 /* 暗色主题下标题颜色 */
 [data-theme="dark"] .reader-md h1,
@@ -103,30 +103,22 @@
   color: #94a3b8 !important;
 }
 
-/* 阅读器段落样式 */
-.reader-md p,
-.blog-content p {
-  margin: 0.8em 0 !important;
-  line-height: 1.8 !important;
-  color: #1a1a2e !important;
-}
-[data-theme="dark"] .reader-md p,
-[data-theme="dark"] .blog-content p {
-  color: #cbd5e1 !important;
-}
-
-/* ═══ 正文排版 — 衬线字体 + 首行缩进 + 标题居中（阅读器 & 博客统一）═══ */
+/* ═══ 正文排版 — 与 Cherry 编辑器预览完全一致 ═══
+   浏览端正文（阅读器/博客）渲染样式完全跟随 Cherry 默认（sans-serif、无首行缩进、
+   默认字号行距），做到「编辑器所见 = 阅读器所得」；仅保留章节标题的大字居中
+   （阅读场景的标题强调，属明确需求）。 */
 .reader-md,
 .blog-content {
-  font-family: Georgia, 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', serif !important;
-  font-size: 1.1rem !important;
-  line-height: 2 !important;
-  color: #1a1a2e !important;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
 }
 .reader-md p,
 .blog-content p {
-  text-indent: 2em !important;
-  margin-bottom: 1em !important;
+  text-indent: 0 !important;
+  margin: 0.8em 0 !important;
+  line-height: inherit !important;
+  color: inherit !important;
 }
 .reader-md h1,
 .reader-md h2,
@@ -145,8 +137,14 @@
 .blog-content h6 {
   text-indent: 0 !important;
 }
-[data-theme="dark"] .reader-md,
-[data-theme="dark"] .blog-content {
+
+/* 暗色主题正文颜色兜底：与编辑器（.cherry-previewer 暗色覆盖）行为一致，
+   其余元素颜色仍跟随 Cherry 默认 */
+[data-theme="dark"] .reader-md.cherry-markdown,
+[data-theme="dark"] .blog-content.cherry-markdown,
+[data-theme="dark"] .comment-md.cherry-markdown,
+[data-theme="dark"] .thread-content.cherry-markdown,
+[data-theme="dark"] .post-content.cherry-markdown {
   color: #cbd5e1 !important;
 }
 
@@ -562,5 +560,55 @@
 .thread-content .chemfig-canvas,
 .post-content .chemfig-canvas {
   display: none;
+}
+
+/* ═══ 修复：浏览端复用 .cherry-previewer 类导致的内容左半挤压 ═══
+   cherry-markdown.min.css 中「裸 .cherry-previewer」是编辑器分屏预览区样式
+   （width:50% + padding:20px 45px + border-left + 背景 + overflow-y:auto）。
+   浏览端（阅读器/博客/评论/论坛）容器为继承 Cherry 主题而复用了该 class，
+   结果正文被压到左侧 50% 宽、右侧大片空白。这里覆盖为全宽无分屏副作用，
+   仅作用于浏览端容器本身，不影响 Cherry 主题下的后代列表/代码块等样式。 */
+.reader-md.cherry-previewer,
+.blog-content.cherry-previewer,
+.comment-md.cherry-previewer,
+.thread-content.cherry-previewer,
+.post-content.cherry-previewer {
+  width: 100% !important;
+  max-width: 100% !important;
+  padding: 0 !important;
+  border-left: none !important;
+  background-color: transparent !important;
+  min-height: 0 !important;
+  overflow-y: visible !important;
+  overflow-x: visible !important;
+  box-sizing: border-box;
+}
+
+
+.reader-md.cherry-markdown pre code,
+.blog-content.cherry-markdown pre code,
+.comment-md.cherry-markdown pre code,
+.thread-content.cherry-markdown pre code,
+.post-content.cherry-markdown pre code,
+.cherry-markdown pre code {
+  font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+}
+.reader-md.cherry-markdown div[data-type="codeBlock"] > pre,
+.blog-content.cherry-markdown div[data-type="codeBlock"] > pre,
+.comment-md.cherry-markdown div[data-type="codeBlock"] > pre,
+.thread-content.cherry-markdown div[data-type="codeBlock"] > pre,
+.post-content.cherry-markdown div[data-type="codeBlock"] > pre {
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 14px 0;
+}
+/* 行内代码：与 Cherry 编辑器一致（等宽字体微调，颜色/背景跟随 Cherry 默认主题） */
+.reader-md.cherry-markdown :not(pre) > code,
+.blog-content.cherry-markdown :not(pre) > code,
+.comment-md.cherry-markdown :not(pre) > code,
+.thread-content.cherry-markdown :not(pre) > code,
+.post-content.cherry-markdown :not(pre) > code {
+  font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+  font-size: 0.9em;
 }
 

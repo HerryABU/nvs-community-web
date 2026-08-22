@@ -31,6 +31,22 @@ func AuthRequired() gin.HandlerFunc {
 	}
 }
 
+// OptionalAuth 可选登录中间件：解析 token 并设置用户上下文（user id/email/role），
+// 解析失败不拦截请求。用于公开路由（如论坛详情）识别登录态，
+// 使管理员/创建者等权限判断在公开接口中也能生效（如管理员进论坛免密码，176号令合规）。
+func OptionalAuth() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if tokenString, err := c.Cookie("token"); err == nil && tokenString != "" {
+			if claims, perr := utils.ParseToken(tokenString); perr == nil {
+				c.Set(CtxUserID, claims.UserID)
+				c.Set(CtxUserEmail, claims.Email)
+				c.Set(CtxUserRole, claims.Role)
+			}
+		}
+		c.Next()
+	}
+}
+
 // AuthorRequired 要求作者角色（author / vip_author）
 func AuthorRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {

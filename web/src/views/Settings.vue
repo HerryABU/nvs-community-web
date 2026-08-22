@@ -3,6 +3,35 @@
     <div class="settings-container">
       <h2 class="page-title">账号设置</h2>
 
+      <!-- 修改昵称 -->
+      <el-card class="settings-card" shadow="hover">
+        <template #header>
+          <div class="card-header">
+            <el-icon><User /></el-icon>
+            <span>修改昵称</span>
+          </div>
+        </template>
+        <el-form label-width="100px" label-position="top" @submit.prevent="submitNickname">
+          <el-form-item label="当前昵称">
+            <el-input :model-value="currentNickname" disabled size="large" />
+          </el-form-item>
+          <el-form-item label="新昵称">
+            <el-input
+              v-model="nicknameForm"
+              maxlength="32"
+              show-word-limit
+              placeholder="1-32 个字符，将展示在评论、论坛等位置"
+              size="large"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" size="large" :loading="nicknameSaving" @click="submitNickname">
+              保存昵称
+            </el-button>
+          </el-form-item>
+        </el-form>
+      </el-card>
+
       <!-- 修改密码 -->
       <el-card class="settings-card" shadow="hover">
         <template #header>
@@ -67,15 +96,43 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
 import { authApi } from '@/api/auth';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
-import { Lock } from '@element-plus/icons-vue';
+import { Lock, User } from '@element-plus/icons-vue';
 
 const router = useRouter();
+const authStore = useAuthStore();
 const formRef = ref<FormInstance>();
 const submitting = ref(false);
+
+// ====== 修改昵称 ======
+const currentNickname = ref(authStore.user?.nickname || authStore.user?.username || '');
+const nicknameForm = ref('');
+const nicknameSaving = ref(false);
+
+async function submitNickname() {
+  const nick = nicknameForm.value.trim();
+  if (!nick) { ElMessage.warning('请输入新昵称'); return; }
+  nicknameSaving.value = true;
+  try {
+    const res = await authApi.updateProfile({ nickname: nick });
+    if (res.data.code === 0) {
+      if (authStore.user) authStore.user.nickname = nick;
+      currentNickname.value = nick;
+      nicknameForm.value = '';
+      ElMessage.success('昵称已更新');
+    } else {
+      ElMessage.error(res.data.message || '更新失败');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '更新失败');
+  } finally {
+    nicknameSaving.value = false;
+  }
+}
 
 const form = reactive({
   oldPassword: '',
@@ -175,5 +232,19 @@ function resetForm() {
 
 :deep(.el-form-item__label) {
   color: var(--text-secondary);
+}
+
+/* ====== 移动端账号设置适配 ====== */
+@media (max-width: 640px) {
+  .settings-page {
+    padding: 20px 12px;
+  }
+  .page-title {
+    font-size: 1.25rem;
+    margin-bottom: 18px;
+  }
+  .card-header {
+    font-size: 1rem;
+  }
 }
 </style>

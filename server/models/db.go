@@ -11,7 +11,8 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+
+	"nvs-server/utils"
 )
 
 // DBConfig 描述一个数据库连接目标（迁移/安装时由前端传入）
@@ -33,6 +34,10 @@ func AllModels() []interface{} {
 		&WithdrawalRequest{}, &EarningsRecord{}, &BlacklistIP{}, &PlatformConfig{},
 		&FederatedSite{}, &FederatedNovel{}, &FederatedInbound{}, &BookShelf{}, &Follow{}, &AuthorBlog{},
 		&UserFrame{}, &UserHTML{}, &XssRule{}, &EmergencyAuditLog{}, &UserAuditLog{},
+		&BadWord{}, &BadWordFlag{}, // 违禁词库：规则 + 标记待审记录
+		&ZoneAccessLog{}, // 隔离墙（敏感分区）进入记录，176号令合规
+		&Notification{}, // 站内消息通知
+		&ReadingNote{},  // 精读：书签 + 批注（含公开/私密）
 		// 软删除留证表（softdel_*，合规证据留存）
 		&SoftDelComment{}, &SoftDelNovel{}, &SoftDelChapter{}, &SoftDelUser{},
 		&SoftDelThread{}, &SoftDelPost{}, &SoftDelBlog{}, &SoftDelForum{},
@@ -59,7 +64,15 @@ func BuildDialector(cfg DBConfig) (gorm.Dialector, error) {
 		if path == "" {
 			path = "data/nvs.db"
 		}
-		return sqlite.Open(path), nil
+		// _pragma=foreign_keys(1)：每个新连接自动启用外键约束（数据一致性保障）
+		// _pragma=busy_timeout(5000)：写锁等待 5s，避免并发写 SQLite 直接报 database is locked
+		dsn := path
+		if strings.Contains(dsn, "?") {
+			dsn += "&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
+		} else {
+			dsn += "?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
+		}
+		return sqlite.Open(dsn), nil
 	default:
 		return nil, fmt.Errorf("不支持的数据库驱动: %s", cfg.Driver)
 	}
@@ -82,7 +95,7 @@ func OpenDB(cfg DBConfig) (*gorm.DB, error) {
 		}
 	}
 	db, err := gorm.Open(d, &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn),
+		Logger: utils.NewDBLogger(),
 	})
 	if err != nil {
 		return nil, err
@@ -94,18 +107,50 @@ func OpenDB(cfg DBConfig) (*gorm.DB, error) {
 			sqlDB.SetConnMaxLifetime(time.Hour)
 		}
 	}
+	// 双保险：当前连接显式开启外键（DSN 参数保证连接池内所有连接均开启）
+	if cfg.Driver == "sqlite" {
+		if err := db.Exec("PRAGMA foreign_keys = ON").Error; err != nil {
+			return nil, fmt.Errorf("启用外键约束失败: %w", err)
+		}
+		var fk int
+		_ = db.Raw("PRAGMA foreign_keys").Scan(&fk)
+		if fk != 1 {
+			return nil, fmt.Errorf("外键约束未生效（PRAGMA foreign_keys = %d）", fk)
+		}
+	}
 	return db, nil
 }
 
 // AutoMigrateAll 迁移所有模型表结构
 func AutoMigrateAll(db *gorm.DB) error {
-	return db.AutoMigrate(AllModels()...)
+	if err := db.AutoMigrate(AllModels()...); err != nil {
+		return err
+	}
+	// 方案A：移除 posts.deleted_at 列（统一走 softdel_posts 留证，幂等）
+	// 注意顺序：先 AutoMigrate（建表），再移除历史遗留列
+	if err := DropPostDeletedAt(db); err != nil {
+		return err
+	}
+	// 清理被新复合索引替代的旧单列索引（冗余索引会造成写放大）
+	return DropLegacyIndexes(db)
 }
 
 // CopyAllTables 将 src 的所有表数据完整复制到 dst（dst 需已 AutoMigrate）。
 // 通过 SELECT * → map 扫描逐表复制，保留主键 ID 与时间戳，外键关系保持一致性。
+// 复制期间临时关闭外键检查（防止表复制顺序触发外键失败），完成后恢复。
 // onTable 回调用于上报每张表的进度（table 名、行数）。
 func CopyAllTables(src, dst *gorm.DB, onTable func(table string, rows int64)) (map[string]int64, error) {
+	// 复制期间临时关闭目标库外键检查（SQLite / MySQL）
+	restoreFK := func() {}
+	if dst.Dialector.Name() == "sqlite" {
+		_ = dst.Exec("PRAGMA foreign_keys = OFF").Error
+		restoreFK = func() { _ = dst.Exec("PRAGMA foreign_keys = ON").Error }
+	} else {
+		_ = dst.Exec("SET FOREIGN_KEY_CHECKS = 0").Error
+		restoreFK = func() { _ = dst.Exec("SET FOREIGN_KEY_CHECKS = 1").Error }
+	}
+	defer restoreFK()
+
 	tables, err := src.Migrator().GetTables()
 	if err != nil {
 		return nil, err

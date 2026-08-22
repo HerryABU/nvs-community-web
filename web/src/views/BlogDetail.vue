@@ -13,7 +13,7 @@
         </div>
       </div>
 
-      <div class="blog-content markdown-body" v-html="htmlContent" ref="blogContentRef"></div>
+      <div class="blog-content markdown-body cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" v-html="htmlContent" ref="blogContentRef"></div>
 
       <div class="blog-footer">
         <el-button @click="$router.back()">返回</el-button>
@@ -95,4 +95,25 @@ onMounted(async () => {
 .blog-content { line-height: 1.8; font-size: 1rem; }
 .blog-footer { margin-top: 32px; display: flex; gap: 12px; }
 .section-title { font-size: 1.15rem; font-weight: 600; margin-bottom: 16px; }
+
+/* ====== 移动端博客详情适配 ====== */
+@media (max-width: 768px) {
+  .blog-header h1 {
+    font-size: 1.3rem;
+    line-height: 1.45;
+  }
+  .blog-meta-line {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+  }
+  .blog-content {
+    font-size: 0.95rem;
+  }
+  .blog-footer {
+    flex-wrap: wrap;
+  }
+  .blog-footer .el-button {
+    flex: 1;
+  }
+}
 </style>

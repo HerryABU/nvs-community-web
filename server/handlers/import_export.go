@@ -253,16 +253,27 @@ func writeParsedChapters(novel *models.Novel, chapters []parsedChapter, startNum
 }
 
 // ImportBatch POST /api/novels/import/batch — 批量导入多个 Word/Markdown 文件（合并为一部作品）
+// form 参数：
+//   title / category：作品标题与分类
+//   mode：file(默认，一个文件一章) | rule(自定义正则拆分) | auto(自动识别标题拆分)
+//   split_rule：mode=rule 时的正则表达式
+//   title_prefix：on 时章节标题加「第N章 」前缀
 func ImportBatch(c *gin.Context) {
 	userID := currentUserID(c)
 
 	title := c.PostForm("title")
 	category := c.PostForm("category")
+	mode := c.PostForm("mode")
+	splitRule := c.PostForm("split_rule")
+	titlePrefix := c.PostForm("title_prefix") == "on"
 	if title == "" {
 		title = "批量导入作品"
 	}
 	if category == "" {
 		category = "其他"
+	}
+	if mode == "" {
+		mode = "file"
 	}
 
 	form, err := c.MultipartForm()
@@ -276,7 +287,7 @@ func ImportBatch(c *gin.Context) {
 		return
 	}
 
-	// 逐个解析文件，合并章节
+	// 逐个文件解析为章节
 	var allChapters []parsedChapter
 	for _, fh := range files {
 		f, err := fh.Open()
@@ -292,12 +303,37 @@ func ImportBatch(c *gin.Context) {
 		if err != nil {
 			continue
 		}
-		allChapters = append(allChapters, parseChapters(content)...)
+		content = strings.TrimSpace(content)
+		if content == "" {
+			continue
+		}
+
+		switch mode {
+		case "rule":
+			// 自定义正则拆分（正则匹配失败/无匹配则整篇一章）
+			if strings.TrimSpace(splitRule) != "" {
+				allChapters = append(allChapters, parseChaptersWithRule(content, splitRule)...)
+			} else {
+				allChapters = append(allChapters, parsedChapter{title: stripExt(fh.Filename), content: content})
+			}
+		case "auto":
+			// 自动识别：按文件内「第X章 / HTML标题 / Markdown标题」拆分
+			allChapters = append(allChapters, parseChapters(content)...)
+		default: // file：一个文件一章，标题取文件名（去扩展名）
+			allChapters = append(allChapters, parsedChapter{title: stripExt(fh.Filename), content: content})
+		}
 	}
 
 	if len(allChapters) == 0 {
 		utils.BadRequest(c, "未能从上传文件中解析出任何章节")
 		return
+	}
+
+	// 可选：章节标题统一加「第N章 」前缀
+	if titlePrefix {
+		for i := range allChapters {
+			allChapters[i].title = fmt.Sprintf("第%d章 %s", i+1, allChapters[i].title)
+		}
 	}
 
 	// reader 自动升级为 author
@@ -325,10 +361,21 @@ func ImportBatch(c *gin.Context) {
 	utils.Success(c, gin.H{
 		"novel_id":       novel.ID,
 		"title":          title,
+		"mode":           mode,
 		"files_count":    len(files),
 		"chapters_count": len(createdChapters),
 		"chapters":       createdChapters,
 	})
+}
+
+// stripExt 去除文件扩展名（保留原始标题，如 "第一章 开端.md" → "第一章 开端"）
+func stripExt(filename string) string {
+	base := filepath.Base(filename)
+	ext := filepath.Ext(base)
+	if ext != "" {
+		base = strings.TrimSuffix(base, ext)
+	}
+	return strings.TrimSpace(base)
 }
 
 type parsedChapter struct {

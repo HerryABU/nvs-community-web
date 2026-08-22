@@ -27,7 +27,7 @@
       </div>
 
       <!-- 主帖内容 -->
-      <div class="thread-content">
+      <div class="thread-content cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red">
         <div v-html="renderMarkdown(thread.content)"></div>
       </div>
 
@@ -58,11 +58,16 @@
               >删除</el-button>
             </span>
           </div>
-          <div class="post-content">
+          <div class="post-content cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red">
             <div v-html="renderMarkdown(p.content)"></div>
           </div>
         </div>
         <el-empty v-if="posts.length === 0" description="暂无回复" />
+      </div>
+
+      <!-- 新回复提示条 -->
+      <div v-if="newReplies > 0" class="new-replies-bar" @click="refreshNewReplies">
+        🔔 有 {{ newReplies }} 条新回复，点击查看
       </div>
 
       <!-- 回复表单 -->
@@ -88,7 +93,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { novelApi, forumApi } from '@/api/novel';
 import { useAuthStore } from '@/stores/auth';
@@ -192,12 +197,44 @@ async function load() {
     checkSensitiveForum();
     posts.value = d.posts || [];
     total.value = d.total || 0;
+    latestTotal.value = d.total || 0;
+    newReplies.value = 0;
   } catch (e) {
     console.error(e);
   } finally {
     loading.value = false;
   }
 }
+
+// ====== 新回复轮询提示（30s 检测，不自动刷新打断浏览） ======
+const latestTotal = ref(0);
+const newReplies = ref(0);
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+async function pollNewReplies() {
+  try {
+    const res = await forumApi.getThread(Number(route.params.id));
+    const cur = res.data.data?.total || 0;
+    if (cur > latestTotal.value) {
+      newReplies.value = cur - latestTotal.value;
+    }
+  } catch { /* 忽略 */ }
+}
+
+function refreshNewReplies() {
+  newReplies.value = 0;
+  latestTotal.value = total.value;
+  load();
+}
+
+onMounted(() => {
+  load();
+  pollTimer = setInterval(pollNewReplies, 30000);
+});
+
+onUnmounted(() => {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+});
 
 async function submitReply() {
   if (!replyContent.value.trim()) return;
@@ -213,8 +250,6 @@ async function submitReply() {
     replying.value = false;
   }
 }
-
-onMounted(load);
 </script>
 
 <style scoped>
@@ -234,6 +269,20 @@ onMounted(load);
   font-size: 0.85rem;
   color: var(--text-light);
 }
+
+.new-replies-bar {
+  margin: 10px 0;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px dashed var(--primary-color);
+  color: var(--primary-color);
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+.new-replies-bar:hover { background: rgba(99, 102, 241, 0.18); }
 
 .thread-content {
   background: #fafafa;
@@ -318,5 +367,36 @@ onMounted(load);
 }
 [data-theme="dark"] .login-hint {
   color: #94a3b8;
+}
+
+/* ====== 移动端帖子页适配 ====== */
+@media (max-width: 768px) {
+  .thread-meta {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+  }
+  .thread-header h1 {
+    font-size: 1.25rem;
+    line-height: 1.4;
+  }
+  .thread-content {
+    padding: 14px;
+    font-size: 0.9rem;
+  }
+  .post-header {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .post-actions {
+    margin-left: 0;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .reply-actions {
+    display: flex;
+  }
+  .reply-actions .el-button {
+    flex: 1;
+  }
 }
 </style>

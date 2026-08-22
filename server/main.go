@@ -27,7 +27,6 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 // frontendBundleRe 匹配内嵌前端打包产物文件名（index-xxxx.js）
@@ -93,6 +92,8 @@ func main() {
 		}
 		return utils.SMTPConfig{
 			Host: host, Port: fmt.Sprintf("%d", portInt), User: user, Password: pass, From: from,
+			// 兼容自签名/内网 SMTP：管理员在后台显式开启才跳过证书校验（默认校验证书，安全）
+			InsecureSkipVerify: models.GetPlatformConfig("smtp_insecure_skip_verify") == "true",
 		}
 	}
 
@@ -181,6 +182,7 @@ func main() {
 	// ==================== API 路由 ====================
 
 	public := r.Group("/api")
+	public.Use(middleware.OptionalAuth()) // 公开路由也识别登录态（管理员豁免/我的论坛等权限判断）
 	{
 		public.POST("/auth/register", handlers.Register)
 		public.POST("/auth/login", security.RateLimit(5, 60), handlers.Login)
@@ -226,6 +228,16 @@ func main() {
 	{
 		protected.GET("/auth/me", handlers.GetCurrentUser)
 		protected.POST("/auth/change-password", handlers.ChangePassword)
+		// 站内消息通知
+		protected.GET("/notifications", handlers.ListNotifications)
+		protected.GET("/notifications/unread-count", handlers.UnreadNotificationCount)
+		protected.POST("/notifications/read", handlers.MarkNotificationRead)
+		// 精读：书签 + 批注
+		protected.POST("/reading/notes", handlers.CreateReadingNote)
+		protected.GET("/reading/notes", handlers.ListMyReadingNotes)
+		protected.GET("/reading/notes/mine", handlers.ListAllMyNotes)
+		protected.PATCH("/reading/notes/:id", handlers.UpdateReadingNote)
+		protected.DELETE("/reading/notes/:id", handlers.DeleteReadingNote)
 		protected.POST("/comments", security.RateLimit(20, 60), handlers.CreateComment)
 		protected.DELETE("/comments/:id", handlers.DeleteComment)
 		protected.POST("/novels", handlers.CreateNovel)
@@ -239,6 +251,7 @@ func main() {
 		protected.GET("/author/banned-content", handlers.GetAuthorBannedContent)
 		protected.GET("/author/dashboard", handlers.GetAuthorDashboard)
 		protected.POST("/novels/:id/export", handlers.ExportNovel)
+		protected.POST("/zone/enter", handlers.RecordZoneEnter) // 记录进入隔离墙（敏感分区）时间，176号令合规
 		protected.POST("/ratings", handlers.UpsertRating)
 		protected.GET("/ratings", handlers.GetUserRating)
 		protected.POST("/forums/:id/threads", handlers.CreateThread)
@@ -247,10 +260,12 @@ func main() {
 		protected.DELETE("/posts/:id", handlers.DeletePostByModerator)
 		// 用户自建论坛
 		protected.POST("/forums", handlers.CreateUserForum)
+		protected.POST("/forums/enter-by-code", handlers.EnterForumByRoomCode) // 房间号进入不可见论坛
 		protected.GET("/forums/mine", handlers.ListMyForums)
 		protected.POST("/forums/:id/verify", handlers.VerifyForumPassword)
 		protected.POST("/forums/:id/mute", handlers.ForumMuteUser)
 		protected.POST("/forums/:id/unmute", handlers.ForumUnmuteUser)
+		protected.GET("/forums/:id/mutes", handlers.ListForumMutes) // 论坛禁言列表（创建者/管理员）
 		// VIP & 导入导出
 		protected.POST("/author/apply-vip", handlers.ApplyVip)
 		protected.POST("/novels/import/preview", handlers.ImportPreview)
@@ -286,6 +301,7 @@ func main() {
 		protected.GET("/follow/stats", handlers.GetFollowStats)
 		// 作者博客（创建、编辑、删除需登录）
 		protected.POST("/blogs", handlers.CreateBlog)
+		protected.POST("/blogs/import/batch", handlers.ImportBlogs)
 		protected.PUT("/blogs/:id", handlers.UpdateBlog)
 		protected.DELETE("/blogs/:id", handlers.DeleteBlog)
 		// 用户自定义 UI-HTML 模板 (UserFrame)
@@ -331,6 +347,7 @@ func main() {
 		admin.GET("/community", handlers.GetCommunityDashboard)
 		admin.GET("/users", handlers.ListUsers)
 		admin.GET("/users/audit", handlers.ListUserAuditLogs)
+		admin.GET("/zone-access", handlers.ListZoneAccessLogs) // 隔离墙进入记录（176号令专项）
 		admin.PUT("/users/:id", handlers.UpdateUser)
 		admin.DELETE("/users/:id", handlers.DeleteUser)
 		admin.POST("/users/:id/mute", handlers.MuteUser)
@@ -346,6 +363,7 @@ func main() {
 		admin.GET("/finance", handlers.GetFinanceOverview)
 		// 站长配置
 		admin.GET("/config", handlers.GetPlatformConfigs)
+		admin.POST("/smtp/test", handlers.TestSMTP) // SMTP 测试与逐阶段诊断
 		admin.PUT("/config", handlers.UpdatePlatformConfig)
 		// 隔离墙配置
 		admin.GET("/wall-config", handlers.GetWallConfig)
@@ -369,6 +387,15 @@ func main() {
 		admin.PUT("/xss-rules/:id", handlers.UpdateXssRule)
 		admin.DELETE("/xss-rules/:id", handlers.DeleteXssRule)
 		admin.POST("/xss-rules/test", handlers.TestXssRule)
+		// 违禁词库（管理员维护：标记/删除/替换 + 关键词/正则双模式 + 可配置适用范围）
+		admin.GET("/bad-words", handlers.ListBadWords)
+		admin.POST("/bad-words", handlers.CreateBadWord)
+		admin.PUT("/bad-words/:id", handlers.UpdateBadWord)
+		admin.DELETE("/bad-words/:id", handlers.DeleteBadWord)
+		admin.POST("/bad-words/test", handlers.TestBadWord)
+		// 违禁词标记待审（mark 动作命中记录，管理员确认/放行）
+		admin.GET("/bad-word-flags", handlers.ListBadWordFlags)
+		admin.PUT("/bad-word-flags/:id", handlers.HandleBadWordFlag)
 		// 内容抢救台（二级密码 + 应急预览/硬删除；unlock 加 IP 限流防爆破）
 		admin.POST("/emergency/set-password", handlers.SetEmergencyPassword)
 		admin.POST("/emergency/unlock", security.RateLimit(10, 60), handlers.UnlockEmergency)
@@ -401,6 +428,10 @@ func main() {
 		r.GET("/api/federated/novels", handlers.ListFederatedNovels)
 		r.GET("/api/federated/sites", handlers.ListPublicSites)
 		r.GET("/api/site-info", handlers.GetSiteInfo)
+		// 精读：公开笔记（游客可看公开批注）
+		r.GET("/api/reading/notes/public", handlers.ListPublicNotes)
+		// 统一搜索：作品 / 作者 / 博客 / HTML 扩展
+		r.GET("/api/search", handlers.UnifiedSearch)
 		// 博客公开读取
 		r.GET("/api/blogs", handlers.ListPublicBlogs)
 		r.GET("/api/blogs/:id", handlers.GetBlog)
@@ -744,7 +775,7 @@ func initDatabase() error {
 
 	var err error
 	models.DB, err = gorm.Open(dialector, &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn),
+		Logger: utils.NewDBLogger(),
 	})
 	if err != nil {
 		return err
@@ -769,6 +800,7 @@ func initDatabase() error {
 	models.InitDefaultForums()
 	models.InitPlatformConfigs()
 	handlers.ReloadXssRules() // 加载管理员配置的 XSS 正则规则
+	handlers.ReloadBadWords() // 加载管理员配置的违禁词库规则
 	initDefaultAdmin()
 	log.Println("数据库迁移完成")
 	return nil

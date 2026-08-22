@@ -225,6 +225,10 @@ func DeleteNovel(c *gin.Context) {
 		return
 	}
 
+	// 作者自删：先清除封禁原因标记，避免误显示 176 号令封禁横幅（ban_reason 非空才视为封禁）
+	_ = models.DB.Model(&models.Novel{}).Where("id = ?", id).Update("ban_reason", "")
+	_ = models.DB.Model(&models.Chapter{}).Where("novel_id = ?", id).Update("ban_reason", "")
+
 	if err := models.DeleteNovel(uint(id)); err != nil {
 		utils.InternalError(c, "删除失败")
 		return

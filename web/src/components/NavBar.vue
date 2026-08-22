@@ -1,6 +1,11 @@
 <template>
   <nav class="navbar">
     <div class="navbar-inner">
+      <!-- 移动端汉堡菜单按钮 -->
+      <button class="mobile-menu-btn" @click="mobileMenuOpen = true" aria-label="打开菜单">
+        <el-icon :size="22"><Menu /></el-icon>
+      </button>
+
       <!-- Logo -->
       <div class="navbar-brand" @click="$router.push('/')">
         <span class="brand-text">{{ siteName }}</span>
@@ -25,16 +30,16 @@
       </el-dropdown>
 
       <!-- 论坛入口 -->
-      <router-link to="/forums" class="nav-link">论坛</router-link>
+      <router-link to="/forums" class="nav-link desktop-only">论坛</router-link>
 
       <!-- 博客入口 -->
-      <router-link to="/blogs" class="nav-link">博客</router-link>
+      <router-link to="/blogs" class="nav-link desktop-only">博客</router-link>
 
       <!-- 扩展应用（管理+广场） -->
-      <router-link to="/htmls" class="nav-link nav-link-create">🔌 扩展应用</router-link>
+      <router-link to="/htmls" class="nav-link nav-link-create desktop-only">🔌 扩展应用</router-link>
 
       <!-- 自定义内容入口（需登录） -->
-      <el-dropdown v-if="authStore.isLoggedIn" trigger="click">
+      <el-dropdown v-if="authStore.isLoggedIn" class="desktop-only" trigger="click">
         <span class="nav-link">
           <el-icon><Brush /></el-icon> 自定义
         </span>
@@ -51,10 +56,10 @@
       </el-dropdown>
 
       <!-- 书架入口（需登录） -->
-      <router-link v-if="authStore.isLoggedIn" to="/bookshelf" class="nav-link">📚 书架</router-link>
+      <router-link v-if="authStore.isLoggedIn" to="/bookshelf" class="nav-link desktop-only">📚 书架</router-link>
 
       <!-- 远程站点 -->
-      <el-dropdown v-if="federatedSites.length > 0" trigger="click">
+      <el-dropdown v-if="federatedSites.length > 0" class="desktop-only" trigger="click">
         <span class="nav-link">
           互联站点 <el-icon><ArrowDown /></el-icon>
         </span>
@@ -100,8 +105,14 @@
         </el-button>
 
         <template v-if="authStore.isLoggedIn">
-          <!-- 创作入口 -->
-          <el-dropdown trigger="click">
+          <!-- 消息中心（新消息提醒：红点/红圈数字） -->
+          <router-link to="/messages" class="nav-link msg-link" title="消息中心">
+            <el-icon><Bell /></el-icon>
+            <span class="msg-badge" v-if="unreadCount > 0">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
+          </router-link>
+
+          <!-- 创作入口（移动端隐藏，收入抽屉） -->
+          <el-dropdown class="desktop-only" trigger="click">
             <span class="nav-link nav-link-create">
               <el-icon><EditPen /></el-icon> 创作
             </span>
@@ -122,7 +133,7 @@
               <el-avatar :size="32" :src="authStore.user?.avatar_url">
                 {{ authStore.user?.nickname?.[0] || authStore.user?.username?.[0] || 'U' }}
               </el-avatar>
-              <span class="user-name">{{ authStore.user?.nickname || authStore.user?.username }}</span>
+              <span class="user-name desktop-only">{{ authStore.user?.nickname || authStore.user?.username }}</span>
             </span>
             <template #dropdown>
               <el-dropdown-menu>
@@ -158,17 +169,87 @@
     </div>
   </nav>
   <input ref="avatarInput" type="file" accept="image/png,image/jpeg,image/gif" style="display:none" @change="onAvatarChange" />
+
+  <!-- ====== 移动端导航抽屉 ====== -->
+  <el-drawer
+    v-model="mobileMenuOpen"
+    direction="rtl"
+    size="min(78vw, 360px)"
+    :with-header="false"
+    class="mobile-nav-drawer"
+  >
+    <div class="mnav">
+      <!-- 搜索 -->
+      <div class="mnav-search">
+        <el-input
+          v-model="searchText"
+          placeholder="搜索作品、作者、博客..."
+          clearable
+          size="large"
+          @keyup.enter="mnavSearch"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
+      </div>
+
+      <!-- 浏览 -->
+      <div class="mnav-group-title">浏览</div>
+      <div class="mnav-item" @click="mnavGo('/')"><el-icon><HomeFilled /></el-icon> 首页</div>
+      <div class="mnav-item" @click="mnavGo('/forums')"><el-icon><ChatDotRound /></el-icon> 论坛</div>
+      <div class="mnav-item" @click="mnavGo('/blogs')"><el-icon><Document /></el-icon> 博客</div>
+      <div class="mnav-item" @click="mnavGo('/htmls')"><span class="mnav-emoji">🔌</span> 扩展应用</div>
+      <div class="mnav-item" v-if="federatedSites.length" @click="mnavFederated"><span class="mnav-emoji">🌐</span> 互联站点</div>
+
+      <!-- 分类 -->
+      <div class="mnav-group-title">分类</div>
+      <div class="mnav-cats">
+        <div v-for="cat in categories" :key="cat" class="mnav-cat" @click="mnavGo(`/category/${encodeURIComponent(cat)}`)">
+          {{ cat }}
+        </div>
+      </div>
+
+      <template v-if="authStore.isLoggedIn">
+        <div class="mnav-group-title">我的</div>
+        <div class="mnav-item" @click="mnavGo('/bookshelf')"><span class="mnav-emoji">📚</span> 书架</div>
+        <div class="mnav-item" @click="mnavGo('/messages')"><el-icon><Bell /></el-icon> 消息中心
+          <span v-if="unreadCount > 0" class="mnav-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
+        </div>
+        <div class="mnav-item" @click="mnavGo('/author/editor')"><el-icon><Plus /></el-icon> 发布作品</div>
+        <div class="mnav-item" @click="mnavGo('/author')"><el-icon><HomeFilled /></el-icon> 作者工作台</div>
+        <div class="mnav-item" @click="mnavGo('/reading')"><el-icon><Notebook /></el-icon> 精读笔记</div>
+
+        <div class="mnav-group-title">账号</div>
+        <div class="mnav-item" @click="mnavGoAuthorHome"><el-icon><User /></el-icon> 我的作者主页</div>
+        <div class="mnav-item" @click="mnavGo('/author/templates')"><el-icon><Brush /></el-icon> 模板设置</div>
+        <div class="mnav-item" @click="mnavGo('/reports')"><el-icon><Warning /></el-icon> 我的举报</div>
+        <div class="mnav-item" @click="mnavGo('/docs')"><el-icon><Document /></el-icon> 格式使用文档</div>
+        <div class="mnav-item" v-if="authStore.user?.role === 'admin'" @click="mnavGo('/admin')"><el-icon><Setting /></el-icon> 管理员面板</div>
+        <div class="mnav-item" @click="mnavGo('/settings')"><el-icon><Setting /></el-icon> 账号设置</div>
+        <div class="mnav-item mnav-logout" @click="mnavLogout"><el-icon><SwitchButton /></el-icon> 退出登录</div>
+      </template>
+      <template v-else>
+        <div class="mnav-group-title">账号</div>
+        <div class="mnav-auth-row">
+          <el-button type="primary" size="large" style="flex:1" @click="mnavGo('/login')">登录</el-button>
+          <el-button size="large" style="flex:1" @click="mnavGo('/register')">注册</el-button>
+        </div>
+      </template>
+    </div>
+  </el-drawer>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useThemeStore } from '@/stores/theme';
 import { publicApi } from '@/api/admin';
 import { authApi } from '@/api/auth';
+import { notificationApi } from '@/api/notification';
 import { ElMessage } from 'element-plus';
-import { Camera, Setting, Brush, Document, Warning } from '@element-plus/icons-vue';
+import { Camera, Setting, Brush, Document, Warning, Bell, Menu, HomeFilled, ChatDotRound, Plus, Notebook, User, SwitchButton } from '@element-plus/icons-vue';
 
 const avatarInput = ref<HTMLInputElement>();
 const router = useRouter();
@@ -180,6 +261,70 @@ const categories = ref<string[]>([]);
 const searchText = ref('');
 const siteName = ref('星海文学');
 const federatedSites = ref<any[]>([]);
+
+// ====== 移动端导航抽屉 ======
+const mobileMenuOpen = ref(false);
+
+function mnavGo(path: string) {
+  mobileMenuOpen.value = false;
+  router.push(path);
+}
+
+function mnavGoAuthorHome() {
+  mobileMenuOpen.value = false;
+  if (authStore.user?.id) router.push(`/author/${authStore.user.id}`);
+}
+
+function mnavSearch() {
+  handleSearch();
+  mobileMenuOpen.value = false;
+}
+
+function mnavFederated() {
+  mobileMenuOpen.value = false;
+  if (federatedSites.value.length > 0) openFederated(federatedSites.value[0]);
+}
+
+function mnavLogout() {
+  mobileMenuOpen.value = false;
+  authStore.logout();
+}
+
+// ====== 新消息提醒（红圈数字徽标，30s 轮询） ======
+const unreadCount = ref(0);
+let notifyTimer: ReturnType<typeof setInterval> | null = null;
+
+async function refreshUnread() {
+  if (!authStore.isLoggedIn) { unreadCount.value = 0; return; }
+  try {
+    const res = await notificationApi.unreadCount();
+    if (res.data.code === 0) {
+      unreadCount.value = Number(res.data.data?.count) || 0;
+    }
+  } catch { /* 忽略，保持旧值 */ }
+}
+
+// 登录态变化时启停轮询
+watch(
+  () => authStore.isLoggedIn,
+  (v) => {
+    if (v) {
+      refreshUnread();
+      if (!notifyTimer) notifyTimer = setInterval(refreshUnread, 30000);
+    } else if (notifyTimer) {
+      clearInterval(notifyTimer);
+      notifyTimer = null;
+      unreadCount.value = 0;
+    }
+  },
+  { immediate: true }
+);
+
+// 消息中心标记已读后立即同步徽标（nvs:unread 事件）
+function onUnreadEvent(e: Event) {
+  const detail = (e as CustomEvent).detail;
+  if (typeof detail === 'number') unreadCount.value = detail;
+}
 
 const isAuthor = computed(() => {
   const role = authStore.user?.role;
@@ -207,8 +352,8 @@ async function onAvatarChange(e: Event) {
     } else {
       ElMessage.error(res.data.message || '上传失败');
     }
-  } catch {
-    ElMessage.error('上传失败，请使用 JPG/PNG/GIF 格式');
+  } catch (err: any) {
+    ElMessage.error(err?.response?.data?.message || '上传失败，请使用 JPG/PNG/GIF/WebP 格式');
   }
 }
 
@@ -275,6 +420,15 @@ onMounted(() => {
   loadSiteInfo();
   loadCategories();
   loadFederatedSites();
+  window.addEventListener('nvs:unread', onUnreadEvent);
+});
+
+onUnmounted(() => {
+  if (notifyTimer) {
+    clearInterval(notifyTimer);
+    notifyTimer = null;
+  }
+  window.removeEventListener('nvs:unread', onUnreadEvent);
 });
 </script>
 
@@ -377,6 +531,32 @@ onMounted(() => {
   position: relative;
   cursor: pointer;
   text-decoration: none;
+}
+
+/* 消息中心入口 + 未读徽标（红圈数字，>99 显示 99+） */
+.msg-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 1.05rem;
+}
+
+.msg-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  transform: translate(30%, -20%);
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--glass-bg, #fff);
 }
 
 .nav-link::after {
@@ -489,5 +669,144 @@ onMounted(() => {
   .category-dropdown {
     display: none;
   }
+}
+
+/* ====== 移动端汉堡菜单按钮 ====== */
+.mobile-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  padding: 0;
+}
+
+.mobile-menu-btn:hover {
+  background: rgba(99, 102, 241, 0.08);
+}
+
+[data-theme="dark"] .mobile-menu-btn:hover {
+  background: rgba(129, 140, 248, 0.12);
+}
+
+@media (max-width: 768px) {
+  .mobile-menu-btn {
+    display: flex;
+  }
+}
+
+/* ====== 移动端导航抽屉 ====== */
+.mobile-nav-drawer :deep(.el-drawer__body) {
+  padding: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mnav {
+  padding: 16px 14px 32px;
+}
+
+.mnav-search {
+  margin-bottom: 16px;
+}
+
+.mnav-group-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin: 20px 4px 8px;
+}
+
+.mnav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px;
+  margin: 2px 0;
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  color: var(--text-color);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  position: relative;
+}
+
+.mnav-item:hover,
+.mnav-item:active {
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--primary-color);
+}
+
+[data-theme="dark"] .mnav-item:hover,
+[data-theme="dark"] .mnav-item:active {
+  background: rgba(129, 140, 248, 0.12);
+}
+
+.mnav-emoji {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.mnav-badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.mnav-logout {
+  color: var(--danger-color);
+}
+
+.mnav-cats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.mnav-cat {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+  color: var(--text-color);
+  font-size: 0.9rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mnav-cat:hover,
+.mnav-cat:active {
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--primary-color);
+}
+
+[data-theme="dark"] .mnav-cat {
+  background: #1e293b;
+}
+
+.mnav-auth-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
 }
 </style>

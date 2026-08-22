@@ -3,9 +3,10 @@ import axios from 'axios';
 const api = axios.create({
   baseURL: '/api',
   withCredentials: true,
-  // 通用 postForm 方法
+  // 通用 postForm 方法：不手动设置 Content-Type，
+  // 让浏览器自动生成带 boundary 的 multipart/form-data（手动设置会丢失 boundary 导致解析失败）
   postForm(url: string, formData: FormData) {
-    return this.post(url, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return this.post(url, formData);
   },
   timeout: 15000,
 });

@@ -39,6 +39,15 @@ export const blogApi = {
   create(data: { title: string; content: string; summary?: string }) {
     return api.post('/blogs', data);
   },
+  // 批量导入博客：每个文件一篇，标题取文件名（去扩展名）
+  importBatch(files: File[]) {
+    const formData = new FormData();
+    for (const f of files) formData.append('files', f);
+    return api.post<{ code: number; data: { count: number; skipped: number; message: string } }>(
+      '/blogs/import/batch',
+      formData,
+    );
+  },
   update(id: number, data: { title?: string; content?: string; summary?: string; is_pinned?: boolean }) {
     return api.put(`/blogs/${id}`, data);
   },

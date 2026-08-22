@@ -196,4 +196,30 @@ onMounted(() => fetchNovels());
   background: #334155 !important;
   color: #94a3b8 !important;
 }
+
+/* ====== 移动端分类页适配 ====== */
+@media (max-width: 768px) {
+  .category-toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .category-toolbar .el-radio-group {
+    width: 100%;
+    display: flex;
+  }
+  .category-toolbar .el-radio-group .el-radio-button {
+    flex: 1;
+  }
+  .category-toolbar .el-radio-group .el-radio-button__inner {
+    width: 100%;
+    padding: 8px 6px;
+  }
+  /* 表式视图窄屏横向滚动 */
+  .table-view {
+    overflow-x: auto;
+  }
+  .table-view .el-table {
+    min-width: 640px;
+  }
+}
 </style>

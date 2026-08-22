@@ -127,4 +127,22 @@ onMounted(() => {
 .bl-read-more { font-size: 0.85rem; color: var(--primary-color); }
 
 .pagination { margin-top: 24px; display: flex; justify-content: center; }
+
+/* ====== 移动端作者博客列表适配 ====== */
+@media (max-width: 640px) {
+  .bl-card {
+    padding: 14px 16px;
+  }
+  .bl-title {
+    font-size: 1.05rem;
+  }
+  .bl-footer {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .pagination .el-pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
 </style>

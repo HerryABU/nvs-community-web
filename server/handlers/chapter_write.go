@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -40,7 +41,9 @@ func CreateChapter(c *gin.Context) {
 	}
 
 	// XSS 防护：移除内联 HTML 标签（保留 Markdown 语法与文本内容）
-	req.Content = security.SanitizeUserContent(req.Content)
+	raw := security.SanitizeUserContent(req.Content)
+	cleaned, badHits := processBadWords(raw, "chapter")
+	req.Content = cleaned
 
 	nextNum, _ := models.GetMaxChapterNumber(uint(novelID))
 	nextNum++
@@ -85,6 +88,9 @@ func CreateChapter(c *gin.Context) {
 		return
 	}
 
+	// 违禁词 mark 动作命中 → 写入待审标记记录
+	flagBadWords(badHits, "chapter", chapter.ID, userID, raw, chapter.Title)
+
 	models.UpdateNovelStats(uint(novelID))
 	updateIndexJSON(uint(userID), uint(novelID))
 	generateChecksums(uint(userID), uint(novelID))
@@ -119,8 +125,13 @@ func UpdateChapter(c *gin.Context) {
 	}
 
 	// XSS 防护：移除内联 HTML 标签（保留 Markdown 语法与文本内容）
+	var badHits []security.BadWordHit
+	var raw string
 	if req.Content != "" {
-		req.Content = security.SanitizeUserContent(req.Content)
+		raw = security.SanitizeUserContent(req.Content)
+		var cleaned string
+		cleaned, badHits = processBadWords(raw, "chapter")
+		req.Content = cleaned
 	}
 
 	if req.Title != "" {
@@ -144,6 +155,9 @@ func UpdateChapter(c *gin.Context) {
 		utils.InternalError(c, "更新章节失败")
 		return
 	}
+
+	// 违禁词 mark 动作命中 → 写入待审标记记录
+	flagBadWords(badHits, "chapter", chapter.ID, userID, raw, chapter.Title)
 
 	models.UpdateNovelStats(uint(novelID))
 	updateIndexJSON(uint(userID), uint(novelID))
@@ -169,8 +183,8 @@ func DeleteChapter(c *gin.Context) {
 		return
 	}
 
-	// 合规留存：软删除。正文文件移入 .deleted/ 目录归档保留（避免后续编号复用覆盖原始内容），
-	// 不再物理删除文件、不再重排编号，保证任何时候都能追溯原始正文。
+	// 合规留存：软删除被删章节，正文文件移入 .deleted/ 目录归档保留（可追溯）；
+	// 随后将后续章节编号前移补齐（文件同步重命名），保证章节编号始终连续。
 	authorDir := filepath.Join(config.NovelDataDir, "authors", fmt.Sprintf("%d", userID), fmt.Sprintf("%d", novelID))
 	deletedDir := filepath.Join(authorDir, ".deleted")
 	os.MkdirAll(deletedDir, 0755)
@@ -181,19 +195,29 @@ func DeleteChapter(c *gin.Context) {
 		}
 	}
 
+	// 作者自删：清除封禁原因标记，避免误显示 176 号令封禁横幅（ban_reason 非空才视为封禁）
+	_ = models.DB.Model(&models.Chapter{}).Where("id = ?", chapter.ID).Update("ban_reason", "")
+
 	if err := models.DeleteChapter(chapter.ID); err != nil {
 		utils.InternalError(c, "删除章节失败")
 		return
 	}
 
+	// 编号补齐：删除章节后，后续章节 chapter_number 前移重排（正文文件同步重命名），
+	// 保证「第N章」连续无空洞（章节管理/阅读器均按新编号展示）。
+	renumberChapters(uint(novelID), chapterNum, authorDir)
+
 	models.UpdateNovelStats(uint(novelID))
 	updateIndexJSON(uint(userID), uint(novelID))
 	generateChecksums(uint(userID), uint(novelID))
 
-	utils.Success(c, gin.H{"message": "章节已删除（软删除，正文已归档保留）"})
+	utils.Success(c, gin.H{"message": "章节已删除（软删除留证，编号已自动补齐）"})
 }
 
-// renumberChapters 将章节编号 >= deletedNum 的章节前移一位，并重命名文件
+// renumberChapters 删除章节后编号补齐：将 chapter_number > deletedNum 的剩余章节
+// 依次前移一位（文件同步重命名 + 数据库 chapter_number/content_path 更新）。
+// 遍历按章节号升序（GetChaptersByNovel），目标号 = 源号-1 且目标已被释放，从小到大
+// 执行重命名不会发生文件覆盖。重命名失败仅记录日志并跳过（保持数据尽力一致）。
 func renumberChapters(novelID uint, deletedNum int, dir string) {
 	chapters, err := models.GetChaptersByNovel(novelID)
 	if err != nil {
@@ -206,8 +230,11 @@ func renumberChapters(novelID uint, deletedNum int, dir string) {
 			newNum := ch.ChapterNumber - 1
 			newPath := filepath.Join(dir, fmt.Sprintf("%d.html", newNum))
 
-			// 重命名文件
-			os.Rename(oldPath, newPath)
+			// 重命名文件（目标号对应文件已被软删除移走，不会冲突）
+			if err := os.Rename(oldPath, newPath); err != nil {
+				log.Printf("[NVS] 章节编号补齐：文件重命名失败 %s → %s (%v)", oldPath, newPath, err)
+				continue
+			}
 
 			// 更新数据库
 			models.DB.Model(&models.Chapter{}).Where("id = ?", ch.ID).Updates(map[string]interface{}{

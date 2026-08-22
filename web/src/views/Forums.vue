@@ -46,12 +46,21 @@
     </div>
 
     <!-- 自建区（用户自建论坛） -->
-    <div class="self-built-header" style="margin-top:32px;display:flex;align-items:center;justify-content:space-between">
+    <div class="self-built-header" style="margin-top:32px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
       <h2 class="section-title" style="margin:0">🏘️ 自建区</h2>
-      <el-button v-if="authStore.isLoggedIn" type="primary" size="small" @click="showCreateForum = true">
-        创建论坛
-      </el-button>
-      <router-link v-else to="/login" class="create-forum-login">登录后可创建论坛</router-link>
+      <div style="display:flex;align-items:center;gap:8px">
+        <el-input
+          v-model="roomCodeInput"
+          size="small"
+          style="width:200px"
+          placeholder="输入房间号进入（如 A3F9K2）"
+          @keyup.enter="enterByRoomCode"
+        />
+        <el-button size="small" :loading="enteringRoom" @click="enterByRoomCode">进入</el-button>
+        <el-button v-if="authStore.isLoggedIn" type="primary" size="small" @click="showCreateForum = true">
+          创建论坛
+        </el-button>
+      </div>
     </div>
     <div class="forum-grid" v-if="customForums.length > 0">
       <el-card v-for="forum in customForums" :key="forum.id" class="forum-card" shadow="hover" @click="enterCustomForum(forum)">
@@ -65,13 +74,16 @@
         <div class="forum-meta">
           <span>{{ forum.thread_count }} 个帖子</span>
           <el-tag v-if="forum.creator_id === authStore.user?.id" size="small" type="success" style="margin-left:8px">我创建的</el-tag>
+          <el-tag v-if="forum.creator_id === authStore.user?.id && forum.room_code" size="small" style="margin-left:8px;cursor:pointer" title="点击复制房间号" @click.stop="copyRoom(forum.room_code)">
+            🚪 {{ forum.room_code }}
+          </el-tag>
         </div>
       </el-card>
     </div>
     <el-empty v-else description="暂无自建论坛" :image-size="40" />
 
     <!-- 创建论坛弹窗 -->
-    <el-dialog v-model="showCreateForum" title="创建自建论坛" width="520px" destroy-on-close>
+    <el-dialog v-model="showCreateForum" title="创建自建论坛" width="520px" destroy-on-close @closed="onCreateClosed">
       <el-form :model="createForm" label-width="90px">
         <el-form-item label="论坛名称" required>
           <el-input v-model="createForm.name" maxlength="128" placeholder="给你的论坛起个名字" />
@@ -82,9 +94,23 @@
         <el-form-item label="进入密码">
           <el-input v-model="createForm.password" maxlength="64" placeholder="可选：设置后需密码进入" show-password />
         </el-form-item>
+        <el-form-item label="房间号">
+          <el-input
+            v-model="createForm.room_code"
+            maxlength="16"
+            placeholder="留空自动生成；也可自定：4-16 位数字+英文字母"
+            @input="onRoomCodeInput"
+          />
+          <span class="hint" style="margin-left:8px">房间号是进入论坛的凭证，发给好友即可凭号进入（有密码则还需密码）</span>
+        </el-form-item>
         <el-form-item label="公开显示">
           <el-switch v-model="createForm.is_public" />
-          <span class="hint" style="margin-left:8px">开启后在大厅「自建区」公开展示，关闭则隐藏（仅本人可见）</span>
+          <span class="hint" style="margin-left:8px">开启后在大厅「自建区」公开展示，关闭则隐藏（仅本人可见，他人凭房间号进入）</span>
+        </el-form-item>
+        <el-form-item v-if="createdRoomCode" label="房间号">
+          <el-tag size="large" type="success" style="font-size:1rem;letter-spacing:2px">{{ createdRoomCode }}</el-tag>
+          <el-button size="small" text type="primary" @click="copyRoomCode">复制</el-button>
+          <span class="hint" style="margin-left:8px">把房间号分享给好友即可进入（有密码则还需密码）</span>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -157,7 +183,36 @@ const customForums = computed(() => allForums.value.filter(f => f.type === 'cust
 // 创建论坛
 const showCreateForum = ref(false);
 const creating = ref(false);
-const createForm = ref({ name: '', description: '', password: '', is_public: true });
+const createForm = ref({ name: '', description: '', password: '', is_public: true, room_code: '' });
+const createdRoomCode = ref('');
+
+// 房间号输入：自动转大写并过滤非法字符
+function onRoomCodeInput() {
+  createForm.value.room_code = (createForm.value.room_code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+async function copyRoomCode() {
+  try {
+    await navigator.clipboard.writeText(createdRoomCode.value);
+    ElMessage.success('房间号已复制');
+  } catch {
+    ElMessage.warning('复制失败，请手动复制：' + createdRoomCode.value);
+  }
+}
+
+async function copyRoom(code: string) {
+  try {
+    await navigator.clipboard.writeText(code);
+    ElMessage.success('房间号已复制：' + code);
+  } catch {
+    ElMessage.warning('复制失败，请手动复制：' + code);
+  }
+}
+
+function onCreateClosed() {
+  createdRoomCode.value = '';
+  createForm.value = { name: '', description: '', password: '', is_public: true, room_code: '' };
+}
 
 async function submitCreateForum() {
   if (!createForm.value.name.trim()) { ElMessage.warning('请填写论坛名称'); return; }
@@ -168,17 +223,56 @@ async function submitCreateForum() {
       description: createForm.value.description,
       password: createForm.value.password,
       is_public: createForm.value.is_public,
+      room_code: createForm.value.room_code,
     });
     if (res.data.code === 0) {
+      createdRoomCode.value = res.data.data?.room_code || '';
       ElMessage.success('论坛已创建，可直接使用（后续由管理员审查）');
-      showCreateForum.value = false;
-      createForm.value = { name: '', description: '', password: '', is_public: true };
       loadForums();
     }
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '创建失败');
   } finally {
     creating.value = false;
+  }
+}
+
+// ====== 房间号进入（不可见论坛的凭证） ======
+const roomCodeInput = ref('');
+const enteringRoom = ref(false);
+
+async function enterByRoomCode() {
+  const code = roomCodeInput.value.trim().toUpperCase();
+  if (!code) { ElMessage.warning('请输入房间号'); return; }
+  enteringRoom.value = true;
+  try {
+    // 第一步：仅验证房间号，返回论坛信息与是否需要密码
+    const res = await forumApi.enterByRoomCode(code);
+    if (res.data.code === 0) {
+      const d = res.data.data;
+      if (d.need_password) {
+        // 第二步：进入密码墙——输入正确密码后才进入
+        try {
+          const { value } = await ElMessageBox.prompt(
+            `论坛「${d.name}」设置了进入密码，请输入密码：`, '进入密码',
+            { confirmButtonText: '进入', cancelButtonText: '取消', inputType: 'password' }
+          );
+          if (!value) return;
+          const res2 = await forumApi.enterByRoomCode(code, value);
+          if (res2.data.code === 0) {
+            router.push(`/forum/${d.forum_id}?room=${code}&password=${encodeURIComponent(value)}`);
+          }
+        } catch (e: any) {
+          if (e !== 'cancel') ElMessage.error(e?.response?.data?.message || '密码错误');
+        }
+      } else {
+        router.push(`/forum/${d.forum_id}?room=${code}`);
+      }
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '房间号无效');
+  } finally {
+    enteringRoom.value = false;
   }
 }
 
@@ -289,6 +383,17 @@ onMounted(loadForums);
   color: var(--text-light);
   display: flex;
   align-items: center;
+}
+
+/* ====== 移动端论坛广场适配 ====== */
+@media (max-width: 640px) {
+  .forum-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+  }
+  .forum-card h3 {
+    font-size: 1rem;
+  }
 }
 </style>
 

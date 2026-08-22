@@ -54,6 +54,21 @@
   </div>
 </template>
 
+<style scoped>
+/* ====== 移动端作者卡片适配 ====== */
+@media (max-width: 640px) {
+  .glass-stat-card {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 14px !important;
+    padding: 16px !important;
+  }
+  .glass-stat-card > div {
+    max-width: 100%;
+  }
+}
+</style>
+
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useAuthStore } from '@/stores/auth';
@@ -82,7 +97,7 @@ async function onAvatarChange(e: Event) {
     const res = await authApi.uploadAvatar(fd);
     authStore.user!.avatar_url = res.data.data.avatar_url;
     ElMessage.success('头像已更新');
-  } catch { ElMessage.error('上传失败'); }
+  } catch (err: any) { ElMessage.error(err?.response?.data?.message || '上传失败'); }
 }
 
 async function onImageChange(e: Event) {
@@ -94,7 +109,9 @@ async function onImageChange(e: Event) {
     ElMessage.success({ message: '图片上传成功', type: 'success', duration: 2000 });
     navigator.clipboard.writeText(res.data.data.url);
     ElMessage.info('图片 URL 已复制到剪贴板');
-  } catch { ElMessage.error('上传失败'); }
+  } catch (err: any) {
+    ElMessage.error(err?.response?.data?.message || '上传失败');
+  }
 }
 
 function startEditSig() {

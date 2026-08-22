@@ -423,4 +423,24 @@ onMounted(load);
 .blog-summary { font-size: 0.85rem; color: #666; margin-top: 4px; }
 [data-theme="dark"] .blog-item { background: #1e293b; border-color: #334155; }
 [data-theme="dark"] .blog-summary { color: #94a3b8; }
+
+/* ====== 移动端作者主页适配 ====== */
+@media (max-width: 640px) {
+  .author-header {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 14px;
+    padding: 20px 16px;
+  }
+  .author-stats {
+    justify-content: center;
+  }
+  .author-info h1 {
+    font-size: 1.3rem;
+  }
+  .chart-card {
+    padding: 14px;
+  }
+}
 </style>

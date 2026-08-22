@@ -9,6 +9,11 @@ export const adminApi = {
     return api.put('/admin/config', data);
   },
 
+  // SMTP 测试与诊断
+  testSmtp(payload: { to: string; host?: string; port?: string; user?: string; password?: string; from?: string }) {
+    return api.post('/admin/smtp/test', payload);
+  },
+
   // 统计数据
   getStats() {
     return api.get('/admin/stats');
@@ -111,6 +116,30 @@ export const adminApi = {
   },
   testXssRule(data: { pattern: string; action?: string; replacement?: string; text: string }) {
     return api.post('/admin/xss-rules/test', data);
+  },
+
+  // 违禁词库（标记/删除/替换 + 关键词/正则双模式 + 可配置适用范围）
+  getBadWords() {
+    return api.get('/admin/bad-words');
+  },
+  createBadWord(data: { name: string; match_type?: string; pattern: string; action?: string; replacement?: string; scope?: string; enabled?: boolean; description?: string }) {
+    return api.post('/admin/bad-words', data);
+  },
+  updateBadWord(id: number, data: { name?: string; match_type?: string; pattern?: string; action?: string; replacement?: string; scope?: string; enabled?: boolean; description?: string }) {
+    return api.put(`/admin/bad-words/${id}`, data);
+  },
+  deleteBadWord(id: number) {
+    return api.delete(`/admin/bad-words/${id}`);
+  },
+  testBadWord(data: { match_type?: string; pattern: string; action?: string; replacement?: string; text: string }) {
+    return api.post('/admin/bad-words/test', data);
+  },
+  // 违禁词标记待审
+  getBadWordFlags(params: { status?: string; page?: number; page_size?: number }) {
+    return api.get('/admin/bad-word-flags', { params });
+  },
+  handleBadWordFlag(id: number, data: { status: string; note?: string; delete_content?: boolean }) {
+    return api.put(`/admin/bad-word-flags/${id}`, data);
   },
 
   // 内容抢救台（二级密码 + 应急预览/软删除留证）

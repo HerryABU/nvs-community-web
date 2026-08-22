@@ -127,12 +127,13 @@ func GetDashboardStats(c *gin.Context) {
 	).Scan(&dailyUsers)
 
 	models.DB.Raw(
-		"SELECT date(created_at) AS date, COUNT(*) AS novels FROM novels WHERE created_at >= ? GROUP BY date ORDER BY date",
+		"SELECT date(created_at) AS date, COUNT(*) AS novels FROM novels WHERE deleted_at IS NULL AND created_at >= ? GROUP BY date ORDER BY date",
 		dates[0],
 	).Scan(&dailyNovels)
 
 	models.DB.Raw(
-		"SELECT date(created_at) AS date, COUNT(*) AS comments FROM comments WHERE created_at >= ? GROUP BY date ORDER BY date",
+		"SELECT date(cm.created_at) AS date, COUNT(*) AS comments FROM comments cm JOIN novels n ON n.id = cm.novel_id "+
+			"WHERE n.deleted_at IS NULL AND cm.deleted_at IS NULL AND cm.created_at >= ? GROUP BY date(cm.created_at) ORDER BY date",
 		dates[0],
 	).Scan(&dailyComments)
 
@@ -167,7 +168,8 @@ func GetDashboardStats(c *gin.Context) {
 	}
 	var dailyChapters []trendChapterRow
 	models.DB.Raw(
-		"SELECT date(created_at) AS date, COUNT(*) AS count FROM chapters WHERE created_at >= ? GROUP BY date ORDER BY date",
+		"SELECT date(c.created_at) AS date, COUNT(*) AS count FROM chapters c JOIN novels n ON n.id = c.novel_id "+
+			"WHERE n.deleted_at IS NULL AND c.deleted_at IS NULL AND c.created_at >= ? GROUP BY date(c.created_at) ORDER BY date",
 		dates[0],
 	).Scan(&dailyChapters)
 
@@ -184,7 +186,8 @@ func GetDashboardStats(c *gin.Context) {
 	}
 	var dailyWords []trendWordRow
 	models.DB.Raw(
-		"SELECT date(created_at) AS date, COALESCE(SUM(word_count),0) AS count FROM chapters WHERE created_at >= ? GROUP BY date ORDER BY date",
+		"SELECT date(c.created_at) AS date, COALESCE(SUM(c.word_count),0) AS count FROM chapters c JOIN novels n ON n.id = c.novel_id "+
+			"WHERE n.deleted_at IS NULL AND c.deleted_at IS NULL AND c.created_at >= ? GROUP BY date(c.created_at) ORDER BY date",
 		dates[0],
 	).Scan(&dailyWords)
 
@@ -231,7 +234,7 @@ func GetDashboardStats(c *gin.Context) {
 	}
 	var catDist []catRow
 	models.DB.Raw(
-		"SELECT COALESCE(category,'未分类') AS name, COUNT(*) AS count FROM novels GROUP BY category ORDER BY count DESC",
+		"SELECT COALESCE(category,'未分类') AS name, COUNT(*) AS count FROM novels WHERE deleted_at IS NULL GROUP BY category ORDER BY count DESC",
 	).Scan(&catDist)
 
 	categoryDistribution := make([]gin.H, 0, len(catDist))

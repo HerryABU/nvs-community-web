@@ -18,6 +18,7 @@ type RegisterInput struct {
 	Password        string `json:"password" binding:"required,min=6,max=128"`
 	Nickname        string `json:"nickname"`
 	AgreeToGuidelines bool `json:"agree_to_guidelines"`
+	VerifyCode      string `json:"verify_code"` // 邮箱验证码（站长开启邮箱验证时必填）
 }
 
 // POST /api/auth/register
@@ -40,6 +41,19 @@ func Register(c *gin.Context) {
 	if allowed, reason := models.CheckEmailDomainAllowed(input.Email); !allowed {
 		utils.BadRequest(c, reason)
 		return
+	}
+
+	// 邮箱验证码校验（站长开启邮箱验证时强制）
+	if models.GetPlatformConfig("email_verify") == "true" {
+		if input.VerifyCode == "" {
+			utils.BadRequest(c, "请输入邮箱验证码")
+			return
+		}
+		if !utils.VerifyCode(input.Email, input.VerifyCode) {
+			utils.BadRequest(c, "邮箱验证码错误或已过期")
+			return
+		}
+		utils.DeleteVerificationCode(input.Email)
 	}
 
 	// 检查邮箱是否已注册

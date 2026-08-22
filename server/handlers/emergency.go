@@ -574,6 +574,11 @@ func DeleteEmergencyContent(c *gin.Context) {
 			utils.InternalError(c, "留证归档失败")
 			return
 		}
+		// 方案A：posts 无 deleted_at，级联删回帖前先批量归档留证，再物理删除
+		if _, aerr := models.ArchivePostsByThread(models.DB, uint(id), operatorID, operator, "", "emergency"); aerr != nil {
+			utils.InternalError(c, "回帖留证归档失败")
+			return
+		}
 		if t.ForumID > 0 {
 			models.DB.Model(&models.Forum{}).Where("id = ?", t.ForumID).
 				UpdateColumn("thread_count", models.DB.Raw("CASE WHEN thread_count > 0 THEN thread_count - 1 ELSE 0 END"))

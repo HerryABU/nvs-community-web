@@ -105,3 +105,85 @@
 [data-theme="dark"] .admin-muted {
   color: #94a3b8;
 }
+
+/* ====== 移动端管理后台最小适配 ====== */
+@media (max-width: 768px) {
+  .admin-shell {
+    padding: 14px 10px;
+  }
+  .admin-panel {
+    padding: 14px;
+  }
+  .admin-toolbar {
+    gap: 6px;
+  }
+  .admin-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  /* 后台表格窄屏横向滚动 */
+  .admin-page-body {
+    overflow-x: auto;
+  }
+  .admin-page-body .el-table {
+    min-width: 720px;
+  }
+  /* .admin-page 系列（各 admin 页面 scoped 有 padding:24px，需 !important 覆盖） */
+  .admin-page {
+    padding: 14px 10px !important;
+  }
+  .admin-page-header {
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+    margin-bottom: 14px !important;
+  }
+  .admin-page-header .el-button,
+  .admin-page-header .el-input,
+  .admin-page-header .el-select,
+  .admin-page-header .el-date-editor {
+    max-width: 100%;
+  }
+  /* 工具栏输入框自动拉伸 */
+  .admin-toolbar .el-input,
+  .admin-toolbar .el-select,
+  .admin-toolbar .el-date-editor {
+    flex: 1 1 140px;
+    min-width: 120px;
+  }
+  /* 表单栅格移动端强制单列 */
+  .admin-page-body .el-form .el-row > .el-col {
+    width: 100% !important;
+    flex: 0 0 100% !important;
+    margin-bottom: 6px;
+  }
+  /* 输入框行式布局换行 */
+  .admin-page-body .el-form .el-form-item {
+    flex-wrap: wrap;
+  }
+  /* 管理头部字号压缩 */
+  .ah-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+  }
+  .ah-title {
+    font-size: 1.1rem !important;
+  }
+  /* 弹窗内宽输入框限宽 */
+  .admin-page-body input[type="text"],
+  .admin-page-body input[type="password"] {
+    max-width: 100%;
+  }
+  /* el-input / el-select 固定宽度（如 380px）窄屏限宽 */
+  .admin-page-body .el-input,
+  .admin-page-body .el-select,
+  .admin-page-body .el-date-editor {
+    max-width: 100%;
+  }
+  /* 数据库/迁移等步骤条横向滚动 */
+  .el-steps {
+    overflow-x: auto;
+  }
+  .el-step__icon {
+    flex-shrink: 0;
+  }
+}

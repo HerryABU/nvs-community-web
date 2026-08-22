@@ -1,6 +1,9 @@
 package models
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -21,6 +24,7 @@ type Forum struct {
 	CreatorID    uint   `gorm:"default:0;index" json:"creator_id"`                        // 创建者用户ID，0=系统/管理员
 	IsPublic     bool   `gorm:"default:false" json:"is_public"`                           // 是否在大厅自建区公开显示
 	PasswordHash string `gorm:"size:128;default:''" json:"-"`                             // 进入密码哈希（空=无密码）
+	RoomCode     string `gorm:"size:16;index" json:"room_code"`                           // 房间号（数字+字母）——不可见论坛的进入凭证；系统默认论坛为空；自建论坛唯一性由代码层保证
 	ReviewStatus string `gorm:"size:16;default:approved;index" json:"review_status"`      // approved/pending/rejected（自建论坛默认 pending 待管理员审查）
 	ReviewNote   string `gorm:"size:512;default:''" json:"review_note"`                   // 管理员审查意见
 	CreatedAt    time.Time `json:"created_at"`
@@ -40,11 +44,16 @@ func (f *Forum) AfterFind(tx *gorm.DB) error {
 // ForumMute 论坛级禁言（自建论坛创建者可对违规用户在本论坛禁言）
 type ForumMute struct {
 	ID         uint       `gorm:"primaryKey" json:"id"`
-	ForumID    uint       `gorm:"not null;index" json:"forum_id"`
-	UserID     uint       `gorm:"not null;index" json:"user_id"`
+	ForumID    uint       `gorm:"not null;index:idx_forum_mutes_forum_user,priority:1" json:"forum_id"`
+	UserID     uint       `gorm:"not null;index:idx_forum_mutes_forum_user,priority:2" json:"user_id"`
 	MutedUntil *time.Time `json:"muted_until"`
 	Reason     string     `gorm:"size:256;default:''" json:"reason"`
+	AdminBan   bool       `gorm:"default:false" json:"admin_ban"` // 管理员封禁（论坛创建者无权解除）
 	CreatedAt  time.Time  `json:"created_at"`
+
+	// 运行时补充
+	Username string `gorm:"-" json:"username,omitempty"`
+	BannedBy string `gorm:"-" json:"banned_by,omitempty"` // 封禁执行者描述（管理员/创建者）
 }
 
 func (ForumMute) TableName() string { return "forum_mutes" }
@@ -102,7 +111,7 @@ func GetForumByID(id uint) (*Forum, error) {
 // Thread 帖子
 type Thread struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
-	ForumID   uint      `gorm:"not null;index" json:"forum_id"`
+	ForumID   uint      `gorm:"not null;index:idx_threads_forum_created,priority:1" json:"forum_id"`
 	UserID    uint      `gorm:"not null;index" json:"user_id"`
 	Title     string    `gorm:"size:256;not null" json:"title"`
 	Content   string    `gorm:"type:text;not null" json:"content"`
@@ -110,7 +119,7 @@ type Thread struct {
 	IsLocked  bool      `gorm:"default:false" json:"is_locked"`
 	ViewCount int       `gorm:"default:0" json:"view_count"`
 	PostCount int       `gorm:"default:0" json:"post_count"`
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt time.Time `gorm:"index:idx_threads_forum_created,priority:2" json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 	User      *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
@@ -148,14 +157,17 @@ func IncrementThreadView(id uint) {
 }
 
 // Post 回复
+// 删除语义（方案A）：posts 表不设 deleted_at 软删除标记，删除统一走
+// softdel_posts 留证表（先 ArchiveSoftDelete 归档快照，再物理删除原始记录），
+// 与 novels/chapters/comments 等「软删除 + softdel_* 留证」双轨逻辑保持一致，
+// 避免 deleted_at 与 softdel_posts 两套删除语义并存造成混乱。
 type Post struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
-	ThreadID  uint      `gorm:"not null;index" json:"thread_id"`
-	UserID    uint      `gorm:"not null" json:"user_id"`
+	ThreadID  uint      `gorm:"not null;index:idx_posts_thread_created,priority:1" json:"thread_id"`
+	UserID    uint      `gorm:"not null;index" json:"user_id"`
 	Content   string    `gorm:"type:text;not null" json:"content"`
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt time.Time `gorm:"index:idx_posts_thread_created,priority:2" json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 	User      *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
 
@@ -168,6 +180,18 @@ func CreatePost(p *Post) error {
 			"post_count": gorm.Expr("post_count + 1"),
 			"updated_at": time.Now(),
 		})
+		// 站内通知：帖子作者收到「有人回复」
+		var t Thread
+		if DB.Select("user_id", "title").First(&t, p.ThreadID).Error == nil {
+			title := t.Title
+			if len(title) > 40 {
+				title = title[:40] + "…"
+			}
+			_ = PushNotification(p.UserID, t.UserID, "thread_reply",
+				"你的帖子有新回复",
+				"《"+title+"》",
+				"/thread/"+strconv.FormatUint(uint64(p.ThreadID), 10))
+		}
 	}
 	return err
 }
@@ -204,17 +228,69 @@ func InitDefaultForums() {
 		DB.Model(&Forum{}).Where("type = ? AND name = ?", d.ftype, d.name).Count(&count)
 		if count == 0 {
 			zone := ""
-		if d.ftype == "sensitive" {
-			zone = d.name
+			if d.ftype == "sensitive" {
+				zone = d.name
+			}
+			DB.Create(&Forum{Name: d.name, Description: d.desc, Type: d.ftype, Zone: zone, SortOrder: i})
 		}
-		DB.Create(&Forum{Name: d.name, Description: d.desc, Type: d.ftype, Zone: zone, SortOrder: i})
-		}
+	}
+	// 存量自建论坛补齐房间号（RoomCode 曾因唯一索引导致创建失败/为空）
+	BackfillForumRoomCodes()
+}
+
+// BackfillForumRoomCodes 为所有缺少房间号的论坛补生成唯一房间号。
+// 系统默认论坛保持空房间号（公开可见，无需凭证）；自建论坛必须有房间号。
+func BackfillForumRoomCodes() {
+	var empty []Forum
+	DB.Where("type = ? AND (room_code = '' OR room_code IS NULL)", "custom").
+		Find(&empty)
+	for _, f := range empty {
+		code := GenerateUniqueRoomCode()
+		DB.Model(&Forum{}).Where("id = ?", f.ID).Update("room_code", code)
 	}
 }
 
 // CreateForum 创建论坛
 func CreateForum(forum *Forum) error {
 	return DB.Create(forum).Error
+}
+
+// 房间号字符集：数字+大写字母，剔除易混淆字符（0/O、1/I/L）
+const roomCodeChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+// GenerateUniqueRoomCode 生成唯一房间号（6 位，数字+字母）
+func GenerateUniqueRoomCode() string {
+	for i := 0; i < 10; i++ {
+		b := make([]byte, 6)
+		for j := range b {
+			b[j] = roomCodeChars[int(time.Now().UnixNano()+int64(j+i)*7919)%len(roomCodeChars)]
+		}
+		code := string(b)
+		var count int64
+		DB.Model(&Forum{}).Where("room_code = ?", code).Count(&count)
+		if count == 0 {
+			return code
+		}
+	}
+	// 兜底：时间戳后 6 位
+	return fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+}
+
+// GetForumByRoomCode 按房间号查找论坛
+func GetForumByRoomCode(code string) (*Forum, error) {
+	var forum Forum
+	err := DB.Where("room_code = ?", strings.ToUpper(strings.TrimSpace(code))).First(&forum).Error
+	if err != nil {
+		return nil, err
+	}
+	return &forum, nil
+}
+
+// RoomCodeExists 房间号是否已被占用（不含软删除的论坛）
+func RoomCodeExists(code string) bool {
+	var count int64
+	DB.Model(&Forum{}).Where("room_code = ?", strings.ToUpper(strings.TrimSpace(code))).Count(&count)
+	return count > 0
 }
 
 // UpdateForum 更新论坛

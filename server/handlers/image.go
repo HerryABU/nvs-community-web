@@ -8,7 +8,6 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,6 +20,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
+	"golang.org/x/image/webp"
 )
 
 // POST /api/author/image — 作者上传图片（重新编码防图片马）
@@ -41,11 +41,11 @@ func UploadImage(c *gin.Context) {
 		return
 	}
 
-	// 安全检查：只允许图片类型
+	// 安全检查：只允许图片类型（含 webp）
 	ext := strings.ToLower(filepath.Ext(header.Filename))
-	allowedExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true}
+	allowedExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true}
 	if !allowedExts[ext] {
-		utils.BadRequest(c, "只支持 JPG/PNG/GIF 格式的图片")
+		utils.BadRequest(c, "只支持 JPG/PNG/GIF/WebP 格式的图片")
 		return
 	}
 
@@ -55,11 +55,17 @@ func UploadImage(c *gin.Context) {
 		utils.InternalError(c, "读取图片失败")
 		return
 	}
+	// 空/过小文件防护（magic bytes 读取会越界）
+	if len(rawData) < 8 {
+		utils.BadRequest(c, "图片文件为空或已损坏")
+		return
+	}
 
-	// 验证文件头魔术字节（magic bytes），防止伪造扩展名
-	if !hasImageMagicBytes(rawData, ext) {
-		log.Printf("[SECURITY] 文件头不匹配：声称扩展名 %s，但实际文件头为 %X", ext, rawData[:minInt(12, len(rawData))])
-		utils.BadRequest(c, "文件内容与扩展名不匹配，可能是恶意文件")
+	// 按文件头嗅探实际格式（扩展名仅作准入，实际格式以内容为准，
+	// 兼容 WebP 内容配 .jpg 后缀等合法场景；防马由「解码重编码」保证）
+	actual := sniffImageFormat(rawData)
+	if actual == "" {
+		utils.BadRequest(c, "无法识别的图片格式（支持 JPG/PNG/GIF/WebP）")
 		return
 	}
 
@@ -70,17 +76,24 @@ func UploadImage(c *gin.Context) {
 		return
 	}
 
-	// 重新编码：解码 → 丢弃所有元数据和隐藏 payload → 重新编码
-	img, format, err := image.Decode(bytes.NewReader(rawData))
+	// 重新编码：解码 → 丢弃所有元数据和隐藏 payload → 重新编码（防图片马）
+	var img image.Image
+	if actual == "webp" {
+		img, err = webp.Decode(bytes.NewReader(rawData))
+	} else {
+		img, _, err = image.Decode(bytes.NewReader(rawData))
+	}
 	if err != nil {
 		utils.BadRequest(c, "无法解码图片，文件可能已损坏")
 		return
 	}
-	_ = format
 
 	// 创建上传目录
 	imgDir := filepath.Join(config.UploadDir, "images")
-	os.MkdirAll(imgDir, 0755)
+	if err := os.MkdirAll(imgDir, 0755); err != nil {
+		utils.InternalError(c, "无法创建图片目录，请检查 data/uploads 权限: "+err.Error())
+		return
+	}
 
 	// 先编码到内存 buffer，确定最终格式后再写文件（避免后缀不一致）
 	var buf bytes.Buffer
@@ -117,6 +130,27 @@ func UploadImage(c *gin.Context) {
 	})
 }
 
+// sniffImageFormat 按文件头嗅探图片实际格式，返回 "jpeg"/"png"/"gif"/"webp"/"bmp"/""。
+// 兼容「扩展名与实际内容不符」的合法图片（如 WebP 内容但命名为 .jpg）。
+func sniffImageFormat(data []byte) string {
+	if len(data) < 12 {
+		return ""
+	}
+	switch {
+	case data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF:
+		return "jpeg"
+	case data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47:
+		return "png"
+	case data[0] == 'G' && data[1] == 'I' && data[2] == 'F' && data[3] == '8':
+		return "gif"
+	case data[0] == 'R' && data[1] == 'I' && data[2] == 'F' && data[3] == 'F' && string(data[8:12]) == "WEBP":
+		return "webp"
+	case data[0] == 'B' && data[1] == 'M':
+		return "bmp"
+	}
+	return ""
+}
+
 // hasImageMagicBytes 验证文件头魔术字节是否匹配声称的扩展名
 func hasImageMagicBytes(data []byte, ext string) bool {
 	switch ext {
@@ -143,11 +177,12 @@ func minInt(a, b int) int {
 	return b
 }
 
-// PUT /api/author/profile — 更新作者资料（签名、隔离开关）
+// PUT /api/author/profile — 更新作者资料（昵称、签名、隔离开关）
 func UpdateAuthorProfile(c *gin.Context) {
 	userID := currentUserID(c)
 
 	var req struct {
+		Nickname    *string `json:"nickname"`
 		Signature   *string `json:"signature"`
 		WallEnabled *bool   `json:"wall_enabled"` // 针对某个作品
 		NovelID     *uint   `json:"novel_id"`     // 可选：指定作品
@@ -155,6 +190,19 @@ func UpdateAuthorProfile(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
+	}
+
+	// 更新昵称（用户可自行修改）
+	if req.Nickname != nil {
+		nick := strings.TrimSpace(*req.Nickname)
+		n := len([]rune(nick))
+		if n < 1 || n > 32 {
+			utils.BadRequest(c, "昵称长度需为 1-32 个字符")
+			return
+		}
+		// 昵称不允许使用控制字符与 HTML 标签
+		nick = bluemonday.StrictPolicy().Sanitize(nick)
+		models.DB.Model(&models.User{}).Where("id = ?", userID).Update("nickname", nick)
 	}
 
 	// 更新签名

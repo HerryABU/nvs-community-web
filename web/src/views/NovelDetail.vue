@@ -387,6 +387,45 @@ onMounted(async () => {
 @media (max-width: 768px) {
   .novel-header {
     flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 20px;
+    margin-bottom: 28px;
+  }
+  .novel-cover {
+    flex-shrink: 0;
+  }
+  .novel-title {
+    font-size: 1.45rem;
+    text-align: center;
+  }
+  .novel-meta {
+    justify-content: center;
+    gap: 10px 14px;
+  }
+  .novel-actions {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .novel-actions .el-button {
+    flex: 1;
+    min-width: 110px;
+  }
+  /* 章节行：隐藏更新日期，压缩间距 */
+  .chapter-item {
+    padding: 13px 12px;
+  }
+  .chapter-num {
+    min-width: 0;
+    font-size: 0.82rem;
+  }
+  .chapter-words {
+    min-width: 0;
+    font-size: 0.78rem;
+    flex-shrink: 0;
+  }
+  .chapter-date {
+    display: none;
   }
 }
 </style>

@@ -5,7 +5,7 @@
  * 内置 KaTeX / Mermaid / 代码高亮 / DOMPurify XSS 防护。
  *
  * 模块拆分：
- *   renderer.ts    — CherryEngine 纯渲染（Reader / 评论 / 论坛）
+ *   renderer.ts    — Cherry 完整版（cherry-markdown.esm.js）headless 纯渲染（Reader / 评论 / 论坛）
  *   global-fix.css — Cherry 预览区和全局 Markdown 样式
  *
  * 使用方式（在 main.ts 中）：

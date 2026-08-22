@@ -91,4 +91,18 @@ onMounted(load);
 .preview-text { font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .verdict-text { font-size: 0.82rem; }
 .muted { color: var(--text-secondary); }
+
+/* ====== 移动端我的举报适配 ====== */
+@media (max-width: 768px) {
+  .page-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .report-list {
+    overflow-x: auto;
+  }
+  .report-list .el-table {
+    min-width: 640px;
+  }
+}
 </style>

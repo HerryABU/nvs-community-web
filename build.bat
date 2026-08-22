@@ -27,12 +27,17 @@ if not exist "dist\index.html" (
 
 echo.
 echo [2/3] Sync frontend dist -^> server\dist + Build Go...
+REM 删除前端产物中的 .gz / .br 副本：后端用 gin-contrib/gzip 实时压缩响应，
+REM 这些静态压缩文件对嵌入的可执行文件是纯冗余，会显著增大二进制体积。
+echo      [clean] removing redundant .gz / .br from dist...
+del /S /Q "dist\*.gz" "dist\*.br" >nul 2>&1
+
 if exist "server\dist" rmdir /S /Q "server\dist"
 xcopy /E /I /Y "dist" "server\dist" >nul
 cd server
-go build -ldflags="-s -w" -o nvs-server.exe .
+go build -ldflags="-s -w" -trimpath -o nvs-server.exe .
 if %ERRORLEVEL% NEQ 0 (
-    echo [ERROR] Go build failed!
+    echo [  ERROR] Go build failed!
     cd ..
     pause
     exit /b 1
@@ -44,18 +49,13 @@ echo [3/3] Copy exe to project root...
 copy /Y "server\nvs-server.exe" "nvs-server.exe" >nul
 
 echo.
-echo [3.5/3] Compress with UPX...
-set UPX_EXE=..\upx\upx-5.2.0-win64\upx.exe
-if exist "nvs-server.exe" (
-    if exist "%UPX_EXE%" (
-        "%UPX_EXE%" --best --force nvs-server.exe
-        echo UPX compression done.
-    ) else (
-        echo UPX not found, skipping compression.
-    )
-) else (
-    echo nvs-server.exe not found for compression
-)
+echo ============================================
+echo   Build succeeded!
+echo   Output: nvs-server.exe  (embedded frontend + backend, no UPX)
+echo   Assets: dist\          (frontend output, project root)
+echo   Run:    nvs-server.exe
+echo   Visit:  http://localhost:8080
+echo ============================================
 
 echo.
 echo ============================================

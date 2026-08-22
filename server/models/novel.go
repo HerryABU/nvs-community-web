@@ -8,14 +8,14 @@ import (
 
 type Novel struct {
 	ID              uint      `gorm:"primaryKey" json:"id"`
-	AuthorID        uint      `gorm:"not null;index" json:"author_id"`
+	AuthorID        uint      `gorm:"not null;index;index:idx_novels_author_status,priority:1" json:"author_id"`
 	Title           string    `gorm:"size:256;not null" json:"title"`
 	Category        string    `gorm:"size:64;default:其他;index" json:"category"`
 	Tags            string    `gorm:"type:json" json:"tags"`
 	Summary         string    `gorm:"type:text" json:"summary"`
 	CoverURL        string    `gorm:"size:512;default:''" json:"cover_url"`
 	PricePerChapter float64   `gorm:"type:decimal(10,2);default:0.00" json:"price_per_chapter"`
-	Status          string    `gorm:"size:16;default:draft;index" json:"status"`
+	Status          string    `gorm:"size:16;default:draft;index:idx_novels_author_status,priority:2" json:"status"`
 	SourceType      string    `gorm:"size:16;default:original" json:"source_type"`        // original / reprint
 	CreationMethod  string    `gorm:"size:16;default:human" json:"creation_method"`       // human / ai / human_ai_assisted
 	TotalWords      int       `gorm:"default:0" json:"total_words"`
@@ -240,9 +240,11 @@ func GetChaptersByNovel(novelID uint) ([]Chapter, error) {
 	return chapters, nil
 }
 
+// GetMaxChapterNumber 返回某作品已有的最大章节序号（含软删除章节）。
+// 关键：必须包含软删除记录，否则软删除某章后新建章节会复用其编号，造成「串号」。
 func GetMaxChapterNumber(novelID uint) (int, error) {
 	var maxNum int
-	err := DB.Model(&Chapter{}).Where("novel_id = ?", novelID).
+	err := DB.Unscoped().Model(&Chapter{}).Where("novel_id = ?", novelID).
 		Select("COALESCE(MAX(chapter_number), 0)").Scan(&maxNum).Error
 	return maxNum, err
 }

@@ -234,4 +234,30 @@ onMounted(() => {
 .um-actions { display: flex; align-items: center; gap: 8px; }
 .um-pagination { margin-top: 16px; display: flex; justify-content: center; }
 .muted { color: var(--text-light); }
+
+/* ====== 移动端用户管理适配 ====== */
+@media (max-width: 768px) {
+  .um-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .um-actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .um-actions .el-input {
+    flex: 1;
+    min-width: 140px;
+  }
+  /* 表格横向滚动 */
+  .page-container > .el-table {
+    display: block;
+    overflow-x: auto;
+    min-width: 640px;
+  }
+  .um-pagination .el-pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
 </style>

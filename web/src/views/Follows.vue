@@ -100,4 +100,19 @@ onMounted(() => { loadData(); });
 .user-bio { color: #999; font-size: 0.8rem; margin-top: 2px; }
 .empty-hint { text-align: center; padding: 48px; color: #999; }
 .pagination { margin-top: 20px; display: flex; justify-content: center; }
+
+/* ====== 移动端关注页适配 ====== */
+@media (max-width: 640px) {
+  .user-card {
+    padding: 12px;
+    gap: 10px;
+  }
+  .user-card .el-button {
+    flex-shrink: 0;
+  }
+  .pagination .el-pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
 </style>

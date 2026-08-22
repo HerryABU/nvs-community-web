@@ -13,66 +13,107 @@ import (
 )
 
 // ==================== 访问日志完整性保护（176号令合规） ====================
-// 访问日志作为执法证据，需防篡改：按天滚动、每日 sha256 校验、gzip 归档、
+// 访问日志作为执法证据，需防篡改：按小时滚动、每日 sha256 校验、gzip 归档、
 // 只读权限（0444）、异地目录备份（backups/logs/）、保留至少 6 个月。
+//
+// 目录结构（与 utils/dailylog.go 一致，按小时切分 + 按类分文件夹）：
+//   log/requests/<YYYY-MM-DD>/<HH>.log   请求日志（request 一个文件夹）
+//   log/database/<YYYY-MM-DD>/<HH>.log   数据库日志（database 一个文件夹）
+// 归档目标：backups/logs/<category>-<日期>-<小时>.log.gz
+// 校验值：log/<category>/<日期>.sha256（每行 "sha256  <category>-<日期>-<小时>.log"）
 
 const (
-	LogDirName       = "logs"             // 访问日志目录（与 middleware.LogDir 一致）
-	LogBackupDirName = "backups/logs"     // 归档备份目录
+	LogDirName       = "log"                // 日志根目录（与 utils.DailyLogRoot 一致）
+	LogBackupDirName = "backups/logs"       // 归档备份目录
 	LogRetentionDur  = 180 * 24 * time.Hour // 保留 6 个月
 )
 
+// logCategories 需要归档的日志类别（文件夹名）
+var logCategories = []string{"requests", "database"}
+
 var logArchiveMu sync.Mutex
 
-// ArchiveAccessLogs 归档除今天外的所有访问日志。
-// 每个日志文件：计算 sha256（存 logs/{date}.sha256）→ gzip 归档到 backups/logs/ → 原文件改只读。
+// ArchiveAccessLogs 归档除今天外的所有小时日志（requests 与 database 两类）。
+// 每个小时文件：计算 sha256 → gzip 归档到 backups/logs/<category>-<日期>-<小时>.log.gz
+// → 原文件改只读；每日生成 log/<category>/<日期>.sha256 汇总校验值。
 // 并清理超过 6 个月的归档（保留 sha256 校验值以便追溯）。
 func ArchiveAccessLogs() error {
 	logArchiveMu.Lock()
 	defer logArchiveMu.Unlock()
 
 	today := time.Now().Format("2006-01-02")
-	entries, err := os.ReadDir(LogDirName)
-	if err != nil {
-		return err
-	}
 	_ = os.MkdirAll(LogBackupDirName, 0755)
 
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		if !strings.HasPrefix(name, "access-") || !strings.HasSuffix(name, ".log") {
-			continue
-		}
-		date := strings.TrimSuffix(strings.TrimPrefix(name, "access-"), ".log")
-		if date >= today {
-			continue // 今天的日志仍在写入，跳过
-		}
-		gzPath := filepath.Join(LogBackupDirName, "access-"+date+".log.gz")
-		if _, err := os.Stat(gzPath); err == nil {
-			continue // 已归档
-		}
-
-		logPath := filepath.Join(LogDirName, name)
-		sum, err := fileSHA256(logPath)
-		if err != nil {
-			continue
-		}
-		shaPath := filepath.Join(LogDirName, date+".sha256")
-		_ = os.WriteFile(shaPath, []byte(sum+"  "+name+"\n"), 0644)
-
-		if err := gzipFile(logPath, gzPath); err != nil {
-			continue
-		}
-		// 只读权限，防篡改
-		_ = os.Chmod(logPath, 0444)
-		_ = os.Chmod(shaPath, 0444)
+	for _, category := range logCategories {
+		archiveCategory(category, today)
 	}
 
 	cleanupOldAccessLogs()
 	return nil
+}
+
+// archiveCategory 归档某个类别（requests / database）下所有过去日期的小时日志
+func archiveCategory(category, today string) {
+	catDir := filepath.Join(LogDirName, category)
+	dateDirs, err := os.ReadDir(catDir)
+	if err != nil {
+		return
+	}
+	for _, d := range dateDirs {
+		if !d.IsDir() {
+			continue
+		}
+		date := d.Name()
+		if date >= today {
+			continue // 今天仍在写入，跳过
+		}
+		// 校验日期格式，避免误处理非日期目录
+		if _, perr := time.Parse("2006-01-02", date); perr != nil {
+			continue
+		}
+
+		dateDir := filepath.Join(catDir, date)
+		entries, err := os.ReadDir(dateDir)
+		if err != nil {
+			continue
+		}
+
+		shaLines := []string{}
+		archivedAny := false
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".log") {
+				continue
+			}
+			hour := strings.TrimSuffix(e.Name(), ".log")
+			if len(hour) != 2 { // 仅处理 HH.log（如 08.log）
+				continue
+			}
+			logPath := filepath.Join(dateDir, e.Name())
+			gzPath := filepath.Join(LogBackupDirName, category+"-"+date+"-"+hour+".log.gz")
+			if _, err := os.Stat(gzPath); err == nil {
+				continue // 已归档
+			}
+
+			sum, err := fileSHA256(logPath)
+			if err != nil {
+				continue
+			}
+			shaLines = append(shaLines, sum+"  "+category+"-"+date+"-"+hour+".log")
+
+			if err := gzipFile(logPath, gzPath); err != nil {
+				continue
+			}
+			// 只读权限，防篡改
+			_ = os.Chmod(logPath, 0444)
+			archivedAny = true
+		}
+
+		if archivedAny {
+			shaPath := filepath.Join(catDir, date+".sha256")
+			_ = os.WriteFile(shaPath, []byte(strings.Join(shaLines, "\n")+"\n"), 0644)
+			_ = os.Chmod(shaPath, 0444)
+		}
+	}
 }
 
 // fileSHA256 计算文件 SHA256
@@ -108,7 +149,7 @@ func gzipFile(src, dst string) error {
 	return gz.Close()
 }
 
-// cleanupOldAccessLogs 删除超过 6 个月的归档 gz 文件（保留 logs/ 下的 .sha256 校验值）
+// cleanupOldAccessLogs 删除超过 6 个月的归档 gz 文件（保留 log/ 下的 .sha256 校验值）
 func cleanupOldAccessLogs() {
 	cutoff := time.Now().Add(-LogRetentionDur)
 	entries, err := os.ReadDir(LogBackupDirName)
@@ -120,10 +161,20 @@ func cleanupOldAccessLogs() {
 			continue
 		}
 		name := e.Name()
-		if !strings.HasPrefix(name, "access-") || !strings.HasSuffix(name, ".log.gz") {
+		// 匹配 <category>-<日期>-<小时>.log.gz
+		base := strings.TrimSuffix(name, ".log.gz")
+		if !strings.Contains(base, "-") || !strings.HasSuffix(name, ".log.gz") {
 			continue
 		}
-		dateStr := strings.TrimSuffix(strings.TrimPrefix(name, "access-"), ".log.gz")
+		// 提取日期段：category-YYYY-MM-DD-HH → 去掉 category- 前缀与 -HH 后缀
+		rest := strings.TrimPrefix(base, "requests-")
+		if rest == base {
+			rest = strings.TrimPrefix(base, "database-")
+		}
+		dateStr := rest
+		if idx := strings.LastIndex(rest, "-"); idx > 0 {
+			dateStr = rest[:idx]
+		}
 		t, err := time.Parse("2006-01-02", dateStr)
 		if err != nil {
 			continue
