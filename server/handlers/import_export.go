@@ -597,9 +597,9 @@ func cleanTitle(raw string) string {
 	cleaned := regexp.MustCompile(`^#{1,6}\s*`).ReplaceAllString(raw, "")
 	// 去掉 ** 和 * 包裹（如 *第X章*）
 	cleaned = regexp.MustCompile(`^\*{1,2}(.+?)\*{1,2}$`).ReplaceAllString(cleaned, "$1")
-	// 去掉行首行尾的 - 和多余空格
-	cleaned = strings.Trim(cleaned, " -–—")
+	// 去掉行首行尾的 - * – — 和多余空格（* 也纳入：*** 纯分隔符清理后须为空）
+	cleaned = strings.Trim(cleaned, " -–—*")
 	cleaned = strings.TrimSpace(cleaned)
-	// 纯分隔符（如 ---）清理后为空，返回空字符串让调用方兜底，避免把分隔符当标题
+	// 纯分隔符（如 ---、***）清理后为空，返回空字符串让调用方兜底，避免把分隔符当标题
 	return cleaned
 }
