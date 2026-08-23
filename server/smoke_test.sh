@@ -134,14 +134,24 @@ check "四级分类被拒绝" '三级' "$CAT4"
 DUP=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X POST "$BASE/api/admin/blog-categories" -H "Content-Type: application/json" -d '{"name":"技术"}')
 check "同名分类被拒绝" '同名' "$DUP"
 
-# ── T06c 普通作者（非管理员）也可管理分类：新增/挂靠/删除 ──
+# ── T06c 普通作者（非管理员）也可管理分类：新增=待审核（事后审核） ──
 ACAT=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X POST "$BASE/api/blog-categories" -H "Content-Type: application/json" -d '{"name":"作者自建分类"}')
 check "普通作者可新增分类" '"code":0' "$ACAT"
 ACATID=$(echo "$ACAT" | "$PY" -c "import sys,json;print(json.load(sys.stdin)['data']['id'])" 2>/dev/null || echo 99)
-AMOVE=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X PUT "$BASE/api/blog-categories/$ACATID" -H "Content-Type: application/json" -d "{\"parent_id\":$CAT1ID,\"sort_order\":9}")
-check "普通作者可挂靠分类到一级下" '"parent_id":'$CAT1ID "$AMOVE"
-ADEL=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X DELETE "$BASE/api/blog-categories/$ACATID")
-check "普通作者可删除分类" '已删除' "$ADEL"
+check "作者创建分类为待审核(pending)" '"status":"pending"' "$ACAT"
+
+# ── T06d 分类事后审核：pending 不公开 → 管理员通过后公开 → 拒绝记录原因 ──
+PUB=$(curl -s -m 8 "$BASE/api/blog-categories")
+if echo "$PUB" | grep -qF "作者自建分类"; then bad "待审核分类不应出现在公开树"; else ok "待审核分类不公开显示"; fi
+RV=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X POST "$BASE/api/admin/blog-categories/$ACATID/review" -H "Content-Type: application/json" -d '{"action":"approve"}')
+check "管理员通过分类审核" '"status":"approved"' "$RV"
+PUB2=$(curl -s -m 8 "$BASE/api/blog-categories")
+if echo "$PUB2" | grep -qF "作者自建分类"; then ok "审核通过后分类公开显示"; else bad "审核通过后分类应公开显示"; fi
+RJ=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X POST "$BASE/api/admin/blog-categories/$ACATID/review" -H "Content-Type: application/json" -d '{"action":"reject","reason":"测试拒绝"}')
+check "管理员拒绝分类(rejected)" '"status":"rejected"' "$RJ"
+check "拒绝原因已记录" '"reject_reason":"测试拒绝"' "$RJ"
+ADEL2=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X DELETE "$BASE/api/admin/blog-categories/$ACATID")
+check "管理员删除分类" '已删除' "$ADEL2"
 
 # ── T06b 用户名/数字解析（数字是主键、用户名兼容） ──
 RSLV=$(curl -s -m 8 "$BASE/api/users/resolve?key=$U")

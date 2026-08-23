@@ -188,6 +188,10 @@ export const adminApi = {
   deleteBlogCategory(id: number) {
     return api.delete(`/admin/blog-categories/${id}`);
   },
+  // 分类审核（事后审核：通过/拒绝）
+  reviewBlogCategory(id: number, action: 'approve' | 'reject', reason?: string) {
+    return api.post(`/admin/blog-categories/${id}/review`, { action, reason });
+  },
 
   // 小说/章节封禁管理（管理员视角，含封禁状态）
   getAdminNovels(params?: { search?: string; page?: number; page_size?: number }) {

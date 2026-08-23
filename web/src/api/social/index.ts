@@ -58,7 +58,11 @@ export const blogApi = {
   getCategories() {
     return api.get<{ code: number; data: BlogCategoryNode[] }>('/blog-categories');
   },
-  // 分类管理（登录作者/管理员可用：新增/编辑/删除/挂靠，支持三级）
+  // 分类管理视图（登录）：platform=已通过分类树 + mine=自己创建的分类（含待审核状态）
+  getManageCategories() {
+    return api.get<{ code: number; data: { platform: BlogCategoryNode[]; mine: any[] } }>('/blog-categories/manage');
+  },
+  // 分类管理（登录作者/管理员可用：新增/编辑/删除/挂靠，支持三级；普通作者创建=待审核）
   createCategory(data: { name: string; parent_id?: number; sort_order?: number }) {
     return api.post('/blog-categories', data);
   },

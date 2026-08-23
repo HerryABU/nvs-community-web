@@ -82,9 +82,9 @@ func TestToggleBlogLike(t *testing.T) {
 // TestGetBlogCategoryName 分类名（含父级前缀）/ 不存在 / 0
 func TestGetBlogCategoryName(t *testing.T) {
 	setupTestDB(t)
-	p := &BlogCategory{Name: "技术", ParentID: 0}
+	p := &BlogCategory{Name: "技术", ParentID: 0, Status: "approved"}
 	DB.Create(p)
-	s := &BlogCategory{Name: "Go 开发", ParentID: p.ID}
+	s := &BlogCategory{Name: "Go 开发", ParentID: p.ID, Status: "approved"}
 	DB.Create(s)
 
 	if got := GetBlogCategoryName(p.ID); got != "技术" {
@@ -104,13 +104,13 @@ func TestGetBlogCategoryName(t *testing.T) {
 // TestGetBlogCategoryTree 分类树：一级挂二级 + blog_count 统计
 func TestGetBlogCategoryTree(t *testing.T) {
 	setupTestDB(t)
-	p := &BlogCategory{Name: "技术"}
+	p := &BlogCategory{Name: "技术", Status: "approved"}
 	DB.Create(p)
-	s1 := &BlogCategory{Name: "Go", ParentID: p.ID}
+	s1 := &BlogCategory{Name: "Go", ParentID: p.ID, Status: "approved"}
 	DB.Create(s1)
-	s2 := &BlogCategory{Name: "Python", ParentID: p.ID}
+	s2 := &BlogCategory{Name: "Python", ParentID: p.ID, Status: "approved"}
 	DB.Create(s2)
-	orphan := &BlogCategory{Name: "随笔"}
+	orphan := &BlogCategory{Name: "随笔", Status: "approved"}
 	DB.Create(orphan)
 
 	seedTestBlog(t, 1, p.ID, "博客A")    // 一级分类直接挂博客
