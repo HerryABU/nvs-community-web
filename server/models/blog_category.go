@@ -31,7 +31,8 @@ type BlogCategoryNode struct {
 	Children  []BlogCategoryNode `json:"children,omitempty"`
 }
 
-// GetBlogCategoryTree 获取完整分类树（按 sort_order, id 排序），并统计每个分类的博客数（仅未删除）
+// GetBlogCategoryTree 获取完整分类树（按 sort_order, id 排序），并统计每个分类的博客数（仅未删除）。
+// 一级分类的 blog_count = 直接挂载 + 其下所有二级分类的博客数（与列表按一级分类过滤的语义一致）。
 func GetBlogCategoryTree() []BlogCategoryNode {
 	var cats []BlogCategory
 	DB.Order("sort_order ASC, id ASC").Find(&cats)
@@ -43,20 +44,28 @@ func GetBlogCategoryTree() []BlogCategoryNode {
 		})
 	}
 
-	// 统计每个分类的博客数
+	// 统计每个分类直接挂载的博客数
 	for i := range nodes {
 		var cnt int64
 		DB.Model(&AuthorBlog{}).Where("category_id = ?", nodes[i].ID).Count(&cnt)
 		nodes[i].BlogCount = cnt
 	}
-
-	// 组装树：一级分类 + 挂载二级分类
+	// 一级分类聚合其下二级分类的博客数（含直接挂载）
 	childrenOf := map[uint][]BlogCategoryNode{}
 	for _, n := range nodes {
 		if n.ParentID != 0 {
 			childrenOf[n.ParentID] = append(childrenOf[n.ParentID], n)
 		}
 	}
+	for i := range nodes {
+		if nodes[i].ParentID == 0 {
+			for _, sub := range childrenOf[nodes[i].ID] {
+				nodes[i].BlogCount += sub.BlogCount
+			}
+		}
+	}
+
+	// 组装树：一级分类 + 挂载二级分类
 	tree := make([]BlogCategoryNode, 0, len(nodes))
 	for _, n := range nodes {
 		if n.ParentID == 0 {
