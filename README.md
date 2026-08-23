@@ -439,6 +439,20 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v2.1.7 分类独立路由页（CSDN 式文章管理）（2026-08-23）
+
+> 「迁移」与「分类设置」从弹窗升级为**独立路由页面**；分类文章管理仿 CSDN 创作中心：批量新增/移动文章、未分类筛选；导入博客可指定目标分类。
+
+| 路由 | 页面 | 说明 |
+|---|---|---|
+| `/author/blog/{用户名}/category/{id}` | `BlogCategoryManage.vue` | 分类文章管理：Tab「本分类文章」（勾选批量移动到其他分类/移出未分类 + 单篇移动）+ Tab「新增其他文章」（未分类/其他分类勾选批量加入本分类，CSDN「批量操作：新增」式） |
+| `/author/blog/{用户名}/category/{id}/settings` | `BlogCategorySettings.vue` | 分类设置：改名 / 挂靠父分类 / 排序 / 删除 / 状态与拒绝原因 |
+| 后端 | `models/blog.go` | `GetBlogsByAuthorFilter`：category_id=nil 全部 / *0 未分类 / *N 指定分类；exclude_category_id 排除 |
+| 后端 | `handlers/social_blog.go` + `main.go` | `POST /api/blogs/batch-category` 批量设置分类（归属校验、≤200 篇）；`ImportBlogs` 支持 `category_id`（导入到指定分类）+ 返回 `created_ids` |
+| 前端 | `api/social/index.ts` | `batchSetCategory`；`listByAuthor` 支持 category_id=0 未分类 / exclude_category_id；`importBatch` 支持分类 |
+| 前端 | `views/BlogManager.vue` | 分类行按钮改为跳独立页「📂 管理文章 / ⚙ 设置」，移除原弹窗 |
+| 前端 | `views/BlogEditor.vue` | 批量导入弹窗新增「导入到分类」下拉（个人专栏） |
+
 ### v2.1.6 博客个人专栏 + 标签 + 媒体（2026-08-23）
 
 > 分类体系改为**个人专栏**（CSDN 式：每个作者自己的分类，去"平台分类"概念）；分类可点进去查看并**批量迁移博客**；博客支持 **#标签**（标签云/筛选/编辑）；新增**通用上传接口** + 编辑器**图片上传 / 音视频嵌入**。
