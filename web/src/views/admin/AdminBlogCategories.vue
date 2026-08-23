@@ -14,24 +14,40 @@
         </div>
 
         <div v-loading="loading">
-          <el-empty v-if="!loading && list.length === 0" description="暂无分类" />
-          <div v-for="item in list" :key="item.id" class="review-row">
-            <el-tag size="small" :type="statusTag(item.status)">{{ statusLabel(item.status) }}</el-tag>
-            <span class="rev-name">{{ item.full_name || item.name }}</span>
-            <span class="rev-meta">
-              创建者：{{ item.creator_name || '#' + item.created_by }} · {{ item.blog_count }} 篇 · {{ formatDate(item.created_at) }}
-            </span>
-            <span v-if="item.status === 'rejected' && item.reject_reason" class="rev-reason">原因：{{ item.reject_reason }}</span>
-            <div class="rev-actions">
-              <template v-if="item.status === 'pending'">
-                <el-button size="small" text type="success" @click="review(item, 'approve')">✅ 通过</el-button>
-                <el-button size="small" text type="danger" @click="openReject(item)">❌ 拒绝</el-button>
-              </template>
-              <template v-else-if="item.status === 'rejected'">
-                <el-button size="small" text type="success" @click="review(item, 'approve')">重新通过</el-button>
-              </template>
-              <el-button size="small" text type="primary" @click="openEdit(item)">编辑</el-button>
-              <el-button size="small" text type="danger" @click="removeCat(item)">删除</el-button>
+          <el-empty v-if="!loading && filteredGroups.length === 0" description="暂无分类" />
+
+          <!-- 二级目录：用户 → 该用户的分类；待审核用户优先展示 -->
+          <div v-for="g in filteredGroups" :key="'u' + g.user_id" class="user-group">
+            <div class="user-group-head" @click="toggleUser(g.user_id)">
+              <span class="ug-arrow" :class="{ open: expandedUsers[g.user_id] }">▸</span>
+              <el-avatar :size="26" :src="g.avatar_url || undefined">{{ ((g.nickname || g.user_name || '?')[0] || '?').toUpperCase() }}</el-avatar>
+              <span class="ug-name">{{ g.nickname || g.user_name }}</span>
+              <el-tag v-if="g.pending_count > 0" size="small" type="danger" effect="dark">⏳ {{ g.pending_count }} 条待审核</el-tag>
+              <el-tag v-else-if="g.user_id > 0" size="small" type="success">已全部通过</el-tag>
+              <el-tag v-else size="small" type="info">平台分类</el-tag>
+              <span class="ug-meta">共 {{ g.total_count }} 个分类</span>
+            </div>
+
+            <div v-show="expandedUsers[g.user_id]" class="user-group-body">
+              <div v-for="item in g.categories" :key="item.id" class="review-row">
+                <el-tag size="small" :type="statusTag(item.status)">{{ statusLabel(item.status) }}</el-tag>
+                <span class="rev-name">{{ item.full_name || item.name }}</span>
+                <span class="rev-meta">
+                  创建者：{{ item.creator_name || '#' + item.created_by }} · {{ item.blog_count }} 篇 · {{ formatDate(item.created_at) }}
+                </span>
+                <span v-if="item.status === 'rejected' && item.reject_reason" class="rev-reason">原因：{{ item.reject_reason }}</span>
+                <div class="rev-actions">
+                  <template v-if="item.status === 'pending'">
+                    <el-button size="small" text type="success" @click="review(item, 'approve')">✅ 通过</el-button>
+                    <el-button size="small" text type="danger" @click="openReject(item)">❌ 拒绝</el-button>
+                  </template>
+                  <template v-else-if="item.status === 'rejected'">
+                    <el-button size="small" text type="success" @click="review(item, 'approve')">重新通过</el-button>
+                  </template>
+                  <el-button size="small" text type="primary" @click="openEdit(item)">编辑</el-button>
+                  <el-button size="small" text type="danger" @click="removeCat(item)">删除</el-button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -103,7 +119,9 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 
 const tab = ref('cats');
 const statusFilter = ref('');
-const list = ref<any[]>([]);
+const rawList = ref<any[]>([]); // 全量平铺（编辑弹窗父分类下拉）
+const groups = ref<any[]>([]);  // 按创建者分组（二级目录）
+const expandedUsers = reactive<Record<number, boolean>>({}); // 用户块展开状态
 const loading = ref(false);
 const saving = ref(false);
 const showDialog = ref(false);
@@ -115,8 +133,23 @@ const form = reactive({ name: '', parent_id: 0, sort_order: 0 });
 
 // 全量平铺（编辑弹窗父分类下拉）
 const allFlat = computed(() =>
-  list.value.map((i: any) => ({ id: i.id, label: i.full_name || i.name })),
+  rawList.value.map((i: any) => ({ id: i.id, label: i.full_name || i.name })),
 );
+
+// 按状态筛选后的分组（过滤后为空的用户隐藏；pending_count 保持真实值）
+const filteredGroups = computed(() => {
+  if (!statusFilter.value) return groups.value;
+  return groups.value
+    .map((g: any) => ({
+      ...g,
+      categories: (g.categories || []).filter((i: any) => i.status === statusFilter.value),
+    }))
+    .filter((g: any) => (g.categories || []).length > 0);
+});
+
+function toggleUser(uid: number) {
+  expandedUsers[uid] = !expandedUsers[uid];
+}
 
 function statusTag(s: string) {
   return ({ pending: 'warning', approved: 'success', rejected: 'danger' } as Record<string, any>)[s] || 'info';
@@ -131,9 +164,13 @@ async function loadTree() {
   try {
     const res = await adminApi.getBlogCategories();
     if (res.data.code === 0) {
-      let arr = res.data.data || [];
-      if (statusFilter.value) arr = arr.filter((i: any) => i.status === statusFilter.value);
-      list.value = arr;
+      const d = res.data.data || {};
+      rawList.value = d.list || [];
+      groups.value = d.groups || [];
+      // 有待审核分类的用户默认展开（管理员一眼看到"谁还需审核"），其余折叠
+      for (const g of groups.value) {
+        if (g.pending_count > 0) expandedUsers[g.user_id] = true;
+      }
     }
   } catch { /* ignore */ }
   finally { loading.value = false; }
@@ -260,6 +297,32 @@ onMounted(() => {
 .rev-meta { font-size: 0.78rem; color: #999; flex: 1; min-width: 200px; }
 .rev-reason { font-size: 0.78rem; color: #e53e3e; }
 .rev-actions { display: flex; gap: 2px; flex-shrink: 0; }
+
+/* ===== 二级目录：用户组 ===== */
+.user-group {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.user-group-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-color, #f8fafc);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s;
+}
+.user-group-head:hover { background: rgba(94, 114, 228, 0.06); }
+[data-theme="dark"] .user-group-head { background: rgba(255, 255, 255, 0.03); }
+.ug-arrow {
+  width: 14px; color: #999; font-size: 0.8rem;
+  transition: transform 0.2s;
+}
+.ug-arrow.open { transform: rotate(90deg); }
+.ug-name { font-weight: 700; font-size: 0.95rem; }
+.ug-meta { font-size: 0.78rem; color: #999; margin-left: auto; }
+.user-group-body { padding: 10px 12px 4px; }
 
 .recycle-item {
   display: flex; align-items: center; gap: 10px;
