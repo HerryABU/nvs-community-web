@@ -439,6 +439,19 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v2.1.1 分类管理下放给普通作者（2026-08-23）
+
+> 作者在「我的博客管理」的 **分类管理** 标签页即可：新增分类（一级/二级/三级）、编辑名称、**设置挂靠父分类**、**拖拽挂靠**（拖到另一分类上成为其子分类）、删除分类；管理员后台同样保留入口。
+
+| 功能 | 涉及文件 |
+|---|---|
+| 分类 CRUD 鉴权从管理员放宽为**登录用户**（作者/管理员均可；层级/同名/防成环校验不变） | `server/handlers/blog_category.go`（`Create/Update/DeleteBlogCategory` + `requireLogin`）、`server/main.go` |
+| 普通路由 `POST/PUT/DELETE /api/blog-categories`（admin 组路由保留，指向同一实现） | `server/main.go` |
+| **作者端分类管理 UI**：Tab 标签页 + 新增/编辑/删除 + 拖拽挂靠 + 挂靠父分类下拉 | `web/src/views/BlogManager.vue` |
+| 前端 API 封装 | `web/src/api/social/index.ts`（`createCategory/updateCategory/deleteCategory`） |
+| 单元测试适配新函数名 | `server/handlers/recycle_softdel_test.go` |
+| 冒烟测试扩展至 41 项（普通作者新增/挂靠/删除分类） | `server/smoke_test.sh` |
+
 ### v2.1.0 URL 规范化 + 博客管理/主页 + 三级分类（2026-08-23）
 
 | 功能 | 涉及文件 |

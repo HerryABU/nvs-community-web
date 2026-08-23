@@ -73,20 +73,23 @@ func ToggleBlogLike(c *gin.Context) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// 管理员分类管理
+// 博客分类管理（登录用户即可管理：普通作者可新增/编辑/删除/挂靠，支持三级）
+// 管理员同样走这里（登录即视为有权限）；层级/同名/防成环校验统一在此。
+// 公开树接口 ListBlogCategories 见文件顶部。
 // ─────────────────────────────────────────────────────────────
 
-// GET /api/admin/blog-categories — 分类树（管理员）
-func AdminListBlogCategories(c *gin.Context) {
-	if !ensureAdmin(c) {
-		return
+// requireLogin 分类管理需要登录（作者/管理员均可）
+func requireLogin(c *gin.Context) bool {
+	if currentUserID(c) == 0 {
+		utils.Unauthorized(c, "请先登录")
+		return false
 	}
-	utils.Success(c, models.GetBlogCategoryTree())
+	return true
 }
 
-// POST /api/admin/blog-categories — 新建分类 { name, parent_id?, sort_order? }
-func AdminCreateBlogCategory(c *gin.Context) {
-	if !ensureAdmin(c) {
+// POST /api/blog-categories — 新建分类 { name, parent_id?, sort_order? }
+func CreateBlogCategory(c *gin.Context) {
+	if !requireLogin(c) {
 		return
 	}
 	var req struct {
@@ -133,9 +136,9 @@ func AdminCreateBlogCategory(c *gin.Context) {
 	utils.Success(c, cat)
 }
 
-// PUT /api/admin/blog-categories/:id — 修改分类
-func AdminUpdateBlogCategory(c *gin.Context) {
-	if !ensureAdmin(c) {
+// PUT /api/blog-categories/:id — 修改分类（改名 / 挂靠新父分类 / 排序）
+func UpdateBlogCategory(c *gin.Context) {
+	if !requireLogin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -223,9 +226,9 @@ func AdminUpdateBlogCategory(c *gin.Context) {
 	utils.Success(c, cat)
 }
 
-// DELETE /api/admin/blog-categories/:id — 删除分类（其下博客回到未分类）
-func AdminDeleteBlogCategory(c *gin.Context) {
-	if !ensureAdmin(c) {
+// DELETE /api/blog-categories/:id — 删除分类（其下博客回到未分类；有子分类先删子分类）
+func DeleteBlogCategory(c *gin.Context) {
+	if !requireLogin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -235,7 +238,7 @@ func AdminDeleteBlogCategory(c *gin.Context) {
 		return
 	}
 	if models.BlogCategoryHasChildren(cat.ID) {
-		utils.BadRequest(c, "该一级分类下还有二级分类，请先删除子分类")
+		utils.BadRequest(c, "该分类下还有子分类，请先删除子分类")
 		return
 	}
 	models.DB.Model(&models.AuthorBlog{}).Where("category_id = ?", cat.ID).Update("category_id", 0)
