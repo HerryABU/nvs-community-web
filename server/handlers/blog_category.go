@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -353,7 +354,56 @@ func AdminListBlogCategories(c *gin.Context) {
 		}
 		list = append(list, it)
 	}
-	utils.Success(c, list)
+
+	// 按创建者分组（二级目录：用户 → 该用户的分类），突出待审核用户
+	type groupItem struct {
+		UserID       uint   `json:"user_id"`
+		UserName     string `json:"user_name"`
+		Nickname     string `json:"nickname"`
+		AvatarURL    string `json:"avatar_url"`
+		PendingCount int64  `json:"pending_count"` // 该用户待审核分类数（真实值，不受筛选影响）
+		TotalCount   int    `json:"total_count"`   // 该用户分类总数
+		Categories   []item `json:"categories"`
+	}
+	groupsMap := map[uint]*groupItem{}
+	var groupOrder []uint
+	for _, it := range list {
+		key := it.CreatedBy
+		g, ok := groupsMap[key]
+		if !ok {
+			g = &groupItem{UserID: key, Categories: []item{}}
+			groupsMap[key] = g
+			groupOrder = append(groupOrder, key)
+			if key > 0 {
+				if u, err := models.GetUserByID(key); err == nil && u != nil {
+					g.UserName = u.Username
+					g.Nickname = u.Nickname
+					g.AvatarURL = u.AvatarURL
+				}
+			} else {
+				g.UserName = "platform"
+				g.Nickname = "平台/管理员"
+			}
+		}
+		g.Categories = append(g.Categories, it)
+		g.TotalCount++
+		if it.Status == "pending" {
+			g.PendingCount++
+		}
+	}
+	groups := make([]groupItem, 0, len(groupOrder))
+	for _, key := range groupOrder {
+		groups = append(groups, *groupsMap[key])
+	}
+	// 待审核多的用户排前面（管理员一眼看到"谁还需审核"）
+	sort.SliceStable(groups, func(i, j int) bool {
+		if groups[i].PendingCount != groups[j].PendingCount {
+			return groups[i].PendingCount > groups[j].PendingCount
+		}
+		return groups[i].TotalCount > groups[j].TotalCount
+	})
+
+	utils.Success(c, gin.H{"list": list, "groups": groups})
 }
 
 // POST /api/admin/blog-categories/:id/review — 审核分类 { action: approve|reject, reason? }

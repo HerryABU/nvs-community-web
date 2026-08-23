@@ -150,6 +150,26 @@ if echo "$PUB2" | grep -qF "作者自建分类"; then ok "审核通过后分类�
 RJ=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X POST "$BASE/api/admin/blog-categories/$ACATID/review" -H "Content-Type: application/json" -d '{"action":"reject","reason":"测试拒绝"}')
 check "管理员拒绝分类(rejected)" '"status":"rejected"' "$RJ"
 check "拒绝原因已记录" '"reject_reason":"测试拒绝"' "$RJ"
+
+# ── T06e 管理员列表按创建者分组（二级目录：用户 → 分类） ──
+# 作者再建一个 pending 分类，确保分组中待审核数>0
+APCAT=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X POST "$BASE/api/blog-categories" -H "Content-Type: application/json" -d '{"name":"作者待审分类"}')
+check "作者再建待审核分类" '"status":"pending"' "$APCAT"
+APCATID=$(echo "$APCAT" | "$PY" -c "import sys,json;print(json.load(sys.stdin)['data']['id'])" 2>/dev/null || echo 99)
+ALIST=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" "$BASE/api/admin/blog-categories")
+check "管理员列表返回分组结构" '"groups":[' "$ALIST"
+check "分组含普通作者(待审核归入创建者)" "\"user_name\":\"$U\"" "$ALIST"
+APEND=$(echo "$ALIST" | "$PY" -c "
+import sys,json
+d=json.load(sys.stdin)['data']
+for g in d.get('groups',[]):
+    if g['user_name']=='$U':
+        print(g['pending_count'], g['total_count'])
+        break
+" 2>/dev/null || echo '0 0')
+if [ "$(echo "$APEND" | awk '{print $1}')" -ge 1 ]; then ok "分组中作者待审核数>0 (pending=$APEND)"; else bad "作者分组 pending_count 应为>0，实际 $APEND"; fi
+ADEL3=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X DELETE "$BASE/api/admin/blog-categories/$APCATID")
+check "清理待审核分类" '已删除' "$ADEL3"
 ADEL2=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X DELETE "$BASE/api/admin/blog-categories/$ACATID")
 check "管理员删除分类" '已删除' "$ADEL2"
 

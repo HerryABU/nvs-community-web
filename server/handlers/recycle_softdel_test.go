@@ -319,6 +319,50 @@ func TestCategoryReviewFlow(t *testing.T) {
 	if resp["data"].(map[string]interface{})["reject_reason"] == "" {
 		t.Errorf("拒绝后应记录原因")
 	}
+
+	// 8) 管理员列表按创建者分组（二级目录）：pending 计入创建者分组，平台分组存在
+	c, w = asUser("author", 2)
+	setJSONBody(c, map[string]interface{}{"name": "作者第二个分类"})
+	CreateBlogCategory(c)
+	mustJSON(t, w)
+
+	c, w = asUser("admin", 1)
+	c.Request = httptest.NewRequest("GET", "/", nil)
+	AdminListBlogCategories(c)
+	resp = mustJSON(t, w)
+	data, ok := resp["data"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("管理员列表应返回对象 {list, groups}，实际 %v", resp["data"])
+	}
+	if _, ok := data["list"]; !ok {
+		t.Errorf("管理员列表应包含 list 平铺")
+	}
+	groups, _ := data["groups"].([]interface{})
+	authorGroup, adminGroup := false, false
+	for _, g := range groups {
+		gm := g.(map[string]interface{})
+		if gm["user_id"] == float64(2) {
+			authorGroup = true
+			if gm["pending_count"] != float64(1) {
+				t.Errorf("作者2 的 pending_count 应为 1（第二个分类待审核），实际 %v", gm["pending_count"])
+			}
+			if gm["total_count"] != float64(2) {
+				t.Errorf("作者2 的分类总数应为 2，实际 %v", gm["total_count"])
+			}
+		}
+		if gm["user_id"] == float64(1) {
+			adminGroup = true
+			if gm["nickname"] != "admin1" {
+				t.Errorf("管理员分组昵称应为 admin1，实际 %v", gm["nickname"])
+			}
+		}
+	}
+	if !authorGroup {
+		t.Errorf("管理员列表应按创建者分组，应包含作者2 的分组")
+	}
+	if !adminGroup {
+		t.Errorf("管理员创建的分类应归入管理员自己(user_id=1)的分组")
+	}
 }
 
 // TestResolveUserKey 用户标识解析：数字=主键 id，非数字=用户名（大小写不敏感）
