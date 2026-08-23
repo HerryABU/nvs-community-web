@@ -437,6 +437,57 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ---
 
+## 📝 版本更新记录（文件级改动说明）
+
+### v2.0.0 功能更新（2026-08-23）
+
+> 本次更新：2 个严重 bug 修复 + 博客体系升级 + 软删除治理完善 + 测试体系。
+
+#### 1️⃣ 严重 bug 修复
+
+| 改动 | 涉及文件 |
+|---|---|
+| **访问日志中间件 64KB 截断请求体**（长章节/长博客 JSON 被截断 → 保存报「没有标题/参数错误」，根因） | `server/middleware/access_log.go` |
+| **批量导入永远新建小说**（不追加到当前作品） | `server/handlers/import_export.go`、`web/src/api/novel.ts`、`web/src/views/Editor.vue` |
+| 创建作品标题 trim 必填校验（空标题友好提示） | `server/handlers/novel.go` |
+| 博客创建绑定错误信息更明确（「请填写博客标题和内容」） | `server/handlers/social_blog.go` |
+| 章节保存后重复建章（id 标记为 -1 而非真实 id） | `web/src/views/ChapterEditor.vue` |
+
+#### 2️⃣ 博客体系升级（分类 / 点赞 / 评论 / 目录）
+
+| 功能 | 涉及文件 |
+|---|---|
+| **CSDN 式一/二级分类**（新表 `blog_categories` + `author_blogs.category_id`） | `server/models/blog_category.go`（新）、`server/models/blog.go`、`server/models/db.go`、`server/handlers/blog_category.go`（新）、`server/handlers/social_blog.go`、`server/main.go` |
+| 分类管理（管理员任意增删改 + 同名/层级约束） | `web/src/views/admin/AdminBlogCategories.vue`（新）、`web/src/api/admin.ts`、`web/src/views/AdminDashboard.vue`、`web/src/router/index.ts` |
+| 博客列表左侧分类栏 + 一级过滤含二级 | `web/src/views/BlogList.vue` |
+| 博客编辑器分类下拉 | `web/src/views/BlogEditor.vue` |
+| **点赞**（新表 `blog_likes` + `like_count` 冗余计数，toggle） | `server/models/blog_category.go`、`server/handlers/blog_category.go`、`server/main.go`、`web/src/views/BlogDetail.vue`、`web/src/api/social/index.ts` |
+| 评论（复用 Comment.blog_id 链路 + 总数展示） | `web/src/components/CommentSection.vue`、`web/src/views/BlogDetail.vue` |
+| **MD 可折叠目录**（#~###### 目录树、节点折叠、滚动高亮） | `web/src/views/BlogDetail.vue` |
+| **目录面板折叠 + 全屏阅读** | `web/src/views/BlogDetail.vue` |
+
+#### 3️⃣ 软删除治理（用户自删 vs 管理员封禁）
+
+| 功能 | 涉及文件 |
+|---|---|
+| 新增 `deleted_by` 字段（user=自删 / admin=封禁） | `server/models/novel.go`、`server/models/comment.go`、`server/models/blog.go` |
+| 用户删除标记 user；管理员封禁标记 admin（含级联章节） | `server/handlers/comment.go`、`server/handlers/admin_softdel.go` |
+| 解封/恢复清除 deleted_by | `server/handlers/admin_ban.go` |
+| **作者回收站**（自删内容可恢复，封禁内容拒绝） | `server/handlers/recycle.go`（新）、`server/main.go`、`web/src/api/novel.ts`、`web/src/views/AuthorDashboard.vue` |
+| **管理员回收站监管**（全站用户自删列表 + 恢复） | `server/handlers/recycle.go`、`web/src/views/admin/AdminBlogCategories.vue` |
+
+#### 4️⃣ 测试体系
+
+| 类型 | 涉及文件 |
+|---|---|
+| 单元测试：访问日志 body 还原/脱敏/ multipart | `server/middleware/access_log_test.go`（新） |
+| 单元测试：导入解析/标题清理 | `server/handlers/import_export_test.go`（新） |
+| 单元测试：博客分类/点赞模型 | `server/models/blog_category_test.go`（新） |
+| 集成测试：deleted_by 区分/回收站权限/分类管理 API | `server/handlers/recycle_softdel_test.go`（新） |
+| 端到端冒烟测试（30 项） | `server/smoke_test.sh`（新） |
+
+---
+
 ## 🌐 项目结构
 
 ```
