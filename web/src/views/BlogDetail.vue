@@ -1,11 +1,15 @@
 <template>
-  <div class="page-container blog-detail" v-loading="loading">
+  <div class="page-container blog-detail" :class="{ 'toc-collapsed': !tocPanelOpen }" v-loading="loading">
     <template v-if="blog">
       <div class="bd-layout">
         <!-- 正文区 -->
         <div class="bd-main">
           <div class="blog-header">
             <div class="bh-title-row">
+              <!-- 目录面板折叠（全屏阅读）时显示展开按钮 -->
+              <el-button v-if="!tocPanelOpen && toc.length > 0" size="small" text type="primary" class="bd-toc-restore" @click="tocPanelOpen = true">
+                <el-icon style="margin-right:2px"><Expand /></el-icon>展开目录
+              </el-button>
               <h1>{{ blog.title }}</h1>
               <el-tag v-if="blog.is_pinned" size="small" type="danger">置顶</el-tag>
             </div>
@@ -53,8 +57,13 @@
         </div>
 
         <!-- 右侧目录（CSDN 式可折叠，仅 md 且有标题时显示） -->
-        <aside class="bd-toc" v-if="toc.length > 0">
-          <div class="bd-toc-title">📑 文章目录</div>
+        <aside class="bd-toc" v-if="tocPanelOpen && toc.length > 0">
+          <div class="bd-toc-title">
+            <span>📑 文章目录</span>
+            <el-tooltip content="折叠目录，全屏阅读" placement="left">
+              <el-icon class="bd-toc-fold" @click="tocPanelOpen = false"><Fold /></el-icon>
+            </el-tooltip>
+          </div>
           <div class="bd-toc-tree">
             <div v-for="item in visibleToc" :key="item.id" class="bd-toc-item" :style="{ paddingLeft: (item.level - 1) * 14 + 'px' }">
               <span
@@ -85,7 +94,7 @@ import CommentSection from '@/components/CommentSection.vue';
 import ReportButton from '@/components/ReportButton.vue';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage } from 'element-plus';
-import { CaretTop, Check } from '@element-plus/icons-vue';
+import { CaretTop, Check, Fold, Expand } from '@element-plus/icons-vue';
 
 const route = useRoute();
 const authStore = useAuthStore();
@@ -94,6 +103,9 @@ const htmlContent = ref('');
 const loading = ref(false);
 const blogContentRef = ref<HTMLElement | null>(null);
 const commentTotal = ref(0);
+
+// 目录面板展开状态：折叠后正文全屏阅读
+const tocPanelOpen = ref(true);
 
 // ===== 点赞 =====
 const liked = ref(false);
@@ -235,12 +247,19 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.page-container { max-width: 860px; margin: 0 auto; padding: 24px; }
+.page-container { max-width: 860px; margin: 0 auto; padding: 24px; transition: max-width 0.25s ease; }
+/* 目录折叠 → 正文全屏阅读 */
+.page-container.toc-collapsed { max-width: 100%; }
 .bd-layout { display: flex; gap: 24px; align-items: flex-start; }
 .bd-main { flex: 1; min-width: 0; }
 
+/* 折叠目录后的全屏正文：行宽过宽时适度收窄，保持可读性 */
+.toc-collapsed .blog-content { max-width: 920px; margin-left: auto; margin-right: auto; }
+.toc-collapsed .blog-footer, .toc-collapsed .section-title, .toc-collapsed .blog-header { max-width: 920px; margin-left: auto; margin-right: auto; }
+
 .blog-header { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #eee; }
 .bh-title-row { display: flex; align-items: center; gap: 10px; }
+.bd-toc-restore { flex-shrink: 0; }
 .blog-header h1 { font-size: 1.5rem; margin-bottom: 8px; }
 .blog-meta-line {
   display: flex; align-items: center; gap: 14px;
@@ -266,7 +285,15 @@ onBeforeUnmount(() => {
   padding: 14px 12px;
 }
 [data-theme="dark"] .bd-toc { background: #1e293b; border-color: #334155; }
-.bd-toc-title { font-size: 0.9rem; font-weight: 700; margin-bottom: 10px; color: var(--text-color); }
+.bd-toc-title {
+  font-size: 0.9rem; font-weight: 700; margin-bottom: 10px; color: var(--text-color);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.bd-toc-fold {
+  cursor: pointer; color: #aaa; font-size: 0.95rem;
+  padding: 2px; border-radius: 4px; transition: color 0.15s, background 0.15s;
+}
+.bd-toc-fold:hover { color: var(--primary-color); background: rgba(94, 114, 228, 0.1); }
 .bd-toc-tree { display: flex; flex-direction: column; gap: 2px; }
 .bd-toc-item { display: flex; align-items: center; gap: 4px; font-size: 0.82rem; line-height: 1.5; }
 .bd-toc-text {
