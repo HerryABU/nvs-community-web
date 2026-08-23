@@ -10,7 +10,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// trimSpace 去除首尾空白
 func trimSpace(s string) string { return strings.TrimSpace(s) }
+
+// collectDescendants 收集 id 分类的全部子孙 id（防止移动成环）
+func collectDescendants(id uint, out *[]uint) {
+	var kids []models.BlogCategory
+	models.DB.Where("parent_id = ?", id).Find(&kids)
+	for _, k := range kids {
+		*out = append(*out, k.ID)
+		collectDescendants(k.ID, out)
+	}
+}
 
 // ─────────────────────────────────────────────────────────────
 // 博客分类（一级/二级，CSDN 式）+ 博客点赞
@@ -92,12 +103,20 @@ func AdminCreateBlogCategory(c *gin.Context) {
 		utils.BadRequest(c, "请填写分类名称")
 		return
 	}
-	// 只允许二级：parent_id 必须是已存在的一级分类
+	// 层级校验：最多三级（一级挂 0，二级挂一级，三级挂二级）；三级不能再挂子分类
 	if req.ParentID != 0 {
 		var p models.BlogCategory
-		if err := models.DB.First(&p, req.ParentID).Error; err != nil || p.ParentID != 0 {
-			utils.BadRequest(c, "二级分类只能挂在已有的一级分类下")
+		if err := models.DB.First(&p, req.ParentID).Error; err != nil {
+			utils.BadRequest(c, "上级分类不存在")
 			return
+		}
+		if p.ParentID != 0 {
+			// 父分类是二级/三级：检查其父级是否为一级（父=一级→当前为三级；父=二级→父已三级，拒绝）
+			var pp models.BlogCategory
+			if err := models.DB.First(&pp, p.ParentID).Error; err == nil && pp.ParentID != 0 {
+				utils.BadRequest(c, "分类最多支持三级，三级下不能再挂子分类")
+				return
+			}
 		}
 	}
 	var cnt int64
@@ -150,23 +169,42 @@ func AdminUpdateBlogCategory(c *gin.Context) {
 		}
 		updates["name"] = name
 	}
-	// 改父级：仅允许在 0 与一级分类之间切换，且不能把自己挂到自己/子分类下
+	// 改父级：最多三级；不能把自己挂到自己/子孙下；不能移到会超过三级的层级
 	if req.ParentID != cat.ParentID {
 		if req.ParentID != 0 {
 			var p models.BlogCategory
-			if err := models.DB.First(&p, req.ParentID).Error; err != nil || p.ParentID != 0 {
-				utils.BadRequest(c, "二级分类只能挂在已有的一级分类下")
+			if err := models.DB.First(&p, req.ParentID).Error; err != nil {
+				utils.BadRequest(c, "上级分类不存在")
+				return
+			}
+			// 目标父分类的深度决定新层级：父深度 ≥3 拒绝；若目标父分类已是三级，新分类会是四级
+			parentDepth := 1
+			if p.ParentID != 0 {
+				var pp models.BlogCategory
+				if err := models.DB.First(&pp, p.ParentID).Error; err == nil {
+					parentDepth = 2
+					if pp.ParentID != 0 {
+						parentDepth = 3
+					}
+				}
+			}
+			if parentDepth >= 3 {
+				utils.BadRequest(c, "分类最多支持三级，三级下不能再挂子分类")
 				return
 			}
 			if req.ParentID == cat.ID {
 				utils.BadRequest(c, "不能将分类挂到自己下面")
 				return
 			}
-		}
-		// 一级分类不能降为二级
-		if cat.ParentID == 0 && req.ParentID != 0 {
-			utils.BadRequest(c, "一级分类下已有子分类，不能改为二级；请先移动子分类")
-			return
+			// 不能移到自己的子孙分类下（防止成环）
+			var descendants []uint
+			collectDescendants(cat.ID, &descendants)
+			for _, d := range descendants {
+				if req.ParentID == d {
+					utils.BadRequest(c, "不能将分类挂到自己的子分类下")
+					return
+				}
+			}
 		}
 		updates["parent_id"] = req.ParentID
 	}

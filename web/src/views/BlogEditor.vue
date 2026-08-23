@@ -56,12 +56,15 @@
       <el-input v-model="blogTitle" placeholder="博客标题" size="large" class="be-title-input" />
       <div class="be-header-row">
         <el-input v-model="blogSummary" placeholder="摘要（选填）" size="small" class="be-summary-input" />
-        <el-select v-model="blogCategoryId" placeholder="选择分类（可选）" size="small" clearable class="be-cat-select">
-          <el-option-group v-for="cat in categoryTree" :key="cat.id" :label="cat.name">
-            <el-option :value="cat.id" :label="cat.name" />
-            <el-option v-for="sub in cat.children || []" :key="sub.id" :value="sub.id" :label="`　└ ${sub.name}`" />
-          </el-option-group>
-        </el-select>
+        <el-cascader
+          v-model="blogCategoryPath"
+          :options="categoryCascader"
+          :props="{ expandTrigger: 'hover', emitPath: true }"
+          placeholder="选择分类（可选，支持三级）"
+          size="small"
+          clearable
+          class="be-cat-select"
+        />
         <div class="be-pinned">
           <el-switch v-model="blogPinned" size="small" />
           <span class="be-pinned-label">置顶</span>
@@ -133,7 +136,8 @@ const editingId = ref(Number(route.params.id) || 0);
 const blogTitle = ref('');
 const blogSummary = ref('');
 const blogPinned = ref(false);
-const blogCategoryId = ref<number | undefined>(undefined);
+const blogCategoryId = ref<number | undefined>(undefined); // 提交用的分类（叶子 id）
+const blogCategoryPath = ref<number[]>([]); // 级联选择路径
 const categoryTree = ref<any[]>([]);
 const blogContent = ref('');
 const richTextContent = ref('');
@@ -141,10 +145,43 @@ const editorMode = ref<'md' | 'richtext'>('md');
 const saving = ref(false);
 const lastSaved = ref('');
 
+// 分类树 → el-cascader options（三级）
+const categoryCascader = computed(() =>
+  (categoryTree.value || []).map((c: any) => ({
+    value: c.id,
+    label: c.name,
+    children: (c.children || []).map((s: any) => ({
+      value: s.id,
+      label: s.name,
+      children: (s.children || []).map((g: any) => ({ value: g.id, label: g.name })),
+    })),
+  })),
+);
+
+// 反查分类路径：给定分类 id，找到 [一级, 二级, 三级] 路径
+function findCatPath(target: number): number[] {
+  for (const c of categoryTree.value) {
+    if (c.id === target) return [c.id];
+    for (const s of c.children || []) {
+      if (s.id === target) return [c.id, s.id];
+      for (const g of s.children || []) {
+        if (g.id === target) return [c.id, s.id, g.id];
+      }
+    }
+  }
+  return [];
+}
+
 async function loadCategories() {
   try {
     const res = await blogApi.getCategories();
-    if (res.data.code === 0) categoryTree.value = res.data.data || [];
+    if (res.data.code === 0) {
+      categoryTree.value = res.data.data || [];
+      // 编辑模式：已有分类 → 恢复级联路径
+      if (blogCategoryId.value && categoryTree.value.length) {
+        blogCategoryPath.value = findCatPath(blogCategoryId.value);
+      }
+    }
   } catch { /* ignore */ }
 }
 
@@ -223,6 +260,10 @@ async function saveBlog() {
   if (!blogTitle.value.trim()) { ElMessage.warning('请输入标题'); return; }
   const content = await getContentToSave();
   if (!content.trim()) { ElMessage.warning('请输入内容'); return; }
+  // 级联选择：取路径最后一项为叶子分类 id
+  blogCategoryId.value = blogCategoryPath.value.length
+    ? blogCategoryPath.value[blogCategoryPath.value.length - 1]
+    : undefined;
   saving.value = true;
   try {
     if (editingId.value) {
@@ -230,7 +271,7 @@ async function saveBlog() {
     } else {
       const res = await blogApi.create({ title: blogTitle.value, content, summary: blogSummary.value, category_id: blogCategoryId.value });
       editingId.value = res.data.data.id;
-      router.replace(`/author/blog/${editingId.value}`);
+      router.replace(`/author/blog/edit/${editingId.value}`);
     }
     const now = new Date();
     lastSaved.value = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;

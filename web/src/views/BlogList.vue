@@ -10,18 +10,30 @@
         </div>
         <template v-for="cat in categoryTree" :key="cat.id">
           <div class="bl-cat-item" :class="{ active: currentCatId === cat.id }" @click="selectCategory(cat.id)">
-            <span class="bl-cat-arrow" :class="{ open: expandedParents[cat.id] }" v-if="cat.children && cat.children.length > 0"
-              @click.stop="toggleParent(cat.id)">▸</span>
+            <span class="bl-cat-arrow" :class="{ open: expandedParents['p'+cat.id] }" v-if="cat.children && cat.children.length > 0"
+              @click.stop="toggleParent('p'+cat.id)">▸</span>
             <span v-else class="bl-cat-arrow placeholder">▸</span>
             <span class="bl-cat-name">{{ cat.name }}</span>
             <span class="bl-cat-count">{{ cat.blog_count }}</span>
           </div>
-          <div v-if="cat.children && cat.children.length > 0 && expandedParents[cat.id]" class="bl-cat-children">
-            <div v-for="sub in cat.children" :key="sub.id" class="bl-cat-sub" :class="{ active: currentCatId === sub.id }"
-              @click="selectCategory(sub.id)">
-              <span class="bl-cat-name">└ {{ sub.name }}</span>
-              <span class="bl-cat-count">{{ sub.blog_count }}</span>
-            </div>
+          <div v-if="cat.children && cat.children.length > 0 && expandedParents['p'+cat.id]" class="bl-cat-children">
+            <template v-for="sub in cat.children" :key="sub.id">
+              <div class="bl-cat-sub" :class="{ active: currentCatId === sub.id }" @click="selectCategory(sub.id)">
+                <span class="bl-cat-arrow" :class="{ open: expandedParents['s'+sub.id] }" v-if="sub.children && sub.children.length > 0"
+                  @click.stop="toggleParent('s'+sub.id)">▸</span>
+                <span v-else class="bl-cat-arrow placeholder">▸</span>
+                <span class="bl-cat-name">└ {{ sub.name }}</span>
+                <span class="bl-cat-count">{{ sub.blog_count }}</span>
+              </div>
+              <!-- 三级分类 -->
+              <div v-if="sub.children && sub.children.length > 0 && expandedParents['s'+sub.id]" class="bl-cat-children3">
+                <div v-for="g in sub.children" :key="g.id" class="bl-cat-sub3" :class="{ active: currentCatId === g.id }"
+                  @click="selectCategory(g.id)">
+                  <span class="bl-cat-name">　└ {{ g.name }}</span>
+                  <span class="bl-cat-count">{{ g.blog_count }}</span>
+                </div>
+              </div>
+            </template>
           </div>
         </template>
       </aside>
@@ -113,12 +125,15 @@ const currentCatName = computed(() => {
     if (c.id === currentCatId.value) return c.name;
     for (const s of c.children || []) {
       if (s.id === currentCatId.value) return `${c.name} / ${s.name}`;
+      for (const g of s.children || []) {
+        if (g.id === currentCatId.value) return `${c.name} / ${s.name} / ${g.name}`;
+      }
     }
   }
   return '';
 });
 
-function toggleParent(id: number) {
+function toggleParent(id: string) {
   expandedParents[id] = !expandedParents[id];
 }
 
@@ -222,6 +237,13 @@ onMounted(() => {
 .bl-cat-arrow.placeholder { visibility: hidden; }
 .bl-cat-children { padding-left: 14px; }
 .bl-cat-sub { font-size: 0.82rem; }
+.bl-cat-children3 { padding-left: 20px; }
+.bl-cat-sub3 { font-size: 0.78rem; padding: 5px 10px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.bl-cat-sub3:hover { background: #f5f7fa; }
+[data-theme="dark"] .bl-cat-sub3:hover { background: rgba(255,255,255,0.05); }
+.bl-cat-sub3.active { background: var(--primary-color); color: #fff; }
+.bl-cat-sub3 .bl-cat-count { color: #aaa; }
+.bl-cat-sub3.active .bl-cat-count { color: rgba(255,255,255,0.75); }
 
 /* ===== 右侧 ===== */
 .bl-main { flex: 1; min-width: 0; }

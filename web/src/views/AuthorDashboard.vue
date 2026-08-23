@@ -14,6 +14,9 @@
           <el-button size="large" @click="$router.push('/author/blog/new')">
             <el-icon><Edit /></el-icon>写博客
           </el-button>
+          <el-button size="large" @click="goMyBlogs">
+            <el-icon><Notebook /></el-icon>我的博客
+          </el-button>
         </div>
       </div>
 
@@ -76,8 +79,8 @@
                 <span class="blog-item-meta">{{ formatDate(blog.created_at) }} · {{ blog.view_count }} 阅读<template v-if="blog.like_count"> · 👍 {{ blog.like_count }}</template></span>
               </div>
               <div class="blog-item-actions">
-                <el-button size="small" text type="primary" @click="$router.push(`/blog/${blog.id}`)">查看</el-button>
-                <el-button size="small" text type="primary" @click="$router.push(`/author/blog/${blog.id}`)">编辑</el-button>
+                <el-button size="small" text type="primary" @click="$router.push(`/author/${authStore.user?.username || authStore.user?.id}/blogs/${blog.id}`)">查看</el-button>
+                <el-button size="small" text type="primary" @click="$router.push(`/author/blog/edit/${blog.id}`)">编辑</el-button>
                 <el-popconfirm title="确定删除？" @confirm="deleteMyBlog(blog.id)">
                   <template #reference><el-button size="small" text type="danger">删除</el-button></template>
                 </el-popconfirm>
@@ -278,7 +281,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { novelApi, forumApi, type Novel } from '@/api/novel';
 import { authApi } from '@/api/auth';
@@ -295,7 +298,18 @@ import DashboardCharts from '@/components/DashboardCharts.vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 
 const route = useRoute();
+const router = useRouter();
 const authStore = useAuthStore();
+
+// 进入「我的博客」管理页：/author/blog/{用户名}（数字主键兼容由页面处理）
+function goMyBlogs() {
+  const u = authStore.user;
+  if (u?.username) {
+    router.push(`/author/blog/${u.username}`);
+  } else {
+    router.push('/author/blog/new');
+  }
+}
 
 const novels = ref<Novel[]>([]);
 const loadingNovels = ref(false);

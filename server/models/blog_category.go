@@ -31,8 +31,8 @@ type BlogCategoryNode struct {
 	Children  []BlogCategoryNode `json:"children,omitempty"`
 }
 
-// GetBlogCategoryTree 获取完整分类树（按 sort_order, id 排序），并统计每个分类的博客数（仅未删除）。
-// 一级分类的 blog_count = 直接挂载 + 其下所有二级分类的博客数（与列表按一级分类过滤的语义一致）。
+// GetBlogCategoryTree 获取完整分类树（支持三级：一级/二级/三级），并统计每个分类的博客数（仅未删除）。
+// 上级分类的 blog_count = 直接挂载 + 其下所有子孙分类的博客数（与列表按上级分类过滤的语义一致）。
 func GetBlogCategoryTree() []BlogCategoryNode {
 	var cats []BlogCategory
 	DB.Order("sort_order ASC, id ASC").Find(&cats)
@@ -50,28 +50,43 @@ func GetBlogCategoryTree() []BlogCategoryNode {
 		DB.Model(&AuthorBlog{}).Where("category_id = ?", nodes[i].ID).Count(&cnt)
 		nodes[i].BlogCount = cnt
 	}
-	// 一级分类聚合其下二级分类的博客数（含直接挂载）
+	// 父子映射（可到三级）
 	childrenOf := map[uint][]BlogCategoryNode{}
 	for _, n := range nodes {
 		if n.ParentID != 0 {
 			childrenOf[n.ParentID] = append(childrenOf[n.ParentID], n)
 		}
 	}
-	for i := range nodes {
-		if nodes[i].ParentID == 0 {
-			for _, sub := range childrenOf[nodes[i].ID] {
-				nodes[i].BlogCount += sub.BlogCount
-			}
+	// 组装树（递归最多三层：一级 → 二级 → 三级），自底向上聚合 blog_count：
+	// 每个节点 = 直接挂载 + 其所有子孙分类的博客数
+	var build func(id uint) []BlogCategoryNode
+	build = func(id uint) []BlogCategoryNode {
+		kids := childrenOf[id]
+		if len(kids) == 0 {
+			return nil
 		}
+		out := make([]BlogCategoryNode, 0, len(kids))
+		for _, k := range kids {
+			k.Children = build(k.ID)
+			if k.Children == nil {
+				k.Children = []BlogCategoryNode{}
+			}
+			for _, g := range k.Children {
+				k.BlogCount += g.BlogCount
+			}
+			out = append(out, k)
+		}
+		return out
 	}
-
-	// 组装树：一级分类 + 挂载二级分类
 	tree := make([]BlogCategoryNode, 0, len(nodes))
 	for _, n := range nodes {
 		if n.ParentID == 0 {
-			n.Children = childrenOf[n.ID]
+			n.Children = build(n.ID)
 			if n.Children == nil {
 				n.Children = []BlogCategoryNode{}
+			}
+			for _, c := range n.Children {
+				n.BlogCount += c.BlogCount
 			}
 			tree = append(tree, n)
 		}
@@ -79,7 +94,7 @@ func GetBlogCategoryTree() []BlogCategoryNode {
 	return tree
 }
 
-// GetBlogCategoryName 取分类名（带父级前缀，如「技术/Go」），不存在返回空
+// GetBlogCategoryName 取分类名（带父级前缀，如「技术/Go/并发」），不存在返回空
 func GetBlogCategoryName(id uint) string {
 	if id == 0 {
 		return ""
@@ -88,21 +103,88 @@ func GetBlogCategoryName(id uint) string {
 	if err := DB.First(&c, id).Error; err != nil {
 		return ""
 	}
-	if c.ParentID == 0 {
-		return c.Name
-	}
-	var p BlogCategory
-	if err := DB.First(&p, c.ParentID).Error; err == nil {
-		return p.Name + "/" + c.Name
-	}
-	return c.Name
+	return blogCategoryFullName(&c)
 }
 
-// BlogCategoryWithChildren 是否存在二级子分类
+// blogCategoryFullName 沿 parent_id 链向上拼接分类全名（支持三级，最多 3 层防环）
+func blogCategoryFullName(c *BlogCategory) string {
+	seg := []string{c.Name}
+	cur := c
+	for depth := 0; depth < 3 && cur.ParentID != 0; depth++ {
+		var p BlogCategory
+		if err := DB.First(&p, cur.ParentID).Error; err != nil {
+			break
+		}
+		if p.ID == c.ID {
+			break // 防环
+		}
+		seg = append([]string{p.Name}, seg...)
+		cur = &p
+	}
+	out := ""
+	for i, s := range seg {
+		if i > 0 {
+			out += "/"
+		}
+		out += s
+	}
+	return out
+}
+
+// BlogCategoryHasChildren 是否存在子分类
 func BlogCategoryHasChildren(id uint) bool {
 	var cnt int64
 	DB.Model(&BlogCategory{}).Where("parent_id = ?", id).Count(&cnt)
 	return cnt > 0
+}
+
+// GetBlogCategoryDescendants 返回某分类及其全部子孙分类 id（支持三级；用于按上级分类过滤博客）。
+func GetBlogCategoryDescendants(rootID uint) []uint {
+	ids := []uint{rootID}
+	if rootID == 0 {
+		return ids
+	}
+	var all []BlogCategory
+	DB.Select("id", "parent_id").Find(&all)
+	childMap := map[uint][]uint{}
+	for _, c := range all {
+		childMap[c.ParentID] = append(childMap[c.ParentID], c.ID)
+	}
+	queue := []uint{rootID}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, cid := range childMap[cur] {
+			ids = append(ids, cid)
+			queue = append(queue, cid)
+		}
+	}
+	return ids
+}
+
+// CategoryLevel 返回分类层级：0=一级 1=二级 2=三级；不存在返回 -1
+func CategoryLevel(id uint) int {
+	if id == 0 {
+		return 0
+	}
+	var c BlogCategory
+	if err := DB.First(&c, id).Error; err != nil {
+		return -1
+	}
+	level := 0
+	cur := &c
+	for depth := 0; depth < 3 && cur.ParentID != 0; depth++ {
+		level++
+		var p BlogCategory
+		if err := DB.First(&p, cur.ParentID).Error; err != nil {
+			break
+		}
+		if p.ID == c.ID {
+			break // 防环
+		}
+		cur = &p
+	}
+	return level
 }
 
 // ─────────────────────────────────────────────────────────────

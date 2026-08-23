@@ -65,15 +65,24 @@ func DeleteBlog(id uint) error {
 	return DB.Delete(&AuthorBlog{}, id).Error
 }
 
-// ListAllBlogs 博客列表（categoryID>0 时按分类过滤；一级分类自动包含其下二级分类）
+// ListAllBlogs 博客列表（categoryID>0 时按分类过滤；一级分类自动包含其下全部子孙分类）
 func ListAllBlogs(categoryID uint, page, pageSize int) ([]AuthorBlog, int64, error) {
 	var blogs []AuthorBlog
 	var total int64
 
 	query := DB.Model(&AuthorBlog{})
 	if categoryID > 0 {
-		// 一级分类 → 包含其下所有二级分类的博客
-		query = query.Where("category_id = ? OR category_id IN (SELECT id FROM blog_categories WHERE parent_id = ?)", categoryID, categoryID)
+		// 收集该分类全部子孙（最多三级），过滤其下所有博客
+		ids := []uint{categoryID}
+		var kids1 []uint
+		DB.Model(&BlogCategory{}).Where("parent_id = ?", categoryID).Pluck("id", &kids1)
+		ids = append(ids, kids1...)
+		if len(kids1) > 0 {
+			var kids2 []uint
+			DB.Model(&BlogCategory{}).Where("parent_id IN ?", kids1).Pluck("id", &kids2)
+			ids = append(ids, kids2...)
+		}
+		query = query.Where("category_id IN ?", ids)
 	}
 	query.Count(&total)
 

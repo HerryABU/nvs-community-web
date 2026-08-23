@@ -2,7 +2,7 @@
   <div class="page-container blog-list-page">
     <div class="bl-header">
       <h1>
-        <router-link :to="`/author/${authorId}`" style="color:var(--primary-color);text-decoration:none">
+        <router-link :to="`/author/${authorKey}`" style="color:var(--primary-color);text-decoration:none">
           {{ authorName }}
         </router-link>
         的博客
@@ -13,7 +13,7 @@
     <div v-loading="loading" class="bl-list">
       <el-empty v-if="!loading && blogs.length === 0" description="该作者还没有博客文章" />
 
-      <div v-for="blog in blogs" :key="blog.id" class="bl-card" @click="$router.push(`/author/${authorId}/blogs/${blog.id}`)">
+      <div v-for="blog in blogs" :key="blog.id" class="bl-card" @click="$router.push(`/author/${authorKey}/blogs/${blog.id}`)">
         <el-tag v-if="blog.is_pinned" type="danger" size="small" class="bl-pin">置顶</el-tag>
 
         <!-- 作者信息行 -->
@@ -57,7 +57,9 @@ import { blogApi } from '@/api/social';
 import { publicApi } from '@/api/admin';
 
 const route = useRoute();
-const authorId = ref(Number(route.params.id));
+// :id 兼容数字主键与用户名（后端统一解析）
+const authorKey = ref(String(route.params.id ?? ''));
+const authorId = ref(0); // 解析后的数字主键
 const authorName = ref('');
 const blogs = ref<any[]>([]);
 const loading = ref(false);
@@ -69,15 +71,18 @@ function formatDate(d?: string) { return d ? new Date(d).toLocaleDateString('zh-
 
 async function loadAuthor() {
   try {
-    const res = await publicApi.getAuthorProfile(authorId.value);
-    const author = res.data?.data?.author || res.data?.data;
+    const res = await publicApi.getAuthorProfile(authorKey.value);
+    const d = res.data?.data;
+    const author = d?.author || d;
     if (author) {
+      authorId.value = d?.author_id || author.id || 0;
       authorName.value = author.nickname || author.username || '作者';
     }
   } catch { /* ignore */ }
 }
 
 async function loadBlogs() {
+  if (authorId.value <= 0) return;
   loading.value = true;
   try {
     const res = await blogApi.listByAuthor(authorId.value, page.value);
@@ -89,8 +94,8 @@ async function loadBlogs() {
   loading.value = false;
 }
 
-onMounted(() => {
-  loadAuthor();
+onMounted(async () => {
+  await loadAuthor();
   loadBlogs();
 });
 </script>

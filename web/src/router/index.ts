@@ -234,11 +234,14 @@ const router = createRouter({
       name: 'blog-list',
       component: () => import('@/views/BlogList.vue'),
     },
+    // 用户博客主页（/blog/{用户名} 或 /blog/{数字id}，数字是主键、用户名兼容访问）
     {
-      path: '/blog/:id',
-      name: 'blog-detail',
-      component: () => import('@/views/BlogDetail.vue'),
+      path: '/blog/:key',
+      name: 'blog-home',
+      component: () => import('@/views/BlogHome.vue'),
     },
+    // 作者博客管理（/author/blog/{用户名}，数字 id 兼容；仅本人可管理）
+    // 注意：new / edit 必须定义在 :key 之前，避免被通配参数抢先匹配
     {
       path: '/author/blog/new',
       name: 'blog-new',
@@ -246,9 +249,15 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
-      path: '/author/blog/:id',
+      path: '/author/blog/edit/:id',
       name: 'blog-edit',
       component: () => import('@/views/BlogEditor.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/author/blog/:key',
+      name: 'blog-manager',
+      component: () => import('@/views/BlogManager.vue'),
       meta: { requiresAuth: true },
     },
     {

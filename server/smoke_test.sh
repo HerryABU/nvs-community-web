@@ -117,27 +117,42 @@ IMPB=$(curl -s -m 20 -b "$SMOKE_DIR_WIN/ck.txt" -X POST "$BASE/api/novels/import
 check "批量导入追加(is_append=true)" '"is_append":true' "$IMPB"
 check "批量导入不新建书本(同一novel_id)" "\"novel_id\":$NID" "$IMPB"
 
-# ── 管理员：建博客分类（一/二级） ──
+# ── 管理员：建博客分类（一/二/三级） ──
 curl -s -m 8 -c "$SMOKE_DIR_WIN/adm.txt" -X POST "$BASE/api/auth/login" -H "Content-Type: application/json" \
   -d '{"email":"admin@nvs.local","password":"Smoke@2026"}' > /dev/null
 CAT1=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X POST "$BASE/api/admin/blog-categories" -H "Content-Type: application/json" -d '{"name":"技术"}')
 CAT1ID=$(echo "$CAT1" | "$PY" -c "import sys,json;print(json.load(sys.stdin)['data']['id'])" 2>/dev/null || echo 1)
 check "管理员创建一级分类" '"code":0' "$CAT1"
 CAT2=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X POST "$BASE/api/admin/blog-categories" -H "Content-Type: application/json" -d "{\"name\":\"Go\",\"parent_id\":$CAT1ID}")
+CAT2ID=$(echo "$CAT2" | "$PY" -c "import sys,json;print(json.load(sys.stdin)['data']['id'])" 2>/dev/null || echo 2)
 check "创建二级分类" '"code":0' "$CAT2"
+CAT3=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X POST "$BASE/api/admin/blog-categories" -H "Content-Type: application/json" -d "{\"name\":\"并发编程\",\"parent_id\":$CAT2ID}")
+CAT3ID=$(echo "$CAT3" | "$PY" -c "import sys,json;print(json.load(sys.stdin)['data']['id'])" 2>/dev/null || echo 3)
+check "创建三级分类" '"code":0' "$CAT3"
+CAT4=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X POST "$BASE/api/admin/blog-categories" -H "Content-Type: application/json" -d "{\"name\":\"非法四级\",\"parent_id\":$CAT3ID}")
+check "四级分类被拒绝" '三级' "$CAT4"
 DUP=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X POST "$BASE/api/admin/blog-categories" -H "Content-Type: application/json" -d '{"name":"技术"}')
 check "同名分类被拒绝" '同名' "$DUP"
 
-# ── T07 博客带分类创建 ──
-BLOG=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X POST "$BASE/api/blogs" -H "Content-Type: application/json" \
-  -d "{\"title\":\"冒烟博客\",\"content\":\"# 冒烟博客内容\n\n正文\",\"category_id\":$CAT1ID}")
-check "博客创建带分类" '"code":0' "$BLOG"
-BID=$(echo "$BLOG" | "$PY" -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
-check "博客分类名返回(技术)" '"category":"技术"' "$BLOG"
+# ── T06b 用户名/数字解析（数字是主键、用户名兼容） ──
+RSLV=$(curl -s -m 8 "$BASE/api/users/resolve?key=$U")
+check "用户名解析为数字id" "\"username\":\"$U\"" "$RSLV"
+RSLV2=$(curl -s -m 8 "$BASE/api/users/resolve?key=$(echo "$U" | tr 'a-z' 'A-Z')")
+check "用户名大小写不敏感" "\"username\":\"$U\"" "$RSLV2"
+UPROF=$(curl -s -m 8 "$BASE/api/author/profile/$U")
+check "作者主页支持用户名" '"code":0' "$UPROF"
 
-# ── T08 列表分类过滤 ──
+# ── T07 博客带三级分类创建 ──
+BLOG=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X POST "$BASE/api/blogs" -H "Content-Type: application/json" \
+  -d "{\"title\":\"冒烟博客\",\"content\":\"# 冒烟博客内容\n\n正文\",\"category_id\":$CAT3ID}")
+check "博客创建带三级分类" '"code":0' "$BLOG"
+BID=$(echo "$BLOG" | "$PY" -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
+check "博客分类名返回(三级前缀)" '技术/Go/并发编程' "$BLOG"
+
+# ── T08 列表一级分类过滤（含三级子孙） ──
 LF=$(curl -s -m 8 "$BASE/api/blogs?category_id=$CAT1ID")
-check "列表按一级分类过滤" '"list":[' "$LF"
+check "列表按一级过滤含三级博客" '"list":[' "$LF"
+check "列表一级过滤返回该博客" "冒烟博客" "$LF"
 
 # ── T09 博客点赞 toggle ──
 L1=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X POST "$BASE/api/blogs/$BID/like")

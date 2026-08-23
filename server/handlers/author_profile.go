@@ -23,15 +23,43 @@ func GetMyNovels(c *gin.Context) {
 	utils.Success(c, novels)
 }
 
-// GetAuthorProfile 获取作者公开主页信息（包括作品列表和统计数据）
-func GetAuthorProfile(c *gin.Context) {
-	authorID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+// ResolveUserKey 解析用户标识（数字主键 id 或 username），返回用户。
+// 规则：纯数字 → 按 id 查；其余 → 按 username 查（大小写不敏感）。
+func ResolveUserKey(key string) (*models.User, error) {
+	if key == "" {
+		return nil, fmt.Errorf("用户标识为空")
+	}
+	if id, err := strconv.ParseUint(key, 10, 64); err == nil {
+		return models.GetUserByID(uint(id))
+	}
+	var u models.User
+	if err := models.DB.Where("LOWER(username) = LOWER(?)", key).First(&u).Error; err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
 
-	user, err := models.GetUserByID(uint(authorID))
-	if err != nil {
+// ResolveUserByKey GET /api/users/resolve?key=xxx — 轻量解析用户标识（id 或用户名）
+// 供前端把 URL 参数（可能是 username）解析为数字主键，避免拉取完整主页。
+func ResolveUserByKey(c *gin.Context) {
+	key := c.Query("key")
+	u, err := ResolveUserKey(key)
+	if err != nil || u == nil {
+		utils.NotFound(c, "用户不存在")
+		return
+	}
+	utils.Success(c, gin.H{"id": u.ID, "username": u.Username, "nickname": u.Nickname, "role": u.Role})
+}
+
+// GetAuthorProfile 获取作者公开主页信息（包括作品列表和统计数据）
+// :id 参数兼容：数字主键 id 或 用户名（username）
+func GetAuthorProfile(c *gin.Context) {
+	user, err := ResolveUserKey(c.Param("id"))
+	if err != nil || user == nil {
 		utils.NotFound(c, "作者不存在")
 		return
 	}
+	authorID := user.ID
 
 	// 隐藏敏感信息但保留 author_id
 	user.PasswordHash = ""

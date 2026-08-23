@@ -20,14 +20,28 @@
               </span>
             </div>
             <div v-if="cat.children && cat.children.length" class="cat-children">
-              <div v-for="sub in cat.children" :key="sub.id" class="cat-sub">
-                <span class="cat-name">└ {{ sub.name }}</span>
-                <el-tag size="small" type="info">{{ sub.blog_count }} 篇</el-tag>
-                <span class="cat-actions">
-                  <el-button size="small" text type="primary" @click="openEdit(sub)">编辑</el-button>
-                  <el-button size="small" text type="danger" @click="removeCat(sub)">删除</el-button>
-                </span>
-              </div>
+              <template v-for="sub in cat.children" :key="sub.id">
+                <div class="cat-sub">
+                  <span class="cat-name">└ {{ sub.name }}</span>
+                  <el-tag size="small" type="info">{{ sub.blog_count }} 篇</el-tag>
+                  <span class="cat-actions">
+                    <el-button size="small" text type="primary" @click="openCreate(sub.id)">+ 子分类</el-button>
+                    <el-button size="small" text type="primary" @click="openEdit(sub)">编辑</el-button>
+                    <el-button size="small" text type="danger" @click="removeCat(sub)">删除</el-button>
+                  </span>
+                </div>
+                <!-- 三级分类 -->
+                <div v-if="sub.children && sub.children.length" class="cat-children3">
+                  <div v-for="g in sub.children" :key="g.id" class="cat-sub3">
+                    <span class="cat-name">　└ {{ g.name }}</span>
+                    <el-tag size="small" type="info">{{ g.blog_count }} 篇</el-tag>
+                    <span class="cat-actions">
+                      <el-button size="small" text type="primary" @click="openEdit(g)">编辑</el-button>
+                      <el-button size="small" text type="danger" @click="removeCat(g)">删除</el-button>
+                    </span>
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
           <el-empty v-if="!loading && tree.length === 0" description="暂无分类，点击「新增一级分类」创建" />
@@ -61,7 +75,7 @@
     </el-tabs>
 
     <!-- 新增/编辑分类弹窗 -->
-    <el-dialog v-model="showDialog" :title="editingId ? '编辑分类' : (parentId ? '新增二级分类' : '新增一级分类')" width="420px">
+    <el-dialog v-model="showDialog" :title="editingId ? '编辑分类' : (parentId ? (parentLevel === 2 ? '新增三级分类' : '新增二级分类') : '新增一级分类')" width="420px">
       <el-form label-width="90px">
         <el-form-item label="分类名称" required>
           <el-input v-model="form.name" placeholder="分类名称（如：技术 / 随笔）" maxlength="64" />
@@ -96,7 +110,22 @@ const saving = ref(false);
 const editingId = ref(0);
 const parentId = ref(0);
 const parentName = ref('');
+const parentLevel = ref(1); // 父分类层级（1=一级 → 新增二级；2=二级 → 新增三级）
 const form = reactive({ name: '', sort_order: 0 });
+
+// 在树中查找节点（含层级信息）
+function findCatInfo(id: number): { name: string; level: number } | null {
+  for (const c of tree.value) {
+    if (c.id === id) return { name: c.name, level: 1 };
+    for (const s of c.children || []) {
+      if (s.id === id) return { name: s.name, level: 2 };
+      for (const g of s.children || []) {
+        if (g.id === id) return { name: g.name, level: 3 };
+      }
+    }
+  }
+  return null;
+}
 
 async function loadTree() {
   loading.value = true;
@@ -111,9 +140,11 @@ function openCreate(parentID = 0) {
   editingId.value = 0;
   parentId.value = parentID;
   parentName.value = '';
+  parentLevel.value = 1;
   if (parentID > 0) {
-    const p = tree.value.find(c => c.id === parentID);
-    parentName.value = p?.name || '';
+    const info = findCatInfo(parentID);
+    parentName.value = info?.name || '';
+    parentLevel.value = info?.level || 1;
   }
   form.name = '';
   form.sort_order = 0;
@@ -124,9 +155,11 @@ function openEdit(cat: any) {
   editingId.value = cat.id;
   parentId.value = cat.parent_id || 0;
   parentName.value = '';
+  parentLevel.value = 1;
   if (cat.parent_id > 0) {
-    const p = tree.value.find(c => c.id === cat.parent_id);
-    parentName.value = p?.name || '';
+    const info = findCatInfo(cat.parent_id);
+    parentName.value = info?.name || '';
+    parentLevel.value = info?.level || 1;
   }
   form.name = cat.name;
   form.sort_order = cat.sort_order || 0;
@@ -213,13 +246,15 @@ onMounted(() => {
   border: 1px solid var(--border-color); border-radius: 10px;
   margin-bottom: 10px; overflow: hidden;
 }
-.cat-main, .cat-sub {
+.cat-main, .cat-sub, .cat-sub3 {
   display: flex; align-items: center; gap: 10px;
   padding: 12px 16px;
 }
 .cat-main { background: var(--bg-color, #f8fafc); font-weight: 600; }
 .cat-children { border-top: 1px dashed var(--border-color); }
 .cat-sub { padding-left: 40px; }
+.cat-children3 { border-top: 1px dashed var(--border-color); }
+.cat-sub3 { padding-left: 72px; font-size: 0.92rem; }
 .cat-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cat-actions { display: flex; gap: 2px; flex-shrink: 0; }
 
