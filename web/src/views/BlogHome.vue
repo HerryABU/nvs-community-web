@@ -28,18 +28,27 @@
 
       <!-- 布局：分类栏 + 博客列表 -->
       <div class="bh-layout">
-        <!-- 左侧分类（该用户博客分类过滤） -->
-        <aside class="bh-cats" v-if="userCats.length > 0">
+        <!-- 左侧分类（三级，点击筛选该用户当前分类博客） -->
+        <aside class="bh-cats" v-if="allCats.length > 0">
           <div class="bh-cats-title">博客分类</div>
           <div class="bh-cat-item" :class="{ active: filterCatId === 0 }" @click="selectCat(0)">全部</div>
-          <template v-for="cat in userCats" :key="cat.id">
+          <template v-for="cat in allCats" :key="cat.id">
             <div class="bh-cat-item" :class="{ active: filterCatId === cat.id }" @click="selectCat(cat.id)">
-              <span class="bh-cat-arrow" :class="{ open: expanded[cat.id] }" v-if="cat.children?.length" @click.stop="toggle(cat.id)">▸</span>
+              <span class="bh-cat-arrow" :class="{ open: expanded['p'+cat.id] }" v-if="cat.children?.length" @click.stop="toggle('p'+cat.id)">▸</span>
               <span v-else class="bh-cat-arrow placeholder">▸</span>
               {{ cat.name }}
             </div>
-            <div v-if="cat.children?.length && expanded[cat.id]" class="bh-cat-children">
-              <div v-for="sub in cat.children" :key="sub.id" class="bh-cat-sub" :class="{ active: filterCatId === sub.id }" @click="selectCat(sub.id)">└ {{ sub.name }}</div>
+            <div v-if="cat.children?.length && expanded['p'+cat.id]" class="bh-cat-children">
+              <template v-for="sub in cat.children" :key="sub.id">
+                <div class="bh-cat-sub" :class="{ active: filterCatId === sub.id }" @click="selectCat(sub.id)">
+                  <span class="bh-cat-arrow" :class="{ open: expanded['s'+sub.id] }" v-if="sub.children?.length" @click.stop="toggle('s'+sub.id)">▸</span>
+                  <span v-else class="bh-cat-arrow placeholder">▸</span>
+                  └ {{ sub.name }}
+                </div>
+                <div v-if="sub.children?.length && expanded['s'+sub.id]" class="bh-cat-children3">
+                  <div v-for="g in sub.children" :key="g.id" class="bh-cat-sub3" :class="{ active: filterCatId === g.id }" @click="selectCat(g.id)">　└ {{ g.name }}</div>
+                </div>
+              </template>
             </div>
           </template>
         </aside>
@@ -76,7 +85,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive } from 'vue';
+import { ref, onMounted, reactive } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { blogApi, type BlogCategoryNode } from '@/api/social';
 import { publicApi } from '@/api/admin';
@@ -94,14 +103,11 @@ const total = ref(0);
 const page = ref(1);
 const pageSize = 10;
 const filterCatId = ref(0);
-const expanded = reactive<Record<number, boolean>>({});
+const expanded = reactive<Record<string, boolean>>({});
 const allCats = ref<BlogCategoryNode[]>([]);
 
-// 该用户用到的分类（从博客列表里收集）
-const userCats = computed(() => allCats.value.filter(c => c.blog_count > 0));
-
 function formatDate(d?: string) { if (!d) return ''; return new Date(d).toLocaleDateString('zh-CN'); }
-function toggle(id: number) { expanded[id] = !expanded[id]; }
+function toggle(k: string) { expanded[k] = !expanded[k]; }
 function selectCat(id: number) { filterCatId.value = id; page.value = 1; loadBlogs(); }
 
 async function loadBlogs() {
@@ -195,6 +201,11 @@ onMounted(init);
 .bh-cat-arrow.open { transform: rotate(90deg); }
 .bh-cat-arrow.placeholder { visibility: hidden; }
 .bh-cat-children { padding-left: 14px; }
+.bh-cat-children3 { padding-left: 22px; }
+.bh-cat-sub3 { font-size: 0.78rem; padding: 5px 10px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; color: var(--text-color); }
+.bh-cat-sub3:hover { background: #f5f7fa; }
+[data-theme="dark"] .bh-cat-sub3:hover { background: rgba(255,255,255,0.05); }
+.bh-cat-sub3.active { background: var(--primary-color); color: #fff; }
 
 /* 右侧列表 */
 .bh-main { flex: 1; min-width: 0; }
