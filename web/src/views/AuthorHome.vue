@@ -85,7 +85,7 @@
       <!-- 作者博客 -->
       <h2 class="section-title" style="margin-top:32px">作者博客</h2>
       <div class="blog-list" v-if="blogs.length > 0">
-        <div v-for="blog in blogs" :key="blog.id" class="blog-item" @click="$router.push(`/author/${authorId}/blogs/${blog.id}`)">
+        <div v-for="blog in blogs" :key="blog.id" class="blog-item" @click="$router.push(`/author/${authorKey}/blogs/${blog.id}`)">
           <div class="blog-title-row">
             <el-tag v-if="blog.is_pinned" size="small" type="danger" style="margin-right:6px">置顶</el-tag>
             <span class="blog-item-title">{{ blog.title }}</span>
@@ -98,7 +98,7 @@
         </div>
       </div>
       <div v-else style="color:#999;font-size:0.9rem;padding:12px 0">暂无博客文章</div>
-      <el-button text size="small" @click="$router.push(`/author/${authorId}/blogs`)" style="margin-top:8px">查看全部博客 →</el-button>
+      <el-button text size="small" @click="$router.push(`/author/${authorKey}/blogs`)" style="margin-top:8px">查看全部博客 →</el-button>
 
       <!-- 作者评论区 -->
       <h2 class="section-title" style="margin-top:32px">读者留言</h2>
@@ -125,7 +125,9 @@ const router = useRouter();
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
 
-const authorId = ref(Number(route.params.id));
+// :id 兼容数字主键与用户名（后端 getAuthorProfile 统一解析）
+const authorKey = ref(String(route.params.id ?? ''));
+const authorId = ref(0); // 解析后的数字主键（异步填充）
 const loading = ref(false);
 const author = ref<any>(null);
 const data = ref<any>({});
@@ -184,20 +186,23 @@ const authorHomeTrendMetrics = computed(() => {
 async function load() {
   loading.value = true;
   try {
-    const res = await publicApi.getAuthorProfile(authorId.value);
+    const res = await publicApi.getAuthorProfile(authorKey.value);
     if (res.data.code === 0) {
       const d = res.data.data;
       author.value = d.author;
       data.value = d;
+      authorId.value = d.author_id || d.author?.id || 0;
     }
   } catch (e) {
     console.error(e);
   } finally {
     loading.value = false;
   }
-  // 同时加载关注状态和博客
-  loadFollowStatus();
-  loadBlogs();
+  // 解析成功后加载关注状态和博客（authorId 为数字主键）
+  if (authorId.value > 0) {
+    loadFollowStatus();
+    loadBlogs();
+  }
 }
 
 async function loadFollowStatus() {

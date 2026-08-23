@@ -245,10 +245,11 @@ func GetBlog(c *gin.Context) {
 }
 
 // GET /api/author/:id/blogs/:blogId — 获取某作者的某篇博客详情（独立 URL）
+// :id 兼容数字主键 id 与用户名（username）
 func GetAuthorBlog(c *gin.Context) {
-	authorID, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil || authorID == 0 {
-		utils.BadRequest(c, "无效的作者ID")
+	author, err := ResolveUserKey(c.Param("id"))
+	if err != nil || author == nil {
+		utils.NotFound(c, "作者不存在")
 		return
 	}
 	blogID, err := strconv.ParseUint(c.Param("blogId"), 10, 64)
@@ -258,7 +259,7 @@ func GetAuthorBlog(c *gin.Context) {
 	}
 
 	blog, err := models.GetBlogByID(uint(blogID))
-	if err != nil || blog.AuthorID != uint(authorID) {
+	if err != nil || blog.AuthorID != author.ID {
 		utils.NotFound(c, "博客不存在")
 		return
 	}

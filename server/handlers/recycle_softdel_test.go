@@ -236,8 +236,41 @@ func TestAdminListRecycle(t *testing.T) {
 	}
 }
 
+// TestResolveUserKey 用户标识解析：数字=主键 id，非数字=用户名（大小写不敏感）
+func TestResolveUserKey(t *testing.T) {
+	setupHandlerTestDB(t)
+	seedTestUser(t, 42, "harry_zhou", "author")
+
+	// 数字 → id
+	u, err := ResolveUserKey("42")
+	if err != nil || u.ID != 42 {
+		t.Fatalf("数字 id 解析失败: %v %+v", err, u)
+	}
+	// 用户名 → username 查询
+	u, err = ResolveUserKey("harry_zhou")
+	if err != nil || u.ID != 42 {
+		t.Fatalf("用户名解析失败: %v %+v", err, u)
+	}
+	// 用户名大小写不敏感
+	u, err = ResolveUserKey("HARRY_ZHOU")
+	if err != nil || u.ID != 42 {
+		t.Fatalf("用户名大写解析失败: %v %+v", err, u)
+	}
+	// 不存在
+	if _, err = ResolveUserKey("nobody_here"); err == nil {
+		t.Errorf("不存在的用户名应报错")
+	}
+	if _, err = ResolveUserKey("99999"); err == nil {
+		t.Errorf("不存在的 id 应报错")
+	}
+	// 空
+	if _, err = ResolveUserKey(""); err == nil {
+		t.Errorf("空标识应报错")
+	}
+}
+
 // ─────────────────────────────────────────────────────────────
-// 博客分类管理 API（一/二级）+ 博客点赞 API
+// 博客分类管理 API（一/二/三级）+ 博客点赞 API
 // ─────────────────────────────────────────────────────────────
 
 func TestBlogCategoryAdminAPI(t *testing.T) {
@@ -267,12 +300,19 @@ func TestBlogCategoryAdminAPI(t *testing.T) {
 	// 记录二级分类 id（catID+1）
 	subID := catID + 1
 
-	// 二级挂二级 → 拒绝
+	// 三级挂二级 → 成功（分类支持到三级）
 	c, w = asUser("admin", 1)
-	setJSONBody(c, map[string]interface{}{"name": "非法", "parent_id": subID})
+	setJSONBody(c, map[string]interface{}{"name": "并发", "parent_id": subID})
 	AdminCreateBlogCategory(c)
-	if !bytes.Contains(w.Body.Bytes(), []byte("一级")) {
-		t.Errorf("二级挂二级应被拒绝: %s", w.Body.String())
+	mustJSON(t, w)
+	sub3ID := subID + 1
+
+	// 四级挂三级 → 拒绝（最多三级）
+	c, w = asUser("admin", 1)
+	setJSONBody(c, map[string]interface{}{"name": "非法四级", "parent_id": sub3ID})
+	AdminCreateBlogCategory(c)
+	if !bytes.Contains(w.Body.Bytes(), []byte("三级")) {
+		t.Errorf("四级分类应被拒绝: %s", w.Body.String())
 	}
 
 	// 删除一级（有子分类）→ 拒绝
@@ -284,7 +324,12 @@ func TestBlogCategoryAdminAPI(t *testing.T) {
 		t.Errorf("一级有子分类应拒绝删除: %s", w.Body.String())
 	}
 
-	// 删除二级 → 成功
+	// 先删三级 → 成功；再删二级 → 成功
+	c, w = asUser("admin", 1)
+	c.Params = gin.Params{gin.Param{Key: "id", Value: "3"}}
+	c.Request = httptest.NewRequest("DELETE", "/", nil)
+	AdminDeleteBlogCategory(c)
+	mustJSON(t, w)
 	c, w = asUser("admin", 1)
 	c.Params = gin.Params{gin.Param{Key: "id", Value: "2"}}
 	c.Request = httptest.NewRequest("DELETE", "/", nil)

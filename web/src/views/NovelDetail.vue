@@ -58,7 +58,7 @@
           </div>
           <div
             class="chapter-item"
-            @click="$router.push(`/novel/${novel.id}/read/${ch.chapter_number}`)"
+            @click="$router.push(`/author/${novel.author_id}/novel/${novel.id}/read/${ch.chapter_number}`)"
           >
             <span class="chapter-num">第{{ ch.chapter_number }}章</span>
             <span class="chapter-title">{{ ch.title }}</span>
@@ -149,7 +149,7 @@ function formatDate(dateStr?: string) {
 
 function startReading() {
   if (chapters.value.length > 0) {
-    router.push(`/novel/${novel.value!.id}/read/${chapters.value[0].chapter_number}`);
+    router.push(`/author/${novel.value!.author_id}/novel/${novel.value!.id}/read/${chapters.value[0].chapter_number}`);
   }
 }
 
@@ -216,6 +216,12 @@ onMounted(async () => {
     ]);
     novel.value = novelRes.data.data;
     chapters.value = chaptersRes.data.data || [];
+
+    // URL 规范化：/novel/:id（旧路径）→ /author/{authorId}/novel/:id（推荐路径）。
+    // 数字是主键，规范路径用作者数字 id；不改变作者标识（无用户名可保留）。
+    if (novel.value && !route.params.authorId) {
+      router.replace(`/author/${novel.value.author_id}/novel/${id}`);
+    }
 
     // 检查书架状态
     if (authStore.isLoggedIn && novel.value) {

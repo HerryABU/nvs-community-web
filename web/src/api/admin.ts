@@ -279,8 +279,13 @@ export const publicApi = {
   getCategoryStats() {
     return api.get('/categories/stats');
   },
-  getAuthorProfile(id: number) {
+  getAuthorProfile(id: number | string) {
+    // :id 兼容数字主键 或 用户名（username）
     return api.get(`/author/profile/${id}`);
+  },
+  // 用户标识解析：数字=主键 id，非数字=用户名（大小写不敏感）
+  resolveUser(key: string) {
+    return api.get<{ code: number; data: { id: number; username: string; nickname: string; role: string } }>('/users/resolve', { params: { key } });
   },
   getAuthorForum(id: number) {
     return api.get(`/author/forum/${id}`);

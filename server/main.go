@@ -209,6 +209,7 @@ func main() {
 		public.GET("/novels/:id/forum", handlers.GetNovelForum)
 		public.GET("/threads/:id", handlers.GetThread)
 		public.GET("/author/profile/:id", handlers.GetAuthorProfile)
+		public.GET("/users/resolve", handlers.ResolveUserByKey) // 用户标识解析（id/用户名，数字是主键）
 		public.GET("/author/forum/:id", handlers.GetAuthorForum)
 		public.GET("/search/authors", handlers.SearchAuthors)
 		public.GET("/userframes/public", handlers.ListPublicFrames)

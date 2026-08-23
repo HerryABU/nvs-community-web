@@ -49,3 +49,6 @@ logs/
 server/handlers/authors/
 server/handlers/log/
 server.pid
+
+# 冒烟测试临时目录（server/smoke_test.sh 运行产物）
+.smoke_*/
