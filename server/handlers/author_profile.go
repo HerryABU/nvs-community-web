@@ -167,14 +167,14 @@ func GetAuthorProfile(c *gin.Context) {
 }
 
 // GetAuthorForum 获取作者的专属讨论区（自动创建）
+// :id 兼容数字主键 id 与用户名（username）
 func GetAuthorForum(c *gin.Context) {
-	authorID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-
-	user, err := models.GetUserByID(uint(authorID))
-	if err != nil {
+	user, err := ResolveUserKey(c.Param("id"))
+	if err != nil || user == nil {
 		utils.NotFound(c, "作者不存在")
 		return
 	}
+	authorID := user.ID
 
 	authorName := user.Nickname
 	if authorName == "" {
