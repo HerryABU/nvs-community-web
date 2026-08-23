@@ -439,6 +439,24 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v2.1.6 博客个人专栏 + 标签 + 媒体（2026-08-23）
+
+> 分类体系改为**个人专栏**（CSDN 式：每个作者自己的分类，去"平台分类"概念）；分类可点进去查看并**批量迁移博客**；博客支持 **#标签**（标签云/筛选/编辑）；新增**通用上传接口** + 编辑器**图片上传 / 音视频嵌入**。
+
+| 类别 | 文件 | 说明 |
+|---|---|---|
+| 标签 | `models/blog_tag.go`(+`blog_tag_test.go`) | `blog_tags` + `blog_tag_links` 表；SyncBlogTags（去重/去#）、GetBlogTags、标签云、按标签查博客 |
+| 标签 | `handlers/social_blog.go` | CreateBlog/UpdateBlog 支持 `tags`；列表/详情返回 tags；`GET /api/blog-tags` 标签云；`GET /api/blogs?tag=` 筛选 |
+| 个人专栏 | `models/blog_category.go` | `GetAuthorCategoryTree`：某作者已公开分类树（仅 approved，他人父分类上提） |
+| 个人专栏 | `handlers/blog_category.go` + `main.go` | `GET /api/author/:id/blog-categories` 公开接口 |
+| 个人专栏 | `views/BlogManager.vue` | 分类管理只显示**我的分类**（个人专栏），去掉"平台分类"区；每分类「📂 博客」→ 弹窗查看该分类博客并**批量迁移** |
+| 个人专栏 | `views/BlogEditor.vue` | 分类下拉改自己的分类（含待审核标注） |
+| 个人专栏 | `views/BlogHome.vue` / `BlogList.vue` | 作者主页分类栏=该作者个人专栏；广场列表支持 tag 参数 + 标签云 |
+| 上传 | `handlers/upload.go` + `main.go` | `POST /api/upload` 通用上传（图片≤10MB / 音视频≤50MB，白名单扩展名） |
+| 编辑器 | `views/BlogEditor.vue` | Cherry `imageUpload` 走统一上传；「🎬 视频 / 🎵 音频」按钮（上传或粘贴 URL 插入） |
+| 详情 | `views/BlogDetail.vue` | 显示 #标签（点击跳全站标签筛选） |
+| API | `api/social/index.ts` | listByAuthor 支持 category 筛选；getTags / getAuthorCategories / uploadApi |
+
 ### v2.1.3 统一用户索引 + 博客分类导入（2026-08-23）
 
 > 修复 `/author/{用户名}/blogs/{id}` 无法访问的 NaN bug；博客管理支持把已有博客导入/归入分类（单篇 + 批量）。
