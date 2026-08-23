@@ -24,19 +24,19 @@ export const followApi = {
 
 // 作者博客
 export const blogApi = {
-  listPublic(page: number = 1, pageSize: number = 12, categoryId?: number) {
-    return api.get('/blogs', { params: { page, page_size: pageSize, category_id: categoryId || undefined } });
+  listPublic(page: number = 1, pageSize: number = 12, categoryId?: number, tag?: string) {
+    return api.get('/blogs', { params: { page, page_size: pageSize, category_id: categoryId || undefined, tag: tag || undefined } });
   },
   getBlog(id: number) {
     return api.get(`/blogs/${id}`);
   },
-  listByAuthor(authorId: number, page: number = 1) {
-    return api.get(`/author/${authorId}/blogs`, { params: { page } });
+  listByAuthor(authorId: number, page: number = 1, categoryId?: number, search?: string) {
+    return api.get(`/author/${authorId}/blogs`, { params: { page, category_id: categoryId || undefined, search: search || undefined } });
   },
   getAuthorBlog(authorId: number, blogId: number) {
     return api.get(`/author/${authorId}/blogs/${blogId}`);
   },
-  create(data: { title: string; content: string; summary?: string; category_id?: number }) {
+  create(data: { title: string; content: string; summary?: string; category_id?: number; tags?: string[] }) {
     return api.post('/blogs', data);
   },
   // 批量导入博客：每个文件一篇，标题取文件名（去扩展名）
@@ -48,17 +48,25 @@ export const blogApi = {
       formData,
     );
   },
-  update(id: number, data: { title?: string; content?: string; summary?: string; is_pinned?: boolean; category_id?: number }) {
+  update(id: number, data: { title?: string; content?: string; summary?: string; is_pinned?: boolean; category_id?: number; tags?: string[] | null }) {
     return api.put(`/blogs/${id}`, data);
   },
   delete(id: number) {
     return api.delete(`/blogs/${id}`);
   },
+  // ===== 标签（#tag，CSDN 式）=====
+  getTags() {
+    return api.get<{ code: number; data: { name: string; count: number }[] }>('/blog-tags');
+  },
   // ===== 分类（树）=====
   getCategories() {
     return api.get<{ code: number; data: BlogCategoryNode[] }>('/blog-categories');
   },
-  // 分类管理视图（登录）：platform=已通过分类树 + mine=自己创建的分类（含待审核状态）
+  // 某作者的已公开分类树（个人专栏）
+  getAuthorCategories(authorKey: number | string) {
+    return api.get<{ code: number; data: BlogCategoryNode[] }>(`/author/${authorKey}/blog-categories`);
+  },
+  // 分类管理视图（登录）：mine=自己创建的分类（个人专栏，含待审核状态）
   getManageCategories() {
     return api.get<{ code: number; data: { platform: BlogCategoryNode[]; mine: any[] } }>('/blog-categories/manage');
   },
@@ -78,6 +86,18 @@ export const blogApi = {
   },
   toggleLike(id: number) {
     return api.post<{ code: number; data: { liked: boolean; count: number } }>(`/blogs/${id}/like`);
+  },
+};
+
+// 通用文件上传（博客图片/音视频，CSDN 式编辑器）
+export const uploadApi = {
+  upload(file: File) {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post<{ code: number; data: { url: string; size: number; name: string; ext: string } }>('/upload', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    });
   },
 };
 

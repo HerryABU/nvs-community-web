@@ -25,7 +25,8 @@ type AuthorBlog struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
-	Author *User `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
+	Author *User    `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
+	Tags   []BlogTag `gorm:"-" json:"tags,omitempty"` // 博客标签（多对多，通过 blog_tag_links 关联）
 }
 
 func (AuthorBlog) TableName() string { return "author_blogs" }
@@ -44,16 +45,41 @@ func GetBlogByID(id uint) (*AuthorBlog, error) {
 	return &blog, nil
 }
 
-func GetBlogsByAuthor(authorID uint, page, pageSize int) ([]AuthorBlog, int64, error) {
+func GetBlogsByAuthor(authorID, categoryID uint, page, pageSize int) ([]AuthorBlog, int64, error) {
 	var blogs []AuthorBlog
 	var total int64
 
 	query := DB.Model(&AuthorBlog{}).Where("author_id = ?", authorID)
+	if categoryID > 0 {
+		query = query.Where("category_id = ?", categoryID)
+	}
 	query.Count(&total)
 
 	offset := (page - 1) * pageSize
 	err := query.Preload("Author").Order("is_pinned DESC, created_at DESC").
 		Offset(offset).Limit(pageSize).Find(&blogs).Error
+	return blogs, total, err
+}
+
+// ListBlogsByIDs 按博客 id 集合查询（支持分类二次筛选；保持置顶+时间倒序）
+func ListBlogsByIDs(ids []uint, categoryID uint, page, pageSize int) ([]AuthorBlog, int64, error) {
+	var blogs []AuthorBlog
+	var total int64
+
+	query := DB.Model(&AuthorBlog{}).Where("id IN ?", ids)
+	if categoryID > 0 {
+		query = query.Where("category_id = ?", categoryID)
+	}
+	query.Count(&total)
+
+	offset := (page - 1) * pageSize
+	err := query.Preload("Author").Order("is_pinned DESC, created_at DESC").
+		Offset(offset).Limit(pageSize).Find(&blogs).Error
+	for i := range blogs {
+		if blogs[i].Author != nil {
+			blogs[i].Author.Email = ""
+		}
+	}
 	return blogs, total, err
 }
 

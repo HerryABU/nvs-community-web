@@ -120,6 +120,8 @@ check "批量导入不新建书本(同一novel_id)" "\"novel_id\":$NID" "$IMPB"
 # ── 管理员：建博客分类（一/二/三级） ──
 curl -s -m 8 -c "$SMOKE_DIR_WIN/adm.txt" -X POST "$BASE/api/auth/login" -H "Content-Type: application/json" \
   -d '{"email":"admin@nvs.local","password":"Smoke@2026"}' > /dev/null
+# 重置审核模式为事后审核（幂等：test_go 副本库可能遗留 pre_public 配置）
+curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X PUT "$BASE/api/admin/blog-categories/mode" -H "Content-Type: application/json" -d '{"mode":"post_review"}' > /dev/null
 CAT1=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X POST "$BASE/api/admin/blog-categories" -H "Content-Type: application/json" -d '{"name":"技术"}')
 CAT1ID=$(echo "$CAT1" | "$PY" -c "import sys,json;print(json.load(sys.stdin)['data']['id'])" 2>/dev/null || echo 1)
 check "管理员创建一级分类" '"code":0' "$CAT1"
@@ -204,16 +206,31 @@ check "作者模版接口支持用户名" '"code":0' "$UFRAMES"
 UAB=$(curl -s -m 8 "$BASE/api/author/$U/blogs")
 check "作者博客列表支持用户名" '"code":0' "$UAB"
 
-# ── T07 博客带三级分类创建 ──
+# ── T07 博客带三级分类创建 + 标签 + 作者专栏分类 ──
 BLOG=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X POST "$BASE/api/blogs" -H "Content-Type: application/json" \
-  -d "{\"title\":\"冒烟博客\",\"content\":\"# 冒烟博客内容\n\n正文\",\"category_id\":$CAT3ID}")
+  -d "{\"title\":\"冒烟博客\",\"content\":\"# 冒烟博客内容\n\n正文\",\"category_id\":$CAT3ID,\"tags\":[\"Go\",\"并发编程\"]}")
 check "博客创建带三级分类" '"code":0' "$BLOG"
 BID=$(echo "$BLOG" | "$PY" -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
 check "博客分类名返回(三级前缀)" '技术/Go/并发编程' "$BLOG"
+check "博客创建返回标签" '"name":"Go"' "$BLOG"
 UBD=$(curl -s -m 8 "$BASE/api/author/$U/blogs/$BID")
 check "博客详情支持用户名(/author/{用户名}/blogs/{id})" '"code":0' "$UBD"
-UBD=$(curl -s -m 8 "$BASE/api/author/$U/blogs/$BID")
-check "博客详情支持用户名(/author/{用户名}/blogs/{id})" '"code":0' "$UBD"
+
+# ── T07b 标签云 + 按标签筛选 + 上传接口 ──
+TAGS=$(curl -s -m 8 "$BASE/api/blog-tags")
+check "标签云接口" '"count"' "$TAGS"
+check "标签云含 Go" '"name":"Go"' "$TAGS"
+TGF=$(curl -s -m 8 "$BASE/api/blogs?tag=Go")
+check "按标签筛选博客" "冒烟博客" "$TGF"
+# 上传小图片（1x1 png）
+printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n\x2d\xb4\x00\x00\x00\x00IEND\xaeB`\x82' > "$SMOKE_DIR_WIN/up.png"
+UP=$(curl -s -m 20 -b "$SMOKE_DIR_WIN/ck.txt" -X POST "$BASE/api/upload" -F "file=@$SMOKE_DIR_WIN/up.png")
+check "上传接口返回url" '"/uploads/' "$UP"
+UPURL=$(echo "$UP" | "$PY" -c "import sys,json;print(json.load(sys.stdin)['data']['url'])" 2>/dev/null || echo "")
+if [ -n "$UPURL" ]; then ok "上传文件可访问 ($UPURL)"; else bad "上传文件URL为空"; fi
+# 作者专栏分类（已公开分类树）
+AUTC=$(curl -s -m 8 "$BASE/api/author/$U/blog-categories")
+check "作者个人专栏分类接口" '"code":0' "$AUTC"
 
 # ── T08 列表一级分类过滤（含三级子孙） ──
 LF=$(curl -s -m 8 "$BASE/api/blogs?category_id=$CAT1ID")

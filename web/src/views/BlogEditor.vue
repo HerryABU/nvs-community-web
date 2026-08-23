@@ -56,21 +56,55 @@
       <el-input v-model="blogTitle" placeholder="博客标题" size="large" class="be-title-input" />
       <div class="be-header-row">
         <el-input v-model="blogSummary" placeholder="摘要（选填）" size="small" class="be-summary-input" />
-        <el-cascader
-          v-model="blogCategoryPath"
-          :options="categoryCascader"
-          :props="{ expandTrigger: 'hover', emitPath: true }"
-          placeholder="选择分类（可选，支持三级）"
+        <el-select
+          v-model="blogTags"
+          multiple
+          filterable
+          allow-create
+          default-first-option
+          placeholder="标签 # 输入回车创建"
+          size="small"
+          class="be-tags-select"
+        />
+        <el-select
+          v-model="blogCategoryId"
+          placeholder="选择分类（我的专栏）"
           size="small"
           clearable
           class="be-cat-select"
-        />
+        >
+          <el-option v-for="c in myCatOptions" :key="c.id" :label="c.label" :value="c.id" />
+        </el-select>
+        <div class="be-media-btns">
+          <el-button size="small" @click="openMedia('video')">🎬 视频</el-button>
+          <el-button size="small" @click="openMedia('audio')">🎵 音频</el-button>
+        </div>
         <div class="be-pinned">
           <el-switch v-model="blogPinned" size="small" />
           <span class="be-pinned-label">置顶</span>
         </div>
       </div>
     </div>
+
+    <!-- 插入视频/音频弹窗（上传或粘贴 URL，仿 CSDN） -->
+    <el-dialog v-model="mediaDialog" :title="mediaType === 'video' ? '🎬 插入视频' : '🎵 插入音频'" width="480px">
+      <el-upload
+        :auto-upload="false"
+        :show-file-list="false"
+        accept="video/*,audio/*"
+        drag
+        :on-change="onMediaFileChange"
+      >
+        <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+        <div class="el-upload__text">点击或拖拽上传{{ mediaType === 'video' ? '视频' : '音频' }}文件（≤50MB）</div>
+      </el-upload>
+      <div class="media-or">—— 或粘贴外链 URL ——</div>
+      <el-input v-model="mediaUrl" :placeholder="mediaType === 'video' ? 'https://example.com/video.mp4' : 'https://example.com/audio.mp3'" />
+      <template #footer>
+        <el-button @click="mediaDialog = false">取消</el-button>
+        <el-button type="primary" :loading="mediaUploading" @click="insertMedia">插入到正文</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 编辑器 -->
     <div class="be-editor">
@@ -87,7 +121,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { blogApi } from '@/api/social';
+import { blogApi, uploadApi } from '@/api/social';
 import { ElMessage } from 'element-plus';
 import { ArrowLeft, UploadFilled } from '@element-plus/icons-vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
@@ -136,51 +170,29 @@ const editingId = ref(Number(route.params.id) || 0);
 const blogTitle = ref('');
 const blogSummary = ref('');
 const blogPinned = ref(false);
-const blogCategoryId = ref<number | undefined>(undefined); // 提交用的分类（叶子 id）
-const blogCategoryPath = ref<number[]>([]); // 级联选择路径
-const categoryTree = ref<any[]>([]);
+const blogCategoryId = ref<number | undefined>(undefined); // 提交用的分类（个人专栏，一级/二级/三级均可）
+const blogTags = ref<string[]>([]); // 博客标签（#tag）
+const myCats = ref<any[]>([]); // 我的分类（个人专栏，含待审核）
 const blogContent = ref('');
 const richTextContent = ref('');
 const editorMode = ref<'md' | 'richtext'>('md');
 const saving = ref(false);
 const lastSaved = ref('');
 
-// 分类树 → el-cascader options（三级）
-const categoryCascader = computed(() =>
-  (categoryTree.value || []).map((c: any) => ({
-    value: c.id,
-    label: c.name,
-    children: (c.children || []).map((s: any) => ({
-      value: s.id,
-      label: s.name,
-      children: (s.children || []).map((g: any) => ({ value: g.id, label: g.name })),
-    })),
+// 我的分类平铺选项（带缩进/待审核标注）
+const myCatOptions = computed(() =>
+  (myCats.value || []).map((c: any) => ({
+    id: c.id,
+    label: (c.full_name || c.name) + (c.status === 'pending' ? '（待审核）' : ''),
   })),
 );
 
-// 反查分类路径：给定分类 id，找到 [一级, 二级, 三级] 路径
-function findCatPath(target: number): number[] {
-  for (const c of categoryTree.value) {
-    if (c.id === target) return [c.id];
-    for (const s of c.children || []) {
-      if (s.id === target) return [c.id, s.id];
-      for (const g of s.children || []) {
-        if (g.id === target) return [c.id, s.id, g.id];
-      }
-    }
-  }
-  return [];
-}
-
 async function loadCategories() {
   try {
-    const res = await blogApi.getCategories();
+    // 个人专栏：只加载自己创建的分类（含待审核/已拒绝状态）
+    const res = await blogApi.getManageCategories();
     if (res.data.code === 0) {
-      categoryTree.value = res.data.data || [];
-      // 编辑模式：已有分类 → 恢复级联路径
-      if (blogCategoryId.value && categoryTree.value.length) {
-        blogCategoryPath.value = findCatPath(blogCategoryId.value);
-      }
+      myCats.value = res.data.data?.mine || [];
     }
   } catch { /* ignore */ }
 }
@@ -212,9 +224,75 @@ async function initCherryEditor() {
       toolbarRight: ['togglePreview'],
     },
     ...editorEngineConfig,
+    // CSDN 式图片上传：走统一 /api/upload
+    imageUpload: async (file: File, callback: (url: string) => void) => {
+      try {
+        const res = await uploadApi.upload(file);
+        const url = res.data.data?.url;
+        callback(url || '');
+        if (!url) ElMessage.error('图片上传失败');
+      } catch (e: any) {
+        ElMessage.error(e?.response?.data?.message || '图片上传失败');
+        callback('');
+      }
+    },
     callback: { afterChange: (text: string) => { blogContent.value = text; } },
   });
   cherryReady = true;
+}
+
+// ===== 插入音视频（CSDN 式：上传文件或粘贴 URL）=====
+const mediaDialog = ref(false);
+const mediaType = ref<'video' | 'audio'>('video');
+const mediaUrl = ref('');
+const mediaFile = ref<File | null>(null);
+const mediaUploading = ref(false);
+
+function openMedia(type: 'video' | 'audio') {
+  mediaType.value = type;
+  mediaUrl.value = '';
+  mediaFile.value = null;
+  mediaDialog.value = true;
+}
+
+function onMediaFileChange(file: any) {
+  if (file.raw) mediaFile.value = file.raw;
+}
+
+function insertIntoEditor(text: string) {
+  if (editorMode.value === 'md' && cherryInstance) {
+    // Cherry 内部 CodeMirror 光标处插入；兼容 insert API
+    const cm = cherryInstance.editor?.codemirror || cherryInstance.codemirror;
+    if (cm && cm.replaceSelection) { cm.replaceSelection(text); }
+    else if (cherryInstance.insert) { cherryInstance.insert(text); }
+    else { blogContent.value += '\n\n' + text; }
+  } else {
+    richTextContent.value += (richTextContent.value ? '<p></p>' : '') + text;
+  }
+}
+
+async function insertMedia() {
+  let url = mediaUrl.value.trim();
+  if (!url && mediaFile.value) {
+    mediaUploading.value = true;
+    try {
+      const res = await uploadApi.upload(mediaFile.value);
+      url = res.data.data?.url || '';
+      if (!url) ElMessage.error('上传失败');
+    } catch (e: any) {
+      ElMessage.error(e?.response?.data?.message || '上传失败');
+      return;
+    } finally { mediaUploading.value = false; }
+  }
+  if (!url) { ElMessage.warning('请上传文件或粘贴 URL'); return; }
+  const html = mediaType.value === 'video'
+    ? `<video src="${url}" controls preload="metadata" style="max-width:100%"></video>`
+    : `<audio src="${url}" controls preload="metadata"></audio>`;
+  insertIntoEditor(html);
+  mediaDialog.value = false;
+  mediaUrl.value = '';
+  mediaFile.value = null;
+  ElMessage.success('已插入' + (mediaType.value === 'video' ? '视频' : '音频'));
 }
 
 function destroyCherryEditor() {
@@ -247,7 +325,8 @@ async function loadBlog() {
       blogSummary.value = b.summary || '';
       blogPinned.value = b.is_pinned || false;
       blogCategoryId.value = b.category_id || undefined;
-      // 分类树可能尚未加载完成：重新拉一次以恢复级联路径（避免竞态导致编辑时分类显示为空）
+      blogTags.value = (b.tags || []).map((t: any) => t.name);
+      // 分类树可能尚未加载完成：重新拉一次（个人专栏）
       await loadCategories();
       if (editorMode.value === 'md') {
         if (cherryInstance) cherryInstance.setValue(b.content || '');
@@ -262,16 +341,20 @@ async function saveBlog() {
   if (!blogTitle.value.trim()) { ElMessage.warning('请输入标题'); return; }
   const content = await getContentToSave();
   if (!content.trim()) { ElMessage.warning('请输入内容'); return; }
-  // 级联选择：取路径最后一项为叶子分类 id
-  blogCategoryId.value = blogCategoryPath.value.length
-    ? blogCategoryPath.value[blogCategoryPath.value.length - 1]
-    : undefined;
   saving.value = true;
   try {
+    const payload = {
+      title: blogTitle.value,
+      content,
+      summary: blogSummary.value,
+      is_pinned: blogPinned.value,
+      category_id: blogCategoryId.value,
+      tags: blogTags.value,
+    };
     if (editingId.value) {
-      await blogApi.update(editingId.value, { title: blogTitle.value, content, summary: blogSummary.value, is_pinned: blogPinned.value, category_id: blogCategoryId.value });
+      await blogApi.update(editingId.value, payload);
     } else {
-      const res = await blogApi.create({ title: blogTitle.value, content, summary: blogSummary.value, category_id: blogCategoryId.value });
+      const res = await blogApi.create(payload);
       editingId.value = res.data.data.id;
       router.replace(`/author/blog/edit/${editingId.value}`);
     }
@@ -325,11 +408,14 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 .be-title-input { --el-input-focus-border-color: var(--primary-color); }
-.be-header-row { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
-.be-summary-input { flex: 1; }
+.be-header-row { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+.be-summary-input { flex: 1; min-width: 200px; }
+.be-tags-select { width: 220px; flex-shrink: 0; }
 .be-cat-select { width: 200px; flex-shrink: 0; }
+.be-media-btns { display: flex; gap: 6px; flex-shrink: 0; }
 .be-pinned { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .be-pinned-label { font-size: 0.8rem; color: #999; white-space: nowrap; }
+.media-or { text-align: center; color: #999; font-size: 0.85rem; margin: 14px 0 8px; }
 
 /* 编辑器区域 */
 .be-editor { flex: 1; overflow: hidden; padding: 0 16px 16px; display: flex; }
@@ -358,7 +444,7 @@ onBeforeUnmount(() => {
   .be-header-row {
     flex-wrap: wrap;
   }
-  .be-cat-select {
+  .be-cat-select, .be-tags-select {
     width: 100%;
     flex: 1 0 100%;
   }

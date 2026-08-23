@@ -308,6 +308,7 @@ func main() {
 		protected.PUT("/blogs/:id", handlers.UpdateBlog)
 		protected.DELETE("/blogs/:id", handlers.DeleteBlog)
 		protected.POST("/blogs/:id/like", handlers.ToggleBlogLike) // 博客点赞/取消
+		protected.POST("/upload", handlers.UploadFile)             // 通用上传：博客图片/音视频
 		// 博客分类管理（登录作者/管理员均可：新增/编辑/删除/挂靠，支持三级；普通作者创建=待审核）
 		protected.GET("/blog-categories/manage", handlers.ListMyBlogCategories)
 		protected.POST("/blog-categories", handlers.CreateBlogCategory)
@@ -452,12 +453,14 @@ func main() {
 		// 统一搜索：作品 / 作者 / 博客 / HTML 扩展
 		r.GET("/api/search", handlers.UnifiedSearch)
 		// 博客公开读取
-		r.GET("/api/blogs", handlers.ListPublicBlogs)
+		r.GET("/api/blogs", handlers.ListPublicBlogs) // 支持 category_id / tag 筛选
 		r.GET("/api/blogs/:id", handlers.GetBlog)
 		r.GET("/api/blogs/:id/likes", handlers.GetBlogLikes) // 博客点赞数+当前用户状态
+		r.GET("/api/blog-tags", handlers.ListBlogTags)       // 全站标签云
 		r.GET("/api/blog-categories", handlers.ListBlogCategories) // 博客分类树（公开）
 		r.GET("/api/author/:id/blogs/:blogId", handlers.GetAuthorBlog)
 		r.GET("/api/author/:id/blogs", handlers.ListAuthorBlogs)
+		r.GET("/api/author/:id/blog-categories", handlers.ListAuthorBlogCategories) // 作者个人专栏（已公开分类）
 
 		// 沙盒预览 & WASM
 		r.GET("/api/sandbox/info", handlers.GetSandboxInfo)

@@ -34,6 +34,17 @@ func ListBlogCategories(c *gin.Context) {
 	utils.Success(c, models.GetBlogCategoryTree())
 }
 
+// GET /api/author/:id/blog-categories — 某作者的已公开分类树（个人专栏）
+// :id 兼容数字主键 id 与用户名（username）
+func ListAuthorBlogCategories(c *gin.Context) {
+	author, err := ResolveUserKey(c.Param("id"))
+	if err != nil || author == nil {
+		utils.NotFound(c, "作者不存在")
+		return
+	}
+	utils.Success(c, models.GetAuthorCategoryTree(author.ID))
+}
+
 // GET /api/blogs/like/status — 兼容：博客点赞状态（供详情页使用）
 // GET /api/blogs/:id/likes — 点赞数 + 当前用户是否已赞
 func GetBlogLikes(c *gin.Context) {

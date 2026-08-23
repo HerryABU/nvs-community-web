@@ -31,18 +31,20 @@ func computeBlogHash(content string) string {
 }
 
 type CreateBlogInput struct {
-	Title      string `json:"title" binding:"required,max=256"`
-	Content    string `json:"content" binding:"required"`
-	Summary    string `json:"summary"`
-	CategoryID uint   `json:"category_id"`
+	Title      string   `json:"title" binding:"required,max=256"`
+	Content    string   `json:"content" binding:"required"`
+	Summary    string   `json:"summary"`
+	CategoryID uint     `json:"category_id"`
+	Tags       []string `json:"tags"` // 博客标签（#tag）
 }
 
 type UpdateBlogInput struct {
-	Title      string `json:"title"`
-	Content    string `json:"content"`
-	Summary    string `json:"summary"`
-	IsPinned   *bool  `json:"is_pinned"`
-	CategoryID *uint  `json:"category_id"`
+	Title      string   `json:"title"`
+	Content    string   `json:"content"`
+	Summary    string   `json:"summary"`
+	IsPinned   *bool    `json:"is_pinned"`
+	CategoryID *uint    `json:"category_id"`
+	Tags       []string `json:"tags"` // 博客标签（#tag），null=不修改
 }
 
 // POST /api/blogs/import/batch — 批量导入博客（multipart，每个文件一篇博客，标题取文件名去扩展名）
@@ -196,6 +198,12 @@ func CreateBlog(c *gin.Context) {
 	blog.ContentHash = contentHash
 	blog.Content = content
 	blog.Category = models.GetBlogCategoryName(blog.CategoryID)
+	// 同步标签（去重/去#前缀）
+	if len(req.Tags) > 0 {
+		if err := models.SyncBlogTags(blog.ID, req.Tags); err == nil {
+			blog.Tags = models.GetBlogTags(blog.ID)
+		}
+	}
 
 	utils.Success(c, blog)
 }
@@ -217,14 +225,39 @@ func ListPublicBlogs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "12"))
 	categoryID, _ := strconv.ParseUint(c.DefaultQuery("category_id", "0"), 10, 64)
+	tag := strings.TrimSpace(c.DefaultQuery("tag", ""))
 
-	blogs, total, err := models.ListAllBlogs(uint(categoryID), page, pageSize)
+	var blogs []models.AuthorBlog
+	var total int64
+	var err error
+	if tag != "" {
+		// 按标签筛选
+		ids, e := models.GetBlogIDsByTag(tag)
+		if e != nil {
+			utils.InternalError(c, "查询失败")
+			return
+		}
+		if len(ids) == 0 {
+			utils.Success(c, gin.H{"list": []models.AuthorBlog{}, "total": 0})
+			return
+		}
+		blogs, total, err = models.ListBlogsByIDs(ids, uint(categoryID), page, pageSize)
+	} else {
+		blogs, total, err = models.ListAllBlogs(uint(categoryID), page, pageSize)
+	}
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
 	}
 	fillBlogCategories(blogs)
+	models.FillBlogTags(blogs)
 	utils.Success(c, gin.H{"list": blogs, "total": total})
+}
+
+// GET /api/blog-tags — 全站标签云（按文章数降序）
+func ListBlogTags(c *gin.Context) {
+	cloud := models.GetBlogTagCloud(30)
+	utils.Success(c, cloud)
 }
 
 // GET /api/blogs/:id — 获取博客详情
@@ -238,6 +271,7 @@ func GetBlog(c *gin.Context) {
 	loadBlogContent(blog)
 	models.IncrementBlogView(uint(id))
 	blog.Category = models.GetBlogCategoryName(blog.CategoryID)
+	blog.Tags = models.GetBlogTags(blog.ID)
 	if blog.Author != nil {
 		blog.Author.Email = ""
 	}
@@ -267,13 +301,14 @@ func GetAuthorBlog(c *gin.Context) {
 	loadBlogContent(blog)
 	models.IncrementBlogView(uint(blogID))
 	blog.Category = models.GetBlogCategoryName(blog.CategoryID)
+	blog.Tags = models.GetBlogTags(blog.ID)
 	if blog.Author != nil {
 		blog.Author.Email = ""
 	}
 	utils.Success(c, blog)
 }
 
-// GET /api/author/:id/blogs — 获取某作者的博客列表
+// GET /api/author/:id/blogs — 获取某作者的博客列表（支持 category_id 筛选）
 func ListAuthorBlogs(c *gin.Context) {
 	// :id 兼容数字主键 id 与用户名（username）
 	author, err := ResolveUserKey(c.Param("id"))
@@ -282,8 +317,9 @@ func ListAuthorBlogs(c *gin.Context) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	categoryID, _ := strconv.ParseUint(c.DefaultQuery("category_id", "0"), 10, 64)
 
-	blogs, total, err := models.GetBlogsByAuthor(author.ID, page, 10)
+	blogs, total, err := models.GetBlogsByAuthor(author.ID, uint(categoryID), page, 10)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -294,6 +330,7 @@ func ListAuthorBlogs(c *gin.Context) {
 			blogs[i].Author.Email = ""
 		}
 	}
+	models.FillBlogTags(blogs)
 	utils.Success(c, gin.H{"list": blogs, "total": total})
 }
 
@@ -353,6 +390,13 @@ func UpdateBlog(c *gin.Context) {
 		blog.CategoryID = cid
 		updates["category_id"] = cid
 	}
+	// 标签：仅当请求显式携带 tags 字段时同步（null 表示不修改）
+	if req.Tags != nil {
+		if err := models.SyncBlogTags(blog.ID, req.Tags); err != nil {
+			utils.InternalError(c, "标签保存失败")
+			return
+		}
+	}
 
 	if len(updates) > 0 {
 		if err := models.DB.Model(blog).Updates(updates).Error; err != nil {
@@ -363,6 +407,7 @@ func UpdateBlog(c *gin.Context) {
 
 	loadBlogContent(blog)
 	blog.Category = models.GetBlogCategoryName(blog.CategoryID)
+	blog.Tags = models.GetBlogTags(blog.ID)
 	utils.Success(c, blog)
 }
 

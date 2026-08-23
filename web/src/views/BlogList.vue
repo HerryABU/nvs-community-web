@@ -4,7 +4,7 @@
       <!-- 左侧分类栏（CSDN 式：一级 + 可展开二级） -->
       <aside class="bl-cats" v-if="categoryTree.length > 0">
         <div class="bl-cats-title">博客分类</div>
-        <div class="bl-cat-item" :class="{ active: currentCatId === 0 }" @click="selectCategory(0)">
+        <div class="bl-cat-item" :class="{ active: currentCatId === 0 && !currentTag }" @click="selectCategory(0)">
           <span class="bl-cat-name">全部博客</span>
           <span class="bl-cat-count">{{ totalAll }}</span>
         </div>
@@ -36,13 +36,29 @@
             </template>
           </div>
         </template>
+        <!-- 热门标签（#tag，CSDN 式标签云） -->
+        <div class="bl-tags" v-if="tagCloud.length > 0">
+          <div class="bl-tags-title">🏷 热门标签</div>
+          <div class="bl-tags-cloud">
+            <span
+              v-for="t in tagCloud"
+              :key="t.name"
+              class="bl-tag"
+              :class="{ active: currentTag === t.name }"
+              @click="selectTag(t.name)"
+            ># {{ t.name }} <em>{{ t.count }}</em></span>
+          </div>
+        </div>
       </aside>
 
       <!-- 右侧列表 -->
       <div class="bl-main">
         <div class="bl-header">
           <h1>📝 作者博客</h1>
-          <p class="bl-subtitle">{{ currentCatName ? `分类：${currentCatName}` : '发现作者们的创作心得与技术分享' }}</p>
+          <p class="bl-subtitle">
+            {{ currentTag ? `标签：#${currentTag}` : (currentCatName ? `分类：${currentCatName}` : '发现作者们的创作心得与技术分享') }}
+            <el-tag v-if="currentTag" size="small" closable class="bl-tag-clear" @close="selectTag('')">清除</el-tag>
+          </p>
         </div>
 
         <div v-loading="loading" class="bl-list" style="min-height: 200px">
@@ -81,8 +97,11 @@
               </p>
             </div>
 
-            <!-- 底部标签 -->
+            <!-- 底部：标签 + 阅读 -->
             <div class="bl-footer">
+              <div class="bl-card-tags">
+                <span v-for="t in blog.tags || []" :key="t.id" class="bl-card-tag" @click.stop="selectTag(t.name)"># {{ t.name }}</span>
+              </div>
               <span class="bl-read-more">阅读全文 →</span>
             </div>
           </div>
@@ -105,7 +124,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive } from 'vue';
+import { useRoute } from 'vue-router';
 import { blogApi, type BlogCategoryNode } from '@/api/social';
+
+const route = useRoute();
 
 const blogs = ref<any[]>([]);
 const total = ref(0);
@@ -118,6 +140,8 @@ const previewLength = 100;
 const categoryTree = ref<BlogCategoryNode[]>([]);
 const currentCatId = ref(0);
 const expandedParents = reactive<Record<number, boolean>>({});
+const tagCloud = ref<{ name: string; count: number }[]>([]);
+const currentTag = ref(typeof route.query.tag === 'string' ? route.query.tag : '');
 
 const currentCatName = computed(() => {
   if (currentCatId.value === 0) return '';
@@ -139,6 +163,14 @@ function toggleParent(id: string) {
 
 function selectCategory(id: number) {
   currentCatId.value = id;
+  currentTag.value = '';
+  page.value = 1;
+  loadBlogs();
+}
+
+function selectTag(tag: string) {
+  currentTag.value = tag;
+  currentCatId.value = 0;
   page.value = 1;
   loadBlogs();
 }
@@ -163,18 +195,19 @@ function extractFirstImage(html: string): string | null {
 
 async function loadCategories() {
   try {
-    const res = await blogApi.getCategories();
-    if (res.data.code === 0) {
-      categoryTree.value = res.data.data || [];
+    const [catRes, tagRes] = await Promise.all([blogApi.getCategories(), blogApi.getTags()]);
+    if (catRes.data.code === 0) {
+      categoryTree.value = catRes.data.data || [];
       totalAll.value = categoryTree.value.reduce((sum, c) => sum + c.blog_count, 0);
     }
+    if (tagRes.data.code === 0) tagCloud.value = tagRes.data.data || [];
   } catch { /* ignore */ }
 }
 
 async function loadBlogs() {
   loading.value = true;
   try {
-    const res = await blogApi.listPublic(page.value, pageSize, currentCatId.value || undefined);
+    const res = await blogApi.listPublic(page.value, pageSize, currentCatId.value || undefined, currentTag.value || undefined);
     if (res.data.code === 0) {
       blogs.value = res.data.data.list || [];
       total.value = res.data.data.total || 0;
@@ -281,7 +314,29 @@ onMounted(() => {
 .bl-summary { font-size: 0.9rem; color: #666; line-height: 1.7; flex: 1; }
 [data-theme="dark"] .bl-summary { color: #94a3b8; }
 
-.bl-footer { display: flex; justify-content: flex-end; align-items: center; }
+/* 热门标签云（CSDN 式） */
+.bl-tags { margin-top: 16px; padding: 12px; background: #fff; border: 1px solid var(--border-color); border-radius: 12px; }
+[data-theme="dark"] .bl-tags { background: #1e293b; border-color: #334155; }
+.bl-tags-title { font-size: 0.85rem; font-weight: 700; margin-bottom: 10px; color: var(--text-color); }
+.bl-tags-cloud { display: flex; flex-wrap: wrap; gap: 6px; }
+.bl-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; border-radius: 999px;
+  background: rgba(94,114,228,0.07); color: var(--primary-color);
+  font-size: 0.78rem; cursor: pointer; transition: all 0.2s;
+}
+.bl-tag em { font-style: normal; font-size: 0.7rem; color: #999; }
+.bl-tag:hover, .bl-tag.active { background: var(--primary-color); color: #fff; }
+.bl-tag:hover em, .bl-tag.active em { color: rgba(255,255,255,0.8); }
+.bl-tag-clear { margin-left: 8px; }
+.bl-footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.bl-card-tags { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
+.bl-card-tag {
+  font-size: 0.75rem; color: var(--primary-color);
+  background: rgba(94,114,228,0.07);
+  padding: 2px 8px; border-radius: 999px; cursor: pointer;
+}
+.bl-card-tag:hover { background: var(--primary-color); color: #fff; }
 .bl-read-more { font-size: 0.85rem; color: var(--primary-color); }
 
 .pagination { margin-top: 24px; display: flex; justify-content: center; }

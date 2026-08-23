@@ -165,6 +165,81 @@ func GetMyCategories(userID uint) []BlogCategory {
 	return cats
 }
 
+// GetAuthorCategoryTree 某作者的已公开分类树（个人专栏，仅 approved，含博客数）
+func GetAuthorCategoryTree(authorID uint) []BlogCategoryNode {
+	var cats []BlogCategory
+	DB.Where("created_by = ? AND status = ?", authorID, "approved").
+		Order("sort_order ASC, id ASC").Find(&cats)
+	if len(cats) == 0 {
+		return []BlogCategoryNode{}
+	}
+	// 只保留属于自己的分类（父分类若不是自己的，则上提）
+	ids := map[uint]bool{}
+	for _, c := range cats {
+		ids[c.ID] = true
+	}
+	nodes := make([]BlogCategoryNode, 0, len(cats))
+	for _, c := range cats {
+		pid := c.ParentID
+		if pid != 0 {
+			var p BlogCategory
+			if err := DB.First(&p, pid).Error; err != nil || p.CreatedBy != authorID || !ids[p.ID] {
+				pid = 0
+			}
+		}
+		nodes = append(nodes, BlogCategoryNode{
+			ID: c.ID, ParentID: pid, Name: c.Name, SortOrder: c.SortOrder,
+			Status: c.Status, CreatedBy: c.CreatedBy,
+		})
+	}
+	// 统计博客数 + 父子映射（可到三级）
+	for i := range nodes {
+		var cnt int64
+		DB.Model(&AuthorBlog{}).Where("category_id = ?", nodes[i].ID).Count(&cnt)
+		nodes[i].BlogCount = cnt
+	}
+	childrenOf := map[uint][]BlogCategoryNode{}
+	for _, n := range nodes {
+		if n.ParentID != 0 {
+			childrenOf[n.ParentID] = append(childrenOf[n.ParentID], n)
+		}
+	}
+	// 组装树（递归最多三层），自底向上聚合 blog_count
+	var build func(id uint) []BlogCategoryNode
+	build = func(id uint) []BlogCategoryNode {
+		kids := childrenOf[id]
+		if len(kids) == 0 {
+			return nil
+		}
+		out := make([]BlogCategoryNode, 0, len(kids))
+		for _, k := range kids {
+			k.Children = build(k.ID)
+			if k.Children == nil {
+				k.Children = []BlogCategoryNode{}
+			}
+			for _, g := range k.Children {
+				k.BlogCount += g.BlogCount
+			}
+			out = append(out, k)
+		}
+		return out
+	}
+	tree := make([]BlogCategoryNode, 0, len(nodes))
+	for _, n := range nodes {
+		if n.ParentID == 0 {
+			n.Children = build(n.ID)
+			if n.Children == nil {
+				n.Children = []BlogCategoryNode{}
+			}
+			for _, c := range n.Children {
+				n.BlogCount += c.BlogCount
+			}
+			tree = append(tree, n)
+		}
+	}
+	return tree
+}
+
 // GetBlogCategoryName 取分类名（带父级前缀，如「技术/Go/并发」），不存在返回空
 func GetBlogCategoryName(id uint) string {
 	if id == 0 {
