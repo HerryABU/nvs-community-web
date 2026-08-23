@@ -93,6 +93,7 @@ import { renderMarkdown, renderMermaidBlocks, renderChemfigBlocks } from '@/mark
 import CommentSection from '@/components/CommentSection.vue';
 import ReportButton from '@/components/ReportButton.vue';
 import { useAuthStore } from '@/stores/auth';
+import { resolveUserKey } from '@/utils/userKey';
 import { ElMessage } from 'element-plus';
 import { CaretTop, Check, Fold, Expand } from '@element-plus/icons-vue';
 
@@ -212,14 +213,19 @@ function formatDate(d?: string) {
 }
 
 onMounted(async () => {
-  // 兼容两种路由：/blog/:id 和 /author/:id/blogs/:blogId
+  // 兼容两种路由：/author/:key/blogs/:blogId（:key 可为数字主键或用户名）与旧 /blog/:id
   const blogId = Number(route.params.blogId || route.params.id);
   loading.value = true;
   try {
     let res;
     if (route.params.blogId) {
-      const authorId = Number(route.params.id);
-      res = await blogApi.getAuthorBlog(authorId, blogId);
+      // 统一索引：用户名/数字主键 一律走 resolveUserKey（禁止 Number("qbz95")=NaN）
+      const author = await resolveUserKey(route.params.id);
+      if (!author) {
+        blog.value = null;
+        return;
+      }
+      res = await blogApi.getAuthorBlog(author.id, blogId);
     } else {
       res = await blogApi.getBlog(blogId);
     }

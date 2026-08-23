@@ -19,11 +19,29 @@
               <el-option v-for="c in flatCats" :key="c.id" :label="c.label" :value="c.id" />
             </el-select>
             <span class="bm-count">共 {{ total }} 篇</span>
+            <span class="bm-toolbar-spacer" />
+            <!-- 批量导入到分类 -->
+            <template v-if="selectedIds.length > 0">
+              <el-dropdown @command="batchSetCategory">
+                <el-button type="primary" size="small">
+                  移动 {{ selectedIds.length }} 篇到分类<el-icon style="margin-left:2px"><ArrowDown /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item :command="0">未分类</el-dropdown-item>
+                    <el-dropdown-item v-for="c in flatCats" :key="c.id" :command="c.id">{{ c.label }}</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+              <el-button size="small" @click="selectedIds = []">取消选择</el-button>
+            </template>
+            <el-button v-else size="small" text @click="batchMode = !batchMode">{{ batchMode ? '退出批量' : '批量分类' }}</el-button>
           </div>
 
           <div class="bm-list" v-loading="listLoading">
             <el-empty v-if="!listLoading && blogs.length === 0" description="还没有博客，点击「写博客」开始创作" />
             <div v-for="blog in blogs" :key="blog.id" class="bm-item">
+              <el-checkbox v-if="batchMode || selectedIds.length > 0" v-model="selectedIds" :value="blog.id" size="small" @click.stop />
               <div class="bm-item-main">
                 <div class="bm-item-tags">
                   <el-tag v-if="blog.is_pinned" size="small" type="danger">置顶</el-tag>
@@ -33,6 +51,16 @@
                 <div class="bm-item-title" @click="$router.push(`/author/${owner.username}/blogs/${blog.id}`)">{{ blog.title }}</div>
               </div>
               <div class="bm-item-actions">
+                <!-- 导入/设置分类：把已有博客归入某个分类 -->
+                <el-dropdown @command="(catId: number) => setBlogCategory(blog, catId)">
+                  <el-button size="small" text type="primary">设分类<el-icon style="margin-left:2px"><ArrowDown /></el-icon></el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item :command="0" :disabled="!blog.category_id">未分类</el-dropdown-item>
+                      <el-dropdown-item v-for="c in flatCats" :key="c.id" :command="c.id" :disabled="c.id === blog.category_id">{{ c.label }}</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
                 <el-button size="small" text type="primary" @click="$router.push(`/author/blog/edit/${blog.id}`)">编辑</el-button>
                 <el-button size="small" text type="warning" @click="togglePin(blog)">{{ blog.is_pinned ? '取消置顶' : '置顶' }}</el-button>
                 <el-button size="small" text type="danger" @click="removeBlog(blog)">删除</el-button>
@@ -150,9 +178,10 @@
 import { ref, computed, reactive, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { blogApi, type BlogCategoryNode } from '@/api/social';
-import { publicApi } from '@/api/admin';
+import { resolveUserKey } from '@/utils/userKey';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { ArrowDown } from '@element-plus/icons-vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -171,6 +200,8 @@ const page = ref(1);
 const pageSize = 10;
 const search = ref('');
 const filterCat = ref<number | undefined>(undefined);
+const batchMode = ref(false);
+const selectedIds = ref<number[]>([]);
 
 // ===== 分类管理 =====
 const categoryTree = ref<BlogCategoryNode[]>([]);
@@ -240,6 +271,32 @@ async function removeBlog(blog: any) {
     ElMessage.success('已删除');
     loadBlogs();
   } catch { /* 取消 */ }
+}
+
+// ===== 博客分类导入（把已有博客归入分类） =====
+async function setBlogCategory(blog: any, catId: number) {
+  try {
+    await blogApi.update(blog.id, { category_id: catId || undefined });
+    ElMessage.success(catId ? '已设置分类' : '已设为未分类');
+    loadBlogs();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '设置失败');
+  }
+}
+
+async function batchSetCategory(catId: number) {
+  if (selectedIds.value.length === 0) return;
+  try {
+    for (const id of selectedIds.value) {
+      await blogApi.update(id, { category_id: catId || undefined });
+    }
+    ElMessage.success(`已将 ${selectedIds.value.length} 篇博客${catId ? '移动到分类' : '设为未分类'}`);
+    selectedIds.value = [];
+    batchMode.value = false;
+    loadBlogs();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '批量设置失败');
+  }
 }
 
 // ===== 分类管理操作 =====
@@ -340,9 +397,9 @@ function onDrop(targetId: number) {
 async function init() {
   loading.value = true;
   try {
-    // 解析 URL 中的用户标识（数字=id / 用户名）
-    const r = await publicApi.resolveUser(key.value);
-    if (r.data.code !== 0) {
+    // 统一索引：数字主键（验证存在）/ 用户名
+    const u = await resolveUserKey(key.value, { verifyNumeric: true });
+    if (!u) {
       // 解析不到用户：纯数字 → 兼容旧「编辑博客」链接 /author/blog/{blogId}
       if (/^\d+$/.test(key.value)) {
         router.replace(`/author/blog/edit/${key.value}`);
@@ -350,7 +407,6 @@ async function init() {
       }
       return; // 404
     }
-    const u = r.data.data;
     // 仅本人可管理：他人访问 → 重定向公开博客主页
     if (!authStore.isLoggedIn || authStore.user?.id !== u.id) {
       router.replace(`/blog/${u.username}`);
@@ -372,6 +428,7 @@ onMounted(init);
 .bm-header h1 { font-size: 1.4rem; color: var(--primary-color); margin: 0; }
 .bm-actions { display: flex; gap: 8px; }
 .bm-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.bm-toolbar-spacer { flex: 1; }
 .bm-count { font-size: 0.85rem; color: #999; }
 .bm-list { display: flex; flex-direction: column; gap: 12px; min-height: 200px; }
 .bm-item {

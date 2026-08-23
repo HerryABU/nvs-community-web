@@ -89,6 +89,7 @@ import { ref, onMounted, reactive } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { blogApi, type BlogCategoryNode } from '@/api/social';
 import { publicApi } from '@/api/admin';
+import { resolveUserKey } from '@/utils/userKey';
 
 const route = useRoute();
 const router = useRouter();
@@ -129,10 +130,10 @@ async function loadBlogs() {
 async function init() {
   loading.value = true;
   try {
-    // 1) 先按用户标识解析（数字=id，非数字=用户名）
-    const r = await publicApi.resolveUser(key.value);
-    if (r.data.code === 0) {
-      user.value = r.data.data;
+    // 1) 先按统一索引解析（数字=id 需验证存在，非数字=用户名）
+    const u = await resolveUserKey(key.value, { verifyNumeric: true });
+    if (u) {
+      user.value = u;
       try {
         const p = await publicApi.getAuthorProfile(user.value.id);
         if (p.data.code === 0) profile.value = p.data.data;
