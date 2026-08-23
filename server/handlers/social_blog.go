@@ -275,10 +275,15 @@ func GetAuthorBlog(c *gin.Context) {
 
 // GET /api/author/:id/blogs — 获取某作者的博客列表
 func ListAuthorBlogs(c *gin.Context) {
-	authorID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	// :id 兼容数字主键 id 与用户名（username）
+	author, err := ResolveUserKey(c.Param("id"))
+	if err != nil || author == nil {
+		utils.NotFound(c, "作者不存在")
+		return
+	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 
-	blogs, total, err := models.GetBlogsByAuthor(uint(authorID), page, 10)
+	blogs, total, err := models.GetBlogsByAuthor(author.ID, page, 10)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return

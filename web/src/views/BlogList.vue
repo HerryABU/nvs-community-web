@@ -300,7 +300,7 @@ onMounted(() => {
   }
   .bl-cats-title { width: 100%; padding-bottom: 6px; margin-bottom: 4px; }
   .bl-cat-item, .bl-cat-sub { padding: 5px 10px; }
-  .bl-cat-children { padding-left: 0; width: 100%; display: flex; flex-wrap: wrap; }
+  .bl-cat-children, .bl-cat-children3 { padding-left: 0; width: 100%; display: flex; flex-wrap: wrap; }
   .bl-cat-children .bl-cat-sub { width: auto; }
   .bl-card { padding: 14px 16px; }
   .bl-title { font-size: 1.05rem; }

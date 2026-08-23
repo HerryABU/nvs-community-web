@@ -247,6 +247,8 @@ async function loadBlog() {
       blogSummary.value = b.summary || '';
       blogPinned.value = b.is_pinned || false;
       blogCategoryId.value = b.category_id || undefined;
+      // 分类树可能尚未加载完成：重新拉一次以恢复级联路径（避免竞态导致编辑时分类显示为空）
+      await loadCategories();
       if (editorMode.value === 'md') {
         if (cherryInstance) cherryInstance.setValue(b.content || '');
       } else {
