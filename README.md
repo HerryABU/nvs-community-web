@@ -439,6 +439,29 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v2.1.3 统一用户索引 + 博客分类导入（2026-08-23）
+
+> 修复 `/author/{用户名}/blogs/{id}` 无法访问的 NaN bug；博客管理支持把已有博客导入/归入分类（单篇 + 批量）。
+
+| 功能 | 涉及文件 |
+|---|---|
+| **统一用户索引方法** `resolveUserKey`（数字=主键直接使用；用户名→`/api/users/resolve` 大小写不敏感；带缓存；`verifyNumeric` 供区分"数字=用户还是博客id"） | `web/src/utils/userKey.ts`（新） |
+| 博客详情页修复：`Number("qbz95")=NaN` 导致 `/author/{用户名}/blogs/{id}` 404 → 改统一索引 | `web/src/views/BlogDetail.vue` |
+| 博客主页/管理页改用统一索引（替代各自直调） | `web/src/views/BlogHome.vue`、`web/src/views/BlogManager.vue` |
+| **博客分类导入**：每篇博客「设分类」下拉（归入一/二/三级分类或未分类）+「批量分类」勾选多篇一键移动 | `web/src/views/BlogManager.vue` |
+| 冒烟测试扩展至 44 项（作者博客列表/详情用户名兼容） | `server/smoke_test.sh` |
+
+### v2.1.2 全面审查补遗（2026-08-23）
+
+> 全站核查"功能遗漏/模块干扰/前端接口路径"：无跨模块干扰；修复 4 处遗漏。
+
+| 功能 | 涉及文件 |
+|---|---|
+| `ListAuthorBlogs`（`/api/author/:id/blogs`）兼容用户名 | `server/handlers/social_blog.go` |
+| BlogHome 公开主页分类栏升级三级（语义修正：不再用全站计数过滤） | `web/src/views/BlogHome.vue` |
+| BlogEditor 编辑分类路径恢复竞态修复 | `web/src/views/BlogEditor.vue` |
+| BlogList 移动端三级分类样式适配 | `web/src/views/BlogList.vue` |
+
 ### v2.1.1 分类管理下放给普通作者（2026-08-23）
 
 > 作者在「我的博客管理」的 **分类管理** 标签页即可：新增分类（一级/二级/三级）、编辑名称、**设置挂靠父分类**、**拖拽挂靠**（拖到另一分类上成为其子分类）、删除分类；管理员后台同样保留入口。
