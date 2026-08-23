@@ -745,11 +745,11 @@ nvs/
 ### 博客
 | 方法 | 端点 | 认证 | 说明 |
 |------|------|------|------|
-| GET | `/api/blogs` | — | 博客列表（`category_id` 过滤，一级自动含二级） |
+| GET | `/api/blogs` | — | 博客列表（`category_id` 过滤，一级自动含三级子孙） |
 | GET | `/api/blogs/:id` | — | 博客详情 |
 | GET | `/api/blogs/:id/likes` | — | 点赞数 + 当前用户是否已赞 |
 | POST | `/api/blogs/:id/like` | JWT | 点赞 / 取消点赞（toggle） |
-| GET | `/api/blog-categories` | — | 博客分类树（一/二级 + 博客数） |
+| GET | `/api/blog-categories` | — | 博客分类树（一/二/三级 + 博客数） |
 | GET | `/api/author/:id/blogs` | — | 作者博客列表 |
 | POST | `/api/blogs` | JWT | 创建博客（可带 `category_id`） |
 | PUT | `/api/blogs/:id` | JWT | 更新博客（可改分类） |
@@ -759,8 +759,8 @@ nvs/
 | 方法 | 端点 | 认证 | 说明 |
 |------|------|------|------|
 | GET | `/api/admin/blog-categories` | JWT(admin) | 分类树 |
-| POST | `/api/admin/blog-categories` | JWT(admin) | 新建分类（`parent_id` 指定二级） |
-| PUT | `/api/admin/blog-categories/:id` | JWT(admin) | 修改分类 |
+| POST | `/api/admin/blog-categories` | JWT(admin) | 新建分类（`parent_id` 指定二级/三级） |
+| PUT | `/api/admin/blog-categories/:id` | JWT(admin) | 修改分类（最多三级，防成环） |
 | DELETE | `/api/admin/blog-categories/:id` | JWT(admin) | 删除分类（其下博客回未分类） |
 
 ### 回收站（软删除区分用户自删 / 管理员封禁）
@@ -814,11 +814,16 @@ nvs/
 | GET | `/api/author/novels` | JWT | 我的作品列表 |
 | GET | `/api/author/novels/:id/stats` | JWT | 作品统计 |
 | GET | `/api/author/dashboard` | JWT | 作者仪表盘 |
-| GET | `/api/author/profile/:id` | — | 作者公开主页 |
-| GET | `/api/author/forum/:id` | — | 作者专属论坛 |
+| GET | `/api/author/profile/:id` | — | 作者公开主页（`:id` 兼容用户名，数字是主键） |
+| GET | `/api/author/forum/:id` | — | 作者专属论坛（兼容用户名） |
 | GET | `/api/author/earnings` | JWT | 收益记录 |
 | POST | `/api/author/withdraw` | JWT | 申请提现 |
 | POST | `/api/author/apply-vip` | JWT | 申请 VIP 作者 |
+
+### 用户标识解析（数字=主键 id，用户名兼容访问，大小写不敏感）
+| 方法 | 端点 | 认证 | 说明 |
+|------|------|------|------|
+| GET | `/api/users/resolve?key=xxx` | — | 轻量解析用户标识 → `{id, username, nickname, role}` |
 
 ### 导入导出
 | 方法 | 端点 | 认证 | 说明 |

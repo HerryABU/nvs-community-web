@@ -278,12 +278,16 @@ func GetNovelFrames(c *gin.Context) {
 }
 
 // GetAuthorFrames GET /api/author/:id/frames
-// 获取作者展现模版（用于作者主页）
+// 获取作者展现模版（用于作者主页）；:id 兼容数字主键 id 与用户名
 func GetAuthorFrames(c *gin.Context) {
-	authorID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	user, err := ResolveUserKey(c.Param("id"))
+	if err != nil || user == nil {
+		utils.NotFound(c, "作者不存在")
+		return
+	}
 	var frames []models.UserFrame
 	models.DB.Where("user_id = ? AND frame_type = ? AND is_active = ?",
-		uint(authorID), "author", true).
+		user.ID, "author", true).
 		Order("updated_at DESC").Find(&frames)
 	utils.Success(c, frames)
 }

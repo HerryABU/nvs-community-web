@@ -141,6 +141,10 @@ RSLV2=$(curl -s -m 8 "$BASE/api/users/resolve?key=$(echo "$U" | tr 'a-z' 'A-Z')"
 check "用户名大小写不敏感" "\"username\":\"$U\"" "$RSLV2"
 UPROF=$(curl -s -m 8 "$BASE/api/author/profile/$U")
 check "作者主页支持用户名" '"code":0' "$UPROF"
+UFRM=$(curl -s -m 8 "$BASE/api/author/forum/$U")
+check "作者论坛支持用户名" '"code":0' "$UFRM"
+UFRAMES=$(curl -s -m 8 "$BASE/api/author/$U/frames")
+check "作者模版接口支持用户名" '"code":0' "$UFRAMES"
 
 # ── T07 博客带三级分类创建 ──
 BLOG=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X POST "$BASE/api/blogs" -H "Content-Type: application/json" \
