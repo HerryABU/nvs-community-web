@@ -188,9 +188,16 @@ export const adminApi = {
   deleteBlogCategory(id: number) {
     return api.delete(`/admin/blog-categories/${id}`);
   },
-  // 分类审核（事后审核：通过/拒绝）
+  // 分类审核（通过/拒绝；拒绝即封禁下架，可填原因）
   reviewBlogCategory(id: number, action: 'approve' | 'reject', reason?: string) {
     return api.post(`/admin/blog-categories/${id}/review`, { action, reason });
+  },
+  // 审核模式：post_review（事后审核，通过后公开）/ pre_public（先公开，事后封禁）
+  getCategoryReviewMode() {
+    return api.get('/admin/blog-categories/mode');
+  },
+  setCategoryReviewMode(mode: 'post_review' | 'pre_public') {
+    return api.put('/admin/blog-categories/mode', { mode });
   },
 
   // 小说/章节封禁管理（管理员视角，含封禁状态）

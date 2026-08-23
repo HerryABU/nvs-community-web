@@ -4,13 +4,27 @@
       <!-- ── 博客分类管理（按用户 + 事后审核） ── -->
       <el-tab-pane label="博客分类管理" name="cats">
         <div class="panel-head">
-          <h2>博客分类管理：按用户创建 + 事后审核（普通作者创建的分类需审核后公开）</h2>
+          <h2>博客分类管理：按用户创建 + 审核（普通作者创建的分类需审核后公开）</h2>
           <el-radio-group v-model="statusFilter" size="small" @change="loadTree">
             <el-radio-button value="">全部</el-radio-button>
             <el-radio-button value="pending">待审核</el-radio-button>
             <el-radio-button value="approved">已通过</el-radio-button>
             <el-radio-button value="rejected">已拒绝</el-radio-button>
           </el-radio-group>
+        </div>
+
+        <!-- 审核模式开关（管理员可切换：事后审核 / 先公开后封禁） -->
+        <div class="mode-bar">
+          <span class="mode-label">审核模式：</span>
+          <el-radio-group v-model="reviewMode" size="small" @change="changeMode">
+            <el-radio-button value="post_review">① 事后审核（通过后公开）</el-radio-button>
+            <el-radio-button value="pre_public">② 先公开（事后封禁）</el-radio-button>
+          </el-radio-group>
+          <span class="mode-hint">
+            {{ reviewMode === 'pre_public'
+              ? '作者创建的分类直接公开显示，管理员发现违规可随时封禁下架（拒绝）'
+              : '作者创建的分类先进入待审核，管理员通过后才会公开显示' }}
+          </span>
         </div>
 
         <div v-loading="loading">
@@ -43,6 +57,10 @@
                   </template>
                   <template v-else-if="item.status === 'rejected'">
                     <el-button size="small" text type="success" @click="review(item, 'approve')">重新通过</el-button>
+                  </template>
+                  <template v-else-if="item.status === 'approved'">
+                    <!-- 先公开模式下：事后封禁（下架） -->
+                    <el-button size="small" text type="danger" @click="openReject(item)">⛔ 封禁</el-button>
                   </template>
                   <el-button size="small" text type="primary" @click="openEdit(item)">编辑</el-button>
                   <el-button size="small" text type="danger" @click="removeCat(item)">删除</el-button>
@@ -119,6 +137,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 
 const tab = ref('cats');
 const statusFilter = ref('');
+const reviewMode = ref<'post_review' | 'pre_public'>('post_review');
 const rawList = ref<any[]>([]); // 全量平铺（编辑弹窗父分类下拉）
 const groups = ref<any[]>([]);  // 按创建者分组（二级目录）
 const expandedUsers = reactive<Record<number, boolean>>({}); // 用户块展开状态
@@ -130,6 +149,20 @@ const editingId = ref(0);
 const rejectingItem = ref<any>(null);
 const rejectReason = ref('');
 const form = reactive({ name: '', parent_id: 0, sort_order: 0 });
+
+// 审核模式切换
+async function changeMode() {
+  try {
+    const res = await adminApi.setCategoryReviewMode(reviewMode.value);
+    if (res.data.code === 0) {
+      ElMessage.success('已切换为：' + (res.data.data?.label || reviewMode.value));
+      loadTree();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '切换失败');
+    reviewMode.value = reviewMode.value === 'pre_public' ? 'post_review' : 'pre_public';
+  }
+}
 
 // 全量平铺（编辑弹窗父分类下拉）
 const allFlat = computed(() =>
@@ -162,7 +195,11 @@ function formatDate(d?: string) { if (!d) return ''; return new Date(d).toLocale
 async function loadTree() {
   loading.value = true;
   try {
-    const res = await adminApi.getBlogCategories();
+    const [res, modeRes] = await Promise.all([
+      adminApi.getBlogCategories(),
+      adminApi.getCategoryReviewMode(),
+    ]);
+    if (modeRes.data.code === 0) reviewMode.value = modeRes.data.data?.mode || 'post_review';
     if (res.data.code === 0) {
       const d = res.data.data || {};
       rawList.value = d.list || [];
@@ -287,6 +324,18 @@ onMounted(() => {
   gap: 12px; margin-bottom: 18px; flex-wrap: wrap;
 }
 .panel-head h2 { font-size: 1.05rem; margin: 0; }
+
+/* 审核模式切换条 */
+.mode-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; margin-bottom: 14px;
+  border: 1px dashed var(--border-color); border-radius: 10px;
+  background: var(--bg-color, #f8fafc);
+  flex-wrap: wrap;
+}
+[data-theme="dark"] .mode-bar { background: rgba(255,255,255,0.03); }
+.mode-label { font-weight: 700; font-size: 0.9rem; }
+.mode-hint { font-size: 0.8rem; color: #999; }
 
 .review-row {
   display: flex; align-items: center; gap: 10px;

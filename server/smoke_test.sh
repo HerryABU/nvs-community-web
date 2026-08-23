@@ -141,6 +141,8 @@ ACATID=$(echo "$ACAT" | "$PY" -c "import sys,json;print(json.load(sys.stdin)['da
 check "作者创建分类为待审核(pending)" '"status":"pending"' "$ACAT"
 
 # ── T06d 分类事后审核：pending 不公开 → 管理员通过后公开 → 拒绝记录原因 ──
+MODE0=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" "$BASE/api/admin/blog-categories/mode")
+check "默认审核模式为事后审核" 'post_review' "$MODE0"
 PUB=$(curl -s -m 8 "$BASE/api/blog-categories")
 if echo "$PUB" | grep -qF "作者自建分类"; then bad "待审核分类不应出现在公开树"; else ok "待审核分类不公开显示"; fi
 RV=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X POST "$BASE/api/admin/blog-categories/$ACATID/review" -H "Content-Type: application/json" -d '{"action":"approve"}')
@@ -150,6 +152,21 @@ if echo "$PUB2" | grep -qF "作者自建分类"; then ok "审核通过后分类�
 RJ=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X POST "$BASE/api/admin/blog-categories/$ACATID/review" -H "Content-Type: application/json" -d '{"action":"reject","reason":"测试拒绝"}')
 check "管理员拒绝分类(rejected)" '"status":"rejected"' "$RJ"
 check "拒绝原因已记录" '"reject_reason":"测试拒绝"' "$RJ"
+
+# ── T06f 审核模式切换：先公开（事后封禁） ──
+MSET=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X PUT "$BASE/api/admin/blog-categories/mode" -H "Content-Type: application/json" -d '{"mode":"pre_public"}')
+check "管理员切换为先公开模式" 'pre_public' "$MSET"
+PCAT=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X POST "$BASE/api/blog-categories" -H "Content-Type: application/json" -d '{"name":"先公开分类"}')
+check "先公开模式下作者创建直接公开(approved)" '"status":"approved"' "$PCAT"
+PCATID=$(echo "$PCAT" | "$PY" -c "import sys,json;print(json.load(sys.stdin)['data']['id'])" 2>/dev/null || echo 99)
+PUB3=$(curl -s -m 8 "$BASE/api/blog-categories")
+if echo "$PUB3" | grep -qF "先公开分类"; then ok "先公开分类立即可见"; else bad "先公开分类应立即出现在公开树"; fi
+PBAN=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X POST "$BASE/api/admin/blog-categories/$PCATID/review" -H "Content-Type: application/json" -d '{"action":"reject","reason":"事后发现违规"}')
+check "管理员事后封禁(拒绝)" '"status":"rejected"' "$PBAN"
+PUB4=$(curl -s -m 8 "$BASE/api/blog-categories")
+if echo "$PUB4" | grep -qF "先公开分类"; then bad "封禁后分类应下架"; else ok "封禁后分类下架"; fi
+MSET2=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X PUT "$BASE/api/admin/blog-categories/mode" -H "Content-Type: application/json" -d '{"mode":"post_review"}')
+check "切回事后审核模式" 'post_review' "$MSET2"
 
 # ── T06e 管理员列表按创建者分组（二级目录：用户 → 分类） ──
 # 作者再建一个 pending 分类，确保分组中待审核数>0

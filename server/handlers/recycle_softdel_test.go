@@ -365,6 +365,80 @@ func TestCategoryReviewFlow(t *testing.T) {
 	}
 }
 
+// TestCategoryReviewModeSwitch 审核模式切换：事后审核(pending) ↔ 先公开(approved 直接公开)
+func TestCategoryReviewModeSwitch(t *testing.T) {
+	setupHandlerTestDB(t)
+	seedTestUser(t, 1, "admin1", "admin")
+	seedTestUser(t, 2, "author2", "author")
+
+	// 默认模式 = 事后审核：作者创建 → pending
+	c, w := asUser("author", 2)
+	setJSONBody(c, map[string]interface{}{"name": "模式测试分类A"})
+	CreateBlogCategory(c)
+	resp := mustJSON(t, w)
+	if resp["data"].(map[string]interface{})["status"] != "pending" {
+		t.Errorf("默认事后审核模式下作者创建应为 pending，实际 %v", resp["data"].(map[string]interface{})["status"])
+	}
+
+	// 管理员读取当前模式
+	c, w = asUser("admin", 1)
+	c.Request = httptest.NewRequest("GET", "/", nil)
+	AdminGetCategoryReviewMode(c)
+	resp = mustJSON(t, w)
+	if resp["data"].(map[string]interface{})["mode"] != "post_review" {
+		t.Errorf("默认模式应为 post_review，实际 %v", resp["data"].(map[string]interface{})["mode"])
+	}
+
+	// 切换为先公开（事后封禁）：作者创建 → 直接 approved
+	c, w = asUser("admin", 1)
+	setJSONBody(c, map[string]interface{}{"mode": "pre_public"})
+	AdminSetCategoryReviewMode(c)
+	resp = mustJSON(t, w)
+	if resp["data"].(map[string]interface{})["mode"] != "pre_public" {
+		t.Errorf("切换后模式应为 pre_public，实际 %v", resp["data"].(map[string]interface{})["mode"])
+	}
+
+	c, w = asUser("author", 2)
+	setJSONBody(c, map[string]interface{}{"name": "模式测试分类B"})
+	CreateBlogCategory(c)
+	resp = mustJSON(t, w)
+	if resp["data"].(map[string]interface{})["status"] != "approved" {
+		t.Errorf("先公开模式下作者创建应直接 approved，实际 %v", resp["data"].(map[string]interface{})["status"])
+	}
+
+	// 先公开模式下管理员可事后封禁（拒绝）
+	c, w = asUser("admin", 1)
+	setJSONBody(c, map[string]interface{}{"action": "reject", "reason": "事后发现违规"})
+	c.Params = gin.Params{gin.Param{Key: "id", Value: "2"}}
+	AdminReviewBlogCategory(c)
+	resp = mustJSON(t, w)
+	if resp["data"].(map[string]interface{})["status"] != "rejected" {
+		t.Errorf("先公开模式下管理员应可事后封禁(rejected)，实际 %v", resp["data"].(map[string]interface{})["status"])
+	}
+
+	// 切回事后审核
+	c, w = asUser("admin", 1)
+	setJSONBody(c, map[string]interface{}{"mode": "post_review"})
+	AdminSetCategoryReviewMode(c)
+	mustJSON(t, w)
+
+	c, w = asUser("admin", 1)
+	c.Request = httptest.NewRequest("GET", "/", nil)
+	AdminGetCategoryReviewMode(c)
+	resp = mustJSON(t, w)
+	if resp["data"].(map[string]interface{})["mode"] != "post_review" {
+		t.Errorf("切回后模式应为 post_review，实际 %v", resp["data"].(map[string]interface{})["mode"])
+	}
+
+	// 非法模式拒绝
+	c, w = asUser("admin", 1)
+	setJSONBody(c, map[string]interface{}{"mode": "invalid"})
+	AdminSetCategoryReviewMode(c)
+	if !bytes.Contains(w.Body.Bytes(), []byte("仅支持")) {
+		t.Errorf("非法模式应被拒绝: %s", w.Body.String())
+	}
+}
+
 // TestResolveUserKey 用户标识解析：数字=主键 id，非数字=用户名（大小写不敏感）
 func TestResolveUserKey(t *testing.T) {
 	setupHandlerTestDB(t)
