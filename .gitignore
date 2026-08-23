@@ -44,3 +44,8 @@ web/*.timestamp-*.mjs
 logs/
 
 
+
+# 测试运行产物（go test 在 handlers 包目录生成）
+server/handlers/authors/
+server/handlers/log/
+server.pid
