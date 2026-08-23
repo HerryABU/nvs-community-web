@@ -439,6 +439,38 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v2.1.8 话题标签 + 搜索扩展（2026-08-23）
+
+> 新增**话题（#话题）**：博客可参与多个话题、全站话题列表/详情聚合页；**搜索升级**：除作品/作者/博客/扩展外，新增**专栏 / 话题 / 论坛**；博客广场移除分类筛选（保留标签云）；作者主页明确展示**作者专栏**。
+
+| 类别 | 文件 | 说明 |
+|---|---|---|
+| 话题 | `models/blog_topic.go`(+`blog_topic_test.go`) | `blog_topics` + `blog_topic_links` 表；SyncBlogTopics、ListBlogTopics（文章数统计）、FillBlogTopics |
+| 话题 | `handlers/blog_topic.go` + `main.go` | `GET /api/topics`、`GET /api/topics/:id`、`GET /api/topics/:id/blogs`、`POST /api/topics`（登录） |
+| 话题 | `handlers/social_blog.go` | CreateBlog/UpdateBlog 支持 `topics`（null=不修改）；列表/详情返回 topics |
+| 话题 | `views/Topics.vue` + 路由 | `/topics` 话题列表（卡片）+ `/topics/:id` 话题详情（参与博客分页） |
+| 话题 | `views/BlogEditor.vue` / `BlogDetail.vue` | 编辑器话题多选（可创建）；详情页「参与话题」pill 跳话题页 |
+| 搜索 | `handlers/novel_public.go` | UnifiedSearch 新增 categories（已公开专栏）/ topics / forums（公开论坛） |
+| 搜索 | `components/HomeSearchResults.vue` + `views/Home.vue` | 结果区新增「📚 专栏 / 🔥 话题 / 💬 论坛」三栏展示 |
+| 广场 | `views/BlogList.vue` | 移除左侧分类筛选栏，保留「🏷 热门标签」侧栏；tag 参数筛选保留 |
+| 主页 | `views/BlogHome.vue` | 作者分类栏标题明确为「📚 作者专栏」 |
+
+### v2.1.8 话题标签 + 搜索扩展（2026-08-23）
+
+> 新增**话题（#话题）**：博客可参与多个话题、全站话题列表/详情聚合页；**搜索升级**：除作品/作者/博客/扩展外，新增**专栏 / 话题 / 论坛**；博客广场移除分类筛选（保留标签云）；作者主页明确展示**作者专栏**。
+
+| 类别 | 文件 | 说明 |
+|---|---|---|
+| 话题 | `models/blog_topic.go`(+`blog_topic_test.go`) | `blog_topics` + `blog_topic_links` 表；SyncBlogTopics、ListBlogTopics（文章数统计）、FillBlogTopics |
+| 话题 | `handlers/blog_topic.go` + `main.go` | `GET /api/topics`、`GET /api/topics/:id`、`GET /api/topics/:id/blogs`、`POST /api/topics`（登录） |
+| 话题 | `handlers/social_blog.go` | CreateBlog/UpdateBlog 支持 `topics`（null=不修改）；列表/详情返回 topics |
+| 话题 | `views/Topics.vue` + 路由 | `/topics` 话题列表（卡片）+ `/topics/:id` 话题详情（参与博客分页） |
+| 话题 | `views/BlogEditor.vue` / `BlogDetail.vue` | 编辑器话题多选（可创建）；详情页「参与话题」pill 跳话题页 |
+| 搜索 | `handlers/novel_public.go` | UnifiedSearch 新增 categories（已公开专栏）/ topics / forums（公开论坛） |
+| 搜索 | `components/HomeSearchResults.vue` + `views/Home.vue` | 结果区新增「📚 专栏 / 🔥 话题 / 💬 论坛」三栏展示 |
+| 广场 | `views/BlogList.vue` | 移除左侧分类筛选栏，保留「🏷 热门标签」侧栏；tag 参数筛选保留 |
+| 主页 | `views/BlogHome.vue` | 作者分类栏标题明确为「📚 作者专栏」 |
+
 ### v2.1.7 分类独立路由页（CSDN 式文章管理）（2026-08-23）
 
 > 「迁移」与「分类设置」从弹窗升级为**独立路由页面**；分类文章管理仿 CSDN 创作中心：批量新增/移动文章、未分类筛选；导入博客可指定目标分类。
