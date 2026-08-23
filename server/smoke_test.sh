@@ -134,6 +134,15 @@ check "四级分类被拒绝" '三级' "$CAT4"
 DUP=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/adm.txt" -X POST "$BASE/api/admin/blog-categories" -H "Content-Type: application/json" -d '{"name":"技术"}')
 check "同名分类被拒绝" '同名' "$DUP"
 
+# ── T06c 普通作者（非管理员）也可管理分类：新增/挂靠/删除 ──
+ACAT=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X POST "$BASE/api/blog-categories" -H "Content-Type: application/json" -d '{"name":"作者自建分类"}')
+check "普通作者可新增分类" '"code":0' "$ACAT"
+ACATID=$(echo "$ACAT" | "$PY" -c "import sys,json;print(json.load(sys.stdin)['data']['id'])" 2>/dev/null || echo 99)
+AMOVE=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X PUT "$BASE/api/blog-categories/$ACATID" -H "Content-Type: application/json" -d "{\"parent_id\":$CAT1ID,\"sort_order\":9}")
+check "普通作者可挂靠分类到一级下" '"parent_id":'$CAT1ID "$AMOVE"
+ADEL=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X DELETE "$BASE/api/blog-categories/$ACATID")
+check "普通作者可删除分类" '已删除' "$ADEL"
+
 # ── T06b 用户名/数字解析（数字是主键、用户名兼容） ──
 RSLV=$(curl -s -m 8 "$BASE/api/users/resolve?key=$U")
 check "用户名解析为数字id" "\"username\":\"$U\"" "$RSLV"

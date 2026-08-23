@@ -58,6 +58,16 @@ export const blogApi = {
   getCategories() {
     return api.get<{ code: number; data: BlogCategoryNode[] }>('/blog-categories');
   },
+  // 分类管理（登录作者/管理员可用：新增/编辑/删除/挂靠，支持三级）
+  createCategory(data: { name: string; parent_id?: number; sort_order?: number }) {
+    return api.post('/blog-categories', data);
+  },
+  updateCategory(id: number, data: { name?: string; parent_id?: number; sort_order?: number }) {
+    return api.put(`/blog-categories/${id}`, data);
+  },
+  deleteCategory(id: number) {
+    return api.delete(`/blog-categories/${id}`);
+  },
   // ===== 点赞 =====
   getLikes(id: number) {
     return api.get<{ code: number; data: { count: number; liked: boolean } }>(`/blogs/${id}/likes`);

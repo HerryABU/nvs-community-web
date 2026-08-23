@@ -280,14 +280,14 @@ func TestBlogCategoryAdminAPI(t *testing.T) {
 	// 创建一级
 	c, w := asUser("admin", 1)
 	setJSONBody(c, map[string]interface{}{"name": "技术"})
-	AdminCreateBlogCategory(c)
+	CreateBlogCategory(c)
 	resp := mustJSON(t, w)
 	catID := uint(resp["data"].(map[string]interface{})["id"].(float64))
 
 	// 同名重复 → 拒绝
 	c, w = asUser("admin", 1)
 	setJSONBody(c, map[string]interface{}{"name": "技术"})
-	AdminCreateBlogCategory(c)
+	CreateBlogCategory(c)
 	if !bytes.Contains(w.Body.Bytes(), []byte("同名")) {
 		t.Errorf("同名分类应被拒绝: %s", w.Body.String())
 	}
@@ -295,7 +295,7 @@ func TestBlogCategoryAdminAPI(t *testing.T) {
 	// 二级挂一级 → 成功
 	c, w = asUser("admin", 1)
 	setJSONBody(c, map[string]interface{}{"name": "Go", "parent_id": catID})
-	AdminCreateBlogCategory(c)
+	CreateBlogCategory(c)
 	mustJSON(t, w)
 	// 记录二级分类 id（catID+1）
 	subID := catID + 1
@@ -303,14 +303,14 @@ func TestBlogCategoryAdminAPI(t *testing.T) {
 	// 三级挂二级 → 成功（分类支持到三级）
 	c, w = asUser("admin", 1)
 	setJSONBody(c, map[string]interface{}{"name": "并发", "parent_id": subID})
-	AdminCreateBlogCategory(c)
+	CreateBlogCategory(c)
 	mustJSON(t, w)
 	sub3ID := subID + 1
 
 	// 四级挂三级 → 拒绝（最多三级）
 	c, w = asUser("admin", 1)
 	setJSONBody(c, map[string]interface{}{"name": "非法四级", "parent_id": sub3ID})
-	AdminCreateBlogCategory(c)
+	CreateBlogCategory(c)
 	if !bytes.Contains(w.Body.Bytes(), []byte("三级")) {
 		t.Errorf("四级分类应被拒绝: %s", w.Body.String())
 	}
@@ -319,7 +319,7 @@ func TestBlogCategoryAdminAPI(t *testing.T) {
 	c, w = asUser("admin", 1)
 	c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
 	c.Request = httptest.NewRequest("DELETE", "/", nil)
-	AdminDeleteBlogCategory(c)
+	DeleteBlogCategory(c)
 	if !bytes.Contains(w.Body.Bytes(), []byte("子分类")) {
 		t.Errorf("一级有子分类应拒绝删除: %s", w.Body.String())
 	}
@@ -328,12 +328,12 @@ func TestBlogCategoryAdminAPI(t *testing.T) {
 	c, w = asUser("admin", 1)
 	c.Params = gin.Params{gin.Param{Key: "id", Value: "3"}}
 	c.Request = httptest.NewRequest("DELETE", "/", nil)
-	AdminDeleteBlogCategory(c)
+	DeleteBlogCategory(c)
 	mustJSON(t, w)
 	c, w = asUser("admin", 1)
 	c.Params = gin.Params{gin.Param{Key: "id", Value: "2"}}
 	c.Request = httptest.NewRequest("DELETE", "/", nil)
-	AdminDeleteBlogCategory(c)
+	DeleteBlogCategory(c)
 	mustJSON(t, w)
 }
 
