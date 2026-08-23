@@ -154,6 +154,8 @@ UFRM=$(curl -s -m 8 "$BASE/api/author/forum/$U")
 check "作者论坛支持用户名" '"code":0' "$UFRM"
 UFRAMES=$(curl -s -m 8 "$BASE/api/author/$U/frames")
 check "作者模版接口支持用户名" '"code":0' "$UFRAMES"
+UAB=$(curl -s -m 8 "$BASE/api/author/$U/blogs")
+check "作者博客列表支持用户名" '"code":0' "$UAB"
 
 # ── T07 博客带三级分类创建 ──
 BLOG=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X POST "$BASE/api/blogs" -H "Content-Type: application/json" \
@@ -161,6 +163,10 @@ BLOG=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X POST "$BASE/api/blogs" -H "Con
 check "博客创建带三级分类" '"code":0' "$BLOG"
 BID=$(echo "$BLOG" | "$PY" -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
 check "博客分类名返回(三级前缀)" '技术/Go/并发编程' "$BLOG"
+UBD=$(curl -s -m 8 "$BASE/api/author/$U/blogs/$BID")
+check "博客详情支持用户名(/author/{用户名}/blogs/{id})" '"code":0' "$UBD"
+UBD=$(curl -s -m 8 "$BASE/api/author/$U/blogs/$BID")
+check "博客详情支持用户名(/author/{用户名}/blogs/{id})" '"code":0' "$UBD"
 
 # ── T08 列表一级分类过滤（含三级子孙） ──
 LF=$(curl -s -m 8 "$BASE/api/blogs?category_id=$CAT1ID")
