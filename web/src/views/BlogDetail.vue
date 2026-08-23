@@ -21,6 +21,15 @@
               <span>{{ formatDate(blog.created_at) }}</span>
               <span>{{ blog.view_count }} 次阅读</span>
             </div>
+            <!-- 标签（#tag，CSDN 式，点击跳转全站标签筛选） -->
+            <div class="blog-tag-bar" v-if="blog.tags && blog.tags.length">
+              <span
+                v-for="t in blog.tags"
+                :key="t.id"
+                class="blog-tag"
+                @click="router.push({ path: '/blogs', query: { tag: t.name } })"
+              ># {{ t.name }}</span>
+            </div>
             <!-- 点赞区 -->
             <div class="blog-like-bar">
               <el-button
@@ -87,7 +96,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, onBeforeUnmount } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { blogApi } from '@/api/social';
 import { renderMarkdown, renderMermaidBlocks, renderChemfigBlocks } from '@/markdown/renderer';
 import CommentSection from '@/components/CommentSection.vue';
@@ -98,6 +107,7 @@ import { ElMessage } from 'element-plus';
 import { CaretTop, Check, Fold, Expand } from '@element-plus/icons-vue';
 
 const route = useRoute();
+const router = useRouter();
 const authStore = useAuthStore();
 const blog = ref<any>(null);
 const htmlContent = ref('');
@@ -272,6 +282,14 @@ onBeforeUnmount(() => {
   font-size: 0.85rem; color: #999; flex-wrap: wrap;
 }
 .blog-author { font-weight: 600; color: var(--primary-color); text-decoration: none; }
+.blog-tag-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.blog-tag {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px; border-radius: 999px;
+  background: rgba(94,114,228,0.08); color: var(--primary-color);
+  font-size: 0.8rem; cursor: pointer; transition: all 0.2s;
+}
+.blog-tag:hover { background: var(--primary-color); color: #fff; }
 .blog-like-bar { margin-top: 14px; }
 .blog-content { line-height: 1.8; font-size: 1rem; }
 .blog-footer { margin-top: 32px; display: flex; gap: 12px; }

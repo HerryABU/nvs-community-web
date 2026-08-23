@@ -81,11 +81,11 @@
           </div>
 
           <div class="bm-cat-tree" v-loading="catLoading">
-            <el-empty v-if="!catLoading && myCats.length === 0 && categoryTree.length === 0" description="暂无分类，点击「新增一级分类」创建" />
+            <el-empty v-if="!catLoading && myCats.length === 0" description="暂无分类，点击「新增一级分类」创建" />
 
-            <!-- 我的分类（含待审核状态） -->
+            <!-- 我的分类（个人专栏：新增/编辑/删除/拖拽挂靠/排序/进入批量迁移博客） -->
             <template v-if="myCats.length > 0">
-              <div class="bm-cat-section">我的分类（{{ myCats.length }}）</div>
+              <div class="bm-cat-section">我的分类（{{ myCats.length }}）· 个人专栏</div>
               <div v-for="c in myCats" :key="c.id" class="bm-cat-node bm-cat-l1 bm-cat-mine"
                    :class="{ 'drag-over': dragOverId === c.id }"
                    draggable="true"
@@ -97,37 +97,11 @@
                 <el-tag size="small" :type="catStatusTag(c.status)">{{ catStatusLabel(c.status) }}</el-tag>
                 <span v-if="c.status === 'rejected' && c.reject_reason" class="bm-cat-reason">原因：{{ c.reject_reason }}</span>
                 <span class="bm-cat-actions">
+                  <el-button size="small" text type="primary" @click="openCatBlogs(c)">📂 博客</el-button>
                   <el-button size="small" text type="primary" @click="openCatEdit(c)">编辑/挂靠</el-button>
                   <el-button size="small" text type="danger" @click="removeCat(c)">删除</el-button>
                 </span>
               </div>
-            </template>
-
-            <!-- 平台分类（已审核通过，公开只读） -->
-            <template v-if="categoryTree.length > 0">
-              <div class="bm-cat-section">平台分类（已审核通过）</div>
-              <div v-for="cat in categoryTree" :key="cat.id" class="bm-cat-node bm-cat-l1">
-                <span class="bm-cat-fold" @click="toggleCat('p'+cat.id)">{{ expanded['p'+cat.id] ? '▾' : '▸' }}</span>
-                <span class="bm-cat-name">{{ cat.name }}</span>
-                <el-tag size="small" type="info">{{ cat.blog_count }} 篇</el-tag>
-              </div>
-              <template v-for="cat in categoryTree" :key="'c'+cat.id">
-                <div v-if="expanded['p'+cat.id]" class="bm-cat-children">
-                  <div v-for="sub in cat.children || []" :key="sub.id" class="bm-cat-node bm-cat-l2">
-                    <span class="bm-cat-fold" @click="toggleCat('s'+sub.id)">{{ expanded['s'+sub.id] ? '▾' : '▸' }}</span>
-                    <span class="bm-cat-name">└ {{ sub.name }}</span>
-                    <el-tag size="small" type="info">{{ sub.blog_count }} 篇</el-tag>
-                  </div>
-                  <template v-for="sub in cat.children || []" :key="'s'+sub.id">
-                    <div v-if="expanded['s'+sub.id]" class="bm-cat-children3">
-                      <div v-for="g in sub.children || []" :key="g.id" class="bm-cat-node bm-cat-l3">
-                        <span class="bm-cat-name">　└ {{ g.name }}</span>
-                        <el-tag size="small" type="info">{{ g.blog_count }} 篇</el-tag>
-                      </div>
-                    </div>
-                  </template>
-                </div>
-              </template>
             </template>
           </div>
         </el-tab-pane>
@@ -155,6 +129,38 @@
           <el-button type="primary" :loading="catSaving" @click="saveCat">保存</el-button>
         </template>
       </el-dialog>
+
+      <!-- 分类博客弹窗：查看该分类博客 + 批量迁移到其他分类 -->
+      <el-dialog v-model="catBlogDialog" :title="`📂 分类《${catBlogCat?.full_name || catBlogCat?.name || ''}》的博客`" width="640px">
+        <div class="cb-toolbar">
+          <span class="cb-count">共 {{ catBlogTotal }} 篇</span>
+          <el-select v-model="catBlogTarget" placeholder="迁移到分类…" clearable size="small" style="width: 200px">
+            <el-option :value="0" label="（未分类）" />
+            <el-option v-for="c in flatCats" :key="c.id" :label="c.label" :value="c.id" :disabled="c.id === catBlogCat?.id" />
+          </el-select>
+          <el-button type="primary" size="small" :disabled="selectedCatBlogs.length === 0 || catBlogTarget === undefined" @click="migrateCatBlogs">
+            迁移 {{ selectedCatBlogs.length }} 篇
+          </el-button>
+          <el-button size="small" @click="selectedCatBlogs = []">清空选择</el-button>
+        </div>
+        <div class="cb-list" v-loading="catBlogLoading" style="max-height: 380px; overflow-y: auto">
+          <el-empty v-if="!catBlogLoading && catBlogs.length === 0" description="该分类下暂无博客" />
+          <div v-for="b in catBlogs" :key="b.id" class="cb-item">
+            <el-checkbox v-model="selectedCatBlogs" :value="b.id" size="small" @click.stop />
+            <div class="cb-item-main">
+              <div class="cb-item-title">{{ b.title }}</div>
+              <div class="cb-item-meta">
+                <el-tag v-if="b.is_pinned" size="small" type="danger">置顶</el-tag>
+                <span v-for="t in b.tags || []" :key="t.id" class="cb-tag">#{{ t.name }}</span>
+                <span class="cb-date">{{ formatDate(b.created_at) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <template #footer>
+          <el-button @click="catBlogDialog = false">关闭</el-button>
+        </template>
+      </el-dialog>
     </template>
     <el-empty v-else-if="!loading" description="无权访问该博客管理页" />
   </div>
@@ -163,7 +169,7 @@
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { blogApi, type BlogCategoryNode } from '@/api/social';
+import { blogApi } from '@/api/social';
 import { resolveUserKey } from '@/utils/userKey';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -190,9 +196,7 @@ const batchMode = ref(false);
 const selectedIds = ref<number[]>([]);
 
 // ===== 分类管理 =====
-const categoryTree = ref<BlogCategoryNode[]>([]);
 const catLoading = ref(false);
-const expanded = reactive<Record<string, boolean>>({});
 const dragOverId = ref<number | null>(null);
 const draggingId = ref<number | null>(null);
 const catDialog = ref(false);
@@ -201,18 +205,9 @@ const catEditId = ref(0);
 const catParentId = ref(0);
 const catForm = reactive({ name: '', parent_id: 0, sort_order: 0 });
 
-// 分类平铺（带缩进标签，用于下拉选择）：平台分类树 + 我的分类（含待审核）
+// 我的分类平铺（个人专栏，含待审核状态标注；用于下拉选择）
 const flatCats = computed(() => {
   const out: { id: number; label: string }[] = [];
-  for (const c of categoryTree.value) {
-    out.push({ id: c.id, label: c.name });
-    for (const s of c.children || []) {
-      out.push({ id: s.id, label: `　└ ${s.name}` });
-      for (const g of s.children || []) {
-        out.push({ id: g.id, label: `　　└ ${g.name}` });
-      }
-    }
-  }
   for (const m of myCats.value) {
     out.push({ id: m.id, label: (m.full_name || m.name) + (m.status === 'pending' ? '（待审核）' : '') });
   }
@@ -294,10 +289,9 @@ const myCats = ref<any[]>([]); // 自己创建的分类（含待审核状态）
 async function loadCategories() {
   catLoading.value = true;
   try {
-    // 管理视图：platform=已通过分类树；mine=自己创建的分类（含 pending/rejected）
+    // 管理视图：mine=自己创建的分类（个人专栏，含 pending/rejected；platform 不再使用——平台无分类）
     const res = await blogApi.getManageCategories();
     if (res.data.code === 0) {
-      categoryTree.value = res.data.data?.platform || [];
       myCats.value = res.data.data?.mine || [];
     }
   } catch { /* ignore */ }
@@ -311,7 +305,60 @@ function catStatusLabel(status: string) {
   return ({ pending: '待审核', approved: '已通过', rejected: '已拒绝' } as Record<string, string>)[status] || status;
 }
 
-function toggleCat(k: string) { expanded[k] = !expanded[k]; }
+// ===== 分类博客：点进分类查看博客 + 批量迁移 =====
+const catBlogDialog = ref(false);
+const catBlogCat = ref<any>(null);
+const catBlogs = ref<any[]>([]);
+const catBlogTotal = ref(0);
+const catBlogLoading = ref(false);
+const selectedCatBlogs = ref<number[]>([]);
+const catBlogTarget = ref<number | undefined>(undefined);
+
+async function openCatBlogs(cat: any) {
+  catBlogCat.value = cat;
+  catBlogs.value = [];
+  catBlogTotal.value = 0;
+  selectedCatBlogs.value = [];
+  catBlogTarget.value = undefined;
+  catBlogDialog.value = true;
+  await loadCatBlogs();
+}
+
+async function loadCatBlogs() {
+  if (!catBlogCat.value) return;
+  catBlogLoading.value = true;
+  try {
+    const res = await blogApi.listByAuthor(owner.value.id, 1, catBlogCat.value.id);
+    if (res.data.code === 0) {
+      catBlogs.value = res.data.data?.list || [];
+      catBlogTotal.value = res.data.data?.total || 0;
+    }
+  } catch { /* ignore */ }
+  finally { catBlogLoading.value = false; }
+}
+
+async function migrateCatBlogs() {
+  const target = catBlogTarget.value;
+  if (selectedCatBlogs.value.length === 0 || target === undefined) return;
+  const n = selectedCatBlogs.value.length;
+  try {
+    await ElMessageBox.confirm(`确定把这 ${n} 篇博客迁移到「${target === 0 ? '未分类' : (flatCats.value.find(c => c.id === target)?.label || target)}」？`, '批量迁移确认', {
+      confirmButtonText: '迁移', type: 'warning',
+    });
+    for (const id of selectedCatBlogs.value) {
+      await blogApi.update(id, { category_id: target });
+    }
+    ElMessage.success(`已迁移 ${n} 篇博客`);
+    selectedCatBlogs.value = [];
+    catBlogTarget.value = undefined;
+    await loadCatBlogs();
+    loadBlogs();
+    loadCategories();
+  } catch (e: any) {
+    if (e !== 'cancel' && e?.response) ElMessage.error(e.response.data?.message || '迁移失败');
+  }
+}
+
 
 function openCatCreate(parentID: number) {
   catEditId.value = 0;

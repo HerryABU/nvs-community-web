@@ -114,7 +114,7 @@ function selectCat(id: number) { filterCatId.value = id; page.value = 1; loadBlo
 async function loadBlogs() {
   listLoading.value = true;
   try {
-    const res = await blogApi.listByAuthor(user.value.id, page.value);
+    const res = await blogApi.listByAuthor(user.value.id, page.value, filterCatId.value || undefined);
     if (res.data.code === 0) {
       let list = res.data.data.list || [];
       total.value = res.data.data.total || 0;
@@ -138,9 +138,9 @@ async function init() {
         const p = await publicApi.getAuthorProfile(user.value.id);
         if (p.data.code === 0) profile.value = p.data.data;
       } catch { /* ignore */ }
-      // 分类树（全站）
+      // 分类树（该作者的个人专栏，仅已公开分类）
       try {
-        const c = await blogApi.getCategories();
+        const c = await blogApi.getAuthorCategories(user.value.id);
         if (c.data.code === 0) allCats.value = c.data.data || [];
       } catch { /* ignore */ }
       loadBlogs();
