@@ -419,6 +419,8 @@ func main() {
 		admin.GET("/recycle", handlers.AdminListRecycle)
 		// 博客分类管理（一/二/三级；管理员审核视图 + 事后审核 + 创建/编辑/删除）
 		admin.GET("/blog-categories", handlers.AdminListBlogCategories)
+		admin.GET("/blog-categories/mode", handlers.AdminGetCategoryReviewMode)
+		admin.PUT("/blog-categories/mode", handlers.AdminSetCategoryReviewMode)
 		admin.POST("/blog-categories", handlers.CreateBlogCategory)
 		admin.PUT("/blog-categories/:id", handlers.UpdateBlogCategory)
 		admin.DELETE("/blog-categories/:id", handlers.DeleteBlogCategory)

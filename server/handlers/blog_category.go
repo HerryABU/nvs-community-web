@@ -169,10 +169,12 @@ func CreateBlogCategory(c *gin.Context) {
 		utils.BadRequest(c, "同名分类已存在")
 		return
 	}
-	// 状态：管理员创建直接通过，普通作者待审核（事后审核）
-	status := models.CategoryStatusPending
-	if isAdminUser(c) {
-		status = models.CategoryStatusApproved
+	// 状态：管理员创建直接通过；普通作者按站点审核模式
+	//   事后审核(post_review，默认) → pending，管理员通过后公开
+	//   先公开(pre_public)         → approved 直接公开，管理员事后可封禁(拒绝)
+	status := models.CategoryStatusApproved
+	if !isAdminUser(c) && models.GetCategoryReviewMode() == models.CategoryReviewModePost {
+		status = models.CategoryStatusPending
 	}
 	cat := &models.BlogCategory{
 		Name: req.Name, ParentID: req.ParentID, SortOrder: req.SortOrder,
@@ -419,8 +421,7 @@ func AdminReviewBlogCategory(c *gin.Context) {
 	}
 	var req struct {
 		Action string `json:"action" binding:"required"`
-		Reason string `json:"reason"`
-	}
+		Reason string `json:"reason"`	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
@@ -448,6 +449,50 @@ func AdminReviewBlogCategory(c *gin.Context) {
 		return
 	}
 	utils.Success(c, cat)
+}
+
+// GET /api/admin/blog-categories/mode — 获取博客分类审核模式
+//   post_review：事后审核（默认），普通作者创建需审核通过后才公开
+//   pre_public：先公开，事后封禁，普通作者创建直接公开，管理员可随时下架
+func AdminGetCategoryReviewMode(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	mode := models.GetCategoryReviewMode()
+	label := "事后审核（通过后公开）"
+	if mode == models.CategoryReviewModePreOpen {
+		label = "先公开（事后封禁）"
+	}
+	utils.Success(c, gin.H{"mode": mode, "label": label})
+}
+
+// PUT /api/admin/blog-categories/mode — 设置博客分类审核模式 { mode: post_review | pre_public }
+func AdminSetCategoryReviewMode(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	var req struct {
+		Mode string `json:"mode" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	if req.Mode != models.CategoryReviewModePost && req.Mode != models.CategoryReviewModePreOpen {
+		utils.BadRequest(c, "mode 仅支持 post_review（事后审核）/ pre_public（先公开）")
+		return
+	}
+	if err := models.SetSetting(models.CategoryReviewModeKey, req.Mode); err != nil {
+		utils.InternalError(c, "保存失败")
+		return
+	}
+	label := "事后审核（通过后公开）"
+	if req.Mode == models.CategoryReviewModePreOpen {
+		label = "先公开（事后封禁）"
+	}
+	auditEmergency(c, models.AuditContentRestore, "blog_category", 0,
+		"管理员切换博客分类审核模式为："+label)
+	utils.Success(c, gin.H{"mode": req.Mode, "label": label})
 }
 
 // fillBlogCategories 为博客列表填充分类名（含父级前缀）
