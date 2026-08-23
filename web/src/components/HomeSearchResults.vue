@@ -39,6 +39,57 @@
         </div>
       </div>
 
+      <!-- 专栏搜索结果（博客分类） -->
+      <div v-if="categories.length > 0" style="margin-bottom:24px">
+        <h3 style="margin-bottom:12px;font-size:1rem;color:var(--primary-color)">📚 找到 {{ categories.length }} 个专栏</h3>
+        <div class="misc-search-list">
+          <div
+            v-for="c in categories"
+            :key="'c' + c.id"
+            class="misc-search-item"
+            @click="$router.push(`/blog/${c.created_by ? c.creator_name || c.created_by : c.id}`)"
+          >
+            <span class="misc-title">📚 {{ c.full_name || c.name }}</span>
+            <span class="misc-summary">{{ c.blog_count }} 篇博客</span>
+            <span class="misc-meta">创建者：{{ c.creator_name || '—' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 话题搜索结果 -->
+      <div v-if="topics.length > 0" style="margin-bottom:24px">
+        <h3 style="margin-bottom:12px;font-size:1rem;color:var(--primary-color)">🔥 找到 {{ topics.length }} 个话题</h3>
+        <div class="misc-search-list">
+          <div
+            v-for="t in topics"
+            :key="'t' + t.id"
+            class="misc-search-item"
+            @click="$router.push(`/topics/${t.id}`)"
+          >
+            <span class="misc-title"># {{ t.name }}</span>
+            <span class="misc-summary">{{ t.description }}</span>
+            <span class="misc-meta">话题</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 论坛搜索结果 -->
+      <div v-if="forums.length > 0" style="margin-bottom:24px">
+        <h3 style="margin-bottom:12px;font-size:1rem;color:var(--primary-color)">💬 找到 {{ forums.length }} 个论坛</h3>
+        <div class="misc-search-list">
+          <div
+            v-for="f in forums"
+            :key="'f' + f.id"
+            class="misc-search-item"
+            @click="$router.push(`/forums/${f.id}`)"
+          >
+            <span class="misc-title">💬 {{ f.name }}</span>
+            <span class="misc-summary">{{ f.description }}</span>
+            <span class="misc-meta">{{ f.thread_count }} 帖</span>
+          </div>
+        </div>
+      </div>
+
       <!-- HTML 扩展搜索结果（名称/描述/项目名） -->
       <div v-if="htmls.length > 0" style="margin-bottom:24px">
         <h3 style="margin-bottom:12px;font-size:1rem;color:var(--primary-color)">🔌 找到 {{ htmls.length }} 个扩展应用</h3>
@@ -135,6 +186,9 @@ defineProps<{
   loading: boolean;
   blogs: any[];
   htmls: any[];
+  categories: any[];
+  topics: any[];
+  forums: any[];
   view: 'grid' | 'table';
   pageSize: number;
 }>();

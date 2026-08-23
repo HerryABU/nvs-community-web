@@ -234,6 +234,17 @@ const router = createRouter({
       name: 'blog-list',
       component: () => import('@/views/BlogList.vue'),
     },
+    // 话题：/topics 列表 + /topics/:id 详情（参与博客）
+    {
+      path: '/topics',
+      name: 'topics',
+      component: () => import('@/views/Topics.vue'),
+    },
+    {
+      path: '/topics/:id',
+      name: 'topic-detail',
+      component: () => import('@/views/Topics.vue'),
+    },
     // 用户博客主页（/blog/{用户名} 或 /blog/{数字id}，数字是主键、用户名兼容访问）
     {
       path: '/blog/:key',

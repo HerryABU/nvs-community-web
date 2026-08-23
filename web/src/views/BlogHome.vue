@@ -30,7 +30,7 @@
       <div class="bh-layout">
         <!-- 左侧分类（三级，点击筛选该用户当前分类博客） -->
         <aside class="bh-cats" v-if="allCats.length > 0">
-          <div class="bh-cats-title">博客分类</div>
+          <div class="bh-cats-title">📚 作者专栏</div>
           <div class="bh-cat-item" :class="{ active: filterCatId === 0 }" @click="selectCat(0)">全部</div>
           <template v-for="cat in allCats" :key="cat.id">
             <div class="bh-cat-item" :class="{ active: filterCatId === cat.id }" @click="selectCat(cat.id)">

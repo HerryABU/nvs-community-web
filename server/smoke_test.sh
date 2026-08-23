@@ -249,6 +249,24 @@ check "作者列表未分类筛选" '"code":0' "$UNC"
 EXC=$(curl -s -m 8 "$BASE/api/author/$U/blogs?exclude_category_id=$CAT1ID")
 check "作者列表排除分类筛选" '"code":0' "$EXC"
 
+# ── T07d 话题：创建 / 博客参与 / 列表 / 话题博客 ──
+TP=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X POST "$BASE/api/topics" -H "Content-Type: application/json" -d '{"name":"#冒烟话题","description":"冒烟测试话题"}')
+check "创建话题" '"name":"冒烟话题"' "$TP"
+TPID=$(echo "$TP" | "$PY" -c "import sys,json;print(json.load(sys.stdin)['data']['id'])" 2>/dev/null || echo 1)
+# 博客更新参与话题
+TBLOG=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X PUT "$BASE/api/blogs/$BID" -H "Content-Type: application/json" -d "{\"topics\":[\"冒烟话题\"]}")
+check "博客参与话题返回" '"name":"冒烟话题"' "$TBLOG"
+TPL=$(curl -s -m 8 "$BASE/api/topics")
+check "话题列表含话题" '冒烟话题' "$TPL"
+TPB=$(curl -s -m 8 "$BASE/api/topics/$TPID/blogs")
+check "话题下博客列表" '冒烟博客' "$TPB"
+
+# ── T07e 搜索扩展：专栏 / 话题 / 论坛 ──
+SX=$(curl -s -m 8 "$BASE/api/search?q=冒烟")
+check "搜索返回专栏" '"categories":[' "$SX"
+check "搜索返回话题" '"topics":[' "$SX"
+check "搜索返回论坛" '"forums":[' "$SX"
+
 # ── T08 列表一级分类过滤（含三级子孙） ──
 LF=$(curl -s -m 8 "$BASE/api/blogs?category_id=$CAT1ID")
 check "列表按一级过滤含三级博客" '"list":[' "$LF"

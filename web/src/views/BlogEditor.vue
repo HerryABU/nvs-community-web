@@ -73,6 +73,16 @@
           class="be-tags-select"
         />
         <el-select
+          v-model="blogTopics"
+          multiple
+          filterable
+          allow-create
+          default-first-option
+          placeholder="话题 # 选择或输入创建"
+          size="small"
+          class="be-topics-select"
+        />
+        <el-select
           v-model="blogCategoryId"
           placeholder="选择分类（我的专栏）"
           size="small"
@@ -180,6 +190,8 @@ const blogSummary = ref('');
 const blogPinned = ref(false);
 const blogCategoryId = ref<number | undefined>(undefined); // 提交用的分类（个人专栏，一级/二级/三级均可）
 const blogTags = ref<string[]>([]); // 博客标签（#tag）
+const blogTopics = ref<string[]>([]); // 博客话题（#话题）
+const topicOptions = ref<{ name: string }[]>([]);
 const myCats = ref<any[]>([]); // 我的分类（个人专栏，含待审核）
 const blogContent = ref('');
 const richTextContent = ref('');
@@ -202,6 +214,9 @@ async function loadCategories() {
     if (res.data.code === 0) {
       myCats.value = res.data.data?.mine || [];
     }
+    // 已有话题（供选择）
+    const t = await blogApi.getTopics();
+    if (t.data.code === 0) topicOptions.value = t.data.data || [];
   } catch { /* ignore */ }
 }
 
@@ -334,6 +349,7 @@ async function loadBlog() {
       blogPinned.value = b.is_pinned || false;
       blogCategoryId.value = b.category_id || undefined;
       blogTags.value = (b.tags || []).map((t: any) => t.name);
+      blogTopics.value = (b.topics || []).map((t: any) => t.name);
       // 分类树可能尚未加载完成：重新拉一次（个人专栏）
       await loadCategories();
       if (editorMode.value === 'md') {
@@ -358,6 +374,7 @@ async function saveBlog() {
       is_pinned: blogPinned.value,
       category_id: blogCategoryId.value,
       tags: blogTags.value,
+      topics: blogTopics.value,
     };
     if (editingId.value) {
       await blogApi.update(editingId.value, payload);
@@ -418,7 +435,8 @@ onBeforeUnmount(() => {
 .be-title-input { --el-input-focus-border-color: var(--primary-color); }
 .be-header-row { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
 .be-summary-input { flex: 1; min-width: 200px; }
-.be-tags-select { width: 220px; flex-shrink: 0; }
+.be-tags-select { width: 200px; flex-shrink: 0; }
+.be-topics-select { width: 200px; flex-shrink: 0; }
 .be-cat-select { width: 200px; flex-shrink: 0; }
 .be-media-btns { display: flex; gap: 6px; flex-shrink: 0; }
 .be-pinned { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
@@ -452,7 +470,7 @@ onBeforeUnmount(() => {
   .be-header-row {
     flex-wrap: wrap;
   }
-  .be-cat-select, .be-tags-select {
+  .be-cat-select, .be-tags-select, .be-topics-select {
     width: 100%;
     flex: 1 0 100%;
   }
