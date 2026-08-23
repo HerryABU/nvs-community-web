@@ -30,8 +30,19 @@ export const blogApi = {
   getBlog(id: number) {
     return api.get(`/blogs/${id}`);
   },
-  listByAuthor(authorId: number, page: number = 1, categoryId?: number, search?: string) {
-    return api.get(`/author/${authorId}/blogs`, { params: { page, category_id: categoryId || undefined, search: search || undefined } });
+  listByAuthor(authorId: number, page: number = 1, categoryId?: number, search?: string, excludeCategoryId?: number) {
+    return api.get(`/author/${authorId}/blogs`, {
+      params: {
+        page,
+        category_id: categoryId !== undefined ? categoryId : undefined,
+        search: search || undefined,
+        exclude_category_id: excludeCategoryId || undefined,
+      },
+    });
+  },
+  // 批量设置博客分类（CSDN 式批量操作；category_id=0 移出到未分类）
+  batchSetCategory(ids: number[], categoryId: number) {
+    return api.post('/blogs/batch-category', { ids, category_id: categoryId });
   },
   getAuthorBlog(authorId: number, blogId: number) {
     return api.get(`/author/${authorId}/blogs/${blogId}`);
@@ -39,11 +50,12 @@ export const blogApi = {
   create(data: { title: string; content: string; summary?: string; category_id?: number; tags?: string[] }) {
     return api.post('/blogs', data);
   },
-  // 批量导入博客：每个文件一篇，标题取文件名（去扩展名）
-  importBatch(files: File[]) {
+  // 批量导入博客：每个文件一篇，标题取文件名（去扩展名）；categoryId 可选=导入到指定分类（CSDN 式）
+  importBatch(files: File[], categoryId?: number) {
     const formData = new FormData();
     for (const f of files) formData.append('files', f);
-    return api.post<{ code: number; data: { count: number; skipped: number; message: string } }>(
+    if (categoryId) formData.append('category_id', String(categoryId));
+    return api.post<{ code: number; data: { count: number; skipped: number; message: string; created_ids?: number[] } }>(
       '/blogs/import/batch',
       formData,
     );

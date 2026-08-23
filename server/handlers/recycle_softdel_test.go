@@ -439,6 +439,83 @@ func TestCategoryReviewModeSwitch(t *testing.T) {
 	}
 }
 
+// TestBatchSetCategoryAndFilter 批量分类 + 未分类/排除分类筛选（CSDN 式批量操作）
+func TestBatchSetCategoryAndFilter(t *testing.T) {
+	setupHandlerTestDB(t)
+	seedTestUser(t, 1, "admin1", "admin")
+	seedTestUser(t, 2, "author2", "author")
+	seedTestUser(t, 3, "other3", "author")
+
+	// 作者2 的分类（approved）
+	cat := &models.BlogCategory{Name: "Go", Status: "approved", CreatedBy: 2}
+	models.DB.Create(cat)
+	// 作者2 三篇博客：两篇未分类，一篇挂分类
+	b1 := &models.AuthorBlog{AuthorID: 2, Title: "B1"}
+	b2 := &models.AuthorBlog{AuthorID: 2, Title: "B2"}
+	b3 := &models.AuthorBlog{AuthorID: 2, Title: "B3", CategoryID: cat.ID}
+	models.DB.Create(b1)
+	models.DB.Create(b2)
+	models.DB.Create(b3)
+	// 作者3 的一篇博客（他人）
+	bo := &models.AuthorBlog{AuthorID: 3, Title: "他人博客"}
+	models.DB.Create(bo)
+
+	// 1) 批量把 b1/b2 归入分类 cat
+	c, w := asUser("author", 2)
+	setJSONBody(c, map[string]interface{}{"ids": []uint{b1.ID, b2.ID}, "category_id": cat.ID})
+	BatchSetBlogCategory(c)
+	resp := mustJSON(t, w)
+	if resp["data"].(map[string]interface{})["updated"] != float64(2) {
+		t.Errorf("批量分类应更新 2 篇，实际 %v", resp["data"])
+	}
+	// 校验
+	var cnt int64
+	models.DB.Model(&models.AuthorBlog{}).Where("id IN ? AND category_id = ?", []uint{b1.ID, b2.ID}, cat.ID).Count(&cnt)
+	if cnt != 2 {
+		t.Errorf("b1/b2 应已归入分类，实际 %d", cnt)
+	}
+
+	// 2) 包含他人博客 → 拒绝
+	c, w = asUser("author", 2)
+	setJSONBody(c, map[string]interface{}{"ids": []uint{b1.ID, bo.ID}, "category_id": 0})
+	BatchSetBlogCategory(c)
+	if !bytes.Contains(w.Body.Bytes(), []byte("无权操作")) {
+		t.Errorf("操作他人博客应被拒绝: %s", w.Body.String())
+	}
+
+	// 3) 移出到未分类（category_id=0）
+	c, w = asUser("author", 2)
+	setJSONBody(c, map[string]interface{}{"ids": []uint{b3.ID}, "category_id": 0})
+	BatchSetBlogCategory(c)
+	mustJSON(t, w)
+	var c3 int64
+	models.DB.Model(&models.AuthorBlog{}).Where("id = ? AND category_id = 0", b3.ID).Count(&c3)
+	if c3 != 1 {
+		t.Errorf("b3 应移出到未分类")
+	}
+
+	// 4) 作者列表：category_id=0 仅未分类（此时仅 b3 未分类）
+	c, w = asUser("reader", 0)
+	c.Params = gin.Params{gin.Param{Key: "id", Value: "2"}}
+	c.Request = httptest.NewRequest("GET", "/author/2/blogs?category_id=0", nil)
+	ListAuthorBlogs(c)
+	resp = mustJSON(t, w)
+	list := resp["data"].(map[string]interface{})["list"].([]interface{})
+	if len(list) != 1 || list[0].(map[string]interface{})["id"] != float64(b3.ID) {
+		t.Errorf("未分类筛选应返回 1 篇（b3），实际 %d", len(list))
+	}
+
+	// 5) 作者列表：exclude_category_id 排除某分类（该分类为空）
+	c, w = asUser("reader", 0)
+	c.Params = gin.Params{gin.Param{Key: "id", Value: "2"}}
+	c.Request = httptest.NewRequest("GET", "/author/2/blogs?exclude_category_id=999", nil)
+	ListAuthorBlogs(c)
+	resp = mustJSON(t, w)
+	if resp["data"].(map[string]interface{})["total"] != float64(3) {
+		t.Errorf("排除不存在的分类应返回全部 3 篇，实际 %v", resp["data"].(map[string]interface{})["total"])
+	}
+}
+
 // TestResolveUserKey 用户标识解析：数字=主键 id，非数字=用户名（大小写不敏感）
 func TestResolveUserKey(t *testing.T) {
 	setupHandlerTestDB(t)

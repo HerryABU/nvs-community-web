@@ -45,13 +45,28 @@ func GetBlogByID(id uint) (*AuthorBlog, error) {
 	return &blog, nil
 }
 
+// GetBlogsByAuthor 作者博客列表（categoryID>0 时按分类筛选；0=不过滤）
 func GetBlogsByAuthor(authorID, categoryID uint, page, pageSize int) ([]AuthorBlog, int64, error) {
+	var cid *uint
+	if categoryID > 0 {
+		cid = &categoryID
+	}
+	return GetBlogsByAuthorFilter(authorID, cid, 0, page, pageSize)
+}
+
+// GetBlogsByAuthorFilter 作者博客列表（增强筛选）
+//   categoryID：nil=全部，*0=仅未分类，*>0=仅该分类
+//   excludeCategoryID：>0 时排除该分类（用于"新增到分类"视图：显示不在本分类的文章）
+func GetBlogsByAuthorFilter(authorID uint, categoryID *uint, excludeCategoryID uint, page, pageSize int) ([]AuthorBlog, int64, error) {
 	var blogs []AuthorBlog
 	var total int64
 
 	query := DB.Model(&AuthorBlog{}).Where("author_id = ?", authorID)
-	if categoryID > 0 {
-		query = query.Where("category_id = ?", categoryID)
+	if categoryID != nil {
+		query = query.Where("category_id = ?", *categoryID)
+	}
+	if excludeCategoryID > 0 {
+		query = query.Where("category_id <> ?", excludeCategoryID)
 	}
 	query.Count(&total)
 

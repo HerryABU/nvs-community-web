@@ -23,7 +23,7 @@
       </div>
     </div>
 
-    <!-- 批量导入对话框 -->
+    <!-- 批量导入对话框（CSDN 式：可指定导入到哪个专栏） -->
     <el-dialog v-model="showBatchDialog" title="批量导入博客" width="560px" destroy-on-close>
       <el-form label-width="80px">
         <el-form-item label="选择文件">
@@ -41,6 +41,12 @@
               <div class="el-upload__tip">每个文件将创建为一篇独立博客，标题取文件名（去扩展名）</div>
             </template>
           </el-upload>
+        </el-form-item>
+        <el-form-item label="导入到分类">
+          <el-select v-model="batchCategoryId" placeholder="不选=导入后未分类" clearable style="width: 100%">
+            <el-option v-for="c in myCatOptions" :key="c.id" :label="c.label" :value="c.id" />
+          </el-select>
+          <div class="el-upload__tip">选择后导入的博客将自动归入该分类（个人专栏）</div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -137,6 +143,7 @@ const showBatchDialog = ref(false);
 const batchImporting = ref(false);
 const batchUploadRef = ref();
 const batchFiles = ref<File[]>([]);
+const batchCategoryId = ref<number | undefined>(undefined);
 
 function onBatchFileChange(file: any) {
   if (file.raw) batchFiles.value.push(file.raw);
@@ -146,12 +153,13 @@ async function doBatchImport() {
   if (batchFiles.value.length === 0) { ElMessage.warning('请选择文件'); return; }
   batchImporting.value = true;
   try {
-    const res = await blogApi.importBatch(batchFiles.value);
+    const res = await blogApi.importBatch(batchFiles.value, batchCategoryId.value);
     if (res.data.code === 0) {
       const d = res.data.data;
       ElMessage.success(d.message || `成功导入 ${d.count} 篇博客`);
       showBatchDialog.value = false;
       batchFiles.value = [];
+      batchCategoryId.value = undefined;
       batchUploadRef.value?.clearFiles();
       // 回到作者工作台，可看到新博客列表
       setTimeout(() => router.push('/author'), 600);
