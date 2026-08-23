@@ -439,6 +439,18 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v2.1.0 URL 规范化 + 博客管理/主页 + 三级分类（2026-08-23）
+
+| 功能 | 涉及文件 |
+|---|---|
+| **作者博客管理页** `/author/blog/{用户名}`（仅本人，数字 id 兼容；他人访问自动转公开主页） | `web/src/views/BlogManager.vue`（新）、`web/src/router/index.ts`、`web/src/views/AuthorDashboard.vue` |
+| **公开博客主页** `/blog/{用户名}`（数字 id 兼容；数字非用户时兼容旧单篇链接自动重定向） | `web/src/views/BlogHome.vue`（新）、`web/src/router/index.ts` |
+| **用户标识解析**：数字=主键 id，用户名兼容（大小写不敏感）；作者主页/博客列表/博客详情/阅读页全部支持 | `server/handlers/author_profile.go`（`ResolveUserKey`）、`server/handlers/social_blog.go`、`server/main.go`、`web/src/api/admin.ts`、`web/src/views/AuthorHome.vue`、`AuthorBlogs.vue` |
+| **/novel/:id 规范重定向** → `/author/{authorId}/novel/:id`（数字主键）；阅读链接规范化 | `web/src/views/NovelDetail.vue` |
+| **分类支持三级**（一级→二级→三级；四级拒绝；删除/成环校验；树递归组装） | `server/models/blog_category.go`、`server/handlers/blog_category.go`、`server/models/blog.go`、`web/src/views/BlogList.vue`、`BlogEditor.vue`（级联选择器）、`admin/AdminBlogCategories.vue` |
+| 单元测试：用户解析 + 三级分类层级 | `server/handlers/recycle_softdel_test.go` |
+| 冒烟测试扩展至 36 项（用户名解析/三级分类/一级过滤含三级） | `server/smoke_test.sh` |
+
 ### v2.0.0 功能更新（2026-08-23）
 
 > 本次更新：2 个严重 bug 修复 + 博客体系升级 + 软删除治理完善 + 测试体系。
