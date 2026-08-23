@@ -22,6 +22,7 @@
       :keyword="searchKeyword" :results="searchResults" :authors="searchAuthors"
       :author-total="searchAuthorTotal" :total="searchTotal" :loading="searchLoading"
       :blogs="searchBlogs" :htmls="searchHtmls"
+      :categories="searchCategories" :topics="searchTopics" :forums="searchForums"
       :view="novelView" :page-size="searchPageSize"
       v-model:current-page="searchPage"
       @clear="clearSearch"
@@ -163,6 +164,9 @@ const searchAuthors = ref<any[]>([]);
 const searchAuthorTotal = ref(0);
 const searchBlogs = ref<any[]>([]);
 const searchHtmls = ref<any[]>([]);
+const searchCategories = ref<any[]>([]);
+const searchTopics = ref<any[]>([]);
+const searchForums = ref<any[]>([]);
 const searchLoading = ref(false);
 const searchTotal = ref(0);
 const searchPage = ref(1);
@@ -238,6 +242,12 @@ async function doSearch() {
       searchAuthors.value = d.authors || [];
       searchBlogs.value = d.blogs || [];
       searchHtmls.value = d.htmls || [];
+      searchCategories.value = d.categories || [];
+      searchTopics.value = d.topics || [];
+      searchForums.value = d.forums || [];
+      searchCategories.value = d.categories || [];
+      searchTopics.value = d.topics || [];
+      searchForums.value = d.forums || [];
       searchTotal.value = (d.novels || []).length;
       searchAuthorTotal.value = (d.authors || []).length;
     }

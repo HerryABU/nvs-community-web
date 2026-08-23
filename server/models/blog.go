@@ -26,7 +26,8 @@ type AuthorBlog struct {
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
 	Author *User    `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
-	Tags   []BlogTag `gorm:"-" json:"tags,omitempty"` // 博客标签（多对多，通过 blog_tag_links 关联）
+	Tags   []BlogTag `gorm:"-" json:"tags,omitempty"`   // 博客标签（多对多，通过 blog_tag_links 关联）
+	Topics []BlogTopic `gorm:"-" json:"topics,omitempty"` // 博客话题（多对多，通过 blog_topic_links 关联）
 }
 
 func (AuthorBlog) TableName() string { return "author_blogs" }

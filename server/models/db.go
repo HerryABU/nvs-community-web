@@ -37,6 +37,7 @@ func AllModels() []interface{} {
 		&BadWord{}, &BadWordFlag{}, // 违禁词库：规则 + 标记待审记录
 		&BlogCategory{}, &BlogLike{}, // 博客分类（一/二级）+ 博客点赞
 		&BlogTag{}, &BlogTagLink{},   // 博客标签（#tag，多对多）
+		&BlogTopic{}, &BlogTopicLink{}, // 博客话题（#话题，多对多）
 		&SystemSetting{}, // 系统设置（key/value）：博客分类审核模式等
 		&ZoneAccessLog{}, // 隔离墙（敏感分区）进入记录，176号令合规
 		&Notification{}, // 站内消息通知

@@ -304,6 +304,7 @@ func main() {
 		protected.GET("/follow/stats", handlers.GetFollowStats)
 		// 作者博客（创建、编辑、删除需登录）
 		protected.POST("/blogs", handlers.CreateBlog)
+		protected.POST("/topics", handlers.CreateTopic) // 创建话题（登录）
 		protected.POST("/blogs/import/batch", handlers.ImportBlogs)
 		protected.POST("/blogs/batch-category", handlers.BatchSetBlogCategory) // 批量设置博客分类（CSDN 式）
 		protected.PUT("/blogs/:id", handlers.UpdateBlog)
@@ -458,6 +459,9 @@ func main() {
 		r.GET("/api/blogs/:id", handlers.GetBlog)
 		r.GET("/api/blogs/:id/likes", handlers.GetBlogLikes) // 博客点赞数+当前用户状态
 		r.GET("/api/blog-tags", handlers.ListBlogTags)       // 全站标签云
+		r.GET("/api/topics", handlers.ListTopics)            // 全站话题列表
+		r.GET("/api/topics/:id", handlers.GetTopic)          // 话题详情
+		r.GET("/api/topics/:id/blogs", handlers.ListTopicBlogs) // 话题下博客列表
 		r.GET("/api/blog-categories", handlers.ListBlogCategories) // 博客分类树（公开）
 		r.GET("/api/author/:id/blogs/:blogId", handlers.GetAuthorBlog)
 		r.GET("/api/author/:id/blogs", handlers.ListAuthorBlogs)

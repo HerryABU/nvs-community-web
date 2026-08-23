@@ -47,7 +47,7 @@ export const blogApi = {
   getAuthorBlog(authorId: number, blogId: number) {
     return api.get(`/author/${authorId}/blogs/${blogId}`);
   },
-  create(data: { title: string; content: string; summary?: string; category_id?: number; tags?: string[] }) {
+  create(data: { title: string; content: string; summary?: string; category_id?: number; tags?: string[]; topics?: string[] }) {
     return api.post('/blogs', data);
   },
   // 批量导入博客：每个文件一篇，标题取文件名（去扩展名）；categoryId 可选=导入到指定分类（CSDN 式）
@@ -60,7 +60,7 @@ export const blogApi = {
       formData,
     );
   },
-  update(id: number, data: { title?: string; content?: string; summary?: string; is_pinned?: boolean; category_id?: number; tags?: string[] | null }) {
+  update(id: number, data: { title?: string; content?: string; summary?: string; is_pinned?: boolean; category_id?: number; tags?: string[] | null; topics?: string[] | null }) {
     return api.put(`/blogs/${id}`, data);
   },
   delete(id: number) {
@@ -70,6 +70,20 @@ export const blogApi = {
   getTags() {
     return api.get<{ code: number; data: { name: string; count: number }[] }>('/blog-tags');
   },
+  // ===== 话题（#话题，CSDN 式内容聚合）=====
+  getTopics() {
+    return api.get<{ code: number; data: { id: number; name: string; description: string; blog_count: number }[] }>('/topics');
+  },
+  getTopic(id: number) {
+    return api.get<{ code: number; data: { topic: any; blog_count: number } }>(`/topics/${id}`);
+  },
+  getTopicBlogs(id: number, page: number = 1, pageSize: number = 12) {
+    return api.get(`/topics/${id}/blogs`, { params: { page, page_size: pageSize } });
+  },
+  createTopic(data: { name: string; description?: string }) {
+    return api.post('/topics', data);
+  },
+
   // ===== 分类（树）=====
   getCategories() {
     return api.get<{ code: number; data: BlogCategoryNode[] }>('/blog-categories');

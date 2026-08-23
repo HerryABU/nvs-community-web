@@ -2,56 +2,7 @@
   <div class="blog-list-wrap">
     <div class="bl-layout">
       <!-- 左侧分类栏（CSDN 式：一级 + 可展开二级） -->
-      <aside class="bl-cats" v-if="categoryTree.length > 0">
-        <div class="bl-cats-title">博客分类</div>
-        <div class="bl-cat-item" :class="{ active: currentCatId === 0 && !currentTag }" @click="selectCategory(0)">
-          <span class="bl-cat-name">全部博客</span>
-          <span class="bl-cat-count">{{ totalAll }}</span>
-        </div>
-        <template v-for="cat in categoryTree" :key="cat.id">
-          <div class="bl-cat-item" :class="{ active: currentCatId === cat.id }" @click="selectCategory(cat.id)">
-            <span class="bl-cat-arrow" :class="{ open: expandedParents['p'+cat.id] }" v-if="cat.children && cat.children.length > 0"
-              @click.stop="toggleParent('p'+cat.id)">▸</span>
-            <span v-else class="bl-cat-arrow placeholder">▸</span>
-            <span class="bl-cat-name">{{ cat.name }}</span>
-            <span class="bl-cat-count">{{ cat.blog_count }}</span>
-          </div>
-          <div v-if="cat.children && cat.children.length > 0 && expandedParents['p'+cat.id]" class="bl-cat-children">
-            <template v-for="sub in cat.children" :key="sub.id">
-              <div class="bl-cat-sub" :class="{ active: currentCatId === sub.id }" @click="selectCategory(sub.id)">
-                <span class="bl-cat-arrow" :class="{ open: expandedParents['s'+sub.id] }" v-if="sub.children && sub.children.length > 0"
-                  @click.stop="toggleParent('s'+sub.id)">▸</span>
-                <span v-else class="bl-cat-arrow placeholder">▸</span>
-                <span class="bl-cat-name">└ {{ sub.name }}</span>
-                <span class="bl-cat-count">{{ sub.blog_count }}</span>
-              </div>
-              <!-- 三级分类 -->
-              <div v-if="sub.children && sub.children.length > 0 && expandedParents['s'+sub.id]" class="bl-cat-children3">
-                <div v-for="g in sub.children" :key="g.id" class="bl-cat-sub3" :class="{ active: currentCatId === g.id }"
-                  @click="selectCategory(g.id)">
-                  <span class="bl-cat-name">　└ {{ g.name }}</span>
-                  <span class="bl-cat-count">{{ g.blog_count }}</span>
-                </div>
-              </div>
-            </template>
-          </div>
-        </template>
-        <!-- 热门标签（#tag，CSDN 式标签云） -->
-        <div class="bl-tags" v-if="tagCloud.length > 0">
-          <div class="bl-tags-title">🏷 热门标签</div>
-          <div class="bl-tags-cloud">
-            <span
-              v-for="t in tagCloud"
-              :key="t.name"
-              class="bl-tag"
-              :class="{ active: currentTag === t.name }"
-              @click="selectTag(t.name)"
-            ># {{ t.name }} <em>{{ t.count }}</em></span>
-          </div>
-        </div>
-      </aside>
-
-      <!-- 右侧列表 -->
+            <!-- 右侧列表 -->
       <div class="bl-main">
         <div class="bl-header">
           <h1>📝 作者博客</h1>
@@ -123,54 +74,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { blogApi, type BlogCategoryNode } from '@/api/social';
+import { blogApi } from '@/api/social';
 
 const route = useRoute();
 
 const blogs = ref<any[]>([]);
 const total = ref(0);
-const totalAll = ref(0);
 const page = ref(1);
 const pageSize = 12;
 const loading = ref(false);
 const previewLength = 100;
 
-const categoryTree = ref<BlogCategoryNode[]>([]);
-const currentCatId = ref(0);
-const expandedParents = reactive<Record<number, boolean>>({});
 const tagCloud = ref<{ name: string; count: number }[]>([]);
 const currentTag = ref(typeof route.query.tag === 'string' ? route.query.tag : '');
 
-const currentCatName = computed(() => {
-  if (currentCatId.value === 0) return '';
-  for (const c of categoryTree.value) {
-    if (c.id === currentCatId.value) return c.name;
-    for (const s of c.children || []) {
-      if (s.id === currentCatId.value) return `${c.name} / ${s.name}`;
-      for (const g of s.children || []) {
-        if (g.id === currentCatId.value) return `${c.name} / ${s.name} / ${g.name}`;
-      }
-    }
-  }
-  return '';
-});
-
-function toggleParent(id: string) {
-  expandedParents[id] = !expandedParents[id];
-}
-
-function selectCategory(id: number) {
-  currentCatId.value = id;
-  currentTag.value = '';
-  page.value = 1;
-  loadBlogs();
-}
 
 function selectTag(tag: string) {
   currentTag.value = tag;
-  currentCatId.value = 0;
   page.value = 1;
   loadBlogs();
 }
@@ -195,19 +117,15 @@ function extractFirstImage(html: string): string | null {
 
 async function loadCategories() {
   try {
-    const [catRes, tagRes] = await Promise.all([blogApi.getCategories(), blogApi.getTags()]);
-    if (catRes.data.code === 0) {
-      categoryTree.value = catRes.data.data || [];
-      totalAll.value = categoryTree.value.reduce((sum, c) => sum + c.blog_count, 0);
-    }
-    if (tagRes.data.code === 0) tagCloud.value = tagRes.data.data || [];
+    const res = await blogApi.getTags();
+    if (res.data.code === 0) tagCloud.value = res.data.data || [];
   } catch { /* ignore */ }
 }
 
 async function loadBlogs() {
   loading.value = true;
   try {
-    const res = await blogApi.listPublic(page.value, pageSize, currentCatId.value || undefined, currentTag.value || undefined);
+    const res = await blogApi.listPublic(page.value, pageSize, undefined, currentTag.value || undefined);
     if (res.data.code === 0) {
       blogs.value = res.data.data.list || [];
       total.value = res.data.data.total || 0;

@@ -30,6 +30,16 @@
                 @click="router.push({ path: '/blogs', query: { tag: t.name } })"
               ># {{ t.name }}</span>
             </div>
+            <!-- 话题（#话题，点击跳转话题页） -->
+            <div class="blog-topic-bar" v-if="blog.topics && blog.topics.length">
+              <span class="bt-label">参与话题：</span>
+              <span
+                v-for="t in blog.topics"
+                :key="t.id"
+                class="blog-topic"
+                @click="router.push(`/topics/${t.id}`)"
+              ># {{ t.name }}</span>
+            </div>
             <!-- 点赞区 -->
             <div class="blog-like-bar">
               <el-button
@@ -290,6 +300,16 @@ onBeforeUnmount(() => {
   font-size: 0.8rem; cursor: pointer; transition: all 0.2s;
 }
 .blog-tag:hover { background: var(--primary-color); color: #fff; }
+.blog-topic-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.bt-label { font-size: 0.8rem; color: #999; }
+.blog-topic {
+  display: inline-flex; align-items: center;
+  padding: 3px 12px; border-radius: 6px;
+  background: rgba(245,158,11,0.12); color: #b45309;
+  font-size: 0.8rem; cursor: pointer; transition: all 0.2s;
+}
+.blog-topic:hover { background: #f59e0b; color: #fff; }
+[data-theme="dark"] .blog-topic { color: #fbbf24; }
 .blog-like-bar { margin-top: 14px; }
 .blog-content { line-height: 1.8; font-size: 1rem; }
 .blog-footer { margin-top: 32px; display: flex; gap: 12px; }

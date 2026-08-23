@@ -108,7 +108,7 @@ func SearchAuthors(c *gin.Context) {
 	utils.Success(c, gin.H{"list": users, "total": total})
 }
 
-// GET /api/search — 统一搜索（公开）：作品 / 作者 / 博客 / HTML 扩展
+// GET /api/search — 统一搜索（公开）：作品 / 作者 / 博客 / HTML 扩展 / 专栏 / 话题 / 论坛
 func UnifiedSearch(c *gin.Context) {
 	q := strings.TrimSpace(c.Query("q"))
 	if q == "" {
@@ -151,8 +151,51 @@ func UnifiedSearch(c *gin.Context) {
 			like, like, like, true, "approved").
 		Preload("User").Order("created_at DESC").Limit(limit).Find(&htmls)
 
+	// 5) 专栏（博客分类）：分类名（仅已公开 approved 分类）
+	type categoryHit struct {
+		ID          uint   `json:"id"`
+		Name        string `json:"name"`
+		FullName    string `json:"full_name"`
+		CreatorID   uint   `json:"created_by"`
+		CreatorName string `json:"creator_name"`
+		BlogCount   int64  `json:"blog_count"`
+	}
+	var cats []models.BlogCategory
+	models.DB.Model(&models.BlogCategory{}).Where("status = ? AND name LIKE ?", "approved", like).
+		Order("id ASC").Limit(limit).Find(&cats)
+	categories := make([]categoryHit, 0, len(cats))
+	for _, c := range cats {
+		hit := categoryHit{
+			ID: c.ID, Name: c.Name,
+			FullName:  models.GetBlogCategoryName(c.ID),
+			CreatorID: c.CreatedBy,
+		}
+		models.DB.Model(&models.AuthorBlog{}).Where("category_id = ?", c.ID).Count(&hit.BlogCount)
+		if c.CreatedBy > 0 {
+			if u, err := models.GetUserByID(c.CreatedBy); err == nil && u != nil {
+				hit.CreatorName = u.Nickname
+				if hit.CreatorName == "" {
+					hit.CreatorName = u.Username
+				}
+			}
+		}
+		categories = append(categories, hit)
+	}
+
+	// 6) 话题：话题名 / 描述
+	var topics []models.BlogTopic
+	models.DB.Model(&models.BlogTopic{}).Where("name LIKE ? OR description LIKE ?", like, like).
+		Order("id ASC").Limit(limit).Find(&topics)
+
+	// 7) 论坛：名称 / 描述（公开论坛）
+	var forums []models.Forum
+	models.DB.Model(&models.Forum{}).
+		Where("(name LIKE ? OR description LIKE ?) AND is_public = ?", like, like, true).
+		Order("thread_count DESC").Limit(limit).Find(&forums)
+
 	utils.Success(c, gin.H{
 		"q": q, "novels": novels, "authors": authors, "blogs": blogs, "htmls": htmls,
+		"categories": categories, "topics": topics, "forums": forums,
 	})
 }
 
