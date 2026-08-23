@@ -305,6 +305,7 @@ func main() {
 		// 作者博客（创建、编辑、删除需登录）
 		protected.POST("/blogs", handlers.CreateBlog)
 		protected.POST("/blogs/import/batch", handlers.ImportBlogs)
+		protected.POST("/blogs/batch-category", handlers.BatchSetBlogCategory) // 批量设置博客分类（CSDN 式）
 		protected.PUT("/blogs/:id", handlers.UpdateBlog)
 		protected.DELETE("/blogs/:id", handlers.DeleteBlog)
 		protected.POST("/blogs/:id/like", handlers.ToggleBlogLike) // 博客点赞/取消

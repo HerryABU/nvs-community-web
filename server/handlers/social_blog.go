@@ -61,11 +61,21 @@ func ImportBlogs(c *gin.Context) {
 		utils.BadRequest(c, "请至少上传一个文件")
 		return
 	}
+	// 目标分类（可选）：导入后自动归入该分类（CSDN 式：导入时可指定专栏）
+	categoryID, _ := strconv.ParseUint(c.PostForm("category_id"), 10, 64)
+	if categoryID > 0 {
+		var cat models.BlogCategory
+		if err := models.DB.First(&cat, categoryID).Error; err != nil {
+			utils.BadRequest(c, "目标分类不存在")
+			return
+		}
+	}
 
 	authorDir := filepath.Join(blogDataDir(), fmt.Sprintf("%d", userID))
 	os.MkdirAll(authorDir, 0755)
 
 	created := make([]gin.H, 0, len(files))
+	createdIDs := make([]uint, 0, len(files))
 	skipped := 0
 	for _, fh := range files {
 		f, err := fh.Open()
@@ -124,12 +134,17 @@ func ImportBlogs(c *gin.Context) {
 			"content_path": contentPath,
 			"content_hash": contentHash,
 		})
+		if categoryID > 0 {
+			models.DB.Model(blog).Update("category_id", categoryID)
+			blog.CategoryID = uint(categoryID)
+		}
 		created = append(created, gin.H{
 			"id":       blog.ID,
 			"title":    title,
 			"summary":  summary,
 			"words":    len([]rune(content)),
 		})
+		createdIDs = append(createdIDs, blog.ID)
 	}
 
 	if len(created) == 0 {
@@ -137,10 +152,12 @@ func ImportBlogs(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{
-		"count":    len(created),
-		"skipped":  skipped,
-		"created":  created,
-		"message":  fmt.Sprintf("成功导入 %d 篇博客", len(created)),
+		"count":        len(created),
+		"skipped":      skipped,
+		"created":      created,
+		"created_ids":  createdIDs,
+		"category_id":  categoryID,
+		"message":      fmt.Sprintf("成功导入 %d 篇博客", len(created)),
 	})
 }
 
@@ -317,9 +334,18 @@ func ListAuthorBlogs(c *gin.Context) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	categoryID, _ := strconv.ParseUint(c.DefaultQuery("category_id", "0"), 10, 64)
+	// category_id：缺省=全部；"0"=未分类；>0=该分类
+	// exclude_category_id：>0 时排除该分类（"新增到分类"视图）
+	var cid *uint
+	if catStr := c.Query("category_id"); catStr != "" {
+		if v, err := strconv.ParseUint(catStr, 10, 64); err == nil {
+			u := uint(v)
+			cid = &u
+		}
+	}
+	excludeID, _ := strconv.ParseUint(c.DefaultQuery("exclude_category_id", "0"), 10, 64)
 
-	blogs, total, err := models.GetBlogsByAuthor(author.ID, uint(categoryID), page, 10)
+	blogs, total, err := models.GetBlogsByAuthorFilter(author.ID, cid, uint(excludeID), page, 10)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -431,4 +457,43 @@ func DeleteBlog(c *gin.Context) {
 	// 标记为「用户自删」（区别于管理员封禁：deleted_by='admin'），回收站据此区分
 	_ = models.DB.Unscoped().Model(&models.AuthorBlog{}).Where("id = ?", id).Update("deleted_by", "user")
 	utils.Success(c, gin.H{"message": "已删除"})
+}
+
+// BatchSetBlogCategory POST /api/blogs/batch-category — 批量设置博客分类（CSDN 式批量操作）
+// body: { ids: [1,2,3], category_id: 5 }（category_id=0 表示移出到未分类）
+func BatchSetBlogCategory(c *gin.Context) {
+	userID := currentUserID(c)
+	var req struct {
+		IDs        []uint `json:"ids" binding:"required"`
+		CategoryID uint   `json:"category_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.IDs) == 0 {
+		utils.BadRequest(c, "请选择要操作的博客")
+		return
+	}
+	if len(req.IDs) > 200 {
+		utils.BadRequest(c, "单次最多操作 200 篇")
+		return
+	}
+	// 校验归属：只能操作自己的博客
+	var cnt int64
+	models.DB.Model(&models.AuthorBlog{}).
+		Where("id IN ? AND author_id = ?", req.IDs, userID).Count(&cnt)
+	if cnt != int64(len(req.IDs)) {
+		utils.Forbidden(c, "存在无权操作的博客")
+		return
+	}
+	if req.CategoryID > 0 {
+		var cat models.BlogCategory
+		if err := models.DB.First(&cat, req.CategoryID).Error; err != nil {
+			utils.BadRequest(c, "分类不存在")
+			return
+		}
+	}
+	if err := models.DB.Model(&models.AuthorBlog{}).
+		Where("id IN ?", req.IDs).Update("category_id", req.CategoryID).Error; err != nil {
+		utils.InternalError(c, "操作失败")
+		return
+	}
+	utils.Success(c, gin.H{"updated": len(req.IDs), "category_id": req.CategoryID})
 }

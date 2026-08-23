@@ -260,6 +260,19 @@ const router = createRouter({
       component: () => import('@/views/BlogManager.vue'),
       meta: { requiresAuth: true },
     },
+    // 分类独立页：文章管理（CSDN 式批量操作）+ 分类设置
+    {
+      path: '/author/blog/:key/category/:id/settings',
+      name: 'blog-category-settings',
+      component: () => import('@/views/BlogCategorySettings.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/author/blog/:key/category/:id',
+      name: 'blog-category-manage',
+      component: () => import('@/views/BlogCategoryManage.vue'),
+      meta: { requiresAuth: true },
+    },
     {
       path: '/settings',
       name: 'settings',

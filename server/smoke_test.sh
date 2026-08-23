@@ -232,6 +232,23 @@ if [ -n "$UPURL" ]; then ok "上传文件可访问 ($UPURL)"; else bad "上传�
 AUTC=$(curl -s -m 8 "$BASE/api/author/$U/blog-categories")
 check "作者个人专栏分类接口" '"code":0' "$AUTC"
 
+# ── T07c 批量分类 + 导入到分类 + 未分类筛选（CSDN 式批量操作） ──
+BC=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X POST "$BASE/api/blogs/batch-category" -H "Content-Type: application/json" -d "{\"ids\":[$BID],\"category_id\":$CAT2ID}")
+check "批量设置博客分类" '"updated":1' "$BC"
+BC2=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X POST "$BASE/api/blogs/batch-category" -H "Content-Type: application/json" -d '{"ids":[999999],"category_id":0}')
+check "批量操作他人/不存在博客被拒" '存在无权操作的博客' "$BC2"
+# 导入到指定分类
+printf '# 导入分类测试\n\n导入内容\n' > "$SMOKE_DIR_WIN/imp_cat.md"
+IMP2=$(curl -s -m 8 -b "$SMOKE_DIR_WIN/ck.txt" -X POST "$BASE/api/blogs/import/batch" -F "files=@$SMOKE_DIR_WIN/imp_cat.md" -F "category_id=$CAT1ID")
+check "导入博客到指定分类" "\"category_id\":$CAT1ID" "$IMP2"
+check "导入返回created_ids" '"created_ids":[' "$IMP2"
+# 未分类筛选（接口可用）
+UNC=$(curl -s -m 8 "$BASE/api/author/$U/blogs?category_id=0")
+check "作者列表未分类筛选" '"code":0' "$UNC"
+# 排除分类筛选（接口可用）
+EXC=$(curl -s -m 8 "$BASE/api/author/$U/blogs?exclude_category_id=$CAT1ID")
+check "作者列表排除分类筛选" '"code":0' "$EXC"
+
 # ── T08 列表一级分类过滤（含三级子孙） ──
 LF=$(curl -s -m 8 "$BASE/api/blogs?category_id=$CAT1ID")
 check "列表按一级过滤含三级博客" '"list":[' "$LF"

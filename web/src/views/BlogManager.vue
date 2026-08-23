@@ -97,8 +97,8 @@
                 <el-tag size="small" :type="catStatusTag(c.status)">{{ catStatusLabel(c.status) }}</el-tag>
                 <span v-if="c.status === 'rejected' && c.reject_reason" class="bm-cat-reason">原因：{{ c.reject_reason }}</span>
                 <span class="bm-cat-actions">
-                  <el-button size="small" text type="primary" @click="openCatBlogs(c)">📂 博客</el-button>
-                  <el-button size="small" text type="primary" @click="openCatEdit(c)">编辑/挂靠</el-button>
+                  <el-button size="small" text type="primary" @click="$router.push(`/author/blog/${owner.username}/category/${c.id}`)">📂 管理文章</el-button>
+                  <el-button size="small" text type="primary" @click="$router.push(`/author/blog/${owner.username}/category/${c.id}/settings`)">⚙ 设置</el-button>
                   <el-button size="small" text type="danger" @click="removeCat(c)">删除</el-button>
                 </span>
               </div>
@@ -130,37 +130,6 @@
         </template>
       </el-dialog>
 
-      <!-- 分类博客弹窗：查看该分类博客 + 批量迁移到其他分类 -->
-      <el-dialog v-model="catBlogDialog" :title="`📂 分类《${catBlogCat?.full_name || catBlogCat?.name || ''}》的博客`" width="640px">
-        <div class="cb-toolbar">
-          <span class="cb-count">共 {{ catBlogTotal }} 篇</span>
-          <el-select v-model="catBlogTarget" placeholder="迁移到分类…" clearable size="small" style="width: 200px">
-            <el-option :value="0" label="（未分类）" />
-            <el-option v-for="c in flatCats" :key="c.id" :label="c.label" :value="c.id" :disabled="c.id === catBlogCat?.id" />
-          </el-select>
-          <el-button type="primary" size="small" :disabled="selectedCatBlogs.length === 0 || catBlogTarget === undefined" @click="migrateCatBlogs">
-            迁移 {{ selectedCatBlogs.length }} 篇
-          </el-button>
-          <el-button size="small" @click="selectedCatBlogs = []">清空选择</el-button>
-        </div>
-        <div class="cb-list" v-loading="catBlogLoading" style="max-height: 380px; overflow-y: auto">
-          <el-empty v-if="!catBlogLoading && catBlogs.length === 0" description="该分类下暂无博客" />
-          <div v-for="b in catBlogs" :key="b.id" class="cb-item">
-            <el-checkbox v-model="selectedCatBlogs" :value="b.id" size="small" @click.stop />
-            <div class="cb-item-main">
-              <div class="cb-item-title">{{ b.title }}</div>
-              <div class="cb-item-meta">
-                <el-tag v-if="b.is_pinned" size="small" type="danger">置顶</el-tag>
-                <span v-for="t in b.tags || []" :key="t.id" class="cb-tag">#{{ t.name }}</span>
-                <span class="cb-date">{{ formatDate(b.created_at) }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <template #footer>
-          <el-button @click="catBlogDialog = false">关闭</el-button>
-        </template>
-      </el-dialog>
     </template>
     <el-empty v-else-if="!loading" description="无权访问该博客管理页" />
   </div>
@@ -303,60 +272,6 @@ function catStatusTag(status: string) {
 }
 function catStatusLabel(status: string) {
   return ({ pending: '待审核', approved: '已通过', rejected: '已拒绝' } as Record<string, string>)[status] || status;
-}
-
-// ===== 分类博客：点进分类查看博客 + 批量迁移 =====
-const catBlogDialog = ref(false);
-const catBlogCat = ref<any>(null);
-const catBlogs = ref<any[]>([]);
-const catBlogTotal = ref(0);
-const catBlogLoading = ref(false);
-const selectedCatBlogs = ref<number[]>([]);
-const catBlogTarget = ref<number | undefined>(undefined);
-
-async function openCatBlogs(cat: any) {
-  catBlogCat.value = cat;
-  catBlogs.value = [];
-  catBlogTotal.value = 0;
-  selectedCatBlogs.value = [];
-  catBlogTarget.value = undefined;
-  catBlogDialog.value = true;
-  await loadCatBlogs();
-}
-
-async function loadCatBlogs() {
-  if (!catBlogCat.value) return;
-  catBlogLoading.value = true;
-  try {
-    const res = await blogApi.listByAuthor(owner.value.id, 1, catBlogCat.value.id);
-    if (res.data.code === 0) {
-      catBlogs.value = res.data.data?.list || [];
-      catBlogTotal.value = res.data.data?.total || 0;
-    }
-  } catch { /* ignore */ }
-  finally { catBlogLoading.value = false; }
-}
-
-async function migrateCatBlogs() {
-  const target = catBlogTarget.value;
-  if (selectedCatBlogs.value.length === 0 || target === undefined) return;
-  const n = selectedCatBlogs.value.length;
-  try {
-    await ElMessageBox.confirm(`确定把这 ${n} 篇博客迁移到「${target === 0 ? '未分类' : (flatCats.value.find(c => c.id === target)?.label || target)}」？`, '批量迁移确认', {
-      confirmButtonText: '迁移', type: 'warning',
-    });
-    for (const id of selectedCatBlogs.value) {
-      await blogApi.update(id, { category_id: target });
-    }
-    ElMessage.success(`已迁移 ${n} 篇博客`);
-    selectedCatBlogs.value = [];
-    catBlogTarget.value = undefined;
-    await loadCatBlogs();
-    loadBlogs();
-    loadCategories();
-  } catch (e: any) {
-    if (e !== 'cancel' && e?.response) ElMessage.error(e.response.data?.message || '迁移失败');
-  }
 }
 
 
