@@ -3,6 +3,7 @@ package handlers
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"nvs-server/models"
 	"nvs-server/utils"
@@ -73,8 +74,8 @@ func ToggleBlogLike(c *gin.Context) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// 博客分类管理（登录用户即可管理：普通作者可新增/编辑/删除/挂靠，支持三级）
-// 管理员同样走这里（登录即视为有权限）；层级/同名/防成环校验统一在此。
+// 博客分类管理（登录用户即可创建；普通作者创建=待审核，管理员创建=已通过）
+// 权限：创建者可编辑/删除自己的分类；管理员可管理全部并审核。
 // 公开树接口 ListBlogCategories 见文件顶部。
 // ─────────────────────────────────────────────────────────────
 
@@ -87,7 +88,46 @@ func requireLogin(c *gin.Context) bool {
 	return true
 }
 
+// canManageCategory 当前用户能否管理该分类（创建者本人 或 管理员）
+func canManageCategory(c *gin.Context, cat *models.BlogCategory) bool {
+	uid := currentUserID(c)
+	if uid == 0 {
+		return false
+	}
+	if isAdminUser(c) {
+		return true
+	}
+	return cat.CreatedBy == uid
+}
+
+// GET /api/blog-categories/manage — 登录用户分类管理视图
+// { platform: 已通过分类树, mine: 自己创建的分类（含待审核/已拒绝，带全名与状态） }
+func ListMyBlogCategories(c *gin.Context) {
+	if !requireLogin(c) {
+		return
+	}
+	uid := currentUserID(c)
+	mine := models.GetMyCategories(uid)
+	mineItems := make([]gin.H, 0, len(mine))
+	for _, m := range mine {
+		mineItems = append(mineItems, gin.H{
+			"id":            m.ID,
+			"parent_id":     m.ParentID,
+			"name":          m.Name,
+			"sort_order":    m.SortOrder,
+			"status":        m.Status,
+			"reject_reason": m.RejectReason,
+			"full_name":     models.GetBlogCategoryName(m.ID),
+		})
+	}
+	utils.Success(c, gin.H{
+		"platform": models.GetBlogCategoryTree(),
+		"mine":     mineItems,
+	})
+}
+
 // POST /api/blog-categories — 新建分类 { name, parent_id?, sort_order? }
+// 普通作者创建 → status=pending（待管理员事后审核）；管理员创建 → approved
 func CreateBlogCategory(c *gin.Context) {
 	if !requireLogin(c) {
 		return
@@ -128,7 +168,15 @@ func CreateBlogCategory(c *gin.Context) {
 		utils.BadRequest(c, "同名分类已存在")
 		return
 	}
-	cat := &models.BlogCategory{Name: req.Name, ParentID: req.ParentID, SortOrder: req.SortOrder}
+	// 状态：管理员创建直接通过，普通作者待审核（事后审核）
+	status := models.CategoryStatusPending
+	if isAdminUser(c) {
+		status = models.CategoryStatusApproved
+	}
+	cat := &models.BlogCategory{
+		Name: req.Name, ParentID: req.ParentID, SortOrder: req.SortOrder,
+		CreatedBy: currentUserID(c), Status: status,
+	}
 	if err := models.DB.Create(cat).Error; err != nil {
 		utils.InternalError(c, "创建失败")
 		return
@@ -137,6 +185,7 @@ func CreateBlogCategory(c *gin.Context) {
 }
 
 // PUT /api/blog-categories/:id — 修改分类（改名 / 挂靠新父分类 / 排序）
+// 权限：创建者本人 或 管理员
 func UpdateBlogCategory(c *gin.Context) {
 	if !requireLogin(c) {
 		return
@@ -145,6 +194,10 @@ func UpdateBlogCategory(c *gin.Context) {
 	var cat models.BlogCategory
 	if err := models.DB.First(&cat, id).Error; err != nil {
 		utils.NotFound(c, "分类不存在")
+		return
+	}
+	if !canManageCategory(c, &cat) {
+		utils.Forbidden(c, "只能管理自己创建的分类")
 		return
 	}
 	var req struct {
@@ -227,6 +280,7 @@ func UpdateBlogCategory(c *gin.Context) {
 }
 
 // DELETE /api/blog-categories/:id — 删除分类（其下博客回到未分类；有子分类先删子分类）
+// 权限：创建者本人 或 管理员
 func DeleteBlogCategory(c *gin.Context) {
 	if !requireLogin(c) {
 		return
@@ -235,6 +289,10 @@ func DeleteBlogCategory(c *gin.Context) {
 	var cat models.BlogCategory
 	if err := models.DB.First(&cat, id).Error; err != nil {
 		utils.NotFound(c, "分类不存在")
+		return
+	}
+	if !canManageCategory(c, &cat) {
+		utils.Forbidden(c, "只能管理自己创建的分类")
 		return
 	}
 	if models.BlogCategoryHasChildren(cat.ID) {
@@ -247,6 +305,99 @@ func DeleteBlogCategory(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{"message": "已删除，该分类下的博客已回到未分类"})
+}
+
+// ─────────────────────────────────────────────────────────────
+// 管理员分类审核（事后审核：普通作者创建的分类先可用后审核）
+// ─────────────────────────────────────────────────────────────
+
+// GET /api/admin/blog-categories — 管理员全量分类视图（含状态与创建者，平铺）
+func AdminListBlogCategories(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	type item struct {
+		ID           uint      `json:"id"`
+		ParentID     uint      `json:"parent_id"`
+		Name         string    `json:"name"`
+		FullName     string    `json:"full_name"`
+		SortOrder    int       `json:"sort_order"`
+		Status       string    `json:"status"`
+		RejectReason string    `json:"reject_reason"`
+		CreatedBy    uint      `json:"created_by"`
+		CreatorName  string    `json:"creator_name"`
+		BlogCount    int64     `json:"blog_count"`
+		CreatedAt    time.Time `json:"created_at"`
+	}
+	var cats []models.BlogCategory
+	models.DB.Order("created_at DESC").Find(&cats)
+	list := make([]item, 0, len(cats))
+	for _, c := range cats {
+		it := item{
+			ID: c.ID, ParentID: c.ParentID, Name: c.Name,
+			FullName: models.GetBlogCategoryName(c.ID), SortOrder: c.SortOrder,
+			Status: c.Status, RejectReason: c.RejectReason, CreatedBy: c.CreatedBy,
+			CreatedAt: c.CreatedAt,
+		}
+		models.DB.Model(&models.AuthorBlog{}).Where("category_id = ?", c.ID).Count(&it.BlogCount)
+		if c.CreatedBy > 0 {
+			if u, err := models.GetUserByID(c.CreatedBy); err == nil && u != nil {
+				name := u.Nickname
+				if name == "" {
+					name = u.Username
+				}
+				it.CreatorName = name
+			}
+		} else {
+			it.CreatorName = "平台/管理员"
+		}
+		list = append(list, it)
+	}
+	utils.Success(c, list)
+}
+
+// POST /api/admin/blog-categories/:id/review — 审核分类 { action: approve|reject, reason? }
+func AdminReviewBlogCategory(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	var cat models.BlogCategory
+	if err := models.DB.First(&cat, id).Error; err != nil {
+		utils.NotFound(c, "分类不存在")
+		return
+	}
+	var req struct {
+		Action string `json:"action" binding:"required"`
+		Reason string `json:"reason"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	switch req.Action {
+	case "approve":
+		cat.Status = models.CategoryStatusApproved
+		cat.RejectReason = ""
+		auditEmergency(c, models.AuditContentRestore, "blog_category", cat.ID,
+			"管理员通过博客分类《"+cat.Name+"》审核")
+	case "reject":
+		cat.Status = models.CategoryStatusRejected
+		cat.RejectReason = trimSpace(req.Reason)
+		if cat.RejectReason == "" {
+			cat.RejectReason = "分类名称/内容不符合平台规范"
+		}
+		auditEmergency(c, models.AuditContentDelete, "blog_category", cat.ID,
+			"管理员拒绝博客分类《"+cat.Name+"》："+cat.RejectReason)
+	default:
+		utils.BadRequest(c, "action 仅支持 approve / reject")
+		return
+	}
+	if err := models.DB.Save(&cat).Error; err != nil {
+		utils.InternalError(c, "操作失败")
+		return
+	}
+	utils.Success(c, cat)
 }
 
 // fillBlogCategories 为博客列表填充分类名（含父级前缀）

@@ -236,6 +236,91 @@ func TestAdminListRecycle(t *testing.T) {
 	}
 }
 
+// TestCategoryReviewFlow 分类事后审核：作者创建=pending → 公开树不显示 →
+// 管理员通过=approved（公开可见）/ 拒绝=rejected+原因；创建者可编辑，他人不可。
+func TestCategoryReviewFlow(t *testing.T) {
+	setupHandlerTestDB(t)
+	seedTestUser(t, 1, "admin1", "admin")
+	seedTestUser(t, 2, "author2", "author")
+	seedTestUser(t, 3, "other3", "author")
+
+	// 1) 普通作者创建分类 → pending
+	c, w := asUser("author", 2)
+	setJSONBody(c, map[string]interface{}{"name": "作者新分类"})
+	CreateBlogCategory(c)
+	resp := mustJSON(t, w)
+	if resp["data"].(map[string]interface{})["status"] != "pending" {
+		t.Errorf("普通作者创建的分类应为 pending，实际 %v", resp["data"].(map[string]interface{})["status"])
+	}
+
+	// 2) 公开树不显示 pending 分类
+	c, w = asUser("reader", 0)
+	c.Request = httptest.NewRequest("GET", "/", nil)
+	ListBlogCategories(c)
+	resp = mustJSON(t, w)
+	for _, n := range resp["data"].([]interface{}) {
+		if n.(map[string]interface{})["id"] == float64(1) {
+			t.Errorf("公开树不应显示 pending 分类")
+		}
+	}
+
+	// 3) 他人不能编辑别人的 pending 分类
+	c, w = asUser("author", 3)
+	setJSONBody(c, map[string]interface{}{"name": "偷改"})
+	c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+	UpdateBlogCategory(c)
+	if !bytes.Contains(w.Body.Bytes(), []byte("只能管理自己创建")) {
+		t.Errorf("他人编辑应被拒绝: %s", w.Body.String())
+	}
+
+	// 4) 管理员审核通过 → approved
+	c, w = asUser("admin", 1)
+	setJSONBody(c, map[string]interface{}{"action": "approve"})
+	c.Params = gin.Params{gin.Param{Key: "id", Value: "1"}}
+	AdminReviewBlogCategory(c)
+	resp = mustJSON(t, w)
+	if resp["data"].(map[string]interface{})["status"] != "approved" {
+		t.Errorf("审核通过后应为 approved，实际 %v", resp["data"].(map[string]interface{})["status"])
+	}
+
+	// 5) 公开树现在显示
+	c, w = asUser("reader", 0)
+	c.Request = httptest.NewRequest("GET", "/", nil)
+	ListBlogCategories(c)
+	resp = mustJSON(t, w)
+	found := false
+	for _, n := range resp["data"].([]interface{}) {
+		if n.(map[string]interface{})["id"] == float64(1) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("审核通过后公开树应显示该分类")
+	}
+
+	// 6) 管理员创建另一分类 → 直接 approved
+	c, w = asUser("admin", 1)
+	setJSONBody(c, map[string]interface{}{"name": "管理员分类"})
+	CreateBlogCategory(c)
+	resp = mustJSON(t, w)
+	if resp["data"].(map[string]interface{})["status"] != "approved" {
+		t.Errorf("管理员创建的分类应为 approved，实际 %v", resp["data"].(map[string]interface{})["status"])
+	}
+
+	// 7) 管理员拒绝 → rejected + reason
+	c, w = asUser("admin", 1)
+	setJSONBody(c, map[string]interface{}{"action": "reject", "reason": "名称不规范"})
+	c.Params = gin.Params{gin.Param{Key: "id", Value: "2"}}
+	AdminReviewBlogCategory(c)
+	resp = mustJSON(t, w)
+	if resp["data"].(map[string]interface{})["status"] != "rejected" {
+		t.Errorf("拒绝后应为 rejected，实际 %v", resp["data"].(map[string]interface{})["status"])
+	}
+	if resp["data"].(map[string]interface{})["reject_reason"] == "" {
+		t.Errorf("拒绝后应记录原因")
+	}
+}
+
 // TestResolveUserKey 用户标识解析：数字=主键 id，非数字=用户名（大小写不敏感）
 func TestResolveUserKey(t *testing.T) {
 	setupHandlerTestDB(t)
@@ -343,8 +428,8 @@ func TestBlogCategoryFilterAndLike(t *testing.T) {
 	seedTestUser(t, 1, "author1", "author")
 
 	// 建分类：技术(1) / Go(2)
-	models.DB.Create(&models.BlogCategory{Name: "技术"})
-	models.DB.Create(&models.BlogCategory{Name: "Go", ParentID: 1})
+	models.DB.Create(&models.BlogCategory{Name: "技术", Status: "approved"})
+	models.DB.Create(&models.BlogCategory{Name: "Go", ParentID: 1, Status: "approved"})
 
 	// 作者创建博客挂二级分类
 	c, w := asUser("author", 1)

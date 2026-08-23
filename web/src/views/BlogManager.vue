@@ -76,72 +76,58 @@
         <!-- ── Tab2：分类管理（普通作者也可管理：新增/编辑/删除/拖拽挂靠/排序） ── -->
         <el-tab-pane label="分类管理" name="cats">
           <div class="bm-cat-toolbar">
-            <span class="bm-cat-hint">💡 支持三级分类：<b>拖拽</b>分类到另一分类上可挂靠为其子分类；「编辑/挂靠」可设置父分类与排序。</span>
+            <span class="bm-cat-hint">💡 最多三级；新增分类需管理员<strong>事后审核</strong>，通过后才会公开显示。</span>
             <el-button type="primary" size="small" @click="openCatCreate(0)">+ 新增一级分类</el-button>
           </div>
 
           <div class="bm-cat-tree" v-loading="catLoading">
-            <el-empty v-if="!catLoading && categoryTree.length === 0" description="暂无分类，点击「新增一级分类」创建" />
+            <el-empty v-if="!catLoading && myCats.length === 0 && categoryTree.length === 0" description="暂无分类，点击「新增一级分类」创建" />
 
-            <!-- 一级分类 -->
-            <div v-for="cat in categoryTree" :key="cat.id"
-                 class="bm-cat-node bm-cat-l1"
-                 :class="{ 'drag-over': dragOverId === cat.id }"
-                 draggable="true"
-                 @dragstart="onDragStart(cat.id)"
-                 @dragover.prevent="dragOverId = cat.id"
-                 @dragleave="dragOverId = null"
-                 @drop.prevent="onDrop(cat.id)">
-              <span class="bm-cat-fold" @click="toggleCat('p'+cat.id)">{{ expanded['p'+cat.id] ? '▾' : '▸' }}</span>
-              <span class="bm-cat-name">{{ cat.name }}</span>
-              <el-tag size="small" type="info">{{ cat.blog_count }} 篇</el-tag>
-              <span class="bm-cat-actions">
-                <el-button size="small" text type="primary" @click="openCatCreate(cat.id)">+ 子分类</el-button>
-                <el-button size="small" text type="primary" @click="openCatEdit(cat)">编辑/挂靠</el-button>
-                <el-button size="small" text type="danger" @click="removeCat(cat)">删除</el-button>
-              </span>
-            </div>
-
-            <!-- 二级/三级分类（展开时显示） -->
-            <template v-for="cat in categoryTree" :key="'c'+cat.id">
-              <div v-if="expanded['p'+cat.id]" class="bm-cat-children">
-                <div v-for="sub in cat.children || []" :key="sub.id"
-                     class="bm-cat-node bm-cat-l2"
-                     :class="{ 'drag-over': dragOverId === sub.id }"
-                     draggable="true"
-                     @dragstart="onDragStart(sub.id)"
-                     @dragover.prevent="dragOverId = sub.id"
-                     @dragleave="dragOverId = null"
-                     @drop.prevent="onDrop(sub.id)">
-                  <span class="bm-cat-fold" @click="toggleCat('s'+sub.id)">{{ expanded['s'+sub.id] ? '▾' : '▸' }}</span>
-                  <span class="bm-cat-name">└ {{ sub.name }}</span>
-                  <el-tag size="small" type="info">{{ sub.blog_count }} 篇</el-tag>
-                  <span class="bm-cat-actions">
-                    <el-button size="small" text type="primary" @click="openCatCreate(sub.id)">+ 子分类</el-button>
-                    <el-button size="small" text type="primary" @click="openCatEdit(sub)">编辑/挂靠</el-button>
-                    <el-button size="small" text type="danger" @click="removeCat(sub)">删除</el-button>
-                  </span>
-                </div>
-                <template v-for="sub in cat.children || []" :key="'s'+sub.id">
-                  <div v-if="expanded['s'+sub.id]" class="bm-cat-children3">
-                    <div v-for="g in sub.children || []" :key="g.id"
-                         class="bm-cat-node bm-cat-l3"
-                         :class="{ 'drag-over': dragOverId === g.id }"
-                         draggable="true"
-                         @dragstart="onDragStart(g.id)"
-                         @dragover.prevent="dragOverId = g.id"
-                         @dragleave="dragOverId = null"
-                         @drop.prevent="onDrop(g.id)">
-                      <span class="bm-cat-name">　└ {{ g.name }}</span>
-                      <el-tag size="small" type="info">{{ g.blog_count }} 篇</el-tag>
-                      <span class="bm-cat-actions">
-                        <el-button size="small" text type="primary" @click="openCatEdit(g)">编辑/挂靠</el-button>
-                        <el-button size="small" text type="danger" @click="removeCat(g)">删除</el-button>
-                      </span>
-                    </div>
-                  </div>
-                </template>
+            <!-- 我的分类（含待审核状态） -->
+            <template v-if="myCats.length > 0">
+              <div class="bm-cat-section">我的分类（{{ myCats.length }}）</div>
+              <div v-for="c in myCats" :key="c.id" class="bm-cat-node bm-cat-l1 bm-cat-mine"
+                   :class="{ 'drag-over': dragOverId === c.id }"
+                   draggable="true"
+                   @dragstart="onDragStart(c.id)"
+                   @dragover.prevent="dragOverId = c.id"
+                   @dragleave="dragOverId = null"
+                   @drop.prevent="onDrop(c.id)">
+                <span class="bm-cat-name">{{ c.full_name || c.name }}</span>
+                <el-tag size="small" :type="catStatusTag(c.status)">{{ catStatusLabel(c.status) }}</el-tag>
+                <span v-if="c.status === 'rejected' && c.reject_reason" class="bm-cat-reason">原因：{{ c.reject_reason }}</span>
+                <span class="bm-cat-actions">
+                  <el-button size="small" text type="primary" @click="openCatEdit(c)">编辑/挂靠</el-button>
+                  <el-button size="small" text type="danger" @click="removeCat(c)">删除</el-button>
+                </span>
               </div>
+            </template>
+
+            <!-- 平台分类（已审核通过，公开只读） -->
+            <template v-if="categoryTree.length > 0">
+              <div class="bm-cat-section">平台分类（已审核通过）</div>
+              <div v-for="cat in categoryTree" :key="cat.id" class="bm-cat-node bm-cat-l1">
+                <span class="bm-cat-fold" @click="toggleCat('p'+cat.id)">{{ expanded['p'+cat.id] ? '▾' : '▸' }}</span>
+                <span class="bm-cat-name">{{ cat.name }}</span>
+                <el-tag size="small" type="info">{{ cat.blog_count }} 篇</el-tag>
+              </div>
+              <template v-for="cat in categoryTree" :key="'c'+cat.id">
+                <div v-if="expanded['p'+cat.id]" class="bm-cat-children">
+                  <div v-for="sub in cat.children || []" :key="sub.id" class="bm-cat-node bm-cat-l2">
+                    <span class="bm-cat-fold" @click="toggleCat('s'+sub.id)">{{ expanded['s'+sub.id] ? '▾' : '▸' }}</span>
+                    <span class="bm-cat-name">└ {{ sub.name }}</span>
+                    <el-tag size="small" type="info">{{ sub.blog_count }} 篇</el-tag>
+                  </div>
+                  <template v-for="sub in cat.children || []" :key="'s'+sub.id">
+                    <div v-if="expanded['s'+sub.id]" class="bm-cat-children3">
+                      <div v-for="g in sub.children || []" :key="g.id" class="bm-cat-node bm-cat-l3">
+                        <span class="bm-cat-name">　└ {{ g.name }}</span>
+                        <el-tag size="small" type="info">{{ g.blog_count }} 篇</el-tag>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </template>
             </template>
           </div>
         </el-tab-pane>
@@ -215,7 +201,7 @@ const catEditId = ref(0);
 const catParentId = ref(0);
 const catForm = reactive({ name: '', parent_id: 0, sort_order: 0 });
 
-// 分类树平铺（带缩进标签，用于下拉选择）
+// 分类平铺（带缩进标签，用于下拉选择）：平台分类树 + 我的分类（含待审核）
 const flatCats = computed(() => {
   const out: { id: number; label: string }[] = [];
   for (const c of categoryTree.value) {
@@ -226,6 +212,9 @@ const flatCats = computed(() => {
         out.push({ id: g.id, label: `　　└ ${g.name}` });
       }
     }
+  }
+  for (const m of myCats.value) {
+    out.push({ id: m.id, label: (m.full_name || m.name) + (m.status === 'pending' ? '（待审核）' : '') });
   }
   return out;
 });
@@ -300,13 +289,26 @@ async function batchSetCategory(catId: number) {
 }
 
 // ===== 分类管理操作 =====
+const myCats = ref<any[]>([]); // 自己创建的分类（含待审核状态）
+
 async function loadCategories() {
   catLoading.value = true;
   try {
-    const res = await blogApi.getCategories();
-    if (res.data.code === 0) categoryTree.value = res.data.data || [];
+    // 管理视图：platform=已通过分类树；mine=自己创建的分类（含 pending/rejected）
+    const res = await blogApi.getManageCategories();
+    if (res.data.code === 0) {
+      categoryTree.value = res.data.data?.platform || [];
+      myCats.value = res.data.data?.mine || [];
+    }
   } catch { /* ignore */ }
   finally { catLoading.value = false; }
+}
+
+function catStatusTag(status: string) {
+  return ({ pending: 'warning', approved: 'success', rejected: 'danger' } as Record<string, any>)[status] || 'info';
+}
+function catStatusLabel(status: string) {
+  return ({ pending: '待审核', approved: '已通过', rejected: '已拒绝' } as Record<string, string>)[status] || status;
 }
 
 function toggleCat(k: string) { expanded[k] = !expanded[k]; }
@@ -346,7 +348,7 @@ async function saveCat() {
         parent_id: catForm.parent_id || 0,
         sort_order: catForm.sort_order,
       });
-      ElMessage.success('已创建');
+      ElMessage.success(catForm.parent_id ? '已创建（待管理员审核后公开）' : '已创建（待管理员审核后公开）');
     }
     catDialog.value = false;
     loadCategories();
@@ -462,6 +464,10 @@ onMounted(init);
 .bm-cat-children { display: flex; flex-direction: column; gap: 8px; }
 .bm-cat-children3 { display: flex; flex-direction: column; gap: 8px; }
 .bm-cat-fold { width: 16px; cursor: pointer; color: #999; user-select: none; }
+.bm-cat-section { font-size: 0.85rem; font-weight: 700; color: var(--text-color); margin: 6px 0 2px; padding: 8px 4px 4px; border-bottom: 1px solid #f0f0f0; }
+[data-theme="dark"] .bm-cat-section { border-bottom-color: #334155; }
+.bm-cat-mine { border-color: rgba(94,114,228,0.4); background: rgba(94,114,228,0.04); }
+.bm-cat-reason { font-size: 0.75rem; color: #e53e3e; }
 .bm-cat-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bm-cat-actions { display: flex; flex-shrink: 0; }
 .bm-cat-form-hint { font-size: 0.75rem; color: #999; margin-top: 4px; width: 100%; }

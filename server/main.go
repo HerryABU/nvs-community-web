@@ -308,7 +308,8 @@ func main() {
 		protected.PUT("/blogs/:id", handlers.UpdateBlog)
 		protected.DELETE("/blogs/:id", handlers.DeleteBlog)
 		protected.POST("/blogs/:id/like", handlers.ToggleBlogLike) // 博客点赞/取消
-		// 博客分类管理（登录作者/管理员均可：新增/编辑/删除/挂靠，支持三级）
+		// 博客分类管理（登录作者/管理员均可：新增/编辑/删除/挂靠，支持三级；普通作者创建=待审核）
+		protected.GET("/blog-categories/manage", handlers.ListMyBlogCategories)
 		protected.POST("/blog-categories", handlers.CreateBlogCategory)
 		protected.PUT("/blog-categories/:id", handlers.UpdateBlogCategory)
 		protected.DELETE("/blog-categories/:id", handlers.DeleteBlogCategory)
@@ -416,11 +417,12 @@ func main() {
 		admin.POST("/softdel/restore", handlers.AdminRestoreContent)
 		// 回收站监管：管理员查看全站用户自删内容
 		admin.GET("/recycle", handlers.AdminListRecycle)
-		// 博客分类管理（一/二/三级；登录用户即可管理，管理员入口相同）
-		admin.GET("/blog-categories", handlers.ListBlogCategories)
+		// 博客分类管理（一/二/三级；管理员审核视图 + 事后审核 + 创建/编辑/删除）
+		admin.GET("/blog-categories", handlers.AdminListBlogCategories)
 		admin.POST("/blog-categories", handlers.CreateBlogCategory)
 		admin.PUT("/blog-categories/:id", handlers.UpdateBlogCategory)
 		admin.DELETE("/blog-categories/:id", handlers.DeleteBlogCategory)
+		admin.POST("/blog-categories/:id/review", handlers.AdminReviewBlogCategory)
 		// 小说/章节封禁管理（管理员视角列表 + 封禁 + 解封）
 		admin.GET("/novels", handlers.AdminListNovels)
 		admin.GET("/novels/:id/chapters", handlers.AdminListChapters)

@@ -3,23 +3,35 @@ package models
 import "time"
 
 // ─────────────────────────────────────────────────────────────
-// 博客分类（支持一级/二级，CSDN 式）
+// 博客分类（支持三级，CSDN 式；按用户归属 + 事后审核）
 //
 // 设计：
-//   - blog_categories 分类树：ParentID=0 为一级分类，其余为二级分类。
-//   - author_blogs.category_id 指向叶子分类（一级或二级均可），0 = 未分类。
-//   - 管理员可任意增删改；删除分类时其下博客自动回到未分类(0)。
+//   - blog_categories 分类树：ParentID=0 为一级分类，其余为二级/三级分类。
+//   - author_blogs.category_id 指向叶子分类，0 = 未分类。
+//   - 普通作者可创建分类（默认 status=pending 待管理员事后审核），管理员创建 = approved。
+//   - 审核通过前不对外展示（公开树/编辑器只出现 approved）；作者可编辑自己的分类。
+//   - 删除分类时其下博客自动回到未分类(0)。
 // ─────────────────────────────────────────────────────────────
 
 type BlogCategory struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	ParentID  uint      `gorm:"default:0;index:idx_blog_cat_parent" json:"parent_id"` // 0 = 一级分类
-	Name      string    `gorm:"size:64;not null" json:"name"`
-	SortOrder int       `gorm:"default:0" json:"sort_order"`
-	CreatedAt time.Time `json:"created_at"`
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	ParentID     uint      `gorm:"default:0;index:idx_blog_cat_parent" json:"parent_id"` // 0 = 一级分类
+	Name         string    `gorm:"size:64;not null" json:"name"`
+	SortOrder    int       `gorm:"default:0" json:"sort_order"`
+	CreatedBy    uint      `gorm:"default:0;index" json:"created_by"`      // 创建者用户 ID（0=平台/管理员）
+	Status       string    `gorm:"size:16;default:pending;index" json:"status"` // pending=待审核 / approved=已通过 / rejected=已拒绝
+	RejectReason string    `gorm:"size:256;default:''" json:"reject_reason"`    // 拒绝原因（status=rejected 时）
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 func (BlogCategory) TableName() string { return "blog_categories" }
+
+// 分类状态常量
+const (
+	CategoryStatusPending  = "pending"  // 待审核（事后审核：先创建后审核）
+	CategoryStatusApproved = "approved" // 已通过（公开可见）
+	CategoryStatusRejected = "rejected" // 已拒绝
+)
 
 // BlogCategoryNode 分类树节点（含子分类与博客数量）
 type BlogCategoryNode struct {
@@ -27,21 +39,56 @@ type BlogCategoryNode struct {
 	ParentID  uint               `json:"parent_id"`
 	Name      string             `json:"name"`
 	SortOrder int                `json:"sort_order"`
+	Status    string             `json:"status,omitempty"`     // 审核状态（公开树恒为 approved，管理视图才带）
+	CreatedBy uint               `json:"created_by,omitempty"` // 创建者（管理视图）
 	BlogCount int64              `json:"blog_count"`
 	Children  []BlogCategoryNode `json:"children,omitempty"`
 }
 
-// GetBlogCategoryTree 获取完整分类树（支持三级：一级/二级/三级），并统计每个分类的博客数（仅未删除）。
-// 上级分类的 blog_count = 直接挂载 + 其下所有子孙分类的博客数（与列表按上级分类过滤的语义一致）。
-func GetBlogCategoryTree() []BlogCategoryNode {
+// buildCategoryTree 通用分类树组装（含状态过滤）：
+// statusFilter 为空 = 全部；否则只取该状态的分类（其父链上允许出现非目标状态但用于挂载）
+func buildCategoryTree(statusFilter string) []BlogCategoryNode {
 	var cats []BlogCategory
-	DB.Order("sort_order ASC, id ASC").Find(&cats)
+	q := DB.Order("sort_order ASC, id ASC")
+	if statusFilter != "" {
+		// 取目标状态分类 + 其所有祖先（祖先用于挂载，即使状态不同）
+		ids := []uint{}
+		var target []BlogCategory
+		q.Where("status = ?", statusFilter).Find(&target)
+		for _, t := range target {
+			ids = append(ids, t.ID)
+			pid := t.ParentID
+			for pid != 0 {
+				ids = append(ids, pid)
+				var p BlogCategory
+				if err := DB.First(&p, pid).Error; err != nil {
+					break
+				}
+				pid = p.ParentID
+			}
+		}
+		if len(ids) == 0 {
+			return []BlogCategoryNode{}
+		}
+		q = DB.Where("id IN ?", ids)
+	}
+	q.Find(&cats)
 
 	nodes := make([]BlogCategoryNode, 0, len(cats))
 	for _, c := range cats {
 		nodes = append(nodes, BlogCategoryNode{
 			ID: c.ID, ParentID: c.ParentID, Name: c.Name, SortOrder: c.SortOrder,
+			Status: c.Status, CreatedBy: c.CreatedBy,
 		})
+	}
+	// 目标状态过滤（仅对外层节点生效；祖先用于挂载但不显示）
+	visible := map[uint]bool{}
+	if statusFilter != "" {
+		for _, c := range cats {
+			if c.Status == statusFilter {
+				visible[c.ID] = true
+			}
+		}
 	}
 
 	// 统计每个分类直接挂载的博客数
@@ -57,8 +104,7 @@ func GetBlogCategoryTree() []BlogCategoryNode {
 			childrenOf[n.ParentID] = append(childrenOf[n.ParentID], n)
 		}
 	}
-	// 组装树（递归最多三层：一级 → 二级 → 三级），自底向上聚合 blog_count：
-	// 每个节点 = 直接挂载 + 其所有子孙分类的博客数
+	// 组装树（递归最多三层），自底向上聚合 blog_count
 	var build func(id uint) []BlogCategoryNode
 	build = func(id uint) []BlogCategoryNode {
 		kids := childrenOf[id]
@@ -67,6 +113,14 @@ func GetBlogCategoryTree() []BlogCategoryNode {
 		}
 		out := make([]BlogCategoryNode, 0, len(kids))
 		for _, k := range kids {
+			if len(visible) > 0 && !visible[k.ID] {
+				// 祖先节点仅作挂载，不进入展示树；其子节点直接上提一层
+				sub := build(k.ID)
+				if sub != nil {
+					out = append(out, sub...)
+				}
+				continue
+			}
 			k.Children = build(k.ID)
 			if k.Children == nil {
 				k.Children = []BlogCategoryNode{}
@@ -80,7 +134,7 @@ func GetBlogCategoryTree() []BlogCategoryNode {
 	}
 	tree := make([]BlogCategoryNode, 0, len(nodes))
 	for _, n := range nodes {
-		if n.ParentID == 0 {
+		if n.ParentID == 0 && (len(visible) == 0 || visible[n.ID]) {
 			n.Children = build(n.ID)
 			if n.Children == nil {
 				n.Children = []BlogCategoryNode{}
@@ -92,6 +146,23 @@ func GetBlogCategoryTree() []BlogCategoryNode {
 		}
 	}
 	return tree
+}
+
+// GetBlogCategoryTree 公开分类树：仅展示已审核通过（approved）的分类
+func GetBlogCategoryTree() []BlogCategoryNode {
+	return buildCategoryTree(CategoryStatusApproved)
+}
+
+// GetAllCategoryTree 管理视图分类树：全部状态（pending/approved/rejected）
+func GetAllCategoryTree() []BlogCategoryNode {
+	return buildCategoryTree("")
+}
+
+// GetMyCategories 作者视图：自己创建的分类（任意状态，平铺）
+func GetMyCategories(userID uint) []BlogCategory {
+	var cats []BlogCategory
+	DB.Where("created_by = ?", userID).Order("sort_order ASC, id ASC").Find(&cats)
+	return cats
 }
 
 // GetBlogCategoryName 取分类名（带父级前缀，如「技术/Go/并发」），不存在返回空
