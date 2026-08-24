@@ -455,25 +455,28 @@ onMounted(() => { loadDashboard(); checkFiling(); });
 }
 
 .admin-menu-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* flex 弹性换行：菜单数量任意（如 21 项）最后一行自然左对齐，杜绝网格空位导致的「歪斜」 */
+  display: flex;
+  flex-wrap: wrap;
   gap: 16px;
 }
 
 @media (max-width: 1000px) {
-  .admin-menu-grid { grid-template-columns: repeat(3, 1fr); }
+  .admin-menu-grid { gap: 14px; }
 }
 @media (max-width: 760px) {
-  .admin-menu-grid { grid-template-columns: repeat(2, 1fr); }
+  .admin-menu-grid { gap: 12px; }
 }
 @media (max-width: 480px) {
-  .admin-menu-grid { grid-template-columns: 1fr; }
+  .admin-menu-grid { gap: 10px; }
 }
 
 .admin-menu-card {
   display: flex;
   align-items: center;
   gap: 14px;
+  width: calc(25% - 12px); /* 4 列（gap 16×3=48，(100%-48)/4=25%-12px） */
+  box-sizing: border-box;
   padding: 18px 16px;
   background: rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(16px);
@@ -481,6 +484,16 @@ onMounted(() => { loadDashboard(); checkFiling(); });
   border-radius: 14px;
   cursor: pointer;
   transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+@media (max-width: 1000px) {
+  .admin-menu-card { width: calc(33.333% - 10px); } /* 3 列 */
+}
+@media (max-width: 760px) {
+  .admin-menu-card { width: calc(50% - 6px); } /* 2 列 */
+}
+@media (max-width: 480px) {
+  .admin-menu-card { width: 100%; } /* 1 列 */
 }
 
 [data-theme="light"] .admin-menu-card {
