@@ -46,22 +46,30 @@ func TestStripURLPrefixHandler(t *testing.T) {
 	})
 }
 
-// TestInjectPrefixIntoHTML 校验 index.html 注入 window.__NVS_PREFIX__ 且正确转义。
+// TestInjectPrefixIntoHTML 校验 index.html 注入 <base href> 与 window.__NVS_PREFIX__ 且正确转义。
 func TestInjectPrefixIntoHTML(t *testing.T) {
 	html := []byte("<html><head><title>t</title></head><body>x</body></html>")
 
-	// 空前缀：原样返回
-	if string(InjectPrefixIntoHTML(html, "")) != string(html) {
-		t.Fatal("空前缀应原样返回")
-	}
-
-	// 正常前缀
+	// 正常前缀：注入 base href="/go-nvs/" + __NVS_PREFIX__
 	out := string(InjectPrefixIntoHTML(html, "/go-nvs"))
+	if !strings.Contains(out, `<base href="/go-nvs/">`) {
+		t.Fatalf("应注入 base href（资源同步前缀）: %s", out)
+	}
 	if !strings.Contains(out, "window.__NVS_PREFIX__='/go-nvs';") {
 		t.Fatalf("应注入前缀变量: %s", out)
 	}
-	if !strings.Contains(out, "</head>") {
-		t.Fatal("注入不应破坏 head 结构")
+	// base 标签必须位于 <head> 内部且在其他内容之前
+	if strings.Index(out, "<head>") > strings.Index(out, `<base href="/go-nvs/">`) {
+		t.Fatal("base 标签应位于 <head> 之后紧跟")
+	}
+
+	// 空前缀：注入 base href="/"（深层路由相对资源正确），不注入前缀变量
+	plain := string(InjectPrefixIntoHTML(html, ""))
+	if !strings.Contains(plain, `<base href="/">`) {
+		t.Fatalf("空前缀应注入 base href=\"/\": %s", plain)
+	}
+	if strings.Contains(plain, "__NVS_PREFIX__='/'") {
+		t.Fatalf("空前缀不应注入非空前缀变量: %s", plain)
 	}
 
 	// 恶意前缀转义（单引号/反斜杠/</script>）
