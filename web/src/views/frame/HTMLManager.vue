@@ -145,8 +145,9 @@
         <div class="plaza-title">{{ h.name }}</div>
         <div class="plaza-author">by {{ h.user?.nickname || h.user?.username }}</div>
         <div class="plaza-actions">
-          <a :href="'/app/'+h.id" target="_blank"><el-button size="small" type="primary">▶ 运行</el-button></a>
-          <a v-if="h.is_downloadable" :href="'/api/userhtmls/'+h.id+'/download'"><el-button size="small">📥</el-button></a>
+          <!-- 🔀 站点路径前缀：运行/下载为直用 URL，需拼 apiPrefix -->
+          <a :href="apiPrefix + '/app/'+h.id" target="_blank"><el-button size="small" type="primary">▶ 运行</el-button></a>
+          <a v-if="h.is_downloadable" :href="apiPrefix + '/api/userhtmls/'+h.id+'/download'"><el-button size="small">📥</el-button></a>
         </div>
       </div>
     </div>
@@ -161,7 +162,7 @@ import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Upload, View, Delete, FolderOpened, Edit, Connection, Close, UploadFilled, VideoPlay } from '@element-plus/icons-vue';
 import { htmlApi } from '@/api/frame';
-import api from '@/api/index';
+import api, { apiPrefix } from '@/api/index';
 import { useAuthStore } from '@/stores/auth';
 import SandboxPreview from './SandboxPreview.vue';
 

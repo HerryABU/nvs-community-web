@@ -1,4 +1,4 @@
-import api from './index';
+import api, { apiPrefix } from './index';
 
 // ==================== UserFrame API ====================
 export const frameApi = {
@@ -13,7 +13,8 @@ export const frameApi = {
   update(id: number, data: Record<string, unknown>) { return api.put(`/userframes/${id}`, data); },
   delete(id: number) { return api.delete(`/userframes/${id}`); },
   listPublic() { return api.get('/userframes/public'); },
-  getPreview(id: number) { return `/api/userframes/${id}/preview`; },
+  // 🔀 站点路径前缀：预览为 window.open / iframe 直用 URL，需手动拼前缀
+  getPreview(id: number) { return `${apiPrefix}/api/userframes/${id}/preview`; },
   getByNovel(novelId: number) { return api.get(`/novels/${novelId}/frames`); },
   getByAuthor(authorId: number) { return api.get(`/author/${authorId}/frames`); },
 };
@@ -30,7 +31,7 @@ export const htmlApi = {
   update(id: number, data: Record<string, unknown>) { return api.put(`/userhtmls/${id}`, data); },
   delete(id: number) { return api.delete(`/userhtmls/${id}`); },
   getByNovel(novelId: number) { return api.get(`/novels/${novelId}/htmls`); },
-  getPreview(id: number) { return `/api/userhtmls/${id}/preview`; },
+  getPreview(id: number) { return `${apiPrefix}/api/userhtmls/${id}/preview`; },
 };
 
 // ==================== 模板API ====================

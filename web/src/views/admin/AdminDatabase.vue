@@ -97,6 +97,7 @@ import { ref, reactive, onMounted, onBeforeUnmount } from 'vue';
 import { Box, Download, Delete, DataLine } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
+import { apiPrefix } from '@/api/index';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
 const activeTab = ref('migrate');
@@ -194,7 +195,8 @@ async function saveSched() {
 }
 
 function downloadBackup(row: any) {
-  window.open(`/api/admin/db/backups/${encodeURIComponent(row.name)}/download`, '_blank');
+  // 🔀 站点路径前缀：window.open 直用 URL 需手动拼前缀
+  window.open(`${apiPrefix}/api/admin/db/backups/${encodeURIComponent(row.name)}/download`, '_blank');
 }
 
 async function removeBackup(row: any) {
