@@ -87,7 +87,7 @@ import { adminApi } from '@/api/admin';
 import {
   User, Document, ChatLineRound, Connection,
   Refresh, ArrowRight, Setting, Collection, Lock, ChatDotRound,
-  Warning, Cpu, TrendCharts, Key, WarningFilled, DataLine, Monitor, Box, Notebook
+  Warning, Cpu, TrendCharts, Key, WarningFilled, DataLine, Monitor, Box, Notebook, View
 } from '@element-plus/icons-vue';
 import AnimatedNumber from '@/components/AnimatedNumber.vue';
 import DashboardCharts from '@/components/DashboardCharts.vue';
@@ -107,6 +107,7 @@ const statCardDefs = computed(() => [
 // 管理功能入口（4×3 网格，12 项）
 const adminMenus = [
   { title: '站点设置', desc: '站点名称、SMTP、robots.txt、安全设置', path: '/admin/settings', icon: Setting, color: 'var(--gradient-blue)' },
+  { title: '日志脱敏', desc: '生产环境日志敏感信息脱敏 · 176号令合规', path: '/admin/log-redact', icon: View, color: 'var(--gradient-danger)' },
   { title: '数据库管理', desc: 'SQLite↔MySQL 迁移 / 多库备份', path: '/admin/database', icon: DataLine, color: 'var(--gradient-teal)' },
   { title: '健康检查', desc: '服务器 / 数据库 / 网络 / 前端 API', path: '/admin/health', icon: Monitor, color: 'var(--gradient-success)' },
   { title: '书目分类管理', desc: '平台书目分类的增删改', path: '/admin/categories', icon: Collection, color: 'var(--gradient-purple)' },
