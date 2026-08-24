@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -78,7 +79,8 @@ func (l *DBLogger) Trace(_ context.Context, begin time.Time, fc func() (string, 
 
 func (l *DBLogger) write(level, sql, extra string, rows int64, err error) {
 	ts := time.Now().Format("2006-01-02 15:04:05")
-	line := fmt.Sprintf("[%s] %s | sql=%q", level, ts, sql)
+	// 🔒 安全审计 L2：SQL 落盘前参数化——绑定值（密码哈希/邮箱/Token/正文等）不随 SQL 明文落盘
+	line := fmt.Sprintf("[%s] %s | sql=%q", level, ts, parameterizeSQL(sql))
 	if extra != "" {
 		line += " | " + extra
 	}
@@ -86,4 +88,11 @@ func (l *DBLogger) write(level, sql, extra string, rows int64, err error) {
 		line += fmt.Sprintf(" | error=%v", err)
 	}
 	_ = WriteDailyLog("database", line)
+}
+
+// parameterizeSQL 将 SQL 中的字符串字面量值替换为 ?（相当于 ParameterizedQueries）。
+// 保留 SQL 结构（表名/列名/关键字），所有引号包裹的绑定值一律不落盘。
+func parameterizeSQL(sql string) string {
+	re := regexp.MustCompile(`'([^']|'')*'`)
+	return re.ReplaceAllString(sql, "?")
 }

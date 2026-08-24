@@ -70,19 +70,19 @@
 - **位置**：`middleware/auth.go:77/91`
 - **修复**：新增 `COOKIE_SECURE` 环境变量（默认 false 兼容本地 HTTP，生产 HTTPS 下设为 true）。
 
-## 二、已确认但未修复（留待后续/运维层处理）
+## 二、第二轮修复（2026-08-24 补充：原「待下一迭代」项全部完成）
 
-| 编号 | 级别 | 问题 | 位置 | 说明与建议 |
-|------|------|------|------|-----------|
-| M4 | 中危 | 沙盒 VFS 无鉴权（仅凭 htmlId 读写） | `handlers/sandbox_vfs.go`、`main.go:221-224` | 属沙盒功能设计，改动可能影响沙盒应用；建议后续对 write/delete 增加登录与归属校验 |
-| M5 | 中危 | 联邦同步 SSRF（管理员配置的 URL 无 scheme/内网拦截） | `handlers/admin_site.go:218` | 仅管理员可配置，风险面有限；建议加 http/https scheme 白名单 + 超时 |
-| L1 | 低危 | /api/health 公开返回内部细节 | `handlers/health.go` | 建议生产环境对非管理员隐藏 DB 驱动/原始错误 |
-| L2 | 低危 | DB 审计日志记录完整 SQL 绑定值 | `utils/gorm_logger.go` | 建议启用 ParameterizedQueries 或对敏感列脱敏 |
-| L4 | 低危 | 端口分配 IDOR（可改他人 html 的 port） | `handlers/port.go:52` | 建议增加归属校验 |
-| L5 | 低危 | 隐藏论坛元数据泄露（名称/描述） | `handlers/forum.go:97-112` | 建议未解锁时返回最小信息 |
-| — | 中危 | 无 CSRF token（依赖 SameSite=Lax） | `web/src/api/index.ts`、`auth.go:80` | Lax 已缓解大部分场景；管理操作建议后续加自定义头/二次验证 |
-| — | 中危 | 明文 HTTP 传输（依赖运维 HTTPS） | `nginx/nginx.conf` | 建议生产启用 HTTPS + 安全响应头（CSP/HSTS） |
-| — | 低危 | 论坛密码/管理 token 进 URL | `web/src/views/Forums.vue:263/319`、`AdminEmergency.vue` | 建议改 POST body/一次性 ticket |
+| 编号 | 级别 | 问题 | 修复方式 |
+|------|------|------|---------|
+| M4 | 中危 | 沙盒 VFS 无鉴权（仅凭 htmlId 读写） | `sandbox_vfs.go`：VFSWrite/VFSDelete 增加登录 + `requireOwnedHTML`（htmlId 归属校验），未登录 401 / 非归属 403；read/list 保持公开（沙盒应用匿名渲染必需） |
+| M5 | 中危 | 联邦同步 SSRF | `admin_site.go`：新增 `isSafeFederatedURL`（仅 http/https + 拒绝回环/内网/链路本地/CGNAT，DNS 解析校验），`http.Client{Timeout:10s}` |
+| L1 | 低危 | /api/health 信息泄露 | `health.go`：公开响应收敛——移除 DB 驱动、原始错误详情、用户/作品/论坛计数、bundle 名 |
+| L2 | 低危 | DB 审计日志记录完整 SQL 绑定值 | `gorm_logger.go`：`parameterizeSQL` 把字符串绑定值替换为 `?`（密码哈希/邮箱/Token/正文不落盘） |
+| L4 | 低危 | 端口分配 IDOR | `port.go`：AllocatePort/ReleasePort 更新前校验 html 归属（`id=? AND user_id=?`） |
+| L5 | 低危 | 隐藏论坛元数据泄露 | `forum.go`：未解锁时仅返回最小信息（id/type/locked），不再返回名称/描述；支持 X-Forum-Room/X-Forum-Password 头 |
+| — | 中危 | 无 CSRF token | 新增 `middleware/csrf.go` CSRFGuard：登录态写操作强制 X-Requested-With 头；前端 axios 拦截器统一附加（`web/src/api/index.ts`）+ 单元测试 |
+| — | 中危 | 明文 HTTP / 缺安全头 | `nginx/nginx.conf`：新增 CSP/Referrer-Policy 安全头 + HTTPS 443 配置示例（HSTS 注释待启用） |
+| — | 低危 | 论坛密码/管理 token 进 URL | 论坛：密码/房间号改存 sessionStorage + `X-Forum-Password`/`X-Forum-Room` 头（Forums.vue/ForumDetail.vue/forums.ts/forum.go）；应急：preview/delete 改 POST body（admin.ts/AdminEmergency.vue/emergency.go/main.go） |
 
 ## 三、扫描结论（未发现问题的领域）
 
@@ -100,4 +100,6 @@
 3. ~~沙盒路径边界校验~~（H1，已修复）
 4. ~~沙盒 iframe 同源逃逸 + mermaid loose XSS~~（已修复）
 5. ~~登录/注册反滥用~~（M1/M2，已修复）
-6. M4 VFS 鉴权 / M5 SSRF 白名单（建议下一迭代）
+6. ~~VFS 鉴权 / 联邦 SSRF / CSRF / health 收敛 / SQL 日志参数化 / IDOR / 元数据泄露 / 敏感信息移出 URL~~（M4/M5/L1/L2/L4/L5 + CSRF + nginx + URL 治理，第二轮全部修复）
+
+> 截至 2026-08-24，审计报告全部发现项均已修复或提供运维层配置方案（HTTPS/HSTS 需部署时启用）。

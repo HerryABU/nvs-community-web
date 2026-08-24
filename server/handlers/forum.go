@@ -97,10 +97,23 @@ func GetForum(c *gin.Context) {
 	if !forum.IsPublic && forum.CreatorID != userID && !isAdminUser(c) {
 		room := c.Query("room")
 		pass := c.Query("password")
+		// 兼容请求头传递（🔒 安全审计：密码不进 URL——前端已改为 header + sessionStorage）
+		if room == "" {
+			room = c.GetHeader("X-Forum-Room")
+		}
+		if pass == "" {
+			pass = c.GetHeader("X-Forum-Password")
+		}
 		if !strings.EqualFold(strings.TrimSpace(room), forum.RoomCode) ||
 			(forum.HasPassword && !utils.CheckPassword(pass, forum.PasswordHash)) {
+			// 🔒 安全审计 L5：未解锁时仅返回最小信息，不泄露论坛名称/描述等元数据
 			utils.Success(c, gin.H{
-				"forum":      forum,
+				"forum": gin.H{
+					"id":        forum.ID,
+					"type":      forum.Type,
+					"is_public": forum.IsPublic,
+					"locked":    true,
+				},
 				"locked":     true,
 				"threads":    []models.Thread{},
 				"total":      0,
@@ -114,9 +127,17 @@ func GetForum(c *gin.Context) {
 	// 密码门禁：有密码且非创建者/管理员时，需提供正确密码才能读取帖子
 	if forum.HasPassword && forum.CreatorID != userID && !isAdminUser(c) {
 		password := c.Query("password")
+		if password == "" {
+			password = c.GetHeader("X-Forum-Password")
+		}
 		if !utils.CheckPassword(password, forum.PasswordHash) {
 			utils.Success(c, gin.H{
-				"forum":      forum,
+				"forum": gin.H{
+					"id":        forum.ID,
+					"type":      forum.Type,
+					"is_public": forum.IsPublic,
+					"locked":    true,
+				},
 				"locked":     true,
 				"threads":    []models.Thread{},
 				"total":      0,

@@ -250,9 +250,11 @@ func buildPostList(posts []models.Post) []gin.H {
 // resolveContentPath 将站内 URL 路径解析为 (类型, ID)。
 // 站长不需要知道内部 ID，直接粘贴站内路径即可定位内容。
 // 支持：/thread/:id /post/:id /comment/:id /blog/:id
-//       /author/:aid/blog/:blogId /author/:aid/blogs/:blogId
-//       /novel/:id /author/:aid/novel/:id
-//       /forum/:id /forums/:id
+//
+//	/author/:aid/blog/:blogId /author/:aid/blogs/:blogId
+//	/novel/:id /author/:aid/novel/:id
+//	/forum/:id /forums/:id
+//
 // 也兼容误粘贴的完整 URL（自动剥离域名部分）。
 func resolveContentPath(path string) (ctype string, id uint64, ok bool) {
 	path = strings.TrimSpace(path)
@@ -340,31 +342,41 @@ func loadFileContent(path string) string {
 	return string(b)
 }
 
-// resolveTarget 解析预览/删除目标：优先 URL 路径，回退 type+id
-func resolveTarget(c *gin.Context) (ctype string, id uint64, ok bool) {
-	if path := c.Query("path"); path != "" {
-		return resolveContentPath(path)
-	}
-	ctype = c.Query("type")
-	n, err := strconv.ParseUint(c.Query("id"), 10, 64)
-	if err != nil || n == 0 {
-		return "", 0, false
-	}
-	return ctype, n, true
-}
+// 说明：预览/删除目标已改为从 POST body 解析（见 PreviewEmergencyContent / DeleteEmergencyContent），
+// 原 resolveTarget（query 解析）已移除——避免敏感参数继续走 URL。
 
-// GET /api/admin/emergency/preview — 拉取内容预览（纯文本 + 作者 + 原始内容）
-// 参数：path（站内 URL 路径，如 /thread/123）或 type+id（兼容）
+// POST /api/admin/emergency/preview — 拉取内容预览（纯文本 + 作者 + 原始内容）
+// 入参（🔒 安全审计：token 走 body，不再进 URL query——避免落入访问日志/浏览器历史）
+// body: { token, path（如 /thread/123）或 type+id }
 func PreviewEmergencyContent(c *gin.Context) {
 	if !ensureAdmin(c) {
 		return
 	}
-	if !verifyEmergencyToken(c.Query("token")) {
+	var req struct {
+		Token string `json:"token"`
+		Path  string `json:"path"`
+		Type  string `json:"type"`
+		ID    uint64 `json:"id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	if !verifyEmergencyToken(req.Token) {
 		utils.Forbidden(c, "二级密码未验证或已过期")
 		return
 	}
-	ctype, id, ok := resolveTarget(c)
-	if !ok {
+	ctype, id := "", uint64(0)
+	if req.Path != "" {
+		var ok bool
+		ctype, id, ok = resolveContentPath(req.Path)
+		if !ok {
+			utils.BadRequest(c, "请输入站内 URL 路径（如 /thread/123 或 /blog/5）")
+			return
+		}
+	} else if req.Type != "" && req.ID > 0 {
+		ctype, id = req.Type, req.ID
+	} else {
 		utils.BadRequest(c, "请输入站内 URL 路径（如 /thread/123 或 /blog/5），或提供 type+id")
 		return
 	}
@@ -519,20 +531,41 @@ func buildContentPath(ctype string, id uint64) string {
 	}
 }
 
-// DELETE /api/admin/emergency/content — 软删除内容（归档留证 + 软删除 + 统计回退 + 日志）
-// 参数：path（站内 URL 路径）或 type+id（兼容）
+// POST /api/admin/emergency/content — 软删除内容（归档留证 + 软删除 + 统计回退 + 日志）
+// 入参（🔒 安全审计：token 走 body，不再进 URL query）
+// body: { token, path（站内 URL 路径）或 type+id }
 // 说明：删除前先将完整快照归档到 softdel_ 表（留证），再软删除原始记录（保留 deleted_at），
-//       不再物理移除正文文件，确保任何应急处置均可在 softdel_ 表中追溯。
+//
+//	不再物理移除正文文件，确保任何应急处置均可在 softdel_ 表中追溯。
 func DeleteEmergencyContent(c *gin.Context) {
 	if !ensureAdmin(c) {
 		return
 	}
-	if !verifyEmergencyToken(c.Query("token")) {
+	var req struct {
+		Token string `json:"token"`
+		Path  string `json:"path"`
+		Type  string `json:"type"`
+		ID    uint64 `json:"id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	if !verifyEmergencyToken(req.Token) {
 		utils.Forbidden(c, "二级密码未验证或已过期")
 		return
 	}
-	ctype, id, ok := resolveTarget(c)
-	if !ok {
+	ctype, id := "", uint64(0)
+	if req.Path != "" {
+		var ok bool
+		ctype, id, ok = resolveContentPath(req.Path)
+		if !ok {
+			utils.BadRequest(c, "请输入站内 URL 路径（如 /thread/123 或 /blog/5）")
+			return
+		}
+	} else if req.Type != "" && req.ID > 0 {
+		ctype, id = req.Type, req.ID
+	} else {
 		utils.BadRequest(c, "请输入站内 URL 路径，或提供 type+id")
 		return
 	}

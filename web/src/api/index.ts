@@ -11,6 +11,17 @@ const api = axios.create({
   timeout: 15000,
 });
 
+// 请求拦截器：统一附加 CSRF 防护头（安全审计：配合后端 CSRFGuard 校验，
+// 登录态写操作必须携带 X-Requested-With，跨站表单/脚本无法伪造）
+api.interceptors.request.use(
+  (config) => {
+    config.headers = config.headers || {};
+    config.headers['X-Requested-With'] = 'XMLHttpRequest';
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 // 响应拦截器：统一错误处理
 api.interceptors.response.use(
   (response) => response,

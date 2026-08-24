@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -70,11 +71,14 @@ func VFSRead(c *gin.Context) {
 }
 
 // VFSWrite POST /api/vfs/:htmlId/write
-// 写入数据到虚拟文件系统
+// 写入数据到虚拟文件系统（🔒 安全审计 M4：仅限登录用户且须为沙盒归属者，防匿名篡改他人存储）
 func VFSWrite(c *gin.Context) {
 	htmlID := parseHtmlID(c)
 	if htmlID == 0 {
 		utils.BadRequest(c, "无效的沙盒ID")
+		return
+	}
+	if !requireOwnedHTML(c, htmlID) {
 		return
 	}
 
@@ -128,11 +132,14 @@ func VFSWrite(c *gin.Context) {
 }
 
 // VFSDelete DELETE /api/vfs/:htmlId/delete?key=xxx
-// 从虚拟文件系统删除数据
+// 从虚拟文件系统删除数据（🔒 安全审计 M4：仅限登录用户且须为沙盒归属者）
 func VFSDelete(c *gin.Context) {
 	htmlID := parseHtmlID(c)
 	if htmlID == 0 {
 		utils.BadRequest(c, "无效的沙盒ID")
+		return
+	}
+	if !requireOwnedHTML(c, htmlID) {
 		return
 	}
 	key := c.Query("key")
@@ -149,6 +156,22 @@ func VFSDelete(c *gin.Context) {
 	GlobalVFS.mu.Unlock()
 
 	utils.Success(c, gin.H{"message": "已删除", "key": key})
+}
+
+// requireOwnedHTML 校验当前登录用户是否为指定 UserHTML 的归属者。
+// 未登录返回 401，非归属者返回 403；通过返回 true。
+func requireOwnedHTML(c *gin.Context, htmlID uint) bool {
+	uid := currentUserID(c)
+	if uid == 0 {
+		utils.Unauthorized(c, "请先登录")
+		return false
+	}
+	var htmlItem models.UserHTML
+	if err := models.DB.Where("id = ? AND user_id = ?", htmlID, uid).First(&htmlItem).Error; err != nil {
+		utils.Forbidden(c, "无权操作该沙盒")
+		return false
+	}
+	return true
 }
 
 // VFSList GET /api/vfs/:htmlId/list

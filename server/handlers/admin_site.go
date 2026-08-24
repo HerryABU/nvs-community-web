@@ -6,6 +6,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -229,6 +230,39 @@ func DeleteFederatedSite(c *gin.Context) {
 	utils.Success(c, gin.H{"message": "已删除"})
 }
 
+// isSafeFederatedURL 🔒 SSRF 防护（安全审计 M5）：
+// 仅允许 http/https；主机必须可解析，且解析结果不得为回环/内网/链路本地/CGNAT 等私网地址。
+// 注意：无法完全防御 DNS rebinding，但可拦截字面内网 IP 与常见私网域名探测。
+func isSafeFederatedURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return false
+	}
+	host := u.Hostname()
+	if host == "" {
+		return false
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil || len(ips) == 0 {
+		return false
+	}
+	for _, ip := range ips {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+			return false
+		}
+		if ip4 := ip.To4(); ip4 != nil {
+			// 0.0.0.0/8、169.254.0.0/16（链路本地）、100.64.0.0/10（CGNAT）
+			if ip4[0] == 0 || (ip4[0] == 169 && ip4[1] == 254) || (ip4[0] == 100 && ip4[1] >= 64 && ip4[1] <= 127) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // selfPublicURL 返回本站对外访问地址（供联邦互通报给对方识别是谁在连）。
 // 优先使用站长配置的 site_url，否则从当前请求的 Host + Scheme 推导。
 func selfPublicURL(c *gin.Context) string {
@@ -271,9 +305,16 @@ func SyncFederatedSite(c *gin.Context) {
 	query.Set("page_size", "50")
 	query.Set("source_name", models.GetSiteName())
 	query.Set("source_url", selfPublicURL(c))
-	// 同步对方站的「真实作品列表」：调用其公开接口 /api/novels（返回 author 为 User 对象）。
-	// API 地址应为对方站 API 根地址（以 /api 结尾），此处拼接 /novels 即命中 /api/novels。
-	resp, err := http.Get(strings.TrimRight(site.APIURL, "/") + "/novels?" + query.Encode())
+
+	// 🔒 安全审计 M5：联邦同步 SSRF 防护——
+	// 仅允许 http/https；禁止内网/回环/链路本地地址（防探测内网服务）；短超时防挂起。
+	target := strings.TrimRight(site.APIURL, "/") + "/novels?" + query.Encode()
+	if !isSafeFederatedURL(target) {
+		utils.BadRequest(c, "远程站点地址非法：仅允许 http/https，且不得指向内网/回环地址")
+		return
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(target)
 	if err != nil {
 		utils.InternalError(c, "连接远程站点失败: "+err.Error())
 		return
