@@ -50,7 +50,7 @@
         <iframe
           v-else
           :src="previewUrl(f.id) + '?chapter=' + chapterNum + '&novel=' + novelId"
-          :sandbox="f.has_controls ? 'allow-scripts allow-same-origin allow-forms allow-popups' : 'allow-scripts allow-same-origin'"
+          :sandbox="f.has_controls ? 'allow-scripts allow-forms allow-popups' : 'allow-scripts'"
           class="template-iframe"
           @load="onFrameLoaded($event)"
         />
@@ -137,7 +137,7 @@
         <iframe
           v-else
           :src="previewUrl(f.id) + '?chapter=' + chapterNum + '&novel=' + novelId"
-          :sandbox="f.has_controls ? 'allow-scripts allow-same-origin allow-forms allow-popups' : 'allow-scripts allow-same-origin'"
+          :sandbox="f.has_controls ? 'allow-scripts allow-forms allow-popups' : 'allow-scripts'"
           class="template-iframe"
           @load="onFrameLoaded($event)"
         />

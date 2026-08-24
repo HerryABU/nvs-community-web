@@ -4,12 +4,14 @@
     <main class="main-content">
       <router-view />
     </main>
+    <SiteFooter />
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted } from 'vue';
 import NavBar from '@/components/NavBar.vue';
+import SiteFooter from '@/components/SiteFooter.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useThemeStore } from '@/stores/theme';
 

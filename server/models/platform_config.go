@@ -269,3 +269,70 @@ func StoreRedactConfig(rc config.RedactConfig) error {
 	}
 	return SetPlatformConfig(RedactConfigKeyFields, string(b))
 }
+
+// ============ 算法推荐配置（公安部令第176号 第七条第九项） ============
+
+const (
+	AlgoSortRule     = "algo_sort_rule"    // 首页推荐排序规则：updated_at/created_at/total_chapters
+	AlgoRankPeriod   = "algo_rank_period"  // 排行榜计算周期：all/7d/30d/90d
+	AlgoPersonalized = "algo_personalized" // 个性化推荐开关（true/false，默认 false）
+	AlgoDescription  = "algo_description"  // 算法说明文本（面向用户的白话说明）
+)
+
+// DefaultAlgoDescription 默认算法说明（白话文，符合算法透明度要求）
+const DefaultAlgoDescription = `本平台的作品展示与排序遵循以下规则：
+
+1. 首页作品列表默认按「最近更新」排序，即最近有更新的作品排在最前面；
+2. 排行榜按作品章节数与更新时间综合计算（可在管理后台配置统计周期）；
+3. 分类页仅按你选择的分类展示作品，不涉及个性化；
+4. 站内搜索按「标题相关性」与「更新时间」排序；
+5. 平台默认不进行基于个人阅读历史的个性化推荐；即使开启，你也可以随时在个人设置中关闭。
+
+以上规则公开透明，不涉及算法黑箱。如对推荐结果有疑问，可联系站长查询排序依据。`
+
+// GetAlgoConfig 读取算法推荐配置（缺省回退默认值）
+func GetAlgoConfig() (sortRule, rankPeriod string, personalized bool, description string) {
+	sortRule = GetPlatformConfig(AlgoSortRule)
+	if sortRule == "" {
+		sortRule = "updated_at"
+	}
+	rankPeriod = GetPlatformConfig(AlgoRankPeriod)
+	if rankPeriod == "" {
+		rankPeriod = "all"
+	}
+	personalized = GetPlatformConfig(AlgoPersonalized) == "true"
+	description = GetPlatformConfig(AlgoDescription)
+	if description == "" {
+		description = DefaultAlgoDescription
+	}
+	return
+}
+
+// ============ 联网备案配置（公安部令第176号 第七条第一项） ============
+
+const (
+	SiteICP     = "site_icp"      // 工信部ICP备案号，如 京ICP备2026000000号
+	SitePSB     = "site_psb"      // 公安联网备案号，如 京公网安备11000000000000号
+	SitePSBLink = "site_psb_link" // 公安备案跳转链接
+)
+
+// GetSiteFiling 读取备案信息（未配置返回空串）
+func GetSiteFiling() (icp, psb, psbLink string) {
+	return GetPlatformConfig(SiteICP), GetPlatformConfig(SitePSB), GetPlatformConfig(SitePSBLink)
+}
+
+// ============ 等保/关基识别记录（公安部令第176号 第七条第四/五项） ============
+
+const (
+	SecurityGrade     = "security_grade"      // 等保定级：1/2/3/未定级
+	SecurityGradeNote = "security_grade_note" // 等保备注
+)
+
+// GetSecurityGrade 读取等保记录（缺省未定级）
+func GetSecurityGrade() (grade, note string) {
+	grade = GetPlatformConfig(SecurityGrade)
+	if grade == "" {
+		grade = "未定级"
+	}
+	return grade, GetPlatformConfig(SecurityGradeNote)
+}

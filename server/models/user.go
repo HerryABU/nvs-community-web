@@ -11,28 +11,30 @@ import (
 var DB *gorm.DB
 
 type User struct {
-	ID              uint       `gorm:"primaryKey" json:"id"`
-	Username        string     `gorm:"size:64;uniqueIndex;not null" json:"username"`
-	Email           string     `gorm:"size:128;uniqueIndex;not null" json:"email"`
-	PasswordHash    string     `gorm:"size:256;not null" json:"-"`
-	Nickname        string     `gorm:"size:64;default:''" json:"nickname"`
-	AvatarURL       string     `gorm:"size:512;default:''" json:"avatar_url"`
-	Signature       string     `gorm:"size:256;default:''" json:"signature"`
-	Bio             string     `gorm:"type:text" json:"bio"`
-	Role            string     `gorm:"size:32;default:reader" json:"role"`
-	SigningKey      string     `gorm:"size:64;default:''" json:"-"` // base64(AES-256 key), only set for authors
-	RealNameVerified bool      `gorm:"default:false" json:"real_name_verified"`
+	ID               uint   `gorm:"primaryKey" json:"id"`
+	Username         string `gorm:"size:64;uniqueIndex;not null" json:"username"`
+	Email            string `gorm:"size:128;uniqueIndex;not null" json:"email"`
+	PasswordHash     string `gorm:"size:256;not null" json:"-"`
+	Nickname         string `gorm:"size:64;default:''" json:"nickname"`
+	AvatarURL        string `gorm:"size:512;default:''" json:"avatar_url"`
+	Signature        string `gorm:"size:256;default:''" json:"signature"`
+	Bio              string `gorm:"type:text" json:"bio"`
+	Role             string `gorm:"size:32;default:reader" json:"role"`
+	SigningKey       string `gorm:"size:64;default:''" json:"-"` // base64(AES-256 key), only set for authors
+	RealNameVerified bool   `gorm:"default:false" json:"real_name_verified"`
 	// 合规留存：注册IP / 最后登录IP / 最后登录时间（176号令用户信息追溯）
 	RegistrationIP string     `gorm:"size:45;default:''" json:"-"`
 	LastLoginIP    string     `gorm:"size:45;default:''" json:"-"`
 	LastLoginAt    *time.Time `json:"-"`
-	LoginFailCount  int        `gorm:"default:0" json:"-"`
-	LockedUntil     *time.Time `json:"-"`
-	MutedUntil      *time.Time `json:"muted_until"`                    // 全局禁言截止时间（null/过去=未禁言）
-	MuteReason      string     `gorm:"size:256;default:''" json:"mute_reason"` // 禁言原因
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
-	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：封禁/删除用户采用软删除（可追溯）
+	LoginFailCount int        `gorm:"default:0" json:"-"`
+	LockedUntil    *time.Time `json:"-"`
+	MutedUntil     *time.Time `json:"muted_until"`                            // 全局禁言截止时间（null/过去=未禁言）
+	MuteReason     string     `gorm:"size:256;default:''" json:"mute_reason"` // 禁言原因
+	// 算法推荐偏好（176号令 第七条第九项：算法推荐管理 —— 用户可关闭个性化推荐）
+	PersonalizedRecommend bool           `gorm:"default:false" json:"personalized_recommend"`
+	CreatedAt             time.Time      `json:"created_at"`
+	UpdatedAt             time.Time      `json:"updated_at"`
+	DeletedAt             gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：封禁/删除用户采用软删除（可追溯）
 }
 
 func (User) TableName() string {

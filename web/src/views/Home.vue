@@ -16,6 +16,23 @@
       </div>
     </div>
 
+    <!-- ====== 站点公告栏（176号令：合规通知/安全公告发布） ====== -->
+    <div v-if="announcements.length" class="notice-bar">
+      <span class="notice-icon">📢</span>
+      <div class="notice-items">
+        <span
+          v-for="a in announcements.slice(0, 3)"
+          :key="a.id"
+          class="notice-item"
+          @click="noticeDlg.item = a; noticeDlg.visible = true"
+        >
+          <el-tag v-if="a.pinned" type="danger" size="small" effect="plain" style="margin-right:6px">置顶</el-tag>
+          {{ a.title }}
+        </span>
+      </div>
+      <span class="notice-more" @click="showAllNotice = true">查看全部</span>
+    </div>
+
     <!-- ====== 搜索结果区域 ====== -->
     <HomeSearchResults
       v-if="searchKeyword"
@@ -40,6 +57,13 @@
       <div class="category-zone">
         <div class="cz-header">
           <h2>类型文学分类</h2>
+          <div style="display:flex; align-items:center; gap:10px">
+            <el-button size="small" text type="primary" @click="showAlgo = true">📊 推荐说明</el-button>
+            <el-radio-group v-model="catStyle" size="small">
+              <el-radio-button value="tags">标签横排</el-radio-button>
+              <el-radio-button value="blocks">大方块</el-radio-button>
+            </el-radio-group>
+          </div>
           <el-radio-group v-model="catStyle" size="small">
             <el-radio-button value="tags">标签横排</el-radio-button>
             <el-radio-button value="blocks">大方块</el-radio-button>
@@ -130,12 +154,34 @@
           <el-icon :size="22"><Grid v-if="novelView==='table'"/><List v-else/></el-icon>
         </el-button>
       </el-tooltip>
+
+    <!-- ====== 推荐说明弹窗（176号令 算法透明度） ====== -->
+    <el-dialog v-model="showAlgo" title="📊 推荐说明" width="560px">
+      <div class="algo-desc" style="white-space: pre-wrap; line-height: 1.8">{{ algoDescription }}</div>
+      <template #footer><el-button type="primary" @click="showAlgo = false">知道了</el-button></template>
+    </el-dialog>
+
+    <!-- ====== 公告详情/列表弹窗 ====== -->
+    <el-dialog v-model="noticeDlg.visible" :title="noticeDlg.item?.title || '公告'" width="600px">
+      <div style="white-space: pre-wrap; line-height: 1.8">{{ noticeDlg.item?.content }}</div>
+      <div style="color: var(--text-light, #999); font-size: 0.8rem; margin-top: 8px">
+        发布于 {{ (noticeDlg.item?.created_at || '').slice(0, 10) }}
+      </div>
+    </el-dialog>
+    <el-dialog v-model="showAllNotice" title="📢 全部公告" width="600px">
+      <div v-if="!announcements.length" style="color: var(--text-light)">暂无公告</div>
+      <div v-for="a in announcements" :key="a.id" class="notice-list-item">
+        <el-tag v-if="a.pinned" type="danger" size="small" effect="plain" style="margin-right:6px">置顶</el-tag>
+        <span class="notice-list-title" @click="noticeDlg.item = a; noticeDlg.visible = true; showAllNotice = false">{{ a.title }}</span>
+        <span class="notice-list-date">{{ (a.created_at || '').slice(0, 10) }}</span>
+      </div>
+    </el-dialog>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, reactive, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { novelApi, type Novel } from '@/api/novel';
 import { publicApi } from '@/api/admin';
@@ -223,9 +269,31 @@ async function loadSiteName(){
   }catch{/* */}
 }
 
+
+// ====== 公告栏 + 算法说明（176号令合规） ======
+const announcements = ref<any[]>([]);
+const showAllNotice = ref(false);
+const noticeDlg = reactive({ visible: false, item: null as any });
+const algoDescription = ref('');
+const showAlgo = ref(false);
+
+async function loadAnnouncements(){
+  try{
+    const res=await publicApi.getAnnouncements();
+    if(res.data.code===0&&Array.isArray(res.data.data))announcements.value=res.data.data;
+  }catch{/* */}
+}
+async function loadAlgoDescription(){
+  try{
+    const res=await publicApi.getAlgoDescription();
+    if(res.data.code===0&&res.data.data.description)algoDescription.value=res.data.data.description;
+  }catch{/* */}
+}
 onMounted(async()=>{
   await loadCats();
   loadSiteName();
+  loadAnnouncements();
+  loadAlgoDescription();
   await Promise.all([fetchCatStats(),reloadAll()]);
 });
 
@@ -288,6 +356,24 @@ watch(
 );
 </script>
 
+
+/* ====== 公告栏 ====== */
+.notice-bar {
+  max-width: 1200px; margin: 14px auto 0; padding: 8px 16px;
+  display: flex; align-items: center; gap: 12px;
+  background: linear-gradient(90deg, rgba(250,204,21,0.12), rgba(250,204,21,0.03));
+  border: 1px solid rgba(250,204,21,0.35); border-radius: 10px;
+  font-size: 0.9rem;
+}
+.notice-icon { flex-shrink: 0; }
+.notice-items { flex: 1; display: flex; flex-wrap: wrap; gap: 6px 18px; overflow: hidden; }
+.notice-item { cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
+.notice-item:hover { text-decoration: underline; }
+.notice-more { flex-shrink: 0; cursor: pointer; color: var(--el-color-primary); font-size: 0.8rem; }
+.notice-list-item { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px dashed var(--el-border-color); }
+.notice-list-title { flex: 1; cursor: pointer; }
+.notice-list-title:hover { color: var(--el-color-primary); }
+.notice-list-date { color: var(--text-light, #999); font-size: 0.8rem; }
 <style scoped>
 /* ====== Hero Carousel — 2024 Modern ====== */
 /* ====== Search Results Section ====== */

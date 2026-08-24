@@ -21,6 +21,7 @@ import (
 const (
 	secureConfigFile = "data/secure-config.json"
 	secretKeyFile    = "data/.secret.key"
+	jwtSecretFile    = "data/.jwt_secret"
 )
 
 // SecureDBConfig 持久化的数据库配置（加密存储）
@@ -58,6 +59,29 @@ func GetOrCreateSecretKey() ([]byte, error) {
 		return nil, err
 	}
 	return key, nil
+}
+
+// GetOrCreateJWTSecret 读取或生成随机 JWT 签名密钥（64 位 hex，0600 持久化）。
+// 安全审计 S1：默认 JWT_SECRET（change-me-in-production-*）为公开值，攻击者可伪造任意
+// 管理员 Token；首次启动自动替换为随机密钥，已存在则沿用（重启不使会话失效）。
+func GetOrCreateJWTSecret() (string, error) {
+	if b, err := os.ReadFile(jwtSecretFile); err == nil {
+		if s := strings.TrimSpace(string(b)); len(s) >= 32 {
+			return s, nil
+		}
+	}
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	s := hex.EncodeToString(buf)
+	if err := os.MkdirAll("data", 0755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(jwtSecretFile, []byte(s), 0600); err != nil {
+		return "", err
+	}
+	return s, nil
 }
 
 func encryptAES(key, plaintext []byte) ([]byte, error) {

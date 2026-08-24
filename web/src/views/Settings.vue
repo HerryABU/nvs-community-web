@@ -91,6 +91,25 @@
           </el-form-item>
         </el-form>
       </el-card>
+
+      <!-- 个性化推荐（176号令 第七条第九项：算法推荐选择权） -->
+      <el-card class="settings-card" shadow="hover">
+        <template #header>
+          <div class="card-header">
+            <el-icon><DataAnalysis /></el-icon>
+            <span>推荐设置</span>
+          </div>
+        </template>
+        <el-form label-width="100px" label-position="top">
+          <el-form-item label="个性化推荐">
+            <el-switch v-model="personalizedRecommend" @change="savePreference" />
+            <div class="hint" style="margin-top: 6px">
+              平台默认不基于个人阅读历史进行个性化推荐；此开关保留您的算法选择权（《公安机关网络空间安全监督检查办法》第七条第九项）。
+              关闭后，即使平台未来启用个性化推荐，您也不会收到基于阅读历史的推荐内容。
+            </div>
+          </el-form-item>
+        </el-form>
+      </el-card>
     </div>
   </div>
 </template>
@@ -100,8 +119,9 @@ import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { authApi } from '@/api/auth';
+import api from '@/api';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
-import { Lock, User } from '@element-plus/icons-vue';
+import { Lock, User, DataAnalysis } from '@element-plus/icons-vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -139,6 +159,22 @@ const form = reactive({
   newPassword: '',
   confirmPassword: '',
 });
+
+// ====== 个性化推荐开关（176号令 第七条第九项） ======
+const personalizedRecommend = ref(false);
+onMounted(async () => {
+  try {
+    const res = await api.get('/users/me/preferences');
+    if (res.data?.code === 0) personalizedRecommend.value = !!res.data.data?.personalized_recommend;
+  } catch { /* ignore */ }
+});
+async function savePreference() {
+  try {
+    const res = await api.put('/users/me/preferences', { personalized_recommend: personalizedRecommend.value });
+    if (res.data?.code === 0) ElMessage.success('推荐偏好已保存');
+    else ElMessage.error(res.data?.message || '保存失败');
+  } catch { ElMessage.error('保存失败'); }
+}
 
 const validateConfirmPassword = (_rule: any, value: string, callback: (error?: Error) => void) => {
   if (value !== form.newPassword) {

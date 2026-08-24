@@ -17,6 +17,23 @@ import (
 
 // ==================== 沙盒预览 + WASM静态服务 ====================
 
+// pathWithin 强校验 target 是否位于 base 目录内（含路径分隔符边界）。
+// 🔒 安全审计 S2/H1：旧实现用 strings.HasPrefix(absPath, absBase) 做前缀匹配，
+// 存在两类穿越：① ../ 跳出（entry_file 可读任意文件 LFI）；② 前缀穿越
+// （/user1 可匹配 /user12，跨用户读取私有内容）。filepath.Rel 校验可同时杜绝两者。
+func pathWithin(base, target string) bool {
+	absBase, err1 := filepath.Abs(base)
+	absTarget, err2 := filepath.Abs(target)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	rel, err := filepath.Rel(absBase, absTarget)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
 // ServeSandboxPreview GET /sandbox/frame/:userID/*filepath
 // 在安全沙盒中返回用户自定义内容文件（CSS/JS/WASM等）
 func ServeSandboxPreview(c *gin.Context) {
@@ -43,12 +60,11 @@ func ServeSandboxPreview(c *gin.Context) {
 			relPath := strings.TrimPrefix(filePath, route.prefix)
 			relPath = strings.TrimPrefix(relPath, "/")
 
-			fullPath := filepath.Join(route.dir, fmt.Sprintf("%d", userID), relPath)
+			baseDir := filepath.Join(route.dir, fmt.Sprintf("%d", userID))
+			fullPath := filepath.Join(baseDir, relPath)
 
-			// 安全检查
-			absBase, _ := filepath.Abs(filepath.Join(route.dir, fmt.Sprintf("%d", userID)))
-			absPath, _ := filepath.Abs(fullPath)
-			if !strings.HasPrefix(absPath, absBase) {
+			// 安全检查：强校验必须落在用户目录内（防 ../ 与前缀穿越）
+			if !pathWithin(baseDir, fullPath) {
 				c.String(http.StatusForbidden, "路径越权")
 				return
 			}
@@ -77,7 +93,7 @@ func ServeSandboxPreview(c *gin.Context) {
 // GetSandboxInfo GET /api/sandbox/info
 func GetSandboxInfo(c *gin.Context) {
 	utils.Success(c, gin.H{
-		"sandbox_policy":     "allow-scripts allow-same-origin",
+		"sandbox_policy":     "allow-scripts",
 		"wasm_supported":     true,
 		"zip_max_size":       "20MB",
 		"zip_max_uncompress": "50MB",
@@ -107,8 +123,9 @@ func GetFramePreview(c *gin.Context) {
 		return
 	}
 
-	// 根据 sandbox_level 决定 sandbox 策略
-	sandboxPolicy := "allow-scripts allow-same-origin"
+	// 根据 sandbox_level 决定 sandbox 策略（安全审计：移除 allow-same-origin，
+	// 用户内容一律 opaque origin，杜绝沙盒内脚本以站点同源读写父页面/会话）
+	sandboxPolicy := "allow-scripts"
 	if frame.HasControls {
 		sandboxPolicy += " allow-forms allow-popups"
 	}
@@ -128,15 +145,19 @@ func GetHTMLPreview(c *gin.Context) {
 		return
 	}
 
-	// 读取入口文件
+	// 读取入口文件：强校验 entry_file 必须落在解压目录内（防路径穿越 LFI）
 	entryPath := filepath.Join(htmlItem.ExtractDir, htmlItem.EntryFile)
+	if !pathWithin(htmlItem.ExtractDir, entryPath) {
+		utils.BadRequest(c, "入口文件路径非法")
+		return
+	}
 	content, err := os.ReadFile(entryPath)
 	if err != nil {
 		utils.InternalError(c, "读取入口文件失败")
 		return
 	}
 
-	sandboxPolicy := "allow-scripts allow-same-origin"
+	sandboxPolicy := "allow-scripts"
 	if htmlItem.AllowWasm {
 		sandboxPolicy += " allow-forms"
 	}
@@ -159,6 +180,10 @@ func ServeAppHTML(c *gin.Context) {
 		return
 	}
 	entryPath := filepath.Join(htmlItem.ExtractDir, htmlItem.EntryFile)
+	if !pathWithin(htmlItem.ExtractDir, entryPath) {
+		c.String(http.StatusForbidden, "入口文件路径非法")
+		return
+	}
 	content, err := os.ReadFile(entryPath)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "读取失败")
@@ -184,9 +209,7 @@ func ServeAppResource(c *gin.Context) {
 	}
 
 	fullPath := filepath.Join(htmlItem.ExtractDir, resourcePath)
-	absBase, _ := filepath.Abs(htmlItem.ExtractDir)
-	absTarget, _ := filepath.Abs(fullPath)
-	if !strings.HasPrefix(absTarget, absBase) {
+	if !pathWithin(htmlItem.ExtractDir, fullPath) {
 		c.String(http.StatusForbidden, "路径越权")
 		return
 	}

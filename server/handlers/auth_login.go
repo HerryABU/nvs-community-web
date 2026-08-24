@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -40,12 +41,36 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	// 🔒 安全审计 M1：账号级失败锁定（5 次失败锁定 15 分钟，防暴力破解；字段早已定义未启用）
+	const maxLoginFails = 5
+	const lockMinutes = 15
+	if user.LockedUntil != nil && user.LockedUntil.After(time.Now()) {
+		remaining := int(time.Until(*user.LockedUntil).Minutes()) + 1
+		utils.BadRequest(c, fmt.Sprintf("登录失败次数过多，账号已锁定，请在 %d 分钟后重试", remaining))
+		return
+	}
+
 	if !utils.CheckPassword(input.Password, user.PasswordHash) {
 		// 合规审计：登录失败（密码错误）
 		recordUserAudit(c, user.ID, models.AuditLoginFail, "登录失败：密码错误 "+user.Username, "fail")
+		// 递增失败计数；达到阈值锁定账号
+		newCount := user.LoginFailCount + 1
+		updates := map[string]interface{}{"login_fail_count": newCount}
+		if newCount >= maxLoginFails {
+			lockUntil := time.Now().Add(lockMinutes * time.Minute)
+			updates["locked_until"] = &lockUntil
+			updates["login_fail_count"] = 0
+		}
+		models.DB.Model(&models.User{}).Where("id = ?", user.ID).Updates(updates)
 		utils.BadRequest(c, "邮箱或密码错误")
 		return
 	}
+
+	// 登录成功：清零失败计数与锁定
+	models.DB.Model(&models.User{}).Where("id = ?", user.ID).Updates(map[string]interface{}{
+		"login_fail_count": 0,
+		"locked_until":     nil,
+	})
 
 	// 合规审计：登录成功
 	recordUserAudit(c, user.ID, models.AuditLoginSuccess, "登录成功 "+user.Username, "success")

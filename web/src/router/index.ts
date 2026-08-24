@@ -188,6 +188,30 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/algorithms',
+      name: 'admin-algorithms',
+      component: () => import('@/views/admin/AdminAlgorithms.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/vulnerabilities',
+      name: 'admin-vulnerabilities',
+      component: () => import('@/views/admin/AdminVulnerabilities.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/compliance',
+      name: 'admin-compliance',
+      component: () => import('@/views/admin/AdminCompliance.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/announcements',
+      name: 'admin-announcements',
+      component: () => import('@/views/admin/AdminAnnouncements.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/badwords',
       name: 'admin-badwords',
       component: () => import('@/views/admin/AdminBadWords.vue'),

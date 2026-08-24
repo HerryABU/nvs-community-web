@@ -153,6 +153,15 @@ func UploadZipHTML(c *gin.Context) {
 		totalSize += e.Size
 	}
 
+	// 🔒 安全审计 S2：entry_file 必须为解压目录内的相对路径（防路径穿越 LFI）
+	entryFile = strings.TrimSpace(strings.ReplaceAll(entryFile, "\\", "/"))
+	entryFile = strings.TrimPrefix(entryFile, "/")
+	if entryFile == "" || strings.HasPrefix(entryFile, "..") || strings.Contains(entryFile, "../") {
+		os.RemoveAll(extractDir)
+		utils.BadRequest(c, "入口文件路径非法：仅允许解压目录内的相对路径")
+		return
+	}
+
 	// 构建novelID指针
 	var novelID *uint
 	if novelIDStr != "" {
@@ -163,15 +172,15 @@ func UploadZipHTML(c *gin.Context) {
 	}
 
 	htmlItem := &models.UserHTML{
-		UserID:      userID,
-		NovelID:     novelID,
-		Name:        name,
-		Description: description,
-		ExtractDir:  extractDir,
-		EntryFile:   entryFile,
-		FileCount:   len(entries),
-		TotalSize:   totalSize,
-		FilePath:    extractDir, // 旧字段兼容
+		UserID:         userID,
+		NovelID:        novelID,
+		Name:           name,
+		Description:    description,
+		ExtractDir:     extractDir,
+		EntryFile:      entryFile,
+		FileCount:      len(entries),
+		TotalSize:      totalSize,
+		FilePath:       extractDir, // 旧字段兼容
 		ZipPath:        zipPath,
 		AllowWasm:      allowWasm,
 		IsPublic:       isPublic,
@@ -234,10 +243,10 @@ func UpdateHTML(c *gin.Context) {
 	}
 
 	var req struct {
-		Name        *string `json:"name"`
-		Description *string `json:"description"`
-		NovelID     *uint   `json:"novel_id"`
-		EntryFile   *string `json:"entry_file"`
+		Name           *string `json:"name"`
+		Description    *string `json:"description"`
+		NovelID        *uint   `json:"novel_id"`
+		EntryFile      *string `json:"entry_file"`
 		IsActive       *bool   `json:"is_active"`
 		AllowWasm      *bool   `json:"allow_wasm"`
 		IsPublic       *bool   `json:"is_public"`
@@ -253,7 +262,18 @@ func UpdateHTML(c *gin.Context) {
 	if req.NovelID != nil {
 		htmlItem.NovelID = req.NovelID
 	}
-	applyIfNotNil(req.EntryFile, &htmlItem.EntryFile)
+	// 🔒 安全审计 S2：entry_file 必须为解压目录内的相对路径（防路径穿越 LFI——
+	// 旧实现可直接把 entry_file 改为 ../../.env 读取任意文件）
+	if req.EntryFile != nil {
+		entry := strings.TrimSpace(*req.EntryFile)
+		entry = strings.ReplaceAll(entry, "\\", "/")
+		entry = strings.TrimPrefix(entry, "/")
+		if entry == "" || strings.HasPrefix(entry, "..") || strings.Contains(entry, "../") {
+			utils.BadRequest(c, "入口文件路径非法：仅允许解压目录内的相对路径")
+			return
+		}
+		htmlItem.EntryFile = entry
+	}
 	applyIfNotNil(req.IsActive, &htmlItem.IsActive)
 	applyIfNotNil(req.AllowWasm, &htmlItem.AllowWasm)
 	applyIfNotNil(req.IsPublic, &htmlItem.IsPublic)

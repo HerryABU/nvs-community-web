@@ -44,7 +44,7 @@ const props = withDefaults(defineProps<{
   sandboxPolicy?: string;
 }>(), {
   height: '500px',
-  sandboxPolicy: 'allow-scripts allow-same-origin',
+  sandboxPolicy: 'allow-scripts',
 });
 
 const iframeRef = ref<HTMLIFrameElement>();

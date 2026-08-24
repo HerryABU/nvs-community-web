@@ -25,6 +25,7 @@ declare module 'vue' {
     ElCheckbox: typeof import('element-plus/es')['ElCheckbox']
     ElCheckboxGroup: typeof import('element-plus/es')['ElCheckboxGroup']
     ElCol: typeof import('element-plus/es')['ElCol']
+    ElDatePicker: typeof import('element-plus/es')['ElDatePicker']
     ElDescriptions: typeof import('element-plus/es')['ElDescriptions']
     ElDescriptionsItem: typeof import('element-plus/es')['ElDescriptionsItem']
     ElDialog: typeof import('element-plus/es')['ElDialog']
@@ -74,6 +75,7 @@ declare module 'vue' {
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SensitiveZoneGuard: typeof import('./src/components/SensitiveZoneGuard.vue')['default']
+    SiteFooter: typeof import('./src/components/SiteFooter.vue')['default']
     SlideCaptcha: typeof import('./src/components/SlideCaptcha.vue')['default']
     StarRating: typeof import('./src/components/StarRating.vue')['default']
   }

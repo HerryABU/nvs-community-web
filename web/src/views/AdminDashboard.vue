@@ -17,6 +17,24 @@
         </div>
       </div>
 
+      <!-- 备案状态提醒（176号令 第七条第一项，F7） -->
+      <el-alert
+        v-if="!filingReady"
+        type="warning"
+        show-icon
+        :closable="false"
+        style="margin-bottom: 20px"
+        title="⚠️ 请尽快完成工信部ICP备案和公安联网备案，并在此配置备案号"
+      >
+        <template #default>
+          <span style="font-size: 0.85rem">
+            未完成备案的网站可能面临行政处罚。前往
+            <el-link type="primary" @click="$router.push('/admin/settings')">站点设置 → 联网备案</el-link>
+            填写备案号（填好后将自动显示在站点页脚）。
+          </span>
+        </template>
+      </el-alert>
+
       <!-- 第一行：统计卡片 -->
       <el-row :gutter="20" class="stats-row">
         <el-col :xs="24" :sm="12" :md="6" v-for="(card, idx) in statCardDefs" :key="idx">
@@ -87,7 +105,8 @@ import { adminApi } from '@/api/admin';
 import {
   User, Document, ChatLineRound, Connection,
   Refresh, ArrowRight, Setting, Collection, Lock, ChatDotRound,
-  Warning, Cpu, TrendCharts, Key, WarningFilled, DataLine, Monitor, Box, Notebook, View
+  Warning, Cpu, TrendCharts, Key, WarningFilled, DataLine, Monitor, Box, Notebook, View,
+  DataAnalysis, Medal, Bell
 } from '@element-plus/icons-vue';
 import AnimatedNumber from '@/components/AnimatedNumber.vue';
 import DashboardCharts from '@/components/DashboardCharts.vue';
@@ -95,6 +114,16 @@ import DashboardCharts from '@/components/DashboardCharts.vue';
 const refreshing = ref(false);
 
 const stats = reactive({ users: 0, novels: 0, comments: 0, forums: 0 });
+
+// 备案状态（176号令 第七条第一项，F7 首页提醒）
+const filingReady = ref(true);
+async function checkFiling() {
+  try {
+    const res = await adminApi.getConfig();
+    const d = res.data.data || {};
+    filingReady.value = !!(d.site_icp && d.site_psb);
+  } catch { /* 保持默认（视为已配置，避免误报） */ }
+}
 
 // 统计卡片
 const statCardDefs = computed(() => [
@@ -106,8 +135,12 @@ const statCardDefs = computed(() => [
 
 // 管理功能入口（4×3 网格，12 项）
 const adminMenus = [
-  { title: '站点设置', desc: '站点名称、SMTP、robots.txt、安全设置', path: '/admin/settings', icon: Setting, color: 'var(--gradient-blue)' },
+  { title: '站点设置', desc: '站点名称、SMTP、robots.txt、备案、安全设置', path: '/admin/settings', icon: Setting, color: 'var(--gradient-blue)' },
   { title: '日志脱敏', desc: '生产环境日志敏感信息脱敏 · 176号令合规', path: '/admin/log-redact', icon: View, color: 'var(--gradient-danger)' },
+  { title: '算法管理', desc: '推荐排序规则 · 算法说明 · 用户选择权', path: '/admin/algorithms', icon: DataAnalysis, color: 'var(--gradient-purple)' },
+  { title: '合规中心', desc: '等保指引 · 检查工具箱 · 自查报告', path: '/admin/compliance', icon: Medal, color: 'var(--gradient-success)' },
+  { title: '漏洞管理', desc: '漏洞整改闭环留痕 · 报告导出', path: '/admin/vulnerabilities', icon: Warning, color: 'var(--gradient-danger)' },
+  { title: '公告栏', desc: '站点公告发布 · 合规通知', path: '/admin/announcements', icon: Bell, color: 'var(--gradient-blue)' },
   { title: '数据库管理', desc: 'SQLite↔MySQL 迁移 / 多库备份', path: '/admin/database', icon: DataLine, color: 'var(--gradient-teal)' },
   { title: '健康检查', desc: '服务器 / 数据库 / 网络 / 前端 API', path: '/admin/health', icon: Monitor, color: 'var(--gradient-success)' },
   { title: '书目分类管理', desc: '平台书目分类的增删改', path: '/admin/categories', icon: Collection, color: 'var(--gradient-purple)' },
@@ -228,7 +261,7 @@ async function refreshAll() {
   refreshing.value = false;
 }
 
-onMounted(loadDashboard);
+onMounted(() => { loadDashboard(); checkFiling(); });
 </script>
 
 <style scoped>
