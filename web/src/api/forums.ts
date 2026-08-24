@@ -5,7 +5,11 @@ export const forumApi = {
     return api.get('/forums', { params: { type } });
   },
   getForum(id: number, page?: number, password?: string, room?: string) {
-    return api.get(`/forums/${id}`, { params: { page, password, room } });
+    // 🔒 安全审计：密码/房间号走自定义头，不再进 URL query（防落入访问日志/浏览器历史/Referer）
+    const headers: Record<string, string> = {};
+    if (password) headers['X-Forum-Password'] = password;
+    if (room) headers['X-Forum-Room'] = room;
+    return api.get(`/forums/${id}`, { params: { page }, headers });
   },
   getNovelForum(novelId: number) {
     return api.get(`/novels/${novelId}/forum`);

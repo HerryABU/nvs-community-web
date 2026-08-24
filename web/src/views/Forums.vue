@@ -260,13 +260,16 @@ async function enterByRoomCode() {
           if (!value) return;
           const res2 = await forumApi.enterByRoomCode(code, value);
           if (res2.data.code === 0) {
-            router.push(`/forum/${d.forum_id}?room=${code}&password=${encodeURIComponent(value)}`);
+            // 🔒 安全审计：密码/房间号存入 sessionStorage，URL 不带敏感信息
+            sessionStorage.setItem(`nvs_forum_${d.forum_id}`, JSON.stringify({ room: code, password: value }));
+            router.push(`/forum/${d.forum_id}`);
           }
         } catch (e: any) {
           if (e !== 'cancel') ElMessage.error(e?.response?.data?.message || '密码错误');
         }
       } else {
-        router.push(`/forum/${d.forum_id}?room=${code}`);
+        sessionStorage.setItem(`nvs_forum_${d.forum_id}`, JSON.stringify({ room: code, password: '' }));
+        router.push(`/forum/${d.forum_id}`);
       }
     }
   } catch (e: any) {
@@ -316,7 +319,9 @@ async function enterCustomForum(forum: Forum) {
       if (!value) return;
       const res = await forumApi.verifyPassword(forum.id, value);
       if (res.data.code === 0) {
-        router.push(`/forum/${forum.id}?password=${encodeURIComponent(value)}`);
+        // 🔒 安全审计：密码存入 sessionStorage，URL 不带敏感信息
+        sessionStorage.setItem(`nvs_forum_${forum.id}`, JSON.stringify({ password: value, room: '' }));
+        router.push(`/forum/${forum.id}`);
       }
     } catch (e: any) {
       if (e !== 'cancel') ElMessage.error(e?.response?.data?.message || '密码验证失败');

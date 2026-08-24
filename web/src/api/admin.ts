@@ -218,11 +218,12 @@ export const adminApi = {
   unlockEmergency(data: { password: string }) {
     return api.post('/admin/emergency/unlock', data);
   },
+  // 🔒 安全审计：应急 token 改走 POST body，不再进 URL query（防落入访问日志/浏览器历史）
   previewEmergencyContent(path: string, token: string) {
-    return api.get('/admin/emergency/preview', { params: { path, token } });
+    return api.post('/admin/emergency/preview', { path, token });
   },
   deleteEmergencyContent(path: string, token: string) {
-    return api.delete('/admin/emergency/content', { params: { path, token } });
+    return api.post('/admin/emergency/content', { path, token });
   },
   getEmergencyAudit() {
     return api.get('/admin/emergency/audit');

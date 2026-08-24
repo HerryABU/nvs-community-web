@@ -37,6 +37,13 @@ func AllocatePort(c *gin.Context) {
 		return
 	}
 
+	// 🔒 安全审计 L4：端口绑定前校验 html 归属（防 IDOR 改写他人扩展）
+	var htmlItem models.UserHTML
+	if err := models.DB.Where("id = ? AND user_id = ?", req.HTMLID, userID).First(&htmlItem).Error; err != nil {
+		utils.Forbidden(c, "无权操作该扩展")
+		return
+	}
+
 	allocator := utils.GetPortAllocator()
 	port, err := allocator.Allocate()
 	if err != nil {
@@ -48,8 +55,8 @@ func AllocatePort(c *gin.Context) {
 	proxyURL := "http://127.0.0.1:" + formatPort(port)
 	middleware.GlobalNamedProxy.Register(userID, req.ProjectName, port, proxyURL)
 
-	// 保存端口+项目名到数据库
-	models.DB.Model(&models.UserHTML{}).Where("id = ?", req.HTMLID).Updates(map[string]interface{}{
+	// 保存端口+项目名到数据库（已校验归属）
+	models.DB.Model(&models.UserHTML{}).Where("id = ? AND user_id = ?", req.HTMLID, userID).Updates(map[string]interface{}{
 		"port":         port,
 		"project_name": req.ProjectName,
 	})
@@ -57,12 +64,12 @@ func AllocatePort(c *gin.Context) {
 	proxyPath := fmt.Sprintf("/sandbox/proxy/%d/%s/", userID, req.ProjectName)
 
 	utils.Success(c, gin.H{
-		"port":          port,
-		"project_name":  req.ProjectName,
-		"proxy_path":    proxyPath,
-		"direct_url":    proxyURL,
-		"html_id":       req.HTMLID,
-		"port_range":    "49152-65535",
+		"port":           port,
+		"project_name":   req.ProjectName,
+		"proxy_path":     proxyPath,
+		"direct_url":     proxyURL,
+		"html_id":        req.HTMLID,
+		"port_range":     "49152-65535",
 		"alloc_strategy": "高位优先 (high-to-low) · 端口号不在URL中暴露",
 	})
 }
@@ -91,8 +98,8 @@ func ReleasePort(c *gin.Context) {
 		utils.GetPortAllocator().Release(req.Port)
 	}
 
-	// 清除数据库
-	models.DB.Model(&models.UserHTML{}).Where("id = ?", req.HTMLID).Updates(map[string]interface{}{
+	// 清除数据库（🔒 安全审计 L4：仅清除归属本人的 html 记录）
+	models.DB.Model(&models.UserHTML{}).Where("id = ? AND user_id = ?", req.HTMLID, userID).Updates(map[string]interface{}{
 		"port":         0,
 		"project_name": "",
 	})

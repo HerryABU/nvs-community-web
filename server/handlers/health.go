@@ -32,14 +32,14 @@ func CollectHealth() gin.H {
 
 	// 1. 服务器
 	server := gin.H{
-		"ok":          true,
-		"uptime_sec":  int64(time.Since(serverStartTime).Seconds()),
-		"goroutines":  runtime.NumGoroutine(),
+		"ok":           true,
+		"uptime_sec":   int64(time.Since(serverStartTime).Seconds()),
+		"goroutines":   runtime.NumGoroutine(),
 		"mem_alloc_mb": round2(float64(ms.Alloc) / 1024 / 1024),
 	}
 
 	// 2. 数据库
-	db := gin.H{"ok": false, "driver": config.DBDriver}
+	db := gin.H{"ok": false}
 	if models.DB != nil {
 		if sqlDB, err := models.DB.DB(); err == nil && sqlDB != nil {
 			t0 := time.Now()
@@ -47,11 +47,12 @@ func CollectHealth() gin.H {
 				db["ok"] = true
 				db["latency_ms"] = time.Since(t0).Milliseconds()
 			} else {
-				db["error"] = err.Error()
+				// 🔒 安全审计 L1：不向公开接口回显数据库驱动/原始错误（可能泄露内部路径与版本）
+				db["error"] = "database unavailable"
 			}
 		}
 	} else {
-		db["error"] = "数据库未初始化"
+		db["error"] = "database unavailable"
 	}
 
 	// 3. Redis
@@ -62,7 +63,7 @@ func CollectHealth() gin.H {
 			redis["status"] = "ok"
 		} else {
 			redis["status"] = "error"
-			redis["error"] = err.Error()
+			redis["error"] = "redis unavailable"
 		}
 	}
 
@@ -70,35 +71,27 @@ func CollectHealth() gin.H {
 	network := gin.H{"ok": true}
 	if err := probeOutbound(); err != nil {
 		network["ok"] = false
-		network["error"] = err.Error()
+		network["error"] = "outbound unavailable"
 	}
 
-	// 5. 业务 API（关键公开数据源可查询）
+	// 5. 业务 API（🔒 仅返回可用性，不公开数据量——用户/作品数属业务敏感信息）
 	apis := gin.H{"ok": false}
 	if models.DB != nil {
-		var users, novels, forums int64
-		models.DB.Model(&models.User{}).Count(&users)
-		models.DB.Model(&models.Novel{}).Count(&novels)
-		models.DB.Model(&models.Forum{}).Count(&forums)
 		apis["ok"] = true
-		apis["users"] = users
-		apis["novels"] = novels
-		apis["forums"] = forums
 	} else {
-		apis["error"] = "数据库未初始化"
+		apis["error"] = "database unavailable"
 	}
 
 	// 6. 前端
 	frontend := gin.H{"ok": false}
 	if FrontendProbe != nil {
-		if bundle, ok := FrontendProbe(); ok {
+		if _, ok := FrontendProbe(); ok {
 			frontend["ok"] = true
-			frontend["bundle"] = bundle
 		} else {
-			frontend["error"] = "前端资源缺失"
+			frontend["error"] = "frontend assets missing"
 		}
 	} else {
-		frontend["error"] = "前端探针未注入"
+		frontend["error"] = "frontend probe not injected"
 	}
 
 	// 汇总

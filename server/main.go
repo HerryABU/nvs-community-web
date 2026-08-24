@@ -107,6 +107,7 @@ func main() {
 	r.Use(middleware.AccessLog()) // 合规：访问日志关联 user_id（按天滚动写入 logs/）
 	r.Use(gzip.Gzip(gzip.DefaultCompression))
 	r.Use(middleware.SandboxWriteProtect()) // 🔒 允许数据文件，拦截脚本
+	r.Use(middleware.CSRFGuard())           // 🔒 CSRF 防护：登录态写操作须带 X-Requested-With 头
 
 	// 建站向导门禁：未完成安装时，除 /api/setup/* 与 /health 外，拦截所有业务 API（严防死守）
 	r.Use(func(c *gin.Context) {
@@ -442,8 +443,8 @@ func main() {
 		// 内容抢救台（二级密码 + 应急预览/硬删除；unlock 加 IP 限流防爆破）
 		admin.POST("/emergency/set-password", handlers.SetEmergencyPassword)
 		admin.POST("/emergency/unlock", security.RateLimit(10, 60), handlers.UnlockEmergency)
-		admin.GET("/emergency/preview", handlers.PreviewEmergencyContent)
-		admin.DELETE("/emergency/content", handlers.DeleteEmergencyContent)
+		admin.POST("/emergency/preview", handlers.PreviewEmergencyContent)
+		admin.POST("/emergency/content", handlers.DeleteEmergencyContent)
 		admin.GET("/emergency/audit", handlers.ListEmergencyAudit)
 		// 内容治理：删除/封禁任意内容（软删除 + softdel_ 留证）
 		admin.GET("/softdel", handlers.AdminListSoftDel)

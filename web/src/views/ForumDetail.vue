@@ -184,11 +184,28 @@ function formatTime(s: string) {
   return new Date(s).toLocaleDateString('zh-CN');
 }
 
+// 🔒 安全审计：论坛密码/房间号不再进 URL——进入成功后存 sessionStorage，请求走自定义头
+function getForumAccess(id: number | string) {
+  let password = '';
+  let room = '';
+  try {
+    const saved = sessionStorage.getItem(`nvs_forum_${id}`);
+    if (saved) {
+      const s = JSON.parse(saved);
+      password = s.password || '';
+      room = s.room || '';
+    }
+  } catch { /* ignore */ }
+  return { password, room };
+}
+function saveForumAccess(id: number | string, access: { password?: string; room?: string }) {
+  sessionStorage.setItem(`nvs_forum_${id}`, JSON.stringify({ password: access.password || '', room: access.room || '' }));
+}
+
 async function load() {
   loading.value = true;
   try {
-    const password = (route.query.password as string) || '';
-    const room = (route.query.room as string) || '';
+    const { password, room } = getForumAccess(route.params.id);
     const res = await forumApi.getForum(Number(route.params.id), undefined, password, room);
     const d = res.data.data;
     forum.value = d.forum;
@@ -214,7 +231,7 @@ async function submitPassword() {
       const r = await forumApi.enterByRoomCode(code, passwordInput.value);
       if (r.data.code === 0) {
         locked.value = false;
-        router.replace({ query: { room: code, password: passwordInput.value || undefined } });
+        saveForumAccess(route.params.id, { room: code, password: passwordInput.value });
         await load();
         return;
       }
@@ -222,7 +239,7 @@ async function submitPassword() {
     const res = await forumApi.verifyPassword(Number(route.params.id), passwordInput.value);
     if (res.data.code === 0) {
       locked.value = false;
-      router.replace({ query: { password: passwordInput.value } });
+      saveForumAccess(route.params.id, { password: passwordInput.value });
       await load();
     }
   } catch (e: any) {
