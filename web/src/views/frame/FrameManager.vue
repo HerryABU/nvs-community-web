@@ -122,7 +122,7 @@ interface Frame {
 const frames = ref<Frame[]>([]);
 const loading = ref(false); const saving = ref(false);
 const showCreate = ref(false); const showPreview = ref(false);
-const previewSrc = ref(''); const previewName = ref(''); const previewPolicy = ref('allow-scripts allow-same-origin');
+const previewSrc = ref(''); const previewName = ref(''); const previewPolicy = ref('allow-scripts');
 const editing = ref<Frame | null>(null);
 
 const form = ref({ name: '', description: '', novel_id: undefined as number | undefined, content: '', is_public: false, has_controls: false, uses_novel_api: false, sandbox_level: 'strict', frame_type: 'reader', run_mode: 'sandbox' });
@@ -166,7 +166,7 @@ async function save() {
 function preview(f: Frame) {
   previewSrc.value = frameApi.getPreview(f.id);
   previewName.value = f.name;
-  previewPolicy.value = f.has_controls ? 'allow-scripts allow-same-origin allow-forms allow-popups' : 'allow-scripts allow-same-origin';
+  previewPolicy.value = f.has_controls ? 'allow-scripts allow-forms allow-popups' : 'allow-scripts';
   showPreview.value = true;
 }
 

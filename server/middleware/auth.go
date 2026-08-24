@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 
+	"nvs-server/config"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -68,14 +69,15 @@ func AuthorRequired() gin.HandlerFunc {
 
 // SetTokenCookie 设置 JWT Cookie
 func SetTokenCookie(c *gin.Context, token string) {
+	// 安全审计 L3：Secure 由 .env 的 COOKIE_SECURE 控制（生产 HTTPS 下应开启，防明文截获）
 	c.SetCookie(
 		"token",
 		token,
 		72*3600, // 72 hours
 		"/",
 		"",
-		false, // Secure: true in production
-		true,  // HttpOnly
+		config.ForceCookieSecure, // Secure: 生产 HTTPS 下由 COOKIE_SECURE=true 开启
+		true,                     // HttpOnly
 	)
 	c.SetSameSite(http.SameSiteLaxMode)
 }
@@ -88,8 +90,8 @@ func ClearTokenCookie(c *gin.Context) {
 		-1,
 		"/",
 		"",
-		false, // Secure: true in production
-		true,  // HttpOnly
+		config.ForceCookieSecure,
+		true, // HttpOnly
 	)
 	c.SetSameSite(http.SameSiteLaxMode)
 }

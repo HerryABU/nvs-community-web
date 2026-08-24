@@ -22,7 +22,7 @@
         <el-card shadow="hover">
           <template #header><span>🛡️ 安全策略</span></template>
           <el-descriptions :column="1" border size="small">
-            <el-descriptions-item label="iframe sandbox">allow-scripts allow-same-origin allow-forms</el-descriptions-item>
+            <el-descriptions-item label="iframe sandbox">allow-scripts allow-forms</el-descriptions-item>
             <el-descriptions-item label="CSP">'wasm-unsafe-eval' 启用</el-descriptions-item>
             <el-descriptions-item label="COEP">require-corp（WASM共享内存）</el-descriptions-item>
             <el-descriptions-item label="ZIP限制">≤20MB 压缩 · ≤50MB 解压 · ≤100:1 压缩比 · ≤500文件</el-descriptions-item>

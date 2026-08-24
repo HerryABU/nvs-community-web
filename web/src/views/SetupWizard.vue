@@ -108,6 +108,24 @@
             <el-input v-model="form.admin.password" type="password" show-password placeholder="至少 8 位，含字母和数字" />
             <div class="hint">强制高强度：至少 8 位，且同时包含字母与数字。</div>
           </el-form-item>
+
+          <!-- 合规备案提醒（176号令 第七条第一项） -->
+          <el-alert
+            type="warning"
+            :closable="false"
+            show-icon
+            style="margin-top: 10px"
+            title="📋 合规备案提醒"
+          >
+            <template #default>
+              <div style="line-height: 1.9; font-size: 0.9rem">
+                您的站点安装完成后，根据《网络安全法》和公安部176号令，您需要完成以下备案：<br />
+                ☐ 工信部ICP备案 → <a href="https://beian.miit.gov.cn" target="_blank" rel="noopener">https://beian.miit.gov.cn</a><br />
+                ☐ 公安联网备案 → <a href="https://beian.cyberpolice.cn" target="_blank" rel="noopener">https://beian.cyberpolice.cn</a><br />
+                <b>⚠️ 未完成备案的网站可能面临行政处罚。</b>安装后请在后台「站点设置 → 联网备案」中填写备案号。
+              </div>
+            </template>
+          </el-alert>
         </el-form>
       </div>
 

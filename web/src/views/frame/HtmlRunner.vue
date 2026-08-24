@@ -43,7 +43,7 @@ const projectData = ref<any>({});
 const loading = ref(true);
 const error = ref('');
 const iframeKey = ref(0);
-const sandboxPolicy = ref('allow-scripts allow-same-origin allow-forms allow-popups');
+const sandboxPolicy = ref('allow-scripts allow-forms allow-popups');
 
 onMounted(async () => {
   try {

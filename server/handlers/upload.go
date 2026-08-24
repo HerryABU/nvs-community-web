@@ -21,9 +21,10 @@ import (
 // 通用文件上传（博客图片/音视频等，仿 CSDN 编辑器）
 // POST /api/upload
 //   multipart field: file
-//   允许：image/*（png/jpg/jpeg/gif/webp/svg），video/mp4/webm，audio/mpeg|mp3|wav|ogg
+//   允许：image/*（png/jpg/jpeg/gif/webp/bmp——不含 svg），video/mp4/webm，audio/mpeg|mp3|wav|ogg|m4a
 //   大小：图片 ≤10MB，音视频 ≤50MB
 //   返回：{ url: "/uploads/2026/08/xxxx.ext", size, name }
+// 🔒 安全审计 M3：移除 .svg（SVG 可内嵌 <script>，同源直出即存储型 XSS）
 // ─────────────────────────────────────────────────────────────
 
 const (
@@ -33,14 +34,14 @@ const (
 )
 
 var allowedUploadExt = map[string]bool{
-	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true, ".svg": true, ".bmp": true,
+	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true, ".bmp": true,
 	".mp4": true, ".webm": true,
 	".mp3": true, ".wav": true, ".ogg": true, ".m4a": true,
 }
 
 func isImageExt(ext string) bool {
 	switch ext {
-	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp":
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp":
 		return true
 	}
 	return false
@@ -64,7 +65,7 @@ func UploadFile(c *gin.Context) {
 
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	if !allowedUploadExt[ext] {
-		utils.BadRequest(c, "不支持的文件类型，仅支持图片(png/jpg/gif/webp/svg) / 视频(mp4/webm) / 音频(mp3/wav/ogg)")
+		utils.BadRequest(c, "不支持的文件类型，仅支持图片(png/jpg/gif/webp/bmp) / 视频(mp4/webm) / 音频(mp3/wav/ogg/m4a)")
 		return
 	}
 	if header.Size > uploadMaxFile {

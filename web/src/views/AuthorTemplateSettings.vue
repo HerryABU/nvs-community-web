@@ -74,7 +74,7 @@
     </el-dialog>
 
     <!-- 预览 -->
-    <el-dialog v-model="showPreview" title="预览" width="85%"><SandboxPreview v-if="previewSrc" :src="previewSrc" height="500px" sandbox-policy="allow-scripts allow-same-origin"/></el-dialog>
+    <el-dialog v-model="showPreview" title="预览" width="85%"><SandboxPreview v-if="previewSrc" :src="previewSrc" height="500px" sandbox-policy="allow-scripts"/></el-dialog>
   </div>
 </template>
 

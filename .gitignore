@@ -50,6 +50,9 @@ logs/
 # 测试运行产物（go test 在 handlers 包目录生成）
 server/handlers/authors/
 server/handlers/log/
+server/middleware/log/
+server/log/
+server/data/
 server.pid
 
 # 冒烟测试临时目录（server/smoke_test.sh 运行产物）

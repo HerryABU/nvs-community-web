@@ -184,7 +184,7 @@ func main() {
 	public := r.Group("/api")
 	public.Use(middleware.OptionalAuth()) // 公开路由也识别登录态（管理员豁免/我的论坛等权限判断）
 	{
-		public.POST("/auth/register", handlers.Register)
+		public.POST("/auth/register", security.RateLimit(10, 60), handlers.Register) // 安全审计 M2：注册限流防批量灌号
 		public.POST("/auth/login", security.RateLimit(5, 60), handlers.Login)
 		public.POST("/auth/logout", handlers.Logout)
 		public.POST("/auth/send-code", handlers.SendVerificationCode)
@@ -217,6 +217,9 @@ func main() {
 		public.GET("/novels/:id/frames", handlers.GetNovelFrames)
 		public.GET("/author/:id/frames", handlers.GetAuthorFrames)
 		public.GET("/novels/:id/htmls", handlers.GetNovelHTMLs)
+		// 176号令合规：公开算法说明（第七条第九项 算法透明度）+ 站点公告栏
+		public.GET("/algorithms/description", handlers.GetAlgoDescription)
+		public.GET("/announcements", handlers.ListAnnouncements)
 		// 沙盒虚拟文件系统
 		public.GET("/sandbox-vfs/:htmlId/read", handlers.VFSRead)
 		public.POST("/sandbox-vfs/:htmlId/write", handlers.VFSWrite)
@@ -250,13 +253,16 @@ func main() {
 		protected.GET("/author/novels", handlers.GetMyNovels)
 		protected.GET("/author/novels/:id/stats", handlers.GetNovelStats)
 		protected.GET("/author/banned-content", handlers.GetAuthorBannedContent)
-		protected.GET("/author/recycle", handlers.ListAuthorRecycle)              // 回收站：用户自删内容
+		protected.GET("/author/recycle", handlers.ListAuthorRecycle)             // 回收站：用户自删内容
 		protected.POST("/author/recycle/restore", handlers.RestoreAuthorRecycle) // 恢复自己删除的内容
 		protected.GET("/author/dashboard", handlers.GetAuthorDashboard)
 		protected.POST("/novels/:id/export", handlers.ExportNovel)
 		protected.POST("/zone/enter", handlers.RecordZoneEnter) // 记录进入隔离墙（敏感分区）时间，176号令合规
 		protected.POST("/ratings", handlers.UpsertRating)
 		protected.GET("/ratings", handlers.GetUserRating)
+		// 176号令合规：用户偏好设置（第七条第九项 个性化推荐关闭权）
+		protected.GET("/users/me/preferences", handlers.GetUserPreferences)
+		protected.PUT("/users/me/preferences", handlers.UpdateUserPreferences)
 		protected.POST("/forums/:id/threads", handlers.CreateThread)
 		protected.POST("/threads/:id/posts", handlers.CreatePost)
 		protected.DELETE("/threads/:id", handlers.DeleteThreadByModerator)
@@ -381,6 +387,27 @@ func main() {
 		admin.GET("/log-redact", handlers.GetLogRedactConfig)
 		admin.PUT("/log-redact", handlers.UpdateLogRedactConfig)
 		admin.POST("/log-redact/preview", handlers.PreviewLogRedact)
+		// 176号令合规补全：算法推荐管理（第七条第九项）
+		admin.GET("/algorithms", handlers.GetAlgoConfig)
+		admin.PUT("/algorithms", handlers.UpdateAlgoConfig)
+		// 等保/关基识别记录（第七条第四/五项）
+		admin.GET("/security-grade", handlers.GetSecurityGrade)
+		admin.PUT("/security-grade", handlers.UpdateSecurityGrade)
+		// 漏洞整改管理（第七条第六项）
+		admin.GET("/vulnerabilities", handlers.ListVulnerabilities)
+		admin.POST("/vulnerabilities", handlers.CreateVulnerability)
+		admin.PUT("/vulnerabilities/:id", handlers.UpdateVulnerability)
+		admin.DELETE("/vulnerabilities/:id", handlers.DeleteVulnerability)
+		admin.GET("/vulnerabilities/export", handlers.ExportVulnerabilities)
+		// 公告栏（管理端）
+		admin.GET("/announcements", handlers.AdminListAnnouncements)
+		admin.POST("/announcements", handlers.AdminCreateAnnouncement)
+		admin.PUT("/announcements/:id", handlers.AdminUpdateAnnouncement)
+		admin.DELETE("/announcements/:id", handlers.AdminDeleteAnnouncement)
+		// 检查应对工具箱（176号令 5.2 检查材料清单）
+		admin.GET("/compliance/report", handlers.GetComplianceReport)
+		admin.GET("/compliance/export-logs", handlers.ExportComplianceLogs)
+		admin.GET("/compliance/export-users", handlers.ExportComplianceUsers)
 		// 隔离墙配置
 		admin.GET("/wall-config", handlers.GetWallConfig)
 		admin.PUT("/wall-config", handlers.UpdateWallConfig)
@@ -461,11 +488,11 @@ func main() {
 		// 博客公开读取
 		r.GET("/api/blogs", handlers.ListPublicBlogs) // 支持 category_id / tag 筛选
 		r.GET("/api/blogs/:id", handlers.GetBlog)
-		r.GET("/api/blogs/:id/likes", handlers.GetBlogLikes) // 博客点赞数+当前用户状态
-		r.GET("/api/blog-tags", handlers.ListBlogTags)       // 全站标签云
-		r.GET("/api/topics", handlers.ListTopics)            // 全站话题列表
-		r.GET("/api/topics/:id", handlers.GetTopic)          // 话题详情
-		r.GET("/api/topics/:id/blogs", handlers.ListTopicBlogs) // 话题下博客列表
+		r.GET("/api/blogs/:id/likes", handlers.GetBlogLikes)       // 博客点赞数+当前用户状态
+		r.GET("/api/blog-tags", handlers.ListBlogTags)             // 全站标签云
+		r.GET("/api/topics", handlers.ListTopics)                  // 全站话题列表
+		r.GET("/api/topics/:id", handlers.GetTopic)                // 话题详情
+		r.GET("/api/topics/:id/blogs", handlers.ListTopicBlogs)    // 话题下博客列表
 		r.GET("/api/blog-categories", handlers.ListBlogCategories) // 博客分类树（公开）
 		r.GET("/api/author/:id/blogs/:blogId", handlers.GetAuthorBlog)
 		r.GET("/api/author/:id/blogs", handlers.ListAuthorBlogs)

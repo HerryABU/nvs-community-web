@@ -78,6 +78,10 @@ CAPTCHA_ENABLED=false
 # 仅当部署在反向代理（如 nginx）之后且需记录真实客户端 IP 时，才填写代理地址。
 TRUSTED_PROXIES=
 
+# JWT Cookie 是否强制 Secure（仅 HTTPS 下传输，true/false，默认 false）。
+# 生产环境启用 HTTPS 后务必设为 true，防止令牌在明文 HTTP 中被截获（安全审计 L3）。
+COOKIE_SECURE=false
+
 # 建站向导 / 安装接口是否仅允许本机(localhost)访问（true/false，默认 true）。
 # 防止反向代理/公网直连越权进入安装向导；如需从局域网远程初始化可设为 false。
 SETUP_LOCAL_ONLY=true
@@ -142,6 +146,9 @@ var (
 	LogRedactSensitive bool     // 生产模式自动脱敏（默认 false = 开发模式保留原始数据）
 	LogRedactMask      string   // 自定义脱敏掩码（默认 "***REDACTED***"）
 	LogSensitiveFields []string // 自定义敏感字段列表（默认 password,token,authorization,cookie,secret,apikey）
+
+	// JWT Cookie Secure 标志（安全审计 L3：生产 HTTPS 下应开启）
+	ForceCookieSecure bool
 )
 
 // Init 初始化配置：自动加载/创建 .env，然后读取环境变量
@@ -180,6 +187,14 @@ func Init() {
 
 	JWTSecret = getEnv("JWT_SECRET", "change-me-in-production")
 	JWTExpireHours = getEnv("JWT_EXPIRE_HOURS", "72")
+	// 🔒 安全审计 S1：默认 JWT_SECRET 为公开值，可被伪造任意管理员 Token。
+	// 使用默认值时自动替换为随机密钥并持久化（data/.jwt_secret，0600），自定义值保持不变。
+	if JWTSecret == "change-me-in-production" || JWTSecret == "change-me-in-production-please-use-a-strong-random-string" {
+		if s, err := GetOrCreateJWTSecret(); err == nil && s != "" {
+			JWTSecret = s
+			log.Printf("[config] 已使用随机 JWT 签名密钥（data/.jwt_secret）——避免公开默认密钥被利用")
+		}
+	}
 
 	NovelDataDir = getEnv("NOVEL_DATA_DIR", "./data/novels")
 	UploadDir = getEnv("UPLOAD_DIR", "./data/uploads")
@@ -199,6 +214,7 @@ func Init() {
 	// 反向代理信任与建站向导本地保护
 	TrustedProxies = parseList(getEnv("TRUSTED_PROXIES", ""))
 	SetupLocalOnly = getEnvBool("SETUP_LOCAL_ONLY", true)
+	ForceCookieSecure = getEnvBool("COOKIE_SECURE", false)
 
 	// 日志敏感信息脱敏（176号令合规）：env 提供初始默认；DB 就绪后由 main 注入持久化并覆盖
 	LogRedactSensitive = getEnvBool("LOG_REDACT_SENSITIVE", false)

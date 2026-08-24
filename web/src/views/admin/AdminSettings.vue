@@ -110,6 +110,18 @@
           <span class="hint-text">白名单开启后仅允许这些域名注册（留空则不限制）；黑名单优先级高于白名单</span>
         </el-form-item>
         <el-divider />
+        <h3 class="sec-title">联网备案（176号令 第七条第一项）</h3>
+        <el-form-item label="ICP备案号">
+          <el-input v-model="configForm.site_icp" placeholder="如：京ICP备2026000000号" style="width: 320px" />
+        </el-form-item>
+        <el-form-item label="公安备案号">
+          <el-input v-model="configForm.site_psb" placeholder="如：京公网安备11000000000000号" style="width: 320px" />
+        </el-form-item>
+        <el-form-item label="公安备案链接">
+          <el-input v-model="configForm.site_psb_link" placeholder="https://beian.cyberpolice.cn" style="width: 320px" />
+        </el-form-item>
+        <span class="hint-text">配置后站点页脚将自动展示备案号（可点击跳转）；未完成备案的网站可能面临行政处罚，请尽快办理工信部ICP备案与公安联网备案</span>
+        <el-divider />
         <h3 class="sec-title">SEO 设置</h3>
         <el-form-item label="robots.txt">
           <el-input v-model="configForm.robots_txt" type="textarea" :rows="6" placeholder="User-agent: *&#10;Allow: /" />
@@ -132,7 +144,8 @@ import { ElMessage } from 'element-plus';
 const configForm = reactive<Record<string, string>>({
   site_name: '', vip_enabled: '', email_verify: '', captcha_enabled: '',
   smtp_host: '', smtp_port: '', smtp_user: '', smtp_password: '', smtp_from: '',
-  robots_txt: '', guidelines: '' });
+  robots_txt: '', guidelines: '',
+  site_icp: '', site_psb: '', site_psb_link: '' });
 const vipEnabled = ref(false);
 const emailVerifyEnabled = ref(false);
 const captchaEnabled = ref(false);
@@ -202,6 +215,9 @@ async function loadConfig() {
     smtpInsecureVerify.value = data.smtp_insecure_skip_verify === 'true';
     configForm.robots_txt = data.robots_txt || '';
     configForm.guidelines = data.guidelines || '';
+    configForm.site_icp = data.site_icp || '';
+    configForm.site_psb = data.site_psb || '';
+    configForm.site_psb_link = data.site_psb_link || '';
     emailDomainBlacklistArr.value = jsonToArray(data.email_domain_blacklist || '');
     emailDomainWhitelistArr.value = jsonToArray(data.email_domain_whitelist || '');
   } catch { /* ignore */ }
@@ -223,6 +239,9 @@ async function saveConfig() {
       smtp_insecure_skip_verify: smtpInsecureVerify.value ? 'true' : 'false',
       robots_txt: configForm.robots_txt,
       guidelines: configForm.guidelines,
+      site_icp: configForm.site_icp,
+      site_psb: configForm.site_psb,
+      site_psb_link: configForm.site_psb_link,
       email_domain_blacklist: arrayToJson(emailDomainBlacklistArr.value),
       email_domain_whitelist: arrayToJson(emailDomainWhitelistArr.value),
     });

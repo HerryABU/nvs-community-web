@@ -375,7 +375,9 @@ export async function renderMermaidBlocks(container: HTMLElement) {
     const mm = (m as any).default || m;
     mm.initialize({
       startOnLoad: false,
-      securityLevel: 'loose',
+      // 🔒 安全审计：securityLevel 必须为 strict/sandbox —— loose 会内联用户 HTML 并启用
+      // 点击事件（配合 htmlLabels 配置可注入 <img onerror>，构成全站存储型 XSS）
+      securityLevel: 'strict',
       theme: 'default',
       themeVariables: { fontFamily: 'sans-serif', fontSize: '14px' },
     });

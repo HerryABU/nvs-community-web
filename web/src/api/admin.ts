@@ -25,6 +25,64 @@ export const adminApi = {
     return api.post('/admin/log-redact/preview', data);
   },
 
+  // 算法推荐管理（176号令 第七条第九项）
+  getAlgorithms() {
+    return api.get('/admin/algorithms');
+  },
+  updateAlgorithms(data: { sort_rule?: string; rank_period?: string; personalized?: boolean; description?: string }) {
+    return api.put('/admin/algorithms', data);
+  },
+
+  // 等保/关基识别记录（第七条第四/五项）
+  getSecurityGrade() {
+    return api.get('/admin/security-grade');
+  },
+  updateSecurityGrade(data: { grade?: string; note?: string }) {
+    return api.put('/admin/security-grade', data);
+  },
+
+  // 漏洞整改管理（第七条第六项）
+  getVulnerabilities(params?: { status?: string; severity?: string }) {
+    return api.get('/admin/vulnerabilities', { params });
+  },
+  createVulnerability(data: { name: string; description?: string; severity: string; affected?: string; reported_by?: string }) {
+    return api.post('/admin/vulnerabilities', data);
+  },
+  updateVulnerability(id: number, data: Record<string, any>) {
+    return api.put(`/admin/vulnerabilities/${id}`, data);
+  },
+  deleteVulnerability(id: number) {
+    return api.delete(`/admin/vulnerabilities/${id}`);
+  },
+  exportVulnerabilities() {
+    return api.get('/admin/vulnerabilities/export', { responseType: 'blob' });
+  },
+
+  // 公告栏（管理端）
+  getAnnouncements() {
+    return api.get('/admin/announcements');
+  },
+  createAnnouncement(data: { title: string; content?: string; pinned?: boolean; published?: boolean }) {
+    return api.post('/admin/announcements', data);
+  },
+  updateAnnouncement(id: number, data: Record<string, any>) {
+    return api.put(`/admin/announcements/${id}`, data);
+  },
+  deleteAnnouncement(id: number) {
+    return api.delete(`/admin/announcements/${id}`);
+  },
+
+  // 检查应对工具箱（176号令 5.2）
+  getComplianceReport() {
+    return api.get('/admin/compliance/report');
+  },
+  exportComplianceLogs(from: string, to: string) {
+    return api.get('/admin/compliance/export-logs', { params: { from, to }, responseType: 'blob' });
+  },
+  exportComplianceUsers() {
+    return api.get('/admin/compliance/export-users', { responseType: 'blob' });
+  },
+
   // 统计数据
   getStats() {
     return api.get('/admin/stats');
@@ -289,7 +347,14 @@ export const publicApi = {
   getSiteInfo() {
     return api.get('/site-info');
   },
-  getFederatedSites() {
+  // 算法推荐说明（公开，176号令 算法透明度）
+  getAlgoDescription() {
+    return api.get('/algorithms/description');
+  },
+  // 站点公告（公开）
+  getAnnouncements() {
+    return api.get('/announcements');
+  },  getFederatedSites() {
     return api.get('/federated/sites');
   },
   getFederatedNovels(params?: { page?: number; page_size?: number; site_id?: number }) {

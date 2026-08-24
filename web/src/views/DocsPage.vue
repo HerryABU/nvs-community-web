@@ -297,8 +297,8 @@ const postMessageProto = [
 ];
 
 const sandboxLevels = [
-  { level:'strict', sandbox:'allow-scripts allow-same-origin', desc:'纯展示（页脚/版权声明），不可交互' },
-  { level:'interactive', sandbox:'allow-scripts allow-same-origin allow-forms allow-popups', desc:'含按钮/表单/弹窗（导航栏/工具栏）' },
+  { level:'strict', sandbox:'allow-scripts', desc:'纯展示（页脚/版权声明），不可交互' },
+  { level:'interactive', sandbox:'allow-scripts allow-forms allow-popups', desc:'含按钮/表单/弹窗（导航栏/工具栏）' },
 ];
 
 const zipSpec = `my-app.zip
@@ -319,7 +319,7 @@ const netCaps = [
   { feature:'Server-Sent Events', support:'✅', note:'connect-src未限制EventSource' },
   { feature:'WebRTC', support:'⚠️', note:'Permissions-Policy禁用camera/microphone' },
   { feature:'外部脚本', support:'❌', note:'CSP script-src: self 仅同源' },
-  { feature:'localStorage/Cookie', support:'✅', note:'allow-same-origin允许同源存储' },
+  { feature:'localStorage/Cookie', support: '❌', note: '已移除 allow-same-origin，沙盒内不可访问父页面存储' },
 ];
 
 const vfsAPI = [

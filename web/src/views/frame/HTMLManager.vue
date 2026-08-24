@@ -113,7 +113,7 @@
     <!-- 预览 -->
     <el-dialog v-model="showPreview" title="沙盒预览" width="85%" destroy-on-close>
       <SandboxPreview v-if="previewSrc" :src="previewSrc" :title="previewName" height="600px"
-        sandbox-policy="allow-scripts allow-same-origin allow-forms" />
+        sandbox-policy="allow-scripts allow-forms" />
       <p class="network-hint">💡 此沙盒环境允许网络请求（fetch/XHR/WebSocket），不阻断网络</p>
     </el-dialog>
 

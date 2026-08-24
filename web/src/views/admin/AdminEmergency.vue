@@ -90,7 +90,7 @@
                 </el-radio-group>
               </div>
               <pre v-if="commentMode(c.id) === 'plain'" class="em-comment-plain">{{ c.content_plain || c.content }}</pre>
-              <iframe v-else :srcdoc="c.content || ''" sandbox="allow-same-origin allow-scripts" class="em-comment-iframe" title="评论渲染预览" />
+              <iframe v-else :srcdoc="c.content || ''" sandbox="allow-scripts" class="em-comment-iframe" title="评论渲染预览" />
             </div>
           </div>
 
@@ -109,7 +109,7 @@
           <div v-else class="em-iframe-wrap">
             <iframe
               :srcdoc="preview.content_raw || ''"
-              sandbox="allow-same-origin allow-scripts"
+              sandbox="allow-scripts"
               class="em-iframe"
               title="内容渲染预览"
             />
