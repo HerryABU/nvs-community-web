@@ -87,6 +87,7 @@ import { ref, reactive, onMounted } from 'vue';
 import { Medal } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
+import { appPrefix } from '@/utils/prefix';
 import { ElMessage } from 'element-plus';
 
 const report = ref<any>(null);
@@ -169,7 +170,7 @@ async function exportUsers() {
   finally { exporting.users = false; }
 }
 function openDocs() {
-  window.open('/docs', '_blank');
+  window.open(appPrefix + '/docs', '_blank');
 }
 
 onMounted(() => { loadReport(); loadGrade(); });

@@ -47,13 +47,34 @@ func TestStripURLPrefixHandler(t *testing.T) {
 }
 
 // TestInjectPrefixIntoHTML 校验 index.html 注入 <base href> 与 window.__NVS_PREFIX__ 且正确转义。
+// 核心：非空前缀时资源引用 ./assets/xxx 必须被改写为 {prefix}/assets/xxx（不依赖浏览器 base 解析）。
 func TestInjectPrefixIntoHTML(t *testing.T) {
-	html := []byte("<html><head><title>t</title></head><body>x</body></html>")
+	html := []byte(`<html><head><title>t</title>
+<link rel="stylesheet" crossorigin href="./assets/index-abc.css">
+<script type="module" crossorigin src="./assets/index-abc.js"></script>
+<link rel="modulepreload" href="./assets/vendor-xyz.js">
+<link rel="icon" href="./favicon.ico">
+</head><body>x</body></html>`)
 
-	// 正常前缀：注入 base href="/go-nvs/" + __NVS_PREFIX__
+	// 正常前缀：资源引用改写 + base + __NVS_PREFIX__
 	out := string(InjectPrefixIntoHTML(html, "/go-nvs"))
+	// 资源引用必须带前缀（主方案）
+	for _, expect := range []string{
+		`href="/go-nvs/assets/index-abc.css"`,
+		`src="/go-nvs/assets/index-abc.js"`,
+		`href="/go-nvs/assets/vendor-xyz.js"`,
+		`href="/go-nvs/favicon.ico"`,
+	} {
+		if !strings.Contains(out, expect) {
+			t.Fatalf("资源引用应改写为带前缀 %q: %s", expect, out)
+		}
+	}
+	// 不应残留裸 ./assets/ 引用
+	if strings.Contains(out, `"./assets/`) || strings.Contains(out, `'./assets/`) {
+		t.Fatalf("不应残留相对 ./assets/ 引用: %s", out)
+	}
 	if !strings.Contains(out, `<base href="/go-nvs/">`) {
-		t.Fatalf("应注入 base href（资源同步前缀）: %s", out)
+		t.Fatalf("应注入 base href（兜底）: %s", out)
 	}
 	if !strings.Contains(out, "window.__NVS_PREFIX__='/go-nvs';") {
 		t.Fatalf("应注入前缀变量: %s", out)
@@ -63,8 +84,11 @@ func TestInjectPrefixIntoHTML(t *testing.T) {
 		t.Fatal("base 标签应位于 <head> 之后紧跟")
 	}
 
-	// 空前缀：注入 base href="/"（深层路由相对资源正确），不注入前缀变量
+	// 空前缀：不改写资源引用，注入 base href="/"，不注入前缀变量
 	plain := string(InjectPrefixIntoHTML(html, ""))
+	if !strings.Contains(plain, `href="./assets/index-abc.css"`) {
+		t.Fatalf("空前缀应保持 Vite 相对资源引用原样: %s", plain)
+	}
 	if !strings.Contains(plain, `<base href="/">`) {
 		t.Fatalf("空前缀应注入 base href=\"/\": %s", plain)
 	}

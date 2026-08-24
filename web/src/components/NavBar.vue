@@ -248,6 +248,7 @@ import { useThemeStore } from '@/stores/theme';
 import { publicApi } from '@/api/admin';
 import { authApi } from '@/api/auth';
 import { notificationApi } from '@/api/notification';
+import { appPrefix } from '@/utils/prefix';
 import { ElMessage } from 'element-plus';
 import { Camera, Setting, Brush, Document, Warning, Bell, Menu, HomeFilled, ChatDotRound, Plus, Notebook, User, SwitchButton } from '@element-plus/icons-vue';
 
@@ -386,7 +387,8 @@ watch(
 
 function openFederated(site: any) {
   // 通过本地代理路径访问外部站点内容: /{site-id}/...
-  window.open(`/${site.id}`, '_blank');
+  // 🔀 前缀挂载时需带 /go-nvs，否则代理规则不命中
+  window.open(`${appPrefix}/${site.id}`, '_blank');
 }
 
 async function loadSiteInfo() {

@@ -163,6 +163,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { Upload, View, Delete, FolderOpened, Edit, Connection, Close, UploadFilled, VideoPlay } from '@element-plus/icons-vue';
 import { htmlApi } from '@/api/frame';
 import api, { apiPrefix } from '@/api/index';
+import { appPrefix } from '@/utils/prefix';
 import { useAuthStore } from '@/stores/auth';
 import SandboxPreview from './SandboxPreview.vue';
 
@@ -182,7 +183,7 @@ async function loadPlaza() {
   plazaLoading.value = false;
 }
 
-function openRunner(h: HTMLItem) { window.open(`/app/${h.id}`, '_blank'); }
+function openRunner(h: HTMLItem) { window.open(`${appPrefix}/app/${h.id}`, '_blank'); }
 
 interface HTMLItem {
   id: number; user_id: number; name: string; description: string; entry_file: string;
