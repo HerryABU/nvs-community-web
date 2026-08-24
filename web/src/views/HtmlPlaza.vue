@@ -41,7 +41,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import api from '@/api/index';
+import api, { apiPrefix } from '@/api/index';
 import ReportButton from '@/components/ReportButton.vue';
 import { useAuthStore } from '@/stores/auth';
 
@@ -64,9 +64,10 @@ async function load() {
   loading.value = false;
 }
 
-function openRunner(h: any) { window.open(`/app/${h.id}`, '_blank'); }
-function openPreview(h: any) { window.open(`/api/userhtmls/${h.id}/preview`, '_blank'); }
-function download(h: any) { window.open(`/api/userhtmls/${h.id}/download`, '_blank'); }
+// 🔀 站点路径前缀：window.open 直用 URL 需手动拼前缀
+function openRunner(h: any) { window.open(`${apiPrefix}/app/${h.id}`, '_blank'); }
+function openPreview(h: any) { window.open(`${apiPrefix}/api/userhtmls/${h.id}/preview`, '_blank'); }
+function download(h: any) { window.open(`${apiPrefix}/api/userhtmls/${h.id}/download`, '_blank'); }
 function fmtSize(b: number) { if (b<1024) return b+'B'; if (b<1048576) return (b/1024).toFixed(1)+'KB'; return (b/1048576).toFixed(1)+'MB'; }
 </script>
 
