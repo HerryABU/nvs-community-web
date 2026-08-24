@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { authApi, type User } from '@/api/auth';
+import { appPrefix } from '@/utils/prefix';
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null);
@@ -48,7 +49,8 @@ export const useAuthStore = defineStore('auth', () => {
       // 即使后端调用失败也清除本地状态
     }
     user.value = null;
-    window.location.href = '/';
+    // 🔀 前缀挂载时跳回 /go-nvs/（根路径 /{prefix}/），无前缀时跳回 /
+    window.location.href = appPrefix + '/';
   }
 
   return {

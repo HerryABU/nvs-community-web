@@ -33,13 +33,26 @@ func StripURLPrefixHandler(prefix string, next http.Handler) http.Handler {
 }
 
 // InjectPrefixIntoHTML 向 index.html 注入站点路径前缀支持（反向代理挂载场景）：
-//  1. <base href="/{prefix}/"> —— Vite 相对 base（./assets/...）据此解析到前缀下，
-//     使首屏 js/css、动态加载 chunk、modulepreload 等静态资源全部同步带前缀；
-//  2. window.__NVS_PREFIX__   —— 供前端 Vue Router base 与 axios baseURL 自适应。
-// 前缀为空时仅注入 <base href="/">（与默认行为一致），保证非前缀场景深层路由资源也正确。
+//  1. 资源引用改写（主方案）：非空前缀时，把 Vite 相对资源引用 ./assets/xxx
+//     直接改写为 {prefix}/assets/xxx —— 首屏 js/css、modulepreload 的 URL 在 HTML
+//     层面就带上前缀，**不依赖浏览器对 <base> 的解析**，任何自建反代（保留/去前缀
+//     转发）下资源都能命中前缀路由；动态 import chunk 相对当前模块 URL 解析，
+//     自动同步前缀；
+//  2. <base href="/{prefix}/">（兜底）：覆盖 HTML 中其他相对引用（如 favicon、
+//     CSS 内 url() 等），使相对路径统一解析到前缀下；
+//  3. window.__NVS_PREFIX__：供前端 Vue Router base 与 axios baseURL 自适应。
+// 前缀为空时仅注入 <base href="/">（与默认行为一致），资源引用保持 Vite 产物原样。
 // 前缀为管理员 env 配置，注入前做转义防 HTML/脚本注入。
 func InjectPrefixIntoHTML(html []byte, prefix string) []byte {
 	prefix = strings.TrimRight(prefix, "/")
+
+	if prefix != "" {
+		// 主方案：相对资源引用改写为绝对前缀路径（双引号/单引号两种形式都处理）
+		html = bytes.ReplaceAll(html, []byte(`"./assets/`), []byte(`"`+prefix+`/assets/`))
+		html = bytes.ReplaceAll(html, []byte(`'./assets/`), []byte(`'`+prefix+`/assets/`))
+		html = bytes.ReplaceAll(html, []byte(`"./favicon.ico`), []byte(`"`+prefix+`/favicon.ico`))
+		html = bytes.ReplaceAll(html, []byte(`'./favicon.ico`), []byte(`'`+prefix+`/favicon.ico`))
+	}
 
 	// 转义：单引号/反斜杠/</script> 防止前缀被当作脚本内容
 	escaped := strings.ReplaceAll(prefix, `\`, `\\`)
@@ -51,7 +64,7 @@ func InjectPrefixIntoHTML(html []byte, prefix string) []byte {
 		baseHref = prefix + "/"
 	}
 	// base 标签需在 head 内其他资源引用之前（Vue Router 使用 createWebHistory 显式 base，
-	// 不受 <base> 影响；此处仅影响相对资源解析）
+	// 不受 <base> 影响；此处仅兜底相对资源解析）
 	baseTag := "<base href=\"" + baseHref + "\">"
 	script := "<script>window.__NVS_PREFIX__='" + escaped + "';</script>"
 

@@ -186,6 +186,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { novelApi, type Novel } from '@/api/novel';
 import { publicApi } from '@/api/admin';
 import { useAuthStore } from '@/stores/auth';
+import { appPrefix } from '@/utils/prefix';
 import NovelCard from '@/components/NovelCard.vue';
 import HomeSearchResults from '@/components/HomeSearchResults.vue';
 import { Grid, List, Plus, ArrowRight, Search } from '@element-plus/icons-vue';
@@ -303,9 +304,8 @@ async function doSearch() {
   searchLoading.value = true;
   try {
     // 统一搜索：一次返回 作品 / 作者 / 博客 / HTML 扩展
-    // 🔀 站点路径前缀支持：API 请求附加 __NVS_PREFIX__（如 /go-nvs）
-    const apiPrefix = (window as any).__NVS_PREFIX__ || '';
-    const res = await fetch(`${apiPrefix}/api/search?q=${encodeURIComponent(searchKeyword.value)}`).then(r => r.json());
+    // 🔀 站点路径前缀支持：API 请求附加当前前缀（如 /go-nvs，智能解析无硬编码）
+    const res = await fetch(`${appPrefix}/api/search?q=${encodeURIComponent(searchKeyword.value)}`).then(r => r.json());
     if (res.code === 0) {
       const d = res.data;
       searchResults.value = d.novels || [];

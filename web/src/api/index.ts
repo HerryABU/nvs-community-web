@@ -1,10 +1,12 @@
 import axios from 'axios';
+import { appPrefix } from '@/utils/prefix';
 
 // 🔀 站点路径前缀支持（URL_PREFIX，如 /go-nvs——名字可任意配置）：
-// 后端在 index.html 注入 window.__NVS_PREFIX__，API 请求统一加前缀，
-// 保证经 nginx 只暴露 /{prefix}/ 前缀时也能正确到达后端。
+// 经 getAppPrefix() 智能解析：后端注入的 window.__NVS_PREFIX__ 优先，
+// 自建反向代理只改写 <base href> 时自动从 document.baseURI 推导（无硬编码）。
+// API 请求统一加前缀，保证经 nginx 只暴露 /{prefix}/ 前缀时也能正确到达后端。
 // 导出供 frame.ts / window.open / <a :href> 等裸 URL 使用点拼接。
-export const apiPrefix: string = (window as any).__NVS_PREFIX__ || '';
+export const apiPrefix: string = appPrefix;
 
 const api = axios.create({
   baseURL: apiPrefix ? `${apiPrefix}/api` : '/api',
@@ -34,11 +36,13 @@ api.interceptors.response.use(
   (error) => {
     if (error.response) {
       const { status, data } = error.response;
+      // 登录页路径需带前缀（前缀挂载时 /login 不带 /go-nvs 会 404）
+      const loginPath = apiPrefix + '/login';
       switch (status) {
         case 401:
           // 未认证，跳转登录
-          if (window.location.pathname !== '/login') {
-            window.location.href = '/login';
+          if (window.location.pathname !== loginPath) {
+            window.location.href = loginPath;
           }
           break;
         case 403:
