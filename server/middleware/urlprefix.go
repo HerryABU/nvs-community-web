@@ -32,24 +32,36 @@ func StripURLPrefixHandler(prefix string, next http.Handler) http.Handler {
 	})
 }
 
-// InjectPrefixIntoHTML 向 index.html 注入站点路径前缀变量，
-// 供前端运行时设置 Vue Router base 与 API baseURL（见 web/src/api/index.ts、router）。
-// 前缀为空时原样返回；前缀为管理员 env 配置，注入前做转义防 HTML/脚本注入。
+// InjectPrefixIntoHTML 向 index.html 注入站点路径前缀支持（反向代理挂载场景）：
+//  1. <base href="/{prefix}/"> —— Vite 相对 base（./assets/...）据此解析到前缀下，
+//     使首屏 js/css、动态加载 chunk、modulepreload 等静态资源全部同步带前缀；
+//  2. window.__NVS_PREFIX__   —— 供前端 Vue Router base 与 axios baseURL 自适应。
+// 前缀为空时仅注入 <base href="/">（与默认行为一致），保证非前缀场景深层路由资源也正确。
+// 前缀为管理员 env 配置，注入前做转义防 HTML/脚本注入。
 func InjectPrefixIntoHTML(html []byte, prefix string) []byte {
 	prefix = strings.TrimRight(prefix, "/")
-	if prefix == "" {
-		return html
-	}
+
 	// 转义：单引号/反斜杠/</script> 防止前缀被当作脚本内容
 	escaped := strings.ReplaceAll(prefix, `\`, `\\`)
 	escaped = strings.ReplaceAll(escaped, `'`, `\'`)
 	escaped = strings.ReplaceAll(escaped, `</`, `<\/`)
+
+	baseHref := "/"
+	if prefix != "" {
+		baseHref = prefix + "/"
+	}
+	// base 标签需在 head 内其他资源引用之前（Vue Router 使用 createWebHistory 显式 base，
+	// 不受 <base> 影响；此处仅影响相对资源解析）
+	baseTag := "<base href=\"" + baseHref + "\">"
 	script := "<script>window.__NVS_PREFIX__='" + escaped + "';</script>"
-	if idx := bytes.Index(html, []byte("</head>")); idx >= 0 {
-		out := make([]byte, 0, len(html)+len(script))
-		out = append(out, html[:idx]...)
+
+	if idx := bytes.Index(html, []byte("<head>")); idx >= 0 {
+		insertAt := idx + len("<head>")
+		out := make([]byte, 0, len(html)+len(baseTag)+len(script))
+		out = append(out, html[:insertAt]...)
+		out = append(out, baseTag...)
 		out = append(out, script...)
-		out = append(out, html[idx:]...)
+		out = append(out, html[insertAt:]...)
 		return out
 	}
 	return html

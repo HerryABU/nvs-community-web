@@ -24,6 +24,10 @@ export default defineConfig({
     // 去重：确保 katex 和 mermaid 使用根目录版本，避免 Cherry 内部版本冲突
     dedupe: ['katex', 'mermaid'],
   },
+  // 🔀 相对 base（顶层配置）：资源引用（首屏 js/css、动态 chunk、modulepreload）生成相对路径，
+  // 由后端在 index.html 注入 <base href="/{URL_PREFIX}/"> 统一解析——
+  // 支持反向代理前缀挂载（如 :8088/go-nvs/login），js/css 等静态资源同步带前缀。
+  base: './',
   build: {
     outDir: '../dist',
     emptyOutDir: true,
