@@ -4,7 +4,9 @@ import { useAuthStore } from '@/stores/auth';
 import api from '@/api';
 
 const router = createRouter({
-  history: createWebHistory(),
+  // 🔀 站点路径前缀支持（URL_PREFIX，如 /go-nvs）：后端在 index.html 注入 window.__NVS_PREFIX__，
+  // 此处作为 Vue Router base，使页面 URL 保持 /go-nvs/xxx 且刷新/跳转正确
+  history: createWebHistory((window as any).__NVS_PREFIX__ || '/'),
   routes: [
     {
       path: '/',

@@ -330,14 +330,16 @@ const vfsAPI = [
 ];
 
 const vfsExample = `// 扩展HTML中使用VFS存储数据
+// 提示：如站点配置了路径前缀（如 /go-nvs），API 需加前缀（/go-nvs/api/...）
+const API = (window.__NVS_PREFIX__ || '') + '/api';
 async function saveSettings(theme) {
-  await fetch('/api/sandbox-vfs/1/write', {
+  await fetch(API + '/sandbox-vfs/1/write', {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({key:'settings.json', value:JSON.stringify({theme})})
   });
 }
 async function loadSettings() {
-  const r = await fetch('/api/sandbox-vfs/1/read?key=settings.json');
+  const r = await fetch(API + '/sandbox-vfs/1/read?key=settings.json');
   return (await r.json()).data.value;
 }`;
 
@@ -438,8 +440,10 @@ const verifyFlow = `// 验证流程
 // 4. 前端显示验证结果 ✓/✗`;
 
 const verifyFrontend = `// 前端章节完整性验证
+// 提示：如站点配置了路径前缀（如 /go-nvs），API 需加前缀
+const API = (window.__NVS_PREFIX__ || '') + '/api';
 async function verifyChapter(novelId, chapterNum) {
-  const r = await fetch('/api/novels/'+novelId+'/chapters/'+chapterNum+'/verify');
+  const r = await fetch(API + '/novels/'+novelId+'/chapters/'+chapterNum+'/verify');
   const d = await r.json();
   if (d.code!==0) return {ok:false, error:'获取验证数据失败'};
 

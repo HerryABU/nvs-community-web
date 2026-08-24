@@ -1,7 +1,11 @@
 import axios from 'axios';
 
+// 🔀 站点路径前缀支持（URL_PREFIX，如 /go-nvs）：后端在 index.html 注入 window.__NVS_PREFIX__，
+// API 请求统一加前缀，保证经 nginx 只暴露 /go-nvs/ 前缀时也能正确到达后端
+const apiPrefix: string = (window as any).__NVS_PREFIX__ || '';
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: apiPrefix ? `${apiPrefix}/api` : '/api',
   withCredentials: true,
   // 通用 postForm 方法：不手动设置 Content-Type，
   // 让浏览器自动生成带 boundary 的 multipart/form-data（手动设置会丢失 boundary 导致解析失败）

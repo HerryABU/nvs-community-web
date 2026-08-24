@@ -604,6 +604,18 @@ func main() {
 			cleanPath = "index.html"
 		}
 
+		// 根路径 / index.html：显式返回并注入站点路径前缀（供前端 router/API base 自适应）
+		if cleanPath == "index.html" {
+			indexBytes, err := fs.ReadFile(frontendFS, "index.html")
+			if err != nil {
+				c.String(http.StatusInternalServerError, "前端资源缺失")
+				return
+			}
+			c.Data(http.StatusOK, "text/html; charset=utf-8",
+				middleware.InjectPrefixIntoHTML(indexBytes, config.URLPrefix))
+			return
+		}
+
 		// 尝试打开请求的文件（嵌入式文件系统中路径不带前导 /）
 		f, err := frontendFS.Open(cleanPath)
 		if err == nil {
@@ -613,20 +625,21 @@ func main() {
 		}
 
 		// 严格 SPA 回退白名单：仅允许已知前端路由根段回退到 index.html；
-		// 其余（代理前缀 /go-nvs/xxx、数字前缀 /123/xxx、以及任意未知前缀）一律 404，
+		// 其余（未配置前缀时的 /go-nvs/xxx、数字前缀 /123/xxx、以及任意未知前缀）一律 404，
 		// 彻底禁止任何形式的代理/前缀造成的 /install 等组件穿越。
 		if !knownSPARoots[firstPathSegment(cleanPath)] {
 			c.Status(http.StatusNotFound)
 			return
 		}
 
-		// 文件不存在 → SPA fallback
+		// 文件不存在 → SPA fallback（注入站点路径前缀）
 		indexContent, err := fs.ReadFile(frontendFS, "index.html")
 		if err != nil {
 			c.String(http.StatusInternalServerError, "前端资源缺失")
 			return
 		}
-		c.Data(http.StatusOK, "text/html; charset=utf-8", indexContent)
+		c.Data(http.StatusOK, "text/html; charset=utf-8",
+			middleware.InjectPrefixIntoHTML(indexContent, config.URLPrefix))
 	})
 
 	// ==================== 启动服务器 ====================
@@ -651,15 +664,18 @@ func main() {
 	// 尝试配置 Windows 防火墙（静默进行，失败不影响启动）
 	configureFirewall(config.ServerPort)
 
-	log.Println("前端已内嵌，无需额外启动 Nginx 或 npm run dev")
-
 	// 启动定时备份调度器（按平台配置 interval 自动备份）
 	models.StartBackupScheduler()
 
 	// 启动访问日志归档调度器（每日 sha256 + gzip + 只读 + 6个月保留，176号令合规）
 	models.StartLogArchiver()
 
-	if err := r.Run(listenAddr); err != nil {
+	// 🔀 站点路径前缀（URL_PREFIX）在 gin 外层剥离：必须先于路由匹配执行。
+	// 未配置前缀时该包装零开销直通。
+	rootHandler := middleware.StripURLPrefixHandler(config.URLPrefix, r)
+	srv := &http.Server{Addr: listenAddr, Handler: rootHandler}
+	log.Println("前端已内嵌，无需额外启动 Nginx 或 npm run dev（支持路径前缀挂载，如 /go-nvs/login）")
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("服务器启动失败: %v", err)
 	}
 }
