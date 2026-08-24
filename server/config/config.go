@@ -81,6 +81,18 @@ TRUSTED_PROXIES=
 # 建站向导 / 安装接口是否仅允许本机(localhost)访问（true/false，默认 true）。
 # 防止反向代理/公网直连越权进入安装向导；如需从局域网远程初始化可设为 false。
 SETUP_LOCAL_ONLY=true
+
+# ==================== 日志敏感信息脱敏（公安部令第176号合规） ====================
+# 访问日志中的 Token / 密码 / 敏感字段脱敏开关：
+# true  = 生产模式：自动脱敏 Cookie/Authorization 令牌、body/query 敏感字段，合规安全
+# false = 开发模式：保留原始数据，方便调试
+LOG_REDACT_SENSITIVE=false
+
+# 自定义脱敏掩码字符（默认 ***REDACTED***；密码类字段固定使用 ******）
+LOG_REDACT_MASK="***REDACTED***"
+
+# 自定义敏感字段列表（逗号分隔，默认 password,token,authorization,cookie,secret,apikey）
+LOG_SENSITIVE_FIELDS="password,token,authorization,cookie,secret,apikey"
 `
 
 var (
@@ -124,7 +136,12 @@ var (
 
 	// Security / reverse proxy
 	TrustedProxies []string // 信任的反向代理 IP/CIDR 列表；空=不信任任何代理（默认，防 X-Forwarded-For 伪造越权）
-	SetupLocalOnly bool      // 建站向导仅允许本机(localhost)访问（默认 true）
+	SetupLocalOnly bool     // 建站向导仅允许本机(localhost)访问（默认 true）
+
+	// 日志敏感信息脱敏（公安部令第176号合规）
+	LogRedactSensitive bool     // 生产模式自动脱敏（默认 false = 开发模式保留原始数据）
+	LogRedactMask      string   // 自定义脱敏掩码（默认 "***REDACTED***"）
+	LogSensitiveFields []string // 自定义敏感字段列表（默认 password,token,authorization,cookie,secret,apikey）
 )
 
 // Init 初始化配置：自动加载/创建 .env，然后读取环境变量
@@ -182,6 +199,19 @@ func Init() {
 	// 反向代理信任与建站向导本地保护
 	TrustedProxies = parseList(getEnv("TRUSTED_PROXIES", ""))
 	SetupLocalOnly = getEnvBool("SETUP_LOCAL_ONLY", true)
+
+	// 日志敏感信息脱敏（176号令合规）：env 提供初始默认；DB 就绪后由 main 注入持久化并覆盖
+	LogRedactSensitive = getEnvBool("LOG_REDACT_SENSITIVE", false)
+	LogRedactMask = getEnv("LOG_REDACT_MASK", DefaultRedactMask)
+	LogSensitiveFields = parseList(getEnv("LOG_SENSITIVE_FIELDS", strings.Join(DefaultSensitiveFields, ",")))
+	RedactMgr.SeedFromEnv(RedactConfig{
+		Enabled:       LogRedactSensitive,
+		Mask:          LogRedactMask,
+		SensitiveKeys: LogSensitiveFields,
+	})
+	log.Printf("[config] 日志脱敏：%s（LOG_REDACT_SENSITIVE=%v, 掩码=%q, 敏感字段=%v）",
+		map[bool]string{true: "生产模式-自动脱敏", false: "开发模式-保留原始数据"}[LogRedactSensitive],
+		LogRedactSensitive, LogRedactMask, LogSensitiveFields)
 }
 
 // createDefaultEnv 基于内嵌模板自动创建 .env 文件，自动检测本机 IP 填入

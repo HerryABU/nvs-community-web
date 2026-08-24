@@ -182,6 +182,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/log-redact',
+      name: 'admin-log-redact',
+      component: () => import('@/views/admin/AdminLogRedact.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/badwords',
       name: 'admin-badwords',
       component: () => import('@/views/admin/AdminBadWords.vue'),

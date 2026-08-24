@@ -2,8 +2,11 @@ package models
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"time"
+
+	"nvs-server/config"
 )
 
 // PlatformConfig 平台配置（站长面板）
@@ -214,4 +217,55 @@ func GetSMTPConfigFromDB() (host, port, user, pass, from string) {
 		from = user
 	}
 	return
+}
+
+// ============ 日志脱敏配置存储（公安部令第176号合规） ============
+// 管理后台「系统设置 → 日志脱敏」修改后持久化到 platform_configs 表，
+// 重启后由 config.RedactMgr.LoadFromDB() 恢复；.env 仅在从未保存过时作为初始默认。
+
+const (
+	RedactConfigKeyEnabled = "log_redact_enabled"
+	RedactConfigKeyMask    = "log_redact_mask"
+	RedactConfigKeyFields  = "log_redact_fields"
+)
+
+// LoadRedactConfig 从平台配置读取脱敏配置。
+// found=false 表示后台从未保存过（调用方应回退 .env 默认）。
+func LoadRedactConfig() (rc config.RedactConfig, found bool, err error) {
+	enabled := GetPlatformConfig(RedactConfigKeyEnabled)
+	mask := GetPlatformConfig(RedactConfigKeyMask)
+	fields := GetPlatformConfig(RedactConfigKeyFields)
+	if enabled == "" && mask == "" && fields == "" {
+		return rc, false, nil
+	}
+	if enabled != "" {
+		rc.Enabled = enabled == "true"
+	}
+	if mask != "" {
+		rc.Mask = mask
+	}
+	if fields != "" {
+		var list []string
+		if jerr := json.Unmarshal([]byte(fields), &list); jerr != nil {
+			// 兼容逗号分隔纯文本
+			list = strings.Split(fields, ",")
+		}
+		rc.SensitiveKeys = list
+	}
+	return rc, true, nil
+}
+
+// StoreRedactConfig 持久化脱敏配置（管理后台保存时调用，先落库成功再切换内存）
+func StoreRedactConfig(rc config.RedactConfig) error {
+	if err := SetPlatformConfig(RedactConfigKeyEnabled, strconv.FormatBool(rc.Enabled)); err != nil {
+		return err
+	}
+	if err := SetPlatformConfig(RedactConfigKeyMask, rc.Mask); err != nil {
+		return err
+	}
+	b, err := json.Marshal(rc.SensitiveKeys)
+	if err != nil {
+		return err
+	}
+	return SetPlatformConfig(RedactConfigKeyFields, string(b))
 }

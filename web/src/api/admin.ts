@@ -14,6 +14,17 @@ export const adminApi = {
     return api.post('/admin/smtp/test', payload);
   },
 
+  // 日志脱敏配置（公安部令第176号合规：生产环境日志敏感信息脱敏）
+  getLogRedactConfig() {
+    return api.get('/admin/log-redact');
+  },
+  updateLogRedactConfig(data: { enabled?: boolean; mask?: string; sensitive_keys?: string[] }) {
+    return api.put('/admin/log-redact', data);
+  },
+  previewLogRedact(data: { kind?: string; sample: string; enabled?: boolean; mask?: string; sensitive_keys?: string[] }) {
+    return api.post('/admin/log-redact/preview', data);
+  },
+
   // 统计数据
   getStats() {
     return api.get('/admin/stats');

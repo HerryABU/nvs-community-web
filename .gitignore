@@ -17,6 +17,8 @@ dist/
 server/dist/
 nvs-server.exe
 *.exe
+# 跨平台发布产物（交叉编译输出，体积大，不入库）
+release/
 
 # IDE
 .vscode/

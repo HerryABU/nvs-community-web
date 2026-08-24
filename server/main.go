@@ -377,6 +377,10 @@ func main() {
 		admin.GET("/config", handlers.GetPlatformConfigs)
 		admin.POST("/smtp/test", handlers.TestSMTP) // SMTP 测试与逐阶段诊断
 		admin.PUT("/config", handlers.UpdatePlatformConfig)
+		// 日志脱敏配置（176号令合规：生产环境日志敏感信息脱敏）
+		admin.GET("/log-redact", handlers.GetLogRedactConfig)
+		admin.PUT("/log-redact", handlers.UpdateLogRedactConfig)
+		admin.POST("/log-redact/preview", handlers.PreviewLogRedact)
 		// 隔离墙配置
 		admin.GET("/wall-config", handlers.GetWallConfig)
 		admin.PUT("/wall-config", handlers.UpdateWallConfig)
@@ -828,6 +832,9 @@ func initDatabase() error {
 	}
 	models.InitDefaultForums()
 	models.InitPlatformConfigs()
+	// 日志脱敏：注入数据库持久化钩子并加载已保存的配置（后台从未保存过则使用 .env 默认）
+	config.RedactMgr.SetPersistence(models.LoadRedactConfig, models.StoreRedactConfig)
+	config.RedactMgr.LoadFromDB()
 	handlers.ReloadXssRules() // 加载管理员配置的 XSS 正则规则
 	handlers.ReloadBadWords() // 加载管理员配置的违禁词库规则
 	initDefaultAdmin()
