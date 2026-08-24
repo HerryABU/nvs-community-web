@@ -82,6 +82,12 @@ TRUSTED_PROXIES=
 # 生产环境启用 HTTPS 后务必设为 true，防止令牌在明文 HTTP 中被截获（安全审计 L3）。
 COOKIE_SECURE=false
 
+# 站点路径前缀（URL_PREFIX，默认留空=挂在域名根）。
+# 用于反向代理场景：如 nginx 将 /go-nvs/ 前缀转发到本站，则填 /go-nvs，
+# 访问 :8088/go-nvs/login 即可正常使用（自动剥离前缀 + 前端路由/API 自适应）。
+# 注意：必须以 / 开头且不带尾斜杠，如 /go-nvs；留空 = 无前缀（默认）。
+URL_PREFIX=
+
 # 建站向导 / 安装接口是否仅允许本机(localhost)访问（true/false，默认 true）。
 # 防止反向代理/公网直连越权进入安装向导；如需从局域网远程初始化可设为 false。
 SETUP_LOCAL_ONLY=true
@@ -149,6 +155,9 @@ var (
 
 	// JWT Cookie Secure 标志（安全审计 L3：生产 HTTPS 下应开启）
 	ForceCookieSecure bool
+
+	// 站点路径前缀（反向代理挂载场景，如 /go-nvs；空 = 域名根）
+	URLPrefix string
 )
 
 // Init 初始化配置：自动加载/创建 .env，然后读取环境变量
@@ -215,6 +224,12 @@ func Init() {
 	TrustedProxies = parseList(getEnv("TRUSTED_PROXIES", ""))
 	SetupLocalOnly = getEnvBool("SETUP_LOCAL_ONLY", true)
 	ForceCookieSecure = getEnvBool("COOKIE_SECURE", false)
+
+	// 站点路径前缀：规范化（保证 / 开头、去尾斜杠）；留空 = 无前缀
+	URLPrefix = normalizePrefix(getEnv("URL_PREFIX", ""))
+	if URLPrefix != "" {
+		log.Printf("[config] 站点路径前缀: %s（访问形如 %s/login）", URLPrefix, URLPrefix)
+	}
 
 	// 日志敏感信息脱敏（176号令合规）：env 提供初始默认；DB 就绪后由 main 注入持久化并覆盖
 	LogRedactSensitive = getEnvBool("LOG_REDACT_SENSITIVE", false)
@@ -378,4 +393,21 @@ func getEnvBool(key string, fallback bool) bool {
 	default:
 		return fallback
 	}
+}
+
+// normalizePrefix 规范化站点路径前缀：保证 / 开头、去除尾斜杠；空/非法返回空串。
+func normalizePrefix(p string) string {
+	p = strings.TrimSpace(p)
+	p = strings.TrimRight(p, "/")
+	if p == "" {
+		return ""
+	}
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	// 拒绝形如 //、含 .. 的前缀（防路径混淆）
+	if strings.Contains(p, "..") || p == "/" || strings.HasPrefix(p, "//") {
+		return ""
+	}
+	return p
 }
