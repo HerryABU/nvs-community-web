@@ -611,6 +611,8 @@ func main() {
 				c.String(http.StatusInternalServerError, "前端资源缺失")
 				return
 			}
+			// index.html 不缓存：每次重新验证，保证发布新版（新 hash 资源）后浏览器立即拿到
+			c.Header("Cache-Control", "no-cache")
 			c.Data(http.StatusOK, "text/html; charset=utf-8",
 				middleware.InjectPrefixIntoHTML(indexBytes, config.URLPrefix))
 			return
@@ -620,6 +622,15 @@ func main() {
 		f, err := frontendFS.Open(cleanPath)
 		if err == nil {
 			f.Close()
+			// 静态资源缓存策略（解决浏览器每次刷新全量重复下载 js/css）：
+			// - assets/*（Vite 产物，文件名带内容 hash）：immutable 永久缓存——
+			//   文件名即指纹，内容不变 URL 不变，浏览器直接命中缓存不再发请求
+			// - 其余静态文件（favicon 等无 hash 文件名）：短缓存 + Last-Modified/ETag 条件验证
+			if strings.HasPrefix(cleanPath, "assets/") {
+				c.Header("Cache-Control", "public, max-age=31536000, immutable")
+			} else {
+				c.Header("Cache-Control", "public, max-age=3600")
+			}
 			http.FileServer(http.FS(frontendFS)).ServeHTTP(c.Writer, c.Request)
 			return
 		}
@@ -638,6 +649,7 @@ func main() {
 			c.String(http.StatusInternalServerError, "前端资源缺失")
 			return
 		}
+		c.Header("Cache-Control", "no-cache")
 		c.Data(http.StatusOK, "text/html; charset=utf-8",
 			middleware.InjectPrefixIntoHTML(indexContent, config.URLPrefix))
 	})
