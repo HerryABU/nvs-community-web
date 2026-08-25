@@ -51,7 +51,7 @@
 - 💾 **备份 / 恢复 / 定时备份** — SQLite `VACUUM INTO` 无损快照 / MySQL 全表 JSON 快照，支持按间隔定时调度
 - 🔀 **站点路径前缀挂载（反向代理）** — 通过 `URL_PREFIX`（如 `/go-nvs`）将整站挂到任意子路径（`http://网关:8088/go-nvs/login`），供 nginx / 自建网关等反向代理使用；前端**自动感知前缀**（Vue Router base / axios baseURL / 资源绝对前缀 / 跳转），支持「保留前缀」「去前缀」两种转发模式，**前缀名任意配置、严禁硬编码**；反向代理仅改写 `<base href>` 时前端自动从 `document.baseURI` 推导实际挂载前缀
 - ⚡ **静态资源强缓存** — Vite 产物 `assets/*`（文件名即内容指纹）→ `Cache-Control: immutable` 一年；`index.html` → `no-cache` 每次重新验证，发布新版本后浏览器立即拿到，杜绝重复全量下载 js/css
-- 🏷️ **页脚开源署名** — 参考 alist「Powered by」风格，站底常驻「由 **NVS** 驱动 v2.2.0」并链接 GitHub 仓库（`HerryABU/nvs-community-web`），与 ICP/公安备案号同排展示；版本号统一管理（Go `version` 包 + 前端 `package.json` 单一来源，`/api/health`、建站向导、健康页、启动日志同步一致）
+- 🏷️ **页脚开源署名** — 参考 alist「Powered by」风格，站底常驻「由 **NVS** 驱动 v2.2.2」并链接 GitHub 仓库（`HerryABU/nvs-community-web`），与 ICP/公安备案号同排展示；版本号统一管理（Go `version` 包 + 前端 `package.json` 单一来源，`/api/health`、建站向导、健康页、启动日志同步一致）
 
 ### 用户系统
 - 🔐 **JWT HttpOnly Cookie 认证** — `SameSite=Lax`，72h 过期
@@ -471,13 +471,14 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
-### v2.2.2 修复公告栏渲染（2026-08-25）
+### v2.2.2 修复公告栏渲染 + 版本号顺延（2026-08-25）
 
-> 公告栏 CSS 误写在 `<style scoped>` 标签之外（Vue SFC 顶层裸文本被编译器丢弃），导致首页公告栏**无样式裸渲染**；另公告详情弹窗原以纯文本显示，无法展示 Markdown 格式的公告内容。
+> 公告栏 CSS 误写在 `<style scoped>` 标签之外（Vue SFC 顶层裸文本被编译器丢弃），导致首页公告栏**无样式裸渲染**；另公告详情弹窗原以纯文本显示，无法展示 Markdown 格式的公告内容。同时将实际运行版本号顺延至 **v2.2.2**（此前 AppVersion/package.json 停留在 2.2.0）。
 
 | 类别 | 文件 | 说明 |
 |---|---|---|
 | 修复 | `views/Home.vue` | ① 公告栏 CSS（`.notice-bar` / `.notice-item` / `.notice-more` 等）从 SFC 顶层移入 `<style scoped>`，恢复首页公告条样式（黄色渐变横幅 / 置顶标签 / 查看全部）；② 公告详情弹窗改用 `renderMarkdown`（Cherry 引擎 + DOMPurify 兜底，与阅读器/博客一致）渲染 Markdown 内容 |
+| 版本 | `version/version.go` / `web/package.json` | 版本号顺延：`AppVersion` 与 `package.json version` 2.2.0 → **2.2.2**（与版本记录最新版本一致，页脚/健康接口/建站向导/启动日志同步） |
 
 ### v2.2.1 版本号统一管理 + 页脚开源署名（2026-08-25）
 
