@@ -21,6 +21,7 @@ import (
 	"nvs-server/models"
 	"nvs-server/security"
 	"nvs-server/utils"
+	"nvs-server/version"
 
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
@@ -140,15 +141,15 @@ func main() {
 			c.JSON(http.StatusOK, handlers.CollectHealth())
 			return
 		}
-		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(`<!DOCTYPE html>
+		healthHTML := fmt.Sprintf(`<!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="UTF-8"><title>NVS 服务状态</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:system-ui,sans-serif;background:#f0f2f5;display:flex;justify-content:center;align-items:center;min-height:100vh}
   .card{background:#fff;border-radius:12px;padding:48px;text-align:center;box-shadow:0 2px 20px rgba(0,0,0,.08);max-width:420px}
-  .dot{display:inline-block;width:14px;height:14px;border-radius:50%;background:#22c55e;margin-right:8px;animation:pulse 2s infinite}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+  .dot{display:inline-block;width:14px;height:14px;border-radius:50%%;background:#22c55e;margin-right:8px;animation:pulse 2s infinite}
+  @keyframes pulse{0%%,100%%{opacity:1}50%%{opacity:.5}}
   h1{font-size:1.5rem;color:#1a1a2e;margin-bottom:12px}
   p{color:#666;line-height:1.7}
   .tag{display:inline-block;background:#e8f0ff;color:#3366cc;padding:2px 10px;border-radius:20px;font-size:.85rem;margin:4px}
@@ -157,10 +158,11 @@ func main() {
 <div class="card">
   <h1><span class="dot"></span>NVS 服务运行中</h1>
   <p>网络小说平台 · 节点正常</p>
-  <p><span class="tag">版本 1.0.0</span></p>
+  <p><span class="tag">版本 %s</span></p>
   <p style="margin-top:16px;font-size:.85rem">联邦社区 · 内容即文件 · 哈希可验证</p>
 </div>
-</body></html>`))
+</body></html>`, version.AppVersion)
+		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(healthHTML))
 	})
 
 	// /api/health：始终返回 JSON 健康报告（供前端/监控调用）
@@ -666,7 +668,7 @@ func main() {
 	}
 
 	log.Println("========================================")
-	log.Printf("  NVS Server v1.0.0")
+	log.Printf("  NVS Server v%s", version.AppVersion)
 	log.Printf("  监听地址: %s", listenAddr)
 	log.Println("========================================")
 

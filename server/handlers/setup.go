@@ -11,6 +11,7 @@ import (
 	"nvs-server/config"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"nvs-server/version"
 
 	"github.com/gin-gonic/gin"
 )
@@ -32,7 +33,7 @@ func SetupStatus(c *gin.Context) {
 	utils.Success(c, gin.H{
 		"installed":  config.IsInstalled(),
 		"db_driver":  config.DBDriver,
-		"server_ver": "1.0.0",
+		"server_ver": version.AppVersion,
 	})
 }
 

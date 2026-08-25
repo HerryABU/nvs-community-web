@@ -16,6 +16,7 @@ import (
 	"nvs-server/config"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"nvs-server/version"
 
 	"github.com/gin-gonic/gin"
 )
@@ -131,7 +132,7 @@ func AdminDBHealth(c *gin.Context) {
 		"driver":       dbDriver,
 		"redis":        redisStatus,
 		"uptime_sec":   int64(time.Since(serverStartTime).Seconds()),
-		"version":      "1.0.0",
+		"version":      version.AppVersion,
 		"table_count":  tableCount,
 		"goroutines":   runtime.NumGoroutine(),
 		"installed":    config.IsInstalled(),

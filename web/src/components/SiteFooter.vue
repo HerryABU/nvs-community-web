@@ -1,10 +1,19 @@
 <template>
-  <footer v-if="icp || psb || siteName" class="site-footer">
+  <footer class="site-footer">
     <div class="footer-inner">
-      <span v-if="siteName">{{ siteName }}</span>
+      <span v-if="siteName" class="site-name">{{ siteName }}</span>
       <a v-if="icp" href="https://beian.miit.gov.cn" target="_blank" rel="noopener" class="footer-link">{{ icp }}</a>
       <a v-if="psb && psbLink" :href="psbLink" target="_blank" rel="noopener" class="footer-link">{{ psb }}</a>
       <a v-else-if="psb" href="https://beian.cyberpolice.cn" target="_blank" rel="noopener" class="footer-link">{{ psb }}</a>
+      <!-- 开源署名（参考 alist「Powered by」风格）：由 NVS 驱动 + 仓库链接 -->
+      <span class="powered">
+        由
+        <a href="https://github.com/HerryABU/nvs-community-web" target="_blank" rel="noopener" class="footer-link">
+          <strong>NVS</strong>
+        </a>
+        驱动
+        <span class="ver">v{{ appVersion }}</span>
+      </span>
     </div>
   </footer>
 </template>
@@ -12,8 +21,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { publicApi } from '@/api/admin';
+// 版本号与 package.json 保持一致（单一来源，构建时注入），与后端 /api/health version 同步
+import pkg from '../../package.json';
 
-// 站点页脚（176号令 第七条第一项：联网备案号自动展示）
+// 站点页脚（176号令 第七条第一项：联网备案号自动展示 + 开源署名）
+const appVersion = pkg.version;
 const siteName = ref('');
 const icp = ref('');
 const psb = ref('');
@@ -44,13 +56,31 @@ onMounted(async () => {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
+  align-items: center;
   gap: 6px 18px;
   font-size: 0.82rem;
   color: var(--text-light, #888);
 }
+.site-name {
+  font-weight: 600;
+  color: var(--text-color, #333);
+}
+.powered {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.powered .ver {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
 .footer-link {
   color: var(--text-light, #888);
   text-decoration: none;
+}
+.footer-link strong {
+  color: var(--el-color-primary, #5b5fe3);
+  font-weight: 600;
 }
 .footer-link:hover {
   color: var(--el-color-primary);

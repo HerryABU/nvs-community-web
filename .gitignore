@@ -15,6 +15,9 @@ web/dist/
 # Build artifacts
 dist/
 server/dist/
+# 构建时 mv 备份的旧产物目录（如 dist_old/、server/dist_old/）
+dist_old*/
+server/dist_old*/
 nvs-server.exe
 *.exe
 # 跨平台发布产物（交叉编译输出，体积大，不入库）
