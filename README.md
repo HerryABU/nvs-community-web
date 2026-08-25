@@ -49,6 +49,8 @@
 - 🔐 **数据库配置加密** — 数据库连接信息（含密码）经 AES-256-GCM 加密落盘 `secure-config.json`，不写明文 `.env`
 - 🔄 **数据库在线热迁移** — SQLite ↔ MySQL 双向热切换，全程无需重启，逐表复制并上报进度
 - 💾 **备份 / 恢复 / 定时备份** — SQLite `VACUUM INTO` 无损快照 / MySQL 全表 JSON 快照，支持按间隔定时调度
+- 🔀 **站点路径前缀挂载（反向代理）** — 通过 `URL_PREFIX`（如 `/go-nvs`）将整站挂到任意子路径（`http://网关:8088/go-nvs/login`），供 nginx / 自建网关等反向代理使用；前端**自动感知前缀**（Vue Router base / axios baseURL / 资源绝对前缀 / 跳转），支持「保留前缀」「去前缀」两种转发模式，**前缀名任意配置、严禁硬编码**；反向代理仅改写 `<base href>` 时前端自动从 `document.baseURI` 推导实际挂载前缀
+- ⚡ **静态资源强缓存** — Vite 产物 `assets/*`（文件名即内容指纹）→ `Cache-Control: immutable` 一年；`index.html` → `no-cache` 每次重新验证，发布新版本后浏览器立即拿到，杜绝重复全量下载 js/css
 
 ### 用户系统
 - 🔐 **JWT HttpOnly Cookie 认证** — `SameSite=Lax`，72h 过期
@@ -91,6 +93,12 @@
 - 🔐 **日志完整性保护** — 每小时文件每日 SHA256 校验 + gzip 归档 + 只读权限（0444）+ 6 个月保留
 - 🛡️ **内容安全扫描（23 条规则）** — 提权 / Shell注入 / 木马 / 挖矿 / 僵尸网络 / 数据窃取 / 钓鱼，上传即自动审查
 - 🚨 **内容抢救台** — 二级密码 + 短时 token 应急窗口，粘贴 URL 即可预览全部评论/回复并物理硬删除，全程审计留痕
+- 🧾 **日志敏感信息脱敏** — 生产模式自动脱敏 Cookie / Authorization / body / query 中的敏感字段（密码类固定 `******`，其余可配置掩码与字段列表），管理后台可视化配置 + 预览工具，运行时热更新无需重启（176号令合规）
+- 🛡️ **CSRF 防护** — 登录态写操作强制校验 `X-Requested-With` 头，前端 axios 统一附加，跨站表单/脚本无法伪造写请求
+- 🔑 **登录账号级锁定** — 单账号 5 次失败 / 15 分钟锁定（配合 IP 限流双层防爆破）
+- 🔐 **JWT 随机密钥** — 默认自动生成随机密钥并持久化 `data/.jwt_secret`，杜绝公开默认密钥伪造管理员 Token
+- 📢 **公告栏** — 站点公告管理端 CRUD + 首页公告条 + 公告列表/详情弹窗（置顶优先）
+- 🧭 **176号令合规工具箱** — 算法推荐透明度（公开说明 + 用户个性化推荐关闭权）、联网备案引导（ICP/公安备案字段 + 页脚展示）、等保/关基自测定级、漏洞整改闭环管理、检查材料一键导出（日志 ZIP / 用户 CSV / 合规自查报告）
 
 ### 站点互通
 - 🌐 **联邦站点** — 支持远程站点互联与跨站作品同步（模仿 alist）
@@ -406,6 +414,13 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 | `LOCAL_IPV4` | 自动检测 | 本机 IPv4（联邦互通用） |
 | `LOCAL_IPV6` | 自动检测 | 本机 IPv6（联邦互通用） |
 
+### 站点路径前缀（反向代理挂载）
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `URL_PREFIX` | 空 | 站点路径前缀，如 `/go-nvs`（必须 `/` 开头、不带尾斜杠；留空=挂在域名根）。用于反向代理场景：nginx/网关将 `/go-nvs/` 前缀转发到本站时，访问 `http://网关:8088/go-nvs/login` 即可正常使用（自动剥离前缀 + 前端路由/API/资源/跳转全自适应，前缀名任意） |
+
+> 🔀 **两种代理转发模式均可用**：① `proxy_pass http://后端;`（不带 URI，保留前缀，后端自动剥离）；② `proxy_pass http://后端/;`（带尾部斜杠，去前缀，后端收 `/assets/x.js` 等原始路径）。反向代理仅改写 `<base href>` 而不注入前缀变量时，前端自动从 `document.baseURI` 推导前缀，无需后端配置。
+
 ### JWT
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
@@ -435,9 +450,65 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 | `EMAIL_VERIFY_ENABLED` | `false` | 邮箱验证开关 |
 | `CAPTCHA_ENABLED` | `false` | 滑块验证码开关 |
 
+### 安全 / 反向代理
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `TRUSTED_PROXIES` | 空 | 信任的反向代理地址（逗号分隔 IP/CIDR）。留空=不信任任何代理头，客户端 IP 取真实 TCP 对端（防 `X-Forwarded-For` 伪造越权） |
+| `COOKIE_SECURE` | `false` | JWT Cookie 强制 Secure（仅 HTTPS 传输；生产启用 HTTPS 后务必 `true`） |
+| `SETUP_LOCAL_ONLY` | `true` | 建站向导仅允许本机 localhost 访问（防公网/反向代理越权进入安装向导） |
+
+### 日志敏感信息脱敏（176号令合规）
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `LOG_REDACT_SENSITIVE` | `false` | 日志脱敏开关：`true`=生产模式（自动脱敏 Cookie/Authorization 令牌、body/query 敏感字段）；`false`=开发模式（保留原始数据，方便调试） |
+| `LOG_REDACT_MASK` | `******` | 脱敏掩码（密码类固定 `******`，其余字段可用此掩码） |
+| `LOG_SENSITIVE_FIELDS` | `password,token,authorization,secret,email` | 需脱敏的字段名列表（逗号分隔，可扩展） |
+
+> 🧾 脱敏配置支持管理后台可视化维护（`/admin/log-redact`），保存后运行时热更新，无需重启；`.env` 仅为种子默认值。
+
 ---
 
 ## 📝 版本更新记录（文件级改动说明）
+
+### v2.2.0 站点路径前缀挂载（反向代理）+ 静态缓存 + 管理面板 UI（2026-08-24）
+
+> 新增 **URL_PREFIX 站点路径前缀挂载**：整站可挂到任意子路径（如 `:8088/go-nvs/login`）供反向代理/网关使用，js/css/API/路由/跳转全自动感知前缀，**前缀名任意配置、严禁硬编码**；同时修复静态资源缓存（解决刷新重复全量下载）与管理面板菜单布局。
+
+| 类别 | 文件 | 说明 |
+|---|---|---|
+| 路由 | `config/config.go` | 新增 `URL_PREFIX` 环境变量 + `normalizePrefix` 规范化（必须以 `/` 开头、拒绝 `..`/`//`） |
+| 路由 | `middleware/urlprefix.go`（新）+ `urlprefix_test.go`（新） | ① 前缀剥离：gin 外层将 `/go-nvs/xxx` → `/xxx`；② HTML 注入：相对 `./assets/` 改写为 `{prefix}/assets/` 绝对前缀（不依赖浏览器 `<base>` 解析）+ `<base href>` 兜底 + `window.__NVS_PREFIX__` |
+| 路由 | `main.go` | `StripURLPrefixHandler` 包裹 gin 引擎；SPA 回退白名单（已知前端根段才回退 index.html，杜绝前缀/组件穿越） |
+| 前端 | `vite.config.ts` | `base: './'` 相对路径产物（首屏 js/css、动态 chunk、modulepreload 全相对化） |
+| 前端 | `utils/prefix.ts`（新） | `getAppPrefix()` 智能解析：后端注入的 `__NVS_PREFIX__` 优先；为空时从 `document.baseURI`（受代理改写 `<base href>` 影响）推导浏览器实际挂载前缀——兼容自建反向代理只改写 base 的场景 |
+| 前端 | `api/index.ts` / `router/index.ts` / `stores/auth.ts` | axios baseURL、Vue Router base、401 跳转、退出跳转全部带前缀 |
+| 前端 | `api/frame.ts` / `NavBar.vue` / `Home.vue` / `HtmlPlaza.vue` / `HTMLManager.vue` / `AdminCompliance.vue` / `AdminDatabase.vue` | 全部 `window.open` / `<a :href>` / fetch 裸 URL 统一拼前缀（删净裸 `/api`、`/login`） |
+| 缓存 | `main.go` | 静态资源缓存策略：`assets/*`（文件名带内容 hash）→ `immutable` 一年；其余静态 → 1h；index.html → `no-cache`（发布新 hash 后浏览器立即拿到） |
+| 日志 | `middleware/header_logger.go` | 静态资源请求只打一行 `(static)` 摘要，API 保留完整审计头（日志去刷屏） |
+| UI | `views/AdminDashboard.vue` | 管理面板 21 项功能菜单改为 flex 弹性换行，修复 4 列网格最后一行空位歪斜 |
+
+### v2.1.9 176号令合规补全 + 全站安全审计闭环 + 日志脱敏 + 公告栏（2026-08-24）
+
+> 围绕《互联网信息服务深度合成管理规定》等 176 号令开展**合规补全**（算法透明度 / 备案引导 / 等保自测 / 漏洞管理 / 检查工具箱 / 公告栏）与**两轮全站安全审计**（JWT 密钥 / 路径穿越 LFI / CSRF / SSRF / IDOR / 信息泄露 9+ 项全部闭环），并新增**日志敏感信息脱敏**。
+
+| 类别 | 文件 | 说明 |
+|---|---|---|
+| 脱敏 | `config/redact_config.go`（新）+ `middleware/redact.go`（新） | 日志敏感信息脱敏引擎：Header/Body JSON/Query 三类脱敏，密码类固定 `******`，其余可配置掩码；`.env` 种子化 + DB 持久化 + 运行时热更新 |
+| 脱敏 | `middleware/access_log.go` / `config/config.go` | 访问日志接入环境感知脱敏（生产自动脱敏，开发保留原始）；新增 `LOG_REDACT_SENSITIVE` / `LOG_REDACT_MASK` / `LOG_SENSITIVE_FIELDS` |
+| 脱敏 | `handlers/admin_redact.go`（新）+ `views/admin/AdminLogRedact.vue`（新） | 管理后台脱敏配置页：开关 + 敏感字段列表 + 掩码 + 预览工具（GET/PUT `/api/admin/log-redact`、POST `preview`） |
+| 合规 | `handlers/public_compliance.go`（新）+ `handlers/admin_vuln.go`（新） | 算法透明度（公开 `/api/algorithms/description` + 用户偏好 `/api/users/me/preferences` 关闭权）；漏洞整改闭环管理（CRUD + 导出 + AdminVulnerabilities.vue） |
+| 合规 | `handlers/admin_compliance.go`（新）+ `handlers/admin_toolbox.go`（新） | 等保/关基自测问卷 + 定级记录（AdminCompliance.vue）；检查工具箱：日志按时间导出 ZIP / 用户清单 CSV / 合规自查报告 |
+| 合规 | `handlers/admin_announce.go`（新）+ `models/announcement.go`（新）+ `AdminAnnouncements.vue`（新） | 公告栏：管理端 CRUD + 首页公告条 + 列表/详情弹窗（置顶优先） |
+| 合规 | `docs/compliance/`（新） | 三份合规制度模板（内容审核 / 应急处置 / 安全策略）+ README |
+| 安全 | `config/secure.go` / `config.go` | S1 JWT 默认密钥 → 自动生成随机密钥持久化 `data/.jwt_secret`（防伪造管理员 Token） |
+| 安全 | `middleware/csrf.go`（新）+ `csrf_test.go`（新） | CSRF 防护：登录态写操作强制 `X-Requested-With` 头，前端 axios 拦截器统一附加 |
+| 安全 | `handlers/userhtml.go` / `wasm.go` | S2/H1 路径穿越 LFI → `pathWithin`（filepath.Rel 强校验，保存端+读取端）；上传白名单移除 `.svg` |
+| 安全 | `handlers/auth_login.go` / `auth_register.go` | M1 登录账号级失败锁定（5 次/15 分钟）；M2 注册接口限流 RateLimit(10,60) |
+| 安全 | `handlers/health.go` / `utils/gorm_logger.go` | L1 `/api/health` 信息收敛（移除驱动/原始错误/计数）；L2 DB 审计日志参数化（密码/邮箱/Token 不落盘） |
+| 安全 | `handlers/port.go` / `sandbox_vfs.go` / `forum.go` / `emergency.go` | L4 端口分配 IDOR 校验归属；M4 VFS write/delete 登录 + 归属校验；L5 隐藏论坛元数据（`X-Forum-Room`/`X-Forum-Password` 头）；敏感信息移出 URL（应急预览/删除改 POST body） |
+| 安全 | `handlers/proxy.go` + `nginx/nginx.conf` | M5 联邦同步 SSRF：仅 http/https + 拒绝回环/内网/链路本地 + DNS 解析校验 + 10s 超时；nginx 加固 CSP/Referrer-Policy + HTTPS 443 示例 |
+| 前端 | 全部沙盒 iframe | 移除 `allow-same-origin`（opaque origin 隔离）；mermaid `securityLevel` 改 strict（存储型 XSS 防护） |
+| 审计 | `docs/security-audit.md`（新） | 两轮审计全部发现项修复记录与运维层方案 |
 
 ### v2.1.8 话题标签 + 搜索扩展（2026-08-23）
 
@@ -604,23 +675,27 @@ nvs/
 │   ├── go.mod / go.sum
 │   │
 │   ├── config/
-│   │   ├── config.go              # 自动创建 .env + 加载 + IPv4/IPv6 检测
+│   │   ├── config.go              # 自动创建 .env + 加载 + IPv4/IPv6 检测 + URL_PREFIX 解析
 │   │   ├── secure.go              # 数据库配置 AES-256-GCM 加密存储（.secret.key + secure-config.json）
+│   │   ├── redact_config.go       # 日志脱敏配置（RedactManager：.env 种子 + DB 持久化 + 热更新）
 │   │   └── setup.go               # 建站向导状态 / 一次性安装密钥
 │   │
-│   ├── models/                    # 数据层（40 个结构体）
+│   ├── models/                    # 数据层（40+ 结构体）
 │   │   ├── user.go                # User + 管理员 / VIP 检查（含注册/登录 IP）
 │   │   ├── novel.go               # Novel + Chapter + NovelCategory（软删除）
 │   │   ├── comment.go             # Comment（软删除）
 │   │   ├── forum.go               # Forum / Thread / Post / ForumMute（软删除）
 │   │   ├── blog.go                # AuthorBlog 作者博客（软删除）
+│   │   ├── blog_category.go       # BlogCategory 三级分类（审核状态/归属用户/排序）
+│   │   ├── blog_tag.go            # 博客标签（#标签云 / 筛选）
+│   │   ├── blog_topic.go          # 话题：BlogTopic + BlogTopicLink（#话题 聚合）
 │   │   ├── bookshelf.go           # BookShelf（收藏 + 阅读进度）
 │   │   ├── rating.go              # Rating 五维度评分
 │   │   ├── follow.go              # Follow 关注关系
 │   │   ├── userframe.go           # UserFrame / UserHTML 自定义模板与扩展（软删除）
 │   │   ├── platform.go            # VipApplication / Report / WithdrawalRequest
 │   │   │                          #   / EarningsRecord / BlacklistIP
-│   │   ├── platform_config.go     # PlatformConfig 站长配置键值
+│   │   ├── platform_config.go     # PlatformConfig 站长配置键值（含 log_redact_* 脱敏配置）
 │   │   ├── platform_federated.go  # FederatedSite / FederatedNovel / FederatedInbound
 │   │   ├── platform_wall.go       # WallConfig 隔离墙配置
 │   │   ├── user_audit.go          # UserAuditLog 用户行为审计日志
@@ -628,12 +703,15 @@ nvs/
 │   │   ├── log_archive.go         # 访问/数据库日志归档调度（SHA256 + gzip + 6个月保留，适配小时文件）
 │   │   ├── xss_rule.go            # XssRule 动态 XSS 正则规则
 │   │   ├── badword.go             # BadWord 违禁词规则 + BadWordFlag 标记待审记录
+│   │   ├── announcement.go        # Announcement 站点公告（置顶/发布状态）
+│   │   ├── vulnerability.go       # Vulnerability 漏洞整改闭环记录（176号令）
+│   │   ├── zone_access.go         # ZoneAccessLog 隔离墙进入记录（176号令专项）
 │   │   ├── backup.go              # 备份 / 恢复 / 定时备份调度器
 │   │   └── db.go                  # AllModels 迁移 + 跨库复制 + 热切换
 │   │
-│   ├── handlers/                  # API 处理器（按功能拆分，60+ 文件）
-│   │   ├── auth_register.go       # 注册（记录注册 IP + 审计）
-│   │   ├── auth_login.go          # 登录 / 登出 / 当前用户（登录 IP + 审计）
+│   ├── handlers/                  # API 处理器（按功能拆分，70+ 文件）
+│   │   ├── auth_register.go       # 注册（记录注册 IP + 审计 + 限流）
+│   │   ├── auth_login.go          # 登录 / 登出 / 当前用户（登录 IP + 审计 + 账号锁定）
 │   │   ├── auth_password.go       # 邮箱验证码 / 忘记重置密码 / 改密码（审计）
 │   │   ├── novel.go               # 作品 CRUD / 分类列表 / 分类统计（软删除）
 │   │   ├── novel_public.go        # 公开作品列表 / 搜索 / 旧路径 301
@@ -641,11 +719,14 @@ nvs/
 │   │   ├── chapter_write.go       # 章节 CRUD / SHA256 + HMAC 签名（软删除归档）
 │   │   ├── comment.go             # 评论 CRUD（软删除）
 │   │   ├── rating.go              # 五维评分 upsert / 查询
-│   │   ├── forum.go               # 论坛 / 帖子 / 回帖
+│   │   ├── forum.go               # 论坛 / 帖子 / 回帖（隐藏论坛元数据 + 自定义头解锁）
 │   │   ├── forum_custom.go        # 用户自建论坛 / 版主删除（审计）
 │   │   ├── bookshelf.go           # 书架管理 + 阅读进度
 │   │   ├── social_follow.go       # 关注 / 取关 / 统计
-│   │   ├── social_blog.go         # 作者博客 CRUD（软删除）
+│   │   ├── social_blog.go         # 作者博客 CRUD + 标签 + 话题（软删除）
+│   │   ├── social.go              # 博客点赞 / 公开博客列表 / 标签云
+│   │   ├── blog_category.go       # 三级分类管理（作者自建待审 / 管理员审核）
+│   │   ├── blog_topic.go          # 话题（#话题）列表 / 详情 / 参与
 │   │   ├── author_profile.go      # 作者主页 / 头像 / 资料
 │   │   ├── author_dashboard.go    # 作者数据大屏
 │   │   ├── import_export.go       # 导入预览 / 多格式导入导出
@@ -656,13 +737,20 @@ nvs/
 │   │   ├── admin_user.go          # 用户管理 / 禁言 / 封禁（审计）+ 用户审计查询
 │   │   ├── admin_report.go        # 举报处理（审计）
 │   │   ├── admin_forum.go         # 论坛管理 / 审查
-│   │   ├── admin_site.go          # 站长配置 / 隔离墙 / 联邦站点 / 入站记录
-│   │   ├── emergency.go           # 内容抢救台（二级密码 + 硬删除 + 审计）
+│   │   ├── admin_site.go          # 站长配置 / 隔离墙 / 联邦站点 / 入站记录 / 公告
+│   │   ├── admin_announce.go      # 公告栏管理端 CRUD
+│   │   ├── admin_redact.go        # 日志脱敏配置管理（GET/PUT/preview）
+│   │   ├── admin_compliance.go    # 等保/关基自测定级（176号令）
+│   │   ├── admin_toolbox.go       # 检查工具箱（日志导出 ZIP / 用户 CSV / 自查报告）
+│   │   ├── admin_vuln.go          # 漏洞整改闭环管理（CRUD + 导出）
+│   │   ├── public_compliance.go   # 合规公开接口（算法说明 / 公告 / 用户偏好）
+│   │   ├── emergency.go           # 内容抢救台（二级密码 + 硬删除 + 审计，token 走 body）
 │   │   ├── userframe.go           # UserFrame 模板 CRUD
-│   │   ├── userhtml.go            # UserHTML 扩展 ZIP 上传 / CRUD
+│   │   ├── userhtml.go            # UserHTML 扩展 ZIP 上传 / CRUD（pathWithin 防穿越）
 │   │   ├── html_review.go         # HTML 内容人工复核
-│   │   ├── sandbox_vfs.go         # 沙盒虚拟文件系统 VFS
-│   │   ├── port.go                # 端口分配 / 命名代理
+│   │   ├── sandbox_vfs.go         # 沙盒虚拟文件系统 VFS（写操作鉴权）
+│   │   ├── port.go                # 端口分配 / 命名代理（归属校验）
+│   │   ├── proxy.go               # 联邦同步代理（SSRF 白名单校验）
 │   │   ├── xss_rule.go            # XSS 规则库 CRUD / 测试
 │   │   ├── badword.go             # 违禁词库 CRUD / 测试 + 标记待审处理（确认/删除/放行）
 │   │   ├── batch.go               # API 聚合（一次请求批量获取）
@@ -670,9 +758,12 @@ nvs/
 │   │
 │   ├── middleware/
 │   │   ├── auth.go                # JWT 鉴权 + 角色检查 + Cookie 管理
+│   │   ├── csrf.go                # CSRF 防护（登录态写操作强制 X-Requested-With）
 │   │   ├── context.go             # 鉴权上下文 key 常量 + getter（单一权威来源）
-│   │   ├── access_log.go          # 访问日志（JSON + user_id + 按小时滚动，log/requests/ 文件夹）
-│   │   ├── header_logger.go       # 请求头日志（敏感头脱敏）
+│   │   ├── access_log.go          # 访问日志（JSON + user_id + 按小时滚动 + 敏感信息脱敏）
+│   │   ├── redact.go              # 日志脱敏引擎（Header/Body JSON/Query 三类）
+│   │   ├── header_logger.go       # 请求头日志（敏感头脱敏 + 静态资源单行摘要）
+│   │   ├── urlprefix.go           # 站点路径前缀剥离 + index.html 前缀注入（反向代理挂载）
 │   │   ├── recovery.go            # panic 恢复（不泄露堆栈）
 │   │   ├── sandbox.go             # 沙盒安全头（CSP / COOP / COEP）
 │   │   ├── sandbox_fs.go          # 沙盒写入保护 / 脚本扩展名拦截
@@ -699,23 +790,31 @@ nvs/
 │   ├── vite.config.ts             # outDir → ../dist / dev 代理 /api → 8080
 │   ├── package.json               # TipTap · ECharts · KaTeX · Mermaid · Element Plus
 │   └── src/
-│       ├── router/index.ts        # 18 路由 + JWT 路由守卫
+│       ├── router/index.ts        # 60+ 路由 + JWT 路由守卫（base 自动感知前缀）
 │       ├── stores/                # Pinia
 │       │   ├── auth.ts            # 用户认证状态
 │       │   └── theme.ts           # 主题切换（亮/暗）
-│       ├── api/                   # axios 封装
+│       ├── api/                   # axios 封装（baseURL 自动带前缀 + CSRF 头）
+│       ├── utils/
+│       │   ├── prefix.ts          # 站点路径前缀智能解析（__NVS_PREFIX__ 优先 + baseURI 推导兜底）
+│       │   ├── sensitiveZone.ts   # 敏感区隔离墙守卫
+│       │   ├── userKey.ts         # 用户标识解析（数字=主键 / 用户名兼容）
+│       │   └── turndown.ts        # HTML → Markdown 转换
 │       ├── views/                 # 30+ 页面组件
 │       │   ├── Home.vue / Login.vue / Register.vue
 │       │   ├── NovelDetail.vue / Reader.vue
 │       │   ├── Editor.vue / ChapterEditor.vue
 │       │   ├── AuthorDashboard.vue / AuthorHome.vue / AuthorBlogs.vue
-│       │   ├── BlogList.vue / BlogDetail.vue / BlogEditor.vue
+│       │   ├── BlogList.vue / BlogDetail.vue / BlogEditor.vue / BlogHome.vue / BlogManager.vue
+│       │   ├── BlogCategoryManage.vue / BlogCategorySettings.vue / Topics.vue
 │       │   ├── CategoryView.vue / Bookshelf.vue / Follows.vue
 │       │   ├── Forums.vue / ForumDetail.vue / ThreadDetail.vue
 │       │   ├── AdminDashboard.vue / UserManagement.vue
-│       │   ├── admin/ — AdminSecurity(XSS规则库) / AdminBadWords(违禁词库) / AdminReports / AdminSoftDel / AdminBan 等
-│       │   └── Login.vue / Register.vue
-│       └── components/            # 15 个通用组件
+│       │   ├── admin/ — AdminSecurity / AdminBadWords / AdminReports / AdminSoftDel / AdminBan /
+│       │   │           AdminAlgorithms(算法) / AdminAnnouncements(公告) / AdminLogRedact(日志脱敏) /
+│       │   │           AdminVulnerabilities(漏洞) / AdminCompliance(等保自测) / AdminHealth / AdminDatabase 等 21 项
+│       │   └── frame/ — FrameManager / HTMLManager / HtmlRunner / SandboxPreview / WasmRunner
+│       └── components/            # 15+ 通用组件
 │           ├── NavBar.vue / NovelCard.vue / HomeSearchResults.vue
 │           ├── CommentSection.vue / CommentItem.vue
 │           ├── StarRating.vue / SensitiveZoneGuard.vue / SlideCaptcha.vue
@@ -973,14 +1072,47 @@ nvs/
 | GET | `/api/admin/html-reviews` | 管理员 | HTML 内容审查列表 |
 | GET | `/api/admin/html-reviews/:type/:id` | 管理员 | 审查详情 |
 | POST | `/api/admin/html-reviews/:type/:id/review` | 管理员 | 复核 HTML 内容 |
+| POST | `/api/admin/smtp/test` | 管理员 | SMTP 测试与逐阶段诊断 |
+| GET | `/api/admin/softdel` | 管理员 | 内容治理：软删除列表（含留证记录） |
+| POST | `/api/admin/softdel` | 管理员 | 删除/封禁任意内容（软删除 + `softdel_` 留证） |
+| POST | `/api/admin/softdel/restore` | 管理员 | 恢复被封禁内容 |
+| GET | `/api/admin/recycle` | 管理员 | 回收站监管：全站用户自删内容 |
+| GET | `/api/admin/novels` | 管理员 | 小说封禁管理列表 |
+| GET | `/api/admin/novels/:id/chapters` | 管理员 | 章节封禁管理列表 |
+| GET | `/api/admin/blog-categories` | 管理员 | 博客分类管理列表（用户分组 + 待审核徽标） |
+| GET | `/api/admin/blog-categories/mode` | 管理员 | 分类审核模式（post_review 事后审核 / pre_public 先公开） |
+| PUT | `/api/admin/blog-categories/mode` | 管理员 | 切换分类审核模式 |
+| POST | `/api/admin/blog-categories` | 管理员 | 创建分类（管理员直通） |
+| PUT | `/api/admin/blog-categories/:id` | 管理员 | 更新分类 |
+| DELETE | `/api/admin/blog-categories/:id` | 管理员 | 删除分类 |
+| POST | `/api/admin/blog-categories/:id/review` | 管理员 | 审核分类（approve / reject[附原因]） |
+| GET | `/api/admin/algorithms` | 管理员 | 算法推荐配置（176号令 算法透明度） |
+| PUT | `/api/admin/algorithms` | 管理员 | 更新算法推荐配置 |
+| GET | `/api/admin/announcements` | 管理员 | 公告列表 |
+| POST | `/api/admin/announcements` | 管理员 | 发布公告 |
+| PUT | `/api/admin/announcements/:id` | 管理员 | 更新公告 |
+| DELETE | `/api/admin/announcements/:id` | 管理员 | 删除公告 |
+| GET | `/api/admin/log-redact` | 管理员 | 日志脱敏配置 |
+| PUT | `/api/admin/log-redact` | 管理员 | 更新脱敏配置（热更新） |
+| POST | `/api/admin/log-redact/preview` | 管理员 | 脱敏效果预览工具 |
+| GET | `/api/admin/security-grade` | 管理员 | 等保/关基识别记录 |
+| PUT | `/api/admin/security-grade` | 管理员 | 更新定级记录 |
+| GET | `/api/admin/vulnerabilities` | 管理员 | 漏洞整改清单（status/severity 筛选 + 统计） |
+| POST | `/api/admin/vulnerabilities` | 管理员 | 新建漏洞记录 |
+| PUT | `/api/admin/vulnerabilities/:id` | 管理员 | 更新漏洞（状态/整改时间） |
+| DELETE | `/api/admin/vulnerabilities/:id` | 管理员 | 删除漏洞记录 |
+| GET | `/api/admin/vulnerabilities/export` | 管理员 | 漏洞清单导出 |
+| GET | `/api/admin/compliance/report` | 管理员 | 合规自查报告（一键生成） |
+| GET | `/api/admin/compliance/export-logs` | 管理员 | 按时间范围导出访问日志（ZIP） |
+| GET | `/api/admin/compliance/export-users` | 管理员 | 导出用户注册信息清单（CSV） |
 
 ### 🔧 内容抢救台（应急窗口）
 | 方法 | 端点 | 认证 | 说明 |
 |------|------|------|------|
 | POST | `/api/admin/emergency/set-password` | 管理员 | 设置/修改二级密码 |
 | POST | `/api/admin/emergency/unlock` | 管理员 | 二级密码解锁（限流 10次/60s，失败锁定 15 分钟） |
-| GET | `/api/admin/emergency/preview` | 二级密码 token | 拉取内容预览（粘贴 URL，小说/博客/帖子返回全部评论/回复） |
-| DELETE | `/api/admin/emergency/content` | 二级密码 token | 物理硬删除（不可恢复） |
+| POST | `/api/admin/emergency/preview` | 二级密码 token | 拉取内容预览（body 传 token，小说/博客/帖子返回全部评论/回复；token 不落 URL） |
+| POST | `/api/admin/emergency/content` | 二级密码 token | 物理硬删除（body 传 token，不可恢复） |
 | GET | `/api/admin/emergency/audit` | 管理员 | 抢救台审计日志 |
 
 ### 🗄️ 数据库管理
@@ -1014,6 +1146,14 @@ nvs/
 | GET | `/api/site-info` | — | 本站信息 |
 
 > 📡 上述联邦公开接口会记录「谁连接了我」（入站连接：对方站点名/地址/IP/User-Agent/访问次数），被连方可在后台「远程站点互通 → 谁连了我」查看。联邦同步时本站会向对方自报身份（`source_name`/`source_url`）。
+
+### 合规公开接口（176号令）
+| 方法 | 端点 | 认证 | 说明 |
+|------|------|------|------|
+| GET | `/api/algorithms/description` | — | 算法推荐说明（公开，算法透明度） |
+| GET | `/api/announcements` | — | 站点公告列表（仅已发布） |
+| GET | `/api/users/me/preferences` | JWT | 用户偏好设置（个性化推荐开关，关闭权） |
+| PUT | `/api/users/me/preferences` | JWT | 更新偏好设置 |
 
 ### 文件服务
 | 路径 | 说明 |
