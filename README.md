@@ -471,6 +471,14 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v2.2.2 修复公告栏渲染（2026-08-25）
+
+> 公告栏 CSS 误写在 `<style scoped>` 标签之外（Vue SFC 顶层裸文本被编译器丢弃），导致首页公告栏**无样式裸渲染**；另公告详情弹窗原以纯文本显示，无法展示 Markdown 格式的公告内容。
+
+| 类别 | 文件 | 说明 |
+|---|---|---|
+| 修复 | `views/Home.vue` | ① 公告栏 CSS（`.notice-bar` / `.notice-item` / `.notice-more` 等）从 SFC 顶层移入 `<style scoped>`，恢复首页公告条样式（黄色渐变横幅 / 置顶标签 / 查看全部）；② 公告详情弹窗改用 `renderMarkdown`（Cherry 引擎 + DOMPurify 兜底，与阅读器/博客一致）渲染 Markdown 内容 |
+
 ### v2.2.1 版本号统一管理 + 页脚开源署名（2026-08-25）
 
 > 全站版本号不再散落硬编码 `1.0.0`：新增 Go `version` 包集中管理（可 `-ldflags` 覆盖），健康接口 / 建站向导 / 数据库管理 / 健康页 / 启动日志全部同步为 **v2.2.0**；前端页脚参考 alist 增加「由 NVS 驱动 + GitHub 仓库链接」开源署名，版本号取自 `package.json`（与后端单一来源同步）。
