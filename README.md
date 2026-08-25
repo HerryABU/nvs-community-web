@@ -51,6 +51,7 @@
 - 💾 **备份 / 恢复 / 定时备份** — SQLite `VACUUM INTO` 无损快照 / MySQL 全表 JSON 快照，支持按间隔定时调度
 - 🔀 **站点路径前缀挂载（反向代理）** — 通过 `URL_PREFIX`（如 `/go-nvs`）将整站挂到任意子路径（`http://网关:8088/go-nvs/login`），供 nginx / 自建网关等反向代理使用；前端**自动感知前缀**（Vue Router base / axios baseURL / 资源绝对前缀 / 跳转），支持「保留前缀」「去前缀」两种转发模式，**前缀名任意配置、严禁硬编码**；反向代理仅改写 `<base href>` 时前端自动从 `document.baseURI` 推导实际挂载前缀
 - ⚡ **静态资源强缓存** — Vite 产物 `assets/*`（文件名即内容指纹）→ `Cache-Control: immutable` 一年；`index.html` → `no-cache` 每次重新验证，发布新版本后浏览器立即拿到，杜绝重复全量下载 js/css
+- 🏷️ **页脚开源署名** — 参考 alist「Powered by」风格，站底常驻「由 **NVS** 驱动 v2.2.0」并链接 GitHub 仓库（`HerryABU/nvs-community-web`），与 ICP/公安备案号同排展示；版本号统一管理（Go `version` 包 + 前端 `package.json` 单一来源，`/api/health`、建站向导、健康页、启动日志同步一致）
 
 ### 用户系统
 - 🔐 **JWT HttpOnly Cookie 认证** — `SameSite=Lax`，72h 过期
@@ -469,6 +470,18 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 ---
 
 ## 📝 版本更新记录（文件级改动说明）
+
+### v2.2.1 版本号统一管理 + 页脚开源署名（2026-08-25）
+
+> 全站版本号不再散落硬编码 `1.0.0`：新增 Go `version` 包集中管理（可 `-ldflags` 覆盖），健康接口 / 建站向导 / 数据库管理 / 健康页 / 启动日志全部同步为 **v2.2.0**；前端页脚参考 alist 增加「由 NVS 驱动 + GitHub 仓库链接」开源署名，版本号取自 `package.json`（与后端单一来源同步）。
+
+| 类别 | 文件 | 说明 |
+|---|---|---|
+| 版本 | `version/version.go`（新） | `version.AppVersion = "2.2.0"` 集中管理，支持 `-ldflags "-X nvs-server/version.AppVersion=vX.Y.Z"` 构建时覆盖 |
+| 版本 | `handlers/health.go` / `handlers/setup.go` / `handlers/db_admin.go` | `/api/health` `version`、`/api/setup/status` `server_ver`、`/api/admin/db/health` `version` 改引用 `version.AppVersion` |
+| 版本 | `main.go` | 健康页「版本 1.0.0」与启动日志 `NVS Server v1.0.0` 改引用 `version.AppVersion` |
+| 版本 | `web/package.json` | `version` 1.0.0 → 2.2.0（前端版本单一来源） |
+| 署名 | `web/src/components/SiteFooter.vue` | 页脚新增「由 NVS 驱动 v2.2.0」+ GitHub 仓库链接（`HerryABU/nvs-community-web`，alist 风格），与站点名/ICP/公安备案同排常驻显示 |
 
 ### v2.2.0 站点路径前缀挂载（反向代理）+ 静态缓存 + 管理面板 UI（2026-08-24）
 

@@ -9,6 +9,7 @@ import (
 	"nvs-server/config"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"nvs-server/version"
 
 	"github.com/gin-gonic/gin"
 )
@@ -106,7 +107,7 @@ func CollectHealth() gin.H {
 	return gin.H{
 		"status":        status,
 		"service":       "nvs-server",
-		"version":       "1.0.0",
+		"version":       version.AppVersion,
 		"installed":     config.IsInstalled(),
 		"now":           time.Now().Format(time.RFC3339),
 		"server":        server,
