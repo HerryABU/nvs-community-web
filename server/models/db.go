@@ -141,6 +141,13 @@ func AutoMigrateAll(db *gorm.DB) error {
 	return DropLegacyIndexes(db)
 }
 
+// mysqlJSONColumns 记录从 SQLite 复制到 MySQL 时需要归一化为合法 JSON 的列（type:json 字段）。
+// SQLite 允许这些列存空字符串，而 MySQL 的 JSON 列拒绝空串（Error 3140: Invalid JSON text: "The document is empty."），
+// 复制时统一改写为 "[]"，与 CreateNovel 的代码兜底保持一致。
+var mysqlJSONColumns = map[string][]string{
+	"novels": {"tags"},
+}
+
 // CopyAllTables 将 src 的所有表数据完整复制到 dst（dst 需已 AutoMigrate）。
 // 通过 SELECT * → map 扫描逐表复制，保留主键 ID 与时间戳，外键关系保持一致性。
 // 复制期间临时关闭外键检查（防止表复制顺序触发外键失败），完成后恢复。
@@ -170,6 +177,18 @@ func CopyAllTables(src, dst *gorm.DB, onTable func(table string, rows int64)) (m
 		var rows []map[string]interface{}
 		if err := src.Table(t).Find(&rows).Error; err != nil {
 			return result, fmt.Errorf("读取表 %s 失败: %w", t, err)
+		}
+		// MySQL 目标：JSON 列空字符串归一化为 "[]"（SQLite 允许空串，MySQL JSON 列拒绝 → Error 3140）
+		if dst.Dialector.Name() == "mysql" {
+			if jsonCols, ok := mysqlJSONColumns[t]; ok && len(rows) > 0 {
+				for _, row := range rows {
+					for _, col := range jsonCols {
+						if v, ok := row[col].(string); ok && v == "" {
+							row[col] = "[]"
+						}
+					}
+				}
+			}
 		}
 		// 事务内批量插入，提升跨库复制速度
 		err := dst.Transaction(func(tx *gorm.DB) error {

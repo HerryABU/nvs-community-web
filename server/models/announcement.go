@@ -6,7 +6,7 @@ import "time"
 // 管理后台维护，前台首页/公告栏展示；置顶公告优先显示。
 type Announcement struct {
 	ID        uint       `gorm:"primaryKey" json:"id"`
-	Title     string     `gorm:"size:256;not null" json:"title"` // 公告标题
+	Title     string     `gorm:"size:255;not null" json:"title"` // 公告标题
 	Content   string     `gorm:"type:text" json:"content"`       // 公告内容（支持 Markdown）
 	Pinned    bool       `gorm:"default:false" json:"pinned"`    // 是否置顶
 	Published bool       `gorm:"default:true" json:"published"`  // 是否发布（false=草稿不展示）

@@ -7,29 +7,28 @@ import (
 )
 
 type Novel struct {
-	ID              uint      `gorm:"primaryKey" json:"id"`
-	AuthorID        uint      `gorm:"not null;index;index:idx_novels_author_status,priority:1" json:"author_id"`
-	Title           string    `gorm:"size:256;not null" json:"title"`
-	Category        string    `gorm:"size:64;default:其他;index" json:"category"`
-	Tags            string    `gorm:"type:json" json:"tags"`
-	Summary         string    `gorm:"type:text" json:"summary"`
-	CoverURL        string    `gorm:"size:512;default:''" json:"cover_url"`
-	PricePerChapter float64   `gorm:"type:decimal(10,2);default:0.00" json:"price_per_chapter"`
-	Status          string    `gorm:"size:16;default:draft;index:idx_novels_author_status,priority:2" json:"status"`
-	SourceType      string    `gorm:"size:16;default:original" json:"source_type"`        // original / reprint
-	CreationMethod  string    `gorm:"size:16;default:human" json:"creation_method"`       // human / ai / human_ai_assisted
-	TotalWords      int       `gorm:"default:0" json:"total_words"`
-	TotalChapters   int       `gorm:"default:0" json:"total_chapters"`
-	ViewCount       int       `gorm:"default:0" json:"view_count"`
-	BanReason       string    `gorm:"size:512;default:''" json:"ban_reason"` // 176号令封禁原因（封禁时写入，作者端可查）
-	DeletedBy       string    `gorm:"size:16;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
-	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
+	ID              uint           `gorm:"primaryKey" json:"id"`
+	AuthorID        uint           `gorm:"not null;index;index:idx_novels_author_status,priority:1" json:"author_id"`
+	Title           string         `gorm:"size:256;not null" json:"title"`
+	Category        string         `gorm:"size:64;default:其他;index" json:"category"`
+	Tags            string         `gorm:"type:json" json:"tags"` // JSON 数组，代码中保证默认 "[]"（MySQL JSON 不支持 DEFAULT）
+	Summary         string         `gorm:"type:text" json:"summary"`
+	CoverURL        string         `gorm:"size:512;default:''" json:"cover_url"`
+	PricePerChapter float64        `gorm:"type:decimal(10,2);default:0.00" json:"price_per_chapter"`
+	Status          string         `gorm:"size:32;default:draft;index:idx_novels_author_status,priority:2" json:"status"`
+	SourceType      string         `gorm:"size:32;default:original" json:"source_type"`  // original / reprint
+	CreationMethod  string         `gorm:"size:32;default:human" json:"creation_method"` // human / ai / human_ai_assisted
+	TotalWords      int            `gorm:"default:0" json:"total_words"`
+	TotalChapters   int            `gorm:"default:0" json:"total_chapters"`
+	ViewCount       int            `gorm:"default:0" json:"view_count"`
+	BanReason       string         `gorm:"type:text" json:"ban_reason"`                    // 封禁原因（可能很长）
+	DeletedBy       string         `gorm:"size:32;default:''" json:"deleted_by,omitempty"` // user/admin
+	CreatedAt       time.Time      `json:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at"`
+	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
 
-	// 关联
-	Author       *User           `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
-	Categories   []NovelCategory `gorm:"foreignKey:NovelID" json:"-"`
+	Author        *User           `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
+	Categories    []NovelCategory `gorm:"foreignKey:NovelID" json:"-"`
 	CategoryNames []string        `gorm:"-" json:"categories,omitempty"`
 }
 
@@ -48,7 +47,11 @@ func (Novel) TableName() string {
 	return "novels"
 }
 
+// CreateNovel 创建作品。Tags 为 JSON 字段（MySQL 不允许 DEFAULT），此处兜底为合法空数组
 func CreateNovel(novel *Novel) error {
+	if novel.Tags == "" {
+		novel.Tags = "[]"
+	}
 	return DB.Create(novel).Error
 }
 
@@ -190,21 +193,21 @@ func DeleteNovel(id uint) error {
 
 // Chapter 章节模型
 type Chapter struct {
-	ID            uint      `gorm:"primaryKey" json:"id"`
-	NovelID       uint      `gorm:"not null;uniqueIndex:uk_novel_chapter;index" json:"novel_id"`
-	ChapterNumber int       `gorm:"not null;uniqueIndex:uk_novel_chapter" json:"chapter_number"`
-	Title         string    `gorm:"size:256;not null" json:"title"`
-	Content       string    `gorm:"-" json:"content,omitempty"`
-	ContentPath   string    `gorm:"size:512;not null" json:"content_path"`
-	ContentHash      string `gorm:"size:64;default:''" json:"content_hash"`
-	ContentSignature string `gorm:"size:64;default:''" json:"content_signature"` // HMAC-SHA256 作者签名
-	WordCount        int    `gorm:"default:0" json:"word_count"`
-	Status        string    `gorm:"size:16;default:draft" json:"status"`
-	BanReason     string    `gorm:"size:512;default:''" json:"ban_reason"` // 176号令封禁原因（封禁时写入）
-	DeletedBy     string    `gorm:"size:16;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
-	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
+	ID               uint           `gorm:"primaryKey" json:"id"`
+	NovelID          uint           `gorm:"not null;uniqueIndex:uk_novel_chapter;index" json:"novel_id"`
+	ChapterNumber    int            `gorm:"not null;uniqueIndex:uk_novel_chapter" json:"chapter_number"`
+	Title            string         `gorm:"size:256;not null" json:"title"`
+	Content          string         `gorm:"-" json:"content,omitempty"`
+	ContentPath      string         `gorm:"size:512;not null" json:"content_path"`
+	ContentHash      string         `gorm:"size:64;default:''" json:"content_hash"`
+	ContentSignature string         `gorm:"size:64;default:''" json:"content_signature"` // HMAC-SHA256 作者签名
+	WordCount        int            `gorm:"default:0" json:"word_count"`
+	Status           string         `gorm:"size:32;default:draft" json:"status"`
+	BanReason        string         `gorm:"type:text" json:"ban_reason"`                      // 176号令封禁原因（封禁时写入）
+	DeletedBy        string         `gorm:"size:32;default:''" json:"deleted_by,omitempty"`   // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 }
 
 func (Chapter) TableName() string {

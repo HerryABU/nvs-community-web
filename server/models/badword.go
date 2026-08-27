@@ -9,14 +9,14 @@ import "time"
 // 适用范围 scope：all（全部）或逗号分隔组合 chapter,comment,forum,blog
 type BadWord struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
-	Name        string    `gorm:"size:128;not null" json:"name"`            // 规则名称
-	MatchType   string    `gorm:"size:16;default:literal" json:"match_type"` // literal / regex
-	Pattern     string    `gorm:"type:text;not null" json:"pattern"`        // 关键词或正则表达式
-	Action      string    `gorm:"size:16;default:mark" json:"action"`       // mark / delete / replace
-	Replacement string    `gorm:"size:256;default:''" json:"replacement"`   // 仅 replace 动作时使用
-	Scope       string    `gorm:"size:128;default:all" json:"scope"`        // all / chapter,comment,forum,blog
-	Enabled     bool      `gorm:"default:true" json:"enabled"`              // 是否启用
-	Description string    `gorm:"type:text" json:"description"`             // 规则说明
+	Name        string    `gorm:"size:255;not null" json:"name"`             // 规则名称
+	MatchType   string    `gorm:"size:32;default:literal" json:"match_type"` // literal / regex
+	Pattern     string    `gorm:"type:text;not null" json:"pattern"`         // 关键词或正则表达式
+	Action      string    `gorm:"size:32;default:mark" json:"action"`        // mark / delete / replace
+	Replacement string    `gorm:"type:text" json:"replacement"`              // 仅 replace 动作时使用
+	Scope       string    `gorm:"size:64;default:all" json:"scope"`          // all / chapter,comment,forum,blog
+	Enabled     bool      `gorm:"default:true" json:"enabled"`               // 是否启用
+	Description string    `gorm:"type:text" json:"description"`              // 规则说明
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -66,14 +66,14 @@ func DeleteBadWord(id uint) error {
 // BadWordFlag 违禁词命中标记记录：mark 动作命中后写入，进入管理员待审列表
 type BadWordFlag struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`
-	ContentType  string    `gorm:"size:32;not null;index" json:"content_type"` // comment / chapter / forum / blog
-	ContentID    uint      `gorm:"not null" json:"content_id"`                 // 对应内容 ID
-	UserID       uint      `gorm:"not null;index" json:"user_id"`              // 内容作者
-	ContentTitle string    `gorm:"size:256" json:"content_title"`              // 内容标题/摘要（评论为片段前缀，章节/帖子为标题）
-	Snippet      string    `gorm:"type:text" json:"snippet"`                   // 命中片段快照
-	MatchedWords string    `gorm:"type:text" json:"matched_words"`             // 命中的违禁词列表（JSON 数组）
+	ContentType  string    `gorm:"size:32;not null;index" json:"content_type"`  // comment / chapter / forum / blog
+	ContentID    uint      `gorm:"not null" json:"content_id"`                  // 对应内容 ID
+	UserID       uint      `gorm:"not null;index" json:"user_id"`               // 内容作者
+	ContentTitle string    `gorm:"size:256" json:"content_title"`               // 内容标题/摘要（评论为片段前缀，章节/帖子为标题）
+	Snippet      string    `gorm:"type:text" json:"snippet"`                    // 命中片段快照
+	MatchedWords string    `gorm:"type:text" json:"matched_words"`              // 命中的违禁词列表（JSON 数组）
 	Status       string    `gorm:"size:16;default:pending;index" json:"status"` // pending（待审）/ confirmed（确认违规）/ dismissed（放行）
-	Note         string    `gorm:"type:text" json:"note"`                      // 管理员处理备注
+	Note         string    `gorm:"type:text" json:"note"`                       // 管理员处理备注
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
