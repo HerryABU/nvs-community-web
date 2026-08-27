@@ -335,7 +335,7 @@ func loadFileContent(path string) string {
 	if path == "" {
 		return ""
 	}
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(utils.ResolveContentPath(path))
 	if err != nil {
 		return ""
 	}

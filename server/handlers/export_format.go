@@ -75,7 +75,7 @@ func ExportEPUB(c *gin.Context) {
 
 	// 章节 xhtml
 	for i, ch := range chapters {
-		content, _ := os.ReadFile(ch.ContentPath)
+		content, _ := os.ReadFile(utils.ResolveContentPath(ch.ContentPath))
 		xhtml := fmt.Sprintf(`<?xml version="1.0"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -111,7 +111,7 @@ func ExportTXT(c *gin.Context) {
 		strings.Repeat("=", 50)))
 
 	for _, ch := range chapters {
-		content, _ := os.ReadFile(ch.ContentPath)
+		content, _ := os.ReadFile(utils.ResolveContentPath(ch.ContentPath))
 		// 保留原始内容（章节存储为 Markdown），转换为纯文本
 		text := string(content)
 		// 简单清理 Markdown 标记
@@ -149,7 +149,7 @@ func ExportDOCX(c *gin.Context) {
 
 	exports := make([]chapterForExport, 0, len(chapters))
 	for _, ch := range chapters {
-		content, _ := os.ReadFile(ch.ContentPath)
+		content, _ := os.ReadFile(utils.ResolveContentPath(ch.ContentPath))
 		exports = append(exports, chapterForExport{
 			Title:   fmt.Sprintf("第%d章 %s", ch.ChapterNumber, ch.Title),
 			Content: string(content),
@@ -188,7 +188,7 @@ func ExportMarkdown(c *gin.Context) {
 		novel.Title, novel.AuthorID, novel.Category, len(chapters)))
 
 	for _, ch := range chapters {
-		content, _ := os.ReadFile(ch.ContentPath)
+		content, _ := os.ReadFile(utils.ResolveContentPath(ch.ContentPath))
 		// 保留原始 Markdown 内容（不做 HTML→Markdown 转换）
 		md.WriteString(fmt.Sprintf("## 第%d章 %s\n\n%s\n\n", ch.ChapterNumber, ch.Title, string(content)))
 	}

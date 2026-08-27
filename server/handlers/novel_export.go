@@ -58,7 +58,7 @@ func ExportNovel(c *gin.Context) {
 	for _, ch := range chapters {
 		// 读取章节内容文件
 		if ch.ContentPath != "" {
-			content, err := os.ReadFile(ch.ContentPath)
+			content, err := os.ReadFile(utils.ResolveContentPath(ch.ContentPath))
 			if err == nil {
 				fileName := fmt.Sprintf("chapter_%04d.html", ch.ChapterNumber)
 				w, _ := zipWriter.Create(fileName)

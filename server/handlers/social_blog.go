@@ -133,7 +133,7 @@ func ImportBlogs(c *gin.Context) {
 		}
 		contentHash := computeBlogHash(content)
 		models.DB.Model(blog).Updates(map[string]interface{}{
-			"content_path": contentPath,
+			"content_path": filepath.ToSlash(contentPath),
 			"content_hash": contentHash,
 		})
 		if categoryID > 0 {
@@ -207,13 +207,13 @@ func CreateBlog(c *gin.Context) {
 		return
 	}
 
-	// 更新路径和哈希到数据库
+	// 更新路径和哈希到数据库（存库统一正斜杠，跨平台可移植）
 	contentHash := computeBlogHash(content)
 	models.DB.Model(blog).Updates(map[string]interface{}{
-		"content_path": contentPath,
+		"content_path": filepath.ToSlash(contentPath),
 		"content_hash": contentHash,
 	})
-	blog.ContentPath = contentPath
+	blog.ContentPath = filepath.ToSlash(contentPath)
 	blog.ContentHash = contentHash
 	blog.Content = content
 	blog.Category = models.GetBlogCategoryName(blog.CategoryID)
@@ -238,7 +238,7 @@ func loadBlogContent(blog *models.AuthorBlog) {
 	if blog.ContentPath == "" {
 		return
 	}
-	data, err := os.ReadFile(blog.ContentPath)
+	data, err := os.ReadFile(utils.ResolveContentPath(blog.ContentPath))
 	if err != nil {
 		return
 	}
@@ -400,7 +400,7 @@ func UpdateBlog(c *gin.Context) {
 		var badHits []security.BadWordHit
 		content, badHits = processBadWords(raw, "blog")
 		if blog.ContentPath != "" {
-			os.WriteFile(blog.ContentPath, []byte(content), 0644)
+			os.WriteFile(utils.ResolveContentPath(blog.ContentPath), []byte(content), 0644)
 		}
 		contentHash := computeBlogHash(content)
 		blog.ContentHash = contentHash

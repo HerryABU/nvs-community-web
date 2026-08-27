@@ -76,7 +76,7 @@ func CreateChapter(c *gin.Context) {
 		NovelID:          uint(novelID),
 		ChapterNumber:    nextNum,
 		Title:            bluemonday.StrictPolicy().Sanitize(req.Title),
-		ContentPath:      contentPath,
+		ContentPath:      filepath.ToSlash(contentPath), // 存库统一正斜杠，跨平台可移植（Windows/Linux 均可读）
 		ContentHash:      contentHash,
 		ContentSignature: contentSignature,
 		WordCount:        wordCount,
@@ -139,7 +139,7 @@ func UpdateChapter(c *gin.Context) {
 	}
 	if req.Content != "" {
 		// 直接存储原始 Markdown 内容
-		if err := os.WriteFile(chapter.ContentPath, []byte(req.Content), 0644); err != nil {
+		if err := os.WriteFile(utils.ResolveContentPath(chapter.ContentPath), []byte(req.Content), 0644); err != nil {
 			utils.InternalError(c, "写入文件失败")
 			return
 		}
@@ -190,8 +190,8 @@ func DeleteChapter(c *gin.Context) {
 	os.MkdirAll(deletedDir, 0755)
 	deletedPath := filepath.Join(deletedDir, fmt.Sprintf("%d_%d.html", chapterNum, time.Now().Unix()))
 	if chapter.ContentPath != "" {
-		if err := os.Rename(chapter.ContentPath, deletedPath); err == nil {
-			models.DB.Model(&models.Chapter{}).Where("id = ?", chapter.ID).Update("content_path", deletedPath)
+		if err := os.Rename(utils.ResolveContentPath(chapter.ContentPath), deletedPath); err == nil {
+			models.DB.Model(&models.Chapter{}).Where("id = ?", chapter.ID).Update("content_path", filepath.ToSlash(deletedPath))
 		}
 	}
 
@@ -229,7 +229,7 @@ func renumberChapters(novelID uint, deletedNum int, dir string) {
 
 	for _, ch := range chapters {
 		if ch.ChapterNumber > deletedNum {
-			oldPath := ch.ContentPath
+			oldPath := utils.ResolveContentPath(ch.ContentPath)
 			newNum := ch.ChapterNumber - 1
 			newPath := filepath.Join(dir, fmt.Sprintf("%d.html", newNum))
 
@@ -315,11 +315,12 @@ func generateChecksums(authorID, novelID uint) {
 
 	entries := make([]ChecksumEntry, 0, len(chapters))
 	for _, ch := range chapters {
-		fileInfo, err := os.Stat(ch.ContentPath)
+		contentPath := utils.ResolveContentPath(ch.ContentPath)
+		fileInfo, err := os.Stat(contentPath)
 		if err != nil {
 			continue
 		}
-		content, err := os.ReadFile(ch.ContentPath)
+		content, err := os.ReadFile(contentPath)
 		if err != nil {
 			continue
 		}

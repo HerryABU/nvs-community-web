@@ -36,7 +36,8 @@ func GetChapterContent(c *gin.Context) {
 		return
 	}
 
-	content, err := os.ReadFile(chapter.ContentPath)
+	contentPath := utils.ResolveContentPath(chapter.ContentPath)
+	content, err := os.ReadFile(contentPath)
 	if err != nil {
 		utils.InternalError(c, "读取章节内容失败")
 		return
@@ -46,7 +47,7 @@ func GetChapterContent(c *gin.Context) {
 	currentHash := computeSHA256(string(content))
 	var fileSize int64
 	var modTime int64
-	if fi, err := os.Stat(chapter.ContentPath); err == nil {
+	if fi, err := os.Stat(contentPath); err == nil {
 		fileSize = fi.Size()
 		modTime = fi.ModTime().Unix()
 	}
@@ -86,13 +87,14 @@ func VerifyChapter(c *gin.Context) {
 		return
 	}
 
-	content, err := os.ReadFile(chapter.ContentPath)
+	contentPath := utils.ResolveContentPath(chapter.ContentPath)
+	content, err := os.ReadFile(contentPath)
 	if err != nil {
 		utils.InternalError(c, "读取文件失败")
 		return
 	}
 
-	fileInfo, err := os.Stat(chapter.ContentPath)
+	fileInfo, err := os.Stat(contentPath)
 	if err != nil {
 		utils.InternalError(c, "获取文件信息失败")
 		return

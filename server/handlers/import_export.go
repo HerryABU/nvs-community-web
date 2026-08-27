@@ -230,7 +230,7 @@ func writeParsedChapters(novel *models.Novel, chapters []parsedChapter, startNum
 			NovelID:          novel.ID,
 			ChapterNumber:    num,
 			Title:            ch.title,
-			ContentPath:      contentPath,
+			ContentPath:      filepath.ToSlash(contentPath), // 存库统一正斜杠，跨平台可移植
 			ContentHash:      contentHash,
 			ContentSignature: contentSignature,
 			WordCount:        len([]rune(ch.content)),

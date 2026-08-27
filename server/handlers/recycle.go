@@ -304,13 +304,14 @@ func restoreChapterFile(ch *models.Chapter) {
 	if ch.ContentPath == "" {
 		return
 	}
+	contentPath := utils.ResolveContentPath(ch.ContentPath)
 	// 若正文文件不存在（在 .deleted/ 中），尝试按命名规则找回
-	if _, err := os.Stat(ch.ContentPath); err != nil {
-		dir := filepath.Dir(ch.ContentPath)
+	if _, err := os.Stat(contentPath); err != nil {
+		dir := filepath.Dir(contentPath)
 		deletedDir := filepath.Join(filepath.Dir(dir), ".deleted")
 		matches, _ := filepath.Glob(filepath.Join(deletedDir, itoa(ch.ChapterNumber)+"_*.html"))
 		if len(matches) > 0 {
-			if err := copyFile(matches[0], ch.ContentPath); err == nil {
+			if err := copyFile(matches[0], contentPath); err == nil {
 				models.DB.Model(&models.Chapter{}).Where("id = ?", ch.ID).
 					Update("content_path", ch.ContentPath)
 			}
