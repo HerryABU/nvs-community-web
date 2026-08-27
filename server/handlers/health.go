@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"context"
+	"database/sql"
 	"net"
 	"runtime"
+	"sync"
 	"time"
 
 	"nvs-server/config"
@@ -45,10 +47,17 @@ func CollectHealth() gin.H {
 		if sqlDB, err := models.DB.DB(); err == nil && sqlDB != nil {
 			t0 := time.Now()
 			if err := sqlDB.Ping(); err == nil {
+				latency := time.Since(t0)
 				db["ok"] = true
-				db["latency_ms"] = time.Since(t0).Milliseconds()
+				db["latency_ms"] = latency.Milliseconds()
+				// 数据库驱动类型（sqlite / mysql）——不暴露连接串/账号/库名等敏感信息
+				db["driver"] = models.DB.Dialector.Name()
+				// 稳定性：最近 N 次健康检查的成功率 + 连接池运行状态
+				db["stable"] = dbHealth.record(true, latency)
+				db["pool"] = poolStats(sqlDB)
 			} else {
-				// 🔒 安全审计 L1：不向公开接口回显数据库驱动/原始错误（可能泄露内部路径与版本）
+				db["stable"] = dbHealth.record(false, 0)
+				// 🔒 安全审计 L1：不向公开接口回显原始错误（可能泄露内部路径与版本）
 				db["error"] = "database unavailable"
 			}
 		}
@@ -138,4 +147,90 @@ func probeOutbound() error {
 
 func round2(f float64) float64 {
 	return float64(int(f*100+0.5)) / 100
+}
+
+// ==================== 数据库健康跟踪（稳定性） ====================
+// dbHealthTracker 进程内维护最近 N 次数据库健康检查结果，
+// 用于 /health 展示稳定性：成功率、连续失败次数、最近成功/失败时间。
+// 纯内存状态，无文件 I/O，重启后窗口清空重建。
+
+const dbHealthWindow = 20 // 滑动窗口大小：统计最近 20 次检查
+
+var dbHealth = &dbHealthTracker{max: dbHealthWindow}
+
+type dbHealthTracker struct {
+	mu               sync.Mutex
+	max              int      // 滑动窗口大小
+	window           []bool   // 最近 max 次结果（true=成功）
+	checks           int      // 窗口内累计检查次数（未满窗口时小于 max）
+	consecutiveFails int      // 当前连续失败次数
+	lastOKAt         time.Time
+	lastFailAt       time.Time
+	lastLatencyMs    int64
+}
+
+// record 记录一次检查结果，返回稳定性摘要（供 /health 展示）
+func (t *dbHealthTracker) record(ok bool, latency time.Duration) map[string]interface{} {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if ok {
+		t.consecutiveFails = 0
+		t.lastOKAt = time.Now()
+		t.lastLatencyMs = latency.Milliseconds()
+	} else {
+		t.consecutiveFails++
+		t.lastFailAt = time.Now()
+	}
+
+	t.window = append(t.window, ok)
+	if len(t.window) > t.max {
+		t.window = t.window[len(t.window)-t.max:]
+	}
+	if t.checks < t.max {
+		t.checks++
+	}
+
+	// 窗口内成功率（0-100）
+	succ := 0
+	for _, r := range t.window {
+		if r {
+			succ++
+		}
+	}
+	rate := 0
+	if len(t.window) > 0 {
+		rate = succ * 100 / len(t.window)
+	}
+
+	summary := gin.H{
+		"success_rate":       rate, // 最近 N 次成功率（%）
+		"checks_in_window":   len(t.window),
+		"consecutive_fails":  t.consecutiveFails,
+		"last_latency_ms":    t.lastLatencyMs,
+		"last_ok_at":         t.lastOKAt.Format(time.RFC3339),
+		"status":             "stable",
+	}
+	if t.consecutiveFails > 0 {
+		summary["status"] = "degraded"
+		summary["last_fail_at"] = t.lastFailAt.Format(time.RFC3339)
+	}
+	return summary
+}
+
+// poolStats 返回数据库连接池运行状态（稳定性/容量参考）
+func poolStats(sqlDB interface {
+	Stats() sql.DBStats
+}) gin.H {
+	stats := sqlDB.Stats()
+	return gin.H{
+		"max_open":        stats.MaxOpenConnections, // 最大连接数上限
+		"open":            stats.OpenConnections,    // 当前打开的连接数
+		"in_use":          stats.InUse,              // 正在使用的连接数
+		"idle":            stats.Idle,               // 空闲连接数
+		"wait_count":      stats.WaitCount,          // 等待连接的累计次数（高说明连接不足）
+		"wait_ms":         stats.WaitDuration.Milliseconds(),
+		"max_idle_closed": stats.MaxIdleClosed,
+		"max_lifetime":    stats.MaxLifetimeClosed,
+	}
 }
