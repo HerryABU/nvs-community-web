@@ -10,6 +10,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type rateLimiterEntry struct {
@@ -198,12 +199,18 @@ func touchKeyLastUsed(identity *models.KeyIdentity) {
 		return
 	}
 	now := time.Now()
+	updates := map[string]interface{}{
+		"total_calls": gorm.Expr("total_calls + ?", 1),
+	}
+	if shouldThrottle(touchThrottle, identity.KeyHash) {
+		updates["last_used_at"] = now
+	}
 	if identity.Type == "federated" {
 		models.DB.Model(&models.FederatedPeerKey{}).Where("id = ?", identity.ID).
-			Update("last_used_at", now)
+			Updates(updates)
 	} else {
 		models.DB.Model(&models.APIKey{}).Where("id = ? AND user_id = ?", identity.ID, identity.UserID).
-			Update("last_used_at", now)
+			Updates(updates)
 	}
 }
 

@@ -239,7 +239,7 @@ func RegenerateAPIKey(c *gin.Context) {
 		return
 	}
 	models.DB.Model(&key).Updates(map[string]interface{}{
-		"key_hash": hash, "key_prefix": prefix, "last_used_at": nil,
+		"key_hash": hash, "key_prefix": prefix, "last_used_at": nil, "total_calls": 0,
 	})
 	utils.Success(c, gin.H{"message": "已重新生成，旧 Key 立即失效", "key": full, "key_prefix": prefix})
 }

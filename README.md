@@ -473,6 +473,23 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v2.3.3 管理子页居中补全 + API Key 调用次数 + 爬虫接入文档（2026-08-28）
+
+> 1. **管理子页居中**：`/admin/users`（用户管理）此前使用独立 `.page-container`，风格与其他 `/admin/*` 子页不一致；统一改为 `AdminHeader` + `.admin-page-body` 布局，与限流/设置等页保持一致的居中列。其余 `/admin/*` 子页已由 v2.3.2 前后若干 commit 完成居中，本次补齐最后一块。
+> 2. **API Key 累计调用次数**：`api_keys` 与 `federated_peer_keys` 新增 `total_calls` 字段，每次携带有效 Key 的请求通过后原子 +1；重新生成 Key 时归零。用户侧「API Key 管理」与管理端「限流与 API Key」均新增「调用次数」列，便于审计与配额规划。
+> 3. **爬虫接入文档**：新增 `docs/api-key-crawler.md`，说明如何申请 Key、如何用 Python `requests` 携带 `X-API-Key` 爬取公开接口、分页遍历与 429 退避重试示例。
+
+| 类别 | 文件 | 说明 |
+|---|---|---|
+| 管理页 | `web/src/views/UserManagement.vue` | 统一使用 `admin-page`/`AdminHeader`/`admin-page-body`，继承全局居中规则 |
+| API Key | `server/models/api_key.go` | `APIKey`/`FederatedPeerKey` 新增 `total_calls int64` |
+| API Key | `server/security/ratelimit.go` | 每次有效 Key 请求原子累加 `total_calls`，`last_used_at` 保持分钟级去重 |
+| API Key | `server/handlers/api_key.go` | 重生成 Key 时 `total_calls` 归零 |
+| 前端 | `web/src/views/Settings.vue` | Key 列表增加「调用次数」列 |
+| 前端 | `web/src/views/admin/AdminRateLimit.vue` | 管理员 Key 一览增加「调用次数」列 |
+| 文档 | `docs/api-key-crawler.md` | Python requests 爬虫接入指南 |
+| 版本 | `server/version/version.go` / `web/package.json` | 版本号 2.3.2 → **2.3.3** |
+
 ### v2.3.2 修复「清空限流」对 IP 行为降级失效（管理员自锁死）（2026-08-28）
 
 > 真实浏览器端到端验证中发现两处连环缺陷，均位于管理员「限流与 API Key → 清空限流」解封链路上：

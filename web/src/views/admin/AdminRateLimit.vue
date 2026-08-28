@@ -146,6 +146,9 @@
           <el-table-column label="最近使用" width="160">
             <template #default="{ row }">{{ formatTime(row.last_used_at) }}</template>
           </el-table-column>
+          <el-table-column label="调用次数" width="90">
+            <template #default="{ row }">{{ row.total_calls ?? 0 }}</template>
+          </el-table-column>
         </el-table>
       </div>
 

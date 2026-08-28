@@ -39,6 +39,7 @@ type APIKey struct {
 	AllowedIPs string     `gorm:"size:512;default:''" json:"allowed_ips"` // 可选 IP/CIDR 白名单（逗号分隔）
 	ExpiresAt  *time.Time `json:"expires_at"`                             // 可选过期时间
 	LastUsedAt *time.Time `json:"last_used_at"`
+	TotalCalls int64      `gorm:"default:0" json:"total_calls"`           // 累计调用次数（每次带 Key 请求命中后 +1）
 	IsActive   bool       `gorm:"default:true" json:"is_active"`
 	CreatedAt  time.Time  `json:"created_at"`
 	UpdatedAt  time.Time  `json:"updated_at"`
@@ -66,6 +67,7 @@ type FederatedPeerKey struct {
 	AllowedIPs  string     `gorm:"size:512;default:''" json:"allowed_ips"` // 可选来源 IP 白名单
 	ExpiresAt   *time.Time `json:"expires_at"`
 	LastUsedAt  *time.Time `json:"last_used_at"`
+	TotalCalls  int64      `gorm:"default:0" json:"total_calls"`           // 累计调用次数（联邦 Key 命中后 +1）
 	IsActive    bool       `gorm:"default:true" json:"is_active"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`

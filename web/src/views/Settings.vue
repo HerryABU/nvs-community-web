@@ -131,6 +131,7 @@
               创建 API Key 后，调用本站 API 时携带 <code>X-API-Key</code> 请求头即可获得远高于匿名访问的配额。
               不带 Key 的请求会被压到很低的匿名配额，被识别为爬虫则更低，命中已知名头爬虫名单会直接 403 ——
               批量抓取/自动化脚本想提速，请在请求中带上你的 Key。可自设不超过角色上限的更小配额，随时停用/吊销。
+              详细接入示例见仓库 <code>docs/api-key-crawler.md</code>。
             </div>
           </template>
         </el-alert>
@@ -188,6 +189,9 @@
           </el-table-column>
           <el-table-column label="最近使用" width="150">
             <template #default="{ row }">{{ formatTime(row.last_used_at) }}</template>
+          </el-table-column>
+          <el-table-column label="调用次数" width="90">
+            <template #default="{ row }">{{ row.total_calls ?? 0 }}</template>
           </el-table-column>
           <el-table-column label="操作" width="200" fixed="right">
             <template #default="{ row }">

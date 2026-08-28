@@ -1,24 +1,26 @@
 <template>
-  <div class="page-container">
-    <div class="um-header">
-      <h2>用户管理</h2>
-      <div class="um-actions">
-        <el-input
-          v-model="search"
-          placeholder="搜索用户名/昵称/邮箱"
-          clearable
-          style="width: 280px"
-          @clear="doSearch"
-          @keyup.enter="doSearch"
-        >
-          <template #prefix><el-icon><Search /></el-icon></template>
-        </el-input>
-        <el-button type="primary" @click="doSearch" :loading="loading">搜索</el-button>
-        <el-button @click="$router.push('/admin')">返回后台</el-button>
-      </div>
-    </div>
+  <div class="admin-page">
+    <AdminHeader title="用户管理" subtitle="搜索 · 编辑 · 禁言 · 封禁" :icon="User">
+      <template #actions>
+        <div class="um-actions">
+          <el-input
+            v-model="search"
+            placeholder="搜索用户名/昵称/邮箱"
+            clearable
+            style="width: 280px"
+            @clear="doSearch"
+            @keyup.enter="doSearch"
+          >
+            <template #prefix><el-icon><Search /></el-icon></template>
+          </el-input>
+          <el-button type="primary" @click="doSearch" :loading="loading">搜索</el-button>
+          <el-button @click="$router.push('/admin')">返回后台</el-button>
+        </div>
+      </template>
+    </AdminHeader>
 
-    <el-table :data="users" v-loading="loading" stripe style="width: 100%; margin-top: 16px">
+    <div class="admin-page-body">
+      <el-table :data="users" v-loading="loading" stripe style="width: 100%">
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="username" label="用户名" width="140" />
       <el-table-column prop="nickname" label="昵称" width="140" />
@@ -56,14 +58,15 @@
       </el-table-column>
     </el-table>
 
-    <div class="um-pagination" v-if="total > 20">
-      <el-pagination
-        v-model:current-page="page"
-        :page-size="20"
-        :total="total"
-        layout="prev, pager, next, total"
-        @current-change="loadUsers"
-      />
+      <div class="um-pagination" v-if="total > 20">
+        <el-pagination
+          v-model:current-page="page"
+          :page-size="20"
+          :total="total"
+          layout="prev, pager, next, total"
+          @current-change="loadUsers"
+        />
+      </div>
     </div>
 
     <!-- 编辑弹窗 -->
@@ -94,6 +97,8 @@
 import { ref, onMounted } from 'vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import AdminHeader from '@/components/admin/AdminHeader.vue';
+import { User } from '@element-plus/icons-vue';
 
 interface UserRow {
   id: number;
@@ -228,19 +233,15 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.page-container { max-width: 1100px; margin: 0 auto; padding: 24px; }
-.um-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-.um-header h2 { margin: 0; }
+.admin-page { --admin-content-max: 1280px; min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
+.admin-page-body { max-width: 1280px; }
 .um-actions { display: flex; align-items: center; gap: 8px; }
-.um-pagination { margin-top: 16px; display: flex; justify-content: center; }
+.um-pagination { margin-top: 16px; display: flex; justify-content: flex-end; }
 .muted { color: var(--text-light); }
+[data-theme="dark"] .admin-page { background: #0f172a; }
 
 /* ====== 移动端用户管理适配 ====== */
 @media (max-width: 768px) {
-  .um-header {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
   .um-actions {
     flex-wrap: wrap;
     width: 100%;
@@ -250,7 +251,7 @@ onMounted(() => {
     min-width: 140px;
   }
   /* 表格横向滚动 */
-  .page-container > .el-table {
+  .admin-page-body > .el-table {
     display: block;
     overflow-x: auto;
     min-width: 640px;
