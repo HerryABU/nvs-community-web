@@ -59,7 +59,7 @@ type FederatedPeerKey struct {
 	PeerName    string     `gorm:"size:128;default:''" json:"peer_name"`   // 对方站点名（本站视角）
 	KeyHash     string     `gorm:"size:64;uniqueIndex;not null" json:"-"`  // sha256(hex)
 	KeyPrefix   string     `gorm:"size:24;not null" json:"key_prefix"`     // nvs_fed_xxxx
-	KeyCipher   string     `gorm:"size:512;default:''" json:"-"`           // outbound 明文 Key 加密存储（AES-256-GCM hex）
+	KeyCipher   string     `gorm:"size:1024;default:''" json:"-"` // outbound 明文 Key 经 AES-256-GCM 加密后 hex 存储。长度推导：hex = 2 × (nonce 12 + 明文 N + tag 16) = 2N + 56；N=256 → 568 字符。取 1024 可容纳最长 484 字符的对端 Key，MySQL/SQLite 均安全
 	IssuerName  string     `gorm:"size:128;default:''" json:"issuer_name"` // 签发方站名（被链接的站据此识别「是谁的 Key」）
 	IssuerURL   string     `gorm:"size:512;default:''" json:"issuer_url"`
 	QuotaPerMin int        `gorm:"default:5000" json:"quota_per_min"`
@@ -85,7 +85,7 @@ type ApiAccessLog struct {
 	IdentityID   uint      `json:"identity_id"`                        // user_id 或 peer_key_id
 	KeyPrefix    string    `gorm:"size:24;default:''" json:"key_prefix"`
 	Method       string    `gorm:"size:8" json:"method"`
-	Path         string    `gorm:"size:256" json:"path"`
+	Path         string    `gorm:"size:512" json:"path"` // 512：URL 查询串较长时避免 MySQL 严格模式 Data too long
 	StatusCode   int       `json:"status_code"`
 	RequestIP    string    `gorm:"size:64" json:"request_ip"`
 	UserAgent    string    `gorm:"size:512" json:"user_agent"`
@@ -160,33 +160,38 @@ type RoleQuota struct {
 }
 
 // APIRateLimitConfig 全局限流配置（JSON 存 platform_configs.api_key_quota）
+// 配额三档关系（无 Key 整体低配额，匿名爬虫更低，有 Key 才高配额）：
+//   有 Key：admin/author/reader/federated 各自高配额（Key 维度）
+//   无 Key：anonymous（普通访客，低配额）→ bot（识别为爬虫，更低）→ blocked（已知名头爬虫，直接 403 阻断）
 type APIRateLimitConfig struct {
 	Admin     RoleQuota `json:"admin"`
 	Author    RoleQuota `json:"author"`
 	Reader    RoleQuota `json:"reader"`
 	Federated RoleQuota `json:"federated"`
-	Anonymous RoleQuota `json:"anonymous"` // 无 Key 匿名
-	Bot       RoleQuota `json:"bot"`       // 识别为爬虫（无头/伪装/超阈值）
+	Anonymous RoleQuota `json:"anonymous"` // 无 Key 匿名（普通访客，低配额）
+	Bot       RoleQuota `json:"bot"`       // 识别为爬虫（无头/伪装/超阈值），配额比匿名更低
 
-	BotUAKeywords  []string `json:"bot_ua_keywords"`   // 自定义爬虫 UA 关键词（与内置并集）
-	BotSpoofCheck  bool     `json:"bot_spoof_check"`   // 伪装头检测：浏览器 UA 但缺 Sec-Fetch-* 头 → 判 bot
-	BotIPThreshold int      `json:"bot_ip_threshold"`  // 单 IP 窗口内请求数超过该值自动降级 bot（0=关闭）
-	BotIPTTLMin    int      `json:"bot_ip_ttl_min"`    // IP 行为统计窗口（分钟，默认 1）
-	LogRetentionDays int    `json:"log_retention_days"` // 访问日志保留天数（默认 7）
+	BotUAKeywords   []string `json:"bot_ua_keywords"`   // 自定义爬虫 UA 关键词（与内置限流名单并集 → 低配额）
+	BotBlockKeywords []string `json:"bot_block_keywords"` // 已知名头爬虫阻断名单（与内置阻断名单并集 → 直接 403）
+	BotSpoofCheck   bool     `json:"bot_spoof_check"`   // 伪装头检测：浏览器 UA 但缺 Sec-Fetch-* 头 → 判 bot
+	BotIPThreshold  int      `json:"bot_ip_threshold"`  // 单 IP 窗口内请求数超过该值自动降级 bot（0=关闭）
+	BotIPTTLMin     int      `json:"bot_ip_ttl_min"`    // IP 行为统计窗口（分钟，默认 1）
+	LogRetentionDays int     `json:"log_retention_days"` // 访问日志保留天数（默认 7）
 }
 
-// DefaultAPIRateLimitConfig 默认配额（与 README 承诺一致，匿名明显高于爬虫）
+// DefaultAPIRateLimitConfig 默认配额。
+// 核心语义：有 Key 高配额；无 Key 低配额（匿名爬虫更低）；已知名头爬虫直接阻断。
 func DefaultAPIRateLimitConfig() APIRateLimitConfig {
 	return APIRateLimitConfig{
 		Admin:     RoleQuota{Req: 10000, Window: 60},
 		Author:    RoleQuota{Req: 1000, Window: 60},
 		Reader:    RoleQuota{Req: 200, Window: 60},
 		Federated: RoleQuota{Req: 5000, Window: 60},
-		Anonymous: RoleQuota{Req: 120, Window: 60},
-		Bot:       RoleQuota{Req: 10, Window: 60},
-		BotSpoofCheck:  true,
-		BotIPThreshold: 300,
-		BotIPTTLMin:    1,
+		Anonymous: RoleQuota{Req: 60, Window: 60}, // 无 Key 普通访客（低于有 Key）
+		Bot:       RoleQuota{Req: 5, Window: 60},  // 匿名爬虫更低
+		BotSpoofCheck:   true,
+		BotIPThreshold:  300,
+		BotIPTTLMin:     1,
 		LogRetentionDays: 7,
 	}
 }

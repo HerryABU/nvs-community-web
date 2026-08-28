@@ -270,6 +270,20 @@ func APIKeyGuard() gin.HandlerFunc {
 		}
 
 		// ===== 匿名 / 爬虫通道 =====
+		// 0) 已知名头爬虫（AI 爬虫 / SEO 采集 / 管理员自定义）→ 直接 403 阻断，不消耗配额
+		if blocked, blockReason := IsBlockedBot(ua); blocked {
+			if shouldThrottle(botLogThrottle, "blocked:"+ip) {
+				_ = models.RecordAccessLog(&models.ApiAccessLog{
+					IdentityType: "blocked", Method: method, Path: path,
+					RequestIP: ip, UserAgent: truncate(ua, 500), BotReason: blockReason,
+				})
+			}
+			c.Header("X-NVS-Blocked", blockReason)
+			utils.Error(c, http.StatusForbidden, utils.CodeForbidden, "已识别为已知名头爬虫，访问被拒绝")
+			c.Abort()
+			return
+		}
+
 		secFetch := HasSecFetchHeaders(
 			c.GetHeader("Sec-Fetch-Site"), c.GetHeader("Sec-Fetch-Mode"), c.GetHeader("Sec-Fetch-Dest"))
 		isBot, botReason := ClassifyBot(ua, secFetch, ip)

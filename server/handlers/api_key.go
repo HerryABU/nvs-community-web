@@ -269,8 +269,9 @@ func GetRateLimitConfig(c *gin.Context) {
 	}
 	cfg := models.LoadAPIRateLimitConfig()
 	utils.Success(c, gin.H{
-		"config":               cfg,
-		"builtin_bot_keywords": security.BuiltinBotKeywords(),
+		"config":                  cfg,
+		"builtin_bot_keywords":    security.BuiltinBotKeywords(),
+		"builtin_block_keywords":  security.BuiltinBlockKeywords(),
 	})
 }
 
