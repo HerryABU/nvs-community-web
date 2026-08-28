@@ -14,13 +14,16 @@ import NavBar from '@/components/NavBar.vue';
 import SiteFooter from '@/components/SiteFooter.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useThemeStore } from '@/stores/theme';
+import { useAppStore } from '@/stores/app';
 
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
+const appStore = useAppStore();
 
 onMounted(() => {
   authStore.fetchUser();
   themeStore.applyTheme();
+  appStore.bootstrap(); // 一次 /api/batch 拉取导航栏/页脚等外壳数据
 });
 </script>
 

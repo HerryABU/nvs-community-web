@@ -473,6 +473,27 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.2.8 已登录用户免限流 + 聚合 API 真正落地首页（2026-08-28）
+
+> 1. **已登录浏览器用户免限流（访客仍受限）**：`APIKeyGuard` 此前只识别 `X-API-Key`，从不识别浏览器登录态，导致已登录用户被当作匿名按 IP 限流。现于 `APIKeyGuard` 内解析 `token` cookie（JWT），命中有效登录态即设置 `CtxKeySkipIP=true` 并放行——既绕过匿名/爬虫 IP 限速，又因为路由级 `RateLimit` 同样读取 `CtxKeySkipIP` 而同步豁免；**访客（无有效 token）仍按匿名/爬虫配额限流**。仅针对浏览器会话，API Key 程序化访问走独立 Key 配额、不受影响。
+> 2. **聚合 API 真正落地（一次请求拿整页）**：后端 `/api/batch` 聚合中间层早已完整实现（并发 goroutine + 内存内转发 + 统一响应），但前端仅有客户端、`无任何页面调用`，属半成品。本版真正打通：
+>    - 新增 `batchGet()` 便捷封装（`web/src/api/batch.ts`），一次调用批量 GET 并按 `id` 返回映射。
+>    - **新增应用级聚合 store** `web/src/stores/app.ts`：导航栏/页脚等所有页面共享的"外壳"数据（站点信息、分类、互联站点、未读数、安装状态）由**一次 `/api/batch`** 并发拉回；`NavBar` / `SiteFooter` 改为消费该 store，不再各自发请求。
+>    - **首页 `Home.vue`** 内容数据（公告、算法说明、分类统计、作品列表）合并为**一次 `/api/batch`**。
+>    - 实测（无头 Chromium 网络拦截）：首屏 **2 次 `/api/batch` + 2 次框架级请求（`/api/auth/me` 鉴权、`/api/setup/status` 安装守卫）**，**页面数据直连请求数 = 0**，控制台 0 错误，站点名/分类/作品/公告/备案号全部正常渲染。原首屏约 13 次独立往返，降至 4 次，且页面数据全部走聚合通道。其余页面（阅读器、作者工作台等）可按同一模式渐进接入。
+> 3. **版本号 3.2.5 → 3.2.8**（语义化顺延）：`server/version/version.go` / `web/package.json` 同步更新，前端 `npm run build` + Go `go build` 通过，`nvs-server.exe` 已重建。
+
+| 类别 | 文件 | 说明 |
+|---|---|---|
+| 限流 | `server/security/ratelimit.go` | 新增 `isLoggedInBrowser()`（解析 `token` cookie 判定登录态）；`APIKeyGuard` 在 health/setup 放行之后、匿名通道之前，已登录即设 `CtxKeySkipIP=true` 并放行 |
+| 限流 | `server/security/login_exempt_test.go` | 新增测试：有效/无效/空/无 cookie 四种登录判定；并将匿名配额打满后，已登录用户连续 50 次请求仍不被 429（且 `CtxKeySkipIP=true`） |
+| 聚合 | `web/src/api/batch.ts` | 新增 `batchGet(specs[])` 便捷封装（GET 批量 → 以 id 为键的结果映射） |
+| 聚合 | `web/src/stores/app.ts` | 新增：应用级外壳数据（站点信息/分类/互联站点/未读数/安装状态）一次 `/api/batch` 拉取，幂等 `bootstrap()` |
+| 聚合 | `web/src/components/NavBar.vue` | 改为消费 `useAppStore`（`storeToRefs`），移除 `loadSiteInfo/loadCategories/loadFederatedSites` 三个独立请求；未读数首屏不再单独拉取 |
+| 聚合 | `web/src/components/SiteFooter.vue` | 改为消费 `useAppStore`，备案号/站点名不再单独请求 |
+| 聚合 | `web/src/views/Home.vue` | 首页内容（公告/算法说明/分类统计/作品列表）合并为 1 次 `batchGet([...])`；分类与站点名改由应用 store 提供 |
+| 版本 | `server/version/version.go` / `web/package.json` | 版本号 3.2.5 → **3.2.8** |
+
 ### v3.2.5 API Key 管理下沉：作者工作台 + 管理员可管（2026-08-28）
 
 > 1. **作者工作台新增 API Key 管理**（`AuthorDashboard.vue`）：作者可在「创作数据大屏」直接创建 / 启停 / 重生成 / 删除自己的 API Key，并查看每个 Key 的调用次数，附「🕷️ API Key 爬虫指南」入口。逻辑与 `Settings` 完全一致（复用 `apiKeyApi`，在角色配额上限内自设更小配额）。

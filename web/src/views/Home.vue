@@ -181,10 +181,12 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { storeToRefs } from 'pinia';
 import { useRoute, useRouter } from 'vue-router';
 import { novelApi, type Novel } from '@/api/novel';
-import { publicApi } from '@/api/admin';
+import { batchGet } from '@/api/batch';
 import { useAuthStore } from '@/stores/auth';
+import { useAppStore } from '@/stores/app';
 import { appPrefix } from '@/utils/prefix';
 import { renderMarkdown } from '@/markdown/renderer';
 import NovelCard from '@/components/NovelCard.vue';
@@ -192,9 +194,11 @@ import HomeSearchResults from '@/components/HomeSearchResults.vue';
 import { Grid, List, Plus, ArrowRight, Search } from '@element-plus/icons-vue';
 
 const authStore = useAuthStore();
+const appStore = useAppStore();
 const route = useRoute();
 const router = useRouter();
-const categories = ref<string[]>([]);
+// 分类列表与站点名来自应用级聚合 batch（stores/app.ts），Home 不再单独请求
+const { categories, siteName } = storeToRefs(appStore);
 const loading = ref(false);
 const total = ref(0);
 const catStyle = ref<'tags'|'blocks'>('tags');
@@ -202,7 +206,6 @@ const novelView = ref<'grid'|'table'>('grid');
 const sortBy = ref<'featured'|'newest'|'updated'>('featured');
 const categoryGroups = ref<Record<string,Novel[]>>({});
 const catStats = ref<Record<string,{novel_count:number;novels:Novel[]}>>({});
-const siteName = ref('星海文学');
 
 // ====== 搜索模式 ======
 const searchKeyword = ref('');
@@ -230,17 +233,6 @@ function groupByCategory(list:Novel[]):Record<string,Novel[]>{
   return g;
 }
 
-async function fetchCatStats(){
-  try{
-    const res=await publicApi.getCategoryStats();
-    if(res.data.code===0&&Array.isArray(res.data.data)){
-      const map:Record<string,any>={};
-      for(const item of res.data.data) map[item.name]=item;
-      catStats.value=map;
-    }
-  }catch{/* */}
-}
-
 async function reloadAll(){
   loading.value=true;
   try{
@@ -256,21 +248,6 @@ async function reloadAll(){
   finally{loading.value=false}
 }
 
-async function loadCats(){
-  try{
-    const res=await publicApi.getCategories();
-    if(res.data.code===0&&Array.isArray(res.data.data))categories.value=res.data.data;
-  }catch{/* */}
-}
-
-async function loadSiteName(){
-  try{
-    const res=await publicApi.getSiteInfo();
-    if(res.data.code===0&&res.data.data.site_name)siteName.value=res.data.data.site_name;
-  }catch{/* */}
-}
-
-
 // ====== 公告栏 + 算法说明（176号令合规） ======
 const announcements = ref<any[]>([]);
 const showAllNotice = ref(false);
@@ -280,24 +257,38 @@ const showAlgo = ref(false);
 // 公告内容 Markdown 渲染（Cherry 引擎，与阅读器/博客一致）
 const noticeHtml = computed(() => renderMarkdown(noticeDlg.item?.content || ''));
 
-async function loadAnnouncements(){
+// ====== 聚合加载：一次 /api/batch 拿到首页全部内容数据（4 个接口 → 1 次请求）======
+// 注：分类列表 / 站点名由应用级 bootstrap（stores/app.ts）聚合，此处不再重复请求。
+async function loadHomeInitial(){
+  loading.value=true;
+  const params:any={page:1,page_size:60};
+  if(sortBy.value==='newest')params.sort_by='created_at';
+  else if(sortBy.value==='updated')params.sort_by='updated_at';
+  else params.sort_by='featured';
   try{
-    const res=await publicApi.getAnnouncements();
-    if(res.data.code===0&&Array.isArray(res.data.data))announcements.value=res.data.data;
-  }catch{/* */}
-}
-async function loadAlgoDescription(){
-  try{
-    const res=await publicApi.getAlgoDescription();
-    if(res.data.code===0&&res.data.data.description)algoDescription.value=res.data.data.description;
-  }catch{/* */}
+    const map=await batchGet([
+      { id:'ann', path:'/api/announcements' },
+      { id:'algo', path:'/api/algorithms/description' },
+      { id:'catStats', path:'/api/categories/stats' },
+      { id:'novels', path:'/api/novels', query:params },
+    ]);
+    if(map.ann?.success&&Array.isArray(map.ann.data))announcements.value=map.ann.data;
+    if(map.algo?.success&&map.algo.data?.description)algoDescription.value=map.algo.data.description;
+    if(map.catStats?.success&&Array.isArray(map.catStats.data)){
+      const m:Record<string,any>={};
+      for(const item of map.catStats.data as any[])m[item.name]=item;
+      catStats.value=m;
+    }
+    if(map.novels?.success&&map.novels.data){
+      const list:Novel[]=(map.novels.data as any).list||[];
+      total.value=(map.novels.data as any).total||0;
+      categoryGroups.value=groupByCategory(list);
+    }
+  }catch(e){console.error(e)}
+  finally{loading.value=false}
 }
 onMounted(async()=>{
-  await loadCats();
-  loadSiteName();
-  loadAnnouncements();
-  loadAlgoDescription();
-  await Promise.all([fetchCatStats(),reloadAll()]);
+  await loadHomeInitial();
 });
 
 // ====== 搜索功能 ======

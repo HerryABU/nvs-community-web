@@ -48,3 +48,28 @@ export const batchApi = {
     });
   },
 };
+
+/**
+ * 便捷封装：一次请求批量拉取多个 GET 接口，返回以 id 为键的结果映射。
+ * 服务器并发执行并一次性返回，浏览器只需 1 次 HTTP 往返（减少请求数/连接数/带宽）。
+ *
+ * @example
+ * const map = await batchGet([
+ *   { id: 'cats',  path: '/api/categories' },
+ *   { id: 'site',  path: '/api/site-info' },
+ *   { id: 'news',  path: '/api/novels', query: { page: '1', page_size: '60' } },
+ * ]);
+ * if (map.cats?.success) categories.value = map.cats.data;
+ */
+export async function batchGet(
+  specs: { id: string; path: string; query?: Record<string, string> }[],
+): Promise<Record<string, BatchResult>> {
+  const res = await batchApi.batch(
+    specs.map((s) => ({ id: s.id, method: 'GET', path: s.path, query: s.query })),
+  );
+  const map: Record<string, BatchResult> = {};
+  for (const r of res.data.data.results) {
+    map[r.id] = r;
+  }
+  return map;
+}

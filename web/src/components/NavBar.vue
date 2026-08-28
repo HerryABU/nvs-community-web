@@ -250,10 +250,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { storeToRefs } from 'pinia';
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useThemeStore } from '@/stores/theme';
-import { publicApi } from '@/api/admin';
+import { useAppStore } from '@/stores/app';
 import { authApi } from '@/api/auth';
 import { notificationApi } from '@/api/notification';
 import { appPrefix } from '@/utils/prefix';
@@ -265,11 +266,9 @@ const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
-
-const categories = ref<string[]>([]);
+const appStore = useAppStore();
+const { categories, siteName, federatedSites, unreadCount } = storeToRefs(appStore);
 const searchText = ref('');
-const siteName = ref('星海文学');
-const federatedSites = ref<any[]>([]);
 
 // ====== 移动端导航抽屉 ======
 const mobileMenuOpen = ref(false);
@@ -300,25 +299,28 @@ function mnavLogout() {
 }
 
 // ====== 新消息提醒（红圈数字徽标，30s 轮询） ======
-const unreadCount = ref(0);
+// unreadCount 来自应用级 store（stores/app.ts 聚合 batch 初始化）
 let notifyTimer: ReturnType<typeof setInterval> | null = null;
 
 async function refreshUnread() {
-  if (!authStore.isLoggedIn) { unreadCount.value = 0; return; }
+  if (!authStore.isLoggedIn) { appStore.unreadCount = 0; return; }
   try {
     const res = await notificationApi.unreadCount();
     if (res.data.code === 0) {
-      unreadCount.value = Number(res.data.data?.count) || 0;
+      appStore.unreadCount = Number(res.data.data?.count) || 0;
     }
   } catch { /* 忽略，保持旧值 */ }
 }
 
 // 登录态变化时启停轮询
+// 注：首屏不必再单独拉未读数 —— 它由应用级 bootstrap 的聚合 batch 一并带回。
+// 仅在会话中真实发生"登录切换"（挂载 3 秒之后）才立即刷新，避免首屏多一次直连请求。
+const navMountedAt = Date.now();
 watch(
   () => authStore.isLoggedIn,
   (v) => {
     if (v) {
-      refreshUnread();
+      if (Date.now() - navMountedAt > 3000) refreshUnread();
       if (!notifyTimer) notifyTimer = setInterval(refreshUnread, 30000);
     } else if (notifyTimer) {
       clearInterval(notifyTimer);
@@ -399,37 +401,8 @@ function openFederated(site: any) {
   window.open(`${appPrefix}/${site.id}`, '_blank');
 }
 
-async function loadSiteInfo() {
-  try {
-    const res = await publicApi.getSiteInfo();
-    if (res.data.code === 0 && res.data.data.site_name) {
-      siteName.value = res.data.data.site_name;
-    }
-  } catch (e) { /* use default */ }
-}
-
-async function loadCategories() {
-  try {
-    const res = await publicApi.getCategories();
-    if (res.data.code === 0 && Array.isArray(res.data.data)) {
-      categories.value = res.data.data;
-    }
-  } catch (e) { /* fallback: keep empty */ }
-}
-
-async function loadFederatedSites() {
-  try {
-    const res = await publicApi.getFederatedSites();
-    if (res.data.code === 0) {
-      federatedSites.value = res.data.data || [];
-    }
-  } catch (e) { /* ignore */ }
-}
-
 onMounted(() => {
-  loadSiteInfo();
-  loadCategories();
-  loadFederatedSites();
+  appStore.bootstrap(); // 幂等：与 App.vue 重复调用只会发一次 /api/batch
   window.addEventListener('nvs:unread', onUnreadEvent);
 });
 

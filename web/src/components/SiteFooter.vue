@@ -19,27 +19,24 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { publicApi } from '@/api/admin';
+import { computed, onMounted } from 'vue';
+import { storeToRefs } from 'pinia';
+import { useAppStore } from '@/stores/app';
 // 版本号与 package.json 保持一致（单一来源，构建时注入），与后端 /api/health version 同步
 import pkg from '../../package.json';
 
 // 站点页脚（176号令 第七条第一项：联网备案号自动展示 + 开源署名）
 const appVersion = pkg.version;
-const siteName = ref('');
-const icp = ref('');
-const psb = ref('');
-const psbLink = ref('');
+const appStore = useAppStore();
+const { siteName, siteInfo } = storeToRefs(appStore);
 
-onMounted(async () => {
-  try {
-    const res = await publicApi.getSiteInfo();
-    const d = res.data?.data || {};
-    siteName.value = d.site_name || '';
-    icp.value = d.site_icp || '';
-    psb.value = d.site_psb || '';
-    psbLink.value = d.site_psb_link || '';
-  } catch { /* 静默 */ }
+// 备案信息来自应用级聚合 batch（/api/site-info），不再单独发请求
+const icp = computed(() => siteInfo.value?.site_icp || '');
+const psb = computed(() => siteInfo.value?.site_psb || '');
+const psbLink = computed(() => siteInfo.value?.site_psb_link || '');
+
+onMounted(() => {
+  appStore.bootstrap(); // 幂等
 });
 </script>
 

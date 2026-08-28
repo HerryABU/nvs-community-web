@@ -113,17 +113,30 @@ func extractAPIKey(c *gin.Context) string {
 	return ""
 }
 
+// isLoggedInBrowser 判断请求是否来自已登录的浏览器会话用户（携带有效 token cookie）。
+// 已登录用户（非访客）免限流；访客（无有效 token）仍走匿名/爬虫配额。
+func isLoggedInBrowser(c *gin.Context) bool {
+	token, err := c.Cookie("token")
+	if err != nil || token == "" {
+		return false
+	}
+	if _, perr := utils.ParseToken(token); perr != nil {
+		return false
+	}
+	return true
+}
+
 // ==================== 敏感接口白名单 ====================
 // 认证/密码类接口：即使携带有效 Key 也保留 route 级 IP 限流（防撞库/爆破）。
 // 这些接口的 route 级 RateLimit 始终按 IP 生效。
 
 var sensitiveAuthPaths = map[string]bool{
-	"/api/auth/login":            true,
-	"/api/auth/register":         true,
-	"/api/auth/forgot-password":  true,
-	"/api/auth/reset-password":   true,
-	"/api/auth/send-code":        true,
-	"/api/auth/verify-code":      true,
+	"/api/auth/login":             true,
+	"/api/auth/register":          true,
+	"/api/auth/forgot-password":   true,
+	"/api/auth/reset-password":    true,
+	"/api/auth/send-code":         true,
+	"/api/auth/verify-code":       true,
 	"/api/admin/emergency/unlock": true,
 }
 
@@ -139,10 +152,10 @@ type throttleEntry struct {
 }
 
 var (
-	logThrottleMu   sync.Mutex
-	logThrottle     = make(map[string]*throttleEntry) // 访问日志去重
-	touchThrottle   = make(map[string]*throttleEntry) // last_used_at 去重
-	botLogThrottle  = make(map[string]*throttleEntry) // bot 命中日志去重
+	logThrottleMu  sync.Mutex
+	logThrottle    = make(map[string]*throttleEntry) // 访问日志去重
+	touchThrottle  = make(map[string]*throttleEntry) // last_used_at 去重
+	botLogThrottle = make(map[string]*throttleEntry) // bot 命中日志去重
 )
 
 func currentMinute() int64 { return time.Now().Unix() / 60 }
@@ -224,9 +237,10 @@ func truncate(s string, n int) string {
 // ==================== 身份感知限流中间件 ====================
 
 // APIKeyGuard 统一身份感知限流（挂在 /api 公共路由组）：
-//   1. 携带有效 API Key → 按 Key 配额限流（Key 维度滑动窗口），识别身份供日志/联邦追溯；
-//   2. 无 Key / 无效 Key → 匿名通道：先做爬虫识别（无头/伪装/高频），
-//      爬虫走 Bot 配额（远低于匿名），其余走匿名配额（均按 IP 维度）。
+//  1. 携带有效 API Key → 按 Key 配额限流（Key 维度滑动窗口），识别身份供日志/联邦追溯；
+//  2. 无 Key / 无效 Key → 匿名通道：先做爬虫识别（无头/伪装/高频），
+//     爬虫走 Bot 配额（远低于匿名），其余走匿名配额（均按 IP 维度）。
+//
 // 所有判定只影响限流配额，不改变路由语义（公开接口仍公开）。
 func APIKeyGuard() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -237,6 +251,16 @@ func APIKeyGuard() gin.HandlerFunc {
 
 		// 放行：健康检查与建站向导（未安装场景不连库，不能查 Key）
 		if path == "/api/health" || path == "/health" || strings.HasPrefix(path, "/api/setup") {
+			c.Next()
+			return
+		}
+
+		// 已登录的浏览器会话用户免限流（访客仍受限）。
+		// 注意：APIKeyGuard 运行于 OptionalAuth 之前，故此处直接解析 token cookie 判定登录态，
+		// 并设置 CtxKeySkipIP，使后续路由级 RateLimit 一并放行。
+		// 仅针对「浏览器登录会话」（token cookie），API Key 程序化访问不受影响（走独立 Key 配额）。
+		if isLoggedInBrowser(c) {
+			c.Set(CtxKeySkipIP, true)
 			c.Next()
 			return
 		}
