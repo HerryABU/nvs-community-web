@@ -64,10 +64,6 @@
               <el-radio-button value="blocks">大方块</el-radio-button>
             </el-radio-group>
           </div>
-          <el-radio-group v-model="catStyle" size="small">
-            <el-radio-button value="tags">标签横排</el-radio-button>
-            <el-radio-button value="blocks">大方块</el-radio-button>
-          </el-radio-group>
         </div>
 
         <!-- 模式1：标签横排 -->

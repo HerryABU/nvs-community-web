@@ -212,6 +212,10 @@ func executeSubRequest(ctx context.Context, engine *gin.Engine, parent *gin.Cont
 
 	// 透传认证信息（Cookie/Authorization）与客户端 IP（供限流使用）
 	subReq.Header = parent.Request.Header.Clone()
+	// 内存内转发无需内容压缩：去掉 Accept-Encoding，避免 gzip 中间件压缩子响应，
+	// 导致 recorder 拿到压缩字节、json.Unmarshal 解析失败（data 退化为乱码字符串，
+	// 前端聚合数据全空 —— 首页分类/小说消失的根因；curl 不带 gzip 所以此前未暴露）。
+	subReq.Header.Del("Accept-Encoding")
 	subReq.RemoteAddr = parent.Request.RemoteAddr
 	// 标记为内部聚合子请求：外层 /api/batch 已统一限流，子请求跳过重复计数（防伪造密钥）
 	subReq.Header.Set(security.HeaderInternalBatch, security.InternalBatchSecret)

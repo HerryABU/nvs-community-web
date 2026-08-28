@@ -496,7 +496,8 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 | 聚合 | `web/src/App.vue` | bootstrap 提前到 setup 同步启动（子组件挂载前发起，无竞态） |
 | 聚合 | `web/src/components/NavBar.vue` | 改为消费 `useAppStore`，移除三个独立请求；未读数首屏不再单独拉取 |
 | 聚合 | `web/src/components/SiteFooter.vue` | 改为消费 `useAppStore`，备案号/站点名不再单独请求 |
-| 聚合 | `web/src/views/Home.vue` | 首页内容统一由 store 聚合通道提供（`ensureHomeLoaded()`） |
+| 聚合 | `web/src/views/Home.vue` | 首页内容统一由 store 聚合通道提供（`ensureHomeLoaded()`）；删除重复的「标签横排/大方块」切换器（cz-header 排版） |
+| 聚合 | `server/handlers/batch.go` | **gzip 修复**：内存内子请求转发时删除 `Accept-Encoding`——否则 gzip 中间件压缩子响应，`json.Unmarshal` 失败、`data` 退化为乱码字符串，前端聚合数据全空（首页分类/小说消失的根因，仅真实浏览器触发） |
 | 版本 | `server/version/version.go` / `web/package.json` | 版本号 3.2.5 → **3.2.8** |
 
 ### v3.2.5 API Key 管理下沉：作者工作台 + 管理员可管（2026-08-28）
