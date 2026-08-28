@@ -357,3 +357,73 @@ func AdminListAPIKeys(c *gin.Context) {
 	}
 	utils.Success(c, rows)
 }
+
+// ==================== 管理员侧：全站 Key 管理（绕过归属校验） ====================
+
+// AdminRegenerateAPIKey POST /api/admin/ratelimit/keys/:id/regenerate —— 管理员重生成任意 Key（旧 Key 立即失效）
+func AdminRegenerateAPIKey(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	var key models.APIKey
+	if err := models.DB.First(&key, id).Error; err != nil {
+		utils.NotFound(c, "Key 不存在")
+		return
+	}
+	full, prefix, hash, err := models.GenerateAPIKey(key.Role)
+	if err != nil {
+		utils.InternalError(c, "生成 Key 失败")
+		return
+	}
+	models.DB.Model(&key).Updates(map[string]interface{}{
+		"key_hash": hash, "key_prefix": prefix, "last_used_at": nil, "total_calls": 0,
+	})
+	utils.Success(c, gin.H{"message": "已重新生成，旧 Key 立即失效", "key": full, "key_prefix": prefix})
+}
+
+// AdminUpdateAPIKey PATCH /api/admin/ratelimit/keys/:id —— 管理员修改任意 Key（启停 / 备注）
+func AdminUpdateAPIKey(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	var key models.APIKey
+	if err := models.DB.First(&key, id).Error; err != nil {
+		utils.NotFound(c, "Key 不存在")
+		return
+	}
+	var req struct {
+		Name     *string `json:"name"`
+		IsActive *bool   `json:"is_active"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	updates := map[string]interface{}{}
+	if req.Name != nil {
+		updates["name"] = bluemonday.StrictPolicy().Sanitize(strings.TrimSpace(*req.Name))
+	}
+	if req.IsActive != nil {
+		updates["is_active"] = *req.IsActive
+	}
+	if len(updates) > 0 {
+		models.DB.Model(&key).Updates(updates)
+	}
+	utils.Success(c, gin.H{"message": "已更新", "key_prefix": key.KeyPrefix})
+}
+
+// AdminDeleteAPIKey DELETE /api/admin/ratelimit/keys/:id —— 管理员删除（吊销）任意 Key
+func AdminDeleteAPIKey(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	res := models.DB.Delete(&models.APIKey{}, id)
+	if res.RowsAffected == 0 {
+		utils.NotFound(c, "Key 不存在")
+		return
+	}
+	utils.Success(c, gin.H{"message": "已删除（吊销）"})
+}

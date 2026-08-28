@@ -149,8 +149,27 @@
           <el-table-column label="调用次数" width="90">
             <template #default="{ row }">{{ row.total_calls ?? 0 }}</template>
           </el-table-column>
+          <el-table-column label="操作" width="200" fixed="right">
+            <template #default="{ row }">
+              <el-button size="small" text @click="toggleKey(row)">{{ row.is_active ? '停用' : '启用' }}</el-button>
+              <el-button size="small" text type="warning" @click="regenerateKey(row)">重生成</el-button>
+              <el-button size="small" text type="danger" @click="deleteKey(row)">删除</el-button>
+            </template>
+          </el-table-column>
         </el-table>
       </div>
+
+      <!-- 重生成后一次性展示完整 Key -->
+      <el-dialog v-model="showNewKey" title="API Key 已重生成" width="540px">
+        <el-alert type="warning" :closable="false" show-icon title="完整 Key 仅此一次展示，请立即复制保存" style="margin-bottom: 12px" />
+        <div class="newkey-box">
+          <code class="newkey-code">{{ newKeyValue }}</code>
+          <el-button type="primary" @click="copyKey">复制</el-button>
+        </div>
+        <p class="hint-text">
+          请求时携带 <code>X-API-Key: {{ newKeyPrefix }}…</code>（完整 Key）。服务端仅存储哈希，遗失后只能重新生成。
+        </p>
+      </el-dialog>
 
       <!-- 访问日志 -->
       <div class="admin-panel">
@@ -313,6 +332,57 @@ async function loadKeys() {
   loadingKeys.value = false;
 }
 
+// 管理动作：启停 / 重生成 / 删除
+const showNewKey = ref(false);
+const newKeyValue = ref('');
+const newKeyPrefix = ref('');
+
+async function toggleKey(row: any) {
+  try {
+    const res = await adminApi.updateApiKey(row.id, { is_active: !row.is_active });
+    if (res.data.code === 0) ElMessage.success('已更新状态');
+    else ElMessage.error(res.data.message || '操作失败');
+    await loadKeys();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
+async function regenerateKey(row: any) {
+  try {
+    await ElMessageBox.confirm(`重新生成「${row.key_prefix}」后旧 Key 立即失效，确定继续？`, '重新生成', { type: 'warning' });
+    const res = await adminApi.regenerateApiKey(row.id);
+    if (res.data.code === 0) {
+      newKeyValue.value = res.data.data.key || '';
+      newKeyPrefix.value = res.data.data.key_prefix || '';
+      showNewKey.value = true;
+      ElMessage.success('已重新生成');
+      await loadKeys();
+    } else {
+      ElMessage.error(res.data.message || '重生成失败');
+    }
+  } catch { /* cancelled */ }
+}
+
+async function deleteKey(row: any) {
+  try {
+    await ElMessageBox.confirm(`确定删除 API Key「${row.key_prefix}」（用户 ${row.username || '?'}）吗？删除后立即失效。`, '删除 API Key', { type: 'warning' });
+    const res = await adminApi.deleteApiKey(row.id);
+    if (res.data.code === 0) ElMessage.success('已删除');
+    else ElMessage.error(res.data.message || '删除失败');
+    await loadKeys();
+  } catch { /* cancelled */ }
+}
+
+async function copyKey() {
+  try {
+    await navigator.clipboard.writeText(newKeyValue.value);
+    ElMessage.success('已复制');
+  } catch {
+    ElMessage.warning('复制失败，请手动选择复制');
+  }
+}
+
 // 日志
 const logs = ref<any[]>([]);
 const logType = ref('');
@@ -379,4 +449,7 @@ onMounted(() => { loadConfig(); loadStats(); loadKeys(); loadLogs(1); });
 .status-err { color: #ef4444; font-weight: 600; }
 code { background: #eef2ff; color: #4f46e5; padding: 1px 6px; border-radius: 4px; font-size: 0.82rem; }
 .pager { margin-top: 12px; display: flex; justify-content: flex-end; }
+.newkey-box { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.newkey-code { flex: 1; background: #0f172a; color: #4ade80; padding: 10px 12px; border-radius: 8px; font-size: 0.82rem; word-break: break-all; }
+[data-theme="light"] .newkey-code { background: #f1f5f9; color: #15803d; }
 </style>

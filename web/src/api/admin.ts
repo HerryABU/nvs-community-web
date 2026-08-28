@@ -342,6 +342,16 @@ export const adminApi = {
   getAllApiKeys() {
     return api.get('/admin/ratelimit/keys');
   },
+  // 管理员对全站任意 Key 的管理（绕过归属校验）
+  regenerateApiKey(id: number) {
+    return api.post(`/admin/ratelimit/keys/${id}/regenerate`);
+  },
+  updateApiKey(id: number, data: { name?: string; is_active?: boolean }) {
+    return api.patch(`/admin/ratelimit/keys/${id}`, data);
+  },
+  deleteApiKey(id: number) {
+    return api.delete(`/admin/ratelimit/keys/${id}`);
+  },
 
   // 数据库管理（健康检查 / 迁移 / 备份 / 恢复 / 定时备份）
   getDbHealth() {

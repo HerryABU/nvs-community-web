@@ -445,6 +445,9 @@ func main() {
 		admin.GET("/ratelimit/stats", handlers.GetRateLimitStats)
 		admin.POST("/ratelimit/clear", handlers.ClearRateLimits)
 		admin.GET("/ratelimit/keys", handlers.AdminListAPIKeys)
+		admin.POST("/ratelimit/keys/:id/regenerate", handlers.AdminRegenerateAPIKey)
+		admin.PATCH("/ratelimit/keys/:id", handlers.AdminUpdateAPIKey)
+		admin.DELETE("/ratelimit/keys/:id", handlers.AdminDeleteAPIKey)
 		// 论坛管理
 		admin.GET("/forums", handlers.AdminListForums)
 		admin.POST("/forums", handlers.AdminCreateForum)
