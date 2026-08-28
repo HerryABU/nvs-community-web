@@ -359,6 +359,12 @@ const router = createRouter({
       name: 'api-spider',
       component: () => import('@/views/APIKeySpider.vue'),
     },
+    {
+      path: '/my-keys',
+      name: 'my-keys',
+      component: () => import('@/views/MyApiKeys.vue'),
+      meta: { requiresAuth: true },
+    },
     // ========== 用户自定义内容（frame/html/wasm 沙盒） ==========
     {
       path: '/frames',
