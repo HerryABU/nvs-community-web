@@ -473,6 +473,23 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v2.3.2 修复「清空限流」对 IP 行为降级失效（管理员自锁死）（2026-08-28）
+
+> 真实浏览器端到端验证中发现两处连环缺陷，均位于管理员「限流与 API Key → 清空限流」解封链路上：
+> 1. **清空不解除降级**：`ClearRateLimits()` 只重建了配额表 `rateLimitStore`，未重置 IP 行为统计表 `botIPStore`。被「单 IP 高频」降级为爬虫的 IP，点清空后仍被判 bot，只能等 TTL 窗口自然滚动，管理员无法立即解封。
+> 2. **管理员自锁死**：管理端接口（含清空按钮本身）同样参与爬虫降级判定，当管理员自身 IP 已降级时，清空请求会先被 429 挡掉、handler 根本不执行 —— 用来解封的按钮被它要解封的配额锁死，第 1 点的修复也因此无法生效。
+>
+> 修复后：清空操作同时重置 IP 行为统计；管理端接口（`/api/admin/*`，本身已有 JWT 鉴权，爬虫降级对其无防护价值）不再参与爬虫降级，仅走匿名配额，保证管理员在任何限流状态下都能进后台自救。
+
+| 类别 | 文件 | 说明 |
+|---|---|---|
+| 安全 | `security/bot.go` | 新增 `ResetBotIPStats()`：在 `botIPMu` 保护下重建 `botIPStore`，供清空限流调用 |
+| 限流 | `security/ratelimit.go` | `ClearRateLimits()` 调用 `ResetBotIPStats()`，解封立即生效；`APIKeyGuard` 对 `/api/admin/*` 跳过爬虫降级（JWT 已鉴权，避免自锁死） |
+| 安全 | `security/bot_test.go` | 新增 `TestClearRateLimits_ResetsBotIPStats` 回归测试（先打阈值触发降级 → 清空 → 断言恢复为正常访问）；已用「临时回退修复」验证该测试确实会失败（`reason=ip_high_frequency`），确保测试有效 |
+| 版本 | `version/version.go` / `web/package.json` | 版本号 2.3.1 → **2.3.2** |
+
+> 验证方式：真实启动服务（SQLite）后以 curl 逐项实测 —— 无头爬虫 UA 精确放行 5/min、伪装头（浏览器 UA 缺 `Sec-Fetch-*`）5/min、普通匿名 >9/min、爬虫 UA 携带有效 API Key 突破至 Key 配额、无效 Key 打回 5/min、已知名头爬虫（GPTBot/Meta/Bytespider）403 且响应头带 `X-Nvs-Blocked`、主流搜索引擎（Googlebot）放行 200。
+
 ### v2.3.1 已知名头爬虫直接阻断 + 配额层级修正 + 双数据库字段加固（2026-08-28）
 
 > 爬虫处置由「一律限流」升级为「**三级分诊**」：① 携带有效 API Key → 高配额（不判爬虫）；② 无 Key 普通匿名 → 低配额；③ 无 Key 且识别为爬虫 → **更低**配额；④ 命中「已知名头爬虫」名单 → **直接 403 阻断**，不消耗配额。

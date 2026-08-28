@@ -131,6 +131,15 @@ func ipOverThreshold(ip string) bool {
 	return e.count > threshold
 }
 
+// ResetBotIPStats 清空 IP 行为统计（管理员「清空限流」误判解封时调用）。
+// 必须一并重置，否则因高频被降级为爬虫的 IP 在清空配额后仍会被判 bot，
+// 只能等 TTL 窗口自然滚动，管理员无法立即解封。
+func ResetBotIPStats() {
+	botIPMu.Lock()
+	botIPStore = make(map[string]*botIPEntry)
+	botIPMu.Unlock()
+}
+
 // ==================== 主识别函数 ====================
 
 // IsBlockedBot 判断请求是否为「已知名头爬虫」（命中内置或自定义阻断名单）→ 直接阻断。

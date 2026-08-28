@@ -286,7 +286,13 @@ func APIKeyGuard() gin.HandlerFunc {
 
 		secFetch := HasSecFetchHeaders(
 			c.GetHeader("Sec-Fetch-Site"), c.GetHeader("Sec-Fetch-Mode"), c.GetHeader("Sec-Fetch-Dest"))
-		isBot, botReason := ClassifyBot(ua, secFetch, ip)
+		// /api/admin/* 已由 JWT 鉴权保护，爬虫降级对它没有防护价值，
+		// 反而会让管理员在自身 IP 被降级时连「清空限流」按钮都点不动（请求先被 429 挡掉，
+		// handler 根本不执行 → 自锁死）。故管理端接口不做爬虫降级，仅走匿名配额。
+		isBot, botReason := false, ""
+		if !strings.HasPrefix(path, "/api/admin/") {
+			isBot, botReason = ClassifyBot(ua, secFetch, ip)
+		}
 
 		identity := &models.KeyIdentity{Type: "anonymous", ValidKey: false}
 		quota := cfg.Anonymous
@@ -349,11 +355,13 @@ func RateLimitStats() map[string]int {
 	return stats
 }
 
-// ClearRateLimits 清空全部内存限流计数（管理员误判解封；联邦 Key 配额等随之重置）
+// ClearRateLimits 清空全部内存限流计数（管理员误判解封；联邦 Key 配额等随之重置）。
+// 必须同时重置 IP 行为统计（botIPStore），否则被高频降级为爬虫的 IP 解封不生效。
 func ClearRateLimits() {
 	rateLimitMu.Lock()
 	rateLimitStore = make(map[string]*rateLimiterEntry)
 	rateLimitMu.Unlock()
+	ResetBotIPStats()
 }
 
 // 定期清理过期条目 (后台协程)

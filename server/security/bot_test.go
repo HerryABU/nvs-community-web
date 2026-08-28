@@ -129,6 +129,39 @@ func TestClassifyBot_IPHighFrequency(t *testing.T) {
 	botKeywordsMu.Unlock()
 }
 
+// TestClearRateLimits_ResetsBotIPStats 回归：管理员「清空限流」必须同时解除 IP 行为降级，
+// 否则被高频降级的 IP 解封不生效（只能等 TTL 窗口自然滚动）。
+func TestClearRateLimits_ResetsBotIPStats(t *testing.T) {
+	botKeywordsMu.Lock()
+	botIPThreshold = 5
+	botIPTTLMin = 1
+	botKeywordsMu.Unlock()
+	defer func() {
+		botKeywordsMu.Lock()
+		botIPThreshold = 300
+		botKeywordsMu.Unlock()
+	}()
+
+	ua := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36"
+	ip := "8.8.4.4"
+	degraded := false
+	for i := 0; i < 10; i++ {
+		if bot, _ := ClassifyBot(ua, true, ip); bot {
+			degraded = true
+			break
+		}
+	}
+	if !degraded {
+		t.Fatal("前置条件失败：IP 未触发高频降级")
+	}
+
+	// 清空限流后应立刻恢复为正常访问
+	ClearRateLimits()
+	if bot, reason := ClassifyBot(ua, true, ip); bot {
+		t.Fatalf("清空限流后 IP 应解除降级，实际仍判为 bot（reason=%s）", reason)
+	}
+}
+
 func TestKeyRateLimit(t *testing.T) {
 	// 配额 3 次/60 秒：前 3 次放行，第 4 次拒绝
 	key := "test-key-1"
