@@ -98,7 +98,7 @@ onMounted(load);
 </script>
 
 <style scoped>
-.admin-page { min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
+.admin-page { --admin-content-max: 1000px; min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
 .admin-page-body { max-width: 1000px; }
 .toolbar { margin-bottom: 12px; }
 [data-theme="dark"] .admin-page { background: #0f172a; }

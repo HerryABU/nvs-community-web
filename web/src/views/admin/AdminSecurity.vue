@@ -258,7 +258,7 @@ onMounted(loadRules);
 </script>
 
 <style scoped>
-.admin-page { min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
+.admin-page { --admin-content-max: 1100px; min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
 .admin-page-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
 .admin-page-header h2 { margin: 0; font-size: 1.3rem; color: var(--text-color, #333); }
 .admin-page-body { max-width: 1100px; }

@@ -347,7 +347,7 @@ onMounted(() => { loadConfig(); loadStats(); loadKeys(); loadLogs(1); });
 </script>
 
 <style scoped>
-.admin-page { min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
+.admin-page { --admin-content-max: 1100px; min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
 .admin-page-body { max-width: 1100px; }
 .admin-panel { background: #fff; border-radius: 10px; padding: 20px; margin-bottom: 20px; border: 1px solid var(--border-color, #e5e7eb); }
 [data-theme="dark"] .admin-panel { background: #1e293b; border-color: #334155; }

@@ -141,7 +141,7 @@ onMounted(load);
 </script>
 
 <style scoped>
-.admin-page { min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
+.admin-page { --admin-content-max: 860px; min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
 .admin-page-body { max-width: 860px; }
 .sec-title { margin: 0 0 8px 0; font-size: 1rem; color: var(--text-color, #333); }
 .hint-text { font-size: 0.8rem; color: var(--text-light, #999); margin-left: 8px; line-height: 1.6; }

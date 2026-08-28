@@ -15,6 +15,24 @@
   margin: 0 auto;
 }
 
+/* ===== 管理子页面内容整体居中 =====
+   背景：各 /admin/* 子页（如 AdminSettings / AdminRateLimit）的 .admin-page-body
+   只设了 max-width、没有 margin auto，内容整块贴左；而 AdminHeader 是 .admin-page
+   的直接子元素（通栏），若只居中 body，标题栏会与下方卡片脱节。
+
+   方案：header 与 body 共用 --admin-content-max 定义的同一居中列，各页在自己的
+   scoped .admin-page 规则里覆写该变量（取值与原本 body 的 max-width 一致）。
+   未覆写的页面（数据库管理 / 健康检查）变量缺省为 none，保持通栏不变。
+
+   这里用 margin: auto 而非 flex，是为了不影响 .admin-page 下其他直接子元素
+   （如 AdminBlogCategories 的 el-tabs、各页的 el-dialog）。 */
+.admin-page > .admin-header,
+.admin-page > .admin-page-body {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: var(--admin-content-max, none);
+}
+
 .admin-panel {
   background: #fff;
   border: 1px solid var(--border-color, #e5e7eb);

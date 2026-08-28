@@ -177,7 +177,7 @@ onMounted(() => { loadReport(); loadGrade(); });
 </script>
 
 <style scoped>
-.admin-page { min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
+.admin-page { --admin-content-max: 1000px; min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
 .admin-page-body { max-width: 1000px; }
 .sec-title { font-size: 1.05rem; color: var(--text-color, #333); margin: 0 0 10px; }
 .hint-text { font-size: 0.8rem; color: var(--text-light, #999); margin-left: 8px; line-height: 1.6; }

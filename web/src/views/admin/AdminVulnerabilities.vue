@@ -165,7 +165,7 @@ onMounted(load);
 </script>
 
 <style scoped>
-.admin-page { min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
+.admin-page { --admin-content-max: 1100px; min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
 .admin-page-body { max-width: 1100px; }
 .stats-row { margin-bottom: 14px; }
 .stat-card { border: 1px solid var(--border-color); border-top: 3px solid; border-radius: 8px; padding: 10px 14px; background: var(--bg-card, #fff); }
