@@ -13,12 +13,20 @@ import (
 	"strings"
 	"time"
 
+	"nvs-server/config"
 	"nvs-server/models"
+	"nvs-server/security"
 	"nvs-server/utils"
+	"nvs-server/version"
 
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
 )
+
+// configEncryptSecret 用机器密钥 AES-256-GCM 加密敏感明文（联邦出站 Key 落库）
+func configEncryptSecret(plain string) (string, error) {
+	return config.EncryptSecret(plain)
+}
 
 // ============ 站长配置 ============
 
@@ -283,11 +291,27 @@ func selfPublicURL(c *gin.Context) string {
 	return scheme + "://" + host
 }
 
-// recordInbound 记录远程站点访问本站公开联邦接口的身份信息（谁连了我）
+// recordInbound 记录远程站点访问本站公开联邦接口的身份信息（谁连了我）。
+// 若对方携带本站签发的联邦 API Key，同时记录 Key 前缀与签发方 —— 被链接的站
+// 可以看到对方用的是哪一个 Key、是谁的（双向可见）。
 func recordInbound(c *gin.Context, endpoint string) {
 	name := c.Query("source_name")
 	srcURL := c.Query("source_url")
-	models.RecordFederatedInbound(name, srcURL, c.ClientIP(), c.Request.UserAgent(), endpoint)
+	keyPrefix := ""
+	issuer := ""
+	if ident, ok := c.Get(security.CtxKeyIdentity); ok {
+		if ki, ok2 := ident.(*models.KeyIdentity); ok2 && ki.ValidKey && ki.Type == "federated" {
+			keyPrefix = ki.KeyPrefix
+			issuer = ki.IssuerName
+			if name == "" {
+				name = ki.PeerName
+			}
+			if srcURL == "" {
+				srcURL = ki.IssuerURL
+			}
+		}
+	}
+	models.RecordFederatedInbound(name, srcURL, c.ClientIP(), c.Request.UserAgent(), endpoint, keyPrefix, issuer)
 }
 
 func SyncFederatedSite(c *gin.Context) {
@@ -314,7 +338,26 @@ func SyncFederatedSite(c *gin.Context) {
 		return
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(target)
+	req, err := http.NewRequest(http.MethodGet, target, nil)
+	if err != nil {
+		utils.InternalError(c, "构造请求失败")
+		return
+	}
+	// 携带本站的联邦出站 Key（对方站签发给本站的 Key）：对方据此识别本站身份并给高配额。
+	// 未配置出站 Key 时仍可同步（走对方匿名通道，可能受限流约束）。
+	outboundKeys := models.ActiveOutboundKeys(uint(id))
+	var sentKey string
+	for i := range outboundKeys {
+		if plain, derr := outboundKeys[i].DecryptOutboundKey(); derr == nil && plain != "" {
+			sentKey = plain
+			break
+		}
+	}
+	if sentKey != "" {
+		req.Header.Set("X-API-Key", sentKey)
+	}
+	req.Header.Set("User-Agent", "NVS-Federated/"+version.AppVersion)
+	resp, err := client.Do(req)
 	if err != nil {
 		utils.InternalError(c, "连接远程站点失败: "+err.Error())
 		return
@@ -430,6 +473,188 @@ func ListInboundSites(c *gin.Context) {
 		return
 	}
 	utils.Success(c, list)
+}
+
+// ============ 联邦站点 API Key（双向可见） ============
+
+// getFederatedSiteOr404 取站点，不存在则已响应 404 并返回 false
+func getFederatedSiteOr404(c *gin.Context) (*models.FederatedSite, bool) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	var site models.FederatedSite
+	if err := models.DB.First(&site, id).Error; err != nil {
+		utils.NotFound(c, "站点不存在")
+		return nil, false
+	}
+	return &site, true
+}
+
+// ListFederatedSiteKeys GET /api/admin/sites/:id/keys
+// inbound 只回前缀（明文仅生成时展示一次）；outbound 回前缀+签发方+状态（明文不回显）。
+func ListFederatedSiteKeys(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	site, ok := getFederatedSiteOr404(c)
+	if !ok {
+		return
+	}
+	var keys []models.FederatedPeerKey
+	models.DB.Where("site_id = ?", site.ID).Order("id DESC").Find(&keys)
+	type keyView struct {
+		ID          uint      `json:"id"`
+		Direction   string    `json:"direction"`
+		PeerName    string    `json:"peer_name"`
+		KeyPrefix   string    `json:"key_prefix"`
+		IssuerName  string    `json:"issuer_name"`
+		QuotaPerMin int       `json:"quota_per_min"`
+		IsActive    bool      `json:"is_active"`
+		LastUsedAt  *time.Time `json:"last_used_at"`
+		CreatedAt   time.Time `json:"created_at"`
+	}
+	views := make([]keyView, 0, len(keys))
+	for _, k := range keys {
+		views = append(views, keyView{
+			ID: k.ID, Direction: k.Direction, PeerName: k.PeerName, KeyPrefix: k.KeyPrefix,
+			IssuerName: k.IssuerName, QuotaPerMin: k.QuotaPerMin,
+			IsActive: k.IsActive, LastUsedAt: k.LastUsedAt, CreatedAt: k.CreatedAt,
+		})
+	}
+	utils.Success(c, gin.H{"site": site, "keys": views})
+}
+
+// CreateFederatedInboundKey POST /api/admin/sites/:id/keys/inbound
+// 本站签发给对方站的 Key：对方访问本站时携带 → 本站识别身份并给高配额。
+// 完整 Key 仅此一次返回，需管理员手动转交给对方站点。
+func CreateFederatedInboundKey(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	site, ok := getFederatedSiteOr404(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		QuotaPerMin int    `json:"quota_per_min"`
+		AllowedIPs  string `json:"allowed_ips"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	cfg := models.LoadAPIRateLimitConfig()
+	quota := req.QuotaPerMin
+	if quota <= 0 || quota > cfg.Federated.Req {
+		quota = cfg.Federated.Req
+	}
+	full, prefix, hash, err := models.GenerateFederatedKey()
+	if err != nil {
+		utils.InternalError(c, "生成 Key 失败")
+		return
+	}
+	rec := &models.FederatedPeerKey{
+		SiteID:      site.ID,
+		Direction:   "inbound",
+		PeerName:    site.Name, // 本站视角：对方站名（谁在用这个 Key）
+		KeyHash:     hash,
+		KeyPrefix:   prefix,
+		IssuerName:  models.GetSiteName(), // 签发方 = 本站
+		IssuerURL:   models.GetPlatformConfig("site_url"),
+		QuotaPerMin: quota,
+		AllowedIPs:  strings.TrimSpace(req.AllowedIPs),
+		IsActive:    true,
+	}
+	if err := models.DB.Create(rec).Error; err != nil {
+		utils.InternalError(c, "保存失败")
+		return
+	}
+	utils.Success(c, gin.H{
+		"message": "已生成本站签发给对方站的联邦 Key（完整 Key 仅此一次展示，请转交对方站并填入其「对方给本站的 Key」）",
+		"key":     full, "key_prefix": prefix, "id": rec.ID,
+		"issuer_name": rec.IssuerName, "quota_per_min": quota,
+	})
+}
+
+// SaveFederatedOutboundKey POST /api/admin/sites/:id/keys/outbound
+// 保存对方站签发给本站的 Key（本站访问对方站时携带，AES 加密落库）。
+func SaveFederatedOutboundKey(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	site, ok := getFederatedSiteOr404(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		Key string `json:"key" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "请提供对方站签发给本站的 Key")
+		return
+	}
+	plain := strings.TrimSpace(req.Key)
+	if len(plain) < 16 || len(plain) > 256 {
+		utils.BadRequest(c, "Key 长度非法")
+		return
+	}
+	cipher, err := configEncryptSecret(plain)
+	if err != nil {
+		utils.InternalError(c, "加密失败")
+		return
+	}
+	prefix := plain
+	if len(prefix) > 12 {
+		prefix = prefix[:12]
+	}
+	rec := &models.FederatedPeerKey{
+		SiteID:      site.ID,
+		Direction:   "outbound",
+		PeerName:    site.Name,
+		KeyHash:     models.HashAPIKey(plain), // 唯一索引占位；出站 Key 由对方站验证，本站不做入站校验
+		KeyPrefix:   prefix + "…",
+		KeyCipher:   cipher,
+		IssuerName:  site.Name, // 对方站签发给本站
+		QuotaPerMin: 0,         // 出站 Key 由对方站决定配额；本站无本地配额
+		IsActive:    true,
+	}
+	if err := models.DB.Create(rec).Error; err != nil {
+		utils.InternalError(c, "保存失败")
+		return
+	}
+	utils.Success(c, gin.H{"message": "已保存对方站签发给本站的 Key（同步时自动携带）", "id": rec.ID})
+}
+
+// ToggleFederatedKey POST /api/admin/sites/:id/keys/:kid/toggle —— 启用/停用
+func ToggleFederatedKey(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	site, ok := getFederatedSiteOr404(c)
+	if !ok {
+		return
+	}
+	kid, _ := strconv.ParseUint(c.Param("kid"), 10, 64)
+	var key models.FederatedPeerKey
+	if err := models.DB.Where("id = ? AND site_id = ?", kid, site.ID).First(&key).Error; err != nil {
+		utils.NotFound(c, "Key 不存在")
+		return
+	}
+	models.DB.Model(&key).Update("is_active", !key.IsActive)
+	utils.Success(c, gin.H{"message": "已更新状态", "is_active": !key.IsActive})
+}
+
+// DeleteFederatedKey DELETE /api/admin/sites/:id/keys/:kid —— 吊销（立即失效）
+func DeleteFederatedKey(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	site, ok := getFederatedSiteOr404(c)
+	if !ok {
+		return
+	}
+	kid, _ := strconv.ParseUint(c.Param("kid"), 10, 64)
+	res := models.DB.Where("id = ? AND site_id = ?", kid, site.ID).Delete(&models.FederatedPeerKey{})
+	if res.RowsAffected == 0 {
+		utils.NotFound(c, "Key 不存在")
+		return
+	}
+	utils.Success(c, gin.H{"message": "已吊销"})
 }
 
 func GetPublicZoneDetail(c *gin.Context) {

@@ -38,6 +38,8 @@ func (FederatedNovel) TableName() string { return "federated_novels" }
 // FederatedInbound 入站联邦连接记录 —— 记录「谁连接了我」。
 // 当远程站点访问本站公开联邦接口（/api/federated/novels 等）时，登记对方身份，
 // 让被连的一方也能看到是哪个站点在同步/连接自己。
+// 若对方携带本站签发的联邦 API Key，则同时记录 Key 前缀与签发方 —— 双向可见：
+// 被链接的站能看到对方用的是哪一个 Key、是谁的。
 type FederatedInbound struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	Name      string    `gorm:"size:128" json:"name"`       // 对方自称的站点名（source_name）
@@ -45,6 +47,8 @@ type FederatedInbound struct {
 	IP        string    `gorm:"size:64;index" json:"ip"`    // 来源 IP
 	UserAgent string    `gorm:"size:512" json:"user_agent"` // User-Agent
 	Endpoint  string    `gorm:"size:64" json:"endpoint"`    // 命中的公开接口
+	KeyPrefix string    `gorm:"size:24;default:''" json:"key_prefix"` // 对方使用的联邦 Key 前缀（nvs_fed_xxxx）
+	Issuer    string    `gorm:"size:128;default:''" json:"issuer"`    // 该 Key 的签发方站名（谁发的 Key）
 	Count     int       `gorm:"default:1" json:"count"`     // 累计访问次数
 	FirstSeen time.Time `json:"first_seen"`
 	LastSeen  time.Time `json:"last_seen"`
@@ -53,13 +57,14 @@ type FederatedInbound struct {
 func (FederatedInbound) TableName() string { return "federated_inbound" }
 
 // RecordFederatedInbound 记录一次入站联邦访问（按 IP+名称+端点 聚合计数）
-func RecordFederatedInbound(name, url, ip, userAgent, endpoint string) {
+func RecordFederatedInbound(name, url, ip, userAgent, endpoint, keyPrefix, issuer string) {
 	now := time.Now()
 	var rec FederatedInbound
 	err := DB.Where("ip = ? AND name = ? AND endpoint = ?", ip, name, endpoint).First(&rec).Error
 	if err != nil {
 		DB.Create(&FederatedInbound{
 			Name: name, URL: url, IP: ip, UserAgent: userAgent, Endpoint: endpoint,
+			KeyPrefix: keyPrefix, Issuer: issuer,
 			Count: 1, FirstSeen: now, LastSeen: now,
 		})
 		return
@@ -71,6 +76,12 @@ func RecordFederatedInbound(name, url, ip, userAgent, endpoint string) {
 	}
 	if userAgent != "" {
 		rec.UserAgent = userAgent
+	}
+	if keyPrefix != "" {
+		rec.KeyPrefix = keyPrefix
+	}
+	if issuer != "" {
+		rec.Issuer = issuer
 	}
 	DB.Save(&rec)
 }

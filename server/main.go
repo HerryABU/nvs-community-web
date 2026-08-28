@@ -132,6 +132,11 @@ func main() {
 		c.Next()
 	})
 
+	// 🔒 身份感知限流（API Key 体系）：四层身份 + 匿名/爬虫通道，统一配额管理。
+	// 挂在全局中间件链（门禁之后）：仅处理 /api/* 路径；携带有效 Key 的读取请求
+	// 按 Key 配额限流并跳过 route 级 IP 限流，无 Key 请求走匿名/爬虫低配额。
+	r.Use(security.APIKeyGuard())
+
 	// 注入 gin 引擎供 API 聚合中间层（/api/batch）内存内转发使用
 	handlers.BatchEngine = r
 
@@ -235,6 +240,12 @@ func main() {
 	{
 		protected.GET("/auth/me", handlers.GetCurrentUser)
 		protected.POST("/auth/change-password", handlers.ChangePassword)
+		// 用户 API Key 管理（创建/查看/修改/重生成/删除，配额在管理员角色上限内自设）
+		protected.GET("/apikeys", handlers.ListMyAPIKeys)
+		protected.POST("/apikeys", handlers.CreateAPIKey)
+		protected.PATCH("/apikeys/:id", handlers.UpdateAPIKey)
+		protected.POST("/apikeys/:id/regenerate", handlers.RegenerateAPIKey)
+		protected.DELETE("/apikeys/:id", handlers.DeleteAPIKey)
 		// 站内消息通知
 		protected.GET("/notifications", handlers.ListNotifications)
 		protected.GET("/notifications/unread-count", handlers.UnreadNotificationCount)
@@ -421,6 +432,19 @@ func main() {
 		admin.PUT("/sites/:id", handlers.UpdateFederatedSite)
 		admin.DELETE("/sites/:id", handlers.DeleteFederatedSite)
 		admin.POST("/sites/:id/sync", handlers.SyncFederatedSite)
+		// 联邦站点 API Key（双向可见：本站签发给对方 / 对方签发给本站）
+		admin.GET("/sites/:id/keys", handlers.ListFederatedSiteKeys)
+		admin.POST("/sites/:id/keys/inbound", handlers.CreateFederatedInboundKey)
+		admin.POST("/sites/:id/keys/outbound", handlers.SaveFederatedOutboundKey)
+		admin.POST("/sites/:id/keys/:kid/toggle", handlers.ToggleFederatedKey)
+		admin.DELETE("/sites/:id/keys/:kid", handlers.DeleteFederatedKey)
+		// 限流与 API Key 管理（全局配额 / 爬虫规则 / 日志统计 / 全站 Key）
+		admin.GET("/ratelimit/config", handlers.GetRateLimitConfig)
+		admin.PUT("/ratelimit/config", handlers.UpdateRateLimitConfig)
+		admin.GET("/ratelimit/logs", handlers.ListRateLimitLogs)
+		admin.GET("/ratelimit/stats", handlers.GetRateLimitStats)
+		admin.POST("/ratelimit/clear", handlers.ClearRateLimits)
+		admin.GET("/ratelimit/keys", handlers.AdminListAPIKeys)
 		// 论坛管理
 		admin.GET("/forums", handlers.AdminListForums)
 		admin.POST("/forums", handlers.AdminCreateForum)
@@ -890,6 +914,9 @@ func initDatabase() error {
 	}
 	models.InitDefaultForums()
 	models.InitPlatformConfigs()
+	// 限流与 API Key：连库后重载管理员配置（含自定义爬虫规则），并清理过期访问日志
+	security.ReloadBotRules()
+	models.CleanupAccessLogs(models.LoadAPIRateLimitConfig().LogRetentionDays)
 	// 日志脱敏：注入数据库持久化钩子并加载已保存的配置（后台从未保存过则使用 .env 默认）
 	config.RedactMgr.SetPersistence(models.LoadRedactConfig, models.StoreRedactConfig)
 	config.RedactMgr.LoadFromDB()

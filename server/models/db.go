@@ -47,6 +47,8 @@ func AllModels() []interface{} {
 		// 软删除留证表（softdel_*，合规证据留存）
 		&SoftDelComment{}, &SoftDelNovel{}, &SoftDelChapter{}, &SoftDelUser{},
 		&SoftDelThread{}, &SoftDelPost{}, &SoftDelBlog{}, &SoftDelForum{},
+		// API Key 体系：用户级 Key / 联邦双向 Key / 按身份访问日志
+		&APIKey{}, &FederatedPeerKey{}, &ApiAccessLog{},
 	}
 }
 

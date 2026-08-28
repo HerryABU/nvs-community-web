@@ -116,6 +116,37 @@ func decryptAES(key, ciphertext []byte) ([]byte, error) {
 	return gcm.Open(nil, ciphertext[:ns], ciphertext[ns:], nil)
 }
 
+// EncryptSecret 用机器密钥 AES-256-GCM 加密任意明文（hex 编码存储）。
+// 供联邦出站 API Key 等敏感凭据加密落库（密钥在 data/.secret.key，仅本机可读）。
+func EncryptSecret(plaintext string) (string, error) {
+	key, err := GetOrCreateSecretKey()
+	if err != nil {
+		return "", err
+	}
+	enc, err := encryptAES(key, []byte(plaintext))
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(enc), nil
+}
+
+// DecryptSecret 解密 EncryptSecret 的产物
+func DecryptSecret(cipherHex string) (string, error) {
+	key, err := GetOrCreateSecretKey()
+	if err != nil {
+		return "", err
+	}
+	raw, err := hex.DecodeString(cipherHex)
+	if err != nil {
+		return "", err
+	}
+	plain, err := decryptAES(key, raw)
+	if err != nil {
+		return "", err
+	}
+	return string(plain), nil
+}
+
 // WriteSecureConfig 加密写入数据库配置
 func WriteSecureConfig(sc SecureDBConfig) error {
 	key, err := GetOrCreateSecretKey()
