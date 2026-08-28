@@ -87,3 +87,39 @@ func TestAPIKeyGuardBypassesLoggedInUser(t *testing.T) {
 		}
 	}
 }
+
+// 验证：/api/batch 内部子请求跳过重复限流（正例走中间件实测）；伪造内部头被识别拒绝。
+func TestAPIKeyGuardInternalBatchBypass(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	r.Use(APIKeyGuard())
+	r.GET("/api/novels", RateLimit(1, 60), func(c *gin.Context) { c.Status(200) })
+
+	// 正确内部密钥：应放行（200），且 CtxKeySkipIP 置位使路由级限流一并跳过（连续多次均 200）
+	for i := 0; i < 3; i++ {
+		req := httptest.NewRequest("GET", "/api/novels", nil)
+		req.Header.Set(HeaderInternalBatch, InternalBatchSecret)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != 200 {
+			t.Fatalf("内部子请求第 %d 次应放行（期望 200），实际 %d", i+1, w.Code)
+		}
+	}
+}
+
+func TestIsInternalBatchSubForgeRejected(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("GET", "/api/novels", nil)
+	c.Request.Header.Set(HeaderInternalBatch, "forged-value")
+	if isInternalBatchSub(c) {
+		t.Error("伪造内部头不应被识别为内部子请求")
+	}
+	c2, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c2.Request = httptest.NewRequest("GET", "/api/novels", nil)
+	c2.Request.Header.Set(HeaderInternalBatch, InternalBatchSecret)
+	if !isInternalBatchSub(c2) {
+		t.Error("正确密钥应被识别为内部子请求")
+	}
+}

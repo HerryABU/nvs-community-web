@@ -184,7 +184,6 @@ import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useRoute, useRouter } from 'vue-router';
 import { novelApi, type Novel } from '@/api/novel';
-import { batchGet } from '@/api/batch';
 import { useAuthStore } from '@/stores/auth';
 import { useAppStore } from '@/stores/app';
 import { appPrefix } from '@/utils/prefix';
@@ -257,31 +256,25 @@ const showAlgo = ref(false);
 // 公告内容 Markdown 渲染（Cherry 引擎，与阅读器/博客一致）
 const noticeHtml = computed(() => renderMarkdown(noticeDlg.item?.content || ''));
 
-// ====== 聚合加载：一次 /api/batch 拿到首页全部内容数据（4 个接口 → 1 次请求）======
-// 注：分类列表 / 站点名由应用级 bootstrap（stores/app.ts）聚合，此处不再重复请求。
+// ====== 聚合加载：首屏由应用级 bootstrap 的 1 次 /api/batch 一并带回 ======
+// 分类列表 / 站点名 / 公告 / 算法说明 / 分类统计 / 作品列表 全部来自 stores/app.ts 的聚合通道；
+// SPA 内后进入首页时由 ensureHomeLoaded() 自行拉取一次（幂等）。
 async function loadHomeInitial(){
   loading.value=true;
-  const params:any={page:1,page_size:60};
-  if(sortBy.value==='newest')params.sort_by='created_at';
-  else if(sortBy.value==='updated')params.sort_by='updated_at';
-  else params.sort_by='featured';
   try{
-    const map=await batchGet([
-      { id:'ann', path:'/api/announcements' },
-      { id:'algo', path:'/api/algorithms/description' },
-      { id:'catStats', path:'/api/categories/stats' },
-      { id:'novels', path:'/api/novels', query:params },
-    ]);
-    if(map.ann?.success&&Array.isArray(map.ann.data))announcements.value=map.ann.data;
-    if(map.algo?.success&&map.algo.data?.description)algoDescription.value=map.algo.data.description;
-    if(map.catStats?.success&&Array.isArray(map.catStats.data)){
+    await appStore.ensureHomeLoaded();
+    const d=appStore.homeData;
+    if(!d)return;
+    announcements.value=d.announcements||[];
+    if(d.algo)algoDescription.value=d.algo;
+    if(d.catStats){
       const m:Record<string,any>={};
-      for(const item of map.catStats.data as any[])m[item.name]=item;
+      for(const item of d.catStats as any[])m[item.name]=item;
       catStats.value=m;
     }
-    if(map.novels?.success&&map.novels.data){
-      const list:Novel[]=(map.novels.data as any).list||[];
-      total.value=(map.novels.data as any).total||0;
+    if(d.novels){
+      const list:Novel[]=d.novels.list||[];
+      total.value=d.novels.total||0;
       categoryGroups.value=groupByCategory(list);
     }
   }catch(e){console.error(e)}

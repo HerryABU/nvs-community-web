@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"nvs-server/security"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -212,6 +213,8 @@ func executeSubRequest(ctx context.Context, engine *gin.Engine, parent *gin.Cont
 	// 透传认证信息（Cookie/Authorization）与客户端 IP（供限流使用）
 	subReq.Header = parent.Request.Header.Clone()
 	subReq.RemoteAddr = parent.Request.RemoteAddr
+	// 标记为内部聚合子请求：外层 /api/batch 已统一限流，子请求跳过重复计数（防伪造密钥）
+	subReq.Header.Set(security.HeaderInternalBatch, security.InternalBatchSecret)
 	if method == http.MethodPost {
 		subReq.Header.Set("Content-Type", "application/json")
 	}

@@ -20,10 +20,13 @@ const authStore = useAuthStore();
 const themeStore = useThemeStore();
 const appStore = useAppStore();
 
+// 在 setup 阶段同步启动：首屏落地页时首页内容并入同一批 → 严格 1 次 /api/batch；
+// 子组件（NavBar/Home）挂载后通过 ensure* 等待同一 promise，无竞态。
+appStore.bootstrap();
+
 onMounted(() => {
   authStore.fetchUser();
   themeStore.applyTheme();
-  appStore.bootstrap(); // 一次 /api/batch 拉取导航栏/页脚等外壳数据
 });
 </script>
 

@@ -1,6 +1,8 @@
 package security
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"net/http"
 	"strings"
 	"sync"
@@ -12,6 +14,20 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+// InternalBatchSecret /api/batch 内部转发密钥：聚合子请求携带该头，
+// 供 APIKeyGuard 识别并跳过重复限流（外层聚合请求已统一限流，子请求不再单独计数）。
+// 值为进程级一次性随机串，客户端无法伪造 —— 防止借该头绕过限流。
+var InternalBatchSecret = func() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "nvs-internal-batch"
+	}
+	return "nvs-int-" + hex.EncodeToString(b)
+}()
+
+// HeaderInternalBatch 内部子请求标识头（配合 InternalBatchSecret 校验）
+const HeaderInternalBatch = "X-NVS-Int-Batch"
 
 type rateLimiterEntry struct {
 	count       int
@@ -29,7 +45,7 @@ var (
 const (
 	CtxKeyIdentity = "apiKeyIdentity" // *models.KeyIdentity：本次请求的身份识别结果
 	CtxKeyOK       = "apiKeyOK"       // bool：是否携带并通过校验的有效 Key
-	CtxKeySkipIP   = "apiKeySkipIP"   // bool：GET/HEAD 且带有效 Key → 跳过 route 级 IP 限流
+	CtxKeySkipIP   = "apiKeySkipIP"   // bool：跳过 route 级 IP 限流（有效 Key GET/HEAD、已登录会话、/api/batch 内部子请求）
 )
 
 // ==================== 通用滑动窗口限流（按任意 key） ====================
@@ -60,6 +76,7 @@ func KeyRateLimit(limitKey string, maxRequests int, windowSecs int) bool {
 // RateLimit 基于 IP 的简单内存限流（route 级使用）。
 // 携带有效 API Key 且请求为 GET/HEAD（非认证敏感接口）时放行 —— 按 Key 配额限流，不再按 IP 计数。
 // maxRequests: 窗口内最大请求数；windowSecs: 时间窗口秒数
+// 桶按「IP + 路由」维度隔离：每个接口独立计数，避免不同路由互相挤占（尤其 /api/batch 聚合子请求）。
 func RateLimit(maxRequests int, windowSecs int) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.GetBool(CtxKeySkipIP) {
@@ -67,13 +84,14 @@ func RateLimit(maxRequests int, windowSecs int) gin.HandlerFunc {
 			return
 		}
 		ip := c.ClientIP()
+		routeKey := ip + "|" + c.FullPath()
 		now := time.Now()
 		window := time.Duration(windowSecs) * time.Second
 
 		rateLimitMu.Lock()
-		entry, exists := rateLimitStore[ip]
+		entry, exists := rateLimitStore[routeKey]
 		if !exists || now.Sub(entry.windowStart) > window {
-			rateLimitStore[ip] = &rateLimiterEntry{
+			rateLimitStore[routeKey] = &rateLimiterEntry{
 				count:       1,
 				windowStart: now,
 			}
@@ -111,6 +129,11 @@ func extractAPIKey(c *gin.Context) string {
 		return strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
 	}
 	return ""
+}
+
+// isInternalBatchSub 判断是否为 /api/batch 内部子请求（校验进程级密钥，客户端无法伪造）
+func isInternalBatchSub(c *gin.Context) bool {
+	return c.GetHeader(HeaderInternalBatch) == InternalBatchSecret
 }
 
 // isLoggedInBrowser 判断请求是否来自已登录的浏览器会话用户（携带有效 token cookie）。
@@ -249,8 +272,23 @@ func APIKeyGuard() gin.HandlerFunc {
 		method := c.Request.Method
 		ua := c.Request.UserAgent()
 
+		// 静态资源与 SPA 页面路由不受 API 限流约束（仅 /api/ 接口参与限流）。
+		// 否则一次页面加载的 ~100+ 静态资源请求会瞬间耗尽匿名配额，导致 CSS/JS 中途 429、页面裸奔。
+		if !strings.HasPrefix(path, "/api/") && path != "/health" {
+			c.Next()
+			return
+		}
+
 		// 放行：健康检查与建站向导（未安装场景不连库，不能查 Key）
 		if path == "/api/health" || path == "/health" || strings.HasPrefix(path, "/api/setup") {
+			c.Next()
+			return
+		}
+
+		// /api/batch 内部子请求：外层聚合请求已统一限流（Key 配额 / 匿名配额 / 路由级），
+		// 子请求跳过重复计数，避免一次聚合把配额放大 N 倍。校验进程级密钥，客户端无法伪造。
+		if isInternalBatchSub(c) {
+			c.Set(CtxKeySkipIP, true) // 同时跳过路由级 IP 限流
 			c.Next()
 			return
 		}

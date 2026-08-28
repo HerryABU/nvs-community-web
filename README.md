@@ -473,25 +473,30 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
-### v3.2.8 已登录用户免限流 + 聚合 API 真正落地首页（2026-08-28）
+### v3.2.8 已登录用户免限流 + 聚合 API 真正落地 + 限流三连修（2026-08-28）
 
 > 1. **已登录浏览器用户免限流（访客仍受限）**：`APIKeyGuard` 此前只识别 `X-API-Key`，从不识别浏览器登录态，导致已登录用户被当作匿名按 IP 限流。现于 `APIKeyGuard` 内解析 `token` cookie（JWT），命中有效登录态即设置 `CtxKeySkipIP=true` 并放行——既绕过匿名/爬虫 IP 限速，又因为路由级 `RateLimit` 同样读取 `CtxKeySkipIP` 而同步豁免；**访客（无有效 token）仍按匿名/爬虫配额限流**。仅针对浏览器会话，API Key 程序化访问走独立 Key 配额、不受影响。
 > 2. **聚合 API 真正落地（一次请求拿整页）**：后端 `/api/batch` 聚合中间层早已完整实现（并发 goroutine + 内存内转发 + 统一响应），但前端仅有客户端、`无任何页面调用`，属半成品。本版真正打通：
 >    - 新增 `batchGet()` 便捷封装（`web/src/api/batch.ts`），一次调用批量 GET 并按 `id` 返回映射。
->    - **新增应用级聚合 store** `web/src/stores/app.ts`：导航栏/页脚等所有页面共享的"外壳"数据（站点信息、分类、互联站点、未读数、安装状态）由**一次 `/api/batch`** 并发拉回；`NavBar` / `SiteFooter` 改为消费该 store，不再各自发请求。
->    - **首页 `Home.vue`** 内容数据（公告、算法说明、分类统计、作品列表）合并为**一次 `/api/batch`**。
->    - 实测（无头 Chromium 网络拦截）：首屏 **2 次 `/api/batch` + 2 次框架级请求（`/api/auth/me` 鉴权、`/api/setup/status` 安装守卫）**，**页面数据直连请求数 = 0**，控制台 0 错误，站点名/分类/作品/公告/备案号全部正常渲染。原首屏约 13 次独立往返，降至 4 次，且页面数据全部走聚合通道。其余页面（阅读器、作者工作台等）可按同一模式渐进接入。
-> 3. **版本号 3.2.5 → 3.2.8**（语义化顺延）：`server/version/version.go` / `web/package.json` 同步更新，前端 `npm run build` + Go `go build` 通过，`nvs-server.exe` 已重建。
+>    - **新增应用级聚合 store** `web/src/stores/app.ts`：导航栏/页脚等所有页面共享的"外壳"数据（站点信息、分类、互联站点、未读数、安装状态）与**首页内容**（公告、算法说明、分类统计、作品列表）在**首屏落地页时并入同一批** → **落地页首屏严格 1 次 `/api/batch`**；`NavBar` / `SiteFooter` / `Home.vue` 全部消费该 store（SPA 内后进入首页由 `ensureHomeLoaded()` 幂等兜底）。首屏落地页的初始路由判定用 `location.pathname` + 站点前缀（仅对初始加载成立，无竞态）。
+>    - 实测（无头 Chromium 直连真实服务，已登录用户落地 `/`）：**1 次 `/api/batch` + 2 次框架级请求（`/api/auth/me`、`/api/setup/status`）= 共 3 次请求完成整页首屏**，**页面数据直连请求数 = 0**，控制台 0 错误，导航栏/页脚/主容器全部正常渲染。原首屏约 13 次独立往返。
+> 3. **限流三连修（真实服务压测发现的三个预置 bug）**：
+>    - **静态资源不再被 API 限流**：`APIKeyGuard` 挂在根引擎且未跳过非 `/api/` 路径，一次页面加载的 ~110 个静态资源请求会瞬间耗尽匿名配额（60/min）→ CSS/JS 中途 429 → **页面裸奔（即此前「CSS UI 全乱掉」的根因）**。现改为仅对 `/api/` 接口限流，静态资源与 SPA 页面路由一律放行。
+>    - **路由级限流按「IP+路由」分桶**：`RateLimit` 原用纯 IP 桶，不同路由互相挤占配额（聚合子请求并发时低配额路由必 429）。现桶键为 `IP|路由`，各接口独立计数。
+>    - **`/api/batch` 子请求免重复限流**：子请求经 `engine.ServeHTTP` 会重新走 APIKeyGuard，把 1 次聚合放大成 N 次配额消耗。现子请求携带进程级随机密钥头（`X-NVS-Int-Batch`，客户端无法伪造），`APIKeyGuard` 识别后跳过重复计数并置 `CtxKeySkipIP`——**1 次 batch 只计 1 个限流单位**。真实服务实测：修复前 6 个子请求中 announcements / categories-stats 必 429，修复后全部 200 且连续 3 轮稳定。
+> 4. **版本号 3.2.5 → 3.2.8**（语义化顺延）：`server/version/version.go` / `web/package.json` 同步更新，前端 `npm run build` + Go `go build` 通过，`nvs-server.exe` 已重建。
 
 | 类别 | 文件 | 说明 |
 |---|---|---|
-| 限流 | `server/security/ratelimit.go` | 新增 `isLoggedInBrowser()`（解析 `token` cookie 判定登录态）；`APIKeyGuard` 在 health/setup 放行之后、匿名通道之前，已登录即设 `CtxKeySkipIP=true` 并放行 |
-| 限流 | `server/security/login_exempt_test.go` | 新增测试：有效/无效/空/无 cookie 四种登录判定；并将匿名配额打满后，已登录用户连续 50 次请求仍不被 429（且 `CtxKeySkipIP=true`） |
+| 限流 | `server/security/ratelimit.go` | 新增 `isLoggedInBrowser()`（解析 `token` cookie 判定登录态）、`isInternalBatchSub()`（进程级密钥校验）；APIKeyGuard 静态资源放行 / 已登录免限流 / batch 子请求免重复计数；路由级 `RateLimit` 改按 `IP\|路由` 分桶 |
+| 限流 | `server/handlers/batch.go` | 子请求携带 `X-NVS-Int-Batch` 内部密钥头（防伪造，1 次聚合只计 1 个限流单位） |
+| 限流 | `server/security/login_exempt_test.go` | 新增测试：登录判定四态、已登录 50 连发不 429、内部 batch 子请求放行 + 伪造头被拒 |
 | 聚合 | `web/src/api/batch.ts` | 新增 `batchGet(specs[])` 便捷封装（GET 批量 → 以 id 为键的结果映射） |
-| 聚合 | `web/src/stores/app.ts` | 新增：应用级外壳数据（站点信息/分类/互联站点/未读数/安装状态）一次 `/api/batch` 拉取，幂等 `bootstrap()` |
-| 聚合 | `web/src/components/NavBar.vue` | 改为消费 `useAppStore`（`storeToRefs`），移除 `loadSiteInfo/loadCategories/loadFederatedSites` 三个独立请求；未读数首屏不再单独拉取 |
+| 聚合 | `web/src/stores/app.ts` | 应用级 store：外壳数据 + 首页内容，首屏落地页并入同一批 → 严格 1 次 `/api/batch`；`ensureHomeLoaded()` 幂等兜底 |
+| 聚合 | `web/src/App.vue` | bootstrap 提前到 setup 同步启动（子组件挂载前发起，无竞态） |
+| 聚合 | `web/src/components/NavBar.vue` | 改为消费 `useAppStore`，移除三个独立请求；未读数首屏不再单独拉取 |
 | 聚合 | `web/src/components/SiteFooter.vue` | 改为消费 `useAppStore`，备案号/站点名不再单独请求 |
-| 聚合 | `web/src/views/Home.vue` | 首页内容（公告/算法说明/分类统计/作品列表）合并为 1 次 `batchGet([...])`；分类与站点名改由应用 store 提供 |
+| 聚合 | `web/src/views/Home.vue` | 首页内容统一由 store 聚合通道提供（`ensureHomeLoaded()`） |
 | 版本 | `server/version/version.go` / `web/package.json` | 版本号 3.2.5 → **3.2.8** |
 
 ### v3.2.5 API Key 管理下沉：作者工作台 + 管理员可管（2026-08-28）
