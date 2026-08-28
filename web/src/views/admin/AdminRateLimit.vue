@@ -24,8 +24,9 @@
       <div class="admin-panel">
         <h3 class="panel-title">各身份限流配额（请求数 / 时间窗口）</h3>
         <p class="hint-text">
-          带有效 API Key 的请求按 Key 配额限流；无 Key 的请求按 IP 走匿名配额，被识别为爬虫后走更低配额。
-          用户创建自己的 Key 时，可在对应角色上限之内自设更小配额。
+          配额按身份从高到低共四档：<b>携带 API Key</b> ≫ <b>匿名（无 Key）</b> &gt; <b>爬虫（识别命中）</b> &gt; <b>已知名头爬虫（直接 403）</b>。
+          无 Key 的匿名访问只给低配额，被识别为爬虫后给更低的配额 —— 爬虫脚本想提速，唯一途径是申请并在请求中携带 API Key
+          （从而可审计、可吊销）。用户创建自己的 Key 时，可在对应角色上限之内自设更小配额。
         </p>
         <el-form label-width="150px" label-position="left" style="max-width: 900px">
           <el-row :gutter="16">
@@ -57,7 +58,36 @@
           </el-row>
 
           <el-divider />
-          <h3 class="panel-title">爬虫识别规则</h3>
+          <h3 class="panel-title">已知名头爬虫：直接阻断（403）</h3>
+          <p class="hint-text">
+            UA 命中下方名单的请求<b>直接返回 403</b>，不消耗任何配额、不进入限流计数。
+            与「爬虫识别规则」的区别：识别规则只是把请求压到低配额（仍可低速访问），阻断名单是彻底拒绝。
+          </p>
+          <el-form-item label="自定义阻断关键词">
+            <el-input
+              type="textarea"
+              :rows="3"
+              v-model="botBlockKeywordsText"
+              placeholder="每行一个关键词（小写子串匹配），如：yandexbot、some-ai-crawler"
+            />
+            <div class="form-tip">
+              与内置阻断名单取并集，保存后立即生效。若需阻断某些搜索引擎爬虫，在此填写其 UA 特征词即可。
+            </div>
+          </el-form-item>
+          <el-form-item label="内置阻断名单">
+            <div class="builtin-tags">
+              <el-tag v-for="kw in builtinBlockKeywords" :key="kw" size="small" type="danger" effect="plain">{{ kw }}</el-tag>
+            </div>
+            <div class="form-tip">
+              内置覆盖 AI 训练/生成爬虫（GPTBot、MetaWebIndexer、ClaudeBot、Bytespider、CCBot、PerplexityBot、AmazonBot、Google-Extended、PetalBot 等）
+              与商业 SEO 采集器（MJ12bot、AhrefsBot、SemrushBot、DotBot 等）。
+              <b>主流搜索引擎（Googlebot / Bingbot / Baiduspider）默认不在阻断名单内</b>，以免影响收录 —— 需要阻断请在上方的自定义栏追加。
+            </div>
+          </el-form-item>
+
+          <el-divider />
+          <h3 class="panel-title">爬虫识别规则（低配额，不阻断）</h3>
+          <p class="hint-text">命中的请求仍可低速访问，只是配额被压到「匿名」之下。适合处理无头浏览器、脚本库这类不确定身份的客户端。</p>
           <el-form-item label="自定义爬虫 UA 关键词">
             <el-input
               type="textarea"
@@ -65,7 +95,7 @@
               v-model="botKeywordsText"
               placeholder="每行一个关键词（小写子串匹配），如：my-bot、spider/1.0"
             />
-            <div class="form-tip">与内置规则取并集。内置覆盖：HeadlessChrome、python-requests、curl、wget、GPTBot、MetaWebIndexer、anthropic-ai、Bytespider 等。</div>
+            <div class="form-tip">与内置规则取并集。内置覆盖：HeadlessChrome、Playwright、python-requests、curl、wget、Scrapy、okhttp 等无头浏览器与脚本库。</div>
           </el-form-item>
           <el-form-item label="伪装头检测">
             <el-switch v-model="form.bot_spoof_check" />
@@ -131,6 +161,7 @@
             <el-option label="读者" value="reader" />
             <el-option label="匿名" value="anonymous" />
             <el-option label="爬虫" value="bot" />
+            <el-option label="已阻断" value="blocked" />
           </el-select>
         </div>
         <el-table :data="logs" v-loading="loadingLogs" size="small" style="width: 100%">
@@ -194,12 +225,14 @@ const roleDefs = [
   { key: 'author', label: '作者 Key', tip: '创作、上传、导入导出、批量操作，可审计' },
   { key: 'reader', label: '读者 Key', tip: '书架、评论、阅读进度同步，第三方阅读器/客户端' },
   { key: 'federated', label: '联邦 Key', tip: '跨站作品同步、站点信息互换，双向可见' },
-  { key: 'anonymous', label: '匿名（无 Key）', tip: '普通访客/搜索引擎，按 IP 限流' },
-  { key: 'bot', label: '爬虫（识别命中）', tip: '无头/伪装/高频爬虫，远低于匿名配额' },
+  { key: 'anonymous', label: '匿名（无 Key）', tip: '普通访客/搜索引擎，按 IP 限流。无 Key 一律低配额' },
+  { key: 'bot', label: '爬虫（识别命中）', tip: '无头/伪装/高频爬虫，配额比匿名更低 —— 想提速就必须改用 API Key' },
 ];
 
 const form = reactive<Record<string, any>>({});
 const botKeywordsText = ref('');
+const botBlockKeywordsText = ref('');
+const builtinBlockKeywords = ref<string[]>([]);
 const savingConfig = ref(false);
 
 function setReq(role: string, v: number | undefined) {
@@ -226,6 +259,8 @@ async function loadConfig() {
     form.bot_ip_ttl_min = cfg.bot_ip_ttl_min ?? 1;
     form.log_retention_days = cfg.log_retention_days ?? 7;
     botKeywordsText.value = (cfg.bot_ua_keywords || []).join('\n');
+    botBlockKeywordsText.value = (cfg.bot_block_keywords || []).join('\n');
+    builtinBlockKeywords.value = res.data.data?.builtin_block_keywords || [];
   } catch { /* ignore */ }
 }
 
@@ -236,6 +271,7 @@ async function saveConfig() {
       admin: form.admin, author: form.author, reader: form.reader,
       federated: form.federated, anonymous: form.anonymous, bot: form.bot,
       bot_ua_keywords: botKeywordsText.value.split('\n').map(s => s.trim()).filter(Boolean),
+      bot_block_keywords: botBlockKeywordsText.value.split('\n').map(s => s.trim()).filter(Boolean),
       bot_spoof_check: form.bot_spoof_check,
       bot_ip_threshold: form.bot_ip_threshold,
       bot_ip_ttl_min: form.bot_ip_ttl_min,
@@ -298,13 +334,13 @@ function formatTime(s?: string) {
   return new Date(s).toLocaleString('zh-CN');
 }
 function roleLabel(role: string) {
-  return ({ admin: '站长', author: '作者', reader: '读者', federated: '联邦', anonymous: '匿名', bot: '爬虫' } as Record<string, string>)[role] || role;
+  return ({ admin: '站长', author: '作者', reader: '读者', federated: '联邦', anonymous: '匿名', bot: '爬虫', blocked: '已阻断' } as Record<string, string>)[role] || role;
 }
 function roleTag(role: string) {
-  return ({ admin: 'danger', author: 'warning', reader: 'primary', federated: 'success', anonymous: 'info', bot: 'danger' } as Record<string, string>)[role] || 'info';
+  return ({ admin: 'danger', author: 'warning', reader: 'primary', federated: 'success', anonymous: 'info', bot: 'warning', blocked: 'danger' } as Record<string, string>)[role] || 'info';
 }
 function logTypeTag(t: string) {
-  return t === 'bot' ? 'danger' : t === 'anonymous' ? 'info' : 'primary';
+  return t === 'blocked' ? 'danger' : t === 'bot' ? 'warning' : t === 'anonymous' ? 'info' : 'primary';
 }
 
 onMounted(() => { loadConfig(); loadStats(); loadKeys(); loadLogs(1); });
@@ -322,6 +358,7 @@ onMounted(() => { loadConfig(); loadStats(); loadKeys(); loadLogs(1); });
 .hint-text { color: var(--text-light, #666); font-size: 0.85rem; margin-bottom: 12px; }
 .form-tip { width: 100%; font-size: 0.78rem; color: var(--text-light, #999); line-height: 1.5; }
 .quota-row { display: flex; align-items: center; gap: 6px; }
+.builtin-tags { display: flex; flex-wrap: wrap; gap: 6px; max-height: 140px; overflow-y: auto; width: 100%; }
 .quota-unit { color: var(--text-light, #666); font-size: 0.85rem; }
 .stats-panel .el-col { margin-bottom: 10px; }
 .stat-mini { background: var(--bg-page, #f5f7fa); border-radius: 8px; padding: 10px; text-align: center; }
