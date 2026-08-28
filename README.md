@@ -473,11 +473,12 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
-### v2.3.5 API Key 管理下沉：作者工作台 + 管理员可管（2026-08-28）
+### v3.2.5 API Key 管理下沉：作者工作台 + 管理员可管（2026-08-28）
 
 > 1. **作者工作台新增 API Key 管理**（`AuthorDashboard.vue`）：作者可在「创作数据大屏」直接创建 / 启停 / 重生成 / 删除自己的 API Key，并查看每个 Key 的调用次数，附「🕷️ API Key 爬虫指南」入口。逻辑与 `Settings` 完全一致（复用 `apiKeyApi`，在角色配额上限内自设更小配额）。
 > 2. **管理员面板升级为可管理**：`AdminRateLimit.vue` 的「全站 API Key 一览」由只读升级为可管理——新增「重生成 / 停用·启用 / 删除」操作列（重生成后一次性展示完整 Key）。
 > 3. **后端新增管理员 Key 管理端点**（绕过归属校验，仅 `ensureAdmin`）：`POST /api/admin/ratelimit/keys/:id/regenerate`、`PATCH /api/admin/ratelimit/keys/:id`、`DELETE /api/admin/ratelimit/keys/:id`；前端 `adminApi` 补充 `regenerateApiKey / updateApiKey / deleteApiKey`。
+> 4. **版本号 2.3.4 → 3.2.5**（语义化顺延，本次为功能性版本跃迁）：`server/version/version.go` / `web/package.json` 同步更新，前端 `npm run build` + Go `go build` 通过，`nvs-server.exe` 已重建。
 
 ### v2.3.4 API Key 爬虫指南内置为独立页面（2026-08-28）
 
