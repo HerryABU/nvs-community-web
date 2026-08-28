@@ -18,9 +18,10 @@
           </template>
         </el-table-column>
         <el-table-column prop="novel_count" label="缓存作品" width="90" />
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="330" fixed="right">
           <template #default="{ row }">
             <el-button size="small" @click="syncSite(row)" :loading="syncingId === row.id">同步</el-button>
+            <el-button size="small" type="primary" plain @click="openKeys(row)">联邦 Key</el-button>
             <el-button size="small" @click="editSite(row)">编辑</el-button>
             <el-button size="small" type="danger" @click="deleteSite(row)">删除</el-button>
           </template>
@@ -81,6 +82,100 @@
           {{ editingSite ? '保存' : '添加' }}
         </el-button>
       </template>
+    </el-dialog>
+
+    <!-- 联邦 Key 管理弹窗（双向可见） -->
+    <el-dialog v-model="showKeys" :title="`联邦 Key · ${keysSite?.name || ''}`" width="720px">
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 14px"
+        title="双向可见机制"
+      >
+        <template #default>
+          <div class="hint-text" style="margin: 4px 0 0">
+            <b>本站签发给对方</b>：对方访问本站同步时携带，本站可识别对方用的是哪个 Key、是谁签发的。
+            <b>对方签发给本站</b>：本站同步请求自动携带，对方同样能识别本站身份，并给高配额（避免被匿名限流挡住）。
+            两站互换 Key 后，互相都能看到对方在用哪个 Key。
+          </div>
+        </template>
+      </el-alert>
+
+      <!-- 本站签发给对方（inbound） -->
+      <div class="key-block">
+        <div class="key-block-head">
+          <h4>① 本站签发给对方站的 Key</h4>
+          <el-button size="small" type="primary" @click="genInboundKey">生成新 Key</el-button>
+        </div>
+        <p class="hint-text">将完整 Key 转交给对方站，填入其「远程站点互通 → 该站点 → 对方签发给本站的 Key」。</p>
+        <el-table :data="inboundKeys" size="small" style="width: 100%">
+          <el-table-column label="Key 前缀" width="170">
+            <template #default="{ row }"><code>{{ row.key_prefix }}</code></template>
+          </el-table-column>
+          <el-table-column label="签发方" width="130">
+            <template #default="{ row }">{{ row.issuer_name || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="配额" width="110">
+            <template #default="{ row }">{{ row.quota_per_min }} 次/分</template>
+          </el-table-column>
+          <el-table-column label="状态" width="80">
+            <template #default="{ row }">
+              <el-tag :type="row.is_active ? 'success' : 'danger'" size="small">{{ row.is_active ? '启用' : '停用' }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="最近使用" width="150">
+            <template #default="{ row }">{{ formatTime(row.last_used_at) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="120">
+            <template #default="{ row }">
+              <el-button size="small" text @click="toggleKey(row)">{{ row.is_active ? '停用' : '启用' }}</el-button>
+              <el-button size="small" text type="danger" @click="deleteKey(row)">吊销</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <!-- 对方签发给本站（outbound） -->
+      <div class="key-block">
+        <div class="key-block-head">
+          <h4>② 对方站签发给本站的 Key</h4>
+        </div>
+        <p class="hint-text">在对方站后台「远程站点互通」生成 Key 后粘贴到这里；同步时本站会自动携带该 Key（AES 加密存储）。</p>
+        <div style="display: flex; gap: 8px; margin-bottom: 10px">
+          <el-input v-model="outboundKeyInput" placeholder="粘贴对方站签发给本站的完整 Key" size="small" show-password />
+          <el-button size="small" type="primary" @click="saveOutboundKey" :loading="savingOutbound">保存</el-button>
+        </div>
+        <el-table v-if="outboundKeys.length" :data="outboundKeys" size="small" style="width: 100%">
+          <el-table-column label="Key 前缀" width="170">
+            <template #default="{ row }"><code>{{ row.key_prefix }}</code></template>
+          </el-table-column>
+          <el-table-column label="签发方" width="160">
+            <template #default="{ row }">{{ row.issuer_name || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="状态" width="80">
+            <template #default="{ row }">
+              <el-tag :type="row.is_active ? 'success' : 'danger'" size="small">{{ row.is_active ? '启用' : '停用' }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="120">
+            <template #default="{ row }">
+              <el-button size="small" text @click="toggleKey(row)">{{ row.is_active ? '停用' : '启用' }}</el-button>
+              <el-button size="small" text type="danger" @click="deleteKey(row)">吊销</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </el-dialog>
+
+    <!-- 新生成的联邦 Key 一次性展示 -->
+    <el-dialog v-model="showNewKey" title="联邦 Key 生成成功" width="560px">
+      <el-alert type="warning" :closable="false" show-icon title="完整 Key 仅此一次展示，请立即复制并转交对方站点" style="margin-bottom: 12px" />
+      <div class="newkey-box">
+        <code class="newkey-code">{{ newKeyValue }}</code>
+        <el-button size="small" type="primary" @click="copyNewKey">复制</el-button>
+      </div>
+      <p class="hint-text">对方站收到后，在其「远程站点互通 → 本站点 → 对方签发给本站的 Key」粘贴保存即可。本站可从入站记录中识别对方正在使用这个 Key。</p>
     </el-dialog>
   </div>
 </template>
@@ -184,6 +279,103 @@ async function deleteSite(site: any) {
   } catch { /* cancelled */ }
 }
 
+// ===== 联邦 Key 管理（双向可见） =====
+const showKeys = ref(false);
+const keysSite = ref<any>(null);
+const inboundKeys = ref<any[]>([]);
+const outboundKeys = ref<any[]>([]);
+const loadingKeys = ref(false);
+const outboundKeyInput = ref('');
+const savingOutbound = ref(false);
+const showNewKey = ref(false);
+const newKeyValue = ref('');
+
+async function openKeys(site: any) {
+  keysSite.value = site;
+  showKeys.value = true;
+  outboundKeyInput.value = '';
+  await loadSiteKeys();
+}
+
+async function loadSiteKeys() {
+  if (!keysSite.value) return;
+  loadingKeys.value = true;
+  try {
+    const res = await adminApi.getSiteKeys(keysSite.value.id);
+    const data = res.data.data || {};
+    inboundKeys.value = (data.keys || []).filter((k: any) => k.direction === 'inbound');
+    outboundKeys.value = (data.keys || []).filter((k: any) => k.direction === 'outbound');
+  } catch { /* ignore */ }
+  loadingKeys.value = false;
+}
+
+async function genInboundKey() {
+  if (!keysSite.value) return;
+  try {
+    const res = await adminApi.createInboundKey(keysSite.value.id);
+    if (res.data.code === 0) {
+      newKeyValue.value = res.data.data.key || '';
+      showNewKey.value = true;
+      ElMessage.success('已生成联邦 Key');
+      await loadSiteKeys();
+    } else {
+      ElMessage.error(res.data.message || '生成失败');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '生成失败');
+  }
+}
+
+async function copyNewKey() {
+  try {
+    await navigator.clipboard.writeText(newKeyValue.value);
+    ElMessage.success('已复制');
+  } catch {
+    ElMessage.warning('复制失败，请手动选择复制');
+  }
+}
+
+async function saveOutboundKey() {
+  if (!keysSite.value) return;
+  const key = outboundKeyInput.value.trim();
+  if (!key) { ElMessage.warning('请粘贴对方站签发给本站的完整 Key'); return; }
+  savingOutbound.value = true;
+  try {
+    const res = await adminApi.saveOutboundKey(keysSite.value.id, key);
+    if (res.data.code === 0) {
+      ElMessage.success(res.data.message || '已保存');
+      outboundKeyInput.value = '';
+      await loadSiteKeys();
+    } else {
+      ElMessage.error(res.data.message || '保存失败');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  }
+  savingOutbound.value = false;
+}
+
+async function toggleKey(row: any) {
+  if (!keysSite.value) return;
+  try {
+    await adminApi.toggleSiteKey(keysSite.value.id, row.id);
+    ElMessage.success('已更新状态');
+    await loadSiteKeys();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
+async function deleteKey(row: any) {
+  if (!keysSite.value) return;
+  try {
+    await ElMessageBox.confirm('吊销后该 Key 立即失效（对方站点将无法继续使用）。确认吊销？', '吊销 Key', { type: 'warning' });
+    await adminApi.deleteSiteKey(keysSite.value.id, row.id);
+    ElMessage.success('已吊销');
+    await loadSiteKeys();
+  } catch { /* cancelled */ }
+}
+
 onMounted(() => { loadSites(); loadInbound(); });
 </script>
 
@@ -199,8 +391,16 @@ onMounted(() => { loadSites(); loadInbound(); });
 .inbound-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .inbound-head h3 { margin: 0; font-size: 1.05rem; color: var(--text-color, #333); }
 .inbound-block code { background: #eef2ff; color: #4f46e5; padding: 1px 6px; border-radius: 4px; font-size: 0.85rem; }
+.key-block { margin-bottom: 18px; padding: 14px; border: 1px solid var(--border-color, #e5e7eb); border-radius: 8px; }
+.key-block-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.key-block-head h4 { margin: 0; font-size: 0.98rem; color: var(--text-color, #333); }
+.key-block code { background: #eef2ff; color: #4f46e5; padding: 1px 6px; border-radius: 4px; font-size: 0.82rem; }
+.newkey-box { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.newkey-code { flex: 1; font-size: 0.95rem; word-break: break-all; background: #eef2ff; color: #4f46e5; padding: 10px 12px; border-radius: 6px; }
 [data-theme="dark"] .admin-page { background: #0f172a; }
 [data-theme="dark"] .admin-page-header h2 { color: #e2e8f0; }
 [data-theme="dark"] .inbound-head h3 { color: #e2e8f0; }
 [data-theme="dark"] .inbound-block { border-color: #334155; }
+[data-theme="dark"] .key-block { border-color: #334155; }
+[data-theme="dark"] .key-block-head h4 { color: #e2e8f0; }
 </style>

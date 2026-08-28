@@ -306,6 +306,43 @@ export const adminApi = {
     return api.post(`/admin/sites/${id}/sync`);
   },
 
+  // 联邦站点 API Key（双向可见）
+  getSiteKeys(id: number) {
+    return api.get(`/admin/sites/${id}/keys`);
+  },
+  createInboundKey(id: number, data?: { quota_per_min?: number; allowed_ips?: string }) {
+    return api.post(`/admin/sites/${id}/keys/inbound`, data || {});
+  },
+  saveOutboundKey(id: number, key: string) {
+    return api.post(`/admin/sites/${id}/keys/outbound`, { key });
+  },
+  toggleSiteKey(id: number, kid: number) {
+    return api.post(`/admin/sites/${id}/keys/${kid}/toggle`);
+  },
+  deleteSiteKey(id: number, kid: number) {
+    return api.delete(`/admin/sites/${id}/keys/${kid}`);
+  },
+
+  // 限流与 API Key 管理
+  getRateLimitConfig() {
+    return api.get('/admin/ratelimit/config');
+  },
+  updateRateLimitConfig(data: Record<string, any>) {
+    return api.put('/admin/ratelimit/config', data);
+  },
+  getRateLimitLogs(params?: { type?: string; page?: number; page_size?: number }) {
+    return api.get('/admin/ratelimit/logs', { params });
+  },
+  getRateLimitStats() {
+    return api.get('/admin/ratelimit/stats');
+  },
+  clearRateLimits() {
+    return api.post('/admin/ratelimit/clear');
+  },
+  getAllApiKeys() {
+    return api.get('/admin/ratelimit/keys');
+  },
+
   // 数据库管理（健康检查 / 迁移 / 备份 / 恢复 / 定时备份）
   getDbHealth() {
     return api.get('/admin/db/health');

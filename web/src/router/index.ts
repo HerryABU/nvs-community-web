@@ -163,6 +163,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/ratelimit',
+      name: 'admin-ratelimit',
+      component: () => import('@/views/admin/AdminRateLimit.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/forums',
       name: 'admin-forums',
       component: () => import('@/views/admin/AdminForums.vue'),
