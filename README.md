@@ -85,6 +85,8 @@
 - 🧱 **敏感区三级隔离墙** — 系统级（管理员配置敏感分区）+ 论坛级（敏感论坛自动触发）+ 作者级（自定义警告语），3~5步确认弹窗含手动输入，动态配置步骤数/警告语/跨域额外步数
 - 🚫 **IP 黑名单** — 管理员可封禁 IP，支持过期时间
 - 🚦 **IP 限流** — 滑动窗口算法，内存存储，登录 5次/60s，评论 20次/60s
+- 🔑 **四层身份 API Key 体系** — 站长 / 作者 / 读者 / 联邦 四种身份 Key + 匿名/爬虫通道，各自独立配额（管理员全局可调）：带 Key 的读取请求按 Key 配额限流（高于匿名），无 Key 请求走 IP 限流；**爬虫识别**（无头 UA / 浏览器 UA 缺 Sec-Fetch 头伪装检测 / 单 IP 高频行为降级）自动进入远低于匿名的爬虫配额；用户可在管理员角色上限内自建/自管 Key（配额/过期/IP 白名单），完整 Key 仅创建时展示一次、库中只存 SHA-256 哈希
+- 🤝 **联邦 Key 双向可见** — 两站互换 API Key：本站签发的 Key 对方同步时携带，被链接的站可在入站记录中识别**对方用的是哪个 Key、是谁签发的**；出站同步自动携带对方签发的 Key（AES-256-GCM 加密落库），免除匿名限流干扰
 - 🧹 **XSS 防护** — bluemonday 白名单净化 + 动态正则规则引擎（管理员后台可维护、可测试）+ 正则移除危险标签和事件处理器
 - 🚫 **违禁词库** — 管理员后台动态维护，**三种动作**：标记（内容正常发布但进入待审列表，管理员确认违规[可连带软删留证]/放行）/ 删除（直接移除匹配内容）/ 替换（替换为指定文本）；**双匹配模式**：关键词（字面匹配自动转义，填词即用）与正则（Go RE2 全方位：`(?i)` 忽略大小写、`(?m)` 多行、`\p{Han}` Unicode 属性）；**可配置适用范围**（章节 / 评论 / 论坛 / 博客 / 全部）；规则即时生效无需改代码，内置实时测试工具，mark 命中自动写入待审记录（去重）
 - 🔏 **内容签名** — HMAC-SHA256 作者签名，章节完整性可验证
@@ -470,6 +472,27 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 ---
 
 ## 📝 版本更新记录（文件级改动说明）
+
+### v2.3.0 四层身份 API Key 体系 + 爬虫识别限流 + 联邦双向 Key（2026-08-28）
+
+> 将限流从「一刀切 IP 计数」升级为「**基于身份的多层级流量管理**」：站长/作者/读者/联邦四层身份 Key + 匿名/爬虫通道各自独立配额（管理员后台统一配置）。**爬虫识别**（无头 UA / 伪装浏览器 UA / 单 IP 高频行为）自动走远低于匿名的爬虫配额，Meta 等商业爬虫无法通过任何"无 Key"方式绕过。**联邦 Key 双向可见**：两站互换 Key 后，被链接的站能识别对方用的是哪个 Key、是谁签发的。
+
+| 类别 | 文件 | 说明 |
+|---|---|---|
+| 模型 | `models/api_key.go`（新）+ `api_key_test.go`（新） | 三张新表：`api_keys`（用户级 Key，仅存 SHA-256 哈希）/ `federated_peer_keys`（联邦双向 Key，出站明文 AES-256-GCM 加密）/ `api_access_logs`（按身份访问日志，限流/携带 Key/爬虫才落库）；配额配置 JSON（`api_key_quota`）读写与夹取 |
+| 模型 | `models/db.go` | `AllModels` 注册三张新表（AutoMigrate 自动建表） |
+| 模型 | `models/platform_federated.go` | `federated_inbound` 入站记录扩展 `key_prefix` / `issuer` 字段 —— 被链接的站可见对方所用 Key 与签发方 |
+| 限流 | `security/ratelimit.go` | 新增 `APIKeyGuard` 身份感知限流中间件（Key 配额滑动窗口 / 匿名与爬虫低配额 / 敏感认证接口保留 IP 限流防撞库 / 访问日志与 last_used 节流防写放大）；`RateLimit` 对「有效 Key + 读取请求」放行 IP 限流；`RateLimitStats` / `ClearRateLimits` 管理接口 |
+| 限流 | `security/bot.go`（新）+ `bot_test.go`（新） | 爬虫识别：内置 + 自定义 UA 关键词（HeadlessChrome/curl/GPTBot/MetaWebIndexer 等）、浏览器 UA 缺 Sec-Fetch-* 伪装检测（可关）、单 IP 窗口内高频自动降级（阈值/窗口可配） |
+| 处理 | `handlers/api_key.go`（新） | 用户侧 Key CRUD（`/api/apikeys`，配额自设 ≤ 角色上限，支持 IP 白名单/过期/重生成）；管理员侧限流配置 / 日志 / 统计 / 全站 Key 一览（`/api/admin/ratelimit/*`） |
+| 联邦 | `handlers/admin_site.go` | 联邦 Key 管理（生成本站签发 Key 一次性展示 / 保存对方签发 Key / 启停 / 吊销，`/api/admin/sites/:id/keys/*`）；`SyncFederatedSite` 出站自动携带对方 Key；`recordInbound` 携带联邦身份写入入站记录 |
+| 路由 | `main.go` | `APIKeyGuard` 挂全局中间件链；挂载 apikeys / admin ratelimit / sites keys 路由；启动时重载爬虫规则 + 清理过期日志 |
+| 加密 | `config/secure.go` | 导出 `EncryptSecret` / `DecryptSecret`（机器密钥 AES-256-GCM，供联邦出站 Key 落库） |
+| 管理端 | `views/admin/AdminRateLimit.vue`（新） | 各身份配额配置、爬虫规则、限流状态统计与清空、访问日志（身份/Key 前缀/命中原因）、全站 Key 一览 |
+| 管理端 | `views/admin/AdminSites.vue` | 「联邦 Key」弹窗：生成/转交/保存/启停/吊销，双向可见提示 |
+| 用户端 | `views/Settings.vue` + `api/apikey.ts`（新） | 个人 API Key 管理：创建（配额/过期/IP 白名单）、列表、启停、重生成、删除 |
+| 路由 | `router/index.ts` / `views/AdminDashboard.vue` | 新增 `/admin/ratelimit` 页面与入口菜单 |
+| 版本 | `version/version.go` / `web/package.json` | 版本号 2.2.2 → **2.3.0** |
 
 ### v2.2.2 修复公告栏渲染 + 版本号顺延（2026-08-25）
 
