@@ -354,6 +354,11 @@ const router = createRouter({
       name: 'docs',
       component: () => import('@/views/DocsPage.vue'),
     },
+    {
+      path: '/api-spider',
+      name: 'api-spider',
+      component: () => import('@/views/APIKeySpider.vue'),
+    },
     // ========== 用户自定义内容（frame/html/wasm 沙盒） ==========
     {
       path: '/frames',

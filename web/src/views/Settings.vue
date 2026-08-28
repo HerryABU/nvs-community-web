@@ -131,7 +131,7 @@
               创建 API Key 后，调用本站 API 时携带 <code>X-API-Key</code> 请求头即可获得远高于匿名访问的配额。
               不带 Key 的请求会被压到很低的匿名配额，被识别为爬虫则更低，命中已知名头爬虫名单会直接 403 ——
               批量抓取/自动化脚本想提速，请在请求中带上你的 Key。可自设不超过角色上限的更小配额，随时停用/吊销。
-              详细接入示例见仓库 <code>docs/api-key-crawler.md</code>。
+              详细接入示例见站内页面 <router-link to="/api-spider">「🕷️ API Key 爬虫指南」</router-link>（用户菜单亦可打开）。
             </div>
           </template>
         </el-alert>

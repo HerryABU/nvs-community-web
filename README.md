@@ -473,6 +473,22 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v2.3.4 API Key 爬虫指南内置为独立页面（2026-08-28）
+
+> 将 v2.3.3 的 `docs/api-key-crawler.md` 由「仓库 Markdown」升级为**随二进制部署的应用内独立页面**，运行时可直接打开，无需读源码：
+> 1. **新增独立页面** `web/src/views/APIKeySpider.vue`，路由 `/api-spider`（公开，与 `/docs` 同级），内容覆盖申请 Key、Python `requests` 调用、公开接口表、分页遍历、429 退避重试、调用次数查看、安全注意事项，并内置「🧪 在线测试」区——可粘贴自己的 Key 同源实测一个请求，自动带上反向代理前缀。
+> 2. **导航入口**：用户下拉菜单与移动端抽屉新增「API Key 爬虫指南」；`Settings` 的 API Key 卡片提示改为指向该页的 `router-link`。
+> 3. **仓库 Markdown 保留**为源码级参考，顶部注明已内置同名应用内页面。
+
+| 类别 | 文件 | 说明 |
+|---|---|---|
+| 页面 | `web/src/views/APIKeySpider.vue` | 新增：API Key 爬虫接入指南独立页面（含在线测试） |
+| 路由 | `web/src/router/index.ts` | 新增 `/api-spider` 公开路由 |
+| 导航 | `web/src/components/NavBar.vue` | 桌面下拉 + 移动抽屉新增入口（Connection 图标） |
+| 设置 | `web/src/views/Settings.vue` | API Key 卡片提示指向 `/api-spider` |
+| 文档 | `docs/api-key-crawler.md` | 顶部注明已内置同名应用内页面 |
+| 版本 | `server/version/version.go` / `web/package.json` | 版本号 2.3.3 → **2.3.4** |
+
 ### v2.3.3 管理子页居中补全 + API Key 调用次数 + 爬虫接入文档（2026-08-28）
 
 > 1. **管理子页居中**：`/admin/users`（用户管理）此前使用独立 `.page-container`，风格与其他 `/admin/*` 子页不一致；统一改为 `AdminHeader` + `.admin-page-body` 布局，与限流/设置等页保持一致的居中列。其余 `/admin/*` 子页已由 v2.3.2 前后若干 commit 完成居中，本次补齐最后一块。
