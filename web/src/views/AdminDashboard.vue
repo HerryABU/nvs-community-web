@@ -449,6 +449,7 @@ onMounted(() => { loadDashboard(); checkFiling(); });
   font-weight: 700;
   color: #e2e8f0;
   margin: 0 0 16px;
+  text-align: center; /* 与下方居中排布的卡片网格保持同一视觉中轴 */
 }
 
 [data-theme="light"] .menu-section-title {
@@ -456,9 +457,11 @@ onMounted(() => { loadDashboard(); checkFiling(); });
 }
 
 .admin-menu-grid {
-  /* flex 弹性换行：菜单数量任意（如 21 项）最后一行自然左对齐，杜绝网格空位导致的「歪斜」 */
+  /* flex 弹性换行 + 居中：菜单数量任意（如 21 项）时，末行不足一列也整体居中，
+     避免左侧堆叠的视觉失衡（早期为左对齐，现按需求改为居中） */
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 16px;
 }
 
