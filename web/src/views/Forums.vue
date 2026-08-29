@@ -57,7 +57,17 @@
           @keyup.enter="enterByRoomCode"
         />
         <el-button size="small" :loading="enteringRoom" @click="enterByRoomCode">进入</el-button>
-        <el-button v-if="authStore.isLoggedIn" type="primary" size="small" @click="showCreateForum = true">
+        <span v-if="authStore.isLoggedIn && myForumQuota" class="quota-hint">
+          {{ quotaHintText }}
+        </span>
+        <el-button
+          v-if="authStore.isLoggedIn"
+          type="primary"
+          size="small"
+          :disabled="!canCreateForum"
+          :title="canCreateForum ? '' : '已达建版上限，如需更多请联系管理员'"
+          @click="showCreateForum = true"
+        >
           创建论坛
         </el-button>
       </div>
@@ -186,6 +196,30 @@ const creating = ref(false);
 const createForm = ref({ name: '', description: '', password: '', is_public: true, room_code: '' });
 const createdRoomCode = ref('');
 
+// ====== 自建论坛额度（管理员可设全局上限，也可单独削减某人） ======
+const myForumQuota = ref<any>(null);
+const canCreateForum = computed(() => {
+  const q = myForumQuota.value;
+  if (!q) return true;
+  return q.limit < 0 || q.remaining > 0;
+});
+const quotaHintText = computed(() => {
+  const q = myForumQuota.value;
+  if (!q) return '';
+  if (q.limit === 0) return '管理员已限制你创建自建论坛';
+  if (q.limit < 0) return `已创建 ${q.used} 个（无上限）`;
+  return `已创建 ${q.used} / ${q.limit} 个${q.override ? '（单独设置）' : ''}`;
+});
+
+async function loadMyForumQuota() {
+  if (!authStore.isLoggedIn) return;
+  try {
+    const res = await forumApi.listMyForums();
+    const d = res.data.data;
+    if (res.data.code === 0 && d && !Array.isArray(d)) myForumQuota.value = d.quota || null;
+  } catch { /* ignore */ }
+}
+
 // 房间号输入：自动转大写并过滤非法字符
 function onRoomCodeInput() {
   createForm.value.room_code = (createForm.value.room_code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -229,6 +263,7 @@ async function submitCreateForum() {
       createdRoomCode.value = res.data.data?.room_code || '';
       ElMessage.success('论坛已创建，可直接使用（后续由管理员审查）');
       loadForums();
+      loadMyForumQuota();
     }
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '创建失败');
@@ -353,7 +388,7 @@ async function loadForums() {
   }
 }
 
-onMounted(loadForums);
+onMounted(() => { loadForums(); loadMyForumQuota(); });
 </script>
 
 <style scoped>
@@ -365,6 +400,11 @@ onMounted(loadForums);
 
 .forum-card {
   cursor: pointer;
+}
+
+.quota-hint {
+  font-size: 0.8rem;
+  color: var(--text-light, #888);
 }
 
 .forum-card-sensitive {

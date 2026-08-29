@@ -11,23 +11,23 @@ import (
 
 // Forum 论坛版块
 type Forum struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Name        string    `gorm:"size:128;not null" json:"name"`
-	Description string    `gorm:"type:text" json:"description"`
-	Type        string    `gorm:"size:16;default:general;index" json:"type"` // general/reader/reader_author/author/sensitive/custom
-	Zone        string    `gorm:"size:64;default:''" json:"zone"`            // 敏感区绑定的隔离墙分区名
-	RefID       string    `gorm:"size:64;default:''" json:"ref_id"`          // novel_id 或 category
-	ParentID    *uint     `gorm:"default:null;index" json:"parent_id"`       // 父论坛ID，null为顶级论坛
-	SortOrder   int       `gorm:"default:0" json:"sort_order"`
-	ThreadCount int       `gorm:"default:0" json:"thread_count"`
+	ID          uint   `gorm:"primaryKey" json:"id"`
+	Name        string `gorm:"size:128;not null" json:"name"`
+	Description string `gorm:"type:text" json:"description"`
+	Type        string `gorm:"size:16;default:general;index" json:"type"` // general/reader/reader_author/author/sensitive/custom
+	Zone        string `gorm:"size:64;default:''" json:"zone"`            // 敏感区绑定的隔离墙分区名
+	RefID       string `gorm:"size:64;default:''" json:"ref_id"`          // novel_id 或 category
+	ParentID    *uint  `gorm:"default:null;index" json:"parent_id"`       // 父论坛ID，null为顶级论坛
+	SortOrder   int    `gorm:"default:0" json:"sort_order"`
+	ThreadCount int    `gorm:"default:0" json:"thread_count"`
 	// 用户自建论坛
-	CreatorID    uint   `gorm:"default:0;index" json:"creator_id"`                        // 创建者用户ID，0=系统/管理员
-	IsPublic     bool   `gorm:"default:false" json:"is_public"`                           // 是否在大厅自建区公开显示
-	PasswordHash string `gorm:"size:128;default:''" json:"-"`                             // 进入密码哈希（空=无密码）
-	RoomCode     string `gorm:"size:16;index" json:"room_code"`                           // 房间号（数字+字母）——不可见论坛的进入凭证；系统默认论坛为空；自建论坛唯一性由代码层保证
-	ReviewStatus string `gorm:"size:16;default:approved;index" json:"review_status"`      // approved/pending/rejected（自建论坛默认 pending 待管理员审查）
-	ReviewNote   string `gorm:"size:512;default:''" json:"review_note"`                   // 管理员审查意见
-	CreatedAt    time.Time `json:"created_at"`
+	CreatorID    uint           `gorm:"default:0;index" json:"creator_id"`                   // 创建者用户ID，0=系统/管理员
+	IsPublic     bool           `gorm:"default:false" json:"is_public"`                      // 是否在大厅自建区公开显示
+	PasswordHash string         `gorm:"size:128;default:''" json:"-"`                        // 进入密码哈希（空=无密码）
+	RoomCode     string         `gorm:"size:16;index" json:"room_code"`                      // 房间号（数字+字母）——不可见论坛的进入凭证；系统默认论坛为空；自建论坛唯一性由代码层保证
+	ReviewStatus string         `gorm:"size:16;default:approved;index" json:"review_status"` // approved/pending/rejected（自建论坛默认 pending 待管理员审查）
+	ReviewNote   string         `gorm:"size:512;default:''" json:"review_note"`              // 管理员审查意见
+	CreatedAt    time.Time      `json:"created_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：论坛软删除
 
 	HasPassword bool `gorm:"-" json:"has_password"` // 是否有进入密码（运行时计算，不落库）
@@ -57,6 +57,183 @@ type ForumMute struct {
 }
 
 func (ForumMute) TableName() string { return "forum_mutes" }
+
+// ==================== 自建论坛配额（全局默认 + 按人覆盖） ====================
+
+// UserForumQuota 管理员对单个用户「自建论坛数量」的额度覆盖。
+// MaxForums 语义：-1 = 跟随全局默认；0 = 禁止创建；> 0 = 该用户的专属上限。
+// 典型用法：对滥用建版的人单独压到 1 或 0（0 即等同削减其建版权利），
+// 对产出优质社区的人单独放宽到 10。
+type UserForumQuota struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	UserID    uint      `gorm:"not null;uniqueIndex" json:"user_id"`
+	MaxForums int       `gorm:"default:-1" json:"max_forums"`
+	Note      string    `gorm:"size:256;default:''" json:"note"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+
+	Username string `gorm:"-" json:"username,omitempty"`
+}
+
+func (UserForumQuota) TableName() string { return "user_forum_quotas" }
+
+// ForumQuotaConfig 全局自建论坛配额（存 platform_configs.forum_quota）
+type ForumQuotaConfig struct {
+	MaxPerUser int `json:"max_per_user"` // 每人最多可创建的自建论坛数；0 = 不限制
+}
+
+const forumQuotaConfigKey = "forum_quota"
+
+// DefaultForumQuotaConfig 默认：每人 3 个自建论坛
+func DefaultForumQuotaConfig() ForumQuotaConfig {
+	return ForumQuotaConfig{MaxPerUser: 3}
+}
+
+// LoadForumQuotaConfig 读取全局自建论坛配额
+func LoadForumQuotaConfig() ForumQuotaConfig {
+	cfg := DefaultForumQuotaConfig()
+	val := GetPlatformConfig(forumQuotaConfigKey)
+	if val == "" {
+		return cfg
+	}
+	if err := jsonUnmarshal([]byte(val), &cfg); err != nil {
+		return DefaultForumQuotaConfig()
+	}
+	if cfg.MaxPerUser < 0 {
+		cfg.MaxPerUser = 0
+	}
+	if cfg.MaxPerUser > 1000 {
+		cfg.MaxPerUser = 1000
+	}
+	return cfg
+}
+
+// SaveForumQuotaConfig 保存全局自建论坛配额
+func SaveForumQuotaConfig(cfg ForumQuotaConfig) error {
+	if cfg.MaxPerUser < 0 {
+		cfg.MaxPerUser = 0
+	}
+	if cfg.MaxPerUser > 1000 {
+		cfg.MaxPerUser = 1000
+	}
+	b, err := jsonMarshal(cfg)
+	if err != nil {
+		return err
+	}
+	return SetPlatformConfig(forumQuotaConfigKey, string(b))
+}
+
+// GetUserForumQuota 读取某用户的额度覆盖（无记录返回 nil = 跟随全局）
+func GetUserForumQuota(userID uint) *UserForumQuota {
+	if userID == 0 {
+		return nil
+	}
+	var q UserForumQuota
+	if err := DB.Where("user_id = ?", userID).First(&q).Error; err != nil {
+		return nil
+	}
+	return &q
+}
+
+// SaveUserForumQuota 写入/更新某用户的额度覆盖。
+//
+// ⚠️ 必须用 map 显式 upsert：MaxForums 的「0 = 禁止创建」是零值，
+// 若走 struct Create，GORM 会把零值字段当作「未设置」而套用列默认值 -1，
+// 导致「剥夺建版权利」静默失效（表现为仍然能建版）。这里按列显式写死。
+func SaveUserForumQuota(q *UserForumQuota) error {
+	if q == nil || q.UserID == 0 {
+		return fmt.Errorf("用户 ID 无效")
+	}
+	if q.MaxForums < -1 {
+		q.MaxForums = -1
+	}
+	if q.MaxForums > 1000 {
+		q.MaxForums = 1000
+	}
+	now := time.Now()
+	cols := map[string]interface{}{
+		"user_id":    q.UserID,
+		"max_forums": q.MaxForums,
+		"note":       q.Note,
+		"updated_at": now,
+	}
+	if existing := GetUserForumQuota(q.UserID); existing != nil {
+		q.ID = existing.ID
+		return DB.Model(&UserForumQuota{}).Where("user_id = ?", q.UserID).Updates(cols).Error
+	}
+	cols["created_at"] = now
+	return DB.Model(&UserForumQuota{}).Create(cols).Error
+}
+
+// ListUserForumQuotas 列出所有被单独设置过建版额度的用户（附用户名）
+func ListUserForumQuotas() ([]UserForumQuota, error) {
+	var list []UserForumQuota
+	if err := DB.Order("updated_at DESC").Find(&list).Error; err != nil {
+		return nil, err
+	}
+	if len(list) == 0 {
+		return list, nil
+	}
+	ids := make([]uint, 0, len(list))
+	for _, q := range list {
+		ids = append(ids, q.UserID)
+	}
+	var users []User
+	DB.Where("id IN ?", ids).Find(&users)
+	names := map[uint]string{}
+	for _, u := range users {
+		names[u.ID] = u.Username
+	}
+	for i := range list {
+		list[i].Username = names[list[i].UserID]
+	}
+	return list, nil
+}
+
+// CountUserCreatedForums 统计某用户已创建的自建论坛数（不含软删除）
+func CountUserCreatedForums(userID uint) int64 {
+	var n int64
+	DB.Model(&Forum{}).Where("creator_id = ? AND type = ?", userID, "custom").Count(&n)
+	return n
+}
+
+// ForumQuotaStatus 自建论坛额度状态（供用户侧与管理端展示）
+type ForumQuotaStatus struct {
+	Used      int64 `json:"used"`      // 已创建数量
+	Limit     int   `json:"limit"`     // 实际生效上限（-1 = 不限制）
+	Global    int   `json:"global"`    // 全局默认（0 = 不限制）
+	Override  bool  `json:"override"`  // 是否被管理员单独设置过
+	Remaining int   `json:"remaining"` // 还可创建几个（-1 = 不限制）
+}
+
+// ForumQuotaFor 计算某用户的自建论坛额度状态
+func ForumQuotaFor(userID uint) ForumQuotaStatus {
+	global := LoadForumQuotaConfig()
+	// 全局语义：0 = 不限制 → 内部统一用 -1 表示「不限制」
+	limit := global.MaxPerUser
+	if limit == 0 {
+		limit = -1
+	}
+	st := ForumQuotaStatus{Global: global.MaxPerUser, Limit: limit}
+	if userID != 0 {
+		st.Used = CountUserCreatedForums(userID)
+	}
+	// 按人覆盖语义：-1 = 跟随全局；0 = 禁止创建；>0 = 专属上限
+	if q := GetUserForumQuota(userID); q != nil && q.MaxForums >= 0 {
+		st.Override = true
+		st.Limit = q.MaxForums
+	}
+	if st.Limit < 0 {
+		st.Remaining = -1
+	} else {
+		rem := int64(st.Limit) - st.Used
+		if rem < 0 {
+			rem = 0
+		}
+		st.Remaining = int(rem)
+	}
+	return st
+}
 
 func GetOrCreateForum(name, ftype, refID, desc string) (*Forum, error) {
 	var forum Forum
@@ -110,20 +287,20 @@ func GetForumByID(id uint) (*Forum, error) {
 
 // Thread 帖子
 type Thread struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	ForumID   uint      `gorm:"not null;index:idx_threads_forum_created,priority:1" json:"forum_id"`
-	UserID    uint      `gorm:"not null;index" json:"user_id"`
-	Title     string    `gorm:"size:256;not null" json:"title"`
-	Content   string    `gorm:"type:text;not null" json:"content"`
-	IsPinned  bool      `gorm:"default:false" json:"is_pinned"`
-	IsLocked  bool      `gorm:"default:false" json:"is_locked"`
-	ViewCount int       `gorm:"default:0" json:"view_count"`
-	PostCount int       `gorm:"default:0" json:"post_count"`
-	CreatedAt time.Time `gorm:"index:idx_threads_forum_created,priority:2" json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	ForumID   uint           `gorm:"not null;index:idx_threads_forum_created,priority:1" json:"forum_id"`
+	UserID    uint           `gorm:"not null;index" json:"user_id"`
+	Title     string         `gorm:"size:256;not null" json:"title"`
+	Content   string         `gorm:"type:text;not null" json:"content"`
+	IsPinned  bool           `gorm:"default:false" json:"is_pinned"`
+	IsLocked  bool           `gorm:"default:false" json:"is_locked"`
+	ViewCount int            `gorm:"default:0" json:"view_count"`
+	PostCount int            `gorm:"default:0" json:"post_count"`
+	CreatedAt time.Time      `gorm:"index:idx_threads_forum_created,priority:2" json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
-	User      *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Forum     *Forum    `gorm:"foreignKey:ForumID" json:"forum,omitempty"`
+	User      *User          `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Forum     *Forum         `gorm:"foreignKey:ForumID" json:"forum,omitempty"`
 }
 
 func (Thread) TableName() string { return "threads" }

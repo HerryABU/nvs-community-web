@@ -38,6 +38,17 @@ func CreateUserForum(c *gin.Context) {
 		return
 	}
 
+	// 建版额度校验：全局默认（管理员配置） + 按人覆盖（管理员可单独削减到 0）
+	quota := models.ForumQuotaFor(userID)
+	if quota.Limit == 0 {
+		utils.Forbidden(c, "管理员已限制你创建自建论坛，如有疑问请联系管理员")
+		return
+	}
+	if quota.Limit > 0 && quota.Used >= int64(quota.Limit) {
+		utils.Forbidden(c, fmt.Sprintf("每人最多创建 %d 个自建论坛（当前 %d 个），如需更多请联系管理员", quota.Limit, quota.Used))
+		return
+	}
+
 	// 进入密码（可选）加密存储
 	passwordHash := ""
 	if req.Password != "" {
@@ -92,13 +103,16 @@ func CreateUserForum(c *gin.Context) {
 	utils.Success(c, forum)
 }
 
-// ListMyForums GET /api/forums/mine — 我创建的自建论坛
+// ListMyForums GET /api/forums/mine — 我创建的自建论坛（附建版额度状态）
 func ListMyForums(c *gin.Context) {
 	userID := currentUserID(c)
 	var forums []models.Forum
 	models.DB.Where("creator_id = ? AND type = ?", userID, "custom").
 		Order("id DESC").Find(&forums)
-	utils.Success(c, forums)
+	utils.Success(c, gin.H{
+		"list":  forums,
+		"quota": models.ForumQuotaFor(userID),
+	})
 }
 
 // VerifyForumPassword POST /api/forums/:id/verify — 验证论坛进入密码

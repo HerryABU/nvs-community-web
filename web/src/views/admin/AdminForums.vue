@@ -37,6 +37,68 @@
       </el-table>
     </div>
 
+    <!-- 自建论坛额度：全局默认 + 按人覆盖 -->
+    <div class="admin-page-body admin-panel" style="margin-top: 16px">
+      <h3 class="panel-title">自建论坛额度管控</h3>
+      <p class="hint-text">
+        控制每个用户最多能建几个自建论坛。<b>全局默认</b>对所有人生效；
+        对滥用建版的人可<b>按人单独削减</b>（填 0 即完全剥夺其建版权利，填 -1 恢复跟随全局）；
+        对产出优质社区的人也可单独放宽。
+      </p>
+      <el-form label-width="120px" label-position="left" style="max-width: 700px">
+        <el-form-item label="全局每人上限">
+          <el-input-number v-model="globalQuota" :min="0" :max="1000" size="small" />
+          <span class="hint-text" style="margin: 0 0 0 10px">0 = 不限制（默认 3）</span>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" size="small" :loading="savingQuota" @click="saveGlobalQuota">保存并立即生效</el-button>
+        </el-form-item>
+      </el-form>
+
+      <el-divider />
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <h3 class="panel-title" style="margin:0">按人单独设置</h3>
+        <el-input v-model="quotaTargetKey" size="small" style="width:220px" placeholder="用户名 或 数字 ID" />
+        <el-button size="small" :loading="resolvingQuotaUser" @click="resolveQuotaUser">载入</el-button>
+      </div>
+      <el-form v-if="quotaTarget" label-width="120px" label-position="left" style="max-width: 700px">
+        <el-form-item label="目标用户">
+          <el-tag type="primary" size="small">#{{ quotaTarget.id }} {{ quotaTarget.username }}</el-tag>
+        </el-form-item>
+        <el-form-item label="建版上限">
+          <el-input-number v-model="quotaForm.max_forums" :min="-1" :max="1000" size="small" />
+          <span class="hint-text" style="margin: 0 0 0 10px">-1 = 跟随全局，0 = 禁止创建</span>
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="quotaForm.note" size="small" placeholder="选填：内部记录，如「灌水建版，削减至 1」" maxlength="120" />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" size="small" :loading="savingUserQuota" @click="saveUserQuota">保存</el-button>
+        </el-form-item>
+      </el-form>
+
+      <el-table :data="userQuotas" v-loading="loadingQuotas" size="small" style="width:100%;margin-top:8px">
+        <el-table-column prop="user_id" label="用户ID" width="80" />
+        <el-table-column prop="username" label="用户名" width="130" />
+        <el-table-column label="建版上限" width="130">
+          <template #default="{ row }">
+            <el-tag v-if="row.max_forums === 0" type="danger" size="small">禁止创建</el-tag>
+            <span v-else-if="row.max_forums < 0" class="muted">跟随全局</span>
+            <el-tag v-else type="warning" size="small">{{ row.max_forums }} 个</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="note" label="备注" min-width="160">
+          <template #default="{ row }">{{ row.note || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="140" fixed="right">
+          <template #default="{ row }">
+            <el-button size="small" text @click="editUserQuota(row)">编辑</el-button>
+            <el-button size="small" text type="danger" @click="revokeUserQuota(row)">撤销</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
     <!-- 添加/编辑论坛弹窗 -->
     <el-dialog v-model="showAddForum" :title="editingForum ? '编辑板块' : '新增板块'" width="480px">
       <el-form :model="forumForm" label-width="90px">
@@ -185,7 +247,89 @@ async function reviewForum(row: any, action: 'approve' | 'reject') {
   }
 }
 
-onMounted(loadForums);
+// ====== 自建论坛额度管控 ======
+const globalQuota = ref(3);
+const savingQuota = ref(false);
+const userQuotas = ref<any[]>([]);
+const loadingQuotas = ref(false);
+const quotaTargetKey = ref('');
+const quotaTarget = ref<any>(null);
+const resolvingQuotaUser = ref(false);
+const savingUserQuota = ref(false);
+const quotaForm = reactive({ max_forums: -1, note: '' });
+
+async function loadQuotaConfig() {
+  try {
+    const res = await adminApi.getForumQuota();
+    const d = res.data.data || {};
+    globalQuota.value = d.config?.max_per_user ?? 3;
+    userQuotas.value = d.overrides || [];
+  } catch { /* ignore */ }
+}
+
+async function saveGlobalQuota() {
+  savingQuota.value = true;
+  try {
+    const res = await adminApi.updateForumQuota(globalQuota.value);
+    if (res.data.code === 0) ElMessage.success('已保存（立即生效）');
+    else ElMessage.error(res.data.message || '保存失败');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  }
+  savingQuota.value = false;
+}
+
+async function resolveQuotaUser() {
+  const key = quotaTargetKey.value.trim();
+  if (!key) { ElMessage.warning('请输入用户名或用户 ID'); return; }
+  resolvingQuotaUser.value = true;
+  try {
+    const res = await adminApi.resolveUser(key);
+    const u = res.data.data;
+    if (!u?.id) { ElMessage.error('未找到该用户'); return; }
+    quotaTarget.value = u;
+    const exist = userQuotas.value.find(q => q.user_id === u.id);
+    quotaForm.max_forums = exist ? exist.max_forums : -1;
+    quotaForm.note = exist?.note || '';
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '未找到该用户');
+    quotaTarget.value = null;
+  }
+  resolvingQuotaUser.value = false;
+}
+
+async function saveUserQuota() {
+  if (!quotaTarget.value) return;
+  savingUserQuota.value = true;
+  try {
+    const res = await adminApi.setUserForumQuota(quotaTarget.value.id, {
+      max_forums: quotaForm.max_forums,
+      note: quotaForm.note,
+    });
+    if (res.data.code === 0) ElMessage.success('已保存（立即生效）');
+    else ElMessage.error(res.data.message || '保存失败');
+    await loadQuotaConfig();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  }
+  savingUserQuota.value = false;
+}
+
+function editUserQuota(row: any) {
+  quotaTargetKey.value = String(row.username || row.user_id);
+  resolveQuotaUser();
+}
+
+async function revokeUserQuota(row: any) {
+  try {
+    await ElMessageBox.confirm(`撤销「${row.username || row.user_id}」的建版额度设置？将恢复跟随全局。`, '撤销', { type: 'warning' });
+    await adminApi.deleteUserForumQuota(row.user_id);
+    ElMessage.success('已撤销');
+    await loadQuotaConfig();
+  } catch { /* cancelled */ }
+}
+
+onMounted(() => { loadForums(); loadQuotaConfig(); });
 </script>
 
 <style scoped>

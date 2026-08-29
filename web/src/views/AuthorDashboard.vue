@@ -482,13 +482,19 @@ async function loadHtmlStats() {
   } catch { /* ignore */ }
 }
 
-// 我创建的论坛（管理：禁言/解禁）
+// 我创建的论坛（管理：禁言/解禁）+ 建版额度
 const myForums = ref<any[]>([]);
+const forumQuota = ref<any>(null);
 
 async function loadMyForums() {
   try {
     const res = await forumApi.listMyForums();
-    if (res.data.code === 0) myForums.value = res.data.data || [];
+    if (res.data.code === 0) {
+      const d = res.data.data || {};
+      // 后端返回 { list, quota }；兼容历史裸数组
+      myForums.value = Array.isArray(d) ? d : (d.list || []);
+      forumQuota.value = Array.isArray(d) ? null : (d.quota || null);
+    }
   } catch { /* ignore */ }
 }
 
