@@ -169,6 +169,22 @@ export const adminApi = {
   reviewForum(id: number, data: { action: string; note?: string }) {
     return api.post(`/admin/forums/${id}/review`, data);
   },
+  // 自建论坛额度：全局默认 + 按人覆盖
+  getForumQuota() {
+    return api.get('/admin/forum-quota');
+  },
+  updateForumQuota(maxPerUser: number) {
+    return api.put('/admin/forum-quota', { max_per_user: maxPerUser });
+  },
+  listUserForumQuotas() {
+    return api.get('/admin/forum-quota/users');
+  },
+  setUserForumQuota(userId: number, data: { max_forums: number; note?: string }) {
+    return api.put(`/admin/forum-quota/users/${userId}`, data);
+  },
+  deleteUserForumQuota(userId: number) {
+    return api.delete(`/admin/forum-quota/users/${userId}`);
+  },
 
   // XSS 正则规则库
   getXssRules() {
@@ -351,6 +367,32 @@ export const adminApi = {
   },
   deleteApiKey(id: number) {
     return api.delete(`/admin/ratelimit/keys/${id}`);
+  },
+  // 按把封禁 / 解封某一个人的某一把 Key
+  banApiKey(id: number, reason?: string) {
+    return api.post(`/admin/ratelimit/keys/${id}/ban`, { reason: reason || '' });
+  },
+  unbanApiKey(id: number) {
+    return api.post(`/admin/ratelimit/keys/${id}/unban`);
+  },
+  // 按人管控：封禁该用户全部 API Key + 专属限流配额
+  listUserApiPolicies() {
+    return api.get('/admin/ratelimit/users');
+  },
+  getUserApiQuota(userId: number) {
+    return api.get(`/admin/ratelimit/users/${userId}/quota`);
+  },
+  setUserApiQuota(userId: number, data: { quota_per_min?: number; window_secs?: number; max_keys?: number; note?: string }) {
+    return api.put(`/admin/ratelimit/users/${userId}/quota`, data);
+  },
+  deleteUserApiQuota(userId: number) {
+    return api.delete(`/admin/ratelimit/users/${userId}/quota`);
+  },
+  banUserApiKeys(userId: number, data: { reason?: string; duration_hours?: number }) {
+    return api.post(`/admin/ratelimit/users/${userId}/keys/ban`, data);
+  },
+  unbanUserApiKeys(userId: number) {
+    return api.post(`/admin/ratelimit/users/${userId}/keys/unban`);
   },
 
   // 数据库管理（健康检查 / 迁移 / 备份 / 恢复 / 定时备份）

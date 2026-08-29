@@ -87,10 +87,26 @@ func ListMyAPIKeys(c *gin.Context) {
 	role := apiKeyRoleForUser(currentUserRole(c))
 	cfg := models.LoadAPIRateLimitConfig()
 	quota := cfg.RoleQuotaFor(role)
+	// 管理员按人限流：叠加用户专属策略（展示为「实际生效配额」）
+	effective := gin.H{"req": quota.Req, "window": quota.Window}
+	limits := gin.H{"max_keys": 0, "keys_banned": false, "ban_reason": ""}
+	if p := models.GetUserAPIPolicy(uid); p != nil {
+		req, win := quota.Req, quota.Window
+		if p.QuotaPerMin > 0 && p.QuotaPerMin < req {
+			req = p.QuotaPerMin
+		}
+		if p.WindowSecs > 0 {
+			win = p.WindowSecs
+		}
+		effective = gin.H{"req": req, "window": win}
+		limits = gin.H{"max_keys": p.MaxKeys, "keys_banned": p.IsBannedNow(), "ban_reason": p.BanReason}
+	}
 	utils.Success(c, gin.H{
 		"list":       list,
 		"role":       role,
 		"role_quota": gin.H{"req": quota.Req, "window": quota.Window},
+		"effective_quota": effective,
+		"limits":     limits,
 	})
 }
 
@@ -123,6 +139,26 @@ func CreateAPIKey(c *gin.Context) {
 	if expiresAt != nil && expiresAt.Before(time.Now()) {
 		utils.BadRequest(c, "过期时间不能早于当前时间")
 		return
+	}
+
+	// 管理员按人管控：封禁中禁止新建 Key；达到 Key 数上限同样拒绝
+	if policy := models.GetUserAPIPolicy(uid); policy != nil {
+		if policy.IsBannedNow() {
+			reason := policy.BanReason
+			if reason == "" {
+				reason = "管理员已封禁你的 API 访问"
+			}
+			utils.Forbidden(c, reason)
+			return
+		}
+		if policy.MaxKeys > 0 {
+			var used int64
+			models.DB.Model(&models.APIKey{}).Where("user_id = ?", uid).Count(&used)
+			if int(used) >= policy.MaxKeys {
+				utils.Forbidden(c, fmt.Sprintf("管理员限制了你最多持有 %d 个 API Key，请先删除后再创建", policy.MaxKeys))
+				return
+			}
+		}
 	}
 
 	role := apiKeyRoleForUser(currentUserRole(c))
@@ -347,13 +383,30 @@ func AdminListAPIKeys(c *gin.Context) {
 			names[u.ID] = u.Username
 		}
 	}
+	// 用户级策略（整体封禁 / 专属配额）命中情况，供列表直接展示
+	policies, _ := models.ListUserAPIPolicies()
+	policyMap := map[uint]*models.UserAPIPolicy{}
+	for i := range policies {
+		policyMap[policies[i].UserID] = &policies[i]
+	}
 	type keyRow struct {
 		models.APIKey
-		Username string `json:"username"`
+		Username    string `json:"username"`
+		UserBanned  bool   `json:"user_banned"`   // 该用户名下 Key 被整体封禁
+		UserQuota   int    `json:"user_quota"`    // 按人专属配额（0 = 跟随角色全局）
+		Effective   int    `json:"effective_req"` // 实际生效配额
 	}
 	rows := make([]keyRow, 0, len(keys))
 	for _, k := range keys {
-		rows = append(rows, keyRow{APIKey: k, Username: names[k.UserID]})
+		row := keyRow{APIKey: k, Username: names[k.UserID], Effective: k.QuotaPerMin}
+		if p, ok := policyMap[k.UserID]; ok {
+			row.UserBanned = p.IsBannedNow()
+			row.UserQuota = p.QuotaPerMin
+			if p.QuotaPerMin > 0 && (row.Effective <= 0 || p.QuotaPerMin < row.Effective) {
+				row.Effective = p.QuotaPerMin
+			}
+		}
+		rows = append(rows, row)
 	}
 	utils.Success(c, rows)
 }

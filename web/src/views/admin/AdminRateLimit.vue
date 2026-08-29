@@ -135,12 +135,20 @@
           <el-table-column prop="key_prefix" label="Key 前缀" width="170">
             <template #default="{ row }"><code>{{ row.key_prefix }}</code></template>
           </el-table-column>
-          <el-table-column label="配额" width="110">
-            <template #default="{ row }">{{ row.quota_per_min }} 次/分</template>
-          </el-table-column>
-          <el-table-column label="状态" width="80">
+          <el-table-column label="配额" width="130">
             <template #default="{ row }">
-              <el-tag :type="row.is_active ? 'success' : 'danger'" size="small">{{ row.is_active ? '启用' : '停用' }}</el-tag>
+              <span>{{ row.effective_req ?? row.quota_per_min }} 次/分</span>
+              <el-tooltip v-if="row.user_quota > 0" content="管理员为该用户设置了专属配额（取更严格值）" placement="top">
+                <el-tag size="small" type="warning" effect="plain" style="margin-left: 4px">限流</el-tag>
+              </el-tooltip>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="170">
+            <template #default="{ row }">
+              <el-tag v-if="row.is_banned || row.user_banned" type="danger" size="small">
+                {{ row.user_banned ? '用户已封禁' : 'Key 已封禁' }}
+              </el-tag>
+              <el-tag v-else :type="row.is_active ? 'success' : 'info'" size="small">{{ row.is_active ? '启用' : '停用' }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="最近使用" width="160">
@@ -149,11 +157,102 @@
           <el-table-column label="调用次数" width="90">
             <template #default="{ row }">{{ row.total_calls ?? 0 }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="200" fixed="right">
+          <el-table-column label="操作" width="250" fixed="right">
             <template #default="{ row }">
               <el-button size="small" text @click="toggleKey(row)">{{ row.is_active ? '停用' : '启用' }}</el-button>
+              <el-button
+                size="small" text
+                :type="row.is_banned ? 'success' : 'danger'"
+                @click="row.is_banned ? unbanKey(row) : banKey(row)"
+              >{{ row.is_banned ? '解封' : '封禁' }}</el-button>
               <el-button size="small" text type="warning" @click="regenerateKey(row)">重生成</el-button>
               <el-button size="small" text type="danger" @click="deleteKey(row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <!-- 按人管控：封禁某人全部 Key + 专属限流配额 -->
+      <div class="admin-panel">
+        <h3 class="panel-title">按人管控：封禁 / 专属限流</h3>
+        <p class="hint-text">
+          针对具体用户下刀，优先级高于角色全局配额：
+          <b>封禁</b>后该用户名下所有 Key（含以后新建的）立即 403；
+          <b>专属配额</b>按 min(角色上限, 专属值) 生效，可把某人单独压到很低的频率而不影响同角色其他人。
+        </p>
+        <el-form label-width="120px" label-position="left" style="max-width: 760px">
+          <el-form-item label="目标用户">
+            <div style="display: flex; gap: 8px; width: 100%">
+              <el-input v-model="targetUserKey" placeholder="用户名 或 数字 ID（如 zhangsan / 12）" style="flex: 1" />
+              <el-button :loading="resolvingUser" @click="resolveTargetUser">载入</el-button>
+            </div>
+            <div class="form-tip">载入后可查看该用户当前的专属策略，并设置配额 / 封禁。</div>
+          </el-form-item>
+          <template v-if="targetUser">
+            <el-form-item label="已选用户">
+              <el-tag type="primary" size="small">#{{ targetUser.id }} {{ targetUser.username }}</el-tag>
+              <span class="quota-unit" style="margin-left: 8px">{{ targetUser.nickname || '' }}</span>
+            </el-form-item>
+            <el-form-item label="专属配额">
+              <div class="quota-row">
+                <el-input-number v-model="policyForm.quota_per_min" :min="0" :max="1000000" :step="10" size="small" />
+                <span class="quota-unit">次 /</span>
+                <el-input-number v-model="policyForm.window_secs" :min="0" :max="86400" :step="10" size="small" />
+                <span class="quota-unit">秒</span>
+              </div>
+              <div class="form-tip">均为 0 表示跟随角色全局（配额取角色上限，窗口取角色窗口）。</div>
+            </el-form-item>
+            <el-form-item label="Key 数上限">
+              <el-input-number v-model="policyForm.max_keys" :min="0" :max="1000" size="small" />
+              <div class="form-tip">0 = 不限制。达到上限后该用户无法再新建 Key（需先删除旧的）。</div>
+            </el-form-item>
+            <el-form-item label="备注">
+              <el-input v-model="policyForm.note" placeholder="选填：仅供管理员内部记录，不对外展示" maxlength="120" />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" :loading="savingPolicy" @click="savePolicy">保存专属策略</el-button>
+              <el-button @click="revokePolicy">撤销（恢复全局）</el-button>
+              <el-button
+                v-if="currentPolicy?.keys_banned"
+                type="success"
+                :loading="banningUser"
+                @click="unbanUserKeys"
+              >解除该用户的 API 封禁</el-button>
+              <el-button v-else type="danger" :loading="banningUser" @click="banUserKeys">封禁该用户全部 Key</el-button>
+            </el-form-item>
+          </template>
+        </el-form>
+
+        <el-divider />
+        <h3 class="panel-title">已单独设置 / 封禁的用户</h3>
+        <el-table :data="userPolicies" v-loading="loadingPolicies" size="small" style="width: 100%">
+          <el-table-column prop="user_id" label="用户ID" width="80" />
+          <el-table-column prop="username" label="用户名" width="130" />
+          <el-table-column label="封禁" width="120">
+            <template #default="{ row }">
+              <el-tag v-if="row.keys_banned" type="danger" size="small">
+                {{ row.ban_until ? '至 ' + formatTime(row.ban_until) : '永久' }}
+              </el-tag>
+              <span v-else class="muted">—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="专属配额" width="150">
+            <template #default="{ row }">
+              <span v-if="row.quota_per_min > 0">{{ row.quota_per_min }} 次/{{ row.window_secs || 60 }}秒</span>
+              <span v-else class="muted">跟随全局</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="Key 上限" width="90">
+            <template #default="{ row }">{{ row.max_keys > 0 ? row.max_keys : '不限' }}</template>
+          </el-table-column>
+          <el-table-column prop="ban_reason" label="封禁原因" min-width="140">
+            <template #default="{ row }">{{ row.ban_reason || row.note || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="180" fixed="right">
+            <template #default="{ row }">
+              <el-button size="small" text @click="editPolicy(row)">编辑</el-button>
+              <el-button v-if="row.keys_banned" size="small" text type="success" @click="unbanUserKeysDirect(row)">解封</el-button>
+              <el-button size="small" text type="danger" @click="revokePolicyDirect(row)">撤销</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -383,6 +482,174 @@ async function copyKey() {
   }
 }
 
+// ====== 按把封禁 / 解封 ======
+async function banKey(row: any) {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      `封禁 Key「${row.key_prefix}」（用户 ${row.username || row.user_id}）。封禁后该 Key 的请求直接返回 403。`,
+      '封禁 API Key',
+      { confirmButtonText: '确认封禁', cancelButtonText: '取消', inputPlaceholder: '封禁原因（将展示给调用方）', inputValue: '违规调用' }
+    );
+    const res = await adminApi.banApiKey(row.id, value || '管理员封禁');
+    if (res.data.code === 0) ElMessage.success('已封禁');
+    else ElMessage.error(res.data.message || '操作失败');
+    await loadKeys();
+  } catch (e: any) {
+    if (e !== 'cancel') ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
+async function unbanKey(row: any) {
+  try {
+    await ElMessageBox.confirm(`确定解封 Key「${row.key_prefix}」？`, '解封 API Key', { type: 'warning' });
+    const res = await adminApi.unbanApiKey(row.id);
+    if (res.data.code === 0) ElMessage.success('已解封');
+    else ElMessage.error(res.data.message || '操作失败');
+    await loadKeys();
+  } catch (e: any) {
+    if (e !== 'cancel') ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
+// ====== 按人管控：封禁全部 Key + 专属限流 ======
+const targetUserKey = ref('');
+const targetUser = ref<any>(null);
+const currentPolicy = ref<any>(null);
+const resolvingUser = ref(false);
+const savingPolicy = ref(false);
+const banningUser = ref(false);
+const loadingPolicies = ref(false);
+const userPolicies = ref<any[]>([]);
+const policyForm = reactive({ quota_per_min: 0, window_secs: 0, max_keys: 0, note: '' });
+
+async function resolveTargetUser() {
+  const key = targetUserKey.value.trim();
+  if (!key) { ElMessage.warning('请输入用户名或用户 ID'); return; }
+  resolvingUser.value = true;
+  try {
+    const res = await adminApi.resolveUser(key);
+    const u = res.data.data;
+    if (!u?.id) { ElMessage.error('未找到该用户'); return; }
+    targetUser.value = u;
+    const pres = await adminApi.getUserApiQuota(u.id);
+    const p = pres.data.data || {};
+    currentPolicy.value = p;
+    policyForm.quota_per_min = p.quota_per_min || 0;
+    policyForm.window_secs = p.window_secs || 0;
+    policyForm.max_keys = p.max_keys || 0;
+    policyForm.note = p.note || '';
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '未找到该用户');
+    targetUser.value = null;
+  }
+  resolvingUser.value = false;
+}
+
+async function savePolicy() {
+  if (!targetUser.value) return;
+  savingPolicy.value = true;
+  try {
+    const res = await adminApi.setUserApiQuota(targetUser.value.id, {
+      quota_per_min: policyForm.quota_per_min,
+      window_secs: policyForm.window_secs,
+      max_keys: policyForm.max_keys,
+      note: policyForm.note,
+    });
+    if (res.data.code === 0) ElMessage.success('已保存（立即生效）');
+    else ElMessage.error(res.data.message || '保存失败');
+    await resolveTargetUser();
+    await loadPolicies();
+    await loadKeys();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  }
+  savingPolicy.value = false;
+}
+
+async function revokePolicy() {
+  if (!targetUser.value) return;
+  try {
+    await ElMessageBox.confirm(`撤销「${targetUser.value.username}」的专属设置？将恢复为跟随角色全局配额。`, '撤销', { type: 'warning' });
+    await adminApi.deleteUserApiQuota(targetUser.value.id);
+    ElMessage.success('已撤销');
+    await resolveTargetUser();
+    await loadPolicies();
+    await loadKeys();
+  } catch (e: any) {
+    if (e !== 'cancel') ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
+async function banUserKeys() {
+  if (!targetUser.value) return;
+  try {
+    const { value } = await ElMessageBox.prompt(
+      `封禁「${targetUser.value.username}」名下的全部 API Key（含以后新建的）。请输入封禁时长（小时，0 = 永久）：`,
+      '封禁用户 API 访问',
+      { confirmButtonText: '确认封禁', cancelButtonText: '取消', inputValue: '0', inputPattern: /^\d+$/, inputErrorMessage: '请输入数字（小时）' }
+    );
+    banningUser.value = true;
+    const res = await adminApi.banUserApiKeys(targetUser.value.id, {
+      duration_hours: parseInt(value || '0', 10),
+      reason: '管理员封禁',
+    });
+    if (res.data.code === 0) ElMessage.success('已封禁该用户的全部 API Key');
+    else ElMessage.error(res.data.message || '操作失败');
+    await resolveTargetUser();
+    await loadPolicies();
+    await loadKeys();
+  } catch (e: any) {
+    if (e !== 'cancel' && e !== null) ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+  banningUser.value = false;
+}
+
+async function unbanUserKeys() {
+  if (!targetUser.value) return;
+  try {
+    await ElMessageBox.confirm(`确定解除「${targetUser.value.username}」的 API 封禁？`, '解封', { type: 'warning' });
+    await adminApi.unbanUserApiKeys(targetUser.value.id);
+    ElMessage.success('已解封');
+    await resolveTargetUser();
+    await loadPolicies();
+    await loadKeys();
+  } catch (e: any) {
+    if (e !== 'cancel') ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
+async function loadPolicies() {
+  loadingPolicies.value = true;
+  try { const res = await adminApi.listUserApiPolicies(); userPolicies.value = res.data.data || []; } catch { /* ignore */ }
+  loadingPolicies.value = false;
+}
+
+async function editPolicy(row: any) {
+  targetUserKey.value = String(row.username || row.user_id);
+  await resolveTargetUser();
+}
+
+async function unbanUserKeysDirect(row: any) {
+  try {
+    await adminApi.unbanUserApiKeys(row.user_id);
+    ElMessage.success('已解封');
+    await loadPolicies();
+    await loadKeys();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
+async function revokePolicyDirect(row: any) {
+  try {
+    await ElMessageBox.confirm(`撤销「${row.username || row.user_id}」的专属设置？`, '撤销', { type: 'warning' });
+    await adminApi.deleteUserApiQuota(row.user_id);
+    ElMessage.success('已撤销');
+    await loadPolicies();
+    await loadKeys();
+  } catch { /* cancelled */ }
+}
+
 // 日志
 const logs = ref<any[]>([]);
 const logType = ref('');
@@ -416,7 +683,7 @@ function logTypeTag(t: string) {
   return t === 'blocked' ? 'danger' : t === 'bot' ? 'warning' : t === 'anonymous' ? 'info' : 'primary';
 }
 
-onMounted(() => { loadConfig(); loadStats(); loadKeys(); loadLogs(1); });
+onMounted(() => { loadConfig(); loadStats(); loadKeys(); loadLogs(1); loadPolicies(); });
 </script>
 
 <style scoped>
@@ -449,6 +716,7 @@ onMounted(() => { loadConfig(); loadStats(); loadKeys(); loadLogs(1); });
 .status-err { color: #ef4444; font-weight: 600; }
 code { background: #eef2ff; color: #4f46e5; padding: 1px 6px; border-radius: 4px; font-size: 0.82rem; }
 .pager { margin-top: 12px; display: flex; justify-content: flex-end; }
+.muted { color: var(--text-light, #999); }
 .newkey-box { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .newkey-code { flex: 1; background: #0f172a; color: #4ade80; padding: 10px 12px; border-radius: 8px; font-size: 0.82rem; word-break: break-all; }
 [data-theme="light"] .newkey-code { background: #f1f5f9; color: #15803d; }

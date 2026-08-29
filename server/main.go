@@ -448,12 +448,29 @@ func main() {
 		admin.POST("/ratelimit/keys/:id/regenerate", handlers.AdminRegenerateAPIKey)
 		admin.PATCH("/ratelimit/keys/:id", handlers.AdminUpdateAPIKey)
 		admin.DELETE("/ratelimit/keys/:id", handlers.AdminDeleteAPIKey)
+		// 按把封禁 / 解封
+		admin.POST("/ratelimit/keys/:id/ban", handlers.AdminBanAPIKey)
+		admin.POST("/ratelimit/keys/:id/unban", handlers.AdminUnbanAPIKey)
+		// 按人管控：封禁该用户全部 Key + 专属限流配额
+		admin.GET("/ratelimit/users", handlers.AdminListUserAPIPolicies)
+		admin.GET("/ratelimit/users/:id/quota", handlers.AdminGetUserAPIQuota)
+		admin.PUT("/ratelimit/users/:id/quota", handlers.AdminSetUserAPIQuota)
+		admin.DELETE("/ratelimit/users/:id/quota", handlers.AdminDeleteUserAPIPolicy)
+		admin.POST("/ratelimit/users/:id/keys/ban", handlers.AdminBanUserAPIKeys)
+		admin.POST("/ratelimit/users/:id/keys/unban", handlers.AdminUnbanUserAPIKeys)
 		// 论坛管理
 		admin.GET("/forums", handlers.AdminListForums)
 		admin.POST("/forums", handlers.AdminCreateForum)
 		admin.PUT("/forums/:id", handlers.AdminUpdateForum)
 		admin.DELETE("/forums/:id", handlers.AdminDeleteForum)
 		admin.POST("/forums/:id/review", handlers.AdminReviewForum)
+		// 自建论坛额度：全局默认 + 按人覆盖（削减/放开某人的建版数）
+		// 独立子树 /forum-quota：避免与 /forums/:id 通配段冲突导致路由注册 panic
+		admin.GET("/forum-quota", handlers.GetForumQuotaConfig)
+		admin.PUT("/forum-quota", handlers.UpdateForumQuotaConfig)
+		admin.GET("/forum-quota/users", handlers.ListUserForumQuotas)
+		admin.PUT("/forum-quota/users/:id", handlers.SetUserForumQuota)
+		admin.DELETE("/forum-quota/users/:id", handlers.DeleteUserForumQuota)
 		// XSS 正则规则库（管理员维护）
 		admin.GET("/xss-rules", handlers.ListXssRules)
 		admin.POST("/xss-rules", handlers.CreateXssRule)

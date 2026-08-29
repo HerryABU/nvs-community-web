@@ -309,7 +309,14 @@ func APIKeyGuard() gin.HandlerFunc {
 		if rawKey != "" {
 			ident := models.ResolveAPIKey(rawKey)
 			if ident != nil {
-				// Key 有效
+				// Key 有效 —— 先判封禁（管理员可封禁单把 Key 或某用户全部 Key）
+				if ident.Banned {
+					recordAccessLog(ident, method, path, ip, ua, http.StatusForbidden, "key_banned")
+					c.Header("X-NVS-Key-Banned", "1")
+					utils.Error(c, http.StatusForbidden, utils.CodeForbidden, ident.BanReason)
+					c.Abort()
+					return
+				}
 				if !models.MatchAllowedIP(ident.AllowedIPs, ip) {
 					recordAccessLog(ident, method, path, ip, ua, http.StatusForbidden, "ip_not_allowed")
 					utils.Error(c, http.StatusForbidden, utils.CodeForbidden, "该 API Key 不允许从当前 IP 访问")
