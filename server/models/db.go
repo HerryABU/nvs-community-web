@@ -51,6 +51,8 @@ func AllModels() []interface{} {
 		&APIKey{}, &FederatedPeerKey{}, &ApiAccessLog{}, &UserAPIPolicy{},
 		// 自建论坛额度：按人覆盖（管理员可削减/放开某人的建版数）
 		&UserForumQuota{},
+		// 全量 Web 访问日志（功能二：前台网络诊断 / 用户分布 / 攻击流量面板）
+		&WebAccessLog{},
 	}
 }
 

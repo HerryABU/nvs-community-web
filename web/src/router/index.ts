@@ -163,6 +163,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/net-diag',
+      name: 'admin-net-diag',
+      component: () => import('@/views/admin/AdminNetDiag.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/sites',
       name: 'admin-sites',
       component: () => import('@/views/admin/AdminSites.vue'),

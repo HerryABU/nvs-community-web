@@ -473,6 +473,13 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.4.1 网络诊断与攻击流量面板（2026-08-30）
+
+> 1. **独立诊断面板**：新增「网络诊断与攻击流量」入口（/admin/net-diag），名义上用于查看用户分布、诊断网络，同时识别防爬与攻击流量。
+> 2. **全量 Web 访问日志入库**：新增 `WebAccessLog` 表，由 `AccessLog` 中间件异步批量写入（非静态资源）；记录 IP、X-Forwarded-For 跳数、UA 家族、身份、状态码、耗时，并复用 `security` 包做轻量 bot 判定。
+> 3. **后端接口**：`GET /api/admin/web-access`（IP/UA/家族/身份/状态/爬虫/日期多维筛选 + 分页）、`GET /api/admin/web-access/stats`（累计/今日/爬虫/近24h攻击流量、Top IP、Top 路径、状态码分布、UA 家族分布、爬虫原因分布）、`POST /api/admin/web-access/cleanup`（清空，合规证据由文件日志承担）。
+> 4. **TTL 说明**：HTTP 应用层无法读取 IP 层 TTL，面板以 X-Forwarded-For 跳数近似代理深度，并在详情抽屉标注该限制。
+
 ### v3.4.0 隔离墙访问仪表盘（176号令合规可视化）（2026-08-30）
 
 > 1. **隔离墙进入记录前台可视化**：新增「隔离墙访问记录」面板，把原本只能在数据库看到的敏感分区进入明细（谁、何时、进入哪个分区、IP、User-Agent）以仪表盘形式呈现。

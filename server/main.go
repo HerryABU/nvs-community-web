@@ -381,6 +381,9 @@ func main() {
 		admin.GET("/users/audit", handlers.ListUserAuditLogs)
 		admin.GET("/zone-access", handlers.ListZoneAccessLogs)        // 隔离墙进入记录（176号令专项，分页+筛选）
 		admin.GET("/zone-access/stats", handlers.GetZoneAccessStats)  // 隔离墙进入记录统计（仪表盘卡片）
+		admin.GET("/web-access", handlers.ListWebAccessLogs)          // 网络诊断 / 用户分布 / 攻击流量（分页+多维筛选）
+		admin.GET("/web-access/stats", handlers.GetWebAccessStats)    // Web 访问日志聚合统计（诊断面板）
+		admin.POST("/web-access/cleanup", handlers.CleanupWebAccessLogs) // 清空 Web 访问日志（合规证据由文件日志承担）
 		admin.PUT("/users/:id", handlers.UpdateUser)
 		admin.DELETE("/users/:id", handlers.DeleteUser)
 		admin.POST("/users/:id/mute", handlers.MuteUser)

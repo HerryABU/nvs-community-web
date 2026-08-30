@@ -5,4 +5,4 @@ package version
 
 // AppVersion 当前版本号（不带 v 前缀，展示时自行拼接）。
 // 保持与 README「版本更新记录」最新版本一致。
-var AppVersion = "3.4.0"
+var AppVersion = "3.4.1"

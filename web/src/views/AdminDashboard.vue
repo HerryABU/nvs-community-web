@@ -146,6 +146,7 @@ const adminMenus = [
   { title: '书目分类管理', desc: '平台书目分类的增删改', path: '/admin/categories', icon: Collection, color: 'var(--gradient-purple)' },
   { title: '隔离墙配置', desc: '敏感分区列表与确认流程', path: '/admin/wall', icon: Lock, color: 'var(--gradient-accent)' },
   { title: '隔离墙访问记录', desc: '谁/何时进入敏感分区 · 176号令合规', path: '/admin/wall-access', icon: Histogram, color: 'var(--gradient-blue)' },
+  { title: '网络诊断与攻击流量', desc: '用户分布 · IP/UA 分类 · 防爬攻击识别', path: '/admin/net-diag', icon: Connection, color: 'var(--gradient-accent)' },
   { title: '远程站点互通', desc: '远程 NVS 站点互联与作品同步', path: '/admin/sites', icon: Connection, color: 'var(--gradient-teal)' },
   { title: '限流与 API Key', desc: '四层身份配额 · 爬虫识别 · 访问审计', path: '/admin/ratelimit', icon: Key, color: 'var(--gradient-accent)' },
   { title: '论坛板块管理', desc: '板块增删、审查、排序', path: '/admin/forums', icon: ChatDotRound, color: 'var(--gradient-blue)' },

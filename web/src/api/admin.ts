@@ -311,6 +311,21 @@ export const adminApi = {
     return api.get('/admin/zone-access/stats');
   },
 
+  // 网络诊断 / 用户分布 / 攻击流量面板
+  getWebAccessLogs(params?: {
+    ip?: string; ua?: string; ua_family?: string; status?: number; is_bot?: boolean;
+    method?: string; path?: string; identity?: string; attack?: boolean;
+    from?: string; to?: string; page?: number; page_size?: number;
+  }) {
+    return api.get('/admin/web-access', { params });
+  },
+  getWebAccessStats() {
+    return api.get('/admin/web-access/stats');
+  },
+  cleanupWebAccessLogs() {
+    return api.post('/admin/web-access/cleanup');
+  },
+
   // 远程站点互通
   getSites() {
     return api.get('/admin/sites');

@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"nvs-server/config"
+	"nvs-server/models"
+	"nvs-server/security"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -103,5 +105,91 @@ func AccessLog() gin.HandlerFunc {
 		if raw, err := json.Marshal(entry); err == nil {
 			_ = utils.WriteDailyLog("requests", string(raw))
 		}
+
+		// —— 异步写入数据库 Web 访问日志（功能二：前台网络诊断 / 用户分布 / 攻击流量面板）——
+		// 排除静态资源（/assets/* 及常见静态扩展名）以降噪控量；
+		// bot 判定复用 security 包（仅在无 API Key 时判爬虫，带 Key 走高配额不判）。
+		p := c.Request.URL.Path
+		if !isStaticAsset(p) {
+			ip := c.ClientIP()
+			ua := c.Request.UserAgent()
+			xff := c.Request.Header.Get("X-Forwarded-For")
+			proxyHops := 0
+			if xff != "" {
+				proxyHops = len(strings.Split(xff, ","))
+			}
+			hasSecFetch := c.Request.Header.Get("Sec-Fetch-Site") != "" ||
+				c.Request.Header.Get("Sec-Fetch-Mode") != "" ||
+				c.Request.Header.Get("Sec-Fetch-Dest") != ""
+
+			identityType := "anonymous"
+			isBot := false
+			botReason := ""
+			uaFamily := classifyUAFamily(ua)
+			if userID > 0 {
+				identityType = "user"
+			}
+			if c.Request.Header.Get("X-API-Key") != "" ||
+				strings.HasPrefix(c.Request.Header.Get("Authorization"), "Bearer nvs_") {
+				identityType = "key"
+			} else {
+				if blocked, reason := security.IsBlockedBot(ua); blocked {
+					isBot, botReason, uaFamily = true, reason, "bot"
+				} else if b, reason := security.ClassifyBot(ua, hasSecFetch, ip); b {
+					isBot, botReason, uaFamily = true, reason, "bot"
+				}
+			}
+			query := c.Request.URL.RawQuery
+			if len(query) > 512 {
+				query = query[:512]
+			}
+			models.EnqueueWebAccess(&models.WebAccessLog{
+				UserID:        userID,
+				IdentityType:  identityType,
+				UAFamily:      uaFamily,
+				Method:        c.Request.Method,
+				Path:          p,
+				Query:         query,
+				IP:            ip,
+				XForwardedFor: xff,
+				ProxyHops:     proxyHops,
+				UA:            ua,
+				StatusCode:    status,
+				Size:          size,
+				LatencyMs:     int(time.Since(start).Milliseconds()),
+				IsBot:         isBot,
+				BotReason:     botReason,
+				CreatedAt:     time.Now(),
+			})
+		}
 	}
+}
+
+// classifyUAFamily 粗略归类 User-Agent 家族（用于诊断面板聚合；与 security 包 bot 判定互补）。
+func classifyUAFamily(ua string) string {
+	lower := strings.ToLower(ua)
+	if lower == "" {
+		return "unknown"
+	}
+	// 工具 / 脚本 / 下载库
+	toolKw := []string{"curl/", "wget", "python", "go-http-client", "node-fetch", "axios",
+		"okhttp", "java/", "libwww", "httpclient", "aiohttp", "httpx", "scrapy", "postmanruntime"}
+	for _, kw := range toolKw {
+		if strings.Contains(lower, kw) {
+			return "tool"
+		}
+	}
+	// 移动端浏览器
+	if strings.Contains(lower, "android") || strings.Contains(lower, "iphone") ||
+		strings.Contains(lower, "ipad") || strings.Contains(lower, "mobile") {
+		return "mobile"
+	}
+	// 桌面浏览器
+	browserKw := []string{"chrome", "firefox", "safari", "edg/", "opera", "msie", "trident", "webkit"}
+	for _, kw := range browserKw {
+		if strings.Contains(lower, kw) {
+			return "browser"
+		}
+	}
+	return "unknown"
 }
