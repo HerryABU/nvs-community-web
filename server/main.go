@@ -388,6 +388,8 @@ func main() {
 		admin.DELETE("/users/:id", handlers.DeleteUser)
 		admin.POST("/users/:id/mute", handlers.MuteUser)
 		admin.POST("/users/:id/unmute", handlers.UnmuteUser)
+		admin.POST("/users/:id/promote-police", handlers.AdminPromoteToPolice) // 提权为警方（准管理员，仅 admin 可操作，留审计）
+		admin.POST("/users/:id/revoke-police", handlers.AdminRevokePolice)     // 撤销警方权限（回退 reader）
 		admin.GET("/vip-applications", handlers.ListVipApplications)
 		admin.POST("/vip-applications/:id/approve", handlers.ApproveVip)
 		admin.GET("/reports", handlers.ListReports)
