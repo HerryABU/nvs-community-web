@@ -339,48 +339,206 @@ func IncrementThreadView(id uint) {
 // 与 novels/chapters/comments 等「软删除 + softdel_* 留证」双轨逻辑保持一致，
 // 避免 deleted_at 与 softdel_posts 两套删除语义并存造成混乱。
 type Post struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	ThreadID  uint      `gorm:"not null;index:idx_posts_thread_created,priority:1" json:"thread_id"`
-	UserID    uint      `gorm:"not null;index" json:"user_id"`
-	Content   string    `gorm:"type:text;not null" json:"content"`
-	CreatedAt time.Time `gorm:"index:idx_posts_thread_created,priority:2" json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	User      *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	ID       uint   `gorm:"primaryKey" json:"id"`
+	ThreadID uint   `gorm:"not null;index:idx_posts_thread_created,priority:1" json:"thread_id"`
+	UserID   uint   `gorm:"not null;index" json:"user_id"`
+	Content  string `gorm:"type:text;not null" json:"content"`
+	// 楼层模型（与 comments 同一套语义）：
+	//   ParentID = 直接回复的那一条；空 = 回复楼主（开新楼）
+	//   RootID   = 所属「楼」的顶层回帖 id；顶层回帖自身为 NULL
+	//   FloorNo  = 楼层号（仅顶层回帖有值，从 1 递增；楼内回复为 0）
+	// 语义：戊回复楼主（甲）→ 脱离，开新楼；丙回复乙（某楼楼主）→ 挂靠该楼，展示「丙 回复 乙」。
+	ParentID    *uint     `gorm:"index:idx_posts_parent" json:"parent_id"`
+	RootID      *uint     `gorm:"index:idx_posts_root" json:"root_id"`
+	FloorNo     int       `gorm:"default:0;index:idx_posts_floor" json:"floor_no"`
+	ReplyCount  int       `gorm:"default:0" json:"reply_count"` // 楼内回复数（顶层回帖有效）
+	Username    string    `gorm:"-" json:"username,omitempty"`
+	ReplyToName string    `gorm:"-" json:"reply_to_name,omitempty"` // 被回复者昵称（展示「X 回复 Y」）
+	CreatedAt   time.Time `gorm:"index:idx_posts_thread_created,priority:2" json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	User        *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
 
 func (Post) TableName() string { return "posts" }
 
+// resolveFloor 落库前推导楼层归属（语义同 Comment.resolveFloor）
+func (p *Post) resolveFloor() {
+	if p.ParentID == nil || *p.ParentID == 0 {
+		var maxFloor int
+		DB.Model(&Post{}).Where("thread_id = ? AND parent_id IS NULL", p.ThreadID).
+			Select("COALESCE(MAX(floor_no), 0)").Scan(&maxFloor)
+		p.RootID = nil
+		p.FloorNo = maxFloor + 1
+		return
+	}
+	var parent Post
+	if err := DB.Select("id", "root_id").First(&parent, *p.ParentID).Error; err != nil {
+		// 父回帖已删除 → 退化为新楼，避免孤儿回复
+		p.ParentID = nil
+		p.resolveFloor()
+		return
+	}
+	p.RootID = &parent.ID
+	if parent.RootID != nil {
+		p.RootID = parent.RootID
+	}
+	p.FloorNo = 0
+}
+
+// PostsPage 楼层分页结果：List = 本页楼层 + 这些楼层下的全部回复（平铺，前端按 root_id 分组成「楼」）
+type PostsPage struct {
+	List       []Post
+	Total      int64 // 回帖总数（含楼内回复）
+	FloorTotal int64 // 楼层数
+	HasMore    bool
+}
+
 func CreatePost(p *Post) error {
+	p.resolveFloor()
 	err := DB.Create(p).Error
-	if err == nil {
-		DB.Model(&Thread{}).Where("id = ?", p.ThreadID).Updates(map[string]interface{}{
-			"post_count": gorm.Expr("post_count + 1"),
-			"updated_at": time.Now(),
-		})
-		// 站内通知：帖子作者收到「有人回复」
-		var t Thread
-		if DB.Select("user_id", "title").First(&t, p.ThreadID).Error == nil {
-			title := t.Title
-			if len(title) > 40 {
-				title = title[:40] + "…"
+	if err != nil {
+		return err
+	}
+	// 楼内回复 → 累加楼层主的 reply_count
+	if p.RootID != nil {
+		DB.Model(&Post{}).Where("id = ?", *p.RootID).
+			UpdateColumn("reply_count", gorm.Expr("reply_count + 1"))
+	}
+	DB.Model(&Thread{}).Where("id = ?", p.ThreadID).Updates(map[string]interface{}{
+		"post_count": gorm.Expr("post_count + 1"),
+		"updated_at": time.Now(),
+	})
+	// 站内通知：帖子作者收到「有人回复」
+	var t Thread
+	if DB.Select("user_id", "title").First(&t, p.ThreadID).Error == nil {
+		title := t.Title
+		if len(title) > 40 {
+			title = title[:40] + "…"
+		}
+		_ = PushNotification(p.UserID, t.UserID, "thread_reply",
+			"你的帖子有新回复",
+			"《"+title+"》",
+			"/thread/"+strconv.FormatUint(uint64(p.ThreadID), 10))
+	}
+	// 楼内互评 → 额外通知被回复者（顶层回帖已被上面帖主通知覆盖，不重复）
+	if p.ParentID != nil && *p.ParentID != 0 {
+		var parent Post
+		if DB.Select("user_id").First(&parent, *p.ParentID).Error == nil {
+			summary := p.Content
+			if runes := []rune(summary); len(runes) > 60 {
+				summary = string(runes[:60]) + "…"
 			}
-			_ = PushNotification(p.UserID, t.UserID, "thread_reply",
-				"你的帖子有新回复",
-				"《"+title+"》",
-				"/thread/"+strconv.FormatUint(uint64(p.ThreadID), 10))
+			_ = PushNotification(p.UserID, parent.UserID, "post_reply",
+				"你的回复收到新回复", summary,
+				"/thread/"+strconv.FormatUint(uint64(p.ThreadID), 10)+"#post-"+strconv.FormatUint(uint64(p.ID), 10))
 		}
 	}
 	return err
 }
 
-func GetPostsByThread(threadID uint, page, pageSize int) ([]Post, int64, error) {
-	var posts []Post
-	var total int64
-	query := DB.Model(&Post{}).Where("thread_id = ?", threadID)
-	query.Count(&total)
-	err := query.Preload("User").Order("created_at ASC").
-		Offset((page - 1) * pageSize).Limit(pageSize).Find(&posts).Error
-	return posts, total, err
+// fillPostReplyToName 为楼内回复填被回复者昵称（展示「X 回复 Y」）
+func fillPostReplyToName(list []Post) {
+	need := map[uint]bool{}
+	for _, p := range list {
+		if p.ParentID != nil && *p.ParentID != 0 {
+			need[*p.ParentID] = true
+		}
+	}
+	if len(need) == 0 {
+		return
+	}
+	ids := make([]uint, 0, len(need))
+	for id := range need {
+		ids = append(ids, id)
+	}
+	var parents []Post
+	DB.Where("id IN ?", ids).Preload("User").Find(&parents)
+	nameOf := map[uint]string{}
+	for _, p := range parents {
+		n := ""
+		if p.User != nil {
+			n = p.User.Nickname
+			if n == "" {
+				n = p.User.Username
+			}
+		}
+		nameOf[p.ID] = n
+	}
+	for i := range list {
+		if list[i].ParentID != nil {
+			list[i].ReplyToName = nameOf[*list[i].ParentID]
+		}
+	}
+}
+
+// GetPostsByThread 帖子回复（楼层分页）：先取本页楼层，再取这些楼层下的全部回复
+func GetPostsByThread(threadID uint, page, pageSize int) (PostsPage, error) {
+	var out PostsPage
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 30
+	}
+	DB.Model(&Post{}).Where("thread_id = ?", threadID).Count(&out.Total)
+	DB.Model(&Post{}).Where("thread_id = ? AND parent_id IS NULL", threadID).Count(&out.FloorTotal)
+
+	var floors []Post
+	if err := DB.Where("thread_id = ? AND parent_id IS NULL", threadID).
+		Preload("User").
+		Order("created_at ASC").
+		Offset((page - 1) * pageSize).Limit(pageSize).
+		Find(&floors).Error; err != nil {
+		return out, err
+	}
+	if len(floors) == 0 {
+		return out, nil
+	}
+	rootIDs := make([]uint, 0, len(floors))
+	for _, f := range floors {
+		rootIDs = append(rootIDs, f.ID)
+	}
+	var replies []Post
+	if err := DB.Where("root_id IN ?", rootIDs).Preload("User").
+		Order("created_at ASC, id ASC").Find(&replies).Error; err != nil {
+		return out, err
+	}
+	out.List = make([]Post, 0, len(floors)+len(replies))
+	out.List = append(out.List, floors...)
+	out.List = append(out.List, replies...)
+	fillPostReplyToName(out.List)
+	out.HasMore = int64(page*pageSize) < out.FloorTotal
+	return out, nil
+}
+
+// BackfillPostFloors 存量回帖回填楼层（幂等）：老回帖一律视为顶层楼层，按时间正序编号
+func BackfillPostFloors() {
+	_ = DB.Exec(`UPDATE posts SET root_id = (
+		SELECT p.id FROM (SELECT id, root_id FROM posts) p WHERE p.id = posts.parent_id
+	) WHERE parent_id IS NOT NULL AND parent_id <> 0 AND (root_id IS NULL OR root_id = 0)`).Error
+	_ = DB.Exec(`UPDATE posts SET root_id = (
+		SELECT p.root_id FROM (SELECT id, root_id FROM posts) p WHERE p.id = posts.root_id
+	) WHERE parent_id IS NOT NULL AND parent_id <> 0 AND root_id IS NOT NULL AND root_id IN (
+		SELECT id FROM (SELECT id FROM posts WHERE parent_id IS NOT NULL AND parent_id <> 0) x
+	)`).Error
+
+	var threadIDs []uint
+	_ = DB.Model(&Post{}).
+		Where("parent_id IS NULL AND (floor_no IS NULL OR floor_no = 0)").
+		Distinct().Pluck("thread_id", &threadIDs).Error
+	for _, tid := range threadIDs {
+		var tops []Post
+		DB.Where("thread_id = ? AND parent_id IS NULL", tid).
+			Order("created_at ASC, id ASC").Find(&tops)
+		n := 0
+		for _, t := range tops {
+			n++
+			if t.FloorNo > 0 {
+				continue
+			}
+			DB.Model(&Post{}).Where("id = ?", t.ID).Update("floor_no", n)
+		}
+	}
 }
 
 // InitDefaultForums 初始化默认大论坛

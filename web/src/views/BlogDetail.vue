@@ -72,7 +72,7 @@
 
           <!-- 评论区 -->
           <h2 class="section-title" style="margin-top: 40px">评论（{{ commentTotal }}）</h2>
-          <CommentSection :novel-id="0" :novel-category="''" :blog-id="blog.id" @loaded="(n: number) => commentTotal = n" />
+          <CommentSection :novel-id="0" :novel-category="''" :blog-id="blog.id" :owner-id="blog.author_id" @loaded="(n: number) => commentTotal = n" />
         </div>
 
         <!-- 右侧目录（CSDN 式可折叠，仅 md 且有标题时显示） -->

@@ -238,17 +238,20 @@ func GetThread(c *gin.Context) {
 
 	models.IncrementThreadView(uint(threadID))
 
-	posts, total, err := models.GetPostsByThread(uint(threadID), page, 30)
+	pg, err := models.GetPostsByThread(uint(threadID), page, 20)
 	if err != nil {
 		utils.InternalError(c, "获取回复失败")
 		return
 	}
 
+	// 楼层模型：posts = 本页楼层 + 这些楼层下的全部回复（平铺，前端按 root_id 分组成「楼」）
 	utils.Success(c, gin.H{
-		"thread": thread,
-		"posts":  posts,
-		"total":  total,
-		"page":   page,
+		"thread":      thread,
+		"posts":       pg.List,
+		"total":       pg.Total,
+		"floor_total": pg.FloorTotal,
+		"has_more":    pg.HasMore,
+		"page":        page,
 	})
 }
 
@@ -282,11 +285,21 @@ func CreatePost(c *gin.Context) {
 	}
 
 	var req struct {
-		Content string `json:"content" binding:"required,max=65536"`
+		Content  string `json:"content" binding:"required,max=65536"`
+		ParentID *uint  `json:"parent_id"` // 楼层模型：空=回复楼主（开新楼）；有值=回复该条（挂靠其所属楼）
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请输入回复内容")
 		return
+	}
+	// 父回帖必须属于同一帖子，防止跨帖挂靠
+	if req.ParentID != nil && *req.ParentID != 0 {
+		var parent models.Post
+		if err := models.DB.Select("id", "thread_id").First(&parent, *req.ParentID).Error; err != nil ||
+			parent.ThreadID != uint(threadID) {
+			utils.BadRequest(c, "被回复的内容不存在")
+			return
+		}
 	}
 
 	raw := security.SanitizeUserContent(req.Content)
@@ -296,6 +309,7 @@ func CreatePost(c *gin.Context) {
 		ThreadID: uint(threadID),
 		UserID:   userID,
 		Content:  cleaned,
+		ParentID: req.ParentID,
 	}
 
 	if err := models.CreatePost(post); err != nil {

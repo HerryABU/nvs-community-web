@@ -17,26 +17,25 @@ func GetComments(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
-	// 博客评论
+	// 楼层模型：List = 本页楼层 + 这些楼层下的全部回复（平铺，前端按 root_id 分组成「楼」）
+	var pg models.CommentsPage
+	var err error
 	if blogID > 0 {
-		comments, total, err := models.GetCommentsByBlog(uint(blogID), page, pageSize)
-		if err != nil {
-			utils.InternalError(c, "获取评论失败")
-			return
-		}
-		utils.Success(c, gin.H{"list": comments, "total": total})
-		return
+		pg, err = models.GetCommentsByBlog(uint(blogID), page, pageSize)
+	} else {
+		pg, err = models.GetCommentsByNovel(uint(novelID), chapterNum, page, pageSize)
 	}
-
-	comments, total, err := models.GetCommentsByNovel(uint(novelID), chapterNum, page, pageSize)
 	if err != nil {
 		utils.InternalError(c, "获取评论失败")
 		return
 	}
 
 	utils.Success(c, gin.H{
-		"list":  comments,
-		"total": total,
+		"list":        pg.List,
+		"total":       pg.Total,
+		"floor_total": pg.FloorTotal,
+		"has_more":    pg.HasMore,
+		"page":        page,
 	})
 }
 

@@ -147,7 +147,7 @@
     <!-- 评论 -->
     <div class="page-container" v-if="!isTrialExceeded">
       <h2 class="section-title">本章评论</h2>
-      <CommentSection :novel-id="novelId" :chapter-number="chapterNum" :novel-category="novelCategory" />
+      <CommentSection :novel-id="novelId" :chapter-number="chapterNum" :novel-category="novelCategory" :owner-id="novelAuthorId" />
     </div>
 
     <!-- 书签对话框 -->

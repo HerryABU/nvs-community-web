@@ -89,7 +89,7 @@
 
       <!-- 评论区 -->
       <h2 class="section-title" style="margin-top: 40px">评论</h2>
-      <CommentSection :novel-id="novel.id" :novel-category="novel.category" />
+      <CommentSection :novel-id="novel.id" :novel-category="novel.category" :owner-id="novel.author_id" />
     </template>
     <el-empty v-else-if="!loading" description="作品不存在" />
 

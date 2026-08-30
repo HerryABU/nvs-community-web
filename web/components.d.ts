@@ -67,6 +67,7 @@ declare module 'vue' {
     ElTooltip: typeof import('element-plus/es')['ElTooltip']
     ElTree: typeof import('element-plus/es')['ElTree']
     ElUpload: typeof import('element-plus/es')['ElUpload']
+    FloorComments: typeof import('./src/components/FloorComments.vue')['default']
     HomeSearchResults: typeof import('./src/components/HomeSearchResults.vue')['default']
     NavBar: typeof import('./src/components/NavBar.vue')['default']
     NovelCard: typeof import('./src/components/NovelCard.vue')['default']

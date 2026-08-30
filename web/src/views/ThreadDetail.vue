@@ -31,38 +31,24 @@
         <div v-html="renderMarkdown(thread.content)"></div>
       </div>
 
-      <!-- 回复列表 -->
+      <!-- 回复列表（楼层模型：楼 + 楼内可折叠回复，与作品/博客/作者评论区同构） -->
       <h2 class="section-title" style="margin-top: 32px">回复（{{ total }}）</h2>
       <div class="post-list">
-        <div v-for="p in posts" :key="p.id" class="post-item">
-          <div class="post-header">
-            <strong>{{ p.user?.username || '匿名' }}</strong>
-            <span class="post-time">{{ formatTime(p.created_at) }}</span>
-            <span class="post-actions">
-              <ReportButton
-                v-if="authStore.isLoggedIn && authStore.user?.id !== p.user_id"
-                target-type="post"
-                :target-id="p.id"
-              />
-              <el-button
-                v-if="authStore.user?.id === p.user_id"
-                size="small" text type="danger" @click="deletePost(p.id)"
-              >删除</el-button>
-              <el-button
-                v-if="isModerator && authStore.user?.id !== p.user_id"
-                size="small" text type="warning" @click="muteUser(p)"
-              >禁言</el-button>
-              <el-button
-                v-if="isModerator && authStore.user?.id !== p.user_id"
-                size="small" text type="danger" @click="deletePost(p.id)"
-              >删除</el-button>
-            </span>
-          </div>
-          <div class="post-content cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red">
-            <div v-html="renderMarkdown(p.content)"></div>
-          </div>
-        </div>
-        <el-empty v-if="posts.length === 0" description="暂无回复" />
+        <FloorComments
+          :items="posts"
+          :owner-id="thread.user_id"
+          target-type="post"
+          :can-moderate="isModerator"
+          :can-mute="isModerator"
+          @reply="handleReply"
+          @delete="deletePost"
+          @mute="muteUser"
+        />
+      </div>
+
+      <!-- 加载更多楼层 -->
+      <div class="load-more" v-if="hasMore">
+        <el-button text :loading="loadingMore" @click="loadMore">加载更多</el-button>
       </div>
 
       <!-- 新回复提示条 -->
@@ -70,9 +56,9 @@
         🔔 有 {{ newReplies }} 条新回复，点击查看
       </div>
 
-      <!-- 回复表单 -->
+      <!-- 回复楼主（开新楼）：不带 parent_id，脱离既有楼层 -->
       <div class="reply-form" v-if="authStore.isLoggedIn">
-        <el-input v-model="replyContent" type="textarea" :rows="3" placeholder="写下你的回复... 支持 **粗体** *斜体* `代码` 等 Markdown 语法" maxlength="2000" show-word-limit />
+        <el-input v-model="replyContent" type="textarea" :rows="3" placeholder="回复楼主，另起一层... 支持 **粗体** *斜体* `代码` 等 Markdown 语法" maxlength="2000" show-word-limit />
         <div class="reply-actions">
           <el-button type="primary" :loading="replying" @click="submitReply">发表回复</el-button>
         </div>
@@ -100,7 +86,7 @@ import { useAuthStore } from '@/stores/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { renderMarkdown } from '@/markdown/renderer';
 import SensitiveZoneGuard from '@/components/SensitiveZoneGuard.vue';
-import ReportButton from '@/components/ReportButton.vue';
+import FloorComments from '@/components/FloorComments.vue';
 import { markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';
 
 const route = useRoute();
@@ -188,15 +174,27 @@ function formatTime(s: string) {
   return new Date(s).toLocaleDateString('zh-CN');
 }
 
-async function load() {
+const page = ref(1);
+const hasMore = ref(false);
+const loadingMore = ref(false);
+
+async function load(reset = true) {
+  if (reset) page.value = 1;
   loading.value = true;
   try {
-    const res = await forumApi.getThread(Number(route.params.id));
+    const res = await forumApi.getThread(Number(route.params.id), page.value);
     const d = res.data.data;
     thread.value = d.thread;
     checkSensitiveForum();
-    posts.value = d.posts || [];
+    if (reset) {
+      posts.value = d.posts || [];
+    } else {
+      // 追加下一页楼层（楼层分页可能重复，按 id 去重）
+      const seen = new Set(posts.value.map((p: any) => p.id));
+      posts.value.push(...(d.posts || []).filter((p: any) => !seen.has(p.id)));
+    }
     total.value = d.total || 0;
+    hasMore.value = Boolean(d.has_more);
     latestTotal.value = d.total || 0;
     newReplies.value = 0;
   } catch (e) {
@@ -204,6 +202,13 @@ async function load() {
   } finally {
     loading.value = false;
   }
+}
+
+async function loadMore() {
+  loadingMore.value = true;
+  page.value++;
+  await load(false);
+  loadingMore.value = false;
 }
 
 // ====== 新回复轮询提示（30s 检测，不自动刷新打断浏览） ======
@@ -236,6 +241,7 @@ onUnmounted(() => {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 });
 
+// 底部输入框：不带 parent_id → 回复楼主，另起一层（脱离既有楼层）
 async function submitReply() {
   if (!replyContent.value.trim()) return;
   replying.value = true;
@@ -248,6 +254,20 @@ async function submitReply() {
     ElMessage.error(e.response?.data?.message || '回复失败');
   } finally {
     replying.value = false;
+  }
+}
+
+// 楼层内回复：parentId 为空=回复楼主开新楼；有值=挂靠该条所属的楼，展示为「X 回复 Y」
+async function handleReply(parentId: number | null, content: string) {
+  try {
+    await forumApi.createPost(Number(route.params.id), {
+      content,
+      parent_id: parentId || undefined,
+    });
+    ElMessage.success(parentId ? '回复成功' : '回复成功');
+    load();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '回复失败');
   }
 }
 </script>
@@ -333,6 +353,11 @@ async function submitReply() {
 
 .reply-actions {
   margin-top: 8px;
+}
+
+.load-more {
+  text-align: center;
+  margin-top: 16px;
 }
 
 .login-hint {

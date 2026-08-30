@@ -409,14 +409,35 @@ func DeletePostByModerator(c *gin.Context) {
 	if runes := []rune(summary); len(runes) > 200 {
 		summary = string(runes[:200])
 	}
+	// 楼层模型：删的是楼层主回帖时，楼内回复一并留证 + 删除（否则回复变孤儿，页面上悬浮无主）
+	var children []models.Post
+	models.DB.Where("root_id = ?", postID).Find(&children)
+	removed := 1
+	for i := range children {
+		cs := children[i].Content
+		if runes := []rune(cs); len(runes) > 200 {
+			cs = string(runes[:200])
+		}
+		_ = models.ArchiveSoftDelete("moderator", "post", children[i].ID, userID, operator,
+			"删除回帖（级联删除楼内回复）", cs, children[i])
+	}
+
 	if err := models.ArchiveSoftDelete("moderator", "post", uint(postID), userID, operator,
 		"删除回帖", summary, post); err != nil {
 		utils.InternalError(c, "留证归档失败，删除已中止")
 		return
 	}
 	models.DB.Delete(&models.Post{}, uint(postID))
+	if len(children) > 0 {
+		childIDs := make([]uint, 0, len(children))
+		for _, ch := range children {
+			childIDs = append(childIDs, ch.ID)
+		}
+		models.DB.Where("id IN ?", childIDs).Delete(&models.Post{})
+		removed += len(children)
+	}
 	models.DB.Model(&models.Thread{}).Where("id = ?", post.ThreadID).
-		UpdateColumn("post_count", gorm.Expr("CASE WHEN post_count > 0 THEN post_count - 1 ELSE 0 END"))
+		UpdateColumn("post_count", gorm.Expr("CASE WHEN post_count >= ? THEN post_count - ? ELSE 0 END", removed, removed))
 	// 合规审计：内容删除处置（含作者/所属帖子）
 	auditEmergency(c, models.AuditContentDelete, "post", uint(postID),
 		fmt.Sprintf("管理员删除回帖（作者ID：%d，ThreadID：%d）", post.UserID, post.ThreadID))

@@ -20,7 +20,8 @@ export const forumApi = {
   getThread(id: number, page?: number) {
     return api.get(`/threads/${id}`, { params: { page } });
   },
-  createPost(threadId: number, data: { content: string }) {
+  // 楼层模型：不传 parent_id = 回复楼主（开新楼）；传 parent_id = 回复该条（挂靠其所属楼）
+  createPost(threadId: number, data: { content: string; parent_id?: number }) {
     return api.post(`/threads/${threadId}/posts`, data);
   },
   pinThread(id: number) {

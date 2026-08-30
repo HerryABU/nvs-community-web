@@ -103,7 +103,11 @@
       <!-- 作者评论区 -->
       <h2 class="section-title" style="margin-top:32px">读者留言</h2>
       <!-- 评论区：使用第一个公开作品的 ID -->
-      <CommentSection :novel-id="data.novels && data.novels.length > 0 ? data.novels[0].id : 0" :novel-category="''" />
+      <CommentSection
+        :novel-id="data.novels && data.novels.length > 0 ? data.novels[0].id : 0"
+        :novel-category="''"
+        :owner-id="authorId"
+      />
     </template>
     <el-empty v-else-if="!loading" description="作者不存在" />
   </div>

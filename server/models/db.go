@@ -142,7 +142,13 @@ func AutoMigrateAll(db *gorm.DB) error {
 		return err
 	}
 	// 清理被新复合索引替代的旧单列索引（冗余索引会造成写放大）
-	return DropLegacyIndexes(db)
+	if err := DropLegacyIndexes(db); err != nil {
+		return err
+	}
+	// 楼层模型：存量评论/回帖补 root_id 与 floor_no（幂等，仅缺失时回填）
+	BackfillCommentFloors()
+	BackfillPostFloors()
+	return nil
 }
 
 // mysqlJSONColumns 记录从 SQLite 复制到 MySQL 时需要归一化为合法 JSON 的列（type:json 字段）。

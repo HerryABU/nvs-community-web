@@ -26,18 +26,16 @@
       🔔 有 {{ newComments }} 条新评论，点击查看
     </div>
 
-    <!-- 评论列表（嵌套展示） -->
-    <div class="comment-list" v-if="displayComments.length > 0">
-      <template v-for="comment in displayComments" :key="comment.id">
-        <CommentItem
-          :comment="comment"
-          @reply="handleReply"
-          @delete="handleDelete"
-          @refresh="fetchComments(true)"
-        />
-      </template>
+    <!-- 评论列表（楼层模型：楼 + 楼内可折叠回复，与作品/博客/作者共用同一套） -->
+    <div class="comment-list">
+      <FloorComments
+        :items="comments"
+        :owner-id="ownerUserId"
+        target-type="comment"
+        @reply="handleReply"
+        @delete="handleDelete"
+      />
     </div>
-    <el-empty v-else description="暂无评论" />
 
     <!-- 加载更多 -->
     <div class="load-more" v-if="hasMore">
@@ -52,13 +50,14 @@ import { novelApi, commentApi, type Comment } from '@/api/novel';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { shouldShowGuard } from '@/utils/sensitiveZone';
-import CommentItem from './CommentItem.vue';
+import FloorComments from './FloorComments.vue';
 
 const props = defineProps<{
   novelId: number;
   chapterNumber?: number;
   novelCategory?: string;
   blogId?: number;
+  ownerId?: number; // 主内容作者 id（楼层里给其评论打「楼主」标）；留空则不显示徽标
 }>();
 
 // loaded(total)：评论总数变化时通知父组件（如博客详情页统计条数）
@@ -73,29 +72,11 @@ const page = ref(1);
 const hasMore = ref(false);
 const loadingMore = ref(false);
 
-// 将平铺评论转为嵌套结构：parent_id 非空的作为子评论挂到父评论下
-const displayComments = computed(() => {
-  const all = comments.value;
-  const parentMap = new Map<number, Comment & { children: Comment[] }>();
+// 楼主：优先取父组件传入，其次用评论项里的主内容作者信息
+const ownerUserId = computed(() => props.ownerId || 0);
 
-  // 第一遍：收集所有父评论（parent_id 为空/0）
-  for (const c of all) {
-    if (!c.parent_id) {
-      parentMap.set(c.id, { ...c, children: [] });
-    }
-  }
-
-  // 第二遍：将子评论挂到对应父评论下
-  for (const c of all) {
-    if (c.parent_id && parentMap.has(c.parent_id)) {
-      parentMap.get(c.parent_id)!.children!.push({ ...c });
-    }
-  }
-
-  // 返回父评论列表（带 children）
-  return Array.from(parentMap.values());
-});
-
+// 楼层模型：后端返回平铺列表（本页楼层 + 这些楼层下的全部回复），
+// 由 FloorComments 按 root_id 分组成「楼」，楼内回复可折叠。
 async function fetchComments(reset = false) {
   if (reset) page.value = 1;
   try {
@@ -111,9 +92,11 @@ async function fetchComments(reset = false) {
       latestTotal.value = Number(data.total) || comments.value.length;
       newComments.value = 0;
     } else {
-      comments.value.push(...(data.list || []));
+      // 追加下一页楼层（去重：楼层分页可能出现重复 id）
+      const seen = new Set(comments.value.map(c => c.id));
+      comments.value.push(...(data.list || []).filter((c: Comment) => !seen.has(c.id)));
     }
-    hasMore.value = (data.list?.length || 0) >= 20;
+    hasMore.value = Boolean(data.has_more);
     emit('loaded', Number(data.total) || comments.value.length);
   } catch (e) {
     console.error(e);
@@ -217,7 +200,8 @@ async function submitComment() {
   }
 }
 
-async function handleReply(parentId: number, content: string) {
+// parentId 为 null 表示回复主内容（开新楼）；有值表示回复楼内某条（挂靠该楼）
+async function handleReply(parentId: number | null, content: string) {
   const allowed = await crossDomainCheck();
   if (!allowed) return;
   try {
@@ -226,12 +210,12 @@ async function handleReply(parentId: number, content: string) {
       blog_id: props.blogId || 0,
       chapter_number: props.chapterNumber,
       content,
-      parent_id: parentId,
+      parent_id: parentId || undefined,
     });
-    ElMessage.success('回复成功');
+    ElMessage.success(parentId ? '回复成功' : '评论发表成功');
     fetchComments(true);
   } catch (e: any) {
-    ElMessage.error('回复失败');
+    ElMessage.error(e?.response?.data?.message || '回复失败');
   }
 }
 
@@ -242,8 +226,9 @@ async function handleDelete(id: number) {
       type: 'warning',
     });
     await commentApi.deleteComment(id);
-    comments.value = comments.value.filter(c => c.id !== id);
     ElMessage.success('已删除');
+    // 删楼层主评时后端会级联删掉楼内回复，本地过滤不完整 → 直接重拉
+    fetchComments(true);
   } catch {
     // 取消
   }

@@ -412,9 +412,9 @@ func PreviewEmergencyContent(c *gin.Context) {
 		preview["content_raw"] = t.Content
 		preview["content_plain"] = toPlainText(t.Content)
 		preview["created_at"] = t.CreatedAt
-		// 帖子下的全部回复
-		if posts, _, err := models.GetPostsByThread(uint(id), 1, 500); err == nil {
-			preview["comments"] = buildPostList(posts)
+		// 帖子下的全部回复（楼层模型：本页楼层 + 楼内回复）
+		if pg, err := models.GetPostsByThread(uint(id), 1, 500); err == nil {
+			preview["comments"] = buildPostList(pg.List)
 		}
 	case "post":
 		var p models.Post
@@ -446,8 +446,8 @@ func PreviewEmergencyContent(c *gin.Context) {
 		preview["content_raw"] = content
 		preview["content_plain"] = toPlainText(content)
 		preview["created_at"] = b.CreatedAt
-		if blogComments, _, err := models.GetCommentsByBlog(uint(id), 1, 500); err == nil {
-			preview["comments"] = buildCommentList(blogComments)
+		if pg, err := models.GetCommentsByBlog(uint(id), 1, 500); err == nil {
+			preview["comments"] = buildCommentList(pg.List)
 		}
 	case "novel":
 		n, err := models.GetNovelByID(uint(id))

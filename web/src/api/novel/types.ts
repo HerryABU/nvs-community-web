@@ -64,11 +64,17 @@ export interface Comment {
   id: number;
   user_id: number;
   novel_id: number;
+  blog_id?: number;
   chapter_number: number;
   content: string;
   quote_text: string;
-  parent_id: number;
+  parent_id: number | null;
+  // 楼层模型：root_id = 所属楼的顶层评论 id（顶层为 null）；floor_no = 楼层号（楼内回复为 0）
+  root_id?: number | null;
+  floor_no?: number;
+  reply_to_name?: string; // 被回复者昵称（展示「X 回复 Y」）
   username?: string;
+  user?: { id: number; username?: string; nickname?: string; avatar_url?: string };
   created_at: string;
 }
 
