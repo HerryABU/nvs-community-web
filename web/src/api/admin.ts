@@ -121,6 +121,26 @@ export const adminApi = {
     return api.post(`/admin/users/${id}/unmute`);
   },
 
+  // 警方取管台（police role）：提权 / 撤销 / 取证查看 / 凭证下载
+  promotePolice(id: number) {
+    return api.post(`/admin/users/${id}/promote-police`);
+  },
+  revokePolice(id: number) {
+    return api.post(`/admin/users/${id}/revoke-police`);
+  },
+  policeListSoftDel(params?: { type?: string; limit?: number }) {
+    return api.get('/police/softdel', { params });
+  },
+  policeGetEvidence(type: string, id: number) {
+    return api.get(`/police/evidence/${type}/${id}`);
+  },
+  policeDownloadEvidence(type: string, id: number) {
+    return api.get(`/police/evidence/${type}/${id}/download`, { responseType: 'blob' });
+  },
+  policeExportPackage() {
+    return api.get('/police/export', { responseType: 'blob' });
+  },
+
   // VIP 申请
   getVipApplications() {
     return api.get('/admin/vip-applications');

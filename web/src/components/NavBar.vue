@@ -159,6 +159,9 @@
                 <el-dropdown-item v-if="authStore.user?.role === 'admin'" @click="$router.push('/admin')">
                   管理员面板
                 </el-dropdown-item>
+                <el-dropdown-item v-if="authStore.user?.role === 'admin' || authStore.user?.role === 'police'" @click="$router.push('/police-console')">
+                  <el-icon><Stamp /></el-icon> 警方取管台
+                </el-dropdown-item>
                 <el-dropdown-item @click="$router.push('/settings')">
                   <el-icon><Setting /></el-icon> 账号设置
                 </el-dropdown-item>
@@ -234,6 +237,7 @@
         <div class="mnav-item" @click="mnavGo('/api-spider')"><el-icon><Connection /></el-icon> API Key 爬虫指南</div>
         <div class="mnav-item" @click="mnavGo('/my-keys')"><el-icon><Key /></el-icon> 我的 API Key</div>
         <div class="mnav-item" v-if="authStore.user?.role === 'admin'" @click="mnavGo('/admin')"><el-icon><Setting /></el-icon> 管理员面板</div>
+        <div class="mnav-item" v-if="authStore.user?.role === 'admin' || authStore.user?.role === 'police'" @click="mnavGo('/police-console')"><el-icon><Stamp /></el-icon> 警方取管台</div>
         <div class="mnav-item" @click="mnavGo('/settings')"><el-icon><Setting /></el-icon> 账号设置</div>
         <div class="mnav-item mnav-logout" @click="mnavLogout"><el-icon><SwitchButton /></el-icon> 退出登录</div>
       </template>
@@ -259,7 +263,7 @@ import { authApi } from '@/api/auth';
 import { notificationApi } from '@/api/notification';
 import { appPrefix } from '@/utils/prefix';
 import { ElMessage } from 'element-plus';
-import { Camera, Setting, Brush, Document, Warning, Bell, Menu, HomeFilled, ChatDotRound, Plus, Notebook, User, SwitchButton, Connection, Key } from '@element-plus/icons-vue';
+import { Camera, Setting, Brush, Document, Warning, Bell, Menu, HomeFilled, ChatDotRound, Plus, Notebook, User, SwitchButton, Connection, Key, Stamp } from '@element-plus/icons-vue';
 
 const avatarInput = ref<HTMLInputElement>();
 const router = useRouter();

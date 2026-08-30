@@ -33,6 +33,8 @@ const (
 	AuditUserUnmute     = "user_unmute"    // 解除禁言
 	AuditUserBan        = "user_ban"       // 封禁/删除用户
 	AuditUserUnban      = "user_unban"     // 解封用户
+	AuditUserPromotePolice = "user_promote_police" // 提权为警方取管台账号
+	AuditUserRevokePolice  = "user_revoke_police"  // 撤销警方取管台权限
 	AuditReportHandle   = "report_handle"  // 举报处理
 )
 

@@ -169,6 +169,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/police-console',
+      name: 'police-console',
+      component: () => import('@/views/admin/AdminPoliceConsole.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/sites',
       name: 'admin-sites',
       component: () => import('@/views/admin/AdminSites.vue'),

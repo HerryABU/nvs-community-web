@@ -54,6 +54,8 @@
               <el-button size="small" type="danger" plain>封禁</el-button>
             </template>
           </el-popconfirm>
+          <el-button v-if="row.role !== 'police' && row.role !== 'admin'" size="small" type="danger" plain @click="doPromote(row)">提权警方</el-button>
+          <el-button v-else-if="row.role === 'police'" size="small" type="info" plain @click="doRevoke(row)">撤销警方</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -129,7 +131,7 @@ function formatDate(d?: string) {
 function roleLabel(role: string) {
   const m: Record<string, string> = {
     reader: '读者', author: '作者', vip_author: 'VIP作者',
-    arbitrator: '仲裁员', admin: '管理员',
+    arbitrator: '仲裁员', admin: '管理员', police: '警方',
   };
   return m[role] || role;
 }
@@ -137,7 +139,7 @@ function roleLabel(role: string) {
 function roleTagType(role: string) {
   const m: Record<string, string> = {
     reader: '', author: 'success', vip_author: 'warning',
-    arbitrator: 'info', admin: 'danger',
+    arbitrator: 'info', admin: 'danger', police: 'danger',
   };
   return m[role] || '';
 }
@@ -224,6 +226,38 @@ async function doUnmute(row: UserRow) {
     loadUsers();
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
+// 提权为警方取管台账号（不可自注册，只能由管理员提权）
+async function doPromote(row: UserRow) {
+  try {
+    await ElMessageBox.confirm(
+      `确认将用户「${row.nickname || row.username}」提权为警方取管台账号？该账号将可查看软删除留证并下载取证凭证。`,
+      '提权为警方',
+      { confirmButtonText: '确认提权', cancelButtonText: '取消', type: 'warning' }
+    );
+    await adminApi.promotePolice(row.id);
+    ElMessage.success('已提权为警方取管台账号');
+    loadUsers();
+  } catch (e: any) {
+    if (e !== 'cancel') ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
+// 撤销警方取管台权限（回退为读者）
+async function doRevoke(row: UserRow) {
+  try {
+    await ElMessageBox.confirm(
+      `确认撤销用户「${row.nickname || row.username}」的警方取管台权限？`,
+      '撤销警方权限',
+      { confirmButtonText: '确认撤销', cancelButtonText: '取消', type: 'warning' }
+    );
+    await adminApi.revokePolice(row.id);
+    ElMessage.success('已撤销警方权限');
+    loadUsers();
+  } catch (e: any) {
+    if (e !== 'cancel') ElMessage.error(e?.response?.data?.message || '操作失败');
   }
 }
 

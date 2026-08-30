@@ -35,6 +35,9 @@ type User struct {
 	CreatedAt             time.Time      `json:"created_at"`
 	UpdatedAt             time.Time      `json:"updated_at"`
 	DeletedAt             gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：封禁/删除用户采用软删除（可追溯）
+	// 警方取管台：由管理员提权而来（不可自注册），记录提权来源与时间为审计留痕
+	PoliceGrantedBy string     `gorm:"size:64;default:''" json:"police_granted_by"`
+	PoliceGrantedAt *time.Time `json:"police_granted_at"`
 }
 
 func (User) TableName() string {

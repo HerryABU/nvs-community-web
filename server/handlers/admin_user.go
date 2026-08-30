@@ -61,6 +61,15 @@ func UpdateUser(c *gin.Context) {
 
 	updates := map[string]interface{}{}
 	if req.Role != nil {
+		// police 角色必须通过专用提权接口设置（留审计），不允许通用编辑直接改
+		if *req.Role == models.RolePolice {
+			utils.BadRequest(c, "警方角色需通过「提权为警方」专用接口设置")
+			return
+		}
+		if !models.ValidPromotableRoles()[*req.Role] {
+			utils.BadRequest(c, "无效的角色: "+*req.Role)
+			return
+		}
 		updates["role"] = *req.Role
 	}
 	if req.Nickname != nil {
@@ -143,4 +152,75 @@ func UnmuteUser(c *gin.Context) {
 	auditEmergency(c, models.AuditUserUnmute, "user", uint(id),
 		fmt.Sprintf("管理员解除禁言用户ID %d", id))
 	utils.Success(c, gin.H{"message": "已解除禁言"})
+}
+
+// POST /api/admin/users/:id/promote-police — 管理员提权为警方取管台账号
+// 警方角色不可自注册，只能由管理员在此显式提权（留审计痕迹），防止越权/漏洞提权。
+func AdminPromoteToPolice(c *gin.Context) {
+	if !ensureAdmin(c) { return }
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	if uint(id) == currentUserID(c) {
+		utils.BadRequest(c, "不能对自己提权")
+		return
+	}
+	u, err := models.GetUserByID(uint(id))
+	if err != nil {
+		utils.NotFound(c, "用户不存在")
+		return
+	}
+	if u.Role == models.RoleAdmin {
+		utils.BadRequest(c, "管理员无需提权为警方")
+		return
+	}
+	operator := ""
+	if admin, aerr := models.GetUserByID(currentUserID(c)); aerr == nil && admin != nil {
+		operator = admin.Username
+	}
+	now := time.Now()
+	if err := models.DB.Model(&models.User{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"role":               models.RolePolice,
+		"police_granted_by": operator,
+		"police_granted_at": &now,
+	}).Error; err != nil {
+		utils.InternalError(c, "提权失败")
+		return
+	}
+	auditEmergency(c, models.AuditUserPromotePolice, "user", uint(id),
+		fmt.Sprintf("管理员 %s 将用户 %s(ID %d) 提权为警方取管台账号", operator, u.Username, id))
+	utils.Success(c, gin.H{
+		"message":           "已提权为警方取管台账号",
+		"role":              models.RolePolice,
+		"police_granted_by": operator,
+		"police_granted_at": now,
+	})
+}
+
+// POST /api/admin/users/:id/revoke-police — 撤销警方取管台权限（回退为读者）
+func AdminRevokePolice(c *gin.Context) {
+	if !ensureAdmin(c) { return }
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	u, err := models.GetUserByID(uint(id))
+	if err != nil {
+		utils.NotFound(c, "用户不存在")
+		return
+	}
+	if u.Role != models.RolePolice {
+		utils.BadRequest(c, "该用户不是警方账号")
+		return
+	}
+	operator := ""
+	if admin, aerr := models.GetUserByID(currentUserID(c)); aerr == nil && admin != nil {
+		operator = admin.Username
+	}
+	if err := models.DB.Model(&models.User{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"role":               models.RoleReader,
+		"police_granted_by": "",
+		"police_granted_at": nil,
+	}).Error; err != nil {
+		utils.InternalError(c, "撤销失败")
+		return
+	}
+	auditEmergency(c, models.AuditUserRevokePolice, "user", uint(id),
+		fmt.Sprintf("管理员 %s 撤销用户 %s(ID %d) 的警方取管台权限", operator, u.Username, id))
+	utils.Success(c, gin.H{"message": "已撤销警方权限", "role": models.RoleReader})
 }

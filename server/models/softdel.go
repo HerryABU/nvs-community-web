@@ -101,6 +101,30 @@ type softDelRow struct {
 	DeletedAt  time.Time `gorm:"column:deleted_at"`
 }
 
+// GetSoftDelByID 取单条留证记录（警方取证凭证下载用）。ctype 须为已知类型。
+func GetSoftDelByID(ctype string, id uint) (*SoftDelItem, error) {
+	table, ok := SoftDelTables[ctype]
+	if !ok {
+		return nil, fmt.Errorf("未知留证类型: %s", ctype)
+	}
+	var row softDelRow
+	if err := DB.Table(table).Where("id = ?", id).First(&row).Error; err != nil {
+		return nil, err
+	}
+	return &SoftDelItem{
+		Type:       ctype,
+		ID:         row.ID,
+		OriginalID: row.OriginalID,
+		DeletedBy:  row.DeletedBy,
+		Operator:   row.Operator,
+		Reason:     row.Reason,
+		Source:     row.Source,
+		Summary:    row.Summary,
+		Snapshot:   row.Snapshot,
+		DeletedAt:  row.DeletedAt,
+	}, nil
+}
+
 // ArchiveSoftDelete 归档一条软删除留证记录。
 // 参数：source=处置来源(admin/emergency/report/moderator)，ctype=内容类型，
 // originalID=原记录 ID，deletedBy/operator=操作者，reason=处置原因，

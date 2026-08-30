@@ -531,6 +531,17 @@ func main() {
 		admin.PUT("/db/backup-config", handlers.AdminDBBackupConfigPut)
 	}
 
+	// 警方取管台（police）：准管理员角色，仅可取证 / 查看软删除，无普通管理权
+	// 不可自注册，只能由管理员通过 /api/admin/users/:id/promote-police 提权。
+	police := r.Group("/api/police")
+	police.Use(middleware.AuthRequired())
+	{
+		police.GET("/softdel", handlers.PoliceListSoftDel)                           // 软删除留证列表（取证查看）
+		police.GET("/evidence/:type/:id", handlers.PoliceGetEvidence)               // 单条取证凭证详情
+		police.GET("/evidence/:type/:id/download", handlers.PoliceDownloadEvidence) // 下载单条取证凭证
+		police.GET("/export", handlers.PoliceExportPackage)                         // 导出全部取证包
+	}
+
 	// 远程站点公开接口
 	{
 		r.GET("/api/federated/novels", handlers.ListFederatedNovels)
