@@ -379,7 +379,8 @@ func main() {
 		admin.GET("/community", handlers.GetCommunityDashboard)
 		admin.GET("/users", handlers.ListUsers)
 		admin.GET("/users/audit", handlers.ListUserAuditLogs)
-		admin.GET("/zone-access", handlers.ListZoneAccessLogs) // 隔离墙进入记录（176号令专项）
+		admin.GET("/zone-access", handlers.ListZoneAccessLogs)        // 隔离墙进入记录（176号令专项，分页+筛选）
+		admin.GET("/zone-access/stats", handlers.GetZoneAccessStats)  // 隔离墙进入记录统计（仪表盘卡片）
 		admin.PUT("/users/:id", handlers.UpdateUser)
 		admin.DELETE("/users/:id", handlers.DeleteUser)
 		admin.POST("/users/:id/mute", handlers.MuteUser)

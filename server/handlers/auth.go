@@ -47,18 +47,56 @@ func RecordZoneEnter(c *gin.Context) {
 }
 
 // ListZoneAccessLogs GET /api/admin/zone-access — 查询隔离墙（敏感分区）进入记录（176号令专项）。
-// 支持 user_id、zone 筛选，返回「谁、何时、进入哪个分区」。
+// 支持 user_id、zone、from、to 筛选与分页，返回「谁、何时、进入哪个分区」及用户名。
 func ListZoneAccessLogs(c *gin.Context) {
 	if !ensureAdmin(c) {
 		return
 	}
 	userID, _ := strconv.ParseUint(c.Query("user_id"), 10, 64)
-	zone := c.Query("zone")
-	logs, err := models.ListZoneAccess(uint(userID), zone, 500)
+	zone := strings.TrimSpace(c.Query("zone"))
+	from := parseDateParam(c.Query("from"))
+	to := parseDateParam(c.Query("to"))
+	page, _ := strconv.Atoi(c.Query("page"))
+	pageSize, _ := strconv.Atoi(c.Query("page_size"))
+	items, total, err := models.ListZoneAccessPage(models.ZoneAccessFilter{
+		UserID:   uint(userID),
+		Zone:     zone,
+		From:     from,
+		To:       to,
+		Page:     page,
+		PageSize: pageSize,
+	})
 	if err != nil {
 		utils.InternalError(c, "获取隔离墙进入记录失败")
 		return
 	}
-	utils.Success(c, logs)
+	utils.Success(c, gin.H{"total": total, "items": items})
+}
+
+// GetZoneAccessStats GET /api/admin/zone-access/stats — 隔离墙进入记录聚合统计（仪表盘卡片）。
+func GetZoneAccessStats(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	stats, err := models.GetZoneAccessStats()
+	if err != nil {
+		utils.InternalError(c, "获取隔离墙进入统计失败")
+		return
+	}
+	utils.Success(c, stats)
+}
+
+// parseDateParam 解析日期查询参数，支持 RFC3339 / 2006-01-02T15:04:05 / 2006-01-02，空或非法返回零值。
+func parseDateParam(s string) time.Time {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}
+	}
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
 }
 

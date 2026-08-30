@@ -303,6 +303,14 @@ export const adminApi = {
     return api.put('/admin/wall-config', data);
   },
 
+  // 隔离墙进入记录仪表盘
+  getZoneAccessLogs(params?: { user_id?: number; zone?: string; from?: string; to?: string; page?: number; page_size?: number }) {
+    return api.get('/admin/zone-access', { params });
+  },
+  getZoneAccessStats() {
+    return api.get('/admin/zone-access/stats');
+  },
+
   // 远程站点互通
   getSites() {
     return api.get('/admin/sites');
