@@ -21,8 +21,71 @@ import (
 
 // ==================== UserHTML 扩展HTML（ZIP上传） ====================
 
+// ==================== 预检（解压前，纯内存） ====================
+
+// zipPrecheck 结果
+type zipPrecheckResult struct {
+	Blocked   bool
+	BlockInfo string // 阻断原因（文件名 + 命中规则）
+	Threats   []security.Threat
+	Warnings  []security.Threat
+	FileCount int
+	TotalSize int64
+}
+
+// precheckZip 在解压前对 ZIP 内每个条目做安全扫描（全程内存，不落盘）。
+// 命中阻断级（critical/high）→ Blocked=true，调用方据此走「封存不解压」。
+// 单个条目读取上限 8MB，避免预检阶段被超大文件拖死。
+func precheckZip(zr *zip.Reader) zipPrecheckResult {
+	var out zipPrecheckResult
+	const maxScanBytes = 8 * 1024 * 1024
+
+	for _, f := range zr.File {
+		if f.FileInfo().IsDir() {
+			continue
+		}
+		out.FileCount++
+		out.TotalSize += int64(f.UncompressedSize64)
+
+		rc, err := f.Open()
+		if err != nil {
+			continue
+		}
+		buf := make([]byte, maxScanBytes)
+		n, _ := io.ReadFull(rc, buf)
+		rc.Close()
+		if n <= 0 {
+			continue
+		}
+		blocked, threats, warnings := security.ClassifyScan(string(buf[:n]), f.Name)
+		if blocked {
+			out.Blocked = true
+			out.Threats = append(out.Threats, threats...)
+			if out.BlockInfo == "" && len(threats) > 0 {
+				out.BlockInfo = fmt.Sprintf("%s 命中 %s（%s）", f.Name, threats[0].Pattern, threats[0].Severity)
+			}
+		}
+		out.Warnings = append(out.Warnings, warnings...)
+	}
+	return out
+}
+
+// quarantineZip 把原始 ZIP 原样封存到隔离目录（不解压），返回封存路径。
+// 目录独立于正常解压目录，避免与已发布扩展混放造成误读。
+func quarantineZip(userID uint, safeName string, timestamp int64, zipData []byte) (string, error) {
+	dir := filepath.Join(config.UserHTMLDir, "_quarantine", fmt.Sprintf("%d", userID))
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, fmt.Sprintf("%s_%d.zip", safeName, timestamp))
+	if err := os.WriteFile(path, zipData, 0644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
 // UploadZipHTML POST /api/userhtmls/upload
-// 接收ZIP文件，安全检测，解压到文件系统
+// 接收ZIP文件 → 解压前纯内存预检 → 预检未通过原样封存（不解压，等管理员处置）→ 通过才解压
 func UploadZipHTML(c *gin.Context) {
 	userID := currentUserID(c)
 
@@ -78,14 +141,91 @@ func UploadZipHTML(c *gin.Context) {
 		return
 	}
 
-	// 安全检测 + 解压
 	userDir := filepath.Join(config.UserHTMLDir, fmt.Sprintf("%d", userID))
 	timestamp := time.Now().UnixMilli()
 	safeName := sanitizeFilename(name)
 	extractDir := filepath.Join(userDir, fmt.Sprintf("%s_%d", safeName, timestamp))
-	os.MkdirAll(extractDir, 0755)
 
-	// 安全解压（含ZIP炸弹检测）
+	// ====== 第一步：ZIP 炸弹检测（纯内存，不落盘） ======
+	if ok, msg := utils.ValidateZipBomb(zipReader, nil); !ok {
+		utils.BadRequest(c, msg)
+		return
+	}
+
+	// ====== 第二步：解压前安全预检（纯内存） ======
+	// 预检未通过 → 原样封存 ZIP，不解压、不落盘任何扩展文件，等管理员处置。
+	pre := precheckZip(zipReader)
+
+	// 构建novelID指针
+	var novelID *uint
+	if novelIDStr != "" {
+		if id, err := strconv.ParseUint(novelIDStr, 10, 64); err == nil {
+			nid := uint(id)
+			novelID = &nid
+		}
+	}
+
+	if pre.Blocked {
+		qPath, err := quarantineZip(userID, safeName, timestamp, zipData)
+		if err != nil {
+			utils.InternalError(c, "封存失败，上传已中止")
+			return
+		}
+		blockReason := pre.BlockInfo
+		if blockReason == "" {
+			blockReason = "内容安全预检命中高危代码"
+		}
+		item := &models.UserHTML{
+			UserID:          userID,
+			NovelID:         novelID,
+			Name:            name,
+			Description:     description,
+			ExtractDir:      "", // 未解压
+			EntryFile:       "",
+			FileCount:       pre.FileCount,
+			TotalSize:       int64(len(zipData)),
+			FilePath:        "",
+			ZipPath:         qPath,
+			AllowWasm:       allowWasm,
+			RunMode:         runMode,
+			ReviewStatus:    "quarantine",
+			ScanWarnings:    security.ThreatsToJSON(append(pre.Warnings, pre.Threats...)),
+			IsExtracted:     false,
+			QuarantinePath:  qPath,
+			ScanBlocked:     true,
+			ScanBlockReason: blockReason,
+		}
+		if err := models.DB.Create(item).Error; err != nil {
+			utils.InternalError(c, "创建封存记录失败")
+			return
+		}
+		// ⚠️ 封存态的关键字段全是零值（is_extracted=false / is_active=false / is_public=false /
+		// is_downloadable=false），而 GORM 对「带 default 标签的列」在 INSERT 时会直接跳过、
+		// 由数据库填默认值——哪怕用 map 显式传 false 也一样。这会导致封存件被误标成
+		// 「已解压 + 已启用」，放行时跳过补解压、详情页也走错分支。
+		// 因此建记录后再用 Updates(map) 强制写回（Updates 不受默认值影响，按列精确写）。
+		models.DB.Model(&models.UserHTML{}).Where("id = ?", item.ID).Updates(map[string]interface{}{
+			"is_extracted":    false,
+			"is_active":       false,
+			"is_public":       false,
+			"is_downloadable": false,
+		})
+		item.IsExtracted = false
+		item.IsActive = false
+		item.IsPublic = false
+		item.IsDownloadable = false
+		// 通知全部管理员：有待处置的封存件
+		notifyAdminsHTMLQuarantine(item)
+		utils.Success(c, gin.H{
+			"html":        item,
+			"quarantined": true,
+			"message":     "安全预检未通过，ZIP 已原样封存、未解压，等待管理员审核",
+		})
+		return
+	}
+
+	// ====== 第三步：预检通过 → 解压 ======
+	os.MkdirAll(extractDir, 0755)
 	entries, err := utils.ExtractZipSafe(zipReader, extractDir, nil)
 	if err != nil {
 		os.RemoveAll(extractDir) // 清理
@@ -111,26 +251,12 @@ func UploadZipHTML(c *gin.Context) {
 		}
 	}
 
-	// 🔍 宽松自动化安全审查：逐文件检测，critical/high 阻断，medium/low 告警转人工复核
-	var allWarnings []security.Threat
-	for _, entry := range entries {
-		content, err := os.ReadFile(entry.Path)
-		if err != nil {
-			continue
-		}
-		blocked, _, warnings := security.ClassifyScan(string(content), entry.Name)
-		if blocked {
-			os.RemoveAll(extractDir) // 清理恶意内容
-			utils.BadRequest(c, "内容安全扫描未通过：文件 "+entry.Name+" 含高危代码，已拒绝上传")
-			return
-		}
-		allWarnings = append(allWarnings, warnings...)
-	}
+	// 中/低危告警 → 已解压但转人工复核；无告警 → 直接通过
 	reviewStatus := "approved"
 	scanWarnings := ""
-	if len(allWarnings) > 0 {
+	if len(pre.Warnings) > 0 {
 		reviewStatus = "pending"
-		scanWarnings = security.ThreatsToJSON(allWarnings)
+		scanWarnings = security.ThreatsToJSON(pre.Warnings)
 	}
 
 	// 保存原始ZIP
@@ -162,13 +288,10 @@ func UploadZipHTML(c *gin.Context) {
 		return
 	}
 
-	// 构建novelID指针
-	var novelID *uint
-	if novelIDStr != "" {
-		if id, err := strconv.ParseUint(novelIDStr, 10, 64); err == nil {
-			nid := uint(id)
-			novelID = &nid
-		}
+	// 待人工复核期间一律不公开，管理员审核通过后才可上广场
+	if reviewStatus == "pending" {
+		isPublic = false
+		isDownloadable = false
 	}
 
 	htmlItem := &models.UserHTML{
@@ -189,6 +312,7 @@ func UploadZipHTML(c *gin.Context) {
 		RunMode:        runMode,
 		ReviewStatus:   reviewStatus,
 		ScanWarnings:   scanWarnings,
+		IsExtracted:    true,
 	}
 	if err := models.DB.Create(htmlItem).Error; err != nil {
 		os.RemoveAll(extractDir)

@@ -471,6 +471,10 @@ func main() {
 		admin.GET("/forum-quota/users", handlers.ListUserForumQuotas)
 		admin.PUT("/forum-quota/users/:id", handlers.SetUserForumQuota)
 		admin.DELETE("/forum-quota/users/:id", handlers.DeleteUserForumQuota)
+		// 应用扩展安全审核：预检未通过的 ZIP 原样封存（不解压），管理员放行/驳回
+		admin.GET("/userhtmls", handlers.AdminListHTMLs)
+		admin.GET("/userhtmls/:id/scan", handlers.AdminGetHTMLScan)
+		admin.POST("/userhtmls/:id/review", handlers.AdminReviewHTML)
 		// XSS 正则规则库（管理员维护）
 		admin.GET("/xss-rules", handlers.ListXssRules)
 		admin.POST("/xss-rules", handlers.CreateXssRule)

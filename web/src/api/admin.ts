@@ -144,7 +144,8 @@ export const adminApi = {
   getHtmlReview(type: string, id: number) {
     return api.get(`/admin/html-reviews/${type}/${id}`);
   },
-  reviewHtml(type: string, id: number, data: { action: string; note?: string }) {
+  // 复核：publish=放行同时上广场；purge_file=驳回时连封存件一起删除
+  reviewHtml(type: string, id: number, data: { action: string; note?: string; publish?: boolean; purge_file?: boolean }) {
     return api.post(`/admin/html-reviews/${type}/${id}/review`, data);
   },
 
