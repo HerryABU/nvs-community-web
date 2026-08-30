@@ -473,6 +473,43 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.3.2 管理员 API Key 封禁与按人限流 + 自建论坛额度 + 楼层式折叠评论 + 扩展安全预检封存（2026-08-30）
+
+> 1. **管理员对 API Key 的「按把封禁」与「按人限流」**：
+>    - 按把：`POST /api/admin/ratelimit/keys/:id/ban|unban`，封禁后该 Key 请求直接 403（`api_keys` 新增 `is_banned/ban_reason/banned_at/banned_by`）。
+>    - 按人（新增 `user_api_policies` 表）：`keys_banned` 封禁某人全部 Key（含以后新建的，支持 `duration_hours` 到期自动解封）；`quota_per_min/window_secs` 专属配额，按 `min(角色上限, 专属值)` 生效；`max_keys` 限制持有 Key 数。管理接口 `GET/PUT/DELETE /api/admin/ratelimit/users/:id/quota`、`POST /api/admin/ratelimit/users/:id/keys/ban|unban`。
+>    - 生效链路：`models.ResolveAPIKey` 叠加用户策略并置 `KeyIdentity.Banned` → `APIKeyGuard` 命中封禁即 403（记日志 `key_banned`）；`CreateAPIKey` 建前校验封禁与 Key 数上限。前端 `AdminRateLimit.vue` 新增封禁/解封、封禁状态列、「按人管控」面板（用户名解析 → 设配额 → 封禁/解封 → 已设置用户表）。
+> 2. **管理员限制每人自建论坛数量（全局默认 + 按人削减/放宽）**：全局 `platform_configs.forum_quota`（`max_per_user`，0=不限制，默认 3）；按人 `user_forum_quotas` 表（`max_forums`：-1=跟随全局 / 0=完全剥夺建版权 / >0=专属上限）。`CreateUserForum` 建版前走 `ForumQuotaFor` 校验；`GET /api/forums/mine` 升级为 `{ list, quota }`。前端 `Forums.vue` 展示「已创建 X / 上限 Y」、达上限禁用创建按钮；`AdminForums.vue` 新增额度管控面板。额度接口独立于 `/admin/forum-quota` 子树（`/forums/:id` 已占用通配，注册 `/forums/quota` 会路由 panic）。
+> 3. **楼层式折叠评论（公众号评论区 + Discuz 楼中楼），论坛/博客/作品/作者/章评全量统一**：
+>    - 语义：甲发主内容 → 乙评论甲 = 开 1 楼；丙评论乙 → 挂 1 楼显示「丙 回复 乙」；丁评论丙 → 仍在 1 楼；戊评论甲（楼主）→ 脱离开 2 楼。即「回复主内容开新楼，回复楼内任意一条挂靠该楼」。
+>    - 后端：`comments` 与 `posts` 均新增 `root_id/floor_no`（posts 另加 `parent_id/reply_count`），`resolveFloor()` 落库前推导；分页改为「按楼层分页」并新增 `floor_total/has_more`；楼内回复回填 `reply_to_name`；删楼层主评/主回帖级联删楼内回复（回帖走 `softdel_posts` 留证）；楼内互评新增 `post_reply` 通知；`AutoMigrateAll` 幂等回填存量。
+>    - 前端：新增共用组件 `FloorComments.vue`（平铺列表按 `root_id` 还原成楼，楼内默认显示 3 条、其余折叠，楼主徽标/举报/删除/版主禁言按位透出）；`ThreadDetail`、`CommentSection`（作品/博客/作者/章评）统一改用它，各入口补传 `owner-id`。
+> 4. **应用扩展安全预检未通过 → ZIP 原样封存不解压，管理员审核后可公布**：
+>    - 上传链路改为「解压前纯内存预检」（`precheckZip`，单文件限 8MB，ZIP 炸弹检测前置）：命中 critical/high → 原样封存到 `data/userhtml/_quarantine/<uid>/`，建 `review_status=quarantine` 记录（`is_extracted=false/is_active=false/is_public=false`），**不解压、不落盘任何扩展文件**，并通知全部管理员；仅中/低危告警 → 已解压但强制不公开、挂 pending。
+>    - 管理员审核：`AdminReviewHTML`（`/api/admin/html-reviews/html/:id/review` 与 `/api/admin/userhtmls/:id/review` 共用）——放行（approve）对封存件按封存的 ZIP 补一次解压（再验 ZIP 炸弹）、锁定目录、置 active，`publish=true` 同步上广场；驳回（reject）置 rejected，`purge_file=true` 连封存件删除。详情页对封存件回显「未解压 + 阻断原因」。
+>    - 前端 `AdminHtmlReview.vue` 新增「已封存」筛选与封存告警弹窗（阻断原因 + 放行将补解压提示）。
+> 5. **版本号 3.2.8 → 3.3.2**（语义化顺延）：`server/version/version.go` / `web/package.json` 同步更新，前端 `npm run build` + Go `go build` 通过，`nvs-server.exe` 已重建。
+
+| 类别 | 文件 | 说明 |
+|---|---|---|
+| API Key 管控 | `server/models/api_key.go` | `APIKey` 增加 `is_banned/ban_reason/banned_at/banned_by`；新增 `UserAPIPolicy` 表模型（按人封禁/专属配额/Key 数上限）；`ResolveAPIKey` 叠加用户策略并置 `Banned`；`SaveUserAPIPolicy` 用 map 显式 upsert（规避 GORM 零值/默认值坑） |
+| API Key 管控 | `server/handlers/admin_apikey_policy.go` | 新增：按把封禁/解封、按人封禁/解封、专属配额读写、策略列表与撤销 |
+| API Key 管控 | `server/handlers/api_key.go` | `CreateAPIKey` 建前校验用户封禁与 Key 数上限；`ListMyAPIKeys` 返回实际生效配额；管理员 Key 列表附 `user_banned/user_quota/effective_req` |
+| API Key 管控 | `server/security/ratelimit.go` | `APIKeyGuard` 命中封禁即 403（`key_banned` 入访问日志） |
+| 论坛额度 | `server/models/forum.go` | 新增 `UserForumQuota`（按人建版额度）、`ForumQuotaConfig`（全局默认）、`ForumQuotaFor` 计算、`SaveUserForumQuota` map upsert（`max_forums=0` 曾被 GORM 静默回落成默认 -1） |
+| 论坛额度 | `server/handlers/admin_forum_quota.go` | 新增：全局额度读写、按人设置/撤销/列表 |
+| 论坛额度 | `server/handlers/forum_custom.go` | `CreateUserForum` 额度校验（区分「被管理员限制」与「已达上限」）；`/api/forums/mine` 返回额度 |
+| 楼层评论 | `server/models/comment.go` / `forum.go` | `root_id/floor_no`（posts 加 `parent_id/reply_count`）、`resolveFloor`、楼层分页、`reply_to_name` 回填、级联删除、存量回填 |
+| 楼层评论 | `server/handlers/comment.go` / `forum.go` / `forum_custom.go` / `emergency.go` | 楼层分页响应（`floor_total/has_more`）、`CreatePost` 支持 `parent_id`、删楼级联删回复、删除按楼数扣计数 |
+| 楼层评论 | `web/src/components/FloorComments.vue` | 新增共用楼层组件（折叠回复、楼主徽标、回复/删除/禁言） |
+| 楼层评论 | `web/src/views/ThreadDetail.vue` / `CommentSection.vue` / `BlogDetail.vue` / `NovelDetail.vue` / `AuthorHome.vue` / `Reader.vue` | 统一楼层渲染 + 各入口补传楼主 `owner-id` |
+| 扩展预检 | `server/handlers/userhtml.go` | 上传改「解压前纯内存预检」：命中高危 → 原样封存（`_quarantine`）、不解压；通过才解压；pending 强制不公开 |
+| 扩展预检 | `server/handlers/admin_html_review.go` | 新增：管理员列表/详情/审核（放行补解压 + 公布，驳回可删封存件） |
+| 扩展预检 | `server/handlers/html_review.go` | 封存件详情回显阻断原因；复核委托提前到 body 解析之前（避免二次读 body 报参数错误） |
+| 扩展预检 | `server/models/userframe.go` | `is_extracted/quarantine_path/scan_blocked/scan_block_reason/reviewed_by/reviewed_at`；列默认 false + 存量回填 |
+| 扩展预检 | `web/src/views/admin/AdminHtmlReview.vue` | 「已封存」筛选、封存告警弹窗、公布/删件勾选 |
+| 版本 | `server/version/version.go` / `web/package.json` | 版本号 3.2.8 → **3.3.2** |
+
 ### v3.2.8 已登录用户免限流 + 聚合 API 真正落地 + 限流三连修（2026-08-28）
 
 > 1. **已登录浏览器用户免限流（访客仍受限）**：`APIKeyGuard` 此前只识别 `X-API-Key`，从不识别浏览器登录态，导致已登录用户被当作匿名按 IP 限流。现于 `APIKeyGuard` 内解析 `token` cookie（JWT），命中有效登录态即设置 `CtxKeySkipIP=true` 并放行——既绕过匿名/爬虫 IP 限速，又因为路由级 `RateLimit` 同样读取 `CtxKeySkipIP` 而同步豁免；**访客（无有效 token）仍按匿名/爬虫配额限流**。仅针对浏览器会话，API Key 程序化访问走独立 Key 配额、不受影响。
