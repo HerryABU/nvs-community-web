@@ -473,6 +473,12 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.5.1 管理员用户搜索/筛选（按角色分类 + 状态）（2026-08-30）
+
+> 1. **后端多维筛选**：`GET /api/admin/users` 新增 `role`（reader/author/vip_author/arbitrator/police/admin）与 `status`（active/muted/banned）查询维度，与既有 `search` 关键字（用户名/昵称/邮箱）自由组合。
+> 2. **封禁用户可见**：`status=banned` 走 `Unscoped()` 查询，使被软删除封禁的账号也能在用户管理中检索出来（普通状态默认排除软删除，符合「看到软删除留证」的合规诉求）；`active` 排除软删除且排除在禁言期内记录，`muted` 仅含禁言未到期用户。
+> 3. **前端筛选栏**：「用户管理」页搜索栏新增「角色分类」「状态」下拉（`el-select` + `clearable`），任意维度变更即触发检索（`@change="doSearch"`），`adminApi.getUsers` 签名升级为接收 `{ page, search, role, status }` 参数对象。
+
 ### v3.5.0 警方用户角色与取管台（2026-08-30）
 
 > 1. **新增 police 角色（准管理员）**：权限模型扩展 `police` 角色。警方账号**不可自注册**（注册恒为 reader，且无 role 注入路径），只能由管理员在「用户管理」中通过专用提权接口（`POST /api/admin/users/:id/promote-police`）显式提权，防止越权/漏洞提权；撤销走 `POST /api/admin/users/:id/revoke-police`（回退为 reader）。

@@ -15,23 +15,45 @@ import (
 )
 
 
-// GET /api/admin/users — 用户列表
+// GET /api/admin/users — 用户列表（支持关键词搜索 + 角色分类 + 状态筛选）
+// query: page, search(用户名/昵称/邮箱), role(角色分类), status(active/muted/banned)
 func ListUsers(c *gin.Context) {
 	if !ensureAdmin(c) { return }
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
 	search := c.Query("search")
+	role := c.Query("role")
+	status := c.Query("status") // active / muted / banned(软删除)
 
-	query := models.DB.Model(&models.User{})
+	// banned 用户是软删除记录，需 Unscoped 才能查到；其余状态默认排除软删除
+	db := models.DB.Model(&models.User{})
+	if status == "banned" {
+		db = db.Unscoped()
+	}
+
 	if search != "" {
 		like := "%" + search + "%"
-		query = query.Where("username LIKE ? OR nickname LIKE ? OR email LIKE ?", like, like, like)
+		db = db.Where("username LIKE ? OR nickname LIKE ? OR email LIKE ?", like, like, like)
+	}
+	if role != "" {
+		db = db.Where("role = ?", role)
+	}
+	switch status {
+	case "muted":
+		db = db.Where("muted_until IS NOT NULL AND muted_until > ?", time.Now())
+	case "active":
+		db = db.Where("(muted_until IS NULL OR muted_until <= ?) AND deleted_at IS NULL", time.Now())
+	case "banned":
+		db = db.Where("deleted_at IS NOT NULL")
 	}
 
 	var total int64
-	query.Count(&total)
+	db.Count(&total)
 
 	var users []models.User
-	query.Offset((page - 1) * 20).Limit(20).Order("id DESC").Find(&users)
+	db.Offset((page - 1) * 20).Limit(20).Order("id DESC").Find(&users)
 	utils.Success(c, gin.H{"list": users, "total": total})
 }
 

@@ -101,9 +101,13 @@ export const adminApi = {
     return api.get('/author/dashboard');
   },
 
-  // 用户管理
-  getUsers(page: number = 1, search?: string) {
-    return api.get('/admin/users', { params: search ? { page, search } : { page } });
+  // 用户管理（支持角色分类 + 状态多维筛选）
+  getUsers(params: { page: number; search?: string; role?: string; status?: string }) {
+    const q: Record<string, unknown> = { page: params.page };
+    if (params.search) q.search = params.search;
+    if (params.role) q.role = params.role;
+    if (params.status) q.status = params.status;
+    return api.get('/admin/users', { params: q });
   },
   getUserAuditLogs(params?: { user_id?: number; action?: string }) {
     return api.get('/admin/users/audit', { params });

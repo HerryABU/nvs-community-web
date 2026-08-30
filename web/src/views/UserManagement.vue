@@ -7,12 +7,27 @@
             v-model="search"
             placeholder="搜索用户名/昵称/邮箱"
             clearable
-            style="width: 280px"
+            style="width: 260px"
             @clear="doSearch"
             @keyup.enter="doSearch"
           >
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
+          <el-select v-model="roleFilter" placeholder="角色分类" clearable style="width: 140px" @change="doSearch">
+            <el-option label="全部角色" value="" />
+            <el-option label="读者" value="reader" />
+            <el-option label="作者" value="author" />
+            <el-option label="VIP作者" value="vip_author" />
+            <el-option label="仲裁员" value="arbitrator" />
+            <el-option label="警方" value="police" />
+            <el-option label="管理员" value="admin" />
+          </el-select>
+          <el-select v-model="statusFilter" placeholder="状态" clearable style="width: 130px" @change="doSearch">
+            <el-option label="全部状态" value="" />
+            <el-option label="正常" value="active" />
+            <el-option label="已禁言" value="muted" />
+            <el-option label="已封禁" value="banned" />
+          </el-select>
           <el-button type="primary" @click="doSearch" :loading="loading">搜索</el-button>
           <el-button @click="$router.push('/admin')">返回后台</el-button>
         </div>
@@ -117,6 +132,8 @@ const users = ref<UserRow[]>([]);
 const total = ref(0);
 const page = ref(1);
 const search = ref('');
+const roleFilter = ref('');
+const statusFilter = ref('');
 const loading = ref(false);
 const saving = ref(false);
 
@@ -147,7 +164,12 @@ function roleTagType(role: string) {
 async function loadUsers() {
   loading.value = true;
   try {
-    const res = await adminApi.getUsers(page.value, search.value || undefined);
+    const res = await adminApi.getUsers({
+      page: page.value,
+      search: search.value || undefined,
+      role: roleFilter.value || undefined,
+      status: statusFilter.value || undefined,
+    });
     if (res.data.code === 0) {
       users.value = res.data.data.list || [];
       total.value = res.data.data.total || 0;
