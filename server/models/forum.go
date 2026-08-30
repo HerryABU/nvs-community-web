@@ -512,23 +512,23 @@ func GetPostsByThread(threadID uint, page, pageSize int) (PostsPage, error) {
 }
 
 // BackfillPostFloors 存量回帖回填楼层（幂等）：老回帖一律视为顶层楼层，按时间正序编号
-func BackfillPostFloors() {
-	_ = DB.Exec(`UPDATE posts SET root_id = (
+func BackfillPostFloors(db *gorm.DB) {
+	_ = db.Exec(`UPDATE posts SET root_id = (
 		SELECT p.id FROM (SELECT id, root_id FROM posts) p WHERE p.id = posts.parent_id
 	) WHERE parent_id IS NOT NULL AND parent_id <> 0 AND (root_id IS NULL OR root_id = 0)`).Error
-	_ = DB.Exec(`UPDATE posts SET root_id = (
+	_ = db.Exec(`UPDATE posts SET root_id = (
 		SELECT p.root_id FROM (SELECT id, root_id FROM posts) p WHERE p.id = posts.root_id
 	) WHERE parent_id IS NOT NULL AND parent_id <> 0 AND root_id IS NOT NULL AND root_id IN (
 		SELECT id FROM (SELECT id FROM posts WHERE parent_id IS NOT NULL AND parent_id <> 0) x
 	)`).Error
 
 	var threadIDs []uint
-	_ = DB.Model(&Post{}).
+	_ = db.Model(&Post{}).
 		Where("parent_id IS NULL AND (floor_no IS NULL OR floor_no = 0)").
 		Distinct().Pluck("thread_id", &threadIDs).Error
 	for _, tid := range threadIDs {
 		var tops []Post
-		DB.Where("thread_id = ? AND parent_id IS NULL", tid).
+		db.Where("thread_id = ? AND parent_id IS NULL", tid).
 			Order("created_at ASC, id ASC").Find(&tops)
 		n := 0
 		for _, t := range tops {
@@ -536,7 +536,7 @@ func BackfillPostFloors() {
 			if t.FloorNo > 0 {
 				continue
 			}
-			DB.Model(&Post{}).Where("id = ?", t.ID).Update("floor_no", n)
+			db.Model(&Post{}).Where("id = ?", t.ID).Update("floor_no", n)
 		}
 	}
 }

@@ -95,8 +95,8 @@ func (UserHTML) TableName() string { return "user_htmls" }
 // 需把「新增列之前就已经解压落盘的扩展」标记为已解压，否则它们会被误判成封存件，
 // 管理员详情页读不到入口文件、放行时还会触发一次多余的重解压。
 // 判定依据：extract_dir 非空即视为已解压（封存件的 extract_dir 恒为空串）。
-func BackfillUserHTMLExtracted() {
-	_ = DB.Model(&UserHTML{}).
+func BackfillUserHTMLExtracted(db *gorm.DB) {
+	_ = db.Model(&UserHTML{}).
 		Where("is_extracted = ? AND extract_dir IS NOT NULL AND extract_dir <> ?", false, "").
 		Update("is_extracted", true).Error
 }

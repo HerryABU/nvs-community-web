@@ -8,34 +8,34 @@ import (
 )
 
 type Comment struct {
-	ID             uint      `gorm:"primaryKey" json:"id"`
-	UserID         uint      `gorm:"not null;index" json:"user_id"`
-	NovelID        uint      `gorm:"default:0;index:idx_comments_novel_created,priority:1" json:"novel_id"`
-	BlogID         uint      `gorm:"default:0;index" json:"blog_id"`
-	ChapterNumber  int       `gorm:"default:0" json:"chapter_number"`
-	Content        string    `gorm:"type:text;not null" json:"content"`
-	QuoteText      string    `gorm:"size:1024;default:''" json:"quote_text"`
-	QuoteOffset    int       `gorm:"default:0" json:"quote_offset"`
-	ParentID       *uint     `gorm:"index:idx_comments_parent" json:"parent_id"`
+	ID            uint   `gorm:"primaryKey" json:"id"`
+	UserID        uint   `gorm:"not null;index" json:"user_id"`
+	NovelID       uint   `gorm:"default:0;index:idx_comments_novel_created,priority:1" json:"novel_id"`
+	BlogID        uint   `gorm:"default:0;index" json:"blog_id"`
+	ChapterNumber int    `gorm:"default:0" json:"chapter_number"`
+	Content       string `gorm:"type:text;not null" json:"content"`
+	QuoteText     string `gorm:"size:1024;default:''" json:"quote_text"`
+	QuoteOffset   int    `gorm:"default:0" json:"quote_offset"`
+	ParentID      *uint  `gorm:"index:idx_comments_parent" json:"parent_id"`
 	// 楼层模型（公众号评论区 + Discuz 楼中楼）：
 	//   RootID  = 所属「楼」的顶层评论 id；顶层评论自身为 NULL
 	//   FloorNo = 楼层号（仅顶层评论有值，从 1 递增；楼内回复为 0）
 	// 语义：回复主内容（作品/博客/帖子）→ 开新楼（ParentID=NULL）；
 	//       回复楼内任意一条 → 挂靠该楼（RootID 继承），展示为「X 回复 Y」。
-	RootID         *uint     `gorm:"index:idx_comments_root" json:"root_id"`
-	FloorNo        int       `gorm:"default:0;index:idx_comments_floor" json:"floor_no"`
-	IsMarkdown     bool      `gorm:"default:true" json:"is_markdown"`
-	Username       string    `gorm:"-" json:"username,omitempty"`
-	ReplyToName    string    `gorm:"-" json:"reply_to_name,omitempty"` // 被回复者昵称（运行时填充，展示「X 回复 Y」）
-	DeletedBy      string    `gorm:"size:16;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
-	CreatedAt      time.Time `gorm:"index:idx_comments_novel_created,priority:2" json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
+	RootID      *uint          `gorm:"index:idx_comments_root" json:"root_id"`
+	FloorNo     int            `gorm:"default:0;index:idx_comments_floor" json:"floor_no"`
+	IsMarkdown  bool           `gorm:"default:true" json:"is_markdown"`
+	Username    string         `gorm:"-" json:"username,omitempty"`
+	ReplyToName string         `gorm:"-" json:"reply_to_name,omitempty"`               // 被回复者昵称（运行时填充，展示「X 回复 Y」）
+	DeletedBy   string         `gorm:"size:16;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
+	CreatedAt   time.Time      `gorm:"index:idx_comments_novel_created,priority:2" json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
 	// 关联
-	User   *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Novel  *Novel    `gorm:"foreignKey:NovelID" json:"novel,omitempty"`
-	Parent *Comment  `gorm:"foreignKey:ParentID" json:"parent,omitempty"`
+	User   *User    `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Novel  *Novel   `gorm:"foreignKey:NovelID" json:"novel,omitempty"`
+	Parent *Comment `gorm:"foreignKey:ParentID" json:"parent,omitempty"`
 }
 
 func (Comment) TableName() string {
@@ -169,13 +169,14 @@ func loadCommentsPage(scope func(*gorm.DB) *gorm.DB, page, pageSize int) (Commen
 // BackfillCommentFloors 存量数据回填（幂等）：
 // 老评论没有 root_id / floor_no，按同一目标（作品+章节 或 博客）的时间正序补楼层号，
 // 并把回复挂到其顶层评论下。仅在 floor_no = 0 且 parent_id IS NULL 时处理。
-func BackfillCommentFloors() {
+// db 由调用方传入（AutoMigrateAll 期间全局 DB 可能尚未就绪，测试场景尤其如此）。
+func BackfillCommentFloors(db *gorm.DB) {
 	// 1) 回填回复的 root_id（父为顶层→取父 id；父也是回复→取父的 root_id）
-	_ = DB.Exec(`UPDATE comments SET root_id = (
+	_ = db.Exec(`UPDATE comments SET root_id = (
 		SELECT p.id FROM (SELECT id, root_id FROM comments) p WHERE p.id = comments.parent_id
 	) WHERE parent_id IS NOT NULL AND parent_id <> 0 AND (root_id IS NULL OR root_id = 0)`).Error
 	// 父评论本身也是回复时，root_id 需要再上溯一层（二级回复场景）
-	_ = DB.Exec(`UPDATE comments SET root_id = (
+	_ = db.Exec(`UPDATE comments SET root_id = (
 		SELECT p.root_id FROM (SELECT id, root_id FROM comments) p WHERE p.id = comments.root_id
 	) WHERE parent_id IS NOT NULL AND parent_id <> 0 AND root_id IS NOT NULL AND root_id IN (
 		SELECT id FROM (SELECT id FROM comments WHERE parent_id IS NOT NULL AND parent_id <> 0) x
@@ -188,7 +189,7 @@ func BackfillCommentFloors() {
 		ChapterNumber int
 	}
 	var groups []group
-	_ = DB.Model(&Comment{}).
+	_ = db.Model(&Comment{}).
 		Where("parent_id IS NULL AND (floor_no IS NULL OR floor_no = 0)").
 		Select("novel_id", "blog_id", "chapter_number").
 		Group("novel_id, blog_id, chapter_number").
@@ -196,11 +197,11 @@ func BackfillCommentFloors() {
 
 	for _, g := range groups {
 		var tops []Comment
-		DB.Where("novel_id = ? AND blog_id = ? AND chapter_number = ? AND parent_id IS NULL",
+		db.Where("novel_id = ? AND blog_id = ? AND chapter_number = ? AND parent_id IS NULL",
 			g.NovelID, g.BlogID, g.ChapterNumber).
 			Order("created_at ASC, id ASC").Find(&tops)
 		var maxExisting int
-		DB.Model(&Comment{}).
+		db.Model(&Comment{}).
 			Where("novel_id = ? AND blog_id = ? AND chapter_number = ? AND parent_id IS NULL AND floor_no > 0",
 				g.NovelID, g.BlogID, g.ChapterNumber).
 			Select("COALESCE(MAX(floor_no), 0)").Scan(&maxExisting)
@@ -210,7 +211,7 @@ func BackfillCommentFloors() {
 				continue
 			}
 			n++
-			DB.Model(&Comment{}).Where("id = ?", t.ID).Update("floor_no", n)
+			db.Model(&Comment{}).Where("id = ?", t.ID).Update("floor_no", n)
 		}
 	}
 }

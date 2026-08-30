@@ -146,10 +146,11 @@ func AutoMigrateAll(db *gorm.DB) error {
 		return err
 	}
 	// 楼层模型：存量评论/回帖补 root_id 与 floor_no（幂等，仅缺失时回填）
-	BackfillCommentFloors()
-	BackfillPostFloors()
+	// 注意：回填必须用传入的 db，AutoMigrateAll 阶段全局 DB 可能尚未就绪（测试场景）
+	BackfillCommentFloors(db)
+	BackfillPostFloors(db)
 	// 应用扩展：存量已解压扩展补 is_extracted（新列默认 false，需按 extract_dir 回填）
-	BackfillUserHTMLExtracted()
+	BackfillUserHTMLExtracted(db)
 	return nil
 }
 
