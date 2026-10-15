@@ -120,6 +120,7 @@ func InitPlatformConfigs() {
 		"email_verify":    "false",
 		"captcha_enabled": "false",
 		"novel_visitor_mode": "open",
+		"home_module":       "novels", // 首页主模块：novels / blogs / forums / combined
 		"categories":      `["硬科幻","奇幻","推演文学","架空历史","现实主义","悬疑推理","实验文学","同人区","政治区","讽刺文学","泛二次元区","其他"]`,
 		"robots_txt":      "User-agent: *\nAllow: /\n",
 	}
@@ -140,6 +141,27 @@ func IsEmailVerifyEnabled() bool {
 // IsCaptchaEnabled 检查滑块验证码是否开启
 func IsCaptchaEnabled() bool {
 	return GetPlatformConfig("captcha_enabled") == "true"
+}
+
+// HomeModuleKey 首页主模块配置键
+const HomeModuleKey = "home_module"
+
+// 允许的首页主模块取值
+var validHomeModules = map[string]bool{
+	"novels":    true,
+	"blogs":     true,
+	"forums":    true,
+	"combined":  true, // 综合页：小说为主，博客/论坛作为副区块
+}
+
+// GetHomeModule 返回当前配置的首页主模块（默认 novels）。
+// 仅当值合法时返回，避免异常配置导致前端渲染异常。
+func GetHomeModule() string {
+	v := GetPlatformConfig(HomeModuleKey)
+	if validHomeModules[v] {
+		return v
+	}
+	return "novels"
 }
 
 // ============ 邮箱域名黑白名单 ============

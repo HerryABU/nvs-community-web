@@ -460,6 +460,7 @@ func GetSiteInfo(c *gin.Context) {
 	utils.Success(c, gin.H{
 		"site_name": models.GetSiteName(), "wall_zones": wallCfg.Zones, "wall_enabled": wallCfg.Enabled,
 		"email_verify": models.IsEmailVerifyEnabled(), "captcha_enabled": models.IsCaptchaEnabled(),
+		"home_module": models.GetHomeModule(),
 		"guidelines": guidelines,
 		"site_icp":   icp, "site_psb": psb, "site_psb_link": psbLink,
 	})

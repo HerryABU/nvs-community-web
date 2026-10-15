@@ -6,6 +6,15 @@
         <el-form-item label="站点名称">
           <el-input v-model="configForm.site_name" placeholder="星海文学" maxlength="64" />
         </el-form-item>
+        <el-form-item label="首页主模块">
+          <el-select v-model="homeModule" style="width:240px">
+            <el-option label="类型文学（小说）" value="novels" />
+            <el-option label="创作博客" value="blogs" />
+            <el-option label="讨论论坛" value="forums" />
+            <el-option label="综合（小说为主）" value="combined" />
+          </el-select>
+          <span class="hint-text">设置站点首页默认展示的内容模块，访客进入首页即见该模块</span>
+        </el-form-item>
         <el-form-item label="平台指南">
           <el-input
             v-model="configForm.guidelines"
@@ -151,6 +160,8 @@ const emailVerifyEnabled = ref(false);
 const captchaEnabled = ref(false);
 const smtpInsecureVerify = ref(false);
 const savingConfig = ref(false);
+// 首页主模块：novels / blogs / forums / combined，控制前台首页默认展示的内容模块
+const homeModule = ref<string>('novels');
 
 // 邮箱域名黑白名单（以标签形式逐条管理，底层仍以 JSON 数组存储）
 const emailDomainBlacklistArr = ref<string[]>([]);
@@ -218,6 +229,7 @@ async function loadConfig() {
     configForm.site_icp = data.site_icp || '';
     configForm.site_psb = data.site_psb || '';
     configForm.site_psb_link = data.site_psb_link || '';
+    homeModule.value = data.home_module || 'novels';
     emailDomainBlacklistArr.value = jsonToArray(data.email_domain_blacklist || '');
     emailDomainWhitelistArr.value = jsonToArray(data.email_domain_whitelist || '');
   } catch { /* ignore */ }
@@ -242,6 +254,7 @@ async function saveConfig() {
       site_icp: configForm.site_icp,
       site_psb: configForm.site_psb,
       site_psb_link: configForm.site_psb_link,
+      home_module: homeModule.value,
       email_domain_blacklist: arrayToJson(emailDomainBlacklistArr.value),
       email_domain_whitelist: arrayToJson(emailDomainWhitelistArr.value),
     });

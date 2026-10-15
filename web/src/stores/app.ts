@@ -25,6 +25,7 @@ export const useAppStore = defineStore('app', () => {
   const siteInfo = ref<any>(null); // /api/site-info 完整返回（含备案号等）
   const siteName = ref('星海文学');
   const categories = ref<string[]>([]);
+  const homeModule = ref<string>('novels'); // 首页主模块（管理员后台可配置：novels/blogs/forums/combined）
   const federatedSites = ref<any[]>([]);
   const unreadCount = ref(0);
   const installed = ref(true);
@@ -70,6 +71,7 @@ export const useAppStore = defineStore('app', () => {
         if (map.site?.success && map.site.data) {
           siteInfo.value = map.site.data;
           if (map.site.data.site_name) siteName.value = map.site.data.site_name;
+          if (map.site.data.home_module) homeModule.value = map.site.data.home_module;
         }
         if (map.cats?.success && Array.isArray(map.cats.data)) categories.value = map.cats.data;
         if (map.fed?.success && map.fed.data) federatedSites.value = map.fed.data || [];
@@ -115,7 +117,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   return {
-    siteInfo, siteName, categories, federatedSites, unreadCount, installed, homeData,
+    siteInfo, siteName, categories, homeModule, federatedSites, unreadCount, installed, homeData,
     bootstrap, ensureHomeLoaded, refreshUnread,
   };
 });

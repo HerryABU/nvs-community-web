@@ -53,95 +53,15 @@
         </el-button>
       </div>
 
-      <!-- ====== 类型文学分类区域 ====== -->
-      <div class="category-zone">
-        <div class="cz-header">
-          <h2>类型文学分类</h2>
-          <div style="display:flex; align-items:center; gap:10px">
-            <el-button size="small" text type="primary" @click="showAlgo = true">📊 推荐说明</el-button>
-            <el-radio-group v-model="catStyle" size="small">
-              <el-radio-button value="tags">标签横排</el-radio-button>
-              <el-radio-button value="blocks">大方块</el-radio-button>
-            </el-radio-group>
-          </div>
-        </div>
+      <!-- ====== 模块化首页：主模块（管理员后台可配置）+ 其余模块副区块 ====== -->
+      <HomeModuleSection
+        v-for="(m, i) in orderedModules"
+        :key="m"
+        :module="m"
+        :featured="i === 0"
+      />
 
-        <!-- 模式1：标签横排 -->
-        <div v-if="catStyle === 'tags'" class="cat-tags">
-          <el-button v-for="cat in categories" :key="cat" size="default" round
-            @click="$router.push(`/category/${encodeURIComponent(cat)}`)">
-            {{ cat }}
-            <span class="cat-count">{{ catStats[cat]?.novel_count || 0 }}</span>
-          </el-button>
-        </div>
-
-        <!-- 模式2：大方块卡片 -->
-        <div v-else class="cat-blocks">
-          <div v-for="cat in categories" :key="cat" class="cat-block-card"
-            @click="$router.push(`/category/${encodeURIComponent(cat)}`)">
-            <div class="cbc-cover-row">
-              <div v-for="(n,i) in (catStats[cat]?.novels || []).slice(0,3)" :key="n.id"
-                class="cbc-cover" :style="{ zIndex: 3-i }">
-                <el-image v-if="n.cover_url" :src="n.cover_url" fit="cover"
-                  style="width:48px;height:64px;border-radius:3px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.15)" />
-                <div v-else class="cbc-cover-ph">封</div>
-              </div>
-              <div v-if="!catStats[cat]?.novels?.length" class="cbc-cover-empty">📚</div>
-            </div>
-            <div class="cbc-name">{{ cat }}</div>
-            <div class="cbc-count">{{ catStats[cat]?.novel_count || 0 }} 部作品</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ====== 全局排序 + 小说视图切换 ====== -->
-      <div class="global-toolbar">
-        <el-radio-group v-model="sortBy" size="small" @change="reloadAll">
-          <el-radio-button value="featured">本周最佳</el-radio-button>
-          <el-radio-button value="newest">新品上架</el-radio-button>
-          <el-radio-button value="updated">最近更新</el-radio-button>
-        </el-radio-group>
-        <el-radio-group v-model="novelView" size="small">
-          <el-radio-button value="grid"><el-icon><Grid /></el-icon> 平铺</el-radio-button>
-          <el-radio-button value="table"><el-icon><List /></el-icon> 表式</el-radio-button>
-        </el-radio-group>
-      </div>
-
-      <!-- ====== 按分类展示小说 ====== -->
-      <div v-loading="loading">
-        <template v-for="cat in categories" :key="cat">
-          <div v-if="categoryGroups[cat]?.length" class="novel-section">
-            <div class="ns-header">
-              <h3>{{ cat }}</h3>
-              <el-button text type="primary" size="small"
-                @click="$router.push(`/category/${encodeURIComponent(cat)}`)">
-                查看全部 {{ (catStats[cat]?.novel_count || categoryGroups[cat].length) }} 部 <el-icon><ArrowRight /></el-icon>
-              </el-button>
-            </div>
-
-            <div v-if="novelView === 'grid'" class="card-grid">
-              <NovelCard v-for="novel in categoryGroups[cat].slice(0,3)" :key="novel.id"
-                :novel="novel" @click="$router.push(`/novel/${novel.id}`)" />
-            </div>
-
-            <el-table v-else :data="categoryGroups[cat].slice(0,3)" stripe size="small"
-              @row-click="(r:any)=>$router.push(`/novel/${r.id}`)" style="cursor:pointer">
-              <el-table-column label="封面" width="60">
-                <template #default="{row}">
-                  <el-image v-if="row.cover_url" :src="row.cover_url" fit="cover" style="width:36px;height:48px;border-radius:3px"/>
-                  <div v-else style="width:36px;height:48px;border-radius:3px;background:#e0e0e0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#999">封</div>
-                </template>
-              </el-table-column>
-              <el-table-column label="作品" min-width="180"><template #default="{row}"><span style="font-weight:500">{{row.title}}</span></template></el-table-column>
-              <el-table-column label="作者" width="90"><template #default="{row}"><router-link :to="`/author/${row.author_id}`" @click.stop>{{row.author_name || row.author?.nickname || row.author?.username || '—'}}</router-link></template></el-table-column>
-              <el-table-column prop="total_words" label="字数" width="80"/>
-              <el-table-column prop="total_chapters" label="章节" width="60"/>
-              <el-table-column label="更新" width="90"><template #default="{row}">{{formatDate(row.updated_at)}}</template></el-table-column>
-            </el-table>
-          </div>
-        </template>
-        <el-empty v-if="!loading && total===0" description="暂无作品"/>
-      </div>
+      <el-empty v-if="!orderedModules.length" description="暂无可展示的模块" />
     </div>
 
     <div class="view-toggle-float">
@@ -150,6 +70,7 @@
           <el-icon :size="22"><Grid v-if="novelView==='table'"/><List v-else/></el-icon>
         </el-button>
       </el-tooltip>
+    </div>
 
     <!-- ====== 推荐说明弹窗（176号令 算法透明度） ====== -->
     <el-dialog v-model="showAlgo" title="📊 推荐说明" width="560px">
@@ -159,7 +80,6 @@
 
     <!-- ====== 公告详情/列表弹窗 ====== -->
     <el-dialog v-model="noticeDlg.visible" :title="noticeDlg.item?.title || '公告'" width="600px">
-      <!-- 公告内容支持 Markdown（Cherry 引擎渲染 + DOMPurify 兜底，与阅读器一致） -->
       <div class="notice-dlg-content md-body" v-html="noticeHtml"></div>
       <div class="notice-dlg-date">发布于 {{ (noticeDlg.item?.created_at || '').slice(0, 10) }}</div>
     </el-dialog>
@@ -171,7 +91,6 @@
         <span class="notice-list-date">{{ (a.created_at || '').slice(0, 10) }}</span>
       </div>
     </el-dialog>
-    </div>
   </div>
 </template>
 
@@ -179,32 +98,32 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useRoute, useRouter } from 'vue-router';
-import { novelApi, type Novel } from '@/api/novel';
 import { useAuthStore } from '@/stores/auth';
 import { useAppStore } from '@/stores/app';
 import { appPrefix } from '@/utils/prefix';
 import { renderMarkdown } from '@/markdown/renderer';
-import NovelCard from '@/components/NovelCard.vue';
 import HomeSearchResults from '@/components/HomeSearchResults.vue';
+import HomeModuleSection from '@/components/home/HomeModuleSection.vue';
 import { Grid, List, Plus, ArrowRight, Search } from '@element-plus/icons-vue';
 
 const authStore = useAuthStore();
 const appStore = useAppStore();
 const route = useRoute();
 const router = useRouter();
-// 分类列表与站点名来自应用级聚合 batch（stores/app.ts），Home 不再单独请求
-const { categories, siteName } = storeToRefs(appStore);
-const loading = ref(false);
-const total = ref(0);
-const catStyle = ref<'tags'|'blocks'>('tags');
+// 分类列表与站点名来自应用级聚合 batch（stores/app.ts）；首页主模块也来自此处
+const { categories, siteName, homeModule } = storeToRefs(appStore);
 const novelView = ref<'grid'|'table'>('grid');
-const sortBy = ref<'featured'|'newest'|'updated'>('featured');
-const categoryGroups = ref<Record<string,Novel[]>>({});
-const catStats = ref<Record<string,{novel_count:number;novels:Novel[]}>>({});
+
+// ====== 模块化首页顺序：主模块在前，其余模块作为副区块（管理员后台可配置） ======
+const MODULE_ALL = ['novels', 'blogs', 'forums'] as const;
+const orderedModules = computed<string[]>(() => {
+  const primary = homeModule.value === 'combined' ? 'novels' : (homeModule.value || 'novels');
+  return [primary, ...MODULE_ALL.filter((m) => m !== primary)];
+});
 
 // ====== 搜索模式 ======
 const searchKeyword = ref('');
-const searchResults = ref<Novel[]>([]);
+const searchResults = ref<any[]>([]);
 const searchAuthors = ref<any[]>([]);
 const searchAuthorTotal = ref(0);
 const searchBlogs = ref<any[]>([]);
@@ -219,62 +138,23 @@ const searchPageSize = 12;
 
 function formatDate(d?:string){return d?new Date(d).toLocaleDateString('zh-CN'):''}
 
-function groupByCategory(list:Novel[]):Record<string,Novel[]>{
-  const g:Record<string,Novel[]>={};
-  for(const n of list){
-    const cs=(n.categories&&n.categories.length>0)?n.categories:(n.category?[n.category]:['其他']);
-    for(const c of cs){if(!g[c])g[c]=[];g[c].push(n)}
-  }
-  return g;
-}
-
-async function reloadAll(){
-  loading.value=true;
-  try{
-    const params:any={page:1,page_size:60};
-    if(sortBy.value==='newest')params.sort_by='created_at';
-    else if(sortBy.value==='updated')params.sort_by='updated_at';
-    else params.sort_by='featured';
-    const res=await novelApi.getNovels(params);
-    const list:Novel[]=res.data.data.list||[];
-    total.value=res.data.data.total||0;
-    categoryGroups.value=groupByCategory(list);
-  }catch(e){console.error(e)}
-  finally{loading.value=false}
-}
-
 // ====== 公告栏 + 算法说明（176号令合规） ======
 const announcements = ref<any[]>([]);
 const showAllNotice = ref(false);
 const noticeDlg = reactive({ visible: false, item: null as any });
 const algoDescription = ref('');
 const showAlgo = ref(false);
-// 公告内容 Markdown 渲染（Cherry 引擎，与阅读器/博客一致）
 const noticeHtml = computed(() => renderMarkdown(noticeDlg.item?.content || ''));
 
-// ====== 聚合加载：首屏由应用级 bootstrap 的 1 次 /api/batch 一并带回 ======
-// 分类列表 / 站点名 / 公告 / 算法说明 / 分类统计 / 作品列表 全部来自 stores/app.ts 的聚合通道；
-// SPA 内后进入首页时由 ensureHomeLoaded() 自行拉取一次（幂等）。
+// 首屏由应用级 bootstrap 的 /api/batch 一并带回公告与算法说明
 async function loadHomeInitial(){
-  loading.value=true;
   try{
     await appStore.ensureHomeLoaded();
-    const d=appStore.homeData;
-    if(!d)return;
-    announcements.value=d.announcements||[];
-    if(d.algo)algoDescription.value=d.algo;
-    if(d.catStats){
-      const m:Record<string,any>={};
-      for(const item of d.catStats as any[])m[item.name]=item;
-      catStats.value=m;
-    }
-    if(d.novels){
-      const list:Novel[]=d.novels.list||[];
-      total.value=d.novels.total||0;
-      categoryGroups.value=groupByCategory(list);
-    }
-  }catch(e){console.error(e)}
-  finally{loading.value=false}
+    const d = appStore.homeData;
+    if(!d) return;
+    announcements.value = d.announcements || [];
+    if(d.algo) algoDescription.value = d.algo;
+  }catch(e){ console.error(e); }
 }
 onMounted(async()=>{
   await loadHomeInitial();
@@ -285,8 +165,6 @@ async function doSearch() {
   if (!searchKeyword.value) return;
   searchLoading.value = true;
   try {
-    // 统一搜索：一次返回 作品 / 作者 / 博客 / HTML 扩展
-    // 🔀 站点路径前缀支持：API 请求附加当前前缀（如 /go-nvs，智能解析无硬编码）
     const res = await fetch(`${appPrefix}/api/search?q=${encodeURIComponent(searchKeyword.value)}`).then(r => r.json());
     if (res.code === 0) {
       const d = res.data;
@@ -294,9 +172,6 @@ async function doSearch() {
       searchAuthors.value = d.authors || [];
       searchBlogs.value = d.blogs || [];
       searchHtmls.value = d.htmls || [];
-      searchCategories.value = d.categories || [];
-      searchTopics.value = d.topics || [];
-      searchForums.value = d.forums || [];
       searchCategories.value = d.categories || [];
       searchTopics.value = d.topics || [];
       searchForums.value = d.forums || [];
@@ -318,10 +193,8 @@ function clearSearch() {
   searchBlogs.value = [];
   searchHtmls.value = [];
   router.replace({ query: {} });
-  // 也同步更新 NavBar 中的搜索框（通过 URL 清除）
 }
 
-// 监听 URL 搜索参数变化
 watch(
   () => route.query.search,
   (newSearch) => {
@@ -330,7 +203,6 @@ watch(
       searchPage.value = 1;
       doSearch();
     } else if (!newSearch) {
-      // URL 中搜索参数被清除时也重置状态
       searchKeyword.value = '';
       searchResults.value = [];
       searchTotal.value = 0;
@@ -354,97 +226,12 @@ watch(
 .notice-item { cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
 .notice-item:hover { text-decoration: underline; }
 .notice-more { flex-shrink: 0; cursor: pointer; color: var(--el-color-primary); font-size: 0.8rem; }
-/* 公告弹窗内容（el-dialog 挂载于 body，需全局作用域） */
 .notice-dlg-content { white-space: pre-wrap; line-height: 1.8; }
 .notice-dlg-date { color: var(--text-light, #999); font-size: 0.8rem; margin-top: 8px; }
 .notice-list-item { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px dashed var(--el-border-color); }
 .notice-list-title { flex: 1; cursor: pointer; }
 .notice-list-title:hover { color: var(--el-color-primary); }
 .notice-list-date { color: var(--text-light, #999); font-size: 0.8rem; }
-/* ====== Hero Carousel — 2024 Modern ====== */
-/* ====== Search Results Section ====== */
-.search-results-section {
-  max-width: var(--page-max-width, 1280px);
-  margin: 0 auto 24px;
-  padding: 0 20px;
-}
-
-.search-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  padding: 16px 20px;
-  background: var(--card-bg, #fff);
-  border-radius: var(--radius-lg, 12px);
-  border: 1px solid var(--border-color, #e5e7eb);
-}
-
-.search-header h2 {
-  font-size: 1.2rem;
-  color: var(--primary-color);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  flex-wrap: wrap;
-}
-
-.search-keyword {
-  color: var(--accent-color, #6366f1);
-  font-weight: 600;
-}
-
-.search-count {
-  font-size: 0.85rem;
-  color: var(--text-light, #999);
-  font-weight: 400;
-  margin-left: 4px;
-}
-
-.search-results-section .card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 20px;
-  margin-bottom: 20px;
-}
-
-.search-results-section .pagination {
-  display: flex;
-  justify-content: center;
-  margin-top: 24px;
-  margin-bottom: 8px;
-}
-
-/* Dark mode for search */
-[data-theme="dark"] .search-header {
-  background: rgba(255,255,255,.04);
-  border-color: rgba(255,255,255,.08);
-}
-
-[data-theme="dark"] .search-header h2 {
-  color: #e2e8f0;
-}
-
-[data-theme="dark"] .search-keyword {
-  color: #818cf8;
-}
-
-[data-theme="dark"] .search-count {
-  color: rgba(255,255,255,.5);
-}
-
-.author-search-row { display: flex; flex-wrap: wrap; gap: 10px; }
-.author-chip {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 14px;
-  background: #fff; border-radius: 10px;
-  border: 1px solid #eee;
-  cursor: pointer; transition: box-shadow 0.2s;
-}
-.author-chip:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-.author-chip-name { font-weight: 500; font-size: 0.9rem; }
-[data-theme="dark"] .author-chip { background: #1e293b; border-color: #334155; }
 
 /* ====== Hero Section ====== */
 .hero-section {
@@ -536,12 +323,8 @@ watch(
   border-color: rgba(255,255,255,.08);
   box-shadow: none;
 }
-[data-theme="dark"] .hero-glass h1 {
-  color: #fff;
-}
-[data-theme="dark"] .hero-glass p {
-  color: rgba(255,255,255,.65);
-}
+[data-theme="dark"] .hero-glass h1 { color: #fff; }
+[data-theme="dark"] .hero-glass p { color: rgba(255,255,255,.65); }
 [data-theme="dark"] .hero-cat-chip {
   background: rgba(255,255,255,.1);
   color: rgba(255,255,255,.85);
@@ -557,403 +340,12 @@ watch(
   color: rgba(255,255,255,.85);
 }
 
-.banner-carousel-wrapper {
-  display: none;
-}
-.banner-carousel-wrapper {
-  margin-bottom: 4px;
-}
-.banner-carousel-wrapper :deep(.el-carousel__indicators) {
-  bottom: 8px;
-}
-.banner-carousel-wrapper :deep(.el-carousel__indicator .el-carousel__button) {
-  background: rgba(255,255,255,.5);
-  opacity: .5;
-  width: 24px;
-  height: 4px;
-  border-radius: 2px;
-  transition: all var(--transition-fast);
-}
-.banner-carousel-wrapper :deep(.el-carousel__indicator.is-active .el-carousel__button) {
-  background: #fff;
-  opacity: 1;
-  width: 36px;
-}
-
-.banner-slide {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  overflow: hidden;
-}
-
-/* Flowing gradient background animation */
-.banner-slide::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  opacity: 0.3;
-  background: linear-gradient(
-    270deg,
-    rgba(255,255,255,0.06) 0%,
-    rgba(255,255,255,0.15) 25%,
-    rgba(255,255,255,0.06) 50%,
-    rgba(255,255,255,0.15) 75%,
-    rgba(255,255,255,0.06) 100%
-  );
-  background-size: 400% 100%;
-  animation: bannerFlow 8s ease-in-out infinite;
-}
-
-@keyframes bannerFlow {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-}
-
-/* Glow orb */
-.banner-glow {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1;
-  animation: bannerGlowPulse 5s ease-in-out infinite alternate;
-}
-
-@keyframes bannerGlowPulse {
-  0% { opacity: 0.5; transform: scale(1); }
-  100% { opacity: 1; transform: scale(1.1); }
-}
-
-/* Glass card */
-.banner-glass-card {
-  position: relative;
-  z-index: 2;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 24px;
-  padding: 36px 56px;
-  text-align: center;
-  color: #fff;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  animation: bannerCardFloat 6s ease-in-out infinite;
-  max-width: 560px;
-  cursor: default;
-  transition: all var(--transition-base);
-}
-
-.banner-glass-card:hover {
-  background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.3);
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.18);
-}
-
-@keyframes bannerCardFloat {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
-}
-
-.banner-icon {
-  font-size: 3.2rem;
-  margin-bottom: 16px;
-  filter: drop-shadow(0 2px 12px rgba(0,0,0,.35));
-}
-
-.banner-glass-card h2 {
-  font-size: 2.4rem;
-  font-weight: 200;
-  letter-spacing: -0.03em;
-  margin-bottom: 10px;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
-  line-height: 1.2;
-}
-
-.banner-glass-card p {
-  font-size: 1.1rem;
-  font-weight: 300;
-  opacity: 0.85;
-  margin-bottom: 20px;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
-  letter-spacing: 0.01em;
-}
-
-.banner-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 9999px;
-  padding: 10px 28px;
-  font-size: 0.95rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  backdrop-filter: blur(6px);
-  letter-spacing: 0.02em;
-}
-
-.banner-action:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
-}
-
-.banner-arrow {
-  transition: transform var(--transition-fast);
-}
-
-.banner-action:hover .banner-arrow {
-  transform: translateX(4px);
-}
-
-/* Floating particles */
-.banner-particles {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.banner-particle {
-  position: absolute;
-  bottom: -10px;
-  width: 5px;
-  height: 5px;
-  background: rgba(255, 255, 255, 0.55);
-  border-radius: 50%;
-  box-shadow: 0 0 6px rgba(255,255,255,0.3);
-  animation: particleRise linear infinite;
-}
-
-@keyframes particleRise {
-  0% {
-    bottom: -10px;
-    opacity: 0;
-    transform: translateX(0) scale(0.3);
-  }
-  15% {
-    opacity: 1;
-  }
-  85% {
-    opacity: 0.4;
-  }
-  100% {
-    bottom: 115%;
-    opacity: 0;
-    transform: translateX(30px) scale(1.4);
-  }
-}
-
-/* ====== Dark Mode Carousel ====== */
-[data-theme="dark"] .banner-glass-card {
-  background: rgba(15, 17, 23, 0.55);
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  color: #e2e8f0;
-}
-
-[data-theme="dark"] .banner-glass-card:hover {
-  background: rgba(15, 17, 23, 0.65);
-}
-
-[data-theme="dark"] .banner-glass-card h2 {
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
-}
-
-[data-theme="dark"] .banner-glass-card p {
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
-}
-
-[data-theme="dark"] .banner-action {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-}
-
-[data-theme="dark"] .banner-action:hover {
-  background: rgba(255, 255, 255, 0.14);
-}
-
-[data-theme="dark"] .banner-particle {
-  background: rgba(255, 255, 255, 0.35);
-}
-
-[data-theme="dark"] .banner-carousel-wrapper :deep(.el-carousel__indicator .el-carousel__button) {
-  background: rgba(255,255,255,.25);
-}
-
 /* ====== Page Layout ====== */
 .home-top-bar {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 16px;
   gap: 10px;
-}
-
-/* Category Zone */
-.category-zone {
-  background: #fff;
-  border-radius: var(--radius-lg);
-  padding: 24px 28px;
-  margin-bottom: 28px;
-  box-shadow: var(--shadow-card);
-}
-[data-theme="dark"] .category-zone {
-  background: #1a1d27;
-  box-shadow: var(--shadow-card);
-}
-
-.cz-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-.cz-header h2 {
-  font-size: 1.3rem;
-  color: var(--text-color);
-  font-weight: 300;
-  letter-spacing: -0.02em;
-}
-
-.cat-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.cat-tags .el-button {
-  font-size: 0.9rem;
-  border-radius: var(--radius-full) !important;
-}
-.cat-count {
-  display: inline-block;
-  background: rgba(99,102,241,.12);
-  color: #6366f1;
-  padding: 0 7px;
-  border-radius: var(--radius-full);
-  margin-left: 4px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  min-width: 22px;
-  text-align: center;
-}
-
-.cat-blocks {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
-  gap: 14px;
-}
-.cat-block-card {
-  cursor: pointer;
-  background: var(--bg-soft);
-  border-radius: var(--radius-md);
-  padding: 18px;
-  text-align: center;
-  transition: all var(--transition-base);
-  border: 2px solid transparent;
-}
-.cat-block-card:hover {
-  background: #eef2ff;
-  border-color: var(--primary-color);
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-md);
-}
-[data-theme="dark"] .cat-block-card {
-  background: #1a1d27;
-}
-[data-theme="dark"] .cat-block-card:hover {
-  background: #1e293b;
-  box-shadow: var(--shadow-md);
-}
-.cbc-cover-row {
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  gap: 2px;
-  height: 72px;
-  margin-bottom: 12px;
-}
-.cbc-cover {
-  position: relative;
-}
-.cbc-cover-ph {
-  width: 48px;
-  height: 64px;
-  border-radius: 4px;
-  border: 2px solid #fff;
-  box-shadow: 0 1px 3px rgba(0,0,0,.12);
-  background: #e2e8f0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #94a3b8;
-  font-size: 11px;
-}
-[data-theme="dark"] .cbc-cover-ph {
-  background: #334155;
-  border-color: #475569;
-  color: #64748b;
-  box-shadow: 0 1px 3px rgba(0,0,0,.3);
-}
-.cbc-cover-empty {
-  font-size: 2rem;
-  opacity: .4;
-}
-.cbc-name {
-  font-weight: 500;
-  color: var(--text-color);
-  font-size: 0.95rem;
-  margin-bottom: 4px;
-}
-.cbc-count {
-  font-size: 0.75rem;
-  color: var(--text-light);
-}
-
-/* Novel Sections */
-.global-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
-  gap: 12px;
-  background: #fff;
-  padding: 14px 20px;
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-}
-[data-theme="dark"] .global-toolbar {
-  background: #1a1d27;
-  box-shadow: var(--shadow-sm);
-}
-.novel-section {
-  margin-bottom: 32px;
-}
-.ns-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 14px;
-}
-.ns-header h3 {
-  font-size: 1.15rem;
-  font-weight: 300;
-  color: var(--text-color);
-  letter-spacing: -0.01em;
-  border-left: 3px solid var(--primary-color);
-  padding-left: 12px;
-}
-
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 20px;
 }
 
 /* Float Toggle */
@@ -975,88 +367,14 @@ watch(
   box-shadow: var(--shadow-xl);
 }
 
-/* Dark: table placeholder fix */
-[data-theme="dark"] .el-table .cbc-cover-ph,
-[data-theme="dark"] .novel-section [style*="background:#e0e0e0"] {
-  background: #334155 !important;
-  color: #64748b !important;
-}
-
 /* ====== 移动端首页适配 ====== */
 @media (max-width: 768px) {
-  .hero-section {
-    height: 150px;
-    margin-bottom: 16px;
-  }
-  .hero-glass {
-    padding: 18px 16px;
-    width: calc(100% - 24px);
-  }
-  .hero-glass h1 {
-    font-size: 1.3rem;
-    margin-bottom: 4px;
-  }
-  .hero-glass p {
-    font-size: 0.8rem;
-    margin-bottom: 10px;
-  }
-  .hero-cat-chip {
-    padding: 4px 12px;
-    font-size: 0.75rem;
-  }
-  .category-zone {
-    padding: 16px 14px;
-    margin-bottom: 18px;
-  }
-  .cz-header {
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-  .cz-header h2 {
-    font-size: 1.1rem;
-  }
-  .cat-blocks {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 10px;
-  }
-  .global-toolbar {
-    padding: 12px 10px;
-    gap: 8px;
-  }
-  .global-toolbar .el-radio-group {
-    width: 100%;
-    display: flex;
-  }
-  .global-toolbar .el-radio-group .el-radio-button {
-    flex: 1;
-  }
-  .global-toolbar .el-radio-group .el-radio-button__inner {
-    width: 100%;
-  }
-  .ns-header {
-    margin-bottom: 10px;
-  }
-  .ns-header h3 {
-    font-size: 1rem;
-  }
-  .home-top-bar .el-button {
-    width: 100%;
-  }
-  /* 浮动切换按钮：避开底部安全区 */
-  .view-toggle-float {
-    bottom: calc(16px + env(safe-area-inset-bottom));
-    right: 16px;
-  }
-  .view-toggle-float .el-button {
-    width: 48px;
-    height: 48px;
-  }
-  /* 首页表格视图窄屏允许横向滚动 */
-  .novel-section .el-table {
-    min-width: 560px;
-  }
-  .novel-section {
-    overflow-x: auto;
-  }
+  .hero-section { height: 150px; margin-bottom: 16px; }
+  .hero-glass { padding: 18px 16px; width: calc(100% - 24px); }
+  .hero-glass h1 { font-size: 1.3rem; margin-bottom: 4px; }
+  .hero-glass p { font-size: 0.8rem; margin-bottom: 10px; }
+  .hero-cat-chip { padding: 4px 12px; font-size: 0.75rem; }
+  .view-toggle-float { bottom: calc(16px + env(safe-area-inset-bottom)); right: 16px; }
+  .view-toggle-float .el-button { width: 48px; height: 48px; }
 }
 </style>
