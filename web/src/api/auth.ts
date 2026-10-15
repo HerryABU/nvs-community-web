@@ -59,6 +59,12 @@ export const authApi = {
     return api.post('/auth/logout');
   },
 
+  // 无感续期：携带 HttpOnly 刷新令牌 Cookie，向后端换取新的访问令牌 Cookie。
+  // 成功返回 code=0；失败（刷新令牌缺失/过期）返回 401，由前端引导重新登录。
+  refreshToken() {
+    return api.post<{ code: number; message: string }>('/auth/refresh');
+  },
+
   // ======== 滑块验证码（货真价实服务端校验） ========
   // issue：向服务端请求一次拼图挑战（返回缺口背景图 + 拼图块 PNG 的 base64）
   captchaIssue() {

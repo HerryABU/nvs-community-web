@@ -112,13 +112,19 @@ func Register(c *gin.Context) {
 	// 合规审计：注册成功
 	recordUserAudit(c, user.ID, models.AuditRegister, "新用户注册，邮箱 "+user.Email, "success")
 
-	// 生成 JWT 并设置 Cookie
-	token, err := utils.GenerateToken(user.ID, user.Email, user.Role)
+	// 生成访问令牌 + 刷新令牌，均写入 HttpOnly Cookie
+	accessToken, err := utils.GenerateToken(user.ID, user.Email, user.Role)
 	if err != nil {
 		utils.InternalError(c, "Token 生成失败")
 		return
 	}
-	middleware.SetTokenCookie(c, token)
+	refreshToken, err := utils.GenerateRefreshToken(user.ID, user.Email, user.Role)
+	if err != nil {
+		utils.InternalError(c, "Refresh Token 生成失败")
+		return
+	}
+	middleware.SetTokenCookie(c, accessToken)
+	middleware.SetRefreshCookie(c, refreshToken)
 
 	utils.SuccessMessage(c, "注册成功", gin.H{
 		"user": user,

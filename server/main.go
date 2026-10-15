@@ -195,6 +195,8 @@ func main() {
 		public.POST("/auth/register", security.RateLimit(10, 60), handlers.Register) // 安全审计 M2：注册限流防批量灌号
 		public.POST("/auth/login", security.RateLimit(5, 60), handlers.Login)
 		public.POST("/auth/logout", handlers.Logout)
+		// 🔒 无感续期：校验 HttpOnly 刷新令牌 Cookie，签发新的访问令牌（不要求已登录）
+		public.POST("/auth/refresh", handlers.Refresh)
 		// 🔒 滑块验证码挑战（货真价实服务端校验）：先 issue 拿到拼图，再 verify 拿 pass token，
 		// 后续 /send-code、/register 必须携带该 token，否则拒绝（防裸调/邮箱轰炸）。
 		public.POST("/auth/captcha/issue", handlers.IssueCaptcha)

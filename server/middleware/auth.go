@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"strconv"
 
 	"nvs-server/config"
 	"nvs-server/utils"
@@ -115,6 +116,39 @@ func SetTokenCookie(c *gin.Context, token string) {
 func ClearTokenCookie(c *gin.Context) {
 	c.SetCookie(
 		"token",
+		"",
+		-1,
+		"/",
+		"",
+		config.ForceCookieSecure,
+		true, // HttpOnly
+	)
+	c.SetSameSite(http.SameSiteLaxMode)
+}
+
+// SetRefreshCookie 设置长期刷新令牌 Cookie（HttpOnly + SameSite=Lax，与访问令牌同安全属性）。
+// 有效期取 JWTRefreshExpireHours（默认 720h），仅用于 /api/auth/refresh 无感续期。
+func SetRefreshCookie(c *gin.Context, token string) {
+	expireHours, err := strconv.Atoi(config.JWTRefreshExpireHours)
+	if err != nil || expireHours <= 0 {
+		expireHours = 720
+	}
+	c.SetCookie(
+		"refresh_token",
+		token,
+		expireHours*3600,
+		"/",
+		"",
+		config.ForceCookieSecure, // Secure: 生产 HTTPS 下由 COOKIE_SECURE=true 开启
+		true,                     // HttpOnly：禁止 JS 读取，防 XSS 窃取
+	)
+	c.SetSameSite(http.SameSiteLaxMode)
+}
+
+// ClearRefreshCookie 清除刷新令牌 Cookie（登出 / 刷新令牌失效时调用）
+func ClearRefreshCookie(c *gin.Context) {
+	c.SetCookie(
+		"refresh_token",
 		"",
 		-1,
 		"/",

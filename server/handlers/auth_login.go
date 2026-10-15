@@ -82,13 +82,19 @@ func Login(c *gin.Context) {
 		"last_login_at": &now,
 	})
 
-	// 生成 JWT 并设置 Cookie
-	token, err := utils.GenerateToken(user.ID, user.Email, user.Role)
+	// 生成访问令牌 + 刷新令牌，均写入 HttpOnly Cookie
+	accessToken, err := utils.GenerateToken(user.ID, user.Email, user.Role)
 	if err != nil {
 		utils.InternalError(c, "Token 生成失败")
 		return
 	}
-	middleware.SetTokenCookie(c, token)
+	refreshToken, err := utils.GenerateRefreshToken(user.ID, user.Email, user.Role)
+	if err != nil {
+		utils.InternalError(c, "Refresh Token 生成失败")
+		return
+	}
+	middleware.SetTokenCookie(c, accessToken)
+	middleware.SetRefreshCookie(c, refreshToken)
 
 	utils.SuccessMessage(c, "登录成功", gin.H{
 		"user": user,
@@ -125,5 +131,49 @@ func Logout(c *gin.Context) {
 		}
 	}
 	middleware.ClearTokenCookie(c)
+	middleware.ClearRefreshCookie(c)
 	utils.SuccessMessage(c, "已退出登录", nil)
+}
+
+// POST /api/auth/refresh
+// 无感续期：校验 HttpOnly 刷新令牌 Cookie，签发新的访问令牌（并轮换刷新令牌），
+// 失败（令牌缺失/过期/非法）则清除全部会话 Cookie 并返回 401，由前端引导重新登录。
+func Refresh(c *gin.Context) {
+	recordInbound(c, "auth-refresh")
+	rt, err := c.Cookie("refresh_token")
+	if err != nil || rt == "" {
+		middleware.ClearTokenCookie(c)
+		middleware.ClearRefreshCookie(c)
+		utils.Unauthorized(c, "会话已过期，请重新登录")
+		return
+	}
+	claims, err := utils.ParseRefreshToken(rt)
+	if err != nil {
+		middleware.ClearTokenCookie(c)
+		middleware.ClearRefreshCookie(c)
+		utils.Unauthorized(c, "刷新令牌无效或已过期")
+		return
+	}
+
+	// 校验用户仍然存在（防止已注销账号的刷新令牌被继续利用）
+	if _, uerr := models.GetUserByID(claims.UserID); uerr != nil {
+		middleware.ClearTokenCookie(c)
+		middleware.ClearRefreshCookie(c)
+		utils.Unauthorized(c, "账号不存在或已注销")
+		return
+	}
+
+	accessToken, err := utils.GenerateToken(claims.UserID, claims.Email, claims.Role)
+	if err != nil {
+		utils.InternalError(c, "Token 生成失败")
+		return
+	}
+	newRefresh, err := utils.GenerateRefreshToken(claims.UserID, claims.Email, claims.Role)
+	if err != nil {
+		utils.InternalError(c, "Refresh Token 生成失败")
+		return
+	}
+	middleware.SetTokenCookie(c, accessToken)
+	middleware.SetRefreshCookie(c, newRefresh)
+	utils.SuccessMessage(c, "已续期", nil)
 }

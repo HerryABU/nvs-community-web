@@ -125,6 +125,8 @@ var (
 	// JWT
 	JWTSecret      string
 	JWTExpireHours string
+	// JWTRefreshExpireHours 刷新令牌有效期（小时），默认 720（30 天），用于无感续期会话
+	JWTRefreshExpireHours string
 
 	// File storage
 	NovelDataDir string
@@ -196,6 +198,7 @@ func Init() {
 
 	JWTSecret = getEnv("JWT_SECRET", "change-me-in-production")
 	JWTExpireHours = getEnv("JWT_EXPIRE_HOURS", "72")
+	JWTRefreshExpireHours = getEnv("JWT_REFRESH_EXPIRE_HOURS", "720")
 	// 🔒 安全审计 S1：默认 JWT_SECRET 为公开值，可被伪造任意管理员 Token。
 	// 使用默认值时自动替换为随机密钥并持久化（data/.jwt_secret，0600），自定义值保持不变。
 	if JWTSecret == "change-me-in-production" || JWTSecret == "change-me-in-production-please-use-a-strong-random-string" {

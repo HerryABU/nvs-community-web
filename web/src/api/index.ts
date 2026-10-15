@@ -1,6 +1,13 @@
 import axios from 'axios';
 import { appPrefix } from '@/utils/prefix';
 
+// 为 AxiosRequestConfig 扩展内部标记字段（仅本拦截器使用，不影响外部类型）
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    _retry?: boolean;
+  }
+}
+
 // 🔀 站点路径前缀支持（URL_PREFIX，如 /go-nvs——名字可任意配置）：
 // 经 getAppPrefix() 智能解析：后端注入的 window.__NVS_PREFIX__ 优先，
 // 自建反向代理只改写 <base href> 时自动从 document.baseURI 推导（无硬编码）。
@@ -30,21 +37,81 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// 响应拦截器：统一错误处理
+// 响应拦截器：统一错误处理 + 访问令牌过期无感续期
+// 🔒 安全设计：访问令牌（token Cookie）短期有效，过期返回 401 时，
+// 拦截器静默调用 /api/auth/refresh（携带 HttpOnly 刷新令牌 Cookie）换发新令牌，
+// 成功后自动重试原请求；仅当刷新也失败才跳转登录。全程不暴露令牌给 JS，防 XSS 窃取。
+let isRefreshing = false;
+// 并发 401 时排队，等刷新完成后统一重试，避免重复刷新
+let refreshSubscribers: Array<(ok: boolean) => void> = [];
+
+function subscribeTokenRefresh(cb: (ok: boolean) => void) {
+  refreshSubscribers.push(cb);
+}
+function onRefreshed(ok: boolean) {
+  refreshSubscribers.forEach((cb) => cb(ok));
+  refreshSubscribers = [];
+}
+
+async function silentRefresh(): Promise<boolean> {
+  if (isRefreshing) {
+    // 已有刷新在途，等待其结果
+    return new Promise<boolean>((resolve) => subscribeTokenRefresh(resolve));
+  }
+  isRefreshing = true;
+  try {
+    // 动态导入避免与 auth.ts（其又导入本文件）形成静态循环依赖
+    const { authApi } = await import('@/api/auth');
+    await authApi.refreshToken();
+    isRefreshing = false;
+    onRefreshed(true);
+    return true;
+  } catch {
+    isRefreshing = false;
+    onRefreshed(false);
+    // 刷新失败：清理本地登录态并跳转登录
+    try {
+      const { useAuthStore } = await import('@/stores/auth');
+      useAuthStore().user = null;
+    } catch {
+      /* 忽略 store 异常 */
+    }
+    const loginPath = apiPrefix + '/login';
+    if (window.location.pathname !== loginPath) {
+      window.location.href = loginPath;
+    }
+    return false;
+  }
+}
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response) {
-      const { status, data } = error.response;
-      // 登录页路径需带前缀（前缀挂载时 /login 不带 /go-nvs 会 404）
-      const loginPath = apiPrefix + '/login';
+  async (error) => {
+    const { config, response } = error;
+    if (response) {
+      const { status, data } = response;
       switch (status) {
-        case 401:
-          // 未认证，跳转登录
-          if (window.location.pathname !== loginPath) {
-            window.location.href = loginPath;
+        case 401: {
+          // 刷新端点自身 401 不再递归刷新，直接放行到下方跳转逻辑
+          const url = config?.url || '';
+          if (url.includes('/auth/refresh')) {
+            const loginPath = apiPrefix + '/login';
+            if (window.location.pathname !== loginPath) {
+              window.location.href = loginPath;
+            }
+            break;
+          }
+          // 避免同一请求重复触发刷新
+          if (config && !config._retry) {
+            config._retry = true;
+            const ok = await silentRefresh();
+            if (ok && config) {
+              // 续期成功，重试原请求
+              return api.request(config);
+            }
           }
           break;
+        }
         case 403:
           console.warn('无权限:', data?.message);
           break;
