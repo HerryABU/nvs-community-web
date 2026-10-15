@@ -6,6 +6,7 @@
         <div class="floor-head">
           <span class="floor-no">{{ floor.floor_no || '?' }}楼</span>
           <span class="floor-user">{{ displayName(floor) }}</span>
+          <el-tag v-if="showDeleted(floor)" size="small" type="danger" effect="dark">已删除</el-tag>
           <el-tag v-if="ownerId && floor.user_id === ownerId" size="small" type="danger" effect="plain">楼主</el-tag>
           <span class="floor-time">{{ formatTime(floor.created_at) }}</span>
           <span class="floor-actions">
@@ -35,7 +36,9 @@
             >删除</el-button>
           </span>
         </div>
-        <div class="floor-content cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red">
+        <div class="floor-content cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" :class="{ 'deleted-content': showDeleted(floor) }">
+          <div v-if="showDeleted(floor)" class="deleted-banner">⚠ 该内容已被删除，以下为警方取证留证（删除人：{{ floor.deleted_by === 'admin' ? '管理员' : floor.deleted_by === 'user' ? '用户自删' : '系统' }}）</div>
+          <div v-else-if="floor.is_deleted && !isModerator" class="deleted-placeholder">[ 该内容已删除 ]</div>
           <div v-html="renderMarkdown(floor.content)"></div>
         </div>
 
@@ -51,7 +54,11 @@
             <span v-if="r.reply_to_name" class="reply-arrow">回复</span>
             <span v-if="r.reply_to_name" class="reply-to">{{ r.reply_to_name }}</span>
             <span class="reply-colon">：</span>
-            <span class="reply-body cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" v-html="renderMarkdown(r.content)"></span>
+            <span class="reply-body cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" :class="{ 'deleted-content': showDeleted(r) }">
+              <el-tag v-if="showDeleted(r)" size="small" type="danger" effect="dark" class="reply-deleted-tag">已删除</el-tag>
+              <span v-if="showDeleted(r) === false && r.is_deleted && !isModerator">[ 该内容已删除 ]</span>
+              <span v-html="renderMarkdown(r.content)"></span>
+            </span>
             <span class="reply-meta">
               <span class="reply-time">{{ formatTime(r.created_at) }}</span>
               <el-button v-if="replyable" size="small" text @click="toggleReply(r.id)">回复</el-button>
@@ -138,6 +145,17 @@ const emit = defineEmits<{
 
 const authStore = useAuthStore();
 const expanded = reactive<Record<number, boolean>>({});
+
+// 警方/管理员取证视图：后端仅向这两类角色返回已删除评论（is_deleted），
+// 前端据此以红字标注「已删除」内容。普通用户拿不到已删除评论，即使拿到也只显示占位符。
+const isModerator = computed(() => {
+  const r = authStore.user?.role;
+  return r === 'admin' || r === 'police';
+});
+// 已删除内容是否应以红字展示（仅警方/管理员）
+function showDeleted(item: any) {
+  return isModerator.value && !!item?.is_deleted;
+}
 
 const floors = computed(() =>
   (props.items || []).filter(i => !i.parent_id).sort((a, b) => (a.floor_no || 0) - (b.floor_no || 0)),
@@ -228,6 +246,11 @@ function formatTime(s?: string) {
 </script>
 
 <style scoped>
+.floor-list {
+  /* 🔴 已删除内容标注色（警方/管理员取证视图）——颜色可调，改这一个变量即可 */
+  --deleted-color: #d03050;
+  --deleted-bg: rgba(208, 48, 80, 0.08);
+}
 .floor {
   padding: 14px 0;
   border-bottom: 1px solid #f0f0f0;
@@ -274,6 +297,25 @@ function formatTime(s?: string) {
   line-height: 1.7;
   white-space: normal;
 }
+
+/* ====== 警方/管理员取证视图：已删除内容红字标注 ====== */
+.deleted-content {
+  color: var(--deleted-color);
+  background: var(--deleted-bg);
+  border-left: 3px solid var(--deleted-color);
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+.deleted-content :deep(a),
+.deleted-content :deep(.cherry-previewer) { color: var(--deleted-color); }
+.deleted-banner {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--deleted-color);
+  margin-bottom: 4px;
+}
+.deleted-placeholder { color: var(--text-light, #999); font-style: italic; }
+.reply-deleted-tag { margin-right: 4px; vertical-align: middle; }
 
 /* ====== 楼内回复：贴左缩进 + 浅底，视觉上「属于这一楼」 ====== */
 .floor-replies {
@@ -347,6 +389,8 @@ function formatTime(s?: string) {
 [data-theme="dark"] .floor-user { color: #e2e8f0; }
 [data-theme="dark"] .floor-time { color: #94a3b8; }
 [data-theme="dark"] .floor-content { color: #cbd5e1; }
+[data-theme="dark"] .deleted-content { color: #f89898; border-left-color: #f89898; background: rgba(208,48,80,.15); }
+[data-theme="dark"] .deleted-banner { color: #f89898; }
 [data-theme="dark"] .floor-replies {
   background: rgba(255,255,255,.03);
   border-left-color: rgba(255,255,255,.1);

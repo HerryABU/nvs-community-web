@@ -28,6 +28,7 @@ type Comment struct {
 	Username    string         `gorm:"-" json:"username,omitempty"`
 	ReplyToName string         `gorm:"-" json:"reply_to_name,omitempty"`               // 被回复者昵称（运行时填充，展示「X 回复 Y」）
 	DeletedBy   string         `gorm:"size:16;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
+	IsDeleted   bool           `gorm:"-" json:"is_deleted"`                            // 运行时计算：是否已软删除（警方/管理员取证视图用）
 	CreatedAt   time.Time      `gorm:"index:idx_comments_novel_created,priority:2" json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
@@ -40,6 +41,14 @@ type Comment struct {
 
 func (Comment) TableName() string {
 	return "comments"
+}
+
+// AfterFind 查询后计算 is_deleted（警方/管理员取证视图据此在前端以红字标注已删除内容）。
+// 常规查询被 GORM 软删除作用域过滤，deleted_at 为空 → is_deleted=false；
+// 仅 include_deleted（Unscoped）场景才会取回已删除行，此时 deleted_at 有值 → is_deleted=true。
+func (c *Comment) AfterFind(tx *gorm.DB) error {
+	c.IsDeleted = c.DeletedAt.Valid
+	return nil
 }
 
 // ==================== 楼层模型 ====================
@@ -119,8 +128,10 @@ func fillReplyToName(list []Comment) {
 	}
 }
 
-// loadCommentsPage 通用分页：先取本页楼层，再取这些楼层下的全部回复
-func loadCommentsPage(scope func(*gorm.DB) *gorm.DB, page, pageSize int) (CommentsPage, error) {
+// loadCommentsPage 通用分页：先取本页楼层，再取这些楼层下的全部回复。
+// includeDeleted=true 时（警方/管理员取证视图）用 Unscoped 绕过软删除作用域，
+// 一并取回已删除楼层/回复，由前端以红字标注。
+func loadCommentsPage(scope func(*gorm.DB) *gorm.DB, page, pageSize int, includeDeleted bool) (CommentsPage, error) {
 	var out CommentsPage
 	if page < 1 {
 		page = 1
@@ -129,13 +140,18 @@ func loadCommentsPage(scope func(*gorm.DB) *gorm.DB, page, pageSize int) (Commen
 		pageSize = 20
 	}
 
-	floorQuery := DB.Model(&Comment{}).Scopes(scope).Where("parent_id IS NULL")
+	base := DB
+	if includeDeleted {
+		base = DB.Unscoped()
+	}
+
+	floorQuery := base.Model(&Comment{}).Scopes(scope).Where("parent_id IS NULL")
 	floorQuery.Count(&out.FloorTotal)
 	// 评论总数（含楼内回复）
-	DB.Model(&Comment{}).Scopes(scope).Count(&out.Total)
+	base.Model(&Comment{}).Scopes(scope).Count(&out.Total)
 
 	var floors []Comment
-	if err := DB.Scopes(scope).Where("parent_id IS NULL").
+	if err := base.Scopes(scope).Where("parent_id IS NULL").
 		Preload("User").
 		Order("created_at DESC").
 		Offset((page - 1) * pageSize).Limit(pageSize).
@@ -151,7 +167,7 @@ func loadCommentsPage(scope func(*gorm.DB) *gorm.DB, page, pageSize int) (Commen
 		rootIDs = append(rootIDs, f.ID)
 	}
 	var replies []Comment
-	if err := DB.Where("root_id IN ?", rootIDs).
+	if err := base.Where("root_id IN ?", rootIDs).
 		Preload("User").
 		Order("created_at ASC").
 		Find(&replies).Error; err != nil {
@@ -281,9 +297,9 @@ func novelCommentScope(novelID uint, chapterNumber int) func(*gorm.DB) *gorm.DB 
 	}
 }
 
-// GetCommentsByNovel 作品/章节评论（楼层分页）
-func GetCommentsByNovel(novelID uint, chapterNumber int, page, pageSize int) (CommentsPage, error) {
-	return loadCommentsPage(novelCommentScope(novelID, chapterNumber), page, pageSize)
+// GetCommentsByNovel 作品/章节评论（楼层分页）。includeDeleted=true 时一并返回已删除评论（警方取证视图）。
+func GetCommentsByNovel(novelID uint, chapterNumber int, page, pageSize int, includeDeleted bool) (CommentsPage, error) {
+	return loadCommentsPage(novelCommentScope(novelID, chapterNumber), page, pageSize, includeDeleted)
 }
 
 func GetCommentByID(id uint) (*Comment, error) {
@@ -326,9 +342,9 @@ func DeleteComment(id uint) error {
 	return DB.Delete(&Comment{}, id).Error
 }
 
-// GetCommentsByBlog 博客评论（楼层分页）
-func GetCommentsByBlog(blogID uint, page, pageSize int) (CommentsPage, error) {
+// GetCommentsByBlog 博客评论（楼层分页）。includeDeleted=true 时一并返回已删除评论（警方取证视图）。
+func GetCommentsByBlog(blogID uint, page, pageSize int, includeDeleted bool) (CommentsPage, error) {
 	return loadCommentsPage(func(db *gorm.DB) *gorm.DB {
 		return db.Where("blog_id = ?", blogID)
-	}, page, pageSize)
+	}, page, pageSize, includeDeleted)
 }

@@ -135,6 +135,10 @@ export const adminApi = {
   policeListSoftDel(params?: { type?: string; limit?: number }) {
     return api.get('/police/softdel', { params });
   },
+  // 警方论坛巡查：全部论坛（含封锁/加密/隐藏/软删除），附帖子/回复统计
+  policeListForums() {
+    return api.get<{ code: number; message: string; data: { forums: any[]; total: number } }>('/police/forums');
+  },
   policeGetEvidence(type: string, id: number) {
     return api.get(`/police/evidence/${type}/${id}`);
   },

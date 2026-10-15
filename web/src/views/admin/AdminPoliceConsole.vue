@@ -20,7 +20,9 @@
       style="margin-bottom: 16px"
     />
 
-    <div class="pc-toolbar">
+    <el-tabs v-model="activeTab" type="border-card" class="pc-tabs">
+      <el-tab-pane label="软删除留证" name="softdel">
+      <div class="pc-toolbar">
       <el-select v-model="filterType" placeholder="全部类型" clearable style="width: 200px" @change="loadList">
         <el-option v-for="t in types" :key="t" :label="typeLabel(t)" :value="t" />
       </el-select>
@@ -50,7 +52,12 @@
           </el-button>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
+      </el-tab-pane>
+      <el-tab-pane label="论坛巡查" name="forums" lazy>
+        <PoliceForumPatrol />
+      </el-tab-pane>
+    </el-tabs>
 
     <el-dialog v-model="detailVisible" title="取证凭证详情" width="720px">
       <div v-if="detail">
@@ -81,6 +88,7 @@ import { adminApi } from '@/api/admin';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage } from 'element-plus';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
+import PoliceForumPatrol from './police/PoliceForumPatrol.vue';
 import { Stamp, Search, Download } from '@element-plus/icons-vue';
 
 interface SoftDelRow {
@@ -96,6 +104,7 @@ interface SoftDelRow {
 }
 
 const authStore = useAuthStore();
+const activeTab = ref('softdel');
 const list = ref<SoftDelRow[]>([]);
 const loading = ref(false);
 const exporting = ref(false);
@@ -198,6 +207,8 @@ onMounted(() => {
 <style scoped>
 .admin-page { --admin-content-max: 1280px; min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
 .pc-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.pc-tabs { border: none; background: transparent; }
+.pc-tabs :deep(.el-tabs__content) { padding: 16px 0 0; }
 .pc-count { color: var(--text-light); margin-left: 8px; }
 .pc-snapshot-title { margin: 14px 0 6px; font-weight: 600; }
 .pc-snapshot { max-height: 360px; overflow: auto; background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; font-size: 12px; line-height: 1.5; }

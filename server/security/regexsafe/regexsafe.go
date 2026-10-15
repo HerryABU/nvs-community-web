@@ -31,9 +31,11 @@ const MaxSplitInputBytes = 8 << 20
 const SplitTimeout = 3 * time.Second
 
 // 允许出现在用户自定义拆分规则中的字符白名单：
-// 仅允许构建简单、确定性的正则（字符类、基础元字符、中文字符、常用标点）。
+// 仅允许构建简单、确定性的正则（字符类、基础元字符、 bounded 量词 {n,m}、中文字符、常用标点）。
 // 任何不在此集合内的字符一律拒绝，从语法层面杜绝回溯型构造。
-var allowedRuleChars = regexp.MustCompile(`^[\[\]().*+?^$|\\/\-#:、，。；;,\s\d\w\p{Han}]*$`)
+// 注：{} 为 RE2 有界量词（{n}/{n,}/{n,m}），确定性无回溯，安全放行；
+//     <>(?P<name>) 命名分组未列入白名单（章节拆分无需命名分组）。
+var allowedRuleChars = regexp.MustCompile(`^[\[\](){}.*+?^$|\\/\-#:、，。；;,\s\d\w\p{Han}]*$`)
 
 // 反向引用 \1..\9（回溯型，禁止）。
 var backrefRe = regexp.MustCompile(`\\[1-9]`)
@@ -59,9 +61,15 @@ func ValidateChapterSplitRule(rule string) error {
 	if !allowedRuleChars.MatchString(rule) {
 		return errRuleIllegalChar
 	}
-	// 2) 禁用回溯型结构：环视 (?= (?!) (?<= (?<! 与命名/内联标志之外的 (?
-	if strings.Contains(rule, "(?") {
-		return errRuleLookaround
+	// 2) 禁用回溯型结构：环视 (?= (?!) (?<= (?<!
+	//    注意：只拦截「环视」这四类构造，放行合法内联标志 (?m)/(?i)/(?s)/(?U)
+	//    与命名分组 (?P<name>——它们都是确定性语法，不引入回溯。
+	//    （Go RE2 本就不支持环视，此处为纵深防御；此前误用 strings.Contains(rule,"(?")
+	//     会把 (?m) 等合法标志一并拒绝，导致含 (?m) 的规则被误判为非法而回退自动识别。）
+	for _, pat := range []string{"(?=", "(?!", "(?<=", "(?<!"} {
+		if strings.Contains(rule, pat) {
+			return errRuleLookaround
+		}
 	}
 	// 3) 反向引用 \1..\9
 	if backrefRe.MatchString(rule) {

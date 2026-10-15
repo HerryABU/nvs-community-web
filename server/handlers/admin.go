@@ -357,3 +357,16 @@ func isAdminUser(c *gin.Context) bool {
 	user, _ := models.GetUserByID(userID)
 	return user != nil && user.Role == "admin"
 }
+
+// isPoliceOrAdminUser 非阻断式判断当前用户是否具备「警方取管台 / 管理员」权限。
+// 用于前台取证豁免：警方可越过房间号/密码门禁查看封锁、加密、隐藏论坛，
+// 并在评论区看到红字标注的已删除内容。与 isAdminUser 一致走 DB 角色判定，
+// 即使上下文仅写入 userID 也能正确识别。
+func isPoliceOrAdminUser(c *gin.Context) bool {
+	userID := currentUserID(c)
+	if userID == 0 {
+		return false
+	}
+	user, _ := models.GetUserByID(userID)
+	return user != nil && models.IsAdminOrPolice(user.Role)
+}

@@ -18,12 +18,14 @@ func GetComments(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
 	// 楼层模型：List = 本页楼层 + 这些楼层下的全部回复（平铺，前端按 root_id 分组成「楼」）
+	// 🔒 警方/管理员取证视图：includeDeleted=true 一并返回已删除评论，前端以红字标注
+	includeDeleted := isPoliceOrAdminUser(c)
 	var pg models.CommentsPage
 	var err error
 	if blogID > 0 {
-		pg, err = models.GetCommentsByBlog(uint(blogID), page, pageSize)
+		pg, err = models.GetCommentsByBlog(uint(blogID), page, pageSize, includeDeleted)
 	} else {
-		pg, err = models.GetCommentsByNovel(uint(novelID), chapterNum, page, pageSize)
+		pg, err = models.GetCommentsByNovel(uint(novelID), chapterNum, page, pageSize, includeDeleted)
 	}
 	if err != nil {
 		utils.InternalError(c, "获取评论失败")

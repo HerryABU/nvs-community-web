@@ -548,6 +548,7 @@ func main() {
 	police.Use(middleware.AuthRequired(), middleware.PoliceRequired())
 	{
 		police.GET("/softdel", handlers.PoliceListSoftDel)                           // 软删除留证列表（取证查看）
+		police.GET("/forums", handlers.PoliceListForums)                            // 论坛巡查：全部论坛（含封锁/加密/隐藏/软删除）
 		police.GET("/evidence/:type/:id", handlers.PoliceGetEvidence)               // 单条取证凭证详情
 		police.GET("/evidence/:type/:id/download", handlers.PoliceDownloadEvidence) // 下载单条取证凭证
 		police.GET("/export", handlers.PoliceExportPackage)                         // 导出全部取证包
