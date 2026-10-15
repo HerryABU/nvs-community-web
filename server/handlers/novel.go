@@ -183,6 +183,10 @@ func UpdateNovel(c *gin.Context) {
 	if input.CreationMethod != "" {
 		novel.CreationMethod = input.CreationMethod
 	}
+	// 作者隔离开关：true=外人需登录才能查看本作品（对应 3.2 作者自决）
+	if input.WallEnabled != nil {
+		novel.WallEnabled = *input.WallEnabled
+	}
 
 	if err := models.UpdateNovel(novel); err != nil {
 		utils.InternalError(c, "更新作品失败")

@@ -49,6 +49,9 @@ func UpdatePlatformConfig(c *gin.Context) {
 	allowed := map[string]bool{
 		"site_name": true, "vip_enabled": true, "categories": true,
 		"email_verify": true, "captcha_enabled": true,
+		"novel_visitor_mode": true, // 访客查看小说模式：open / trial / login_required
+		"home_module":       true, // 首页模块：novel / blog / forum / combined
+		"wall_warning_text": true, // 隔离墙/登录墙提示文案（作者可见性说明）
 		"smtp_host": true, "smtp_port": true, "smtp_user": true,
 		"smtp_password": true, "smtp_from": true,
 		"smtp_insecure_skip_verify": true, // 跳过 TLS 证书校验（内网/自签名 SMTP，默认关闭）

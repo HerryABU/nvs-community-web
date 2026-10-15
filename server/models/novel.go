@@ -18,6 +18,7 @@ type Novel struct {
 	Status          string         `gorm:"size:32;default:draft;index:idx_novels_author_status,priority:2" json:"status"`
 	SourceType      string         `gorm:"size:32;default:original" json:"source_type"`  // original / reprint
 	CreationMethod  string         `gorm:"size:32;default:human" json:"creation_method"` // human / ai / human_ai_assisted
+	WallEnabled     bool           `gorm:"not null;default:false" json:"wall_enabled"`    // 作者隔离开关：true=外人需登录才能查看本作品
 	TotalWords      int            `gorm:"default:0" json:"total_words"`
 	TotalChapters   int            `gorm:"default:0" json:"total_chapters"`
 	ViewCount       int            `gorm:"default:0" json:"view_count"`

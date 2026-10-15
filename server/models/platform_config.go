@@ -19,6 +19,24 @@ type PlatformConfig struct {
 
 func (PlatformConfig) TableName() string { return "platform_configs" }
 
+// ============ 访客查看小说门禁（站长前台可配） ============
+const (
+	// NovelVisitorModeKey 访客查看小说模式：
+	//   open            —— 完全开放，任何人可阅读/爬取；
+	//   trial           —— 访客仅可试读前 30%（最多 5 章），完整需登录；
+	//   login_required  —— 必须登录后才能查看任何内容。
+	NovelVisitorModeKey = "novel_visitor_mode"
+)
+
+// GetNovelVisitorMode 读取访客查看小说模式，缺省 open（完全开放）。
+func GetNovelVisitorMode() string {
+	switch GetPlatformConfig(NovelVisitorModeKey) {
+	case "trial", "login_required", "open":
+		return GetPlatformConfig(NovelVisitorModeKey)
+	}
+	return "open"
+}
+
 // ============ 平台配置辅助函数 ============
 
 // GetPlatformConfig 获取单个平台配置值
@@ -101,6 +119,7 @@ func InitPlatformConfigs() {
 		"vip_enabled":     "true",
 		"email_verify":    "false",
 		"captcha_enabled": "false",
+		"novel_visitor_mode": "open",
 		"categories":      `["硬科幻","奇幻","推演文学","架空历史","现实主义","悬疑推理","实验文学","同人区","政治区","讽刺文学","泛二次元区","其他"]`,
 		"robots_txt":      "User-agent: *\nAllow: /\n",
 	}

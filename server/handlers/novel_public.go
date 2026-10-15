@@ -217,7 +217,23 @@ func GetNovel(c *gin.Context) {
 		return
 	}
 
-	utils.Success(c, novel)
+	// 🔒 访客查看门禁（3.1/3.2/3.3）：匿名且需登录/作者上锁时拒绝，登录后可正常查看与爬取
+	isLogin := currentUserID(c) != 0
+	access := ResolveNovelAccess(novel, isLogin, currentUserRole(c))
+	if access.RequiresLogin && !isLogin {
+		utils.Unauthorized(c, "该作品需登录后查看")
+		return
+	}
+	if access.IsTrial {
+		access.TrialLimit = ComputeTrialLimit(novel.TotalChapters)
+	}
+
+	utils.Success(c, NovelView{
+		Novel:          *novel,
+		RequiresLogin:  access.RequiresLogin,
+		IsTrial:        access.IsTrial,
+		TrialLimit:     access.TrialLimit,
+	})
 }
 
 // GET /api/categories

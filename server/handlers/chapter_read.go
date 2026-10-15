@@ -18,10 +18,26 @@ func GetChapters(c *gin.Context) {
 		utils.BadRequest(c, "无效的作品ID")
 		return
 	}
+	novel, err := models.GetNovelByID(uint(novelID))
+	if err != nil {
+		utils.NotFound(c, "作品不存在")
+		return
+	}
+	// 🔒 访客门禁：匿名且需登录/作者上锁时拒绝（对应 3.3 爬虫亦被拦截）
+	isLogin := currentUserID(c) != 0
+	access := ResolveNovelAccess(novel, isLogin, currentUserRole(c))
+	if access.RequiresLogin && !isLogin {
+		utils.Unauthorized(c, "该作品需登录后查看")
+		return
+	}
 	chapters, err := models.GetChaptersByNovel(uint(novelID))
 	if err != nil {
 		utils.InternalError(c, "获取章节列表失败")
 		return
+	}
+	// 试读模式：匿名仅返回前 TrialLimit 章（爬虫同样只能拿到试读部分）
+	if access.IsTrial && len(chapters) > access.TrialLimit {
+		chapters = chapters[:access.TrialLimit]
 	}
 	utils.Success(c, chapters)
 }
@@ -29,6 +45,24 @@ func GetChapters(c *gin.Context) {
 func GetChapterContent(c *gin.Context) {
 	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	chapterNum, _ := strconv.Atoi(c.Param("num"))
+
+	novel, err := models.GetNovelByID(uint(novelID))
+	if err != nil {
+		utils.NotFound(c, "作品不存在")
+		return
+	}
+	// 🔒 访客门禁：匿名且需登录/作者上锁时拒绝
+	isLogin := currentUserID(c) != 0
+	access := ResolveNovelAccess(novel, isLogin, currentUserRole(c))
+	if access.RequiresLogin && !isLogin {
+		utils.Unauthorized(c, "该章节需登录后查看")
+		return
+	}
+	// 试读模式：匿名访问超出试读范围的章节一律拒绝
+	if access.IsTrial && chapterNum > access.TrialLimit {
+		utils.Unauthorized(c, "试读已结束，登录后可阅读全文")
+		return
+	}
 
 	chapter, err := models.GetChapterByNovelAndNumber(uint(novelID), chapterNum)
 	if err != nil {
@@ -80,6 +114,22 @@ func GetChapterContent(c *gin.Context) {
 func VerifyChapter(c *gin.Context) {
 	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	chapterNum, _ := strconv.Atoi(c.Param("num"))
+
+	novel, err := models.GetNovelByID(uint(novelID))
+	if err != nil {
+		utils.NotFound(c, "作品不存在")
+		return
+	}
+	isLogin := currentUserID(c) != 0
+	access := ResolveNovelAccess(novel, isLogin, currentUserRole(c))
+	if access.RequiresLogin && !isLogin {
+		utils.Unauthorized(c, "该章节需登录后查看")
+		return
+	}
+	if access.IsTrial && chapterNum > access.TrialLimit {
+		utils.Unauthorized(c, "试读已结束，登录后可阅读全文")
+		return
+	}
 
 	chapter, err := models.GetChapterByNovelAndNumber(uint(novelID), chapterNum)
 	if err != nil {
