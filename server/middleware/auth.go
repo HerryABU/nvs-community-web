@@ -67,6 +67,35 @@ func AuthorRequired() gin.HandlerFunc {
 	}
 }
 
+// AdminRequired 要求管理员角色（admin）。用于 /api/admin 组级纵深防御，
+// 防止「新增 handler 漏写 ensureAdmin」导致越权。需配合 AuthRequired 或 OptionalAuth 使用
+// （上下文里的 user id/role 由前置中间件写入）。
+func AdminRequired() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role := UserRole(c)
+		if role != "admin" {
+			utils.Forbidden(c, "需要管理员权限")
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+// PoliceRequired 要求警方或管理员角色（police / admin）。用于 /api/police 取管台组级纵深防御。
+// 管理员默认具备警方台全部查看能力（仅取证/查看软删，无普通管理写权限由具体 handler 控制）。
+func PoliceRequired() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role := UserRole(c)
+		if role != "admin" && role != "police" {
+			utils.Forbidden(c, "需要警方或管理员权限")
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
 // SetTokenCookie 设置 JWT Cookie
 func SetTokenCookie(c *gin.Context, token string) {
 	// 安全审计 L3：Secure 由 .env 的 COOKIE_SECURE 控制（生产 HTTPS 下应开启，防明文截获）

@@ -421,6 +421,17 @@ const router = createRouter({
   ],
 });
 
+// 🔒 组级角色守卫：所有 /admin/* 路由强制 requiresAdmin，/police-console 强制 requiresPolice。
+// 此前仅在 NavBar 用 v-if 隐藏入口，路由层未拦截，普通用户手输 URL 即可直达后台模板。
+router.getRoutes().forEach((r) => {
+  if (r.path.startsWith('/admin')) {
+    r.meta = { ...(r.meta || {}), requiresAdmin: true };
+  }
+  if (r.path === '/police-console') {
+    r.meta = { ...(r.meta || {}), requiresPolice: true };
+  }
+});
+
 // 建站向导状态缓存（进程内只查询一次 /api/setup/status）
 const setupState = { checked: false, installed: true };
 let setupPromise: Promise<void> | null = null;
@@ -461,6 +472,24 @@ router.beforeEach(async (to, _from, next) => {
       return;
     }
   }
+
+  // 🔒 角色守卫：admin / police 专属路由拦截非对应角色（即使已登录也不放行）
+  if (to.meta.requiresAdmin || to.meta.requiresPolice) {
+    const authStore = useAuthStore();
+    if (!authStore.user && !authStore.loading) {
+      await authStore.fetchUser();
+    }
+    const role = authStore.user?.role;
+    if (to.meta.requiresAdmin && role !== 'admin') {
+      next('/');
+      return;
+    }
+    if (to.meta.requiresPolice && role !== 'admin' && role !== 'police') {
+      next('/');
+      return;
+    }
+  }
+
   next();
 });
 
