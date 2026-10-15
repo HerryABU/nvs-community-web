@@ -13,10 +13,27 @@ import (
 	"nvs-server/config"
 	"nvs-server/models"
 	"nvs-server/security"
+	"nvs-server/security/regexsafe"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
+
+// maxImportBytes 小说上传分解允许的最大文件字节数（8MB），
+// 防止超大文件一次性读入内存造成资源耗尽型 DoS。
+const maxImportBytes = 8 << 20
+
+// readLimited 读取上传内容并限制最大字节数；超出上限返回明确错误。
+func readLimited(r io.Reader) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, int64(maxImportBytes)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxImportBytes {
+		return nil, fmt.Errorf("文件过大（上限 %.0f MB），请分卷上传", float64(maxImportBytes)/(1<<20))
+	}
+	return data, nil
+}
 
 // readImportContent 读取导入文件内容：.docx 转 Markdown 文本，其余按纯文本/Markdown 处理
 func readImportContent(data []byte, filename string) (string, error) {
@@ -41,9 +58,9 @@ func ImportPreview(c *gin.Context) {
 	}
 	defer file.Close()
 
-	data, err := io.ReadAll(file)
+	data, err := readLimited(file)
 	if err != nil {
-		utils.InternalError(c, "读取文件失败")
+		utils.InternalError(c, "读取文件失败: "+err.Error())
 		return
 	}
 
@@ -111,9 +128,9 @@ func ImportNovel(c *gin.Context) {
 	}
 	defer file.Close()
 
-	data, err := io.ReadAll(file)
+	data, err := readLimited(file)
 	if err != nil {
-		utils.InternalError(c, "读取文件失败")
+		utils.InternalError(c, "读取文件失败: "+err.Error())
 		return
 	}
 
@@ -289,7 +306,7 @@ func ImportBatch(c *gin.Context) {
 		if err != nil {
 			continue
 		}
-		data, err := io.ReadAll(f)
+		data, err := readLimited(f)
 		f.Close()
 		if err != nil {
 			continue
@@ -472,12 +489,14 @@ func parseChapters(content string) []parsedChapter {
 // parseChaptersWithRule 使用用户自定义正则分割章节
 // 自动区分两种语义：匹配内容清理后为空 → 分割线规则；否则 → 标题前缀规则
 func parseChaptersWithRule(content string, rule string) []parsedChapter {
-	re, err := regexp.Compile(rule)
+	// 安全编译：白名单校验 + 强制 multiline + 匹配超时，从根上消除正则爆炸（ReDoS）。
+	re, err := regexsafe.CompileChapterSplitRule(rule)
 	if err != nil {
+		// 规则非法 / 编译失败 → 回退自动识别（绝不信任未经验证的用户输入）
 		return parseChapters(content)
 	}
 
-	locs := re.FindAllStringIndex(content, -1)
+	locs := regexsafe.SafeFindAllStringIndex(re, content, regexsafe.SplitTimeout)
 	if len(locs) < 1 {
 		return parseChapters(content)
 	}
