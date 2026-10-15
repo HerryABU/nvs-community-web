@@ -195,6 +195,10 @@ func main() {
 		public.POST("/auth/register", security.RateLimit(10, 60), handlers.Register) // 安全审计 M2：注册限流防批量灌号
 		public.POST("/auth/login", security.RateLimit(5, 60), handlers.Login)
 		public.POST("/auth/logout", handlers.Logout)
+		// 🔒 滑块验证码挑战（货真价实服务端校验）：先 issue 拿到拼图，再 verify 拿 pass token，
+		// 后续 /send-code、/register 必须携带该 token，否则拒绝（防裸调/邮箱轰炸）。
+		public.POST("/auth/captcha/issue", handlers.IssueCaptcha)
+		public.POST("/auth/captcha/verify", handlers.VerifyCaptcha)
 		public.POST("/auth/send-code", handlers.SendVerificationCode)
 		public.POST("/auth/verify-code", handlers.VerifyEmailCode)
 		public.POST("/auth/forgot-password", security.RateLimit(3, 60), handlers.ForgotPassword)
@@ -372,7 +376,9 @@ func main() {
 
 	// 管理员路由
 	admin := r.Group("/api/admin")
-	admin.Use(middleware.AuthRequired())
+	// 🔒 纵深防御：组级强制 admin 角色（除登录校验外再叠加角色校验），
+	// 防止「新增 handler 漏写 ensureAdmin」导致越权。具体写操作仍由各 handler 内部 ensureAdmin 兜底。
+	admin.Use(middleware.AuthRequired(), middleware.AdminRequired())
 	{
 		admin.GET("/stats", handlers.GetAdminStats)
 		admin.GET("/dashboard", handlers.GetDashboardStats)
@@ -536,7 +542,8 @@ func main() {
 	// 警方取管台（police）：准管理员角色，仅可取证 / 查看软删除，无普通管理权
 	// 不可自注册，只能由管理员通过 /api/admin/users/:id/promote-police 提权。
 	police := r.Group("/api/police")
-	police.Use(middleware.AuthRequired())
+	// 🔒 纵深防御：组级强制 police/admin 角色
+	police.Use(middleware.AuthRequired(), middleware.PoliceRequired())
 	{
 		police.GET("/softdel", handlers.PoliceListSoftDel)                           // 软删除留证列表（取证查看）
 		police.GET("/evidence/:type/:id", handlers.PoliceGetEvidence)               // 单条取证凭证详情
@@ -584,8 +591,10 @@ func main() {
 
 	// ==================== 静态文件服务 ====================
 
-	// 小说正文静态文件（文件系统存储）
-	r.StaticFS("/novels", gin.Dir(config.NovelDataDir, false))
+	// 注意：小说正文不再以 StaticFS 直链暴露。章节内容统一经 GetChapterContent
+	// （/api/novels/:id/chapters/:num）按访客门禁（3.1/3.2/3.3）与签名校验后返回，
+	// 避免匿名用户/爬虫绕过登录直接下载原始 .html 全文。沙盒代理对 /novels 的读取走
+	// proxy.go 的文件处理器，与本静态路由无关，不受影响。
 
 	sandboxGroup := r.Group("/sandbox")
 	sandboxGroup.Use(

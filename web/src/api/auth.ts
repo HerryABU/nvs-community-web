@@ -12,6 +12,16 @@ export interface RegisterParams {
   nickname?: string;
   agree_to_guidelines: boolean;
   verify_code?: string;
+  captcha_token?: string;
+}
+
+export interface CaptchaIssueResp {
+  challenge_id: string;
+  bg_image: string;
+  piece_image: string;
+  width: number;
+  height: number;
+  tip: string;
 }
 
 export interface User {
@@ -49,9 +59,27 @@ export const authApi = {
     return api.post('/auth/logout');
   },
 
-  // 发送邮箱验证码
-  sendVerificationCode(email: string) {
-    return api.post<{ code: number; message: string }>('/auth/send-code', { email });
+  // ======== 滑块验证码（货真价实服务端校验） ========
+  // issue：向服务端请求一次拼图挑战（返回缺口背景图 + 拼图块 PNG 的 base64）
+  captchaIssue() {
+    return api.post<{ code: number; message: string; data: CaptchaIssueResp }>(
+      '/auth/captcha/issue'
+    );
+  },
+  // verify：上报滑块归位的 x 坐标，服务端校验通过则签发一次性 pass token
+  captchaVerify(challengeId: string, x: number) {
+    return api.post<{ code: number; message: string; data: { captcha_token: string } }>(
+      '/auth/captcha/verify',
+      { challenge_id: challengeId, x }
+    );
+  },
+
+  // 发送邮箱验证码（必须携带滑块 pass token，否则后端拒绝）
+  sendVerificationCode(email: string, captchaToken?: string) {
+    return api.post<{ code: number; message: string }>('/auth/send-code', {
+      email,
+      captcha_token: captchaToken || '',
+    });
   },
 
   // 验证邮箱验证码

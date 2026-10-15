@@ -24,12 +24,18 @@
         <el-form-item v-if="emailVerifyRequired" label="验证码" prop="verifyCode">
           <div class="verify-row">
             <el-input v-model="form.verifyCode" placeholder="邮箱验证码" maxlength="6" style="flex:1" />
-            <el-button :disabled="codeCountdown > 0" @click="sendCode" :loading="sendingCode" style="margin-left:8px;min-width:120px">
+            <el-button
+              :disabled="codeCountdown > 0 || (captchaRequired && !captchaVerified)"
+              @click="sendCode"
+              :loading="sendingCode"
+              style="margin-left:8px;min-width:120px"
+            >
               {{ codeCountdown > 0 ? `${codeCountdown}s 后重发` : '发送验证码' }}
             </el-button>
           </div>
+          <p class="hint-tip" v-if="captchaRequired && !captchaVerified">请先完成上方滑块验证，方可获取邮箱验证码</p>
         </el-form-item>
-        <!-- 滑块验证码（仅当站长开启且邮箱验证未开启时显示） -->
+        <!-- 滑块验证码（站长开启时显示，必须先通过才能发码 / 注册） -->
         <el-form-item v-if="captchaRequired" label="安全验证" prop="captchaVerified">
           <SlideCaptcha ref="slideCaptchaRef" @verified="onCaptchaVerified" />
         </el-form-item>
@@ -102,6 +108,7 @@ let countdownTimer: ReturnType<typeof setInterval> | null = null;
 const emailVerifyRequired = ref(false);
 const captchaRequired = ref(false);
 const captchaVerified = ref(false);
+const captchaToken = ref(''); // 滑块通过后服务端签发的 pass token
 const guidelinesHtml = ref('');
 
 // 内置默认平台指南（站长未配置时展示）
@@ -188,8 +195,9 @@ async function loadSiteConfig() {
   } catch { /* use defaults: both off */ }
 }
 
-function onCaptchaVerified(val: boolean) {
-  captchaVerified.value = val;
+function onCaptchaVerified(token: string) {
+  captchaToken.value = token;
+  captchaVerified.value = !!token;
 }
 
 onMounted(() => {
@@ -202,9 +210,18 @@ async function sendCode() {
   const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRe.test(form.email)) { ElMessage.warning('请输入有效的邮箱地址'); return; }
 
+  // 🔒 必须先通过滑块验证码才允许发码（防邮箱轰炸 / 裸调接口）
+  if (captchaRequired.value && !captchaVerified.value) {
+    ElMessage.warning('请先完成滑块验证');
+    return;
+  }
+
   sendingCode.value = true;
   try {
-    await authApi.sendVerificationCode(form.email);
+    await authApi.sendVerificationCode(
+      form.email,
+      captchaRequired.value ? captchaToken.value : undefined
+    );
     ElMessage.success('验证码已发送，请查收邮件');
     codeCountdown.value = 60;
     countdownTimer = setInterval(() => {
@@ -243,14 +260,16 @@ async function handleRegister() {
   submitting.value = true;
   try {
     const nickname = form.nickname || form.username;
-    // 邮箱验证码随注册请求一并提交后端强制校验（站长开启时必填）
+    // 邮箱验证码随注册请求一并提交后端强制校验（站长开启时必填）；
+    // 滑块 pass token 一并提交，后端在 captcha_enabled 时强制校验。
     const res = await authStore.register(
       form.username,
       form.email,
       form.password,
       nickname,
       form.agreeToGuidelines,
-      emailVerifyRequired.value ? form.verifyCode : undefined
+      emailVerifyRequired.value ? form.verifyCode : undefined,
+      captchaRequired.value ? captchaToken.value : undefined
     );
     if (res.code === 0) {
       ElMessage.success('注册成功');
@@ -338,6 +357,12 @@ function agreeGuidelines() {
   display: flex;
   align-items: center;
   width: 100%;
+}
+
+.hint-tip {
+  margin: 6px 0 0 0;
+  font-size: 0.78rem;
+  color: #e6a23c;
 }
 
 /* ====== 移动端注册页适配 ====== */

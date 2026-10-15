@@ -6,6 +6,7 @@ import (
 
 	"nvs-server/middleware"
 	"nvs-server/models"
+	"nvs-server/security/slidecaptcha"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -13,12 +14,13 @@ import (
 )
 
 type RegisterInput struct {
-	Username        string `json:"username" binding:"required,min=3,max=64"`
-	Email           string `json:"email" binding:"required,email,max=128"`
-	Password        string `json:"password" binding:"required,min=6,max=128"`
-	Nickname        string `json:"nickname"`
-	AgreeToGuidelines bool `json:"agree_to_guidelines"`
-	VerifyCode      string `json:"verify_code"` // 邮箱验证码（站长开启邮箱验证时必填）
+	Username          string `json:"username" binding:"required,min=3,max=64"`
+	Email             string `json:"email" binding:"required,email,max=128"`
+	Password          string `json:"password" binding:"required,min=6,max=128"`
+	Nickname          string `json:"nickname"`
+	AgreeToGuidelines bool   `json:"agree_to_guidelines"`
+	VerifyCode        string `json:"verify_code"`   // 邮箱验证码（站长开启邮箱验证时必填）
+	CaptchaToken      string `json:"captcha_token"` // 滑块验证码 pass token（站长开启滑块时必填）
 }
 
 // POST /api/auth/register
@@ -35,6 +37,15 @@ func Register(c *gin.Context) {
 	if !input.AgreeToGuidelines {
 		utils.BadRequest(c, "请同意平台指南")
 		return
+	}
+
+	// 🔒 滑块验证码闸门：站长开启滑块时，注册必须携带有效的 pass token（先过滑块再注册），
+	// 否则直接拒绝，堵死「裸调 register」绕过滑块的通道。
+	if models.IsCaptchaEnabled() {
+		if input.CaptchaToken == "" || !slidecaptcha.VerifyPassToken(input.CaptchaToken) {
+			utils.Forbidden(c, "请先完成滑块验证后再注册")
+			return
+		}
 	}
 
 	// 邮箱域名黑白名单校验（黑名单禁止、白名单放行）

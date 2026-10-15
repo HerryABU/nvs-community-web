@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"nvs-server/models"
+	"nvs-server/security/slidecaptcha"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -14,11 +15,21 @@ import (
 // POST /api/auth/send-code — 发送邮箱验证码
 func SendVerificationCode(c *gin.Context) {
 	var req struct {
-		Email string `json:"email" binding:"required,email"`
+		Email        string `json:"email" binding:"required,email"`
+		CaptchaToken string `json:"captcha_token"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请提供有效的邮箱地址")
 		return
+	}
+
+	// 🔒 必须先通过滑块验证码，否则禁止发送（防邮箱轰炸 / 探测 / 裸调接口）。
+	// 仅当站长开启滑块验证码（captcha_enabled）时强制；关闭时为兼容旧链路放行。
+	if models.IsCaptchaEnabled() {
+		if req.CaptchaToken == "" || !slidecaptcha.VerifyPassToken(req.CaptchaToken) {
+			utils.Forbidden(c, "请先完成滑块验证后再获取邮箱验证码")
+			return
+		}
 	}
 
 	email := strings.TrimSpace(strings.ToLower(req.Email))
