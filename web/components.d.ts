@@ -12,6 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AdminHeader: typeof import('./src/components/admin/AdminHeader.vue')['default']
+    AdminMenuPanel: typeof import('./src/components/admin/AdminMenuPanel.vue')['default']
     AnimatedNumber: typeof import('./src/components/AnimatedNumber.vue')['default']
     AuthorCard: typeof import('./src/components/author/AuthorCard.vue')['default']
     CommentItem: typeof import('./src/components/CommentItem.vue')['default']
@@ -25,6 +26,8 @@ declare module 'vue' {
     ElCheckbox: typeof import('element-plus/es')['ElCheckbox']
     ElCheckboxGroup: typeof import('element-plus/es')['ElCheckboxGroup']
     ElCol: typeof import('element-plus/es')['ElCol']
+    ElCollapse: typeof import('element-plus/es')['ElCollapse']
+    ElCollapseItem: typeof import('element-plus/es')['ElCollapseItem']
     ElDatePicker: typeof import('element-plus/es')['ElDatePicker']
     ElDescriptions: typeof import('element-plus/es')['ElDescriptions']
     ElDescriptionsItem: typeof import('element-plus/es')['ElDescriptionsItem']
