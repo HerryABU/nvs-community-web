@@ -30,6 +30,11 @@
         <el-icon><Search /></el-icon> 查询
       </el-button>
       <span class="pc-count">共 {{ list.length }} 条留证</span>
+      <div class="pc-color">
+        <span class="pc-color-label">已删除高亮色</span>
+        <el-color-picker :model-value="delColor" @change="onColorChange" :disabled="!canEditColor" />
+        <span class="pc-color-hint" v-if="!canEditColor">（仅管理员可修改）</span>
+      </div>
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="width: 100%">
@@ -39,8 +44,12 @@
       <el-table-column prop="original_id" label="原ID" width="90" />
       <el-table-column prop="operator" label="处置人" width="130" />
       <el-table-column prop="source" label="来源" width="100" />
-      <el-table-column prop="reason" label="原因" min-width="180" show-overflow-tooltip />
-      <el-table-column prop="summary" label="摘要" min-width="200" show-overflow-tooltip />
+      <el-table-column prop="reason" label="原因" min-width="180" show-overflow-tooltip>
+        <template #default="{ row }"><span :style="{ color: delColor }">{{ row.reason }}</span></template>
+      </el-table-column>
+      <el-table-column prop="summary" label="摘要" min-width="200" show-overflow-tooltip>
+        <template #default="{ row }"><span :style="{ color: delColor }">{{ row.summary }}</span></template>
+      </el-table-column>
       <el-table-column prop="deleted_at" label="删除时间" width="170">
         <template #default="{ row }">{{ formatDate(row.deleted_at) }}</template>
       </el-table-column>
@@ -66,7 +75,7 @@
           <el-descriptions-item label="原ID">{{ detail.original_id }}</el-descriptions-item>
           <el-descriptions-item label="处置人">{{ detail.operator }}</el-descriptions-item>
           <el-descriptions-item label="来源">{{ detail.source }}</el-descriptions-item>
-          <el-descriptions-item label="原因" :span="2">{{ detail.reason }}</el-descriptions-item>
+          <el-descriptions-item label="原因" :span="2"><span :style="{ color: delColor }">{{ detail.reason }}</span></el-descriptions-item>
           <el-descriptions-item label="删除时间" :span="2">{{ formatDate(detail.deleted_at) }}</el-descriptions-item>
         </el-descriptions>
         <div class="pc-snapshot-title">完整快照（JSON）</div>
@@ -83,13 +92,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { adminApi } from '@/api/admin';
+import api from '@/api';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage } from 'element-plus';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import PoliceForumPatrol from './police/PoliceForumPatrol.vue';
 import { Stamp, Search, Download } from '@element-plus/icons-vue';
+
+const DefaultPoliceDelColor = '#ff4d4f';
 
 interface SoftDelRow {
   id: number;
@@ -112,6 +124,10 @@ const dlLoading = ref(false);
 const filterType = ref('');
 const detailVisible = ref(false);
 const detail = ref<SoftDelRow | null>(null);
+
+// 已删除内容高亮色（警方取证台统一使用）：管理员可改，警方可读不可写
+const delColor = ref(DefaultPoliceDelColor);
+const canEditColor = computed(() => authStore.user?.role === 'admin');
 
 const types = ['comment', 'novel', 'chapter', 'user', 'thread', 'post', 'blog', 'forum'];
 
@@ -159,6 +175,33 @@ async function openDetail(row: SoftDelRow) {
   detailVisible.value = true;
 }
 
+// 加载已删除内容高亮色（警方可读），失败则用默认色
+async function loadDelColor() {
+  try {
+    const res = await api.get('/police/del-color');
+    if (res.data.code === 0 && res.data.data?.color) {
+      delColor.value = res.data.data.color;
+    }
+  } catch {
+    /* 保持默认色 */
+  }
+}
+
+// 管理员修改高亮色：PUT 落库；失败还原
+async function onColorChange(color?: string) {
+  if (!color) {
+    loadDelColor();
+    return;
+  }
+  try {
+    await api.put('/police/del-color', { color });
+    ElMessage.success('删除内容高亮色已更新');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+    loadDelColor();
+  }
+}
+
 function triggerDownload(blob: Blob, filename: string) {
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -173,7 +216,11 @@ function triggerDownload(blob: Blob, filename: string) {
 async function doDownload(row: SoftDelRow, fromDetail = false) {
   if (fromDetail) dlLoading.value = true;
   try {
-    const res = await adminApi.policeDownloadEvidence(row.type, row.id);
+    // G2：长路由 + 查询串，避免路径参数
+    const res = await api.get('/police/download', {
+      params: { type: row.type, id: row.id },
+      responseType: 'blob',
+    });
     const blob = new Blob([res.data], { type: 'application/json' });
     triggerDownload(blob, `evidence_${row.type}_${row.id}.json`);
     ElMessage.success('凭证已下载');
@@ -201,12 +248,16 @@ async function doExport() {
 
 onMounted(() => {
   loadList();
+  loadDelColor();
 });
 </script>
 
 <style scoped>
 .admin-page { --admin-content-max: 1280px; min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
-.pc-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.pc-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.pc-color { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.pc-color-label { color: var(--text-light); font-size: 13px; }
+.pc-color-hint { color: var(--text-light); font-size: 12px; }
 .pc-tabs { border: none; background: transparent; }
 .pc-tabs :deep(.el-tabs__content) { padding: 16px 0 0; }
 .pc-count { color: var(--text-light); margin-left: 8px; }

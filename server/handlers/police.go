@@ -48,13 +48,13 @@ func PoliceListSoftDel(c *gin.Context) {
 	utils.Success(c, items)
 }
 
-// GET /api/police/evidence/:type/:id — 单条取证凭证详情（完整快照）
+// GET /api/police/evidence?type=comment&id=123 — 单条取证凭证详情（完整快照）
 func PoliceGetEvidence(c *gin.Context) {
 	if !ensurePoliceOrAdmin(c) {
 		return
 	}
-	ctype := c.Param("type")
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	ctype := c.Query("type")
+	id, _ := strconv.ParseUint(c.Query("id"), 10, 64)
 	item, err := models.GetSoftDelByID(ctype, uint(id))
 	if err != nil {
 		utils.NotFound(c, "取证记录不存在")
@@ -63,13 +63,13 @@ func PoliceGetEvidence(c *gin.Context) {
 	utils.Success(c, item)
 }
 
-// GET /api/police/evidence/:type/:id/download — 下载单条取证凭证（JSON 文件，取证留证）
+// GET /api/police/download?type=comment&id=123 — 下载单条取证凭证（JSON 文件，取证留证）
 func PoliceDownloadEvidence(c *gin.Context) {
 	if !ensurePoliceOrAdmin(c) {
 		return
 	}
-	ctype := c.Param("type")
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	ctype := c.Query("type")
+	id, _ := strconv.ParseUint(c.Query("id"), 10, 64)
 	item, err := models.GetSoftDelByID(ctype, uint(id))
 	if err != nil {
 		utils.NotFound(c, "取证记录不存在")

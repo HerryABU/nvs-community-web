@@ -38,8 +38,8 @@
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column label="论坛名称" min-width="180">
         <template #default="{ row }">
-          <span class="pfp-name">{{ row.name }}</span>
-          <el-tag v-if="row.is_deleted" size="small" type="info" effect="plain" class="pfp-flag">已删除</el-tag>
+          <span class="pfp-name" :style="row.is_deleted ? { color: delColor } : null">{{ row.name }}</span>
+          <el-tag v-if="row.is_deleted" size="small" type="info" effect="plain" class="pfp-flag" :style="{ color: delColor, borderColor: delColor }">已删除</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="type" label="类型" width="110">
@@ -82,6 +82,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { adminApi } from '@/api/admin';
+import api from '@/api';
 import { ElMessage } from 'element-plus';
 import { Search, Refresh } from '@element-plus/icons-vue';
 
@@ -105,6 +106,8 @@ const rows = ref<ForumRow[]>([]);
 const loading = ref(false);
 const keyword = ref('');
 const visFilter = ref('');
+// 已删除内容高亮色：与警方取证台统一（警方可读）
+const delColor = ref('#ff4d4f');
 
 function countOf(pred: (r: ForumRow) => boolean) {
   return rows.value.filter(pred).length;
@@ -151,6 +154,18 @@ async function load() {
   }
 }
 
+// 加载已删除内容高亮色（与警方取证台统一），失败则用默认色
+async function loadDelColor() {
+  try {
+    const res = await api.get('/police/del-color');
+    if (res.data.code === 0 && res.data.data?.color) {
+      delColor.value = res.data.data.color;
+    }
+  } catch {
+    /* 保持默认色 */
+  }
+}
+
 // 进入查看：警方/管理员由后端豁免门禁，直接跳论坛详情页即可
 function enter(row: ForumRow) {
   if (row.is_deleted) {
@@ -159,7 +174,10 @@ function enter(row: ForumRow) {
   router.push(`/forum/${row.id}`);
 }
 
-onMounted(load);
+onMounted(() => {
+  load();
+  loadDelColor();
+});
 </script>
 
 <style scoped>
