@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { themeApi } from '@/api/theme';
+import api from '@/api';
 import { useAuthStore } from '@/stores/auth';
 
 export const useThemeStore = defineStore('theme', () => {
@@ -23,6 +24,8 @@ export const useThemeStore = defineStore('theme', () => {
   // ===== F12 用户自定义网站主题（alist 式，服务端消毒后全局生效） =====
   const siteCss = ref(''); // 站点默认主题（管理员配置，对全部访客生效）
   const myCss = ref(''); // 个人主题（登录用户配置，覆盖站点主题）
+  // F12a 全站 opt-in iframe（管理员配置允许列表 URL，访客可读启用状态）
+  const globalIframe = ref<{ enabled: boolean; url: string }>({ enabled: false, url: '' });
 
   // 生效 CSS：个人主题优先；两者均挂载时 my 后写入即覆盖 site
   const effectiveCss = computed(() => (myCss.value.trim() ? myCss.value : siteCss.value));
@@ -52,6 +55,8 @@ export const useThemeStore = defineStore('theme', () => {
       myCss.value = me.value.data.data?.css || '';
     }
     applyCustomTheme();
+    // F12a 拉取全站 opt-in iframe 启用状态（访客可读）
+    loadGlobalIframe();
   }
 
   // 写入两个 <style> 标签注入主题 CSS。
@@ -68,9 +73,32 @@ export const useThemeStore = defineStore('theme', () => {
     writeStyleTag('nvs-my-theme', '');
   }
 
+  // F12a 全站 opt-in iframe：拉取启用状态 + URL，App.vue 据此渲染
+  async function loadGlobalIframe(): Promise<void> {
+    try {
+      const r = await api.get('/site-iframe');
+      const d = r.data?.data || {};
+      globalIframe.value = { enabled: !!d.enabled, url: d.url || '' };
+    } catch {
+      /* 静默：未配置则不渲染 */
+    }
+  }
+
+  // F12b 作者主题（访客可见）：注入第三个 <style>，仅作者域页面生效
+  function loadAuthorTheme(authorId: number | string): void {
+    api.get(`/author/${authorId}/theme`).then((r: any) => {
+      writeStyleTag(`nvs-author-theme-${authorId}`, r?.data?.data?.css || '');
+    }).catch(() => {});
+  }
+  function clearAuthorTheme(authorId: number | string): void {
+    const el = document.getElementById(`nvs-author-theme-${authorId}`);
+    if (el) el.textContent = '';
+  }
+
   return {
     isDark, toggle, applyTheme,
     siteCss, myCss, effectiveCss, loadTheme, applyCustomTheme, resetMyTheme,
+    globalIframe, loadGlobalIframe, loadAuthorTheme, clearAuthorTheme,
   };
 });
 

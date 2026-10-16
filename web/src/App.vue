@@ -9,6 +9,14 @@
     <main class="main-content">
       <router-view />
     </main>
+    <!-- F12a 全站 opt-in iframe：仅启用且有合法 URL 时渲染，强制 sandbox -->
+    <iframe
+      v-if="themeStore.globalIframe.enabled"
+      :src="themeStore.globalIframe.url"
+      sandbox="allow-scripts allow-same-origin"
+      class="global-embed-band"
+      title="site-embed"
+    />
     <SiteFooter />
 
     <!-- 未成年检测引导（F21.1）：平台开启保护且未填报出生日期时询问 -->
@@ -96,6 +104,14 @@ watch(() => authStore.isLoggedIn, (logged) => {
   flex: 1;
   margin-top: 60px;
   min-height: calc(100vh - 60px);
+}
+
+.global-embed-band {
+  width: 100%;
+  height: 320px;
+  border: 0;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+  background: var(--bg-color);
 }
 
 .minor-banner {

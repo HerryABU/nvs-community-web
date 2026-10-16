@@ -250,6 +250,10 @@ func main() {
 		public.GET("/live/config", handlers.LiveConfig)
 		// 自定义网站主题（F12：alist 式，服务端消毒后全局生效）
 		public.GET("/theme/site", handlers.GetSiteTheme)
+		// F12a 全站 opt-in iframe（管理员配置允许列表 URL，访客可读启用状态）
+		public.GET("/site-iframe", handlers.GetSiteIframe)
+		// F12b 作者主题（访客可见，仅 CSS，服务端消毒）
+		public.GET("/author/:id/theme", handlers.GetAuthorTheme)
 		// 沙盒虚拟文件系统
 		public.GET("/sandbox-vfs/:htmlId/read", handlers.VFSRead)
 		public.POST("/sandbox-vfs/:htmlId/write", handlers.VFSWrite)
@@ -276,6 +280,8 @@ func main() {
 	// 自定义网站主题（F12）：个人主题读取 / 保存（服务端消毒）
 	protected.GET("/theme/me", handlers.GetMyTheme)
 	protected.PUT("/theme/me", handlers.UpdateMyTheme)
+	// F12b 作者主题（本人或管理员可写，访客可见）
+	protected.PUT("/author/:id/theme", handlers.UpdateAuthorTheme)
 	// web 项目额度（F17）：个人额度查询 + 设为公开（触发超额审核）
 	protected.GET("/web-quota/mine", handlers.MyWebQuota)
 	protected.POST("/web-quota/html-public", handlers.SetHTMLPublic)
@@ -396,6 +402,8 @@ func main() {
 		protected.DELETE("/blog-categories/:id", handlers.DeleteBlogCategory)
 		// 用户自定义 UI-HTML 模板 (UserFrame)
 		protected.GET("/userframes", handlers.ListFrames)
+		// F16 站内内容相对路径引用选择器（CSDN 式）
+		protected.GET("/frame/refs", handlers.ListContentRefs)
 		protected.POST("/userframes", handlers.CreateFrame)
 		protected.GET("/userframes/:id", handlers.GetFrame)
 		protected.PUT("/userframes/:id", handlers.UpdateFrame)
@@ -502,6 +510,8 @@ func main() {
 		admin.PUT("/rage-config", handlers.UpdateRageConfigAdmin)
 		// 自定义网站主题（F12：alist 式，管理员配置对全站生效）
 		admin.PUT("/theme/site", handlers.UpdateSiteTheme)
+		// F12a 全站 opt-in iframe 仅管理员可写
+		admin.PUT("/site-iframe", handlers.UpdateSiteIframe)
 		// web 项目额度与超额审核（F17）
 		admin.GET("/web-quota/requests", handlers.AdminListWebQuotaRequests)
 		admin.POST("/web-quota/requests/:id/approve", handlers.AdminApproveWebQuotaRequest)
@@ -625,8 +635,10 @@ func main() {
 	{
 		police.GET("/softdel", handlers.PoliceListSoftDel)                           // 软删除留证列表（取证查看）
 		police.GET("/forums", handlers.PoliceListForums)                            // 论坛巡查：全部论坛（含封锁/加密/隐藏/软删除）
-		police.GET("/evidence/:type/:id", handlers.PoliceGetEvidence)               // 单条取证凭证详情
-		police.GET("/evidence/:type/:id/download", handlers.PoliceDownloadEvidence) // 下载单条取证凭证
+		police.GET("/evidence", handlers.PoliceGetEvidence)               // 单条取证凭证详情（?type=&id=）
+		police.GET("/download", handlers.PoliceDownloadEvidence)         // 下载单条取证凭证（?type=&id=）
+		police.GET("/del-color", handlers.PoliceGetDelColor)             // 已删除内容高亮色（警方可读）
+		police.PUT("/del-color", handlers.PoliceSetDelColor)             // 已删除内容高亮色（仅管理员可写）
 		police.GET("/export", handlers.PoliceExportPackage)                         // 导出全部取证包
 	}
 
