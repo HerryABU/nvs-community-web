@@ -132,6 +132,10 @@ export const adminApi = {
   revokePolice(id: number) {
     return api.post(`/admin/users/${id}/revoke-police`);
   },
+  // 热词统计：最近 N 天评论/回帖/帖题高频词（内容治理/舆情观测）
+  hotWords(params?: { days?: number; limit?: number }) {
+    return api.get<{ code: number; message: string; data: { words: { word: string; count: number }[]; days: number; total: number } }>('/admin/hotwords', { params });
+  },
   policeListSoftDel(params?: { type?: string; limit?: number }) {
     return api.get('/police/softdel', { params });
   },

@@ -64,6 +64,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: '内容留证', desc: 'softdel 回收站 · 删除/封禁可追溯', path: '/admin/softdel', icon: Box, color: 'var(--gradient-purple)' },
       { title: '内容抢救台', desc: '二级密码应急预览/软删除留证', path: '/admin/emergency', icon: WarningFilled, color: 'var(--gradient-accent)' },
       { title: 'HTML 内容审查', desc: '自定义 HTML 模板/扩展人工复核', path: '/admin/html-review', icon: Cpu, color: 'var(--gradient-purple)' },
+      { title: '热词统计', desc: '评论/回帖高频词聚合 · 舆情观测', path: '/admin/hotwords', icon: Histogram, color: 'var(--gradient-blue)' },
     ],
   },
   {

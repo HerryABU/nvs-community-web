@@ -385,6 +385,7 @@ func main() {
 		admin.GET("/stats", handlers.GetAdminStats)
 		admin.GET("/dashboard", handlers.GetDashboardStats)
 		admin.GET("/community", handlers.GetCommunityDashboard)
+		admin.GET("/hotwords", handlers.AdminHotWords) // 热词统计（内容治理/舆情观测）
 		admin.GET("/users", handlers.ListUsers)
 		admin.GET("/users/audit", handlers.ListUserAuditLogs)
 		admin.GET("/zone-access", handlers.ListZoneAccessLogs)        // 隔离墙进入记录（176号令专项，分页+筛选）
