@@ -1,5 +1,10 @@
 <template>
   <div class="floor-list">
+    <!-- 狂暴模式（F19）：实时连接状态徽标（仅传入 liveChannel 时展示） -->
+    <div v-if="liveChannel" class="floor-live-bar">
+      <LiveBadge :connected="liveConnected" />
+      <span class="floor-live-tip">狂暴模式已开启，新评论将实时推送</span>
+    </div>
     <div v-for="floor in floors" :key="floor.id" class="floor" :id="`floor-${floor.id}`">
       <!-- ====== 楼主位（本楼主贴） ====== -->
       <div class="floor-main">
@@ -114,6 +119,8 @@ import { ref, computed, reactive } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { renderMarkdown } from '@/markdown/renderer';
 import ReportButton from './ReportButton.vue';
+import LiveBadge from './comment/LiveBadge.vue';
+import { useLiveComments } from '@/composables/useLiveComments';
 
 // 楼层模型（公众号评论区 + Discuz 楼中楼）：
 //  - 回复主内容（作品/博客/帖子）→ 开新楼（parent_id 为空，floor_no 递增）
@@ -127,6 +134,7 @@ const props = withDefaults(defineProps<{
   canModerate?: boolean;        // 版主/管理员：可删他人内容
   canMute?: boolean;            // 版主：可禁言
   previewCount?: number;        // 楼内回复默认展示条数，超出折叠
+  liveChannel?: string;         // 狂暴模式（F19）SSE 频道 key；传入即开启实时评论订阅
 }>(), {
   items: () => [],
   ownerId: 0,
@@ -135,13 +143,20 @@ const props = withDefaults(defineProps<{
   canModerate: false,
   canMute: false,
   previewCount: 3,
+  liveChannel: '',
 });
 
 const emit = defineEmits<{
   reply: [parentId: number | null, content: string];
   delete: [id: number];
   mute: [item: any];
+  live: [item: any];            // 狂暴模式（F19）：收到服务端推送的新评论
 }>();
+
+// 狂暴模式（F19）：评论区实时订阅。频道为空（未开启/未传）时 composable 内部直接短路不建连接；
+// 传 getter 以便频道异步就绪（确认开启后）自动重建连接。组件卸载时由 composable 自行断开。
+const live = useLiveComments(() => props.liveChannel || '', (c: any) => emit('live', c));
+const liveConnected = live.connected;
 
 const authStore = useAuthStore();
 const expanded = reactive<Record<number, boolean>>({});

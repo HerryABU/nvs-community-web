@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"nvs-server/models"
+	"nvs-server/realtime"
 	"nvs-server/security"
 	"nvs-server/utils"
 
@@ -130,6 +131,14 @@ func CreateComment(c *gin.Context) {
 
 	if user, err := models.GetUserByID(userID); err == nil {
 		comment.Username = user.Username
+	}
+
+	// 狂暴模式（F19）：向评论所在频道广播新评论（hub 内部按 Enabled/批量/带宽控制，
+	// 慢客户端自动断开；关闭时为零开销直返）
+	if req.NovelID > 0 {
+		realtime.PublishCommentEvent("novel", req.NovelID, comment)
+	} else if req.BlogID > 0 {
+		realtime.PublishCommentEvent("blog", req.BlogID, comment)
 	}
 
 	utils.Success(c, comment)

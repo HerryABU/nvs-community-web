@@ -32,8 +32,10 @@
         :items="comments"
         :owner-id="ownerUserId"
         target-type="comment"
+        :live-channel="liveChannel"
         @reply="handleReply"
         @delete="handleDelete"
+        @live="onLiveComment"
       />
     </div>
 
@@ -47,6 +49,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { novelApi, commentApi, type Comment } from '@/api/novel';
+import { novelCommentChannel, blogCommentChannel, liveApi } from '@/api/live';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { shouldShowGuard } from '@/utils/sensitiveZone';
@@ -74,6 +77,28 @@ const loadingMore = ref(false);
 
 // 楼主：优先取父组件传入，其次用评论项里的主内容作者信息
 const ownerUserId = computed(() => props.ownerId || 0);
+
+// ====== 狂暴模式（F19）：实时评论 ======
+// 仅当服务端开启狂暴模式后才订阅对应频道（避免对未开启站点空转重连）。
+// 频道按 novel/blog 区分；章节评论只接受同章节的实时推送，跨章节仅提示刷新。
+const rageEnabled = ref(false);
+const liveChannel = computed(() =>
+  rageEnabled.value
+    ? (props.blogId ? blogCommentChannel(props.blogId) : (props.novelId ? novelCommentChannel(props.novelId) : ''))
+    : '',
+);
+
+function onLiveComment(c: any) {
+  if (!c || !c.id) return;
+  if (props.chapterNumber !== undefined && c.chapter_number !== undefined && c.chapter_number !== props.chapterNumber) {
+    newComments.value += 1; // 跨章节新评论：仅提示刷新，不混入当前列表
+    return;
+  }
+  const seen = new Set(comments.value.map((x) => x.id));
+  if (seen.has(c.id)) return; // 去重：自己刚发的也会收到推送
+  comments.value = [c, ...comments.value];
+  emit('loaded', comments.value.length);
+}
 
 // 楼层模型：后端返回平铺列表（本页楼层 + 这些楼层下的全部回复），
 // 由 FloorComments 按 root_id 分组成「楼」，楼内回复可折叠。
@@ -126,6 +151,10 @@ async function pollNewComments() {
 onMounted(() => {
   fetchComments(true);
   pollTimer = setInterval(pollNewComments, 30000);
+  // 探测狂暴模式是否开启（开启才订阅实时评论，未开启则不建 SSE 连接）
+  liveApi.publicConfig()
+    .then((r) => { if (r.data?.enabled) rageEnabled.value = true; })
+    .catch(() => { /* 探测失败按未开启处理，不影响评论区正常使用 */ });
 });
 
 onUnmounted(() => {
