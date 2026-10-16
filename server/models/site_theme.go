@@ -15,6 +15,7 @@ import (
 type SiteTheme struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	CSS       string    `gorm:"type:text" json:"css"` // 已消毒的主题 CSS
+	CustomJS  string    `gorm:"type:text" json:"custom_js"` // 已做注入安全处理的自定义 JS（管理员可写，全站访客执行）
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
@@ -29,10 +30,21 @@ func GetSiteTheme() string {
 	return t.CSS
 }
 
+// GetSiteThemeJS 读取站点默认主题 JS；无记录返回空串。
+func GetSiteThemeJS() string {
+	var t SiteTheme
+	if err := DB.First(&t, 1).Error; err != nil {
+		return ""
+	}
+	return t.CustomJS
+}
+
 // SetSiteTheme 保存站点默认主题：先经服务端白名单消毒再 Upsert 单行。
 // 返回被移除的规则列表（供前端提示管理员）。
-func SetSiteTheme(css string) (removed []string, err error) {
+func SetSiteTheme(css string, customJS string) (removed []string, err error) {
 	sanitized, removed := utils.SanitizeCSS(css)
+	sanitizedJS, jsRemoved := utils.SanitizeJS(customJS)
+	removed = append(removed, jsRemoved...)
 	var t SiteTheme
 	if ferr := DB.First(&t, 1).Error; ferr != nil {
 		if !errors.Is(ferr, gorm.ErrRecordNotFound) {
@@ -44,6 +56,7 @@ func SetSiteTheme(css string) (removed []string, err error) {
 		}
 	}
 	t.CSS = sanitized
+	t.CustomJS = sanitizedJS
 	t.UpdatedAt = time.Now()
 	return removed, DB.Save(&t).Error
 }

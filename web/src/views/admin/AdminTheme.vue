@@ -31,6 +31,33 @@
         </el-form-item>
       </el-form>
 
+      <!-- F12 alist 式自定义 JS：管理员可写，对全站访客执行（与 alist 自定义 JS 一致） -->
+      <el-divider content-position="left">站点自定义 JS（alist 式）</el-divider>
+      <el-alert type="warning" :closable="false" show-icon class="tip">
+        <template #title>高风险能力 · 仅管理员</template>
+        此处 JS 会以 <code>&lt;script&gt;</code> 形式注入到<b>全站每一个访客的页面</b>并执行（与 alist 自定义 JS 一致）。
+        仅管理员可编辑；后端会剥离 <code>&lt;/script&gt;</code> 等逃逸序列防止破坏页面，但脚本<b>逻辑本身不受限</b>——请仅写入你信任的代码。
+        可通过 <code>window.NVS</code> / <code>window.alist</code> 读取站点状态、监听事件、调用安全 API。
+      </el-alert>
+      <el-form label-width="120px" class="theme-form">
+        <el-form-item label="自定义 JS">
+          <el-input
+            v-model="js"
+            type="textarea"
+            :rows="12"
+            placeholder="例如：(function(){ console.log('NVS theme loaded', window.NVS.siteName); })();"
+            :disabled="saving"
+            class="js-editor"
+          />
+        </el-form-item>
+        <el-form-item v-if="jsRemoved.length" label="被处理项">
+          <el-tag v-for="r in jsRemoved" :key="r" type="warning" class="rm-tag" size="small">{{ r }}</el-tag>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" :loading="saving" @click="save">保存（全站生效）</el-button>
+        </el-form-item>
+      </el-form>
+
       <!-- G3 全站 opt-in 嵌入 iframe：allowlist 单一地址 + 启用开关（沙箱渲染） -->
       <el-divider content-position="left">全站嵌入区（页脚上方通栏）</el-divider>
       <el-alert type="warning" :closable="false" show-icon class="tip">
@@ -84,7 +111,9 @@ import api from '@/api';
 const loading = ref(false);
 const saving = ref(false);
 const css = ref('');
+const js = ref('');
 const removed = ref<string[]>([]);
+const jsRemoved = ref<string[]>([]);
 
 // G3 全站嵌入 iframe 配置（管理员 allowlist）
 const iframeLoading = ref(false);
@@ -140,6 +169,7 @@ async function reload() {
   try {
     const r = await themeApi.getSiteTheme();
     css.value = r.data?.data?.css || '';
+    js.value = r.data?.data?.js || '';
   } catch {
     ElMessage.error('加载失败');
   } finally {
@@ -150,10 +180,11 @@ async function reload() {
 async function save() {
   saving.value = true;
   try {
-    const r = await themeApi.updateSiteTheme(css.value);
+    const r = await themeApi.updateSiteTheme(css.value, js.value);
     if (r.data?.code === 0) {
       removed.value = r.data.data?.removed || [];
-      ElMessage.success(removed.value.length ? '已保存（部分规则因安全风险被移除）' : '已保存，全站生效');
+      jsRemoved.value = (r.data.data?.removed || []).filter((x: string) => /script|注释/.test(x));
+      ElMessage.success(removed.value.length ? '已保存（部分内容因安全风险被处理）' : '已保存，全站生效');
     } else {
       ElMessage.error(r.data?.message || '保存失败');
     }
@@ -167,10 +198,12 @@ async function save() {
 async function resetDefault() {
   saving.value = true;
   try {
-    const r = await themeApi.updateSiteTheme('');
+    const r = await themeApi.updateSiteTheme('', '');
     if (r.data?.code === 0) {
       css.value = '';
+      js.value = '';
       removed.value = [];
+      jsRemoved.value = [];
       ElMessage.success('已恢复默认');
     } else {
       ElMessage.error(r.data?.message || '操作失败');
@@ -191,6 +224,7 @@ onMounted(() => {
 <style scoped>
 .theme-form { max-width: 880px; margin-top: 16px; }
 .css-editor :deep(textarea) { font-family: 'Cascadia Code', Consolas, monospace; font-size: 13px; }
+.js-editor :deep(textarea) { font-family: 'Cascadia Code', Consolas, monospace; font-size: 13px; }
 .rm-tag { margin-right: 6px; }
 .iframe-form { max-width: 880px; margin-top: 16px; }
 .iframe-preview { width: 100%; height: 320px; border: 1px solid var(--border-color, #e5e7eb); border-radius: 10px; }

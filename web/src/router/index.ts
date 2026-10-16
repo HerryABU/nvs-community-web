@@ -576,4 +576,7 @@ router.beforeEach(async (to, _from, next) => {
   next();
 });
 
+// 暴露给自定义主题 JS（alist 兼容 window.NVS.route）读取当前路由
+(window as any).__nvsRouter__ = router;
+
 export default router;

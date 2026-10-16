@@ -13,6 +13,7 @@ type UserTheme struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	UserID    uint      `gorm:"uniqueIndex;not null" json:"user_id"`
 	CSS       string    `gorm:"type:text" json:"css"` // 已消毒的主题 CSS
+	CustomJS  string    `gorm:"type:text" json:"custom_js"` // 已做注入安全处理的自定义 JS（仅本人登录态执行）
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
@@ -30,19 +31,34 @@ func GetUserTheme(userID uint) string {
 	return t.CSS
 }
 
+// GetUserThemeJS 读取用户个人主题 JS；无记录返回空串。
+func GetUserThemeJS(userID uint) string {
+	if userID == 0 {
+		return ""
+	}
+	var t UserTheme
+	if err := DB.Where("user_id = ?", userID).First(&t).Error; err != nil {
+		return ""
+	}
+	return t.CustomJS
+}
+
 // SetUserTheme 保存用户个人主题：服务端强制白名单消毒后按用户 Upsert。
 // 返回被移除的规则列表（供前端提示用户）。
-func SetUserTheme(userID uint, css string) (removed []string, err error) {
+func SetUserTheme(userID uint, css string, customJS string) (removed []string, err error) {
 	if userID == 0 {
 		return []string{}, nil
 	}
 	sanitized, removed := utils.SanitizeCSS(css)
+	sanitizedJS, jsRemoved := utils.SanitizeJS(customJS)
+	removed = append(removed, jsRemoved...)
 	var t UserTheme
 	if err := DB.Where("user_id = ?", userID).First(&t).Error; err == nil {
 		t.CSS = sanitized
+		t.CustomJS = sanitizedJS
 		t.UpdatedAt = time.Now()
 		return removed, DB.Save(&t).Error
 	}
 	now := time.Now()
-	return removed, DB.Create(&UserTheme{UserID: userID, CSS: sanitized, UpdatedAt: now}).Error
+	return removed, DB.Create(&UserTheme{UserID: userID, CSS: sanitized, CustomJS: sanitizedJS, UpdatedAt: now}).Error
 }

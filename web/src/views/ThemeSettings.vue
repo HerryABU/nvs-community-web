@@ -37,6 +37,38 @@
         </el-form>
       </el-tab-pane>
 
+      <!-- 个人自定义 JS：仅本人登录态执行（自 XSS，无横向危害），alist 式 -->
+      <el-tab-pane label="个人 JS" name="js">
+        <el-alert type="info" :closable="false" show-icon class="tip">
+          <template #title>说明</template>
+          此处的 JS 仅在你<b>自己登录后</b>的页面执行（不影响其他访客）。可用来做个性化交互特效，
+          通过 <code>window.NVS</code> / <code>window.alist</code> 读取站点状态、监听事件。后端会剥离
+          <code>&lt;/script&gt;</code> 等逃逸序列。
+        </el-alert>
+        <el-form label-width="100px" class="theme-form" v-loading="jsLoading">
+          <el-form-item label="个人 JS">
+            <el-input
+              v-model="js"
+              type="textarea"
+              :rows="12"
+              placeholder="例如：(function(){ document.body.classList.add('my-fx'); })();"
+              :disabled="jsSaving"
+              class="js-editor"
+            />
+          </el-form-item>
+
+          <el-form-item v-if="jsRemoved.length" label="被处理项">
+            <el-tag v-for="r in jsRemoved" :key="r" type="warning" class="rm-tag" size="small">{{ r }}</el-tag>
+          </el-form-item>
+
+          <el-form-item>
+            <el-button type="primary" :loading="jsSaving" @click="saveJs">保存我的 JS</el-button>
+            <el-button :loading="jsSaving" @click="resetJs">清除</el-button>
+            <el-button @click="reloadJs" :disabled="jsSaving">重新加载</el-button>
+          </el-form-item>
+        </el-form>
+      </el-tab-pane>
+
       <!-- 作者主题：访客在你的作者页/作品页可见（G4） -->
       <el-tab-pane v-if="authStore.isAuthor" label="作者主题（访客可见）" name="author">
         <el-alert type="info" :closable="false" show-icon class="tip">
@@ -88,11 +120,67 @@ const saving = ref(false);
 const css = ref('');
 const removed = ref<string[]>([]);
 
+// ===== 个人自定义 JS（仅本人登录态执行） =====
+const jsLoading = ref(false);
+const jsSaving = ref(false);
+const js = ref('');
+const jsRemoved = ref<string[]>([]);
+
+async function reloadJs() {
+  jsLoading.value = true;
+  try {
+    const r = await themeApi.getMyTheme();
+    js.value = r.data?.data?.js || '';
+  } catch {
+    ElMessage.error('加载失败');
+  } finally {
+    jsLoading.value = false;
+  }
+}
+
+async function saveJs() {
+  jsSaving.value = true;
+  try {
+    const r = await themeApi.updateMyTheme(css.value, js.value);
+    if (r.data?.code === 0) {
+      jsRemoved.value = (r.data.data?.removed || []).filter((x: string) => /script|注释/.test(x));
+      await themeStore.loadTheme();
+      ElMessage.success(jsRemoved.value.length ? '已保存（部分内容因安全风险被处理）' : '已保存，立即生效');
+    } else {
+      ElMessage.error(r.data?.message || '保存失败');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  } finally {
+    jsSaving.value = false;
+  }
+}
+
+async function resetJs() {
+  jsSaving.value = true;
+  try {
+    const r = await themeApi.updateMyTheme(css.value, '');
+    if (r.data?.code === 0) {
+      js.value = '';
+      jsRemoved.value = [];
+      await themeStore.loadTheme();
+      ElMessage.success('已清除个人 JS');
+    } else {
+      ElMessage.error(r.data?.message || '操作失败');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+  } finally {
+    jsSaving.value = false;
+  }
+}
+
 async function reload() {
   loading.value = true;
   try {
     const r = await themeApi.getMyTheme();
     css.value = r.data?.data?.css || '';
+    js.value = r.data?.data?.js || '';
   } catch {
     ElMessage.error('加载失败');
   } finally {
@@ -103,7 +191,7 @@ async function reload() {
 async function save() {
   saving.value = true;
   try {
-    const r = await themeApi.updateMyTheme(css.value);
+    const r = await themeApi.updateMyTheme(css.value, js.value);
     if (r.data?.code === 0) {
       removed.value = r.data.data?.removed || [];
       // 本地即时生效（store 重新拉取并注入）
@@ -122,9 +210,10 @@ async function save() {
 async function resetMine() {
   saving.value = true;
   try {
-    const r = await themeApi.updateMyTheme('');
+    const r = await themeApi.updateMyTheme('', '');
     if (r.data?.code === 0) {
       css.value = '';
+      js.value = '';
       removed.value = [];
       themeStore.resetMyTheme();
       await themeStore.loadTheme();
@@ -212,5 +301,6 @@ onMounted(() => {
 .theme-form { margin-top: 8px; }
 .theme-tabs { margin-top: 8px; }
 .css-editor :deep(textarea) { font-family: 'Cascadia Code', Consolas, monospace; font-size: 13px; }
+.js-editor :deep(textarea) { font-family: 'Cascadia Code', Consolas, monospace; font-size: 13px; }
 .rm-tag { margin-right: 6px; }
 </style>
