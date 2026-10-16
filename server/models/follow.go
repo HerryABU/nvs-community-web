@@ -7,7 +7,10 @@ type Follow struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
 	FollowerID  uint      `gorm:"not null;uniqueIndex:uk_follow;index:idx_follower" json:"follower_id"`
 	FollowedID  uint      `gorm:"not null;uniqueIndex:uk_follow;index:idx_followed" json:"followed_id"`
-	CreatedAt   time.Time `json:"created_at"`
+	// IsSpecial 特别关注（F14）：关注关系的加强态；不关注则无所谓特别关注。
+	// 取消特别关注只把本列置 false，保留普通关注行。
+	IsSpecial bool      `gorm:"default:false" json:"is_special"`
+	CreatedAt time.Time `json:"created_at"`
 
 	Follower *User `gorm:"foreignKey:FollowerID" json:"follower,omitempty"`
 	Followed *User `gorm:"foreignKey:FollowedID" json:"followed,omitempty"`

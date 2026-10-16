@@ -354,6 +354,10 @@ func main() {
 		protected.GET("/followers", handlers.ListFollowers)
 		protected.GET("/follow/check/:id", handlers.CheckFollow)
 		protected.GET("/follow/stats", handlers.GetFollowStats)
+		// 特别关注 + 动态流（F14）
+		protected.POST("/follows/:id/special", handlers.ToggleSpecialFollow)
+		protected.GET("/follows/special", handlers.ListMySpecialFollows)
+		protected.GET("/feed/special", handlers.GetSpecialFeed)
 		// 作者博客（创建、编辑、删除需登录）
 		protected.POST("/blogs", handlers.CreateBlog)
 		protected.POST("/topics", handlers.CreateTopic) // 创建话题（登录）

@@ -159,6 +159,12 @@
                 <el-dropdown-item @click="$router.push('/user/blacklist')">
                   <el-icon><CircleClose /></el-icon> 黑名单管理
                 </el-dropdown-item>
+                <el-dropdown-item @click="$router.push('/user/special-follows')">
+                  <el-icon><Star /></el-icon> 特别关注
+                </el-dropdown-item>
+                <el-dropdown-item @click="$router.push('/feed')">
+                  <el-icon><Bell /></el-icon> 特别关注动态
+                </el-dropdown-item>
                 <el-dropdown-item @click="$router.push('/user/messages')">
                   <el-icon><ChatLineRound /></el-icon> 我的私信
                 </el-dropdown-item>
@@ -269,7 +275,7 @@ import { authApi } from '@/api/auth';
 import { notificationApi } from '@/api/notification';
 import { appPrefix } from '@/utils/prefix';
 import { ElMessage } from 'element-plus';
-import { Camera, Setting, Brush, Document, Warning, Bell, Menu, HomeFilled, ChatDotRound, Plus, Notebook, User, SwitchButton, Connection, Key, Stamp, CircleClose, ChatLineRound } from '@element-plus/icons-vue';
+import { Camera, Setting, Brush, Document, Warning, Bell, Menu, HomeFilled, ChatDotRound, Plus, Notebook, User, SwitchButton, Connection, Key, Stamp, CircleClose, ChatLineRound, Star } from '@element-plus/icons-vue';
 
 const avatarInput = ref<HTMLInputElement>();
 const router = useRouter();

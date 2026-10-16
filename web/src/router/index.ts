@@ -373,6 +373,18 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/user/special-follows',
+      name: 'user-special-follows',
+      component: () => import('@/views/user/SpecialFollows.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/feed',
+      name: 'feed',
+      component: () => import('@/views/Feed.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/user/messages',
       name: 'user-messages',
       component: () => import('@/views/user/Messages.vue'),
