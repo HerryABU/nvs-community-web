@@ -210,6 +210,9 @@ func main() {
 		public.POST("/auth/verify-code", handlers.VerifyEmailCode)
 		public.POST("/auth/forgot-password", security.RateLimit(3, 60), handlers.ForgotPassword)
 		public.POST("/auth/reset-password", security.RateLimit(3, 60), handlers.ResetPassword)
+		// 微信扫码登录（F21.2）：授权 URL 获取 + OAuth 回调（免鉴权，state 一次性防 CSRF）
+		public.GET("/auth/wechat/url", security.RateLimit(10, 60), handlers.WeChatAuthStart)
+		public.GET("/auth/wechat/callback", handlers.WeChatCallback)
 		public.GET("/categories", handlers.ListCategories)
 		public.GET("/categories/stats", handlers.ListCategoryStats)
 		public.GET("/wall-zone/:zone", handlers.GetPublicZoneDetail)
@@ -242,6 +245,11 @@ func main() {
 		// 自定义主页（F15）：公开区块列表 + 全站最新帖（论坛首页风格区块）
 		public.GET("/home-blocks", handlers.ListPublicHomeBlocks)
 		public.GET("/threads/latest", handlers.ListLatestThreads)
+		// 狂暴模式（F19）：SSE 评论实时流 + 公开状态查询（管理员开关，默认关）
+		public.GET("/live/stream", handlers.LiveStream)
+		public.GET("/live/config", handlers.LiveConfig)
+		// 自定义网站主题（F12：alist 式，服务端消毒后全局生效）
+		public.GET("/theme/site", handlers.GetSiteTheme)
 		// 沙盒虚拟文件系统
 		public.GET("/sandbox-vfs/:htmlId/read", handlers.VFSRead)
 		public.POST("/sandbox-vfs/:htmlId/write", handlers.VFSWrite)
@@ -261,6 +269,17 @@ func main() {
 	// 未成年检测（F21.1）：出生日期自报 + 状态查询（strict 分级限制在发布入口门禁）
 	protected.POST("/auth/birthdate", security.RateLimit(10, 60), handlers.SetBirthDate)
 	protected.GET("/auth/minor-status", handlers.GetMinorStatus)
+	// 微信账号绑定（F21.2）：绑定状态 / 绑定 / 解绑
+	protected.GET("/auth/wechat/bind-status", handlers.WeChatBindStatus)
+	protected.POST("/auth/wechat/bind", handlers.WeChatBind)
+	protected.POST("/auth/wechat/unbind", handlers.WeChatUnbind)
+	// 自定义网站主题（F12）：个人主题读取 / 保存（服务端消毒）
+	protected.GET("/theme/me", handlers.GetMyTheme)
+	protected.PUT("/theme/me", handlers.UpdateMyTheme)
+	// web 项目额度（F17）：个人额度查询 + 设为公开（触发超额审核）
+	protected.GET("/web-quota/mine", handlers.MyWebQuota)
+	protected.POST("/web-quota/html-public", handlers.SetHTMLPublic)
+	protected.POST("/web-quota/frame-public", handlers.SetFramePublic)
 	// 用户黑名单（F13：拉黑禁言/屏蔽内容）
 	protected.POST("/blacklist", security.RateLimit(20, 60), handlers.AddBlacklist)
 	protected.DELETE("/blacklist/:id", handlers.RemoveBlacklist)
@@ -478,6 +497,17 @@ func main() {
 		admin.POST("/home-block-reorder", handlers.AdminReorderHomeBlocks)
 		admin.GET("/home-block-presets", handlers.AdminListHomeBlockPresets)
 		admin.POST("/home-block-presets/:key/apply", handlers.AdminApplyHomeBlockPreset)
+		// 狂暴模式配置（F19：默认关；开启后评论区 SSE 实时推送）
+		admin.GET("/rage-config", handlers.GetRageConfigAdmin)
+		admin.PUT("/rage-config", handlers.UpdateRageConfigAdmin)
+		// 自定义网站主题（F12：alist 式，管理员配置对全站生效）
+		admin.PUT("/theme/site", handlers.UpdateSiteTheme)
+		// web 项目额度与超额审核（F17）
+		admin.GET("/web-quota/requests", handlers.AdminListWebQuotaRequests)
+		admin.POST("/web-quota/requests/:id/approve", handlers.AdminApproveWebQuotaRequest)
+		admin.POST("/web-quota/requests/:id/reject", handlers.AdminRejectWebQuotaRequest)
+		admin.GET("/web-quota/config", handlers.AdminGetWebQuotaConfig)
+		admin.PUT("/web-quota/config", handlers.AdminSetWebQuotaConfig)
 		// 检查应对工具箱（176号令 5.2 检查材料清单）
 		admin.GET("/compliance/report", handlers.GetComplianceReport)
 		admin.GET("/compliance/export-logs", handlers.ExportComplianceLogs)

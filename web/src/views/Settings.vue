@@ -3,6 +3,34 @@
     <div class="settings-container">
       <h2 class="page-title">账号设置</h2>
 
+      <!-- 我的主题（F12：alist 式自定义网站外观） -->
+      <el-card class="settings-card" shadow="hover">
+        <template #header>
+          <div class="card-header">
+            <el-icon><Brush /></el-icon>
+            <span>我的主题</span>
+          </div>
+        </template>
+        <p class="card-desc">自定义你的专属网站外观（CSS），保存后立即在所有设备生效，覆盖站点默认主题。</p>
+        <router-link to="/settings/theme">
+          <el-button type="primary" plain>前往主题设置</el-button>
+        </router-link>
+      </el-card>
+
+      <!-- web 项目额度（F17） -->
+      <el-card class="settings-card" shadow="hover">
+        <template #header>
+          <div class="card-header">
+            <el-icon><Box /></el-icon>
+            <span>我的 web 项目额度</span>
+          </div>
+        </template>
+        <p class="card-desc">查看你已公开发布到广场的 web 项目数量与剩余额度；超额发布将进入管理员审核队列。</p>
+        <router-link to="/settings/web-quota">
+          <el-button type="primary" plain>查看额度</el-button>
+        </router-link>
+      </el-card>
+
       <!-- 修改昵称 -->
       <el-card class="settings-card" shadow="hover">
         <template #header>
@@ -230,7 +258,7 @@ import { authApi } from '@/api/auth';
 import { apiKeyApi } from '@/api/apikey';
 import api from '@/api';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
-import { Lock, User, DataAnalysis, Key } from '@element-plus/icons-vue';
+import { Lock, User, DataAnalysis, Key, Brush, Box } from '@element-plus/icons-vue';
 import RealNameCard from '@/components/user/RealNameCard.vue';
 
 const router = useRouter();

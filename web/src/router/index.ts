@@ -253,6 +253,30 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/rage',
+      name: 'admin-rage',
+      component: () => import('@/views/admin/AdminRage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/theme',
+      name: 'admin-theme',
+      component: () => import('@/views/admin/AdminTheme.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/home-blocks',
+      name: 'admin-home-blocks',
+      component: () => import('@/views/admin/AdminHomeBlocks.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/web-quota',
+      name: 'admin-web-quota',
+      component: () => import('@/views/admin/AdminWebQuota.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/badwords',
       name: 'admin-badwords',
       component: () => import('@/views/admin/AdminBadWords.vue'),
@@ -362,6 +386,18 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/settings/theme',
+      name: 'settings-theme',
+      component: () => import('@/views/ThemeSettings.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/settings/web-quota',
+      name: 'settings-web-quota',
+      component: () => import('@/views/user/WebQuota.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/about',
       name: 'about',
       component: () => import('@/views/About.vue'),
@@ -376,6 +412,12 @@ const router = createRouter({
       path: '/user/special-follows',
       name: 'user-special-follows',
       component: () => import('@/views/user/SpecialFollows.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/user/wechat-bind',
+      name: 'user-wechat-bind',
+      component: () => import('@/views/user/WeChatBind.vue'),
       meta: { requiresAuth: true },
     },
     {

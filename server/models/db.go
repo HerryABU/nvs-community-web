@@ -59,6 +59,12 @@ func AllModels() []interface{} {
 		&Message{},
 		// 自定义主页区块（F15：管理员可编辑/排序/套用布局预设）
 		&HomeBlock{},
+		// 狂暴模式配置（F19：评论实时更新，默认关，带宽可控）
+		&RageConfig{},
+		// 自定义网站主题（F12：alist 式，服务端消毒后全局生效）
+		&SiteTheme{}, &UserTheme{},
+		// web 项目额度与超额审核（F17：发布到广场需额度，超额进入审核队列）
+		&UserWebQuota{}, &WebQuotaRequest{},
 	}
 }
 
