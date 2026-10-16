@@ -14,6 +14,9 @@
           <el-form-item label="注册邮箱" prop="email">
             <el-input v-model="emailForm.email" placeholder="请输入注册邮箱" maxlength="128" />
           </el-form-item>
+          <el-form-item v-if="captchaRequired && !captchaToken">
+            <SlideCaptcha @verified="onCaptchaVerified" />
+          </el-form-item>
           <el-form-item v-if="emailStep === 2" label="验证码" prop="code">
             <div class="code-row">
               <el-input v-model="emailForm.code" placeholder="邮件中的验证码" maxlength="6" />
@@ -159,8 +162,12 @@ function startCooldown(which: 'email' | 'phone') {
 async function sendEmailCode() {
   const valid = await emailFormRef.value?.validateField('email').catch(() => false);
   if (!valid) return;
+  if (captchaRequired.value && !captchaToken.value) {
+    ElMessage.warning('请先完成滑块验证');
+    return;
+  }
   try {
-    await authApi.forgotPassword(emailForm.email);
+    await authApi.forgotPassword(emailForm.email, captchaToken.value);
     ElMessage.success('验证码已发送，请查收邮件');
     emailStep.value = 2;
     startCooldown('email');

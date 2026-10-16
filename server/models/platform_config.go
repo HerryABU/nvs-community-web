@@ -115,19 +115,19 @@ func GetRobotsTxt() string {
 // InitPlatformConfigs 初始化默认平台配置（仅在不存在时写入）
 func InitPlatformConfigs() {
 	defaults := map[string]string{
-		"site_name":       "星海文学",
-		"vip_enabled":     "true",
-		"email_verify":    "false",
-		"captcha_enabled": "false",
-		"novel_visitor_mode": "open",
-		"home_module":       "novels", // 首页主模块：novels / blogs / forums / combined
-		"realname_required": "false",  // 发布/评论强制实名（默认关闭）
-		"login_methods":    `{"email":true,"phone":true,"wechat":false}`, // 允许的登录方式
-		"minor_mode":       "off",    // 未成年保护模式：off / soft / strict
-		"national_realname_api": `{"enabled":false,"url":"","token":""}`, // 国家实名检测 API（不存储姓名/身份证明文）
-		"categories":      `["硬科幻","奇幻","推演文学","架空历史","现实主义","悬疑推理","实验文学","同人区","政治区","讽刺文学","泛二次元区","其他"]`,
-		"robots_txt":      "User-agent: *\nAllow: /\n",
-		"web_publish_quota": "3", // 每用户默认可公开发布的 web 项目（UserHTML+UserFrame 合计）上限
+		"site_name":             "星海文学",
+		"vip_enabled":           "true",
+		"email_verify":          "false",
+		"captcha_enabled":       "true",
+		"novel_visitor_mode":    "open",
+		"home_module":           "novels",                                     // 首页主模块：novels / blogs / forums / combined
+		"realname_required":     "false",                                      // 发布/评论强制实名（默认关闭）
+		"login_methods":         `{"email":true,"phone":true,"wechat":false}`, // 允许的登录方式
+		"minor_mode":            "off",                                        // 未成年保护模式：off / soft / strict
+		"national_realname_api": `{"enabled":false,"url":"","token":""}`,      // 国家实名检测 API（不存储姓名/身份证明文）
+		"categories":            `["硬科幻","奇幻","推演文学","架空历史","现实主义","悬疑推理","实验文学","同人区","政治区","讽刺文学","泛二次元区","其他"]`,
+		"robots_txt":            "User-agent: *\nAllow: /\n",
+		"web_publish_quota":     "3", // 每用户默认可公开发布的 web 项目（UserHTML+UserFrame 合计）上限
 	}
 	for k, v := range defaults {
 		var count int64
@@ -153,10 +153,10 @@ const HomeModuleKey = "home_module"
 
 // 允许的首页主模块取值
 var validHomeModules = map[string]bool{
-	"novels":    true,
-	"blogs":     true,
-	"forums":    true,
-	"combined":  true, // 综合页：小说为主，博客/论坛作为副区块
+	"novels":   true,
+	"blogs":    true,
+	"forums":   true,
+	"combined": true, // 综合页：小说为主，博客/论坛作为副区块
 }
 
 // GetHomeModule 返回当前配置的首页主模块（默认 novels）。
@@ -404,9 +404,9 @@ func IsRealNameRequired() bool {
 
 // LoginMethods 允许的登录方式
 type LoginMethods struct {
-	Email   bool `json:"email"`   // 邮箱+密码
-	Phone   bool `json:"phone"`   // 手机号+验证码
-	WeChat  bool `json:"wechat"`  // 微信扫码
+	Email  bool `json:"email"`  // 邮箱+密码
+	Phone  bool `json:"phone"`  // 手机号+验证码
+	WeChat bool `json:"wechat"` // 微信扫码
 }
 
 // GetLoginMethods 读取登录方式配置（缺省 email+phone 开放，微信默认关闭）
@@ -459,8 +459,8 @@ func GetMinorMode() MinorMode {
 // NationalRealNameConfig 国家实名检测 API 配置
 type NationalRealNameConfig struct {
 	Enabled bool   `json:"enabled"`
-	URL     string `json:"url"`    // 国家实名检测 API 端点（HTTPS）
-	Token   string `json:"token"`  // 接入令牌
+	URL     string `json:"url"`   // 国家实名检测 API 端点（HTTPS）
+	Token   string `json:"token"` // 接入令牌
 }
 
 // GetNationalRealNameConfig 读取国家实名 API 配置（缺省关闭）

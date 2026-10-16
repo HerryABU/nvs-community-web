@@ -76,7 +76,8 @@ func VerifyEmailCode(c *gin.Context) {
 // POST /api/auth/forgot-password — 发送密码重置验证码
 func ForgotPassword(c *gin.Context) {
 	var req struct {
-		Email string `json:"email" binding:"required,email"`
+		Email        string `json:"email" binding:"required,email"`
+		CaptchaToken string `json:"captcha_token"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请提供有效的邮箱地址")
@@ -84,6 +85,15 @@ func ForgotPassword(c *gin.Context) {
 	}
 
 	email := strings.TrimSpace(strings.ToLower(req.Email))
+
+	// 🔒 滑块验证码闸门：站长开启滑块时，必须先通过滑块才能发送重置邮件，防邮箱轰炸 / 枚举。
+	// 与 /api/auth/send-code、/api/auth/register 一致，堵死「裸调 forgot-password」通道。
+	if models.IsCaptchaEnabled() {
+		if req.CaptchaToken == "" || !slidecaptcha.VerifyPassToken(req.CaptchaToken) {
+			utils.Forbidden(c, "请先完成滑块验证后再请求密码重置")
+			return
+		}
+	}
 
 	// 检查邮箱是否已注册
 	user, err := models.GetUserByEmail(email)

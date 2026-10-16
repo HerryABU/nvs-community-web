@@ -93,9 +93,12 @@ export const authApi = {
     return api.post<{ code: number; message: string }>('/auth/verify-code', { email, code });
   },
 
-  // 忘记密码 - 发送重置验证码
-  forgotPassword(email: string) {
-    return api.post<{ code: number; message: string }>('/auth/forgot-password', { email });
+  // 忘记密码 - 发送重置验证码（必须携带滑块 pass token，否则后端拒绝）
+  forgotPassword(email: string, captchaToken?: string) {
+    return api.post<{ code: number; message: string }>('/auth/forgot-password', {
+      email,
+      captcha_token: captchaToken || '',
+    });
   },
 
   // 重置密码

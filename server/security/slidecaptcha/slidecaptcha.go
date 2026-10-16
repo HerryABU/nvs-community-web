@@ -22,6 +22,8 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,8 +48,9 @@ type challenge struct {
 }
 
 var (
-	store sync.Map // id -> *challenge
-	once  sync.Once
+	store      sync.Map // id -> *challenge
+	usedTokens sync.Map // pass token -> 过期 Unix 时间戳（一次性使用追踪，防同 token 复用）
+	once       sync.Once
 )
 
 func init() { once.Do(startReaper) }
@@ -63,6 +66,13 @@ func startReaper() {
 				c, _ := v.(*challenge)
 				if c == nil || c.used || now.Sub(c.createdAt) > challengeTTL {
 					store.Delete(k)
+				}
+				return true
+			})
+			// 清理已过期的 pass token 记录（value 存过期 Unix 时间戳）
+			usedTokens.Range(func(k, v any) bool {
+				if exp, ok := v.(int64); ok && now.Unix() > exp {
+					usedTokens.Delete(k)
 				}
 				return true
 			})
@@ -123,7 +133,7 @@ func Verify(id string, sliderX int) (token string, ok bool) {
 		return "", false
 	}
 	c.used = true
-	return signPass(id, c.correctX), true
+	return signPass(id), true
 }
 
 func abs(a int) int {
@@ -134,36 +144,46 @@ func abs(a int) int {
 }
 
 // signPass 用服务端密钥对挑战签发一次性 pass token（HMAC-SHA256，含时间戳）。
-func signPass(id string, correctX int) string {
+// correctX 仅服务端持有（滑块挑战完成时即消费），不参与签名；校验端拿不到 correctX，
+// 故以 id|ts 作为签名基底，由 HMAC 保证 token 确由服务端签发且未被篡改。
+func signPass(id string) string {
 	ts := time.Now().Unix()
-	payload := fmt.Sprintf("%s|%d|%d", id, correctX, ts)
+	payload := fmt.Sprintf("%s|%d", id, ts)
 	mac := hmac.New(sha256.New, []byte(passSecret()))
 	sum := mac.Sum([]byte(payload))
 	return fmt.Sprintf("%d.%s.%x", ts, id, sum)
 }
 
-// VerifyPassToken 校验 pass token 有效性（存在、未过期、签名正确）。
+// VerifyPassToken 校验 pass token 有效性：结构合法、未过期、签名正确，且一次性未使用。
+// token 格式：`<ts>.<challengeID>.<hmacHex>`，以 "." 三段分割（challengeID 由服务端生成，不含 "."）。
 func VerifyPassToken(token string) bool {
 	if token == "" {
 		return false
 	}
-	var ts int64
-	var id, macHex string
-	if _, err := fmt.Sscanf(token, "%d.%[^.].%s", &ts, &id, &macHex); err != nil {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
 		return false
 	}
+	ts, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return false
+	}
+	id := parts[1]
+	macHex := parts[2]
 	if time.Now().Unix()-ts > validMinutes*60 {
 		return false
 	}
-	// 重新计算：correctX 已隐含在签名里，但校验时不需重建，只要签名对得上即可；
-	// 用 id + 当前时间重算签名，确保 token 由服务端签发且未被篡改。
-	// 为防重放，将 id 与 ts 一并参与签名（同一次挑战的 pass token 与具体 correctX 绑定）。
 	mac := hmac.New(sha256.New, []byte(passSecret()))
-	// 重算时 correctX 未知，这里以 id+ts 作为签名基底（correctX 在签发时已并入 hash，
-	// 此处用 id+ts 二次确认 token 结构合法且未过期；严格性由短有效期保证）。
 	sum := mac.Sum([]byte(fmt.Sprintf("%s|%d", id, ts)))
 	expected := fmt.Sprintf("%x", sum)
-	return hmac.Equal([]byte(expected), []byte(macHex))
+	if !hmac.Equal([]byte(expected), []byte(macHex)) {
+		return false
+	}
+	// 一次性：同一 token 仅首次校验通过，复用立即失效（防同一滑块结果多次刷接口）
+	if _, loaded := usedTokens.LoadOrStore(token, ts+validMinutes*60); loaded {
+		return false
+	}
+	return true
 }
 
 func passSecret() string {
