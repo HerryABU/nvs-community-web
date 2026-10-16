@@ -37,6 +37,8 @@ appStore.bootstrap();
 onMounted(() => {
   authStore.fetchUser();
   themeStore.applyTheme();
+  // F12 自定义网站主题（alist 式）：拉取站点默认主题 +（已登录时）个人主题并注入 <style>
+  themeStore.loadTheme();
 });
 
 // ======== 未成年检测（F21.1） ========
