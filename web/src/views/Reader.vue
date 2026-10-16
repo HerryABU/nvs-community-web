@@ -312,8 +312,9 @@ async function loadFrames() {
     const res = await frameApi.getByNovel(novelId.value);
     if (res.data.code === 0) {
       const frames = res.data.data || [];
-      headerFrames.value = frames.filter((f: any) => f.position !== 'bottom');
-      footerFrames.value = frames.filter((f: any) => f.position === 'bottom');
+      // position 为 footer 的模板放正文下方；空值或其它值默认 header（向后兼容）
+      headerFrames.value = frames.filter((f: any) => f.position !== 'footer');
+      footerFrames.value = frames.filter((f: any) => f.position === 'footer');
     }
   } catch { /* 静默失败，模板非必需 */ }
 }

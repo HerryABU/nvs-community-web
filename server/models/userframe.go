@@ -33,6 +33,8 @@ type UserFrame struct {
 	// iframe 嵌入预览尺寸（前端预览/运行窗口大小，已有数据由 AutoMigrate 加列、默认 960/600）
 	FrameWidth  int `gorm:"default:960" json:"frame_width"`
 	FrameHeight int `gorm:"default:600" json:"frame_height"`
+	// 模板在读者页的放置位置：header(正文上方) / footer(正文下方)，默认 header
+	Position string `gorm:"size:16;default:header" json:"position"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记

@@ -54,7 +54,13 @@
           <el-col :span="16"><el-form-item label="名称"><el-input v-model="form.name" /></el-form-item></el-col>
           <el-col :span="8"><el-form-item label="关联作品"><el-input-number v-model="form.novel_id" :min="0" style="width:100%" /></el-form-item></el-col>
         </el-row>
-        <el-form-item label="HTML内容"><el-input v-model="form.content" type="textarea" :rows="16" class="code-input" /></el-form-item>
+        <el-form-item label="HTML内容">
+          <template #label>
+            <span>HTML内容</span>
+            <el-button size="small" type="primary" link :icon="Link" @click="showRefPicker = true">插入站内链接</el-button>
+          </template>
+          <el-input ref="contentInputRef" v-model="form.content" type="textarea" :rows="16" class="code-input" />
+        </el-form-item>
         <el-space>
           <el-checkbox v-model="form.has_controls">交互控件</el-checkbox>
           <el-checkbox v-model="form.uses_novel_api">平台API</el-checkbox>
@@ -64,6 +70,12 @@
           <el-radio-group v-model="form.run_mode">
             <el-radio value="sandbox">沙盒隔离（默认）</el-radio>
             <el-radio value="inline">非沙盒注入（仅限本人页面）</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="放置位置" style="margin-top:12px">
+          <el-radio-group v-model="form.position">
+            <el-radio value="header">正文上方</el-radio>
+            <el-radio value="footer">正文下方</el-radio>
           </el-radio-group>
         </el-form-item>
       </el-form>
@@ -100,17 +112,22 @@
           />
         </div>
       </el-card>
-      <el-alert class="compile-hint" type="info" :closable="false" show-icon
-        title="嵌入尺寸提示"
-        description="保存的尺寸将用于本模板作为 iframe 嵌入到阅读页 / 作者主页时的窗口大小；重新保存模板内容后预览会即时生效，请以「启用」状态的最新版本为准。" />
+        <el-alert class="compile-hint" type="info" :closable="false" show-icon
+          title="嵌入尺寸提示"
+          description="保存的尺寸将用于本模板作为 iframe 嵌入到阅读页 / 作者主页时的窗口大小；重新保存模板内容后预览会即时生效，请以「启用」状态的最新版本为准。" />
     </el-dialog>
+
+    <!-- 站内内容引用选择器（CSDN式相对链接） -->
+    <ContentRefPicker v-model:visible="showRefPicker" @confirm="insertRefLink" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, nextTick, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { Link } from '@element-plus/icons-vue';
 import { frameApi } from '@/api/frame';
+import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
 
 const tab = ref('reader');
 const readerFrames = ref<any[]>([]);
@@ -119,9 +136,11 @@ const showEdit = ref(false); const showPreview = ref(false); const saving = ref(
 const editing = ref<any>(null); const previewSrc = ref('');
 const previewW = ref(960); const previewH = ref(600); const savingPreview = ref(false);
 const previewTarget = ref<any>(null);
-const form = ref({ name:'', novel_id:undefined as number|undefined, content:'', has_controls:false, uses_novel_api:false, is_public:false, sandbox_level:'strict', frame_type:'reader', run_mode:'sandbox' });
+const showRefPicker = ref(false);
+const contentInputRef = ref<any>(null);
+const form = ref({ name:'', novel_id:undefined as number|undefined, content:'', has_controls:false, uses_novel_api:false, is_public:false, sandbox_level:'strict', frame_type:'reader', run_mode:'sandbox', position:'header' });
 
-function resetForm(){ form.value={ name:'', novel_id:undefined, content:'', has_controls:false, uses_novel_api:false, is_public:false, sandbox_level:'strict', frame_type:'reader', run_mode:'sandbox' }; editing.value=null; }
+function resetForm(){ form.value={ name:'', novel_id:undefined, content:'', has_controls:false, uses_novel_api:false, is_public:false, sandbox_level:'strict', frame_type:'reader', run_mode:'sandbox', position:'header' }; editing.value=null; }
 function fmt(d:string){return new Date(d).toLocaleDateString('zh-CN')}
 
 onMounted(load);
@@ -138,7 +157,25 @@ async function load(){
 }
 
 function openCreate(type:string){ form.value.frame_type=type; showEdit.value=true; }
-function edit(f:any){ editing.value=f; form.value={name:f.name,novel_id:f.novel_id??undefined,content:'',has_controls:f.has_controls,uses_novel_api:f.uses_novel_api,is_public:f.is_public,sandbox_level:f.sandbox_level,frame_type:f.frame_type,run_mode:f.run_mode||'sandbox'}; showEdit.value=true; frameApi.get(f.id).then(r=>{if(r.data.code===0)form.value.content=r.data.data.content}) }
+function edit(f:any){ editing.value=f; form.value={name:f.name,novel_id:f.novel_id??undefined,content:'',has_controls:f.has_controls,uses_novel_api:f.uses_novel_api,is_public:f.is_public,sandbox_level:f.sandbox_level,frame_type:f.frame_type,run_mode:f.run_mode||'sandbox',position:f.position||'header'}; showEdit.value=true; frameApi.get(f.id).then(r=>{if(r.data.code===0)form.value.content=r.data.data.content}) }
+
+// 在 HTML 内容文本框的光标处插入相对链接；无选区则追加到末尾
+function insertRefLink(link: string){
+  const ta = contentInputRef.value?.textarea as HTMLTextAreaElement | undefined;
+  const val = form.value.content || '';
+  if (ta){
+    const start = ta.selectionStart ?? val.length;
+    const end = ta.selectionEnd ?? val.length;
+    form.value.content = val.slice(0, start) + link + val.slice(end);
+    nextTick(() => {
+      ta.focus();
+      const pos = start + link.length;
+      ta.setSelectionRange(pos, pos);
+    });
+  } else {
+    form.value.content = val + link;
+  }
+}
 
 async function save(){
   if(!form.value.name||!form.value.content){ElMessage.warning('请填写完整');return}

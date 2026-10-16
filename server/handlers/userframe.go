@@ -37,6 +37,7 @@ func CreateFrame(c *gin.Context) {
 		RunMode      string `json:"run_mode"`
 		FrameWidth   *int   `json:"frame_width"`
 		FrameHeight  *int   `json:"frame_height"`
+		Position     *string `json:"position"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
@@ -65,6 +66,10 @@ func CreateFrame(c *gin.Context) {
 	}
 	if req.RunMode != "sandbox" && req.RunMode != "inline" {
 		req.RunMode = "sandbox"
+	}
+	// position 校验：默认 header，仅允许 header / footer
+	if req.Position == nil || (*req.Position != "header" && *req.Position != "footer") {
+		req.Position = nil
 	}
 
 	userDir := filepath.Join(config.UserFrameDir, fmt.Sprintf("%d", userID))
@@ -120,6 +125,10 @@ func CreateFrame(c *gin.Context) {
 	}
 	if req.FrameHeight != nil {
 		frame.FrameHeight = *req.FrameHeight
+	}
+	// position：空值走 DB 默认 header，显式 header/footer 写入
+	if req.Position != nil {
+		frame.Position = *req.Position
 	}
 	if err := models.DB.Create(frame).Error; err != nil {
 		os.Remove(filePath)
@@ -187,6 +196,7 @@ func UpdateFrame(c *gin.Context) {
 		RunMode      *string `json:"run_mode"`
 		FrameWidth   *int    `json:"frame_width"`
 		FrameHeight  *int    `json:"frame_height"`
+		Position     *string `json:"position"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
@@ -228,6 +238,10 @@ func UpdateFrame(c *gin.Context) {
 	}
 	if req.RunMode != nil && (*req.RunMode == "sandbox" || *req.RunMode == "inline") {
 		updates["run_mode"] = *req.RunMode
+	}
+	// position：map 写入，显式 header/footer 不被 GORM 零值跳过逻辑丢弃
+	if req.Position != nil && (*req.Position == "header" || *req.Position == "footer") {
+		updates["position"] = *req.Position
 	}
 	if req.FrameWidth != nil {
 		updates["frame_width"] = *req.FrameWidth
@@ -327,6 +341,77 @@ func GetAuthorFrames(c *gin.Context) {
 		user.ID, "author", true).
 		Order("updated_at DESC").Find(&frames)
 	utils.Success(c, frames)
+}
+
+// ==================== 站内内容引用检索（CSDN式相对链接） ====================
+
+// ContentRef 站内可引用内容（供模板内插入相对链接）
+type ContentRef struct {
+	Type  string `json:"type"`  // novel / blog / thread
+	ID    uint   `json:"id"`
+	Title string `json:"title"`
+}
+
+// listContentRefs 跨小说 / 博客 / 论坛帖检索标题，返回可插入的相对链接目标。
+// 仅返回软删除未被标记的记录（GORM 对带 gorm.DeletedAt 的模型自动过滤）。
+func listContentRefs(query string) ([]ContentRef, error) {
+	q := strings.TrimSpace(query)
+	like := "%" + q + "%"
+	const perType = 8
+	refs := make([]ContentRef, 0, perType*3)
+
+	// 小说
+	var novels []models.Novel
+	nq := models.DB.Select("id, title").Limit(perType)
+	if q != "" {
+		nq = nq.Where("title LIKE ?", like)
+	}
+	if err := nq.Find(&novels).Error; err == nil {
+		for _, n := range novels {
+			refs = append(refs, ContentRef{Type: "novel", ID: n.ID, Title: n.Title})
+		}
+	}
+
+	// 博客
+	var blogs []models.AuthorBlog
+	bq := models.DB.Select("id, title").Limit(perType)
+	if q != "" {
+		bq = bq.Where("title LIKE ?", like)
+	}
+	if err := bq.Find(&blogs).Error; err == nil {
+		for _, b := range blogs {
+			refs = append(refs, ContentRef{Type: "blog", ID: b.ID, Title: b.Title})
+		}
+	}
+
+	// 论坛帖
+	var threads []models.Thread
+	tq := models.DB.Select("id, title").Limit(perType)
+	if q != "" {
+		tq = tq.Where("title LIKE ?", like)
+	}
+	if err := tq.Find(&threads).Error; err == nil {
+		for _, t := range threads {
+			refs = append(refs, ContentRef{Type: "thread", ID: t.ID, Title: t.Title})
+		}
+	}
+
+	// 总量限制 ~20（前端 picker 展示足够）
+	if len(refs) > 20 {
+		refs = refs[:20]
+	}
+	return refs, nil
+}
+
+// ListContentRefs GET /api/frame/refs?q=
+// 供前端 ContentRefPicker 检索站内内容，返回 {type,id,title}。
+func ListContentRefs(c *gin.Context) {
+	refs, err := listContentRefs(c.Query("q"))
+	if err != nil {
+		utils.InternalError(c, "检索站内内容失败")
+		return
+	}
+	utils.Success(c, refs)
 }
 
 // ==================== 模板格式API ====================
