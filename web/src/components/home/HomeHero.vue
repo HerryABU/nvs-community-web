@@ -27,7 +27,7 @@ defineProps<{
 <style scoped>
 .hero-section {
   position: relative;
-  height: 240px;
+  height: 300px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -57,19 +57,19 @@ defineProps<{
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(0,0,0,.06);
   border-radius: var(--radius-lg);
-  max-width: 640px;
+  max-width: 760px;
   width: 90%;
   box-shadow: 0 4px 24px rgba(0,0,0,.04);
 }
 .hero-glass h1 {
-  font-size: 2rem;
+  font-size: 2.4rem;
   font-weight: 300;
   color: var(--primary-color);
   margin-bottom: 6px;
   letter-spacing: -.5px;
 }
 .hero-glass p {
-  font-size: .95rem;
+  font-size: 1.05rem;
   color: var(--text-light);
   margin-bottom: 16px;
   font-weight: 300;
