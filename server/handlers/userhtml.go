@@ -375,16 +375,26 @@ func UpdateHTML(c *gin.Context) {
 		AllowWasm      *bool   `json:"allow_wasm"`
 		IsPublic       *bool   `json:"is_public"`
 		IsDownloadable *bool   `json:"is_downloadable"`
+		FrameWidth     *int    `json:"frame_width"`
+		FrameHeight    *int    `json:"frame_height"`
+		BlogID         *uint   `json:"blog_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
 
-	applyIfNotNil(req.Name, &htmlItem.Name)
-	applyIfNotNil(req.Description, &htmlItem.Description)
+	// 🔒 用 Updates(map) 精确写列：map 不会跳过零值，允许把布尔/数值显式设为 0/false，
+	// 规避 GORM 「带 default 标签的列遇到零值会被跳过」的坑。
+	updates := map[string]interface{}{}
+	if req.Name != nil {
+		updates["name"] = *req.Name
+	}
+	if req.Description != nil {
+		updates["description"] = *req.Description
+	}
 	if req.NovelID != nil {
-		htmlItem.NovelID = req.NovelID
+		updates["novel_id"] = *req.NovelID
 	}
 	// 🔒 安全审计 S2：entry_file 必须为解压目录内的相对路径（防路径穿越 LFI——
 	// 旧实现可直接把 entry_file 改为 ../../.env 读取任意文件）
@@ -396,17 +406,38 @@ func UpdateHTML(c *gin.Context) {
 			utils.BadRequest(c, "入口文件路径非法：仅允许解压目录内的相对路径")
 			return
 		}
-		htmlItem.EntryFile = entry
+		updates["entry_file"] = entry
 	}
-	applyIfNotNil(req.IsActive, &htmlItem.IsActive)
-	applyIfNotNil(req.AllowWasm, &htmlItem.AllowWasm)
-	applyIfNotNil(req.IsPublic, &htmlItem.IsPublic)
-	applyIfNotNil(req.IsDownloadable, &htmlItem.IsDownloadable)
+	if req.IsActive != nil {
+		updates["is_active"] = *req.IsActive
+	}
+	if req.AllowWasm != nil {
+		updates["allow_wasm"] = *req.AllowWasm
+	}
+	if req.IsPublic != nil {
+		updates["is_public"] = *req.IsPublic
+	}
+	if req.IsDownloadable != nil {
+		updates["is_downloadable"] = *req.IsDownloadable
+	}
+	if req.FrameWidth != nil {
+		updates["frame_width"] = *req.FrameWidth
+	}
+	if req.FrameHeight != nil {
+		updates["frame_height"] = *req.FrameHeight
+	}
+	if req.BlogID != nil {
+		updates["blog_id"] = *req.BlogID
+	}
 
-	if err := models.DB.Save(&htmlItem).Error; err != nil {
-		utils.InternalError(c, "更新失败")
-		return
+	if len(updates) > 0 {
+		if err := models.DB.Model(&htmlItem).Updates(updates).Error; err != nil {
+			utils.InternalError(c, "更新失败")
+			return
+		}
 	}
+	// 重新载入最新数据返回（含未变更的关联字段）
+	models.DB.Where("id = ?", htmlItem.ID).First(&htmlItem)
 	utils.Success(c, htmlItem)
 }
 

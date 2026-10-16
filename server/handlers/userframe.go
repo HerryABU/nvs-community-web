@@ -35,6 +35,8 @@ func CreateFrame(c *gin.Context) {
 		SandboxLevel string `json:"sandbox_level"`
 		FrameType    string `json:"frame_type"`
 		RunMode      string `json:"run_mode"`
+		FrameWidth   *int   `json:"frame_width"`
+		FrameHeight  *int   `json:"frame_height"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
@@ -112,6 +114,13 @@ func CreateFrame(c *gin.Context) {
 		ReviewStatus: reviewStatus,
 		ScanWarnings: scanWarnings,
 	}
+	// iframe 预览尺寸：未传则保持零值，由列默认值（960/600）兜底
+	if req.FrameWidth != nil {
+		frame.FrameWidth = *req.FrameWidth
+	}
+	if req.FrameHeight != nil {
+		frame.FrameHeight = *req.FrameHeight
+	}
 	if err := models.DB.Create(frame).Error; err != nil {
 		os.Remove(filePath)
 		utils.InternalError(c, "创建模板记录失败")
@@ -176,30 +185,55 @@ func UpdateFrame(c *gin.Context) {
 		SandboxLevel *string `json:"sandbox_level"`
 		FrameType    *string `json:"frame_type"`
 		RunMode      *string `json:"run_mode"`
+		FrameWidth   *int    `json:"frame_width"`
+		FrameHeight  *int    `json:"frame_height"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
 
-	applyIfNotNil(req.Name, &frame.Name)
-	applyIfNotNil(req.Description, &frame.Description)
-	if req.NovelID != nil {
-		frame.NovelID = req.NovelID
+	// 🔒 用 Updates(map) 精确写列：map 不会跳过零值，允许把布尔/数值显式设为 0/false，
+	// 规避 GORM 「带 default 标签的列遇到零值会被跳过」的坑。
+	updates := map[string]interface{}{}
+	if req.Name != nil {
+		updates["name"] = *req.Name
 	}
-	applyIfNotNil(req.IsActive, &frame.IsActive)
-	applyIfNotNil(req.IsPublic, &frame.IsPublic)
-	applyIfNotNil(req.Tags, &frame.Tags)
-	applyIfNotNil(req.HasControls, &frame.HasControls)
-	applyIfNotNil(req.UsesNovelAPI, &frame.UsesNovelAPI)
+	if req.Description != nil {
+		updates["description"] = *req.Description
+	}
+	if req.NovelID != nil {
+		updates["novel_id"] = *req.NovelID
+	}
+	if req.IsActive != nil {
+		updates["is_active"] = *req.IsActive
+	}
+	if req.IsPublic != nil {
+		updates["is_public"] = *req.IsPublic
+	}
+	if req.Tags != nil {
+		updates["tags"] = *req.Tags
+	}
+	if req.HasControls != nil {
+		updates["has_controls"] = *req.HasControls
+	}
+	if req.UsesNovelAPI != nil {
+		updates["uses_novel_api"] = *req.UsesNovelAPI
+	}
 	if req.SandboxLevel != nil && (*req.SandboxLevel == "strict" || *req.SandboxLevel == "interactive") {
-		frame.SandboxLevel = *req.SandboxLevel
+		updates["sandbox_level"] = *req.SandboxLevel
 	}
 	if req.FrameType != nil && (*req.FrameType == "reader" || *req.FrameType == "author") {
-		frame.FrameType = *req.FrameType
+		updates["frame_type"] = *req.FrameType
 	}
 	if req.RunMode != nil && (*req.RunMode == "sandbox" || *req.RunMode == "inline") {
-		frame.RunMode = *req.RunMode
+		updates["run_mode"] = *req.RunMode
+	}
+	if req.FrameWidth != nil {
+		updates["frame_width"] = *req.FrameWidth
+	}
+	if req.FrameHeight != nil {
+		updates["frame_height"] = *req.FrameHeight
 	}
 
 	if req.Content != nil {
@@ -217,22 +251,25 @@ func UpdateFrame(c *gin.Context) {
 			utils.InternalError(c, "更新模板文件失败")
 			return
 		}
-		frame.Version++
+		updates["version"] = frame.Version + 1
 		// 更新审查状态与告警
 		if len(warnings) > 0 {
-			frame.ReviewStatus = "pending"
-			frame.ScanWarnings = security.ThreatsToJSON(warnings)
-			frame.ReviewNote = ""
+			updates["review_status"] = "pending"
+			updates["scan_warnings"] = security.ThreatsToJSON(warnings)
+			updates["review_note"] = ""
 		} else {
-			frame.ReviewStatus = "approved"
-			frame.ScanWarnings = ""
+			updates["review_status"] = "approved"
+			updates["scan_warnings"] = ""
 		}
 	}
 
-	if err := models.DB.Save(&frame).Error; err != nil {
-		utils.InternalError(c, "更新模板失败")
-		return
+	if len(updates) > 0 {
+		if err := models.DB.Model(&frame).Updates(updates).Error; err != nil {
+			utils.InternalError(c, "更新模板失败")
+			return
+		}
 	}
+	models.DB.Where("id = ?", frame.ID).First(&frame)
 	utils.Success(c, frame)
 }
 

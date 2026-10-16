@@ -34,6 +34,7 @@ import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { ArrowLeft, Refresh } from '@element-plus/icons-vue';
 import api from '@/api/index';
+import { appPrefix } from '@/utils/prefix';
 
 const route = useRoute();
 const htmlId = computed(() => Number(route.params.htmlId));
@@ -54,7 +55,8 @@ onMounted(async () => {
     }
   } catch { /* */ }
   // 始终使用虚拟路径加载，完全不暴露真实API路径
-  previewSrc.value = `/app/${htmlId.value}`;
+  // 🔀 站点路径前缀：/app 为浏览器路由，需用 appPrefix 动态拼接（绝不硬编码 /go-nvs）
+  previewSrc.value = `${appPrefix}/app/${htmlId.value}`;
   loading.value = false;
 });
 

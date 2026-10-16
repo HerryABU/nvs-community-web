@@ -30,9 +30,12 @@ type UserFrame struct {
 	ReviewNote   string         `gorm:"size:512" json:"review_note"`                         // 管理员复核意见
 	ScanWarnings string         `gorm:"type:text" json:"scan_warnings"`                      // 自动扫描告警（JSON 数组）
 	RunMode      string         `gorm:"size:16;default:sandbox;index" json:"run_mode"`       // sandbox(沙盒) / inline(非沙盒直接注入，仅限本人页面)
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
+	// iframe 嵌入预览尺寸（前端预览/运行窗口大小，已有数据由 AutoMigrate 加列、默认 960/600）
+	FrameWidth  int `gorm:"default:960" json:"frame_width"`
+	FrameHeight int `gorm:"default:600" json:"frame_height"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
 	User  *User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	Novel *Novel `gorm:"foreignKey:NovelID" json:"novel,omitempty"`
@@ -46,6 +49,7 @@ type UserHTML struct {
 	ID             uint   `gorm:"primaryKey" json:"id"`
 	UserID         uint   `gorm:"not null;index" json:"user_id"`
 	NovelID        *uint  `gorm:"index" json:"novel_id"`                         // 关联作品（可选）
+	BlogID         *uint  `gorm:"index" json:"blog_id"`                          // 关联博客（可选）
 	Name           string `gorm:"size:128;not null" json:"name"`                 // 扩展名称
 	Description    string `gorm:"size:512" json:"description"`                   // 描述
 	ExtractDir     string `gorm:"size:512;not null" json:"extract_dir"`          // ZIP解压后的目录路径
@@ -81,9 +85,12 @@ type UserHTML struct {
 	ScanBlockReason string         `gorm:"size:512;default:''" json:"scan_block_reason"` // 阻断原因（命中的文件+规则）
 	ReviewedBy      uint           `gorm:"default:0" json:"reviewed_by"`                 // 复核管理员 ID
 	ReviewedAt      *time.Time     `json:"reviewed_at"`
-	CreatedAt       time.Time      `json:"created_at"`
-	UpdatedAt       time.Time      `json:"updated_at"`
-	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
+	// iframe 嵌入预览尺寸（前端预览/运行窗口大小，已有数据由 AutoMigrate 加列、默认 960/600）
+	FrameWidth  int `gorm:"default:960" json:"frame_width"`
+	FrameHeight int `gorm:"default:600" json:"frame_height"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
 	User  *User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	Novel *Novel `gorm:"foreignKey:NovelID" json:"novel,omitempty"`

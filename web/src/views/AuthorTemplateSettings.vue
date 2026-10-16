@@ -73,8 +73,37 @@
       </template>
     </el-dialog>
 
-    <!-- 预览 -->
-    <el-dialog v-model="showPreview" title="预览" width="85%"><SandboxPreview v-if="previewSrc" :src="previewSrc" height="500px" sandbox-policy="allow-scripts"/></el-dialog>
+    <!-- 预览 / iframe 嵌入 -->
+    <el-dialog v-model="showPreview" title="预览 / iframe 嵌入" width="90%">
+      <el-card shadow="never" class="iframe-preview-card">
+        <template #header>
+          <div class="iframe-ctrl">
+            <span class="iframe-ctrl-title">嵌入窗口</span>
+            <el-space wrap>
+              <span class="dim-label">宽(px)</span>
+              <el-input-number v-model="previewW" :min="200" :max="2000" :step="20" size="small" controls-position="right" />
+              <span class="dim-label">高(px)</span>
+              <el-input-number v-model="previewH" :min="200" :max="2000" :step="20" size="small" controls-position="right" />
+              <el-button size="small" type="primary" :loading="savingPreview" @click="savePreviewSettings">保存尺寸</el-button>
+            </el-space>
+          </div>
+        </template>
+        <div class="iframe-stage">
+          <iframe
+            v-if="previewSrc"
+            :key="previewSrc"
+            :src="previewSrc"
+            :style="{ width: previewW + 'px', height: previewH + 'px' }"
+            sandbox="allow-scripts"
+            class="embed-iframe"
+            title="模板预览"
+          />
+        </div>
+      </el-card>
+      <el-alert class="compile-hint" type="info" :closable="false" show-icon
+        title="嵌入尺寸提示"
+        description="保存的尺寸将用于本模板作为 iframe 嵌入到阅读页 / 作者主页时的窗口大小；重新保存模板内容后预览会即时生效，请以「启用」状态的最新版本为准。" />
+    </el-dialog>
   </div>
 </template>
 
@@ -82,13 +111,14 @@
 import { ref, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { frameApi } from '@/api/frame';
-import SandboxPreview from '@/views/frame/SandboxPreview.vue';
 
 const tab = ref('reader');
 const readerFrames = ref<any[]>([]);
 const authorFrames = ref<any[]>([]);
 const showEdit = ref(false); const showPreview = ref(false); const saving = ref(false);
 const editing = ref<any>(null); const previewSrc = ref('');
+const previewW = ref(960); const previewH = ref(600); const savingPreview = ref(false);
+const previewTarget = ref<any>(null);
 const form = ref({ name:'', novel_id:undefined as number|undefined, content:'', has_controls:false, uses_novel_api:false, is_public:false, sandbox_level:'strict', frame_type:'reader', run_mode:'sandbox' });
 
 function resetForm(){ form.value={ name:'', novel_id:undefined, content:'', has_controls:false, uses_novel_api:false, is_public:false, sandbox_level:'strict', frame_type:'reader', run_mode:'sandbox' }; editing.value=null; }
@@ -121,7 +151,17 @@ async function save(){
   }catch{ElMessage.error('保存失败')}
   saving.value=false;
 }
-function preview(f:any){previewSrc.value=frameApi.getPreview(f.id);showPreview.value=true}
+function preview(f:any){ previewTarget.value=f; previewSrc.value=frameApi.getPreview(f.id); previewW.value=f.frame_width||960; previewH.value=f.frame_height||600; showPreview.value=true; }
+async function savePreviewSettings(){
+  if(!previewTarget.value)return;
+  savingPreview.value=true;
+  try{
+    const r=await frameApi.update(previewTarget.value.id,{frame_width:previewW.value,frame_height:previewH.value});
+    if(r.data.code===0){previewTarget.value.frame_width=previewW.value;previewTarget.value.frame_height=previewH.value;ElMessage.success('尺寸已保存')}
+    else{ElMessage.error(r.data.message||'保存失败')}
+  }catch{ElMessage.error('保存失败')}
+  savingPreview.value=false;
+}
 async function del(f:any){
   try{await ElMessageBox.confirm('删除？','确认',{type:'warning'});await frameApi.delete(f.id);ElMessage.success('已删除');load()}catch{}
 }
@@ -141,6 +181,14 @@ async function del(f:any){
 .card-ft{display:flex;gap:6px;justify-content:flex-end}
 .empty{padding:40px 0;text-align:center}
 .code-input :deep(textarea){font-family:monospace;font-size:.85rem}
+.iframe-preview-card{margin-bottom:12px}
+.iframe-ctrl{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.iframe-ctrl-title{font-weight:600;font-size:.92rem}
+.dim-label{color:var(--text-secondary);font-size:.82rem}
+.iframe-stage{max-height:70vh;overflow:auto;display:flex;justify-content:center;background:var(--bg-color);padding:8px}
+.embed-iframe{border:1px solid var(--border-color);display:block;background:#fff;flex-shrink:0}
+[data-theme="dark"] .embed-iframe{background:#1a1a2e}
+.compile-hint{margin-top:10px}
 
 /* ====== 移动端作者模板设置适配 ====== */
 @media (max-width: 640px) {

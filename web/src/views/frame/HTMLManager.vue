@@ -28,6 +28,7 @@
             <el-tag v-if="h.port > 0" type="danger" size="small">端口:{{ h.port }}</el-tag>
             <el-tag v-if="h.allow_wasm" type="warning" size="small">WASM</el-tag>
             <el-tag v-if="h.is_public" type="success" size="small">🌐 广场</el-tag>
+            <el-tag v-if="h.blog_id" type="info" size="small">📝 博客:{{ h.blog_id }}</el-tag>
             <el-tag type="info" size="small">{{ h.file_count }} 文件</el-tag>
           </div>
         </div>
@@ -110,10 +111,40 @@
       </template>
     </el-dialog>
 
-    <!-- 预览 -->
-    <el-dialog v-model="showPreview" title="沙盒预览" width="85%" destroy-on-close>
-      <SandboxPreview v-if="previewSrc" :src="previewSrc" :title="previewName" height="600px"
-        sandbox-policy="allow-scripts allow-forms" />
+    <!-- 预览 / iframe 嵌入 -->
+    <el-dialog v-model="showPreview" title="沙盒预览 / iframe 嵌入" width="90%" destroy-on-close>
+      <el-card shadow="never" class="iframe-preview-card">
+        <template #header>
+          <div class="iframe-ctrl">
+            <span class="iframe-ctrl-title">预览窗口</span>
+            <el-space wrap>
+              <span class="dim-label">宽(px)</span>
+              <el-input-number v-model="previewW" :min="200" :max="2000" :step="20" size="small" controls-position="right" />
+              <span class="dim-label">高(px)</span>
+              <el-input-number v-model="previewH" :min="200" :max="2000" :step="20" size="small" controls-position="right" />
+              <el-select v-model="embedSource" placeholder="选择站内扩展嵌入" size="small" clearable style="width:220px" @change="onEmbedChange">
+                <el-option v-for="o in htmls" :key="o.id" :label="o.name" :value="o.id" />
+              </el-select>
+              <el-input-number v-model="previewBlogId" :min="0" :step="1" size="small" placeholder="绑定博客ID" style="width:160px" controls-position="right" />
+              <el-button size="small" type="primary" :loading="savingPreview" @click="savePreviewSettings">保存尺寸/绑定</el-button>
+            </el-space>
+          </div>
+        </template>
+        <div class="iframe-stage">
+          <iframe
+            v-if="previewSrc"
+            :key="previewSrc"
+            :src="previewSrc"
+            :style="{ width: previewW + 'px', height: previewH + 'px' }"
+            sandbox="allow-scripts allow-forms allow-popups"
+            class="embed-iframe"
+            title="iframe 预览"
+          />
+        </div>
+      </el-card>
+      <el-alert class="compile-hint" type="info" :closable="false" show-icon
+        title="编译产物提示"
+        description="若 ZIP 解压后的产物路径（入口文件 / 资源目录）发生变更，需重新上传 ZIP，预览与运行才会指向新路径；旧产物路径不会自动更新，请重新上传。" />
       <p class="network-hint">💡 此沙盒环境允许网络请求（fetch/XHR/WebSocket），不阻断网络</p>
     </el-dialog>
 
@@ -165,7 +196,6 @@ import { htmlApi } from '@/api/frame';
 import api, { apiPrefix } from '@/api/index';
 import { appPrefix } from '@/utils/prefix';
 import { useAuthStore } from '@/stores/auth';
-import SandboxPreview from './SandboxPreview.vue';
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -189,6 +219,7 @@ interface HTMLItem {
   id: number; user_id: number; name: string; description: string; entry_file: string;
   file_count: number; total_size: number; port: number; project_name: string;
   is_active: boolean; is_public: boolean; allow_wasm: boolean; updated_at: string;
+  frame_width?: number; frame_height?: number; blog_id?: number | null;
 }
 interface ZipEntryItem { name: string; size: number; }
 
@@ -197,6 +228,9 @@ const showUpload = ref(false); const uploading = ref(false);
 const uploadFile = ref<File | null>(null); const uploadError = ref(''); const uploadResult = ref('');
 const uploadRef = ref<any>(); const extractedFiles = ref<ZipEntryItem[]>([]);
 const showPreview = ref(false); const previewSrc = ref(''); const previewName = ref('');
+const previewW = ref(960); const previewH = ref(600); const previewBlogId = ref(0);
+const embedSource = ref<number | undefined>(undefined); const savingPreview = ref(false);
+const previewTarget = ref<HTMLItem | null>(null);
 const showFiles = ref(false); const fileTree = ref<any[]>([]); const fileTreeLoading = ref(false); const viewingName = ref('');
 const showEntryChange = ref(false); const newEntryFile = ref(''); const changingEntryName = ref('');
 const changingFiles = ref<ZipEntryItem[]>([]); const changingHtmlId = ref(0);
@@ -292,9 +326,51 @@ async function doUpload() {
 }
 
 function preview(h: HTMLItem) {
-  previewSrc.value = htmlApi.getPreview(h.id);
+  previewTarget.value = h;
   previewName.value = h.name;
+  // 🔀 站点路径前缀：iframe 直用 URL，用 apiPrefix 动态拼接（绝不硬编码 /go-nvs）
+  previewSrc.value = `${apiPrefix}/app/${h.id}`;
+  previewW.value = h.frame_width || 960;
+  previewH.value = h.frame_height || 600;
+  previewBlogId.value = h.blog_id ?? 0;
+  embedSource.value = h.id;
   showPreview.value = true;
+}
+
+// 站内资源选择：从当前用户的 UserHTML 列表选一个已有扩展作为内嵌源（相对路径，用 apiPrefix 拼接）
+function onEmbedChange(val: number | undefined) {
+  if (val) {
+    previewSrc.value = `${apiPrefix}/app/${val}`;
+  } else if (previewTarget.value) {
+    previewSrc.value = `${apiPrefix}/app/${previewTarget.value.id}`;
+  }
+}
+
+// 保存当前扩展的预览尺寸与博客绑定（blog_id=0 视为解绑 → null）
+async function savePreviewSettings() {
+  if (!previewTarget.value) return;
+  savingPreview.value = true;
+  try {
+    const data: Record<string, unknown> = {
+      frame_width: previewW.value,
+      frame_height: previewH.value,
+      blog_id: previewBlogId.value > 0 ? previewBlogId.value : null,
+    };
+    const r = await htmlApi.update(previewTarget.value.id, data);
+    if (r.data.code === 0) {
+      const d = r.data.data;
+      previewTarget.value.frame_width = d.frame_width ?? previewW.value;
+      previewTarget.value.frame_height = d.frame_height ?? previewH.value;
+      previewTarget.value.blog_id = d.blog_id ?? (previewBlogId.value > 0 ? previewBlogId.value : null);
+      ElMessage.success('尺寸/绑定已保存');
+    } else {
+      ElMessage.error(r.data.message || '保存失败');
+    }
+  } catch {
+    ElMessage.error('保存失败');
+  } finally {
+    savingPreview.value = false;
+  }
 }
 
 async function togglePublic(h: HTMLItem) {
@@ -417,6 +493,14 @@ function fmtDate(d: string) { return new Date(d).toLocaleDateString('zh-CN'); }
 .card-actions { display: flex; gap: 4px; justify-content: flex-end; flex-wrap: wrap; }
 .empty-state { padding: 40px 0; display: flex; justify-content: center; }
 .network-hint { color: var(--text-secondary); font-size: 0.85rem; margin-top: 8px; text-align: center; }
+.iframe-preview-card { margin-bottom: 12px; }
+.iframe-ctrl { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.iframe-ctrl-title { font-weight: 600; font-size: 0.92rem; }
+.dim-label { color: var(--text-secondary); font-size: 0.82rem; }
+.iframe-stage { max-height: 70vh; overflow: auto; display: flex; justify-content: center; background: var(--bg-color); padding: 8px; }
+.embed-iframe { border: 1px solid var(--border-color); display: block; background: #fff; flex-shrink: 0; }
+[data-theme="dark"] .embed-iframe { background: #1a1a2e; }
+.compile-hint { margin-top: 10px; }
 .plaza-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
 .plaza-card{background:var(--card-bg);border:1px solid var(--border-color);border-radius:10px;overflow:hidden;cursor:pointer;transition:box-shadow .2s}
 .plaza-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.08)}
