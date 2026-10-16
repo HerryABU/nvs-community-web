@@ -57,6 +57,8 @@ func AllModels() []interface{} {
 		&Blacklist{},
 		// 私信（F20：会话消息，互关才可发第 3 条）
 		&Message{},
+		// 自定义主页区块（F15：管理员可编辑/排序/套用布局预设）
+		&HomeBlock{},
 	}
 }
 

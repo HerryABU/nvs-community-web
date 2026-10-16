@@ -239,6 +239,9 @@ func main() {
 		// 176号令合规：公开算法说明（第七条第九项 算法透明度）+ 站点公告栏
 		public.GET("/algorithms/description", handlers.GetAlgoDescription)
 		public.GET("/announcements", handlers.ListAnnouncements)
+		// 自定义主页（F15）：公开区块列表 + 全站最新帖（论坛首页风格区块）
+		public.GET("/home-blocks", handlers.ListPublicHomeBlocks)
+		public.GET("/threads/latest", handlers.ListLatestThreads)
 		// 沙盒虚拟文件系统
 		public.GET("/sandbox-vfs/:htmlId/read", handlers.VFSRead)
 		public.POST("/sandbox-vfs/:htmlId/write", handlers.VFSWrite)
@@ -465,6 +468,16 @@ func main() {
 		admin.POST("/announcements", handlers.AdminCreateAnnouncement)
 		admin.PUT("/announcements/:id", handlers.AdminUpdateAnnouncement)
 		admin.DELETE("/announcements/:id", handlers.AdminDeleteAnnouncement)
+		// 自定义主页区块（F15）
+		// ⚠️ gin httprouter 铁律：静态段不能与同级通配段共存，
+		// 故 reorder/presets 用独立前缀，避免与 /home-blocks/:id 冲突 panic
+		admin.GET("/home-blocks", handlers.AdminListHomeBlocks)
+		admin.POST("/home-blocks", handlers.AdminCreateHomeBlock)
+		admin.PUT("/home-blocks/:id", handlers.AdminUpdateHomeBlock)
+		admin.DELETE("/home-blocks/:id", handlers.AdminDeleteHomeBlock)
+		admin.POST("/home-block-reorder", handlers.AdminReorderHomeBlocks)
+		admin.GET("/home-block-presets", handlers.AdminListHomeBlockPresets)
+		admin.POST("/home-block-presets/:key/apply", handlers.AdminApplyHomeBlockPreset)
 		// 检查应对工具箱（176号令 5.2 检查材料清单）
 		admin.GET("/compliance/report", handlers.GetComplianceReport)
 		admin.GET("/compliance/export-logs", handlers.ExportComplianceLogs)
