@@ -255,6 +255,9 @@ func main() {
 	protected.POST("/auth/realname/apply", security.RateLimit(5, 60), handlers.ApplyRealName)
 	protected.GET("/auth/realname", handlers.GetMyRealName)
 	protected.POST("/auth/realname/national-check", security.RateLimit(5, 60), handlers.NationalRealNameCheck)
+	// 未成年检测（F21.1）：出生日期自报 + 状态查询（strict 分级限制在发布入口门禁）
+	protected.POST("/auth/birthdate", security.RateLimit(10, 60), handlers.SetBirthDate)
+	protected.GET("/auth/minor-status", handlers.GetMinorStatus)
 	// 用户黑名单（F13：拉黑禁言/屏蔽内容）
 	protected.POST("/blacklist", security.RateLimit(20, 60), handlers.AddBlacklist)
 	protected.DELETE("/blacklist/:id", handlers.RemoveBlacklist)

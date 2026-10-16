@@ -150,12 +150,36 @@ export const authApi = {
     }>('/auth/realname');
   },
   // 国家实名检测 API 代理（姓名+身份证不落库明文，仅返回是否一致）
-  nationalRealNameCheck(realName: string, idCard: string) {
+  // advanced=true 为高级模式：只验证年龄，服务器不存储姓名/身份证，
+  // 仅按证件推算出生日期与未成年标记（F21.1 未成年检测）
+  nationalRealNameCheck(realName: string, idCard: string, advanced = false) {
     return api.post<{
       code: number; message: string; data: {
-        matched: boolean; status: string; message: string;
+        matched: boolean; status: string; message: string; minor_protected: boolean;
       };
-    }>('/auth/realname/national-check', { real_name: realName, id_card: idCard });
+    }>('/auth/realname/national-check', { real_name: realName, id_card: idCard, advanced });
+  },
+
+  // ======== 未成年检测（F21.1） ========
+  // 自报出生日期（不强制实名；已实名用户以证件为准不可自报）
+  setBirthDate(birthDate: string) {
+    return api.post<{ code: number; message: string; data: { age: number; minor_protected: boolean } }>(
+      '/auth/birthdate',
+      { birth_date: birthDate }
+    );
+  },
+  // 未成年模式与我的状态（need_ask=true 时前端应弹窗询问）
+  getMinorStatus() {
+    return api.get<{
+      code: number; message: string; data: {
+        minor_mode: 'off' | 'soft' | 'strict';
+        birth_date_set: boolean;
+        birth_date?: string;
+        age?: number;
+        minor_protected: boolean;
+        need_ask: boolean;
+      };
+    }>('/auth/minor-status');
   },
 
   // 上传头像（FormData 不手动设置 Content-Type，避免丢失 boundary）

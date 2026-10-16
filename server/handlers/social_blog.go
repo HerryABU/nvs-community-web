@@ -166,6 +166,10 @@ func ImportBlogs(c *gin.Context) {
 // POST /api/blogs — 创建博客
 func CreateBlog(c *gin.Context) {
 	userID := currentUserID(c)
+	// 未成年保护门禁（strict 模式下未成年人不可发布作品）
+	if checkMinorPublishRestricted(c) {
+		return
+	}
 	var req CreateBlogInput
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请填写博客标题和内容")

@@ -47,6 +47,10 @@ func CreateNovel(c *gin.Context) {
 	if checkRealNameRequired(c) {
 		return
 	}
+	// 未成年保护门禁（strict 模式下未成年人不可发布作品）
+	if checkMinorPublishRestricted(c) {
+		return
+	}
 
 	var input CreateNovelInput
 	if err := c.ShouldBindJSON(&input); err != nil {

@@ -35,6 +35,10 @@ func CreateChapter(c *gin.Context) {
 	if checkRealNameRequired(c) {
 		return
 	}
+	// 未成年保护门禁（strict 模式下未成年人不可发布作品）
+	if checkMinorPublishRestricted(c) {
+		return
+	}
 
 	var req struct {
 		Title   string `json:"title" binding:"required"`

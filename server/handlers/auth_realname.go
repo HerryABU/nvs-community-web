@@ -105,14 +105,18 @@ func GetMyRealName(c *gin.Context) {
 
 // NationalRealNameResp 国家实名检测 API 的标准化返回
 type NationalRealNameResp struct {
-	Matched bool   `json:"matched"`           // 姓名与身份证是否一致
-	Status  string `json:"status"`            // 原始状态串（透传，便于排查）
-	Message string `json:"message"`           // 提示信息
+	Matched        bool   `json:"matched"`           // 姓名与身份证是否一致
+	Status         string `json:"status"`            // 原始状态串（透传，便于排查）
+	Message        string `json:"message"`           // 提示信息
+	MinorProtected bool   `json:"minor_protected"`   // 核验通过时按证件推算的未成年标记
 }
 
 // POST /api/auth/realname/national-check — 国家实名检测 API 代理（需登录）
-// ⚠️ 服务器不存储姓名与身份证号：仅当次请求转发，响应只回传「是否一致」。
-// body: { real_name, id_card }
+// 两种模式：
+//   - 普通模式（advanced=false）：核验通过即完成实名落库（姓名加密、身份证仅哈希+脱敏）；
+//   - 高级模式（advanced=true）：仅验证年龄，服务器不存储姓名与身份证号，
+//     只按证件推算出生日期与未成年标记落库（未成年人网络保护「年龄验证」场景）。
+// body: { real_name, id_card, advanced? }
 func NationalRealNameCheck(c *gin.Context) {
 	userID := currentUserID(c)
 	if userID == 0 {
@@ -125,8 +129,9 @@ func NationalRealNameCheck(c *gin.Context) {
 		return
 	}
 	var req struct {
-		RealName string `json:"real_name" binding:"required"`
-		IDCard   string `json:"id_card" binding:"required"`
+		RealName  string `json:"real_name" binding:"required"`
+		IDCard    string `json:"id_card" binding:"required"`
+		Advanced  bool   `json:"advanced"` // 高级模式：只验龄，不落身份信息
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请填写姓名与身份证号")
@@ -183,12 +188,20 @@ func NationalRealNameCheck(c *gin.Context) {
 		out.Message = v
 	}
 
-	// 核验通过则顺带完成实名落库（姓名加密、身份证仅哈希+脱敏）
+	// 核验通过则落库。高级模式只验龄：仅按证件推算出生日期与未成年标记，
+	// 不存姓名/身份证哈希/脱敏串，real_name_verified 保持原值。
 	if out.Matched {
 		birth, verr := utils.ValidateIDCard(idCard)
 		if verr == nil {
-			encrypted, eerr := utils.EncryptField(name)
-			if eerr == nil {
+			ageMinor := utils.AgeAt(birth, time.Now()) < 18
+			out.MinorProtected = ageMinor
+			if req.Advanced {
+				_ = models.DB.Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+					"birth_date":      &birth,
+					"minor_protected": ageMinor,
+				}).Error
+				recordUserAudit(c, userID, models.AuditChangeProfile, "国家实名核验通过（高级模式：仅验证年龄，不存储身份信息）", "success")
+			} else if encrypted, eerr := utils.EncryptField(name); eerr == nil {
 				idHash := sha256Hex("idcard|" + idCard)
 				var dup int64
 				models.DB.Model(&models.User{}).Where("id_card_hash = ? AND id != ?", idHash, userID).Count(&dup)
@@ -201,7 +214,7 @@ func NationalRealNameCheck(c *gin.Context) {
 						"real_name_verified": true,
 						"real_name_at":       &now,
 						"birth_date":         &birth,
-						"minor_protected":    utils.AgeAt(birth, now) < 18,
+						"minor_protected":    ageMinor,
 					}).Error
 					recordUserAudit(c, userID, models.AuditChangeProfile, "国家实名核验通过并完成实名", "success")
 				}
