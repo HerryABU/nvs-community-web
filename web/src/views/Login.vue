@@ -9,6 +9,7 @@
       <el-tabs v-if="showTabs" v-model="activeTab" stretch class="login-tabs">
         <el-tab-pane v-if="methods.email" label="邮箱登录" name="email" />
         <el-tab-pane v-if="methods.phone" label="手机号登录" name="phone" />
+        <el-tab-pane v-if="methods.wechat" label="微信扫码" name="wechat" />
       </el-tabs>
 
       <!-- 邮箱密码登录 -->
@@ -41,7 +42,10 @@
       </el-form>
 
       <!-- 手机号验证码登录（F10） -->
-      <PhoneLoginForm v-else @success="onLoginSuccess" />
+      <PhoneLoginForm v-else-if="activeTab === 'phone'" @success="onLoginSuccess" />
+
+      <!-- 微信扫码登录（F21.2） -->
+      <WeChatQRLogin v-else-if="activeTab === 'wechat'" />
 
       <div class="auth-footer">
         还没有账号？<router-link to="/register">立即注册</router-link>
@@ -63,6 +67,7 @@ import { useAppStore } from '@/stores/app';
 import { ElMessage } from 'element-plus';
 import PhoneLoginForm from '@/components/auth/PhoneLoginForm.vue';
 import ForgotPasswordDialog from '@/components/auth/ForgotPasswordDialog.vue';
+import WeChatQRLogin from '@/components/auth/WeChatQRLogin.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -75,12 +80,26 @@ const showTabs = computed(() => {
   const n = (methods.value.email ? 1 : 0) + (methods.value.phone ? 1 : 0) + (methods.value.wechat ? 1 : 0);
   return n > 1;
 });
-const activeTab = ref<'email' | 'phone'>(methods.value.email ? 'email' : 'phone');
+const activeTab = ref<'email' | 'phone' | 'wechat'>(
+  methods.value.email ? 'email' : methods.value.phone ? 'phone' : 'wechat'
+);
 
 onMounted(async () => {
   // siteInfo 可能尚未就绪（SPA 直达登录页），确保一次
   if (!appStore.siteInfo) await appStore.bootstrap();
   if (!methods.value.email && methods.value.phone) activeTab.value = 'phone';
+  else if (!methods.value.email && !methods.value.phone && methods.value.wechat) activeTab.value = 'wechat';
+
+  // 微信扫码回调落地：后端写 cookie 后重定向到 /login?wechat=bound|failed
+  const wx = route.query.wechat as string | undefined;
+  if (wx === 'bound') {
+    ElMessage.success('微信登录成功');
+    await authStore.fetchUser();
+    const redirect = route.query.redirect as string;
+    router.replace(redirect || '/');
+  } else if (wx === 'failed') {
+    ElMessage.error(route.query.reason ? String(route.query.reason) : '微信登录失败，请重试');
+  }
 });
 
 const formRef = ref();
