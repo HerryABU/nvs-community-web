@@ -104,6 +104,20 @@ func RemoveBlacklist(c *gin.Context) {
 	utils.Success(c, gin.H{"message": "已解除拉黑"})
 }
 
+// HiddenAuthorIDs 返回 userID 以 hide 模式（屏蔽内容）拉黑的全部作者 ID。
+// 供评论列表 / 动态流在一次请求内「一次性取出」隐藏作者集合，再在内存中过滤，
+// 避免逐条查询；block 模式的写侧拦截仍由 CreateComment 等业务函数负责。
+func HiddenAuthorIDs(userID uint) ([]uint, error) {
+	var ids []uint
+	if userID == 0 {
+		return ids, nil
+	}
+	err := models.DB.Model(&models.Blacklist{}).
+		Where("user_id = ? AND mode = ?", userID, models.BlacklistModeHide).
+		Pluck("blocked_user_id", &ids).Error
+	return ids, err
+}
+
 // ListMyBlacklist GET /api/blacklist?page=&page_size= — 我的黑名单列表
 func ListMyBlacklist(c *gin.Context) {
 	userID := currentUserID(c)

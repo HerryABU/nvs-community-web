@@ -3,27 +3,33 @@
     <!-- 拼图舞台：背景缺口图 + 可拖动拼图块（1:1 像素，保证上报 x 与服务端 correctX 同坐标系） -->
     <div class="sp-stage" ref="stageRef" :style="{ width: stageW + 'px', height: stageH + 'px' }">
       <img
+        v-if="!useFallback"
         class="sp-bg"
         :src="bgImage"
         :width="stageW"
         :height="stageH"
         alt="滑块验证背景"
         draggable="false"
+        @error="onImgError"
       />
       <img
-        v-if="!verified"
+        v-if="!verified && !useFallback"
         class="sp-piece"
         :src="pieceImage"
         :style="{ left: sliderLeft + 'px', top: pieceTop + 'px', width: pieceSize + 'px', height: pieceSize + 'px' }"
         alt="拼图块"
         draggable="false"
+        @error="onImgError"
         @pointerdown.prevent="onDown"
       />
+      <div v-if="useFallback && !verified" class="sp-fallback">
+        <span>拼图加载失败，请直接拖动下方滑块完成验证</span>
+      </div>
       <div v-if="verified" class="sp-ok-mask">
         <el-icon><CircleCheckFilled /></el-icon>
         <span>验证通过</span>
       </div>
-      <span v-if="!verified && !dragging && !loading" class="sp-tip">{{ tip }}</span>
+      <span v-if="!verified && !dragging && !loading && !useFallback" class="sp-tip">{{ tip }}</span>
       <span v-if="loading" class="sp-tip">拼图生成中…</span>
     </div>
 
@@ -50,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onUnmounted, onMounted } from 'vue';
+import { ref, computed, onUnmounted, onMounted } from 'vue';
 import { ArrowRightBold, CircleCheckFilled, Loading } from '@element-plus/icons-vue';
 import { authApi } from '@/api/auth';
 
@@ -76,14 +82,27 @@ const verified = ref(false);
 const dragging = ref(false);
 const loading = ref(false);
 const errorMsg = ref('');
+// imgFailed：背景/拼图图加载失败（data-URI 不可用等）时置位。
+// canvasSupported：环境是否支持 canvas/Image（极旧环境可能为 false）。
+// useFallback：任一不满足时，组件自动降级为下方拖动条（bar）交互，仍可上报 x
+// 完成验证，不阻断注册 / 发码流程。
+const imgFailed = ref(false);
+const canvasSupported =
+  typeof document !== 'undefined' && !!document.createElement('canvas').getContext;
+const useFallback = computed(() => imgFailed.value || !canvasSupported);
 
 let startX = 0;
 let startLeft = 0;
 let maxLeft = 0;
 
+function onImgError() {
+  imgFailed.value = true;
+}
+
 async function issue() {
   loading.value = true;
   errorMsg.value = '';
+  imgFailed.value = false;
   try {
     const res = await authApi.captchaIssue();
     if (res.data.code === 0 && res.data.data) {
@@ -222,6 +241,20 @@ defineExpose({ reset });
   border-radius: 12px;
   pointer-events: none;
   white-space: nowrap;
+}
+
+.sp-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #666;
+  background: #eef1f5;
+  pointer-events: none;
 }
 
 .sp-ok-mask {
