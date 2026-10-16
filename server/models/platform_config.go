@@ -121,6 +121,10 @@ func InitPlatformConfigs() {
 		"captcha_enabled": "false",
 		"novel_visitor_mode": "open",
 		"home_module":       "novels", // 首页主模块：novels / blogs / forums / combined
+		"realname_required": "false",  // 发布/评论强制实名（默认关闭）
+		"login_methods":    `{"email":true,"phone":true,"wechat":false}`, // 允许的登录方式
+		"minor_mode":       "off",    // 未成年保护模式：off / soft / strict
+		"national_realname_api": `{"enabled":false,"url":"","token":""}`, // 国家实名检测 API（不存储姓名/身份证明文）
 		"categories":      `["硬科幻","奇幻","推演文学","架空历史","现实主义","悬疑推理","实验文学","同人区","政治区","讽刺文学","泛二次元区","其他"]`,
 		"robots_txt":      "User-agent: *\nAllow: /\n",
 	}
@@ -376,4 +380,95 @@ func GetSecurityGrade() (grade, note string) {
 		grade = "未定级"
 	}
 	return grade, GetPlatformConfig(SecurityGradeNote)
+}
+
+// ============ 实名制与登录方式配置（F10 / F21） ============
+
+const (
+	// RealNameRequiredKey 发布/评论是否要求实名（true/false，默认 false）
+	RealNameRequiredKey = "realname_required"
+	// LoginMethodsKey 允许的登录方式（JSON：{"email":true,"phone":true,"wechat":false}）
+	LoginMethodsKey = "login_methods"
+	// MinorModeKey 未成年保护模式：off=关闭 / soft=软模式（提醒+时长提示）/ strict=严格（未实名限流）
+	MinorModeKey = "minor_mode"
+	// NationalRealNameKey 国家实名检测 API 配置（JSON：{"enabled":false,"url":"","token":""}）
+	// 核验时仅转发姓名+身份证号给国家 API，服务器不存储二者明文。
+	NationalRealNameKey = "national_realname_api"
+)
+
+// IsRealNameRequired 发布/评论是否强制实名
+func IsRealNameRequired() bool {
+	return GetPlatformConfig(RealNameRequiredKey) == "true"
+}
+
+// LoginMethods 允许的登录方式
+type LoginMethods struct {
+	Email   bool `json:"email"`   // 邮箱+密码
+	Phone   bool `json:"phone"`   // 手机号+验证码
+	WeChat  bool `json:"wechat"`  // 微信扫码
+}
+
+// GetLoginMethods 读取登录方式配置（缺省 email+phone 开放，微信默认关闭）
+func GetLoginMethods() LoginMethods {
+	v := GetPlatformConfig(LoginMethodsKey)
+	if v == "" {
+		return LoginMethods{Email: true, Phone: true, WeChat: false}
+	}
+	var m LoginMethods
+	if err := json.Unmarshal([]byte(v), &m); err != nil {
+		return LoginMethods{Email: true, Phone: true, WeChat: false}
+	}
+	// 至少保留一种登录方式，避免站长误配置全员锁死
+	if !m.Email && !m.Phone && !m.WeChat {
+		return LoginMethods{Email: true, Phone: true, WeChat: false}
+	}
+	return m
+}
+
+// SetLoginMethods 持久化登录方式配置
+func SetLoginMethods(m LoginMethods) error {
+	if !m.Email && !m.Phone && !m.WeChat {
+		m.Email = true // 兜底：不允许全部关闭
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	return SetPlatformConfig(LoginMethodsKey, string(b))
+}
+
+// MinorMode 未成年保护模式
+type MinorMode string
+
+const (
+	MinorModeOff    MinorMode = "off"
+	MinorModeSoft   MinorMode = "soft"
+	MinorModeStrict MinorMode = "strict"
+)
+
+// GetMinorMode 读取未成年保护模式（缺省 off）
+func GetMinorMode() MinorMode {
+	switch MinorMode(GetPlatformConfig(MinorModeKey)) {
+	case MinorModeSoft, MinorModeStrict:
+		return MinorMode(GetPlatformConfig(MinorModeKey))
+	}
+	return MinorModeOff
+}
+
+// NationalRealNameConfig 国家实名检测 API 配置
+type NationalRealNameConfig struct {
+	Enabled bool   `json:"enabled"`
+	URL     string `json:"url"`    // 国家实名检测 API 端点（HTTPS）
+	Token   string `json:"token"`  // 接入令牌
+}
+
+// GetNationalRealNameConfig 读取国家实名 API 配置（缺省关闭）
+func GetNationalRealNameConfig() NationalRealNameConfig {
+	v := GetPlatformConfig(NationalRealNameKey)
+	var c NationalRealNameConfig
+	if v == "" {
+		return c
+	}
+	_ = json.Unmarshal([]byte(v), &c)
+	return c
 }

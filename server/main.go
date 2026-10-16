@@ -20,6 +20,7 @@ import (
 	"nvs-server/middleware"
 	"nvs-server/models"
 	"nvs-server/security"
+	"nvs-server/security/sms"
 	"nvs-server/utils"
 	"nvs-server/version"
 
@@ -202,6 +203,10 @@ func main() {
 		public.POST("/auth/captcha/issue", handlers.IssueCaptcha)
 		public.POST("/auth/captcha/verify", handlers.VerifyCaptcha)
 		public.POST("/auth/send-code", handlers.SendVerificationCode)
+		// 手机号登录/注册（F10）：验证码经可插拔短信网关发送，存储支持 Redis/内存双模式
+		public.POST("/auth/phone/send-code", security.RateLimit(5, 60), handlers.SendPhoneCode)
+		public.POST("/auth/phone/login", security.RateLimit(10, 60), handlers.PhoneLogin)
+		public.POST("/auth/phone/reset-password", security.RateLimit(5, 60), handlers.PhoneResetPassword)
 		public.POST("/auth/verify-code", handlers.VerifyEmailCode)
 		public.POST("/auth/forgot-password", security.RateLimit(3, 60), handlers.ForgotPassword)
 		public.POST("/auth/reset-password", security.RateLimit(3, 60), handlers.ResetPassword)
@@ -244,8 +249,26 @@ func main() {
 	protected := r.Group("/api")
 	protected.Use(middleware.AuthRequired())
 	{
-		protected.GET("/auth/me", handlers.GetCurrentUser)
-		protected.POST("/auth/change-password", handlers.ChangePassword)
+	protected.GET("/auth/me", handlers.GetCurrentUser)
+	protected.POST("/auth/change-password", handlers.ChangePassword)
+	// 实名制（F10/F21.1）：申请/状态/国家实名核验代理（姓名+身份证不落库明文）
+	protected.POST("/auth/realname/apply", security.RateLimit(5, 60), handlers.ApplyRealName)
+	protected.GET("/auth/realname", handlers.GetMyRealName)
+	protected.POST("/auth/realname/national-check", security.RateLimit(5, 60), handlers.NationalRealNameCheck)
+	// 用户黑名单（F13：拉黑禁言/屏蔽内容）
+	protected.POST("/blacklist", security.RateLimit(20, 60), handlers.AddBlacklist)
+	protected.DELETE("/blacklist/:id", handlers.RemoveBlacklist)
+	protected.GET("/blacklist", handlers.ListMyBlacklist)
+	// 私信（F20：会话消息；互关才可发第 3 条，可在设置中关闭）
+	protected.POST("/messages", security.RateLimit(30, 60), handlers.SendMessage)
+	protected.GET("/messages/conversations", handlers.ListConversations)
+	protected.GET("/messages/with/:userId", handlers.ListMessages)
+	protected.POST("/messages/read", handlers.MarkMessageRead)
+	protected.GET("/messages/unread-count", handlers.UnreadMessageCount)
+	protected.GET("/messages/settings", handlers.GetMessageSettings)
+	protected.PUT("/messages/settings", handlers.UpdateMessageSettings)
+	protected.POST("/messages/recall", handlers.RecallMessage)
+	protected.POST("/messages/conversation/delete", handlers.DeleteConversation)
 		// 用户 API Key 管理（创建/查看/修改/重生成/删除，配额在管理员角色上限内自设）
 		protected.GET("/apikeys", handlers.ListMyAPIKeys)
 		protected.POST("/apikeys", handlers.CreateAPIKey)
@@ -385,6 +408,8 @@ func main() {
 		admin.GET("/stats", handlers.GetAdminStats)
 		admin.GET("/dashboard", handlers.GetDashboardStats)
 		admin.GET("/community", handlers.GetCommunityDashboard)
+		// 实名记录查询（F10：姓名解密仅在本响应返回，身份证仅脱敏展示）
+		admin.GET("/realname", handlers.AdminListRealName)
 		admin.GET("/hotwords", handlers.AdminHotWords) // 热词统计（内容治理/舆情观测）
 		admin.GET("/users", handlers.ListUsers)
 		admin.GET("/users/audit", handlers.ListUserAuditLogs)
@@ -962,6 +987,10 @@ func initDatabase() error {
 	if config.DBDriver == "sqlite" && config.DBMemory {
 		log.Println("[SQLite] 内存模式：验证码和限流使用进程内存储")
 	}
+
+	// 短信网关（可插拔：log/http）与手机验证码存储后端（Redis/内存，随 ConnectRedis 决定）
+	sms.Init()
+	log.Printf("[sms] 验证码存储后端: %s", utils.PhoneCodeBackend())
 
 	if err := models.AutoMigrateAll(models.DB); err != nil {
 		return err

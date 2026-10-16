@@ -60,6 +60,14 @@ func UpdatePlatformConfig(c *gin.Context) {
 		"email_domain_whitelist":    true, "email_domain_blacklist": true,
 		// 联网备案（176号令 第七条第一项）
 		"site_icp": true, "site_psb": true, "site_psb_link": true,
+		// 其他备案信息（可选，前台关于页/页脚展示）
+		"site_net_culture_license": true, "site_app_filing": true,
+		"site_broadcast_license": true, "site_idc_license": true,
+		// 实名制与登录方式（F10/F21）：发布实名强制、允许的登录方式、未成年模式、国家实名 API
+		"realname_required": true,
+		"login_methods":     true,
+		"minor_mode":        true,
+		"national_realname_api": true,
 	}
 	for k, v := range req {
 		if !allowed[k] {
@@ -457,12 +465,27 @@ func GetSiteInfo(c *gin.Context) {
 	}
 	// 联网备案信息（176号令 第七条第一项；已配置才返回）
 	icp, psb, psbLink := models.GetSiteFiling()
+	// 其他备案信息（可选，已配置才返回；前台关于页/页脚展示）
+	extraFilings := gin.H{}
+	for _, key := range []string{"site_net_culture_license", "site_app_filing", "site_broadcast_license", "site_idc_license"} {
+		if v := models.GetPlatformConfig(key); v != "" {
+			extraFilings[key] = v
+		}
+	}
+	loginMethods := models.GetLoginMethods()
 	utils.Success(c, gin.H{
 		"site_name": models.GetSiteName(), "wall_zones": wallCfg.Zones, "wall_enabled": wallCfg.Enabled,
 		"email_verify": models.IsEmailVerifyEnabled(), "captcha_enabled": models.IsCaptchaEnabled(),
 		"home_module": models.GetHomeModule(),
 		"guidelines": guidelines,
 		"site_icp":   icp, "site_psb": psb, "site_psb_link": psbLink,
+		"extra_filings": extraFilings,
+		// 登录方式（F21.3：前台登录页按配置渲染入口）与实名/未成年配置
+		"login_methods":     loginMethods,
+		"realname_required": models.IsRealNameRequired(),
+		"minor_mode":        string(models.GetMinorMode()),
+		"wechat_login_available": config.WeChatAppID != "" && config.WeChatAppSecret != "" && config.WeChatCallback != "",
+		"national_realname_enabled": models.GetNationalRealNameConfig().Enabled,
 	})
 }
 

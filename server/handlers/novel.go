@@ -43,6 +43,11 @@ func CreateNovel(c *gin.Context) {
 		return
 	}
 
+	// 实名强制门禁（站长开启 realname_required 时生效）
+	if checkRealNameRequired(c) {
+		return
+	}
+
 	var input CreateNovelInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())

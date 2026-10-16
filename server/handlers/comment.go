@@ -32,6 +32,19 @@ func GetComments(c *gin.Context) {
 		return
 	}
 
+	// 黑名单 hide 模式（F13）：双向屏蔽——对方拉黑了我 或 我拉黑了对方，其内容对当前查看者不可见
+	viewerID := currentUserID(c)
+	if viewerID > 0 && len(pg.List) > 0 {
+		filtered := make([]models.Comment, 0, len(pg.List))
+		for _, cm := range pg.List {
+			if models.IsBlockedEither(viewerID, cm.UserID) {
+				continue
+			}
+			filtered = append(filtered, cm)
+		}
+		pg.List = filtered
+	}
+
 	utils.Success(c, gin.H{
 		"list":        pg.List,
 		"total":       pg.Total,
@@ -46,6 +59,11 @@ func CreateComment(c *gin.Context) {
 
 	// 全局禁言检查
 	if checkUserMuted(c) {
+		return
+	}
+
+	// 实名强制门禁（站长开启 realname_required 时生效）
+	if checkRealNameRequired(c) {
 		return
 	}
 
@@ -65,6 +83,24 @@ func CreateComment(c *gin.Context) {
 	if req.NovelID == 0 && req.BlogID == 0 {
 		utils.BadRequest(c, "请指定作品或博客")
 		return
+	}
+
+	// 黑名单门禁（F13）：被作品/博客作者拉黑（block 模式）者不可评论
+	if req.NovelID > 0 {
+		if novel, nerr := models.GetNovelByID(req.NovelID); nerr == nil && novel.AuthorID != userID {
+			if models.IsBlacklisted(novel.AuthorID, userID) {
+				utils.Forbidden(c, "你已被该作者拉黑，无法在其作品下评论")
+				return
+			}
+		}
+	}
+	if req.BlogID > 0 {
+		if blog, berr := models.GetBlogByID(req.BlogID); berr == nil && blog.AuthorID != userID {
+			if models.IsBlacklisted(blog.AuthorID, userID) {
+				utils.Forbidden(c, "你已被该作者拉黑，无法在其博客下评论")
+				return
+			}
+		}
 	}
 
 	// XSS 净化 + 违禁词库净化（delete/replace 动作直接改写文本）

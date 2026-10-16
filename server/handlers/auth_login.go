@@ -21,6 +21,10 @@ type LoginInput struct {
 
 // POST /api/auth/login
 func Login(c *gin.Context) {
+	if !models.GetLoginMethods().Email {
+		utils.Forbidden(c, "站长已关闭邮箱密码登录")
+		return
+	}
 	var input LoginInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())

@@ -53,6 +53,10 @@ func AllModels() []interface{} {
 		&UserForumQuota{},
 		// 全量 Web 访问日志（功能二：前台网络诊断 / 用户分布 / 攻击流量面板）
 		&WebAccessLog{},
+		// 用户黑名单（F13：拉黑禁言/屏蔽内容，站长/警方/管理员不可被拉黑）
+		&Blacklist{},
+		// 私信（F20：会话消息，互关才可发第 3 条）
+		&Message{},
 	}
 }
 

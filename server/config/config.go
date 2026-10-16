@@ -92,6 +92,35 @@ URL_PREFIX=
 # 防止反向代理/公网直连越权进入安装向导；如需从局域网远程初始化可设为 false。
 SETUP_LOCAL_ONLY=true
 
+# ==================== 短信网关（手机号登录/验证码，可插拔） ====================
+# SMS_GATEWAY: log=开发网关（验证码写入服务日志，不真实发送）；http=通用 HTTP 网关。
+# http 网关约定：POST JSON {"phone","code","sign_name","template_code"} 到 SMS_HTTP_URL，
+# 请求头 Authorization: Bearer <SMS_HTTP_TOKEN>，2xx 视为发送成功。
+# 适配自建短信网关或云厂商 Webhook（阿里云/腾讯云可用其 API 网关封装为统一 Webhook）。
+SMS_GATEWAY=log
+# SMS_GATEWAY=http 时必填：
+SMS_HTTP_URL=
+SMS_HTTP_TOKEN=
+# 短信签名（需在短信平台报备）与模板 Code（模板内容须含验证码占位符）
+SMS_SIGN_NAME=星海文学
+SMS_TEMPLATE_CODE=
+# 网关超时（秒）
+SMS_TIMEOUT_SEC=5
+
+# ==================== 实名信息加密（公安部令第176号合规） ====================
+# 实名姓名/身份证号以 AES-256-GCM 加密存储。此项为 hex 或 base64 编码的 32 字节密钥；
+# 留空则自动由 JWT_SECRET 派生（重启不丢失，但轮换 JWT_SECRET 会导致历史数据不可解密，
+# 生产环境强烈建议显式配置独立密钥）。
+REAL_NAME_ENC_KEY=
+
+# ==================== 微信开放平台网页扫码登录 ====================
+# 在微信开放平台（open.weixin.qq.com）创建「网站应用」获得 AppID/AppSecret，
+# 回调域名须在平台登记且与 WECHAT_CALLBACK 的域名一致（含路径前缀）。
+WECHAT_APP_ID=
+WECHAT_APP_SECRET=
+# 完整回调地址，如 https://example.com/go-nvs/api/auth/wechat/callback
+WECHAT_CALLBACK=
+
 # ==================== 日志敏感信息脱敏（公安部令第176号合规） ====================
 # 访问日志中的 Token / 密码 / 敏感字段脱敏开关：
 # true  = 生产模式：自动脱敏 Cookie/Authorization 令牌、body/query 敏感字段，合规安全
@@ -160,6 +189,23 @@ var (
 
 	// 站点路径前缀（反向代理挂载场景，如 /go-nvs；空 = 域名根）
 	URLPrefix string
+
+	// 短信网关（可插拔，F10）：log=开发日志网关（验证码打进日志），http=通用 HTTP 网关
+	// （自建短信网关/云厂商 Webhook，POST JSON {phone,code,sign_name}，Bearer 鉴权）
+	SMSGateway      string
+	SMSHTTPURL      string
+	SMSHTTPToken    string
+	SMSSignName     string
+	SMSTemplateCode string
+	SMSTimeoutSec   int
+
+	// 实名信息加密密钥（AES-256-GCM，hex 或 base64；缺省由 JWT_SECRET 派生，生产必须显式配置）
+	RealNameEncKey string
+
+	// 微信开放平台网页应用扫码登录（F21.2）
+	WeChatAppID     string
+	WeChatAppSecret string
+	WeChatCallback  string // 完整回调 URL（含路径前缀），如 https://example.com/go-nvs/api/auth/wechat/callback
 )
 
 // Init 初始化配置：自动加载/创建 .env，然后读取环境变量
@@ -233,6 +279,28 @@ func Init() {
 	if URLPrefix != "" {
 		log.Printf("[config] 站点路径前缀: %s（访问形如 %s/login）", URLPrefix, URLPrefix)
 	}
+
+	// 短信网关（可插拔，F10）
+	SMSGateway = strings.ToLower(strings.TrimSpace(getEnv("SMS_GATEWAY", "log")))
+	SMSHTTPURL = strings.TrimSpace(getEnv("SMS_HTTP_URL", ""))
+	SMSHTTPToken = strings.TrimSpace(getEnv("SMS_HTTP_TOKEN", ""))
+	SMSSignName = strings.TrimSpace(getEnv("SMS_SIGN_NAME", "星海文学"))
+	SMSTemplateCode = strings.TrimSpace(getEnv("SMS_TEMPLATE_CODE", ""))
+	SMSTimeoutSec = getEnvInt("SMS_TIMEOUT_SEC", 5)
+	if SMSGateway != "log" && SMSGateway != "http" {
+		SMSGateway = "log"
+	}
+	if SMSGateway == "http" && SMSHTTPURL == "" {
+		log.Printf("[config] SMS_GATEWAY=http 但未配置 SMS_HTTP_URL，短信将发送失败")
+	}
+
+	// 实名信息加密密钥：显式配置优先，缺省由 JWT_SECRET 派生（保证重启后仍可解密）
+	RealNameEncKey = strings.TrimSpace(getEnv("REAL_NAME_ENC_KEY", ""))
+
+	// 微信扫码登录（F21.2）
+	WeChatAppID = strings.TrimSpace(getEnv("WECHAT_APP_ID", ""))
+	WeChatAppSecret = strings.TrimSpace(getEnv("WECHAT_APP_SECRET", ""))
+	WeChatCallback = strings.TrimSpace(getEnv("WECHAT_CALLBACK", ""))
 
 	// 日志敏感信息脱敏（176号令合规）：env 提供初始默认；DB 就绪后由 main 注入持久化并覆盖
 	LogRedactSensitive = getEnvBool("LOG_REDACT_SENSITIVE", false)

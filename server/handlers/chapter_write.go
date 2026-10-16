@@ -31,6 +31,11 @@ func CreateChapter(c *gin.Context) {
 		return
 	}
 
+	// 实名强制门禁（站长开启 realname_required 时生效）
+	if checkRealNameRequired(c) {
+		return
+	}
+
 	var req struct {
 		Title   string `json:"title" binding:"required"`
 		Content string `json:"content" binding:"required"`
