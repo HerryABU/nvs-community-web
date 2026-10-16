@@ -30,7 +30,7 @@ export default defineConfig({
   base: './',
   build: {
     outDir: '../dist',
-    emptyOutDir: true,
+    emptyOutDir: false,
     // 体积告警阈值放宽（重型库本就独立分包）
     chunkSizeWarningLimit: 4000,
     rollupOptions: {
