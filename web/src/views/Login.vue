@@ -4,7 +4,16 @@
       <template #header>
         <h2 class="auth-title">登录</h2>
       </template>
+
+      <!-- 登录方式页签（F21.3：按站长配置渲染；仅一种时隐藏页签） -->
+      <el-tabs v-if="showTabs" v-model="activeTab" stretch class="login-tabs">
+        <el-tab-pane v-if="methods.email" label="邮箱登录" name="email" />
+        <el-tab-pane v-if="methods.phone" label="手机号登录" name="phone" />
+      </el-tabs>
+
+      <!-- 邮箱密码登录 -->
       <el-form
+        v-if="activeTab === 'email'"
         ref="formRef"
         :model="form"
         :rules="rules"
@@ -12,13 +21,14 @@
         @submit.prevent="handleLogin"
       >
         <el-form-item label="邮箱" prop="email">
-          <el-input v-model="form.email" placeholder="请输入邮箱" prefix-icon="Message" />
+          <el-input v-model="form.email" placeholder="请输入邮箱" maxlength="128" prefix-icon="Message" />
         </el-form-item>
         <el-form-item label="密码" prop="password">
           <el-input
             v-model="form.password"
             type="password"
             placeholder="请输入密码"
+            maxlength="128"
             show-password
             prefix-icon="Lock"
           />
@@ -29,6 +39,10 @@
           </el-button>
         </el-form-item>
       </el-form>
+
+      <!-- 手机号验证码登录（F10） -->
+      <PhoneLoginForm v-else @success="onLoginSuccess" />
+
       <div class="auth-footer">
         还没有账号？<router-link to="/register">立即注册</router-link>
         <span style="margin: 0 8px; color: #ccc;">|</span>
@@ -36,59 +50,42 @@
       </div>
     </el-card>
 
-    <!-- 忘记密码弹窗 -->
-    <el-dialog v-model="showForgot" title="重置密码" width="400px" :close-on-click-modal="false">
-      <el-form ref="forgotFormRef" :model="forgotForm" :rules="forgotRules" label-position="top">
-        <el-form-item label="邮箱" prop="email">
-          <el-input v-model="forgotForm.email" placeholder="请输入注册邮箱" />
-        </el-form-item>
-
-        <el-form-item v-if="forgotStep === 2" label="验证码" prop="code">
-          <el-input v-model="forgotForm.code" placeholder="请输入邮件中的验证码" />
-        </el-form-item>
-
-        <el-form-item v-if="forgotStep === 2" label="新密码" prop="newPassword">
-          <el-input v-model="forgotForm.newPassword" type="password" placeholder="请输入新密码（至少6位）" show-password />
-        </el-form-item>
-      </el-form>
-
-      <template #footer>
-        <el-button @click="showForgot = false">取消</el-button>
-        <el-button
-          v-if="forgotStep === 1"
-          type="primary"
-          :loading="forgotLoading"
-          :disabled="forgotCooldown > 0"
-          @click="sendResetCode"
-        >
-          {{ forgotCooldown > 0 ? `${forgotCooldown}s 后重试` : '发送验证码' }}
-        </el-button>
-        <el-button
-          v-if="forgotStep === 2"
-          type="primary"
-          :loading="forgotLoading"
-          @click="doResetPassword"
-        >
-          重置密码
-        </el-button>
-      </template>
-    </el-dialog>
+    <!-- 忘记密码（F22：邮箱/手机双通道） -->
+    <ForgotPasswordDialog v-model:visible="showForgot" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
-import { authApi } from '@/api/auth';
+import { useAppStore } from '@/stores/app';
 import { ElMessage } from 'element-plus';
+import PhoneLoginForm from '@/components/auth/PhoneLoginForm.vue';
+import ForgotPasswordDialog from '@/components/auth/ForgotPasswordDialog.vue';
 
 const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
+const appStore = useAppStore();
+
+// 站长配置的登录方式（缺省 email+phone）
+const methods = computed(() => appStore.loginMethods);
+const showTabs = computed(() => {
+  const n = (methods.value.email ? 1 : 0) + (methods.value.phone ? 1 : 0) + (methods.value.wechat ? 1 : 0);
+  return n > 1;
+});
+const activeTab = ref<'email' | 'phone'>(methods.value.email ? 'email' : 'phone');
+
+onMounted(async () => {
+  // siteInfo 可能尚未就绪（SPA 直达登录页），确保一次
+  if (!appStore.siteInfo) await appStore.bootstrap();
+  if (!methods.value.email && methods.value.phone) activeTab.value = 'phone';
+});
 
 const formRef = ref();
 const submitting = ref(false);
+const showForgot = ref(false);
 
 const form = reactive({
   email: '',
@@ -124,75 +121,8 @@ async function handleLogin() {
   }
 }
 
-// ============ 忘记密码 ============
-const showForgot = ref(false);
-const forgotStep = ref(1); // 1: 输入邮箱, 2: 输入验证码和新密码
-const forgotLoading = ref(false);
-const forgotCooldown = ref(0);
-const forgotFormRef = ref();
-
-const forgotForm = reactive({
-  email: '',
-  code: '',
-  newPassword: '',
-});
-
-const forgotRules = {
-  email: [
-    { required: true, message: '请输入邮箱', trigger: 'blur' },
-    { type: 'email', message: '请输入有效的邮箱地址', trigger: 'blur' },
-  ],
-  code: [{ required: true, message: '请输入验证码', trigger: 'blur' }],
-  newPassword: [
-    { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, message: '密码至少6位', trigger: 'blur' },
-  ],
-};
-
-async function sendResetCode() {
-  const valid = await forgotFormRef.value?.validateField('email').catch(() => false);
-  if (!valid) return;
-
-  forgotLoading.value = true;
-  try {
-    await authApi.forgotPassword(forgotForm.email);
-    ElMessage.success('验证码已发送，请查收邮件');
-    forgotStep.value = 2;
-    // 60秒冷却
-    forgotCooldown.value = 60;
-    const timer = setInterval(() => {
-      forgotCooldown.value--;
-      if (forgotCooldown.value <= 0) clearInterval(timer);
-    }, 1000);
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '发送失败');
-  } finally {
-    forgotLoading.value = false;
-  }
-}
-
-async function doResetPassword() {
-  const valid = await forgotFormRef.value?.validate().catch(() => false);
-  if (!valid) return;
-
-  forgotLoading.value = true;
-  try {
-    const res = await authApi.resetPassword(forgotForm.email, forgotForm.code, forgotForm.newPassword);
-    if (res.data.code === 0) {
-      ElMessage.success('密码重置成功，请重新登录');
-      showForgot.value = false;
-      forgotStep.value = 1;
-      forgotForm.email = '';
-      forgotForm.code = '';
-      forgotForm.newPassword = '';
-    } else {
-      ElMessage.error(res.data.message || '重置失败');
-    }
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '重置密码失败');
-  } finally {
-    forgotLoading.value = false;
-  }
+function onLoginSuccess() {
+  // PhoneLoginForm 内部已完成跳转，这里仅占位便于后续扩展（如登录后弹窗关闭）
 }
 </script>
 
@@ -214,6 +144,10 @@ async function doResetPassword() {
   text-align: center;
   margin: 0;
   color: var(--primary-color);
+}
+
+.login-tabs {
+  margin-bottom: 4px;
 }
 
 .auth-footer {

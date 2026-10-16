@@ -32,6 +32,9 @@
         </el-form>
       </el-card>
 
+      <!-- 实名认证（F10） -->
+      <RealNameCard />
+
       <!-- 修改密码 -->
       <el-card class="settings-card" shadow="hover">
         <template #header>
@@ -228,6 +231,7 @@ import { apiKeyApi } from '@/api/apikey';
 import api from '@/api';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import { Lock, User, DataAnalysis, Key } from '@element-plus/icons-vue';
+import RealNameCard from '@/components/user/RealNameCard.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();

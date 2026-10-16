@@ -156,6 +156,12 @@
                 <el-dropdown-item @click="$router.push('/my-keys')">
                   <el-icon><Key /></el-icon> 我的 API Key
                 </el-dropdown-item>
+                <el-dropdown-item @click="$router.push('/user/blacklist')">
+                  <el-icon><CircleClose /></el-icon> 黑名单管理
+                </el-dropdown-item>
+                <el-dropdown-item @click="$router.push('/user/messages')">
+                  <el-icon><ChatLineRound /></el-icon> 我的私信
+                </el-dropdown-item>
                 <el-dropdown-item v-if="authStore.user?.role === 'admin'" @click="$router.push('/admin')">
                   管理员面板
                 </el-dropdown-item>
@@ -263,7 +269,7 @@ import { authApi } from '@/api/auth';
 import { notificationApi } from '@/api/notification';
 import { appPrefix } from '@/utils/prefix';
 import { ElMessage } from 'element-plus';
-import { Camera, Setting, Brush, Document, Warning, Bell, Menu, HomeFilled, ChatDotRound, Plus, Notebook, User, SwitchButton, Connection, Key, Stamp } from '@element-plus/icons-vue';
+import { Camera, Setting, Brush, Document, Warning, Bell, Menu, HomeFilled, ChatDotRound, Plus, Notebook, User, SwitchButton, Connection, Key, Stamp, CircleClose, ChatLineRound } from '@element-plus/icons-vue';
 
 const avatarInput = ref<HTMLInputElement>();
 const router = useRouter();

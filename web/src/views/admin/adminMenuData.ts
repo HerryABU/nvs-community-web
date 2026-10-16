@@ -1,7 +1,7 @@
 import {
   Setting, View, DataAnalysis, Medal, Warning, Bell, DataLine, Monitor,
   Collection, Lock, Histogram, Stamp, Key, ChatDotRound, Cpu, WarningFilled,
-  Box, Notebook, TrendCharts, Connection,
+  Box, Notebook, TrendCharts, Connection, Postcard,
 } from '@element-plus/icons-vue';
 
 // 管理员控制台「管理功能」分类数据（F8：分类折叠 + ?category=/?item= 深链定位）。
@@ -65,6 +65,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: '内容抢救台', desc: '二级密码应急预览/软删除留证', path: '/admin/emergency', icon: WarningFilled, color: 'var(--gradient-accent)' },
       { title: 'HTML 内容审查', desc: '自定义 HTML 模板/扩展人工复核', path: '/admin/html-review', icon: Cpu, color: 'var(--gradient-purple)' },
       { title: '热词统计', desc: '评论/回帖高频词聚合 · 舆情观测', path: '/admin/hotwords', icon: Histogram, color: 'var(--gradient-blue)' },
+      { title: '实名记录', desc: '实名用户查询 · 姓名解密展示 · 未成年标记', path: '/admin/realname', icon: Postcard, color: 'var(--gradient-success)' },
     ],
   },
   {

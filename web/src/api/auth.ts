@@ -107,6 +107,57 @@ export const authApi = {
     });
   },
 
+  // ======== 手机号登录（F10） ========
+  // 发送手机验证码（必须携带滑块 pass token；login=登录/注册，reset=找回密码）
+  phoneSendCode(phone: string, captchaToken?: string, purpose: 'login' | 'reset' = 'login') {
+    return api.post<{ code: number; message: string; data: { backend: string } }>(
+      '/auth/phone/send-code',
+      { phone, captcha_token: captchaToken || '', purpose }
+    );
+  },
+  // 手机号验证码登录（不存在则自动注册）
+  phoneLogin(phone: string, code: string) {
+    return api.post<{ code: number; message: string; data: { user: User } }>(
+      '/auth/phone/login',
+      { phone, code }
+    );
+  },
+
+  // 手机号验证码重置密码（F22）
+  phoneResetPassword(phone: string, code: string, newPassword: string) {
+    return api.post<{ code: number; message: string }>('/auth/phone/reset-password', {
+      phone,
+      code,
+      new_password: newPassword,
+    });
+  },
+
+  // ======== 实名制（F10 / F21.1） ========
+  // 提交实名（姓名加密存储，身份证仅哈希+脱敏）
+  applyRealName(realName: string, idCard: string) {
+    return api.post<{ code: number; message: string; data: { id_card_masked: string; minor_protected: boolean } }>(
+      '/auth/realname/apply',
+      { real_name: realName, id_card: idCard }
+    );
+  },
+  // 我的实名状态
+  getRealNameStatus() {
+    return api.get<{
+      code: number; message: string; data: {
+        real_name_verified: boolean; id_card_masked: string;
+        birth_date: string | null; minor_protected: boolean;
+      };
+    }>('/auth/realname');
+  },
+  // 国家实名检测 API 代理（姓名+身份证不落库明文，仅返回是否一致）
+  nationalRealNameCheck(realName: string, idCard: string) {
+    return api.post<{
+      code: number; message: string; data: {
+        matched: boolean; status: string; message: string;
+      };
+    }>('/auth/realname/national-check', { real_name: realName, id_card: idCard });
+  },
+
   // 上传头像（FormData 不手动设置 Content-Type，避免丢失 boundary）
   uploadAvatar(formData: FormData) {
     return api.post<{ code: number; message: string; data: { avatar_url: string } }>(

@@ -175,6 +175,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/realname',
+      name: 'admin-realname',
+      component: () => import('@/views/admin/AdminRealName.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/police-console',
       name: 'police-console',
       component: () => import('@/views/admin/AdminPoliceConsole.vue'),
@@ -353,6 +359,23 @@ const router = createRouter({
       path: '/settings',
       name: 'settings',
       component: () => import('@/views/Settings.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/about',
+      name: 'about',
+      component: () => import('@/views/About.vue'),
+    },
+    {
+      path: '/user/blacklist',
+      name: 'user-blacklist',
+      component: () => import('@/views/user/Blacklist.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/user/messages',
+      name: 'user-messages',
+      component: () => import('@/views/user/Messages.vue'),
       meta: { requiresAuth: true },
     },
     {

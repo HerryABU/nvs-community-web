@@ -136,6 +136,19 @@ export const adminApi = {
   hotWords(params?: { days?: number; limit?: number }) {
     return api.get<{ code: number; message: string; data: { words: { word: string; count: number }[]; days: number; total: number } }>('/admin/hotwords', { params });
   },
+  // 实名记录（F10：姓名解密后仅在本响应返回，身份证仅脱敏展示）
+  listRealName(params?: { page?: number; page_size?: number; keyword?: string }) {
+    return api.get<{
+      code: number; message: string; data: {
+        list: {
+          user_id: number; username: string; nickname: string; role: string; phone: string;
+          real_name: string; id_card_masked: string; minor_protected: boolean; age: number;
+          real_name_at: string | null;
+        }[];
+        total: number; page: number; page_size: number;
+      };
+    }>('/admin/realname', { params });
+  },
   policeListSoftDel(params?: { type?: string; limit?: number }) {
     return api.get('/police/softdel', { params });
   },

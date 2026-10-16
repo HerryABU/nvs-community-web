@@ -26,6 +26,11 @@ export const useAppStore = defineStore('app', () => {
   const siteName = ref('星海文学');
   const categories = ref<string[]>([]);
   const homeModule = ref<string>('novels'); // 首页主模块（管理员后台可配置：novels/blogs/forums/combined）
+  // 允许的登录方式（F21.3：管理员可配；email=邮箱密码 / phone=手机验证码 / wechat=微信扫码）
+  const loginMethods = ref<{ email: boolean; phone: boolean; wechat: boolean }>({
+    email: true, phone: true, wechat: false,
+  });
+  const realnameRequired = ref(false); // 发布/评论是否强制实名（F10）
   const federatedSites = ref<any[]>([]);
   const unreadCount = ref(0);
   const installed = ref(true);
@@ -72,6 +77,14 @@ export const useAppStore = defineStore('app', () => {
           siteInfo.value = map.site.data;
           if (map.site.data.site_name) siteName.value = map.site.data.site_name;
           if (map.site.data.home_module) homeModule.value = map.site.data.home_module;
+          if (map.site.data.login_methods) {
+            loginMethods.value = {
+              email: !!map.site.data.login_methods.email,
+              phone: !!map.site.data.login_methods.phone,
+              wechat: !!map.site.data.login_methods.wechat,
+            };
+          }
+          realnameRequired.value = !!map.site.data.realname_required;
         }
         if (map.cats?.success && Array.isArray(map.cats.data)) categories.value = map.cats.data;
         if (map.fed?.success && map.fed.data) federatedSites.value = map.fed.data || [];
@@ -117,7 +130,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   return {
-    siteInfo, siteName, categories, homeModule, federatedSites, unreadCount, installed, homeData,
+    siteInfo, siteName, categories, homeModule, loginMethods, realnameRequired, federatedSites, unreadCount, installed, homeData,
     bootstrap, ensureHomeLoaded, refreshUnread,
   };
 });

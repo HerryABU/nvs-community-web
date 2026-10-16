@@ -33,6 +33,15 @@ export const useAuthStore = defineStore('auth', () => {
     return res.data;
   }
 
+  // 手机号验证码登录（F10；不存在则后端自动注册）
+  async function phoneLogin(phone: string, code: string) {
+    const res = await authApi.phoneLogin(phone, code);
+    if (res.data.code === 0) {
+      user.value = res.data.data.user;
+    }
+    return res.data;
+  }
+
   async function register(username: string, email: string, password: string, nickname?: string, agreeToGuidelines: boolean = true, verifyCode?: string, captchaToken?: string) {
     const res = await authApi.register({ username, email, password, nickname, agree_to_guidelines: agreeToGuidelines, verify_code: verifyCode, captcha_token: captchaToken });
     if (res.data.code === 0) {
@@ -60,6 +69,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthor,
     fetchUser,
     login,
+    phoneLogin,
     register,
     logout,
   };

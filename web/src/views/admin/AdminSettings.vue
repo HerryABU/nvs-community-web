@@ -15,6 +15,39 @@
           </el-select>
           <span class="hint-text">设置站点首页默认展示的内容模块，访客进入首页即见该模块</span>
         </el-form-item>
+
+        <!-- 登录方式（F21.3：控制前台登录页渲染哪些入口；至少保留一种） -->
+        <el-form-item label="允许的登录方式">
+          <el-checkbox v-model="loginEmail">邮箱 + 密码</el-checkbox>
+          <el-checkbox v-model="loginPhone">手机号 + 验证码</el-checkbox>
+          <el-checkbox v-model="loginWechat" :disabled="!wechatAvailable">
+            微信扫码{{ wechatAvailable ? '' : '（需配置 WECHAT_APP_ID/SECRET/CALLBACK）' }}
+          </el-checkbox>
+          <span class="hint-text">手机号登录需在 .env 配置短信网关（SMS_GATEWAY=log 时验证码仅打入服务日志）</span>
+        </el-form-item>
+
+        <!-- 实名制与未成年保护（F10 / F21.1） -->
+        <el-form-item label="发布需实名">
+          <el-switch v-model="realnameRequired" active-text="开启" inactive-text="关闭" />
+          <span class="hint-text">开启后，用户发布作品/章节/评论前须先完成实名认证（站长与警方豁免）</span>
+        </el-form-item>
+        <el-form-item label="未成年保护模式">
+          <el-select v-model="minorMode" style="width:240px">
+            <el-option label="关闭" value="off" />
+            <el-option label="软模式（提醒 + 时长提示）" value="soft" />
+            <el-option label="严格（未实名限制发布）" value="strict" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="国家实名检测">
+          <el-switch v-model="nationalApiEnabled" active-text="开启" inactive-text="关闭" />
+          <span class="hint-text">对接国家实名检测 API：姓名+身份证号仅随请求转发，服务器不存储明文</span>
+        </el-form-item>
+        <el-form-item v-if="nationalApiEnabled" label="检测 API 地址">
+          <el-input v-model="nationalApiUrl" placeholder="https:// 国家实名检测 API 端点" maxlength="512" />
+        </el-form-item>
+        <el-form-item v-if="nationalApiEnabled" label="接入令牌">
+          <el-input v-model="nationalApiToken" placeholder="API Token" maxlength="256" show-password />
+        </el-form-item>
         <el-form-item label="平台指南">
           <el-input
             v-model="configForm.guidelines"
@@ -130,6 +163,20 @@
           <el-input v-model="configForm.site_psb_link" placeholder="https://beian.cyberpolice.cn" style="width: 320px" />
         </el-form-item>
         <span class="hint-text">配置后站点页脚将自动展示备案号（可点击跳转）；未完成备案的网站可能面临行政处罚，请尽快办理工信部ICP备案与公安联网备案</span>
+
+        <!-- 其他备案信息（可选，未配置项不在前台展示） -->
+        <el-form-item label="网络文化经营许可证">
+          <el-input v-model="configForm.site_net_culture_license" placeholder="如：京网文〔2026〕0001-000号" style="width: 320px" />
+        </el-form-item>
+        <el-form-item label="APP 备案号">
+          <el-input v-model="configForm.site_app_filing" placeholder="如：京ICP备2026000000号-1A" style="width: 320px" />
+        </el-form-item>
+        <el-form-item label="广播电视节目制作经营许可证">
+          <el-input v-model="configForm.site_broadcast_license" placeholder="如：（京）字第00001号" style="width: 320px" />
+        </el-form-item>
+        <el-form-item label="IDC / ISP 许可证">
+          <el-input v-model="configForm.site_idc_license" placeholder="如：京IDC证0001号" style="width: 320px" />
+        </el-form-item>
         <el-divider />
         <h3 class="sec-title">SEO 设置</h3>
         <el-form-item label="robots.txt">
@@ -154,7 +201,9 @@ const configForm = reactive<Record<string, string>>({
   site_name: '', vip_enabled: '', email_verify: '', captcha_enabled: '',
   smtp_host: '', smtp_port: '', smtp_user: '', smtp_password: '', smtp_from: '',
   robots_txt: '', guidelines: '',
-  site_icp: '', site_psb: '', site_psb_link: '' });
+  site_icp: '', site_psb: '', site_psb_link: '',
+  // 其他备案信息（可选）
+  site_net_culture_license: '', site_app_filing: '', site_broadcast_license: '', site_idc_license: '' });
 const vipEnabled = ref(false);
 const emailVerifyEnabled = ref(false);
 const captchaEnabled = ref(false);
@@ -162,6 +211,21 @@ const smtpInsecureVerify = ref(false);
 const savingConfig = ref(false);
 // 首页主模块：novels / blogs / forums / combined，控制前台首页默认展示的内容模块
 const homeModule = ref<string>('novels');
+
+// ====== 登录方式 / 实名制 / 未成年保护（F10 / F21） ======
+// 允许的登录方式（至少保留一种，后端有兜底）
+const loginEmail = ref(true);
+const loginPhone = ref(true);
+const loginWechat = ref(false);
+const wechatAvailable = ref(false); // 后端已配置微信 AppID/Secret/Callback 才可用
+// 发布/评论强制实名
+const realnameRequired = ref(false);
+// 未成年保护模式：off / soft / strict
+const minorMode = ref<'off' | 'soft' | 'strict'>('off');
+// 国家实名检测 API
+const nationalApiEnabled = ref(false);
+const nationalApiUrl = ref('');
+const nationalApiToken = ref('');
 
 // 邮箱域名黑白名单（以标签形式逐条管理，底层仍以 JSON 数组存储）
 const emailDomainBlacklistArr = ref<string[]>([]);
@@ -229,7 +293,25 @@ async function loadConfig() {
     configForm.site_icp = data.site_icp || '';
     configForm.site_psb = data.site_psb || '';
     configForm.site_psb_link = data.site_psb_link || '';
+    configForm.site_net_culture_license = data.site_net_culture_license || '';
+    configForm.site_app_filing = data.site_app_filing || '';
+    configForm.site_broadcast_license = data.site_broadcast_license || '';
+    configForm.site_idc_license = data.site_idc_license || '';
     homeModule.value = data.home_module || 'novels';
+    // 登录方式（至少一种；wechat 需后端配置齐全才允许开启）
+    if (data.login_methods) {
+      loginEmail.value = !!data.login_methods.email;
+      loginPhone.value = !!data.login_methods.phone;
+      loginWechat.value = !!data.login_methods.wechat;
+    }
+    wechatAvailable.value = !!data.wechat_login_available;
+    realnameRequired.value = data.realname_required === true || data.realname_required === 'true';
+    minorMode.value = (data.minor_mode as any) || 'off';
+    if (data.national_realname_api) {
+      nationalApiEnabled.value = !!data.national_realname_api.enabled;
+      nationalApiUrl.value = data.national_realname_api.url || '';
+      nationalApiToken.value = data.national_realname_api.token || '';
+    }
     emailDomainBlacklistArr.value = jsonToArray(data.email_domain_blacklist || '');
     emailDomainWhitelistArr.value = jsonToArray(data.email_domain_whitelist || '');
   } catch { /* ignore */ }
@@ -254,7 +336,24 @@ async function saveConfig() {
       site_icp: configForm.site_icp,
       site_psb: configForm.site_psb,
       site_psb_link: configForm.site_psb_link,
+      site_net_culture_license: configForm.site_net_culture_license,
+      site_app_filing: configForm.site_app_filing,
+      site_broadcast_license: configForm.site_broadcast_license,
+      site_idc_license: configForm.site_idc_license,
       home_module: homeModule.value,
+      // 登录方式（至少保留一种，后端兜底）
+      login_methods: JSON.stringify({
+        email: loginEmail.value,
+        phone: loginPhone.value,
+        wechat: loginWechat.value && wechatAvailable.value,
+      }),
+      realname_required: realnameRequired.value ? 'true' : 'false',
+      minor_mode: minorMode.value,
+      national_realname_api: JSON.stringify({
+        enabled: nationalApiEnabled.value,
+        url: nationalApiUrl.value.trim(),
+        token: nationalApiToken.value.trim(),
+      }),
       email_domain_blacklist: arrayToJson(emailDomainBlacklistArr.value),
       email_domain_whitelist: arrayToJson(emailDomainWhitelistArr.value),
     });
