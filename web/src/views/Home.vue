@@ -16,7 +16,7 @@
       </div>
     </div>
 
-    <!-- ====== 站点公告栏（176号令：合规通知/安全公告发布） ====== -->
+    <!-- ====== 站点公告栏（多公告，置顶优先；176号令：合规通知/安全公告发布） ====== -->
     <div v-if="announcements.length" class="notice-bar">
       <span class="notice-icon">📢</span>
       <div class="notice-items">
@@ -24,10 +24,11 @@
           v-for="a in announcements.slice(0, 3)"
           :key="a.id"
           class="notice-item"
-          @click="noticeDlg.item = a; noticeDlg.visible = true"
+          @click="openNotice(a)"
         >
-          <el-tag v-if="a.pinned" type="danger" size="small" effect="plain" style="margin-right:6px">置顶</el-tag>
-          {{ a.title }}
+          <el-tag v-if="a.pinned" type="danger" size="small" effect="plain" class="notice-pin-tag">置顶</el-tag>
+          <span class="notice-item-title">{{ a.title }}</span>
+          <span class="notice-item-date">{{ formatDate(a.created_at) }}</span>
         </span>
       </div>
       <span class="notice-more" @click="showAllNotice = true">查看全部</span>
@@ -78,17 +79,19 @@
       <template #footer><el-button type="primary" @click="showAlgo = false">知道了</el-button></template>
     </el-dialog>
 
-    <!-- ====== 公告详情/列表弹窗 ====== -->
+    <!-- ====== 公告详情/列表弹窗（内容经 cherry-markdown 渲染，与评论区同款样式） ====== -->
     <el-dialog v-model="noticeDlg.visible" :title="noticeDlg.item?.title || '公告'" width="600px">
-      <div class="notice-dlg-content md-body" v-html="noticeHtml"></div>
-      <div class="notice-dlg-date">发布于 {{ (noticeDlg.item?.created_at || '').slice(0, 10) }}</div>
+      <div class="notice-dlg-content cherry-markdown cherry-previewer">
+        <div v-html="noticeHtml"></div>
+      </div>
+      <div class="notice-dlg-date">发布于 {{ formatDate(noticeDlg.item?.created_at) }}</div>
     </el-dialog>
     <el-dialog v-model="showAllNotice" title="📢 全部公告" width="600px">
       <div v-if="!announcements.length" style="color: var(--text-light)">暂无公告</div>
       <div v-for="a in announcements" :key="a.id" class="notice-list-item">
         <el-tag v-if="a.pinned" type="danger" size="small" effect="plain" style="margin-right:6px">置顶</el-tag>
-        <span class="notice-list-title" @click="noticeDlg.item = a; noticeDlg.visible = true; showAllNotice = false">{{ a.title }}</span>
-        <span class="notice-list-date">{{ (a.created_at || '').slice(0, 10) }}</span>
+        <span class="notice-list-title" @click="openNotice(a); showAllNotice = false">{{ a.title }}</span>
+        <span class="notice-list-date">{{ formatDate(a.created_at) }}</span>
       </div>
     </el-dialog>
   </div>
@@ -146,13 +149,27 @@ const algoDescription = ref('');
 const showAlgo = ref(false);
 const noticeHtml = computed(() => renderMarkdown(noticeDlg.item?.content || ''));
 
+// 多公告排序：置顶优先，其余按发布时间倒序（后端 ListPublishedAnnouncements 已排序，前端二次保险）
+function sortAnnouncements(list: any[]) {
+  return [...list].sort((a, b) => {
+    if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+    return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+  });
+}
+
+// 打开公告详情弹窗（标题 + 时间 + Markdown 全文）
+function openNotice(a: any) {
+  noticeDlg.item = a;
+  noticeDlg.visible = true;
+}
+
 // 首屏由应用级 bootstrap 的 /api/batch 一并带回公告与算法说明
 async function loadHomeInitial(){
   try{
     await appStore.ensureHomeLoaded();
     const d = appStore.homeData;
     if(!d) return;
-    announcements.value = d.announcements || [];
+    announcements.value = sortAnnouncements(d.announcements || []);
     if(d.algo) algoDescription.value = d.algo;
   }catch(e){ console.error(e); }
 }
@@ -223,10 +240,14 @@ watch(
 }
 .notice-icon { flex-shrink: 0; }
 .notice-items { flex: 1; display: flex; flex-wrap: wrap; gap: 6px 18px; overflow: hidden; }
-.notice-item { cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
+.notice-item { cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 360px; }
+.notice-item-title { overflow: hidden; text-overflow: ellipsis; }
+.notice-item-date { flex-shrink: 0; font-size: 0.75rem; color: var(--text-light, #aaa); }
 .notice-item:hover { text-decoration: underline; }
+.notice-pin-tag { flex-shrink: 0; }
 .notice-more { flex-shrink: 0; cursor: pointer; color: var(--el-color-primary); font-size: 0.8rem; }
-.notice-dlg-content { white-space: pre-wrap; line-height: 1.8; }
+/* 公告详情弹窗：内容经 cherry-markdown 渲染，长文限高滚动 */
+.notice-dlg-content { max-height: 60vh; overflow-y: auto; }
 .notice-dlg-date { color: var(--text-light, #999); font-size: 0.8rem; margin-top: 8px; }
 .notice-list-item { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px dashed var(--el-border-color); }
 .notice-list-title { flex: 1; cursor: pointer; }
