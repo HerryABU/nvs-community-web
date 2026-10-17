@@ -40,6 +40,21 @@
   --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.03);
   --shadow-card-hover: 0 12px 36px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.05);
 
+  /* Card / hover surfaces（多页引用，勿删；暗色于 [data-theme="dark"] 覆写） */
+  --bg-card: #ffffff;
+  --bg-hover: #f1f5f9;
+  --shadow-hover: 0 12px 36px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.05);
+
+  /* Semantic aliases & surfaces（审计补齐：多页引用但曾未定义 → 背景/颜色失效） */
+  --card-bg: var(--bg-card);
+  --text-primary: var(--text-color);
+  --text-secondary: var(--text-light);
+  --bg-page: #fafbfc;
+  --bg-subtle: #f8fafc;
+  --primary-rgb: 99, 102, 241;
+  --deleted-color: #94a3b8;
+  --deleted-bg: rgba(148, 163, 184, 0.08);
+
   /* Glass */
   --glass-bg: rgba(255, 255, 255, 0.72);
   --glass-bg-strong: rgba(255, 255, 255, 0.85);
@@ -823,6 +838,18 @@ kbd {
   --shadow-xl: 0 12px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
   --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.04);
   --shadow-card-hover: 0 12px 36px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+  /* Card / hover surfaces — dark */
+  --bg-card: #1a1d27;
+  --bg-hover: #334155;
+  --shadow-hover: 0 12px 36px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+  /* Semantic aliases & surfaces — dark */
+  --bg-page: #0f1117;
+  --bg-subtle: #1e293b;
+  --primary-rgb: 129, 140, 248;
+  --deleted-color: #64748b;
+  --deleted-bg: rgba(100, 116, 139, 0.12);
 
   /* Glass */
   --glass-bg: rgba(15, 17, 23, 0.75);
