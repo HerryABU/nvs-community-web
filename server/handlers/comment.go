@@ -38,6 +38,11 @@ func GetComments(c *gin.Context) {
 	viewerID := currentUserID(c)
 	pg.List = FilterHiddenItems(viewerID, pg.List, func(cm models.Comment) uint { return cm.UserID })
 
+	// 楼加密（入口限制）：未解锁的加密楼 content 脱敏、楼内回复剔除。
+	// 豁免：楼作者本人、警方/管理员；其余用户凭 X-Floor-Password 头（id:密码 多楼格式）解锁。
+	_, isStaff, floorPwdHeader := resolveFloorPasswordViewer(c)
+	pg.List = models.RedactLockedComments(pg.List, viewerID, isStaff, parseFloorPasswords(floorPwdHeader))
+
 	utils.Success(c, gin.H{
 		"list":        pg.List,
 		"total":       pg.Total,
@@ -91,6 +96,25 @@ func CreateComment(c *gin.Context) {
 		if blog, berr := models.GetBlogByID(req.BlogID); berr == nil && blog.AuthorID != userID {
 			if models.IsBlacklisted(blog.AuthorID, userID) {
 				utils.Forbidden(c, "你已被该作者拉黑，无法在其博客下评论")
+				return
+			}
+		}
+	}
+
+	// 楼加密门禁：回复目标是加密楼内的评论时，未解锁用户不可回复
+	// （防止借回复入口试探加密楼内容）。豁免：楼作者、警方/管理员、带对密码。
+	if req.ParentID != nil && *req.ParentID != 0 {
+		parent, perr := models.GetCommentByID(*req.ParentID)
+		if perr == nil && parent.HasPassword {
+			// 找到所属「楼」：父即顶层时取父，否则取父的 RootID
+			floor := parent
+			if parent.RootID != nil {
+				if root, rerr := models.GetCommentByID(*parent.RootID); rerr == nil {
+					floor = root
+				}
+			}
+			if !models.FloorAccessUnlocked(floor, userID, isPoliceOrAdminUser(c), map[uint]string{floor.ID: c.GetHeader("X-Floor-Password")}) {
+				utils.Forbidden(c, "该楼已加密，输入访问密码后才可回复")
 				return
 			}
 		}

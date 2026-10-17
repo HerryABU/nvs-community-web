@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+
+	"nvs-server/utils"
 )
 
 type Comment struct {
@@ -22,16 +24,23 @@ type Comment struct {
 	//   FloorNo = 楼层号（仅顶层评论有值，从 1 递增；楼内回复为 0）
 	// 语义：回复主内容（作品/博客/帖子）→ 开新楼（ParentID=NULL）；
 	//       回复楼内任意一条 → 挂靠该楼（RootID 继承），展示为「X 回复 Y」。
-	RootID      *uint          `gorm:"index:idx_comments_root" json:"root_id"`
-	FloorNo     int            `gorm:"default:0;index:idx_comments_floor" json:"floor_no"`
-	IsMarkdown  bool           `gorm:"default:true" json:"is_markdown"`
-	Username    string         `gorm:"-" json:"username,omitempty"`
-	ReplyToName string         `gorm:"-" json:"reply_to_name,omitempty"`               // 被回复者昵称（运行时填充，展示「X 回复 Y」）
-	DeletedBy   string         `gorm:"size:16;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
-	IsDeleted   bool           `gorm:"-" json:"is_deleted"`                            // 运行时计算：是否已软删除（警方/管理员取证视图用）
-	CreatedAt   time.Time      `gorm:"index:idx_comments_novel_created,priority:2" json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
+	RootID  *uint `gorm:"index:idx_comments_root" json:"root_id"`
+	FloorNo int   `gorm:"default:0;index:idx_comments_floor" json:"floor_no"`
+	// 楼加密（入口限制，非内容加密）：仅顶层评论（楼）可设访问密码。
+	// 语义与「加密论坛」同构——未解锁者（非楼作者、非警方/管理员）读取时
+	// content 脱敏为占位、楼内回复不返回；凭 X-Floor-Password 头解锁。
+	// 注意：内容本身不做加密存储， PasswordHash 仅用于入口校验。
+	HasPassword  bool           `gorm:"default:false;index" json:"has_password"`
+	PasswordHash string         `gorm:"size:128;default:''" json:"-"` // bcrypt，不序列化外泄
+	Locked       bool           `gorm:"-" json:"locked"`              // 运行时：当前请求未解锁（脱敏占位标记）
+	IsMarkdown   bool           `gorm:"default:true" json:"is_markdown"`
+	Username     string         `gorm:"-" json:"username,omitempty"`
+	ReplyToName  string         `gorm:"-" json:"reply_to_name,omitempty"`               // 被回复者昵称（运行时填充，展示「X 回复 Y」）
+	DeletedBy    string         `gorm:"size:16;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
+	IsDeleted    bool           `gorm:"-" json:"is_deleted"`                            // 运行时计算：是否已软删除（警方/管理员取证视图用）
+	CreatedAt    time.Time      `gorm:"index:idx_comments_novel_created,priority:2" json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
 	// 关联
 	User   *User    `gorm:"foreignKey:UserID" json:"user,omitempty"`
@@ -182,6 +191,70 @@ func loadCommentsPage(scope func(*gorm.DB) *gorm.DB, page, pageSize int, include
 	return out, nil
 }
 
+// ==================== 楼加密（入口限制） ====================
+
+// FloorAccessUnlocked 判断某层楼对当前查看者是否已解锁。
+// 解锁条件（任一）：楼未设密码 / 查看者是楼作者本人 / 查看者是警方或管理员 / 密码正确。
+// passwords 为「楼层 id → 访问密码」映射（列表场景一次带多楼；单楼场景传单元素 map）。
+// 这是入口限制而非内容加密：内容明文存储，仅控制是否返回。
+func FloorAccessUnlocked(floor *Comment, viewerID uint, isStaff bool, passwords map[uint]string) bool {
+	if floor == nil || !floor.HasPassword {
+		return true
+	}
+	if viewerID != 0 && floor.UserID == viewerID {
+		return true
+	}
+	if isStaff {
+		return true
+	}
+	pwd := passwords[floor.ID]
+	if pwd == "" {
+		return false
+	}
+	return utils.CheckPassword(pwd, floor.PasswordHash)
+}
+
+// RedactLockedComments 对平铺评论列表做楼加密脱敏（models 层统一收口）。
+// 未解锁的顶层楼 → content 置空 + Locked=true（前端渲染 🔒 占位）；
+// 该楼名下的全部楼内回复一并从列表剔除（防止楼内内容绕读出）。
+// 返回新切片，不修改入参（调用方可能基于同一列表做多次判定）。
+func RedactLockedComments(list []Comment, viewerID uint, isStaff bool, passwords map[uint]string) []Comment {
+	// 整体拷贝：脱敏标记只落在副本上，避免污染调用方切片
+	work := make([]Comment, len(list))
+	copy(work, list)
+
+	lockedRoots := map[uint]bool{}
+	for i := range work {
+		c := &work[i]
+		if c.ParentID != nil && *c.ParentID != 0 {
+			continue // 楼内回复稍后按 lockedRoots 处理
+		}
+		if !FloorAccessUnlocked(c, viewerID, isStaff, passwords) {
+			c.Locked = true
+			c.Content = ""
+			c.QuoteText = ""
+			lockedRoots[c.ID] = true
+		}
+	}
+	if len(lockedRoots) == 0 {
+		return work
+	}
+	out := make([]Comment, 0, len(work))
+	for _, c := range work {
+		if c.ParentID != nil && *c.ParentID != 0 {
+			root := c.RootID
+			if root == nil {
+				root = c.ParentID
+			}
+			if root != nil && lockedRoots[*root] {
+				continue // 加密楼未解锁：楼内回复不返回
+			}
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
 // BackfillCommentFloors 存量数据回填（幂等）：
 // 老评论没有 root_id / floor_no，按同一目标（作品+章节 或 博客）的时间正序补楼层号，
 // 并把回复挂到其顶层评论下。仅在 floor_no = 0 且 parent_id IS NULL 时处理。
@@ -302,6 +375,7 @@ func GetCommentsByNovel(novelID uint, chapterNumber int, page, pageSize int, inc
 	return loadCommentsPage(novelCommentScope(novelID, chapterNumber), page, pageSize, includeDeleted)
 }
 
+// GetCommentByID 按 id 取单条评论（含 User 预加载）。
 func GetCommentByID(id uint) (*Comment, error) {
 	var comment Comment
 	err := DB.Preload("User").First(&comment, id).Error
@@ -309,6 +383,33 @@ func GetCommentByID(id uint) (*Comment, error) {
 		return nil, err
 	}
 	return &comment, nil
+}
+
+// SetFloorPassword 设置/修改楼的访问密码（入口限制，非内容加密）。
+// passwordHash 为空且 hasPassword=false 表示解除加密。
+// 仅允许顶层评论（parent_id IS NULL）设密——楼内回复不单独设密码。
+// 用 map Updates 按列精确写，避免 GORM 结构体零值被默认值吞掉。
+func SetFloorPassword(floorID uint, passwordHash string, hasPassword bool) error {
+	return DB.Model(&Comment{}).Where("id = ? AND parent_id IS NULL", floorID).
+		Updates(map[string]any{"password_hash": passwordHash, "has_password": hasPassword}).Error
+}
+
+// GetFloorWithReplies 取单楼（顶层评论）+ 全部楼内回复（时间正序）。
+// 供「楼详情」端点使用：凭密码解锁后可整楼读取（前端 🔒 占位解锁后调用）。
+func GetFloorWithReplies(floorID uint) (*Comment, []Comment, error) {
+	var floor Comment
+	if err := DB.Preload("User").First(&floor, floorID).Error; err != nil {
+		return nil, nil, err
+	}
+	var replies []Comment
+	if err := DB.Preload("User").
+		Where("root_id = ?", floorID).
+		Order("created_at ASC").
+		Find(&replies).Error; err != nil {
+		return nil, nil, err
+	}
+	fillReplyToName(replies)
+	return &floor, replies, nil
 }
 
 // GetAllCommentsByNovel 获取作品的「全部」评论（书评 + 所有章评，按时间倒序）。

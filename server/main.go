@@ -222,6 +222,8 @@ func main() {
 		public.GET("/novels/:id/chapters/:num", handlers.GetChapterContent)
 		public.GET("/novels/:id/chapters/:num/verify", handlers.VerifyChapter)
 		public.GET("/comments", handlers.GetComments)
+		// 楼加密（入口限制）：单楼整读（公开，楼内校验密码）；验证/设密需登录态
+		public.GET("/comments/:id/detail", handlers.GetFloorDetail)
 		public.GET("/reports/reasons", handlers.GetReportReasons)
 		// API 聚合中间层（一次请求批量获取多个接口数据，向后兼容原有独立调用）
 		public.POST("/batch", security.RateLimit(30, 60), handlers.BatchHandler)
@@ -266,42 +268,42 @@ func main() {
 	protected := r.Group("/api")
 	protected.Use(middleware.AuthRequired())
 	{
-	protected.GET("/auth/me", handlers.GetCurrentUser)
-	protected.POST("/auth/change-password", handlers.ChangePassword)
-	// 实名制（F10/F21.1）：申请/状态/国家实名核验代理（姓名+身份证不落库明文）
-	protected.POST("/auth/realname/apply", security.RateLimit(5, 60), handlers.ApplyRealName)
-	protected.GET("/auth/realname", handlers.GetMyRealName)
-	protected.POST("/auth/realname/national-check", security.RateLimit(5, 60), handlers.NationalRealNameCheck)
-	// 未成年检测（F21.1）：出生日期自报 + 状态查询（strict 分级限制在发布入口门禁）
-	protected.POST("/auth/birthdate", security.RateLimit(10, 60), handlers.SetBirthDate)
-	protected.GET("/auth/minor-status", handlers.GetMinorStatus)
-	// 微信账号绑定（F21.2）：绑定状态 / 绑定 / 解绑
-	protected.GET("/auth/wechat/bind-status", handlers.WeChatBindStatus)
-	protected.POST("/auth/wechat/bind", handlers.WeChatBind)
-	protected.POST("/auth/wechat/unbind", handlers.WeChatUnbind)
-	// 自定义网站主题（F12）：个人主题读取 / 保存（服务端消毒）
-	protected.GET("/theme/me", handlers.GetMyTheme)
-	protected.PUT("/theme/me", handlers.UpdateMyTheme)
-	// F12b 作者主题（本人或管理员可写，访客可见）
-	protected.PUT("/author/:id/theme", handlers.UpdateAuthorTheme)
-	// web 项目额度（F17）：个人额度查询 + 设为公开（触发超额审核）
-	protected.GET("/web-quota/mine", handlers.MyWebQuota)
-	protected.POST("/web-quota/html-public", handlers.SetHTMLPublic)
-	protected.POST("/web-quota/frame-public", handlers.SetFramePublic)
-	// 用户黑名单（F13：拉黑禁言/屏蔽内容）
-	protected.POST("/blacklist", security.RateLimit(20, 60), handlers.AddBlacklist)
-	protected.DELETE("/blacklist/:id", handlers.RemoveBlacklist)
-	protected.GET("/blacklist", handlers.ListMyBlacklist)
-	// 私信（F20：会话消息；互关才可发第 3 条，可在设置中关闭）
-	protected.POST("/messages", security.RateLimit(30, 60), handlers.SendMessage)
-	protected.GET("/messages/conversations", handlers.ListConversations)
-	protected.GET("/messages/with/:userId", handlers.ListMessages)
-	protected.POST("/messages/read", handlers.MarkMessageRead)
-	protected.GET("/messages/unread-count", handlers.UnreadMessageCount)
-	protected.GET("/messages/settings", handlers.GetMessageSettings)
-	protected.PUT("/messages/settings", handlers.UpdateMessageSettings)
-	protected.POST("/messages/recall", handlers.RecallMessage)
-	protected.POST("/messages/conversation/delete", handlers.DeleteConversation)
+		protected.GET("/auth/me", handlers.GetCurrentUser)
+		protected.POST("/auth/change-password", handlers.ChangePassword)
+		// 实名制（F10/F21.1）：申请/状态/国家实名核验代理（姓名+身份证不落库明文）
+		protected.POST("/auth/realname/apply", security.RateLimit(5, 60), handlers.ApplyRealName)
+		protected.GET("/auth/realname", handlers.GetMyRealName)
+		protected.POST("/auth/realname/national-check", security.RateLimit(5, 60), handlers.NationalRealNameCheck)
+		// 未成年检测（F21.1）：出生日期自报 + 状态查询（strict 分级限制在发布入口门禁）
+		protected.POST("/auth/birthdate", security.RateLimit(10, 60), handlers.SetBirthDate)
+		protected.GET("/auth/minor-status", handlers.GetMinorStatus)
+		// 微信账号绑定（F21.2）：绑定状态 / 绑定 / 解绑
+		protected.GET("/auth/wechat/bind-status", handlers.WeChatBindStatus)
+		protected.POST("/auth/wechat/bind", handlers.WeChatBind)
+		protected.POST("/auth/wechat/unbind", handlers.WeChatUnbind)
+		// 自定义网站主题（F12）：个人主题读取 / 保存（服务端消毒）
+		protected.GET("/theme/me", handlers.GetMyTheme)
+		protected.PUT("/theme/me", handlers.UpdateMyTheme)
+		// F12b 作者主题（本人或管理员可写，访客可见）
+		protected.PUT("/author/:id/theme", handlers.UpdateAuthorTheme)
+		// web 项目额度（F17）：个人额度查询 + 设为公开（触发超额审核）
+		protected.GET("/web-quota/mine", handlers.MyWebQuota)
+		protected.POST("/web-quota/html-public", handlers.SetHTMLPublic)
+		protected.POST("/web-quota/frame-public", handlers.SetFramePublic)
+		// 用户黑名单（F13：拉黑禁言/屏蔽内容）
+		protected.POST("/blacklist", security.RateLimit(20, 60), handlers.AddBlacklist)
+		protected.DELETE("/blacklist/:id", handlers.RemoveBlacklist)
+		protected.GET("/blacklist", handlers.ListMyBlacklist)
+		// 私信（F20：会话消息；互关才可发第 3 条，可在设置中关闭）
+		protected.POST("/messages", security.RateLimit(30, 60), handlers.SendMessage)
+		protected.GET("/messages/conversations", handlers.ListConversations)
+		protected.GET("/messages/with/:userId", handlers.ListMessages)
+		protected.POST("/messages/read", handlers.MarkMessageRead)
+		protected.GET("/messages/unread-count", handlers.UnreadMessageCount)
+		protected.GET("/messages/settings", handlers.GetMessageSettings)
+		protected.PUT("/messages/settings", handlers.UpdateMessageSettings)
+		protected.POST("/messages/recall", handlers.RecallMessage)
+		protected.POST("/messages/conversation/delete", handlers.DeleteConversation)
 		// 用户 API Key 管理（创建/查看/修改/重生成/删除，配额在管理员角色上限内自设）
 		protected.GET("/apikeys", handlers.ListMyAPIKeys)
 		protected.POST("/apikeys", handlers.CreateAPIKey)
@@ -320,6 +322,9 @@ func main() {
 		protected.DELETE("/reading/notes/:id", handlers.DeleteReadingNote)
 		protected.POST("/comments", security.RateLimit(20, 60), handlers.CreateComment)
 		protected.DELETE("/comments/:id", handlers.DeleteComment)
+		// 楼加密（入口限制）：验证访问密码 / 设置·修改·解除密码（限速防爆破）
+		protected.POST("/comments/:id/verify-password", security.RateLimit(10, 60), handlers.VerifyFloorPassword)
+		protected.POST("/comments/:id/password", security.RateLimit(10, 60), handlers.SetFloorPassword)
 		protected.POST("/novels", handlers.CreateNovel)
 		protected.PUT("/novels/:id", handlers.UpdateNovel)
 		protected.DELETE("/novels/:id", handlers.DeleteNovel)
@@ -453,14 +458,14 @@ func main() {
 		admin.GET("/realname-provider", handlers.AdminGetRealNameProvider)
 		admin.PUT("/realname-provider", handlers.AdminSetRealNameProvider)
 		admin.POST("/realname-provider/test", handlers.AdminTestRealNameProvider)
-		admin.GET("/hotwords", handlers.AdminHotWords) // 热词统计（内容治理/舆情观测）
+		admin.GET("/hotwords", handlers.AdminHotWords)                     // 热词统计（内容治理/舆情观测）
 		admin.POST("/search-logs/cleanup", handlers.AdminSearchLogCleanup) // 维护搜索埋点日志（清空/保留期清理）
 		admin.GET("/users", handlers.ListUsers)
 		admin.GET("/users/audit", handlers.ListUserAuditLogs)
-		admin.GET("/zone-access", handlers.ListZoneAccessLogs)        // 隔离墙进入记录（176号令专项，分页+筛选）
-		admin.GET("/zone-access/stats", handlers.GetZoneAccessStats)  // 隔离墙进入记录统计（仪表盘卡片）
-		admin.GET("/web-access", handlers.ListWebAccessLogs)          // 网络诊断 / 用户分布 / 攻击流量（分页+多维筛选）
-		admin.GET("/web-access/stats", handlers.GetWebAccessStats)    // Web 访问日志聚合统计（诊断面板）
+		admin.GET("/zone-access", handlers.ListZoneAccessLogs)           // 隔离墙进入记录（176号令专项，分页+筛选）
+		admin.GET("/zone-access/stats", handlers.GetZoneAccessStats)     // 隔离墙进入记录统计（仪表盘卡片）
+		admin.GET("/web-access", handlers.ListWebAccessLogs)             // 网络诊断 / 用户分布 / 攻击流量（分页+多维筛选）
+		admin.GET("/web-access/stats", handlers.GetWebAccessStats)       // Web 访问日志聚合统计（诊断面板）
 		admin.POST("/web-access/cleanup", handlers.CleanupWebAccessLogs) // 清空 Web 访问日志（合规证据由文件日志承担）
 		admin.PUT("/users/:id", handlers.UpdateUser)
 		admin.DELETE("/users/:id", handlers.DeleteUser)
@@ -640,13 +645,13 @@ func main() {
 	// 🔒 纵深防御：组级强制 police/admin 角色
 	police.Use(middleware.AuthRequired(), middleware.PoliceRequired())
 	{
-		police.GET("/softdel", handlers.PoliceListSoftDel)                           // 软删除留证列表（取证查看）
-		police.GET("/forums", handlers.PoliceListForums)                            // 论坛巡查：全部论坛（含封锁/加密/隐藏/软删除）
-		police.GET("/evidence", handlers.PoliceGetEvidence)               // 单条取证凭证详情（?type=&id=）
-		police.GET("/download", handlers.PoliceDownloadEvidence)         // 下载单条取证凭证（?type=&id=）
-		police.GET("/del-color", handlers.PoliceGetDelColor)             // 已删除内容高亮色（警方可读）
-		police.PUT("/del-color", handlers.PoliceSetDelColor)             // 已删除内容高亮色（仅管理员可写）
-		police.GET("/export", handlers.PoliceExportPackage)                         // 导出全部取证包
+		police.GET("/softdel", handlers.PoliceListSoftDel)       // 软删除留证列表（取证查看）
+		police.GET("/forums", handlers.PoliceListForums)         // 论坛巡查：全部论坛（含封锁/加密/隐藏/软删除）
+		police.GET("/evidence", handlers.PoliceGetEvidence)      // 单条取证凭证详情（?type=&id=）
+		police.GET("/download", handlers.PoliceDownloadEvidence) // 下载单条取证凭证（?type=&id=）
+		police.GET("/del-color", handlers.PoliceGetDelColor)     // 已删除内容高亮色（警方可读）
+		police.PUT("/del-color", handlers.PoliceSetDelColor)     // 已删除内容高亮色（仅管理员可写）
+		police.GET("/export", handlers.PoliceExportPackage)      // 导出全部取证包
 	}
 
 	// 远程站点公开接口
@@ -1066,6 +1071,14 @@ func initDatabase() error {
 	}
 	models.InitDefaultForums()
 	models.InitPlatformConfigs()
+	// 管理端配置（DB）覆盖 .env 初始值：微信扫码凭据热更新进 config 包级变量
+	// （sms 网关由 resolveGateway 每次发送前读 DB，无需在此处理）
+	if wxID, wxSecret, wxCallback, fromDB := models.GetWeChatConfigFromDB(); fromDB {
+		config.WeChatAppID = wxID
+		config.WeChatAppSecret = wxSecret
+		config.WeChatCallback = wxCallback
+		log.Println("[wechat] 已从数据库恢复管理端保存的微信扫码配置")
+	}
 	// 限流与 API Key：连库后重载管理员配置（含自定义爬虫规则），并清理过期访问日志
 	security.ReloadBotRules()
 	models.CleanupAccessLogs(models.LoadAPIRateLimitConfig().LogRetentionDays)
