@@ -2,15 +2,17 @@
   <div class="quota-page">
     <h2 class="page-title">我的 Web 项目额度</h2>
     <p class="hint-text">
-      平台对每位用户公开到广场的 Web 项目（自定义 HTML 扩展 + UI 模板合计）数量设上限。
-      达额后继续公开的项目会进入「超额待审核」，管理员批准后才能在广场展示。
+      平台对每位用户公开到广场的 Web 项目（自定义 HTML 扩展 + UI 模板合计）设「数量」与「总大小」双重额度。
+      任一维度达额后，继续公开的项目会进入「超额待审核」，管理员批准后才能在广场展示。
     </p>
 
+    <!-- 数量维度 -->
     <el-card shadow="never" class="stat-card">
+      <div class="dim-title">公开数量额度</div>
       <div class="stat-grid">
         <div class="stat-item">
           <div class="stat-num">{{ data.quota < 0 ? '不限' : data.quota }}</div>
-          <div class="stat-label">额度上限</div>
+          <div class="stat-label">额度上限（个）</div>
         </div>
         <div class="stat-item">
           <div class="stat-num">{{ data.used }}</div>
@@ -23,12 +25,37 @@
           <div class="stat-label">剩余可公开</div>
         </div>
       </div>
-      <div v-if="data.overridden" class="override-tip">
-        你的额度由管理员单独设置（{{ data.override_quota === -1 ? '跟随全局' : data.override_quota + ' 个' }}）
-        <span v-if="data.override_note" class="muted">— {{ data.override_note }}</span>
-      </div>
-      <div v-else class="override-tip muted">当前跟随全局默认额度（{{ data.global_default }} 个）</div>
     </el-card>
+
+    <!-- 大小维度 -->
+    <el-card shadow="never" class="stat-card">
+      <div class="dim-title">公开总大小额度</div>
+      <div class="stat-grid">
+        <div class="stat-item">
+          <div class="stat-num">{{ data.size_quota_mb <= 0 ? '不限' : fmtMB(data.size_quota_mb) }}</div>
+          <div class="stat-label">额度上限</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num">{{ fmtBytes(data.size_used_bytes) }}</div>
+          <div class="stat-label">已占用</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num" :class="{ 'warn': data.size_quota_mb > 0 && data.size_remaining_mb === 0 }">
+            {{ data.size_remaining_mb < 0 ? '不限' : fmtMB(data.size_remaining_mb) }}
+          </div>
+          <div class="stat-label">剩余可用</div>
+        </div>
+      </div>
+    </el-card>
+
+    <div v-if="data.overridden" class="override-tip">
+      你的额度由管理员单独设置（数量：{{ data.override_quota === -1 ? '跟随全局' : data.override_quota + ' 个' }}；
+      大小：{{ data.override_size_mb === -1 ? '跟随全局' : (data.override_size_mb === 0 ? '不限' : data.override_size_mb + ' MB') }}）
+      <span v-if="data.override_note" class="muted">— {{ data.override_note }}</span>
+    </div>
+    <div v-else class="override-tip muted">
+      当前跟随全局默认额度（数量 {{ data.global_default }} 个；大小 {{ data.global_size_mb <= 0 ? '不限' : data.global_size_mb + ' MB' }}）
+    </div>
 
     <el-divider content-position="left">我的超额审核单</el-divider>
     <el-table :data="data.requests || []" v-loading="loading" style="width:100%">
@@ -60,8 +87,9 @@ import { ElMessage } from 'element-plus';
 
 interface MyQuotaData {
   quota: number; used: number; remaining: number;
-  overridden: boolean; override_quota: number | null; override_note: string;
-  global_default: number;
+  size_quota_mb: number; size_used_bytes: number; size_remaining_mb: number;
+  overridden: boolean; override_quota: number | null; override_size_mb: number | null; override_note: string;
+  global_default: number; global_size_mb: number;
   requests: {
     id: number; target_type: string; target_id: number; status: string;
     reason: string; review_note: string; target_name: string; created_at: string;
@@ -69,10 +97,26 @@ interface MyQuotaData {
 }
 
 const data = ref<MyQuotaData>({
-  quota: 0, used: 0, remaining: 0, overridden: false, override_quota: null,
-  override_note: '', global_default: 3, requests: [],
+  quota: 0, used: 0, remaining: 0,
+  size_quota_mb: 0, size_used_bytes: 0, size_remaining_mb: -1,
+  overridden: false, override_quota: null, override_size_mb: null,
+  override_note: '', global_default: 3, global_size_mb: 0, requests: [],
 });
 const loading = ref(false);
+
+/** 字节数格式化为易读单位（B/KB/MB/GB） */
+function fmtBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const v = bytes / Math.pow(1024, i);
+  return (i === 0 ? v.toFixed(0) : v.toFixed(1)) + ' ' + units[i];
+}
+/** MB 数格式化为易读单位（>=1024 MB 显示 GB） */
+function fmtMB(mb: number): string {
+  if (mb < 1024) return mb + ' MB';
+  return (mb / 1024).toFixed(1) + ' GB';
+}
 
 async function load() {
   loading.value = true;
@@ -102,12 +146,15 @@ onMounted(load);
 .page-title { margin: 0 0 8px; font-size: 1.3rem; color: var(--text-color, #333); }
 .hint-text { color: var(--text-light, #666); font-size: 0.85rem; margin-bottom: 16px; }
 .stat-card { border-radius: 10px; margin-bottom: 16px; }
+.dim-title { font-weight: 600; font-size: 0.95rem; color: var(--text-color, #333); margin-bottom: 12px; }
 .stat-grid { display: flex; gap: 24px; }
 .stat-item { text-align: center; flex: 1; }
 .stat-num { font-size: 1.8rem; font-weight: 700; color: var(--el-color-primary, #409eff); }
 .stat-num.warn { color: var(--el-color-danger, #f56c6c); }
 .stat-label { font-size: 0.85rem; color: var(--text-light, #666); margin-top: 4px; }
-.override-tip { margin-top: 12px; font-size: 0.82rem; }
+.override-tip { margin-top: 4px; margin-bottom: 12px; font-size: 0.82rem; color: var(--text-color, #333); }
 .muted { color: var(--text-light, #999); }
-[data-theme="dark"] .page-title { color: #e2e8f0; }
+[data-theme="dark"] .page-title,
+[data-theme="dark"] .dim-title { color: #e2e8f0; }
+[data-theme="dark"] .override-tip { color: #cbd5e1; }
 </style>

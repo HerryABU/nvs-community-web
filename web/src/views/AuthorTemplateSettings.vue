@@ -68,6 +68,7 @@
           <el-checkbox v-model="form.uses_novel_api">平台API</el-checkbox>
           <el-checkbox v-model="form.is_public">公开分享</el-checkbox>
         </el-space>
+        <div style="font-size:.75rem;color:var(--text-secondary);margin-top:4px">「公开分享」经额度审核生效：数量或总大小超额时进入「待审核」，不在广场展示</div>
         <el-form-item label="运行模式" style="margin-top:12px">
           <el-radio-group v-model="form.run_mode">
             <el-radio value="sandbox">沙盒隔离（默认）</el-radio>
@@ -129,6 +130,7 @@ import { ref, nextTick, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Link } from '@element-plus/icons-vue';
 import { frameApi } from '@/api/frame';
+import { webQuotaApi } from '@/api/webQuota';
 import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
 
 const tab = ref('reader');
@@ -179,13 +181,36 @@ function insertRefLink(link: string){
   }
 }
 
+// 公开/撤回模板：走带额度判断的 /web-quota/frame-public（超额 → 超额待审，不绕过额度）
+async function applyFramePublic(id:number, next:boolean){
+  try{
+    const r = await webQuotaApi.setFramePublic(id, next);
+    const d = r.data.data;
+    if(d?.allowed){ ElMessage.success(d.message || (next?'已公开发布':'已撤回公开')) }
+    else if(d?.need_review){ ElMessage.warning(d.message || '已进入超额待审核，管理员通过后将展示到广场') }
+    else { ElMessage.warning(d?.message || '操作未生效') }
+  }catch(e:any){ ElMessage.error(e?.response?.data?.message || '操作失败') }
+}
+
 async function save(){
   if(!form.value.name||!form.value.content){ElMessage.warning('请填写完整');return}
   saving.value=true;
   try{
-    const data:any={...form.value,novel_id:form.value.novel_id as number,blog_id:form.value.blog_id as number};
-    if(editing.value){await frameApi.update(editing.value.id,data);ElMessage.success('已更新')}
-    else {await frameApi.create(data);ElMessage.success('已创建')}
+    // is_public 不随表单直写：公开/撤回统一走额度接口，避免绕过数量/大小额度管控
+    const { is_public: wantPublic, ...rest }:any = form.value;
+    if(editing.value){
+      const wasPublic = editing.value.is_public;
+      await frameApi.update(editing.value.id, rest);
+      if(wantPublic!==wasPublic){ await applyFramePublic(editing.value.id, wantPublic) }
+      else { ElMessage.success('已更新') }
+    } else {
+      const r = await frameApi.create(rest);
+      const d = r.data.data;
+      const newId = d?.frame?.id ?? d?.id;
+      // 后端建记录时已按勾选状态走过额度判断（public_note 为处理结果），无需重复调用
+      if(wantPublic && newId && !d?.public_note){ await applyFramePublic(newId, true) }
+      else { ElMessage.success('已创建'); if(d?.public_note){ ElMessage.warning(d.public_note) } }
+    }
     showEdit.value=false;resetForm();load();
   }catch{ElMessage.error('保存失败')}
   saving.value=false;

@@ -24,6 +24,7 @@
             <el-tag v-if="f.review_status === 'pending'" type="warning" size="small">待复核</el-tag>
             <el-tag v-else-if="f.review_status === 'rejected'" type="danger" size="small">已驳回</el-tag>
             <el-tag v-if="f.is_public" type="success" size="small">公开</el-tag>
+            <el-tag v-else-if="f.review_status === 'quota_review'" type="warning" size="small">⏳ 超额待审</el-tag>
             <el-tag v-if="!f.is_active" type="info" size="small">禁用</el-tag>
           </div>
         </div>
@@ -33,6 +34,7 @@
         </div>
         <div class="card-actions">
           <el-button size="small" @click="preview(f)" :icon="View">预览</el-button>
+          <el-button size="small" :type="f.is_public?'success':''" @click="togglePublic(f)">{{ f.is_public?'撤回公开' : (f.review_status==='quota_review'?'超额待审':'公开') }}</el-button>
           <el-button size="small" @click="edit(f)" :icon="Edit">编辑</el-button>
           <el-button size="small" type="danger" @click="del(f)" :icon="Delete">删除</el-button>
         </div>
@@ -85,6 +87,7 @@
             <el-checkbox v-model="form.uses_novel_api">调用平台小说API</el-checkbox>
             <el-checkbox v-model="form.has_controls">包含按钮/控件</el-checkbox>
             <el-checkbox v-model="form.is_public">公开分享</el-checkbox>
+            <span class="run-mode-hint" style="margin:0 0 6px">勾选后经额度审核：超额将进入「待审核」，不在广场展示</span>
           </el-col>
         </el-row>
         <el-alert v-if="form.uses_novel_api" type="info" :closable="false" show-icon style="margin-bottom:12px">
@@ -114,6 +117,7 @@ import { ref, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, View, Edit, Delete } from '@element-plus/icons-vue';
 import { frameApi } from '@/api/frame';
+import { webQuotaApi } from '@/api/webQuota';
 import SandboxPreview from './SandboxPreview.vue';
 
 interface Frame {
@@ -155,16 +159,53 @@ async function save() {
   if (!form.value.name.trim() || !form.value.content.trim()) { ElMessage.warning('请填写完整'); return; }
   saving.value = true;
   try {
+    // is_public 不随表单直写：公开/撤回统一走带额度判断的 /web-quota/frame-public
+    // （数量/大小任一超额 → 转「超额待审」），避免绕过额度管控。
+    const { is_public: wantPublic, ...rest } = form.value;
     if (editing.value) {
-      await frameApi.update(editing.value.id, { ...form.value });
-      ElMessage.success('已更新');
+      const wasPublic = editing.value.is_public;
+      await frameApi.update(editing.value.id, rest);
+      if (wantPublic !== wasPublic) {
+        await applyFramePublic(editing.value.id, wantPublic);
+      } else {
+        ElMessage.success('已更新');
+      }
     } else {
-      await frameApi.create({ ...form.value });
-      ElMessage.success('已创建');
+      const r = await frameApi.create(rest);
+      const d = r.data.data;
+      const newId = d?.frame?.id ?? d?.id;
+      // 后端建记录时已按勾选状态走过额度判断（public_note 为处理结果），无需重复调用
+      if (wantPublic && newId && !d?.public_note) {
+        await applyFramePublic(newId, true);
+      } else {
+        ElMessage.success('已创建');
+        if (d?.public_note) ElMessage.warning(d.public_note);
+      }
     }
     showCreate.value = false; resetForm(); await load();
   } catch { ElMessage.error('保存失败'); }
   finally { saving.value = false; }
+}
+
+// 公开/撤回 UI 模板（走额度接口，返回 need_review 时转超额待审）
+async function applyFramePublic(id: number, next: boolean) {
+  try {
+    const r = await webQuotaApi.setFramePublic(id, next);
+    const d = r.data.data;
+    if (d?.allowed) {
+      ElMessage.success(d.message || (next ? '已公开发布' : '已撤回公开'));
+    } else if (d?.need_review) {
+      ElMessage.warning(d.message || '已进入超额待审核，管理员通过后将展示到广场');
+    } else {
+      ElMessage.warning(d?.message || '操作未生效');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+async function togglePublic(f: Frame) {
+  await applyFramePublic(f.id, !f.is_public);
+  await load();
 }
 
 function preview(f: Frame) {

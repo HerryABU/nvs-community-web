@@ -1,11 +1,11 @@
 <template>
   <div class="admin-page">
-    <AdminHeader title="Web 项目额度" subtitle="公开额度管控与超额审核" :icon="Stamp" />
+    <AdminHeader title="Web 项目额度" subtitle="数量 + 总大小双维度公开额度管控与超额审核" :icon="Stamp" />
 
     <div class="admin-page-body admin-panel">
       <p class="hint-text">
-        平台对每位用户公开到广场的 Web 项目（自定义 HTML 扩展 + UI 模板合计）数量设上限。
-        达到额度后继续公开的项目将进入「超额待审核」，由管理员批准后才能在广场展示。
+        平台对每位用户公开到广场的 Web 项目（自定义 HTML 扩展 + UI 模板合计）设「数量」与「总大小」双重额度，
+        两个维度可同时开启。任一维度达到额度后，继续公开的项目将进入「超额待审核」，由管理员批准后才能在广场展示。
       </p>
 
       <!-- ============ 额度配置 ============ -->
@@ -18,10 +18,14 @@
         <el-form :inline="true" @submit.prevent>
           <el-form-item label="每人默认可公开数">
             <el-input-number v-model="globalQuota" :min="0" :max="1000" :step="1" />
+            <span class="muted small">0 = 禁止任何人公开发布</span>
+          </el-form-item>
+          <el-form-item label="每人默认可公开总大小">
+            <el-input-number v-model="globalSizeMB" :min="0" :max="102400" :step="10" />
+            <span class="muted small">MB，0 = 不限</span>
           </el-form-item>
           <el-form-item>
             <el-button type="primary" :loading="savingGlobal" @click="saveGlobal">保存全局默认</el-button>
-            <span class="muted small">0 = 禁止任何人公开发布</span>
           </el-form-item>
         </el-form>
       </el-card>
@@ -34,9 +38,13 @@
           <el-form-item label="用户 ID">
             <el-input v-model.number="overrideUserID" type="number" placeholder="用户 ID" style="width:140px" />
           </el-form-item>
-          <el-form-item label="额度">
+          <el-form-item label="数量额度">
             <el-input-number v-model="overrideQuota" :min="-1" :max="1000" :step="1" />
-            <span class="muted small">-1 跟随全局 / 0 禁止 / &gt;0 专属上限</span>
+            <span class="muted small">-1 跟随全局 / 0 禁止 / &gt;0 专属个数</span>
+          </el-form-item>
+          <el-form-item label="大小额度">
+            <el-input-number v-model="overrideSizeMB" :min="-1" :max="102400" :step="10" />
+            <span class="muted small">-1 跟随全局 / 0 不限 / &gt;0 专属 MB</span>
           </el-form-item>
           <el-form-item label="备注">
             <el-input v-model="overrideNote" placeholder="选填" style="width:180px" />
@@ -47,17 +55,24 @@
         </el-form>
 
         <el-table :data="overrides" style="width:100%;margin-top:8px" v-loading="loadingOverrides">
-          <el-table-column prop="user_id" label="用户 ID" width="100" />
-          <el-table-column prop="username" label="用户名" min-width="120" show-overflow-tooltip />
-          <el-table-column label="额度" width="160">
+          <el-table-column prop="user_id" label="用户 ID" width="90" />
+          <el-table-column prop="username" label="用户名" min-width="110" show-overflow-tooltip />
+          <el-table-column label="数量额度" width="140">
             <template #default="{ row }">
               <el-tag size="small" :type="row.quota === -1 ? 'info' : (row.quota === 0 ? 'danger' : 'success')">
                 {{ row.quota === -1 ? '跟随全局' : (row.quota === 0 ? '禁止公开' : row.quota + ' 个') }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="note" label="备注" min-width="140" show-overflow-tooltip />
-          <el-table-column label="操作" width="120" fixed="right">
+          <el-table-column label="大小额度" width="150">
+            <template #default="{ row }">
+              <el-tag size="small" :type="sizeTagType(row.quota_size_mb)">
+                {{ sizeLabel(row.quota_size_mb) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="note" label="备注" min-width="120" show-overflow-tooltip />
+          <el-table-column label="操作" width="90" fixed="right">
             <template #default="{ row }">
               <el-button size="small" type="danger" text @click="removeOverride(row)">撤销</el-button>
             </template>
@@ -137,17 +152,31 @@ interface QuotaRequest {
   reason: string; review_note: string; username: string; target_name: string; created_at: string;
 }
 interface OverrideRow {
-  user_id: number; username: string; quota: number; note: string;
+  user_id: number; username: string; quota: number; quota_size_mb: number; note: string;
+}
+
+/** 大小额度 tag 文案：-1 跟随全局 / 0 不限 / >0 N MB */
+function sizeLabel(v: number): string {
+  if (v === -1) return '跟随全局';
+  if (v === 0) return '不限大小';
+  return v + ' MB';
+}
+function sizeTagType(v: number): 'info' | 'warning' | 'success' {
+  if (v === -1) return 'info';
+  if (v === 0) return 'warning';
+  return 'success';
 }
 
 // ---- 配置 ----
 const globalQuota = ref(3);
+const globalSizeMB = ref(0);
 const savingGlobal = ref(false);
 const overrides = ref<OverrideRow[]>([]);
 const loadingOverrides = ref(false);
 
 const overrideUserID = ref<number | null>(null);
 const overrideQuota = ref(-1);
+const overrideSizeMB = ref(-1);
 const overrideNote = ref('');
 const savingOverride = ref(false);
 
@@ -156,6 +185,7 @@ async function loadConfig() {
     const res = await webQuotaApi.getConfig();
     if (res.data.code === 0) {
       globalQuota.value = res.data.data.max_per_user ?? 3;
+      globalSizeMB.value = res.data.data.max_size_mb ?? 0;
       overrides.value = res.data.data.overrides || [];
     }
   } catch { /* ignore */ }
@@ -164,8 +194,12 @@ async function loadConfig() {
 async function saveGlobal() {
   savingGlobal.value = true;
   try {
-    const res = await webQuotaApi.setConfig({ action: 'global', max_per_user: globalQuota.value });
-    if (res.data.code === 0) ElMessage.success('全局默认额度已保存');
+    const res = await webQuotaApi.setConfig({
+      action: 'global',
+      max_per_user: globalQuota.value,
+      max_size_mb: globalSizeMB.value,
+    });
+    if (res.data.code === 0) ElMessage.success('全局默认额度已保存（数量与大小均已生效）');
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '保存失败');
   }
@@ -182,6 +216,7 @@ async function saveOverride() {
       action: 'set_user',
       user_id: overrideUserID.value,
       quota: overrideQuota.value,
+      quota_size_mb: overrideSizeMB.value,
       note: overrideNote.value,
     });
     if (res.data.code === 0) {
@@ -271,6 +306,7 @@ onMounted(() => {
 .hint-text { color: var(--text-light, #666); font-size: 0.85rem; margin-bottom: 12px; }
 .card-title { font-weight: 600; color: var(--text-color, #333); }
 .config-card { border-radius: 10px; }
+.config-card :deep(.el-form--inline .el-form-item) { margin-right: 28px; }
 /* 操作栏统一用全局 .admin-toolbar（styles/admin.css），无需本地重复定义 */
 .review-meta { font-size: 0.85rem; color: var(--text-color, #333); margin-bottom: 10px; }
 .muted { color: var(--text-light, #999); }

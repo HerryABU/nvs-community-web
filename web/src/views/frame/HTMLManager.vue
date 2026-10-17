@@ -27,6 +27,8 @@
             <el-tag v-if="h.port > 0" type="danger" size="small">端口:{{ h.port }}</el-tag>
             <el-tag v-if="h.allow_wasm" type="warning" size="small">WASM</el-tag>
             <el-tag v-if="h.is_public" type="success" size="small">🌐 广场</el-tag>
+            <el-tag v-else-if="h.review_status === 'quota_review'" type="warning" size="small">⏳ 超额待审</el-tag>
+            <el-tag v-if="h.review_status === 'pending'" type="warning" size="small">待复核</el-tag>
             <el-tag v-if="h.blog_id" type="info" size="small">📝 博客:{{ h.blog_id }}</el-tag>
             <el-tag type="info" size="small">{{ h.file_count }} 文件</el-tag>
           </div>
@@ -193,6 +195,7 @@ import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Upload, View, Delete, FolderOpened, Edit, Connection, Close, UploadFilled, VideoPlay } from '@element-plus/icons-vue';
 import { htmlApi } from '@/api/frame';
+import { webQuotaApi } from '@/api/webQuota';
 import api, { apiPrefix } from '@/api/index';
 import { appPrefix } from '@/utils/prefix';
 import { useAuthStore } from '@/stores/auth';
@@ -219,6 +222,7 @@ interface HTMLItem {
   id: number; user_id: number; name: string; description: string; entry_file: string;
   file_count: number; total_size: number; port: number; project_name: string;
   is_active: boolean; is_public: boolean; allow_wasm: boolean; updated_at: string;
+  review_status?: string;
   frame_width?: number; frame_height?: number; blog_id?: number | null;
 }
 interface ZipEntryItem { name: string; size: number; }
@@ -314,6 +318,10 @@ async function doUpload() {
     const r = await htmlApi.upload(fd);
     if (r.data.code === 0) {
       uploadResult.value = `${r.data.data.files?.length || 0} 个文件已解压`;
+      if (r.data.data.public_note) {
+        // 勾选了广场展示：直接公开 或 超额转入待审（管理员通过后才展示）
+        ElMessage.warning(r.data.data.public_note);
+      }
       ElMessage.success('上传成功');
       setTimeout(() => { showUpload.value = false; resetUpload(); load(); }, 1500);
     } else {
@@ -373,12 +381,25 @@ async function savePreviewSettings() {
   }
 }
 
+// 公开/撤回：走带额度判断的专用接口（数量/大小任一超额 → 转「超额待审」，不直接进广场）
 async function togglePublic(h: HTMLItem) {
+  const next = !h.is_public;
   try {
-    await htmlApi.update(h.id, { is_public: !h.is_public });
-    h.is_public = !h.is_public;
-    ElMessage.success(h.is_public ? '已发布到广场' : '已从广场撤回');
-  } catch { ElMessage.error('操作失败'); }
+    const r = await webQuotaApi.setHtmlPublic(h.id, next);
+    const d = r.data.data;
+    if (d?.allowed) {
+      h.is_public = next;
+      h.review_status = next ? 'approved' : h.review_status;
+      ElMessage.success(d.message || (next ? '已发布到广场' : '已从广场撤回'));
+    } else if (d?.need_review) {
+      h.review_status = 'quota_review';
+      ElMessage.warning(d.message || '已进入超额待审核，管理员通过后将展示到广场');
+    } else {
+      ElMessage.warning(d?.message || '操作未生效');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
 }
 async function viewFiles(h: HTMLItem) {
   viewingName.value = h.name;

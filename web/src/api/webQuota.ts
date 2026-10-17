@@ -34,11 +34,14 @@ export const webQuotaApi = {
     return api.get('/admin/web-quota/config');
   },
   // action: global / set_user / remove_user
+  // max_size_mb：全局总大小额度（MB，0=不限）；quota_size_mb：按人大小覆盖（-1 跟随全局/0 不限/>0 专属 MB）
   setConfig(data: {
     action: 'global' | 'set_user' | 'remove_user';
     max_per_user?: number;
+    max_size_mb?: number;
     user_id?: number;
     quota?: number;
+    quota_size_mb?: number;
     note?: string;
   }) {
     return api.put('/admin/web-quota/config', data);
