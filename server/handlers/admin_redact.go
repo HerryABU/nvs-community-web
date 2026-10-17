@@ -7,6 +7,8 @@ package handlers
 //   POST /api/admin/log-redact/preview 脱敏效果预览（不修改实际配置）
 
 import (
+	"log"
+	"strconv"
 	"strings"
 
 	"nvs-server/config"
@@ -60,6 +62,14 @@ func UpdateLogRedactConfig(c *gin.Context) {
 	if err := config.RedactMgr.Update(rc); err != nil {
 		utils.InternalError(c, "保存脱敏配置失败")
 		return
+	}
+	// .env 自动同步（重启后仍生效；写失败仅告警不阻断）
+	if _, err := config.SyncPlatformConfigEnv(map[string]string{
+		"log_redact_enabled": strconv.FormatBool(rc.Enabled),
+		"log_redact_mask":    rc.Mask,
+		"log_redact_fields":  strings.Join(rc.SensitiveKeys, ","),
+	}); err != nil {
+		log.Printf("[admin] 脱敏配置已保存但 .env 同步失败: %v", err)
 	}
 	utils.Success(c, gin.H{
 		"message":        "日志脱敏配置已更新，即时生效",

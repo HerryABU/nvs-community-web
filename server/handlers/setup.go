@@ -158,6 +158,10 @@ func SetupInstall(c *gin.Context) {
 	models.InitDefaultForums()
 	models.InitPlatformConfigs()
 	_ = models.SetPlatformConfig("site_name", req.SiteName)
+	// .env 同步 SITE_NAME（重启后仍生效；写失败不阻断安装）
+	if _, err := config.SyncPlatformConfigEnv(map[string]string{"site_name": req.SiteName}); err != nil {
+		log.Printf("[setup] 站点名已保存但 .env 同步失败: %v", err)
+	}
 	ReloadXssRules()
 
 	// 6. 创建管理员账号（记录，不记录明文密码）

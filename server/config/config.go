@@ -221,6 +221,8 @@ func Init() {
 	if err := loadEnvFile(envPath); err != nil {
 		log.Printf("[config] 加载 .env 失败: %v，使用系统环境变量与默认值", err)
 	}
+	// 记录实际加载路径：管理后台保存配置时按此路径同步写回（见 envfile.go）
+	SetEnvFilePath(envPath)
 
 	// 3. 从环境变量读取各配置项
 	DBDriver = getEnv("DB_DRIVER", "sqlite")

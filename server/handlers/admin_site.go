@@ -6,6 +6,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -34,7 +35,16 @@ func GetPlatformConfigs(c *gin.Context) {
 	if !ensureAdmin(c) {
 		return
 	}
-	utils.Success(c, models.GetAllPlatformConfigs())
+	all := models.GetAllPlatformConfigs()
+	// 派生状态键（增量，不破坏既有 map[string]string 契约；供登录方式/实名页渲染）：
+	// wechat_login_available — 微信扫码登录是否可用（env 配齐 AppID/Secret/Callback）
+	// sms_gateway / sms_http_configured — 短信网关形态（手机号登录依赖）
+	// env_file_path — .env 实际路径（保存配置时自动同步写回该文件）
+	all["wechat_login_available"] = strconv.FormatBool(config.WeChatAppID != "" && config.WeChatAppSecret != "" && config.WeChatCallback != "")
+	all["sms_gateway"] = config.SMSGateway
+	all["sms_http_configured"] = strconv.FormatBool(config.SMSGateway == "http" && config.SMSHTTPURL != "")
+	all["env_file_path"] = config.GetEnvFilePath()
+	utils.Success(c, all)
 }
 
 func UpdatePlatformConfig(c *gin.Context) {
@@ -50,9 +60,9 @@ func UpdatePlatformConfig(c *gin.Context) {
 		"site_name": true, "vip_enabled": true, "categories": true,
 		"email_verify": true, "captcha_enabled": true,
 		"novel_visitor_mode": true, // 访客查看小说模式：open / trial / login_required
-		"home_module":       true, // 首页模块：novel / blog / forum / combined
-		"wall_warning_text": true, // 隔离墙/登录墙提示文案（作者可见性说明）
-		"smtp_host": true, "smtp_port": true, "smtp_user": true,
+		"home_module":        true, // 首页模块：novel / blog / forum / combined
+		"wall_warning_text":  true, // 隔离墙/登录墙提示文案（作者可见性说明）
+		"smtp_host":          true, "smtp_port": true, "smtp_user": true,
 		"smtp_password": true, "smtp_from": true,
 		"smtp_insecure_skip_verify": true, // 跳过 TLS 证书校验（内网/自签名 SMTP，默认关闭）
 		"robots_txt":                true,
@@ -64,9 +74,9 @@ func UpdatePlatformConfig(c *gin.Context) {
 		"site_net_culture_license": true, "site_app_filing": true,
 		"site_broadcast_license": true, "site_idc_license": true,
 		// 实名制与登录方式（F10/F21）：发布实名强制、允许的登录方式、未成年模式、国家实名 API
-		"realname_required": true,
-		"login_methods":     true,
-		"minor_mode":        true,
+		"realname_required":     true,
+		"login_methods":         true,
+		"minor_mode":            true,
 		"national_realname_api": true,
 	}
 	for k, v := range req {
@@ -85,7 +95,16 @@ func UpdatePlatformConfig(c *gin.Context) {
 			return
 		}
 	}
-	utils.Success(c, gin.H{"message": "配置已更新"})
+	// .env 自动同步：数据库是运行时真相，.env 同步保证重启后仍生效（写失败不阻断保存）
+	resp := gin.H{"message": "配置已更新"}
+	if envSynced, envErr := config.SyncPlatformConfigEnv(req); envErr != nil {
+		log.Printf("[admin] 配置已保存但 .env 同步失败: %v", envErr)
+		resp["env_sync_error"] = envErr.Error()
+	} else if len(envSynced) > 0 {
+		resp["env_synced"] = envSynced
+		resp["env_note"] = "已同步写入 .env（" + strings.Join(envSynced, ", ") + "），重启后依然生效"
+	}
+	utils.Success(c, resp)
 }
 
 // ============ SMTP 测试与诊断 ============
@@ -477,14 +496,14 @@ func GetSiteInfo(c *gin.Context) {
 		"site_name": models.GetSiteName(), "wall_zones": wallCfg.Zones, "wall_enabled": wallCfg.Enabled,
 		"email_verify": models.IsEmailVerifyEnabled(), "captcha_enabled": models.IsCaptchaEnabled(),
 		"home_module": models.GetHomeModule(),
-		"guidelines": guidelines,
-		"site_icp":   icp, "site_psb": psb, "site_psb_link": psbLink,
+		"guidelines":  guidelines,
+		"site_icp":    icp, "site_psb": psb, "site_psb_link": psbLink,
 		"extra_filings": extraFilings,
 		// 登录方式（F21.3：前台登录页按配置渲染入口）与实名/未成年配置
-		"login_methods":     loginMethods,
-		"realname_required": models.IsRealNameRequired(),
-		"minor_mode":        string(models.GetMinorMode()),
-		"wechat_login_available": config.WeChatAppID != "" && config.WeChatAppSecret != "" && config.WeChatCallback != "",
+		"login_methods":             loginMethods,
+		"realname_required":         models.IsRealNameRequired(),
+		"minor_mode":                string(models.GetMinorMode()),
+		"wechat_login_available":    config.WeChatAppID != "" && config.WeChatAppSecret != "" && config.WeChatCallback != "",
 		"national_realname_enabled": models.GetNationalRealNameConfig().Enabled,
 	})
 }
@@ -528,15 +547,15 @@ func ListFederatedSiteKeys(c *gin.Context) {
 	var keys []models.FederatedPeerKey
 	models.DB.Where("site_id = ?", site.ID).Order("id DESC").Find(&keys)
 	type keyView struct {
-		ID          uint      `json:"id"`
-		Direction   string    `json:"direction"`
-		PeerName    string    `json:"peer_name"`
-		KeyPrefix   string    `json:"key_prefix"`
-		IssuerName  string    `json:"issuer_name"`
-		QuotaPerMin int       `json:"quota_per_min"`
-		IsActive    bool      `json:"is_active"`
+		ID          uint       `json:"id"`
+		Direction   string     `json:"direction"`
+		PeerName    string     `json:"peer_name"`
+		KeyPrefix   string     `json:"key_prefix"`
+		IssuerName  string     `json:"issuer_name"`
+		QuotaPerMin int        `json:"quota_per_min"`
+		IsActive    bool       `json:"is_active"`
 		LastUsedAt  *time.Time `json:"last_used_at"`
-		CreatedAt   time.Time `json:"created_at"`
+		CreatedAt   time.Time  `json:"created_at"`
 	}
 	views := make([]keyView, 0, len(keys))
 	for _, k := range keys {
