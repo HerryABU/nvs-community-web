@@ -1,11 +1,32 @@
 <template>
   <div class="admin-page">
-    <AdminHeader title="站点设置" subtitle="站点名称 · SMTP · robots.txt · 安全设置" :icon="Setting" />
+    <AdminHeader title="站点设置" subtitle="站点名称 · 首页主模块 · 平台指南 · 备案 · robots.txt" :icon="Setting" />
     <div class="admin-page-body admin-panel">
+
+      <!-- 快捷入口：登录方式与实名/未成年已独立成页 -->
+      <div class="quick-nav">
+        <div class="quick-nav-item" @click="go('/admin/login-methods')">
+          <span class="qn-icon" style="background: var(--gradient-indigo)">🔑</span>
+          <div class="qn-body">
+            <div class="qn-title">登录方式管理</div>
+            <div class="qn-desc">邮箱/手机号/微信扫码入口 · 注册验证 · SMTP 通道 · 域名黑白名单</div>
+          </div>
+          <el-icon><ArrowRight /></el-icon>
+        </div>
+        <div class="quick-nav-item" @click="go('/admin/realname')">
+          <span class="qn-icon" style="background: var(--gradient-success)">🪪</span>
+          <div class="qn-body">
+            <div class="qn-title">实名与未成年保护</div>
+            <div class="qn-desc">核验提供商（国家/腾讯/阿里/华为/网易） · 发布实名强制 · 未成年模式 · 实名记录</div>
+          </div>
+          <el-icon><ArrowRight /></el-icon>
+        </div>
+      </div>
+
       <el-form :model="configForm" label-width="120px" @submit.prevent="saveConfig">
         <SectionHeader
           title="基础设置"
-          subtitle="站点名称 · 首页主模块 · 登录方式 · 实名与未成年保护"
+          subtitle="站点名称 · 首页主模块 · 平台指南"
           :icon="'⚙️'"
           gradient="primary"
         />
@@ -21,39 +42,6 @@
           </el-select>
           <span class="hint-text">设置站点首页默认展示的内容模块，访客进入首页即见该模块</span>
         </el-form-item>
-
-        <!-- 登录方式（F21.3：控制前台登录页渲染哪些入口；至少保留一种） -->
-        <el-form-item label="允许的登录方式">
-          <el-checkbox v-model="loginEmail">邮箱 + 密码</el-checkbox>
-          <el-checkbox v-model="loginPhone">手机号 + 验证码</el-checkbox>
-          <el-checkbox v-model="loginWechat" :disabled="!wechatAvailable">
-            微信扫码{{ wechatAvailable ? '' : '（需配置 WECHAT_APP_ID/SECRET/CALLBACK）' }}
-          </el-checkbox>
-          <span class="hint-text">手机号登录需在 .env 配置短信网关（SMS_GATEWAY=log 时验证码仅打入服务日志）</span>
-        </el-form-item>
-
-        <!-- 实名制与未成年保护（F10 / F21.1） -->
-        <el-form-item label="发布需实名">
-          <el-switch v-model="realnameRequired" active-text="开启" inactive-text="关闭" />
-          <span class="hint-text">开启后，用户发布作品/章节/评论前须先完成实名认证（站长与警方豁免）</span>
-        </el-form-item>
-        <el-form-item label="未成年保护模式">
-          <el-select v-model="minorMode" style="width:240px">
-            <el-option label="关闭" value="off" />
-            <el-option label="软模式（提醒 + 时长提示）" value="soft" />
-            <el-option label="严格（未实名限制发布）" value="strict" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="国家实名检测">
-          <el-switch v-model="nationalApiEnabled" active-text="开启" inactive-text="关闭" />
-          <span class="hint-text">对接国家实名检测 API：姓名+身份证号仅随请求转发，服务器不存储明文</span>
-        </el-form-item>
-        <el-form-item v-if="nationalApiEnabled" label="检测 API 地址">
-          <el-input v-model="nationalApiUrl" placeholder="https:// 国家实名检测 API 端点" maxlength="512" />
-        </el-form-item>
-        <el-form-item v-if="nationalApiEnabled" label="接入令牌">
-          <el-input v-model="nationalApiToken" placeholder="API Token" maxlength="256" show-password />
-        </el-form-item>
         <el-form-item label="平台指南">
           <el-input
             v-model="configForm.guidelines"
@@ -66,104 +54,6 @@
         <el-form-item label="VIP 付费">
           <el-switch v-model="vipEnabled" active-text="开启" inactive-text="关闭" />
           <span class="hint-text">关闭后，作者无法申请 VIP 付费功能</span>
-        </el-form-item>
-        <SectionHeader
-          title="邮件验证设置"
-          subtitle="SMTP 发件配置与连通性诊断"
-          :icon="'✉️'"
-          gradient="blue"
-        />
-        <el-form-item label="邮箱验证">
-          <el-switch v-model="emailVerifyEnabled" active-text="开启" inactive-text="关闭" />
-          <span class="hint-text">开启后注册需验证邮箱，关闭则跳过验证</span>
-        </el-form-item>
-        <el-form-item label="SMTP 服务器">
-          <el-input v-model="configForm.smtp_host" placeholder="smtp.qq.com" style="width:220px" />
-        </el-form-item>
-        <el-form-item label="SMTP 端口">
-          <el-input v-model="configForm.smtp_port" placeholder="587" style="width:120px" />
-        </el-form-item>
-        <el-form-item label="发件邮箱">
-          <el-input v-model="configForm.smtp_user" placeholder="your-email@qq.com" style="width:280px" />
-        </el-form-item>
-        <el-form-item label="SMTP 密码/授权码">
-          <el-input v-model="configForm.smtp_password" type="password" show-password placeholder="授权码" style="width:260px" />
-        </el-form-item>
-        <el-form-item label="发件人地址">
-          <el-input v-model="configForm.smtp_from" placeholder="同发件邮箱" style="width:280px" />
-        </el-form-item>
-        <el-form-item label="证书校验">
-          <el-switch v-model="smtpInsecureVerify" active-text="跳过证书校验" inactive-text="校验证书" />
-          <span class="hint-text">默认校验证书（安全）。仅当使用自签名/内网 SMTP 服务器报证书错误时再开启</span>
-        </el-form-item>
-        <el-form-item label="SMTP 测试">
-          <div class="smtp-test-row">
-            <el-input v-model="smtpTestTo" placeholder="测试收件邮箱，如 you@example.com" style="width:280px" />
-            <el-button type="primary" plain :loading="smtpTesting" @click="runSmtpTest">发送测试邮件</el-button>
-          </div>
-          <div v-if="smtpTestSteps.length" class="smtp-diag">
-            <div v-for="s in smtpTestSteps" :key="s.step" class="diag-step" :class="s.ok ? 'is-ok' : 'is-fail'">
-              <span class="diag-icon">{{ s.ok ? '✓' : '✗' }}</span>
-              <span class="diag-name">{{ stepName(s.step) }}</span>
-              <span class="diag-ms">{{ s.ms }}ms</span>
-              <span class="diag-detail">{{ s.detail }}</span>
-            </div>
-          </div>
-          <span class="hint-text">测试将逐阶段诊断：配置 → DNS → 连接 → TLS → 认证 → 发件，快速定位问题</span>
-        </el-form-item>
-        <SectionHeader
-          title="安全设置"
-          subtitle="滑块验证码 · 邮箱域名黑白名单"
-          :icon="'🛡️'"
-          gradient="danger"
-        />
-        <el-form-item label="滑块验证码">
-          <el-switch v-model="captchaEnabled" active-text="开启" inactive-text="关闭" />
-          <span class="hint-text">在注册/登录时显示滑块验证码</span>
-        </el-form-item>
-        <el-form-item label="邮箱域名黑名单">
-          <el-select
-            v-model="emailDomainBlacklistArr"
-            multiple
-            filterable
-            allow-create
-            default-first-option
-            clearable
-            placeholder="输入域名后回车添加，如 qq.com"
-            style="width: 100%"
-          />
-          <div class="bulk-import">
-            <el-input
-              v-model="blacklistImport"
-              type="textarea"
-              :rows="2"
-              placeholder="批量导入：粘贴多个域名，逗号 / 空格 / 换行分隔，如 qq.com, gmail.com, 163.com"
-            />
-            <el-button size="small" type="primary" plain @click="importDomains('black', blacklistImport)">导入</el-button>
-          </div>
-          <span class="hint-text">黑名单域名禁止注册（可逐条添加或批量导入，留空则不限制）</span>
-        </el-form-item>
-        <el-form-item label="邮箱域名白名单">
-          <el-select
-            v-model="emailDomainWhitelistArr"
-            multiple
-            filterable
-            allow-create
-            default-first-option
-            clearable
-            placeholder="输入域名后回车添加，如 company.com"
-            style="width: 100%"
-          />
-          <div class="bulk-import">
-            <el-input
-              v-model="whitelistImport"
-              type="textarea"
-              :rows="2"
-              placeholder="批量导入：粘贴多个域名，逗号 / 空格 / 换行分隔，如 company.com, university.edu"
-            />
-            <el-button size="small" type="primary" plain @click="importDomains('white', whitelistImport)">导入</el-button>
-          </div>
-          <span class="hint-text">白名单开启后仅允许这些域名注册（留空则不限制）；黑名单优先级高于白名单</span>
         </el-form-item>
         <SectionHeader
           title="联网备案"
@@ -206,6 +96,8 @@
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="saveConfig" :loading="savingConfig">保存设置</el-button>
+          <span v-if="envNote" class="env-note">📄 {{ envNote }}</span>
+          <span v-if="envError" class="env-error">⚠️ .env 同步失败（数据库配置仍已生效）</span>
         </el-form-item>
       </el-form>
     </div>
@@ -213,88 +105,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
-import { Setting } from '@element-plus/icons-vue';
+import { reactive, ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { Setting, ArrowRight } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage } from 'element-plus';
 
+const router = useRouter();
+function go(path: string) { router.push(path); }
+
 const configForm = reactive<Record<string, string>>({
-  site_name: '', vip_enabled: '', email_verify: '', captcha_enabled: '',
-  smtp_host: '', smtp_port: '', smtp_user: '', smtp_password: '', smtp_from: '',
+  site_name: '', vip_enabled: '',
   robots_txt: '', guidelines: '',
   site_icp: '', site_psb: '', site_psb_link: '',
   // 其他备案信息（可选）
   site_net_culture_license: '', site_app_filing: '', site_broadcast_license: '', site_idc_license: '' });
 const vipEnabled = ref(false);
-const emailVerifyEnabled = ref(false);
-const captchaEnabled = ref(false);
-const smtpInsecureVerify = ref(false);
 const savingConfig = ref(false);
+const envNote = ref('');
+const envError = ref('');
 // 首页主模块：novels / blogs / forums / combined，控制前台首页默认展示的内容模块
 const homeModule = ref<string>('novels');
-
-// ====== 登录方式 / 实名制 / 未成年保护（F10 / F21） ======
-// 允许的登录方式（至少保留一种，后端有兜底）
-const loginEmail = ref(true);
-const loginPhone = ref(true);
-const loginWechat = ref(false);
-const wechatAvailable = ref(false); // 后端已配置微信 AppID/Secret/Callback 才可用
-// 发布/评论强制实名
-const realnameRequired = ref(false);
-// 未成年保护模式：off / soft / strict
-const minorMode = ref<'off' | 'soft' | 'strict'>('off');
-// 国家实名检测 API
-const nationalApiEnabled = ref(false);
-const nationalApiUrl = ref('');
-const nationalApiToken = ref('');
-
-// 邮箱域名黑白名单（以标签形式逐条管理，底层仍以 JSON 数组存储）
-const emailDomainBlacklistArr = ref<string[]>([]);
-const emailDomainWhitelistArr = ref<string[]>([]);
-// 批量导入临时输入（逗号 / 空格 / 换行分隔）
-const blacklistImport = ref('');
-const whitelistImport = ref('');
-
-// 批量导入域名：支持逗号、空格、换行、分号分隔，自动去重、小写化
-function importDomains(target: 'black' | 'white', text: string) {
-  const parts = (text || '')
-    .split(/[,，;\s]+/)
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  if (!parts.length) {
-    ElMessage.warning('请输入至少一个域名');
-    return;
-  }
-  const arr = target === 'black' ? emailDomainBlacklistArr : emailDomainWhitelistArr;
-  const exists = new Set(arr.value);
-  let added = 0;
-  for (const p of parts) {
-    if (!exists.has(p)) {
-      exists.add(p);
-      arr.value.push(p);
-      added++;
-    }
-  }
-  if (target === 'black') blacklistImport.value = '';
-  else whitelistImport.value = '';
-  ElMessage.success(`已导入 ${added} 个域名（重复自动忽略）`);
-}
-
-function jsonToArray(json: string): string[] {
-  if (!json) return [];
-  try {
-    const arr = JSON.parse(json);
-    return Array.isArray(arr)
-      ? arr.map((s: unknown) => String(s).trim().toLowerCase()).filter(Boolean)
-      : [];
-  } catch {
-    return [];
-  }
-}
-function arrayToJson(arr: string[]): string {
-  return JSON.stringify((arr || []).map((s) => s.trim().toLowerCase()).filter(Boolean));
-}
 
 async function loadConfig() {
   try {
@@ -302,14 +134,6 @@ async function loadConfig() {
     const data = res.data.data || res.data || {};
     configForm.site_name = data.site_name || '';
     vipEnabled.value = data.vip_enabled === 'true';
-    emailVerifyEnabled.value = data.email_verify === 'true';
-    captchaEnabled.value = data.captcha_enabled === 'true';
-    configForm.smtp_host = data.smtp_host || '';
-    configForm.smtp_port = data.smtp_port || '587';
-    configForm.smtp_user = data.smtp_user || '';
-    configForm.smtp_password = data.smtp_password || '';
-    configForm.smtp_from = data.smtp_from || '';
-    smtpInsecureVerify.value = data.smtp_insecure_skip_verify === 'true';
     configForm.robots_txt = data.robots_txt || '';
     configForm.guidelines = data.guidelines || '';
     configForm.site_icp = data.site_icp || '';
@@ -320,39 +144,17 @@ async function loadConfig() {
     configForm.site_broadcast_license = data.site_broadcast_license || '';
     configForm.site_idc_license = data.site_idc_license || '';
     homeModule.value = data.home_module || 'novels';
-    // 登录方式（至少一种；wechat 需后端配置齐全才允许开启）
-    if (data.login_methods) {
-      loginEmail.value = !!data.login_methods.email;
-      loginPhone.value = !!data.login_methods.phone;
-      loginWechat.value = !!data.login_methods.wechat;
-    }
-    wechatAvailable.value = !!data.wechat_login_available;
-    realnameRequired.value = data.realname_required === true || data.realname_required === 'true';
-    minorMode.value = (data.minor_mode as any) || 'off';
-    if (data.national_realname_api) {
-      nationalApiEnabled.value = !!data.national_realname_api.enabled;
-      nationalApiUrl.value = data.national_realname_api.url || '';
-      nationalApiToken.value = data.national_realname_api.token || '';
-    }
-    emailDomainBlacklistArr.value = jsonToArray(data.email_domain_blacklist || '');
-    emailDomainWhitelistArr.value = jsonToArray(data.email_domain_whitelist || '');
   } catch { /* ignore */ }
 }
 
 async function saveConfig() {
   savingConfig.value = true;
+  envNote.value = '';
+  envError.value = '';
   try {
-    await adminApi.updateConfig({
+    const res = await adminApi.updateConfig({
       site_name: configForm.site_name,
       vip_enabled: vipEnabled.value ? 'true' : 'false',
-      email_verify: emailVerifyEnabled.value ? 'true' : 'false',
-      captcha_enabled: captchaEnabled.value ? 'true' : 'false',
-      smtp_host: configForm.smtp_host,
-      smtp_port: configForm.smtp_port,
-      smtp_user: configForm.smtp_user,
-      smtp_password: configForm.smtp_password,
-      smtp_from: configForm.smtp_from,
-      smtp_insecure_skip_verify: smtpInsecureVerify.value ? 'true' : 'false',
       robots_txt: configForm.robots_txt,
       guidelines: configForm.guidelines,
       site_icp: configForm.site_icp,
@@ -363,65 +165,17 @@ async function saveConfig() {
       site_broadcast_license: configForm.site_broadcast_license,
       site_idc_license: configForm.site_idc_license,
       home_module: homeModule.value,
-      // 登录方式（至少保留一种，后端兜底）
-      login_methods: JSON.stringify({
-        email: loginEmail.value,
-        phone: loginPhone.value,
-        wechat: loginWechat.value && wechatAvailable.value,
-      }),
-      realname_required: realnameRequired.value ? 'true' : 'false',
-      minor_mode: minorMode.value,
-      national_realname_api: JSON.stringify({
-        enabled: nationalApiEnabled.value,
-        url: nationalApiUrl.value.trim(),
-        token: nationalApiToken.value.trim(),
-      }),
-      email_domain_blacklist: arrayToJson(emailDomainBlacklistArr.value),
-      email_domain_whitelist: arrayToJson(emailDomainWhitelistArr.value),
     });
-    ElMessage.success('配置已保存');
+    const d = res.data.data || res.data || {};
+    if (d.env_sync_error) {
+      envError.value = d.env_sync_error;
+      ElMessage.warning('配置已保存，但 .env 同步失败');
+    } else {
+      if (d.env_note) envNote.value = d.env_note;
+      ElMessage.success('配置已保存');
+    }
   } catch { ElMessage.error('保存失败'); }
   finally { savingConfig.value = false; }
-}
-
-// ====== SMTP 测试与诊断 ======
-const smtpTestTo = ref('');
-const smtpTesting = ref(false);
-const smtpTestSteps = ref<{ step: string; ok: boolean; ms: number; detail: string }[]>([]);
-
-const stepLabels: Record<string, string> = {
-  config: '配置检查', dns: 'DNS 解析', connect: 'TCP 连接', hello: 'SMTP 握手',
-  starttls: 'TLS 升级', auth: '账号认证', mail: '发件/收件', data: '邮件发送',
-};
-function stepName(step: string) {
-  return stepLabels[step] || step;
-}
-
-// 使用当前表单里的 SMTP 配置做测试；密码留空时后端沿用已保存的授权码
-async function runSmtpTest() {
-  const to = smtpTestTo.value.trim();
-  if (!to) { ElMessage.warning('请先填写测试收件邮箱'); return; }
-  smtpTesting.value = true;
-  smtpTestSteps.value = [];
-  try {
-    const res = await adminApi.testSmtp({
-      to,
-      host: configForm.smtp_host,
-      port: configForm.smtp_port,
-      user: configForm.smtp_user,
-      password: configForm.smtp_password,
-      from: configForm.smtp_from,
-    });
-    const d = res.data.data || {};
-    smtpTestSteps.value = d.steps || [];
-    if (d.ok) ElMessage.success(d.message || 'SMTP 测试通过，邮件已发送');
-    else ElMessage.error(d.message || 'SMTP 测试未通过，请查看诊断');
-  } catch (e: any) {
-    smtpTestSteps.value = [];
-    ElMessage.error(e?.response?.data?.message || '测试请求失败，请检查网络');
-  } finally {
-    smtpTesting.value = false;
-  }
 }
 
 onMounted(loadConfig);
@@ -429,23 +183,16 @@ onMounted(loadConfig);
 
 <style scoped>
 .admin-page { --admin-content-max: 760px; min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
-.admin-page-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
-.admin-page-header h2 { margin: 0; font-size: 1.3rem; color: var(--text-color, #333); }
 .admin-page-body { max-width: 760px; }
 .hint-text { font-size: 0.8rem; color: var(--text-light, #999); margin-left: 8px; }
-.smtp-test-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; width: 100%; }
-.smtp-diag { width: 100%; margin: 6px 0; display: flex; flex-direction: column; gap: 4px; }
-.diag-step { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; padding: 4px 10px; border-radius: 6px; }
-.diag-step.is-ok { background: #f0f9eb; color: #529b2e; }
-.diag-step.is-fail { background: #fef0f0; color: #d03050; }
-.diag-icon { font-weight: 700; width: 14px; flex-shrink: 0; }
-.diag-name { font-weight: 600; min-width: 64px; flex-shrink: 0; }
-.diag-ms { color: #999; min-width: 52px; flex-shrink: 0; }
-.diag-detail { flex: 1; word-break: break-all; }
-[data-theme="dark"] .diag-step.is-ok { background: rgba(82, 155, 46, 0.15); color: #95d475; }
-[data-theme="dark"] .diag-step.is-fail { background: rgba(208, 48, 80, 0.15); color: #f89898; }
-.bulk-import { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }
-.bulk-import .el-textarea { flex: 1; }
+.quick-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+.quick-nav-item { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-card); cursor: pointer; transition: transform .15s, border-color .15s; }
+.quick-nav-item:hover { transform: translateY(-1px); border-color: var(--primary-color); }
+.qn-icon { width: 38px; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; }
+.qn-body { flex: 1; min-width: 0; }
+.qn-title { font-weight: 600; font-size: 0.92rem; color: var(--text-color); }
+.qn-desc { font-size: 0.74rem; color: var(--text-muted); margin-top: 2px; }
+.env-note { font-size: 0.82rem; color: var(--el-color-success); margin-left: 12px; }
+.env-error { font-size: 0.82rem; color: var(--el-color-danger); margin-left: 12px; }
 [data-theme="dark"] .admin-page { background: #0f172a; }
-[data-theme="dark"] .admin-page-header h2, [data-theme="dark"] .sec-title { color: #e2e8f0; }
 </style>

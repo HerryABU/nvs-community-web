@@ -95,6 +95,7 @@ declare module 'vue' {
     PhoneLoginForm: typeof import('./src/components/auth/PhoneLoginForm.vue')['default']
     PoliceBadge: typeof import('./src/components/site/PoliceBadge.vue')['default']
     RealNameCard: typeof import('./src/components/user/RealNameCard.vue')['default']
+    RealNameProviderForm: typeof import('./src/components/admin/RealNameProviderForm.vue')['default']
     ReportButton: typeof import('./src/components/ReportButton.vue')['default']
     RichTextEditor: typeof import('./src/components/RichTextEditor.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

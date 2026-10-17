@@ -181,6 +181,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/login-methods',
+      name: 'admin-login-methods',
+      component: () => import('@/views/admin/AdminLoginMethods.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/police-console',
       name: 'police-console',
       component: () => import('@/views/admin/AdminPoliceConsole.vue'),

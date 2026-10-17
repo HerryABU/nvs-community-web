@@ -1,7 +1,7 @@
 import {
   Setting, View, DataAnalysis, Medal, Warning, Bell, DataLine, Monitor,
   Collection, Lock, Histogram, Stamp, Key, ChatDotRound, Cpu, WarningFilled,
-  Box, Notebook, TrendCharts, Connection, Postcard, Lightning, Brush, Grid,
+  Box, Notebook, TrendCharts, Connection, Postcard, Lightning, Brush, Grid, Message,
 } from '@element-plus/icons-vue';
 
 // 管理员控制台「管理功能」分类数据（F8：分类折叠 + ?category=/?item= 深链定位）。
@@ -30,7 +30,8 @@ export const adminMenuCategories: AdminMenuCategory[] = [
     icon: Setting,
     color: 'var(--gradient-blue)',
     items: [
-      { title: '站点设置', desc: '站点名称、SMTP、robots.txt、备案、安全设置', path: '/admin/settings', icon: Setting, color: 'var(--gradient-blue)' },
+      { title: '站点设置', desc: '站点名称、首页主模块、平台指南、备案、robots.txt', path: '/admin/settings', icon: Setting, color: 'var(--gradient-blue)' },
+      { title: '登录方式管理', desc: '邮箱/手机号/微信扫码入口 · 注册验证 · SMTP 通道 · 域名限制', path: '/admin/login-methods', icon: Message, color: 'var(--gradient-indigo)' },
       { title: '自定义主页', desc: '编排首页区块：头图/公告/模块/博客/版块/最新帖/自定义HTML/链接', path: '/admin/home-blocks', icon: Grid, color: 'var(--gradient-teal)' },
       { title: '自定义主题', desc: 'alist 式全局主题：CSS 消毒后全站生效', path: '/admin/theme', icon: Brush, color: 'var(--gradient-pink)' },
       { title: '狂暴模式', desc: '评论区实时推送（SSE）开关与带宽参数', path: '/admin/rage', icon: Lightning, color: 'var(--gradient-purple)' },
@@ -68,7 +69,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: '内容抢救台', desc: '二级密码应急预览/软删除留证', path: '/admin/emergency', icon: WarningFilled, color: 'var(--gradient-accent)' },
       { title: 'HTML 内容审查', desc: '自定义 HTML 模板/扩展人工复核', path: '/admin/html-review', icon: Cpu, color: 'var(--gradient-purple)' },
       { title: '热词统计', desc: '评论/回帖高频词聚合 · 舆情观测', path: '/admin/hotwords', icon: Histogram, color: 'var(--gradient-blue)' },
-      { title: '实名记录', desc: '实名用户查询 · 姓名解密展示 · 未成年标记', path: '/admin/realname', icon: Postcard, color: 'var(--gradient-success)' },
+      { title: '实名与未成年保护', desc: '核验提供商配置 · 实名策略 · 未成年模式 · 实名记录', path: '/admin/realname', icon: Postcard, color: 'var(--gradient-success)' },
     ],
   },
   {

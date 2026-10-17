@@ -156,7 +156,7 @@ export const adminApi = {
     );
   },
   // 实名记录（F10：姓名解密后仅在本响应返回，身份证仅脱敏展示）
-  listRealName(params?: { page?: number; page_size?: number; keyword?: string }) {
+  listRealName(params?: { page?: number; page_size?: number; keyword?: string; minor_only?: boolean }) {
     return api.get<{
       code: number; message: string; data: {
         list: {
@@ -164,9 +164,35 @@ export const adminApi = {
           real_name: string; id_card_masked: string; minor_protected: boolean; age: number;
           real_name_at: string | null;
         }[];
-        total: number; page: number; page_size: number;
+        total: number; minor_total: number; page: number; page_size: number;
       };
     }>('/admin/realname', { params });
+  },
+  // 实名核验提供商配置（国家代理/腾讯/阿里/华为/网易）
+  getRealNameProvider() {
+    return api.get<{
+      code: number; message: string; data: {
+        config: {
+          provider: string;
+          national: { url: string; token: string; name_field: string; card_field: string };
+          tencent: { secret_id: string; secret_key: string; region: string };
+          alibaba: { app_code: string; gateway: string; method: string; name_param: string; card_param: string };
+          huawei: { ak: string; sk: string; endpoint: string; uri: string };
+          netease: { business_id: string; secret_id: string; secret_key: string; url: string; algorithm: string };
+        };
+        has_secret: Record<string, boolean>;
+        providers: string[];
+      };
+    }>('/admin/realname-provider');
+  },
+  setRealNameProvider(config: Record<string, unknown>) {
+    return api.put('/admin/realname-provider', config);
+  },
+  testRealNameProvider(payload?: { real_name?: string; id_card?: string }) {
+    return api.post<{ code: number; message: string; data: { ok: boolean; matched?: boolean; code?: string; message: string; hint?: string } }>(
+      '/admin/realname-provider/test',
+      payload || {},
+    );
   },
   policeListSoftDel(params?: { type?: string; limit?: number }) {
     return api.get('/police/softdel', { params });
