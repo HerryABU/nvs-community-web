@@ -28,7 +28,9 @@ func ApplyVip(c *gin.Context) {
 		return
 	}
 
-	var req struct{ Reason string `json:"reason"` }
+	var req struct {
+		Reason string `json:"reason"`
+	}
 	c.ShouldBindJSON(&req)
 
 	app := &models.VipApplication{UserID: userID, Reason: req.Reason}
@@ -39,7 +41,9 @@ func ApplyVip(c *gin.Context) {
 
 // GET /api/admin/vip-applications — 查看 VIP 申请列表
 func ListVipApplications(c *gin.Context) {
-	if !ensureAdmin(c) { return }
+	if !ensureAdmin(c) {
+		return
+	}
 	var apps []models.VipApplication
 	models.DB.Preload("User").Order("created_at DESC").Find(&apps)
 	utils.Success(c, apps)
@@ -47,7 +51,9 @@ func ListVipApplications(c *gin.Context) {
 
 // POST /api/admin/vip-applications/:id/approve
 func ApproveVip(c *gin.Context) {
-	if !ensureAdmin(c) { return }
+	if !ensureAdmin(c) {
+		return
+	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	now := time.Now()
@@ -69,7 +75,9 @@ func ApproveVip(c *gin.Context) {
 
 // GET /api/admin/stats — 平台统计
 func GetAdminStats(c *gin.Context) {
-	if !ensureAdmin(c) { return }
+	if !ensureAdmin(c) {
+		return
+	}
 	var userCount, novelCount, commentCount, forumCount int64
 	models.DB.Model(&models.User{}).Count(&userCount)
 	models.DB.Model(&models.Novel{}).Count(&novelCount)
@@ -211,9 +219,9 @@ func GetDashboardStats(c *gin.Context) {
 	}
 	var topNovelsRaw []topNovelRow
 	models.DB.Raw(
-		"SELECT n.title, n.total_words, n.total_chapters, u.nickname AS author_name "+
-			"FROM novels n JOIN users u ON u.id = n.author_id "+
-			"WHERE n.deleted_at IS NULL "+
+		"SELECT n.title, n.total_words, n.total_chapters, u.nickname AS author_name " +
+			"FROM novels n JOIN users u ON u.id = n.author_id " +
+			"WHERE n.deleted_at IS NULL " +
 			"ORDER BY n.total_words DESC LIMIT 6",
 	).Scan(&topNovelsRaw)
 
@@ -278,12 +286,12 @@ func GetDashboardStats(c *gin.Context) {
 			"new_users": userTrendNewUsers,
 		},
 		"chapter_trend": gin.H{
-			"dates": dates,
+			"dates":  dates,
 			"counts": chapterTrendCounts,
 		},
 		"word_count_trend": gin.H{
-			"dates": dates,
-			"counts": wordsTrendCounts,
+			"dates":      dates,
+			"counts":     wordsTrendCounts,
 			"cumulative": cumulativeWordsCounts,
 		},
 		"top_novels":            topNovels,
@@ -321,7 +329,9 @@ func GetEarnings(c *gin.Context) {
 
 // GET /api/admin/finance — 财务总览
 func GetFinanceOverview(c *gin.Context) {
-	if !ensureAdmin(c) { return }
+	if !ensureAdmin(c) {
+		return
+	}
 	var totalTips float64
 	models.DB.Model(&models.EarningsRecord{}).Select("COALESCE(SUM(amount),0)").Scan(&totalTips)
 
