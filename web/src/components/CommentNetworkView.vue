@@ -62,7 +62,7 @@
         <el-button size="small" @click="resetView">重置视角</el-button>
       </div>
       <div class="cn-graph-hint">
-        拖拽旋转 · 滚轮缩放 · 点击节点下钻到该评论者；箭头 A→B 表示「A 回复了 B」，链路粒子流即回复流向。
+        拖拽旋转 · 滚轮缩放 · 点击节点下钻到该评论者；箭头 A→B 表示「A 回复了 B」，边上文字即该条回复正文，沿回复链即可追踪内容演变。
       </div>
     </div>
 
@@ -115,7 +115,14 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { commentNetworkApi } from '@/api/novel/comments';
 import { formatRelativeTime } from '@/utils/relativeTime';
+import * as THREE from 'three';
 import type { CommentNetwork, NetworkEdge } from '@/api/novel/types';
+
+// 文本截断：超长评论正文省略为 …（用于流程图框内 / 3D 边标签）
+function trunc(s: string, n = 16): string {
+  if (!s) return '';
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
 
 const props = defineProps<{
   targetType: string;
@@ -367,17 +374,30 @@ function build2DOption(kind: 'force' | 'flow' | 'flowchart' | 'divergent') {
     kind === 'divergent' ? computeRadial(g.nodes, g.links) : null;
   const isRect = kind === 'flowchart';
   const data = g.nodes.map((n) => {
+    // 标准流程图：框内直接呈现「用户名 + 该评论者最新评论正文」，随两个开关折叠
+    const ex = userExcerptMap.value.get(n.user_id) || '';
+    let labelText = '';
+    if (showUsername.value) labelText += `{a|${n.name}}`;
+    if (showComment.value && ex) labelText += (labelText ? '\n' : '') + `{b|${trunc(ex, 14)}}`;
     const base: any = {
       id: String(n.user_id),
       name: n.name,
       symbol: isRect ? 'rect' : 'circle',
-      symbolSize: isRect ? [68, 30] : 14 + Math.min(34, n.val * 2),
+      symbolSize: isRect ? [150, 52] : 14 + Math.min(34, n.val * 2),
       value: `回复/被回合计 ${n.val}`,
       itemStyle: isRect
         ? { color: n.color || '#eef2ff', borderColor: '#4f46e5', borderWidth: 1.5, borderRadius: 6 }
         : { color: n.color },
       label: isRect
-        ? { show: showUsername.value, position: 'inside', fontSize: 11, color: '#1e293b' }
+        ? {
+            show: true,
+            position: 'inside',
+            formatter: labelText,
+            rich: {
+              a: { fontSize: 12, color: '#1e293b', fontWeight: 'bold', lineHeight: 18, align: 'center' },
+              b: { fontSize: 9, color: '#475569', lineHeight: 12, align: 'center' },
+            },
+          }
         : { show: showUsername.value, fontSize: 10 },
     };
     if (coords) { const c = coords.get(n.user_id); if (c) { base.x = c.x; base.y = c.y; } }
@@ -400,11 +420,12 @@ function build2DOption(kind: 'force' | 'flow' | 'flowchart' | 'divergent') {
     label: { show: true, fontSize: 10 },
     data,
     links,
+    // 内容已置于流程图框内，避免重复；其余 2D 形态在边上展示评论正文
     edgeLabel: {
-      show: showComment.value,
+      show: !isRect && showComment.value,
       fontSize: 9,
       color: '#64748b',
-      formatter: (p: any) => p.data?.excerpt || '',
+      formatter: (p: any) => trunc(p.data?.excerpt || '', 18),
     },
     lineStyle: { color: '#94a3b8', curveness: kind === 'divergent' ? 0.12 : 0 },
   };
@@ -441,7 +462,7 @@ const currentGraphOption = computed(() => {
 const graphHint = computed(() => {
   switch (viewMode.value) {
     case 'flow': return '折线流程图：按回复层级从左到右分层，箭头 A→B 表示「A 回复了 B」。';
-    case 'flowchart': return '标准流程图：根评论者居顶，按回复层级自上而下展开，方框即节点、箭头即回复方向。';
+    case 'flowchart': return '标准流程图：根评论者居顶，按回复层级自上而下展开；方框内即「用户名 + 其最新评论正文」，箭头即回复方向，沿链读可见内容演变。';
     case 'divergent': return '发散形状：中心为最活跃评论者，其余按互动距离呈辐射环展开。';
     default: return '箭头 A→B 表示「A 回复了 B」；点击节点可下钻到该评论者的互动。';
   }
@@ -472,6 +493,7 @@ function resetView() {
 function build3DData(mode: ViewMode) {
   const g = baseGraph.value;
   const coords3d = mode === '3d-flow' ? computeFlow3D(g.nodes, g.links) : null;
+  const nameOf = (id: number) => g.nodes.find((n) => n.user_id === id)?.name || `评论者${id}`;
   const nodes = g.nodes.map((n) => {
     const o: any = { id: String(n.user_id), name: n.name, val: n.val, color: n.color || '#4f46e5' };
     if (coords3d) {
@@ -485,8 +507,48 @@ function build3DData(mode: ViewMode) {
     target: String(l.target),
     count: l.count,
     suspicious: l.suspicious,
+    fromName: nameOf(l.source),
+    toName: nameOf(l.target),
+    excerpt: pairExcerpt.value.get(`${l.source}->${l.target}`) || '',
   }));
   return { nodes, links };
+}
+
+// 生成贴边的评论正文文字精灵（canvas 纹理），用于 3D 边上持久显示内容演变
+function makeLinkSprite(text: string): THREE.Sprite | null {
+  if (!text) return null;
+  const t = trunc(text, 16);
+  const pad = 8;
+  const fontPx = 28;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+  ctx.font = `${fontPx}px sans-serif`;
+  const w = Math.ceil(ctx.measureText(t).width) + pad * 2;
+  const h = fontPx + pad * 2;
+  canvas.width = w;
+  canvas.height = h;
+  const c2 = canvas.getContext('2d')!;
+  c2.font = `${fontPx}px sans-serif`;
+  c2.fillStyle = 'rgba(15,23,42,0.82)';
+  const r = 8;
+  c2.beginPath();
+  c2.moveTo(r, 0);
+  c2.arcTo(w, 0, w, h, r);
+  c2.arcTo(w, h, 0, h, r);
+  c2.arcTo(0, h, 0, 0, r);
+  c2.arcTo(0, 0, w, 0, r);
+  c2.closePath();
+  c2.fill();
+  c2.fillStyle = '#e2e8f0';
+  c2.textBaseline = 'middle';
+  c2.fillText(t, pad, h / 2);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.minFilter = THREE.LinearFilter;
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false });
+  const sprite = new THREE.Sprite(mat);
+  const scale = 14; // 世界单位/像素（让文字在 3D 场景里可读）
+  sprite.scale.set((w / h) * scale, scale, 1);
+  return sprite;
 }
 
 async function mount3D() {
@@ -519,6 +581,14 @@ async function mount3D() {
     .linkDirectionalParticles(2)
     .linkDirectionalParticleWidth(1.6)
     .linkDirectionalParticleColor((l: any) => (l.suspicious ? '#ef4444' : '#818cf8'))
+    .linkLabel((l: any) =>
+      showComment.value && l.excerpt
+        ? `${l.fromName} → ${l.toName}：${trunc(l.excerpt, 40)}`
+        : `${l.fromName} → ${l.toName}`,
+    )
+    // 边上持久显示评论正文，便于沿回复链追踪内容演变；随「评论内容」开关折叠
+    .linkThreeObjectExtend(true)
+    .linkThreeObject((l: any) => (showComment.value ? makeLinkSprite(l.excerpt) : null))
     .onNodeClick((n: any) => setFilter(Number(n.id)))
     .backgroundColor('rgba(15,23,42,0.04)');
   // 3D 流程图：图层固定、停止力导模拟，路线沿 X 轴前向推进互不交叉

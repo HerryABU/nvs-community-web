@@ -26,6 +26,7 @@
     "pinia": "^2.1.7",
     "qrcode": "^1.5.4",
     "smiles-drawer": "^2.4.1",
+    "three": "^0.186.1",
     "turndown": "^7.2.4",
     "vue": "^3.4.31",
     "vue-echarts": "^8.0.1",
