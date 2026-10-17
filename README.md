@@ -473,6 +473,42 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.6.0 实名五提供商 + 配置 .env 自动同步 + Web 项目双维度额度 + 登录方式/实名独立页（2026-10-17）
+
+> 1. **实名核验提供商抽象层（`server/realname/`）**：Provider 接口 + 注册表 + `Verify(ctx,cfg,name,idCard)` 统一路由，五通道落地——`national`（通用 JSON 代理，宽松解析 `{"code":0}`/`{"status":"match"}`/`{"result":true}`/嵌套 `data` 等形态）、`tencent`（TC3-HMAC-SHA256，`faceid.tencentcloudapi.com` IdCardVerification，结果码 0 一致 / -1 不一致 / 异常码抛错不收费）、`aliyun`（云市场 AppCode）、`huawei`（AK/SK + SDK-HMAC-SHA256）、`netease`（MD5 签名网关）。敏感凭据后台脱敏回显（`has_secret` 标记，secret 留空沿用旧值），「测试连接」用非法身份证探测链路（厂商对非法输入不收费）。
+> 2. **平台配置保存后自动同步 `.env`（`server/config/envfile.go`）**：原位替换 / 末尾追加 / 引号处理 / CRLF 兼容 / 临时文件原子 rename / 互斥锁；`PlatformConfigEnvKeys` 映射（site_name→SITE_NAME、email_verify→EMAIL_VERIFY_ENABLED、captcha_enabled→CAPTCHA_ENABLED、smtp_*→SMTP_*、log_redact_*→LOG_REDACT_*）。DB 为运行时真相、`.env` 保证重启生效；站点配置保存、脱敏配置保存、安装向导三处挂接，后台保存响应回显 `env_synced/env_note/env_sync_error`。
+> 3. **Web 项目公开双维度额度（数量 + 总大小 MB，可同时开启）**：全局 `platform_configs.web_publish_quota_size_mb`（0=不限）+ 按人 `user_web_quotas.quota_size_mb`（-1 跟随 / 0 不限 / >0 专属）；`CheckAndApplyWebPublish` 双维度判定，任一超标转 `review_status=quota_review` 待审并生成审核单，reason 区分维度；大小统计 `UserHTML.TotalSize` + `UserFrame.FilePath` 实时 stat（目录递归）。
+> 4. **公开链路收口（堵绕过口子）**：上传 ZIP 勾选「广场展示」、新建 UI 模板勾选「公开分享」不再直写 `is_public`，建记录后统一走 `CheckAndApplyWebPublish`（超额转待审 + `public_note` 提示）；前端 HTML 扩展 / UI 模板 / 作者模板设置的公开开关改调 `/api/web-quota/html-public`、`/api/web-quota/frame-public`。
+> 5. **登录方式管理独立页（`/admin/login-methods`）**：微信/邮箱/手机号三开关卡（微信登录附 env 配置指引）、注册验证安全（邮箱验证/滑块）、SMTP 通道配置 + 诊断测试、域名黑白名单、保存后 .env 同步回显；修复存量 bug（`login_methods` 为 JSON 字符串需 `JSON.parse` 后读取）。
+> 6. **实名与未成年保护独立页（`/admin/realname`）**：统计卡（总数/未成年/成年/当前提供商）+ RealNameProviderForm 五提供商卡片配置与测试 + 保护策略（realname_required/minor_mode）+ 记录列表（`minor_only` 筛选）；AdminSettings 瘦身为两张快速导航卡。
+> 7. **热词面板前端打磨**：三类型（内容/搜索/标签）渐变切换卡 + 统计卡 + 分类型彩色条形 + 排名奖牌色 + 暗色适配。
+> 8. **版本号 3.5.1 → 3.6.0**（语义化顺延）：`server/version/version.go` / `web/package.json` / `web/src/stores/theme.ts`（window.NVS.version 桥）同步更新，`go test ./...` 全绿、`npm run build` 通过、`nvs-server.exe` 已重建（新功能字符串已验证嵌入）。
+
+| 类别 | 文件 | 说明 |
+|---|---|---|
+| 实名提供商 | `server/realname/provider.go` | Provider 接口 + 注册表 + Verify 路由 + 包级 httpClient（测试注入）+ 宽松 JSON 解析辅助 |
+| 实名提供商 | `server/realname/national.go` | 通用代理 + parseLooseResult 多形态兼容 |
+| 实名提供商 | `server/realname/tencent.go` | TC3-HMAC-SHA256 签名（CanonicalRequest→StringToSign→密钥派生）+ parseTencentResp |
+| 实名提供商 | `server/realname/aliyun.go` | AppCode 简单认证，GET/POST 与参数名可配 |
+| 实名提供商 | `server/realname/huawei.go` | SDK-HMAC-SHA256 + regionFromEndpoint + verify_result 兼容解析 |
+| 实名提供商 | `server/realname/netease.go` | 参数 ASCII 排序拼 MD5 签名 + 网关 code≠200 先拦 |
+| 实名提供商 | `server/realname/realname_test.go` | 9 组离线单测（签名计算/响应解析/httptest 全链路/未配置哨兵） |
+| .env 同步 | `server/config/envfile.go` | SyncEnvFile 原位替换/原子写/互斥锁 + PlatformConfigEnvKeys + jsonArrayToCSV |
+| .env 同步 | `server/config/config.go` | Init 记录实际加载路径（SetEnvFilePath/GetEnvFilePath） |
+| .env 同步 | `server/handlers/admin_site.go` | UpdatePlatformConfig 保存后同步 + 派生字段（wechat_login_available 等） |
+| .env 同步 | `server/handlers/admin_redact.go` / `setup.go` | 脱敏配置三键同步；安装向导 site_name 同步 |
+| 双维度额度 | `server/models/web_quota.go` | 大小额度常量/配置/按人覆盖（map upsert 保零值）+ pathSizeBytes/CountPublicWebSize + CheckAndApplyWebPublish 双维度 reason |
+| 双维度额度 | `server/handlers/web_quota.go` | MyWebQuota 大小字段；Admin 配置端点 max_size_mb/quota_size_mb；未提交维度沿用旧值 |
+| 双维度额度 | `server/models/web_quota_test.go` | 5 组测试（零值 upsert 回归/目录递归/按人豁免/双维度判定） |
+| 公开收口 | `server/handlers/userhtml.go` / `userframe.go` | 上传/新建公开勾选建记录后走 CheckAndApplyWebPublish + public_note |
+| 前端 | `web/src/components/admin/RealNameProviderForm.vue` | 新增：五提供商卡片 + 动态凭据表单 + 保存/测试连接 |
+| 前端 | `web/src/views/admin/AdminLoginMethods.vue` | 新增：登录方式/SMTP/域名名单独立页 |
+| 前端 | `web/src/views/admin/AdminRealName.vue` | 重写：统计卡 + 提供商表单 + 保护策略 + minor_only 筛选 |
+| 前端 | `web/src/views/admin/AdminSettings.vue` | 瘦身：移除搬迁四区，改快速导航卡 |
+| 前端 | `web/src/views/admin/AdminWebQuota.vue` / `web/src/views/user/WebQuota.vue` | 双维度额度 UI（全局/按人 MB 配置、数量+大小双卡、大小 tag） |
+| 前端 | `web/src/views/frame/HTMLManager.vue` / `FrameManager.vue` / `AuthorTemplateSettings.vue` | 公开开关改走额度接口 + 超额待审 badge + need_review 提示 |
+| 前端 | `web/src/views/admin/AdminHotWords.vue` | 三类型切换卡/统计卡/彩色条形/奖牌色打磨 |
+
 ### v3.5.1 管理员用户搜索/筛选（按角色分类 + 状态）（2026-08-30）
 
 > 1. **后端多维筛选**：`GET /api/admin/users` 新增 `role`（reader/author/vip_author/arbitrator/police/admin）与 `status`（active/muted/banned）查询维度，与既有 `search` 关键字（用户名/昵称/邮箱）自由组合。
