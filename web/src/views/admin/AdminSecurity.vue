@@ -264,13 +264,13 @@ onMounted(loadRules);
 .admin-page-body { max-width: 1100px; }
 .hint-text { font-size: 0.8rem; color: var(--text-light, #999); line-height: 1.6; }
 .muted { color: var(--text-light, #999); }
-.rule-pattern { font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #c7254e; background: #f9f2f4; padding: 2px 6px; border-radius: 3px; }
-.rule-replace { color: #2563eb; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; }
+.rule-pattern { font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: var(--el-color-danger); background: var(--el-color-danger-light-9); padding: 2px 6px; border-radius: 3px; }
+.rule-replace { color: var(--el-color-primary); font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; }
 .test-result { padding: 0 12px; }
 .test-line { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
 .test-label { font-weight: 600; color: var(--text-color, #333); flex-shrink: 0; }
 .test-matches { display: flex; flex-wrap: wrap; gap: 6px; }
-.test-output { flex: 1; margin: 0; padding: 10px 12px; background: #f5f7fa; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.85rem; white-space: pre-wrap; word-break: break-all; font-family: 'Consolas', 'Monaco', monospace; }
+.test-output { flex: 1; margin: 0; padding: 10px 12px; background: var(--bg-soft); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; white-space: pre-wrap; word-break: break-all; font-family: 'Consolas', 'Monaco', monospace; }
 [data-theme="dark"] .admin-page { background: #0f172a; }
 [data-theme="dark"] .admin-page-header h2 { color: #e2e8f0; }
 [data-theme="dark"] .test-label { color: #e2e8f0; }

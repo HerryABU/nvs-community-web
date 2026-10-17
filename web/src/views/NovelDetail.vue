@@ -269,11 +269,11 @@ onMounted(async () => {
   width: 180px;
   height: 240px;
   border-radius: 8px;
-  background: #e0e0e0;
+  background: var(--border-color);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #999;
+  color: var(--text-muted);
   font-size: 0.9rem;
 }
 
@@ -309,7 +309,7 @@ onMounted(async () => {
 }
 
 .novel-summary p {
-  color: #555;
+  color: var(--text-light);
   white-space: pre-wrap;
 }
 
@@ -328,13 +328,13 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   padding: 12px 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color);
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .chapter-item:hover {
-  background: #f5f7fa;
+  background: var(--bg-soft);
 }
 
 .chapter-item:last-child {
@@ -360,7 +360,7 @@ onMounted(async () => {
 }
 .chapter-collapse-row:hover {
   background: rgba(64, 158, 255, 0.08);
-  color: #2563eb;
+  color: var(--el-color-primary);
 }
 
 .chapter-num {

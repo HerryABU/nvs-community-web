@@ -386,17 +386,17 @@ onMounted(() => { loadSites(); loadInbound(); });
 .admin-page-body { max-width: 1100px; }
 .hint-text { color: var(--text-light, #666); font-size: 0.85rem; margin-bottom: 12px; }
 .form-tip { width: 100%; font-size: 0.78rem; color: var(--text-light, #999); line-height: 1.5; }
-.form-tip code { background: #eef2ff; color: #4f46e5; padding: 1px 6px; border-radius: 4px; font-size: 0.85rem; }
+.form-tip code { background: var(--bg-soft); color: var(--primary-color); padding: 1px 6px; border-radius: 4px; font-size: 0.85rem; }
 .inbound-block { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border-color, #e5e7eb); }
 .inbound-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .inbound-head h3 { margin: 0; font-size: 1.05rem; color: var(--text-color, #333); }
-.inbound-block code { background: #eef2ff; color: #4f46e5; padding: 1px 6px; border-radius: 4px; font-size: 0.85rem; }
+.inbound-block code { background: var(--bg-soft); color: var(--primary-color); padding: 1px 6px; border-radius: 4px; font-size: 0.85rem; }
 .key-block { margin-bottom: 18px; padding: 14px; border: 1px solid var(--border-color, #e5e7eb); border-radius: 8px; }
 .key-block-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .key-block-head h4 { margin: 0; font-size: 0.98rem; color: var(--text-color, #333); }
-.key-block code { background: #eef2ff; color: #4f46e5; padding: 1px 6px; border-radius: 4px; font-size: 0.82rem; }
+.key-block code { background: var(--bg-soft); color: var(--primary-color); padding: 1px 6px; border-radius: 4px; font-size: 0.82rem; }
 .newkey-box { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.newkey-code { flex: 1; font-size: 0.95rem; word-break: break-all; background: #eef2ff; color: #4f46e5; padding: 10px 12px; border-radius: 6px; }
+.newkey-code { flex: 1; font-size: 0.95rem; word-break: break-all; background: var(--bg-soft); color: var(--primary-color); padding: 10px 12px; border-radius: 6px; }
 [data-theme="dark"] .admin-page { background: #0f172a; }
 [data-theme="dark"] .admin-page-header h2 { color: #e2e8f0; }
 [data-theme="dark"] .inbound-head h3 { color: #e2e8f0; }

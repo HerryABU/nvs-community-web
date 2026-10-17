@@ -410,7 +410,7 @@ onBeforeUnmount(() => {
   bottom: 0;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--bg-card);
   z-index: 50;
 }
 
@@ -421,8 +421,8 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   height: 48px;
   padding: 0 16px;
-  border-bottom: 1px solid #e8e8e8;
-  background: #fafafa;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-soft);
   flex-shrink: 0;
 }
 
@@ -451,7 +451,7 @@ onBeforeUnmount(() => {
 
 .ce-saved-time {
   font-size: 0.8rem;
-  color: #999;
+  color: var(--text-muted);
 }
 
 /* 主体 */
@@ -465,10 +465,10 @@ onBeforeUnmount(() => {
 .ce-sidebar {
   width: 240px;
   flex-shrink: 0;
-  border-right: 1px solid #e8e8e8;
+  border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  background: #fafafa;
+  background: var(--bg-soft);
 }
 
 .ce-sidebar-header {
@@ -478,7 +478,7 @@ onBeforeUnmount(() => {
   padding: 12px 16px;
   font-weight: 600;
   font-size: 0.9rem;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .ce-chapter-list {
@@ -498,11 +498,11 @@ onBeforeUnmount(() => {
 }
 
 .ce-chapter-item:hover {
-  background: #f0f0f0;
+  background: var(--bg-hover);
 }
 
 .ce-chapter-item.active {
-  background: #e6f7ff;
+  background: var(--el-color-primary-light-9);
   color: var(--primary-color);
 }
 
@@ -510,7 +510,7 @@ onBeforeUnmount(() => {
   font-weight: 600;
   min-width: 24px;
   text-align: center;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .ce-ch-title {
@@ -522,7 +522,7 @@ onBeforeUnmount(() => {
 
 .ce-ch-words {
   font-size: 0.75rem;
-  color: #bbb;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -544,7 +544,7 @@ onBeforeUnmount(() => {
 
 .ce-editor-header {
   padding: 8px 16px;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 

@@ -99,8 +99,8 @@
         <div v-if="chapter?.content" class="reader-md-wrap">
           <div class="reader-md markdown-body cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" v-html="renderedHtml" ref="mdContainer" @click="onMdClick"></div>
         </div>
-        <p v-else-if="chapter" style="text-align:center;color:#f59e0b">章节已加载但内容为空（content长度=0）</p>
-        <p v-else style="text-align:center;color:#999">暂无内容（chapter 为 null）</p>
+        <p v-else-if="chapter" style="text-align:center;color:var(--warning-color)">章节已加载但内容为空（content长度=0）</p>
+        <p v-else style="text-align:center;color:var(--text-muted)">暂无内容（chapter 为 null）</p>
       </div>
     </div>
 
@@ -747,7 +747,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 16px;
   padding: 8px 24px;
-  background: #fff;
+  background: var(--bg-card);
   border-bottom: 1px solid var(--border-color);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 }
@@ -788,7 +788,7 @@ onBeforeUnmount(() => {
   max-width: 800px;
   margin: 0 auto;
   padding: 32px;
-  background: #fff;
+  background: var(--bg-card);
   border-radius: 8px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
@@ -823,7 +823,7 @@ onBeforeUnmount(() => {
 
 /* Markdown 正文排版（基于 .markdown-body，与 Cherry 编辑器预览统一） */
 .markdown-body {
-  color: #1a1a2e;
+  color: var(--text-color);
   font-size: 1.05rem;
   line-height: 2;
 }
@@ -841,7 +841,7 @@ onBeforeUnmount(() => {
   text-align: center;
   margin: 1em 0;
   overflow-x: auto;
-  background: #fff;
+  background: var(--bg-card);
 }
 .markdown-body .mermaid-container svg { max-width: 100%; height: auto; }
 [data-theme="dark"] .markdown-body .mermaid-container { background: #1e293b; }
@@ -1057,14 +1057,14 @@ mark.note-ann:active {
 [data-theme="dark"] mark.note-mine { border-bottom-color: #60a5fa; }
 [data-theme="dark"] mark.note-ann:hover,
 [data-theme="dark"] mark.note-ann:active { background: rgba(251, 191, 36, 0.16); }
-.note-hint { margin-left: 8px; font-size: 0.75rem; color: #999; }
+.note-hint { margin-left: 8px; font-size: 0.75rem; color: var(--text-muted); }
 .note-selected {
-  background: #f5f5f5; border-left: 3px solid #f59e0b; padding: 8px 12px;
+  background: var(--bg-soft); border-left: 3px solid #f59e0b; padding: 8px 12px;
   margin-bottom: 12px; color: #666; font-size: 0.85rem; border-radius: 4px;
   max-height: 80px; overflow: auto; white-space: pre-wrap;
 }
 .note-vis-row { margin-top: 10px; display: flex; align-items: center; }
-.note-meta { margin-top: 10px; font-size: 0.78rem; color: #999; }
+.note-meta { margin-top: 10px; font-size: 0.78rem; color: var(--text-muted); }
 .note-detail-content { white-space: pre-wrap; color: var(--text-color, #333); line-height: 1.7; }
 [data-theme="dark"] .note-selected { background: rgba(255,255,255,0.06); color: #cbd5e1; border-left-color: #f59e0b; }
 </style>

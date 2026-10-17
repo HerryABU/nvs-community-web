@@ -282,7 +282,7 @@ onMounted(load);
   color: var(--text-color, #333);
   margin-bottom: 12px;
   padding-bottom: 6px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .sub-forum-grid {
@@ -292,8 +292,8 @@ onMounted(load);
 }
 
 .sub-forum-card {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
+  background: var(--bg-soft);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 14px;
   cursor: pointer;
@@ -320,7 +320,7 @@ onMounted(load);
 
 .sub-forum-meta {
   font-size: 0.75rem;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .forum-header {
@@ -348,17 +348,17 @@ onMounted(load);
 .mute-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
 .mute-user { font-weight: 600; color: var(--text-color, #333); }
 .mute-reason { font-size: 0.82rem; color: var(--text-light, #666); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mute-meta { font-size: 0.75rem; color: #999; flex-shrink: 0; }
+.mute-meta { font-size: 0.75rem; color: var(--text-muted); flex-shrink: 0; }
 
 .thread-item {
   padding: 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color);
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .thread-item:hover {
-  background: #f9f9f9;
+  background: var(--bg-soft);
 }
 
 .thread-main h3 {

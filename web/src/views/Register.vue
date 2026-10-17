@@ -333,7 +333,7 @@ function agreeGuidelines() {
 .guidelines-content h4 {
   margin-top: 16px;
   margin-bottom: 8px;
-  color: #333;
+  color: var(--text-color);
 }
 
 .guidelines-content ul {
@@ -347,7 +347,7 @@ function agreeGuidelines() {
 .guidelines-footer {
   margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-color);
   text-align: center;
   font-weight: 600;
   color: var(--primary-color);

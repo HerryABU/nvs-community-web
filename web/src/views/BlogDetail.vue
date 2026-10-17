@@ -364,7 +364,7 @@ onBeforeUnmount(() => {
 .toc-collapsed .blog-content { max-width: 920px; margin-left: auto; margin-right: auto; }
 .toc-collapsed .blog-footer, .toc-collapsed .section-title, .toc-collapsed .blog-header { max-width: 920px; margin-left: auto; margin-right: auto; }
 
-.blog-header { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #eee; }
+.blog-header { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); }
 
 /* ===== 自定义阅读模版区（与 Reader.vue 同构）===== */
 .template-zone { margin: 0 0 12px; }
@@ -382,7 +382,7 @@ onBeforeUnmount(() => {
 .blog-header h1 { font-size: 1.5rem; margin-bottom: 8px; }
 .blog-meta-line {
   display: flex; align-items: center; gap: 14px;
-  font-size: 0.85rem; color: #999; flex-wrap: wrap;
+  font-size: 0.85rem; color: var(--text-muted); flex-wrap: wrap;
 }
 .blog-author { font-weight: 600; color: var(--primary-color); text-decoration: none; }
 .blog-tag-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
@@ -394,7 +394,7 @@ onBeforeUnmount(() => {
 }
 .blog-tag:hover { background: var(--primary-color); color: #fff; }
 .blog-topic-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
-.bt-label { font-size: 0.8rem; color: #999; }
+.bt-label { font-size: 0.8rem; color: var(--text-muted); }
 .blog-topic {
   display: inline-flex; align-items: center;
   padding: 3px 12px; border-radius: 6px;
@@ -416,8 +416,8 @@ onBeforeUnmount(() => {
   top: 80px;
   max-height: calc(100vh - 120px);
   overflow-y: auto;
-  background: #fff;
-  border: 1px solid #eee;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 14px 12px;
 }

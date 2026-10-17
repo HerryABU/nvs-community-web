@@ -369,42 +369,36 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer); });
 </script>
 
 <style scoped>
-.admin-page { --admin-content-max: 900px; min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
+/* 全量令牌化：颜色一律走 global.css 设计令牌（暗色自动翻转，不再手写 [data-theme] 覆盖）。
+   唯一例外：iframe 容器保持 #fff——其内部渲染的是用户内容 HTML（按亮色编写），
+   暗色下也应为亮底，与 cherry 编辑器预览行为一致。 */
+.admin-page { --admin-content-max: 900px; min-height: 100vh; padding: 24px; background: var(--bg-page); }
 .admin-page-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
-.admin-page-header h2 { margin: 0; font-size: 1.3rem; color: var(--text-color, #333); }
+.admin-page-header h2 { margin: 0; font-size: 1.3rem; color: var(--text-color); }
 .admin-page-body { max-width: 900px; }
-.em-card { background: var(--bg-card, #fff); border: 1px solid var(--border-color, #e5e7eb); border-radius: 10px; padding: 16px 20px; margin-bottom: 16px; }
-.em-card-title { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text-color, #333); margin-bottom: 12px; }
+.em-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 16px 20px; margin-bottom: 16px; }
+.em-card-title { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text-color); margin-bottom: 12px; }
 .em-unlock, .em-fetch { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.em-path-hint { width: 100%; font-size: 0.78rem; color: var(--text-light, #999); }
-.em-title { margin-bottom: 10px; font-weight: 600; color: var(--text-color, #333); }
+.em-path-hint { width: 100%; font-size: 0.78rem; color: var(--text-muted); }
+.em-title { margin-bottom: 10px; font-weight: 600; color: var(--text-color); }
 .em-comments { margin-bottom: 12px; }
-.em-comments-head { font-weight: 600; color: var(--text-color, #333); margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color, #e5e7eb); }
-.em-comment-item { padding: 8px 10px; margin-bottom: 8px; background: #f8fafc; border: 1px solid #eef2f7; border-radius: 6px; }
+.em-comments-head { font-weight: 600; color: var(--text-color); margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color); }
+.em-comment-item { padding: 8px 10px; margin-bottom: 8px; background: var(--bg-subtle); border: 1px solid var(--border-color); border-radius: 6px; }
 .em-comment-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
-.em-comment-author { font-weight: 600; color: #4f46e5; }
-.em-comment-id { color: var(--text-light, #999); font-size: 0.8rem; }
-.em-comment-time { color: var(--text-light, #999); font-size: 0.8rem; margin-left: auto; }
-.em-comment-content { color: var(--text-color, #333); font-size: 0.88rem; white-space: pre-wrap; word-break: break-all; }
-.em-comments-tip { font-weight: 400; font-size: 0.75rem; color: var(--text-light, #999); margin-left: 8px; }
+.em-comment-author { font-weight: 600; color: var(--primary-color); }
+.em-comment-id { color: var(--text-muted); font-size: 0.8rem; }
+.em-comment-time { color: var(--text-muted); font-size: 0.8rem; margin-left: auto; }
+.em-comment-content { color: var(--text-color); font-size: 0.88rem; white-space: pre-wrap; word-break: break-all; }
+.em-comments-tip { font-weight: 400; font-size: 0.75rem; color: var(--text-muted); margin-left: 8px; }
 .em-comment-view-switch { margin: 4px 0 6px; }
-.em-comment-plain { margin: 0; padding: 8px 10px; background: #f8fafc; border: 1px solid #eef2f7; border-radius: 6px; font-size: 0.86rem; white-space: pre-wrap; word-break: break-all; color: #333; }
-.em-comment-iframe { width: 100%; height: 180px; border: 1px solid #ccc; border-radius: 6px; background: #fff; }
-[data-theme="dark"] .em-comment-item { background: #0f172a; border-color: #334155; }
-[data-theme="dark"] .em-comment-content { color: #cbd5e1; }
-[data-theme="dark"] .em-comment-plain { background: #0f172a; border-color: #334155; color: #cbd5e1; }
-.em-meta { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; color: var(--text-color, #333); }
-.em-meta code { background: #eef2ff; color: #4f46e5; padding: 1px 6px; border-radius: 4px; font-size: 0.85rem; }
+.em-comment-plain { margin: 0; padding: 8px 10px; background: var(--bg-subtle); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.86rem; white-space: pre-wrap; word-break: break-all; color: var(--text-color); }
+.em-comment-iframe { width: 100%; height: 180px; border: 1px solid var(--border-color); border-radius: 6px; background: #fff; }
+.em-meta { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; color: var(--text-color); }
+.em-meta code { background: var(--bg-soft); color: var(--primary-color); padding: 1px 6px; border-radius: 4px; font-size: 0.85rem; }
 .em-view-switch { margin-bottom: 12px; }
-.em-plain { margin: 0; padding: 14px 16px; background: #f5f7fa; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.9rem; white-space: pre-wrap; word-break: break-all; min-height: 120px; color: #333; }
+.em-plain { margin: 0; padding: 14px 16px; background: var(--bg-soft); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem; white-space: pre-wrap; word-break: break-all; min-height: 120px; color: var(--text-color); }
 .em-iframe-wrap { margin-bottom: 12px; }
-.em-iframe { width: 100%; height: 320px; border: 1px solid #ccc; border-radius: 6px; background: #fff; }
-.em-iframe-tip { font-size: 0.78rem; color: var(--text-light, #999); margin-top: 6px; }
-.em-danger { margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border-color, #e5e7eb); }
-[data-theme="dark"] .admin-page { background: #0f172a; }
-[data-theme="dark"] .admin-page-header h2 { color: #e2e8f0; }
-[data-theme="dark"] .em-card { background: #1e293b; border-color: #334155; }
-[data-theme="dark"] .em-card-title, [data-theme="dark"] .em-meta { color: #e2e8f0; }
-[data-theme="dark"] .em-plain { background: #0f172a; border-color: #334155; color: #cbd5e1; }
-[data-theme="dark"] .em-iframe { background: #fff; }
+.em-iframe { width: 100%; height: 320px; border: 1px solid var(--border-color); border-radius: 6px; background: #fff; }
+.em-iframe-tip { font-size: 0.78rem; color: var(--text-muted); margin-top: 6px; }
+.em-danger { margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border-color); }
 </style>

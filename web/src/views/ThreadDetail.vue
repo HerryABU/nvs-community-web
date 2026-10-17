@@ -305,7 +305,7 @@ async function handleReply(parentId: number | null, content: string) {
 .new-replies-bar:hover { background: rgba(99, 102, 241, 0.18); }
 
 .thread-content {
-  background: #fafafa;
+  background: var(--bg-soft);
   padding: 20px;
   border-radius: 8px;
   line-height: 1.8;
@@ -315,7 +315,7 @@ async function handleReply(parentId: number | null, content: string) {
 
 .post-item {
   padding: 16px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .post-header {

@@ -29,7 +29,7 @@
             <el-button v-if="authStore.isLoggedIn" :type="isFollowing ? 'default' : 'primary'" size="small" @click="toggleFollow" :loading="followLoading">
               {{ isFollowing ? '已关注' : '+ 关注' }}
             </el-button>
-            <span style="color:#999;font-size:0.85rem">{{ followStats.followers }} 粉丝 · {{ followStats.following }} 关注</span>
+            <span style="color:var(--text-muted);font-size:0.85rem">{{ followStats.followers }} 粉丝 · {{ followStats.following }} 关注</span>
             <el-button type="primary" text size="small" @click="goForum">
               进入 {{ author.nickname || author.username }} 的讨论区
             </el-button>
@@ -97,7 +97,7 @@
           <p class="blog-summary" v-if="blog.summary">{{ blog.summary }}</p>
         </div>
       </div>
-      <div v-else style="color:#999;font-size:0.9rem;padding:12px 0">暂无博客文章</div>
+      <div v-else style="color:var(--text-muted);font-size:0.9rem;padding:12px 0">暂无博客文章</div>
       <el-button text size="small" @click="$router.push(`/author/${authorKey}/blogs`)" style="margin-top:8px">查看全部博客 →</el-button>
 
       <!-- 作者评论区 -->
@@ -428,7 +428,7 @@ onMounted(load);
 .blog-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
 .blog-title-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
 .blog-item-title { font-weight: 600; font-size: 0.95rem; }
-.blog-meta { font-size: 0.75rem; color: #999; display: flex; gap: 16px; }
+.blog-meta { font-size: 0.75rem; color: var(--text-muted); display: flex; gap: 16px; }
 .blog-summary { font-size: 0.85rem; color: #666; margin-top: 4px; }
 [data-theme="dark"] .blog-item { background: #1e293b; border-color: #334155; }
 [data-theme="dark"] .blog-summary { color: #94a3b8; }
