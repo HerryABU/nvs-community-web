@@ -331,6 +331,12 @@ func main() {
 		// 楼加密（入口限制）：验证访问密码 / 设置·修改·解除密码（限速防爆破）
 		protected.POST("/comments/:id/verify-password", security.RateLimit(10, 60), handlers.VerifyFloorPassword)
 		protected.POST("/comments/:id/password", security.RateLimit(10, 60), handlers.SetFloorPassword)
+		// @ 提及来源设置 + 联想候选（站长/楼主可配置，评论框联想用）
+		protected.GET("/mention-source", handlers.GetMentionSource)
+		protected.PUT("/mention-source", handlers.SetMentionSource)
+		protected.GET("/mention-candidates", handlers.GetMentionCandidates)
+		// 评论网（社交图谱）分析：谁回复了谁的哪条评论 + 时间估计（可按 user_id 下钻）
+		protected.GET("/comment-network", handlers.GetCommentNetwork)
 		protected.POST("/novels", handlers.CreateNovel)
 		protected.PUT("/novels/:id", handlers.UpdateNovel)
 		protected.DELETE("/novels/:id", handlers.DeleteNovel)

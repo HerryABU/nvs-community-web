@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"strconv"
+	"time"
 
 	"nvs-server/models"
 	"nvs-server/realtime"
@@ -124,6 +125,9 @@ func CreateComment(c *gin.Context) {
 	raw := security.SanitizeUserContent(req.Content)
 	cleaned, badHits := processBadWords(raw, "comment")
 
+	// @ 提及：从已净化正文解析被提及用户（按 username/nickname 命中）
+	mentions := models.ParseMentions(cleaned)
+
 	comment := &models.Comment{
 		UserID:        userID,
 		NovelID:       req.NovelID,
@@ -132,6 +136,10 @@ func CreateComment(c *gin.Context) {
 		Content:       cleaned,
 		QuoteText:     security.SanitizePlainText(req.QuoteText),
 		IsMarkdown:    true,
+		// 微秒级时间戳：精确排序与评论网分析的时间估计；旧数据回填为 0
+		CreatedMicro: time.Now().UnixMicro(),
+		// @ 提及存储（JSON）；解析失败/用户不存在已在上游过滤
+		MentionsRaw: models.MentionsToRaw(mentions),
 	}
 	if req.ParentID != nil {
 		comment.ParentID = req.ParentID
@@ -147,6 +155,23 @@ func CreateComment(c *gin.Context) {
 
 	if user, err := models.GetUserByID(userID); err == nil {
 		comment.Username = user.Username
+	}
+	// 让返回给前端的 comment 带上解析出的提及（AfterFind 仅对 DB 查询结果生效，此处手动填）
+	comment.Mentions = mentions
+
+	// @ 提及通知：被提及用户收到站内信（best-effort；跳过自己与已删除用户）
+	if len(mentions) > 0 {
+		excerpt := cleaned
+		if len(excerpt) > 60 {
+			excerpt = excerpt[:60] + "…"
+		}
+		for _, m := range mentions {
+			if m.UserID == userID {
+				continue
+			}
+			_ = models.PushNotification(userID, m.UserID, "comment_mention",
+				"有人在评论中提到了你", "@"+m.Name+": "+excerpt, models.LinkForComment(comment))
+		}
 	}
 
 	// 狂暴模式（F19）：向评论所在频道广播新评论（hub 内部按 Enabled/批量/带宽控制，
