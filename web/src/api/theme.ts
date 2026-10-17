@@ -22,9 +22,11 @@ export const themeApi = {
   getSiteTheme() {
     return api.get<{ code: number; data: ThemeData }>('/theme/site');
   },
-  // 保存站点默认主题（仅管理员；对全站访客生效）
+  // 保存站点默认主题（仅管理员；对全站访客生效）。
+  // 注意：必须打 /admin/theme/site——该 PUT 注册在服务端 admin 组（带鉴权中间件），
+  // public 组的 /theme/site 只有 GET；漏掉 /admin 前缀会 404（gin httprouter 无此方法路由）。
   updateSiteTheme(css: string, js: string) {
-    return api.put<{ code: number; data: ThemeSaveResult }>('/theme/site', { css, js });
+    return api.put<{ code: number; data: ThemeSaveResult }>('/admin/theme/site', { css, js });
   },
   // 我的个人主题（需登录；未登录返回 401，由 store 静默处理）
   getMyTheme() {
