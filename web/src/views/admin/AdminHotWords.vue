@@ -1,127 +1,164 @@
 <template>
   <div class="admin-page">
     <AdminHeader title="热词统计" subtitle="内容热词 · 搜索热词 · 标签热词 · 内容治理与舆情观测" :icon="Histogram" />
-    <div class="admin-page-body admin-panel">
+    <div class="admin-page-body">
+
+      <!-- 类型切换卡片 -->
+      <div class="hw-type-cards">
+        <div
+          v-for="t in typeCards"
+          :key="t.value"
+          class="hw-type-card"
+          :class="{ active: activeType === t.value }"
+          @click="switchType(t.value)"
+        >
+          <div class="hw-type-icon" :style="{ background: t.gradient }">{{ t.icon }}</div>
+          <div class="hw-type-body">
+            <div class="hw-type-name">{{ t.name }}</div>
+            <div class="hw-type-desc">{{ t.desc }}</div>
+          </div>
+        </div>
+      </div>
 
       <!-- 概览卡片 -->
-      <div class="stat-cards" v-loading="loading">
-        <div class="stat-card">
-          <div class="stat-value">{{ stats.total }}</div>
-          <div class="stat-label">{{ stats.totalLabel }}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">{{ stats.topWord || '—' }}</div>
-          <div class="stat-label">{{ stats.topLabel }}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">{{ stats.topCount }}</div>
-          <div class="stat-label">{{ stats.countLabel }}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">{{ days }} 天</div>
-          <div class="stat-label">统计窗口</div>
+      <div class="admin-panel">
+        <SectionHeader :title="`${currentTypeName}概览`" :subtitle="currentTypeSubtitle" :icon="currentTypeIcon" gradient="primary" />
+        <div class="admin-stat-grid" v-loading="loading">
+          <div class="admin-stat-card">
+            <div class="admin-stat-icon" style="background: var(--gradient-primary)">∑</div>
+            <div>
+              <div class="admin-stat-value">{{ stats.total }}</div>
+              <div class="admin-stat-label">{{ stats.totalLabel }}</div>
+            </div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-icon" style="background: var(--gradient-amber)">🔥</div>
+            <div>
+              <div class="admin-stat-value hw-top-word" :title="stats.topWord">{{ stats.topWord || '—' }}</div>
+              <div class="admin-stat-label">{{ stats.topLabel }}</div>
+            </div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-icon" style="background: var(--gradient-success)">📈</div>
+            <div>
+              <div class="admin-stat-value">{{ stats.topCount }}</div>
+              <div class="admin-stat-label">{{ stats.countLabel }}</div>
+            </div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-icon" style="background: var(--gradient-blue)">🕐</div>
+            <div>
+              <div class="admin-stat-value">{{ days }} 天</div>
+              <div class="admin-stat-label">统计窗口</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- 筛选区 -->
-      <div class="filter-bar">
-        <span class="filter-label">热词类型</span>
-        <el-radio-group v-model="activeType" size="small" @change="reload">
-          <el-radio-button value="content">内容热词</el-radio-button>
-          <el-radio-button value="search">搜索热词</el-radio-button>
-          <el-radio-button value="tag">标签热词</el-radio-button>
-        </el-radio-group>
-        <span class="filter-label">统计窗口</span>
-        <el-radio-group v-model="days" size="small" @change="reload">
-          <el-radio-button :value="7">近 7 天</el-radio-button>
-          <el-radio-button :value="30">近 30 天</el-radio-button>
-          <el-radio-button :value="90">近 90 天</el-radio-button>
-        </el-radio-group>
-        <el-select v-model="limit" size="small" style="width:130px" @change="reload">
-          <el-option label="前 30 词" :value="30" />
-          <el-option label="前 50 词" :value="50" />
-          <el-option label="前 100 词" :value="100" />
-          <el-option label="前 200 词" :value="200" />
-        </el-select>
-        <el-input
-          v-model="keyword"
-          placeholder="筛选热词"
-          size="small"
-          style="width:180px"
-          clearable
-          :prefix-icon="Search"
-        />
-        <el-button size="small" @click="reload" :icon="RefreshLeft">刷新</el-button>
-        <el-button size="small" type="primary" :icon="Download" :disabled="!filteredWords.length" @click="exportCsv">
-          导出 CSV
-        </el-button>
-        <el-button
-          v-if="activeType === 'search'"
-          size="small"
-          type="danger"
-          plain
-          :icon="Delete"
-          @click="confirmCleanup"
-        >
-          清空搜索日志
-        </el-button>
-      </div>
+      <!-- 明细 -->
+      <div class="admin-panel">
+        <SectionHeader :title="`${currentTypeName}明细`" subtitle="按出现次数降序 · 支持关键词筛选与 CSV 导出" :icon="currentTypeIcon" :gradient="currentTypeGradient" />
 
-      <p class="hint-text">
-        <template v-if="activeType === 'content'">
-          轻量分词聚合：英文整词 + 中文短段（≤4 字）整取 / 长段二元切分，已过滤停用词；仅统计出现 ≥2 次的词。数据按需实时聚合，不落库。单表扫描上限 5000 条。
-        </template>
-        <template v-else-if="activeType === 'search'">
-          埋点聚合：统一搜索 / 作品搜索 / 作者搜索三处入口的 query（异步批量落库，单表扫描上限 5000 条）。「原始搜索短语」单次即计入；「搜索词分词」需 ≥2 次。写入不阻塞搜索请求，channel 满时丢弃（背压保护）。
-        </template>
-        <template v-else>
-          标签聚合：博客结构化标签（#tag，窗口内新建博客）+ 作品 JSON 标签，按使用次数降序，单次出现即计入。
-        </template>
-      </p>
+        <div class="admin-toolbar">
+          <span class="filter-label">统计窗口</span>
+          <el-radio-group v-model="days" size="small" @change="reload">
+            <el-radio-button :value="7">近 7 天</el-radio-button>
+            <el-radio-button :value="30">近 30 天</el-radio-button>
+            <el-radio-button :value="90">近 90 天</el-radio-button>
+          </el-radio-group>
+          <el-select v-model="limit" size="small" style="width:130px" @change="reload">
+            <el-option label="前 30 词" :value="30" />
+            <el-option label="前 50 词" :value="50" />
+            <el-option label="前 100 词" :value="100" />
+            <el-option label="前 200 词" :value="200" />
+          </el-select>
+          <el-input
+            v-model="keyword"
+            placeholder="筛选热词"
+            size="small"
+            style="width:180px"
+            clearable
+            :prefix-icon="Search"
+          />
+          <el-button size="small" :icon="RefreshLeft" @click="reload">刷新</el-button>
+          <el-button size="small" type="primary" :icon="Download" :disabled="!currentRows.length" @click="exportCsv">
+            导出 CSV
+          </el-button>
+          <el-button
+            v-if="activeType === 'search'"
+            size="small"
+            type="danger"
+            plain
+            :icon="Delete"
+            @click="confirmCleanup"
+          >
+            清空搜索日志
+          </el-button>
+        </div>
 
-      <!-- 搜索热词：原始短语 + 分词双区 -->
-      <template v-if="activeType === 'search'">
-        <div class="hw-section" v-loading="loading">
-          <div class="hw-section-title">
-            原始搜索短语 <span class="hw-section-sub">用户完整输入，大小写不敏感</span>
+        <p class="hint-text">
+          <template v-if="activeType === 'content'">
+            轻量分词聚合：英文整词 + 中文短段（≤4 字）整取 / 长段二元切分，已过滤停用词；仅统计出现 ≥2 次的词。数据按需实时聚合，不落库。单表扫描上限 5000 条。
+          </template>
+          <template v-else-if="activeType === 'search'">
+            埋点聚合：统一搜索 / 作品搜索 / 作者搜索三处入口的 query（异步批量落库，单表扫描上限 5000 条）。「原始搜索短语」单次即计入；「搜索词分词」需 ≥2 次。写入不阻塞搜索请求，channel 满时丢弃（背压保护）。
+          </template>
+          <template v-else>
+            标签聚合：博客结构化标签（#tag，窗口内新建博客）+ 作品 JSON 标签，按使用次数降序，单次出现即计入。
+          </template>
+        </p>
+
+        <!-- 搜索热词：原始短语 + 分词双区 -->
+        <template v-if="activeType === 'search'">
+          <div class="hw-section" v-loading="loading">
+            <div class="hw-section-title">
+              <span class="hw-section-dot" style="background: var(--gradient-blue)" />
+              原始搜索短语 <span class="hw-section-sub">用户完整输入，大小写不敏感</span>
+            </div>
+            <div v-for="(w, i) in filteredQueries" :key="'q' + w.word" class="hw-row">
+              <span class="hw-rank" :class="rankClass(i)">{{ i + 1 }}</span>
+              <span class="hw-word" :title="w.word">{{ w.word }}</span>
+              <span class="hw-bar-wrap">
+                <span class="hw-bar hw-bar-blue" :style="{ width: barWidth(w.count, maxQueryCount) }" />
+              </span>
+              <span class="hw-count">{{ w.count }}</span>
+            </div>
+            <el-empty v-if="!loading && !filteredQueries.length" description="该窗口内暂无搜索记录" :image-size="80" />
           </div>
-          <div v-for="(w, i) in filteredQueries" :key="'q' + w.word" class="hw-row">
+          <div class="hw-section" v-loading="loading">
+            <div class="hw-section-title">
+              <span class="hw-section-dot" style="background: var(--gradient-teal)" />
+              搜索词分词 <span class="hw-section-sub">中英混合 tokenizer 切分，≥2 次</span>
+            </div>
+            <div v-for="(w, i) in filteredWords" :key="'w' + w.word" class="hw-row">
+              <span class="hw-rank" :class="rankClass(i)">{{ i + 1 }}</span>
+              <span class="hw-word" :title="w.word">{{ w.word }}</span>
+              <span class="hw-bar-wrap">
+                <span class="hw-bar hw-bar-teal" :style="{ width: barWidth(w.count, maxWordCount) }" />
+              </span>
+              <span class="hw-count">{{ w.count }}</span>
+            </div>
+            <el-empty v-if="!loading && !filteredWords.length" description="该窗口内暂无搜索热词" :image-size="80" />
+          </div>
+        </template>
+
+        <!-- 内容热词 / 标签热词：单列表 -->
+        <div v-else class="hw-section" v-loading="loading">
+          <div class="hw-section-title">
+            <span class="hw-section-dot" :style="{ background: activeType === 'tag' ? 'var(--gradient-purple)' : 'var(--gradient-primary)' }" />
+            {{ activeType === 'tag' ? '标签使用排行' : '热词出现排行' }}
+            <span class="hw-section-sub">{{ activeType === 'tag' ? '单次出现即计入' : '仅统计出现 ≥2 次的词' }}</span>
+          </div>
+          <div v-for="(w, i) in filteredWords" :key="w.word" class="hw-row">
             <span class="hw-rank" :class="rankClass(i)">{{ i + 1 }}</span>
             <span class="hw-word" :title="w.word">{{ w.word }}</span>
             <span class="hw-bar-wrap">
-              <span class="hw-bar" :style="{ width: barWidth(w.count, maxQueryCount) }" />
+              <span class="hw-bar" :class="activeType === 'tag' ? 'hw-bar-purple' : 'hw-bar-primary'" :style="{ width: barWidth(w.count, maxWordCount) }" />
             </span>
             <span class="hw-count">{{ w.count }}</span>
           </div>
-          <el-empty v-if="!loading && !filteredQueries.length" description="该窗口内暂无搜索记录" :image-size="80" />
+          <el-empty v-if="!loading && !filteredWords.length" :description="activeType === 'tag' ? '该窗口内暂无标签' : '该窗口内暂无热词'" :image-size="80" />
         </div>
-        <div class="hw-section" v-loading="loading">
-          <div class="hw-section-title">
-            搜索词分词 <span class="hw-section-sub">中英混合 tokenizer 切分，≥2 次</span>
-          </div>
-          <div v-for="(w, i) in filteredWords" :key="'w' + w.word" class="hw-row">
-            <span class="hw-rank" :class="rankClass(i)">{{ i + 1 }}</span>
-            <span class="hw-word" :title="w.word">{{ w.word }}</span>
-            <span class="hw-bar-wrap">
-              <span class="hw-bar" :style="{ width: barWidth(w.count, maxWordCount) }" />
-            </span>
-            <span class="hw-count">{{ w.count }}</span>
-          </div>
-          <el-empty v-if="!loading && !filteredWords.length" description="该窗口内暂无搜索热词" :image-size="80" />
-        </div>
-      </template>
-
-      <!-- 内容热词 / 标签热词：单列表 -->
-      <div v-else class="hw-list" v-loading="loading">
-        <div v-for="(w, i) in filteredWords" :key="w.word" class="hw-row">
-          <span class="hw-rank" :class="rankClass(i)">{{ i + 1 }}</span>
-          <span class="hw-word" :title="w.word">{{ w.word }}</span>
-          <span class="hw-bar-wrap">
-            <span class="hw-bar" :style="{ width: barWidth(w.count, maxWordCount) }" />
-          </span>
-          <span class="hw-count">{{ w.count }}</span>
-        </div>
-        <el-empty v-if="!loading && !filteredWords.length" :description="activeType === 'tag' ? '该窗口内暂无标签' : '该窗口内暂无热词'" :image-size="80" />
       </div>
     </div>
   </div>
@@ -131,6 +168,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { adminApi } from '@/api/admin';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
+import SectionHeader from '@/components/common/SectionHeader.vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Histogram, Search, RefreshLeft, Download, Delete } from '@element-plus/icons-vue';
 
@@ -145,6 +183,26 @@ const loading = ref(false);
 const words = ref<HotWord[]>([]);
 const queries = ref<HotWord[]>([]);
 const searchTotal = ref(0);
+
+// ===== 类型卡片 =====
+const typeCards: { value: HotWordType; name: string; desc: string; icon: string; gradient: string }[] = [
+  { value: 'content', name: '内容热词', desc: '评论 / 回帖 / 帖题分词高频词', icon: '💬', gradient: 'var(--gradient-primary)' },
+  { value: 'search', name: '搜索热词', desc: '站内搜索 query 埋点 + 分词', icon: '🔍', gradient: 'var(--gradient-blue)' },
+  { value: 'tag', name: '标签热词', desc: '博客 #tag 与作品标签聚合', icon: '🏷️', gradient: 'var(--gradient-purple)' },
+];
+function switchType(t: HotWordType) {
+  if (activeType.value === t) return;
+  activeType.value = t;
+  reload();
+}
+
+const currentTypeName = computed(() => typeCards.find((t) => t.value === activeType.value)?.name || '');
+const currentTypeIcon = computed(() => typeCards.find((t) => t.value === activeType.value)?.icon || '📊');
+const currentTypeGradient = computed(() => {
+  const g = typeCards.find((t) => t.value === activeType.value)?.gradient || '';
+  return g.replace('var(--gradient-', '').replace(')', '');
+});
+const currentTypeSubtitle = computed(() => typeCards.find((t) => t.value === activeType.value)?.desc || '');
 
 const stats = computed(() => {
   const top = words.value[0];
@@ -189,6 +247,9 @@ const filteredQueries = computed(() => {
   if (!kw) return queries.value;
   return queries.value.filter((w) => w.word.toLowerCase().includes(kw));
 });
+
+// 当前主列表（导出/禁用判断用）：搜索态取原始短语，其余取 words
+const currentRows = computed(() => (activeType.value === 'search' ? filteredQueries.value : filteredWords.value));
 
 const maxWordCount = computed(() => words.value.reduce((m, w) => Math.max(m, w.count), 0));
 const maxQueryCount = computed(() => queries.value.reduce((m, w) => Math.max(m, w.count), 0));
@@ -247,7 +308,7 @@ function exportCsv() {
     : activeType.value === 'tag'
       ? [['排名', '标签', '使用次数']]
       : [['排名', '热词', '出现次数']];
-  const src = isSearch ? filteredQueries.value : filteredWords.value;
+  const src = currentRows.value;
   src.forEach((w, i) => rows.push([String(i + 1), w.word, String(w.count)]));
   if (!src.length) {
     ElMessage.warning('当前无可导出的数据');
@@ -271,86 +332,59 @@ onMounted(reload);
 </script>
 
 <style scoped>
-.filter-bar {
+.admin-page { --admin-content-max: 980px; min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
+[data-theme="dark"] .admin-page { background: #0f172a; }
+.hw-top-word { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 类型切换卡片 */
+.hw-type-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.hw-type-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 2px solid var(--border-color); border-radius: 10px; background: var(--bg-card); cursor: pointer; transition: border-color .15s, transform .15s; }
+.hw-type-card:hover { transform: translateY(-1px); }
+.hw-type-card.active { border-color: var(--primary-color); }
+.hw-type-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
+.hw-type-name { font-weight: 600; font-size: 0.92rem; color: var(--text-color); }
+.hw-type-desc { font-size: 0.76rem; color: var(--text-muted); margin-top: 2px; }
+
+.filter-label { font-size: 13px; color: var(--el-text-color-secondary); }
+.hint-text { font-size: 0.8rem; color: var(--text-light, #999); margin: 0 0 12px; }
+
+/* 明细分区 */
+.hw-section {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 6px 16px 10px;
+  margin-bottom: 16px;
+  min-height: 120px;
+  background: var(--bg-card);
+}
+.hw-section-title {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-}
-.filter-label { font-size: 13px; color: var(--el-text-color-secondary); }
-
-.hw-list, .hw-section {
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
-  padding: 8px 12px;
-  min-height: 120px;
-}
-.hw-section { margin-bottom: 16px; }
-.hw-section-title {
+  gap: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
-  padding: 8px 0 6px;
+  color: var(--text-color);
+  padding: 10px 0 8px;
 }
-.hw-section-sub {
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--el-text-color-secondary);
-  margin-left: 8px;
-}
-.hw-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-}
+.hw-section-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.hw-section-sub { font-size: 12px; font-weight: 400; color: var(--text-muted); }
+.hw-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border-color); }
 .hw-row:last-child { border-bottom: none; }
 .hw-rank {
-  width: 26px;
-  height: 22px;
-  border-radius: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--el-text-color-secondary);
-  background: var(--el-fill-color-light);
-  flex-shrink: 0;
+  width: 26px; height: 22px; border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: var(--text-muted);
+  background: var(--bg-soft); flex-shrink: 0;
 }
 .hw-rank.rk-gold { background: #f7d774; color: #7a5b00; }
 .hw-rank.rk-silver { background: #dfe3e8; color: #4a5568; }
 .hw-rank.rk-bronze { background: #e8c39e; color: #7a4a1d; }
-.hw-word {
-  width: 180px;
-  flex-shrink: 0;
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.hw-bar-wrap {
-  flex: 1;
-  height: 10px;
-  background: var(--el-fill-color-light);
-  border-radius: 5px;
-  overflow: hidden;
-}
-.hw-bar {
-  display: block;
-  height: 100%;
-  border-radius: 5px;
-  background: linear-gradient(90deg, var(--el-color-primary-light-4), var(--el-color-primary));
-  transition: width .3s ease;
-}
-.hw-count {
-  width: 56px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-size: 13px;
-  color: var(--el-text-color-regular);
-  flex-shrink: 0;
-}
+.hw-word { width: 180px; flex-shrink: 0; font-size: 14px; color: var(--text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hw-bar-wrap { flex: 1; height: 10px; background: var(--bg-soft); border-radius: 5px; overflow: hidden; }
+.hw-bar { display: block; height: 100%; border-radius: 5px; transition: width .3s ease; }
+.hw-bar-primary { background: linear-gradient(90deg, var(--el-color-primary-light-4), var(--el-color-primary)); }
+.hw-bar-blue { background: linear-gradient(90deg, #93c5fd, #3b82f6); }
+.hw-bar-teal { background: linear-gradient(90deg, #5eead4, #14b8a6); }
+.hw-bar-purple { background: linear-gradient(90deg, #c4b5fd, #8b5cf6); }
+.hw-count { width: 56px; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 600; color: var(--text-color); flex-shrink: 0; }
 </style>
