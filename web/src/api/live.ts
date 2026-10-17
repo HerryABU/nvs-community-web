@@ -18,7 +18,7 @@ export interface RageConfig {
  * 与 api 实例相同的路径前缀规则（apiPrefix + /api），保证反代前缀场景下可达。
  */
 export function buildLiveStreamURL(channel: string): string {
-  return `${apiPrefix}/api/live/stream?channel=${encodeURIComponent(channel)}`;
+  return `${appPrefix}/api/live/stream?channel=${encodeURIComponent(channel)}`;
 }
 
 /** 小说/章节评论频道 key（chapter_number 在事件负载里，前端自行按章节过滤） */

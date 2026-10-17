@@ -69,16 +69,12 @@ async function silentRefresh(): Promise<boolean> {
   } catch {
     isRefreshing = false;
     onRefreshed(false);
-    // 刷新失败：清理本地登录态并跳转登录
+    // 刷新失败：仅清理本地登录态，不强制整页跳登录（跳转决策交给路由守卫）。
     try {
       const { useAuthStore } = await import('@/stores/auth');
       useAuthStore().user = null;
     } catch {
       /* 忽略 store 异常 */
-    }
-    const loginPath = apiPrefix + '/login';
-    if (window.location.pathname !== loginPath) {
-      window.location.href = loginPath;
     }
     return false;
   }
@@ -92,13 +88,9 @@ api.interceptors.response.use(
       const { status, data } = response;
       switch (status) {
         case 401: {
-          // 刷新端点自身 401 不再递归刷新，直接放行到下方跳转逻辑
+          // 刷新端点自身 401 不再递归刷新，直接放行到下方拒绝逻辑
           const url = config?.url || '';
           if (url.includes('/auth/refresh')) {
-            const loginPath = apiPrefix + '/login';
-            if (window.location.pathname !== loginPath) {
-              window.location.href = loginPath;
-            }
             break;
           }
           // 避免同一请求重复触发刷新
@@ -110,6 +102,10 @@ api.interceptors.response.use(
               return api.request(config);
             }
           }
+          // 续期失败：仅拒绝该请求，不强制整页跳登录。
+          // 整页跳转登录只应由路由守卫（requiresAuth 路由）决策，
+          // 否则公共页面（论坛/帖子）上任意辅助接口 401（如 /api/theme/me）
+          // 都会把用户劫持到登录页，导致「帖子/回复看不见」。
           break;
         }
         case 403:

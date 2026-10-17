@@ -1,4 +1,4 @@
-import { ref, getCurrentInstance, onUnmounted, watch, unref, type MaybeRefOrGetter } from 'vue';
+import { ref, getCurrentInstance, onUnmounted, watch, toValue, type MaybeRefOrGetter } from 'vue';
 import { buildLiveStreamURL } from '@/api/live';
 
 // F19 狂暴模式：评论区实时更新 composable。
@@ -36,7 +36,7 @@ export function useLiveComments(channel: MaybeRefOrGetter<string>, onComment: (c
 
   function connect() {
     if (closed) return;
-    const ch = unref(channel);
+    const ch = toValue(channel);
     if (!ch) return; // 频道未就绪（如狂暴模式未开启），不建连接
     // 关闭旧连接再建，避免叠加
     teardown();
@@ -97,7 +97,7 @@ export function useLiveComments(channel: MaybeRefOrGetter<string>, onComment: (c
   // 频道响应式变化（如从空变为有效）：软重连（不置 closed，可再次重建）
   if (typeof channel === 'function' || (typeof channel === 'object' && channel !== null && 'value' in channel)) {
     watch(
-      () => unref(channel),
+      () => toValue(channel),
       () => {
         if (closed) return;
         attempt = 0;
