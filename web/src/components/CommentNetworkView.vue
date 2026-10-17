@@ -16,14 +16,20 @@
       </div>
     </div>
 
-    <!-- 视图切换 -->
+    <!-- 视图切换：2D 形态 + 3D 形态 两组互斥 -->
     <div class="cn-toolbar">
-      <el-radio-group v-model="viewMode" size="small">
+      <span class="cn-toolbar-label">2D</span>
+      <el-radio-group v-model="mode2d" size="small">
         <el-radio-button value="force">力导向</el-radio-button>
         <el-radio-button value="flow">折线流程图</el-radio-button>
+        <el-radio-button value="flowchart">标准流程图</el-radio-button>
         <el-radio-button value="divergent">发散形状</el-radio-button>
-        <el-radio-button value="3d">3D 图谱</el-radio-button>
         <el-radio-button value="list">互动清单</el-radio-button>
+      </el-radio-group>
+      <span class="cn-toolbar-label">3D</span>
+      <el-radio-group v-model="mode3d" size="small">
+        <el-radio-button value="3d">3D 图谱</el-radio-button>
+        <el-radio-button value="3d-flow">3D 流程图</el-radio-button>
       </el-radio-group>
       <el-button v-if="filterUserID" size="small" text type="primary" @click="clearFilter">
         清除「{{ filterUserName }}」筛选 ✕
@@ -32,14 +38,20 @@
     </div>
 
     <!-- 2D 关系图（ECharts graph，多形态） -->
-    <div v-if="viewMode !== 'list' && viewMode !== '3d'" class="cn-graph-wrap">
+    <div v-if="is2D" class="cn-graph-wrap">
       <v-chart :option="currentGraphOption" autoresize class="cn-graph" @click="onGraphClick" />
       <div class="cn-graph-hint">{{ graphHint }}</div>
     </div>
 
-    <!-- 3D 图谱（three.js / 3d-force-graph，按需加载） -->
-    <div v-else-if="viewMode === '3d'" class="cn-graph-wrap">
+    <!-- 3D 图谱 / 3D 流程图（three.js / 3d-force-graph，按需加载，可旋转） -->
+    <div v-else-if="is3D" class="cn-graph-wrap">
       <div ref="graph3dEl" class="cn-graph-3d"></div>
+      <div class="cn-3d-controls">
+        <el-button size="small" :type="autoRotate ? 'primary' : 'default'" @click="toggleRotate">
+          {{ autoRotate ? '停止旋转' : '自动旋转' }}
+        </el-button>
+        <el-button size="small" @click="resetView">重置视角</el-button>
+      </div>
       <div class="cn-graph-hint">
         拖拽旋转 · 滚轮缩放 · 点击节点下钻到该评论者；箭头 A→B 表示「A 回复了 B」，链路粒子流即回复流向。
       </div>
@@ -93,7 +105,18 @@ const props = defineProps<{
 
 const net = ref<CommentNetwork | null>(null);
 const loading = ref(false);
-const viewMode = ref<'force' | 'flow' | 'divergent' | '3d' | 'list'>('force');
+
+type ViewMode = 'force' | 'flow' | 'flowchart' | 'divergent' | '3d' | '3d-flow' | 'list';
+const mode2d = ref<ViewMode>('force');
+const mode3d = ref<'' | '3d' | '3d-flow'>('');
+const viewMode = computed<ViewMode>(() => (mode3d.value || mode2d.value) as ViewMode);
+// 两组互斥：选中其一即清空另一组
+watch(mode2d, (v) => { if (v) mode3d.value = ''; });
+watch(mode3d, (v) => { if (v) mode2d.value = ''; });
+
+const is2D = computed(() => ['force', 'flow', 'flowchart', 'divergent'].includes(viewMode.value));
+const is3D = computed(() => viewMode.value === '3d' || viewMode.value === '3d-flow');
+
 const filterUserID = ref<number>(0);
 
 const filterUserName = computed(() => {
@@ -131,7 +154,8 @@ async function load() {
 
 function setFilter(uid: number) {
   filterUserID.value = uid;
-  viewMode.value = 'list';
+  mode2d.value = 'list';
+  mode3d.value = '';
 }
 function clearFilter() {
   filterUserID.value = 0;
@@ -146,7 +170,7 @@ function onGraphClick(params: any) {
 }
 
 // ===================== 基础图数据（Top 50 节点 + 聚合边） =====================
-interface GNode { user_id: number; name: string; val: number; color?: string; x?: number; y?: number; }
+interface GNode { user_id: number; name: string; val: number; color?: string; }
 interface GLink { source: number; target: number; count: number; suspicious: boolean; }
 
 const baseGraph = computed<{ nodes: GNode[]; links: GLink[] }>(() => {
@@ -173,8 +197,8 @@ const baseGraph = computed<{ nodes: GNode[]; links: GLink[] }>(() => {
   return { nodes, links };
 });
 
-// ---------- 折线流程图：按回复层级（DAG 分层）左→右布局 ----------
-function computeFlow(nodes: GNode[], links: GLink[]): Map<number, { x: number; y: number }> {
+// 通用 BFS 分层（DAG 层级）
+function computeLayers(nodes: GNode[], links: GLink[]): Map<number, number> {
   const outAdj = new Map<number, number[]>();
   const inAdj = new Map<number, number[]>();
   nodes.forEach((n) => { outAdj.set(n.user_id, []); inAdj.set(n.user_id, []); });
@@ -182,7 +206,6 @@ function computeFlow(nodes: GNode[], links: GLink[]): Map<number, { x: number; y
     outAdj.get(l.source)?.push(l.target);
     inAdj.get(l.target)?.push(l.source);
   });
-  // 根节点：无入边；若无则取出度最高者
   let roots = nodes.filter((n) => (inAdj.get(n.user_id)?.length || 0) === 0).map((n) => n.user_id);
   if (roots.length === 0 && nodes.length) {
     const r = [...nodes].sort((a, b) => b.val - a.val)[0];
@@ -202,7 +225,12 @@ function computeFlow(nodes: GNode[], links: GLink[]): Map<number, { x: number; y
     }
   }
   nodes.forEach((n) => { if (!level.has(n.user_id)) level.set(n.user_id, 0); });
-  // 按层级分组
+  return level;
+}
+
+// ---------- 折线流程图：按回复层级（DAG 分层）左→右布局 ----------
+function computeFlow(nodes: GNode[], links: GLink[], vertical = false): Map<number, { x: number; y: number }> {
+  const level = computeLayers(nodes, links);
   const byLevel = new Map<number, GNode[]>();
   nodes.forEach((n) => {
     const lv = level.get(n.user_id)!;
@@ -210,12 +238,17 @@ function computeFlow(nodes: GNode[], links: GLink[]): Map<number, { x: number; y
     byLevel.get(lv)!.push(n);
   });
   const coords = new Map<number, { x: number; y: number }>();
-  const colW = 180;
-  const rowH = 72;
+  const colW = vertical ? 180 : 180;
+  const rowH = vertical ? 90 : 72;
   [...byLevel.keys()].sort((a, b) => a - b).forEach((lv) => {
     const arr = byLevel.get(lv)!;
     arr.forEach((n, i) => {
-      coords.set(n.user_id, { x: lv * colW, y: (i - (arr.length - 1) / 2) * rowH });
+      if (vertical) {
+        // 自上而下：根在上（y 取负，越大层级越低）
+        coords.set(n.user_id, { x: (i - (arr.length - 1) / 2) * colW, y: -lv * rowH });
+      } else {
+        coords.set(n.user_id, { x: lv * colW, y: (i - (arr.length - 1) / 2) * rowH });
+      }
     });
   });
   return coords;
@@ -256,16 +289,50 @@ function computeRadial(nodes: GNode[], links: GLink[]): Map<number, { x: number;
   return coords;
 }
 
-function build2DOption(kind: 'force' | 'flow' | 'divergent') {
+// ---------- 3D 流程图：层级沿 X 轴铺开，层内节点在 Y-Z 平面成环，前向边互不交叉 ----------
+function computeFlow3D(nodes: GNode[], links: GLink[]): Map<number, { x: number; y: number; z: number }> {
+  const level = computeLayers(nodes, links);
+  const byLevel = new Map<number, GNode[]>();
+  nodes.forEach((n) => {
+    const lv = level.get(n.user_id)!;
+    if (!byLevel.has(lv)) byLevel.set(lv, []);
+    byLevel.get(lv)!.push(n);
+  });
+  const coords = new Map<number, { x: number; y: number; z: number }>();
+  const layerGap = 170;
+  const ringR = 80;
+  [...byLevel.keys()].sort((a, b) => a - b).forEach((lv) => {
+    const arr = byLevel.get(lv)!;
+    arr.forEach((n, i) => {
+      const x = lv * layerGap;
+      if (arr.length === 1) { coords.set(n.user_id, { x, y: 0, z: 0 }); return; }
+      const ang = (2 * Math.PI * i) / arr.length + lv * 0.5;
+      coords.set(n.user_id, { x, y: Math.cos(ang) * ringR, z: Math.sin(ang) * ringR });
+    });
+  });
+  return coords;
+}
+
+function build2DOption(kind: 'force' | 'flow' | 'flowchart' | 'divergent') {
   const g = baseGraph.value;
-  const coords = kind === 'flow' ? computeFlow(g.nodes, g.links) : kind === 'divergent' ? computeRadial(g.nodes, g.links) : null;
+  const coords =
+    kind === 'flow' ? computeFlow(g.nodes, g.links, false) :
+    kind === 'flowchart' ? computeFlow(g.nodes, g.links, true) :
+    kind === 'divergent' ? computeRadial(g.nodes, g.links) : null;
+  const isRect = kind === 'flowchart';
   const data = g.nodes.map((n) => {
     const base: any = {
       id: String(n.user_id),
       name: n.name,
-      symbolSize: 14 + Math.min(34, n.val * 2),
+      symbol: isRect ? 'rect' : 'circle',
+      symbolSize: isRect ? [68, 30] : 14 + Math.min(34, n.val * 2),
       value: `回复/被回合计 ${n.val}`,
-      itemStyle: { color: n.color },
+      itemStyle: isRect
+        ? { color: n.color || '#eef2ff', borderColor: '#4f46e5', borderWidth: 1.5, borderRadius: 6 }
+        : { color: n.color },
+      label: isRect
+        ? { show: true, position: 'inside', fontSize: 11, color: '#1e293b' }
+        : { show: true, fontSize: 10 },
     };
     if (coords) { const c = coords.get(n.user_id); if (c) { base.x = c.x; base.y = c.y; } }
     return base;
@@ -304,12 +371,14 @@ function build2DOption(kind: 'force' | 'flow' | 'divergent') {
 
 const forceOption = computed(() => build2DOption('force'));
 const flowOption = computed(() => build2DOption('flow'));
+const flowchartOption = computed(() => build2DOption('flowchart'));
 const divergentOption = computed(() => build2DOption('divergent'));
 
 const currentGraphOption = computed(() => {
   if (!net.value) return { series: [] };
   switch (viewMode.value) {
     case 'flow': return flowOption.value;
+    case 'flowchart': return flowchartOption.value;
     case 'divergent': return divergentOption.value;
     default: return forceOption.value;
   }
@@ -318,18 +387,45 @@ const currentGraphOption = computed(() => {
 const graphHint = computed(() => {
   switch (viewMode.value) {
     case 'flow': return '折线流程图：按回复层级从左到右分层，箭头 A→B 表示「A 回复了 B」。';
+    case 'flowchart': return '标准流程图：根评论者居顶，按回复层级自上而下展开，方框即节点、箭头即回复方向。';
     case 'divergent': return '发散形状：中心为最活跃评论者，其余按互动距离呈辐射环展开。';
     default: return '箭头 A→B 表示「A 回复了 B」；点击节点可下钻到该评论者的互动。';
   }
 });
 
-// ===================== 3D 图谱（3d-force-graph，按需加载） =====================
+// ===================== 3D 图谱（3d-force-graph，按需加载，可旋转） =====================
 const graph3dEl = ref<HTMLElement | null>(null);
 let fgInstance: any = null;
+const autoRotate = ref(false);
 
-function build3DData() {
+function applyRotationState() {
+  if (!fgInstance) return;
+  try {
+    const c = fgInstance.controls();
+    c.autoRotate = autoRotate.value;
+    c.autoRotateSpeed = 1.4;
+  } catch { /* noop */ }
+}
+function toggleRotate() {
+  autoRotate.value = !autoRotate.value;
+  applyRotationState();
+}
+function resetView() {
+  if (!fgInstance) return;
+  try { fgInstance.zoomToFit(500, 60); } catch { /* noop */ }
+}
+
+function build3DData(mode: ViewMode) {
   const g = baseGraph.value;
-  const nodes = g.nodes.map((n) => ({ id: String(n.user_id), name: n.name, val: n.val, color: n.color || '#4f46e5' }));
+  const coords3d = mode === '3d-flow' ? computeFlow3D(g.nodes, g.links) : null;
+  const nodes = g.nodes.map((n) => {
+    const o: any = { id: String(n.user_id), name: n.name, val: n.val, color: n.color || '#4f46e5' };
+    if (coords3d) {
+      const c = coords3d.get(n.user_id);
+      if (c) { o.x = c.x; o.y = c.y; o.z = c.z; o.fx = c.x; o.fy = c.y; o.fz = c.z; }
+    }
+    return o;
+  });
   const links = g.links.map((l) => ({
     source: String(l.source),
     target: String(l.target),
@@ -340,11 +436,14 @@ function build3DData() {
 }
 
 async function mount3D() {
-  if (fgInstance || !graph3dEl.value) return;
+  if (!graph3dEl.value) return;
+  if (fgInstance) { try { fgInstance.graphData({ nodes: [], links: [] }); } catch { /* noop */ } fgInstance = null; }
+  graph3dEl.value.innerHTML = '';
   const ForceGraph3D = (await import('3d-force-graph')).default;
   const el = graph3dEl.value;
+  const mode = viewMode.value;
   fgInstance = ForceGraph3D()(el)
-    .graphData(build3DData())
+    .graphData(build3DData(mode))
     .nodeId('id')
     .nodeLabel('name')
     .nodeVal('val')
@@ -360,29 +459,37 @@ async function mount3D() {
     .linkDirectionalParticleColor((l: any) => (l.suspicious ? '#ef4444' : '#818cf8'))
     .onNodeClick((n: any) => setFilter(Number(n.id)))
     .backgroundColor('rgba(15,23,42,0.04)');
+  // 3D 流程图：图层固定、停止力导模拟，路线沿 X 轴前向推进互不交叉
+  if (mode === '3d-flow') {
+    try { fgInstance.cooldownTicks(0); } catch { /* noop */ }
+  }
   fgInstance.width(el.clientWidth || 600).height(420);
+  applyRotationState();
 }
 
 function refresh3D() {
-  if (fgInstance) fgInstance.graphData(build3DData());
+  if (!fgInstance) return;
+  fgInstance.graphData(build3DData(viewMode.value));
+  if (viewMode.value === '3d-flow') { try { fgInstance.cooldownTicks(0); } catch { /* noop */ } }
 }
 
 function onResize() {
   if (fgInstance && graph3dEl.value) fgInstance.width(graph3dEl.value.clientWidth);
 }
 
-watch(viewMode, async (m) => {
-  if (m === '3d') {
+const is3DMode = (x: string) => x === '3d' || x === '3d-flow';
+watch(viewMode, async (m, old) => {
+  if (is3DMode(m)) {
     await nextTick();
     await mount3D();
   } else if (fgInstance) {
-    try { fgInstance.pauseAnimation(); } catch { /* noop */ }
-    fgInstance = null; // 容器由 v-if 移除，下次进入重建
+    fgInstance = null;
+    if (graph3dEl.value) graph3dEl.value.innerHTML = '';
   }
 });
 
 // 数据/筛选变化时，若正处于 3D 模式则刷新
-watch([filterUserID, net], () => { if (viewMode.value === '3d' && fgInstance) refresh3D(); });
+watch([filterUserID, net], () => { if (is3DMode(viewMode.value) && fgInstance) refresh3D(); });
 
 onMounted(() => {
   load();
@@ -410,12 +517,14 @@ watch(filterUserID, () => { if (filterUserID.value) load(); });
 .cn-stat-num { font-size: 1.4rem; font-weight: 700; color: var(--primary-color, #4f46e5); }
 .cn-stat-label { font-size: 0.78rem; color: var(--text-light, #999); }
 
-.cn-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.cn-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.cn-toolbar-label { font-size: 0.8rem; color: var(--text-light, #999); font-weight: 600; }
 .cn-warn { font-size: 0.8rem; color: #ef4444; }
 
 .cn-graph-wrap { position: relative; }
 .cn-graph { height: 420px; width: 100%; }
 .cn-graph-3d { height: 420px; width: 100%; border-radius: 10px; overflow: hidden; background: rgba(15, 23, 42, 0.04); }
+.cn-3d-controls { display: flex; gap: 8px; justify-content: center; margin-top: 6px; }
 .cn-graph-hint { font-size: 0.76rem; color: var(--text-light, #999); text-align: center; margin-top: 4px; }
 
 .cn-subtitle { font-size: 0.9rem; margin: 14px 0 8px; color: var(--text, #333); }
