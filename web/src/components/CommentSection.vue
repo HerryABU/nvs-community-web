@@ -36,6 +36,7 @@
         @reply="handleReply"
         @delete="handleDelete"
         @live="onLiveComment"
+        @unlocked="fetchComments(true)"
       />
     </div>
 
@@ -49,6 +50,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { novelApi, commentApi, type Comment } from '@/api/novel';
+import { getFloorPasswords } from '@/api/novel/comments';
 import { novelCommentChannel, blogCommentChannel, liveApi } from '@/api/live';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -110,6 +112,7 @@ async function fetchComments(reset = false) {
       blog_id: props.blogId || 0,
       chapter_number: props.chapterNumber,
       page: page.value,
+      items: comments.value, // 带上已解锁楼密码（X-Floor-Password 头）
     });
     const data = res.data.data;
     if (reset) {
@@ -240,12 +243,22 @@ async function handleReply(parentId: number | null, content: string) {
       chapter_number: props.chapterNumber,
       content,
       parent_id: parentId || undefined,
-    });
+    }, replyFloorHeaders(parentId));
     ElMessage.success(parentId ? '回复成功' : '评论发表成功');
     fetchComments(true);
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '回复失败');
   }
+}
+
+// 加密楼内回复需带该楼解锁密码（X-Floor-Password: id:password）
+function replyFloorHeaders(parentId: number | null): Record<string, string> {
+  if (!parentId) return {};
+  const parent = comments.value.find((c) => c.id === parentId) as any;
+  if (!parent) return {};
+  const floorId = parent.parent_id ? (parent.root_id ?? parent.parent_id) : parent.id;
+  const pwd = getFloorPasswords()[String(floorId)];
+  return pwd ? { 'X-Floor-Password': `${floorId}:${pwd}` } : {};
 }
 
 async function handleDelete(id: number) {

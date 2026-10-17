@@ -73,6 +73,8 @@ export interface Comment {
   root_id?: number | null;
   floor_no?: number;
   reply_to_name?: string; // 被回复者昵称（展示「X 回复 Y」）
+  has_password?: boolean; // 楼加密（入口限制）：该楼是否设有访问密码
+  locked?: boolean;       // 运行时脱敏标记：当前请求未解锁（前端渲染 🔒 占位）
   username?: string;
   user?: { id: number; username?: string; nickname?: string; avatar_url?: string };
   created_at: string;

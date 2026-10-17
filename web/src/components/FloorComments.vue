@@ -13,6 +13,9 @@
           <span class="floor-user">{{ displayName(floor) }}</span>
           <el-tag v-if="showDeleted(floor)" size="small" type="danger" effect="dark">已删除</el-tag>
           <el-tag v-if="ownerId && floor.user_id === ownerId" size="small" type="danger" effect="plain">楼主</el-tag>
+          <el-tag v-if="floor.has_password" size="small" type="warning" effect="plain" class="floor-lock-tag">
+            <el-icon class="lock-ico"><Lock /></el-icon> 已加密
+          </el-tag>
           <span class="floor-time">{{ formatTime(floor.created_at) }}</span>
           <span class="floor-actions">
             <slot name="actions" :item="floor" />
@@ -41,10 +44,27 @@
             >删除</el-button>
           </span>
         </div>
-        <div class="floor-content cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" :class="{ 'deleted-content': showDeleted(floor) }">
+        <div v-if="!floor.Locked" class="floor-content cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" :class="{ 'deleted-content': showDeleted(floor) }">
           <div v-if="showDeleted(floor)" class="deleted-banner">⚠ 该内容已被删除，以下为警方取证留证（删除人：{{ floor.deleted_by === 'admin' ? '管理员' : floor.deleted_by === 'user' ? '用户自删' : '系统' }}）</div>
           <div v-else-if="floor.is_deleted && !isModerator" class="deleted-placeholder">[ 该内容已删除 ]</div>
           <div v-html="renderMarkdown(floor.content)"></div>
+        </div>
+        <div v-else class="floor-locked">
+          <div class="locked-icon"><el-icon><Lock /></el-icon></div>
+          <div class="locked-text">该楼已加密，需要密码才能查看内容</div>
+          <div v-if="authStore.isLoggedIn" class="locked-input">
+            <el-input
+              v-model="pwdInput[floor.id]"
+              type="password"
+              show-password
+              size="small"
+              placeholder="输入访问密码"
+              @keyup.enter="unlock(floor)"
+            />
+            <el-button size="small" type="primary" :loading="unlocking[floor.id]" @click="unlock(floor)">解锁</el-button>
+          </div>
+          <div v-else class="locked-hint">请先 <router-link to="/login">登录</router-link> 后输入密码查看</div>
+          <el-button v-if="canSetPassword(floor)" size="small" text type="warning" @click="openManage(floor)">管理密码</el-button>
         </div>
 
         <!-- 楼内回复（可折叠，公众号评论区交互） -->
@@ -111,6 +131,26 @@
     </div>
 
     <el-empty v-if="floors.length === 0" description="暂无内容" />
+
+    <!-- 楼加密管理弹窗（仅楼作者 / 警方 / 管理员）：设置 / 修改 / 解除访问密码 -->
+    <el-dialog v-model="manageVisible" title="楼访问密码管理" width="420px">
+      <div v-if="manageTarget" class="manage-body">
+        <el-alert type="info" :closable="false" show-icon title="入口限制，非内容加密">
+          <template #default>密码仅控制是否返回楼内容，内容仍明文存储；警方 / 站长 / 管理员可随时查看。</template>
+        </el-alert>
+        <el-input
+          v-model="managePassword"
+          type="password"
+          show-password
+          class="manage-input"
+          placeholder="新访问密码（至少 4 位，不可含逗号 / 冒号）"
+        />
+        <div class="manage-actions">
+          <el-button type="primary" :disabled="!managePassword.trim()" :loading="managing" @click="saveManage">设置 / 修改密码</el-button>
+          <el-button v-if="manageTarget.has_password" type="danger" text :loading="managing" @click="removeManage">解除加密</el-button>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -121,6 +161,9 @@ import { renderMarkdown } from '@/markdown/renderer';
 import ReportButton from './ReportButton.vue';
 import LiveBadge from './comment/LiveBadge.vue';
 import { useLiveComments } from '@/composables/useLiveComments';
+import { commentApi, setFloorPassword } from '@/api/novel/comments';
+import { Lock } from '@element-plus/icons-vue';
+import { ElMessage } from 'element-plus';
 
 // 楼层模型（公众号评论区 + Discuz 楼中楼）：
 //  - 回复主内容（作品/博客/帖子）→ 开新楼（parent_id 为空，floor_no 递增）
@@ -151,6 +194,7 @@ const emit = defineEmits<{
   delete: [id: number];
   mute: [item: any];
   live: [item: any];            // 狂暴模式（F19）：收到服务端推送的新评论
+  unlocked: [];                 // 楼加密解锁 / 改密后，通知父组件重拉列表（带解锁密码头）
 }>();
 
 // 狂暴模式（F19）：评论区实时订阅。频道为空（未开启/未传）时 composable 内部直接短路不建连接；
@@ -257,6 +301,88 @@ function formatTime(s?: string) {
   if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`;
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`;
   return d.toLocaleDateString('zh-CN');
+}
+
+// ====== 楼加密（入口限制）：🔒 占位解锁 + 作者/警方/管理员密码管理 ======
+const pwdInput = reactive<Record<number, string>>({});
+const unlocking = reactive<Record<number, boolean>>({});
+const manageVisible = ref(false);
+const manageTarget = ref<any>(null);
+const managePassword = ref('');
+const managing = ref(false);
+
+// 是否可管理该楼密码：楼作者本人，或警方/管理员
+function canSetPassword(floor: any) {
+  return authStore.user?.id === floor.user_id || isModerator.value;
+}
+
+// 解锁：校验通过后把密码存 sessionStorage，并通知父组件重拉列表（带 X-Floor-Password 头）
+async function unlock(floor: any) {
+  const pwd = (pwdInput[floor.id] || '').trim();
+  if (!pwd) { ElMessage.warning('请输入访问密码'); return; }
+  unlocking[floor.id] = true;
+  try {
+    const res = await commentApi.verifyFloorPassword(floor.id, pwd);
+    if (res.data?.data?.ok) {
+      setFloorPassword(floor.id, pwd);
+      ElMessage.success('解锁成功');
+      emit('unlocked');
+    } else {
+      ElMessage.error(res.data?.message || '密码错误');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '解锁失败');
+  } finally {
+    unlocking[floor.id] = false;
+  }
+}
+
+function openManage(floor: any) {
+  manageTarget.value = floor;
+  managePassword.value = '';
+  manageVisible.value = true;
+}
+
+async function saveManage() {
+  if (!manageTarget.value) return;
+  const pwd = managePassword.value.trim();
+  if (!pwd) { ElMessage.warning('请输入新密码'); return; }
+  managing.value = true;
+  try {
+    const res = await commentApi.setFloorPassword(manageTarget.value.id, pwd);
+    if (res.data?.data?.ok) {
+      ElMessage.success(res.data.data.message || '已设置访问密码');
+      manageTarget.value.has_password = true;
+      manageVisible.value = false;
+      emit('unlocked');
+    } else {
+      ElMessage.error(res.data?.message || '操作失败');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+  } finally {
+    managing.value = false;
+  }
+}
+
+async function removeManage() {
+  if (!manageTarget.value) return;
+  managing.value = true;
+  try {
+    const res = await commentApi.setFloorPassword(manageTarget.value.id, '');
+    if (res.data?.data?.ok) {
+      ElMessage.success('已解除加密');
+      manageTarget.value.has_password = false;
+      manageVisible.value = false;
+      emit('unlocked');
+    } else {
+      ElMessage.error(res.data?.message || '操作失败');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+  } finally {
+    managing.value = false;
+  }
 }
 </script>
 
@@ -397,6 +523,51 @@ function formatTime(s?: string) {
   justify-content: flex-end;
   margin-top: 6px;
 }
+
+/* ====== 楼加密（入口限制）：🔒 占位 + 解锁输入 ====== */
+.floor-lock-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 600;
+}
+.floor-lock-tag .lock-ico { font-size: 0.85rem; }
+
+.floor-locked {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px dashed var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  background: var(--bg-subtle, #f8fafc);
+}
+.locked-icon {
+  font-size: 1.4rem;
+  color: var(--text-light, #94a3b8);
+  line-height: 1;
+}
+.locked-text {
+  font-size: 0.9rem;
+  color: var(--text-light, #64748b);
+}
+.locked-input {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  max-width: 320px;
+}
+.locked-hint {
+  font-size: 0.85rem;
+  color: var(--text-light, #94a3b8);
+}
+.locked-hint a { color: var(--primary-color, #4f46e5); }
+
+/* ====== 楼加密管理弹窗 ====== */
+.manage-body { display: flex; flex-direction: column; gap: 12px; }
+.manage-input { width: 100%; }
+.manage-actions { display: flex; gap: 8px; }
 </style>
 
 <style>
@@ -422,5 +593,11 @@ function formatTime(s?: string) {
   .floor-head { gap: 6px; }
   .floor-actions { margin-left: 0; width: 100%; }
   .floor-replies { padding: 6px 8px; }
+  .floor-lock-tag { background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); color: #fbbf24; }
+  .floor-locked { background: rgba(255,255,255,.03); border-color: rgba(255,255,255,.12); }
+  .locked-icon { color: #94a3b8; }
+  .locked-text { color: #94a3b8; }
+  .locked-hint { color: #94a3b8; }
+  .locked-hint a { color: #93c5fd; }
 }
 </style>

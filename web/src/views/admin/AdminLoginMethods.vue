@@ -20,7 +20,7 @@
             <div class="lm-body">
               <div class="lm-name">手机号 + 验证码</div>
               <div class="lm-desc">
-                依赖短信网关（.env 配置 SMS_GATEWAY）
+                依赖短信网关，可在下方「短信网关」面板配置
                 <el-tag size="small" :type="smsTagType" style="margin-left: 6px">{{ smsGatewayLabel }}</el-tag>
               </div>
             </div>
@@ -149,6 +149,61 @@
         </el-form>
       </div>
 
+      <!-- 短信网关（手机号验证码登录，管理端可配） -->
+      <div class="admin-panel">
+        <SectionHeader title="短信网关（手机号登录）" subtitle="手机号验证码登录依赖的短信通道，管理端可配，DB 优先 + .env 同步" :icon="'📨'" gradient="teal" />
+        <el-form label-width="150px" class="policy-form" @submit.prevent="saveConfig">
+          <el-form-item label="网关形态">
+            <el-select v-model="smsForm.sms_gateway" style="width: 320px">
+              <el-option label="开发网关（验证码仅入日志）" value="log" />
+              <el-option label="通用 HTTP 网关" value="http" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="网关地址">
+            <el-input
+              v-model="smsForm.sms_http_url"
+              placeholder="https://sms.example.com/api/send"
+              style="width: 380px"
+              :disabled="smsForm.sms_gateway !== 'http'"
+            />
+          </el-form-item>
+          <el-form-item label="网关 Token">
+            <el-input
+              v-model="smsForm.sms_http_token"
+              type="password"
+              show-password
+              placeholder="Bearer Token"
+              style="width: 380px"
+              :disabled="smsForm.sms_gateway !== 'http'"
+            />
+          </el-form-item>
+          <el-form-item label="短信签名">
+            <el-input v-model="smsForm.sms_sign_name" placeholder="如 星海文学" style="width: 240px" />
+          </el-form-item>
+          <el-form-item label="模板编码">
+            <el-input v-model="smsForm.sms_template_code" placeholder="如 SMS_123456789" style="width: 240px" />
+          </el-form-item>
+          <p class="hint-text">HTTP 网关将收到 POST JSON：{ phone, code, sign_name, template_code }；网关地址与 Token 留空视为「未配置」。</p>
+        </el-form>
+      </div>
+
+      <!-- 微信扫码登录配置（管理端可配） -->
+      <div class="admin-panel">
+        <SectionHeader title="微信扫码登录" subtitle="微信开放平台「网站应用」三件套，管理端可配，DB 优先 + .env 同步" :icon="'💬'" gradient="success" />
+        <el-form label-width="150px" class="policy-form" @submit.prevent="saveConfig">
+          <el-form-item label="AppID">
+            <el-input v-model="wechatForm.wechat_app_id" placeholder="微信开放平台网站应用 AppID" style="width: 380px" />
+          </el-form-item>
+          <el-form-item label="AppSecret">
+            <el-input v-model="wechatForm.wechat_app_secret" type="password" show-password placeholder="AppSecret" style="width: 380px" />
+          </el-form-item>
+          <el-form-item label="授权回调地址">
+            <el-input v-model="wechatForm.wechat_callback" placeholder="https://your-site.com/api/wechat/callback" style="width: 380px" />
+          </el-form-item>
+          <p class="hint-text">三件套齐全后，登录页将出现「微信扫码」入口；当前状态：{{ wechatAvailable ? '可用' : '不可用（请补全配置后保存）' }}。</p>
+        </el-form>
+      </div>
+
       <!-- 保存 -->
       <div class="admin-panel save-panel">
         <div class="save-row">
@@ -174,6 +229,16 @@ import { ElMessage } from 'element-plus';
 
 const configForm = reactive<Record<string, string>>({
   smtp_host: '', smtp_port: '587', smtp_user: '', smtp_password: '', smtp_from: '',
+});
+
+// ===== 短信网关（手机号验证码登录，管理端可配，DB 优先 + .env 同步） =====
+const smsForm = reactive<Record<string, string>>({
+  sms_gateway: 'log', sms_http_url: '', sms_http_token: '', sms_sign_name: '', sms_template_code: '',
+});
+
+// ===== 微信扫码登录配置（管理端可配，DB 优先 + .env 同步） =====
+const wechatForm = reactive<Record<string, string>>({
+  wechat_app_id: '', wechat_app_secret: '', wechat_callback: '',
 });
 const emailVerifyEnabled = ref(false);
 const captchaEnabled = ref(false);
@@ -274,6 +339,16 @@ async function loadConfig() {
     envFilePath.value = data.env_file_path || '.env';
     emailDomainBlacklistArr.value = jsonToArray(data.email_domain_blacklist || '');
     emailDomainWhitelistArr.value = jsonToArray(data.email_domain_whitelist || '');
+    // 短信网关配置（DB 优先；未落库时回退 .env 状态，前端以 'log' 兜底）
+    smsForm.sms_gateway = data.sms_gateway || smsGateway.value || 'log';
+    smsForm.sms_http_url = data.sms_http_url || '';
+    smsForm.sms_http_token = data.sms_http_token || '';
+    smsForm.sms_sign_name = data.sms_sign_name || '';
+    smsForm.sms_template_code = data.sms_template_code || '';
+    // 微信扫码配置
+    wechatForm.wechat_app_id = data.wechat_app_id || '';
+    wechatForm.wechat_app_secret = data.wechat_app_secret || '';
+    wechatForm.wechat_callback = data.wechat_callback || '';
   } catch { /* ignore */ }
 }
 
@@ -303,6 +378,16 @@ async function saveConfig() {
         phone: loginPhone.value,
         wechat: loginWechat.value && wechatAvailable.value,
       }),
+      // 短信网关（手机号验证码登录）
+      sms_gateway: smsForm.sms_gateway,
+      sms_http_url: smsForm.sms_http_url,
+      sms_http_token: smsForm.sms_http_token,
+      sms_sign_name: smsForm.sms_sign_name,
+      sms_template_code: smsForm.sms_template_code,
+      // 微信扫码登录
+      wechat_app_id: wechatForm.wechat_app_id,
+      wechat_app_secret: wechatForm.wechat_app_secret,
+      wechat_callback: wechatForm.wechat_callback,
     });
     const d = res.data.data || res.data || {};
     if (d.env_sync_error) {
@@ -312,6 +397,8 @@ async function saveConfig() {
       if (d.env_note) envNote.value = d.env_note;
       ElMessage.success('登录方式配置已保存');
     }
+    // 保存后重拉配置，刷新「微信可用 / 短信网关」等派生状态
+    await loadConfig();
   } catch {
     ElMessage.error('保存失败');
   } finally {
