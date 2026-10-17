@@ -17,6 +17,9 @@
             <div class="hw-type-name">{{ t.name }}</div>
             <div class="hw-type-desc">{{ t.desc }}</div>
           </div>
+          <span v-if="activeType === t.value" class="hw-type-badge" :style="{ background: t.gradient }">
+            {{ activeCardCount }} 词
+          </span>
         </div>
       </div>
 
@@ -27,7 +30,7 @@
           <div class="admin-stat-card">
             <div class="admin-stat-icon" style="background: var(--gradient-primary)">∑</div>
             <div>
-              <div class="admin-stat-value">{{ stats.total }}</div>
+              <div class="admin-stat-value">{{ fmtNum(stats.total) }}</div>
               <div class="admin-stat-label">{{ stats.totalLabel }}</div>
             </div>
           </div>
@@ -36,12 +39,13 @@
             <div>
               <div class="admin-stat-value hw-top-word" :title="stats.topWord">{{ stats.topWord || '—' }}</div>
               <div class="admin-stat-label">{{ stats.topLabel }}</div>
+              <div v-if="stats.topShare" class="admin-stat-sub">占总量 {{ stats.topShare }}</div>
             </div>
           </div>
           <div class="admin-stat-card">
             <div class="admin-stat-icon" style="background: var(--gradient-success)">📈</div>
             <div>
-              <div class="admin-stat-value">{{ stats.topCount }}</div>
+              <div class="admin-stat-value">{{ fmtNum(stats.topCount) }}</div>
               <div class="admin-stat-label">{{ stats.countLabel }}</div>
             </div>
           </div>
@@ -115,7 +119,7 @@
               <span class="hw-section-dot" style="background: var(--gradient-blue)" />
               原始搜索短语 <span class="hw-section-sub">用户完整输入，大小写不敏感</span>
             </div>
-            <div v-for="(w, i) in filteredQueries" :key="'q' + w.word" class="hw-row">
+            <div v-for="(w, i) in filteredQueries" :key="'q' + w.word" class="hw-row" title="点击复制" @click="copyWord(w.word)">
               <span class="hw-rank" :class="rankClass(i)">{{ i + 1 }}</span>
               <span class="hw-word" :title="w.word">{{ w.word }}</span>
               <span class="hw-bar-wrap">
@@ -123,14 +127,14 @@
               </span>
               <span class="hw-count">{{ w.count }}</span>
             </div>
-            <el-empty v-if="!loading && !filteredQueries.length" description="该窗口内暂无搜索记录" :image-size="80" />
+            <EmptyState v-if="!loading && !filteredQueries.length" icon="🔍" text="暂无搜索记录" description="该窗口内用户还没有产生站内搜索行为" />
           </div>
           <div class="hw-section" v-loading="loading">
             <div class="hw-section-title">
               <span class="hw-section-dot" style="background: var(--gradient-teal)" />
               搜索词分词 <span class="hw-section-sub">中英混合 tokenizer 切分，≥2 次</span>
             </div>
-            <div v-for="(w, i) in filteredWords" :key="'w' + w.word" class="hw-row">
+            <div v-for="(w, i) in filteredWords" :key="'w' + w.word" class="hw-row" title="点击复制" @click="copyWord(w.word)">
               <span class="hw-rank" :class="rankClass(i)">{{ i + 1 }}</span>
               <span class="hw-word" :title="w.word">{{ w.word }}</span>
               <span class="hw-bar-wrap">
@@ -138,7 +142,7 @@
               </span>
               <span class="hw-count">{{ w.count }}</span>
             </div>
-            <el-empty v-if="!loading && !filteredWords.length" description="该窗口内暂无搜索热词" :image-size="80" />
+            <EmptyState v-if="!loading && !filteredWords.length" icon="✂️" text="暂无搜索热词" description="该窗口内的搜索短语尚未切分出高频词" />
           </div>
         </template>
 
@@ -149,7 +153,7 @@
             {{ activeType === 'tag' ? '标签使用排行' : '热词出现排行' }}
             <span class="hw-section-sub">{{ activeType === 'tag' ? '单次出现即计入' : '仅统计出现 ≥2 次的词' }}</span>
           </div>
-          <div v-for="(w, i) in filteredWords" :key="w.word" class="hw-row">
+          <div v-for="(w, i) in filteredWords" :key="w.word" class="hw-row" title="点击复制" @click="copyWord(w.word)">
             <span class="hw-rank" :class="rankClass(i)">{{ i + 1 }}</span>
             <span class="hw-word" :title="w.word">{{ w.word }}</span>
             <span class="hw-bar-wrap">
@@ -157,7 +161,7 @@
             </span>
             <span class="hw-count">{{ w.count }}</span>
           </div>
-          <el-empty v-if="!loading && !filteredWords.length" :description="activeType === 'tag' ? '该窗口内暂无标签' : '该窗口内暂无热词'" :image-size="80" />
+          <EmptyState v-if="!loading && !filteredWords.length" :icon="activeType === 'tag' ? '🏷️' : '💬'" :text="activeType === 'tag' ? '暂无标签' : '暂无热词'" :description="activeType === 'tag' ? '该窗口内没有新建带标签的博客或作品' : '该窗口内评论/回帖/帖题尚未聚合出高频词'" />
         </div>
       </div>
     </div>
@@ -169,6 +173,7 @@ import { ref, computed, onMounted } from 'vue';
 import { adminApi } from '@/api/admin';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import SectionHeader from '@/components/common/SectionHeader.vue';
+import EmptyState from '@/components/common/EmptyState.vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Histogram, Search, RefreshLeft, Download, Delete } from '@element-plus/icons-vue';
 
@@ -204,16 +209,28 @@ const currentTypeGradient = computed(() => {
 });
 const currentTypeSubtitle = computed(() => typeCards.find((t) => t.value === activeType.value)?.desc || '');
 
+// 出现次数总和（用于 top 词占比）
+const wordsTotalCount = computed(() => words.value.reduce((s, w) => s + w.count, 0));
+const queriesTotalCount = computed(() => queries.value.reduce((s, w) => s + w.count, 0));
+
+function shareOf(topCount: number, total: number): string {
+  if (!topCount || !total) return '';
+  const pct = (topCount / total) * 100;
+  return pct >= 10 ? `${pct.toFixed(0)}%` : `${pct.toFixed(1)}%`;
+}
+
 const stats = computed(() => {
   const top = words.value[0];
   if (activeType.value === 'search') {
+    const q = queries.value[0];
     return {
       total: searchTotal.value,
       totalLabel: '搜索总次数',
-      topWord: queries.value[0]?.word || top?.word || '',
+      topWord: q?.word || top?.word || '',
       topLabel: '最热搜索词',
-      topCount: queries.value[0]?.count || top?.count || 0,
+      topCount: q?.count || top?.count || 0,
       countLabel: '最高搜索次数',
+      topShare: shareOf(q?.count || top?.count || 0, queriesTotalCount.value),
     };
   }
   if (activeType.value === 'tag') {
@@ -224,6 +241,7 @@ const stats = computed(() => {
       topLabel: '最热标签',
       topCount: top?.count || 0,
       countLabel: '最高使用次数',
+      topShare: shareOf(top?.count || 0, wordsTotalCount.value),
     };
   }
   return {
@@ -233,6 +251,7 @@ const stats = computed(() => {
     topLabel: '当前最热词',
     topCount: top?.count || 0,
     countLabel: '最高出现次数',
+    topShare: shareOf(top?.count || 0, wordsTotalCount.value),
   };
 });
 
@@ -250,6 +269,24 @@ const filteredQueries = computed(() => {
 
 // 当前主列表（导出/禁用判断用）：搜索态取原始短语，其余取 words
 const currentRows = computed(() => (activeType.value === 'search' ? filteredQueries.value : filteredWords.value));
+
+// 激活类型卡上的词数徽标
+const activeCardCount = computed(() => currentRows.value.length);
+
+// 千分位格式化
+function fmtNum(n: number): string {
+  return (n ?? 0).toLocaleString('zh-CN');
+}
+
+// 点击热词行复制（便于拿到词条去站内搜索/联动排查）
+async function copyWord(word: string) {
+  try {
+    await navigator.clipboard.writeText(word);
+    ElMessage.success(`已复制「${word}」`);
+  } catch {
+    ElMessage.warning('复制失败，请手动选择文本');
+  }
+}
 
 const maxWordCount = computed(() => words.value.reduce((m, w) => Math.max(m, w.count), 0));
 const maxQueryCount = computed(() => queries.value.reduce((m, w) => Math.max(m, w.count), 0));
@@ -335,13 +372,15 @@ onMounted(reload);
 .admin-page { --admin-content-max: 980px; min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
 [data-theme="dark"] .admin-page { background: #0f172a; }
 .hw-top-word { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-stat-sub { font-size: 11px; color: var(--text-light, #999); margin-top: 2px; }
 
 /* 类型切换卡片 */
 .hw-type-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-bottom: 16px; }
-.hw-type-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 2px solid var(--border-color); border-radius: 10px; background: var(--bg-card); cursor: pointer; transition: border-color .15s, transform .15s; }
+.hw-type-card { position: relative; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 2px solid var(--border-color); border-radius: 10px; background: var(--bg-card); cursor: pointer; transition: border-color .15s, transform .15s; }
 .hw-type-card:hover { transform: translateY(-1px); }
 .hw-type-card.active { border-color: var(--primary-color); }
 .hw-type-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
+.hw-type-badge { position: absolute; top: 8px; right: 8px; padding: 1px 8px; border-radius: 9px; font-size: 11px; font-weight: 700; color: #fff; }
 .hw-type-name { font-weight: 600; font-size: 0.92rem; color: var(--text-color); }
 .hw-type-desc { font-size: 0.76rem; color: var(--text-muted); margin-top: 2px; }
 
@@ -368,7 +407,8 @@ onMounted(reload);
 }
 .hw-section-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 .hw-section-sub { font-size: 12px; font-weight: 400; color: var(--text-muted); }
-.hw-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border-color); }
+.hw-row { display: flex; align-items: center; gap: 12px; padding: 8px 6px; margin: 0 -6px; border-bottom: 1px solid var(--border-color); cursor: pointer; border-radius: 6px; transition: background .12s; }
+.hw-row:hover { background: var(--bg-soft, rgba(0,0,0,.03)); }
 .hw-row:last-child { border-bottom: none; }
 .hw-rank {
   width: 26px; height: 22px; border-radius: 6px;
