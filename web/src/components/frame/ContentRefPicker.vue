@@ -23,7 +23,7 @@
       >
         <el-tag size="small" :type="typeTag(r.type)">{{ typeLabel(r.type) }}</el-tag>
         <span class="ref-title" :title="r.title">{{ r.title }}</span>
-        <span class="ref-link">/{{ r.type }}/{{ r.id }}</span>
+        <span class="ref-link">{{ relLink(r) }}</span>
       </div>
     </div>
     <template #footer>
@@ -41,13 +41,15 @@ import api from '@/api/index';
 const props = defineProps<{ visible: boolean }>();
 const emit = defineEmits<{
   (e: 'update:visible', v: boolean): void;
-  (e: 'confirm', link: string): void;
+  // link：相对路径（如 /novel/123）；ref：完整引用对象（编辑器插入 [标题](链接) 用）
+  (e: 'confirm', link: string, ref: ContentRef): void;
 }>();
 
 interface ContentRef {
   type: string;
   id: number;
   title: string;
+  author_id?: number; // 博客详情的正确路由须带作者 id
 }
 
 const query = ref('');
@@ -83,13 +85,14 @@ function typeTag(t: string): any {
 // 仅生成相对链接（与站点前缀无关，挂载在任意 base href 下都能正确跳转），
 // 绝不插入任何脚本/JS。论坛帖实际路由为 /thread/:id。
 function relLink(r: ContentRef): string {
-  if (r.type === 'blog') return `/blog/${r.id}`;
+  // 博客详情唯一路由是 /author/:authorId/blogs/:blogId（/blog/:key 是作者博客主页，不是文章）
+  if (r.type === 'blog') return r.author_id ? `/author/${r.author_id}/blogs/${r.id}` : `/blog/${r.id}`;
   if (r.type === 'thread') return `/thread/${r.id}`;
   return `/novel/${r.id}`;
 }
 
 function pick(r: ContentRef) {
-  emit('confirm', relLink(r));
+  emit('confirm', relLink(r), r);
   emit('update:visible', false);
 }
 </script>

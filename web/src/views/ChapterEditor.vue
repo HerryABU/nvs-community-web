@@ -16,9 +16,13 @@
         </div>
       <div class="ce-toolbar-right">
         <span v-if="lastSaved" class="ce-saved-time">已保存 {{ lastSaved }}</span>
+        <el-button :icon="Link" @click="showRefPicker = true">插入站内链接</el-button>
         <el-button type="primary" :loading="saving" @click="saveChapter">保存章节</el-button>
       </div>
     </div>
+
+    <!-- 站内内容引用选择器（16.2：章节正文引用其他小说/博客/论坛帖，相对路径可跳转） -->
+    <ContentRefPicker v-model:visible="showRefPicker" @confirm="insertRefLink" />
 
     <div class="ce-body">
       <!-- 左侧章节列表 -->
@@ -89,8 +93,9 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router';
 import { novelApi, chapterApi, type Chapter } from '@/api/novel';
 import { ElMessage } from 'element-plus';
-import { ArrowLeft, Plus, Delete } from '@element-plus/icons-vue';
+import { ArrowLeft, Plus, Delete, Link } from '@element-plus/icons-vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
+import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
 // engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
 import { renderMarkdown, editorEngineConfig } from '@/markdown/renderer';
 import { htmlToMarkdown } from '@/utils/turndown';
@@ -113,6 +118,24 @@ const lastSaved = ref('');
 // Cherry 编辑器实例
 const cherryContainer = ref<HTMLDivElement | null>(null);
 let cherryInstance: any = null;
+
+// ===== 站内内容引用（16.2）：正文引用其他小说/博客/论坛帖，相对路径可跳转 =====
+const showRefPicker = ref(false);
+
+// 在编辑器光标处插入 [标题](相对链接)；Markdown 模式走 Cherry 内 CodeMirror 光标处，
+// 富文本模式追加到 v-model 内容（RichTextEditor 内部按 md 渲染链接）
+function insertRefLink(link: string, ref: { type: string; id: number; title: string }) {
+  const md = `[${ref.title || link}](${link})`;
+  if (editorMode.value === 'md' && cherryInstance) {
+    const cm = cherryInstance.editor?.codemirror || cherryInstance.codemirror;
+    if (cm && cm.replaceSelection) { cm.replaceSelection(md); ElMessage.success('已插入引用'); return; }
+    if (cherryInstance.insert) { cherryInstance.insert(md); ElMessage.success('已插入引用'); return; }
+    chapterContent.value += '\n\n' + md;
+  } else {
+    richTextContent.value += (richTextContent.value ? '\n\n' : '') + md;
+  }
+  ElMessage.success('已插入引用');
+}
 let cherryReady = false;
 
 // 获取当前要保存的内容（富文本模式先转换）

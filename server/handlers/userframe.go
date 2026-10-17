@@ -390,9 +390,10 @@ func GetAuthorFrames(c *gin.Context) {
 
 // ContentRef 站内可引用内容（供模板内插入相对链接）
 type ContentRef struct {
-	Type  string `json:"type"`  // novel / blog / thread
-	ID    uint   `json:"id"`
-	Title string `json:"title"`
+	Type     string `json:"type"`  // novel / blog / thread
+	ID       uint   `json:"id"`
+	Title    string `json:"title"`
+	AuthorID uint   `json:"author_id,omitempty"` // 博客详情路由为 /author/:id/blogs/:blogId，须带作者 id 才能拼出正确相对路径
 }
 
 // listContentRefs 跨小说 / 博客 / 论坛帖检索标题，返回可插入的相对链接目标。
@@ -415,15 +416,15 @@ func listContentRefs(query string) ([]ContentRef, error) {
 		}
 	}
 
-	// 博客
+	// 博客（详情路由为 /author/:authorId/blogs/:blogId，须带 author_id）
 	var blogs []models.AuthorBlog
-	bq := models.DB.Select("id, title").Limit(perType)
+	bq := models.DB.Select("id, title, author_id").Limit(perType)
 	if q != "" {
 		bq = bq.Where("title LIKE ?", like)
 	}
 	if err := bq.Find(&blogs).Error; err == nil {
 		for _, b := range blogs {
-			refs = append(refs, ContentRef{Type: "blog", ID: b.ID, Title: b.Title})
+			refs = append(refs, ContentRef{Type: "blog", ID: b.ID, Title: b.Title, AuthorID: b.AuthorID})
 		}
 	}
 

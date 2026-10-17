@@ -6,6 +6,7 @@
         <el-button text @click="$router.push('/author')">
           <el-icon><ArrowLeft /></el-icon>返回工作台
         </el-button>
+        <el-button text :icon="Link" @click="showRefPicker = true">插入站内链接</el-button>
       </div>
       <div class="be-toolbar-center">
         <span class="be-page-title">{{ editingId ? '编辑博客' : '写博客' }}</span>
@@ -22,6 +23,9 @@
         <el-button type="primary" :loading="saving" @click="saveBlog">保存</el-button>
       </div>
     </div>
+
+    <!-- 站内内容引用选择器（16.2：博客正文引用其他小说/博客/论坛帖，相对路径可跳转） -->
+    <ContentRefPicker v-model:visible="showRefPicker" @confirm="insertRefLink" />
 
     <!-- 批量导入对话框（CSDN 式：可指定导入到哪个专栏） -->
     <el-dialog v-model="showBatchDialog" title="批量导入博客" width="560px" destroy-on-close>
@@ -139,8 +143,9 @@ import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { blogApi, uploadApi } from '@/api/social';
 import { ElMessage } from 'element-plus';
-import { ArrowLeft, UploadFilled } from '@element-plus/icons-vue';
+import { ArrowLeft, UploadFilled, Link } from '@element-plus/icons-vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
+import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
 // engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
 import { renderMarkdown, editorEngineConfig } from '@/markdown/renderer';
 import { htmlToMarkdown } from '@/utils/turndown';
@@ -292,6 +297,14 @@ function insertIntoEditor(text: string) {
   } else {
     richTextContent.value += (richTextContent.value ? '<p></p>' : '') + text;
   }
+}
+
+// ===== 站内内容引用（16.2）：正文引用其他小说/博客/论坛帖，相对路径可跳转 =====
+const showRefPicker = ref(false);
+
+function insertRefLink(link: string, ref: { type: string; id: number; title: string }) {
+  insertIntoEditor(`[${ref.title || link}](${link})`);
+  ElMessage.success('已插入引用');
 }
 
 async function insertMedia() {
