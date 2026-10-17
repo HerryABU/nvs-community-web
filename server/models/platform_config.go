@@ -267,6 +267,100 @@ func GetSMTPConfigFromDB() (host, port, user, pass, from string) {
 	return
 }
 
+// ============ 短信网关配置（管理端可配，DB 优先回退 env） ============
+
+const (
+	// SMSGatewayConfigKey 网关形态：log=开发网关（验证码仅入日志）/ http=通用 HTTP 网关
+	SMSGatewayConfigKey = "sms_gateway"
+	// SMSHTTPURLConfigKey http 网关地址（POST JSON {phone,code,sign_name,template_code}）
+	SMSHTTPURLConfigKey = "sms_http_url"
+	// SMSHTTPTokenConfigKey http 网关 Bearer Token
+	SMSHTTPTokenConfigKey = "sms_http_token"
+	// SMSSignNameConfigKey 短信签名
+	SMSSignNameConfigKey = "sms_sign_name"
+	// SMSTemplateCodeConfigKey 短信模板编码
+	SMSTemplateCodeConfigKey = "sms_template_code"
+)
+
+// platformConfigExists 判断配置键是否已落库（含空值）。
+// 用于区分「管理端从未配置（回退 .env）」与「主动清空（以 DB 空值为准）」。
+func platformConfigExists(key string) bool {
+	var cnt int64
+	DB.Model(&PlatformConfig{}).Where("key = ?", key).Count(&cnt)
+	return cnt > 0
+}
+
+// GetSMSConfigFromDB 短信网关配置：DB（管理端保存）优先，未落库的键回退 config 包 env 值。
+// fromDB 表示管理端是否显式保存过（false=仍依赖 .env 初始值）。
+func GetSMSConfigFromDB() (gateway, url, token, signName, template string, fromDB bool) {
+	gateway = config.SMSGateway
+	url = config.SMSHTTPURL
+	token = config.SMSHTTPToken
+	signName = config.SMSSignName
+	template = config.SMSTemplateCode
+	if platformConfigExists(SMSGatewayConfigKey) {
+		gateway = GetPlatformConfig(SMSGatewayConfigKey)
+		fromDB = true
+	}
+	if platformConfigExists(SMSHTTPURLConfigKey) {
+		url = GetPlatformConfig(SMSHTTPURLConfigKey)
+		fromDB = true
+	}
+	if platformConfigExists(SMSHTTPTokenConfigKey) {
+		token = GetPlatformConfig(SMSHTTPTokenConfigKey)
+		fromDB = true
+	}
+	if platformConfigExists(SMSSignNameConfigKey) {
+		signName = GetPlatformConfig(SMSSignNameConfigKey)
+		fromDB = true
+	}
+	if platformConfigExists(SMSTemplateCodeConfigKey) {
+		template = GetPlatformConfig(SMSTemplateCodeConfigKey)
+		fromDB = true
+	}
+	if gateway != "log" && gateway != "http" {
+		gateway = "log"
+	}
+	return
+}
+
+// ============ 微信扫码登录配置（管理端可配，DB 优先回退 env） ============
+
+const (
+	// WeChatAppIDConfigKey 微信开放平台 AppID（PC 网站应用）
+	WeChatAppIDConfigKey = "wechat_app_id"
+	// WeChatAppSecretConfigKey 微信开放平台 AppSecret
+	WeChatAppSecretConfigKey = "wechat_app_secret"
+	// WeChatCallbackConfigKey 微信授权回调地址
+	WeChatCallbackConfigKey = "wechat_callback"
+)
+
+// GetWeChatConfigFromDB 微信扫码配置：DB 优先，未落库的键回退 config 包 env 值。
+func GetWeChatConfigFromDB() (appID, appSecret, callback string, fromDB bool) {
+	appID = config.WeChatAppID
+	appSecret = config.WeChatAppSecret
+	callback = config.WeChatCallback
+	if platformConfigExists(WeChatAppIDConfigKey) {
+		appID = GetPlatformConfig(WeChatAppIDConfigKey)
+		fromDB = true
+	}
+	if platformConfigExists(WeChatAppSecretConfigKey) {
+		appSecret = GetPlatformConfig(WeChatAppSecretConfigKey)
+		fromDB = true
+	}
+	if platformConfigExists(WeChatCallbackConfigKey) {
+		callback = GetPlatformConfig(WeChatCallbackConfigKey)
+		fromDB = true
+	}
+	return
+}
+
+// GetWeChatLoginAvailable 微信扫码登录是否可用（AppID/Secret/Callback 三件套齐全）
+func GetWeChatLoginAvailable() bool {
+	appID, appSecret, callback, _ := GetWeChatConfigFromDB()
+	return appID != "" && appSecret != "" && callback != ""
+}
+
 // ============ 日志脱敏配置存储（公安部令第176号合规） ============
 // 管理后台「系统设置 → 日志脱敏」修改后持久化到 platform_configs 表，
 // 重启后由 config.RedactMgr.LoadFromDB() 恢复；.env 仅在从未保存过时作为初始默认。

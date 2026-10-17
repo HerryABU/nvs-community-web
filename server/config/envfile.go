@@ -180,14 +180,24 @@ func quoteEnvValue(v string) string {
 // 仅列出 .env 中存在对应语义的键；未列出项（如 novel_visitor_mode、home_module）
 // 只落数据库，不写 .env。
 var PlatformConfigEnvKeys = map[string]string{
-	"site_name":          "SITE_NAME",
-	"email_verify":       "EMAIL_VERIFY_ENABLED",
-	"captcha_enabled":    "CAPTCHA_ENABLED",
-	"smtp_host":          "SMTP_HOST",
-	"smtp_port":          "SMTP_PORT",
-	"smtp_user":          "SMTP_USER",
-	"smtp_password":      "SMTP_PASSWORD",
-	"smtp_from":          "SMTP_FROM",
+	"site_name":       "SITE_NAME",
+	"email_verify":    "EMAIL_VERIFY_ENABLED",
+	"captcha_enabled": "CAPTCHA_ENABLED",
+	"smtp_host":       "SMTP_HOST",
+	"smtp_port":       "SMTP_PORT",
+	"smtp_user":       "SMTP_USER",
+	"smtp_password":   "SMTP_PASSWORD",
+	"smtp_from":       "SMTP_FROM",
+	// 短信网关（手机号验证码登录）：管理端保存后同步，重启仍生效
+	"sms_gateway":       "SMS_GATEWAY",
+	"sms_http_url":      "SMS_HTTP_URL",
+	"sms_http_token":    "SMS_HTTP_TOKEN",
+	"sms_sign_name":     "SMS_SIGN_NAME",
+	"sms_template_code": "SMS_TEMPLATE_CODE",
+	// 微信扫码登录：管理端保存后同步，重启仍生效
+	"wechat_app_id":      "WECHAT_APP_ID",
+	"wechat_app_secret":  "WECHAT_APP_SECRET",
+	"wechat_callback":    "WECHAT_CALLBACK",
 	"log_redact_enabled": "LOG_REDACT_SENSITIVE",
 	"log_redact_mask":    "LOG_REDACT_MASK",
 	"log_redact_fields":  "LOG_SENSITIVE_FIELDS",

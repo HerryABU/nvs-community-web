@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"nvs-server/config"
+	"nvs-server/models"
 )
 
 // Gateway 短信网关接口：发送验证码短信。
@@ -34,26 +35,13 @@ func (LogGateway) Send(_ context.Context, phone, code string) error {
 
 // HTTPGateway 通用 HTTP 网关：POST JSON {phone,code,sign_name,template_code} 到配置 URL，
 // 请求头 Authorization: Bearer <token>。适配自建短信网关或云厂商 API 网关封装。
+// 实例由 resolveGateway 按 DB 平台配置动态构造（管理端可配，无需重启）。
 type HTTPGateway struct {
 	url      string
 	token    string
 	signName string
 	template string
 	client   *http.Client
-}
-
-func NewHTTPGateway() *HTTPGateway {
-	timeout := time.Duration(config.SMSTimeoutSec) * time.Second
-	if timeout <= 0 {
-		timeout = 5 * time.Second
-	}
-	return &HTTPGateway{
-		url:      config.SMSHTTPURL,
-		token:    config.SMSHTTPToken,
-		signName: config.SMSSignName,
-		template: config.SMSTemplateCode,
-		client:   &http.Client{Timeout: timeout},
-	}
 }
 
 func (g *HTTPGateway) Name() string { return "http" }
@@ -91,27 +79,45 @@ func (g *HTTPGateway) Send(ctx context.Context, phone, code string) error {
 	return nil
 }
 
-// current 当前网关实例（进程级，配置在 Init 时确定）
+// current 当前网关实例（进程级，配置在 Init 时确定）。
+// 管理端保存短信配置后由 resolveGateway 按 DB 值动态解析，Init 仅决定启动初始形态。
 var current Gateway = LogGateway{}
 
 // Init 按配置选择网关（main 启动时调用一次）。
 func Init() {
-	switch config.SMSGateway {
-	case "http":
-		current = NewHTTPGateway()
-	default:
-		current = LogGateway{}
-	}
+	current = resolveGateway()
 	log.Printf("[sms] 短信网关: %s", current.Name())
 }
 
-// SendCode 发送验证码短信（进程级入口）。
+// resolveGateway 按 DB 平台配置解析当前网关（管理端可配，DB 优先回退 .env）。
+// 短信发送是低频操作，每次发送前解析一次，避免缓存失效问题。
+func resolveGateway() Gateway {
+	gateway, url, token, signName, template, _ := models.GetSMSConfigFromDB()
+	switch gateway {
+	case "http":
+		timeout := time.Duration(config.SMSTimeoutSec) * time.Second
+		if timeout <= 0 {
+			timeout = 5 * time.Second
+		}
+		return &HTTPGateway{
+			url:      url,
+			token:    token,
+			signName: signName,
+			template: template,
+			client:   &http.Client{Timeout: timeout},
+		}
+	default:
+		return LogGateway{}
+	}
+}
+
+// SendCode 发送验证码短信（进程级入口，按 DB 配置动态解析网关）。
 func SendCode(ctx context.Context, phone, code string) error {
-	return current.Send(ctx, phone, code)
+	return resolveGateway().Send(ctx, phone, code)
 }
 
 // CurrentName 当前网关名（供健康检查/管理端展示）。
-func CurrentName() string { return current.Name() }
+func CurrentName() string { return resolveGateway().Name() }
 
 // maskPhone 日志脱敏：138****5678
 func maskPhone(phone string) string {

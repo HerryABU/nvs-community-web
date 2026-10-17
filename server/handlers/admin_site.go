@@ -37,12 +37,14 @@ func GetPlatformConfigs(c *gin.Context) {
 	}
 	all := models.GetAllPlatformConfigs()
 	// 派生状态键（增量，不破坏既有 map[string]string 契约；供登录方式/实名页渲染）：
-	// wechat_login_available — 微信扫码登录是否可用（env 配齐 AppID/Secret/Callback）
-	// sms_gateway / sms_http_configured — 短信网关形态（手机号登录依赖）
+	// wechat_login_available — 微信扫码登录是否可用（DB 配置优先，回退 env 三件套）
+	// sms_gateway / sms_http_configured — 短信网关形态（DB 优先，回退 env；手机号登录依赖）
 	// env_file_path — .env 实际路径（保存配置时自动同步写回该文件）
-	all["wechat_login_available"] = strconv.FormatBool(config.WeChatAppID != "" && config.WeChatAppSecret != "" && config.WeChatCallback != "")
-	all["sms_gateway"] = config.SMSGateway
-	all["sms_http_configured"] = strconv.FormatBool(config.SMSGateway == "http" && config.SMSHTTPURL != "")
+	wxID, wxSecret, wxCallback, _ := models.GetWeChatConfigFromDB()
+	all["wechat_login_available"] = strconv.FormatBool(wxID != "" && wxSecret != "" && wxCallback != "")
+	smsGateway, smsURL, _, _, _, _ := models.GetSMSConfigFromDB()
+	all["sms_gateway"] = smsGateway
+	all["sms_http_configured"] = strconv.FormatBool(smsGateway == "http" && smsURL != "")
 	all["env_file_path"] = config.GetEnvFilePath()
 	utils.Success(c, all)
 }
@@ -65,9 +67,19 @@ func UpdatePlatformConfig(c *gin.Context) {
 		"smtp_host":          true, "smtp_port": true, "smtp_user": true,
 		"smtp_password": true, "smtp_from": true,
 		"smtp_insecure_skip_verify": true, // 跳过 TLS 证书校验（内网/自签名 SMTP，默认关闭）
-		"robots_txt":                true,
-		"guidelines":                true, // 平台指南（注册页展示，支持基础 HTML 排版）
-		"email_domain_whitelist":    true, "email_domain_blacklist": true,
+		// 短信网关（手机号验证码登录）：管理端可配，DB 优先，同步 .env 保证重启生效
+		"sms_gateway":       true, // log=开发网关 / http=通用 HTTP 网关
+		"sms_http_url":      true,
+		"sms_http_token":    true,
+		"sms_sign_name":     true,
+		"sms_template_code": true,
+		// 微信扫码登录：管理端可配（开放平台 PC 网站应用三件套）
+		"wechat_app_id":          true,
+		"wechat_app_secret":      true,
+		"wechat_callback":        true,
+		"robots_txt":             true,
+		"guidelines":             true, // 平台指南（注册页展示，支持基础 HTML 排版）
+		"email_domain_whitelist": true, "email_domain_blacklist": true,
 		// 联网备案（176号令 第七条第一项）
 		"site_icp": true, "site_psb": true, "site_psb_link": true,
 		// 其他备案信息（可选，前台关于页/页脚展示）
@@ -94,6 +106,15 @@ func UpdatePlatformConfig(c *gin.Context) {
 			utils.InternalError(c, "保存配置失败: "+k)
 			return
 		}
+	}
+	// 热更新微信扫码凭据：utils.WeChatAuthURL/ExchangeCode 直接读 config 包级变量
+	// （models 已依赖 utils，不可反向依赖，故保存后把 DB 值覆盖进 config 变量实现即时生效；
+	//   重启时由 main.go 启动段从 DB 恢复，双保险）
+	if _, ok := req["wechat_app_id"]; ok {
+		wxID, wxSecret, wxCallback, _ := models.GetWeChatConfigFromDB()
+		config.WeChatAppID = wxID
+		config.WeChatAppSecret = wxSecret
+		config.WeChatCallback = wxCallback
 	}
 	// .env 自动同步：数据库是运行时真相，.env 同步保证重启后仍生效（写失败不阻断保存）
 	resp := gin.H{"message": "配置已更新"}
