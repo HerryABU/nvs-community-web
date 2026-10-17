@@ -28,8 +28,10 @@ type HTMLReviewItem struct {
 	IsActive     bool              `json:"is_active"`
 	IsPublic     bool              `json:"is_public"`
 	Warnings     []security.Threat `json:"warnings"`
-	CreatedAt    time.Time         `json:"created_at"`
-	UpdatedAt    time.Time         `json:"updated_at"`
+	// WASM：允许加载 WASM 的条目为不可读二进制，审查时需重点关注
+	AllowWasm bool      `json:"allow_wasm"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 	// 封存态（仅 html：预检未通过 → 原样封存 ZIP，未解压）
 	IsExtracted     bool   `json:"is_extracted"`
 	ScanBlocked     bool   `json:"scan_blocked"`
@@ -60,7 +62,8 @@ func ListHTMLReviews(c *gin.Context) {
 				OwnerName: ownerName(f.User), Name: f.Name, Description: f.Description,
 				ReviewStatus: f.ReviewStatus, ReviewNote: f.ReviewNote, RunMode: f.RunMode,
 				IsActive: f.IsActive, IsPublic: f.IsPublic,
-				Warnings:  security.ThreatsFromJSON(f.ScanWarnings),
+				Warnings: security.ThreatsFromJSON(f.ScanWarnings),
+				// 主题模板为单文件渲染，无 WASM 概念，AllowWasm 保持 false
 				CreatedAt: f.CreatedAt, UpdatedAt: f.UpdatedAt,
 			})
 		}
@@ -80,6 +83,7 @@ func ListHTMLReviews(c *gin.Context) {
 				ReviewStatus: h.ReviewStatus, ReviewNote: h.ReviewNote, RunMode: h.RunMode,
 				IsActive: h.IsActive, IsPublic: h.IsPublic,
 				Warnings:  security.ThreatsFromJSON(h.ScanWarnings),
+				AllowWasm: h.AllowWasm,
 				CreatedAt: h.CreatedAt, UpdatedAt: h.UpdatedAt,
 				IsExtracted: h.IsExtracted, ScanBlocked: h.ScanBlocked,
 				ScanBlockReason: h.ScanBlockReason, QuarantinePath: h.QuarantinePath,
