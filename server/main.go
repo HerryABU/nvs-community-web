@@ -258,6 +258,8 @@ func main() {
 		public.GET("/site-iframe", handlers.GetSiteIframe)
 		// F12b 作者主题（访客可见，仅 CSS，服务端消毒）
 		public.GET("/author/:id/theme", handlers.GetAuthorTheme)
+		// 自定义主页（作者公开页，访客可见已审核片段）
+		public.GET("/author/:id/home-customize", handlers.GetAuthorHomeCustomize)
 		// 沙盒虚拟文件系统
 		public.GET("/sandbox-vfs/:htmlId/read", handlers.VFSRead)
 		public.POST("/sandbox-vfs/:htmlId/write", handlers.VFSWrite)
@@ -286,6 +288,10 @@ func main() {
 		protected.PUT("/theme/me", handlers.UpdateMyTheme)
 		// F12b 作者主题（本人或管理员可写，访客可见）
 		protected.PUT("/author/:id/theme", handlers.UpdateAuthorTheme)
+		// 自定义主页（alist 式单框代码 + 双作用域 + 站长审核）
+		protected.GET("/me/home-customize", handlers.GetMyHomeCustomize)
+		protected.PUT("/me/home-customize", handlers.UpdateMyHomeCustomize)
+		protected.PUT("/author/:id/home-customize", handlers.UpdateAuthorHomeCustomize)
 		// web 项目额度（F17）：个人额度查询 + 设为公开（触发超额审核）
 		protected.GET("/web-quota/mine", handlers.MyWebQuota)
 		protected.POST("/web-quota/html-public", handlers.SetHTMLPublic)
@@ -587,6 +593,9 @@ func main() {
 		admin.GET("/userhtmls", handlers.AdminListHTMLs)
 		admin.GET("/userhtmls/:id/scan", handlers.AdminGetHTMLScan)
 		admin.POST("/userhtmls/:id/review", handlers.AdminReviewHTML)
+		// 自定义主页审核（作者公开页提交 → 站长/管理员复核原文）
+		admin.GET("/home-customize/reviews", handlers.ListHomeCustomizeReviews)
+		admin.POST("/home-customize/reviews/:id/review", handlers.ReviewHomeCustomize)
 		// XSS 正则规则库（管理员维护）
 		admin.GET("/xss-rules", handlers.ListXssRules)
 		admin.POST("/xss-rules", handlers.CreateXssRule)

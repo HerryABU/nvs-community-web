@@ -63,6 +63,8 @@ func AllModels() []interface{} {
 		&RageConfig{},
 		// 自定义网站主题（F12：alist 式，服务端消毒后全局生效）
 		&SiteTheme{}, &UserTheme{}, &AuthorTheme{}, // F12b 作者公开主题（访客可见，仅 CSS）
+		// 自定义主页（alist 式单框代码 + 双作用域 + 站长审核）
+		&UserHomeCustomize{}, &AuthorHomeCustomize{},
 		// web 项目额度与超额审核（F17：发布到广场需额度，超额进入审核队列）
 		&UserWebQuota{}, &WebQuotaRequest{},
 		// 搜索热词埋点（F9：站内搜索 query 记录，聚合出搜索热词）
