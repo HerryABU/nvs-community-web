@@ -34,24 +34,9 @@ func GetComments(c *gin.Context) {
 	}
 
 	// 黑名单 hide 模式（F13）：隐藏当前用户主动屏蔽（hide）的作者所发布的评论。
-	// 一次性取出隐藏作者集合，避免逐条查询；block 写侧拦截在 CreateComment 中保留。
+	// block 写侧拦截在 CreateComment 中保留；过滤逻辑复用 FilterHiddenItems。
 	viewerID := currentUserID(c)
-	if viewerID > 0 && len(pg.List) > 0 {
-		if hidden, herr := HiddenAuthorIDs(viewerID); herr == nil && len(hidden) > 0 {
-			hiddenSet := make(map[uint]struct{}, len(hidden))
-			for _, id := range hidden {
-				hiddenSet[id] = struct{}{}
-			}
-			filtered := make([]models.Comment, 0, len(pg.List))
-			for _, cm := range pg.List {
-				if _, blocked := hiddenSet[cm.UserID]; blocked {
-					continue
-				}
-				filtered = append(filtered, cm)
-			}
-			pg.List = filtered
-		}
-	}
+	pg.List = FilterHiddenItems(viewerID, pg.List, func(cm models.Comment) uint { return cm.UserID })
 
 	utils.Success(c, gin.H{
 		"list":        pg.List,

@@ -89,23 +89,8 @@ func GetSpecialFeed(c *gin.Context) {
 	}
 
 	// 黑名单 hide 模式（F13）：隐藏被当前用户屏蔽（hide）的作者所发布的动态。
-	// 一次性取出隐藏作者集合，仅在本次返回 page 内过滤；total 仍为聚合总数。
-	if userID > 0 && len(items) > 0 {
-		if hidden, herr := HiddenAuthorIDs(userID); herr == nil && len(hidden) > 0 {
-			hiddenSet := make(map[uint]struct{}, len(hidden))
-			for _, id := range hidden {
-				hiddenSet[id] = struct{}{}
-			}
-			kept := make([]models.FeedItem, 0, len(items))
-			for _, it := range items {
-				if _, blocked := hiddenSet[it.UserID]; blocked {
-					continue
-				}
-				kept = append(kept, it)
-			}
-			items = kept
-		}
-	}
+	// 仅在本次返回 page 内过滤；total 仍为聚合总数。过滤逻辑复用 FilterHiddenItems。
+	items = FilterHiddenItems(userID, items, func(it models.FeedItem) uint { return it.UserID })
 
 	utils.Success(c, gin.H{"list": items, "total": total})
 }

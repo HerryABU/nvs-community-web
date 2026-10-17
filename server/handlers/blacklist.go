@@ -105,7 +105,7 @@ func RemoveBlacklist(c *gin.Context) {
 }
 
 // HiddenAuthorIDs 返回 userID 以 hide 模式（屏蔽内容）拉黑的全部作者 ID。
-// 供评论列表 / 动态流在一次请求内「一次性取出」隐藏作者集合，再在内存中过滤，
+// 供评论列表 / 动态流 / 论坛帖子在一次请求内「一次性取出」隐藏作者集合，再在内存中过滤，
 // 避免逐条查询；block 模式的写侧拦截仍由 CreateComment 等业务函数负责。
 func HiddenAuthorIDs(userID uint) ([]uint, error) {
 	var ids []uint
@@ -116,6 +116,31 @@ func HiddenAuthorIDs(userID uint) ([]uint, error) {
 		Where("user_id = ? AND mode = ?", userID, models.BlacklistModeHide).
 		Pluck("blocked_user_id", &ids).Error
 	return ids, err
+}
+
+// FilterHiddenItems 从 items 中剔除「当前用户以 hide 模式拉黑的作者」所产生的内容。
+// getAuthor 取出条目作者 ID；viewerID=0（未登录）或无隐藏记录时原样返回（零开销）。
+// 供评论/回帖/帖子/动态等各类列表复用，语义统一：hide=不看其内容。
+func FilterHiddenItems[T any](viewerID uint, items []T, getAuthor func(T) uint) []T {
+	if viewerID == 0 || len(items) == 0 {
+		return items
+	}
+	hidden, err := HiddenAuthorIDs(viewerID)
+	if err != nil || len(hidden) == 0 {
+		return items
+	}
+	hiddenSet := make(map[uint]struct{}, len(hidden))
+	for _, id := range hidden {
+		hiddenSet[id] = struct{}{}
+	}
+	kept := make([]T, 0, len(items))
+	for _, it := range items {
+		if _, blocked := hiddenSet[getAuthor(it)]; blocked {
+			continue
+		}
+		kept = append(kept, it)
+	}
+	return kept
 }
 
 // ListMyBlacklist GET /api/blacklist?page=&page_size= — 我的黑名单列表

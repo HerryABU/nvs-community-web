@@ -155,6 +155,9 @@ func GetForum(c *gin.Context) {
 		return
 	}
 
+	// 黑名单 hide 模式（F13）：不看被自己屏蔽（hide）的作者发的帖子
+	threads = FilterHiddenItems(currentUserID(c), threads, func(t models.Thread) uint { return t.UserID })
+
 	// 获取子论坛列表
 	subForums, _ := models.GetSubForums(uint(forumID))
 
@@ -244,6 +247,9 @@ func GetThread(c *gin.Context) {
 		utils.InternalError(c, "获取回复失败")
 		return
 	}
+
+	// 黑名单 hide 模式（F13）：不看被自己屏蔽（hide）的作者发的回帖
+	pg.List = FilterHiddenItems(currentUserID(c), pg.List, func(p models.Post) uint { return p.UserID })
 
 	// 楼层模型：posts = 本页楼层 + 这些楼层下的全部回复（平铺，前端按 root_id 分组成「楼」）
 	utils.Success(c, gin.H{
@@ -345,6 +351,9 @@ func GetNovelForum(c *gin.Context) {
 	}
 
 	threads, total, _ := models.GetThreadsByForum(forum.ID, 1, 20)
+
+	// 黑名单 hide 模式（F13）：不看被自己屏蔽（hide）的作者发的帖子
+	threads = FilterHiddenItems(currentUserID(c), threads, func(t models.Thread) uint { return t.UserID })
 
 	utils.Success(c, gin.H{
 		"forum":   forum,

@@ -195,6 +195,9 @@ func GetAuthorForum(c *gin.Context) {
 
 	threads, total, _ := models.GetThreadsByForum(forum.ID, 1, 20)
 
+	// 黑名单 hide 模式（F13）：不看被自己屏蔽（hide）的作者（含其讨论区内他人代发内容不滤，仅滤作者本人所发）
+	threads = FilterHiddenItems(currentUserID(c), threads, func(t models.Thread) uint { return t.UserID })
+
 	utils.Success(c, gin.H{
 		"forum":   forum,
 		"threads": threads,
