@@ -17,7 +17,7 @@
       </div>
     </el-form-item>
 
-    <!-- 滑块验证码（站长开启 captcha_enabled 时必过，防短信轰炸/裸调） -->
+    <!-- 滑块验证码（站长开启 captcha_enabled 时必过，用于发码与登录两步人机校验，单一滑块顺序复用） -->
     <el-form-item v-if="captchaRequired && !captchaToken">
       <SlideCaptcha @verified="onCaptchaVerified" />
     </el-form-item>
@@ -92,6 +92,8 @@ async function sendCode() {
     await authApi.phoneSendCode(form.phone, captchaToken.value, 'login');
     ElMessage.success('验证码已发送，请查收短信');
     startCooldown();
+    // 发码已消费滑块 pass token，重置以便登录提交前再次完成验证（单一滑块顺序复用）
+    captchaToken.value = '';
   } catch (e: any) {
     ElMessage.error(e.response?.data?.message || '验证码发送失败');
   } finally {
@@ -105,16 +107,24 @@ async function handleLogin() {
 
   submitting.value = true;
   try {
-    const res = await authStore.phoneLogin(form.phone, form.code);
+    // 🔒 站长开启滑块时，登录提交前必须先过人机校验（与发码滑块顺序复用同一 token 槽位）
+    if (captchaRequired.value && !captchaToken.value) {
+      ElMessage.warning('请先完成滑块验证');
+      return;
+    }
+    const res = await authStore.phoneLogin(form.phone, form.code, captchaToken.value);
     if (res.code === 0) {
       ElMessage.success('登录成功');
       const redirect = route.query.redirect as string;
       router.push(redirect || '/');
       emit('success');
     } else {
+      // 失败的滑块 pass token 已被服务端一次性消费，重置以强制重新验证
+      if (captchaRequired.value) captchaToken.value = '';
       ElMessage.error(res.message || '登录失败');
     }
   } catch (e: any) {
+    if (captchaRequired.value) captchaToken.value = '';
     ElMessage.error(e.response?.data?.message || '登录失败，请检查验证码');
   } finally {
     submitting.value = false;

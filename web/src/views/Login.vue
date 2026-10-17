@@ -34,6 +34,12 @@
             prefix-icon="Lock"
           />
         </el-form-item>
+
+        <!-- 滑块验证码（站长开启 captcha_enabled 时，登录前必过，防撞库/暴力破解） -->
+        <el-form-item v-if="captchaRequired && !captchaToken">
+          <SlideCaptcha @verified="onCaptchaVerified" />
+        </el-form-item>
+
         <el-form-item>
           <el-button type="primary" native-type="submit" :loading="submitting" style="width: 100%">
             登录
@@ -68,6 +74,7 @@ import { ElMessage } from 'element-plus';
 import PhoneLoginForm from '@/components/auth/PhoneLoginForm.vue';
 import ForgotPasswordDialog from '@/components/auth/ForgotPasswordDialog.vue';
 import WeChatQRLogin from '@/components/auth/WeChatQRLogin.vue';
+import SlideCaptcha from '@/components/SlideCaptcha.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -106,6 +113,13 @@ const formRef = ref();
 const submitting = ref(false);
 const showForgot = ref(false);
 
+// 站长开启滑块验证码时，邮箱登录前必须先过人机校验
+const captchaRequired = computed(() => !!appStore.siteInfo?.captcha_enabled);
+const captchaToken = ref('');
+function onCaptchaVerified(token: string) {
+  captchaToken.value = token;
+}
+
 const form = reactive({
   email: '',
   password: '',
@@ -125,15 +139,22 @@ async function handleLogin() {
 
   submitting.value = true;
   try {
-    const res = await authStore.login(form.email, form.password);
+    if (captchaRequired.value && !captchaToken.value) {
+      ElMessage.warning('请先完成滑块验证');
+      return;
+    }
+    const res = await authStore.login(form.email, form.password, captchaToken.value);
     if (res.code === 0) {
       ElMessage.success('登录成功');
       const redirect = route.query.redirect as string;
       router.push(redirect || '/');
     } else {
+      // 失败的滑块 pass token 已被服务端一次性消费，重置以强制重新验证
+      if (captchaRequired.value) captchaToken.value = '';
       ElMessage.error(res.message || '登录失败');
     }
   } catch (e: any) {
+    if (captchaRequired.value) captchaToken.value = '';
     ElMessage.error(e.response?.data?.message || '登录失败，请检查邮箱和密码');
   } finally {
     submitting.value = false;
