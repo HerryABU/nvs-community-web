@@ -703,7 +703,7 @@ onMounted(() => { loadConfig(); loadStats(); loadKeys(); loadLogs(1); loadPolici
 .stats-panel .el-col { margin-bottom: 10px; }
 .stat-mini { background: var(--bg-page, #f5f7fa); border-radius: 8px; padding: 10px; text-align: center; }
 [data-theme="dark"] .stat-mini { background: #0f172a; }
-.stat-mini-value { font-size: 1.4rem; font-weight: 700; color: var(--gradient-primary, #4f46e5); }
+.stat-mini-value { font-size: 1.4rem; font-weight: 700; color: var(--primary-color, #4f46e5); }
 .stat-mini-label { font-size: 0.75rem; color: var(--text-light, #666); margin-top: 2px; }
 .http-method { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 1px 6px; border-radius: 4px; margin-right: 6px; color: #fff; }
 .m-get { background: #10b981; }

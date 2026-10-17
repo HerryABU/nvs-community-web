@@ -68,7 +68,7 @@
       <!-- ============ 超额待审列表 ============ -->
       <el-divider content-position="left">超额待审列表</el-divider>
 
-      <div class="toolbar">
+      <div class="admin-toolbar">
         <el-radio-group v-model="filterStatus" @change="loadRequests">
           <el-radio-button value="">全部</el-radio-button>
           <el-radio-button value="pending">待审核</el-radio-button>
@@ -271,7 +271,7 @@ onMounted(() => {
 .hint-text { color: var(--text-light, #666); font-size: 0.85rem; margin-bottom: 12px; }
 .card-title { font-weight: 600; color: var(--text-color, #333); }
 .config-card { border-radius: 10px; }
-.toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+/* 操作栏统一用全局 .admin-toolbar（styles/admin.css），无需本地重复定义 */
 .review-meta { font-size: 0.85rem; color: var(--text-color, #333); margin-bottom: 10px; }
 .muted { color: var(--text-light, #999); }
 .small { font-size: 0.78rem; margin-left: 8px; }

@@ -116,16 +116,15 @@ onMounted(() => {
 .topics-page { max-width: 960px; margin: 0 auto; padding: 24px; }
 .tp-head { margin-bottom: 20px; }
 .tp-head h1 { font-size: 1.4rem; margin: 8px 0 4px; }
-.tp-sub { color: #999; font-size: 0.9rem; }
+.tp-sub { color: var(--text-light, #999); font-size: 0.9rem; }
 .tp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
 .tp-card {
   padding: 16px; border: 1px solid var(--border-color); border-radius: 12px;
-  cursor: pointer; transition: all 0.2s; background: #fff;
+  cursor: pointer; transition: all 0.2s; background: var(--bg-card, #fff);
 }
-[data-theme="dark"] .tp-card { background: #1e293b; border-color: #334155; }
 .tp-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.08); border-color: var(--primary-color); }
 .tp-card-name { font-weight: 700; color: var(--primary-color); font-size: 1rem; }
-.tp-card-desc { font-size: 0.8rem; color: #999; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-card-desc { font-size: 0.8rem; color: var(--text-light, #999); margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tp-card-count { font-size: 0.75rem; color: #b45309; margin-top: 10px; }
 .tp-blogs { display: flex; flex-direction: column; gap: 10px; }
 .tp-blog {
@@ -139,6 +138,6 @@ onMounted(() => {
 .tp-blog-meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
 .tp-author { font-size: 0.8rem; color: var(--primary-color); }
 .tp-tag { font-size: 0.75rem; color: var(--primary-color); }
-.tp-date { font-size: 0.78rem; color: #999; }
-.tp-views { font-size: 0.78rem; color: #999; flex-shrink: 0; }
+.tp-date { font-size: 0.78rem; color: var(--text-light, #999); }
+.tp-views { font-size: 0.78rem; color: var(--text-light, #999); flex-shrink: 0; }
 </style>

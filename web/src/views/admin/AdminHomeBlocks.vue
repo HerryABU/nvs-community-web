@@ -3,8 +3,8 @@
     <AdminHeader title="自定义主页" subtitle="编排首页区块（头图/公告/模块/博客/版块/最新帖/自定义HTML/链接），支持排序与一键布局" :icon="Grid" />
     <div class="admin-page-body admin-panel" v-loading="loading">
       <!-- 操作栏 -->
-      <div class="toolbar">
-        <div class="toolbar-left">
+      <div class="admin-toolbar">
+        <div class="admin-toolbar-left">
           <el-button type="primary" @click="openCreate">新增区块</el-button>
           <el-dropdown @command="applyPreset" trigger="click">
             <el-button>套用布局预设<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
@@ -17,7 +17,7 @@
             </template>
           </el-dropdown>
         </div>
-        <div class="toolbar-right">
+        <div class="admin-toolbar-right">
           <el-tag type="info">拖动或点箭头调整顺序，保存后即时生效</el-tag>
           <el-button @click="reload" :disabled="loading">刷新</el-button>
         </div>
@@ -256,8 +256,8 @@ onMounted(reload);
 </script>
 
 <style scoped>
-.toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
-.toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 8px; }
+.admin-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+.admin-toolbar-left, .admin-toolbar-right { display: flex; align-items: center; gap: 8px; }
 .block-table { margin-top: 4px; }
 .order-ctrl { display: flex; flex-direction: column; align-items: center; }
 .order-ctrl .el-button { margin: 0; padding: 2px; }

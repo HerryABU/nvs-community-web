@@ -71,7 +71,7 @@
           <el-divider content-position="left">隔离墙设置</el-divider>
           <el-form-item label="启用隔离">
             <el-switch v-model="form.wall_enabled" size="small" />
-            <span style="margin-left:8px;font-size:0.8rem;color:#999">{{ form.wall_enabled !== false ? '已启用 - 读者进入需确认' : '已关闭 - 读者可直接阅读' }}</span>
+            <span style="margin-left:8px;font-size:0.8rem;color: var(--text-light, #999)">{{ form.wall_enabled !== false ? '已启用 - 读者进入需确认' : '已关闭 - 读者可直接阅读' }}</span>
           </el-form-item>
           <el-form-item label="警告语" v-if="form.wall_enabled !== false">
             <el-input v-model="form.wall_warning" type="textarea" :rows="3" placeholder="自定义读者进入时的隔离警告语（如：本作品涉及敏感题材，请确认您年满18周岁并愿意承担阅读风险）" maxlength="512" show-word-limit />
@@ -564,7 +564,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   padding: 10px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color, #eee);
 }
 
 .chapter-item:last-child {
@@ -599,13 +599,13 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 12px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color, #eee);
 }
 
 .import-rule-hint {
   margin-top: 4px;
   font-size: 0.8rem;
-  color: #999;
+  color: var(--text-light, #999);
 }
 
 .import-chapter-list {
@@ -618,7 +618,7 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   padding: 6px 0;
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid var(--border-color, #eee);
 }
 
 .import-ch-num {
@@ -630,7 +630,7 @@ onMounted(() => {
 
 .import-ch-words {
   font-size: 0.8rem;
-  color: #999;  white-space: nowrap;
+  color: var(--text-light, #999);  white-space: nowrap;
 }
 
 /* ====== 移动端作品编辑器适配 ====== */
