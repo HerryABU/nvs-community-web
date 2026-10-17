@@ -1,46 +1,50 @@
 <template>
   <div class="admin-page">
     <AdminHeader title="举报处理" subtitle="审核举报、删除违规内容（软删除留证）" :icon="Warning" />
-    <div class="admin-page-body admin-panel">
-      <p class="hint-text">处理用户举报：判定成立/不成立，成立时可选择删除被举报内容（删除会先归档到 softdel 表再软删除，全程留证）。</p>
+    <div class="admin-page-body">
+      <div class="admin-panel">
+        <SectionHeader title="举报列表" subtitle="待处理 / 已成立 / 已驳回" :icon="'🧾'" gradient="danger" />
+        <p class="hint-text">处理用户举报：判定成立/不成立，成立时可选择删除被举报内容（删除会先归档到 softdel 表再软删除，全程留证）。</p>
 
-      <div class="toolbar">
-        <el-radio-group v-model="filterStatus" @change="load">
-          <el-radio-button value="">全部</el-radio-button>
-          <el-radio-button value="pending">待处理</el-radio-button>
-          <el-radio-button value="accepted">已成立</el-radio-button>
-          <el-radio-button value="rejected">已驳回</el-radio-button>
-        </el-radio-group>
-        <el-button size="small" @click="load" :loading="loading" :icon="Refresh" style="margin-left:8px">刷新</el-button>
+        <div class="admin-toolbar">
+          <el-radio-group v-model="filterStatus" @change="load">
+            <el-radio-button value="">全部</el-radio-button>
+            <el-radio-button value="pending">待处理</el-radio-button>
+            <el-radio-button value="accepted">已成立</el-radio-button>
+            <el-radio-button value="rejected">已驳回</el-radio-button>
+          </el-radio-group>
+          <el-button size="small" @click="load" :loading="loading" :icon="Refresh">刷新</el-button>
+        </div>
+
+        <el-table :data="reports" v-loading="loading" style="width:100%;margin-top:12px">
+          <el-table-column label="对象" width="90">
+            <template #default="{ row }">
+              <el-tag size="small" :type="targetTag(row.target_type)">{{ targetLabel(row.target_type) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="理由" min-width="100">
+            <template #default="{ row }">{{ row.reason }}</template>
+          </el-table-column>
+          <el-table-column label="说明" min-width="160" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.detail || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="举报人" width="120">
+            <template #default="{ row }">{{ row.reporter?.nickname || row.reporter?.username || `#${row.reporter_id}` }}</template>
+          </el-table-column>
+          <el-table-column label="状态" width="90">
+            <template #default="{ row }">
+              <el-tag size="small" :type="statusTag(row.status)">{{ statusLabel(row.status) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="110" fixed="right">
+            <template #default="{ row }">
+              <el-button v-if="row.status === 'pending'" size="small" type="primary" text @click="openHandle(row)">处理</el-button>
+              <span v-else class="muted">{{ row.verdict ? '已处理' : '—' }}</span>
+            </template>
+          </el-table-column>
+          <template #empty><EmptyState icon="📭" text="暂无举报记录" /></template>
+        </el-table>
       </div>
-
-      <el-table :data="reports" v-loading="loading" style="width:100%;margin-top:12px">
-        <el-table-column label="对象" width="90">
-          <template #default="{ row }">
-            <el-tag size="small" :type="targetTag(row.target_type)">{{ targetLabel(row.target_type) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="理由" min-width="100">
-          <template #default="{ row }">{{ row.reason }}</template>
-        </el-table-column>
-        <el-table-column label="说明" min-width="160" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.detail || '—' }}</template>
-        </el-table-column>
-        <el-table-column label="举报人" width="120">
-          <template #default="{ row }">{{ row.reporter?.nickname || row.reporter?.username || `#${row.reporter_id}` }}</template>
-        </el-table-column>
-        <el-table-column label="状态" width="90">
-          <template #default="{ row }">
-            <el-tag size="small" :type="statusTag(row.status)">{{ statusLabel(row.status) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="110" fixed="right">
-          <template #default="{ row }">
-            <el-button v-if="row.status === 'pending'" size="small" type="primary" text @click="openHandle(row)">处理</el-button>
-            <span v-else class="muted">{{ row.verdict ? '已处理' : '—' }}</span>
-          </template>
-        </el-table-column>
-      </el-table>
     </div>
 
     <!-- 处理弹窗 -->
@@ -154,14 +158,10 @@ onMounted(load);
 
 <style scoped>
 .admin-page { --admin-content-max: 1100px; min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
-.admin-page-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
-.admin-page-header h2 { margin: 0; font-size: 1.3rem; color: var(--text-color, #333); }
-.admin-page-body { max-width: 1100px; }
 .hint-text { color: var(--text-light, #666); font-size: 0.85rem; margin-bottom: 12px; }
-.toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .handle-body { color: var(--text-color, #333); }
 .detail-box { margin-top: 8px; padding: 8px 12px; background: rgba(0,0,0,0.04); border-radius: 6px; font-size: 0.85rem; color: var(--text-secondary, #666); }
 .muted { color: var(--text-light, #999); }
 [data-theme="dark"] .admin-page { background: #0f172a; }
-[data-theme="dark"] .admin-page-header h2 { color: #e2e8f0; }
+[data-theme="dark"] .detail-box { background: rgba(255,255,255,0.06); }
 </style>

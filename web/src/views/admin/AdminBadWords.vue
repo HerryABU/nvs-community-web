@@ -14,7 +14,7 @@
             description="规则在章节、评论、论坛、博客等用户内容保存前动态应用（Go RE2 正则语法），修改后立即生效。动作「标记」= 命中内容正常保存但进入下方待审列表，由管理员处理；「删除」= 删除匹配内容；「替换」= 替换为指定文本。匹配方式「关键词」= 字面匹配自动转义，填词即用；「正则」= 支持 (?i) 忽略大小写、(?m) 多行、\p{Han} Unicode 属性等全方位正则。"
           />
 
-          <div style="margin-bottom: 12px; display: flex; gap: 8px">
+          <div class="admin-toolbar">
             <el-button type="primary" size="small" @click="openAdd"><el-icon><Plus /></el-icon> 新增违禁词</el-button>
             <el-button size="small" @click="openTest()"><el-icon><Search /></el-icon> 测试规则</el-button>
             <el-button size="small" @click="loadWords" :loading="loading"><el-icon><Refresh /></el-icon> 刷新</el-button>
@@ -66,7 +66,7 @@
                 <el-button size="small" type="danger" @click="removeWord(row)">删除</el-button>
               </template>
             </el-table-column>
-            <template #empty><el-empty description="暂无违禁词，点击「新增违禁词」添加" /></template>
+            <template #empty><EmptyState icon="📭" text="暂无违禁词" description="点击「新增违禁词」添加" /></template>
           </el-table>
         </el-tab-pane>
 
@@ -81,7 +81,7 @@
             description="以下内容命中了「标记」动作的违禁词规则，内容已正常发布但被标记。请逐条审核：确认违规可「确认并删除」（软删除 + 留证），误报可「放行」。"
           />
 
-          <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center">
+          <div class="admin-toolbar">
             <el-radio-group v-model="flagStatus" size="small" @change="loadFlags">
               <el-radio-button value="">全部</el-radio-button>
               <el-radio-button value="pending">待审</el-radio-button>
@@ -140,7 +140,7 @@
                 <span v-else class="muted">{{ row.note || '已处理' }}</span>
               </template>
             </el-table-column>
-            <template #empty><el-empty description="暂无标记记录" /></template>
+            <template #empty><EmptyState icon="🔍" text="暂无标记记录" /></template>
           </el-table>
 
           <div style="margin-top: 12px; display: flex; justify-content: flex-end">

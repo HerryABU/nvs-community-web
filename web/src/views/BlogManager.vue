@@ -2,24 +2,27 @@
   <div class="blog-manager" v-loading="loading">
     <!-- 非本人访问 → 重定向公开主页 -->
     <template v-if="owner">
-      <div class="bm-header">
-        <h1>📝 我的博客管理</h1>
-        <div class="bm-actions">
+      <SectionHeader
+        title="我的博客管理"
+        :icon="'📝'"
+        gradient="primary"
+      >
+        <template #actions>
           <el-button type="primary" @click="$router.push('/author/blog/new')">✍️ 写博客</el-button>
           <el-button @click="$router.push(`/blog/${owner.username}`)">查看公开主页</el-button>
-        </div>
-      </div>
+        </template>
+      </SectionHeader>
 
       <el-tabs v-model="activeTab" class="bm-tabs">
         <!-- ── Tab1：博客列表 ── -->
         <el-tab-pane label="我的博客" name="blogs">
-          <div class="bm-toolbar">
+          <div class="bm-toolbar toolbar">
             <el-input v-model="search" placeholder="搜索标题…" clearable style="width: 220px" size="small" @keyup.enter="loadBlogs" />
             <el-select v-model="filterCat" placeholder="全部分类" clearable size="small" style="width: 160px" @change="loadBlogs">
               <el-option v-for="c in flatCats" :key="c.id" :label="c.label" :value="c.id" />
             </el-select>
             <span class="bm-count">共 {{ total }} 篇</span>
-            <span class="bm-toolbar-spacer" />
+            <span class="toolbar__spacer" />
             <!-- 批量导入到分类 -->
             <template v-if="selectedIds.length > 0">
               <el-dropdown @command="batchSetCategory">
@@ -39,7 +42,7 @@
           </div>
 
           <div class="bm-list" v-loading="listLoading">
-            <el-empty v-if="!listLoading && blogs.length === 0" description="还没有博客，点击「写博客」开始创作" />
+            <EmptyState v-if="!listLoading && blogs.length === 0" icon="📝" text="还没有博客" description="点击「写博客」开始创作" />
             <div v-for="blog in blogs" :key="blog.id" class="bm-item">
               <el-checkbox v-if="batchMode || selectedIds.length > 0" v-model="selectedIds" :value="blog.id" size="small" @click.stop />
               <div class="bm-item-main">
@@ -75,13 +78,13 @@
 
         <!-- ── Tab2：分类管理（普通作者也可管理：新增/编辑/删除/拖拽挂靠/排序） ── -->
         <el-tab-pane label="分类管理" name="cats">
-          <div class="bm-cat-toolbar">
+          <div class="bm-cat-toolbar toolbar">
             <span class="bm-cat-hint">💡 最多三级；新增分类需管理员<strong>事后审核</strong>，通过后才会公开显示。</span>
             <el-button type="primary" size="small" @click="openCatCreate(0)">+ 新增一级分类</el-button>
           </div>
 
           <div class="bm-cat-tree" v-loading="catLoading">
-            <el-empty v-if="!catLoading && myCats.length === 0" description="暂无分类，点击「新增一级分类」创建" />
+            <EmptyState v-if="!catLoading && myCats.length === 0" icon="🗂️" text="暂无分类" description="点击「新增一级分类」创建" />
 
             <!-- 我的分类（个人专栏：新增/编辑/删除/拖拽挂靠/排序/进入批量迁移博客） -->
             <template v-if="myCats.length > 0">
@@ -131,7 +134,7 @@
       </el-dialog>
 
     </template>
-    <el-empty v-else-if="!loading" description="无权访问该博客管理页" />
+    <EmptyState v-else-if="!loading" icon="🔒" text="无权访问该博客管理页" />
   </div>
 </template>
 
@@ -388,18 +391,15 @@ onMounted(init);
 
 <style scoped>
 .blog-manager { max-width: 920px; margin: 0 auto; padding: 24px 16px; }
-.bm-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
-.bm-header h1 { font-size: 1.4rem; color: var(--primary-color); margin: 0; }
-.bm-actions { display: flex; gap: 8px; }
+/* 页头改用全局 SectionHeader 组件 */
 .bm-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
-.bm-toolbar-spacer { flex: 1; }
-.bm-count { font-size: 0.85rem; color: #999; }
+.bm-count { font-size: 0.85rem; color: var(--text-light); }
 .bm-list { display: flex; flex-direction: column; gap: 12px; min-height: 200px; }
 .bm-item {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 14px 18px; background: #fff; border: 1px solid #eee; border-radius: 12px; flex-wrap: wrap;
+  padding: 14px 18px; background: #fff; border: 1px solid var(--border-color); border-radius: var(--radius-md); flex-wrap: wrap;
 }
-[data-theme="dark"] .bm-item { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .bm-item { background: #1a1d27; border-color: var(--border-color); }
 .bm-item-main { flex: 1; min-width: 200px; }
 .bm-item-tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .bm-item-meta { font-size: 0.75rem; color: #999; }
@@ -414,10 +414,10 @@ onMounted(init);
 .bm-cat-tree { display: flex; flex-direction: column; gap: 8px; min-height: 120px; }
 .bm-cat-node {
   display: flex; align-items: center; gap: 8px;
-  padding: 10px 14px; border: 1px solid #eee; border-radius: 10px;
+  padding: 10px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-sm);
   background: #fff; cursor: grab; transition: background 0.15s, border-color 0.15s;
 }
-[data-theme="dark"] .bm-cat-node { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .bm-cat-node { background: #1a1d27; border-color: var(--border-color); }
 .bm-cat-node:hover { border-color: var(--primary-color); }
 .bm-cat-node.drag-over { border-color: var(--primary-color); background: rgba(94,114,228,0.1); }
 .bm-cat-l1 { font-weight: 600; }

@@ -1,15 +1,13 @@
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <div>
-        <h2>🚨 我的举报</h2>
-        <p class="subtitle">查看您提交的举报及处理进度</p>
-      </div>
-      <el-button @click="load" :loading="loading" :icon="Refresh">刷新</el-button>
-    </div>
+    <SectionHeader title="我的举报" subtitle="查看您提交的举报及处理进度" :icon="'🚨'" gradient="danger">
+      <template #actions>
+        <el-button @click="load" :loading="loading" :icon="Refresh">刷新</el-button>
+      </template>
+    </SectionHeader>
 
     <div v-loading="loading" class="report-list">
-      <el-empty v-if="!loading && reports.length === 0" description="您还没有提交过举报" />
+      <EmptyState v-if="!loading && reports.length === 0" icon="🚨" text="您还没有提交过举报" description="提交举报后，可在此查看处理进度" />
       <el-table v-else :data="reports" style="width: 100%">
         <el-table-column label="举报对象" min-width="200">
           <template #default="{ row }">

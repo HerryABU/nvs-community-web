@@ -1,18 +1,16 @@
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <div class="header-left">
-        <h2>🎨 自定义UI模板</h2>
-        <p class="subtitle">为小说阅读页面创建个性化渲染模板。支持调用平台小说API、沙盒内按钮控件。</p>
-      </div>
-      <el-button type="primary" @click="showCreate = true" :icon="Plus">新建模板</el-button>
-    </div>
+    <SectionHeader title="自定义 UI 模板" subtitle="为小说阅读页面创建个性化渲染模板。支持调用平台小说 API、沙盒内按钮控件。" :icon="'🎨'" gradient="primary">
+      <template #actions>
+        <el-button type="primary" @click="showCreate = true" :icon="Plus">新建模板</el-button>
+      </template>
+    </SectionHeader>
 
-    <div v-if="frames.length === 0 && !loading" class="empty-state">
-      <el-empty description="还没有自定义模板">
+    <EmptyState v-if="frames.length === 0 && !loading" icon="📭" text="还没有自定义模板" description="为小说阅读页创建个性化渲染模板，支持调用平台 API 与沙盒按钮控件。">
+      <template #actions>
         <el-button type="primary" @click="showCreate = true" :icon="Plus">创建第一个模板</el-button>
-      </el-empty>
-    </div>
+      </template>
+    </EmptyState>
 
     <div v-else class="frame-grid">
       <div v-for="f in frames" :key="f.id" class="frame-card" :class="{ inactive: !f.is_active }">
@@ -182,23 +180,21 @@ function fmtDate(d: string) { return new Date(d).toLocaleDateString('zh-CN'); }
 
 <style scoped>
 .page-container { max-width: 1100px; margin: 0 auto; padding: 24px 20px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
-.header-left h2 { margin: 0; font-size: 1.4rem; }
-.subtitle { color: var(--text-secondary); margin: 4px 0 0; font-size: 0.9rem; }
 .frame-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
-.frame-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; transition: box-shadow 0.2s; }
-.frame-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+.frame-card { background: #fff; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; display: flex; flex-direction: column; gap: 10px; transition: box-shadow var(--transition-base); }
+.frame-card:hover { box-shadow: var(--shadow-md); }
 .frame-card.inactive { opacity: 0.6; }
 .card-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .card-name { font-weight: 600; font-size: 1.05rem; flex: 1; }
 .card-badges { display: flex; gap: 4px; }
 .card-body { flex: 1; }
-.card-desc { color: var(--text-secondary); font-size: 0.88rem; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card-meta { display: flex; gap: 16px; margin-top: 6px; font-size: 0.8rem; color: var(--text-secondary); }
-.card-actions { display: flex; gap: 6px; justify-content: flex-end; }
-.empty-state { padding: 40px 0; display: flex; justify-content: center; }
+.card-desc { color: var(--text-light); font-size: 0.88rem; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-meta { display: flex; gap: 16px; margin-top: 6px; font-size: 0.8rem; color: var(--text-light); }
+.card-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 .code-input :deep(textarea) { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.85rem; line-height: 1.5; }
-.run-mode-hint { font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; line-height: 1.4; }
+.run-mode-hint { font-size: 0.75rem; color: var(--text-light); margin-top: 4px; line-height: 1.4; }
+
+[data-theme="dark"] .frame-card { background: #1a1d27; }
 
 /* ====== 移动端模板管理适配 ====== */
 @media (max-width: 640px) {

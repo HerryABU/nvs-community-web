@@ -1,9 +1,6 @@
 <template>
   <div class="settings-page">
-    <div class="settings-header">
-      <h2>我的主题</h2>
-      <p class="sub">自定义你的专属网站外观（alist 式）。保存后立即在所有设备生效，覆盖站点默认主题。</p>
-    </div>
+    <SectionHeader title="我的主题" subtitle="自定义你的专属网站外观（alist 式）。保存后立即在所有设备生效，覆盖站点默认主题。" :icon="'🎨'" gradient="purple" />
 
     <el-alert type="info" :closable="false" show-icon class="tip">
       <template #title>安全说明</template>
@@ -295,8 +292,6 @@ onMounted(() => {
 
 <style scoped>
 .settings-page { max-width: 820px; margin: 0 auto; padding: 24px 16px; }
-.settings-header h2 { margin: 0 0 4px; }
-.sub { color: var(--text-light); font-size: 0.9rem; margin: 0 0 16px; }
 .tip { margin-bottom: 20px; }
 .theme-form { margin-top: 8px; }
 .theme-tabs { margin-top: 8px; }

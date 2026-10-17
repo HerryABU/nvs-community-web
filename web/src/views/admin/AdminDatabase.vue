@@ -53,7 +53,7 @@
 
         <!-- ==================== 备份管理 ==================== -->
         <el-tab-pane label="备份管理" name="backup">
-          <div class="toolbar">
+          <div class="admin-toolbar">
             <el-button type="primary" :icon="Box" :loading="backingUp" @click="startBackup">立即备份</el-button>
             <div class="sched">
               <span>定时备份：</span>
@@ -85,6 +85,9 @@
                 <el-button size="small" type="danger" :icon="Delete" @click="removeBackup(row)">删除</el-button>
               </template>
             </el-table-column>
+            <template #empty>
+              <EmptyState icon="💾" text="暂无备份" description="点击「立即备份」创建第一个备份" />
+            </template>
           </el-table>
         </el-tab-pane>
       </el-tabs>
@@ -287,10 +290,10 @@ onBeforeUnmount(stopPolling);
 .admin-page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
 .admin-page-header h2 { margin: 0; color: var(--text-color); }
 .admin-page-body { background: var(--bg-color); border-radius: 12px; padding: 20px; }
-.toolbar { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 8px; }
 .sched { display: flex; align-items: center; color: var(--text-light); font-size: 0.9rem; }
 .muted { color: var(--text-muted); }
-.job-box { margin-top: 20px; padding: 16px; background: #fff; border: 1px solid #eef2f7; border-radius: 12px; }
+.job-box { margin-top: 20px; padding: 16px; background: var(--bg-card, #fff); border: 1px solid var(--border-color); border-radius: 12px; }
+[data-theme="dark"] .job-box { background: #1e293b; border-color: #334155; }
 .job-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .job-msg { color: var(--text-light); }
 .job-meta { margin-top: 8px; color: var(--text-light); font-size: 0.88rem; }

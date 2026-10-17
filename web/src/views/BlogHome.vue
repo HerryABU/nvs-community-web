@@ -55,13 +55,15 @@
 
         <!-- 博客列表 -->
         <div class="bh-main">
-          <div class="bh-header">
-            <h1>📝 {{ user.nickname || user.username }} 的博客</h1>
-            <p class="bh-subtitle">共 {{ total }} 篇文章</p>
-          </div>
+          <SectionHeader
+            :title="(user.nickname || user.username) + ' 的博客'"
+            :subtitle="`共 ${total} 篇文章`"
+            :icon="'📝'"
+            gradient="primary"
+          />
 
           <div class="bh-list">
-            <el-empty v-if="!listLoading && blogs.length === 0" description="还没有博客文章" />
+            <EmptyState v-if="!listLoading && blogs.length === 0" icon="📭" text="还没有博客文章" />
             <div v-for="blog in blogs" :key="blog.id" class="bh-card" @click="$router.push(`/author/${user.username}/blogs/${blog.id}`)">
               <div class="bh-card-row">
                 <el-tag v-if="blog.is_pinned" size="small" type="danger">置顶</el-tag>
@@ -80,7 +82,7 @@
         </div>
       </div>
     </template>
-    <el-empty v-else-if="!loading" description="用户不存在" />
+    <EmptyState v-else-if="!loading" icon="🚫" text="用户不存在" />
   </div>
 </template>
 
@@ -172,9 +174,9 @@ onMounted(init);
 .bh-user-card {
   max-width: 1080px; margin: 0 auto 20px;
   display: flex; align-items: center; gap: 20px;
-  background: #fff; border: 1px solid #eee; border-radius: 14px; padding: 20px 24px;
+  background: #fff; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 20px 24px;
 }
-[data-theme="dark"] .bh-user-card { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .bh-user-card { background: #1a1d27; border-color: var(--border-color); }
 .bh-user-name { font-size: 1.3rem; font-weight: 700; display: flex; align-items: center; }
 .bh-user-sub { display: flex; gap: 14px; font-size: 0.82rem; color: #999; margin-top: 6px; flex-wrap: wrap; }
 .bh-user-links { margin-top: 8px; }
@@ -185,11 +187,11 @@ onMounted(init);
 /* 左侧分类 */
 .bh-cats {
   width: 200px; flex-shrink: 0;
-  background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 12px 10px;
+  background: #fff; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px 10px;
   position: sticky; top: 80px; max-height: calc(100vh - 110px); overflow-y: auto;
 }
-[data-theme="dark"] .bh-cats { background: #1e293b; border-color: #334155; }
-.bh-cats-title { font-size: 0.9rem; font-weight: 700; padding: 4px 10px 8px; border-bottom: 1px solid #f0f0f0; margin-bottom: 6px; }
+[data-theme="dark"] .bh-cats { background: #1a1d27; border-color: var(--border-color); }
+.bh-cats-title { font-size: 0.9rem; font-weight: 700; padding: 4px 10px 8px; border-bottom: 1px solid var(--border-color); margin-bottom: 6px; }
 .bh-cat-item, .bh-cat-sub {
   display: flex; align-items: center; gap: 4px;
   padding: 7px 10px; border-radius: 8px; cursor: pointer; font-size: 0.86rem;
@@ -210,16 +212,14 @@ onMounted(init);
 
 /* 右侧列表 */
 .bh-main { flex: 1; min-width: 0; }
-.bh-header { margin-bottom: 16px; text-align: center; }
-.bh-header h1 { font-size: 1.4rem; color: var(--primary-color); margin-bottom: 4px; }
-.bh-subtitle { font-size: 0.88rem; color: #999; }
+/* 页头改用全局 SectionHeader 组件 */
 .bh-list { display: flex; flex-direction: column; gap: 14px; }
 .bh-card {
-  padding: 16px 20px; background: #fff; border: 1px solid #eee; border-radius: 12px;
+  padding: 16px 20px; background: #fff; border: 1px solid var(--border-color); border-radius: var(--radius-md);
   cursor: pointer; transition: box-shadow 0.2s;
 }
-.bh-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
-[data-theme="dark"] .bh-card { background: #1e293b; border-color: #334155; }
+.bh-card:hover { box-shadow: var(--shadow-card-hover); }
+[data-theme="dark"] .bh-card { background: #1a1d27; border-color: var(--border-color); }
 .bh-card-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .bh-card-date, .bh-card-meta { font-size: 0.75rem; color: #999; }
 .bh-card-title { font-size: 1.1rem; font-weight: 700; margin: 8px 0 6px; line-height: 1.4; }

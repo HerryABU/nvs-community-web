@@ -2,9 +2,9 @@
   <div class="admin-page">
     <AdminHeader title="公告栏" subtitle="站点公告管理 · 合规通知发布" :icon="Bell" />
     <div class="admin-page-body admin-panel">
-      <div class="toolbar">
+      <div class="admin-toolbar">
         <el-button type="primary" @click="openCreate">+ 发布公告</el-button>
-        <el-radio-group v-model="statusFilter" size="small" style="margin-left:12px">
+        <el-radio-group v-model="statusFilter" size="small">
           <el-radio-button label="all">全部</el-radio-button>
           <el-radio-button label="published">已发布</el-radio-button>
           <el-radio-button label="draft">草稿</el-radio-button>
@@ -33,7 +33,10 @@
               <template #reference><el-button size="small" type="danger" plain>删除</el-button></template>
             </el-popconfirm>
           </template>
-        </el-table-column>
+          </el-table-column>
+        <template #empty>
+          <EmptyState icon="📭" text="暂无公告" description="点击「发布公告」创建第一条公告" />
+        </template>
       </el-table>
 
       <el-dialog v-model="dlg.visible" :title="dlg.id ? '编辑公告' : '发布公告'" width="640px" @closed="onDlgClosed">
@@ -154,7 +157,6 @@ onMounted(load);
 <style scoped>
 .admin-page { --admin-content-max: 1000px; min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
 .admin-page-body { max-width: 1000px; }
-.toolbar { margin-bottom: 12px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .form-hint { margin-left: 10px; font-size: 0.78rem; color: var(--text-light, #999); }
 /* 实时预览区：限高滚动，避免长公告把对话框撑爆 */
 .ann-preview { max-height: 260px; overflow-y: auto; padding: 8px 12px; border: 1px dashed var(--el-border-color); border-radius: 6px; }

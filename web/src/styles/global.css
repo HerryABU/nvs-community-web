@@ -1272,6 +1272,186 @@ body {
   }
 }
 
+/* =================================================================
+   前端一致性打磨层（Consistency Layer）
+   与 styles/admin.css 的 .admin-* 体系互补：
+   - 后台页优先复用 .admin-panel / .admin-section-title / .admin-toolbar / .admin-stat-card
+   - 前台内容页复用以下 .block-head / .toolbar / .content-card / .stat-tile / .empty-state
+   全部为 additive，不改动任何既有规则，暗色主题已覆盖。
+   ================================================================= */
+
+/* ===== 区块头（前台内容页统一标题行，左图标+标题+副标题，右操作槽） ===== */
+.block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 16px;
+}
+.block-head__title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--text-color);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.block-head__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.block-head__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ===== 工具栏（筛选 + 操作行，自动换行、统一间距） ===== */
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.toolbar > .el-input,
+.toolbar > .el-select,
+.toolbar > .el-date-editor,
+.toolbar > .el-cascader {
+  width: auto;
+  min-width: 180px;
+}
+.toolbar__spacer {
+  flex: 1 1 auto;
+}
+
+/* ===== 内容卡片（前台通用卡片容器，统一内边距与阴影） ===== */
+.content-card {
+  background: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: 20px 24px;
+  margin-bottom: 20px;
+}
+.content-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.content-card__title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+/* ===== 统计小方块（前台概览，悬停微抬升） ===== */
+.stat-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.stat-tile {
+  background: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+.stat-tile:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+}
+.stat-tile__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+.stat-tile__body {
+  min-width: 0;
+}
+.stat-tile__value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-color);
+  line-height: 1.2;
+}
+.stat-tile__label {
+  font-size: 0.8rem;
+  color: var(--text-light);
+  margin-top: 2px;
+}
+
+/* ===== 空状态 ===== */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 20px;
+  text-align: center;
+  color: var(--text-light);
+}
+.empty-state__icon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+  opacity: 0.65;
+}
+.empty-state__text {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-light);
+}
+.empty-state__desc {
+  margin: 6px 0 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  max-width: 360px;
+  line-height: 1.5;
+}
+.empty-state__actions {
+  margin-top: 16px;
+}
+
+/* ===== 暗色主题 ===== */
+[data-theme="dark"] .content-card,
+[data-theme="dark"] .stat-tile {
+  background: #1a1d27;
+}
+[data-theme="dark"] .content-card__title,
+[data-theme="dark"] .stat-tile__value {
+  color: #e2e8f0;
+}
+[data-theme="dark"] .block-head__title {
+  color: #e2e8f0;
+}
+[data-theme="dark"] .section-header--card {
+  background: #1a1d27;
+}
+
 /* ---- 编辑器 / 后台表格横向滚动兜底 ---- */
 @media (max-width: 768px) {
   .el-table {

@@ -1,7 +1,7 @@
 <template>
   <div class="settings-page">
     <div class="settings-container">
-      <h2 class="page-title">账号设置</h2>
+      <SectionHeader title="账号设置" subtitle="管理你的资料、安全与隐私偏好" :icon="'⚙️'" gradient="primary" />
 
       <!-- 我的主题（F12：alist 式自定义网站外观） -->
       <el-card class="settings-card" shadow="hover">
@@ -232,7 +232,7 @@
             </template>
           </el-table-column>
         </el-table>
-        <p v-if="!myKeys.length && !loadingKeys" class="hint" style="text-align: center; margin-top: 8px">尚未创建 API Key</p>
+        <EmptyState v-if="!myKeys.length && !loadingKeys" icon="🔑" text="尚未创建 API Key" description="创建后可获得远高于匿名访问的 API 配额" />
       </el-card>
     </div>
 
@@ -486,15 +486,8 @@ onMounted(async () => {
   margin: 0 auto;
 }
 
-.page-title {
-  font-size: 1.5rem;
-  color: var(--text-primary);
-  margin-bottom: 24px;
-  text-align: center;
-}
-
 .settings-card {
-  border-radius: 12px;
+  border-radius: var(--radius-md);
 }
 
 .card-header {
@@ -503,7 +496,7 @@ onMounted(async () => {
   gap: 8px;
   font-size: 1.1rem;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-color);
 }
 
 :deep(.el-form-item__label) {
@@ -511,10 +504,10 @@ onMounted(async () => {
 }
 
 .settings-container code {
-  background: #eef2ff;
-  color: #4f46e5;
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--primary-color);
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   font-size: 0.82rem;
 }
 .newkey-box {
@@ -527,10 +520,10 @@ onMounted(async () => {
   flex: 1;
   font-size: 0.95rem;
   word-break: break-all;
-  background: #eef2ff;
-  color: #4f46e5;
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--primary-color);
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 .hint {
   color: var(--text-light, #666);
@@ -545,10 +538,6 @@ onMounted(async () => {
 @media (max-width: 640px) {
   .settings-page {
     padding: 20px 12px;
-  }
-  .page-title {
-    font-size: 1.25rem;
-    margin-bottom: 18px;
   }
   .card-header {
     font-size: 1rem;

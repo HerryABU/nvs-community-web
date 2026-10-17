@@ -3,6 +3,12 @@
     <AdminHeader title="站点设置" subtitle="站点名称 · SMTP · robots.txt · 安全设置" :icon="Setting" />
     <div class="admin-page-body admin-panel">
       <el-form :model="configForm" label-width="120px" @submit.prevent="saveConfig">
+        <SectionHeader
+          title="基础设置"
+          subtitle="站点名称 · 首页主模块 · 登录方式 · 实名与未成年保护"
+          :icon="'⚙️'"
+          gradient="primary"
+        />
         <el-form-item label="站点名称">
           <el-input v-model="configForm.site_name" placeholder="星海文学" maxlength="64" />
         </el-form-item>
@@ -61,8 +67,12 @@
           <el-switch v-model="vipEnabled" active-text="开启" inactive-text="关闭" />
           <span class="hint-text">关闭后，作者无法申请 VIP 付费功能</span>
         </el-form-item>
-        <el-divider />
-        <h3 class="sec-title">邮件验证设置</h3>
+        <SectionHeader
+          title="邮件验证设置"
+          subtitle="SMTP 发件配置与连通性诊断"
+          :icon="'✉️'"
+          gradient="blue"
+        />
         <el-form-item label="邮箱验证">
           <el-switch v-model="emailVerifyEnabled" active-text="开启" inactive-text="关闭" />
           <span class="hint-text">开启后注册需验证邮箱，关闭则跳过验证</span>
@@ -101,8 +111,12 @@
           </div>
           <span class="hint-text">测试将逐阶段诊断：配置 → DNS → 连接 → TLS → 认证 → 发件，快速定位问题</span>
         </el-form-item>
-        <el-divider />
-        <h3 class="sec-title">安全设置</h3>
+        <SectionHeader
+          title="安全设置"
+          subtitle="滑块验证码 · 邮箱域名黑白名单"
+          :icon="'🛡️'"
+          gradient="danger"
+        />
         <el-form-item label="滑块验证码">
           <el-switch v-model="captchaEnabled" active-text="开启" inactive-text="关闭" />
           <span class="hint-text">在注册/登录时显示滑块验证码</span>
@@ -151,8 +165,12 @@
           </div>
           <span class="hint-text">白名单开启后仅允许这些域名注册（留空则不限制）；黑名单优先级高于白名单</span>
         </el-form-item>
-        <el-divider />
-        <h3 class="sec-title">联网备案（176号令 第七条第一项）</h3>
+        <SectionHeader
+          title="联网备案"
+          subtitle="176号令 第七条第一项 · ICP / 公安 / 许可证"
+          :icon="'📋'"
+          gradient="teal"
+        />
         <el-form-item label="ICP备案号">
           <el-input v-model="configForm.site_icp" placeholder="如：京ICP备2026000000号" style="width: 320px" />
         </el-form-item>
@@ -177,8 +195,12 @@
         <el-form-item label="IDC / ISP 许可证">
           <el-input v-model="configForm.site_idc_license" placeholder="如：京IDC证0001号" style="width: 320px" />
         </el-form-item>
-        <el-divider />
-        <h3 class="sec-title">SEO 设置</h3>
+        <SectionHeader
+          title="SEO 设置"
+          subtitle="robots.txt 抓取策略"
+          :icon="'🔍'"
+          gradient="cyan"
+        />
         <el-form-item label="robots.txt">
           <el-input v-model="configForm.robots_txt" type="textarea" :rows="6" placeholder="User-agent: *&#10;Allow: /" />
         </el-form-item>
@@ -410,7 +432,6 @@ onMounted(loadConfig);
 .admin-page-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
 .admin-page-header h2 { margin: 0; font-size: 1.3rem; color: var(--text-color, #333); }
 .admin-page-body { max-width: 760px; }
-.sec-title { margin: 0 0 12px 0; font-size: 1rem; color: var(--text-color, #333); }
 .hint-text { font-size: 0.8rem; color: var(--text-light, #999); margin-left: 8px; }
 .smtp-test-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; width: 100%; }
 .smtp-diag { width: 100%; margin: 6px 0; display: flex; flex-direction: column; gap: 4px; }

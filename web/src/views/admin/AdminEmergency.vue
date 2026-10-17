@@ -68,7 +68,7 @@
               全部评论 / 回复（共 {{ preview.comments.length }} 条）
               <span class="em-comments-tip">每条评论可独立切换「纯文本 / iframe 沙箱」隔离渲染</span>
             </div>
-            <el-empty v-if="preview.comments.length === 0" description="暂无评论" :image-size="60" />
+            <EmptyState v-if="preview.comments.length === 0" icon="💬" text="暂无评论" />
             <div v-for="c in preview.comments" :key="c.id" class="em-comment-item">
               <div class="em-comment-meta">
                 <span class="em-comment-author">{{ c.author || '匿名' }}</span>
@@ -150,6 +150,9 @@
           <el-table-column label="时间" width="160">
             <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
           </el-table-column>
+          <template #empty>
+            <EmptyState icon="🗂️" text="暂无审计日志" description="解锁并操作后，相关记录会显示在这里" />
+          </template>
         </el-table>
       </div>
     </div>
@@ -370,7 +373,7 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer); });
 .admin-page-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
 .admin-page-header h2 { margin: 0; font-size: 1.3rem; color: var(--text-color, #333); }
 .admin-page-body { max-width: 900px; }
-.em-card { background: #fff; border: 1px solid var(--border-color, #e5e7eb); border-radius: 10px; padding: 16px 20px; margin-bottom: 16px; }
+.em-card { background: var(--bg-card, #fff); border: 1px solid var(--border-color, #e5e7eb); border-radius: 10px; padding: 16px 20px; margin-bottom: 16px; }
 .em-card-title { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text-color, #333); margin-bottom: 12px; }
 .em-unlock, .em-fetch { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .em-path-hint { width: 100%; font-size: 0.78rem; color: var(--text-light, #999); }

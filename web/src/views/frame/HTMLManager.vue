@@ -1,11 +1,10 @@
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <div class="header-left">
-        <h2>🔌 扩展应用</h2>
-      </div>
-      <el-button v-if="authStore.isLoggedIn && tab==='mine'" type="primary" @click="showUpload = true" :icon="Upload">上传ZIP</el-button>
-    </div>
+    <SectionHeader title="扩展应用" subtitle="上传、管理与运行你的自定义 HTML 扩展应用。" :icon="'🔌'" gradient="primary">
+      <template #actions>
+        <el-button v-if="authStore.isLoggedIn && tab==='mine'" type="primary" @click="showUpload = true" :icon="Upload">上传ZIP</el-button>
+      </template>
+    </SectionHeader>
 
     <el-tabs v-model="tab" @tab-change="onTabChange" style="margin-bottom:16px">
       <el-tab-pane label="📂 我的项目" name="mine" />
@@ -14,11 +13,11 @@
 
     <template v-if="tab==='mine'">
 
-    <div v-if="htmls.length === 0 && !loading" class="empty-state">
-      <el-empty description="还没有扩展应用">
+    <EmptyState v-if="htmls.length === 0 && !loading" icon="📦" text="还没有扩展应用" description="上传你的第一个 ZIP 包，创建自定义 HTML 扩展应用。">
+      <template #actions>
         <el-button type="primary" @click="showUpload = true" :icon="Upload">上传第一个ZIP</el-button>
-      </el-empty>
-    </div>
+      </template>
+    </EmptyState>
 
     <div v-else class="html-grid">
       <div v-for="h in htmls" :key="h.id" class="html-card" :class="{ inactive: !h.is_active }">
@@ -163,7 +162,7 @@
 
 <!-- 广场Tab -->
 <div v-if="tab==='plaza'">
-  <div v-if="plazaItems.length===0&&!plazaLoading" class="empty-state"><el-empty description="还没有公开项目" /></div>
+  <EmptyState v-if="plazaItems.length===0&&!plazaLoading" icon="🏪" text="还没有公开项目" description="成为第一个把扩展应用发布到广场的作者吧。" />
   <div v-else class="plaza-grid">
     <div v-for="h in plazaItems" :key="h.id" class="plaza-card">
       <a :href="'/app/'+h.id" target="_blank" style="text-decoration:none;color:inherit">
@@ -474,43 +473,42 @@ function fmtDate(d: string) { return new Date(d).toLocaleDateString('zh-CN'); }
 
 <style scoped>
 .page-container { max-width: 1100px; margin: 0 auto; padding: 24px 20px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
-.header-left h2 { margin: 0; font-size: 1.4rem; }
-.subtitle { color: var(--text-secondary); margin: 4px 0 0; font-size: 0.9rem; }
 .html-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
-.html-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; transition: box-shadow 0.2s; }
-.html-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+.html-card { background: #fff; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; display: flex; flex-direction: column; gap: 10px; transition: box-shadow var(--transition-base); }
+.html-card:hover { box-shadow: var(--shadow-md); }
 .html-card.inactive { opacity: 0.6; }
 .card-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .card-name { font-weight: 600; font-size: 1.05rem; flex: 1; }
 .card-badges { display: flex; gap: 4px; flex-wrap: wrap; }
 .card-body { flex: 1; }
-.card-desc { color: var(--text-secondary); font-size: 0.88rem; margin: 0; }
+.card-desc { color: var(--text-light); font-size: 0.88rem; margin: 0; }
 .card-entry { color: var(--primary-color); font-size: 0.82rem; font-family: monospace; margin: 2px 0 0; }
 .card-proxy { color: var(--el-color-danger); font-size: 0.78rem; font-family: monospace; margin: 2px 0 0; }
-.card-proxy code { background: rgba(245,108,108,0.1); padding: 1px 4px; border-radius: 3px; }
-.card-meta { display: flex; gap: 16px; margin-top: 6px; font-size: 0.8rem; color: var(--text-secondary); }
+.card-proxy code { background: rgba(239, 68, 68, 0.1); padding: 1px 4px; border-radius: var(--radius-xs); }
+.card-meta { display: flex; gap: 16px; margin-top: 6px; font-size: 0.8rem; color: var(--text-light); }
 .card-actions { display: flex; gap: 4px; justify-content: flex-end; flex-wrap: wrap; }
-.empty-state { padding: 40px 0; display: flex; justify-content: center; }
-.network-hint { color: var(--text-secondary); font-size: 0.85rem; margin-top: 8px; text-align: center; }
+.network-hint { color: var(--text-light); font-size: 0.85rem; margin-top: 8px; text-align: center; }
 .iframe-preview-card { margin-bottom: 12px; }
-.iframe-ctrl { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.iframe-ctrl-title { font-weight: 600; font-size: 0.92rem; }
-.dim-label { color: var(--text-secondary); font-size: 0.82rem; }
-.iframe-stage { max-height: 70vh; overflow: auto; display: flex; justify-content: center; background: var(--bg-color); padding: 8px; }
+.iframe-ctrl { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.iframe-ctrl-title { font-weight: 600; font-size: 0.92rem; color: var(--text-color); }
+.dim-label { color: var(--text-light); font-size: 0.82rem; }
+.iframe-stage { max-height: 70vh; overflow: auto; display: flex; justify-content: center; background: var(--bg-color); padding: 8px; border-radius: var(--radius-sm); }
 .embed-iframe { border: 1px solid var(--border-color); display: block; background: #fff; flex-shrink: 0; }
-[data-theme="dark"] .embed-iframe { background: #1a1a2e; }
+[data-theme="dark"] .embed-iframe { background: #1a1d27; }
 .compile-hint { margin-top: 10px; }
-.plaza-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
-.plaza-card{background:var(--card-bg);border:1px solid var(--border-color);border-radius:10px;overflow:hidden;cursor:pointer;transition:box-shadow .2s}
-.plaza-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.08)}
-.plaza-thumb{height:140px;display:flex;align-items:center;justify-content:center;background:var(--bg-color)}
-.plaza-img{width:100%;height:100%;object-fit:cover}
-.plaza-placeholder{font-size:2.5rem;opacity:.25}
-.plaza-info{padding:10px 12px}
-.plaza-title{font-weight:600;font-size:.95rem;margin-bottom:2px}
-.plaza-author{color:var(--text-secondary);font-size:.8rem;margin-bottom:6px}
-.plaza-actions{display:flex;gap:4px}
+.plaza-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+.plaza-card { background: #fff; border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow: hidden; cursor: pointer; transition: box-shadow var(--transition-base); }
+.plaza-card:hover { box-shadow: var(--shadow-md); }
+.plaza-thumb { height: 140px; display: flex; align-items: center; justify-content: center; background: var(--bg-color); }
+.plaza-img { width: 100%; height: 100%; object-fit: cover; }
+.plaza-placeholder { font-size: 2.5rem; opacity: 0.25; }
+.plaza-info { padding: 10px 12px; }
+.plaza-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 2px; }
+.plaza-author { color: var(--text-light); font-size: 0.8rem; margin-bottom: 6px; }
+.plaza-actions { display: flex; gap: 4px; }
+
+[data-theme="dark"] .html-card,
+[data-theme="dark"] .plaza-card { background: #1a1d27; }
 
 /* ====== 移动端扩展应用管理适配 ====== */
 @media (max-width: 640px) {

@@ -1,18 +1,13 @@
 <template>
   <div class="mykeys-page">
     <div class="mykeys-container">
-      <div class="mykeys-header">
-        <div class="mykeys-title">
-          <el-icon :size="26"><Key /></el-icon>
-          <span>我的 API Key</span>
-        </div>
-        <div class="mykeys-sub">
-          <span>第三方客户端 / 阅读器 / 爬虫合规访问本站 API 的凭证</span>
+      <SectionHeader title="我的 API Key" subtitle="第三方客户端 / 阅读器 / 爬虫合规访问本站 API 的凭证" :icon="'🔑'" gradient="primary">
+        <template #actions>
           <router-link to="/api-spider" class="spider-link">
             <el-icon><Connection /></el-icon> 🕷️ API Key 爬虫指南
           </router-link>
-        </div>
-      </div>
+        </template>
+      </SectionHeader>
 
       <el-card class="settings-card" shadow="hover">
         <template #header>
@@ -103,7 +98,7 @@
             </template>
           </el-table-column>
         </el-table>
-        <p v-if="!myKeys.length && !loadingKeys" class="hint" style="text-align: center; margin-top: 8px">尚未创建 API Key</p>
+        <EmptyState v-if="!myKeys.length && !loadingKeys" icon="🔑" text="尚未创建 API Key" description="创建后可获得远高于匿名访问的 API 配额" />
       </el-card>
     </div>
 
@@ -242,26 +237,6 @@ onMounted(() => {
   max-width: 960px;
   margin: 0 auto;
 }
-.mykeys-header {
-  margin-bottom: 18px;
-}
-.mykeys-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: var(--text-color);
-}
-.mykeys-sub {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-top: 6px;
-  font-size: 0.9rem;
-  color: var(--text-muted, #909399);
-}
 .spider-link {
   display: inline-flex;
   align-items: center;
@@ -280,7 +255,7 @@ onMounted(() => {
   font-weight: 600;
 }
 .settings-card {
-  border-radius: 14px;
+  border-radius: var(--radius-md);
 }
 .newkey-box {
   display: flex;

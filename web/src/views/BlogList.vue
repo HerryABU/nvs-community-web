@@ -4,16 +4,19 @@
       <!-- 左侧分类栏（CSDN 式：一级 + 可展开二级） -->
             <!-- 右侧列表 -->
       <div class="bl-main">
-        <div class="bl-header">
-          <h1>📝 作者博客</h1>
-          <p class="bl-subtitle">
-            {{ currentTag ? `标签：#${currentTag}` : (currentCatName ? `分类：${currentCatName}` : '发现作者们的创作心得与技术分享') }}
-            <el-tag v-if="currentTag" size="small" closable class="bl-tag-clear" @close="selectTag('')">清除</el-tag>
-          </p>
-        </div>
+        <SectionHeader
+          title="作者博客"
+          :subtitle="currentTag ? `标签：#${currentTag}` : (currentCatName ? `分类：${currentCatName}` : '发现作者们的创作心得与技术分享')"
+          :icon="'📝'"
+          gradient="primary"
+        >
+          <template #actions>
+            <el-tag v-if="currentTag" size="small" closable type="primary" @close="selectTag('')">清除筛选</el-tag>
+          </template>
+        </SectionHeader>
 
         <div v-loading="loading" class="bl-list" style="min-height: 200px">
-          <el-empty v-if="!loading && blogs.length === 0" description="该分类下暂无博客文章" />
+          <EmptyState v-if="!loading && blogs.length === 0" icon="📭" text="该分类下暂无博客文章" />
 
           <div v-for="blog in blogs" :key="blog.id" class="bl-card" @click="$router.push(`/author/${blog.author_id}/blogs/${blog.id}`)">
             <!-- 作者信息行 -->
@@ -198,20 +201,18 @@ onMounted(() => {
 
 /* ===== 右侧 ===== */
 .bl-main { flex: 1; min-width: 0; }
-.bl-header { margin-bottom: 20px; text-align: center; }
-.bl-header h1 { font-size: 1.6rem; color: var(--primary-color); margin-bottom: 4px; }
-.bl-subtitle { font-size: 0.9rem; color: #999; }
+/* 页头改用全局 SectionHeader 组件 */
 
 .bl-list { display: flex; flex-direction: column; gap: 16px; }
 
 .bl-card {
   padding: 20px 24px;
-  background: #fff; border-radius: 12px;
-  border: 1px solid #eee;
+  background: #fff; border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
   cursor: pointer; transition: box-shadow 0.2s;
 }
-.bl-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
-[data-theme="dark"] .bl-card { background: #1e293b; border-color: #334155; }
+.bl-card:hover { box-shadow: var(--shadow-card-hover); }
+[data-theme="dark"] .bl-card { background: #1a1d27; border-color: var(--border-color); }
 
 .bl-author-row {
   display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;

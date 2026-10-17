@@ -34,7 +34,7 @@
       </template>
     </AdminHeader>
 
-    <div class="admin-page-body">
+    <div class="admin-page-body admin-panel">
       <el-table :data="users" v-loading="loading" stripe style="width: 100%">
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="username" label="用户名" width="140" />

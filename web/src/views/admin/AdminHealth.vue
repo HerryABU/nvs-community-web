@@ -2,7 +2,7 @@
   <div class="admin-page">
     <AdminHeader title="健康检查" subtitle="服务器 / 数据库 / 网络 / 前端 API" :icon="Monitor" />
     <div class="admin-page-body admin-panel">
-      <div class="toolbar">
+      <div class="admin-toolbar">
         <el-button type="primary" :icon="Refresh" :loading="loading" @click="loadHealth">立即检测</el-button>
         <el-switch v-model="autoRefresh" active-text="自动刷新（30s）" />
         <el-tag v-if="health" :type="health.status === 'ok' ? 'success' : 'warning'" size="large" effect="dark">
@@ -133,12 +133,11 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer); });
 .admin-page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
 .admin-page-header h2 { margin: 0; color: var(--text-color); }
 .admin-page-body { background: var(--bg-color); border-radius: 12px; padding: 20px; }
-.toolbar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
 .muted { color: var(--text-muted); font-size: 0.85rem; }
 .core-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
 .core-card {
   display: flex; gap: 14px; align-items: flex-start;
-  background: #fff; border: 1px solid #eef2f7; border-radius: 12px; padding: 18px;
+  background: var(--bg-card, #fff); border: 1px solid var(--border-color); border-radius: 12px; padding: 18px;
 }
 .core-card.ok { border-left: 4px solid #10b981; }
 .core-card.bad { border-left: 4px solid #ef4444; }
@@ -150,4 +149,5 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer); });
 .core-value { font-size: 1.4rem; font-weight: 700; color: var(--text-color); margin: 2px 0; }
 .core-sub { color: var(--text-muted); font-size: 0.78rem; line-height: 1.5; }
 .bad-text { color: #ef4444; }
+[data-theme="dark"] .core-card { background: #1e293b; border-color: #334155; }
 </style>

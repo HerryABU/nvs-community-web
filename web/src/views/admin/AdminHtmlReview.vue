@@ -9,7 +9,7 @@
         中/低危告警的扩展已解压但状态为「待复核」，通过后才可公开。
       </p>
 
-      <div class="toolbar">
+      <div class="admin-toolbar">
         <el-radio-group v-model="filterStatus" @change="load">
           <el-radio-button value="">全部</el-radio-button>
           <el-radio-button value="quarantine">已封存</el-radio-button>
@@ -56,6 +56,9 @@
             <el-button size="small" type="primary" text @click="openReview(row)">复核</el-button>
           </template>
         </el-table-column>
+        <template #empty>
+          <EmptyState icon="📝" text="暂无待审查内容" description="当前筛选条件下没有需要扩展人工复核" />
+        </template>
       </el-table>
     </div>
 
@@ -220,7 +223,6 @@ onMounted(load);
 .admin-page-header h2 { margin: 0; font-size: 1.3rem; color: var(--text-color, #333); }
 .admin-page-body { max-width: 1100px; }
 .hint-text { color: var(--text-light, #666); font-size: 0.85rem; margin-bottom: 12px; }
-.toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .warning-line { font-size: 0.82rem; line-height: 1.5; margin: 2px 0; }
 .meta-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .note { font-size: 0.8rem; color: var(--text-light, #666); }

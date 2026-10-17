@@ -1,28 +1,34 @@
 <template>
   <div class="admin-page">
     <AdminHeader title="漏洞管理" subtitle="漏洞隐患整改闭环留痕 · 176号令第七条第六项" :icon="Warning" />
-    <div class="admin-page-body admin-panel">
-      <el-row :gutter="12" class="stats-row">
-        <el-col :span="5" v-for="(v, k) in statDefs" :key="k">
-          <div class="stat-card" :style="{ borderColor: v.color }">
-            <div class="stat-num" :style="{ color: v.color }">{{ stats[k] ?? 0 }}</div>
-            <div class="stat-label">{{ v.label }}</div>
+
+    <div class="admin-page-body">
+      <section class="admin-panel">
+        <h3 class="admin-section-title">统计概览</h3>
+        <div class="admin-stat-grid">
+          <div class="admin-stat-card stat-accent" v-for="(v, k) in statDefs" :key="k" :style="{ borderLeftColor: v.color }">
+            <div>
+              <div class="admin-stat-value">{{ stats[k] ?? 0 }}</div>
+              <div class="admin-stat-label">{{ v.label }}</div>
+            </div>
           </div>
-        </el-col>
-      </el-row>
+        </div>
+      </section>
 
-      <div class="toolbar">
-        <el-select v-model="filter.status" placeholder="状态筛选" clearable style="width: 140px" @change="load">
-          <el-option label="待整改" value="pending" />
-          <el-option label="整改中" value="fixing" />
-          <el-option label="已整改" value="fixed" />
-          <el-option label="已忽略" value="ignored" />
-        </el-select>
-        <el-button type="primary" @click="openCreate">+ 新建漏洞记录</el-button>
-        <el-button type="success" plain @click="exportCsv">导出报告 CSV</el-button>
-      </div>
+      <section class="admin-panel">
+        <h3 class="admin-section-title">漏洞记录</h3>
+        <div class="admin-toolbar">
+          <el-select v-model="filter.status" placeholder="状态筛选" clearable style="width: 140px" @change="load">
+            <el-option label="待整改" value="pending" />
+            <el-option label="整改中" value="fixing" />
+            <el-option label="已整改" value="fixed" />
+            <el-option label="已忽略" value="ignored" />
+          </el-select>
+          <el-button type="primary" @click="openCreate">+ 新建漏洞记录</el-button>
+          <el-button type="success" plain @click="exportCsv">导出报告 CSV</el-button>
+        </div>
 
-      <el-table :data="list" border stripe size="small">
+        <el-table :data="list" border stripe size="small">
         <el-table-column prop="name" label="漏洞名称" min-width="160" show-overflow-tooltip />
         <el-table-column label="严重程度" width="90">
           <template #default="{ row }">
@@ -48,6 +54,7 @@
           </template>
         </el-table-column>
       </el-table>
+      </section>
 
       <el-dialog v-model="dlg.visible" :title="dlg.id ? '编辑漏洞记录' : '新建漏洞记录'" width="560px">
         <el-form label-width="90px">
