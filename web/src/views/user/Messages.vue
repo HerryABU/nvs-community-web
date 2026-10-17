@@ -179,29 +179,29 @@ onBeforeUnmount(() => {
 .msg-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .msg-header h2 { margin: 0; }
 .header-right { display: flex; align-items: center; gap: 12px; }
-.unread-total { font-size: 0.8rem; color: #f56c6c; }
+.unread-total { font-size: 0.8rem; color: var(--danger-color, #f56c6c); }
 
 .msg-layout { display: flex; gap: 14px; align-items: stretch; min-height: 560px; }
 .conv-panel { width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; max-height: 640px; overflow-y: auto; }
 .conv-item {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px;
-  background: #fff; border: 1px solid #eee; border-radius: 10px; cursor: pointer; transition: box-shadow 0.2s;
+  background: var(--el-bg-color-overlay, #fff); border: 1px solid var(--border-color, #eee); border-radius: 10px; cursor: pointer; transition: box-shadow 0.2s;
 }
 .conv-item:hover { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08); }
-.conv-item.active { border-color: #409eff; background: #ecf5ff; }
+.conv-item.active { border-color: var(--primary-color, #409eff); background: var(--el-color-primary-light-9, #ecf5ff); }
 .conv-body { flex: 1; min-width: 0; }
 .conv-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .conv-name { font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.conv-time { font-size: 0.68rem; color: #bbb; flex-shrink: 0; }
-.conv-last { font-size: 0.76rem; color: #999; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-time { font-size: 0.68rem; color: var(--text-muted, #bbb); flex-shrink: 0; }
+.conv-last { font-size: 0.76rem; color: var(--text-light, #999); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .chat-panel { flex: 1; min-width: 0; }
 .back-btn { display: none; padding-left: 0; }
-.chat-empty { height: 100%; background: #fff; border: 1px solid #eee; border-radius: 10px; }
+.chat-empty { height: 100%; background: var(--el-bg-color-overlay, #fff); border: 1px solid var(--border-color, #eee); border-radius: 10px; }
 
 .settings-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .settings-label { font-size: 0.9rem; font-weight: 600; }
-.settings-desc { font-size: 0.76rem; color: #999; font-weight: 400; margin-top: 4px; line-height: 1.5; }
+.settings-desc { font-size: 0.76rem; color: var(--text-light, #999); font-weight: 400; margin-top: 4px; line-height: 1.5; }
 
 /* ====== 移动端：列表与聊天窗分屏切换 ====== */
 @media (max-width: 768px) {

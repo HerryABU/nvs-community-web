@@ -276,7 +276,7 @@ async function doInstall() {
 .setup-card {
   width: 100%;
   max-width: 600px;
-  background: #fff;
+  background: var(--el-bg-color-overlay, #fff);
   border-radius: 16px;
   padding: 36px 40px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
@@ -292,20 +292,20 @@ async function doInstall() {
   border-radius: 8px;
   letter-spacing: 1px;
 }
-.setup-head h1 { margin: 14px 0 6px; font-size: 1.6rem; color: #1e293b; }
-.sub { color: #64748b; font-size: 0.9rem; }
+.setup-head h1 { margin: 14px 0 6px; font-size: 1.6rem; color: var(--text-color, #1e293b); }
+.sub { color: var(--text-light, #64748b); font-size: 0.9rem; }
 .steps { margin: 8px 0 24px; }
 .step-body { min-height: 280px; }
 .env-panel { padding: 4px 0; }
-.env-loading { color: #94a3b8; text-align: center; padding: 40px 0; }
+.env-loading { color: var(--text-muted, #94a3b8); text-align: center; padding: 40px 0; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
-.hint { color: #94a3b8; font-size: 0.82rem; }
-.sqlite-box { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 16px; }
-.sqlite-box p { margin: 0 0 6px; color: #334155; font-size: 0.9rem; }
-.sqlite-box code { background: #eef2ff; color: #4f46e5; padding: 1px 6px; border-radius: 4px; }
+.hint { color: var(--text-muted, #94a3b8); font-size: 0.82rem; }
+.sqlite-box { background: var(--bg-soft, #f8fafc); border: 1px dashed var(--border-color, #cbd5e1); border-radius: 10px; padding: 16px; }
+.sqlite-box p { margin: 0 0 6px; color: var(--text-color, #334155); font-size: 0.9rem; }
+.sqlite-box code { background: rgba(99, 102, 241, 0.12); color: var(--primary-color, #4f46e5); padding: 1px 6px; border-radius: 4px; }
 .key-tip { margin-bottom: 16px; }
-.test-ok { color: #10b981; font-size: 0.9rem; }
-.test-bad { color: #ef4444; font-size: 0.9rem; }
+.test-ok { color: var(--success-color, #10b981); font-size: 0.9rem; }
+.test-bad { color: var(--danger-color, #ef4444); font-size: 0.9rem; }
 .step-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px; }
 
 /* ====== 移动端建站向导适配 ====== */
