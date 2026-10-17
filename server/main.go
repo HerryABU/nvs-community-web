@@ -450,6 +450,7 @@ func main() {
 		// 实名记录查询（F10：姓名解密仅在本响应返回，身份证仅脱敏展示）
 		admin.GET("/realname", handlers.AdminListRealName)
 		admin.GET("/hotwords", handlers.AdminHotWords) // 热词统计（内容治理/舆情观测）
+		admin.POST("/search-logs/cleanup", handlers.AdminSearchLogCleanup) // 维护搜索埋点日志（清空/保留期清理）
 		admin.GET("/users", handlers.ListUsers)
 		admin.GET("/users/audit", handlers.ListUserAuditLogs)
 		admin.GET("/zone-access", handlers.ListZoneAccessLogs)        // 隔离墙进入记录（176号令专项，分页+筛选）

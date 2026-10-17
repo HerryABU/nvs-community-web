@@ -75,6 +75,11 @@ func ListNovels(c *gin.Context) {
 		return
 	}
 
+	// 搜索埋点（F9：搜索热词来源之一）
+	if search != "" {
+		models.RecordSearchQuery(search, currentUserID(c), "novels", int(total))
+	}
+
 	utils.Success(c, gin.H{
 		"list":      novels,
 		"total":     total,
@@ -105,6 +110,8 @@ func SearchAuthors(c *gin.Context) {
 	query.Offset(offset).Limit(pageSize).Order("nickname ASC").Find(&users)
 	// 脱敏
 	models.SanitizeUserEmails(users)
+	// 搜索埋点（F9：搜索热词来源之一）
+	models.RecordSearchQuery(search, currentUserID(c), "authors", int(total))
 	utils.Success(c, gin.H{"list": users, "total": total})
 }
 
@@ -192,6 +199,11 @@ func UnifiedSearch(c *gin.Context) {
 	models.DB.Model(&models.Forum{}).
 		Where("(name LIKE ? OR description LIKE ?) AND is_public = ?", like, like, true).
 		Order("thread_count DESC").Limit(limit).Find(&forums)
+
+	// 搜索埋点（F9：搜索热词主入口；粗略命中数 = 各分区结果条数之和）
+	hitCount := len(novels) + len(authors) + len(blogs) + len(htmls) +
+		len(categories) + len(topics) + len(forums)
+	models.RecordSearchQuery(q, currentUserID(c), "unified", hitCount)
 
 	utils.Success(c, gin.H{
 		"q": q, "novels": novels, "authors": authors, "blogs": blogs, "htmls": htmls,

@@ -65,6 +65,8 @@ func AllModels() []interface{} {
 		&SiteTheme{}, &UserTheme{}, &AuthorTheme{}, // F12b 作者公开主题（访客可见，仅 CSS）
 		// web 项目额度与超额审核（F17：发布到广场需额度，超额进入审核队列）
 		&UserWebQuota{}, &WebQuotaRequest{},
+		// 搜索热词埋点（F9：站内搜索 query 记录，聚合出搜索热词）
+		&SearchLog{},
 	}
 }
 

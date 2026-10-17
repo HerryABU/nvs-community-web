@@ -1,11 +1,18 @@
 package models
 
 import (
-	"regexp"
-	"sort"
+	"encoding/json"
 	"strings"
 	"time"
 )
+
+// ==================== 内容热词 + 标签热词（F9：热词统计） ====================
+//
+// 三类热词统一由管理端 /api/admin/hotwords?type= 提供：
+//   type=content（默认）——AggregateHotWords：评论/回帖/帖题高频词
+//   type=search           ——AggregateSearchWords/AggregateSearchQueries（见 searchlog.go）
+//   type=tag              ——AggregateTagHotWords：博客结构化标签 + 作品 JSON 标签
+// 切词能力统一收敛到 tokenizer.go 的 Tokenize。
 
 // HotWord 热词统计项（管理员内容治理/舆情观测）
 type HotWord struct {
@@ -13,41 +20,12 @@ type HotWord struct {
 	Count int    `json:"count"`
 }
 
-var (
-	// 英文/数字词（长度≥2）
-	enWordRe = regexp.MustCompile(`[a-zA-Z][a-zA-Z']{1,}`)
-	// 连续中文段（长度≥2），再做二元切分
-	cjkRunRe = regexp.MustCompile(`[\p{Han}]{2,}`)
-)
-
-// 中文高频虚字：二元切分后，含这些字的二元组一律丢弃，降噪。
-const cjkStopChars = "的了是在我有和就都不与及着或一个也没你说他她它们这那什么怎么为因所但还就可已很于上下里外被把让从往对着呢吧啊吗之其或并且如果那么这个人们年月日个次条种些"
-
-// 英文停用词（小写）
-var enStopwords = map[string]bool{
-	"the": true, "and": true, "for": true, "are": true, "but": true, "not": true,
-	"you": true, "all": true, "any": true, "can": true, "had": true, "her": true,
-	"was": true, "one": true, "our": true, "out": true, "day": true, "get": true,
-	"has": true, "him": true, "his": true, "how": true, "man": true, "new": true,
-	"now": true, "old": true, "see": true, "two": true, "way": true, "who": true,
-	"boy": true, "did": true, "its": true, "let": true, "put": true, "say": true,
-	"she": true, "too": true, "use": true, "that": true, "with": true, "this": true,
-	"from": true, "they": true, "have": true, "will": true, "your": true, "said": true,
-}
-
 // AggregateHotWords 统计最近 N 天评论/回帖/帖题中的高频词（按需聚合，无持久化表）。
-// 采用轻量分词：英文整词 + 中文二元切分（bigram），过滤停用词，取出现次数≥2 的前 limit 项。
+// 切词走 Tokenize（英文整词 + 中文短段整取/长段二元切分，过滤停用词），
+// 取出现次数≥2 的前 limit 项。
 // days<=0 默认 7，>365 收敛到 365；limit<=0 默认 50，>200 收敛到 200。
 func AggregateHotWords(days, limit int) ([]HotWord, error) {
-	if days <= 0 {
-		days = 7
-	}
-	if days > 365 {
-		days = 365
-	}
-	if limit <= 0 || limit > 200 {
-		limit = 50
-	}
+	days, limit = clampHotWordWindow(days, limit)
 	since := time.Now().AddDate(0, 0, -days)
 	counts := map[string]int{}
 
@@ -75,46 +53,86 @@ func AggregateHotWords(days, limit int) ([]HotWord, error) {
 		countHotWords(t.Title, counts)
 	}
 
-	words := make([]HotWord, 0, len(counts))
-	for w, n := range counts {
-		if n < 2 { // 至少出现 2 次才视为「热词」
-			continue
-		}
-		words = append(words, HotWord{Word: w, Count: n})
-	}
-	sort.Slice(words, func(i, j int) bool {
-		if words[i].Count != words[j].Count {
-			return words[i].Count > words[j].Count
-		}
-		return words[i].Word < words[j].Word
-	})
-	if len(words) > limit {
-		words = words[:limit]
-	}
-	return words, nil
+	return topHotWords(counts, 2, limit), nil
 }
 
-// countHotWords 将一段文本切词并累加到 counts。
+// countHotWords 将一段文本切词并累加到 counts（薄封装，保留历史调用点）
 func countHotWords(text string, counts map[string]int) {
-	if strings.TrimSpace(text) == "" {
-		return
-	}
-	// 英文/数字整词
-	for _, w := range enWordRe.FindAllString(strings.ToLower(text), -1) {
-		if len(w) < 2 || enStopwords[w] {
-			continue
-		}
+	for _, w := range Tokenize(text) {
 		counts[w]++
 	}
-	// 中文二元切分
-	for _, run := range cjkRunRe.FindAllString(text, -1) {
-		rs := []rune(run)
-		for i := 0; i+2 <= len(rs); i++ {
-			a, b := rs[i], rs[i+1]
-			if strings.ContainsRune(cjkStopChars, a) || strings.ContainsRune(cjkStopChars, b) {
-				continue
-			}
-			counts[string([]rune{a, b})]++
+}
+
+// AggregateTagHotWords 标签热词：聚合最近 N 天新建内容上作者打的标签。
+//  1. 博客结构化标签：blog_tags ⋈ blog_tag_links ⋈ author_blogs（窗口内、未删除）；
+//  2. 作品 JSON 标签：novels.tags 为 JSON 数组字符串，逐条解析。
+//
+// 标签是作者人工 curation 的，单次出现即计入（≥1），按使用次数降序。
+func AggregateTagHotWords(days, limit int) ([]HotWord, error) {
+	days, limit = clampHotWordWindow(days, limit)
+	since := time.Now().AddDate(0, 0, -days)
+	counts := map[string]int{}
+
+	// 1) 博客结构化标签（SQL 侧聚合）
+	type tagRow struct {
+		Name  string
+		Count int64
+	}
+	var rows []tagRow
+	DB.Table("blog_tags").
+		Select("blog_tags.name AS name, COUNT(blog_tag_links.blog_id) AS count").
+		Joins("JOIN blog_tag_links ON blog_tag_links.tag_id = blog_tags.id").
+		Joins("JOIN author_blogs ON author_blogs.id = blog_tag_links.blog_id").
+		Where("author_blogs.deleted_at IS NULL AND author_blogs.created_at >= ?", since).
+		Group("blog_tags.id").
+		Scan(&rows)
+	for _, r := range rows {
+		name := strings.TrimSpace(r.Name)
+		if name != "" {
+			counts[name] += int(r.Count)
 		}
 	}
+
+	// 2) 作品 JSON 标签（扫描上限同内容热词）
+	const scanCap = 5000
+	var novels []Novel
+	DB.Select("tags").Where("created_at >= ?", since).
+		Order("created_at DESC").Limit(scanCap).Find(&novels)
+	for _, n := range novels {
+		for _, tag := range parseNovelTags(n.Tags) {
+			if tag != "" {
+				counts[tag]++
+			}
+		}
+	}
+
+	return topHotWords(counts, 1, limit), nil
+}
+
+// parseNovelTags 解析 novels.tags（JSON 数组字符串）为去空标签列表。
+// 非法 JSON 时退化为按逗号/中文逗号切分，保证老数据/脏数据不丢标签。
+func parseNovelTags(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var tags []string
+	if err := json.Unmarshal([]byte(raw), &tags); err == nil {
+		out := make([]string, 0, len(tags))
+		for _, t := range tags {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				out = append(out, t)
+			}
+		}
+		return out
+	}
+	for _, t := range strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == '，' || r == ';' || r == '；'
+	}) {
+		if t = strings.TrimSpace(t); t != "" {
+			tags = append(tags, t)
+		}
+	}
+	return tags
 }
