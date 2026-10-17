@@ -50,7 +50,9 @@
       <el-form :model="form" label-position="top">
         <el-row :gutter="16">
           <el-col :span="16"><el-form-item label="名称" required><el-input v-model="form.name" maxlength="128" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="关联作品"><el-input-number v-model="form.novel_id" :min="0" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="关联作品"><el-input-number v-model="form.novel_id" :min="0" :disabled="!!form.blog_id" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="关联博客"><el-input-number v-model="form.blog_id" :min="0" :disabled="!!form.novel_id" style="width:100%" /></el-form-item></el-col>
+          <div style="width:100%;font-size:0.75rem;color:var(--text-light);margin:-8px 0 8px">作品与博客二选一绑定（均空=全局模板）；绑定博客的阅读模版会渲染在该博客详情页</div>
         </el-row>
         <el-form-item label="描述"><el-input v-model="form.description" type="textarea" :rows="2" maxlength="512" /></el-form-item>
         <el-row :gutter="16">
@@ -115,7 +117,7 @@ import { frameApi } from '@/api/frame';
 import SandboxPreview from './SandboxPreview.vue';
 
 interface Frame {
-  id: number; name: string; description: string; novel_id: number | null;
+  id: number; name: string; description: string; novel_id: number | null; blog_id: number | null;
   is_active: boolean; is_public: boolean; version: number; updated_at: string;
   has_controls: boolean; uses_novel_api: boolean; sandbox_level: string; frame_type: string;
   run_mode: string; review_status: string;
@@ -127,10 +129,10 @@ const showCreate = ref(false); const showPreview = ref(false);
 const previewSrc = ref(''); const previewName = ref(''); const previewPolicy = ref('allow-scripts');
 const editing = ref<Frame | null>(null);
 
-const form = ref({ name: '', description: '', novel_id: undefined as number | undefined, content: '', is_public: false, has_controls: false, uses_novel_api: false, sandbox_level: 'strict', frame_type: 'reader', run_mode: 'sandbox' });
+const form = ref({ name: '', description: '', novel_id: undefined as number | undefined, blog_id: undefined as number | undefined, content: '', is_public: false, has_controls: false, uses_novel_api: false, sandbox_level: 'strict', frame_type: 'reader', run_mode: 'sandbox' });
 
 function resetForm() {
-  form.value = { name: '', description: '', novel_id: undefined, content: '', is_public: false, has_controls: false, uses_novel_api: false, sandbox_level: 'strict', frame_type: 'reader', run_mode: 'sandbox' };
+  form.value = { name: '', description: '', novel_id: undefined, blog_id: undefined, content: '', is_public: false, has_controls: false, uses_novel_api: false, sandbox_level: 'strict', frame_type: 'reader', run_mode: 'sandbox' };
   editing.value = null;
 }
 
@@ -144,7 +146,7 @@ async function load() {
 
 function edit(f: Frame) {
   editing.value = f;
-  form.value = { name: f.name, description: f.description, novel_id: f.novel_id ?? undefined, content: '', is_public: f.is_public, has_controls: f.has_controls, uses_novel_api: f.uses_novel_api, sandbox_level: f.sandbox_level, frame_type: f.frame_type || 'reader', run_mode: f.run_mode || 'sandbox' };
+  form.value = { name: f.name, description: f.description, novel_id: f.novel_id ?? undefined, blog_id: f.blog_id ?? undefined, content: '', is_public: f.is_public, has_controls: f.has_controls, uses_novel_api: f.uses_novel_api, sandbox_level: f.sandbox_level, frame_type: f.frame_type || 'reader', run_mode: f.run_mode || 'sandbox' };
   showCreate.value = true;
   frameApi.get(f.id).then(r => { if (r.data.code === 0) form.value.content = r.data.data.content; });
 }
@@ -157,7 +159,7 @@ async function save() {
       await frameApi.update(editing.value.id, { ...form.value });
       ElMessage.success('已更新');
     } else {
-      await frameApi.create({ ...form.value, novel_id: form.value.novel_id as number });
+      await frameApi.create({ ...form.value });
       ElMessage.success('已创建');
     }
     showCreate.value = false; resetForm(); await load();

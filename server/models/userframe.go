@@ -12,6 +12,7 @@ type UserFrame struct {
 	ID          uint   `gorm:"primaryKey" json:"id"`
 	UserID      uint   `gorm:"not null;index" json:"user_id"`
 	NovelID     *uint  `gorm:"index" json:"novel_id"`              // 关联作品（可选，为空则为全局模板）
+	BlogID      *uint  `gorm:"index" json:"blog_id"`               // 关联博客（可选；与 NovelID 互斥，二选一或均空）
 	Name        string `gorm:"size:128;not null" json:"name"`      // 模板名称
 	Description string `gorm:"size:512" json:"description"`        // 描述
 	FilePath    string `gorm:"size:512;not null" json:"file_path"` // 文件系统路径
@@ -39,8 +40,9 @@ type UserFrame struct {
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
-	User  *User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Novel *Novel `gorm:"foreignKey:NovelID" json:"novel,omitempty"`
+	User  *User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Novel *Novel      `gorm:"foreignKey:NovelID" json:"novel,omitempty"`
+	Blog  *AuthorBlog `gorm:"foreignKey:BlogID" json:"blog,omitempty"`
 }
 
 func (UserFrame) TableName() string { return "user_frames" }

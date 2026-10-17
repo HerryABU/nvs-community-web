@@ -466,6 +466,16 @@ func GetNovelHTMLs(c *gin.Context) {
 	utils.Success(c, htmls)
 }
 
+// GetBlogHTMLs GET /api/blogs/:id/htmls
+// 获取博客关联的扩展应用（与 GetNovelHTMLs 对称，博客侧 16.1 绑定能力）
+func GetBlogHTMLs(c *gin.Context) {
+	blogID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	var htmls []models.UserHTML
+	models.DB.Where("blog_id = ? AND is_active = ?", uint(blogID), true).
+		Order("updated_at DESC").Find(&htmls)
+	utils.Success(c, htmls)
+}
+
 // ==================== 辅助 ====================
 
 func findEntryHTML(entries []utils.ZipEntry) string {

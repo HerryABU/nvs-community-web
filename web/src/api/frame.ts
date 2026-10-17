@@ -5,7 +5,7 @@ export const frameApi = {
   list() { return api.get('/userframes'); },
   get(id: number) { return api.get(`/userframes/${id}`); },
   create(data: {
-    name: string; description?: string; novel_id?: number;
+    name: string; description?: string; novel_id?: number; blog_id?: number;
     content: string; is_public?: boolean; tags?: string;
     has_controls?: boolean; uses_novel_api?: boolean; sandbox_level?: string;
     frame_type?: string; run_mode?: string;
@@ -16,6 +16,7 @@ export const frameApi = {
   // 🔀 站点路径前缀：预览为 window.open / iframe 直用 URL，需手动拼前缀
   getPreview(id: number) { return `${apiPrefix}/api/userframes/${id}/preview`; },
   getByNovel(novelId: number) { return api.get(`/novels/${novelId}/frames`); },
+  getByBlog(blogId: number) { return api.get(`/blogs/${blogId}/frames`); },
   getByAuthor(authorId: number) { return api.get(`/author/${authorId}/frames`); },
 };
 

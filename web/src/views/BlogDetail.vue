@@ -56,7 +56,47 @@
             </div>
           </div>
 
+          <!-- 自定义模板Header区域（作者绑定的阅读模版，渲染在正文上方） -->
+          <div v-if="headerFrames.length > 0" class="template-zone template-header">
+            <div v-for="f in headerFrames" :key="f.id" class="template-frame-wrapper">
+              <!-- 非沙盒注入：作者本人页面直接同源嵌入（无 sandbox 限制） -->
+              <iframe
+                v-if="isInlineFrame(f)"
+                :src="previewUrl(f.id) + '?blog=' + blog.id"
+                class="template-iframe"
+                @load="onFrameLoaded($event)"
+              />
+              <!-- 沙盒模式：受限 iframe -->
+              <iframe
+                v-else
+                :src="previewUrl(f.id) + '?blog=' + blog.id"
+                :sandbox="f.has_controls ? 'allow-scripts allow-forms allow-popups' : 'allow-scripts'"
+                class="template-iframe"
+                @load="onFrameLoaded($event)"
+              />
+            </div>
+          </div>
+
           <div class="blog-content markdown-body cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" v-html="htmlContent" ref="blogContentRef"></div>
+
+          <!-- 自定义模板Footer区域（position=footer 的模版，渲染在正文下方） -->
+          <div v-if="footerFrames.length > 0" class="template-zone template-footer">
+            <div v-for="f in footerFrames" :key="f.id" class="template-frame-wrapper">
+              <iframe
+                v-if="isInlineFrame(f)"
+                :src="previewUrl(f.id) + '?blog=' + blog.id"
+                class="template-iframe"
+                @load="onFrameLoaded($event)"
+              />
+              <iframe
+                v-else
+                :src="previewUrl(f.id) + '?blog=' + blog.id"
+                :sandbox="f.has_controls ? 'allow-scripts allow-forms allow-popups' : 'allow-scripts'"
+                class="template-iframe"
+                @load="onFrameLoaded($event)"
+              />
+            </div>
+          </div>
 
           <div class="blog-footer">
             <el-button @click="$router.back()">返回</el-button>
@@ -108,6 +148,7 @@
 import { ref, computed, onMounted, nextTick, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { blogApi } from '@/api/social';
+import { frameApi } from '@/api/frame';
 import { renderMarkdown, renderMermaidBlocks, renderChemfigBlocks } from '@/markdown/renderer';
 import CommentSection from '@/components/CommentSection.vue';
 import ReportButton from '@/components/ReportButton.vue';
@@ -132,6 +173,45 @@ const tocPanelOpen = ref(true);
 const liked = ref(false);
 const likeCount = ref(0);
 const liking = ref(false);
+
+// ===== 自定义阅读模版（与 Reader.vue 同一套机制：header 正文上方 / footer 正文下方）=====
+const headerFrames = ref<any[]>([]);
+const footerFrames = ref<any[]>([]);
+
+function previewUrl(frameId: number) { return frameApi.getPreview(frameId); }
+
+// 非沙盒注入判定：仅当模板声明 inline 且当前访问者是模板作者本人时生效
+function isInlineFrame(f: any): boolean {
+  return f.run_mode === 'inline' && authStore.user?.id === f.user_id;
+}
+
+function onFrameLoaded(e: Event) {
+  const iframe = e.target as HTMLIFrameElement;
+  try {
+    // 自适应高度：根据iframe内部内容调整
+    const body = iframe.contentDocument?.body;
+    if (body) {
+      const h = body.scrollHeight;
+      if (h > 60) iframe.style.height = h + 'px';
+    }
+  } catch {
+    // 跨域限制下无法读取contentDocument，使用默认高度
+    iframe.style.height = '200px';
+  }
+}
+
+async function loadFrames() {
+  if (!blog.value) return;
+  try {
+    const res = await frameApi.getByBlog(blog.value.id);
+    if (res.data.code === 0) {
+      const frames = res.data.data || [];
+      // position 为 footer 的模板放正文下方；空值或其它值默认 header（向后兼容）
+      headerFrames.value = frames.filter((f: any) => f.position !== 'footer');
+      footerFrames.value = frames.filter((f: any) => f.position === 'footer');
+    }
+  } catch { /* 静默失败，模板非必需 */ }
+}
 
 async function loadLikes() {
   if (!blog.value) return;
@@ -260,6 +340,7 @@ onMounted(async () => {
         }
       });
       loadLikes();
+      loadFrames();
     }
   } catch { /* ignore */ }
   finally { loading.value = false; }
@@ -284,6 +365,18 @@ onBeforeUnmount(() => {
 .toc-collapsed .blog-footer, .toc-collapsed .section-title, .toc-collapsed .blog-header { max-width: 920px; margin-left: auto; margin-right: auto; }
 
 .blog-header { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #eee; }
+
+/* ===== 自定义阅读模版区（与 Reader.vue 同构）===== */
+.template-zone { margin: 0 0 12px; }
+.template-header { margin-top: 8px; }
+.template-footer { margin-bottom: 16px; }
+.template-frame-wrapper {
+  border-radius: 8px; overflow: hidden;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  margin-bottom: 8px;
+}
+.template-iframe { width: 100%; min-height: 150px; border: none; display: block; }
 .bh-title-row { display: flex; align-items: center; gap: 10px; }
 .bd-toc-restore { flex-shrink: 0; }
 .blog-header h1 { font-size: 1.5rem; margin-bottom: 8px; }

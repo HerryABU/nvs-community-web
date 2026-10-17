@@ -237,8 +237,10 @@ func main() {
 		public.GET("/userframes/public", handlers.ListPublicFrames)
 		public.GET("/template/novel/:id", handlers.GetTemplateAPI)
 		public.GET("/novels/:id/frames", handlers.GetNovelFrames)
+		public.GET("/blogs/:id/frames", handlers.GetBlogFrames)
 		public.GET("/author/:id/frames", handlers.GetAuthorFrames)
 		public.GET("/novels/:id/htmls", handlers.GetNovelHTMLs)
+		public.GET("/blogs/:id/htmls", handlers.GetBlogHTMLs)
 		// 176号令合规：公开算法说明（第七条第九项 算法透明度）+ 站点公告栏
 		public.GET("/algorithms/description", handlers.GetAlgoDescription)
 		public.GET("/announcements", handlers.ListAnnouncements)

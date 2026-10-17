@@ -27,6 +27,7 @@ func CreateFrame(c *gin.Context) {
 		Name         string `json:"name" binding:"required"`
 		Description  string `json:"description"`
 		NovelID      *uint  `json:"novel_id"`
+		BlogID       *uint  `json:"blog_id"`
 		Content      string `json:"content" binding:"required"`
 		IsPublic     bool   `json:"is_public"`
 		Tags         string `json:"tags"`
@@ -41,6 +42,12 @@ func CreateFrame(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
+		return
+	}
+
+	// 绑定互斥：一部模板只能绑定小说或博客其一（或均空=全局模板），避免归属歧义
+	if req.NovelID != nil && req.BlogID != nil {
+		utils.BadRequest(c, "模板只能绑定小说或博客其中之一")
 		return
 	}
 
@@ -106,6 +113,7 @@ func CreateFrame(c *gin.Context) {
 	frame := &models.UserFrame{
 		UserID:       userID,
 		NovelID:      req.NovelID,
+		BlogID:       req.BlogID,
 		Name:         req.Name,
 		Description:  req.Description,
 		FilePath:     filePath,
@@ -185,6 +193,7 @@ func UpdateFrame(c *gin.Context) {
 		Name         *string `json:"name"`
 		Description  *string `json:"description"`
 		NovelID      *uint   `json:"novel_id"`
+		BlogID       *uint   `json:"blog_id"`
 		Content      *string `json:"content"`
 		IsActive     *bool   `json:"is_active"`
 		IsPublic     *bool   `json:"is_public"`
@@ -203,6 +212,20 @@ func UpdateFrame(c *gin.Context) {
 		return
 	}
 
+	// 绑定互斥校验（合并 novel_id / blog_id 的最终值后判断）
+	finalNovelID := frame.NovelID
+	if req.NovelID != nil {
+		finalNovelID = req.NovelID
+	}
+	finalBlogID := frame.BlogID
+	if req.BlogID != nil {
+		finalBlogID = req.BlogID
+	}
+	if finalNovelID != nil && finalBlogID != nil {
+		utils.BadRequest(c, "模板只能绑定小说或博客其中之一")
+		return
+	}
+
 	// 🔒 用 Updates(map) 精确写列：map 不会跳过零值，允许把布尔/数值显式设为 0/false，
 	// 规避 GORM 「带 default 标签的列遇到零值会被跳过」的坑。
 	updates := map[string]interface{}{}
@@ -214,6 +237,9 @@ func UpdateFrame(c *gin.Context) {
 	}
 	if req.NovelID != nil {
 		updates["novel_id"] = *req.NovelID
+	}
+	if req.BlogID != nil {
+		updates["blog_id"] = *req.BlogID
 	}
 	if req.IsActive != nil {
 		updates["is_active"] = *req.IsActive
@@ -324,6 +350,23 @@ func GetNovelFrames(c *gin.Context) {
 	var frames []models.UserFrame
 	models.DB.Where("user_id = ? AND novel_id = ? AND frame_type = ? AND is_active = ?",
 		novel.AuthorID, uint(novelID), "reader", true).
+		Order("updated_at DESC").Find(&frames)
+	utils.Success(c, frames)
+}
+
+// GetBlogFrames GET /api/blogs/:id/frames
+// 获取博客关联的阅读模版（仅作者本人的模版，用户级隔离；与 GetNovelFrames 对称）
+func GetBlogFrames(c *gin.Context) {
+	blogID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	// 先查作者
+	blog, err := models.GetBlogByID(uint(blogID))
+	if err != nil {
+		utils.Success(c, []models.UserFrame{})
+		return
+	}
+	var frames []models.UserFrame
+	models.DB.Where("user_id = ? AND blog_id = ? AND frame_type = ? AND is_active = ?",
+		blog.AuthorID, uint(blogID), "reader", true).
 		Order("updated_at DESC").Find(&frames)
 	utils.Success(c, frames)
 }

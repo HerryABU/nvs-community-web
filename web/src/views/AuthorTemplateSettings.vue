@@ -52,7 +52,9 @@
       <el-form :model="form" label-position="top">
         <el-row :gutter="16">
           <el-col :span="16"><el-form-item label="名称"><el-input v-model="form.name" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="关联作品"><el-input-number v-model="form.novel_id" :min="0" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="关联作品"><el-input-number v-model="form.novel_id" :min="0" :disabled="!!form.blog_id" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="关联博客"><el-input-number v-model="form.blog_id" :min="0" :disabled="!!form.novel_id" style="width:100%" /></el-form-item></el-col>
+          <div style="width:100%;font-size:0.75rem;color:var(--text-light);margin:-8px 0 8px">作品与博客二选一绑定（均空=全局模板）</div>
         </el-row>
         <el-form-item label="HTML内容">
           <template #label>
@@ -138,9 +140,9 @@ const previewW = ref(960); const previewH = ref(600); const savingPreview = ref(
 const previewTarget = ref<any>(null);
 const showRefPicker = ref(false);
 const contentInputRef = ref<any>(null);
-const form = ref({ name:'', novel_id:undefined as number|undefined, content:'', has_controls:false, uses_novel_api:false, is_public:false, sandbox_level:'strict', frame_type:'reader', run_mode:'sandbox', position:'header' });
+const form = ref({ name:'', novel_id:undefined as number|undefined, blog_id:undefined as number|undefined, content:'', has_controls:false, uses_novel_api:false, is_public:false, sandbox_level:'strict', frame_type:'reader', run_mode:'sandbox', position:'header' });
 
-function resetForm(){ form.value={ name:'', novel_id:undefined, content:'', has_controls:false, uses_novel_api:false, is_public:false, sandbox_level:'strict', frame_type:'reader', run_mode:'sandbox', position:'header' }; editing.value=null; }
+function resetForm(){ form.value={ name:'', novel_id:undefined, blog_id:undefined, content:'', has_controls:false, uses_novel_api:false, is_public:false, sandbox_level:'strict', frame_type:'reader', run_mode:'sandbox', position:'header' }; editing.value=null; }
 function fmt(d:string){return new Date(d).toLocaleDateString('zh-CN')}
 
 onMounted(load);
@@ -157,7 +159,7 @@ async function load(){
 }
 
 function openCreate(type:string){ form.value.frame_type=type; showEdit.value=true; }
-function edit(f:any){ editing.value=f; form.value={name:f.name,novel_id:f.novel_id??undefined,content:'',has_controls:f.has_controls,uses_novel_api:f.uses_novel_api,is_public:f.is_public,sandbox_level:f.sandbox_level,frame_type:f.frame_type,run_mode:f.run_mode||'sandbox',position:f.position||'header'}; showEdit.value=true; frameApi.get(f.id).then(r=>{if(r.data.code===0)form.value.content=r.data.data.content}) }
+function edit(f:any){ editing.value=f; form.value={name:f.name,novel_id:f.novel_id??undefined,blog_id:f.blog_id??undefined,content:'',has_controls:f.has_controls,uses_novel_api:f.uses_novel_api,is_public:f.is_public,sandbox_level:f.sandbox_level,frame_type:f.frame_type,run_mode:f.run_mode||'sandbox',position:f.position||'header'}; showEdit.value=true; frameApi.get(f.id).then(r=>{if(r.data.code===0)form.value.content=r.data.data.content}) }
 
 // 在 HTML 内容文本框的光标处插入相对链接；无选区则追加到末尾
 function insertRefLink(link: string){
@@ -181,7 +183,7 @@ async function save(){
   if(!form.value.name||!form.value.content){ElMessage.warning('请填写完整');return}
   saving.value=true;
   try{
-    const data:any={...form.value,novel_id:form.value.novel_id as number};
+    const data:any={...form.value,novel_id:form.value.novel_id as number,blog_id:form.value.blog_id as number};
     if(editing.value){await frameApi.update(editing.value.id,data);ElMessage.success('已更新')}
     else {await frameApi.create(data);ElMessage.success('已创建')}
     showEdit.value=false;resetForm();load();
