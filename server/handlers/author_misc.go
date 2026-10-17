@@ -22,7 +22,6 @@ import (
 	"golang.org/x/image/webp"
 )
 
-
 // POST /api/author/avatar — 作者上传头像
 func UploadAvatar(c *gin.Context) {
 	userID := currentUserID(c)
@@ -156,8 +155,8 @@ func GetSignatureStatus(c *gin.Context) {
 
 	// 统计该用户作品的签名覆盖率
 	type signStats struct {
-		Total    int64
-		Signed   int64
+		Total  int64
+		Signed int64
 	}
 	var stats signStats
 	models.DB.Raw(
@@ -167,11 +166,11 @@ func GetSignatureStatus(c *gin.Context) {
 	).Scan(&stats)
 
 	utils.Success(c, gin.H{
-		"has_signing_key":    hasKey,
-		"total_chapters":     stats.Total,
-		"signed_chapters":    stats.Signed,
-		"unsigned_chapters":  stats.Total - stats.Signed,
-		"coverage_percent":   func() float64 {
+		"has_signing_key":   hasKey,
+		"total_chapters":    stats.Total,
+		"signed_chapters":   stats.Signed,
+		"unsigned_chapters": stats.Total - stats.Signed,
+		"coverage_percent": func() float64 {
 			if stats.Total == 0 {
 				return 100.0
 			}

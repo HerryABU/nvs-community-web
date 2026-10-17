@@ -13,7 +13,6 @@ import (
 	"gorm.io/gorm"
 )
 
-
 // 分类列表（从数据库动态读取，不再硬编码）
 // 使用 models.GetCategories() 替代
 
@@ -241,10 +240,10 @@ func GetNovel(c *gin.Context) {
 	}
 
 	utils.Success(c, NovelView{
-		Novel:          *novel,
-		RequiresLogin:  access.RequiresLogin,
-		IsTrial:        access.IsTrial,
-		TrialLimit:     access.TrialLimit,
+		Novel:         *novel,
+		RequiresLogin: access.RequiresLogin,
+		IsTrial:       access.IsTrial,
+		TrialLimit:    access.TrialLimit,
 	})
 }
 

@@ -3,9 +3,10 @@ package models
 // 角色常量与权限判定（权限模型）
 //
 // 权限层级（由高到低）：
-//   admin   管理员（全权限）
-//   police  警方取管台（准管理员：仅可取证 / 查看软删除，无普通管理权；不可自注册）
-//   vip_author / author / arbitrator / reader
+//
+//	admin   管理员（全权限）
+//	police  警方取管台（准管理员：仅可取证 / 查看软删除，无普通管理权；不可自注册）
+//	vip_author / author / arbitrator / reader
 const (
 	RoleAdmin      = "admin"
 	RolePolice     = "police" // 警方取管台：准管理员，仅可取证/查看软删除；不可自注册，只能由管理员提权

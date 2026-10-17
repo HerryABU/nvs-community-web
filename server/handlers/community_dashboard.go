@@ -9,7 +9,9 @@ import (
 
 // GET /api/admin/community — 社区动态仪表盘
 func GetCommunityDashboard(c *gin.Context) {
-	if !ensureAdmin(c) { return }
+	if !ensureAdmin(c) {
+		return
+	}
 
 	// 最近注册用户
 	var recentUsers []models.User
@@ -25,18 +27,18 @@ func GetCommunityDashboard(c *gin.Context) {
 
 	// 最近评论
 	var recentComments []struct {
-		ID        uint   `json:"id"`
-		Content   string `json:"content"`
-		CreatedAt string `json:"created_at"`
-		UserID    uint   `json:"user_id"`
-		Username  string `json:"username"`
-		NovelID   uint   `json:"novel_id"`
+		ID         uint   `json:"id"`
+		Content    string `json:"content"`
+		CreatedAt  string `json:"created_at"`
+		UserID     uint   `json:"user_id"`
+		Username   string `json:"username"`
+		NovelID    uint   `json:"novel_id"`
 		NovelTitle string `json:"novel_title"`
 	}
 	models.DB.Raw(
-		"SELECT c.id, c.content, c.created_at, c.user_id, u.nickname AS username, c.novel_id, n.title AS novel_title "+
-			"FROM comments c JOIN users u ON u.id = c.user_id JOIN novels n ON n.id = c.novel_id "+
-			"WHERE n.deleted_at IS NULL AND c.deleted_at IS NULL "+
+		"SELECT c.id, c.content, c.created_at, c.user_id, u.nickname AS username, c.novel_id, n.title AS novel_title " +
+			"FROM comments c JOIN users u ON u.id = c.user_id JOIN novels n ON n.id = c.novel_id " +
+			"WHERE n.deleted_at IS NULL AND c.deleted_at IS NULL " +
 			"ORDER BY c.created_at DESC LIMIT 5",
 	).Scan(&recentComments)
 
@@ -51,9 +53,9 @@ func GetCommunityDashboard(c *gin.Context) {
 		ForumName string `json:"forum_name"`
 	}
 	models.DB.Raw(
-		"SELECT t.id, t.title, t.created_at, t.user_id, u.nickname AS username, t.forum_id, f.name AS forum_name "+
-			"FROM threads t JOIN users u ON u.id = t.user_id JOIN forums f ON f.id = t.forum_id "+
-			"WHERE t.deleted_at IS NULL AND f.deleted_at IS NULL "+
+		"SELECT t.id, t.title, t.created_at, t.user_id, u.nickname AS username, t.forum_id, f.name AS forum_name " +
+			"FROM threads t JOIN users u ON u.id = t.user_id JOIN forums f ON f.id = t.forum_id " +
+			"WHERE t.deleted_at IS NULL AND f.deleted_at IS NULL " +
 			"ORDER BY t.created_at DESC LIMIT 5",
 	).Scan(&recentThreads)
 

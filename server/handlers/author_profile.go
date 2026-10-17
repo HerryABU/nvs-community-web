@@ -11,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-
 // GetMyNovels 获取我的作品列表
 func GetMyNovels(c *gin.Context) {
 	userID := currentUserID(c)
@@ -147,20 +146,20 @@ func GetAuthorProfile(c *gin.Context) {
 	}
 
 	utils.Success(c, gin.H{
-		"author":          user,
-		"author_id":       user.ID,
-		"novels":          novels,
-		"total_novels":    totalNovels,
-		"total_words":     totalWords,
-		"total_chapters":  totalChapters,
-		"total_comments":  totalComments,
-		"avg_rating":      avgRating,
+		"author":         user,
+		"author_id":      user.ID,
+		"novels":         novels,
+		"total_novels":   totalNovels,
+		"total_words":    totalWords,
+		"total_chapters": totalChapters,
+		"total_comments": totalComments,
+		"avg_rating":     avgRating,
 		"chapter_trend": gin.H{
-			"dates": dates,
+			"dates":  dates,
 			"counts": chapterTrendCounts,
 		},
 		"comment_trend": gin.H{
-			"dates": dates,
+			"dates":  dates,
 			"counts": commentTrendCounts,
 		},
 	})

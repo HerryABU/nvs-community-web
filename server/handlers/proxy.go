@@ -12,7 +12,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-
 // OutsideWebProxy 处理外联站点访问：/{outsidewebid}/*proxyPath → 转发到内部同路径处理
 func OutsideWebProxy(c *gin.Context) {
 	outsideWebID := c.Param("outsidewebid")

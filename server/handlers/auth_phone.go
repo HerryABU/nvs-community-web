@@ -1,7 +1,8 @@
 // auth_phone.go — 手机号验证码登录/注册 + 实名制 + 国家实名核验代理（F10 / F21.1）。
 // 拆分为：
-//   auth_phone.go      本文件：手机号验证码登录/注册
-//   auth_realname.go   实名申请/状态/国家实名 API 代理（不存储姓名与身份证明文）
+//
+//	auth_phone.go      本文件：手机号验证码登录/注册
+//	auth_realname.go   实名申请/状态/国家实名 API 代理（不存储姓名与身份证明文）
 package handlers
 
 import (
@@ -191,13 +192,13 @@ func createPhoneUser(c *gin.Context, phone string) (*models.User, error) {
 		return nil, err
 	}
 	user := &models.User{
-		Username:         username,
-		Email:            "p" + phone + "@phone.nvs.local", // 占位邮箱（唯一，不可用于登录）
-		PasswordHash:     hash,
-		Nickname:         "手机用户" + phone[len(phone)-4:],
-		Role:             "reader",
-		Phone:            phone,
-		RegistrationIP:   c.ClientIP(),
+		Username:       username,
+		Email:          "p" + phone + "@phone.nvs.local", // 占位邮箱（唯一，不可用于登录）
+		PasswordHash:   hash,
+		Nickname:       "手机用户" + phone[len(phone)-4:],
+		Role:           "reader",
+		Phone:          phone,
+		RegistrationIP: c.ClientIP(),
 	}
 	if err := models.CreateUser(user); err != nil {
 		return nil, err
@@ -246,7 +247,7 @@ func issueSession(c *gin.Context, user *models.User, auditDesc string) {
 	middleware.SetRefreshCookie(c, refreshToken)
 }
 
-func intToStr(n int) string    { return int64ToStr(int64(n)) }
+func intToStr(n int) string { return int64ToStr(int64(n)) }
 func int64ToStr(n int64) string {
 	if n == 0 {
 		return "0"

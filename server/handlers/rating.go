@@ -28,8 +28,12 @@ func UpsertRating(c *gin.Context) {
 
 	// 验证范围 1-5
 	clamp := func(v int) int {
-		if v < 1 { return 1 }
-		if v > 5 { return 5 }
+		if v < 1 {
+			return 1
+		}
+		if v > 5 {
+			return 5
+		}
 		return v
 	}
 

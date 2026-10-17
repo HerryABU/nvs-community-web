@@ -156,6 +156,3 @@ func GetBlogIDsByTag(tagName string) ([]uint, error) {
 		Pluck("blog_tag_links.blog_id", &ids).Error
 	return ids, err
 }
-
-
-

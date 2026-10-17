@@ -202,4 +202,3 @@ func HandleReport(c *gin.Context) {
 		fmt.Sprintf("举报处理：%s，判定：%s，删除目标：%v", req.Status, verdict, req.DeleteTarget))
 	utils.Success(c, gin.H{"message": "已处理"})
 }
-

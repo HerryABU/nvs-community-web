@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-
 // GET /api/author/dashboard — 作者端数据大屏
 func GetAuthorDashboard(c *gin.Context) {
 	userID := currentUserID(c)
@@ -31,15 +30,22 @@ func GetAuthorDashboard(c *gin.Context) {
 		dates[6-i] = now.AddDate(0, 0, -i).Format("2006-01-02")
 	}
 
-	type dayCount struct{ Date string; Count int64 }
+	type dayCount struct {
+		Date  string
+		Count int64
+	}
 	var dailyChapters []dayCount
 	if len(novelIDs) > 0 {
 		models.DB.Raw("SELECT date(chapters.created_at) AS date, COUNT(*) AS count FROM chapters JOIN novels ON novels.id = chapters.novel_id WHERE novels.author_id = ? AND novels.deleted_at IS NULL AND chapters.deleted_at IS NULL AND chapters.created_at >= ? GROUP BY date(chapters.created_at) ORDER BY date", userID, dates[0]).Scan(&dailyChapters)
 	}
 	chapterMap := make(map[string]int64)
-	for _, r := range dailyChapters { chapterMap[r.Date] = r.Count }
+	for _, r := range dailyChapters {
+		chapterMap[r.Date] = r.Count
+	}
 	trendChapters := make([]gin.H, 0, 7)
-	for _, d := range dates { trendChapters = append(trendChapters, gin.H{"date": d, "count": chapterMap[d]}) }
+	for _, d := range dates {
+		trendChapters = append(trendChapters, gin.H{"date": d, "count": chapterMap[d]})
+	}
 
 	var dailyComments []dayCount
 	if len(novelIDs) > 0 {
@@ -52,11 +58,20 @@ func GetAuthorDashboard(c *gin.Context) {
 		models.DB.Raw("SELECT date(chapters.created_at) AS date, COALESCE(SUM(chapters.word_count),0) AS count FROM chapters JOIN novels ON novels.id = chapters.novel_id WHERE novels.author_id = ? AND novels.deleted_at IS NULL AND chapters.deleted_at IS NULL AND chapters.created_at >= ? GROUP BY date(chapters.created_at) ORDER BY date", userID, dates[0]).Scan(&dailyWords)
 	}
 	commentMap := make(map[string]int64)
-	for _, r := range dailyComments { commentMap[r.Date] = r.Count }
+	for _, r := range dailyComments {
+		commentMap[r.Date] = r.Count
+	}
 	trendComments := make([]gin.H, 0, 7)
-	for _, d := range dates { trendComments = append(trendComments, gin.H{"date": d, "count": commentMap[d]}) }
+	for _, d := range dates {
+		trendComments = append(trendComments, gin.H{"date": d, "count": commentMap[d]})
+	}
 
-	type novelStatRow struct{ Title string; TotalWords int; TotalChapters int; Status string }
+	type novelStatRow struct {
+		Title         string
+		TotalWords    int
+		TotalChapters int
+		Status        string
+	}
 	var novelStatsRaw []novelStatRow
 	models.DB.Raw("SELECT title, total_words, total_chapters, status FROM novels WHERE author_id = ? AND deleted_at IS NULL ORDER BY updated_at DESC", userID).Scan(&novelStatsRaw)
 	novelStats := make([]gin.H, 0, len(novelStatsRaw))
@@ -77,12 +92,18 @@ func GetAuthorDashboard(c *gin.Context) {
 	}
 
 	chapterTrendCounts := make([]int64, 7)
-	for i, d := range dates { chapterTrendCounts[i] = chapterMap[d] }
+	for i, d := range dates {
+		chapterTrendCounts[i] = chapterMap[d]
+	}
 	commentTrendCounts := make([]int64, 7)
-	for i, d := range dates { commentTrendCounts[i] = commentMap[d] }
+	for i, d := range dates {
+		commentTrendCounts[i] = commentMap[d]
+	}
 
 	wordsMap := make(map[string]int64)
-	for _, r := range dailyWords { wordsMap[r.Date] = r.Count }
+	for _, r := range dailyWords {
+		wordsMap[r.Date] = r.Count
+	}
 	wordsTrendCounts := make([]int64, 7)
 	cumulativeWordsCounts := make([]int64, 7)
 	var cumSum int64
@@ -93,12 +114,12 @@ func GetAuthorDashboard(c *gin.Context) {
 	}
 
 	utils.Success(c, gin.H{
-		"stats": gin.H{"novels": totalNovels, "total_words": totalWords, "total_chapters": totalChapters, "total_comments": totalComments},
+		"stats":          gin.H{"novels": totalNovels, "total_words": totalWords, "total_chapters": totalChapters, "total_comments": totalComments},
 		"trend_chapters": trendChapters, "trend_comments": trendComments,
 		"bookshelf_count": bookshelfCount, "total_views": totalViews,
-		"chapter_trend":   gin.H{"dates": dates, "counts": chapterTrendCounts},
-		"comment_trend":   gin.H{"dates": dates, "counts": commentTrendCounts},
+		"chapter_trend":    gin.H{"dates": dates, "counts": chapterTrendCounts},
+		"comment_trend":    gin.H{"dates": dates, "counts": commentTrendCounts},
 		"word_count_trend": gin.H{"dates": dates, "counts": wordsTrendCounts, "cumulative": cumulativeWordsCounts},
-		"novel_stats":     novelStats, "avg_rating": avgRating,
+		"novel_stats":      novelStats, "avg_rating": avgRating,
 	})
 }

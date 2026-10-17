@@ -8,25 +8,25 @@ import (
 
 // AuthorBlog 作者博客文章
 type AuthorBlog struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	AuthorID    uint      `gorm:"not null;index:idx_author_blog" json:"author_id"`
-	Title       string    `gorm:"size:256;not null" json:"title"`
-	Content     string    `gorm:"-" json:"content,omitempty"`
-	ContentPath string    `gorm:"size:512;not null" json:"-"`
-	ContentHash string    `gorm:"size:64;default:''" json:"content_hash,omitempty"`
-	Summary     string    `gorm:"size:512;default:''" json:"summary"`
-	CategoryID  uint      `gorm:"default:0;index:idx_blog_category" json:"category_id"` // 博客分类（blog_categories 表，0=未分类）
-	Category    string    `gorm:"-" json:"category,omitempty"`                         // 运行时填充：分类名（含父级前缀）
-	LikeCount   int       `gorm:"default:0" json:"like_count"`                         // 点赞数（blog_likes 冗余计数）
-	IsPinned    bool      `gorm:"default:false;index" json:"is_pinned"`
-	ViewCount   int       `gorm:"default:0" json:"view_count"`
-	DeletedBy   string    `gorm:"size:16;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          uint           `gorm:"primaryKey" json:"id"`
+	AuthorID    uint           `gorm:"not null;index:idx_author_blog" json:"author_id"`
+	Title       string         `gorm:"size:256;not null" json:"title"`
+	Content     string         `gorm:"-" json:"content,omitempty"`
+	ContentPath string         `gorm:"size:512;not null" json:"-"`
+	ContentHash string         `gorm:"size:64;default:''" json:"content_hash,omitempty"`
+	Summary     string         `gorm:"size:512;default:''" json:"summary"`
+	CategoryID  uint           `gorm:"default:0;index:idx_blog_category" json:"category_id"` // 博客分类（blog_categories 表，0=未分类）
+	Category    string         `gorm:"-" json:"category,omitempty"`                          // 运行时填充：分类名（含父级前缀）
+	LikeCount   int            `gorm:"default:0" json:"like_count"`                          // 点赞数（blog_likes 冗余计数）
+	IsPinned    bool           `gorm:"default:false;index" json:"is_pinned"`
+	ViewCount   int            `gorm:"default:0" json:"view_count"`
+	DeletedBy   string         `gorm:"size:16;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
-	Author *User    `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
-	Tags   []BlogTag `gorm:"-" json:"tags,omitempty"`   // 博客标签（多对多，通过 blog_tag_links 关联）
+	Author *User       `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
+	Tags   []BlogTag   `gorm:"-" json:"tags,omitempty"`   // 博客标签（多对多，通过 blog_tag_links 关联）
 	Topics []BlogTopic `gorm:"-" json:"topics,omitempty"` // 博客话题（多对多，通过 blog_topic_links 关联）
 }
 
@@ -56,8 +56,9 @@ func GetBlogsByAuthor(authorID, categoryID uint, page, pageSize int) ([]AuthorBl
 }
 
 // GetBlogsByAuthorFilter 作者博客列表（增强筛选）
-//   categoryID：nil=全部，*0=仅未分类，*>0=仅该分类
-//   excludeCategoryID：>0 时排除该分类（用于"新增到分类"视图：显示不在本分类的文章）
+//
+//	categoryID：nil=全部，*0=仅未分类，*>0=仅该分类
+//	excludeCategoryID：>0 时排除该分类（用于"新增到分类"视图：显示不在本分类的文章）
 func GetBlogsByAuthorFilter(authorID uint, categoryID *uint, excludeCategoryID uint, page, pageSize int) ([]AuthorBlog, int64, error) {
 	var blogs []AuthorBlog
 	var total int64

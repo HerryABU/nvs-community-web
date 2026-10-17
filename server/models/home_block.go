@@ -4,15 +4,17 @@
 //   - blog    博客首页风格（hero + 公告 + 博客大区块 + 小说副栏）
 //   - forum   论坛首页风格（hero + 公告 + 论坛区块 + 最新帖 + 博客副栏）
 //   - minimal 极简小说（hero + 小说模块）
+//
 // 区块类型与 config JSON：
-//   hero     {site_title, subtitle, show_categories}
-//   notice   {max_items}
-//   modules  {modules: ["novels","blogs","forums"], featured_first}
-//   blogs    {limit, view: list|grid}
-//   forums   {limit}
-//   threads  {limit}                      最新帖（自动排除加密/待审论坛）
-//   custom   {html}                       自定义 HTML（服务端消毒后落库）
-//   links    {items: [{title, url}]}
+//
+//	hero     {site_title, subtitle, show_categories}
+//	notice   {max_items}
+//	modules  {modules: ["novels","blogs","forums"], featured_first}
+//	blogs    {limit, view: list|grid}
+//	forums   {limit}
+//	threads  {limit}                      最新帖（自动排除加密/待审论坛）
+//	custom   {html}                       自定义 HTML（服务端消毒后落库）
+//	links    {items: [{title, url}]}
 package models
 
 import (
@@ -127,10 +129,10 @@ func ReorderHomeBlocks(ids []uint) error {
 
 // HomeBlockPreset 布局预设
 type HomeBlockPreset struct {
-	Key     string      `json:"key"`     // mixed/blog/forum/minimal
-	Name    string      `json:"name"`    // 展示名
-	Desc    string      `json:"desc"`    // 一句话描述
-	Blocks  []HomeBlock `json:"-"`       // 预设区块（内部使用，不直接序列化给前端）
+	Key    string      `json:"key"`  // mixed/blog/forum/minimal
+	Name   string      `json:"name"` // 展示名
+	Desc   string      `json:"desc"` // 一句话描述
+	Blocks []HomeBlock `json:"-"`    // 预设区块（内部使用，不直接序列化给前端）
 }
 
 func hp(t, title, config string, enabled bool) HomeBlock {

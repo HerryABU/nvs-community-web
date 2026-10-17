@@ -432,7 +432,8 @@ func AdminReviewBlogCategory(c *gin.Context) {
 	}
 	var req struct {
 		Action string `json:"action" binding:"required"`
-		Reason string `json:"reason"`	}
+		Reason string `json:"reason"`
+	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
@@ -463,8 +464,9 @@ func AdminReviewBlogCategory(c *gin.Context) {
 }
 
 // GET /api/admin/blog-categories/mode — 获取博客分类审核模式
-//   post_review：事后审核（默认），普通作者创建需审核通过后才公开
-//   pre_public：先公开，事后封禁，普通作者创建直接公开，管理员可随时下架
+//
+//	post_review：事后审核（默认），普通作者创建需审核通过后才公开
+//	pre_public：先公开，事后封禁，普通作者创建直接公开，管理员可随时下架
 func AdminGetCategoryReviewMode(c *gin.Context) {
 	if !ensureAdmin(c) {
 		return

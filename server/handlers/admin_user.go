@@ -14,11 +14,12 @@ import (
 	"github.com/microcosm-cc/bluemonday"
 )
 
-
 // GET /api/admin/users — 用户列表（支持关键词搜索 + 角色分类 + 状态筛选）
 // query: page, search(用户名/昵称/邮箱), role(角色分类), status(active/muted/banned)
 func ListUsers(c *gin.Context) {
-	if !ensureAdmin(c) { return }
+	if !ensureAdmin(c) {
+		return
+	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if page < 1 {
 		page = 1
@@ -59,7 +60,9 @@ func ListUsers(c *gin.Context) {
 
 // GET /api/admin/users/audit — 用户行为审计日志（176号令合规查询，可按 user_id/action 筛选）
 func ListUserAuditLogs(c *gin.Context) {
-	if !ensureAdmin(c) { return }
+	if !ensureAdmin(c) {
+		return
+	}
 	userID, _ := strconv.ParseUint(c.Query("user_id"), 10, 64)
 	action := c.Query("action")
 	logs, err := models.ListUserAuditLogs(uint(userID), action, 500)
@@ -72,7 +75,9 @@ func ListUserAuditLogs(c *gin.Context) {
 
 // PUT /api/admin/users/:id — 修改用户（支持 role、nickname、email）
 func UpdateUser(c *gin.Context) {
-	if !ensureAdmin(c) { return }
+	if !ensureAdmin(c) {
+		return
+	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var req struct {
 		Role     *string `json:"role"`
@@ -108,7 +113,9 @@ func UpdateUser(c *gin.Context) {
 
 // DELETE /api/admin/users/:id — 删除/封禁用户（软删除 + 留证）
 func DeleteUser(c *gin.Context) {
-	if !ensureAdmin(c) { return }
+	if !ensureAdmin(c) {
+		return
+	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	// 不能删除自己
@@ -131,7 +138,9 @@ func DeleteUser(c *gin.Context) {
 
 // POST /api/admin/users/:id/mute — 全局禁言用户
 func MuteUser(c *gin.Context) {
-	if !ensureAdmin(c) { return }
+	if !ensureAdmin(c) {
+		return
+	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	var req struct {
@@ -163,7 +172,9 @@ func MuteUser(c *gin.Context) {
 
 // POST /api/admin/users/:id/unmute — 解除全局禁言
 func UnmuteUser(c *gin.Context) {
-	if !ensureAdmin(c) { return }
+	if !ensureAdmin(c) {
+		return
+	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	models.DB.Model(&models.User{}).Where("id = ?", id).Updates(map[string]interface{}{
@@ -179,7 +190,9 @@ func UnmuteUser(c *gin.Context) {
 // POST /api/admin/users/:id/promote-police — 管理员提权为警方取管台账号
 // 警方角色不可自注册，只能由管理员在此显式提权（留审计痕迹），防止越权/漏洞提权。
 func AdminPromoteToPolice(c *gin.Context) {
-	if !ensureAdmin(c) { return }
+	if !ensureAdmin(c) {
+		return
+	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if uint(id) == currentUserID(c) {
 		utils.BadRequest(c, "不能对自己提权")
@@ -200,7 +213,7 @@ func AdminPromoteToPolice(c *gin.Context) {
 	}
 	now := time.Now()
 	if err := models.DB.Model(&models.User{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"role":               models.RolePolice,
+		"role":              models.RolePolice,
 		"police_granted_by": operator,
 		"police_granted_at": &now,
 	}).Error; err != nil {
@@ -219,7 +232,9 @@ func AdminPromoteToPolice(c *gin.Context) {
 
 // POST /api/admin/users/:id/revoke-police — 撤销警方取管台权限（回退为读者）
 func AdminRevokePolice(c *gin.Context) {
-	if !ensureAdmin(c) { return }
+	if !ensureAdmin(c) {
+		return
+	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	u, err := models.GetUserByID(uint(id))
 	if err != nil {
@@ -235,7 +250,7 @@ func AdminRevokePolice(c *gin.Context) {
 		operator = admin.Username
 	}
 	if err := models.DB.Model(&models.User{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"role":               models.RoleReader,
+		"role":              models.RoleReader,
 		"police_granted_by": "",
 		"police_granted_at": nil,
 	}).Error; err != nil {
