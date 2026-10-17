@@ -52,7 +52,7 @@ import('vue-echarts').then(({ default: ECharts }) => {
     ]).then(([renderers, charts, components]) => {
       use([
         renderers.CanvasRenderer,
-        charts.LineChart, charts.BarChart, charts.PieChart, charts.GaugeChart,
+        charts.LineChart, charts.BarChart, charts.PieChart, charts.GaugeChart, charts.GraphChart,
         components.GridComponent, components.TooltipComponent, components.LegendComponent, components.TitleComponent,
       ]);
       // 从已挂载的实例注册全局组件

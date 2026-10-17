@@ -111,6 +111,12 @@ const router = createRouter({
       component: () => import('@/views/Forums.vue'),
     },
     {
+      path: '/comment-network',
+      name: 'comment-network',
+      component: () => import('@/views/CommentNetworkPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/bookshelf',
       name: 'bookshelf',
       component: () => import('@/views/Bookshelf.vue'),

@@ -77,7 +77,63 @@ export interface Comment {
   locked?: boolean;       // 运行时脱敏标记：当前请求未解锁（前端渲染 🔒 占位）
   username?: string;
   user?: { id: number; username?: string; nickname?: string; avatar_url?: string };
+  // 微秒级时间戳（Unix 微秒）与 @ 提及（渲染为可点击链接）
+  created_micro?: number;
+  mentions?: { name: string; user_id: number }[];
   created_at: string;
+}
+
+// 评论网（社交图谱）分析返回结构
+export interface MentionRef {
+  name: string;
+  user_id: number;
+}
+export interface NetworkNode {
+  user_id: number;
+  username: string;
+  nickname: string;
+  comment_count: number;
+  in_degree: number;
+  out_degree: number;
+}
+export interface NetworkEdge {
+  from_user_id: number;
+  from_name: string;
+  to_user_id: number;
+  to_name: string;
+  comment_id: number;
+  parent_comment_id: number;
+  parent_excerpt: string;
+  created_micro: number;
+  estimated_target_id: number;
+  estimated_target_excerpt: string;
+  is_estimated: boolean;
+}
+export interface NetworkPair {
+  from_user_id: number;
+  from_name: string;
+  to_user_id: number;
+  to_name: string;
+  count: number;
+  suspicious: boolean;
+}
+export interface CommentNetwork {
+  target_type: string;
+  target_id: number;
+  total_comments: number;
+  commenter_count: number;
+  interaction_count: number;
+  nodes: NetworkNode[];
+  edges: NetworkEdge[];
+  top_pairs: NetworkPair[];
+}
+export interface MentionSourceInfo {
+  effective: string;
+  site_default: string;
+  can_edit: boolean;
+  override_set: boolean;
+  is_admin: boolean;
+  is_owner: boolean;
 }
 
 export interface NovelListParams {

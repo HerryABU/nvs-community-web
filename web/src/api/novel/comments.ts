@@ -90,3 +90,45 @@ export const commentApi = {
     return api.delete(`/comments/${id}`);
   },
 };
+
+// @ 提及来源设置 / 联想候选
+export const mentionApi = {
+  // 查询某作品/博客生效的提及来源（effective）与当前用户是否可编辑
+  getSource(params: { target_type: string; target_id: number }) {
+    return api.get<{ code: number; data: import('@/api/novel/types').MentionSourceInfo }>(
+      '/mention-source',
+      { params },
+    );
+  },
+  // 设置提及来源：target_id=0 改站点默认（仅站长）；>0 改本作品覆盖（站长或楼主）
+  setSource(body: { target_type: string; target_id: number; mode: string }) {
+    return api.put<{ code: number; data: { ok: boolean; effective: string } }>(
+      '/mention-source',
+      body,
+    );
+  },
+  // 联想候选：scope=participants 本作品参与者 / scope=global 全站用户
+  getCandidates(params: {
+    scope: string;
+    target_type?: string;
+    target_id?: number;
+    q?: string;
+    limit?: number;
+  }) {
+    return api.get<{ code: number; data: { id: number; username: string; nickname: string }[] }>(
+      '/mention-candidates',
+      { params },
+    );
+  },
+};
+
+// 评论网（社交图谱）分析
+export const commentNetworkApi = {
+  get(params: { target_type: string; target_id: number; user_id?: number }) {
+    return api.get<{ code: number; data: import('@/api/novel/types').CommentNetwork }>(
+      '/comment-network',
+      { params },
+    );
+  },
+};
+
