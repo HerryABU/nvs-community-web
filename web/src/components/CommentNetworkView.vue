@@ -31,6 +31,15 @@
         <el-radio-button value="3d">3D 图谱</el-radio-button>
         <el-radio-button value="3d-flow">3D 流程图</el-radio-button>
       </el-radio-group>
+      <span class="cn-toolbar-sep"></span>
+      <label class="cn-toggle">
+        <el-switch v-model="showUsername" size="small" />
+        <span>用户名</span>
+      </label>
+      <label class="cn-toggle">
+        <el-switch v-model="showComment" size="small" />
+        <span>评论内容</span>
+      </label>
       <el-button v-if="filterUserID" size="small" text type="primary" @click="clearFilter">
         清除「{{ filterUserName }}」筛选 ✕
       </el-button>
@@ -78,13 +87,23 @@
       <div v-if="visibleEdges.length === 0" class="cn-empty">暂无互动数据</div>
       <div v-for="e in visibleEdges" :key="e.comment_id" class="cn-edge">
         <div class="cn-edge-head">
-          <span class="cn-edge-from">{{ e.from_name }}</span>
-          <span class="cn-edge-arrow">回复了</span>
-          <span class="cn-edge-to">{{ e.to_name }}</span>
+          <template v-if="showUsername">
+            <span class="cn-edge-from">{{ e.from_name }}</span>
+            <span class="cn-edge-arrow">回复了</span>
+            <span class="cn-edge-to">{{ e.to_name }}</span>
+          </template>
+          <template v-else>
+            <span class="cn-edge-from">评论者</span>
+            <span class="cn-edge-arrow">回复了</span>
+            <span class="cn-edge-to">评论者</span>
+          </template>
           <span class="cn-edge-time">{{ formatRelativeTime(undefined, e.created_micro) }}</span>
         </div>
-        <div class="cn-edge-quote">「{{ e.parent_excerpt }}」</div>
-        <div v-if="e.is_estimated" class="cn-edge-est">
+        <div v-if="showComment" class="cn-edge-quote">「{{ e.comment_excerpt || e.parent_excerpt }}」</div>
+        <div v-if="showComment && e.parent_excerpt && e.comment_excerpt && e.parent_excerpt !== e.comment_excerpt" class="cn-edge-replyto">
+          ↩ 回复：「{{ e.parent_excerpt }}」
+        </div>
+        <div v-if="showComment && e.is_estimated" class="cn-edge-est">
           ⟳ 时间估计：大概率实际指向其更新的评论「{{ e.estimated_target_excerpt }}」
         </div>
       </div>
@@ -116,6 +135,10 @@ watch(mode3d, (v) => { if (v) mode2d.value = ''; });
 
 const is2D = computed(() => ['force', 'flow', 'flowchart', 'divergent'].includes(viewMode.value));
 const is3D = computed(() => viewMode.value === '3d' || viewMode.value === '3d-flow');
+
+// 显示开关：用户名 / 评论内容（可折叠以减小图面密度）
+const showUsername = ref(true);
+const showComment = ref(true);
 
 const filterUserID = ref<number>(0);
 
@@ -195,6 +218,29 @@ const baseGraph = computed<{ nodes: GNode[]; links: GLink[] }>(() => {
       suspicious: p.suspicious,
     }));
   return { nodes, links };
+});
+
+// 评论内容映射：聚合边 (from->to) → 该对最新一条回复的正文（用于 2D 边标签）
+const pairExcerpt = computed<Map<string, string>>(() => {
+  const m = new Map<string, string>();
+  if (!net.value) return m;
+  for (const e of net.value.edges) {
+    const key = `${e.from_user_id}->${e.to_user_id}`;
+    if (!m.has(key)) m.set(key, e.comment_excerpt || e.parent_excerpt || '');
+  }
+  return m;
+});
+// 评论者 → 其最新一条回复正文（用于 3D 节点标签）
+const userExcerptMap = computed<Map<number, string>>(() => {
+  const m = new Map<number, string>();
+  if (!net.value) return m;
+  for (const e of net.value.edges) {
+    if (!m.has(e.from_user_id)) {
+      const ex = e.comment_excerpt || e.parent_excerpt;
+      if (ex) m.set(e.from_user_id, ex);
+    }
+  }
+  return m;
 });
 
 // 通用 BFS 分层（DAG 层级）
@@ -331,8 +377,8 @@ function build2DOption(kind: 'force' | 'flow' | 'flowchart' | 'divergent') {
         ? { color: n.color || '#eef2ff', borderColor: '#4f46e5', borderWidth: 1.5, borderRadius: 6 }
         : { color: n.color },
       label: isRect
-        ? { show: true, position: 'inside', fontSize: 11, color: '#1e293b' }
-        : { show: true, fontSize: 10 },
+        ? { show: showUsername.value, position: 'inside', fontSize: 11, color: '#1e293b' }
+        : { show: showUsername.value, fontSize: 10 },
     };
     if (coords) { const c = coords.get(n.user_id); if (c) { base.x = c.x; base.y = c.y; } }
     return base;
@@ -341,6 +387,7 @@ function build2DOption(kind: 'force' | 'flow' | 'flowchart' | 'divergent') {
     source: String(l.source),
     target: String(l.target),
     value: l.count,
+    excerpt: pairExcerpt.value.get(`${l.source}->${l.target}`) || '',
     lineStyle: { width: Math.min(8, 1 + l.count / 3), color: l.suspicious ? '#ef4444' : '#94a3b8' },
   }));
   const series: any = {
@@ -353,6 +400,12 @@ function build2DOption(kind: 'force' | 'flow' | 'flowchart' | 'divergent') {
     label: { show: true, fontSize: 10 },
     data,
     links,
+    edgeLabel: {
+      show: showComment.value,
+      fontSize: 9,
+      color: '#64748b',
+      formatter: (p: any) => p.data?.excerpt || '',
+    },
     lineStyle: { color: '#94a3b8', curveness: kind === 'divergent' ? 0.12 : 0 },
   };
   if (kind === 'force') {
@@ -362,7 +415,8 @@ function build2DOption(kind: 'force' | 'flow' | 'flowchart' | 'divergent') {
     tooltip: {
       formatter: (p: any) =>
         p.dataType === 'edge'
-          ? `${p.data.source} → ${p.data.target}：${p.data.value} 次回复`
+          ? `${p.data.source} → ${p.data.target}：${p.data.value} 次回复` +
+            (showComment.value && p.data.excerpt ? `\n「${p.data.excerpt}」` : '')
           : `${p.data.name}\n${p.data.value}`,
     },
     series: [series],
@@ -445,7 +499,15 @@ async function mount3D() {
   fgInstance = ForceGraph3D()(el)
     .graphData(build3DData(mode))
     .nodeId('id')
-    .nodeLabel('name')
+    .nodeLabel((n: any) => {
+      const parts: string[] = [];
+      if (showUsername.value) parts.push(n.name);
+      if (showComment.value) {
+        const ex = userExcerptMap.value.get(Number(n.id));
+        if (ex) parts.push(ex);
+      }
+      return parts.join('\n');
+    })
     .nodeVal('val')
     .nodeColor((n: any) => n.color)
     .nodeOpacity(0.95)
@@ -471,6 +533,7 @@ function refresh3D() {
   if (!fgInstance) return;
   fgInstance.graphData(build3DData(viewMode.value));
   if (viewMode.value === '3d-flow') { try { fgInstance.cooldownTicks(0); } catch { /* noop */ } }
+  applyRotationState();
 }
 
 function onResize() {
@@ -488,8 +551,8 @@ watch(viewMode, async (m, old) => {
   }
 });
 
-// 数据/筛选变化时，若正处于 3D 模式则刷新
-watch([filterUserID, net], () => { if (is3DMode(viewMode.value) && fgInstance) refresh3D(); });
+// 数据/筛选/显示开关变化时，若正处于 3D 模式则刷新
+watch([filterUserID, net, showUsername, showComment], () => { if (is3DMode(viewMode.value) && fgInstance) refresh3D(); });
 
 onMounted(() => {
   load();
@@ -519,6 +582,8 @@ watch(filterUserID, () => { if (filterUserID.value) load(); });
 
 .cn-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
 .cn-toolbar-label { font-size: 0.8rem; color: var(--text-light, #999); font-weight: 600; }
+.cn-toolbar-sep { width: 1px; height: 20px; background: var(--border-color, #e2e8f0); margin: 0 2px; }
+.cn-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; color: var(--text-light, #999); }
 .cn-warn { font-size: 0.8rem; color: #ef4444; }
 
 .cn-graph-wrap { position: relative; }
@@ -548,6 +613,10 @@ watch(filterUserID, () => { if (filterUserID.value) load(); });
 .cn-edge-quote {
   font-size: 0.82rem; color: var(--text, #444); margin-top: 2px;
   border-left: 2px solid var(--border-color, #e2e8f0); padding-left: 8px;
+}
+.cn-edge-replyto {
+  font-size: 0.78rem; color: var(--text-light, #999); margin-top: 2px;
+  border-left: 2px solid #cbd5e1; padding-left: 8px;
 }
 .cn-edge-est {
   font-size: 0.8rem; color: #d97706; margin-top: 2px;

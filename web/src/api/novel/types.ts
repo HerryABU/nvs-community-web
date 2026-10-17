@@ -103,6 +103,7 @@ export interface NetworkEdge {
   to_name: string;
   comment_id: number;
   parent_comment_id: number;
+  comment_excerpt: string;
   parent_excerpt: string;
   created_micro: number;
   estimated_target_id: number;

@@ -91,6 +91,7 @@ type NetworkEdge struct {
 	ToName       string `json:"to_name"`
 	CommentID    uint   `json:"comment_id"`    // 本条回复评论 id
 	ParentCommentID uint `json:"parent_comment_id"` // 显式父评论 id
+	CommentExcerpt string `json:"comment_excerpt"` // 本条回复评论正文（A 说的话）
 	ParentExcerpt string `json:"parent_excerpt"`
 	CreatedMicro int64  `json:"created_micro"`
 	// 时间估计：若回复者显式父评论不是被回复者「最新的一条」，则估计其实际想回复的是被回复者更早前的最新评论
@@ -251,6 +252,7 @@ func GetCommentNetwork(targetType string, targetID, filterUserID uint) (*Comment
 			ToName:                 displayName(to),
 			CommentID:              c.ID,
 			ParentCommentID:        parent.ID,
+			CommentExcerpt:         commentSnippet(c.Content),
 			ParentExcerpt:          commentSnippet(parent.Content),
 			CreatedMicro:           effMicro(c),
 			EstimatedTargetID:      estID,
