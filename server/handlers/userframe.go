@@ -24,20 +24,20 @@ func CreateFrame(c *gin.Context) {
 	userID := currentUserID(c)
 
 	var req struct {
-		Name         string `json:"name" binding:"required"`
-		Description  string `json:"description"`
-		NovelID      *uint  `json:"novel_id"`
-		BlogID       *uint  `json:"blog_id"`
-		Content      string `json:"content" binding:"required"`
-		IsPublic     bool   `json:"is_public"`
-		Tags         string `json:"tags"`
-		HasControls  bool   `json:"has_controls"`
-		UsesNovelAPI bool   `json:"uses_novel_api"`
-		SandboxLevel string `json:"sandbox_level"`
-		FrameType    string `json:"frame_type"`
-		RunMode      string `json:"run_mode"`
-		FrameWidth   *int   `json:"frame_width"`
-		FrameHeight  *int   `json:"frame_height"`
+		Name         string  `json:"name" binding:"required"`
+		Description  string  `json:"description"`
+		NovelID      *uint   `json:"novel_id"`
+		BlogID       *uint   `json:"blog_id"`
+		Content      string  `json:"content" binding:"required"`
+		IsPublic     bool    `json:"is_public"`
+		Tags         string  `json:"tags"`
+		HasControls  bool    `json:"has_controls"`
+		UsesNovelAPI bool    `json:"uses_novel_api"`
+		SandboxLevel string  `json:"sandbox_level"`
+		FrameType    string  `json:"frame_type"`
+		RunMode      string  `json:"run_mode"`
+		FrameWidth   *int    `json:"frame_width"`
+		FrameHeight  *int    `json:"frame_height"`
 		Position     *string `json:"position"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -117,7 +117,7 @@ func CreateFrame(c *gin.Context) {
 		Name:         req.Name,
 		Description:  req.Description,
 		FilePath:     filePath,
-		IsPublic:     req.IsPublic,
+		IsPublic:     false, // 公开一律走额度链路：建记录后由 CheckAndApplyWebPublish 决定
 		Tags:         req.Tags,
 		HasControls:  req.HasControls,
 		UsesNovelAPI: req.UsesNovelAPI,
@@ -144,7 +144,26 @@ func CreateFrame(c *gin.Context) {
 		return
 	}
 
-	utils.Success(c, frame)
+	// 用户勾选「公开分享」→ 过额度判断（数量/大小任一超额 → 转 quota_review 待审，不直接进广场）
+	publicNote := ""
+	if req.IsPublic {
+		allowed, needReview, reason, err := models.CheckAndApplyWebPublish(userID, models.WebQuotaTargetFrame, frame.ID)
+		if err != nil {
+			utils.InternalError(c, "操作失败")
+			return
+		}
+		if allowed {
+			frame.IsPublic = true
+			publicNote = "已公开发布"
+		} else if needReview {
+			publicNote = reason + "，管理员通过后将展示到广场"
+		}
+	}
+
+	utils.Success(c, gin.H{
+		"frame":       frame,
+		"public_note": publicNote,
+	})
 }
 
 // ListFrames GET /api/userframes
@@ -390,7 +409,7 @@ func GetAuthorFrames(c *gin.Context) {
 
 // ContentRef 站内可引用内容（供模板内插入相对链接）
 type ContentRef struct {
-	Type     string `json:"type"`  // novel / blog / thread
+	Type     string `json:"type"` // novel / blog / thread
 	ID       uint   `json:"id"`
 	Title    string `json:"title"`
 	AuthorID uint   `json:"author_id,omitempty"` // 博客详情路由为 /author/:id/blogs/:blogId，须带作者 id 才能拼出正确相对路径

@@ -23,7 +23,7 @@ import (
 
 // ==================== 用户侧：额度查询 + 公开开关 ====================
 
-// MyWebQuota GET /api/web-quota/mine —— 查看本人额度/已用/剩余/待审单
+// MyWebQuota GET /api/web-quota/mine —— 查看本人额度/已用/剩余/待审单（数量 + 大小双维度）
 func MyWebQuota(c *gin.Context) {
 	userID := currentUserID(c)
 	quota := models.GetWebPublishQuota(userID)
@@ -39,27 +39,47 @@ func MyWebQuota(c *gin.Context) {
 		}
 	}
 
+	// 大小维度（MB；sizeQuota<=0 表示不限）
+	sizeQuota := models.GetWebPublishQuotaSizeMB(userID)
+	usedSize := models.CountPublicWebSize(userID)
+	sizeRemaining := -1
+	if sizeQuota > 0 {
+		limitBytes := int64(sizeQuota) * 1024 * 1024
+		sizeRemaining = int((limitBytes - usedSize) / 1024 / 1024)
+		if sizeRemaining < 0 {
+			sizeRemaining = 0
+		}
+	}
+
 	var overrideVal *int
+	var overrideSizeVal *int
 	var overrideNote string
 	isOverridden := false
 	if ov := models.GetUserWebQuotaOverride(userID); ov != nil {
 		isOverridden = true
 		v := ov.Quota
 		overrideVal = &v
+		sv := ov.QuotaSizeMB
+		overrideSizeVal = &sv
 		overrideNote = ov.Note
 	}
 
 	requests, _ := models.ListMyWebQuotaRequests(userID)
 
 	utils.Success(c, gin.H{
-		"quota":          quota,
-		"used":           used,
-		"remaining":      remaining,
-		"overridden":     isOverridden,
-		"override_quota": overrideVal,
-		"override_note":  overrideNote,
-		"global_default": models.GetWebPublishQuotaConfig(),
-		"requests":       requests,
+		"quota":             quota,
+		"used":              used,
+		"remaining":         remaining,
+		"size_quota_mb":     sizeQuota,
+		"size_used_bytes":   usedSize,
+		"size_remaining_mb": sizeRemaining,
+		"overridden":        isOverridden,
+		"override_quota":    overrideVal,
+		"override_size_mb":  overrideSizeVal,
+		"override_note":     overrideNote,
+		"global_default":    models.GetWebPublishQuotaConfig(),
+		"global_size_mb":    models.GetWebPublishQuotaSizeConfig(),
+		"requests":          requests,
 	})
 }
 
@@ -94,7 +114,7 @@ func SetHTMLPublic(c *gin.Context) {
 		return
 	}
 
-	allowed, _, err := models.CheckAndApplyWebPublish(userID, models.WebQuotaTargetHTML, req.ID)
+	allowed, _, reason, err := models.CheckAndApplyWebPublish(userID, models.WebQuotaTargetHTML, req.ID)
 	if err != nil {
 		utils.InternalError(c, "操作失败")
 		return
@@ -106,7 +126,7 @@ func SetHTMLPublic(c *gin.Context) {
 			"is_public":   false,
 			"allowed":     false,
 			"need_review": true,
-			"message":     "已达公开额度上限，已提交超额审核，管理员通过后将在广场展示",
+			"message":     reason + "，管理员通过后将在广场展示",
 		})
 	}
 }
@@ -141,7 +161,7 @@ func SetFramePublic(c *gin.Context) {
 		return
 	}
 
-	allowed, _, err := models.CheckAndApplyWebPublish(userID, models.WebQuotaTargetFrame, req.ID)
+	allowed, _, reason, err := models.CheckAndApplyWebPublish(userID, models.WebQuotaTargetFrame, req.ID)
 	if err != nil {
 		utils.InternalError(c, "操作失败")
 		return
@@ -153,7 +173,7 @@ func SetFramePublic(c *gin.Context) {
 			"is_public":   false,
 			"allowed":     false,
 			"need_review": true,
-			"message":     "已达公开额度上限，已提交超额审核，管理员通过后将在广场展示",
+			"message":     reason + "，管理员通过后将在广场展示",
 		})
 	}
 }
@@ -221,6 +241,7 @@ func AdminGetWebQuotaConfig(c *gin.Context) {
 	}
 	utils.Success(c, gin.H{
 		"max_per_user": models.GetWebPublishQuotaConfig(),
+		"max_size_mb":  models.GetWebPublishQuotaSizeConfig(),
 		"overrides":    overrides,
 	})
 }
@@ -228,19 +249,22 @@ func AdminGetWebQuotaConfig(c *gin.Context) {
 // AdminSetWebQuotaConfig PUT /api/admin/web-quota/config —— 保存配置
 // body.action:
 //
-//	"global"      —— 设置全局默认额度（max_per_user）
-//	"set_user"    —— 为指定用户单独设置额度（user_id + quota，quota=-1 跟随全局 / 0 禁止 / >0 专属上限）
+//	"global"      —— 设置全局默认额度（max_per_user 数量；max_size_mb 大小，0=不限，可单独或同时提交）
+//	"set_user"    —— 为指定用户单独设置额度（quota=-1 跟随全局 / 0 禁止 / >0 专属数量上限；
+//	                  quota_size_mb=-1 跟随全局 / 0 不限 / >0 专属大小上限 MB）
 //	"remove_user" —— 撤销某用户的额度覆盖（恢复跟随全局）
 func AdminSetWebQuotaConfig(c *gin.Context) {
 	if !ensureAdmin(c) {
 		return
 	}
 	var req struct {
-		Action     string `json:"action"`
-		MaxPerUser *int   `json:"max_per_user"`
-		UserID     uint   `json:"user_id"`
-		Quota      *int   `json:"quota"`
-		Note       string `json:"note"`
+		Action      string `json:"action"`
+		MaxPerUser  *int   `json:"max_per_user"`
+		MaxSizeMB   *int   `json:"max_size_mb"`
+		UserID      uint   `json:"user_id"`
+		Quota       *int   `json:"quota"`
+		QuotaSizeMB *int   `json:"quota_size_mb"`
+		Note        string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -249,17 +273,29 @@ func AdminSetWebQuotaConfig(c *gin.Context) {
 
 	switch req.Action {
 	case "global":
-		if req.MaxPerUser == nil {
-			utils.BadRequest(c, "请填写 max_per_user")
+		if req.MaxPerUser == nil && req.MaxSizeMB == nil {
+			utils.BadRequest(c, "请至少填写一项：max_per_user（数量）或 max_size_mb（大小，0=不限）")
 			return
 		}
-		if *req.MaxPerUser < 0 || *req.MaxPerUser > 1000 {
-			utils.BadRequest(c, "额度需在 0 ~ 1000 之间（0 = 禁止任何人公开发布）")
-			return
+		if req.MaxPerUser != nil {
+			if *req.MaxPerUser < 0 || *req.MaxPerUser > 1000 {
+				utils.BadRequest(c, "数量额度需在 0 ~ 1000 之间（0 = 禁止任何人公开发布）")
+				return
+			}
+			if err := models.SetWebPublishQuotaConfig(*req.MaxPerUser); err != nil {
+				utils.InternalError(c, "保存失败")
+				return
+			}
 		}
-		if err := models.SetWebPublishQuotaConfig(*req.MaxPerUser); err != nil {
-			utils.InternalError(c, "保存失败")
-			return
+		if req.MaxSizeMB != nil {
+			if *req.MaxSizeMB < 0 || *req.MaxSizeMB > models.MaxWebQuotaSizeMB {
+				utils.BadRequest(c, "大小额度需在 0 ~ 102400 MB 之间（0 = 不限）")
+				return
+			}
+			if err := models.SetWebPublishQuotaSizeConfig(*req.MaxSizeMB); err != nil {
+				utils.InternalError(c, "保存失败")
+				return
+			}
 		}
 		utils.Success(c, gin.H{"message": "全局默认额度已保存（立即生效）"})
 	case "set_user":
@@ -267,15 +303,26 @@ func AdminSetWebQuotaConfig(c *gin.Context) {
 			utils.BadRequest(c, "用户 ID 无效")
 			return
 		}
-		if req.Quota == nil {
-			utils.BadRequest(c, "请填写 quota（-1=跟随全局，0=禁止公开，>0=专属上限）")
+		if req.Quota == nil && req.QuotaSizeMB == nil {
+			utils.BadRequest(c, "请至少填写一项：quota（数量）或 quota_size_mb（大小）")
 			return
 		}
 		if _, err := models.GetUserByID(req.UserID); err != nil {
 			utils.NotFound(c, "用户不存在")
 			return
 		}
-		if err := models.SetUserWebQuotaOverride(req.UserID, *req.Quota, strings.TrimSpace(req.Note)); err != nil {
+		// 未提交的维度沿用已保存值（-1 = 跟随全局），实现「只改其一」
+		quota, quotaSizeMB := models.WebQuotaFollowGlobal, models.WebQuotaFollowGlobal
+		if ov := models.GetUserWebQuotaOverride(req.UserID); ov != nil {
+			quota, quotaSizeMB = ov.Quota, ov.QuotaSizeMB
+		}
+		if req.Quota != nil {
+			quota = *req.Quota
+		}
+		if req.QuotaSizeMB != nil {
+			quotaSizeMB = *req.QuotaSizeMB
+		}
+		if err := models.SetUserWebQuotaOverride(req.UserID, quota, quotaSizeMB, strings.TrimSpace(req.Note)); err != nil {
 			utils.InternalError(c, "保存失败")
 			return
 		}

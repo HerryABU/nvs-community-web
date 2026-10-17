@@ -306,7 +306,7 @@ func UploadZipHTML(c *gin.Context) {
 		FilePath:       extractDir, // 旧字段兼容
 		ZipPath:        zipPath,
 		AllowWasm:      allowWasm,
-		IsPublic:       isPublic,
+		IsPublic:       false, // 公开一律走额度链路：建记录后由 CheckAndApplyWebPublish 决定
 		IsDownloadable: isDownloadable,
 		ThumbURL:       findThumbPath(entries, extractDir, userID, safeName, timestamp),
 		RunMode:        runMode,
@@ -320,10 +320,27 @@ func UploadZipHTML(c *gin.Context) {
 		return
 	}
 
+	// 用户勾选「广场展示」→ 过额度判断（数量/大小任一超额 → 转 quota_review 待审，不直接进广场）
+	publicNote := ""
+	if isPublic {
+		allowed, needReview, reason, err := models.CheckAndApplyWebPublish(userID, models.WebQuotaTargetHTML, htmlItem.ID)
+		if err != nil {
+			utils.InternalError(c, "操作失败")
+			return
+		}
+		if allowed {
+			htmlItem.IsPublic = true
+			publicNote = "已公开发布到广场"
+		} else if needReview {
+			publicNote = reason + "，管理员通过后将展示到广场"
+		}
+	}
+
 	utils.Success(c, gin.H{
-		"html":       htmlItem,
-		"files":      entries,
-		"entry_file": entryFile,
+		"html":        htmlItem,
+		"files":       entries,
+		"entry_file":  entryFile,
+		"public_note": publicNote,
 	})
 }
 
