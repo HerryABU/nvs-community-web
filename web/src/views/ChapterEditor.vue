@@ -81,6 +81,7 @@
           <RichTextEditor
             v-model="richTextContent"
             placeholder="开始写作..."
+            @save="saveChapter"
           />
         </div>
       </main>

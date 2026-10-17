@@ -132,7 +132,7 @@
         <div ref="cherryContainer" class="be-cherry-container"></div>
       </div>
       <div v-show="editorMode === 'richtext'" class="be-richtext-editor">
-        <RichTextEditor v-model="richTextContent" placeholder="开始写作..." />
+        <RichTextEditor v-model="richTextContent" placeholder="开始写作..." @save="saveBlog" />
       </div>
     </div>
   </div>

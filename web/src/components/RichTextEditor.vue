@@ -35,6 +35,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void;
+  // Ctrl/Cmd + S：拦截浏览器「网页另存为」，交由外层执行保存
+  (e: 'save'): void;
 }>();
 
 const editor = useEditor({
@@ -63,6 +65,16 @@ const editor = useEditor({
   editorProps: {
     attributes: {
       class: 'prose prose-sm max-w-none focus:outline-none',
+    },
+    // 富文本模式：Ctrl/Cmd + B/I/U 由 Tiptap 默认绑定（粗体/斜体/下划线），
+    // 这里补一个 Ctrl/Cmd + S —— 拦截浏览器保存并向上抛出 save 事件。
+    handleKeyDown: (_view, event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        emit('save');
+        return true;
+      }
+      return false;
     },
   },
 });

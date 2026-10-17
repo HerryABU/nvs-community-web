@@ -6,9 +6,10 @@
         v-model="newComment"
         type="textarea"
         :rows="3"
-        placeholder="写下你的评论... 支持 **粗体** *斜体* `代码` 等 Markdown 语法"
+        placeholder="写下你的评论... 支持 **粗体** *斜体* `代码` 等 Markdown 语法（Ctrl+B 粗体 / Ctrl+I 斜体 / Ctrl+U 下划线 / Ctrl+S 发表）"
         maxlength="2000"
         show-word-limit
+        @keydown="onCommentKeydown"
       />
       <div class="form-actions">
         <span class="tip-text">文明评论，理性表达</span>
@@ -55,6 +56,7 @@ import { novelCommentChannel, blogCommentChannel, liveApi } from '@/api/live';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { shouldShowGuard } from '@/utils/sensitiveZone';
+import { editorKeydownHandler, MARKDOWN_TOKENS } from '@/utils/editorShortcuts';
 import FloorComments from './FloorComments.vue';
 
 const props = defineProps<{
@@ -230,6 +232,11 @@ async function submitComment() {
   } finally {
     submitting.value = false;
   }
+}
+
+// 评论框快捷键：Ctrl/Cmd + B/I/U 包裹选区（Markdown），Ctrl/Cmd + S 拦截浏览器保存并直接发表
+function onCommentKeydown(e: KeyboardEvent) {
+  editorKeydownHandler(e, { tokens: MARKDOWN_TOKENS, onSave: () => submitComment() });
 }
 
 // parentId 为 null 表示回复主内容（开新楼）；有值表示回复楼内某条（挂靠该楼）

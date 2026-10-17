@@ -118,9 +118,10 @@
             v-model="replyContent"
             type="textarea"
             :rows="2"
-            :placeholder="replyPlaceholder"
+            :placeholder="replyPlaceholder + '（Ctrl+B 粗体 / Ctrl+I 斜体 / Ctrl+U 下划线 / Ctrl+S 回复）'"
             maxlength="2000"
             size="small"
+            @keydown="onReplyKeydown"
           />
           <div class="reply-form-actions">
             <el-button size="small" @click="cancelReply">取消</el-button>
@@ -164,6 +165,7 @@ import { useLiveComments } from '@/composables/useLiveComments';
 import { commentApi, setFloorPassword } from '@/api/novel/comments';
 import { Lock } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
+import { editorKeydownHandler, MARKDOWN_TOKENS } from '@/utils/editorShortcuts';
 
 // 楼层模型（公众号评论区 + Discuz 楼中楼）：
 //  - 回复主内容（作品/博客/帖子）→ 开新楼（parent_id 为空，floor_no 递增）
@@ -274,6 +276,11 @@ function cancelReply() {
   replyTarget.value = null;
   replyScope.value = null;
   replyContent.value = '';
+}
+
+// 楼内回复框快捷键：Ctrl/Cmd + B/I/U 包裹选区，Ctrl/Cmd + S 拦截浏览器保存并直接回复
+function onReplyKeydown(e: KeyboardEvent) {
+  editorKeydownHandler(e, { tokens: MARKDOWN_TOKENS, onSave: () => submitReply() });
 }
 
 async function submitReply() {
