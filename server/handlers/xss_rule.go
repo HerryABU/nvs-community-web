@@ -73,8 +73,12 @@ func CreateXssRule(c *gin.Context) {
 		utils.BadRequest(c, "规则名称和正则表达式不能为空")
 		return
 	}
-	if _, err := regexp.Compile(req.Pattern); err != nil {
-		utils.BadRequest(c, "正则表达式无效: "+err.Error())
+	if err := security.ValidateUserPattern(req.Pattern); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+	if hint := security.UserPatternHint(req.Pattern); hint != "" {
+		utils.BadRequest(c, hint)
 		return
 	}
 	enabled := true
@@ -124,8 +128,12 @@ func UpdateXssRule(c *gin.Context) {
 		rule.Name = req.Name
 	}
 	if req.Pattern != "" {
-		if _, err := regexp.Compile(req.Pattern); err != nil {
-			utils.BadRequest(c, "正则表达式无效: "+err.Error())
+		if err := security.ValidateUserPattern(req.Pattern); err != nil {
+			utils.BadRequest(c, err.Error())
+			return
+		}
+		if hint := security.UserPatternHint(req.Pattern); hint != "" {
+			utils.BadRequest(c, hint)
 			return
 		}
 		rule.Pattern = req.Pattern
@@ -181,6 +189,10 @@ func TestXssRule(c *gin.Context) {
 	}
 	if req.Pattern == "" {
 		utils.BadRequest(c, "正则表达式不能为空")
+		return
+	}
+	if err := security.ValidateUserPattern(req.Pattern); err != nil {
+		utils.BadRequest(c, err.Error())
 		return
 	}
 	re, err := regexp.Compile(req.Pattern)

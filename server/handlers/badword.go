@@ -77,13 +77,16 @@ func normalizeBadWordScope(scope string) string {
 	return strings.Join(parts, ",")
 }
 
-// validateBadWordPattern 校验正则合法性（仅 regex 模式）
-func validateBadWordPattern(matchType, pattern string) error {
+// validateBadWordPattern 校验正则合法性（仅 regex 模式）：长度上限 + RE2 编译。
+// 第二个返回值为误用提示（如嵌套量词），可保存但需提醒管理员。
+func validateBadWordPattern(matchType, pattern string) (error, string) {
 	if matchType == "regex" {
-		_, err := regexp.Compile(pattern)
-		return err
+		if err := security.ValidateUserPattern(pattern); err != nil {
+			return err, ""
+		}
+		return nil, security.UserPatternHint(pattern)
 	}
-	return nil
+	return nil, ""
 }
 
 // GET /api/admin/bad-words — 列出所有违禁词规则
@@ -123,8 +126,11 @@ func CreateBadWord(c *gin.Context) {
 		return
 	}
 	matchType := normalizeBadWordMatchType(req.MatchType)
-	if err := validateBadWordPattern(matchType, req.Pattern); err != nil {
-		utils.BadRequest(c, "正则表达式无效: "+err.Error())
+	if err, hint := validateBadWordPattern(matchType, req.Pattern); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	} else if hint != "" {
+		utils.BadRequest(c, hint)
 		return
 	}
 	action := normalizeBadWordAction(req.Action)
@@ -186,8 +192,11 @@ func UpdateBadWord(c *gin.Context) {
 		word.MatchType = normalizeBadWordMatchType(req.MatchType)
 	}
 	if req.Pattern != "" {
-		if err := validateBadWordPattern(word.MatchType, req.Pattern); err != nil {
-			utils.BadRequest(c, "正则表达式无效: "+err.Error())
+		if err, hint := validateBadWordPattern(word.MatchType, req.Pattern); err != nil {
+			utils.BadRequest(c, err.Error())
+			return
+		} else if hint != "" {
+			utils.BadRequest(c, hint)
 			return
 		}
 		word.Pattern = req.Pattern
@@ -251,6 +260,10 @@ func TestBadWord(c *gin.Context) {
 	}
 	matchType := normalizeBadWordMatchType(req.MatchType)
 	pattern := req.Pattern
+	if len(pattern) > security.MaxUserPatternLen {
+		utils.BadRequest(c, "正则长度超过 256 字节上限，请拆分多条规则")
+		return
+	}
 	if matchType == "literal" {
 		pattern = regexp.QuoteMeta(pattern)
 	}

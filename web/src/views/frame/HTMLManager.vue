@@ -68,6 +68,7 @@
             <div class="el-upload__text">将 .zip 文件拖到此处，或<em>点击上传</em></div>
             <template #tip>
               <div class="el-upload__tip">最大 20MB · 解压 ≤ 50MB · 压缩比 ≤ 100:1 · 最多500文件</div>
+              <div class="el-upload__tip">推荐上传<strong>编译后的构建产物</strong>（如 vite/webpack 的 dist 目录、纯静态 HTML/CSS/JS），请直接打包 dist 内的文件；<strong>不推荐</strong>上传 .ts/.vue/.jsx 等需要 Node.js 运行时或构建步骤的源文件</div>
             </template>
           </el-upload>
         </el-form-item>

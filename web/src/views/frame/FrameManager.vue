@@ -91,6 +91,10 @@
           <code>window.NVS.getCurrentChapter()</code> 当前章节 ·
           <code>window.NVS.sendMessage(type, data)</code> 向父页面通信
         </el-alert>
+        <el-alert type="warning" :closable="false" show-icon style="margin-bottom:12px">
+          <template #title>推荐编译后的静态产物</template>
+          请使用 vite/webpack 等构建产物（dist 目录内的纯 HTML/CSS/JS）；<strong>不推荐</strong> .ts/.vue/.jsx 等需要 Node.js 运行时或构建步骤的源文件
+        </el-alert>
         <el-form-item label="HTML 内容" required>
           <el-input v-model="form.content" type="textarea" :rows="16" placeholder="<div class='novel-page'>...</div>" class="code-input" />
         </el-form-item>

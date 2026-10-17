@@ -100,8 +100,10 @@ func (c *compiledBadWord) inScope(scope string) bool {
 	return scope != "" && c.scopes[scope]
 }
 
-// ScanBadWords 扫描指定内容类型中的违禁词，返回全部命中（不修改文本）
+// ScanBadWords 扫描指定内容类型中的违禁词，返回全部命中（不修改文本）。
+// 正文超过 MaxScanBytes 时仅扫描前 1MB（资源耗尽防护，见 userpattern.go）。
 func ScanBadWords(content, scope string) []BadWordHit {
+	content, _ = TruncateForScan(content)
 	badWordsMu.RLock()
 	rules := badWords
 	badWordsMu.RUnlock()
@@ -128,7 +130,9 @@ func ScanBadWords(content, scope string) []BadWordHit {
 
 // ApplyBadWords 应用 delete/replace 动作净化文本；mark 规则不修改文本。
 // 返回：净化后的文本 + 全部命中（含 mark，命中基于净化前原文）。
+// 正文超过 MaxScanBytes 时仅处理前 1MB，后续原样保留（资源耗尽防护）。
 func ApplyBadWords(content, scope string) (string, []BadWordHit) {
+	scanned, truncated := TruncateForScan(content)
 	badWordsMu.RLock()
 	rules := badWords
 	badWordsMu.RUnlock()
@@ -136,7 +140,7 @@ func ApplyBadWords(content, scope string) (string, []BadWordHit) {
 		return content, nil
 	}
 	var hits []BadWordHit
-	result := content
+	result := scanned
 	for _, r := range rules {
 		if !r.inScope(scope) {
 			continue
@@ -153,10 +157,14 @@ func ApplyBadWords(content, scope string) (string, []BadWordHit) {
 			}
 			result = r.re.ReplaceAllString(result, "")
 		default: // mark：只记录命中，不改文本
-			for _, idx := range r.re.FindAllStringIndex(content, -1) {
-				hits = append(hits, BadWordHit{RuleID: r.id, RuleName: r.name, Action: r.action, Matched: content[idx[0]:idx[1]], Index: idx[0]})
+			for _, idx := range r.re.FindAllStringIndex(scanned, -1) {
+				hits = append(hits, BadWordHit{RuleID: r.id, RuleName: r.name, Action: r.action, Matched: scanned[idx[0]:idx[1]], Index: idx[0]})
 			}
 		}
+	}
+	if truncated {
+		// 未扫描的尾部原样拼回，保证内容完整（delete/replace 的偏移已按前段计算，不受影响）
+		result += content[MaxScanBytes:]
 	}
 	return result, hits
 }

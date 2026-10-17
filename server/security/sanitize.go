@@ -347,14 +347,16 @@ func SetDynamicXssRules(rules []DynamicXssRule) {
 // ApplyDynamicXssRules 应用管理员配置的 XSS 正则规则。
 // 默认动作 escape：转义匹配片段中的 HTML 标签，保留完整文本（不缺胳膊少腿）；
 // 可选动作 replace（替换为 Replacement）/ delete（删除匹配内容）。
+// 正文超过 MaxScanBytes 时仅处理前 1MB，尾部原样拼回（资源耗尽防护，见 userpattern.go）。
 func ApplyDynamicXssRules(content string) string {
+	scanned, truncated := TruncateForScan(content)
 	dynamicRulesMu.RLock()
 	rules := dynamicRules
 	dynamicRulesMu.RUnlock()
 	if len(rules) == 0 || content == "" {
 		return content
 	}
-	result := content
+	result := scanned
 	for _, r := range rules {
 		switch r.action {
 		case "replace":
@@ -368,6 +370,9 @@ func ApplyDynamicXssRules(content string) string {
 				})
 			})
 		}
+	}
+	if truncated {
+		result += content[MaxScanBytes:]
 	}
 	return result
 }
