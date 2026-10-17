@@ -113,8 +113,8 @@ func TestGetBlogCategoryTree(t *testing.T) {
 	orphan := &BlogCategory{Name: "随笔", Status: "approved"}
 	DB.Create(orphan)
 
-	seedTestBlog(t, 1, p.ID, "博客A")    // 一级分类直接挂博客
-	seedTestBlog(t, 1, s1.ID, "博客B")   // 二级分类挂博客
+	seedTestBlog(t, 1, p.ID, "博客A")  // 一级分类直接挂博客
+	seedTestBlog(t, 1, s1.ID, "博客B") // 二级分类挂博客
 	seedTestBlog(t, 1, 0, "未分类博客")   // 未分类
 
 	tree := GetBlogCategoryTree()

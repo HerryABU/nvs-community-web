@@ -12,7 +12,7 @@ import (
 type UserTheme struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	UserID    uint      `gorm:"uniqueIndex;not null" json:"user_id"`
-	CSS       string    `gorm:"type:text" json:"css"` // 已消毒的主题 CSS
+	CSS       string    `gorm:"type:text" json:"css"`       // 已消毒的主题 CSS
 	CustomJS  string    `gorm:"type:text" json:"custom_js"` // 已做注入安全处理的自定义 JS（仅本人登录态执行）
 	UpdatedAt time.Time `json:"updated_at"`
 }

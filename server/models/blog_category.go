@@ -18,7 +18,7 @@ type BlogCategory struct {
 	ParentID     uint      `gorm:"default:0;index:idx_blog_cat_parent" json:"parent_id"` // 0 = 一级分类
 	Name         string    `gorm:"size:64;not null" json:"name"`
 	SortOrder    int       `gorm:"default:0" json:"sort_order"`
-	CreatedBy    uint      `gorm:"default:0;index" json:"created_by"`      // 创建者用户 ID（0=平台/管理员）
+	CreatedBy    uint      `gorm:"default:0;index" json:"created_by"`           // 创建者用户 ID（0=平台/管理员）
 	Status       string    `gorm:"size:16;default:pending;index" json:"status"` // pending=待审核 / approved=已通过 / rejected=已拒绝
 	RejectReason string    `gorm:"size:256;default:''" json:"reject_reason"`    // 拒绝原因（status=rejected 时）
 	CreatedAt    time.Time `json:"created_at"`

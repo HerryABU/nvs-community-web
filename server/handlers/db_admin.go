@@ -29,7 +29,7 @@ var serverStartTime = time.Now()
 
 type dbJob struct {
 	ID          string                 `json:"id"`
-	Type        string                 `json:"type"` // migrate | backup | restore
+	Type        string                 `json:"type"`   // migrate | backup | restore
 	Status      string                 `json:"status"` // running | done | error
 	Message     string                 `json:"message"`
 	Table       string                 `json:"table"`

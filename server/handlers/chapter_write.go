@@ -344,9 +344,9 @@ func generateChecksums(authorID, novelID uint) {
 	}
 
 	checksums := map[string]interface{}{
-		"novel_id":    novelID,
-		"updated_at":  security.NowString(),
-		"chapters":    entries,
+		"novel_id":   novelID,
+		"updated_at": security.NowString(),
+		"chapters":   entries,
 	}
 
 	dir := filepath.Join(config.NovelDataDir, "authors", fmt.Sprintf("%d", authorID), fmt.Sprintf("%d", novelID))

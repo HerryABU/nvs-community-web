@@ -42,14 +42,14 @@ func (FederatedNovel) TableName() string { return "federated_novels" }
 // 被链接的站能看到对方用的是哪一个 Key、是谁的。
 type FederatedInbound struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
-	Name      string    `gorm:"size:128" json:"name"`       // 对方自称的站点名（source_name）
-	URL       string    `gorm:"size:512" json:"url"`        // 对方自称的站点地址（source_url）
-	IP        string    `gorm:"size:64;index" json:"ip"`    // 来源 IP
-	UserAgent string    `gorm:"size:512" json:"user_agent"` // User-Agent
-	Endpoint  string    `gorm:"size:64" json:"endpoint"`    // 命中的公开接口
+	Name      string    `gorm:"size:128" json:"name"`                 // 对方自称的站点名（source_name）
+	URL       string    `gorm:"size:512" json:"url"`                  // 对方自称的站点地址（source_url）
+	IP        string    `gorm:"size:64;index" json:"ip"`              // 来源 IP
+	UserAgent string    `gorm:"size:512" json:"user_agent"`           // User-Agent
+	Endpoint  string    `gorm:"size:64" json:"endpoint"`              // 命中的公开接口
 	KeyPrefix string    `gorm:"size:24;default:''" json:"key_prefix"` // 对方使用的联邦 Key 前缀（nvs_fed_xxxx）
 	Issuer    string    `gorm:"size:128;default:''" json:"issuer"`    // 该 Key 的签发方站名（谁发的 Key）
-	Count     int       `gorm:"default:1" json:"count"`     // 累计访问次数
+	Count     int       `gorm:"default:1" json:"count"`               // 累计访问次数
 	FirstSeen time.Time `json:"first_seen"`
 	LastSeen  time.Time `json:"last_seen"`
 }

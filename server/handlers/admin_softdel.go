@@ -249,16 +249,16 @@ func userSnapshot(u *models.User) map[string]interface{} {
 		lastLogin = u.LastLoginAt.Format("2006-01-02 15:04:05")
 	}
 	return map[string]interface{}{
-		"id":               u.ID,
-		"username":         u.Username,
-		"email":            u.Email,
-		"nickname":         u.Nickname,
-		"role":             u.Role,
+		"id":                 u.ID,
+		"username":           u.Username,
+		"email":              u.Email,
+		"nickname":           u.Nickname,
+		"role":               u.Role,
 		"real_name_verified": u.RealNameVerified,
-		"registration_ip":  u.RegistrationIP,
-		"last_login_ip":    u.LastLoginIP,
-		"last_login_at":    lastLogin,
-		"created_at":       u.CreatedAt.Format("2006-01-02 15:04:05"),
+		"registration_ip":    u.RegistrationIP,
+		"last_login_ip":      u.LastLoginIP,
+		"last_login_at":      lastLogin,
+		"created_at":         u.CreatedAt.Format("2006-01-02 15:04:05"),
 	}
 }
 

@@ -79,9 +79,9 @@ func TestMinorStatusNeedAsk(t *testing.T) {
 	GetMinorStatus(c)
 	var resp struct {
 		Data struct {
-			NeedAsk       bool   `json:"need_ask"`
-			BirthDateSet  bool   `json:"birth_date_set"`
-			MinorMode     string `json:"minor_mode"`
+			NeedAsk      bool   `json:"need_ask"`
+			BirthDateSet bool   `json:"birth_date_set"`
+			MinorMode    string `json:"minor_mode"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {

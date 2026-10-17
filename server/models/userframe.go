@@ -27,18 +27,18 @@ type UserFrame struct {
 	SandboxLevel string `gorm:"size:16;default:strict" json:"sandbox_level"`    // strict(只读) / interactive(含控件)
 	FrameType    string `gorm:"size:16;default:reader;index" json:"frame_type"` // reader(阅读模版) / author(作者展现模版)
 	// 审查与运行模式
-	ReviewStatus string         `gorm:"size:16;default:approved;index" json:"review_status"` // approved(通过) / pending(待复核) / rejected(驳回)
-	ReviewNote   string         `gorm:"size:512" json:"review_note"`                         // 管理员复核意见
-	ScanWarnings string         `gorm:"type:text" json:"scan_warnings"`                      // 自动扫描告警（JSON 数组）
-	RunMode      string         `gorm:"size:16;default:sandbox;index" json:"run_mode"`       // sandbox(沙盒) / inline(非沙盒直接注入，仅限本人页面)
+	ReviewStatus string `gorm:"size:16;default:approved;index" json:"review_status"` // approved(通过) / pending(待复核) / rejected(驳回)
+	ReviewNote   string `gorm:"size:512" json:"review_note"`                         // 管理员复核意见
+	ScanWarnings string `gorm:"type:text" json:"scan_warnings"`                      // 自动扫描告警（JSON 数组）
+	RunMode      string `gorm:"size:16;default:sandbox;index" json:"run_mode"`       // sandbox(沙盒) / inline(非沙盒直接注入，仅限本人页面)
 	// iframe 嵌入预览尺寸（前端预览/运行窗口大小，已有数据由 AutoMigrate 加列、默认 960/600）
 	FrameWidth  int `gorm:"default:960" json:"frame_width"`
 	FrameHeight int `gorm:"default:600" json:"frame_height"`
 	// 模板在读者页的放置位置：header(正文上方) / footer(正文下方)，默认 header
-	Position string `gorm:"size:16;default:header" json:"position"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
+	Position  string         `gorm:"size:16;default:header" json:"position"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
 	User  *User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	Novel *Novel      `gorm:"foreignKey:NovelID" json:"novel,omitempty"`
@@ -83,15 +83,15 @@ type UserHTML struct {
 	// ⚠️ is_extracted 列默认值必须是 false：GORM struct Create 会把 false 当零值忽略、
 	// 套用列默认值。若默认为 true，封存件会被错误地标成「已解压」，放行时跳过补解压、
 	// 详情页也会走错分支。存量（新增列前已解压的）扩展由 BackfillUserHTMLExtracted 回填。
-	IsExtracted     bool           `gorm:"default:false" json:"is_extracted"`            // 是否已解压（false = 仅封存原始 ZIP）
-	QuarantinePath  string         `gorm:"size:512;default:''" json:"quarantine_path"`   // 封存的原始 ZIP 路径
-	ScanBlocked     bool           `gorm:"default:false" json:"scan_blocked"`            // 预检是否命中高危（阻断级）
-	ScanBlockReason string         `gorm:"size:512;default:''" json:"scan_block_reason"` // 阻断原因（命中的文件+规则）
-	ReviewedBy      uint           `gorm:"default:0" json:"reviewed_by"`                 // 复核管理员 ID
-	ReviewedAt      *time.Time     `json:"reviewed_at"`
+	IsExtracted     bool       `gorm:"default:false" json:"is_extracted"`            // 是否已解压（false = 仅封存原始 ZIP）
+	QuarantinePath  string     `gorm:"size:512;default:''" json:"quarantine_path"`   // 封存的原始 ZIP 路径
+	ScanBlocked     bool       `gorm:"default:false" json:"scan_blocked"`            // 预检是否命中高危（阻断级）
+	ScanBlockReason string     `gorm:"size:512;default:''" json:"scan_block_reason"` // 阻断原因（命中的文件+规则）
+	ReviewedBy      uint       `gorm:"default:0" json:"reviewed_by"`                 // 复核管理员 ID
+	ReviewedAt      *time.Time `json:"reviewed_at"`
 	// iframe 嵌入预览尺寸（前端预览/运行窗口大小，已有数据由 AutoMigrate 加列、默认 960/600）
-	FrameWidth  int `gorm:"default:960" json:"frame_width"`
-	FrameHeight int `gorm:"default:600" json:"frame_height"`
+	FrameWidth  int            `gorm:"default:960" json:"frame_width"`
+	FrameHeight int            `gorm:"default:600" json:"frame_height"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记

@@ -10,9 +10,9 @@ import (
 type Notification struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	UserID    uint      `gorm:"not null;index:idx_notifications_user_read_created,priority:1" json:"user_id"` // 接收者
-	ActorID   uint      `gorm:"default:0" json:"actor_id"`                          // 触发者（0=系统）
-	ActorName string    `gorm:"size:64;default:''" json:"actor_name"`               // 触发者昵称（冗余，免联表）
-	Type      string    `gorm:"size:32;not null;index" json:"type"`                 // thread_reply / comment_reply / novel_comment / blog_comment
+	ActorID   uint      `gorm:"default:0" json:"actor_id"`                                                    // 触发者（0=系统）
+	ActorName string    `gorm:"size:64;default:''" json:"actor_name"`                                         // 触发者昵称（冗余，免联表）
+	Type      string    `gorm:"size:32;not null;index" json:"type"`                                           // thread_reply / comment_reply / novel_comment / blog_comment
 	Title     string    `gorm:"size:256;default:''" json:"title"`
 	Content   string    `gorm:"size:512;default:''" json:"content"` // 摘要
 	Link      string    `gorm:"size:512;default:''" json:"link"`    // 跳转地址

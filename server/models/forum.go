@@ -32,8 +32,8 @@ type Forum struct {
 
 	HasPassword bool `gorm:"-" json:"has_password"` // 是否有进入密码（运行时计算，不落库）
 
-	CreatorName  string `gorm:"-" json:"creator_name,omitempty"`  // 创建者用户名（运行时填充，警方巡查/管理端展示）
-	IsDeleted    bool   `gorm:"-" json:"is_deleted,omitempty"`    // 是否已软删除（运行时计算，警方巡查可见）
+	CreatorName string `gorm:"-" json:"creator_name,omitempty"` // 创建者用户名（运行时填充，警方巡查/管理端展示）
+	IsDeleted   bool   `gorm:"-" json:"is_deleted,omitempty"`   // 是否已软删除（运行时计算，警方巡查可见）
 }
 
 func (Forum) TableName() string { return "forums" }

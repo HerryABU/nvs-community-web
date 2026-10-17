@@ -14,7 +14,7 @@ import (
 // 登录用户的个人主题（UserTheme）覆盖站点主题。
 type SiteTheme struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
-	CSS       string    `gorm:"type:text" json:"css"` // 已消毒的主题 CSS
+	CSS       string    `gorm:"type:text" json:"css"`       // 已消毒的主题 CSS
 	CustomJS  string    `gorm:"type:text" json:"custom_js"` // 已做注入安全处理的自定义 JS（管理员可写，全站访客执行）
 	UpdatedAt time.Time `json:"updated_at"`
 }

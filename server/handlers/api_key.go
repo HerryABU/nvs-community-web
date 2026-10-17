@@ -102,11 +102,11 @@ func ListMyAPIKeys(c *gin.Context) {
 		limits = gin.H{"max_keys": p.MaxKeys, "keys_banned": p.IsBannedNow(), "ban_reason": p.BanReason}
 	}
 	utils.Success(c, gin.H{
-		"list":       list,
-		"role":       role,
-		"role_quota": gin.H{"req": quota.Req, "window": quota.Window},
+		"list":            list,
+		"role":            role,
+		"role_quota":      gin.H{"req": quota.Req, "window": quota.Window},
 		"effective_quota": effective,
-		"limits":     limits,
+		"limits":          limits,
 	})
 }
 
@@ -305,9 +305,9 @@ func GetRateLimitConfig(c *gin.Context) {
 	}
 	cfg := models.LoadAPIRateLimitConfig()
 	utils.Success(c, gin.H{
-		"config":                  cfg,
-		"builtin_bot_keywords":    security.BuiltinBotKeywords(),
-		"builtin_block_keywords":  security.BuiltinBlockKeywords(),
+		"config":                 cfg,
+		"builtin_bot_keywords":   security.BuiltinBotKeywords(),
+		"builtin_block_keywords": security.BuiltinBlockKeywords(),
 	})
 }
 
@@ -391,10 +391,10 @@ func AdminListAPIKeys(c *gin.Context) {
 	}
 	type keyRow struct {
 		models.APIKey
-		Username    string `json:"username"`
-		UserBanned  bool   `json:"user_banned"`   // 该用户名下 Key 被整体封禁
-		UserQuota   int    `json:"user_quota"`    // 按人专属配额（0 = 跟随角色全局）
-		Effective   int    `json:"effective_req"` // 实际生效配额
+		Username   string `json:"username"`
+		UserBanned bool   `json:"user_banned"`   // 该用户名下 Key 被整体封禁
+		UserQuota  int    `json:"user_quota"`    // 按人专属配额（0 = 跟随角色全局）
+		Effective  int    `json:"effective_req"` // 实际生效配额
 	}
 	rows := make([]keyRow, 0, len(keys))
 	for _, k := range keys {

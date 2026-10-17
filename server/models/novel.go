@@ -18,7 +18,7 @@ type Novel struct {
 	Status          string         `gorm:"size:32;default:draft;index:idx_novels_author_status,priority:2" json:"status"`
 	SourceType      string         `gorm:"size:32;default:original" json:"source_type"`  // original / reprint
 	CreationMethod  string         `gorm:"size:32;default:human" json:"creation_method"` // human / ai / human_ai_assisted
-	WallEnabled     bool           `gorm:"not null;default:false" json:"wall_enabled"`    // 作者隔离开关：true=外人需登录才能查看本作品
+	WallEnabled     bool           `gorm:"not null;default:false" json:"wall_enabled"`   // 作者隔离开关：true=外人需登录才能查看本作品
 	TotalWords      int            `gorm:"default:0" json:"total_words"`
 	TotalChapters   int            `gorm:"default:0" json:"total_chapters"`
 	ViewCount       int            `gorm:"default:0" json:"view_count"`
@@ -204,8 +204,8 @@ type Chapter struct {
 	ContentSignature string         `gorm:"size:64;default:''" json:"content_signature"` // HMAC-SHA256 作者签名
 	WordCount        int            `gorm:"default:0" json:"word_count"`
 	Status           string         `gorm:"size:32;default:draft" json:"status"`
-	BanReason        string         `gorm:"type:text" json:"ban_reason"`                      // 176号令封禁原因（封禁时写入）
-	DeletedBy        string         `gorm:"size:32;default:''" json:"deleted_by,omitempty"`   // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
+	BanReason        string         `gorm:"type:text" json:"ban_reason"`                    // 176号令封禁原因（封禁时写入）
+	DeletedBy        string         `gorm:"size:32;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
 	CreatedAt        time.Time      `json:"created_at"`
 	UpdatedAt        time.Time      `json:"updated_at"`
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记

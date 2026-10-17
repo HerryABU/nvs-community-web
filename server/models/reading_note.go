@@ -14,8 +14,8 @@ type ReadingNote struct {
 	ChapterNumber int       `gorm:"default:0" json:"chapter_number"` // 0=作品级书签
 	Type          string    `gorm:"size:16;not null" json:"type"`    // bookmark / annotation
 	Content       string    `gorm:"size:2000;default:''" json:"content"`
-	SelectedText  string    `gorm:"size:1000;default:''" json:"selected_text"` // 批注选中的原文片段
-	Anchor        int       `gorm:"default:0" json:"anchor"`                   // 原文中的字符偏移（仅批注用，粗定位）
+	SelectedText  string    `gorm:"size:1000;default:''" json:"selected_text"`       // 批注选中的原文片段
+	Anchor        int       `gorm:"default:0" json:"anchor"`                         // 原文中的字符偏移（仅批注用，粗定位）
 	Visibility    string    `gorm:"size:16;default:private;index" json:"visibility"` // private / public
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`

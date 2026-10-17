@@ -16,15 +16,15 @@ func ListWebAccessLogs(c *gin.Context) {
 		return
 	}
 	q := models.WebAccessQuery{
-		IP:       c.Query("ip"),
-		UA:       c.Query("ua"),
-		UAFamily: c.Query("ua_family"),
-		Method:   c.Query("method"),
-		Path:     c.Query("path"),
-		Identity: c.Query("identity"),
+		IP:         c.Query("ip"),
+		UA:         c.Query("ua"),
+		UAFamily:   c.Query("ua_family"),
+		Method:     c.Query("method"),
+		Path:       c.Query("path"),
+		Identity:   c.Query("identity"),
 		OnlyAttack: c.Query("attack") == "1",
-		Page:     atoiDefault(c.Query("page"), 1),
-		PageSize: atoiDefault(c.Query("page_size"), 50),
+		Page:       atoiDefault(c.Query("page"), 1),
+		PageSize:   atoiDefault(c.Query("page_size"), 50),
 	}
 	if t := parseDateParam(c.Query("from")); !t.IsZero() {
 		q.From = t.Format("2006-01-02 15:04:05")

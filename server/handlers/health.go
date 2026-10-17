@@ -160,10 +160,10 @@ var dbHealth = &dbHealthTracker{max: dbHealthWindow}
 
 type dbHealthTracker struct {
 	mu               sync.Mutex
-	max              int      // 滑动窗口大小
-	window           []bool   // 最近 max 次结果（true=成功）
-	checks           int      // 窗口内累计检查次数（未满窗口时小于 max）
-	consecutiveFails int      // 当前连续失败次数
+	max              int    // 滑动窗口大小
+	window           []bool // 最近 max 次结果（true=成功）
+	checks           int    // 窗口内累计检查次数（未满窗口时小于 max）
+	consecutiveFails int    // 当前连续失败次数
 	lastOKAt         time.Time
 	lastFailAt       time.Time
 	lastLatencyMs    int64
@@ -204,12 +204,12 @@ func (t *dbHealthTracker) record(ok bool, latency time.Duration) map[string]inte
 	}
 
 	summary := gin.H{
-		"success_rate":       rate, // 最近 N 次成功率（%）
-		"checks_in_window":   len(t.window),
-		"consecutive_fails":  t.consecutiveFails,
-		"last_latency_ms":    t.lastLatencyMs,
-		"last_ok_at":         t.lastOKAt.Format(time.RFC3339),
-		"status":             "stable",
+		"success_rate":      rate, // 最近 N 次成功率（%）
+		"checks_in_window":  len(t.window),
+		"consecutive_fails": t.consecutiveFails,
+		"last_latency_ms":   t.lastLatencyMs,
+		"last_ok_at":        t.lastOKAt.Format(time.RFC3339),
+		"status":            "stable",
 	}
 	if t.consecutiveFails > 0 {
 		summary["status"] = "degraded"

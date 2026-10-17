@@ -18,9 +18,9 @@ import (
 // ─────────────────────────────────────────────────────────────
 
 // DropPostDeletedAt 移除 posts 表的 deleted_at 列（幂等：列不存在时跳过）。
-// - SQLite：不支持 DROP COLUMN，采用「建新表 → 拷贝数据 → 删旧表 → 重命名」
-//   重建方案，重建后由调用方触发 AutoMigrate 补回索引；
-// - MySQL：直接 ALTER TABLE DROP COLUMN。
+//   - SQLite：不支持 DROP COLUMN，采用「建新表 → 拷贝数据 → 删旧表 → 重命名」
+//     重建方案，重建后由调用方触发 AutoMigrate 补回索引；
+//   - MySQL：直接 ALTER TABLE DROP COLUMN。
 func DropPostDeletedAt(db *gorm.DB) error {
 	if !db.Migrator().HasColumn(&Post{}, "deleted_at") {
 		return nil // 已是目标结构，无需迁移

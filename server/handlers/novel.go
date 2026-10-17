@@ -122,9 +122,9 @@ func CreateNovel(c *gin.Context) {
 	// 创建 index.json
 	indexPath := filepath.Join(novelDir, "index.json")
 	indexData := map[string]interface{}{
-		"novel_id":   novel.ID,
-		"title":      novel.Title,
-		"chapters":   []interface{}{},
+		"novel_id": novel.ID,
+		"title":    novel.Title,
+		"chapters": []interface{}{},
 	}
 	indexBytes, _ := json.MarshalIndent(indexData, "", "  ")
 	os.WriteFile(indexPath, indexBytes, 0644)

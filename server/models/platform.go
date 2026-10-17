@@ -87,11 +87,11 @@ func (EarningsRecord) TableName() string { return "earnings_records" }
 
 // BlacklistIP 黑名单 IP
 type BlacklistIP struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	IP        string    `gorm:"size:45;uniqueIndex;not null" json:"ip"`
-	Reason    string    `gorm:"size:256" json:"reason"`
+	ID        uint       `gorm:"primaryKey" json:"id"`
+	IP        string     `gorm:"size:45;uniqueIndex;not null" json:"ip"`
+	Reason    string     `gorm:"size:256" json:"reason"`
 	ExpiresAt *time.Time `json:"expires_at"`
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 func (BlacklistIP) TableName() string { return "blacklist_ips" }

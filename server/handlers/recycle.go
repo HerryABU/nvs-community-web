@@ -57,10 +57,10 @@ func ListAuthorRecycle(c *gin.Context) {
 	fillBlogCategories(blogs)
 
 	utils.Success(c, gin.H{
-		"novels":     novels,
+		"novels":      novels,
 		"novel_total": novelTotal,
-		"blogs":      blogs,
-		"blog_total": blogTotal,
+		"blogs":       blogs,
+		"blog_total":  blogTotal,
 	})
 }
 

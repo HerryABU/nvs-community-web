@@ -40,9 +40,9 @@ func TestFilterHiddenItems(t *testing.T) {
 	}
 
 	threads := []models.Thread{
-		{UserID: hiddenAuthor},  // 应被滤除
-		{UserID: normalAuthor},  // block 模式不在列表过滤范围，保留
-		{UserID: 999},           // 无关作者，保留
+		{UserID: hiddenAuthor}, // 应被滤除
+		{UserID: normalAuthor}, // block 模式不在列表过滤范围，保留
+		{UserID: 999},          // 无关作者，保留
 	}
 	kept := FilterHiddenItems(viewer, threads, func(th models.Thread) uint { return th.UserID })
 	if len(kept) != 2 || kept[0].UserID != normalAuthor || kept[1].UserID != 999 {

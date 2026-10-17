@@ -92,14 +92,14 @@ func TestParseChaptersWithRule(t *testing.T) {
 // TestCleanTitle 标题清理：# 标记 / ** 包裹 / 行首行尾分隔符；纯分隔符返回空
 func TestCleanTitle(t *testing.T) {
 	cases := map[string]string{
-		"### 三级标题":     "三级标题",
-		"# 一级标题":       "一级标题",
-		"*第X章*":        "第X章",
-		"**加粗标题**":     "加粗标题",
-		"- 列表标题":        "列表标题",
-		"---":           "",
-		"***":           "",
-		"  普通标题  ":      "普通标题",
+		"### 三级标题": "三级标题",
+		"# 一级标题":   "一级标题",
+		"*第X章*":    "第X章",
+		"**加粗标题**": "加粗标题",
+		"- 列表标题":   "列表标题",
+		"---":      "",
+		"***":      "",
+		"  普通标题  ": "普通标题",
 	}
 	for in, want := range cases {
 		if got := cleanTitle(in); got != want {
@@ -112,11 +112,11 @@ func TestCleanTitle(t *testing.T) {
 func TestStripExt(t *testing.T) {
 	cases := map[string]string{
 		"第一章 开端.md":   "第一章 开端",
-		"正文.txt":        "正文",
-		"noext":          "noext",
-		"dir/第一章.doc":   "第一章",
-		"a.b.c.md":       "a.b.c",
-		"":               "",
+		"正文.txt":      "正文",
+		"noext":       "noext",
+		"dir/第一章.doc": "第一章",
+		"a.b.c.md":    "a.b.c",
+		"":            "",
 	}
 	for in, want := range cases {
 		if got := stripExt(in); got != want {

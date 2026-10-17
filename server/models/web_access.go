@@ -106,14 +106,14 @@ func ListWebAccess(q WebAccessQuery) (items []WebAccessLog, total int64, err err
 
 // WebAccessStats 聚合统计（用于诊断面板）
 type WebAccessStats struct {
-	Total        int64             `json:"total"`
-	Today        int64             `json:"today"`
-	BotTotal     int64             `json:"bot_total"`
-	AttackTotal  int64             `json:"attack_total"` // 近 24h：is_bot 或 status>=400
-	TopIPs       []map[string]any  `json:"top_ips"`
-	TopPaths     []map[string]any  `json:"top_paths"`
-	StatusDist   []map[string]any  `json:"status_dist"`
-	UAFamilyDist []map[string]any  `json:"ua_family_dist"`
+	Total         int64            `json:"total"`
+	Today         int64            `json:"today"`
+	BotTotal      int64            `json:"bot_total"`
+	AttackTotal   int64            `json:"attack_total"` // 近 24h：is_bot 或 status>=400
+	TopIPs        []map[string]any `json:"top_ips"`
+	TopPaths      []map[string]any `json:"top_paths"`
+	StatusDist    []map[string]any `json:"status_dist"`
+	UAFamilyDist  []map[string]any `json:"ua_family_dist"`
 	BotReasonDist []map[string]any `json:"bot_reason_dist"`
 }
 

@@ -18,7 +18,7 @@ func IssueCaptcha(c *gin.Context) {
 	utils.Success(c, gin.H{
 		"challenge_id": id,
 		"bg_image":     bg,
-		"piece_image":   piece,
+		"piece_image":  piece,
 		"width":        320,
 		"height":       160,
 		"tip":          "拖动拼图到缺口位置完成验证",

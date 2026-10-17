@@ -16,20 +16,20 @@ import (
 
 // HTMLReviewItem 统一的管理员审查条目（UserFrame + UserHTML）
 type HTMLReviewItem struct {
-	Type         string           `json:"type"` // frame / html
-	ID           uint             `json:"id"`
-	UserID       uint             `json:"user_id"`
-	OwnerName    string           `json:"owner_name"`
-	Name         string           `json:"name"`
-	Description  string           `json:"description"`
-	ReviewStatus string           `json:"review_status"`
-	ReviewNote   string           `json:"review_note"`
-	RunMode      string           `json:"run_mode"`
-	IsActive     bool             `json:"is_active"`
-	IsPublic     bool             `json:"is_public"`
+	Type         string            `json:"type"` // frame / html
+	ID           uint              `json:"id"`
+	UserID       uint              `json:"user_id"`
+	OwnerName    string            `json:"owner_name"`
+	Name         string            `json:"name"`
+	Description  string            `json:"description"`
+	ReviewStatus string            `json:"review_status"`
+	ReviewNote   string            `json:"review_note"`
+	RunMode      string            `json:"run_mode"`
+	IsActive     bool              `json:"is_active"`
+	IsPublic     bool              `json:"is_public"`
 	Warnings     []security.Threat `json:"warnings"`
-	CreatedAt    time.Time        `json:"created_at"`
-	UpdatedAt    time.Time        `json:"updated_at"`
+	CreatedAt    time.Time         `json:"created_at"`
+	UpdatedAt    time.Time         `json:"updated_at"`
 	// 封存态（仅 html：预检未通过 → 原样封存 ZIP，未解压）
 	IsExtracted     bool   `json:"is_extracted"`
 	ScanBlocked     bool   `json:"scan_blocked"`
@@ -136,7 +136,7 @@ func GetHTMLReview(c *gin.Context) {
 				"type": "html", "id": h.ID, "name": h.Name, "user_id": h.UserID,
 				"review_status": h.ReviewStatus, "review_note": h.ReviewNote, "run_mode": h.RunMode,
 				"is_active": h.IsActive, "is_public": h.IsPublic,
-				"warnings": security.ThreatsFromJSON(h.ScanWarnings),
+				"warnings":          security.ThreatsFromJSON(h.ScanWarnings),
 				"entry_file":        h.EntryFile,
 				"is_extracted":      false,
 				"scan_blocked":      h.ScanBlocked,
@@ -156,7 +156,7 @@ func GetHTMLReview(c *gin.Context) {
 			"type": "html", "id": h.ID, "name": h.Name, "user_id": h.UserID,
 			"review_status": h.ReviewStatus, "review_note": h.ReviewNote, "run_mode": h.RunMode,
 			"is_active": h.IsActive, "is_public": h.IsPublic,
-			"warnings": security.ThreatsFromJSON(h.ScanWarnings),
+			"warnings":          security.ThreatsFromJSON(h.ScanWarnings),
 			"entry_file":        h.EntryFile,
 			"is_extracted":      true,
 			"scan_blocked":      h.ScanBlocked,

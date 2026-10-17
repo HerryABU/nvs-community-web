@@ -11,9 +11,9 @@ import (
 // 与通用审计日志 user_audit_logs 解耦，便于按分区统计与审计追溯（含将来扩展浏览时长）。
 type ZoneAccessLog struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
-	UserID    uint      `gorm:"not null;index:idx_zone_access_user_zone,priority:1" json:"user_id"`    // 进入用户
+	UserID    uint      `gorm:"not null;index:idx_zone_access_user_zone,priority:1" json:"user_id"`      // 进入用户
 	Zone      string    `gorm:"size:50;not null;index:idx_zone_access_user_zone,priority:2" json:"zone"` // 隔离墙分区名，如同人区 / 政治文学区
-	EnteredAt time.Time `gorm:"not null;index" json:"entered_at"`  // 进入（确认通过）时间
+	EnteredAt time.Time `gorm:"not null;index" json:"entered_at"`                                        // 进入（确认通过）时间
 	IP        string    `gorm:"size:45" json:"ip"`
 	UserAgent string    `gorm:"type:text" json:"user_agent"`
 	CreatedAt time.Time `json:"created_at"`

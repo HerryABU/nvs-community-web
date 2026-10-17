@@ -11,21 +11,21 @@ import (
 var DB *gorm.DB
 
 type User struct {
-	ID               uint   `gorm:"primaryKey" json:"id"`
-	Username         string `gorm:"size:64;uniqueIndex;not null" json:"username"`
-	Email            string `gorm:"size:128;uniqueIndex;not null" json:"email"`
-	PasswordHash     string `gorm:"size:256;not null" json:"-"`
-	Nickname         string `gorm:"size:64;default:''" json:"nickname"`
-	AvatarURL        string `gorm:"size:512;default:''" json:"avatar_url"`
-	Signature        string `gorm:"size:256;default:''" json:"signature"`
-	Bio              string `gorm:"type:text" json:"bio"`
-	Role             string `gorm:"size:32;default:reader" json:"role"`
-	SigningKey       string `gorm:"size:64;default:''" json:"-"` // base64(AES-256 key), only set for authors
+	ID           uint   `gorm:"primaryKey" json:"id"`
+	Username     string `gorm:"size:64;uniqueIndex;not null" json:"username"`
+	Email        string `gorm:"size:128;uniqueIndex;not null" json:"email"`
+	PasswordHash string `gorm:"size:256;not null" json:"-"`
+	Nickname     string `gorm:"size:64;default:''" json:"nickname"`
+	AvatarURL    string `gorm:"size:512;default:''" json:"avatar_url"`
+	Signature    string `gorm:"size:256;default:''" json:"signature"`
+	Bio          string `gorm:"type:text" json:"bio"`
+	Role         string `gorm:"size:32;default:reader" json:"role"`
+	SigningKey   string `gorm:"size:64;default:''" json:"-"` // base64(AES-256 key), only set for authors
 	// 手机号登录（F10）：普通索引 + 应用层唯一校验（空串唯一索引在多行下冲突，故不用 DB uniqueIndex）
 	Phone string `gorm:"size:20;index;default:''" json:"phone,omitempty"`
 	// 实名制（F10，公安部令第176号合规）：姓名 AES-256-GCM 加密存储；身份证仅存哈希+脱敏展示
-	RealName     string     `gorm:"size:256;default:''" json:"-"`       // 密文（EncryptField 产出）
-	IDCardHash   string     `gorm:"size:64;index;default:''" json:"-"`  // sha256(身份证号) 用于查重/防重复实名
+	RealName     string     `gorm:"size:256;default:''" json:"-"`      // 密文（EncryptField 产出）
+	IDCardHash   string     `gorm:"size:64;index;default:''" json:"-"` // sha256(身份证号) 用于查重/防重复实名
 	IDCardMasked string     `gorm:"size:32;default:''" json:"id_card_masked,omitempty"`
 	RealNameAt   *time.Time `json:"-"`
 	// 未成年保护（F21.1）：出生日期 + 未成年人标记（可由生日推算或国家实名 API 返回）

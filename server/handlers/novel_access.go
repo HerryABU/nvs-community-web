@@ -11,8 +11,8 @@ import (
 type NovelView struct {
 	models.Novel
 	RequiresLogin bool `json:"requires_login"` // 匿名必须登录才能查看
-	IsTrial       bool `json:"is_trial"`        // 匿名仅可试读前 TrialLimit 章
-	TrialLimit    int  `json:"trial_limit"`     // 试读章节上限
+	IsTrial       bool `json:"is_trial"`       // 匿名仅可试读前 TrialLimit 章
+	TrialLimit    int  `json:"trial_limit"`    // 试读章节上限
 }
 
 // NovelAccess 解析某作品对当前访问者的可见性策略。

@@ -141,10 +141,10 @@ func ImportBlogs(c *gin.Context) {
 			blog.CategoryID = uint(categoryID)
 		}
 		created = append(created, gin.H{
-			"id":       blog.ID,
-			"title":    title,
-			"summary":  summary,
-			"words":    len([]rune(content)),
+			"id":      blog.ID,
+			"title":   title,
+			"summary": summary,
+			"words":   len([]rune(content)),
 		})
 		createdIDs = append(createdIDs, blog.ID)
 	}
@@ -154,12 +154,12 @@ func ImportBlogs(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{
-		"count":        len(created),
-		"skipped":      skipped,
-		"created":      created,
-		"created_ids":  createdIDs,
-		"category_id":  categoryID,
-		"message":      fmt.Sprintf("成功导入 %d 篇博客", len(created)),
+		"count":       len(created),
+		"skipped":     skipped,
+		"created":     created,
+		"created_ids": createdIDs,
+		"category_id": categoryID,
+		"message":     fmt.Sprintf("成功导入 %d 篇博客", len(created)),
 	})
 }
 

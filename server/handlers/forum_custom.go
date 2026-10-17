@@ -145,8 +145,8 @@ func VerifyForumPassword(c *gin.Context) {
 
 // EnterForumByRoomCode POST /api/forums/enter-by-code — 凭房间号进入（不可见论坛的唯一入口凭证）。
 // 请求：{room_code, password?}。两段式：
-//  - 仅传 room_code：校验房间号有效性；若论坛有密码则返回 need_password=true（不视为错误），由前端弹密码输入框；
-//  - room_code + password：校验房间号并校验密码，通过后返回 forum_id。
+//   - 仅传 room_code：校验房间号有效性；若论坛有密码则返回 need_password=true（不视为错误），由前端弹密码输入框；
+//   - room_code + password：校验房间号并校验密码，通过后返回 forum_id。
 func EnterForumByRoomCode(c *gin.Context) {
 	var req struct {
 		RoomCode string `json:"room_code" binding:"required"`
@@ -170,11 +170,11 @@ func EnterForumByRoomCode(c *gin.Context) {
 	// 未提供密码：返回论坛信息与是否需密码（进入密码墙由前端二次提交）
 	if req.Password == "" {
 		utils.Success(c, gin.H{
-			"forum_id":     forum.ID,
-			"name":         forum.Name,
-			"has_password": forum.HasPassword,
+			"forum_id":      forum.ID,
+			"name":          forum.Name,
+			"has_password":  forum.HasPassword,
 			"need_password": forum.HasPassword,
-			"is_public":    forum.IsPublic,
+			"is_public":     forum.IsPublic,
 		})
 		return
 	}
@@ -186,11 +186,11 @@ func EnterForumByRoomCode(c *gin.Context) {
 	}
 
 	utils.Success(c, gin.H{
-		"forum_id":     forum.ID,
-		"name":         forum.Name,
-		"has_password": forum.HasPassword,
+		"forum_id":      forum.ID,
+		"name":          forum.Name,
+		"has_password":  forum.HasPassword,
 		"need_password": false,
-		"is_public":    forum.IsPublic,
+		"is_public":     forum.IsPublic,
 	})
 }
 
@@ -218,9 +218,9 @@ func ForumMuteUser(c *gin.Context) {
 	}
 
 	var req struct {
-		UserID         uint `json:"user_id" binding:"required"`
-		DurationHours  int  `json:"duration_hours"` // 禁言时长（小时），0=永久
-		Reason         string `json:"reason"`
+		UserID        uint   `json:"user_id" binding:"required"`
+		DurationHours int    `json:"duration_hours"` // 禁言时长（小时），0=永久
+		Reason        string `json:"reason"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
