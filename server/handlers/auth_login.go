@@ -8,6 +8,7 @@ import (
 
 	"nvs-server/middleware"
 	"nvs-server/models"
+	"nvs-server/security/slidecaptcha"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -15,8 +16,9 @@ import (
 )
 
 type LoginInput struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
+	Email        string `json:"email" binding:"required,email"`
+	Password     string `json:"password" binding:"required"`
+	CaptchaToken string `json:"captcha_token"` // 滑块验证码 pass token（站长开启滑块时必填）
 }
 
 // POST /api/auth/login
@@ -32,6 +34,15 @@ func Login(c *gin.Context) {
 	}
 
 	input.Email = strings.TrimSpace(strings.ToLower(input.Email))
+
+	// 🔒 滑块验证码闸门：站长开启滑块时，登录前必须先过人机校验，阻断撞库/暴力破解。
+	// 与注册、发码、找回密码一致；未通过滑块挑战直接拒绝，堵死「裸调 login」通道。
+	if models.IsCaptchaEnabled() {
+		if input.CaptchaToken == "" || !slidecaptcha.VerifyPassToken(input.CaptchaToken) {
+			utils.Forbidden(c, "请先完成滑块验证后再登录")
+			return
+		}
+	}
 
 	user, err := models.GetUserByEmail(input.Email)
 	if err != nil {

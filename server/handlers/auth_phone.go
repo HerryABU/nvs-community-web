@@ -131,13 +131,24 @@ func PhoneLogin(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Phone string `json:"phone" binding:"required"`
-		Code  string `json:"code" binding:"required"`
+		Phone        string `json:"phone" binding:"required"`
+		Code         string `json:"code" binding:"required"`
+		CaptchaToken string `json:"captcha_token"` // 滑块验证码 pass token（站长开启滑块时必填）
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
+
+	// 🔒 滑块验证码闸门：站长开启滑块时，手机号登录前必须先过人机校验。
+	// 与发码、注册等一致，堵死「裸调 phone/login」通道。
+	if models.IsCaptchaEnabled() {
+		if req.CaptchaToken == "" || !slidecaptcha.VerifyPassToken(req.CaptchaToken) {
+			utils.Forbidden(c, "请先完成滑块验证后再登录")
+			return
+		}
+	}
+
 	phone := sms.NormalizePhone(req.Phone)
 	code := strings.TrimSpace(req.Code)
 	if !sms.IsValidCNMobile(phone) {
