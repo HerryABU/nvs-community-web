@@ -25,8 +25,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function login(email: string, password: string) {
-    const res = await authApi.login({ email, password });
+  async function login(email: string, password: string, captchaToken?: string) {
+    const res = await authApi.login({ email, password, captcha_token: captchaToken });
     if (res.data.code === 0) {
       user.value = res.data.data.user;
     }
@@ -34,8 +34,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   // 手机号验证码登录（F10；不存在则后端自动注册）
-  async function phoneLogin(phone: string, code: string) {
-    const res = await authApi.phoneLogin(phone, code);
+  async function phoneLogin(phone: string, code: string, captchaToken?: string) {
+    const res = await authApi.phoneLogin(phone, code, captchaToken);
     if (res.data.code === 0) {
       user.value = res.data.data.user;
     }

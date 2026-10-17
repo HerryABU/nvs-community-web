@@ -3,6 +3,7 @@ import api from './index';
 export interface LoginParams {
   email: string;
   password: string;
+  captcha_token?: string;
 }
 
 export interface RegisterParams {
@@ -118,11 +119,11 @@ export const authApi = {
       { phone, captcha_token: captchaToken || '', purpose }
     );
   },
-  // 手机号验证码登录（不存在则自动注册）
-  phoneLogin(phone: string, code: string) {
+  // 手机号验证码登录（不存在则自动注册）；captchaToken 为滑块 pass token（站长开启滑块时必填）
+  phoneLogin(phone: string, code: string, captchaToken?: string) {
     return api.post<{ code: number; message: string; data: { user: User } }>(
       '/auth/phone/login',
-      { phone, code }
+      { phone, code, captcha_token: captchaToken || '' }
     );
   },
 
