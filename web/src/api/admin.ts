@@ -132,9 +132,28 @@ export const adminApi = {
   revokePolice(id: number) {
     return api.post(`/admin/users/${id}/revoke-police`);
   },
-  // 热词统计：最近 N 天评论/回帖/帖题高频词（内容治理/舆情观测）
-  hotWords(params?: { days?: number; limit?: number }) {
-    return api.get<{ code: number; message: string; data: { words: { word: string; count: number }[]; days: number; total: number } }>('/admin/hotwords', { params });
+  // 热词统计：内容热词(默认)/搜索热词/标签热词（内容治理与舆情观测）
+  hotWords(params?: { days?: number; limit?: number; type?: 'content' | 'search' | 'tag' }) {
+    return api.get<{
+      code: number;
+      message: string;
+      data: {
+        type: 'content' | 'search' | 'tag';
+        words: { word: string; count: number }[];
+        queries?: { word: string; count: number }[]; // type=search 时的原始搜索短语
+        search_total?: number;                        // type=search 时的窗口内搜索总次数
+        days: number;
+        total: number;
+      };
+    }>('/admin/hotwords', { params });
+  },
+  // 维护搜索埋点日志：days>0 仅清理 N 天前，days=0/不传清空全部
+  clearSearchLogs(days?: number) {
+    return api.post<{ code: number; message: string; data: { removed: number } }>(
+      '/admin/search-logs/cleanup',
+      {},
+      days && days > 0 ? { params: { days } } : undefined,
+    );
   },
   // 实名记录（F10：姓名解密后仅在本响应返回，身份证仅脱敏展示）
   listRealName(params?: { page?: number; page_size?: number; keyword?: string }) {
