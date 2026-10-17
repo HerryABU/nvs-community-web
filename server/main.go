@@ -39,7 +39,7 @@ var frontendBundleRe = regexp.MustCompile(`index-[A-Za-z0-9_-]+\.js`)
 // 以及任意未知前缀）一律 404，杜绝任何形式的代理/前缀造成的组件穿越。
 var knownSPARoots = map[string]bool{
 	"admin": true, "author": true, "blog": true, "blogs": true,
-	"bookshelf": true, "category": true, "docs": true, "forum": true,
+	"bookshelf": true, "category": true, "comment-network": true, "docs": true, "forum": true,
 	"forums": true, "frames": true, "htmls": true, "install": true,
 	"login": true, "novel": true, "plaza": true, "register": true,
 	"reports": true, "run": true, "settings": true, "setup": true,
