@@ -5,10 +5,18 @@
       <LiveBadge :connected="liveConnected" />
       <span class="floor-live-tip">狂暴模式已开启，新评论将实时推送</span>
     </div>
+    <!-- 折叠系统：评论区整体折叠/展开 -->
+    <div v-if="floors.length > 0" class="floor-list-bar">
+      <el-button text size="small" @click="toggleAll">
+        {{ allCollapsed ? '展开全部' : '折叠全部' }}
+      </el-button>
+      <span class="floor-list-count">共 {{ floors.length }} 楼</span>
+    </div>
     <div v-for="floor in floors" :key="floor.id" class="floor" :id="`floor-${floor.id}`">
       <!-- ====== 楼主位（本楼主贴） ====== -->
       <div class="floor-main">
         <div class="floor-head">
+          <span class="floor-collapse" @click="toggleFloor(floor.id)">{{ isFloorCollapsed(floor.id) ? '▸' : '▾' }}</span>
           <span class="floor-no">{{ floor.floor_no || '?' }}楼</span>
           <span class="floor-user">{{ displayName(floor) }}</span>
           <el-tag v-if="showDeleted(floor)" size="small" type="danger" effect="dark">已删除</el-tag>
@@ -16,7 +24,9 @@
           <el-tag v-if="floor.has_password" size="small" type="warning" effect="plain" class="floor-lock-tag">
             <el-icon class="lock-ico"><Lock /></el-icon> 已加密
           </el-tag>
-          <span class="floor-time">{{ formatTime(floor.created_at) }}</span>
+          <el-tooltip :content="absTime(floor)" placement="top">
+            <span class="floor-time">{{ relTime(floor) }}</span>
+          </el-tooltip>
           <span class="floor-actions">
             <slot name="actions" :item="floor" />
             <el-button v-if="replyable" size="small" text @click="toggleReply(floor.id)">
@@ -44,10 +54,10 @@
             >删除</el-button>
           </span>
         </div>
-        <div v-if="!floor.Locked" class="floor-content cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" :class="{ 'deleted-content': showDeleted(floor) }">
+        <template v-if="!isFloorCollapsed(floor.id)"><div v-if="!floor.Locked" class="floor-content cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" :class="{ 'deleted-content': showDeleted(floor) }">
           <div v-if="showDeleted(floor)" class="deleted-banner">⚠ 该内容已被删除，以下为警方取证留证（删除人：{{ floor.deleted_by === 'admin' ? '管理员' : floor.deleted_by === 'user' ? '用户自删' : '系统' }}）</div>
           <div v-else-if="floor.is_deleted && !isModerator" class="deleted-placeholder">[ 该内容已删除 ]</div>
-          <div v-html="renderMarkdown(floor.content)"></div>
+          <div v-html="renderCommentHTML(floor.content, floor.mentions)"></div>
         </div>
         <div v-else class="floor-locked">
           <div class="locked-icon"><el-icon><Lock /></el-icon></div>
@@ -82,10 +92,12 @@
             <span class="reply-body cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" :class="{ 'deleted-content': showDeleted(r) }">
               <el-tag v-if="showDeleted(r)" size="small" type="danger" effect="dark" class="reply-deleted-tag">已删除</el-tag>
               <span v-if="showDeleted(r) === false && r.is_deleted && !isModerator">[ 该内容已删除 ]</span>
-              <span v-html="renderMarkdown(r.content)"></span>
+              <span v-html="renderCommentHTML(r.content, r.mentions)"></span>
             </span>
             <span class="reply-meta">
-              <span class="reply-time">{{ formatTime(r.created_at) }}</span>
+              <el-tooltip :content="absTime(r)" placement="top">
+                <span class="reply-time">{{ relTime(r) }}</span>
+              </el-tooltip>
               <el-button v-if="replyable" size="small" text @click="toggleReply(r.id)">回复</el-button>
               <ReportButton
                 v-if="targetType && authStore.isLoggedIn && authStore.user?.id !== r.user_id"
@@ -114,19 +126,26 @@
 
         <!-- 楼内回复输入框 -->
         <div v-if="replyTarget !== null && replyScope === floor.id" class="reply-form">
-          <el-input
+          <MentionTextarea
             v-model="replyContent"
-            type="textarea"
             :rows="2"
-            :placeholder="replyPlaceholder + '（Ctrl+B 粗体 / Ctrl+I 斜体 / Ctrl+U 下划线 / Ctrl+S 回复）'"
-            maxlength="2000"
-            size="small"
-            @keydown="onReplyKeydown"
+            :source="mentionSource"
+            :target-type="workType"
+            :target-i-d="targetID"
+            :placeholder="replyPlaceholder + '（Ctrl+B 粗体 / Ctrl+I 斜体 / Ctrl+U 下划线 / Ctrl+S 回复，输入 @ 提及）'"
+            @save="submitReply"
           />
           <div class="reply-form-actions">
             <el-button size="small" @click="cancelReply">取消</el-button>
             <el-button size="small" type="primary" :loading="replying" @click="submitReply">回复</el-button>
           </div>
+        </div>
+        </template>
+        <div v-else class="floor-collapsed-summary" @click="toggleFloor(floor.id)">
+          <span class="floor-collapse">▸</span>
+          <span class="floor-no">{{ floor.floor_no || '?' }}楼</span>
+          <span class="floor-user">{{ displayName(floor) }}</span>
+          <span class="floor-collapsed-meta">{{ repliesOf(floor.id).length }} 条回复 · {{ relTime(floor) }} · 点击展开</span>
         </div>
       </div>
     </div>
@@ -158,14 +177,15 @@
 <script setup lang="ts">
 import { ref, computed, reactive } from 'vue';
 import { useAuthStore } from '@/stores/auth';
-import { renderMarkdown } from '@/markdown/renderer';
+import MentionTextarea from './MentionTextarea.vue';
 import ReportButton from './ReportButton.vue';
 import LiveBadge from './comment/LiveBadge.vue';
 import { useLiveComments } from '@/composables/useLiveComments';
 import { commentApi, setFloorPassword } from '@/api/novel/comments';
 import { Lock } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
-import { editorKeydownHandler, MARKDOWN_TOKENS } from '@/utils/editorShortcuts';
+import { formatRelativeTime, formatAbsoluteMicro } from '@/utils/relativeTime';
+import { renderCommentHTML } from '@/utils/commentRender';
 
 // 楼层模型（公众号评论区 + Discuz 楼中楼）：
 //  - 回复主内容（作品/博客/帖子）→ 开新楼（parent_id 为空，floor_no 递增）
@@ -180,6 +200,10 @@ const props = withDefaults(defineProps<{
   canMute?: boolean;            // 版主：可禁言
   previewCount?: number;        // 楼内回复默认展示条数，超出折叠
   liveChannel?: string;         // 狂暴模式（F19）SSE 频道 key；传入即开启实时评论订阅
+  // 新增：@ 提及相关
+  mentionSource?: string;       // participants / global / manual（生效的提及来源）
+  workType?: string;            // 作品类型 blog / novel（联想候选用）
+  targetID?: number;            // 作品/博客 id（联想候选用）
 }>(), {
   items: () => [],
   ownerId: 0,
@@ -189,6 +213,9 @@ const props = withDefaults(defineProps<{
   canMute: false,
   previewCount: 3,
   liveChannel: '',
+  mentionSource: 'participants',
+  workType: '',
+  targetID: 0,
 });
 
 const emit = defineEmits<{
@@ -206,6 +233,22 @@ const liveConnected = live.connected;
 
 const authStore = useAuthStore();
 const expanded = reactive<Record<number, boolean>>({});
+
+// ── 折叠系统：单楼折叠 + 评论区整体折叠/展开 ──
+const collapsedFloors = reactive<Record<number, boolean>>({});
+function isFloorCollapsed(id: number) {
+  return !!collapsedFloors[id];
+}
+function toggleFloor(id: number) {
+  collapsedFloors[id] = !collapsedFloors[id];
+}
+const allCollapsed = computed(
+  () => floors.value.length > 0 && floors.value.every((f) => collapsedFloors[f.id]),
+);
+function toggleAll() {
+  const next = !allCollapsed.value;
+  for (const f of floors.value) collapsedFloors[f.id] = next;
+}
 
 // 警方/管理员取证视图：后端仅向这两类角色返回已删除评论（is_deleted），
 // 前端据此以红字标注「已删除」内容。普通用户拿不到已删除评论，即使拿到也只显示占位符。
@@ -278,11 +321,6 @@ function cancelReply() {
   replyContent.value = '';
 }
 
-// 楼内回复框快捷键：Ctrl/Cmd + B/I/U 包裹选区，Ctrl/Cmd + S 拦截浏览器保存并直接回复
-function onReplyKeydown(e: KeyboardEvent) {
-  editorKeydownHandler(e, { tokens: MARKDOWN_TOKENS, onSave: () => submitReply() });
-}
-
 async function submitReply() {
   const text = replyContent.value.trim();
   if (!text) return;
@@ -299,15 +337,13 @@ function displayName(item: any) {
   return item?.user?.username || item?.username || '匿名用户';
 }
 
-function formatTime(s?: string) {
-  if (!s) return '';
-  const d = new Date(s);
-  const now = new Date();
-  const diff = now.getTime() - d.getTime();
-  if (diff < 60000) return '刚刚';
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`;
-  return d.toLocaleDateString('zh-CN');
+// 相对时间（用户视角：刚刚 / X分钟前 / X小时前 / X天前 / YYYY-MM-DD）
+function relTime(item: any) {
+  return formatRelativeTime(item?.created_at, item?.created_micro);
+}
+// 绝对时间（含微秒）：悬停 Tooltip 展示，满足极客查证
+function absTime(item: any) {
+  return formatAbsoluteMicro(item?.created_at, item?.created_micro);
 }
 
 // ====== 楼加密（入口限制）：🔒 占位解锁 + 作者/警方/管理员密码管理 ======
@@ -575,6 +611,38 @@ async function removeManage() {
 .manage-body { display: flex; flex-direction: column; gap: 12px; }
 .manage-input { width: 100%; }
 .manage-actions { display: flex; gap: 8px; }
+
+/* ====== 折叠系统 ====== */
+.floor-list-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.floor-list-count {
+  font-size: 0.8rem;
+  color: var(--text-light, #999);
+}
+.floor-collapse {
+  cursor: pointer;
+  color: var(--text-light, #999);
+  font-size: 0.8rem;
+  user-select: none;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.floor-collapsed-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-light, #999);
+}
+.floor-collapsed-summary:hover { color: var(--primary-color, #4f46e5); }
+.floor-collapsed-meta { margin-left: auto; font-size: 0.78rem; }
 </style>
 
 <style>

@@ -2,14 +2,26 @@
   <div class="comment-section">
     <!-- 发表评论 -->
     <div class="comment-form" v-if="authStore.isLoggedIn">
-      <el-input
+      <div v-if="mentionCanEdit" class="mention-source-row">
+        <span class="mention-source-label">@ 提及来源</span>
+        <el-select
+          v-model="mentionSource"
+          size="small"
+          :loading="mentionLoading"
+          @change="onChangeMentionSource"
+          style="width: 170px"
+        >
+          <el-option v-for="o in MENTION_SOURCE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+        </el-select>
+      </div>
+      <MentionTextarea
         v-model="newComment"
-        type="textarea"
         :rows="3"
-        placeholder="写下你的评论... 支持 **粗体** *斜体* `代码` 等 Markdown 语法（Ctrl+B 粗体 / Ctrl+I 斜体 / Ctrl+U 下划线 / Ctrl+S 发表）"
-        maxlength="2000"
-        show-word-limit
-        @keydown="onCommentKeydown"
+        :source="mentionSource"
+        :target-type="mentionTargetType"
+        :target-i-d="mentionTargetID"
+        :maxlength="2000"
+        @save="submitComment"
       />
       <div class="form-actions">
         <span class="tip-text">文明评论，理性表达</span>
@@ -20,6 +32,13 @@
     </div>
     <div v-else class="comment-login-hint">
       <router-link to="/login">登录</router-link> 后即可发表评论
+    </div>
+
+    <!-- 评论网分析入口 -->
+    <div class="comment-network-entry">
+      <el-button size="small" text type="primary" @click="networkDrawer = true">
+        🕸 评论网分析（社交图谱）
+      </el-button>
     </div>
 
     <!-- 新评论提示条 -->
@@ -34,6 +53,9 @@
         :owner-id="ownerUserId"
         target-type="comment"
         :live-channel="liveChannel"
+        :mention-source="mentionSource"
+        :work-type="mentionTargetType"
+        :target-i-d="mentionTargetID"
         @reply="handleReply"
         @delete="handleDelete"
         @live="onLiveComment"
@@ -45,19 +67,28 @@
     <div class="load-more" v-if="hasMore">
       <el-button text :loading="loadingMore" @click="loadMore">加载更多</el-button>
     </div>
+
+    <!-- 评论网分析抽屉 -->
+    <CommentNetworkDrawer
+      v-model="networkDrawer"
+      :target-type="mentionTargetType"
+      :target-i-d="mentionTargetID"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { novelApi, commentApi, type Comment } from '@/api/novel';
-import { getFloorPasswords } from '@/api/novel/comments';
+import { getFloorPasswords, mentionApi } from '@/api/novel/comments';
 import { novelCommentChannel, blogCommentChannel, liveApi } from '@/api/live';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { shouldShowGuard } from '@/utils/sensitiveZone';
-import { editorKeydownHandler, MARKDOWN_TOKENS } from '@/utils/editorShortcuts';
 import FloorComments from './FloorComments.vue';
+import MentionTextarea from './MentionTextarea.vue';
+import CommentNetworkDrawer from '@/views/CommentNetworkDrawer.vue';
+import type { MentionSourceInfo } from '@/api/novel/types';
 
 const props = defineProps<{
   novelId: number;
@@ -71,6 +102,56 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'loaded', total: number): void }>();
 
 const authStore = useAuthStore();
+
+// ── @ 提及来源（站长/楼主可配置，控制评论框 @ 联想范围） ──
+const mentionTargetType = computed(() => (props.blogId ? 'blog' : 'novel'));
+const mentionTargetID = computed(() => (props.blogId ? props.blogId : props.novelId));
+const mentionSource = ref<string>('participants');
+const mentionCanEdit = ref(false);
+const mentionLoading = ref(false);
+const MENTION_SOURCE_OPTIONS = [
+  { value: 'participants', label: '本作品参与者' },
+  { value: 'global', label: '全站用户' },
+  { value: 'manual', label: '手动输入（不联想）' },
+];
+
+// 评论网分析抽屉
+const networkDrawer = ref(false);
+
+async function loadMentionSource() {
+  if (!authStore.isLoggedIn) return;
+  try {
+    const res = await mentionApi.getSource({
+      target_type: mentionTargetType.value,
+      target_id: mentionTargetID.value,
+    });
+    const info: MentionSourceInfo | undefined = res.data?.data;
+    if (info) {
+      mentionSource.value = info.effective || 'participants';
+      mentionCanEdit.value = !!info.can_edit;
+    }
+  } catch {
+    /* 忽略：使用默认 participants */
+  }
+}
+
+async function onChangeMentionSource(val: string) {
+  if (!mentionCanEdit.value) return;
+  mentionLoading.value = true;
+  try {
+    const res = await mentionApi.setSource({
+      target_type: mentionTargetType.value,
+      target_id: mentionTargetID.value,
+      mode: val,
+    });
+    if (res.data?.data?.effective) mentionSource.value = res.data.data.effective;
+    ElMessage.success('已更新 @ 提及来源');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  } finally {
+    mentionLoading.value = false;
+  }
+}
 
 const comments = ref<Comment[]>([]);
 const newComment = ref('');
@@ -155,6 +236,7 @@ async function pollNewComments() {
 
 onMounted(() => {
   fetchComments(true);
+  loadMentionSource();
   pollTimer = setInterval(pollNewComments, 30000);
   // 探测狂暴模式是否开启（开启才订阅实时评论，未开启则不建 SSE 连接）
   liveApi.publicConfig()
@@ -232,11 +314,6 @@ async function submitComment() {
   } finally {
     submitting.value = false;
   }
-}
-
-// 评论框快捷键：Ctrl/Cmd + B/I/U 包裹选区（Markdown），Ctrl/Cmd + S 拦截浏览器保存并直接发表
-function onCommentKeydown(e: KeyboardEvent) {
-  editorKeydownHandler(e, { tokens: MARKDOWN_TOKENS, onSave: () => submitComment() });
 }
 
 // parentId 为 null 表示回复主内容（开新楼）；有值表示回复楼内某条（挂靠该楼）
@@ -336,6 +413,20 @@ async function loadMore() {
 .load-more {
   text-align: center;
   margin-top: 16px;
+}
+
+.comment-network-entry {
+  margin: 4px 0 10px;
+}
+.mention-source-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.mention-source-label {
+  font-size: 0.82rem;
+  color: var(--text-light, #999);
 }
 </style>
 
