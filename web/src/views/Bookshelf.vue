@@ -211,7 +211,7 @@ onMounted(() => {
   position: relative;
   display: flex; gap: 16px;
   padding: 16px;
-  background: #fff; border-radius: var(--radius-sm);
+  background: var(--el-bg-color-overlay, #fff); border-radius: var(--radius-sm);
   box-shadow: var(--shadow-card);
   cursor: pointer;
   transition: box-shadow var(--transition-fast), transform var(--transition-fast);
@@ -256,7 +256,7 @@ onMounted(() => {
 .follow-list { display: flex; flex-direction: column; gap: 8px; }
 .follow-card {
   display: flex; align-items: center; gap: 14px;
-  padding: 14px 16px; background: #fff; border-radius: 10px;
+  padding: 14px 16px; background: var(--el-bg-color-overlay, #fff); border-radius: 10px;
   cursor: pointer; transition: box-shadow 0.2s;
   box-shadow: var(--shadow-card);
   border: 1px solid var(--border-color);
@@ -264,8 +264,8 @@ onMounted(() => {
 .follow-card:hover { box-shadow: var(--shadow-hover); }
 .follow-info { flex: 1; }
 .follow-name { font-weight: 600; font-size: 0.95rem; }
-.follow-bio { color: #999; font-size: 0.8rem; margin-top: 2px; }
-.empty-hint { text-align: center; padding: 48px; color: #999; }
+.follow-bio { color: var(--text-light, #999); font-size: 0.8rem; margin-top: 2px; }
+.empty-hint { text-align: center; padding: 48px; color: var(--text-light, #999); }
 
 /* ====== 移动端书架适配 ====== */
 @media (max-width: 640px) {

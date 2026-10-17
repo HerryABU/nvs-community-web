@@ -123,8 +123,8 @@ onMounted(() => { loadData(); });
 .filter-bar { display: flex; justify-content: flex-start; }
 .feed-list { display: flex; flex-direction: column; gap: 10px; min-height: 120px; }
 .feed-card {
-  padding: 14px 16px; background: #fff; border-radius: 10px;
-  border: 1px solid #eee; cursor: pointer; transition: box-shadow 0.2s;
+  padding: 14px 16px; background: var(--el-bg-color-overlay, #fff); border-radius: 10px;
+  border: 1px solid var(--border-color, #eee); cursor: pointer; transition: box-shadow 0.2s;
 }
 .feed-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
 .card-top { display: flex; align-items: center; gap: 8px; }
@@ -133,14 +133,14 @@ onMounted(() => { loadData(); });
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .card-summary {
-  color: #666; font-size: 0.82rem; margin-top: 6px; line-height: 1.6;
+  color: var(--text-light, #666); font-size: 0.82rem; margin-top: 6px; line-height: 1.6;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .card-meta {
   display: flex; justify-content: space-between; gap: 12px;
-  margin-top: 8px; color: #999; font-size: 0.75rem;
+  margin-top: 8px; color: var(--text-light, #999); font-size: 0.75rem;
 }
-.empty-hint { text-align: center; padding: 48px 16px; color: #999; line-height: 1.8; }
+.empty-hint { text-align: center; padding: 48px 16px; color: var(--text-light, #999); line-height: 1.8; }
 .pagination { margin-top: 20px; display: flex; justify-content: center; }
 
 /* ====== 移动端适配 ====== */

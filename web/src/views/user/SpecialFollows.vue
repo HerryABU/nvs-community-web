@@ -97,18 +97,18 @@ onMounted(() => { loadData(); });
 .follow-header { margin-bottom: 16px; }
 .follow-header h2 { margin: 0 0 12px 0; }
 .header-sub { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.sub-hint { color: #999; font-size: 0.8rem; }
+.sub-hint { color: var(--text-light, #999); font-size: 0.8rem; }
 .user-list { display: flex; flex-direction: column; gap: 8px; }
 .user-card {
   display: flex; align-items: center; gap: 14px;
-  padding: 14px 16px; background: #fff; border-radius: 10px;
-  cursor: pointer; transition: box-shadow 0.2s; border: 1px solid #eee;
+  padding: 14px 16px; background: var(--el-bg-color-overlay, #fff); border-radius: 10px;
+  cursor: pointer; transition: box-shadow 0.2s; border: 1px solid var(--border-color, #eee);
 }
 .user-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
 .user-info { flex: 1; }
 .user-name { font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 6px; }
-.user-bio { color: #999; font-size: 0.8rem; margin-top: 2px; }
-.empty-hint { text-align: center; padding: 48px 16px; color: #999; line-height: 1.8; }
+.user-bio { color: var(--text-light, #999); font-size: 0.8rem; margin-top: 2px; }
+.empty-hint { text-align: center; padding: 48px 16px; color: var(--text-light, #999); line-height: 1.8; }
 .pagination { margin-top: 20px; display: flex; justify-content: center; }
 
 /* ====== 移动端适配 ====== */
