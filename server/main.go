@@ -449,6 +449,10 @@ func main() {
 		admin.GET("/community", handlers.GetCommunityDashboard)
 		// 实名记录查询（F10：姓名解密仅在本响应返回，身份证仅脱敏展示）
 		admin.GET("/realname", handlers.AdminListRealName)
+		// 实名核验提供商配置（国家代理/腾讯/阿里/华为/网易）
+		admin.GET("/realname-provider", handlers.AdminGetRealNameProvider)
+		admin.PUT("/realname-provider", handlers.AdminSetRealNameProvider)
+		admin.POST("/realname-provider/test", handlers.AdminTestRealNameProvider)
 		admin.GET("/hotwords", handlers.AdminHotWords) // 热词统计（内容治理/舆情观测）
 		admin.POST("/search-logs/cleanup", handlers.AdminSearchLogCleanup) // 维护搜索埋点日志（清空/保留期清理）
 		admin.GET("/users", handlers.ListUsers)

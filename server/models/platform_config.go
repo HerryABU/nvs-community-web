@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"nvs-server/config"
+	"nvs-server/realname"
 )
 
 // PlatformConfig 平台配置（站长面板）
@@ -115,19 +116,20 @@ func GetRobotsTxt() string {
 // InitPlatformConfigs 初始化默认平台配置（仅在不存在时写入）
 func InitPlatformConfigs() {
 	defaults := map[string]string{
-		"site_name":             "星海文学",
-		"vip_enabled":           "true",
-		"email_verify":          "false",
-		"captcha_enabled":       "true",
-		"novel_visitor_mode":    "open",
-		"home_module":           "novels",                                     // 首页主模块：novels / blogs / forums / combined
-		"realname_required":     "false",                                      // 发布/评论强制实名（默认关闭）
-		"login_methods":         `{"email":true,"phone":true,"wechat":false}`, // 允许的登录方式
-		"minor_mode":            "off",                                        // 未成年保护模式：off / soft / strict
-		"national_realname_api": `{"enabled":false,"url":"","token":""}`,      // 国家实名检测 API（不存储姓名/身份证明文）
-		"categories":            `["硬科幻","奇幻","推演文学","架空历史","现实主义","悬疑推理","实验文学","同人区","政治区","讽刺文学","泛二次元区","其他"]`,
-		"robots_txt":            "User-agent: *\nAllow: /\n",
-		"web_publish_quota":     "3", // 每用户默认可公开发布的 web 项目（UserHTML+UserFrame 合计）上限
+		"site_name":                 "星海文学",
+		"vip_enabled":               "true",
+		"email_verify":              "false",
+		"captcha_enabled":           "true",
+		"novel_visitor_mode":        "open",
+		"home_module":               "novels",                                     // 首页主模块：novels / blogs / forums / combined
+		"realname_required":         "false",                                      // 发布/评论强制实名（默认关闭）
+		"login_methods":             `{"email":true,"phone":true,"wechat":false}`, // 允许的登录方式
+		"minor_mode":                "off",                                        // 未成年保护模式：off / soft / strict
+		"national_realname_api":     `{"enabled":false,"url":"","token":""}`,      // 国家实名检测 API（不存储姓名/身份证明文）
+		"categories":                `["硬科幻","奇幻","推演文学","架空历史","现实主义","悬疑推理","实验文学","同人区","政治区","讽刺文学","泛二次元区","其他"]`,
+		"robots_txt":                "User-agent: *\nAllow: /\n",
+		"web_publish_quota":         "3", // 每用户默认可公开发布的 web 项目（UserHTML+UserFrame 合计）数量上限
+		"web_publish_quota_size_mb": "0", // 每用户默认可公开发布的 web 项目总大小上限（MB，0 = 不限）
 	}
 	for k, v := range defaults {
 		var count int64
@@ -472,4 +474,38 @@ func GetNationalRealNameConfig() NationalRealNameConfig {
 	}
 	_ = json.Unmarshal([]byte(v), &c)
 	return c
+}
+
+// ============ 实名核验提供商（多通道：国家代理/腾讯/阿里/华为/网易） ============
+
+// RealNameProviderConfigKey 实名核验提供商总配置（JSON：provider + 各厂商凭据）
+const RealNameProviderConfigKey = "realname_provider"
+
+// GetRealNameProviderConfig 读取提供商配置。
+// 兼容迁移：provider 为空但旧键 national_realname_api 已配置时，自动按 national 提供商返回。
+func GetRealNameProviderConfig() realname.Config {
+	var c realname.Config
+	v := GetPlatformConfig(RealNameProviderConfigKey)
+	if v != "" {
+		_ = json.Unmarshal([]byte(v), &c)
+	}
+	if c.Provider == "" {
+		// 旧配置迁移：national_realname_api 已开启 → national 通道
+		old := GetNationalRealNameConfig()
+		if old.Enabled && old.URL != "" {
+			c.Provider = "national"
+			c.National.URL = old.URL
+			c.National.Token = old.Token
+		}
+	}
+	return c
+}
+
+// SetRealNameProviderConfig 持久化提供商配置
+func SetRealNameProviderConfig(c realname.Config) error {
+	b, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+	return SetPlatformConfig(RealNameProviderConfigKey, string(b))
 }
