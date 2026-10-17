@@ -1,6 +1,8 @@
 package models
 
 import (
+	"encoding/json"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -26,6 +28,8 @@ type Comment struct {
 	//       回复楼内任意一条 → 挂靠该楼（RootID 继承），展示为「X 回复 Y」。
 	RootID  *uint `gorm:"index:idx_comments_root" json:"root_id"`
 	FloorNo int   `gorm:"default:0;index:idx_comments_floor" json:"floor_no"`
+	// 显式回复目标用户（评论网分析用）：回复楼内某条时 = 被回复者 user_id；回复主内容（开新楼）时为 0
+	ReplyToUserID uint `gorm:"default:0;index" json:"reply_to_user_id"`
 	// 楼加密（入口限制，非内容加密）：仅顶层评论（楼）可设访问密码。
 	// 语义与「加密论坛」同构——未解锁者（非楼作者、非警方/管理员）读取时
 	// content 脱敏为占位、楼内回复不返回；凭 X-Floor-Password 头解锁。
@@ -38,9 +42,14 @@ type Comment struct {
 	ReplyToName  string         `gorm:"-" json:"reply_to_name,omitempty"`               // 被回复者昵称（运行时填充，展示「X 回复 Y」）
 	DeletedBy    string         `gorm:"size:16;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
 	IsDeleted    bool           `gorm:"-" json:"is_deleted"`                            // 运行时计算：是否已软删除（警方/管理员取证视图用）
-	CreatedAt    time.Time      `gorm:"index:idx_comments_novel_created,priority:2" json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
+	// 微秒级时间戳（Unix 微秒）：用于评论网分析的时间估计与精确排序；旧数据回填为 0
+	CreatedMicro int64 `gorm:"default:0;index" json:"created_micro"`
+	// @ 提及：存储 JSON 数组 [{"name":"foo","user_id":5}]；运行时由 AfterFind/MentionsRefs 解析到 Mentions
+	MentionsRaw string       `gorm:"type:text;default:''" json:"-"`
+	Mentions    []MentionRef `gorm:"-" json:"mentions,omitempty"` // 解析后的提及列表（展示/跳转用）
+	CreatedAt   time.Time    `gorm:"index:idx_comments_novel_created,priority:2" json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
 	// 关联
 	User   *User    `gorm:"foreignKey:UserID" json:"user,omitempty"`
@@ -57,7 +66,79 @@ func (Comment) TableName() string {
 // 仅 include_deleted（Unscoped）场景才会取回已删除行，此时 deleted_at 有值 → is_deleted=true。
 func (c *Comment) AfterFind(tx *gorm.DB) error {
 	c.IsDeleted = c.DeletedAt.Valid
+	if c.MentionsRaw != "" {
+		var ms []MentionRef
+		if json.Unmarshal([]byte(c.MentionsRaw), &ms) == nil {
+			c.Mentions = ms
+		}
+	}
 	return nil
+}
+
+// MentionRef @ 提及解析结果：被提及的展示名与其用户 id（解析失败/用户不存在则不含该条）。
+type MentionRef struct {
+	Name   string `json:"name"`
+	UserID uint   `json:"user_id"`
+}
+
+// mentionRe 匹配 @用户名：要求 @ 前非单词字符（避免邮箱 a@b 误判），用户名 2-20 位
+// 允许字母/数字/下划线/连字符/中文。Go RE2 不支持后顾/前瞻，尾随字符校验在代码中处理。
+var mentionRe = regexp.MustCompile(`(?:^|[^A-Za-z0-9_@])@([A-Za-z0-9_\-一-龥]{2,20})`)
+
+// isWordByte 判断字节是否为 ASCII 单词字符（用于尾随校验，防止 @name 吞噬后续词）
+func isWordByte(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '_'
+}
+
+// ParseMentions 从评论正文中提取 @提及，解析为存在的用户（按 username / nickname 匹配）。
+// 去重：同一用户名、同一用户只记一次；用户不存在则跳过（不报错）。
+func ParseMentions(content string) []MentionRef {
+	if content == "" {
+		return nil
+	}
+	locs := mentionRe.FindAllStringSubmatchIndex(content, -1)
+	if len(locs) == 0 {
+		return nil
+	}
+	seenName := map[string]bool{}
+	seenUID := map[uint]bool{}
+	out := make([]MentionRef, 0, len(locs))
+	for _, loc := range locs {
+		// 正则仅有一个捕获组（@后的用户名）。FindAllStringSubmatchIndex 对单组匹配返回
+		// 4 个整数：[fullStart, fullEnd, nameStart, nameEnd]，故用户名取 loc[2], loc[3]。
+		nameStart, nameEnd := loc[2], loc[3]
+		name := content[nameStart:nameEnd]
+		// 尾随字符为单词字符（如命中 20 字上限后仍有字母）：视为不完整，跳过
+		if nameEnd < len(content) && isWordByte(content[nameEnd]) {
+			continue
+		}
+		if seenName[name] {
+			continue
+		}
+		seenName[name] = true
+		var u User
+		if err := DB.Where("username = ? OR nickname = ?", name, name).First(&u).Error; err != nil {
+			continue // 用户不存在：忽略该 @
+		}
+		if seenUID[u.ID] {
+			continue
+		}
+		seenUID[u.ID] = true
+		out = append(out, MentionRef{Name: name, UserID: u.ID})
+	}
+	return out
+}
+
+// MentionsToRaw 将提及列表序列化为 JSON 存储字符串；空列表返回空串。
+func MentionsToRaw(ms []MentionRef) string {
+	if len(ms) == 0 {
+		return ""
+	}
+	b, err := json.Marshal(ms)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 // ==================== 楼层模型 ====================
@@ -79,7 +160,7 @@ func (c *Comment) resolveFloor() {
 		return
 	}
 	var parent Comment
-	if err := DB.Select("id", "root_id").First(&parent, *c.ParentID).Error; err != nil {
+	if err := DB.Select("id", "root_id", "user_id").First(&parent, *c.ParentID).Error; err != nil {
 		// 父评论已删除/不存在：退化成新楼，避免产生孤儿回复
 		c.ParentID = nil
 		c.resolveFloor()
@@ -90,6 +171,8 @@ func (c *Comment) resolveFloor() {
 		c.RootID = parent.RootID
 	}
 	c.FloorNo = 0
+	// 显式记录回复目标用户（评论网分析用，避免仅靠 parent_id 反查）
+	c.ReplyToUserID = parent.UserID
 }
 
 // CommentsPage 分页结果（楼层模型）：
@@ -323,7 +406,7 @@ func CreateComment(comment *Comment) error {
 		var parent Comment
 		if DB.Select("user_id").First(&parent, *comment.ParentID).Error == nil {
 			_ = PushNotification(comment.UserID, parent.UserID, "comment_reply",
-				"你的评论收到回复", content, linkForComment(comment))
+				"你的评论收到回复", content, LinkForComment(comment))
 		}
 	}
 	// 2) 作品收到新评论 → 通知作品作者
@@ -345,8 +428,8 @@ func CreateComment(comment *Comment) error {
 	return nil
 }
 
-// linkForComment 评论跳转链接：章评带章节号，作品级评论不带
-func linkForComment(c *Comment) string {
+// LinkForComment 评论跳转链接：章评带章节号，作品级评论不带
+func LinkForComment(c *Comment) string {
 	base := "/novel/" + strconv.FormatUint(uint64(c.NovelID), 10)
 	if c.NovelID == 0 {
 		return ""
