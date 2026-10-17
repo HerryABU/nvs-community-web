@@ -223,6 +223,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/home-customize-review',
+      name: 'admin-home-customize-review',
+      component: () => import('@/views/admin/AdminHomeCustomizeReview.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/security',
       name: 'admin-security',
       component: () => import('@/views/admin/AdminSecurity.vue'),
@@ -443,6 +449,20 @@ const router = createRouter({
       name: 'messages',
       component: () => import('@/views/MessageCenter.vue'),
       meta: { requiresAuth: true },
+    },
+    // ========== 个人中心（/me 路由，按功能类型懒加载子页，消除点击进入的长拉取尾巴） ==========
+    {
+      path: '/me',
+      component: () => import('@/views/me/MeLayout.vue'),
+      meta: { requiresAuth: true },
+      children: [
+        { path: '', name: 'me', component: () => import('@/views/me/MeOverview.vue') },
+        { path: 'works', name: 'me-works', component: () => import('@/views/me/MeWorks.vue') },
+        { path: 'blogs', name: 'me-blogs', component: () => import('@/views/me/MeBlogs.vue') },
+        { path: 'comments', name: 'me-comments', component: () => import('@/views/me/MeComments.vue') },
+        { path: 'stats', name: 'me-stats', component: () => import('@/views/me/MeStats.vue') },
+        { path: 'decorate', name: 'me-decorate', component: () => import('@/views/me/MeDecorate.vue') },
+      ],
     },
     {
       path: '/reading',

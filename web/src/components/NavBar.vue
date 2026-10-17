@@ -138,8 +138,8 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item @click="triggerAvatarUpload"><el-icon><Camera /></el-icon> 更换头像</el-dropdown-item>
-                <el-dropdown-item @click="goAuthorHome">
-                  <el-icon><User /></el-icon> 我的作者主页
+                <el-dropdown-item @click="$router.push('/me')">
+                  <el-icon><User /></el-icon> 个人中心
                 </el-dropdown-item>
                 <el-dropdown-item @click="$router.push('/author/templates')">
                   <el-icon><Brush /></el-icon> 模板设置
@@ -242,7 +242,7 @@
         <div class="mnav-item" @click="mnavGo('/reading')"><el-icon><Notebook /></el-icon> 精读笔记</div>
 
         <div class="mnav-group-title">账号</div>
-        <div class="mnav-item" @click="mnavGoAuthorHome"><el-icon><User /></el-icon> 我的作者主页</div>
+        <div class="mnav-item" @click="mnavGo('/me')"><el-icon><User /></el-icon> 个人中心</div>
         <div class="mnav-item" @click="mnavGo('/author/templates')"><el-icon><Brush /></el-icon> 模板设置</div>
         <div class="mnav-item" @click="mnavGo('/reports')"><el-icon><Warning /></el-icon> 我的举报</div>
         <div class="mnav-item" @click="mnavGo('/docs')"><el-icon><Document /></el-icon> 格式使用文档</div>
@@ -292,11 +292,6 @@ const mobileMenuOpen = ref(false);
 function mnavGo(path: string) {
   mobileMenuOpen.value = false;
   router.push(path);
-}
-
-function mnavGoAuthorHome() {
-  mobileMenuOpen.value = false;
-  if (authStore.user?.id) router.push(`/author/${authStore.user.id}`);
 }
 
 function mnavSearch() {
@@ -357,12 +352,6 @@ const isAuthor = computed(() => {
   const role = authStore.user?.role;
   return role === 'author' || role === 'vip_author' || role === 'admin';
 });
-
-function goAuthorHome() {
-  if (authStore.user?.id) {
-    router.push(`/author/${authStore.user.id}`);
-  }
-}
 
 function triggerAvatarUpload() { avatarInput.value?.click(); }
 

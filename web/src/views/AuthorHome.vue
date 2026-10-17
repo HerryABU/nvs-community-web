@@ -1,6 +1,13 @@
 <template>
   <div class="page-container author-home" v-loading="loading">
     <template v-if="author">
+      <!-- 作者公开主页装扮（已消毒 + 站长审核通过，对外可见） -->
+      <div
+        v-if="publicHtml"
+        class="author-custom-html"
+        v-html="publicHtml"
+      />
+
       <!-- 作者信息头 -->
       <div class="author-header">
         <div class="author-avatar-wrap">
@@ -123,6 +130,7 @@ import { ElMessage } from 'element-plus';
 import CommentSection from '@/components/CommentSection.vue';
 import DashboardCharts from '@/components/DashboardCharts.vue';
 import { useThemeStore } from '@/stores/theme';
+import { homeCustomizeApi } from '@/api/homeCustomize';
 
 const route = useRoute();
 const router = useRouter();
@@ -135,6 +143,9 @@ const authorId = ref(0); // 解析后的数字主键（异步填充）
 const loading = ref(false);
 const author = ref<any>(null);
 const data = ref<any>({});
+
+// 作者公开主页装扮（已消毒 + 审核通过的对外片段）
+const publicHtml = ref('');
 
 // 关注
 const isFollowing = ref(false);
@@ -206,7 +217,15 @@ async function load() {
   if (authorId.value > 0) {
     loadFollowStatus();
     loadBlogs();
+    loadPublicHtml();
   }
+}
+
+async function loadPublicHtml() {
+  try {
+    const res = await homeCustomizeApi.getAuthorHomeCustomize(authorId.value);
+    if (res.data.code === 0) publicHtml.value = res.data.data.public_html || '';
+  } catch { /* ignore */ }
 }
 
 async function loadFollowStatus() {
@@ -278,6 +297,12 @@ onMounted(load);
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+}
+
+/* 作者公开主页装扮片段（顶部，已消毒 + 审核通过） */
+.author-custom-html {
+  margin-bottom: 20px;
+  overflow: hidden;
 }
 
 [data-theme="dark"] .author-header {

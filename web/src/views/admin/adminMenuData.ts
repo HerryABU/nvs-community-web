@@ -68,6 +68,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: '内容留证', desc: 'softdel 回收站 · 删除/封禁可追溯', path: '/admin/softdel', icon: Box, color: 'var(--gradient-purple)' },
       { title: '内容抢救台', desc: '二级密码应急预览/软删除留证', path: '/admin/emergency', icon: WarningFilled, color: 'var(--gradient-accent)' },
       { title: 'HTML/WASM 审核', desc: '可疑内容人工判定 · 封存件处置 · 审核记录', path: '/admin/html-review', icon: Cpu, color: 'var(--gradient-purple)' },
+      { title: '作者主页审核', desc: '自定义公开主页消毒预览 · 原文送站长复核 · 通过/驳回', path: '/admin/home-customize-review', icon: View, color: 'var(--gradient-pink)' },
       { title: '热词统计', desc: '评论/回帖高频词聚合 · 舆情观测', path: '/admin/hotwords', icon: Histogram, color: 'var(--gradient-blue)' },
       { title: '实名与未成年保护', desc: '核验提供商配置 · 实名策略 · 未成年模式 · 实名记录', path: '/admin/realname', icon: Postcard, color: 'var(--gradient-success)' },
     ],

@@ -482,7 +482,9 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 > 5. **登录方式管理独立页（`/admin/login-methods`）**：微信/邮箱/手机号三开关卡（微信登录附 env 配置指引）、注册验证安全（邮箱验证/滑块）、SMTP 通道配置 + 诊断测试、域名黑白名单、保存后 .env 同步回显；修复存量 bug（`login_methods` 为 JSON 字符串需 `JSON.parse` 后读取）。
 > 6. **实名与未成年保护独立页（`/admin/realname`）**：统计卡（总数/未成年/成年/当前提供商）+ RealNameProviderForm 五提供商卡片配置与测试 + 保护策略（realname_required/minor_mode）+ 记录列表（`minor_only` 筛选）；AdminSettings 瘦身为两张快速导航卡。
 > 7. **热词面板前端打磨**：三类型（内容/搜索/标签）渐变切换卡 + 统计卡 + 分类型彩色条形 + 排名奖牌色 + 暗色适配。
-> 8. **版本号 3.5.1 → 3.6.0**（语义化顺延）：`server/version/version.go` / `web/package.json` / `web/src/stores/theme.ts`（window.NVS.version 桥）同步更新，`go test ./...` 全绿、`npm run build` 通过、`nvs-server.exe` 已重建（新功能字符串已验证嵌入）。
+> 8. **自定义主页（alist 单框 + 双作用域 + 站长审核）**：「我的主页装扮」(`/me`) 仅本人登录态可见，允许原始 HTML/CSS/JS（自 XSS，等同 alist 个人自定义）；「作者公开主页」(`/author/:id`) 他人可见，提交即 `utils.SanitizeCustomHTML` 消毒（剥离 script/iframe/on\*/危险协议，保留布局/样式，「不过度激进」）并置 pending 进审核队列，自动化预检发现被移除项（had_issues）时原文 raw_html 一并送站长复核（按 `role='admin'` 查询、不硬编码），通过则 `public_html = safe_html` 对外可见；前端 `MeDecorate.vue` 双区块（自看原始 / 公开送审）+ `AdminHomeCustomizeReview.vue` 审核台（原文 vs 消毒预览）。
+> 9. **编辑器快捷键**：评论区/回复框支持 `Ctrl/Cmd+B/I/U`（粗体/斜体/下划线）+ `Ctrl/Cmd+S` 保存并 `preventDefault` 拦截浏览器「网页另存为」；Tiptap 富文本补 `Ctrl+S`→save；通用工具 `web/src/utils/editorShortcuts.ts`。
+> 10. **版本号 3.5.1 → 3.6.0**（语义化顺延）：`server/version/version.go` / `web/package.json` / `web/src/stores/theme.ts`（window.NVS.version 桥）同步更新，`go test ./...` 全绿、`npm run build` 通过、`nvs-server.exe` 已重建（新功能字符串已验证嵌入）。
 
 | 类别 | 文件 | 说明 |
 |---|---|---|
@@ -508,6 +510,11 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 | 前端 | `web/src/views/admin/AdminWebQuota.vue` / `web/src/views/user/WebQuota.vue` | 双维度额度 UI（全局/按人 MB 配置、数量+大小双卡、大小 tag） |
 | 前端 | `web/src/views/frame/HTMLManager.vue` / `FrameManager.vue` / `AuthorTemplateSettings.vue` | 公开开关改走额度接口 + 超额待审 badge + need_review 提示 |
 | 前端 | `web/src/views/admin/AdminHotWords.vue` | 三类型切换卡/统计卡/彩色条形/奖牌色打磨 |
+| 自定义主页消毒 | `server/utils/htmlcustom_sanitize.go` | `SanitizeCustomHTML`（保留结构/样式、剥离脚本/危险标签/事件/危险协议，style 走 `SanitizeCSS`；8 组单测） |
+| 自定义主页模型 | `server/models/home_customize.go` | `UserHomeCustomize`（自看原始）/ `AuthorHomeCustomize`（公开消毒+审核，raw/safe/public 三态 + had_issues） |
+| 自定义主页接口 | `server/handlers/home_customize.go` | `/me/home-customize`、`/author/:id/home-customize`、`/admin/home-customize/reviews`；预检出问题按 role 通知站长（不硬编码） |
+| 前端 | `web/src/views/me/MeDecorate.vue` / `web/src/views/admin/AdminHomeCustomizeReview.vue` | 双区块装扮页 + 站长审核台（原文 vs 消毒预览） |
+| 前端 | `web/src/utils/editorShortcuts.ts` | 编辑器快捷键工具（B/I/U/S，拦截浏览器保存）；CommentSection/FloorComments/RichTextEditor/BlogEditor/ChapterEditor 接入 |
 
 ### v3.5.1 管理员用户搜索/筛选（按角色分类 + 状态）（2026-08-30）
 
