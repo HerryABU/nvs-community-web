@@ -24,6 +24,8 @@
         <el-radio-button value="flow">折线流程图</el-radio-button>
         <el-radio-button value="flowchart">标准流程图</el-radio-button>
         <el-radio-button value="divergent">发散形状</el-radio-button>
+        <el-radio-button value="tree">树状图</el-radio-button>
+        <el-radio-button value="tree-flow">树状流程图</el-radio-button>
         <el-radio-button value="list">互动清单</el-radio-button>
       </el-radio-group>
       <span class="cn-toolbar-label">3D</span>
@@ -46,9 +48,14 @@
       <span v-if="suspiciousCount > 0" class="cn-warn">⚠ {{ suspiciousCount }} 组高频互怼（疑似刷评/抱团）</span>
     </div>
 
-    <!-- 2D 关系图（ECharts graph，多形态） -->
-    <div v-if="is2D" class="cn-graph-wrap">
-      <v-chart :option="currentGraphOption" autoresize class="cn-graph" @click="onGraphClick" />
+    <!-- 2D 关系图：graph 系与 tree 系各用独立 <v-chart> 实例，均通过 v-if 按需挂载，
+         确保各自在「可见」状态下初始化（echarts.init 在 display:none 容器下不会创建 canvas） -->
+    <div v-if="isGraph2D" class="cn-graph-wrap">
+      <v-chart ref="graphChartRef" :option="graphOption" autoresize class="cn-graph" @click="onGraphClick" />
+      <div class="cn-graph-hint">{{ graphHint }}</div>
+    </div>
+    <div v-else-if="isTree2D" class="cn-graph-wrap">
+      <div ref="treeEl" class="cn-graph"></div>
       <div class="cn-graph-hint">{{ graphHint }}</div>
     </div>
 
@@ -67,7 +74,7 @@
     </div>
 
     <!-- 互动清单 -->
-    <div v-else class="cn-list">
+    <div v-else-if="viewMode === 'list'" class="cn-list">
       <h4 class="cn-subtitle">高频互动 TOP（A 回复 B）</h4>
       <div
         v-for="p in net.top_pairs"
@@ -115,6 +122,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { commentNetworkApi } from '@/api/novel/comments';
 import { formatRelativeTime } from '@/utils/relativeTime';
+import * as echarts from 'echarts';
 import * as THREE from 'three';
 import type { CommentNetwork, NetworkEdge } from '@/api/novel/types';
 
@@ -132,7 +140,7 @@ const props = defineProps<{
 const net = ref<CommentNetwork | null>(null);
 const loading = ref(false);
 
-type ViewMode = 'force' | 'flow' | 'flowchart' | 'divergent' | '3d' | '3d-flow' | 'list';
+type ViewMode = 'force' | 'flow' | 'flowchart' | 'divergent' | 'tree' | 'tree-flow' | '3d' | '3d-flow' | 'list';
 const mode2d = ref<ViewMode>('force');
 const mode3d = ref<'' | '3d' | '3d-flow'>('');
 const viewMode = computed<ViewMode>(() => (mode3d.value || mode2d.value) as ViewMode);
@@ -140,8 +148,44 @@ const viewMode = computed<ViewMode>(() => (mode3d.value || mode2d.value) as View
 watch(mode2d, (v) => { if (v) mode3d.value = ''; });
 watch(mode3d, (v) => { if (v) mode2d.value = ''; });
 
-const is2D = computed(() => ['force', 'flow', 'flowchart', 'divergent'].includes(viewMode.value));
+const isGraph2D = computed(() => ['force', 'flow', 'flowchart', 'divergent'].includes(viewMode.value));
+const isTree2D = computed(() => viewMode.value === 'tree' || viewMode.value === 'tree-flow');
 const is3D = computed(() => viewMode.value === '3d' || viewMode.value === '3d-flow');
+
+// 两组 2D 图表各自的 <v-chart> 实例引用（graph 系用 vue-echarts；tree 系因 vue-echarts 在
+// display:none / 后期挂载场景下 echarts.init 无法创建 canvas，改为手写 ECharts 实例管理）
+const graphChartRef = ref<any>(null);
+const treeEl = ref<HTMLElement | null>(null);
+let treeInst: any = null;
+let treeRO: ResizeObserver | null = null;
+
+function renderTree() {
+  if (!treeEl.value) return;
+  if (!treeInst) treeInst = echarts.init(treeEl.value);
+  treeInst.setOption(treeOption.value, { notMerge: true });
+  treeInst.resize();
+}
+function disposeTree() {
+  if (treeRO) { treeRO.disconnect(); treeRO = null; }
+  if (treeInst) { treeInst.dispose(); treeInst = null; }
+}
+// 进入/离开树状图：按需初始化与销毁（避免实例长期驻留于隐藏容器）
+watch(isTree2D, async (on) => {
+  await nextTick();
+  if (on) {
+    renderTree();
+    if (treeEl.value && !treeRO) {
+      treeRO = new ResizeObserver(() => treeInst?.resize());
+      treeRO.observe(treeEl.value);
+    }
+  } else {
+    disposeTree();
+  }
+});
+// 树状图数据 / 内容开关变化时刷新
+watch(treeOption, () => { if (isTree2D.value && treeInst) renderTree(); });
+onMounted(() => { if (isTree2D.value) renderTree(); });
+onBeforeUnmount(() => disposeTree());
 
 // 显示开关：用户名 / 评论内容（可折叠以减小图面密度）
 const showUsername = ref(true);
@@ -194,8 +238,8 @@ function clearFilter() {
 
 // 点击关系图节点 → 下钻该评论者
 function onGraphClick(params: any) {
-  if (params?.dataType === 'node' && params.data?.id) {
-    setFilter(Number(params.data.id));
+  if (params?.dataType === 'node' && (params.data?.uid || params.data?.id)) {
+    setFilter(Number(params.data.uid ?? params.data.id));
   }
 }
 
@@ -291,8 +335,8 @@ function computeFlow(nodes: GNode[], links: GLink[], vertical = false): Map<numb
     byLevel.get(lv)!.push(n);
   });
   const coords = new Map<number, { x: number; y: number }>();
-  const colW = vertical ? 180 : 180;
-  const rowH = vertical ? 90 : 72;
+  const colW = vertical ? 230 : 230;
+  const rowH = vertical ? 96 : 96;
   [...byLevel.keys()].sort((a, b) => a - b).forEach((lv) => {
     const arr = byLevel.get(lv)!;
     arr.forEach((n, i) => {
@@ -330,7 +374,7 @@ function computeRadial(nodes: GNode[], links: GLink[]): Map<number, { x: number;
     byRing.get(r)!.push(n);
   });
   const coords = new Map<number, { x: number; y: number }>();
-  const ringR = 130;
+  const ringR = 175;
   [...byRing.keys()].sort((a, b) => a - b).forEach((r) => {
     const arr = byRing.get(r)!;
     arr.forEach((n, i) => {
@@ -352,8 +396,8 @@ function computeFlow3D(nodes: GNode[], links: GLink[]): Map<number, { x: number;
     byLevel.get(lv)!.push(n);
   });
   const coords = new Map<number, { x: number; y: number; z: number }>();
-  const layerGap = 170;
-  const ringR = 80;
+  const layerGap = 200;
+  const ringR = 95;
   [...byLevel.keys()].sort((a, b) => a - b).forEach((lv) => {
     const arr = byLevel.get(lv)!;
     arr.forEach((n, i) => {
@@ -430,7 +474,7 @@ function build2DOption(kind: 'force' | 'flow' | 'flowchart' | 'divergent') {
     lineStyle: { color: '#94a3b8', curveness: kind === 'divergent' ? 0.12 : 0 },
   };
   if (kind === 'force') {
-    series.force = { repulsion: 240, edgeLength: [60, 160] };
+    series.force = { repulsion: 1200, edgeLength: [120, 280], gravity: 0.06, friction: 0.6 };
   }
   return {
     tooltip: {
@@ -444,12 +488,132 @@ function build2DOption(kind: 'force' | 'flow' | 'flowchart' | 'divergent') {
   };
 }
 
+// ===================== 评论树（评论级：哪条评论引发了哪些回复） =====================
+interface TreeNode {
+  id: number;
+  name: string;
+  author: string;
+  excerpt: string;
+  uid: number;
+  children: TreeNode[];
+}
+// 由 net.edges（回复→父评论 关系）构建评论森林；上限裁剪避免过载
+const commentTree = computed<{ roots: TreeNode[] }>(() => {
+  const n = net.value;
+  if (!n) return { roots: [] };
+  const info = new Map<number, { author: string; excerpt: string; uid: number }>();
+  const childrenOf = new Map<number, number[]>();
+  const childSet = new Set<number>();
+  for (const e of n.edges) {
+    const child = e.comment_id;
+    const parent = e.parent_comment_id;
+    if (!info.has(child)) info.set(child, { author: e.from_name, excerpt: e.comment_excerpt, uid: e.from_user_id });
+    if (!info.has(parent)) info.set(parent, { author: e.to_name, excerpt: e.parent_excerpt, uid: e.to_user_id });
+    if (!childrenOf.has(parent)) childrenOf.set(parent, []);
+    childrenOf.get(parent)!.push(child);
+    childSet.add(child);
+  }
+  const sizeOf = new Map<number, number>();
+  const build = (id: number): TreeNode => {
+    const ch = (childrenOf.get(id) || []).map(build);
+    sizeOf.set(id, 1 + ch.reduce((s, c) => s + (sizeOf.get(c.id) || 0), 0));
+    const inf = info.get(id)!;
+    return { id, name: inf.author, author: inf.author, excerpt: inf.excerpt, uid: inf.uid, children: ch };
+  };
+  let roots = [...childrenOf.keys()].filter((id) => !childSet.has(id));
+  if (roots.length === 0 && childrenOf.size > 0) roots = [...childrenOf.keys()];
+  const rootNodes = roots.map(build).sort((a, b) => (sizeOf.get(b.id) || 0) - (sizeOf.get(a.id) || 0));
+  // 总节点上限 120：优先保留子树最大的根；单根超限则按深度 3 截断
+  const MAX_NODES = 120;
+  const truncateDepth = (node: TreeNode, depth: number): TreeNode =>
+    depth <= 0
+      ? { ...node, children: [] }
+      : { ...node, children: node.children.map((c) => truncateDepth(c, depth - 1)) };
+  const capped: TreeNode[] = [];
+  let total = 0;
+  for (const r of rootNodes) {
+    const sz = sizeOf.get(r.id) || 0;
+    if (total + sz > MAX_NODES) {
+      if (capped.length === 0) capped.push(truncateDepth(r, 3));
+      break;
+    }
+    capped.push(r);
+    total += sz;
+    if (total >= MAX_NODES) break;
+  }
+  return { roots: capped };
+});
+
+function buildTreeOption(orient: 'TB' | 'LR') {
+  const roots = commentTree.value.roots;
+  if (!roots.length) {
+    return {
+      title: {
+        text: '暂无回复关系（还没有评论引发其他评论）',
+        left: 'center',
+        top: 'center',
+        textStyle: { color: '#999', fontSize: 14 },
+      },
+      series: [],
+    };
+  }
+  const mkLabel = (d: any) => {
+    let s = '';
+    if (showUsername.value) s += `{a|${d.author}}`;
+    if (showComment.value && d.excerpt) s += (s ? '\n' : '') + `{b|${trunc(d.excerpt, 22)}}`;
+    return s;
+  };
+  const series: any = {
+    type: 'tree',
+    orient,
+    roam: true,
+    expandAndCollapse: true,
+    initialTreeDepth: -1,
+    symbol: 'circle',
+    symbolSize: 11,
+    data: roots,
+    top: '3%',
+    bottom: '3%',
+    left: orient === 'LR' ? '6%' : '8%',
+    right: orient === 'LR' ? '14%' : '8%',
+    edgeShape: 'curve',
+    edgeForkPosition: '60%',
+    lineStyle: { color: '#94a3b8', width: 1, curveness: 0.5 },
+    label: {
+      show: true,
+      fontSize: 10,
+      color: '#1e293b',
+      formatter: (p: any) => mkLabel(p.data),
+      rich: {
+        a: { fontSize: 11, color: '#4f46e5', fontWeight: 'bold', lineHeight: 15, align: 'center' },
+        b: { fontSize: 9, color: '#475569', lineHeight: 12, align: 'center' },
+      },
+    },
+    emphasis: { focus: 'descendant' },
+    animationDuration: 300,
+    animationDurationUpdate: 300,
+  };
+  return {
+    tooltip: {
+      formatter: (p: any) => {
+        const d = p.data;
+        let s = `${d.author}`;
+        if (showComment.value && d.excerpt) s += `\n「${d.excerpt}」`;
+        return s;
+      },
+    },
+    series: [series],
+  };
+}
+
 const forceOption = computed(() => build2DOption('force'));
 const flowOption = computed(() => build2DOption('flow'));
 const flowchartOption = computed(() => build2DOption('flowchart'));
 const divergentOption = computed(() => build2DOption('divergent'));
+const treeOptionTB = computed(() => buildTreeOption('TB'));
+const treeOptionLR = computed(() => buildTreeOption('LR'));
 
-const currentGraphOption = computed(() => {
+const graphOption = computed(() => {
   if (!net.value) return { series: [] };
   switch (viewMode.value) {
     case 'flow': return flowOption.value;
@@ -458,12 +622,18 @@ const currentGraphOption = computed(() => {
     default: return forceOption.value;
   }
 });
+const treeOption = computed(() => {
+  if (!net.value) return { series: [] };
+  return viewMode.value === 'tree-flow' ? treeOptionLR.value : treeOptionTB.value;
+});
 
 const graphHint = computed(() => {
   switch (viewMode.value) {
     case 'flow': return '折线流程图：按回复层级从左到右分层，箭头 A→B 表示「A 回复了 B」。';
     case 'flowchart': return '标准流程图：根评论者居顶，按回复层级自上而下展开；方框内即「用户名 + 其最新评论正文」，箭头即回复方向，沿链读可见内容演变。';
     case 'divergent': return '发散形状：中心为最活跃评论者，其余按互动距离呈辐射环展开。';
+    case 'tree': return '树状图：以「评论」为节点，父子关系即「子评论回复了父评论」；沿枝向下即可看清哪条评论引发了哪些回复。可拖拽缩放、点击节点折叠/展开分支。';
+    case 'tree-flow': return '树状流程图：横向展开评论回复树，根评论在左、回复向右衍生；箭头起点（父）引发箭头终点（子）。';
     default: return '箭头 A→B 表示「A 回复了 B」；点击节点可下钻到该评论者的互动。';
   }
 });
