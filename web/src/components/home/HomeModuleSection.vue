@@ -66,13 +66,14 @@ interface Item { id: number; title: string; subtitle: string; to: string }
 const items = ref<Item[]>([]);
 const loading = ref(false);
 
-function normalize(list: any[], module: ModuleType): Item[] {
+function normalize(list: any[], module: ModuleType): any[] {
   return (list || []).map((r: any) => {
     if (module === 'novels') {
+      // 透传整条小说记录，保留 NovelCard 需要的 total_words / total_chapters /
+      // cover_url / summary / author / categories 等字段，避免卡片全部回退默认值。
       return {
-        id: r.id,
+        ...r,
         title: r.title || '未命名',
-        subtitle: r.author_name || r.author?.nickname || r.author?.username || '—',
         to: `/novel/${r.id}`,
       };
     }

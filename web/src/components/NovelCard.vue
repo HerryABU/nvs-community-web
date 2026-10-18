@@ -19,12 +19,12 @@
         <el-tag v-for="cat in displayCategories" :key="cat" size="small" type="warning" style="margin-right:4px">
           {{ cat }}
         </el-tag>
-        <span class="word-count">{{ (novel.total_words || 0).toLocaleString() }} 字</span>
+        <span v-if="novel.total_words" class="word-count">{{ novel.total_words.toLocaleString() }} 字</span>
       </div>
       <p class="card-summary">{{ truncate(novel.summary, 80) }}</p>
       <div class="card-footer">
-        <span class="author-name">{{ (novel as any).author?.nickname || (novel as any).author?.username || '未知作者' }}</span>
-        <span class="chapter-count">{{ novel.total_chapters || 0 }} 章</span>
+        <span class="author-name">{{ authorName }}</span>
+        <span v-if="novel.total_chapters" class="chapter-count">{{ novel.total_chapters }} 章</span>
       </div>
     </div>
   </el-card>
@@ -38,7 +38,13 @@ const props = defineProps<{ novel: Novel }>();
 defineEmits<{ click: [] }>();
 
 const displayCategories = computed(() => {
-  return props.novel.categories?.length ? props.novel.categories : (props.novel.category ? [props.novel.category] : ['其他']);
+  const cats = props.novel.categories?.length ? props.novel.categories : (props.novel.category ? [props.novel.category] : []);
+  return cats.filter(Boolean);
+});
+
+const authorName = computed(() => {
+  const a = (props.novel as any).author;
+  return a?.nickname || a?.username || '佚名';
 });
 
 function truncate(text: string | undefined, maxLen: number): string {
