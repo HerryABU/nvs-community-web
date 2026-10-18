@@ -11,6 +11,12 @@
         <span class="brand-text">{{ siteName }}</span>
       </div>
 
+      <!-- 主页入口 -->
+      <router-link to="/" class="nav-link desktop-only">主页</router-link>
+
+      <!-- 小说入口（作品信息流） -->
+      <router-link to="/feed" class="nav-link desktop-only">小说</router-link>
+
       <!-- 分类下拉 -->
       <el-dropdown class="category-dropdown" trigger="click">
         <span class="category-trigger">
