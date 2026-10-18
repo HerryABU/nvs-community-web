@@ -291,3 +291,51 @@ func GetTotalWordsByNovel(novelID uint) (int, error) {
 		Select("COALESCE(SUM(word_count), 0)").Scan(&total).Error
 	return total, err
 }
+
+// RecomputeAllNovelStats 批量重算所有作品的章节数与总字数统计（从 chapters 表聚合写回 novels）。
+// 用于修复因历史导入 / 迁移 / 早期版本未回填，导致 novels.total_chapters / total_words
+// 与真实章节不一致的脏数据。含软删除作品一并重算，保证统计口径一致。
+// 返回：处理作品数、实际发生变更数。
+func RecomputeAllNovelStats() (processed int, changed int, err error) {
+	// 1) 聚合：每个作品的章节数 + 总字数（chapters 默认已过滤软删除行）
+	type agg struct {
+		NovelID   uint `gorm:"column:novel_id"`
+		ChapCount int  `gorm:"column:chap_count"`
+		WordSum   int  `gorm:"column:word_sum"`
+	}
+	var aggs []agg
+	if err = DB.Model(&Chapter{}).
+		Select("novel_id, COUNT(*) as chap_count, COALESCE(SUM(word_count), 0) as word_sum").
+		Group("novel_id").Scan(&aggs).Error; err != nil {
+		return 0, 0, err
+	}
+	aggMap := make(map[uint]agg, len(aggs))
+	for _, a := range aggs {
+		aggMap[a.NovelID] = a
+	}
+
+	// 2) 遍历全部作品（含软删除），写回统计；用 map Updates 精确写列，规避 GORM 零值坑
+	var novels []Novel
+	if err = DB.Unscoped().Find(&novels).Error; err != nil {
+		return 0, 0, err
+	}
+	for i := range novels {
+		n := &novels[i]
+		tc, tw := 0, 0
+		if a, ok := aggMap[n.ID]; ok {
+			tc, tw = a.ChapCount, a.WordSum
+		}
+		if n.TotalChapters != tc || n.TotalWords != tw {
+			if err = DB.Model(&Novel{}).Where("id = ?", n.ID).
+				Updates(map[string]interface{}{
+					"total_chapters": tc,
+					"total_words":    tw,
+				}).Error; err != nil {
+				return processed, changed, err
+			}
+			changed++
+		}
+		processed++
+	}
+	return processed, changed, nil
+}

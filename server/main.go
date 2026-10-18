@@ -640,6 +640,9 @@ func main() {
 		// 小说/章节封禁管理（管理员视角列表 + 封禁 + 解封）
 		admin.GET("/novels", handlers.AdminListNovels)
 		admin.GET("/novels/:id/chapters", handlers.AdminListChapters)
+		// 批量重算所有作品统计（修复 total_chapters / total_words 脏数据）
+		// 注意：不可注册在 /novels 下，否则与 /novels/:id/chapters 的通配段冲突导致路由 panic。
+		admin.POST("/recompute-novel-stats", handlers.AdminRecomputeNovelStats)
 		// 数据库管理（健康检查 / 迁移 / 备份 / 恢复 / 定时备份）
 		admin.GET("/db/health", handlers.AdminDBHealth)
 		admin.GET("/db/current", handlers.AdminDBCurrent)

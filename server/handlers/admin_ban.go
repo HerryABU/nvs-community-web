@@ -97,6 +97,42 @@ func AdminListNovels(c *gin.Context) {
 	utils.Success(c, gin.H{"list": list, "total": total, "page": page, "page_size": pageSize})
 }
 
+// AdminRecomputeNovelStats 批量重算所有作品统计（章节数 / 总字数）。
+// POST /api/admin/recompute-novel-stats
+// 可选 ?id=<novelID> 仅重算单部作品；不带参数则重算全部作品。
+// 用于修复 novels.total_chapters / total_words 与真实章节不一致的脏数据
+// （历史导入、迁移遗留、早期版本未回填等）。
+// 注：路由挂在 /api/admin/recompute-novel-stats 而非 /api/admin/novels/...，
+// 以免与 /novels/:id/chapters 的通配段冲突触发路由 panic。
+func AdminRecomputeNovelStats(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	if idStr := c.Query("id"); idStr != "" {
+		id, err := strconv.ParseUint(idStr, 10, 64)
+		if err != nil {
+			utils.BadRequest(c, "无效的小说ID")
+			return
+		}
+		if err := models.UpdateNovelStats(uint(id)); err != nil {
+			utils.InternalError(c, "重算失败: "+err.Error())
+			return
+		}
+		utils.Success(c, gin.H{"message": "已重算单部作品统计", "id": id})
+		return
+	}
+	processed, changed, err := models.RecomputeAllNovelStats()
+	if err != nil {
+		utils.InternalError(c, "重算失败: "+err.Error())
+		return
+	}
+	utils.Success(c, gin.H{
+		"message":   "已重算所有作品统计",
+		"processed": processed,
+		"changed":   changed,
+	})
+}
+
 // AdminListChapters 管理员查某小说的章节列表（含已封禁/软删除）。
 // GET /api/admin/novels/:id/chapters
 func AdminListChapters(c *gin.Context) {
