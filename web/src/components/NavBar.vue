@@ -162,6 +162,9 @@
                 <el-dropdown-item @click="$router.push('/my-keys')">
                   <el-icon><Key /></el-icon> 我的 API Key
                 </el-dropdown-item>
+                <el-dropdown-item @click="$router.push('/wallet')">
+                  <el-icon><Wallet /></el-icon> 我的钱包
+                </el-dropdown-item>
                 <el-dropdown-item @click="$router.push('/user/blacklist')">
                   <el-icon><CircleClose /></el-icon> 黑名单管理
                 </el-dropdown-item>
@@ -254,6 +257,7 @@
         <div class="mnav-item" @click="mnavGo('/docs')"><el-icon><Document /></el-icon> 格式使用文档</div>
         <div class="mnav-item" @click="mnavGo('/api-spider')"><el-icon><Connection /></el-icon> API Key 爬虫指南</div>
         <div class="mnav-item" @click="mnavGo('/my-keys')"><el-icon><Key /></el-icon> 我的 API Key</div>
+        <div class="mnav-item" @click="mnavGo('/wallet')"><el-icon><Wallet /></el-icon> 我的钱包</div>
         <div class="mnav-item" v-if="authStore.user?.role === 'admin'" @click="mnavGo('/admin')"><el-icon><Setting /></el-icon> 管理员面板</div>
         <div class="mnav-item" v-if="authStore.user?.role === 'admin' || authStore.user?.role === 'police'" @click="mnavGo('/police-console')"><el-icon><Stamp /></el-icon> 警方取管台</div>
         <div class="mnav-item" @click="mnavGo('/settings')"><el-icon><Setting /></el-icon> 账号设置</div>
@@ -281,7 +285,7 @@ import { authApi } from '@/api/auth';
 import { notificationApi } from '@/api/notification';
 import { appPrefix } from '@/utils/prefix';
 import { ElMessage } from 'element-plus';
-import { Camera, Setting, Brush, Document, Warning, Bell, Menu, HomeFilled, ChatDotRound, Plus, Notebook, User, SwitchButton, Connection, Key, Stamp, CircleClose, ChatLineRound, Star } from '@element-plus/icons-vue';
+import { Camera, Setting, Brush, Document, Warning, Bell, Menu, HomeFilled, ChatDotRound, Plus, Notebook, User, SwitchButton, Connection, Key, Stamp, CircleClose, ChatLineRound, Star, Wallet } from '@element-plus/icons-vue';
 
 const avatarInput = ref<HTMLInputElement>();
 const router = useRouter();

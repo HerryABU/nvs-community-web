@@ -96,6 +96,7 @@ declare module 'vue' {
     NovelCard: typeof import('./src/components/NovelCard.vue')['default']
     PhoneLoginForm: typeof import('./src/components/auth/PhoneLoginForm.vue')['default']
     PoliceBadge: typeof import('./src/components/site/PoliceBadge.vue')['default']
+    PublishQuotaHint: typeof import('./src/components/PublishQuotaHint.vue')['default']
     RealNameCard: typeof import('./src/components/user/RealNameCard.vue')['default']
     RealNameProviderForm: typeof import('./src/components/admin/RealNameProviderForm.vue')['default']
     ReportButton: typeof import('./src/components/ReportButton.vue')['default']

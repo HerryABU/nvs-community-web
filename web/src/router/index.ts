@@ -133,6 +133,12 @@ const router = createRouter({
       component: () => import('@/views/ThreadDetail.vue'),
     },
     {
+      path: '/wallet',
+      name: 'wallet',
+      component: () => import('@/views/Wallet.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin',
       name: 'admin-dashboard',
       component: () => import('@/views/AdminDashboard.vue'),
@@ -298,6 +304,12 @@ const router = createRouter({
       path: '/admin/daily-publish',
       name: 'admin-daily-publish',
       component: () => import('@/views/admin/AdminPublishQuota.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/token',
+      name: 'admin-token',
+      component: () => import('@/views/admin/AdminToken.vue'),
       meta: { requiresAuth: true },
     },
     {
