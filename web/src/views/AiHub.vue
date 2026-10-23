@@ -12,16 +12,20 @@
       </div>
 
       <div class="ai-hub-side-scroll">
-        <div class="ai-hub-side-title">智能体</div>
-        <div
-          v-for="a in agents"
-          :key="a.id"
-          :class="['ai-agent-item', { active: activeAgentId === a.id && !activeSessionId }]"
-          @click="pickAgent(a)"
-        >
-          <span class="ai-agent-emoji">{{ a.emoji || '🤖' }}</span>
-          <span class="ai-agent-name">{{ a.name }}</span>
-        </div>
+        <template v-for="g in agentGroups" :key="g.name">
+          <div class="ai-hub-side-title">{{ g.name }}</div>
+          <div
+            v-for="a in g.items"
+            :key="a.id"
+            :class="['ai-agent-item', { active: activeAgentId === a.id && !activeSessionId }]"
+            @click="pickAgent(a)"
+          >
+            <span class="ai-agent-emoji">{{ a.emoji || '🤖' }}</span>
+            <span class="ai-agent-name">{{ a.name }}</span>
+            <span v-if="a.upstream === 'coze'" class="ai-agent-coze">Coze</span>
+            <span v-if="a.used_count" class="ai-agent-used">{{ formatCount(a.used_count) }}</span>
+          </div>
+        </template>
 
         <div class="ai-hub-side-title">历史会话</div>
         <div
@@ -165,6 +169,24 @@ const mobileSideOpen = ref(false);
 const loading = ref(true);
 
 const activeSession = computed(() => sessions.value.find((s) => s.id === activeSessionId.value) || null);
+
+// 智能体按分类分组（空分类归「通用」）
+const agentGroups = computed(() => {
+  const map = new Map<string, AiAgent[]>();
+  for (const a of agents.value) {
+    const k = (a.category || '').trim() || '通用';
+    if (!map.has(k)) map.set(k, []);
+    map.get(k)!.push(a);
+  }
+  return Array.from(map.entries()).map(([name, items]) => ({ name, items }));
+});
+
+function formatCount(n?: number) {
+  const v = n || 0;
+  if (v >= 10000) return `${(v / 10000).toFixed(1)}w+`;
+  if (v >= 1000) return `${(v / 1000).toFixed(1)}k+`;
+  return String(v);
+}
 const noModels = computed(
   () => status.chat_models.length + status.image_models.length + status.video_models.length === 0,
 );
@@ -348,7 +370,12 @@ onMounted(() => {
   color: var(--el-color-primary, #409eff);
 }
 .ai-agent-emoji { font-size: 1.1rem; }
-.ai-agent-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-agent-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-agent-coze {
+  font-size: 0.6rem; padding: 0 5px; border-radius: 4px; flex-shrink: 0;
+  background: rgba(139, 92, 246, 0.12); color: #8b5cf6;
+}
+.ai-agent-used { font-size: 0.66rem; color: var(--text-light, #999); flex-shrink: 0; }
 .ai-session-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ai-session-shared { font-size: 0.7rem; opacity: 0.7; flex-shrink: 0; }
 .ai-session-tools { display: none; align-items: center; gap: 6px; flex-shrink: 0; }

@@ -80,6 +80,12 @@
           <div v-else class="ai-video-pending">
             {{ t.status === 'failed' ? '失败（已退款）' : statusText(t.status) }}
           </div>
+          <button
+            v-if="parseVideo(t.result)"
+            type="button"
+            class="ai-video-publish"
+            @click="publishVideo(t)"
+          >{{ t.is_public ? '已发布' : '发布到视频广场' }}</button>
         </div>
       </div>
     </div>
@@ -88,7 +94,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { aiHubApi, type AiHubStatus } from '@/api/aiHub';
 
 const props = defineProps<{ status: AiHubStatus }>();
@@ -208,6 +214,25 @@ function stopPolling() {
   if (pollTimer) {
     window.clearInterval(pollTimer);
     pollTimer = undefined;
+  }
+}
+
+// 发布到视频广场（与图像共用灵感广场作品流，kind=video）
+async function publishVideo(t: any) {
+  try {
+    const { value: title } = await ElMessageBox.prompt('作品标题（留空取提示词前 40 字）', '发布到视频广场', {
+      inputValue: t.title || '',
+      confirmButtonText: '发布',
+      cancelButtonText: '取消',
+    });
+    const res = await aiHubApi.publishMedia(t.id, { public: true, title, style: 'AI视频' });
+    if (res.data.code === 0) {
+      ElMessage.success('已发布到视频广场');
+      await loadHistory();
+    }
+  } catch (e: any) {
+    if (e === 'cancel' || e?.message === 'cancel') return;
+    ElMessage.error(e?.response?.data?.message || '发布失败');
   }
 }
 
