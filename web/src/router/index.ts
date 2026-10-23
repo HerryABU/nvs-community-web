@@ -139,6 +139,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/ai',
+      name: 'ai-hub',
+      component: () => import('@/views/AiHub.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin',
       name: 'admin-dashboard',
       component: () => import('@/views/AdminDashboard.vue'),
@@ -316,6 +322,12 @@ const router = createRouter({
       path: '/admin/ai-pool',
       name: 'admin-ai-pool',
       component: () => import('@/views/admin/AdminAiPool.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/ai-agents',
+      name: 'admin-ai-agents',
+      component: () => import('@/views/admin/AdminAiAgents.vue'),
       meta: { requiresAuth: true },
     },
     {

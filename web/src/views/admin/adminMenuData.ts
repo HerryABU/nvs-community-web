@@ -2,7 +2,7 @@ import {
   Setting, View, DataAnalysis, Medal, Warning, Bell, DataLine, Monitor,
   Collection, Lock, Histogram, Stamp, Key, ChatDotRound, Cpu, WarningFilled,
   Box, Notebook, TrendCharts, Connection, Postcard, Lightning, Brush, Grid, Message,
-  Timer, Coin, MagicStick,
+  Timer, Coin, MagicStick, ChatLineRound,
 } from '@element-plus/icons-vue';
 
 // 管理员控制台「管理功能」分类数据（F8：分类折叠 + ?category=/?item= 深链定位）。
@@ -105,7 +105,8 @@ export const adminMenuCategories: AdminMenuCategory[] = [
     icon: MagicStick,
     color: 'var(--gradient-purple)',
     items: [
-      { title: 'AI 模型池', desc: 'OpenAI 兼容上游配置 · 密钥加密存储 · 按量计费（编辑区 AI 助手数据源）', path: '/admin/ai-pool', icon: MagicStick, color: 'var(--gradient-purple)' },
+      { title: 'AI 模型池', desc: 'OpenAI 兼容上游配置 · 密钥加密存储 · 按量计费（对话/绘画/视频）', path: '/admin/ai-pool', icon: MagicStick, color: 'var(--gradient-purple)' },
+      { title: 'AI 智能体', desc: '对话人设预设 · 系统提示词 · 工作台卡片', path: '/admin/ai-agents', icon: ChatLineRound, color: 'var(--gradient-indigo)' },
     ],
   },
   {
