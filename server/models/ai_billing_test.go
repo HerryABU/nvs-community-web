@@ -98,7 +98,7 @@ func TestAiSettlePaidCall(t *testing.T) {
 	if _, e := AppendTokenLedger(7, TokenTypeRechargeCard, 100, "card", 1, "卡密", ""); e != nil {
 		t.Fatalf("充值失败: %v", e)
 	}
-	log, err := CreateAiCallLog(7, m, "polish", "chapter", 3, 1500, 500)
+	log, err := CreateAiCallLog(7, m, "polish", "chapter", 3, 1500, 500, false)
 	if err != nil {
 		t.Fatalf("创建 pending 流水失败: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestAiSettleInsufficientBalance(t *testing.T) {
 	if _, e := AppendTokenLedger(8, TokenTypeGrant, 2, "admin", 1, "", ""); e != nil {
 		t.Fatalf("增发失败: %v", e)
 	}
-	log, err := CreateAiCallLog(8, m, "continue", "", 0, 1200, 600)
+	log, err := CreateAiCallLog(8, m, "continue", "", 0, 1200, 600, false)
 	if err != nil {
 		t.Fatalf("创建 pending 流水失败: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestAiSettleInsufficientBalance(t *testing.T) {
 func TestAiSettleFreeModel(t *testing.T) {
 	setupAiTestDB(t)
 	m := seedAiModel(t, 0, 0, 1024)
-	log, err := CreateAiCallLog(9, m, "summarize", "", 0, 100, 100)
+	log, err := CreateAiCallLog(9, m, "summarize", "", 0, 100, 100, false)
 	if err != nil {
 		t.Fatalf("创建 pending 流水失败: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestAiConfigAndQueries(t *testing.T) {
 		t.Errorf("禁用模型应返回 nil,nil，实际 %v err=%v", em, err)
 	}
 	// 调用历史分页
-	_, _ = CreateAiCallLog(5, &AiModel{ID: 1, Name: "a"}, "custom", "", 0, 10, 10)
+	_, _ = CreateAiCallLog(5, &AiModel{ID: 1, Name: "a"}, "custom", "", 0, 10, 10, false)
 	list, total, err := ListAiCallLogs(5, 1, 20)
 	if err != nil || total != 1 || len(list) != 1 {
 		t.Errorf("调用历史异常: total=%d len=%d err=%v", total, len(list), err)
