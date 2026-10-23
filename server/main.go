@@ -306,6 +306,17 @@ func main() {
 		protected.GET("/ai/status", handlers.AiStatus)
 		protected.POST("/ai/estimate", security.RateLimit(60, 60), handlers.AiEstimate)
 		protected.POST("/ai/complete", security.RateLimit(20, 60), handlers.AiComplete)
+		// AI 工作台（§5.4）：会话 / 流式对话 / 绘画 / 视频 / 智能体
+		protected.GET("/ai/hub/status", handlers.AiHubStatus)
+		protected.GET("/ai/agents", handlers.AiAgentList)
+		protected.GET("/ai/sessions", handlers.AiHubSessions)
+		protected.GET("/ai/sessions/:id/messages", handlers.AiHubSessionMessages)
+		protected.DELETE("/ai/sessions/:id", handlers.AiHubDeleteSession)
+		protected.POST("/ai/chat/stream", security.RateLimit(30, 60), handlers.AiHubChatStream)
+		protected.POST("/ai/image", security.RateLimit(20, 60), handlers.AiHubImage)
+		protected.POST("/ai/video", security.RateLimit(10, 60), handlers.AiHubVideoSubmit)
+		protected.GET("/ai/video/:id", handlers.AiHubVideoStatus)
+		protected.GET("/ai/media", handlers.AiHubMediaHistory)
 		// 用户黑名单（F13：拉黑禁言/屏蔽内容）
 		protected.POST("/blacklist", security.RateLimit(20, 60), handlers.AddBlacklist)
 		protected.DELETE("/blacklist/:id", handlers.RemoveBlacklist)
@@ -627,6 +638,11 @@ func main() {
 		admin.POST("/ai/models", handlers.AdminCreateAiModel)
 		admin.PUT("/ai/models/:id", handlers.AdminUpdateAiModel)
 		admin.DELETE("/ai/models/:id", handlers.AdminDeleteAiModel)
+		// AI 智能体管理（§5.4）：预设增删改
+		admin.GET("/ai/agents", handlers.AdminListAiAgents)
+		admin.POST("/ai/agents", handlers.AdminCreateAiAgent)
+		admin.PUT("/ai/agents/:id", handlers.AdminUpdateAiAgent)
+		admin.DELETE("/ai/agents/:id", handlers.AdminDeleteAiAgent)
 		// 应用扩展安全审核：预检未通过的 ZIP 原样封存（不解压），管理员放行/驳回
 		admin.GET("/userhtmls", handlers.AdminListHTMLs)
 		admin.GET("/userhtmls/:id/scan", handlers.AdminGetHTMLScan)
@@ -1121,6 +1137,7 @@ func initDatabase() error {
 	}
 	models.InitDefaultForums()
 	models.InitPlatformConfigs()
+	models.SeedDefaultAiAgents() // AI 智能体内置种子（表为空时写入）
 	// 管理端配置（DB）覆盖 .env 初始值：微信扫码凭据热更新进 config 包级变量
 	// （sms 网关由 resolveGateway 每次发送前读 DB，无需在此处理）
 	if wxID, wxSecret, wxCallback, fromDB := models.GetWeChatConfigFromDB(); fromDB {

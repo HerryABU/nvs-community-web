@@ -157,6 +157,7 @@ func SetupInstall(c *gin.Context) {
 	models.DB = target
 	models.InitDefaultForums()
 	models.InitPlatformConfigs()
+	models.SeedDefaultAiAgents() // AI 智能体内置种子（表为空时写入）
 	_ = models.SetPlatformConfig("site_name", req.SiteName)
 	// .env 同步 SITE_NAME（重启后仍生效；写失败不阻断安装）
 	if _, err := config.SyncPlatformConfigEnv(map[string]string{"site_name": req.SiteName}); err != nil {

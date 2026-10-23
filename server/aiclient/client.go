@@ -24,10 +24,12 @@ type Message struct {
 
 // ChatRequest /chat/completions 请求体
 type ChatRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	MaxTokens   int       `json:"max_tokens,omitempty"`
-	Temperature float64   `json:"temperature,omitempty"`
+	Model         string                 `json:"model"`
+	Messages      []Message              `json:"messages"`
+	MaxTokens     int                    `json:"max_tokens,omitempty"`
+	Temperature   float64                `json:"temperature,omitempty"`
+	Stream        bool                   `json:"stream,omitempty"`
+	StreamOptions map[string]interface{} `json:"stream_options,omitempty"`
 }
 
 // ChatResponse /chat/completions 响应体（只取需要的字段）

@@ -19,11 +19,13 @@ func aiModelVO(m *models.AiModel) gin.H {
 	return gin.H{
 		"id":          m.ID,
 		"name":        m.Name,
+		"kind":        models.NormalizeAiKind(m.Kind),
 		"model_id":    m.ModelID,
 		"base_url":    m.BaseURL,
 		"has_api_key": m.ApiKeyEnc != "",
 		"price_in":    m.PriceIn,
 		"price_out":   m.PriceOut,
+		"price_call":  m.PriceCall,
 		"max_tokens":  m.MaxTokens,
 		"temperature": m.Temperature,
 		"enabled":     m.Enabled,
@@ -85,11 +87,13 @@ func AdminListAiModels(c *gin.Context) {
 // aiModelInput 创建/更新共用入参
 type aiModelInput struct {
 	Name        string  `json:"name"`
+	Kind        string  `json:"kind"`
 	ModelID     string  `json:"model_id"`
 	BaseURL     string  `json:"base_url"`
 	ApiKey      string  `json:"api_key"` // 留空=不轮换
 	PriceIn     *int64  `json:"price_in"`
 	PriceOut    *int64  `json:"price_out"`
+	PriceCall   *int64  `json:"price_call"`
 	MaxTokens   *int    `json:"max_tokens"`
 	Temperature *float64 `json:"temperature"`
 	Enabled     *bool   `json:"enabled"`
@@ -114,8 +118,9 @@ func AdminCreateAiModel(c *gin.Context) {
 		utils.BadRequest(c, "展示名、模型标识、上游地址均为必填")
 		return
 	}
+	kind := models.NormalizeAiKind(strings.TrimSpace(req.Kind))
 	m := &models.AiModel{
-		Name: name, ModelID: modelID, BaseURL: baseURL,
+		Name: name, Kind: kind, ModelID: modelID, BaseURL: baseURL,
 		Note: strings.TrimSpace(req.Note),
 	}
 	if req.PriceIn != nil {
@@ -123,6 +128,9 @@ func AdminCreateAiModel(c *gin.Context) {
 	}
 	if req.PriceOut != nil {
 		m.PriceOut = *req.PriceOut
+	}
+	if req.PriceCall != nil {
+		m.PriceCall = *req.PriceCall
 	}
 	if req.MaxTokens != nil {
 		m.MaxTokens = *req.MaxTokens
@@ -162,6 +170,9 @@ func AdminUpdateAiModel(c *gin.Context) {
 	if s := strings.TrimSpace(req.Name); s != "" {
 		fields["name"] = s
 	}
+	if s := strings.TrimSpace(req.Kind); s != "" {
+		fields["kind"] = models.NormalizeAiKind(s)
+	}
 	if s := strings.TrimSpace(req.ModelID); s != "" {
 		fields["model_id"] = s
 	}
@@ -173,6 +184,9 @@ func AdminUpdateAiModel(c *gin.Context) {
 	}
 	if req.PriceOut != nil {
 		fields["price_out"] = *req.PriceOut
+	}
+	if req.PriceCall != nil {
+		fields["price_call"] = *req.PriceCall
 	}
 	if req.MaxTokens != nil {
 		fields["max_tokens"] = *req.MaxTokens

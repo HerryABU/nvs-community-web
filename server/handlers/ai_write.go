@@ -48,7 +48,7 @@ func AiStatus(c *gin.Context) {
 	userID := currentUserID(c)
 	var modelList []gin.H
 	if aiEnabled {
-		list, err := models.ListAiModels(true)
+		list, err := models.ListAiModelsByKind(models.AiKindChat, true)
 		if err == nil {
 			for i := range list {
 				m := &list[i]

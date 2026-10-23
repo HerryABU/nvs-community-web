@@ -14,15 +14,17 @@ import (
 // 零值纪律：enabled=false / price=0 均为合法业务值，更新一律走 map 精确写，
 // 不用 struct Save（避免零值被 GORM 跳过或误判）。
 
-// AiModel AI 上游模型（OpenAI 兼容 /chat/completions）
+// AiModel AI 上游模型（OpenAI 兼容）
 type AiModel struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`
 	Name         string    `gorm:"size:64;not null" json:"name"`            // 展示名（如「默认模型」）
+	Kind         string    `gorm:"size:16;not null;default:chat;index" json:"kind"` // chat/image/video
 	ModelID      string    `gorm:"size:128;not null" json:"model_id"`       // 上游模型标识（如 gpt-4o-mini）
 	BaseURL      string    `gorm:"size:256;not null" json:"base_url"`       // 上游地址（不含 /chat/completions）
 	ApiKeyEnc    string    `gorm:"type:text" json:"-"`                      // api_key 密文（EncryptField），不回传前端
-	PriceIn      int64     `gorm:"not null;default:0" json:"price_in"`      // 每 1K 输入 tokens 代币价（0=免费）
-	PriceOut     int64     `gorm:"not null;default:0" json:"price_out"`     // 每 1K 输出 tokens 代币价（0=免费）
+	PriceIn      int64     `gorm:"not null;default:0" json:"price_in"`      // 每 1K 输入 tokens 代币价（0=免费，chat 用）
+	PriceOut     int64     `gorm:"not null;default:0" json:"price_out"`     // 每 1K 输出 tokens 代币价（0=免费，chat 用）
+	PriceCall    int64     `gorm:"not null;default:0" json:"price_call"`    // 每次调用代币价（image/video 用，0=免费）
 	MaxTokens    int       `gorm:"not null;default:2048" json:"max_tokens"` // 默认最大输出 tokens
 	Temperature  float64   `gorm:"not null;default:0.7" json:"temperature"` // 默认温度
 	Enabled      bool      `gorm:"not null;default:true" json:"enabled"`    // 是否启用
@@ -33,6 +35,24 @@ type AiModel struct {
 }
 
 func (AiModel) TableName() string { return "ai_models" }
+
+// ---------- 模型类型 ----------
+
+const (
+	AiKindChat  = "chat"
+	AiKindImage = "image"
+	AiKindVideo = "video"
+)
+
+// NormalizeAiKind 归一化类型（空串按 chat，非法按 chat）
+func NormalizeAiKind(kind string) string {
+	switch kind {
+	case AiKindImage, AiKindVideo:
+		return kind
+	default:
+		return AiKindChat
+	}
+}
 
 // ---------- 配置开关 ----------
 
@@ -67,6 +87,24 @@ func ListAiModels(onlyEnabled bool) ([]AiModel, error) {
 	return list, err
 }
 
+// ListAiModelsByKind 按类型列模型（空 kind 归一化为 chat，兼容旧数据）
+func ListAiModelsByKind(kind string, onlyEnabled bool) ([]AiModel, error) {
+	kind = NormalizeAiKind(kind)
+	var list []AiModel
+	q := DB.Order("priority DESC, id ASC")
+	if kind == AiKindChat {
+		// 旧数据 kind 列为空串（AutoMigrate 前创建），一并视为 chat
+		q = q.Where("kind IN ?", []string{AiKindChat, ""})
+	} else {
+		q = q.Where("kind = ?", kind)
+	}
+	if onlyEnabled {
+		q = q.Where("enabled = ?", true)
+	}
+	err := q.Find(&list).Error
+	return list, err
+}
+
 // GetAiModel 按 ID 取模型
 func GetAiModel(id uint) (*AiModel, error) {
 	var m AiModel
@@ -83,6 +121,18 @@ func GetEnabledAiModel(id uint) (*AiModel, error) {
 		return nil, err
 	}
 	if !m.Enabled {
+		return nil, nil
+	}
+	return m, nil
+}
+
+// GetEnabledAiModelOfKind 取一个指定类型的启用模型（不存在返回 nil, nil）
+func GetEnabledAiModelOfKind(id uint, kind string) (*AiModel, error) {
+	m, err := GetEnabledAiModel(id)
+	if err != nil || m == nil {
+		return nil, err
+	}
+	if NormalizeAiKind(m.Kind) != NormalizeAiKind(kind) {
 		return nil, nil
 	}
 	return m, nil

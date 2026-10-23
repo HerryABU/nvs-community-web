@@ -73,6 +73,8 @@ func AllModels() []interface{} {
 		&TokenLedger{}, &UserTokenBalance{}, &CardKey{},
 		// AI 模型池 + 调用计费（§5.3：OpenAI 兼容上游，代币按 usage 结算）
 		&AiModel{}, &AiCallLog{},
+		// AI 工作台（§5.4）：会话/消息、智能体预设、绘画视频任务
+		&AiChatSession{}, &AiChatMessage{}, &AiAgent{}, &AiMediaTask{},
 		// 搜索热词埋点（F9：站内搜索 query 记录，聚合出搜索热词）
 		&SearchLog{},
 	}
