@@ -28,6 +28,10 @@ func AiHubImage(c *gin.Context) {
 		Size    string `json:"size"`
 		Style   string `json:"style"`
 		N       int    `json:"n"`
+		// 自备密钥（§5.5 BYOK）
+		Byok      bool   `json:"byok"`
+		ByokModel string `json:"byok_model"`
+		ByokKeyID uint   `json:"byok_key_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -40,6 +44,51 @@ func AiHubImage(c *gin.Context) {
 	}
 	if len([]rune(prompt)) > 4000 {
 		utils.BadRequest(c, "提示词过长（上限 4000 字）")
+		return
+	}
+	// BYOK：用户自备密钥（伪模型，不计平台费用）
+	if req.Byok {
+		byokModel := strings.TrimSpace(req.ByokModel)
+		if byokModel == "" {
+			utils.BadRequest(c, "使用自备密钥时需填写上游模型标识")
+			return
+		}
+		uk, uerr := models.ResolveUserAiKey(userID, req.ByokKeyID)
+		if uerr != nil {
+			utils.InternalError(c, "读取自备密钥失败")
+			return
+		}
+		if uk == nil {
+			utils.BadRequest(c, "自备密钥不可用：请先在「我的钱包 → 上游密钥」中添加")
+			return
+		}
+		apiKey, kerr := uk.DecryptApiKey()
+		if kerr != nil {
+			utils.InternalError(c, "自备密钥解密失败，请删除后重新添加")
+			return
+		}
+		n := req.N
+		if n < 1 || n > 4 {
+			n = 1
+		}
+		client := aiclient.NewClient(uk.BaseURL, apiKey, 180*time.Second)
+		urls, gerr := client.GenerateImages(aiclient.ImagesRequest{
+			Model: byokModel, Prompt: prompt, N: n,
+			Size: strings.TrimSpace(req.Size), ResponseFormat: "url",
+		})
+		if gerr != nil {
+			utils.BadRequest(c, "绘画失败："+gerr.Error()+"（未扣款）")
+			return
+		}
+		models.TouchUserAiKey(uk.ID)
+		utils.Success(c, gin.H{
+			"task_id":       0,
+			"images":        urls,
+			"cost":          0,
+			"free":          false,
+			"byok":          true,
+			"balance_after": models.GetTokenBalance(userID),
+		})
 		return
 	}
 	m, err := models.GetEnabledAiModelOfKind(req.ModelID, models.AiKindImage)
@@ -117,6 +166,10 @@ func AiHubVideoSubmit(c *gin.Context) {
 		Prompt   string `json:"prompt"`
 		Duration int    `json:"duration"`
 		Size     string `json:"size"`
+		// 自备密钥（§5.5 BYOK）
+		Byok      bool   `json:"byok"`
+		ByokModel string `json:"byok_model"`
+		ByokKeyID uint   `json:"byok_key_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -131,15 +184,22 @@ func AiHubVideoSubmit(c *gin.Context) {
 		utils.BadRequest(c, "提示词过长（上限 4000 字）")
 		return
 	}
-	m, err := models.GetEnabledAiModelOfKind(req.ModelID, models.AiKindVideo)
-	if err != nil || m == nil {
-		utils.BadRequest(c, "视频模型不可用")
-		return
+	// 模型解析：BYOK 用伪模型（0 费、不进平台池）
+	var m *models.AiModel
+	if req.Byok {
+		m = &models.AiModel{ID: 0, Name: "自备密钥", PriceCall: 0}
+	} else {
+		mm, merr := models.GetEnabledAiModelOfKind(req.ModelID, models.AiKindVideo)
+		if merr != nil || mm == nil {
+			utils.BadRequest(c, "视频模型不可用")
+			return
+		}
+		m = mm
 	}
 	// 免费额度优先（按次消耗 1 次）
 	freeOK, _, _ := models.CheckAiFreeQuota(userID, 0)
-	// 非免费预检：余额 ≥ 单次价
-	if !freeOK {
+	// 非免费预检：余额 ≥ 单次价（BYOK 不扣平台代币）
+	if !freeOK && !req.Byok {
 		if !models.IsTokenEnabled() {
 			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
 			return
@@ -163,9 +223,35 @@ func AiHubVideoSubmit(c *gin.Context) {
 		utils.InternalError(c, "模型密钥解密失败，请联系站长")
 		return
 	}
-	client := aiclient.NewClient(m.BaseURL, apiKey, 60*time.Second)
+	// BYOK 视频：用用户自备密钥提交，任务记 0 费、不扣平台代币
+	var uk *models.UserAiKey
+	baseURL, upModel := m.BaseURL, m.ModelID
+	byok := req.Byok
+	if byok {
+		var uerr error
+		uk, uerr = models.ResolveUserAiKey(userID, req.ByokKeyID)
+		if uerr != nil || uk == nil {
+			models.FailAiMediaTask(task.ID, "自备密钥不可用", false)
+			utils.BadRequest(c, "自备密钥不可用：请先在「我的钱包 → 上游密钥」中添加")
+			return
+		}
+		ukKey, derr := uk.DecryptApiKey()
+		if derr != nil {
+			models.FailAiMediaTask(task.ID, "自备密钥解密失败", false)
+			utils.InternalError(c, "自备密钥解密失败，请删除后重新添加")
+			return
+		}
+		baseURL, apiKey = uk.BaseURL, ukKey
+		upModel = strings.TrimSpace(req.ByokModel)
+		if upModel == "" {
+			models.FailAiMediaTask(task.ID, "缺少上游模型标识", false)
+			utils.BadRequest(c, "使用自备密钥时需填写上游模型标识")
+			return
+		}
+	}
+	client := aiclient.NewClient(baseURL, apiKey, 60*time.Second)
 	remoteID, status, verr := client.CreateVideo(aiclient.VideosCreateRequest{
-		Model: m.ModelID, Prompt: prompt,
+		Model: upModel, Prompt: prompt,
 		Duration: req.Duration, Size: strings.TrimSpace(req.Size),
 	})
 	if verr != nil {
@@ -173,13 +259,17 @@ func AiHubVideoSubmit(c *gin.Context) {
 		utils.BadRequest(c, "视频提交失败："+verr.Error()+"（未扣款）")
 		return
 	}
-	// 提交成功：免费额度记用量；否则先扣款再转 running（扣款失败则任务失败）
+	// 提交成功：免费额度/BYOK 记零费；否则先扣款再转 running（扣款失败则任务失败）
 	var nb int64
-	if freeOK {
+	switch {
+	case byok:
+		_ = models.MarkAiMediaFree(task.ID)
+		nb = models.GetTokenBalance(userID)
+	case freeOK:
 		_ = models.MarkAiMediaFree(task.ID)
 		_ = models.RecordAiFreeUsage(userID, 1, 0)
 		nb = models.GetTokenBalance(userID)
-	} else {
+	default:
 		var cerr error
 		nb, cerr = models.ChargeAiMediaTask(task.ID)
 		if cerr != nil {
@@ -188,12 +278,16 @@ func AiHubVideoSubmit(c *gin.Context) {
 			return
 		}
 	}
+	if byok {
+		models.TouchUserAiKey(uk.ID)
+	}
 	models.MarkAiMediaSubmitted(task.ID, remoteID)
 	utils.Success(c, gin.H{
 		"task_id":       task.ID,
 		"status":        status,
-		"cost":          map[bool]int64{true: 0, false: m.PriceCall}[freeOK],
-		"free":          freeOK,
+		"cost":          map[bool]int64{true: 0, false: m.PriceCall}[freeOK || byok],
+		"free":          freeOK && !byok,
+		"byok":          byok,
 		"balance_after": nb,
 	})
 }
@@ -216,6 +310,48 @@ func AiHubVideoStatus(c *gin.Context) {
 	}
 	if task.RemoteID == "" {
 		utils.Success(c, gin.H{"task_id": task.ID, "status": task.Status, "error": task.Error, "cost": task.Cost})
+		return
+	}
+	// BYOK 任务（ModelID=0）：用用户默认自备密钥轮询上游
+	if task.ModelID == 0 {
+		uk, uerr := models.ResolveUserAiKey(userID, 0)
+		if uerr != nil || uk == nil {
+			utils.BadRequest(c, "自备密钥不可用，无法查询任务状态")
+			return
+		}
+		ukKey, derr := uk.DecryptApiKey()
+		if derr != nil {
+			utils.InternalError(c, "自备密钥解密失败")
+			return
+		}
+		client := aiclient.NewClient(uk.BaseURL, ukKey, 30*time.Second)
+		status, videoURL, upErr, qerr := client.QueryVideo(task.RemoteID)
+		if qerr != nil {
+			utils.Success(c, gin.H{"task_id": task.ID, "status": task.Status, "error": qerr.Error(), "cost": task.Cost})
+			return
+		}
+		switch status {
+		case "succeeded", "success", "completed":
+			if videoURL == "" {
+				utils.Success(c, gin.H{"task_id": task.ID, "status": models.AiMediaRunning, "cost": task.Cost})
+				return
+			}
+			rj, _ := json.Marshal(gin.H{"video": videoURL})
+			models.UpdateAiMediaResult(task.ID, string(rj))
+			utils.Success(c, gin.H{
+				"task_id": task.ID, "status": models.AiMediaSucceeded,
+				"result": task.Result, "video": videoURL, "cost": task.Cost,
+			})
+		case "failed", "error", "cancelled", "canceled":
+			msg := upErr
+			if msg == "" {
+				msg = "上游任务失败"
+			}
+			models.FailAiMediaTask(task.ID, msg, false)
+			utils.Success(c, gin.H{"task_id": task.ID, "status": models.AiMediaFailed, "error": msg, "cost": task.Cost})
+		default:
+			utils.Success(c, gin.H{"task_id": task.ID, "status": models.AiMediaRunning, "cost": task.Cost})
+		}
 		return
 	}
 	m, merr := models.GetAiModel(task.ModelID)

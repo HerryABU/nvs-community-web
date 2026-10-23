@@ -310,6 +310,12 @@ func main() {
 		protected.GET("/ai/hub/status", handlers.AiHubStatus)
 		protected.GET("/ai/agents", handlers.AiAgentList)
 		protected.GET("/ai/free-quota", handlers.AiFreeQuotaStatus)
+
+		// 用户自备 API Key（§5.5 BYOK）：CRUD + 默认（:id 通配与既有 /ai/video/:id 不同前缀段，无冲突）
+		protected.GET("/ai/my-keys", handlers.AiMyKeys)
+		protected.POST("/ai/my-keys", handlers.AiMyKeyCreate)
+		protected.DELETE("/ai/my-keys/:id", handlers.AiMyKeyDelete)
+		protected.POST("/ai/my-keys/:id/default", handlers.AiMyKeySetDefault)
 		protected.GET("/ai/sessions", handlers.AiHubSessions)
 		protected.GET("/ai/sessions/:id/messages", handlers.AiHubSessionMessages)
 		protected.DELETE("/ai/sessions/:id", handlers.AiHubDeleteSession)

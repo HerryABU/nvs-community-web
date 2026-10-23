@@ -122,6 +122,10 @@ func AiComplete(c *gin.Context) {
 		Temperature *float64 `json:"temperature"`
 		RefType     string `json:"ref_type"`
 		RefID       uint   `json:"ref_id"`
+		// 自备密钥（§5.5 BYOK）：byok=true 时用用户自带上游，不扣平台代币
+		Byok      bool   `json:"byok"`
+		ByokModel string `json:"byok_model"`
+		ByokKeyID uint   `json:"byok_key_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -141,6 +145,84 @@ func AiComplete(c *gin.Context) {
 		utils.BadRequest(c, "内容过长（上限 20000 字）")
 		return
 	}
+
+	// ── 自备密钥分支（BYOK）：用户自带上游，不扣平台代币 ──
+	if req.Byok {
+		byokModel := strings.TrimSpace(req.ByokModel)
+		if byokModel == "" {
+			utils.BadRequest(c, "使用自备密钥时需填写上游模型标识")
+			return
+		}
+		tokensIn := models.EstimateTokens(text)
+		tokensOut := req.MaxTokens
+		if tokensOut <= 0 {
+			tokensOut = 2048
+		}
+		if tokensOut > 8192 {
+			tokensOut = 8192
+		}
+		uk, uerr := models.ResolveUserAiKey(userID, req.ByokKeyID)
+		if uerr != nil {
+			utils.InternalError(c, "读取自备密钥失败")
+			return
+		}
+		if uk == nil {
+			utils.BadRequest(c, "自备密钥不可用：请先在「我的钱包 → 上游密钥」中添加")
+			return
+		}
+		apiKey, kerr := uk.DecryptApiKey()
+		if kerr != nil {
+			utils.InternalError(c, "自备密钥解密失败，请删除后重新添加")
+			return
+		}
+		pseudo := &models.AiModel{ID: 0, Name: "自备密钥 · " + uk.Label}
+		callLog, lerr := models.CreateAiCallLog(userID, pseudo, action, req.RefType, req.RefID, tokensIn, tokensOut, true)
+		if lerr != nil {
+			utils.InternalError(c, "记录调用失败")
+			return
+		}
+		temp := 0.7
+		if req.Temperature != nil {
+			temp = *req.Temperature
+		}
+		client := aiclient.NewClient(uk.BaseURL, apiKey, 120*time.Second)
+		content, realIn, realOut, cerr := client.Complete(aiclient.ChatRequest{
+			Model: byokModel,
+			Messages: []aiclient.Message{
+				{Role: "system", Content: aiSystemPrompt(action)},
+				{Role: "user", Content: text},
+			},
+			MaxTokens:   tokensOut,
+			Temperature: temp,
+		})
+		if cerr != nil {
+			models.FailAiCallLog(callLog.ID, cerr.Error())
+			utils.BadRequest(c, "AI 调用失败："+cerr.Error())
+			return
+		}
+		if realIn <= 0 {
+			realIn = tokensIn
+		}
+		if realOut <= 0 {
+			realOut = models.EstimateTokens(content)
+		}
+		if _, serr := models.SettleAiCallLog(callLog.ID, realIn, realOut); serr != nil {
+			utils.Error(c, 429, 42902, fmt.Sprintf("结算失败：%v", serr))
+			return
+		}
+		models.TouchUserAiKey(uk.ID)
+		utils.Success(c, gin.H{
+			"content":       content,
+			"tokens_in":     realIn,
+			"tokens_out":    realOut,
+			"cost":          0,
+			"free":          false,
+			"byok":          true,
+			"balance_after": models.GetTokenBalance(userID),
+		})
+		return
+	}
+
 	m, err := models.GetEnabledAiModel(req.ModelID)
 	if err != nil || m == nil {
 		utils.BadRequest(c, "模型不可用")

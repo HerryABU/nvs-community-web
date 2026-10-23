@@ -116,6 +116,10 @@ func AiHubChatStream(c *gin.Context) {
 		AgentID   uint   `json:"agent_id"`
 		Message   string `json:"message"`
 		MaxTokens int    `json:"max_tokens"`
+		// 自备密钥（§5.5 BYOK）：byok=true 时用用户自带上游，不扣平台代币
+		Byok      bool   `json:"byok"`
+		ByokModel string `json:"byok_model"`
+		ByokKeyID uint   `json:"byok_key_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -130,10 +134,34 @@ func AiHubChatStream(c *gin.Context) {
 		utils.BadRequest(c, "内容过长（上限 20000 字）")
 		return
 	}
-	m, err := models.GetEnabledAiModelOfKind(req.ModelID, models.AiKindChat)
-	if err != nil || m == nil {
-		utils.BadRequest(c, "模型不可用")
-		return
+
+	// ── 模型解析：BYOK 用用户自备密钥（伪模型，不落平台池） ──
+	var m *models.AiModel
+	var uk *models.UserAiKey
+	byokModel := strings.TrimSpace(req.ByokModel)
+	if req.Byok {
+		if byokModel == "" {
+			utils.BadRequest(c, "使用自备密钥时需填写上游模型标识")
+			return
+		}
+		var uerr error
+		uk, uerr = models.ResolveUserAiKey(userID, req.ByokKeyID)
+		if uerr != nil {
+			utils.InternalError(c, "读取自备密钥失败")
+			return
+		}
+		if uk == nil {
+			utils.BadRequest(c, "自备密钥不可用：请先在「我的钱包 → 上游密钥」中添加")
+			return
+		}
+		m = &models.AiModel{ID: 0, Name: "自备密钥 · " + uk.Label, MaxTokens: 2048, Temperature: 0.7}
+	} else {
+		mm, err := models.GetEnabledAiModelOfKind(req.ModelID, models.AiKindChat)
+		if err != nil || mm == nil {
+			utils.BadRequest(c, "模型不可用")
+			return
+		}
+		m = mm
 	}
 
 	// ── 会话 ──
@@ -191,9 +219,9 @@ func AiHubChatStream(c *gin.Context) {
 	if tokensOut > 8192 {
 		tokensOut = 8192
 	}
-	// 免费额度判定（优先）：命中则本次不扣代币
+	// 免费额度判定（优先）：命中则本次不扣代币；BYOK 一律不扣平台代币
 	freeOK, _, _ := models.CheckAiFreeQuota(userID, tokensIn+tokensOut)
-	if !freeOK {
+	if !freeOK && !req.Byok {
 		if !models.IsTokenEnabled() {
 			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
 			return
@@ -209,7 +237,7 @@ func AiHubChatStream(c *gin.Context) {
 	// ── 落用户消息 + pending 流水 ──
 	models.AppendAiChatMessage(session.ID, "user", msg, 0, 0, 0, 0)
 	models.TouchAiChatSession(session.ID, msg)
-	callLog, lerr := models.CreateAiCallLog(userID, m, "chat", "session", session.ID, tokensIn, tokensOut, freeOK)
+	callLog, lerr := models.CreateAiCallLog(userID, m, "chat", "session", session.ID, tokensIn, tokensOut, freeOK || req.Byok)
 	if lerr != nil {
 		utils.InternalError(c, "记录调用失败")
 		return
@@ -223,18 +251,27 @@ func AiHubChatStream(c *gin.Context) {
 	c.Status(200)
 
 	apiKey, kerr := m.DecryptApiKey()
+	if req.Byok {
+		apiKey, kerr = uk.DecryptApiKey()
+	}
 	if kerr != nil {
 		models.FailAiCallLog(callLog.ID, "密钥解密失败")
 		sseEvent(c, gin.H{"error": "模型密钥解密失败，请联系站长"})
 		return
 	}
+	baseURL := m.BaseURL
+	upModel := m.ModelID
+	if req.Byok {
+		baseURL = uk.BaseURL
+		upModel = byokModel
+	}
 	temp := m.Temperature
-	client := aiclient.NewClient(m.BaseURL, apiKey, 180*time.Second)
+	client := aiclient.NewClient(baseURL, apiKey, 180*time.Second)
 	var sb string
 	var realIn, realOut int
 	var streamErr string
 	for chunk := range client.CompleteStream(aiclient.ChatRequest{
-		Model:       m.ModelID,
+		Model:       upModel,
 		Messages:    messages,
 		MaxTokens:   tokensOut,
 		Temperature: temp,
@@ -278,6 +315,10 @@ func AiHubChatStream(c *gin.Context) {
 		_ = models.RecordAiFreeUsage(userID, 1, realIn+realOut)
 		cost = 0
 	}
+	if req.Byok {
+		models.TouchUserAiKey(uk.ID)
+		cost = 0
+	}
 	am, _ := models.AppendAiChatMessage(session.ID, "assistant", sb, realIn, realOut, cost, callLog.ID)
 	models.TouchAiChatSession(session.ID, "")
 	sseEvent(c, gin.H{
@@ -287,7 +328,8 @@ func AiHubChatStream(c *gin.Context) {
 		"tokens_in":     realIn,
 		"tokens_out":    realOut,
 		"cost":          cost,
-		"free":          freeOK,
+		"free":          freeOK && !req.Byok,
+		"byok":          req.Byok,
 		"balance_after": nb,
 	})
 }
