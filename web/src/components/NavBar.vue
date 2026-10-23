@@ -41,6 +41,9 @@
       <!-- 博客入口 -->
       <router-link to="/blogs" class="nav-link desktop-only">博客</router-link>
 
+      <!-- AI 工作台（全 AI 台：对话/绘画/视频/智能体，与编辑器内「AI 辅助创作台」区分） -->
+      <router-link to="/ai" class="nav-link nav-link-ai desktop-only">✨ AI 工作台</router-link>
+
       <!-- 扩展应用（管理+广场） -->
       <router-link to="/htmls" class="nav-link nav-link-create desktop-only">🔌 扩展应用</router-link>
 
@@ -143,10 +146,10 @@
             </span>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item @click="triggerAvatarUpload"><el-icon><Camera /></el-icon> 更换头像</el-dropdown-item>
                 <el-dropdown-item @click="$router.push('/me')">
                   <el-icon><User /></el-icon> 个人中心
                 </el-dropdown-item>
+                <el-dropdown-item @click="triggerAvatarUpload"><el-icon><Camera /></el-icon> 更换头像</el-dropdown-item>
                 <el-dropdown-item @click="$router.push('/author/templates')">
                   <el-icon><Brush /></el-icon> 模板设置
                 </el-dropdown-item>
@@ -180,16 +183,20 @@
                 <el-dropdown-item @click="$router.push('/user/messages')">
                   <el-icon><ChatLineRound /></el-icon> 我的私信
                 </el-dropdown-item>
-                <el-dropdown-item v-if="authStore.user?.role === 'admin'" @click="$router.push('/admin')">
-                  管理员面板
-                </el-dropdown-item>
-                <el-dropdown-item v-if="authStore.user?.role === 'admin' || authStore.user?.role === 'police'" @click="$router.push('/police-console')">
-                  <el-icon><Stamp /></el-icon> 警方取管台
-                </el-dropdown-item>
                 <el-dropdown-item @click="$router.push('/settings')">
                   <el-icon><Setting /></el-icon> 账号设置
                 </el-dropdown-item>
-                <el-dropdown-item @click="authStore.logout()">退出登录</el-dropdown-item>
+                <el-dropdown-item v-if="authStore.user?.role === 'admin'" divided @click="$router.push('/admin')">
+                  <el-icon><Setting /></el-icon> 管理员面板
+                </el-dropdown-item>
+                <el-dropdown-item
+                  v-if="authStore.user?.role === 'admin' || authStore.user?.role === 'police'"
+                  :divided="authStore.user?.role !== 'admin'"
+                  @click="$router.push('/police-console')"
+                >
+                  <el-icon><Stamp /></el-icon> 警方取管台
+                </el-dropdown-item>
+                <el-dropdown-item divided @click="authStore.logout()">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -251,6 +258,7 @@
         </div>
         <div class="mnav-item" @click="mnavGo('/author/editor')"><el-icon><Plus /></el-icon> 发布作品</div>
         <div class="mnav-item" @click="mnavGo('/author')"><el-icon><HomeFilled /></el-icon> 作者工作台</div>
+        <div class="mnav-item" @click="mnavGo('/ai')"><el-icon><MagicStick /></el-icon> AI 工作台</div>
         <div class="mnav-item" @click="mnavGo('/reading')"><el-icon><Notebook /></el-icon> 精读笔记</div>
 
         <div class="mnav-group-title">账号</div>
@@ -467,7 +475,12 @@ onUnmounted(() => {
   align-items: center;
   gap: 22px;
   padding: 0 20px;
+  /* 防止窄屏下栏目被挤压成竖排：超宽时横向滚动兜底（隐藏滚动条） */
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
+.navbar-inner::-webkit-scrollbar { display: none; }
 
 .navbar-brand {
   cursor: pointer;
@@ -487,6 +500,7 @@ onUnmounted(() => {
 }
 
 /* Category trigger */
+.category-dropdown { flex-shrink: 0; }
 .category-trigger {
   cursor: pointer;
   color: var(--text-color);
@@ -499,6 +513,8 @@ onUnmounted(() => {
   border-radius: var(--radius-sm);
   transition: all var(--transition-fast);
   position: relative;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .category-trigger::after {
@@ -533,7 +549,19 @@ onUnmounted(() => {
   position: relative;
   cursor: pointer;
   text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
+
+/* AI 工作台入口（前页可见，与编辑器内「AI 辅助创作台」区分） */
+.nav-link-ai {
+  color: var(--primary-color);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.nav-link-ai.router-link-active { color: var(--primary-color); }
 
 /* 消息中心入口 + 未读徽标（红圈数字，>99 显示 99+） */
 .msg-link {
@@ -595,6 +623,8 @@ onUnmounted(() => {
   border: 1.5px dashed var(--primary-color);
   transition: all var(--transition-fast);
   font-size: 0.9rem;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .nav-link-create:hover {
@@ -641,6 +671,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 14px;
   margin-left: auto;
+  flex-shrink: 0;
 }
 
 .user-info {
@@ -671,6 +702,21 @@ onUnmounted(() => {
   .category-dropdown {
     display: none;
   }
+}
+
+/* 中窄屏：收紧间距与内边距，优先保证栏目完整单行展示 */
+@media (max-width: 1240px) {
+  .navbar-inner { gap: 14px; }
+  .nav-link, .category-trigger { padding: 6px 9px; }
+  .search-box { max-width: 220px; }
+}
+
+@media (max-width: 1080px) {
+  .navbar-inner { gap: 10px; padding: 0 14px; }
+  .brand-text { font-size: 1.15rem; }
+  .nav-link, .category-trigger { padding: 6px 7px; font-size: 0.9rem; }
+  .nav-link-create { padding: 6px 10px; }
+  .search-box { max-width: 150px; }
 }
 
 /* ====== 移动端汉堡菜单按钮 ====== */
