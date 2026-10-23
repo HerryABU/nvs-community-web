@@ -704,6 +704,19 @@ func main() {
 		admin.PUT("/ai/config", handlers.AdminSetAiConfig)
 		admin.GET("/ai/models", handlers.AdminListAiModels)
 		admin.GET("/ai/presets", handlers.AdminAiModelPresets)
+
+		// AI 功能开关 / 厂商字典 / 数据审计
+		admin.GET("/ai/features", handlers.AdminGetAiFeatures)
+		admin.PUT("/ai/features", handlers.AdminSetAiFeatures)
+		admin.GET("/ai/vendors", handlers.AdminListAiVendors)
+		admin.POST("/ai/vendors", handlers.AdminCreateAiVendor)
+		admin.PUT("/ai/vendors/:id", handlers.AdminUpdateAiVendor)
+		admin.DELETE("/ai/vendors/:id", handlers.AdminDeleteAiVendor)
+		admin.GET("/ai/audit/stats", handlers.AdminAiAuditStats)
+		admin.GET("/ai/audit/sessions", handlers.AdminAiAuditSessions)
+		admin.GET("/ai/audit/sessions/:id/messages", handlers.AdminAiAuditSessionMessages)
+		admin.GET("/ai/audit/media", handlers.AdminAiAuditMedia)
+		admin.GET("/ai/audit/calls", handlers.AdminAiAuditCalls)
 		admin.POST("/ai/models", handlers.AdminCreateAiModel)
 		admin.PUT("/ai/models/:id", handlers.AdminUpdateAiModel)
 		admin.DELETE("/ai/models/:id", handlers.AdminDeleteAiModel)
@@ -1255,6 +1268,7 @@ func initDatabase() error {
 	models.InitPlatformConfigs()
 	models.SeedDefaultAiAgents() // AI 智能体内置种子（表为空时写入）
 	models.InitAiPrompts()       // AI 提示词库平台预设（幂等）
+	models.SeedAiVendors()       // AI 厂商字典（幂等）
 	// 管理端配置（DB）覆盖 .env 初始值：微信扫码凭据热更新进 config 包级变量
 	// （sms 网关由 resolveGateway 每次发送前读 DB，无需在此处理）
 	if wxID, wxSecret, wxCallback, fromDB := models.GetWeChatConfigFromDB(); fromDB {

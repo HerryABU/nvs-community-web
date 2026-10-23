@@ -41,6 +41,11 @@ func galleryItem(t *models.AiMediaTask) gin.H {
 
 // AiGalleryList GET /api/ai/gallery?kind=image|video&style=&page= — 公开作品流
 func AiGalleryList(c *gin.Context) {
+	// 开关：关闭「公开」后仅登录用户可见
+	if !models.GetAiFeatureFlags().PublicGallery && currentUserID(c) == 0 {
+		utils.BadRequest(c, "灵感广场仅登录可见")
+		return
+	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	kind := strings.TrimSpace(c.Query("kind"))
 	style := strings.TrimSpace(c.Query("style"))

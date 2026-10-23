@@ -59,13 +59,22 @@ func AiHubImage(c *gin.Context) {
 	if mode == "" {
 		mode = "t2i"
 	}
+	flags := models.GetAiFeatureFlags()
 	switch mode {
 	case "i2i":
+		if !flags.AllowI2I {
+			utils.BadRequest(c, "站长已关闭「混图」功能")
+			return
+		}
 		if len(refs) == 0 {
 			utils.BadRequest(c, "混图需至少上传 1 张参考图")
 			return
 		}
 	case "faceswap":
+		if !flags.AllowFaceSwap {
+			utils.BadRequest(c, "站长已关闭「换脸」功能")
+			return
+		}
 		if len(refs) < 2 {
 			utils.BadRequest(c, "换脸需上传 2 张图（第 1 张目标人物、第 2 张面部来源）")
 			return

@@ -125,6 +125,40 @@ export const aiApi = {
   setConfig(data: { enabled: boolean }) {
     return api.put('/admin/ai/config', data);
   },
+  // ---------- 数据审计 / 功能开关 / 厂商字典（管理端） ----------
+  aiAuditStats() {
+    return api.get<{ code: number; data: Record<string, number> }>('/admin/ai/audit/stats');
+  },
+  aiAuditSessions(params: { user_id?: number; page?: number } = {}) {
+    return api.get<{ code: number; data: { list: any[]; total: number; page: number } }>('/admin/ai/audit/sessions', { params });
+  },
+  aiAuditSessionMessages(id: number) {
+    return api.get<{ code: number; data: { session: any; messages: any[] } }>(`/admin/ai/audit/sessions/${id}/messages`);
+  },
+  aiAuditMedia(params: { kind?: string; status?: string; page?: number } = {}) {
+    return api.get<{ code: number; data: { list: any[]; total: number; page: number } }>('/admin/ai/audit/media', { params });
+  },
+  aiAuditCalls(params: { status?: string; page?: number } = {}) {
+    return api.get<{ code: number; data: { list: any[]; total: number; page: number } }>('/admin/ai/audit/calls', { params });
+  },
+  getAiFeatures() {
+    return api.get<{ code: number; data: AiFeatureFlags }>('/admin/ai/features');
+  },
+  setAiFeatures(data: AiFeatureFlags) {
+    return api.put('/admin/ai/features', data);
+  },
+  listAiVendors() {
+    return api.get<{ code: number; data: { list: AiVendor[] } }>('/admin/ai/vendors');
+  },
+  createAiVendor(data: { name: string; sort_order?: number }) {
+    return api.post('/admin/ai/vendors', data);
+  },
+  updateAiVendor(id: number, data: { name: string; sort_order?: number; enabled?: boolean }) {
+    return api.put(`/admin/ai/vendors/${id}`, data);
+  },
+  deleteAiVendor(id: number) {
+    return api.delete(`/admin/ai/vendors/${id}`);
+  },
   aiModelPresets(params: { kind?: string } = {}) {
     return api.get<{ code: number; data: { list: AiModelPreset[] } }>('/admin/ai/presets', { params });
   },
@@ -243,4 +277,23 @@ export interface AdminAiModelInput {
   provider_hint?: string;
   vendor?: string;
   note?: string;
+}
+
+/** AI 功能开关（平台级） */
+export interface AiFeatureFlags {
+  allow_byok: boolean;
+  allow_i2i: boolean;
+  allow_faceswap: boolean;
+  context_msgs: number;
+  daily_chat_limit: number;
+  public_gallery: boolean;
+}
+
+/** AI 厂商（含引用计数，便于判断能否删除） */
+export interface AiVendor {
+  id: number;
+  name: string;
+  sort_order: number;
+  enabled: boolean;
+  models: number;
 }

@@ -138,6 +138,17 @@ func AiHubChatStream(c *gin.Context) {
 		return
 	}
 
+	// ── 平台开关：每日对话上限 + 是否允许自备密钥 ──
+	flags := models.GetAiFeatureFlags()
+	if ok, reason := models.CheckAiChatDailyLimit(userID); !ok {
+		utils.Error(c, 429, 42903, reason)
+		return
+	}
+	if req.Byok && !flags.AllowByok {
+		utils.BadRequest(c, "站长已关闭「自备密钥」功能")
+		return
+	}
+
 	// ── 模型解析：BYOK 用用户自备密钥（伪模型，不落平台池） ──
 	var m *models.AiModel
 	var uk *models.UserAiKey
@@ -200,10 +211,14 @@ func AiHubChatStream(c *gin.Context) {
 		}
 	}
 	messages := []aiclient.Message{{Role: "system", Content: systemPrompt}}
-	// 仅带最近 20 条进上下文，控制成本
+	// 仅带最近 N 条进上下文（N 由「AI 功能配置」控制，默认 20）
+	ctxLimit := flags.ContextMsgs
+	if ctxLimit <= 0 {
+		ctxLimit = 20
+	}
 	start := 0
-	if len(history) > 20 {
-		start = len(history) - 20
+	if len(history) > ctxLimit {
+		start = len(history) - ctxLimit
 	}
 	for _, h := range history[start:] {
 		messages = append(messages, aiclient.Message{Role: h.Role, Content: h.Content})

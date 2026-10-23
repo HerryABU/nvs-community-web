@@ -355,6 +355,18 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/ai-logs',
+      name: 'admin-ai-logs',
+      component: () => import('@/views/admin/AdminAiLogs.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/ai-features',
+      name: 'admin-ai-features',
+      component: () => import('@/views/admin/AdminAiFeatures.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/ai-bot',
       name: 'admin-ai-bot',
       component: () => import('@/views/admin/AdminAiBot.vue'),
