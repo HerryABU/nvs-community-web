@@ -2,7 +2,7 @@ import {
   Setting, View, DataAnalysis, Medal, Warning, Bell, DataLine, Monitor,
   Collection, Lock, Histogram, Stamp, Key, ChatDotRound, Cpu, WarningFilled,
   Box, Notebook, TrendCharts, Connection, Postcard, Lightning, Brush, Grid, Message,
-  Timer, Coin, MagicStick, ChatLineRound, Present,
+  Timer, Coin, MagicStick, ChatLineRound, Present, CreditCard,
 } from '@element-plus/icons-vue';
 
 // 管理员控制台「管理功能」分类数据（F8：分类折叠 + ?category=/?item= 深链定位）。
@@ -86,6 +86,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: 'web 项目额度与审核', desc: '广场发布额度配置 + 超额发布审核队列', path: '/admin/web-quota', icon: Box, color: 'var(--gradient-purple)' },
       { title: '每日发文限额', desc: '按用户等级配置每日发布数量/字数 · 按人覆盖 · AI 计入', path: '/admin/daily-publish', icon: Timer, color: 'var(--gradient-indigo)' },
       { title: '代币与卡密', desc: '平台内消费积分开关/命名 · 卡密生成作废 · 授信调整', path: '/admin/token', icon: Coin, color: 'var(--gradient-amber)' },
+      { title: '在线支付通道', desc: '微信/支付宝聚合充值 · 档位面额 · 幂等到账 · 手动补单', path: '/admin/payment', icon: CreditCard, color: 'var(--gradient-success)' },
       { title: '公告栏', desc: '站点公告发布 · 合规通知', path: '/admin/announcements', icon: Bell, color: 'var(--gradient-blue)' },
       { title: '书目分类管理', desc: '平台书目分类的增删改', path: '/admin/categories', icon: Collection, color: 'var(--gradient-purple)' },
     ],

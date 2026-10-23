@@ -61,6 +61,61 @@
         </div>
       </el-card>
 
+      <!-- 在线充值（§7.4：微信/支付宝聚合 / 模拟支付） -->
+      <el-card v-if="pay.enabled" shadow="never" class="recharge-card">
+        <div class="card-title">
+          在线充值
+          <span class="muted small">
+            （{{ pay.provider === 'aggregate' ? '微信 / 支付宝' : '模拟支付（演示）' }} · 1 元 = {{ pay.token_per_fen * 100 }} {{ status.name || '代币' }}）
+          </span>
+        </div>
+        <div class="tier-grid">
+          <div
+            v-for="t in pay.tiers"
+            :key="t.fen"
+            class="tier-item"
+            :class="{ active: selectedFen === t.fen }"
+            @click="selectedFen = t.fen"
+          >
+            <div class="tier-label">{{ t.label }}</div>
+            <div class="tier-tokens">到账 {{ tierTokens(t) }} {{ status.name || '代币' }}</div>
+            <div v-if="t.bonus > 0" class="tier-bonus">赠 {{ t.bonus }}</div>
+          </div>
+        </div>
+        <div class="recharge-actions">
+          <el-radio-group v-model="payChannel" v-if="pay.channels.length > 1">
+            <el-radio-button v-for="ch in pay.channels" :key="ch.value" :value="ch.value">{{ ch.label }}</el-radio-button>
+          </el-radio-group>
+          <el-button type="primary" size="large" :loading="creating" :disabled="!selectedFen" @click="createOrder">
+            立即充值
+          </el-button>
+        </div>
+        <div class="redeem-hint">代币为平台内消费积分，不可提现、不可转账；充值时请认准本站域名，谨防钓鱼。</div>
+        <div v-if="payOrders.list.length" class="recent-orders">
+          <div class="recent-title">最近充值订单</div>
+          <el-table :data="payOrders.list" size="small">
+            <el-table-column prop="order_no" label="订单号" min-width="150" show-overflow-tooltip />
+            <el-table-column label="渠道" width="90">
+              <template #default="{ row }">{{ PAY_CHANNEL_LABELS[row.channel] || row.channel }}</template>
+            </el-table-column>
+            <el-table-column label="金额" width="90">
+              <template #default="{ row }">¥{{ (row.amount_fen / 100).toFixed(2) }}</template>
+            </el-table-column>
+            <el-table-column label="代币" width="90">
+              <template #default="{ row }">+{{ row.token_amount }}</template>
+            </el-table-column>
+            <el-table-column label="状态" width="90">
+              <template #default="{ row }">
+                <el-tag size="small" :type="row.status === 'paid' ? 'success' : row.status === 'pending' ? 'warning' : 'info'">
+                  {{ PAY_STATUS_LABELS[row.status] || row.status }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="created_at" label="时间" min-width="150" show-overflow-tooltip />
+          </el-table>
+        </div>
+      </el-card>
+
       <!-- 卡密兑换 -->
       <el-card shadow="never" class="redeem-card">
         <div class="card-title">卡密兑换</div>
@@ -114,6 +169,41 @@
       </el-card>
     </template>
 
+    <!-- 在线支付浮层：收银台入口 + 订单状态轮询 -->
+    <el-dialog
+      v-model="payDialog"
+      title="在线支付"
+      width="440px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      @closed="stopPayPolling"
+    >
+      <div class="pay-dialog-body">
+        <div class="pay-amount">¥{{ ((payDialogOrder?.amount_fen || 0) / 100).toFixed(2) }}</div>
+        <div class="pay-tokens">到账 {{ payDialogOrder?.token_amount }} {{ status.name || '代币' }}</div>
+        <div class="pay-order-no">订单号：{{ payDialogOrder?.order_no }}</div>
+        <div v-if="payCountdown > 0" class="pay-countdown">支付剩余时间：{{ mmss(payCountdown) }}</div>
+        <div v-else class="pay-countdown expired">订单已过期，请关闭后重新下单</div>
+        <el-result
+          v-if="payDialogOrder?.status === 'paid'"
+          icon="success"
+          title="支付成功"
+          :sub-title="`${payDialogOrder?.token_amount} ${status.name || '代币'} 已到账`"
+        />
+        <el-button
+          v-else-if="payDialogOrder?.status === 'pending'"
+          type="primary"
+          size="large"
+          @click="openCashier"
+        >
+          打开收银台
+        </el-button>
+        <p class="pay-tip">
+          请勿关闭本页，支付完成后将自动刷新到账状态；如已扣款但长时间未到账，请联系站长补单。
+        </p>
+      </div>
+    </el-dialog>
+
     <!-- 添加密钥弹窗 -->
     <el-dialog v-model="keyDialog" title="添加上游密钥" width="460px">
       <el-form label-width="90px">
@@ -139,11 +229,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, onUnmounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { InfoFilled, Plus } from '@element-plus/icons-vue';
 import { tokenApi, TOKEN_TYPE_LABELS } from '@/api/token';
 import { aiApi, type MyAiKey } from '@/api/ai';
+import {
+  paymentApi, PAY_STATUS_LABELS, PAY_CHANNEL_LABELS,
+  type PaymentStatus, type PaymentTier, type PaymentOrderItem,
+} from '@/api/payment';
 
 const status = reactive<{ enabled: boolean; name: string; balance: number }>({
   enabled: false,
@@ -215,6 +309,111 @@ function typeTag(t: string) {
     refund: 'info',
   };
   return (map[t] as any) || 'info';
+}
+
+// ---------- 在线充值（§7.4） ----------
+const pay = reactive<PaymentStatus>({
+  enabled: false, token_enabled: false, token_name: '', provider: 'mock',
+  channels: [], tiers: [], token_per_fen: 10, order_ttl_min: 30,
+});
+const payChannel = ref('mock');
+const selectedFen = ref<number | null>(null);
+const creating = ref(false);
+const payDialog = ref(false);
+const payDialogOrder = ref<PaymentOrderItem | null>(null);
+const payCountdown = ref(0);
+let payTimer: number | undefined;
+let payPollTimer: number | undefined;
+
+function tierTokens(t: PaymentTier) {
+  return t.fen * pay.token_per_fen + t.bonus;
+}
+function mmss(sec: number) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+async function loadPayStatus() {
+  try {
+    const res = await paymentApi.status();
+    if (res.data.code === 0) {
+      Object.assign(pay, res.data.data);
+      if (pay.channels.length) payChannel.value = pay.channels[0].value;
+      if (pay.enabled) loadPayOrders();
+    }
+  } catch { /* 支付未配置时静默 */ }
+}
+
+const payOrders = reactive<{ list: PaymentOrderItem[] }>({ list: [] });
+
+async function loadPayOrders() {
+  try {
+    const res = await paymentApi.myOrders({ page: 1, page_size: 5 });
+    if (res.data.code === 0) payOrders.list = res.data.data.list || [];
+  } catch { /* ignore */ }
+}
+
+async function createOrder() {
+  if (!selectedFen.value) { ElMessage.warning('请选择充值档位'); return; }
+  creating.value = true;
+  try {
+    const res = await paymentApi.createOrder({ channel: payChannel.value, fen: selectedFen.value });
+    if (res.data.code === 0) {
+      payDialogOrder.value = res.data.data as unknown as PaymentOrderItem;
+      payDialog.value = true;
+      startPayPolling();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '下单失败');
+  }
+  creating.value = false;
+}
+
+function openCashier() {
+  const url = payDialogOrder.value?.pay_url;
+  if (url) window.open(url, '_blank', 'noopener');
+}
+
+function stopPayPolling() {
+  if (payTimer !== undefined) { clearInterval(payTimer); payTimer = undefined; }
+  if (payPollTimer !== undefined) { clearInterval(payPollTimer); payPollTimer = undefined; }
+}
+
+function startPayPolling() {
+  stopPayPolling();
+  const expires = new Date(payDialogOrder.value!.expires_at).getTime();
+  payCountdown.value = Math.max(0, Math.floor((expires - Date.now()) / 1000));
+  payTimer = window.setInterval(() => {
+    payCountdown.value = Math.max(0, Math.floor((expires - Date.now()) / 1000));
+    if (payCountdown.value === 0) {
+      stopPayPolling();
+      loadPayOrders();
+    }
+  }, 1000);
+  payPollTimer = window.setInterval(async () => {
+    if (!payDialogOrder.value) return;
+    try {
+      const res = await paymentApi.orderStatus(payDialogOrder.value.order_no);
+      if (res.data.code === 0) {
+        const st = res.data.data;
+        payDialogOrder.value = { ...payDialogOrder.value, ...st } as PaymentOrderItem;
+        if (st.status !== 'pending') {
+          stopPayPolling();
+          if (st.status === 'paid') {
+            ElMessage.success(`充值成功，+${st.token_amount} ${pay.token_name || '代币'}`);
+            status.balance = st.balance;
+            loadStatus();
+            loadLedger();
+            loadPayOrders();
+          } else {
+            ElMessage.warning(PAY_STATUS_LABELS[st.status] || '订单已关闭');
+            loadPayOrders();
+          }
+        }
+      }
+    } catch { /* 轮询失败静默重试 */ }
+  }, 2500);
 }
 
 // ---------- 上游密钥（BYOK §5.5） ----------
@@ -290,7 +489,10 @@ async function deleteKey(row: MyAiKey) {
 onMounted(() => {
   loadStatus();
   loadKeys();
+  loadPayStatus();
 });
+
+onUnmounted(stopPayPolling);
 </script>
 
 <style scoped>
@@ -313,6 +515,32 @@ onMounted(() => {
 .amount-in { color: #16a34a; font-weight: 600; }
 .amount-out { color: #ef4444; font-weight: 600; }
 .disabled-card { border-radius: 12px; }
+/* ---------- 在线充值 ---------- */
+.recharge-card { border-radius: 10px; margin-bottom: 16px; }
+.tier-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.tier-item {
+  position: relative; border: 1px solid var(--el-border-color, #dcdfe6); border-radius: 10px;
+  padding: 12px 10px; text-align: center; cursor: pointer; transition: all 0.15s;
+  background: var(--el-fill-color-light, #fafafa);
+}
+.tier-item:hover { border-color: var(--el-color-primary, #409eff); }
+.tier-item.active { border-color: var(--el-color-primary, #409eff); background: var(--el-color-primary-light-9, #ecf5ff); }
+.tier-label { font-size: 1.05rem; font-weight: 700; color: var(--text-color, #333); }
+.tier-tokens { font-size: 0.75rem; color: var(--text-light, #888); margin-top: 4px; }
+.tier-bonus {
+  position: absolute; top: -8px; right: -6px; font-size: 0.68rem; line-height: 1;
+  background: var(--el-color-danger, #f56c6c); color: #fff; padding: 3px 6px; border-radius: 8px;
+}
+.recharge-actions { display: flex; align-items: center; gap: 14px; }
+.recent-orders { margin-top: 14px; }
+.recent-title { font-size: 0.82rem; color: var(--text-light, #888); margin-bottom: 6px; }
+.pay-dialog-body { text-align: center; }
+.pay-amount { font-size: 2rem; font-weight: 700; color: var(--el-color-danger, #f56c6c); }
+.pay-tokens { font-size: 0.9rem; color: var(--text-light, #666); margin: 4px 0 8px; }
+.pay-order-no { font-size: 0.75rem; color: var(--text-light, #999); word-break: break-all; }
+.pay-countdown { font-size: 0.8rem; color: var(--el-color-warning, #e6a23c); margin: 10px 0; }
+.pay-countdown.expired { color: var(--el-color-danger, #f56c6c); }
+.pay-tip { font-size: 0.75rem; color: var(--text-light, #999); line-height: 1.6; margin-top: 12px; }
 [data-theme="dark"] .page-title,
 [data-theme="dark"] .card-title { color: #e2e8f0; }
 </style>

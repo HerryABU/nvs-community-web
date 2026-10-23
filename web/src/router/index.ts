@@ -139,6 +139,18 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/pay/mock/:orderNo',
+      name: 'pay-mock',
+      component: () => import('@/views/PayMock.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/pay/result/:orderNo',
+      name: 'pay-result',
+      component: () => import('@/views/PayResult.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/ai',
       name: 'ai-hub',
       component: () => import('@/views/AiHub.vue'),
@@ -334,6 +346,12 @@ const router = createRouter({
       path: '/admin/ai-bot',
       name: 'admin-ai-bot',
       component: () => import('@/views/admin/AdminAiBot.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/payment',
+      name: 'admin-payment',
+      component: () => import('@/views/admin/AdminPayment.vue'),
       meta: { requiresAuth: true },
     },
     {
