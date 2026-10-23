@@ -39,6 +39,11 @@
       <div class="ai-hub-side-foot">
         <span>余额 {{ status.balance }} {{ status.token_name }}</span>
         <el-button text type="primary" size="small" @click="$router.push('/wallet')">充值</el-button>
+        <template v-if="status.free_quota?.enabled">
+          <span class="ai-hub-free" :class="{ exhausted: status.free_quota.calls_left === 0 }">
+            今日免费剩余 {{ status.free_quota.calls_left < 0 ? '不限' : status.free_quota.calls_left }} 次
+          </span>
+        </template>
       </div>
     </aside>
     <div v-if="mobileSideOpen" class="ai-hub-mask" @click="mobileSideOpen = false" />
@@ -108,6 +113,7 @@ const status = reactive<AiHubStatus>({
   token_enabled: true,
   token_name: '代币',
   balance: 0,
+  free_quota: undefined,
   chat_models: [],
   image_models: [],
   video_models: [],
@@ -224,10 +230,12 @@ onMounted(() => {
 .ai-session-del { display: none; color: #ef4444; flex-shrink: 0; }
 .ai-session-item:hover .ai-session-del { display: inline-block; }
 .ai-hub-side-foot {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px;
   padding: 10px 14px; border-top: 1px solid var(--el-border-color, #ebeef5);
   font-size: 0.8rem; color: var(--text-light, #666);
 }
+.ai-hub-free { color: #16a34a; }
+.ai-hub-free.exhausted { color: #ef4444; }
 .ai-hub-mask { display: none; }
 .ai-hub-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .ai-hub-topbar {

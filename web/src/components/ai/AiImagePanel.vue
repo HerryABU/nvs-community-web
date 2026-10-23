@@ -44,7 +44,10 @@
 
     <!-- 结果 -->
     <div v-if="lastImages.length" class="ai-media-result">
-      <div class="ai-media-result-label">本次结果（扣除 {{ lastCost }}，余额 {{ lastBalance }}）</div>
+      <div class="ai-media-result-label">
+        <template v-if="lastFree">本次结果（免费额度，余额 {{ lastBalance }}）</template>
+        <template v-else>本次结果（扣除 {{ lastCost }}，余额 {{ lastBalance }}）</template>
+      </div>
       <div class="ai-img-grid">
         <img v-for="(img, i) in lastImages" :key="i" :src="img" class="ai-img-item" alt="AI 绘画结果" />
       </div>
@@ -84,6 +87,7 @@ const n = ref(1);
 const generating = ref(false);
 const lastImages = ref<string[]>([]);
 const lastCost = ref(0);
+const lastFree = ref(false);
 const lastBalance = ref(0);
 const history = ref<any[]>([]);
 
@@ -129,6 +133,7 @@ async function generate() {
     if (res.data.code === 0) {
       lastImages.value = res.data.data.images || [];
       lastCost.value = res.data.data.cost;
+      lastFree.value = !!res.data.data.free;
       lastBalance.value = res.data.data.balance_after;
       prompt.value = '';
       await loadHistory();

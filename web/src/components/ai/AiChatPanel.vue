@@ -29,8 +29,10 @@
         <div class="ai-msg-bubble">
           <div v-if="m.role === 'assistant'" class="ai-msg-md" v-html="renderMd(m.content)" />
           <div v-else class="ai-msg-plain">{{ m.content }}</div>
-          <div v-if="m.role === 'assistant' && m.cost > 0" class="ai-msg-meta">
-            消耗 {{ m.cost }} {{ status.token_name }} · {{ m.tokens_in }}/{{ m.tokens_out }} tokens
+          <div v-if="m.role === 'assistant' && (m.cost > 0 || m.free)" class="ai-msg-meta">
+            <span v-if="m.free" class="ai-msg-free">免费额度</span>
+            <template v-else>消耗 {{ m.cost }} {{ status.token_name }} · </template>
+            {{ m.tokens_in }}/{{ m.tokens_out }} tokens
           </div>
         </div>
       </div>
@@ -183,7 +185,7 @@ async function send() {
     } else {
       messages.value.push({
         id: -Date.now() - 1, role: 'assistant', content: result.content,
-        tokens_in: 0, tokens_out: 0, cost: result.cost, created_at: '',
+        tokens_in: 0, tokens_out: 0, cost: result.cost, free: result.free, created_at: '',
       });
       emit('balance-updated', result.balance_after);
       if (!props.sessionId && result.session_id) {
@@ -254,6 +256,10 @@ function stop() {
 .ai-msg-md :deep(code) { font-family: Consolas, monospace; }
 .ai-msg-md :deep(ul), .ai-msg-md :deep(ol) { margin: 4px 0 8px; padding-left: 20px; }
 .ai-msg-meta { margin-top: 6px; font-size: 0.72rem; color: var(--text-light, #999); }
+.ai-msg-free {
+  display: inline-block; padding: 0 6px; margin-right: 4px; border-radius: 4px;
+  background: rgba(22, 163, 74, 0.12); color: #16a34a;
+}
 .ai-cursor {
   display: inline-block; width: 8px; height: 1em;
   background: var(--el-color-primary, #409eff);

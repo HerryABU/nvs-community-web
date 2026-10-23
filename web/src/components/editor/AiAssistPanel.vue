@@ -75,9 +75,14 @@
       <div class="ai-estimate-row">
         <span v-if="estimating" class="muted">预估中…</span>
         <span v-else-if="estimate" :class="{ 'ai-warn': !estimate.affordable }">
-          预估：{{ estimate.tokens_in }} 入 / {{ estimate.tokens_out }} 出 tokens，约
-          <b>{{ estimate.cost }}</b> {{ status.token_name }}
-          <span v-if="!estimate.affordable">（余额不足，请先充值）</span>
+          <template v-if="estimate.free_eligible">
+            预估：{{ estimate.tokens_in }} 入 / {{ estimate.tokens_out }} 出 tokens，<b>免费额度</b>
+          </template>
+          <template v-else>
+            预估：{{ estimate.tokens_in }} 入 / {{ estimate.tokens_out }} 出 tokens，约
+            <b>{{ estimate.cost }}</b> {{ status.token_name }}
+            <span v-if="!estimate.affordable">（余额不足，请先充值）</span>
+          </template>
         </span>
         <span v-else class="muted">输入内容后自动预估费用</span>
       </div>
@@ -89,7 +94,8 @@
         :disabled="!form.text.trim() || (estimate && !estimate.affordable)"
         @click="run"
       >
-        执行（约 {{ estimate?.cost ?? '—' }} {{ status.token_name }}）
+        <template v-if="estimate?.free_eligible">执行（免费额度）</template>
+        <template v-else>执行（约 {{ estimate?.cost ?? '—' }} {{ status.token_name }}）</template>
       </el-button>
 
       <!-- 结果 -->
@@ -97,7 +103,8 @@
         <div class="ai-result-label">
           AI 结果
           <span class="muted small">
-            实耗 {{ result.tokens_in }}/{{ result.tokens_out }} tokens，扣除 {{ result.cost }}，余额 {{ result.balance_after }}
+            <template v-if="result.free">免费额度 · </template>
+            <template v-else>实耗 {{ result.tokens_in }}/{{ result.tokens_out }} tokens，扣除 {{ result.cost }}，余额 {{ result.balance_after }}</template>
           </span>
         </div>
         <div class="ai-result-text">{{ result.content }}</div>
@@ -147,7 +154,7 @@ const form = reactive<{ model_id: number; action: string; max_tokens: number; te
 const estimate = ref<AiEstimateResult | null>(null);
 const estimating = ref(false);
 const running = ref(false);
-const result = ref<{ content: string; tokens_in: number; tokens_out: number; cost: number; balance_after: number } | null>(null);
+const result = ref<{ content: string; tokens_in: number; tokens_out: number; cost: number; free?: boolean; balance_after: number } | null>(null);
 
 const currentActionHint = computed(
   () => AI_ACTIONS.find((a) => a.value === form.action)?.hint || '',

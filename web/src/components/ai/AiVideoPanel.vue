@@ -44,7 +44,10 @@
     <div v-if="current" class="ai-media-result">
       <div class="ai-media-result-label">
         {{ statusText(current.status) }}
-        <span v-if="current.status === 'succeeded'" class="muted small">扣除 {{ current.cost }}</span>
+        <span v-if="current.status === 'succeeded'" class="muted small">
+          <template v-if="current.free">免费额度</template>
+          <template v-else>扣除 {{ current.cost }}</template>
+        </span>
         <span v-else class="muted small">生成中会自动刷新，可离开页面（完成后在历史中查看）</span>
       </div>
       <video v-if="currentVideo" :src="currentVideo" controls class="ai-video-player" />
@@ -85,7 +88,7 @@ const prompt = ref('');
 const duration = ref(5);
 const vsize = ref('1280x720');
 const submitting = ref(false);
-const current = ref<{ id: number; status: string; video?: string; error?: string; cost: number } | null>(null);
+const current = ref<{ id: number; status: string; video?: string; error?: string; cost: number; free?: boolean } | null>(null);
 const history = ref<any[]>([]);
 let pollTimer: number | undefined;
 
@@ -148,6 +151,7 @@ async function submit() {
         id: res.data.data.task_id,
         status: res.data.data.status || 'running',
         cost: res.data.data.cost,
+        free: !!res.data.data.free,
       };
       prompt.value = '';
       startPolling();

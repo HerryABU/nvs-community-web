@@ -19,6 +19,15 @@ export interface AiHubStatus {
   token_enabled: boolean;
   token_name: string;
   balance: number;
+  free_quota?: {
+    enabled: boolean;
+    calls_left: number;
+    tokens_left: number;
+    used_calls: number;
+    used_tokens: number;
+    calls_per_day: number;
+    max_tokens_per_day: number;
+  };
   chat_models: AiHubModel[];
   image_models: AiHubModel[];
   video_models: AiHubModel[];
@@ -52,6 +61,7 @@ export interface AiChatMessage {
   tokens_in: number;
   tokens_out: number;
   cost: number;
+  free?: boolean;
   created_at: string;
 }
 
@@ -72,10 +82,10 @@ export const aiHubApi = {
     return api.delete(`/ai/sessions/${id}`);
   },
   image(data: { model_id: number; prompt: string; size?: string; style?: string; n?: number }) {
-    return api.post<{ code: number; data: { task_id: number; images: string[]; cost: number; balance_after: number } }>('/ai/image', data);
+    return api.post<{ code: number; data: { task_id: number; images: string[]; cost: number; free?: boolean; balance_after: number } }>('/ai/image', data);
   },
   videoSubmit(data: { model_id: number; prompt: string; duration?: number; size?: string }) {
-    return api.post<{ code: number; data: { task_id: number; status: string; cost: number; balance_after: number } }>('/ai/video', data);
+    return api.post<{ code: number; data: { task_id: number; status: string; cost: number; free?: boolean; balance_after: number } }>('/ai/video', data);
   },
   videoStatus(id: number) {
     return api.get<{ code: number; data: { task_id: number; status: string; video?: string; result?: string; error?: string; cost: number } }>(`/ai/video/${id}`);
@@ -104,7 +114,7 @@ export async function streamChat(
   payload: { session_id?: number; model_id: number; agent_id?: number; message: string; max_tokens?: number },
   onChunk: (text: string) => void,
   signal?: AbortSignal,
-): Promise<{ content: string; cost: number; balance_after: number; session_id: number } | null> {
+): Promise<{ content: string; cost: number; free?: boolean; balance_after: number; session_id: number } | null> {
   const base = (api.defaults.baseURL || '') as string;
   const resp = await fetch(`${base}/ai/chat/stream`, {
     method: 'POST',
@@ -158,6 +168,7 @@ export async function streamChat(
   return {
     content,
     cost: final.cost || 0,
+    free: !!final.free,
     balance_after: final.balance_after || 0,
     session_id: final.session_id || 0,
   };

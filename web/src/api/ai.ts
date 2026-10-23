@@ -12,18 +12,30 @@ export interface AiModelItem {
   max_tokens: number;
 }
 
+export interface AiFreeQuota {
+  enabled: boolean;
+  calls_left: number; // -1=不限
+  tokens_left: number; // -1=不限
+  used_calls: number;
+  used_tokens: number;
+  calls_per_day: number; // 生效上限（-1 不限 / 0 不提供）
+  max_tokens_per_day: number; // 生效上限（-1 不限 / 0 不限）
+}
+
 export interface AiStatus {
   ai_enabled: boolean;
   token_enabled: boolean;
   token_name: string;
   balance: number;
   models: AiModelItem[];
+  free_quota?: AiFreeQuota;
 }
 
 export interface AiEstimateResult {
   tokens_in: number;
   tokens_out: number;
   cost: number;
+  free_eligible?: boolean;
   balance: number;
   affordable: boolean;
 }
@@ -54,7 +66,12 @@ export const aiApi = {
     ref_type?: string;
     ref_id?: number;
   }) {
-    return api.post<{ code: number; data: { content: string; tokens_in: number; tokens_out: number; cost: number; balance_after: number } }>('/ai/complete', data);
+    return api.post<{ code: number; data: { content: string; tokens_in: number; tokens_out: number; cost: number; free?: boolean; balance_after: number } }>('/ai/complete', data);
+  },
+
+  // 免费 AI 额度（§5.3）
+  freeQuotaStatus() {
+    return api.get<{ code: number; data: AiFreeQuota }>('/ai/free-quota');
   },
 
   // 管理端
@@ -76,7 +93,32 @@ export const aiApi = {
   deleteModel(id: number) {
     return api.delete(`/admin/ai/models/${id}`);
   },
+
+  // 管理端：免费 AI 额度（平台默认 + 按人覆盖）
+  getFreeQuotaConfig() {
+    return api.get<{ code: number; data: { enabled: boolean; config: { calls_per_day: number; max_tokens_per_day: number } } }>('/admin/ai/free-quota/config');
+  },
+  setFreeQuotaConfig(data: { enabled: boolean; calls_per_day: number; max_tokens_per_day: number }) {
+    return api.put('/admin/ai/free-quota/config', data);
+  },
+  listFreeQuotaOverrides() {
+    return api.get<{ code: number; data: AdminAiFreeQuotaOverride[] }>('/admin/ai/free-quota/overrides');
+  },
+  manageFreeQuotaOverride(data: { action: 'set' | 'remove'; user_id: number; daily_calls?: number; daily_tokens?: number; note?: string }) {
+    return api.post('/admin/ai/free-quota/overrides', data);
+  },
 };
+
+export interface AdminAiFreeQuotaOverride {
+  id: number;
+  user_id: number;
+  daily_calls: number;
+  daily_tokens: number;
+  note: string;
+  username?: string;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface AdminAiModel {
   id: number;
