@@ -298,6 +298,10 @@ func main() {
 		protected.POST("/web-quota/frame-public", handlers.SetFramePublic)
 		// 每日发文限额（§13.4）：当前用户今日发文额度（发布表单展示剩余量）
 		protected.GET("/daily-publish/status", handlers.GetMyPublishQuota)
+		// 代币钱包（§7）：状态 / 流水 / 卡密兑换
+		protected.GET("/token/status", handlers.TokenStatus)
+		protected.GET("/token/ledger", handlers.TokenLedgerList)
+		protected.POST("/token/redeem", handlers.RedeemCard)
 		// 用户黑名单（F13：拉黑禁言/屏蔽内容）
 		protected.POST("/blacklist", security.RateLimit(20, 60), handlers.AddBlacklist)
 		protected.DELETE("/blacklist/:id", handlers.RemoveBlacklist)
@@ -603,6 +607,14 @@ func main() {
 		admin.PUT("/daily-publish/config", handlers.AdminSetDailyPublishConfig)
 		admin.GET("/daily-publish/overrides", handlers.AdminListPublishOverrides)
 		admin.POST("/daily-publish/overrides", handlers.AdminManagePublishOverride)
+		// 代币账本 / 卡密管理（§7）：配置 + 生成/作废卡密 + 授信扣减
+		// 独立子树 /token：静态段，避让 :id 通配冲突
+		admin.GET("/token/config", handlers.AdminGetTokenConfig)
+		admin.PUT("/token/config", handlers.AdminSetTokenConfig)
+		admin.GET("/token/cards", handlers.AdminListCards)
+		admin.POST("/token/cards", handlers.AdminGenerateCards)
+		admin.POST("/token/cards/:id/void", handlers.AdminVoidCard)
+		admin.POST("/token/adjust", handlers.AdminAdjustToken)
 		// 应用扩展安全审核：预检未通过的 ZIP 原样封存（不解压），管理员放行/驳回
 		admin.GET("/userhtmls", handlers.AdminListHTMLs)
 		admin.GET("/userhtmls/:id/scan", handlers.AdminGetHTMLScan)
