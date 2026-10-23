@@ -81,7 +81,7 @@ func AllModels() []interface{} {
 		&UserAiKey{},
 		&AiNovelMemory{},
 		&AiBotUsage{},
-		&AiPrompt{}, &AiVendor{},
+		&AiPrompt{}, &AiVendor{}, &AiModelKey{}, &AiStyle{},
 		// 搜索热词埋点（F9：站内搜索 query 记录，聚合出搜索热词）
 		&SearchLog{},
 	}

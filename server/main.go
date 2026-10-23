@@ -278,6 +278,8 @@ func main() {
 		public.GET("/ai/shared/:token", handlers.AiSharedSession)
 		// 灵感广场：公开作品流（作者主动发布才可见）
 		public.GET("/ai/gallery", handlers.AiGalleryList)
+		// 风格字典（发布作品时下拉用）
+		public.GET("/ai/styles", handlers.AiStyleList)
 		// 在线支付回调（§7.4）：网关异步通知（验签准入，无鉴权）+ 支付完成同步跳转
 		public.POST("/payment/notify/:channel", security.RateLimit(120, 60), handlers.PaymentNotify)
 		public.GET("/payment/return/:channel", handlers.PaymentReturn)
@@ -704,6 +706,21 @@ func main() {
 		admin.PUT("/ai/config", handlers.AdminSetAiConfig)
 		admin.GET("/ai/models", handlers.AdminListAiModels)
 		admin.GET("/ai/presets", handlers.AdminAiModelPresets)
+
+		// API 卡池（多密钥轮询）
+		admin.GET("/ai/models/:id/keys", handlers.AdminListAiModelKeys)
+		admin.POST("/ai/models/:id/keys", handlers.AdminCreateAiModelKey)
+		admin.PUT("/ai/models/:id/keys/:keyId", handlers.AdminUpdateAiModelKey)
+		admin.DELETE("/ai/models/:id/keys/:keyId", handlers.AdminDeleteAiModelKey)
+		admin.POST("/ai/models/:id/keys/test", handlers.AdminTestAiModelKey)
+
+		// 风格字典 / 扣子默认配置
+		admin.GET("/ai/styles", handlers.AdminListAiStyles)
+		admin.POST("/ai/styles", handlers.AdminCreateAiStyle)
+		admin.PUT("/ai/styles/:id", handlers.AdminUpdateAiStyle)
+		admin.DELETE("/ai/styles/:id", handlers.AdminDeleteAiStyle)
+		admin.GET("/ai/coze-default", handlers.AdminGetAiCozeDefault)
+		admin.PUT("/ai/coze-default", handlers.AdminSetAiCozeDefault)
 
 		// AI 功能开关 / 厂商字典 / 数据审计
 		admin.GET("/ai/features", handlers.AdminGetAiFeatures)
@@ -1269,6 +1286,7 @@ func initDatabase() error {
 	models.SeedDefaultAiAgents() // AI 智能体内置种子（表为空时写入）
 	models.InitAiPrompts()       // AI 提示词库平台预设（幂等）
 	models.SeedAiVendors()       // AI 厂商字典（幂等）
+	models.SeedAiStyles()        // 作品风格字典（幂等）
 	// 管理端配置（DB）覆盖 .env 初始值：微信扫码凭据热更新进 config 包级变量
 	// （sms 网关由 resolveGateway 每次发送前读 DB，无需在此处理）
 	if wxID, wxSecret, wxCallback, fromDB := models.GetWeChatConfigFromDB(); fromDB {

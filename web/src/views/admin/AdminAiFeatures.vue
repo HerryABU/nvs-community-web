@@ -88,6 +88,63 @@
       </el-table>
     </el-card>
 
+    <!-- 风格字典 -->
+    <el-card shadow="never" class="cfg-card" style="margin-top:14px">
+      <SectionHeader title="作品风格字典" desc="绘画/视频发布作品时选风格；广场筛选 chips 由它生成">
+        <template #actions>
+          <el-radio-group v-model="styleKind" size="small" @change="loadStyles">
+            <el-radio-button value="image">图像</el-radio-button>
+            <el-radio-button value="video">视频</el-radio-button>
+          </el-radio-group>
+          <el-button size="small" style="margin-left:8px" @click="openStyle(null)">
+            <el-icon><Plus /></el-icon> 新增风格
+          </el-button>
+        </template>
+      </SectionHeader>
+      <el-table :data="styles" size="small" v-loading="styleLoading">
+        <el-table-column prop="name" label="风格" min-width="160" />
+        <el-table-column prop="sort_order" label="排序" width="90" />
+        <el-table-column label="启用" width="90">
+          <template #default="{ row }">
+            <el-switch v-model="row.enabled" size="small" @change="toggleStyle(row)" />
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="140" fixed="right">
+          <template #default="{ row }">
+            <el-button text type="primary" size="small" @click="openStyle(row)">编辑</el-button>
+            <el-button text type="danger" size="small" @click="removeStyle(row)">删除</el-button>
+          </template>
+        </el-table-column>
+        <template #empty><EmptyState icon="🎨" text="暂无风格" /></template>
+      </el-table>
+    </el-card>
+
+    <!-- 扣子默认配置 -->
+    <el-card shadow="never" class="cfg-card" style="margin-top:14px">
+      <SectionHeader title="扣子（Coze）默认配置" desc="智能体未填 API 域名/超时时继承这里的默认值">
+        <template #actions>
+          <el-button size="small" :loading="cozeSaving" type="primary" @click="saveCoze">保存</el-button>
+        </template>
+      </SectionHeader>
+      <div class="cfg-row">
+        <div class="cfg-item">
+          <div class="cfg-name">API 域名</div>
+          <div class="cfg-desc">国内 https://api.coze.cn / 国际 https://api.coze.com</div>
+        </div>
+        <el-select v-model="coze.base_url" size="small" style="width:240px" filterable allow-create>
+          <el-option label="https://api.coze.cn" value="https://api.coze.cn" />
+          <el-option label="https://api.coze.com" value="https://api.coze.com" />
+        </el-select>
+      </div>
+      <div class="cfg-row">
+        <div class="cfg-item">
+          <div class="cfg-name">等待超时（秒）</div>
+          <div class="cfg-desc">30–600；智能体工作流较慢时调大</div>
+        </div>
+        <el-input-number v-model="coze.timeout_seconds" :min="30" :max="600" size="small" controls-position="right" />
+      </div>
+    </el-card>
+
     <el-dialog v-model="vendorVisible" :title="editingVendor ? '编辑厂商' : '新增厂商'" width="420px">
       <el-form label-width="72px">
         <el-form-item label="名称" required>
@@ -106,6 +163,26 @@
         <el-button type="primary" :loading="vendorSaving" @click="saveVendor">保存</el-button>
       </template>
     </el-dialog>
+    <el-dialog v-model="styleVisible" :title="editingStyle ? '编辑风格' : '新增风格'" width="420px">
+      <el-form label-width="72px">
+        <el-form-item label="类型">
+          <el-radio-group v-model="styleForm.kind">
+            <el-radio-button value="image">图像</el-radio-button>
+            <el-radio-button value="video">视频</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="名称" required>
+          <el-input v-model="styleForm.name" maxlength="32" placeholder="如 写实摄影 / 国风 / 空镜" />
+        </el-form-item>
+        <el-form-item label="排序">
+          <el-input-number v-model="styleForm.sort_order" :min="0" :max="999" controls-position="right" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="styleVisible = false">取消</el-button>
+        <el-button type="primary" :loading="styleSaving" @click="saveStyle">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -116,7 +193,7 @@ import { Plus } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import SectionHeader from '@/components/common/SectionHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
-import { aiApi, type AiFeatureFlags, type AiVendor } from '@/api/ai';
+import { aiApi, type AiFeatureFlags, type AiVendor, type AiStyle, type AiCozeDefault } from '@/api/ai';
 
 const saving = ref(false);
 const flags = reactive<AiFeatureFlags>({
@@ -221,9 +298,104 @@ async function removeVendor(row: AiVendor) {
   }
 }
 
+// ---------- 风格字典 ----------
+const styleKind = ref('image');
+const styles = ref<AiStyle[]>([]);
+const styleLoading = ref(false);
+const styleVisible = ref(false);
+const styleSaving = ref(false);
+const editingStyle = ref<AiStyle | null>(null);
+const styleForm = reactive({ kind: 'image', name: '', sort_order: 0 });
+
+async function loadStyles() {
+  styleLoading.value = true;
+  try {
+    const res = await aiApi.listAiStyles({ kind: styleKind.value });
+    if (res.data.code === 0) styles.value = res.data.data.list || [];
+  } catch { /* ignore */ }
+  styleLoading.value = false;
+}
+
+function openStyle(row: AiStyle | null) {
+  editingStyle.value = row;
+  styleForm.kind = row?.kind || styleKind.value;
+  styleForm.name = row?.name || '';
+  styleForm.sort_order = row?.sort_order ?? 0;
+  styleVisible.value = true;
+}
+
+async function saveStyle() {
+  if (!styleForm.name.trim()) {
+    ElMessage.warning('名称不能为空');
+    return;
+  }
+  styleSaving.value = true;
+  try {
+    const res = editingStyle.value
+      ? await aiApi.updateAiStyle(editingStyle.value.id, { name: styleForm.name.trim(), sort_order: styleForm.sort_order })
+      : await aiApi.createAiStyle({ kind: styleForm.kind, name: styleForm.name.trim(), sort_order: styleForm.sort_order });
+    if (res.data.code === 0) {
+      ElMessage.success('已保存');
+      styleVisible.value = false;
+      await loadStyles();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  }
+  styleSaving.value = false;
+}
+
+async function toggleStyle(row: AiStyle) {
+  try {
+    await aiApi.updateAiStyle(row.id, { name: row.name, sort_order: row.sort_order, enabled: row.enabled });
+  } catch (e: any) {
+    row.enabled = !row.enabled;
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
+async function removeStyle(row: AiStyle) {
+  try {
+    await ElMessageBox.confirm(`删除风格「${row.name}」？历史作品里的风格名会保留。`, '删除确认', { type: 'warning' });
+  } catch { return; }
+  try {
+    const res = await aiApi.deleteAiStyle(row.id);
+    if (res.data.code === 0) {
+      ElMessage.success('已删除');
+      await loadStyles();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '删除失败');
+  }
+}
+
+// ---------- 扣子默认配置 ----------
+const coze = reactive<AiCozeDefault>({ base_url: 'https://api.coze.cn', timeout_seconds: 150 });
+const cozeSaving = ref(false);
+
+async function loadCoze() {
+  try {
+    const res = await aiApi.getAiCozeDefault();
+    if (res.data.code === 0) Object.assign(coze, res.data.data);
+  } catch { /* ignore */ }
+}
+
+async function saveCoze() {
+  cozeSaving.value = true;
+  try {
+    const res = await aiApi.setAiCozeDefault({ ...coze });
+    if (res.data.code === 0) ElMessage.success('已保存');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  }
+  cozeSaving.value = false;
+}
+
 onMounted(() => {
   loadFlags();
   loadVendors();
+  loadStyles();
+  loadCoze();
 });
 </script>
 

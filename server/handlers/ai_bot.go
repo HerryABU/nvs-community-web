@@ -129,7 +129,11 @@ func generateAiBotReply(triggerUser uint, trigger *models.Comment, cfg models.Ai
 	sb.WriteString("召唤者说：" + triggerContent + "\n")
 	sb.WriteString("请针对以上内容给出回复。")
 
-	apiKey, kerr := m.DecryptApiKey()
+	lease, kerr := models.AcquireModelKey(m)
+	apiKey := ""
+	if lease != nil {
+		apiKey = lease.Key
+	}
 	if kerr != nil {
 		return
 	}

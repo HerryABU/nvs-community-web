@@ -160,15 +160,20 @@ func AiHubImage(c *gin.Context) {
 		utils.InternalError(c, "创建任务失败")
 		return
 	}
-	apiKey, kerr := m.DecryptApiKey()
+	lease, kerr := models.AcquireModelKey(m)
+	apiKey := ""
+	if lease != nil {
+		apiKey = lease.Key
+	}
 	if kerr != nil {
-		models.FailAiMediaTask(task.ID, "密钥解密失败", false)
-		utils.InternalError(c, "模型密钥解密失败，请联系站长")
+		models.FailAiMediaTask(task.ID, "密钥不可用", false)
+		utils.InternalError(c, "模型密钥不可用（密钥池已被摘除且无兜底密钥），请联系站长")
 		return
 	}
 	client := aiclient.NewClient(m.BaseURL, apiKey, 180*time.Second)
 	urls, gerr := generateImagesByApiKind(client, m, promptForMode, size, strings.TrimSpace(req.Style), n, refs)
 	if gerr != nil {
+		lease.Fail()
 		models.FailAiMediaTask(task.ID, gerr.Error(), false)
 		utils.BadRequest(c, "绘画失败："+gerr.Error()+"（未扣款）")
 		return
@@ -193,6 +198,7 @@ func AiHubImage(c *gin.Context) {
 			return
 		}
 	}
+	lease.OK()
 	rj, _ := json.Marshal(gin.H{"images": urls})
 	models.UpdateAiMediaResult(task.ID, string(rj))
 	utils.Success(c, gin.H{
@@ -267,10 +273,14 @@ func AiHubVideoSubmit(c *gin.Context) {
 		utils.InternalError(c, "创建任务失败")
 		return
 	}
-	apiKey, kerr := m.DecryptApiKey()
+	lease, kerr := models.AcquireModelKey(m)
+	apiKey := ""
+	if lease != nil {
+		apiKey = lease.Key
+	}
 	if kerr != nil {
-		models.FailAiMediaTask(task.ID, "密钥解密失败", false)
-		utils.InternalError(c, "模型密钥解密失败，请联系站长")
+		models.FailAiMediaTask(task.ID, "密钥不可用", false)
+		utils.InternalError(c, "模型密钥不可用，请联系站长")
 		return
 	}
 	// BYOK 视频：用用户自备密钥提交，任务记 0 费、不扣平台代币
@@ -305,6 +315,9 @@ func AiHubVideoSubmit(c *gin.Context) {
 		Duration: req.Duration, Size: strings.TrimSpace(req.Size),
 	})
 	if verr != nil {
+		if !byok {
+			lease.Fail()
+		}
 		models.FailAiMediaTask(task.ID, verr.Error(), false)
 		utils.BadRequest(c, "视频提交失败："+verr.Error()+"（未扣款）")
 		return
@@ -409,9 +422,13 @@ func AiHubVideoStatus(c *gin.Context) {
 		utils.BadRequest(c, "模型已删除，无法继续查询")
 		return
 	}
-	apiKey, kerr := m.DecryptApiKey()
+	lease, kerr := models.AcquireModelKey(m)
+	apiKey := ""
+	if lease != nil {
+		apiKey = lease.Key
+	}
 	if kerr != nil {
-		utils.InternalError(c, "模型密钥解密失败")
+		utils.InternalError(c, "模型密钥不可用")
 		return
 	}
 	client := aiclient.NewClient(m.BaseURL, apiKey, 30*time.Second)

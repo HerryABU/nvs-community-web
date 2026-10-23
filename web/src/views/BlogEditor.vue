@@ -7,6 +7,9 @@
           <el-icon><ArrowLeft /></el-icon>返回工作台
         </el-button>
         <el-button text :icon="Link" @click="showRefPicker = true">插入站内链接</el-button>
+        <el-button text @click="openAiPanel">
+          <el-icon><MagicStick /></el-icon>AI 助手
+        </el-button>
       </div>
       <div class="be-toolbar-center">
         <span class="be-page-title">{{ editingId ? '编辑博客' : '写博客' }}</span>
@@ -26,6 +29,14 @@
 
     <!-- 站内内容引用选择器（16.2：博客正文引用其他小说/博客/论坛帖，相对路径可跳转） -->
     <ContentRefPicker v-model:visible="showRefPicker" @confirm="insertRefLink" />
+
+    <!-- 编辑器内 AI 辅助（与章节编辑器共用同一面板：续写/润色/扩写/摘要，按量计费） -->
+    <AiAssistPanel
+      v-model:visible="showAiPanel"
+      :context-text="aiContextText"
+      @insert="insertIntoEditor"
+      @replace="aiReplaceAll"
+    />
 
     <!-- 批量导入对话框（CSDN 式：可指定导入到哪个专栏） -->
     <el-dialog v-model="showBatchDialog" title="批量导入博客" width="560px" destroy-on-close>
@@ -143,11 +154,12 @@ import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { blogApi, uploadApi } from '@/api/social';
 import { ElMessage } from 'element-plus';
-import { ArrowLeft, UploadFilled, Link } from '@element-plus/icons-vue';
+import { ArrowLeft, MagicStick, UploadFilled, Link } from '@element-plus/icons-vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
 // engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
 import { renderMarkdown, editorEngineConfig } from '@/markdown/renderer';
+import AiAssistPanel from '@/components/editor/AiAssistPanel.vue';
 import { htmlToMarkdown } from '@/utils/turndown';
 
 const route = useRoute();
@@ -285,6 +297,35 @@ function openMedia(type: 'video' | 'audio') {
 
 function onMediaFileChange(file: any) {
   if (file.raw) mediaFile.value = file.raw;
+}
+
+// ===== 编辑器内 AI 辅助 =====
+const showAiPanel = ref(false);
+const aiContextText = ref('');
+// 优先用富文本纯文本，其次 Markdown 原文；截取尾部避免超长
+async function openAiPanel() {
+  try {
+    const raw = editorMode.value === 'richtext'
+      ? richTextContent.value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+      : await getContentToSave();
+    aiContextText.value = (raw || '').slice(-4000);
+  } catch {
+    aiContextText.value = '';
+  }
+  showAiPanel.value = true;
+}
+
+// AI 结果整体替换正文（Markdown 模式写回 Cherry；富文本模式按 HTML 段落写入）
+async function aiReplaceAll(text: string) {
+  if (!text) return;
+  if (editorMode.value === 'md' && cherryInstance) {
+    cherryInstance.setValue(text);
+    blogContent.value = text;
+  } else {
+    const html = renderMarkdown(text);
+    richTextContent.value = html;
+  }
+  ElMessage.success('已替换正文');
 }
 
 function insertIntoEditor(text: string) {

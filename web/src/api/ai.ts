@@ -159,6 +159,42 @@ export const aiApi = {
   deleteAiVendor(id: number) {
     return api.delete(`/admin/ai/vendors/${id}`);
   },
+  // ---------- API 卡池（多密钥轮询） ----------
+  aiModelKeys(modelId: number) {
+    return api.get<{ code: number; data: { list: any[]; total: number; max_fail: number } }>(`/admin/ai/models/${modelId}/keys`);
+  },
+  aiModelKeyCreate(modelId: number, data: { label?: string; key?: string; keys?: string; weight?: number }) {
+    return api.post(`/admin/ai/models/${modelId}/keys`, data);
+  },
+  aiModelKeyUpdate(modelId: number, keyId: number, data: { label?: string; weight?: number; enabled?: boolean; reset?: boolean }) {
+    return api.put(`/admin/ai/models/${modelId}/keys/${keyId}`, data);
+  },
+  aiModelKeyDelete(modelId: number, keyId: number) {
+    return api.delete(`/admin/ai/models/${modelId}/keys/${keyId}`);
+  },
+  aiModelKeyTest(modelId: number, data: { key_id?: number; key?: string }) {
+    return api.post<{ code: number; data: { ok: boolean; message: string } }>(`/admin/ai/models/${modelId}/keys/test`, data);
+  },
+
+  // ---------- 风格字典 / 扣子默认配置 ----------
+  listAiStyles(params: { kind?: string } = {}) {
+    return api.get<{ code: number; data: { list: AiStyle[] } }>('/admin/ai/styles', { params });
+  },
+  createAiStyle(data: { kind: string; name: string; sort_order?: number }) {
+    return api.post('/admin/ai/styles', data);
+  },
+  updateAiStyle(id: number, data: { name: string; sort_order?: number; enabled?: boolean }) {
+    return api.put(`/admin/ai/styles/${id}`, data);
+  },
+  deleteAiStyle(id: number) {
+    return api.delete(`/admin/ai/styles/${id}`);
+  },
+  getAiCozeDefault() {
+    return api.get<{ code: number; data: AiCozeDefault }>('/admin/ai/coze-default');
+  },
+  setAiCozeDefault(data: AiCozeDefault) {
+    return api.put('/admin/ai/coze-default', data);
+  },
   aiModelPresets(params: { kind?: string } = {}) {
     return api.get<{ code: number; data: { list: AiModelPreset[] } }>('/admin/ai/presets', { params });
   },
@@ -296,4 +332,19 @@ export interface AiVendor {
   sort_order: number;
   enabled: boolean;
   models: number;
+}
+
+/** 作品风格字典 */
+export interface AiStyle {
+  id: number;
+  kind: string;
+  name: string;
+  sort_order: number;
+  enabled: boolean;
+}
+
+/** 扣子全局默认配置 */
+export interface AiCozeDefault {
+  base_url: string;
+  timeout_seconds: number;
 }

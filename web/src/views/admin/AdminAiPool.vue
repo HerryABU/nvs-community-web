@@ -55,8 +55,9 @@
             </template>
           </el-table-column>
           <el-table-column prop="priority" label="优先级" width="80" />
-          <el-table-column label="操作" width="130" fixed="right">
+          <el-table-column label="操作" width="200" fixed="right">
             <template #default="{ row }">
+              <el-button size="small" text type="primary" @click="openKeys(row)">密钥池</el-button>
               <el-button size="small" text type="primary" @click="openEdit(row)">编辑</el-button>
               <el-button size="small" text type="danger" @click="removeModel(row)">删除</el-button>
             </template>
@@ -156,6 +157,71 @@
         <el-button type="primary" :loading="saving" @click="saveModel">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- ============ API 卡池（多密钥轮询） ============ -->
+    <el-drawer v-model="keysVisible" :title="`密钥池 · ${keysModel?.name || ''}`" size="min(720px, 94vw)">
+      <div class="kp-tip">
+        多把密钥按权重随机轮询；单把密钥连续失败 {{ maxFail }} 次自动停用（可手动重置）。
+        池为空时自动回退到模型自带的单一密钥。
+      </div>
+
+      <div class="kp-add">
+        <el-input v-model="keyForm.label" size="small" placeholder="备注（可选）" style="width:150px" />
+        <el-input-number v-model="keyForm.weight" :min="1" :max="100" size="small" style="width:110px" />
+        <el-input
+          v-model="keyForm.keys"
+          type="textarea"
+          :rows="2"
+          size="small"
+          placeholder="粘贴密钥；支持一次多行批量导入（每行一把，最多 50 行）"
+          style="flex:1"
+        />
+        <el-button type="primary" size="small" :loading="keySaving" @click="addKeys">添加</el-button>
+      </div>
+
+      <el-table :data="keys" size="small" v-loading="keyLoading">
+        <el-table-column prop="label" label="备注" width="120" show-overflow-tooltip />
+        <el-table-column prop="hint" label="密钥" width="110">
+          <template #default="{ row }"><code>{{ row.hint || '—' }}</code></template>
+        </el-table-column>
+        <el-table-column label="权重" width="110">
+          <template #default="{ row }">
+            <el-input-number
+              :model-value="row.weight"
+              :min="1"
+              :max="100"
+              size="small"
+              controls-position="right"
+              style="width:80px"
+              @change="(v: number) => updateKey(row, { weight: v })"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column label="失败次数" width="90">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.fail_count >= maxFail ? 'danger' : row.fail_count > 0 ? 'warning' : 'success'">
+              {{ row.fail_count }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="启用" width="80">
+          <template #default="{ row }">
+            <el-switch :model-value="row.enabled" size="small" @change="(v: boolean) => updateKey(row, { enabled: v })" />
+          </template>
+        </el-table-column>
+        <el-table-column prop="last_used_at" label="最近使用" width="150">
+          <template #default="{ row }">{{ row.last_used_at ? new Date(row.last_used_at).toLocaleString() : '—' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="150" fixed="right">
+          <template #default="{ row }">
+            <el-button size="small" text type="primary" :loading="testingId === row.id" @click="testKey(row)">测试</el-button>
+            <el-button size="small" text @click="updateKey(row, { reset: true })">重置</el-button>
+            <el-button size="small" text type="danger" @click="removeKey(row)">删除</el-button>
+          </template>
+        </el-table-column>
+        <template #empty><EmptyState icon="🔑" text="尚未添加密钥（当前使用模型自带密钥）" /></template>
+      </el-table>
+    </el-drawer>
   </div>
 </template>
 
@@ -243,6 +309,104 @@ function kindHint(kind: string) {
     video: '按次计费：异步任务（/videos 提交 + 查询），提交即扣款、失败退款',
   };
   return map[kind] || '';
+}
+
+// ---------- API 卡池 ----------
+const keysVisible = ref(false);
+const keyLoading = ref(false);
+const keySaving = ref(false);
+const testingId = ref(0);
+const maxFail = ref(3);
+const keysModel = ref<AdminAiModel | null>(null);
+const keys = ref<any[]>([]);
+const keyForm = reactive({ label: '', keys: '', weight: 1 });
+
+async function loadKeys() {
+  if (!keysModel.value) return;
+  keyLoading.value = true;
+  try {
+    const res = await aiApi.aiModelKeys(keysModel.value.id);
+    if (res.data.code === 0) {
+      keys.value = res.data.data.list || [];
+      maxFail.value = res.data.data.max_fail || 3;
+    }
+  } catch { /* ignore */ }
+  keyLoading.value = false;
+}
+
+function openKeys(row: AdminAiModel) {
+  keysModel.value = row;
+  keys.value = [];
+  keyForm.label = '';
+  keyForm.keys = '';
+  keyForm.weight = 1;
+  keysVisible.value = true;
+  loadKeys();
+}
+
+async function addKeys() {
+  if (!keysModel.value || !keyForm.keys.trim()) {
+    ElMessage.warning('请粘贴密钥');
+    return;
+  }
+  keySaving.value = true;
+  try {
+    const res = await aiApi.aiModelKeyCreate(keysModel.value.id, {
+      label: keyForm.label.trim(),
+      keys: keyForm.keys,
+      weight: keyForm.weight,
+    });
+    if (res.data.code === 0) {
+      ElMessage.success((res.data as any).data?.message || '已添加');
+      keyForm.keys = '';
+      await loadKeys();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '添加失败');
+  }
+  keySaving.value = false;
+}
+
+async function updateKey(row: any, patch: any) {
+  if (!keysModel.value) return;
+  try {
+    const res = await aiApi.aiModelKeyUpdate(keysModel.value.id, row.id, patch);
+    if (res.data.code === 0) await loadKeys();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
+async function removeKey(row: any) {
+  if (!keysModel.value) return;
+  try {
+    await ElMessageBox.confirm(`删除该密钥（${row.hint || row.id}）？`, '删除确认', { type: 'warning' });
+  } catch { return; }
+  try {
+    const res = await aiApi.aiModelKeyDelete(keysModel.value.id, row.id);
+    if (res.data.code === 0) {
+      ElMessage.success('已删除');
+      await loadKeys();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '删除失败');
+  }
+}
+
+async function testKey(row: any) {
+  if (!keysModel.value) return;
+  testingId.value = row.id;
+  try {
+    const res = await aiApi.aiModelKeyTest(keysModel.value.id, { key_id: row.id });
+    if (res.data.code === 0) {
+      const r = res.data.data;
+      ElMessage[r.ok ? 'success' : 'error'](r.message);
+      if (r.ok) await loadKeys();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '测试失败');
+  }
+  testingId.value = 0;
 }
 
 // ---------- 厂商预设 ----------
@@ -363,6 +527,11 @@ onMounted(() => { loadConfig(); loadModels(); loadPresets(); });
 .hint-text { color: var(--text-light, #666); font-size: 0.85rem; margin-bottom: 12px; line-height: 1.6; }
 .enable-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px; font-weight: 600; }
 .table-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.kp-tip {
+  font-size: 0.78rem; color: var(--text-light, #777); line-height: 1.6;
+  background: var(--el-fill-color-light, #f8f9fa); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px;
+}
+.kp-add { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
 .muted { color: var(--text-light, #999); }
 .small { font-size: 0.78rem; margin-left: 6px; }
 .mono { font-family: Consolas, 'Courier New', monospace; }

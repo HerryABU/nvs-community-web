@@ -276,7 +276,11 @@ func AiHubChatStream(c *gin.Context) {
 		}
 	}
 
-	apiKey, kerr := m.DecryptApiKey()
+	lease, kerr := models.AcquireModelKey(m)
+	apiKey := ""
+	if lease != nil {
+		apiKey = lease.Key
+	}
 	if req.Byok {
 		apiKey, kerr = uk.DecryptApiKey()
 	}
@@ -324,6 +328,9 @@ func AiHubChatStream(c *gin.Context) {
 		}
 	}
 	if streamErr != "" {
+		if !req.Byok && lease != nil {
+			lease.Fail()
+		}
 		models.FailAiCallLog(callLog.ID, streamErr)
 		sseEvent(c, gin.H{"error": "AI 调用失败：" + streamErr})
 		return

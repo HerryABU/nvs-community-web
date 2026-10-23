@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"nvs-server/aiclient"
@@ -24,9 +25,16 @@ func runCozeChat(c *gin.Context, ag *models.AiAgent, callLog *models.AiCallLog, 
 		sseEvent(c, gin.H{"error": "该智能体未配置扣子访问令牌，请联系站长"})
 		return
 	}
-	client := aiclient.NewCozeClient(ag.CozeBase, token, 150*time.Second)
+	// 全局默认值兜底：智能体未填 API 域名 / 超时时继承「扣子默认配置」
+	def := models.GetAiCozeDefault()
+	base := strings.TrimSpace(ag.CozeBase)
+	if base == "" {
+		base = def.BaseURL
+	}
+	timeout := time.Duration(def.TimeoutSeconds) * time.Second
+	client := aiclient.NewCozeClient(base, token, timeout)
 	answer, convID, cerr := client.Chat(ag.BotID, "u"+strconv.FormatUint(uint64(userID), 10),
-		session.ThirdConvID, question, 150*time.Second)
+		session.ThirdConvID, question, timeout)
 	if cerr != nil {
 		models.FailAiCallLog(callLog.ID, cerr.Error())
 		sseEvent(c, gin.H{"error": "扣子调用失败：" + cerr.Error()})

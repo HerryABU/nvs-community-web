@@ -179,7 +179,11 @@ func AiMindmap(c *gin.Context) {
 		utils.InternalError(c, "记录调用失败")
 		return
 	}
-	apiKey, kerr := m.DecryptApiKey()
+	lease, kerr := models.AcquireModelKey(m)
+	apiKey := ""
+	if lease != nil {
+		apiKey = lease.Key
+	}
 	if kerr != nil {
 		models.FailAiCallLog(callLog.ID, "密钥解密失败")
 		utils.InternalError(c, "模型密钥解密失败，请联系站长")
