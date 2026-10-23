@@ -46,6 +46,11 @@ export interface AiAgent {
   greeting: string;
   enabled: boolean;
   sort_order: number;
+  category?: string;
+  used_count?: number;
+  upstream?: string;
+  bot_id?: string;
+  coze_base?: string;
 }
 
 export interface AiChatSession {
@@ -76,7 +81,7 @@ export const aiHubApi = {
     return api.get<{ code: number; data: AiHubStatus }>('/ai/hub/status');
   },
   agents() {
-    return api.get<{ code: number; data: { list: AiAgent[] } }>('/ai/agents');
+    return api.get<{ code: number; data: { list: AiAgent[]; categories: string[] } }>('/ai/agents');
   },
   sessions() {
     return api.get<{ code: number; data: { list: AiChatSession[] } }>('/ai/sessions');
@@ -108,7 +113,11 @@ export const aiHubApi = {
       };
     }>(`/ai/shared/${token}`);
   },
-  image(data: { model_id: number; prompt: string; size?: string; style?: string; n?: number; byok?: boolean; byok_model?: string }) {
+  image(data: {
+    model_id: number; prompt: string; size?: string; ratio?: string; style?: string; n?: number;
+    mode?: 't2i' | 'i2i' | 'faceswap'; ref_images?: string[];
+    byok?: boolean; byok_model?: string;
+  }) {
     return api.post<{ code: number; data: { task_id: number; images: string[]; cost: number; free?: boolean; byok?: boolean; balance_after: number } }>('/ai/image', data);
   },
   videoSubmit(data: { model_id: number; prompt: string; duration?: number; size?: string; byok?: boolean; byok_model?: string }) {
@@ -119,6 +128,35 @@ export const aiHubApi = {
   },
   mediaHistory(kind: 'image' | 'video', page = 1) {
     return api.get<{ code: number; data: { list: any[]; total: number } }>('/ai/media', { params: { kind, page } });
+  },
+
+  /** 灵感广场（公开作品流，无需登录） */
+  gallery(params: { kind?: string; style?: string; page?: number } = {}) {
+    return api.get<{
+      code: number;
+      data: {
+        list: Array<{
+          id: number; kind: 'image' | 'video'; title: string; prompt: string;
+          model_name: string; style: string; likes: number;
+          images: string[]; video: string; created_at: string;
+        }>;
+        total: number; page: number; styles: string[];
+      };
+    }>('/ai/gallery', { params });
+  },
+  /** 发布/取消发布我的作品 */
+  publishMedia(id: number, data: { public: boolean; title?: string; style?: string }) {
+    return api.post(`/ai/gallery/${id}/publish`, data);
+  },
+  likeMedia(id: number) {
+    return api.post(`/ai/gallery/${id}/like`);
+  },
+  mediaPublic(id: number) {
+    return api.get<{ code: number; data: { id: number; is_public: boolean; title: string; style: string } }>(`/ai/media/${id}/public`);
+  },
+  /** 思维导图：需求 → Markdown 层级大纲 */
+  mindmap(data: { topic: string; depth?: number; model_id?: number }) {
+    return api.post<{ code: number; data: { outline: string; cost: number; free: boolean; balance_after: number } }>('/ai/mindmap', data);
   },
 
   // 管理端智能体

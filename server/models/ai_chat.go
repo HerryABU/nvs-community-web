@@ -20,6 +20,8 @@ type AiChatSession struct {
 	AgentName string    `gorm:"size:64;default:''" json:"agent_name"`
 	ModelID   uint      `gorm:"not null;default:0" json:"model_id"`
 	Title     string    `gorm:"size:128;default:''" json:"title"`
+	// ThirdConvID 第三方会话 ID（扣子 conversation_id；用于多轮上下文续接）
+	ThirdConvID string `gorm:"size:64;default:''" json:"-"`
 	// ShareToken 分享令牌（nil = 未分享）；非 nil 即公开可读（只读快照）
 	ShareToken *string    `gorm:"size:32;unique" json:"share_token,omitempty"`
 	SharedAt   *time.Time `json:"shared_at,omitempty"`
@@ -212,4 +214,12 @@ func CountAiChatMessages(sessionID uint) (int64, error) {
 	var n int64
 	err := DB.Model(&AiChatMessage{}).Where("session_id = ?", sessionID).Count(&n).Error
 	return n, err
+}
+
+// SetSessionThirdConv 记录第三方会话 ID
+func SetSessionThirdConv(sessionID uint, convID string) {
+	if sessionID == 0 || strings.TrimSpace(convID) == "" {
+		return
+	}
+	DB.Model(&AiChatSession{}).Where("id = ?", sessionID).UpdateColumn("third_conv_id", convID)
 }

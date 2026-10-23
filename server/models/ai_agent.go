@@ -3,6 +3,8 @@ package models
 import (
 	"strings"
 	"time"
+
+	"nvs-server/utils"
 )
 
 // ==================== AI 智能体预设（§5.4） ====================
@@ -17,6 +19,13 @@ type AiAgent struct {
 	Description  string    `gorm:"size:256;default:''" json:"description"`
 	SystemPrompt string    `gorm:"type:text" json:"system_prompt"`
 	Greeting     string    `gorm:"size:256;default:''" json:"greeting"` // 开场白
+	Category     string    `gorm:"size:32;default:'';index" json:"category"` // 分类（写作/编程/绘画/翻译…）
+	UsedCount    int64     `gorm:"not null;default:0" json:"used_count"`      // 使用次数（市场排序用）
+	// 上游类型：空/llm = 平台模型池；coze = 扣子（Coze）官方智能体
+	Upstream  string `gorm:"size:16;not null;default:''" json:"upstream"`
+	BotID     string `gorm:"size:64;default:''" json:"bot_id"`       // Coze bot_id
+	CozeBase  string `gorm:"size:128;default:''" json:"coze_base"`   // api.coze.cn / api.coze.com
+	TokenEnc  string `gorm:"type:text" json:"-"`                     // Coze PAT（加密存储，只写不读）
 	Builtin      bool      `gorm:"not null;default:false" json:"builtin"` // 内置种子（禁止删除标识，仅提示）
 	Enabled      bool      `gorm:"not null;default:true" json:"enabled"`
 	SortOrder    int       `gorm:"not null;default:0" json:"sort_order"`
@@ -114,4 +123,44 @@ func SeedDefaultAiAgents() {
 	for i := range defaults {
 		_ = DB.Create(&defaults[i])
 	}
+}
+
+// TouchAiAgent 累加使用次数（对话成功后调用）
+func TouchAiAgent(id uint) {
+	if id == 0 {
+		return
+	}
+	DB.Model(&AiAgent{}).Where("id = ?", id).UpdateColumn("used_count", DB.Raw("used_count + 1"))
+}
+
+// ListAiAgentCategories 去重分类（仅启用）
+func ListAiAgentCategories() []string {
+	var cats []string
+	DB.Model(&AiAgent{}).Where("enabled = ? AND category <> ''", true).
+		Distinct().Order("category ASC").Pluck("category", &cats)
+	return cats
+}
+
+// IsCoze 是否为扣子智能体
+func (a *AiAgent) IsCoze() bool { return strings.EqualFold(strings.TrimSpace(a.Upstream), "coze") }
+
+// SetCozeToken 加密保存 Coze 访问令牌（留空表示不修改）
+func (a *AiAgent) SetCozeToken(plain string) error {
+	plain = strings.TrimSpace(plain)
+	if plain == "" {
+		return nil
+	}
+	enc, err := utils.EncryptField(plain)
+	if err != nil {
+		return err
+	}
+	return DB.Model(&AiAgent{}).Where("id = ?", a.ID).UpdateColumn("token_enc", enc).Error
+}
+
+// DecryptCozeToken 解密 Coze 令牌
+func (a *AiAgent) DecryptCozeToken() (string, error) {
+	if strings.TrimSpace(a.TokenEnc) == "" {
+		return "", nil
+	}
+	return utils.DecryptField(a.TokenEnc)
 }

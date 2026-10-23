@@ -34,6 +34,11 @@ type AiMediaTask struct {
 	Cost         int64     `gorm:"not null;default:0" json:"cost"`
 	CallLogID    uint      `gorm:"not null;default:0" json:"call_log_id"`
 	Error        string    `gorm:"size:256;default:''" json:"error"`
+	// 作品广场（灵感广场）：作者主动发布后公开可见
+	IsPublic bool   `gorm:"not null;default:false;index" json:"is_public"`
+	Title    string `gorm:"size:128;default:''" json:"title"`
+	Style    string `gorm:"size:32;default:'';index" json:"style"`
+	Likes    int64  `gorm:"not null;default:0" json:"likes"`
 	CreatedAt    time.Time `gorm:"index:idx_ai_media_user,priority:2" json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
@@ -56,6 +61,7 @@ func CreateAiMediaTask(userID uint, m *AiModel, kind, prompt string, params AiMe
 	t := &AiMediaTask{
 		UserID: userID, Kind: kind, ModelID: m.ID, ModelName: m.Name,
 		Prompt: prompt, Params: string(pj), Status: AiMediaPending,
+		Style: params.Style, // 作品广场按风格筛选
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	if err := DB.Create(t).Error; err != nil {

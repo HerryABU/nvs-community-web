@@ -63,6 +63,8 @@
           <el-radio-button value="chat"><el-icon><ChatDotRound /></el-icon> 对话</el-radio-button>
           <el-radio-button value="image"><el-icon><Picture /></el-icon> 绘画</el-radio-button>
           <el-radio-button value="video"><el-icon><VideoCamera /></el-icon> 视频</el-radio-button>
+          <el-radio-button value="gallery"><el-icon><Star /></el-icon> 灵感广场</el-radio-button>
+          <el-radio-button value="mind"><el-icon><Share /></el-icon> 思维导图</el-radio-button>
         </el-radio-group>
         <span v-if="activeTab === 'chat' && activeSession" class="ai-hub-current">
           {{ activeSession.agent_name || 'AI 对话' }}
@@ -97,8 +99,14 @@
           @balance-updated="onBalanceUpdated"
           @sessions-changed="loadSessions"
         />
-        <AiImagePanel v-else-if="activeTab === 'image'" :status="status" />
-        <AiVideoPanel v-else :status="status" />
+        <AiImagePanel
+          v-else-if="activeTab === 'image'"
+          :status="status"
+          :initial-prompt="remixPrompt"
+        />
+        <AiVideoPanel v-else-if="activeTab === 'video'" :status="status" />
+        <AiGalleryPanel v-else-if="activeTab === 'gallery'" @remix="onRemix" />
+        <MindMapPanel v-else :status="status" />
       </template>
     </main>
 
@@ -125,14 +133,18 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Close, Delete, Menu, ChatDotRound, Picture, VideoCamera, EditPen, Share } from '@element-plus/icons-vue';
+import { Plus, Close, Delete, Menu, ChatDotRound, Picture, VideoCamera, EditPen, Share, Star } from '@element-plus/icons-vue';
 import { aiHubApi, type AiHubStatus, type AiAgent, type AiChatSession } from '@/api/aiHub';
 import { appPrefix } from '@/utils/prefix';
 import AiChatPanel from '@/components/ai/AiChatPanel.vue';
 import AiImagePanel from '@/components/ai/AiImagePanel.vue';
 import AiVideoPanel from '@/components/ai/AiVideoPanel.vue';
+import AiGalleryPanel from '@/components/ai/AiGalleryPanel.vue';
+import MindMapPanel from '@/components/ai/MindMapPanel.vue';
 
+const route = useRoute();
 const status = reactive<AiHubStatus>({
   ai_enabled: false,
   token_enabled: true,
@@ -147,7 +159,8 @@ const agents = ref<AiAgent[]>([]);
 const sessions = ref<AiChatSession[]>([]);
 const activeSessionId = ref<number | null>(null);
 const activeAgentId = ref(0);
-const activeTab = ref<'chat' | 'image' | 'video'>('chat');
+const activeTab = ref<'chat' | 'image' | 'video' | 'gallery' | 'mind'>('chat');
+const remixPrompt = ref('');
 const mobileSideOpen = ref(false);
 const loading = ref(true);
 
@@ -293,9 +306,21 @@ async function copyShareLink() {
   }
 }
 
+// 灵感广场「复刻同款」：切到绘画页并注入提示词
+function onRemix(payload: { kind: string; prompt: string }) {
+  remixPrompt.value = payload.prompt;
+  activeTab.value = payload.kind === 'video' ? 'video' : 'image';
+  ElMessage.success('已填入提示词，可直接生成');
+}
+
 onMounted(() => {
   loadAll();
   loadSessions();
+  // 深链：/ai?tab=image&prompt=xxx
+  const tab = String(route.query.tab || '');
+  if (tab === 'image' || tab === 'video' || tab === 'gallery' || tab === 'mind') activeTab.value = tab;
+  const p = String(route.query.prompt || '');
+  if (p) remixPrompt.value = p;
 });</script>
 
 <style scoped>

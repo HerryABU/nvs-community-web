@@ -19,7 +19,7 @@ func AiAgentList(c *gin.Context) {
 		utils.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list})
+	utils.Success(c, gin.H{"list": list, "categories": models.ListAiAgentCategories()})
 }
 
 // ---------- 管理端 ----------
@@ -64,6 +64,11 @@ func AdminCreateAiAgent(c *gin.Context) {
 		Greeting     string `json:"greeting"`
 		Enabled      *bool  `json:"enabled"`
 		SortOrder    *int   `json:"sort_order"`
+		Category     string `json:"category"`
+		Upstream     string `json:"upstream"`
+		BotID        string `json:"bot_id"`
+		CozeBase     string `json:"coze_base"`
+		CozeToken    string `json:"coze_token"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -81,6 +86,9 @@ func AdminCreateAiAgent(c *gin.Context) {
 		Name: strings.TrimSpace(req.Name), Emoji: strings.TrimSpace(req.Emoji),
 		Description: strings.TrimSpace(req.Description),
 		SystemPrompt: req.SystemPrompt, Greeting: strings.TrimSpace(req.Greeting),
+		Category: strings.TrimSpace(req.Category),
+		Upstream: strings.TrimSpace(req.Upstream), BotID: strings.TrimSpace(req.BotID),
+		CozeBase: strings.TrimSpace(req.CozeBase),
 		Enabled: true,
 	}
 	if req.Enabled != nil {
@@ -92,6 +100,12 @@ func AdminCreateAiAgent(c *gin.Context) {
 	if err := models.CreateAiAgent(a); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
+	}
+	if strings.TrimSpace(req.CozeToken) != "" {
+		if err := a.SetCozeToken(req.CozeToken); err != nil {
+			utils.InternalError(c, "扣子令牌加密保存失败")
+			return
+		}
 	}
 	utils.Success(c, gin.H{"message": "已创建", "id": a.ID})
 }
@@ -114,6 +128,11 @@ func AdminUpdateAiAgent(c *gin.Context) {
 		Greeting     string `json:"greeting"`
 		Enabled      *bool  `json:"enabled"`
 		SortOrder    *int   `json:"sort_order"`
+		Category     string `json:"category"`
+		Upstream     string `json:"upstream"`
+		BotID        string `json:"bot_id"`
+		CozeBase     string `json:"coze_base"`
+		CozeToken    string `json:"coze_token"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -135,9 +154,29 @@ func AdminUpdateAiAgent(c *gin.Context) {
 	if req.SortOrder != nil {
 		fields["sort_order"] = *req.SortOrder
 	}
+	fields["category"] = strings.TrimSpace(req.Category)
+	upstream := strings.ToLower(strings.TrimSpace(req.Upstream))
+	if upstream != "" && upstream != "llm" && upstream != "coze" {
+		utils.BadRequest(c, "upstream 仅支持 llm 或 coze")
+		return
+	}
+	if upstream == "llm" {
+		upstream = ""
+	}
+	fields["upstream"] = upstream
+	fields["bot_id"] = strings.TrimSpace(req.BotID)
+	fields["coze_base"] = strings.TrimSpace(req.CozeBase)
 	if err := models.UpdateAiAgentFields(uint(id), fields); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
+	}
+	if strings.TrimSpace(req.CozeToken) != "" {
+		if a, e := models.GetAiAgent(uint(id)); e == nil {
+			if err := a.SetCozeToken(req.CozeToken); err != nil {
+				utils.InternalError(c, "扣子令牌加密保存失败")
+				return
+			}
+		}
 	}
 	utils.Success(c, gin.H{"message": "已保存"})
 }

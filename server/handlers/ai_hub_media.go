@@ -26,8 +26,11 @@ func AiHubImage(c *gin.Context) {
 		ModelID uint   `json:"model_id"`
 		Prompt  string `json:"prompt"`
 		Size    string `json:"size"`
+		Ratio   string `json:"ratio"` // 1:1 / 9:16 / 2:3 / 3:4 / 4:3（优先于 size）
 		Style   string `json:"style"`
 		N       int    `json:"n"`
+		Mode    string   `json:"mode"`       // t2i（默认）/ i2i 混图 / faceswap 换脸
+		RefImages []string `json:"ref_images"` // data URL 参考图（最多 3 张）
 		// 自备密钥（§5.5 BYOK）
 		Byok      bool   `json:"byok"`
 		ByokModel string `json:"byok_model"`
@@ -46,6 +49,41 @@ func AiHubImage(c *gin.Context) {
 		utils.BadRequest(c, "提示词过长（上限 4000 字）")
 		return
 	}
+	// ── 参考图（混图/换脸）：仅接受上传的 data URL，绝不拉外链（防 SSRF） ──
+	refs, rerr := aiclient.ImageRefsFromDataURLs(req.RefImages)
+	if rerr != nil {
+		utils.BadRequest(c, rerr.Error())
+		return
+	}
+	mode := strings.TrimSpace(req.Mode)
+	if mode == "" {
+		mode = "t2i"
+	}
+	switch mode {
+	case "i2i":
+		if len(refs) == 0 {
+			utils.BadRequest(c, "混图需至少上传 1 张参考图")
+			return
+		}
+	case "faceswap":
+		if len(refs) < 2 {
+			utils.BadRequest(c, "换脸需上传 2 张图（第 1 张目标人物、第 2 张面部来源）")
+			return
+		}
+	}
+	// 比例优先：把 1:1 / 9:16 / 2:3 / 3:4 / 4:3 映射成上游 size
+	size := strings.TrimSpace(req.Size)
+	if r := strings.TrimSpace(req.Ratio); r != "" {
+		size = sizeOfRatio(r)
+	}
+	promptForMode := prompt
+	if mode == "faceswap" {
+		promptForMode = "保持第 1 张图的人物、姿势、光线与构图不变，将面部替换为第 2 张图中的人物面部，自然融合肤色与质感。" +
+			"额外要求：" + prompt
+	} else if mode == "i2i" {
+		promptForMode = "参考所给图片的主体、风格与配色进行再创作。" + prompt
+	}
+
 	// BYOK：用户自备密钥（伪模型，不计平台费用）
 	if req.Byok {
 		byokModel := strings.TrimSpace(req.ByokModel)
@@ -72,10 +110,16 @@ func AiHubImage(c *gin.Context) {
 			n = 1
 		}
 		client := aiclient.NewClient(uk.BaseURL, apiKey, 180*time.Second)
-		urls, gerr := client.GenerateImages(aiclient.ImagesRequest{
-			Model: byokModel, Prompt: prompt, N: n,
-			Size: strings.TrimSpace(req.Size), ResponseFormat: "url",
-		})
+		var urls []string
+		var gerr error
+		if len(refs) > 0 {
+			urls, gerr = client.EditImages(byokModel, promptForMode, size, refs, n)
+		} else {
+			urls, gerr = client.GenerateImages(aiclient.ImagesRequest{
+				Model: byokModel, Prompt: prompt, N: n,
+				Size: size, ResponseFormat: "url",
+			})
+		}
 		if gerr != nil {
 			utils.BadRequest(c, "绘画失败："+gerr.Error()+"（未扣款）")
 			return
@@ -101,7 +145,7 @@ func AiHubImage(c *gin.Context) {
 		n = 1
 	}
 	task, terr := models.CreateAiMediaTask(userID, m, models.AiKindImage, prompt, models.AiMediaParams{
-		Size: strings.TrimSpace(req.Size), Style: strings.TrimSpace(req.Style), N: n,
+		Size: size, Style: strings.TrimSpace(req.Style), N: n,
 	})
 	if terr != nil {
 		utils.InternalError(c, "创建任务失败")
@@ -114,7 +158,7 @@ func AiHubImage(c *gin.Context) {
 		return
 	}
 	client := aiclient.NewClient(m.BaseURL, apiKey, 180*time.Second)
-	urls, gerr := generateImagesByApiKind(client, m, prompt, strings.TrimSpace(req.Size), strings.TrimSpace(req.Style), n)
+	urls, gerr := generateImagesByApiKind(client, m, promptForMode, size, strings.TrimSpace(req.Style), n, refs)
 	if gerr != nil {
 		models.FailAiMediaTask(task.ID, gerr.Error(), false)
 		utils.BadRequest(c, "绘画失败："+gerr.Error()+"（未扣款）")
@@ -442,7 +486,7 @@ func mjBotTypeOf(modelID string) aiclient.MJBotType {
 //   - mj     ：Midjourney 代理（含 Niji），同步轮询出图，单次 1 张
 //   - gemini ：generateContent（nanobanana），base64 内联返回
 //   - openai ：/v1/images/generations（豆包 Seedream / gpt-image-2 / 多数中转）
-func generateImagesByApiKind(client *aiclient.Client, m *models.AiModel, prompt, size, style string, n int) ([]string, error) {
+func generateImagesByApiKind(client *aiclient.Client, m *models.AiModel, prompt, size, style string, n int, refs []aiclient.ImgRef) ([]string, error) {
 	switch models.NormalizeAiApiKind(m.ApiKind) {
 	case models.AiApiMJ:
 		p := prompt
@@ -450,21 +494,46 @@ func generateImagesByApiKind(client *aiclient.Client, m *models.AiModel, prompt,
 			p += " --style " + style
 		}
 		p += " --ar " + aspectRatioOf(size)
-		return client.MJImagineAndWait(aiclient.MJImagineParams{
+		return client.MJImagineMulti(aiclient.MJImagineParams{
 			Prompt:  p,
 			BotType: mjBotTypeOf(m.ModelID),
-		}, 180*time.Second)
+		}, refs, 180*time.Second)
 	case models.AiApiGemini:
 		p := prompt
 		if style != "" {
 			p += "\n\nstyle: " + style
 		}
+		if len(refs) > 0 {
+			imgs, _, err := client.GeminiImageWithRefs(m.ModelID, p, size, refs)
+			return imgs, err
+		}
 		imgs, _, err := client.GeminiImage(m.ModelID, p, size)
 		return imgs, err
 	default:
+		if len(refs) > 0 {
+			return client.EditImages(m.ModelID, prompt, size, refs, n)
+		}
 		return client.GenerateImages(aiclient.ImagesRequest{
 			Model: m.ModelID, Prompt: prompt, N: n,
 			Size: size, ResponseFormat: "url",
 		})
+	}
+}
+
+// sizeOfRatio 五档比例 → 上游尺寸（MJ 会再折算成 --ar）
+func sizeOfRatio(r string) string {
+	switch strings.TrimSpace(r) {
+	case "9:16":
+		return "1024x1792"
+	case "2:3":
+		return "1024x1536"
+	case "3:4":
+		return "1024x1365"
+	case "4:3":
+		return "1365x1024"
+	case "16:9", "3:2":
+		return "1792x1024"
+	default:
+		return "1024x1024"
 	}
 }

@@ -252,6 +252,14 @@ func AiHubChatStream(c *gin.Context) {
 	c.Header("X-Accel-Buffering", "no") // 反代关闭缓冲
 	c.Status(200)
 
+	// ── 扣子（Coze）智能体：走 Coze v3/chat 协议（非流式，整段回吐） ──
+	if session.AgentID > 0 {
+		if ag, e := models.GetAiAgent(session.AgentID); e == nil && ag.IsCoze() {
+			runCozeChat(c, ag, callLog, session, userID, msg)
+			return
+		}
+	}
+
 	apiKey, kerr := m.DecryptApiKey()
 	if req.Byok {
 		apiKey, kerr = uk.DecryptApiKey()
@@ -330,6 +338,7 @@ func AiHubChatStream(c *gin.Context) {
 		cost = 0
 	}
 	am, _ := models.AppendAiChatMessage(session.ID, "assistant", sb, realIn, realOut, cost, callLog.ID)
+	models.TouchAiAgent(session.AgentID)
 	models.TouchAiChatSession(session.ID, "")
 	sseEvent(c, gin.H{
 		"done":          true,

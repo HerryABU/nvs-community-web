@@ -65,9 +65,39 @@
             placeholder="定义智能体的人设与行为准则，将作为每次对话的 system 消息"
           />
         </el-form-item>
+        <el-form-item label="分类">
+          <el-input v-model="form.category" placeholder="如：写作 / 编程 / 绘画 / 翻译（用于市场分组）" maxlength="32" />
+        </el-form-item>
         <el-form-item label="开场白">
           <el-input v-model="form.greeting" placeholder="用户进入会话时看到的第一句话" maxlength="256" />
         </el-form-item>
+        <el-form-item label="上游类型">
+          <el-radio-group v-model="form.upstream">
+            <el-radio-button value="">平台模型池</el-radio-button>
+            <el-radio-button value="coze">扣子 Coze</el-radio-button>
+          </el-radio-group>
+          <div class="muted small">选「扣子」后由 Coze 官方智能体接管（系统提示词失效）</div>
+        </el-form-item>
+        <template v-if="form.upstream === 'coze'">
+          <el-form-item label="Bot ID" required>
+            <el-input v-model="form.bot_id" placeholder="Coze 智能体 ID（bot_id）" maxlength="64" />
+          </el-form-item>
+          <el-form-item label="API 域名">
+            <el-select v-model="form.coze_base" clearable placeholder="默认 https://api.coze.cn" style="width:100%">
+              <el-option label="国内 https://api.coze.cn" value="https://api.coze.cn" />
+              <el-option label="国际 https://api.coze.com" value="https://api.coze.com" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="访问令牌">
+            <el-input
+              v-model="form.coze_token"
+              type="password"
+              show-password
+              :placeholder="editing ? '留空表示不更换（已加密存储）' : 'Coze 个人访问令牌 PAT'"
+            />
+            <div class="muted small">仅写不读：保存后前端无法再取回明文</div>
+          </el-form-item>
+        </template>
         <el-form-item label="排序">
           <el-input-number v-model="form.sort_order" :min="0" :max="999" :step="1" controls-position="right" />
           <span class="muted small">小者在前</span>
@@ -121,7 +151,11 @@ const saving = ref(false);
 const editing = ref<any | null>(null);
 
 function blankForm() {
-  return { name: '', emoji: '', description: '', system_prompt: '', greeting: '', sort_order: 0, enabled: true };
+  return {
+    name: '', emoji: '', description: '', system_prompt: '', greeting: '',
+    sort_order: 0, enabled: true,
+    category: '', upstream: '', bot_id: '', coze_base: 'https://api.coze.cn', coze_token: '',
+  };
 }
 const form = reactive(blankForm());
 
@@ -137,6 +171,8 @@ function openEdit(row: any) {
     name: row.name, emoji: row.emoji, description: row.description,
     system_prompt: row.system_prompt, greeting: row.greeting,
     sort_order: row.sort_order, enabled: row.enabled,
+    category: row.category || '', upstream: row.upstream || '',
+    bot_id: row.bot_id || '', coze_base: row.coze_base || 'https://api.coze.cn', coze_token: '',
   });
   dialogVisible.value = true;
 }
@@ -160,6 +196,11 @@ async function saveAgent() {
       greeting: form.greeting.trim(),
       sort_order: form.sort_order,
       enabled: form.enabled,
+      category: form.category.trim(),
+      upstream: form.upstream,
+      bot_id: form.bot_id.trim(),
+      coze_base: form.coze_base,
+      ...(form.coze_token.trim() ? { coze_token: form.coze_token.trim() } : {}),
     };
     const res = editing.value
       ? await aiHubApi.adminUpdateAgent(editing.value.id, payload)

@@ -276,6 +276,8 @@ func main() {
 
 		// AI 会话分享：公开只读快照（令牌即凭据，无登录要求）
 		public.GET("/ai/shared/:token", handlers.AiSharedSession)
+		// 灵感广场：公开作品流（作者主动发布才可见）
+		public.GET("/ai/gallery", handlers.AiGalleryList)
 		// 在线支付回调（§7.4）：网关异步通知（验签准入，无鉴权）+ 支付完成同步跳转
 		public.POST("/payment/notify/:channel", security.RateLimit(120, 60), handlers.PaymentNotify)
 		public.GET("/payment/return/:channel", handlers.PaymentReturn)
@@ -377,6 +379,12 @@ func main() {
 		protected.PUT("/ai/prompts/:id", handlers.AiPromptUpdate)
 		protected.DELETE("/ai/prompts/:id", handlers.AiPromptDelete)
 		protected.POST("/ai/prompts/:id/use", handlers.AiPromptUse)
+
+		// 灵感广场：发布/取消发布、点赞；思维导图生成
+		protected.POST("/ai/gallery/:id/publish", handlers.AiGalleryPublish)
+		protected.POST("/ai/gallery/:id/like", handlers.AiGalleryLike)
+		protected.GET("/ai/media/:id/public", handlers.AiMyMediaPublic)
+		protected.POST("/ai/mindmap", security.RateLimit(10, 60), handlers.AiMindmap)
 		// 用户黑名单（F13：拉黑禁言/屏蔽内容）
 		protected.POST("/blacklist", security.RateLimit(20, 60), handlers.AddBlacklist)
 		protected.DELETE("/blacklist/:id", handlers.RemoveBlacklist)
