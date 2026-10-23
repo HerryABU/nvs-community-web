@@ -50,6 +50,30 @@ BIND_IPV6=::
 # 开启后服务器同时监听 IPv4 和 IPv6 地址
 ENABLE_IPV6=false
 
+# ==================== 国密（SM）双轨密码（可选模块，默认国际轨） ====================
+# NVS_CRYPTO_TRACK: intl（默认，标准 RSA/ECC+AES，零国密依赖）| gm（纯国密 SM2/SM3/SM4+TLCP）| dual（双轨自适应协商）
+# 责任边界：框架不代做等保/密评；是否启用及合规责任由站长自行承担（见 docs/gm-mapping.md）
+NVS_CRYPTO_TRACK=intl
+
+# 国际轨证书（track=intl 或 dual 时生效；都不配 = 纯 HTTP，适合反向代理终止 TLS 的部署）
+NVS_CRYPTO_INTL_CERT=
+NVS_CRYPTO_INTL_KEY=
+
+# 国密实现路径（track=gm/dual 必填）：tongsuo（推荐，CGO 官方绑定，需 Tongsuo C 库）| purego（纯 Go，无 CGO）
+NVS_CRYPTO_GM_PROVIDER=
+
+# 国密双证书四件套（track=gm/dual 必填；TLCP 要求签名+加密两套证书）
+NVS_CRYPTO_SM_SIGN_CERT=
+NVS_CRYPTO_SM_SIGN_KEY=
+NVS_CRYPTO_SM_ENC_CERT=
+NVS_CRYPTO_SM_ENC_KEY=
+
+# 禁用 TLS 会话复用（默认 false）
+NVS_CRYPTO_SESSION_TICKETS_DISABLED=false
+
+# 握手记录 JSONL 输出路径（留空 = 关闭；记录协议/套件/SNI，不含业务数据）
+NVS_TLS_HANDSHAKE_LOG=
+
 # 本机 IPv4 地址（自动检测，用于对外展示/联邦互通）
 LOCAL_IPV4={{AUTO_IPV4}}
 
@@ -316,6 +340,9 @@ func Init() {
 	log.Printf("[config] 日志脱敏：%s（LOG_REDACT_SENSITIVE=%v, 掩码=%q, 敏感字段=%v）",
 		map[bool]string{true: "生产模式-自动脱敏", false: "开发模式-保留原始数据"}[LogRedactSensitive],
 		LogRedactSensitive, LogRedactMask, LogSensitiveFields)
+
+	// 国密（SM）双轨密码配置（可选模块，默认国际轨零国密依赖）
+	initCrypto()
 }
 
 // createDefaultEnv 基于内嵌模板自动创建 .env 文件，自动检测本机 IP 填入
