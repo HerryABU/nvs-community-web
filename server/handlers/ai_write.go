@@ -65,6 +65,7 @@ func AiStatus(c *gin.Context) {
 		"token_name":    models.GetTokenName(),
 		"balance":       models.GetTokenBalance(userID),
 		"models":        modelList,
+		"free_quota":    models.SummarizeAiFreeQuota(userID),
 	})
 }
 
@@ -95,12 +96,14 @@ func AiEstimate(c *gin.Context) {
 		tokensOut = m.MaxTokens
 	}
 	cost := models.EstimateAiCost(m, tokensIn, tokensOut)
+	freeOK, _, _ := models.CheckAiFreeQuota(userID, tokensIn+tokensOut)
 	utils.Success(c, gin.H{
-		"tokens_in":  tokensIn,
-		"tokens_out": tokensOut,
-		"cost":       cost,
-		"balance":    models.GetTokenBalance(userID),
-		"affordable": cost <= 0 || models.GetTokenBalance(userID) >= cost,
+		"tokens_in":     tokensIn,
+		"tokens_out":    tokensOut,
+		"cost":          cost,
+		"free_eligible": freeOK,
+		"balance":       models.GetTokenBalance(userID),
+		"affordable":    freeOK || cost <= 0 || models.GetTokenBalance(userID) >= cost,
 	})
 }
 
@@ -108,10 +111,6 @@ func AiEstimate(c *gin.Context) {
 func AiComplete(c *gin.Context) {
 	if !models.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
-		return
-	}
-	if !models.IsTokenEnabled() {
-		utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
 		return
 	}
 	userID := currentUserID(c)
@@ -155,12 +154,20 @@ func AiComplete(c *gin.Context) {
 	if tokensOut > 8192 {
 		tokensOut = 8192
 	}
-	// 预检：余额不足直接拒绝，不发起上游调用
-	if _, ok := models.PrecheckAiBalance(userID, m, tokensIn, tokensOut); !ok {
-		cost := models.EstimateAiCost(m, tokensIn, tokensOut)
-		utils.Error(c, 429, 42902, fmt.Sprintf("%s不足：本次约需 %d，当前余额 %d，请先充值",
-			models.GetTokenName(), cost, models.GetTokenBalance(userID)))
-		return
+	// 免费额度判定（优先）：命中则本次不扣代币
+	freeOK, _, _ := models.CheckAiFreeQuota(userID, tokensIn+tokensOut)
+	// 非免费路径：代币系统未开启或余额不足均拒绝（不发起上游）
+	if !freeOK {
+		if !models.IsTokenEnabled() {
+			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
+			return
+		}
+		if _, ok := models.PrecheckAiBalance(userID, m, tokensIn, tokensOut); !ok {
+			cost := models.EstimateAiCost(m, tokensIn, tokensOut)
+			utils.Error(c, 429, 42902, fmt.Sprintf("%s不足：本次约需 %d，当前余额 %d，请先充值",
+				models.GetTokenName(), cost, models.GetTokenBalance(userID)))
+			return
+		}
 	}
 
 	apiKey, kerr := m.DecryptApiKey()
@@ -169,7 +176,7 @@ func AiComplete(c *gin.Context) {
 		return
 	}
 	// pending 流水（失败也不扣款的凭据）
-	callLog, lerr := models.CreateAiCallLog(userID, m, action, req.RefType, req.RefID, tokensIn, tokensOut)
+	callLog, lerr := models.CreateAiCallLog(userID, m, action, req.RefType, req.RefID, tokensIn, tokensOut, freeOK)
 	if lerr != nil {
 		utils.InternalError(c, "记录调用失败")
 		return
@@ -205,11 +212,18 @@ func AiComplete(c *gin.Context) {
 		utils.Error(c, 429, 42902, fmt.Sprintf("结算失败：%v（未扣款）", serr))
 		return
 	}
+	cost := models.EstimateAiCost(m, realIn, realOut)
+	if freeOK {
+		// 免费额度调用：记入当日免费用量（1 次 + 真实 tokens）
+		_ = models.RecordAiFreeUsage(userID, 1, realIn+realOut)
+		cost = 0
+	}
 	utils.Success(c, gin.H{
 		"content":       content,
 		"tokens_in":     realIn,
 		"tokens_out":    realOut,
-		"cost":          models.EstimateAiCost(m, realIn, realOut),
+		"cost":          cost,
+		"free":          freeOK,
 		"balance_after": nb,
 	})
 }

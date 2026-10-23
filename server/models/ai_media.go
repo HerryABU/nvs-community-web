@@ -116,6 +116,13 @@ func MarkAiMediaSubmitted(taskID uint, remoteID string) {
 	}).Error
 }
 
+// MarkAiMediaFree 免费额度调用：费用归零（不扣代币；状态流转由调用方负责）。
+// 失败退款时 Cost<=0 天然不退。
+func MarkAiMediaFree(taskID uint) error {
+	return DB.Model(&AiMediaTask{}).Where("id = ?", taskID).
+		Update("cost", 0).Error
+}
+
 // UpdateAiMediaResult 回写结果（成功）
 func UpdateAiMediaResult(taskID uint, resultJSON string) {
 	_ = DB.Model(&AiMediaTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{

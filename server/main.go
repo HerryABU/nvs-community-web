@@ -309,6 +309,7 @@ func main() {
 		// AI 工作台（§5.4）：会话 / 流式对话 / 绘画 / 视频 / 智能体
 		protected.GET("/ai/hub/status", handlers.AiHubStatus)
 		protected.GET("/ai/agents", handlers.AiAgentList)
+		protected.GET("/ai/free-quota", handlers.AiFreeQuotaStatus)
 		protected.GET("/ai/sessions", handlers.AiHubSessions)
 		protected.GET("/ai/sessions/:id/messages", handlers.AiHubSessionMessages)
 		protected.DELETE("/ai/sessions/:id", handlers.AiHubDeleteSession)
@@ -643,6 +644,12 @@ func main() {
 		admin.POST("/ai/agents", handlers.AdminCreateAiAgent)
 		admin.PUT("/ai/agents/:id", handlers.AdminUpdateAiAgent)
 		admin.DELETE("/ai/agents/:id", handlers.AdminDeleteAiAgent)
+
+		// 免费 AI 额度（§5.3）：平台默认 + 按人覆盖（静态子树避让 :id 通配）
+		admin.GET("/ai/free-quota/config", handlers.AdminGetAiFreeQuotaConfig)
+		admin.PUT("/ai/free-quota/config", handlers.AdminSetAiFreeQuotaConfig)
+		admin.GET("/ai/free-quota/overrides", handlers.AdminListAiFreeQuotaOverrides)
+		admin.POST("/ai/free-quota/overrides", handlers.AdminManageAiFreeQuotaOverride)
 		// 应用扩展安全审核：预检未通过的 ZIP 原样封存（不解压），管理员放行/驳回
 		admin.GET("/userhtmls", handlers.AdminListHTMLs)
 		admin.GET("/userhtmls/:id/scan", handlers.AdminGetHTMLScan)

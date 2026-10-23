@@ -26,6 +26,7 @@ func AiHubStatus(c *gin.Context) {
 		"token_enabled": tokenEnabled,
 		"token_name":    models.GetTokenName(),
 		"balance":       models.GetTokenBalance(userID),
+		"free_quota":    models.SummarizeAiFreeQuota(userID),
 		"chat_models":   []gin.H{},
 		"image_models":  []gin.H{},
 		"video_models":  []gin.H{},
@@ -106,10 +107,6 @@ func sseEvent(c *gin.Context, v interface{}) {
 func AiHubChatStream(c *gin.Context) {
 	if !models.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
-		return
-	}
-	if !models.IsTokenEnabled() {
-		utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
 		return
 	}
 	userID := currentUserID(c)
@@ -194,17 +191,25 @@ func AiHubChatStream(c *gin.Context) {
 	if tokensOut > 8192 {
 		tokensOut = 8192
 	}
-	if _, ok := models.PrecheckAiBalance(userID, m, tokensIn, tokensOut); !ok {
-		cost := models.EstimateAiCost(m, tokensIn, tokensOut)
-		utils.Error(c, 429, 42902, fmt.Sprintf("%s不足：本次约需 %d，当前余额 %d，请先充值",
-			models.GetTokenName(), cost, models.GetTokenBalance(userID)))
-		return
+	// 免费额度判定（优先）：命中则本次不扣代币
+	freeOK, _, _ := models.CheckAiFreeQuota(userID, tokensIn+tokensOut)
+	if !freeOK {
+		if !models.IsTokenEnabled() {
+			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
+			return
+		}
+		if _, ok := models.PrecheckAiBalance(userID, m, tokensIn, tokensOut); !ok {
+			cost := models.EstimateAiCost(m, tokensIn, tokensOut)
+			utils.Error(c, 429, 42902, fmt.Sprintf("%s不足：本次约需 %d，当前余额 %d，请先充值",
+				models.GetTokenName(), cost, models.GetTokenBalance(userID)))
+			return
+		}
 	}
 
 	// ── 落用户消息 + pending 流水 ──
 	models.AppendAiChatMessage(session.ID, "user", msg, 0, 0, 0, 0)
 	models.TouchAiChatSession(session.ID, msg)
-	callLog, lerr := models.CreateAiCallLog(userID, m, "chat", "session", session.ID, tokensIn, tokensOut)
+	callLog, lerr := models.CreateAiCallLog(userID, m, "chat", "session", session.ID, tokensIn, tokensOut, freeOK)
 	if lerr != nil {
 		utils.InternalError(c, "记录调用失败")
 		return
@@ -269,6 +274,10 @@ func AiHubChatStream(c *gin.Context) {
 		return
 	}
 	cost := models.EstimateAiCost(m, realIn, realOut)
+	if freeOK {
+		_ = models.RecordAiFreeUsage(userID, 1, realIn+realOut)
+		cost = 0
+	}
 	am, _ := models.AppendAiChatMessage(session.ID, "assistant", sb, realIn, realOut, cost, callLog.ID)
 	models.TouchAiChatSession(session.ID, "")
 	sseEvent(c, gin.H{
@@ -278,6 +287,7 @@ func AiHubChatStream(c *gin.Context) {
 		"tokens_in":     realIn,
 		"tokens_out":    realOut,
 		"cost":          cost,
+		"free":          freeOK,
 		"balance_after": nb,
 	})
 }

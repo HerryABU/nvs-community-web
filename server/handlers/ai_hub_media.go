@@ -21,10 +21,6 @@ func AiHubImage(c *gin.Context) {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
-	if !models.IsTokenEnabled() {
-		utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
-		return
-	}
 	userID := currentUserID(c)
 	var req struct {
 		ModelID uint   `json:"model_id"`
@@ -78,17 +74,33 @@ func AiHubImage(c *gin.Context) {
 		utils.BadRequest(c, "绘画失败："+gerr.Error()+"（未扣款）")
 		return
 	}
-	nb, cerr := models.ChargeAiMediaTask(task.ID)
-	if cerr != nil {
-		utils.Error(c, 429, 42902, cerr.Error()+"（未扣款）")
-		return
+	// 免费额度优先（按次消耗 1 次）；否则代币扣款
+	freeOK, _, _ := models.CheckAiFreeQuota(userID, 0)
+	var nb int64
+	if freeOK {
+		_ = models.MarkAiMediaFree(task.ID)
+		_ = models.RecordAiFreeUsage(userID, 1, 0)
+		nb = models.GetTokenBalance(userID)
+	} else {
+		if !models.IsTokenEnabled() {
+			models.FailAiMediaTask(task.ID, "代币系统未开启", false)
+			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI（未扣款）")
+			return
+		}
+		var cerr error
+		nb, cerr = models.ChargeAiMediaTask(task.ID)
+		if cerr != nil {
+			utils.Error(c, 429, 42902, cerr.Error()+"（未扣款）")
+			return
+		}
 	}
 	rj, _ := json.Marshal(gin.H{"images": urls})
 	models.UpdateAiMediaResult(task.ID, string(rj))
 	utils.Success(c, gin.H{
 		"task_id":       task.ID,
 		"images":        urls,
-		"cost":          m.PriceCall,
+		"cost":          map[bool]int64{true: 0, false: m.PriceCall}[freeOK],
+		"free":          freeOK,
 		"balance_after": nb,
 	})
 }
@@ -97,10 +109,6 @@ func AiHubImage(c *gin.Context) {
 func AiHubVideoSubmit(c *gin.Context) {
 	if !models.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
-		return
-	}
-	if !models.IsTokenEnabled() {
-		utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
 		return
 	}
 	userID := currentUserID(c)
@@ -128,11 +136,19 @@ func AiHubVideoSubmit(c *gin.Context) {
 		utils.BadRequest(c, "视频模型不可用")
 		return
 	}
-	// 预检：余额 ≥ 单次价
-	if m.PriceCall > 0 && models.GetTokenBalance(userID) < m.PriceCall {
-		utils.Error(c, 429, 42902, "余额不足：本次需 "+strconv.FormatInt(m.PriceCall, 10)+
-			"，当前余额 "+strconv.FormatInt(models.GetTokenBalance(userID), 10)+"，请先充值")
-		return
+	// 免费额度优先（按次消耗 1 次）
+	freeOK, _, _ := models.CheckAiFreeQuota(userID, 0)
+	// 非免费预检：余额 ≥ 单次价
+	if !freeOK {
+		if !models.IsTokenEnabled() {
+			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
+			return
+		}
+		if m.PriceCall > 0 && models.GetTokenBalance(userID) < m.PriceCall {
+			utils.Error(c, 429, 42902, "余额不足：本次需 "+strconv.FormatInt(m.PriceCall, 10)+
+				"，当前余额 "+strconv.FormatInt(models.GetTokenBalance(userID), 10)+"，请先充值")
+			return
+		}
 	}
 	task, terr := models.CreateAiMediaTask(userID, m, models.AiKindVideo, prompt, models.AiMediaParams{
 		Duration: req.Duration, Size: strings.TrimSpace(req.Size),
@@ -157,18 +173,27 @@ func AiHubVideoSubmit(c *gin.Context) {
 		utils.BadRequest(c, "视频提交失败："+verr.Error()+"（未扣款）")
 		return
 	}
-	// 提交成功：先扣款再转 running；扣款失败（并发耗尽余额）则任务失败
-	nb, cerr := models.ChargeAiMediaTask(task.ID)
-	if cerr != nil {
-		models.FailAiMediaTask(task.ID, cerr.Error(), false)
-		utils.Error(c, 429, 42902, cerr.Error()+"（未扣款，请充值后重试）")
-		return
+	// 提交成功：免费额度记用量；否则先扣款再转 running（扣款失败则任务失败）
+	var nb int64
+	if freeOK {
+		_ = models.MarkAiMediaFree(task.ID)
+		_ = models.RecordAiFreeUsage(userID, 1, 0)
+		nb = models.GetTokenBalance(userID)
+	} else {
+		var cerr error
+		nb, cerr = models.ChargeAiMediaTask(task.ID)
+		if cerr != nil {
+			models.FailAiMediaTask(task.ID, cerr.Error(), false)
+			utils.Error(c, 429, 42902, cerr.Error()+"（未扣款，请充值后重试）")
+			return
+		}
 	}
 	models.MarkAiMediaSubmitted(task.ID, remoteID)
 	utils.Success(c, gin.H{
 		"task_id":       task.ID,
 		"status":        status,
-		"cost":          m.PriceCall,
+		"cost":          map[bool]int64{true: 0, false: m.PriceCall}[freeOK],
+		"free":          freeOK,
 		"balance_after": nb,
 	})
 }

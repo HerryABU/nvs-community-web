@@ -33,9 +33,10 @@ type AiCallLog struct {
 	RefID         uint      `gorm:"default:0" json:"ref_id"`
 	TokensIn      int       `gorm:"not null;default:0" json:"tokens_in"`
 	TokensOut     int       `gorm:"not null;default:0" json:"tokens_out"`
-	Cost          int64     `gorm:"not null;default:0" json:"cost"` // 实扣代币
+	Cost          int64     `gorm:"not null;default:0" json:"cost"` // 实扣代币（免费额度调用为 0）
 	Status        string    `gorm:"size:16;not null;default:pending;index" json:"status"`
 	PriceSnapshot string    `gorm:"type:text" json:"price_snapshot"` // 计费快照 JSON
+	FreeQuota     bool      `gorm:"not null;default:false" json:"free_quota"` // 走免费额度（结算不扣款）
 	Error         string    `gorm:"size:256;default:''" json:"error"`
 	CreatedAt     time.Time `gorm:"index:idx_ai_call_user,priority:2" json:"created_at"`
 	SettledAt     *time.Time `json:"settled_at"`
@@ -97,8 +98,9 @@ func PrecheckAiBalance(userID uint, m *AiModel, tokensIn, tokensOut int) (int64,
 
 // ---------- 调用生命周期 ----------
 
-// CreateAiCallLog 发起调用前记 pending 流水（预估费用入 snapshot 的 cost 字段先记预估）
-func CreateAiCallLog(userID uint, m *AiModel, action, refType string, refID uint, tokensIn, tokensOut int) (*AiCallLog, error) {
+// CreateAiCallLog 发起调用前记 pending 流水（预估费用入 snapshot 的 cost 字段先记预估）。
+// freeQuota=true 表示本次走免费额度（结算时 cost 归零、不碰代币账本）。
+func CreateAiCallLog(userID uint, m *AiModel, action, refType string, refID uint, tokensIn, tokensOut int, freeQuota bool) (*AiCallLog, error) {
 	snap := AiPriceSnapshot{
 		ModelID: m.ID, ModelName: m.Name, PriceIn: m.PriceIn, PriceOut: m.PriceOut,
 		TokensIn: tokensIn, TokensOut: tokensOut, Cost: EstimateAiCost(m, tokensIn, tokensOut),
@@ -108,7 +110,7 @@ func CreateAiCallLog(userID uint, m *AiModel, action, refType string, refID uint
 		UserID: userID, ModelID: m.ID, ModelName: m.Name, Action: action,
 		RefType: refType, RefID: refID, TokensIn: tokensIn, TokensOut: tokensOut,
 		Cost: snap.Cost, Status: AiCallPending, PriceSnapshot: string(snapJSON),
-		CreatedAt: time.Now(),
+		FreeQuota: freeQuota, CreatedAt: time.Now(),
 	}
 	if err := DB.Create(log).Error; err != nil {
 		return nil, err
@@ -131,6 +133,9 @@ func SettleAiCallLog(logID uint, tokensIn, tokensOut int) (int64, error) {
 		return 0, err
 	}
 	cost := EstimateAiCost(&m, tokensIn, tokensOut)
+	if log.FreeQuota {
+		cost = 0 // 免费额度调用：不扣代币（用量由调用方记入免费额度流水）
+	}
 	snap := AiPriceSnapshot{
 		ModelID: m.ID, ModelName: m.Name, PriceIn: m.PriceIn, PriceOut: m.PriceOut,
 		TokensIn: tokensIn, TokensOut: tokensOut, Cost: cost,
