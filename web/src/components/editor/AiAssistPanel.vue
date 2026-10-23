@@ -64,6 +64,55 @@
             <el-radio-button :value="2048">长</el-radio-button>
           </el-radio-group>
         </el-form-item>
+        <!-- 长篇上下文（§13.5） -->
+        <el-form-item v-if="memoryEnabled" label="长篇上下文">
+          <div class="ai-memory-block">
+            <el-checkbox v-model="form.use_memory" size="small">注入作品记忆</el-checkbox>
+            <span class="muted small">
+              大纲 {{ memory.outline ? '已设' : '未设' }} · 摘要 {{ memory.summaries }} 条 ·
+              最近 {{ memory.recent }} 章入上下文 · 预算 {{ memory.budget }} tokens
+            </span>
+            <el-button text type="primary" size="small" @click="memoryPanelOpen = !memoryPanelOpen">
+              {{ memoryPanelOpen ? '收起记忆管理' : '管理记忆' }}
+            </el-button>
+          </div>
+          <div v-if="memoryPanelOpen" class="ai-memory-panel">
+            <div class="ai-memory-sub">作品大纲（注入最高优先级）</div>
+            <el-input
+              v-model="outlineDraft"
+              type="textarea"
+              :rows="3"
+              resize="none"
+              placeholder="用几句话概括作品主线、人物与设定，AI 续写时将以此为纲"
+              maxlength="8000"
+            />
+            <div class="ai-memory-actions">
+              <el-button size="small" type="primary" :loading="memorySaving" @click="saveOutline">保存大纲</el-button>
+            </div>
+            <div class="ai-memory-sub">章节摘要（按章保存，新→旧取最近 {{ memory.recent }} 条）</div>
+            <el-table :data="memoryList" size="small" :show-header="true" max-height="220">
+              <el-table-column label="章节" width="90">
+                <template #default="{ row }">#{{ row.chapter_id }}</template>
+              </el-table-column>
+              <el-table-column label="摘要" min-width="160" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.content }}</template>
+              </el-table-column>
+              <el-table-column label="操作" width="60" fixed="right">
+                <template #default="{ row }">
+                  <el-button text type="danger" size="small" @click="removeSummary(row)">删</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+            <div class="ai-memory-actions">
+              <el-button size="small" :loading="memorySaving" @click="saveCurrentSummary">
+                将当前正文存为本章摘要
+              </el-button>
+            </div>
+            <div class="muted small" style="margin-top:6px">
+              提示：用上方「摘要」动作生成后，也可点结果区「存为章节摘要」。
+            </div>
+          </div>
+        </el-form-item>
       </el-form>
 
       <!-- 输入 -->
@@ -118,6 +167,7 @@
         <div class="ai-result-text">{{ result.content }}</div>
         <div class="ai-result-actions">
           <el-button size="small" @click="copyResult">复制</el-button>
+          <el-button v-if="memoryEnabled && props.chapterId" size="small" @click="saveResultAsSummary">存为章节摘要</el-button>
           <el-button size="small" type="primary" plain @click="emit('replace', result!.content)">替换正文</el-button>
           <el-button size="small" type="primary" @click="emit('insert', result!.content)">插入编辑器</el-button>
         </div>
@@ -129,13 +179,17 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus';
-import { aiApi, AI_ACTIONS, type AiStatus, type AiEstimateResult } from '@/api/ai';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { aiApi, AI_ACTIONS, type AiStatus, type AiEstimateResult, type AiNovelMemory } from '@/api/ai';
 
 const props = defineProps<{
   visible: boolean;
   /** 当前章节文本（打开面板时预填） */
   contextText?: string;
+  /** 作品 ID（§13.5 长篇上下文；0=不启用记忆） */
+  novelId?: number;
+  /** 当前章节 ID（§13.5；0=新章节） */
+  chapterId?: number;
 }>();
 const emit = defineEmits<{
   (e: 'update:visible', v: boolean): void;
@@ -152,13 +206,14 @@ const status = reactive<AiStatus>({
   models: [],
 });
 
-const form = reactive<{ model_id: number; action: string; max_tokens: number; text: string; byok: boolean; byok_model: string }>({
+const form = reactive<{ model_id: number; action: string; max_tokens: number; text: string; byok: boolean; byok_model: string; use_memory: boolean }>({
   model_id: 0,
   action: 'continue',
   max_tokens: 1024,
   text: '',
   byok: false,
   byok_model: '',
+  use_memory: true,
 });
 
 const estimate = ref<AiEstimateResult | null>(null);
@@ -247,17 +302,119 @@ async function run() {
       ref_type: 'chapter',
       byok: form.byok || undefined,
       byok_model: form.byok ? form.byok_model.trim() : undefined,
+      novel_id: memoryEnabled.value ? props.novelId : undefined,
+      chapter_id: memoryEnabled.value ? props.chapterId : undefined,
+      use_memory: memoryEnabled.value && form.use_memory,
     });
     if (res.data.code === 0) {
       result.value = res.data.data;
       status.balance = res.data.data.balance_after;
-      ElMessage.success('生成成功');
+      ElMessage.success(res.data.data.byok ? '生成成功（使用自备密钥）' : res.data.data.free ? '生成成功（免费额度）' : '生成成功');
+      if (memoryEnabled.value && form.use_memory) refreshMemory();
     }
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '调用失败');
   }
   running.value = false;
 }
+
+// ==================== 长篇上下文（§13.5） ====================
+const memoryEnabled = computed(() => !!props.novelId);
+const memoryPanelOpen = ref(false);
+const memorySaving = ref(false);
+const memory = reactive({ outline: false, summaries: 0, budget: 3000, recent: 5 });
+const memoryList = ref<AiNovelMemory[]>([]);
+const outlineDraft = ref('');
+
+async function refreshMemory() {
+  if (!props.novelId) return;
+  try {
+    const res = await aiApi.memoryList(props.novelId);
+    if (res.data.code === 0) {
+      const d = res.data.data;
+      memory.outline = d.outline;
+      memory.summaries = d.summaries;
+      memory.budget = d.budget;
+      memory.recent = d.recent;
+      memoryList.value = d.list.filter((m) => m.kind === 'chapter_summary');
+      const outline = d.list.find((m) => m.kind === 'outline');
+      if (outline && !outlineDraft.value) outlineDraft.value = outline.content;
+    }
+  } catch { /* ignore */ }
+}
+
+async function saveOutline() {
+  if (!props.novelId) return;
+  memorySaving.value = true;
+  try {
+    const res = await aiApi.saveOutline({ novel_id: props.novelId, content: outlineDraft.value });
+    if (res.data.code === 0) {
+      ElMessage.success('大纲已保存');
+      await refreshMemory();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  }
+  memorySaving.value = false;
+}
+
+async function saveCurrentSummary() {
+  if (!props.novelId || !props.chapterId) {
+    ElMessage.warning('当前章节尚未保存，无法关联摘要');
+    return;
+  }
+  memorySaving.value = true;
+  try {
+    const res = await aiApi.saveSummary({
+      novel_id: props.novelId,
+      chapter_id: props.chapterId,
+      content: form.text,
+    });
+    if (res.data.code === 0) {
+      ElMessage.success('已存为本章摘要');
+      await refreshMemory();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  }
+  memorySaving.value = false;
+}
+
+async function saveResultAsSummary() {
+  if (!result.value || !props.novelId || !props.chapterId) return;
+  memorySaving.value = true;
+  try {
+    const res = await aiApi.saveSummary({
+      novel_id: props.novelId,
+      chapter_id: props.chapterId,
+      content: result.value.content,
+    });
+    if (res.data.code === 0) {
+      ElMessage.success('已存为本章摘要');
+      await refreshMemory();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  }
+  memorySaving.value = false;
+}
+
+async function removeSummary(row: AiNovelMemory) {
+  await ElMessageBox.confirm(`删除章节 #${row.chapter_id} 的摘要？`, '确认', { type: 'warning' });
+  try {
+    const res = await aiApi.deleteSummary({ novel_id: row.novel_id, chapter_id: row.chapter_id });
+    if (res.data.code === 0) {
+      ElMessage.success('已删除');
+      await refreshMemory();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '删除失败');
+  }
+}
+
+watch(() => props.visible, (v) => {
+  if (v && memoryEnabled.value) refreshMemory();
+});
 
 async function copyResult() {
   if (!result.value) return;
@@ -309,8 +466,16 @@ watch(
   padding: 12px; font-size: 0.88rem; line-height: 1.7;
 }
 .ai-result-actions { display: flex; gap: 8px; margin-top: 10px; }
+.ai-memory-block { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+.ai-memory-panel {
+  margin-top: 8px; padding: 10px; border-radius: 8px; width: 100%;
+  background: var(--el-fill-color-light, #f8f9fa);
+}
+.ai-memory-sub { font-size: 0.78rem; font-weight: 600; margin: 8px 0 6px; color: var(--text-color, #333); }
+.ai-memory-actions { margin-top: 8px; }
 .muted { color: var(--text-light, #999); }
 .small { font-size: 0.75rem; font-weight: 400; }
 [data-theme="dark"] .ai-balance-row,
-[data-theme="dark"] .ai-result-text { background: #1e293b; }
+[data-theme="dark"] .ai-result-text,
+[data-theme="dark"] .ai-memory-panel { background: #1e293b; }
 </style>

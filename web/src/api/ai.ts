@@ -90,6 +90,23 @@ export const aiApi = {
     return api.post(`/ai/my-keys/${id}/default`);
   },
 
+  // 长篇 AI 记忆（§13.5）
+  memoryList(novelId: number) {
+    return api.get<{ code: number; data: { list: AiNovelMemory[]; outline: boolean; summaries: number; budget: number; recent: number } }>('/ai/memory', { params: { novel_id: novelId } });
+  },
+  saveOutline(data: { novel_id: number; content: string }) {
+    return api.put('/ai/memory/outline', data);
+  },
+  saveSummary(data: { novel_id: number; chapter_id: number; content: string }) {
+    return api.put('/ai/memory/summary', data);
+  },
+  deleteSummary(data: { novel_id: number; chapter_id: number }) {
+    return api.delete('/ai/memory/summary', { data });
+  },
+  previewContext(data: { novel_id: number; chapter_id?: number; text?: string; budget?: number }) {
+    return api.post<{ code: number; data: { context: string; tokens: number } }>('/ai/memory/context', data);
+  },
+
   // 管理端
   getConfig() {
     return api.get<{ code: number; data: { enabled: boolean } }>('/admin/ai/config');
@@ -146,6 +163,17 @@ export interface MyAiKey {
   has_key: boolean;
   last_used_at: string | null;
   created_at: string;
+}
+
+export interface AiNovelMemory {
+  id: number;
+  novel_id: number;
+  kind: 'outline' | 'chapter_summary';
+  chapter_id: number;
+  content: string;
+  tokens: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface AdminAiModel {

@@ -26,10 +26,12 @@
     <!-- 站内内容引用选择器（16.2：章节正文引用其他小说/博客/论坛帖，相对路径可跳转） -->
     <ContentRefPicker v-model:visible="showRefPicker" @confirm="insertRefLink" />
 
-    <!-- AI 助手（§13.3：续写/润色/扩写/摘要，代币按量计费） -->
+    <!-- AI 助手（§13.3：续写/润色/扩写/摘要，代币按量计费；§13.5 长篇上下文） -->
     <AiAssistPanel
       v-model:visible="showAiPanel"
       :context-text="aiContextText"
+      :novel-id="novelId"
+      :chapter-id="currentChapterId"
       @insert="aiInsert"
       @replace="aiReplace"
     />
@@ -117,6 +119,11 @@ const router = useRouter();
 
 const novelId = computed(() => Number(route.params.id));
 const currentNum = ref(Number(route.params.num) || 1);
+// 当前章节 ID（§13.5 长篇上下文关联；未保存的新章节为 0）
+const currentChapterId = computed(() => {
+  const c = chapters.value.find((ch) => ch.chapter_number === currentNum.value);
+  return c && c.id > 0 ? c.id : 0;
+});
 
 const novelTitle = ref('');
 const chapters = ref<Chapter[]>([]);
