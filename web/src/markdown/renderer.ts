@@ -353,6 +353,93 @@ export function renderMarkdown(content: string): string {
   }
 }
 
+// ════════════════════════════════════════════════════════════════════
+// AI 输出渲染（严格模式）：AI 生成内容 = 完全不可信输入
+// ════════════════════════════════════════════════════════════════════
+// 与 renderMarkdown 的区别：
+//   - 白名单是「ALLOWED_TAGS」而非黑名单：未列出的标签一律剔除
+//     （包括 style/details/summary/button/iframe/svg/math 等）
+//   - 属性白名单化：不允许 style / 事件属性 / data-*；
+//   - URI 只允许 http(s)/mailto，禁止 javascript: / data: / vbscript:
+//   - 外链强制 target=_blank + rel="noopener noreferrer nofollow"（防 tabnabbing）
+//   - 图片强制 referrerpolicy=no-referrer + loading=lazy（防追踪像素与解码炸弹）
+// 任何异常都降级为「全量文本转义」，绝不把原始 HTML 吐到页面上。
+const AI_ALLOWED_TAGS = [
+  'p', 'br', 'hr', 'span', 'div',
+  'strong', 'b', 'em', 'i', 'u', 's', 'del', 'mark', 'sub', 'sup', 'small',
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'ul', 'ol', 'li', 'dl', 'dt', 'dd',
+  'blockquote', 'pre', 'code', 'kbd', 'samp',
+  'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'caption', 'colgroup', 'col',
+  'a', 'img',
+];
+
+const AI_DOMPURIFY_CONFIG = {
+  ALLOWED_TAGS: AI_ALLOWED_TAGS,
+  ALLOWED_ATTR: ['href', 'title', 'src', 'alt', 'class', 'colspan', 'rowspan', 'align'],
+  ALLOWED_URI_REGEXP: /^(?:https?:|mailto:)/i,
+  FORBID_TAGS: [
+    'style', 'script', 'iframe', 'frame', 'frameset', 'object', 'embed', 'form', 'input',
+    'textarea', 'select', 'option', 'button', 'link', 'meta', 'base', 'applet', 'audio',
+    'video', 'source', 'track', 'noscript', 'template', 'svg', 'math', 'marquee',
+    'details', 'summary', 'dialog', 'canvas',
+  ],
+  FORBID_ATTR: ['style', 'srcset', 'sizes', 'formaction', 'action', 'background', 'poster', 'ping'],
+  ALLOW_DATA_ATTR: false,
+  ALLOW_ARIA_ATTR: false,
+  KEEP_CONTENT: true,
+} as const;
+
+function escapeHtmlAll(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** 二次加固：外链 noopener/nofollow、图片不携带 referrer。仅对已净化 HTML 做属性设置。 */
+function hardenAiHtml(html: string): string {
+  try {
+    const tpl = document.createElement('template'); // template 内容惰性，不会执行脚本
+    tpl.innerHTML = html;
+    tpl.content.querySelectorAll('a').forEach((a) => {
+      a.setAttribute('target', '_blank');
+      a.setAttribute('rel', 'noopener noreferrer nofollow');
+    });
+    tpl.content.querySelectorAll('img').forEach((img) => {
+      img.setAttribute('referrerpolicy', 'no-referrer');
+      img.setAttribute('loading', 'lazy');
+      if (!/^https?:/i.test(img.getAttribute('src') || '')) img.remove();
+    });
+    tpl.content.querySelectorAll('span, div, table, th, td, code, pre').forEach((el) => {
+      el.removeAttribute('style');
+    });
+    return tpl.innerHTML;
+  } catch {
+    return html;
+  }
+}
+
+/**
+ * renderAiMarkdown — AI 对话/生成内容的专用渲染器（不可信输入）。
+ * 支持 GFM（标题/列表/表格/代码块/引用/加粗斜体删除线），HTML 与危险语法一律剔除。
+ */
+export function renderAiMarkdown(content: string): string {
+  if (!content) return '';
+  try {
+    const engine = getHeadlessEngine();
+    if (!engine) throw new Error('Cherry 引擎不可用');
+    const html = engine.makeHtml(content) as string;
+    const clean = DOMPurify.sanitize(html, AI_DOMPURIFY_CONFIG as any) as string;
+    return hardenAiHtml(clean);
+  } catch (e) {
+    console.error('[NVS] renderAiMarkdown error:', e);
+    return `<pre>${escapeHtmlAll(content)}</pre>`;
+  }
+}
+
 export async function renderMermaidBlocks(container: HTMLElement) {
   // CherryEngine 生成 data-lang="mermaid" 属性，转为 mermaid.run() 能识别的 class
   const wrappers = container.querySelectorAll<HTMLElement>('[data-lang="mermaid"]');

@@ -16,11 +16,14 @@ import (
 	"time"
 
 	"nvs-server/config"
+	"nvs-server/crypto"
+	"nvs-server/gmcmd"
 	"nvs-server/handlers"
 	"nvs-server/middleware"
 	"nvs-server/models"
 	"nvs-server/security"
 	"nvs-server/security/sms"
+	"nvs-server/tlsconfig"
 	"nvs-server/utils"
 	"nvs-server/version"
 
@@ -41,9 +44,13 @@ var knownSPARoots = map[string]bool{
 	"admin": true, "author": true, "blog": true, "blogs": true,
 	"bookshelf": true, "category": true, "comment-network": true, "docs": true, "forum": true,
 	"forums": true, "frames": true, "htmls": true, "install": true,
-	"login": true, 		"novel": true, "plaza": true, "register": true,
-		"reports": true, "run": true, "settings": true, "setup": true,
-		"thread": true, "wasm": true, "pay": true,
+	"login": true, "novel": true, "plaza": true, "register": true,
+	"reports": true, "run": true, "settings": true, "setup": true,
+	"thread": true, "wasm": true, "pay": true,
+	// 以下根段此前遗漏，导致直接访问/刷新这些页面被 404（SPA 深链失效）
+	"about": true, "ai": true, "api-spider": true, "feed": true,
+	"me": true, "messages": true, "my-keys": true, "police-console": true,
+	"reading": true, "topics": true, "user": true, "wallet": true,
 }
 
 // firstPathSegment 返回去前导斜杠后的路径首段，如 "novel/1"→"novel"，"admin"→"admin"
@@ -63,6 +70,20 @@ func main() {
 	}
 
 	config.Init()
+
+	// CLI 子命令（不启动 HTTP 服务）：gm-audit / credential-age
+	if len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-") {
+		os.Exit(gmcmd.Run(os.Args[1:]))
+	}
+
+	// 国密（SM）双轨配置校验（fail-fast：轨道取值 / 实现路径 / 双证书四件套）
+	if err := config.CryptoCfg.Validate(); err != nil {
+		log.Fatalf("国密配置校验失败: %v", err)
+	}
+	// 握手观测（默认关闭；配置 NVS_TLS_HANDSHAKE_LOG 后启用 JSONL 落盘，N-04 仅本地）
+	if err := tlsconfig.Configure(config.TLSHandshakeLogPath); err != nil {
+		log.Fatalf("握手观测配置失败: %v", err)
+	}
 
 	// 确保数据目录存在
 	os.MkdirAll(config.NovelDataDir, 0755)
@@ -252,6 +273,9 @@ func main() {
 		// 狂暴模式（F19）：SSE 评论实时流 + 公开状态查询（管理员开关，默认关）
 		public.GET("/live/stream", handlers.LiveStream)
 		public.GET("/live/config", handlers.LiveConfig)
+
+		// AI 会话分享：公开只读快照（令牌即凭据，无登录要求）
+		public.GET("/ai/shared/:token", handlers.AiSharedSession)
 		// 在线支付回调（§7.4）：网关异步通知（验签准入，无鉴权）+ 支付完成同步跳转
 		public.POST("/payment/notify/:channel", security.RateLimit(120, 60), handlers.PaymentNotify)
 		public.GET("/payment/return/:channel", handlers.PaymentReturn)
@@ -338,11 +362,21 @@ func main() {
 		protected.GET("/ai/sessions", handlers.AiHubSessions)
 		protected.GET("/ai/sessions/:id/messages", handlers.AiHubSessionMessages)
 		protected.DELETE("/ai/sessions/:id", handlers.AiHubDeleteSession)
+		protected.PUT("/ai/sessions/:id", handlers.AiHubRenameSession)
+		protected.POST("/ai/sessions/:id/share", handlers.AiHubShareSession)
+		protected.DELETE("/ai/sessions/:id/share", handlers.AiHubUnshareSession)
 		protected.POST("/ai/chat/stream", security.RateLimit(30, 60), handlers.AiHubChatStream)
 		protected.POST("/ai/image", security.RateLimit(20, 60), handlers.AiHubImage)
 		protected.POST("/ai/video", security.RateLimit(10, 60), handlers.AiHubVideoSubmit)
 		protected.GET("/ai/video/:id", handlers.AiHubVideoStatus)
 		protected.GET("/ai/media", handlers.AiHubMediaHistory)
+
+		// AI 提示词库：平台预设（只读）+ 我的自定义（增删改）
+		protected.GET("/ai/prompts", handlers.AiPromptList)
+		protected.POST("/ai/prompts", handlers.AiPromptCreate)
+		protected.PUT("/ai/prompts/:id", handlers.AiPromptUpdate)
+		protected.DELETE("/ai/prompts/:id", handlers.AiPromptDelete)
+		protected.POST("/ai/prompts/:id/use", handlers.AiPromptUse)
 		// 用户黑名单（F13：拉黑禁言/屏蔽内容）
 		protected.POST("/blacklist", security.RateLimit(20, 60), handlers.AddBlacklist)
 		protected.DELETE("/blacklist/:id", handlers.RemoveBlacklist)
@@ -974,9 +1008,40 @@ func main() {
 	rootHandler := middleware.StripURLPrefixHandler(config.URLPrefix, r)
 	srv := &http.Server{Addr: listenAddr, Handler: rootHandler}
 	log.Println("前端已内嵌，无需额外启动 Nginx 或 npm run dev（支持路径前缀挂载，如 /go-nvs/login）")
-	if err := srv.ListenAndServe(); err != nil {
+
+	// 🔐 国密双轨监听装配：国际轨默认（零国密依赖）；gm/dual 轨经 crypto.Provider
+	// 叠加 Tongsuo（CGO）或纯 Go gmtls 的 TLCP 能力（未配证书时保持纯 HTTP 现状）。
+	listener, err := buildServiceListener(listenAddr)
+	if err != nil {
+		log.Fatalf("监听器构建失败: %v", err)
+	}
+	if err := srv.Serve(listener); err != nil {
 		log.Fatalf("服务器启动失败: %v", err)
 	}
+}
+
+// buildServiceListener 构建服务监听器：按密码轨道叠加 TLS/TLCP 能力。
+func buildServiceListener(listenAddr string) (net.Listener, error) {
+	inner, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		return nil, err
+	}
+	provider, err := crypto.New(config.CryptoCfg)
+	if err != nil {
+		_ = inner.Close()
+		return nil, err
+	}
+	ln, err := provider.BuildListener(inner, config.CryptoCfg)
+	if err != nil {
+		_ = inner.Close()
+		return nil, err
+	}
+	if ln == net.Listener(inner) {
+		log.Printf("  TLS: 未启用（纯 HTTP；反向代理终止 TLS 或未配置证书）")
+	} else {
+		log.Printf("  TLS: 已启用（provider=%s, track=%s）", provider.Name(), config.CryptoCfg.Track)
+	}
+	return ln, nil
 }
 
 // listAccessURLs 扫描所有网卡 IP 并输出可访问的 URL
@@ -1180,6 +1245,7 @@ func initDatabase() error {
 	models.InitDefaultForums()
 	models.InitPlatformConfigs()
 	models.SeedDefaultAiAgents() // AI 智能体内置种子（表为空时写入）
+	models.InitAiPrompts()       // AI 提示词库平台预设（幂等）
 	// 管理端配置（DB）覆盖 .env 初始值：微信扫码凭据热更新进 config 包级变量
 	// （sms 网关由 resolveGateway 每次发送前读 DB，无需在此处理）
 	if wxID, wxSecret, wxCallback, fromDB := models.GetWeChatConfigFromDB(); fromDB {

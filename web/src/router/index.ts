@@ -157,6 +157,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      // 公开只读分享页（令牌即凭据，无需登录）
+      path: '/ai/share/:token',
+      name: 'ai-shared',
+      component: () => import('@/views/AiShared.vue'),
+    },
+    {
       path: '/admin',
       name: 'admin-dashboard',
       component: () => import('@/views/AdminDashboard.vue'),

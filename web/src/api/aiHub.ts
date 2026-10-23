@@ -50,6 +50,8 @@ export interface AiChatSession {
   agent_name: string;
   model_id: number;
   title: string;
+  share_token?: string | null;
+  shared_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -80,6 +82,27 @@ export const aiHubApi = {
   },
   deleteSession(id: number) {
     return api.delete(`/ai/sessions/${id}`);
+  },
+  renameSession(id: number, title: string) {
+    return api.put(`/ai/sessions/${id}`, { title });
+  },
+  shareSession(id: number) {
+    return api.post<{ code: number; data: { share_token: string; path: string } }>(`/ai/sessions/${id}/share`);
+  },
+  unshareSession(id: number) {
+    return api.delete(`/ai/sessions/${id}/share`);
+  },
+  /** 公开只读快照（无需登录） */
+  sharedSession(token: string) {
+    return api.get<{
+      code: number;
+      data: {
+        title: string;
+        agent_name: string;
+        shared_at: string | null;
+        messages: Array<{ role: 'user' | 'assistant'; content: string; created_at: string }>;
+      };
+    }>(`/ai/shared/${token}`);
   },
   image(data: { model_id: number; prompt: string; size?: string; style?: string; n?: number; byok?: boolean; byok_model?: string }) {
     return api.post<{ code: number; data: { task_id: number; images: string[]; cost: number; free?: boolean; byok?: boolean; balance_after: number } }>('/ai/image', data);

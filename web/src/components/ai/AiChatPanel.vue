@@ -22,6 +22,9 @@
         placeholder="上游模型 ID"
         :disabled="generating"
       />
+      <el-button size="small" plain @click="promptOpen = true">
+        <el-icon><Collection /></el-icon> 提示词
+      </el-button>
       <span class="ai-chat-balance">余额 <b>{{ status.balance }}</b> {{ status.token_name }}</span>
     </div>
 
@@ -40,17 +43,25 @@
         <div class="ai-msg-bubble">
           <div v-if="m.role === 'assistant'" class="ai-msg-md" v-html="renderMd(m.content)" />
           <div v-else class="ai-msg-plain">{{ m.content }}</div>
-          <div v-if="m.role === 'assistant' && (m.cost > 0 || m.free)" class="ai-msg-meta">
-            <span v-if="m.free" class="ai-msg-free">免费额度</span>
-            <template v-else>消耗 {{ m.cost }} {{ status.token_name }} · </template>
-            {{ m.tokens_in }}/{{ m.tokens_out }} tokens
+          <div v-if="m.role === 'assistant'" class="ai-msg-tools">
+            <button class="ai-msg-tool" type="button" title="复制内容" @click="copyMsg(m.content)">
+              <el-icon><CopyDocument /></el-icon> 复制
+            </button>
+            <button class="ai-msg-tool" type="button" title="重新发送" @click="regenerate(m)">
+              <el-icon><RefreshRight /></el-icon> 重试
+            </button>
+            <span v-if="m.cost > 0 || m.free" class="ai-msg-meta">
+              <span v-if="m.free" class="ai-msg-free">免费额度</span>
+              <template v-else>消耗 {{ m.cost }} {{ status.token_name }}</template>
+            </span>
           </div>
         </div>
       </div>
-      <!-- 流式中的消息 -->
+      <!-- 流式中的消息（同样走严格 Markdown 渲染） -->
       <div v-if="streamingText" class="ai-msg ai-msg-assistant">
         <div class="ai-msg-bubble">
-          <div class="ai-msg-plain ai-streaming">{{ streamingText }}<span class="ai-cursor" /></div>
+          <div class="ai-msg-md" v-html="streamingHtml" />
+          <span class="ai-cursor" />
         </div>
       </div>
     </div>
@@ -72,13 +83,22 @@
         <el-button v-else type="primary" :disabled="!inputText.trim()" @click="send">发送</el-button>
       </div>
     </div>
+
+    <AiPromptLibrary
+      v-model="promptOpen"
+      kind="chat"
+      :draft="inputText"
+      @pick="onPickPrompt"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue';
 import { ElMessage } from 'element-plus';
-import { renderMarkdown } from '@/markdown/renderer';
+import { CopyDocument, RefreshRight, Collection } from '@element-plus/icons-vue';
+import { renderAiMarkdown } from '@/markdown/renderer';
+import AiPromptLibrary from '@/components/ai/AiPromptLibrary.vue';
 import { streamChat, type AiHubStatus, type AiAgent, type AiChatMessage, type AiChatSession } from '@/api/aiHub';
 
 const props = defineProps<{
@@ -105,6 +125,11 @@ let loadingSession = 0;
 const modelId = ref(0);
 const useByok = ref(false);
 const byokModel = ref('');
+// 提示词库
+const promptOpen = ref(false);
+function onPickPrompt(content: string) {
+  inputText.value = inputText.value.trim() ? `${inputText.value}\n\n${content}` : content;
+}
 watch(
   () => props.status.chat_models,
   (list) => {
@@ -124,10 +149,54 @@ function modelLabel(m: { name: string; price_in: number; price_out: number }) {
 }
 
 function renderMd(md: string) {
+  // AI 生成内容按不可信输入处理：严格白名单 + 全量转义兜底
   try {
-    return renderMarkdown(md);
+    return renderAiMarkdown(md);
   } catch {
-    return md.replace(/</g, '&lt;');
+    return md.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+}
+
+// 流式渲染节流：每 120ms 重算一次 Markdown，避免每个 chunk 全量渲染造成卡顿
+const streamingHtml = ref('');
+let streamTimer: number | null = null;
+watch(streamingText, () => {
+  if (streamTimer) return;
+  streamTimer = window.setTimeout(() => {
+    streamTimer = null;
+    streamingHtml.value = renderMd(streamingText.value);
+  }, 120);
+});
+
+async function copyMsg(text: string) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    ElMessage.success('已复制');
+  } catch {
+    ElMessage.warning('复制失败，请手动选择文本');
+  }
+}
+
+// 重试：找到该助手消息之前最近的一条用户消息，重新发起
+function regenerate(m: AiChatMessage) {
+  if (generating.value) return;
+  const idx = messages.value.findIndex((x) => x.id === m.id);
+  for (let i = idx - 1; i >= 0; i--) {
+    if (messages.value[i].role === 'user') {
+      send(messages.value[i].content);
+      return;
+    }
   }
 }
 
@@ -157,8 +226,9 @@ watch(
   { immediate: true },
 );
 
-async function send() {
-  const text = inputText.value.trim();
+async function send(rawText?: string) {
+  const isRetry = typeof rawText === 'string';
+  const text = (isRetry ? rawText : inputText.value).trim();
   if (!text || generating.value) return;
   if (!useByok.value && !modelId.value) {
     ElMessage.warning('暂无可用模型');
@@ -172,7 +242,7 @@ async function send() {
     ElMessage.warning('代币系统未开启，可使用「我的密钥」或联系站长');
     return;
   }
-  inputText.value = '';
+  if (!isRetry) inputText.value = '';
   // 乐观上屏
   messages.value.push({
     id: -Date.now(), role: 'user', content: text,
@@ -180,6 +250,7 @@ async function send() {
   });
   generating.value = true;
   streamingText.value = '';
+  streamingHtml.value = '';
   scrollBottom();
   abortCtrl = new AbortController();
   try {
@@ -274,7 +345,18 @@ function stop() {
 }
 .ai-msg-md :deep(code) { font-family: Consolas, monospace; }
 .ai-msg-md :deep(ul), .ai-msg-md :deep(ol) { margin: 4px 0 8px; padding-left: 20px; }
-.ai-msg-meta { margin-top: 6px; font-size: 0.72rem; color: var(--text-light, #999); }
+.ai-msg-meta { font-size: 0.72rem; color: var(--text-light, #999); }
+.ai-msg-tools {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 6px; padding-top: 6px;
+  border-top: 1px dashed var(--el-border-color-lighter, #e5e7eb);
+}
+.ai-msg-tool {
+  display: inline-flex; align-items: center; gap: 3px;
+  border: 0; background: transparent; padding: 0; cursor: pointer;
+  font-size: 0.72rem; color: var(--el-color-primary, #409eff);
+}
+.ai-msg-tool:hover { text-decoration: underline; }
 .ai-msg-free {
   display: inline-block; padding: 0 6px; margin-right: 4px; border-radius: 4px;
   background: rgba(22, 163, 74, 0.12); color: #16a34a;

@@ -1,6 +1,9 @@
 package models
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -17,8 +20,11 @@ type AiChatSession struct {
 	AgentName string    `gorm:"size:64;default:''" json:"agent_name"`
 	ModelID   uint      `gorm:"not null;default:0" json:"model_id"`
 	Title     string    `gorm:"size:128;default:''" json:"title"`
-	CreatedAt time.Time `gorm:"index:idx_ai_session_user,priority:2" json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	// ShareToken 分享令牌（nil = 未分享）；非 nil 即公开可读（只读快照）
+	ShareToken *string    `gorm:"size:32;unique" json:"share_token,omitempty"`
+	SharedAt   *time.Time `json:"shared_at,omitempty"`
+	CreatedAt  time.Time  `gorm:"index:idx_ai_session_user,priority:2" json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
 func (AiChatSession) TableName() string { return "ai_chat_sessions" }
@@ -93,6 +99,87 @@ func TouchAiChatSession(id uint, firstUserText string) {
 		}
 	}
 	DB.Model(&AiChatSession{}).Where("id = ?", id).Updates(updates)
+}
+
+// RenameAiChatSession 重命名会话（校验归属）
+func RenameAiChatSession(id, userID uint, title string) error {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return fmt.Errorf("标题不能为空")
+	}
+	if len([]rune(title)) > 60 {
+		title = string([]rune(title)[:60])
+	}
+	res := DB.Model(&AiChatSession{}).Where("id = ? AND user_id = ?", id, userID).
+		Updates(map[string]interface{}{"title": title, "updated_at": time.Now()})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return fmt.Errorf("会话不存在")
+	}
+	return nil
+}
+
+// ShareAiChatSession 生成分享令牌（幂等：已分享则返回原令牌）
+func ShareAiChatSession(id, userID uint) (string, error) {
+	var s AiChatSession
+	if err := DB.Where("id = ? AND user_id = ?", id, userID).First(&s).Error; err != nil {
+		return "", fmt.Errorf("会话不存在")
+	}
+	if s.ShareToken != nil && s.SharedAt != nil {
+		return *s.ShareToken, nil
+	}
+	// 唯一令牌（32 位 hex，撞库重试）
+	var token string
+	for i := 0; i < 3; i++ {
+		b := make([]byte, 16)
+		if _, err := rand.Read(b); err != nil {
+			return "", err
+		}
+		token = hex.EncodeToString(b)
+		var n int64
+		DB.Model(&AiChatSession{}).Where("share_token = ?", token).Count(&n)
+		if n == 0 {
+			break
+		}
+		token = ""
+	}
+	if token == "" {
+		return "", fmt.Errorf("生成分享令牌失败，请重试")
+	}
+	now := time.Now()
+	tk := token
+	if err := DB.Model(&AiChatSession{}).Where("id = ?", id).
+		Updates(map[string]interface{}{"share_token": &tk, "shared_at": &now, "updated_at": now}).Error; err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
+// UnshareAiChatSession 取消分享（令牌置空，链接立即失效）
+func UnshareAiChatSession(id, userID uint) error {
+	res := DB.Model(&AiChatSession{}).Where("id = ? AND user_id = ?", id, userID).
+		Updates(map[string]interface{}{"share_token": nil, "shared_at": nil})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return fmt.Errorf("会话不存在")
+	}
+	return nil
+}
+
+// GetSharedSessionByToken 公开读取已分享会话（无归属校验，仅限 shared_at 非空）
+func GetSharedSessionByToken(token string) (*AiChatSession, error) {
+	if len(token) != 32 {
+		return nil, fmt.Errorf("分享链接无效")
+	}
+	var s AiChatSession
+	if err := DB.Where("share_token = ? AND shared_at IS NOT NULL", token).First(&s).Error; err != nil {
+		return nil, fmt.Errorf("分享不存在或已取消")
+	}
+	return &s, nil
 }
 
 // ---------- 消息 ----------

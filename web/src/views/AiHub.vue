@@ -31,7 +31,12 @@
           @click="openSession(s)"
         >
           <span class="ai-session-title">{{ s.title || '新对话' }}</span>
-          <el-icon class="ai-session-del" @click.stop="deleteSession(s)"><Delete /></el-icon>
+          <span v-if="s.share_token" class="ai-session-shared" title="已分享">🔗</span>
+          <span class="ai-session-tools">
+            <el-icon title="重命名" @click.stop="renameSession(s)"><EditPen /></el-icon>
+            <el-icon title="分享" @click.stop="openShare(s)"><Share /></el-icon>
+            <el-icon class="ai-session-del" title="删除" @click.stop="deleteSession(s)"><Delete /></el-icon>
+          </span>
         </div>
         <el-empty v-if="!sessions.length" description="暂无会话" :image-size="50" />
       </div>
@@ -96,14 +101,34 @@
         <AiVideoPanel v-else :status="status" />
       </template>
     </main>
+
+    <!-- 分享对话框 -->
+    <el-dialog v-model="shareVisible" title="分享会话" width="520px">
+      <template v-if="shareLink">
+        <p class="share-tip">任何人通过此链接可查看该会话的只读快照（不含余额与费用信息）。取消分享后链接立即失效。</p>
+        <el-input :model-value="shareLink" readonly>
+          <template #append>
+            <el-button @click="copyShareLink">复制</el-button>
+          </template>
+        </el-input>
+        <div class="share-actions">
+          <el-button text type="danger" @click="unshare">取消分享</el-button>
+        </div>
+      </template>
+      <template v-else>
+        <p class="share-tip">生成只读分享链接，方便把对话发给他人查看。</p>
+        <el-button type="primary" :loading="sharing" @click="doShare">生成分享链接</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Close, Delete, Menu, ChatDotRound, Picture, VideoCamera } from '@element-plus/icons-vue';
+import { Plus, Close, Delete, Menu, ChatDotRound, Picture, VideoCamera, EditPen, Share } from '@element-plus/icons-vue';
 import { aiHubApi, type AiHubStatus, type AiAgent, type AiChatSession } from '@/api/aiHub';
+import { appPrefix } from '@/utils/prefix';
 import AiChatPanel from '@/components/ai/AiChatPanel.vue';
 import AiImagePanel from '@/components/ai/AiImagePanel.vue';
 import AiVideoPanel from '@/components/ai/AiVideoPanel.vue';
@@ -194,11 +219,84 @@ async function deleteSession(s: AiChatSession) {
   }
 }
 
+// ===== 会话重命名 / 分享 =====
+const shareVisible = ref(false);
+const shareLink = ref('');
+const sharing = ref(false);
+const shareSessionId = ref<number | null>(null);
+
+async function renameSession(s: AiChatSession) {
+  try {
+    const { value } = await ElMessageBox.prompt('新的会话标题', '重命名会话', {
+      inputValue: s.title || '',
+      inputValidator: (v: string) => (!!v && v.trim().length > 0) || '标题不能为空',
+      confirmButtonText: '保存',
+      cancelButtonText: '取消',
+    });
+    const res = await aiHubApi.renameSession(s.id, value.trim());
+    if (res.data.code === 0) {
+      ElMessage.success('已重命名');
+      await loadSessions();
+    }
+  } catch (e: any) {
+    if (e === 'cancel' || e?.message === 'cancel') return;
+    ElMessage.error(e?.response?.data?.message || '重命名失败');
+  }
+}
+
+function openShare(s: AiChatSession) {
+  shareSessionId.value = s.id;
+  shareLink.value = s.share_token ? buildShareUrl(s.share_token) : '';
+  shareVisible.value = true;
+}
+
+function buildShareUrl(token: string) {
+  return `${location.origin}${appPrefix || ''}/ai/share/${token}`;
+}
+
+async function doShare() {
+  if (!shareSessionId.value) return;
+  sharing.value = true;
+  try {
+    const res = await aiHubApi.shareSession(shareSessionId.value);
+    if (res.data.code === 0 && res.data.data?.share_token) {
+      shareLink.value = buildShareUrl(res.data.data.share_token);
+      await loadSessions();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '生成失败');
+  } finally {
+    sharing.value = false;
+  }
+}
+
+async function unshare() {
+  if (!shareSessionId.value) return;
+  try {
+    const res = await aiHubApi.unshareSession(shareSessionId.value);
+    if (res.data.code === 0) {
+      ElMessage.success('已取消分享');
+      shareVisible.value = false;
+      await loadSessions();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
+async function copyShareLink() {
+  try {
+    await navigator.clipboard.writeText(shareLink.value);
+    ElMessage.success('链接已复制');
+  } catch {
+    ElMessage.warning('复制失败，请手动选择');
+  }
+}
+
 onMounted(() => {
   loadAll();
   loadSessions();
-});
-</script>
+});</script>
 
 <style scoped>
 .ai-hub { display: flex; height: calc(100vh - 60px); min-height: 0; background: var(--bg-page, #f5f7fa); }
@@ -227,8 +325,14 @@ onMounted(() => {
 .ai-agent-emoji { font-size: 1.1rem; }
 .ai-agent-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ai-session-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ai-session-del { display: none; color: #ef4444; flex-shrink: 0; }
-.ai-session-item:hover .ai-session-del { display: inline-block; }
+.ai-session-shared { font-size: 0.7rem; opacity: 0.7; flex-shrink: 0; }
+.ai-session-tools { display: none; align-items: center; gap: 6px; flex-shrink: 0; }
+.ai-session-tools .el-icon { color: var(--text-light, #888); }
+.ai-session-tools .el-icon:hover { color: var(--el-color-primary, #409eff); }
+.ai-session-item:hover .ai-session-tools { display: inline-flex; }
+.ai-session-del { color: #ef4444; }
+.share-tip { font-size: 0.82rem; color: var(--text-light, #666); margin: 0 0 10px; line-height: 1.6; }
+.share-actions { margin-top: 10px; text-align: right; }
 .ai-hub-side-foot {
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px;
   padding: 10px 14px; border-top: 1px solid var(--el-border-color, #ebeef5);
