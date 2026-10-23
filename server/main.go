@@ -41,9 +41,9 @@ var knownSPARoots = map[string]bool{
 	"admin": true, "author": true, "blog": true, "blogs": true,
 	"bookshelf": true, "category": true, "comment-network": true, "docs": true, "forum": true,
 	"forums": true, "frames": true, "htmls": true, "install": true,
-	"login": true, "novel": true, "plaza": true, "register": true,
-	"reports": true, "run": true, "settings": true, "setup": true,
-	"thread": true, "wasm": true,
+	"login": true, 		"novel": true, "plaza": true, "register": true,
+		"reports": true, "run": true, "settings": true, "setup": true,
+		"thread": true, "wasm": true, "pay": true,
 }
 
 // firstPathSegment 返回去前导斜杠后的路径首段，如 "novel/1"→"novel"，"admin"→"admin"
@@ -252,6 +252,9 @@ func main() {
 		// 狂暴模式（F19）：SSE 评论实时流 + 公开状态查询（管理员开关，默认关）
 		public.GET("/live/stream", handlers.LiveStream)
 		public.GET("/live/config", handlers.LiveConfig)
+		// 在线支付回调（§7.4）：网关异步通知（验签准入，无鉴权）+ 支付完成同步跳转
+		public.POST("/payment/notify/:channel", security.RateLimit(120, 60), handlers.PaymentNotify)
+		public.GET("/payment/return/:channel", handlers.PaymentReturn)
 		// 自定义网站主题（F12：alist 式，服务端消毒后全局生效）
 		public.GET("/theme/site", handlers.GetSiteTheme)
 		// F12a 全站 opt-in iframe（管理员配置允许列表 URL，访客可读启用状态）
@@ -302,6 +305,12 @@ func main() {
 		protected.GET("/token/status", handlers.TokenStatus)
 		protected.GET("/token/ledger", handlers.TokenLedgerList)
 		protected.POST("/token/redeem", handlers.RedeemCard)
+		// 在线支付充值（§7.4）：档位下单 / 订单轮询 / 我的订单 / 模拟支付确认
+		protected.GET("/payment/status", handlers.PaymentStatus)
+		protected.POST("/payment/order", security.RateLimit(10, 60), handlers.PaymentCreateOrder)
+		protected.GET("/payment/order/:no", handlers.PaymentOrderStatus)
+		protected.GET("/payment/orders", handlers.PaymentMyOrders)
+		protected.POST("/payment/mock/confirm", security.RateLimit(20, 60), handlers.PaymentMockConfirm)
 		// AI 调用（§5.3）：可用性/预估/补全计费（限流防刷）
 		protected.GET("/ai/status", handlers.AiStatus)
 		protected.POST("/ai/estimate", security.RateLimit(60, 60), handlers.AiEstimate)
@@ -670,6 +679,12 @@ func main() {
 		// @ai 评论机器人配置（§5.6）
 		admin.GET("/ai/bot/config", handlers.AdminGetAiBotConfig)
 		admin.PUT("/ai/bot/config", handlers.AdminSetAiBotConfig)
+		// 在线支付通道（§7.4）：配置（密钥只写不读）/ 档位 / 订单列表 / 手动补单
+		admin.GET("/payment/config", handlers.AdminGetPaymentConfig)
+		admin.PUT("/payment/config", handlers.AdminSetPaymentConfig)
+		admin.PUT("/payment/tiers", handlers.AdminSetPaymentTiers)
+		admin.GET("/payment/orders", handlers.AdminListPaymentOrders)
+		admin.POST("/payment/orders/mark-paid", handlers.AdminMarkOrderPaid)
 		// 应用扩展安全审核：预检未通过的 ZIP 原样封存（不解压），管理员放行/驳回
 		admin.GET("/userhtmls", handlers.AdminListHTMLs)
 		admin.GET("/userhtmls/:id/scan", handlers.AdminGetHTMLScan)

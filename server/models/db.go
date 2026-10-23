@@ -71,6 +71,8 @@ func AllModels() []interface{} {
 		&UserPublishLog{}, &UserPublishQuota{},
 		// 代币账本 + 卡密充值（§7：平台内消费积分，与作者收益账分离，不可篡改可对账）
 		&TokenLedger{}, &UserTokenBalance{}, &CardKey{},
+		// 在线支付充值订单（§7.4：微信/支付宝聚合通道，幂等到账）
+		&RechargeOrder{},
 		// AI 模型池 + 调用计费（§5.3：OpenAI 兼容上游，代币按 usage 结算）
 		&AiModel{}, &AiCallLog{},
 		// AI 工作台（§5.4）：会话/消息、智能体预设、绘画视频任务
