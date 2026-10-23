@@ -126,6 +126,10 @@ func AiComplete(c *gin.Context) {
 		Byok      bool   `json:"byok"`
 		ByokModel string `json:"byok_model"`
 		ByokKeyID uint   `json:"byok_key_id"`
+		// 长篇上下文（§13.5）：注入作品大纲 + 前文摘要 + 当前章尾部
+		NovelID   uint `json:"novel_id"`
+		ChapterID uint `json:"chapter_id"`
+		UseMemory bool `json:"use_memory"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -146,6 +150,14 @@ func AiComplete(c *gin.Context) {
 		return
 	}
 
+	// ── 长篇上下文组装（§13.5，BYOK 与平台池均支持） ──
+	memoryCtx := ""
+	memoryTokens := 0
+	if req.UseMemory && req.NovelID > 0 {
+		memoryCtx, memoryTokens = models.BuildNovelContext(req.NovelID, req.ChapterID, text, models.AiContextBudget)
+	}
+	systemPrefix := aiContextBlock(memoryCtx)
+
 	// ── 自备密钥分支（BYOK）：用户自带上游，不扣平台代币 ──
 	if req.Byok {
 		byokModel := strings.TrimSpace(req.ByokModel)
@@ -153,7 +165,7 @@ func AiComplete(c *gin.Context) {
 			utils.BadRequest(c, "使用自备密钥时需填写上游模型标识")
 			return
 		}
-		tokensIn := models.EstimateTokens(text)
+		tokensIn := models.EstimateTokens(text) + memoryTokens
 		tokensOut := req.MaxTokens
 		if tokensOut <= 0 {
 			tokensOut = 2048
@@ -189,7 +201,7 @@ func AiComplete(c *gin.Context) {
 		content, realIn, realOut, cerr := client.Complete(aiclient.ChatRequest{
 			Model: byokModel,
 			Messages: []aiclient.Message{
-				{Role: "system", Content: aiSystemPrompt(action)},
+				{Role: "system", Content: systemPrefix + aiSystemPrompt(action)},
 				{Role: "user", Content: text},
 			},
 			MaxTokens:   tokensOut,
@@ -228,7 +240,7 @@ func AiComplete(c *gin.Context) {
 		utils.BadRequest(c, "模型不可用")
 		return
 	}
-	tokensIn := models.EstimateTokens(text)
+	tokensIn := models.EstimateTokens(text) + memoryTokens
 	tokensOut := req.MaxTokens
 	if tokensOut <= 0 {
 		tokensOut = m.MaxTokens
@@ -272,7 +284,7 @@ func AiComplete(c *gin.Context) {
 	content, realIn, realOut, cerr := client.Complete(aiclient.ChatRequest{
 		Model: m.ModelID,
 		Messages: []aiclient.Message{
-			{Role: "system", Content: aiSystemPrompt(action)},
+			{Role: "system", Content: systemPrefix + aiSystemPrompt(action)},
 			{Role: "user", Content: text},
 		},
 		MaxTokens:   tokensOut,

@@ -316,6 +316,13 @@ func main() {
 		protected.POST("/ai/my-keys", handlers.AiMyKeyCreate)
 		protected.DELETE("/ai/my-keys/:id", handlers.AiMyKeyDelete)
 		protected.POST("/ai/my-keys/:id/default", handlers.AiMyKeySetDefault)
+
+		// 长篇 AI 记忆（§13.5）：大纲/章节摘要/上下文组装（:id 通配在不同前缀段，无冲突）
+		protected.GET("/ai/memory", handlers.AiMemoryList)
+		protected.PUT("/ai/memory/outline", handlers.AiMemorySaveOutline)
+		protected.PUT("/ai/memory/summary", handlers.AiMemorySaveSummary)
+		protected.DELETE("/ai/memory/summary", handlers.AiMemoryDeleteSummary)
+		protected.POST("/ai/memory/context", handlers.AiMemoryContext)
 		protected.GET("/ai/sessions", handlers.AiHubSessions)
 		protected.GET("/ai/sessions/:id/messages", handlers.AiHubSessionMessages)
 		protected.DELETE("/ai/sessions/:id", handlers.AiHubDeleteSession)
