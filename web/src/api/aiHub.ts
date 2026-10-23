@@ -81,11 +81,11 @@ export const aiHubApi = {
   deleteSession(id: number) {
     return api.delete(`/ai/sessions/${id}`);
   },
-  image(data: { model_id: number; prompt: string; size?: string; style?: string; n?: number }) {
-    return api.post<{ code: number; data: { task_id: number; images: string[]; cost: number; free?: boolean; balance_after: number } }>('/ai/image', data);
+  image(data: { model_id: number; prompt: string; size?: string; style?: string; n?: number; byok?: boolean; byok_model?: string }) {
+    return api.post<{ code: number; data: { task_id: number; images: string[]; cost: number; free?: boolean; byok?: boolean; balance_after: number } }>('/ai/image', data);
   },
-  videoSubmit(data: { model_id: number; prompt: string; duration?: number; size?: string }) {
-    return api.post<{ code: number; data: { task_id: number; status: string; cost: number; free?: boolean; balance_after: number } }>('/ai/video', data);
+  videoSubmit(data: { model_id: number; prompt: string; duration?: number; size?: string; byok?: boolean; byok_model?: string }) {
+    return api.post<{ code: number; data: { task_id: number; status: string; cost: number; free?: boolean; byok?: boolean; balance_after: number } }>('/ai/video', data);
   },
   videoStatus(id: number) {
     return api.get<{ code: number; data: { task_id: number; status: string; video?: string; result?: string; error?: string; cost: number } }>(`/ai/video/${id}`);
@@ -111,7 +111,7 @@ export const aiHubApi = {
 
 /** 流式对话：fetch 读取 SSE，onChunk 收增量，返回最终结果 */
 export async function streamChat(
-  payload: { session_id?: number; model_id: number; agent_id?: number; message: string; max_tokens?: number },
+  payload: { session_id?: number; model_id: number; agent_id?: number; message: string; max_tokens?: number; byok?: boolean; byok_model?: string },
   onChunk: (text: string) => void,
   signal?: AbortSignal,
 ): Promise<{ content: string; cost: number; free?: boolean; balance_after: number; session_id: number } | null> {

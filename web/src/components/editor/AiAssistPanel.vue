@@ -32,7 +32,7 @@
       <!-- 模型与动作 -->
       <el-form label-width="72px" class="ai-form">
         <el-form-item label="模型">
-          <el-select v-model="form.model_id" size="small" style="width:100%">
+          <el-select v-model="form.model_id" size="small" style="width:100%" :disabled="form.byok">
             <el-option
               v-for="m in status.models"
               :key="m.id"
@@ -40,6 +40,14 @@
               :value="m.id"
             />
           </el-select>
+          <el-checkbox v-model="form.byok" size="small" style="margin-left:8px">我的密钥</el-checkbox>
+          <el-input
+            v-if="form.byok"
+            v-model="form.byok_model"
+            size="small"
+            style="width:56%; margin-top:6px"
+            placeholder="上游模型 ID（如 deepseek-chat）"
+          />
         </el-form-item>
         <el-form-item label="动作">
           <el-radio-group v-model="form.action" size="small">
@@ -144,11 +152,13 @@ const status = reactive<AiStatus>({
   models: [],
 });
 
-const form = reactive<{ model_id: number; action: string; max_tokens: number; text: string }>({
+const form = reactive<{ model_id: number; action: string; max_tokens: number; text: string; byok: boolean; byok_model: string }>({
   model_id: 0,
   action: 'continue',
   max_tokens: 1024,
   text: '',
+  byok: false,
+  byok_model: '',
 });
 
 const estimate = ref<AiEstimateResult | null>(null);
@@ -218,8 +228,12 @@ async function run() {
     ElMessage.warning('请输入内容');
     return;
   }
+  if (form.byok && !form.byok_model.trim()) {
+    ElMessage.warning('使用我的密钥时需填写上游模型 ID');
+    return;
+  }
   await doEstimate();
-  if (estimate.value && !estimate.value.affordable) {
+  if (estimate.value && !estimate.value.affordable && !form.byok) {
     ElMessage.warning(`${status.token_name}不足，请先充值`);
     return;
   }
@@ -231,6 +245,8 @@ async function run() {
       text: form.text,
       max_tokens: form.max_tokens,
       ref_type: 'chapter',
+      byok: form.byok || undefined,
+      byok_model: form.byok ? form.byok_model.trim() : undefined,
     });
     if (res.data.code === 0) {
       result.value = res.data.data;

@@ -65,13 +65,29 @@ export const aiApi = {
     temperature?: number;
     ref_type?: string;
     ref_id?: number;
+    byok?: boolean;
+    byok_model?: string;
   }) {
-    return api.post<{ code: number; data: { content: string; tokens_in: number; tokens_out: number; cost: number; free?: boolean; balance_after: number } }>('/ai/complete', data);
+    return api.post<{ code: number; data: { content: string; tokens_in: number; tokens_out: number; cost: number; free?: boolean; byok?: boolean; balance_after: number } }>('/ai/complete', data);
   },
 
   // 免费 AI 额度（§5.3）
   freeQuotaStatus() {
     return api.get<{ code: number; data: AiFreeQuota }>('/ai/free-quota');
+  },
+
+  // 用户自备 API Key（§5.5 BYOK）
+  myKeys() {
+    return api.get<{ code: number; data: { list: MyAiKey[]; max: number } }>('/ai/my-keys');
+  },
+  createMyKey(data: { label?: string; base_url: string; api_key: string; model_id?: string }) {
+    return api.post<{ code: number; data: { message: string; id: number } }>('/ai/my-keys', data);
+  },
+  deleteMyKey(id: number) {
+    return api.delete(`/ai/my-keys/${id}`);
+  },
+  setDefaultMyKey(id: number) {
+    return api.post(`/ai/my-keys/${id}/default`);
   },
 
   // 管理端
@@ -118,6 +134,18 @@ export interface AdminAiFreeQuotaOverride {
   username?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface MyAiKey {
+  id: number;
+  label: string;
+  base_url: string;
+  model_id: string;
+  enabled: boolean;
+  is_default: boolean;
+  has_key: boolean;
+  last_used_at: string | null;
+  created_at: string;
 }
 
 export interface AdminAiModel {

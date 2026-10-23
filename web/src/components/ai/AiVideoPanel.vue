@@ -4,9 +4,19 @@
     <div class="ai-media-form">
       <div class="ai-media-row">
         <span class="ai-media-label">模型</span>
-        <el-select v-model="modelId" size="small" style="width:220px">
+        <el-select v-model="modelId" size="small" style="width:220px" :disabled="useByok">
           <el-option v-for="m in status.video_models" :key="m.id" :label="modelLabel(m)" :value="m.id" />
         </el-select>
+        <el-tooltip content="使用「我的钱包 → 上游密钥」中配置的密钥，不消耗平台代币" placement="top">
+          <el-checkbox v-model="useByok" size="small">我的密钥</el-checkbox>
+        </el-tooltip>
+        <el-input
+          v-if="useByok"
+          v-model="byokModel"
+          size="small"
+          style="width:180px"
+          placeholder="上游模型 ID"
+        />
       </div>
       <div class="ai-media-row">
         <span class="ai-media-label">提示词</span>
@@ -84,6 +94,8 @@ import { aiHubApi, type AiHubStatus } from '@/api/aiHub';
 const props = defineProps<{ status: AiHubStatus }>();
 
 const modelId = ref(0);
+const useByok = ref(false);
+const byokModel = ref('');
 const prompt = ref('');
 const duration = ref(5);
 const vsize = ref('1280x720');
@@ -134,8 +146,12 @@ function parseVideo(result: string): string {
 const currentVideo = computed(() => current.value?.video || '');
 
 async function submit() {
-  if (!modelId.value) {
+  if (!modelId.value && !useByok.value) {
     ElMessage.warning('请先选择模型');
+    return;
+  }
+  if (useByok.value && !byokModel.value.trim()) {
+    ElMessage.warning('使用我的密钥时需填写上游模型 ID');
     return;
   }
   submitting.value = true;
@@ -145,6 +161,8 @@ async function submit() {
       prompt: prompt.value.trim(),
       duration: duration.value,
       size: vsize.value,
+      byok: useByok.value || undefined,
+      byok_model: useByok.value ? byokModel.value.trim() : undefined,
     });
     if (res.data.code === 0) {
       current.value = {

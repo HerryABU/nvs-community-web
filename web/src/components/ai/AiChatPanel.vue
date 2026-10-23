@@ -3,7 +3,7 @@
   <div class="ai-chat">
     <!-- 顶部：模型 + 长度 + 余额 -->
     <div class="ai-chat-topbar">
-      <el-select v-model="modelId" size="small" style="width:200px" :disabled="generating">
+      <el-select v-model="modelId" size="small" style="width:200px" :disabled="generating || useByok">
         <el-option v-for="m in status.chat_models" :key="m.id" :label="modelLabel(m)" :value="m.id" />
       </el-select>
       <el-radio-group v-model="maxTokens" size="small" :disabled="generating">
@@ -11,6 +11,17 @@
         <el-radio-button :value="2048">中</el-radio-button>
         <el-radio-button :value="4096">长</el-radio-button>
       </el-radio-group>
+      <el-tooltip content="使用「我的钱包 → 上游密钥」中配置的密钥，不消耗平台代币" placement="top">
+        <el-checkbox v-model="useByok" size="small" :disabled="generating">我的密钥</el-checkbox>
+      </el-tooltip>
+      <el-input
+        v-if="useByok"
+        v-model="byokModel"
+        size="small"
+        style="width:160px"
+        placeholder="上游模型 ID"
+        :disabled="generating"
+      />
       <span class="ai-chat-balance">余额 <b>{{ status.balance }}</b> {{ status.token_name }}</span>
     </div>
 
@@ -92,6 +103,8 @@ let abortCtrl: AbortController | null = null;
 let loadingSession = 0;
 
 const modelId = ref(0);
+const useByok = ref(false);
+const byokModel = ref('');
 watch(
   () => props.status.chat_models,
   (list) => {
@@ -147,12 +160,16 @@ watch(
 async function send() {
   const text = inputText.value.trim();
   if (!text || generating.value) return;
-  if (!modelId.value) {
+  if (!useByok.value && !modelId.value) {
     ElMessage.warning('暂无可用模型');
     return;
   }
-  if (!props.status.token_enabled) {
-    ElMessage.warning('代币系统未开启');
+  if (useByok.value && !byokModel.value.trim()) {
+    ElMessage.warning('使用我的密钥时需填写上游模型 ID');
+    return;
+  }
+  if (!props.status.token_enabled && !useByok.value) {
+    ElMessage.warning('代币系统未开启，可使用「我的密钥」或联系站长');
     return;
   }
   inputText.value = '';
@@ -173,6 +190,8 @@ async function send() {
         agent_id: props.agentId || undefined,
         message: text,
         max_tokens: maxTokens.value,
+        byok: useByok.value || undefined,
+        byok_model: useByok.value ? byokModel.value.trim() : undefined,
       },
       (chunk) => {
         streamingText.value += chunk;

@@ -11,7 +11,46 @@
       </el-empty>
     </el-card>
 
-    <template v-else>
+    <!-- 上游密钥（BYOK，独立于代币系统：始终可用） -->
+    <el-card shadow="never" class="byok-card">
+      <div class="card-title">
+        我的上游密钥
+        <span class="muted small">（BYOK：使用自己的 OpenAI 兼容密钥调用 AI，不消耗平台代币）</span>
+      </div>
+      <div class="byok-tip">
+        <el-icon><InfoFilled /></el-icon>
+        密钥经 AES-256-GCM <b>加密存储、只写不读</b>（添加后不可查看，遗失请删除重加）；最多 {{ keyMax }} 个。
+        在「AI 工作台」或章节编辑器勾选「使用我的密钥」即可生效。
+      </div>
+      <el-table :data="myKeys" v-loading="keysLoading" style="width:100%" size="small">
+        <el-table-column label="备注名" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.label }}
+            <el-tag v-if="row.is_default" size="small" type="success" style="margin-left:4px">默认</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="base_url" label="上游地址" min-width="180" show-overflow-tooltip />
+        <el-table-column label="默认模型" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.model_id || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="密钥" width="80">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.has_key ? 'success' : 'info'">已配置</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="150" fixed="right">
+          <template #default="{ row }">
+            <el-button v-if="!row.is_default" text type="primary" size="small" @click="setDefaultKey(row)">设默认</el-button>
+            <el-button text type="danger" size="small" @click="deleteKey(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div class="byok-actions">
+        <el-button type="primary" size="small" :icon="Plus" @click="keyDialog = true">添加密钥</el-button>
+      </div>
+    </el-card>
+
+    <template v-if="status.enabled">
       <!-- 余额卡 -->
       <el-card shadow="never" class="balance-card">
         <div class="balance-label">{{ status.name || '代币' }}余额</div>
@@ -74,14 +113,37 @@
         </div>
       </el-card>
     </template>
+
+    <!-- 添加密钥弹窗 -->
+    <el-dialog v-model="keyDialog" title="添加上游密钥" width="460px">
+      <el-form label-width="90px">
+        <el-form-item label="备注名">
+          <el-input v-model="keyForm.label" placeholder="如：我的 DeepSeek" maxlength="64" />
+        </el-form-item>
+        <el-form-item label="上游地址" required>
+          <el-input v-model="keyForm.base_url" placeholder="如 https://api.deepseek.com/v1（不含 /chat/completions）" />
+        </el-form-item>
+        <el-form-item label="API Key" required>
+          <el-input v-model="keyForm.api_key" type="password" show-password placeholder="上游密钥，加密后存储" />
+        </el-form-item>
+        <el-form-item label="默认模型">
+          <el-input v-model="keyForm.model_id" placeholder="如 deepseek-chat（调用时可改）" maxlength="128" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="keyDialog = false">取消</el-button>
+        <el-button type="primary" :loading="keySaving" @click="saveKey">添加</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
-import { ElMessage } from 'element-plus';
-import { InfoFilled } from '@element-plus/icons-vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { InfoFilled, Plus } from '@element-plus/icons-vue';
 import { tokenApi, TOKEN_TYPE_LABELS } from '@/api/token';
+import { aiApi, type MyAiKey } from '@/api/ai';
 
 const status = reactive<{ enabled: boolean; name: string; balance: number }>({
   enabled: false,
@@ -155,7 +217,80 @@ function typeTag(t: string) {
   return (map[t] as any) || 'info';
 }
 
-onMounted(loadStatus);
+// ---------- 上游密钥（BYOK §5.5） ----------
+const myKeys = ref<MyAiKey[]>([]);
+const keysLoading = ref(false);
+const keyMax = ref(5);
+const keyDialog = ref(false);
+const keySaving = ref(false);
+const keyForm = reactive({ label: '', base_url: '', api_key: '', model_id: '' });
+
+async function loadKeys() {
+  keysLoading.value = true;
+  try {
+    const res = await aiApi.myKeys();
+    if (res.data.code === 0) {
+      myKeys.value = res.data.data.list || [];
+      keyMax.value = res.data.data.max || 5;
+    }
+  } catch { /* AI 未开启时静默 */ }
+  keysLoading.value = false;
+}
+
+async function saveKey() {
+  if (!keyForm.base_url.trim() || !keyForm.api_key.trim()) {
+    ElMessage.warning('上游地址与 API Key 均为必填');
+    return;
+  }
+  keySaving.value = true;
+  try {
+    const res = await aiApi.createMyKey({
+      label: keyForm.label.trim(),
+      base_url: keyForm.base_url.trim(),
+      api_key: keyForm.api_key.trim(),
+      model_id: keyForm.model_id.trim(),
+    });
+    if (res.data.code === 0) {
+      ElMessage.success('已添加（密钥不可再次查看）');
+      keyDialog.value = false;
+      keyForm.label = ''; keyForm.base_url = ''; keyForm.api_key = ''; keyForm.model_id = '';
+      await loadKeys();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '添加失败');
+  }
+  keySaving.value = false;
+}
+
+async function setDefaultKey(row: MyAiKey) {
+  try {
+    const res = await aiApi.setDefaultMyKey(row.id);
+    if (res.data.code === 0) {
+      ElMessage.success('已设为默认');
+      await loadKeys();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
+async function deleteKey(row: MyAiKey) {
+  await ElMessageBox.confirm(`删除密钥「${row.label}」？删除后使用该密钥的调用将失败，且密钥无法恢复。`, '确认删除', { type: 'warning' });
+  try {
+    const res = await aiApi.deleteMyKey(row.id);
+    if (res.data.code === 0) {
+      ElMessage.success('已删除');
+      await loadKeys();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '删除失败');
+  }
+}
+
+onMounted(() => {
+  loadStatus();
+  loadKeys();
+});
 </script>
 
 <style scoped>
@@ -166,6 +301,11 @@ onMounted(loadStatus);
 .balance-num { font-size: 2.6rem; font-weight: 700; color: var(--el-color-primary, #409eff); margin: 6px 0 10px; }
 .balance-note { font-size: 0.8rem; color: var(--text-light, #888); line-height: 1.6; }
 .redeem-card, .ledger-card { border-radius: 10px; margin-bottom: 16px; }
+.byok-card { border-radius: 10px; margin-bottom: 16px; }
+.byok-tip { font-size: 0.78rem; color: var(--text-light, #888); line-height: 1.6; margin-bottom: 10px; }
+.byok-actions { margin-top: 10px; }
+.muted { color: var(--text-light, #999); }
+.small { font-size: 0.75rem; font-weight: 400; }
 .card-title { font-weight: 600; font-size: 0.95rem; color: var(--text-color, #333); margin-bottom: 12px; }
 .redeem-row { display: flex; gap: 12px; align-items: center; }
 .redeem-hint { font-size: 0.78rem; color: var(--text-light, #999); margin-top: 8px; }
