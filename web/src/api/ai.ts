@@ -81,11 +81,13 @@ export const aiApi = {
 export interface AdminAiModel {
   id: number;
   name: string;
+  kind: string;
   model_id: string;
   base_url: string;
   has_api_key: boolean;
   price_in: number;
   price_out: number;
+  price_call: number;
   max_tokens: number;
   temperature: number;
   enabled: boolean;
@@ -97,11 +99,13 @@ export interface AdminAiModel {
 
 export interface AdminAiModelInput {
   name: string;
+  kind?: string;
   model_id: string;
   base_url: string;
   api_key?: string;
   price_in?: number;
   price_out?: number;
+  price_call?: number;
   max_tokens?: number;
   temperature?: number;
   enabled?: boolean;
