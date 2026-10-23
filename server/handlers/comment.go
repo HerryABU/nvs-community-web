@@ -182,6 +182,9 @@ func CreateComment(c *gin.Context) {
 		realtime.PublishCommentEvent("blog", req.BlogID, comment)
 	}
 
+	// @ai 评论区机器人（§5.6）：检测召唤标记，异步生成 AI 回复（默认关闭）
+	maybeTriggerAiBot(c, comment)
+
 	utils.Success(c, comment)
 }
 

@@ -323,6 +323,9 @@ func main() {
 		protected.PUT("/ai/memory/summary", handlers.AiMemorySaveSummary)
 		protected.DELETE("/ai/memory/summary", handlers.AiMemoryDeleteSummary)
 		protected.POST("/ai/memory/context", handlers.AiMemoryContext)
+
+		// @ai 评论区机器人（§5.6）：状态查询（配置在管理端）
+		protected.GET("/ai/bot/status", handlers.AiBotStatus)
 		protected.GET("/ai/sessions", handlers.AiHubSessions)
 		protected.GET("/ai/sessions/:id/messages", handlers.AiHubSessionMessages)
 		protected.DELETE("/ai/sessions/:id", handlers.AiHubDeleteSession)
@@ -663,6 +666,10 @@ func main() {
 		admin.PUT("/ai/free-quota/config", handlers.AdminSetAiFreeQuotaConfig)
 		admin.GET("/ai/free-quota/overrides", handlers.AdminListAiFreeQuotaOverrides)
 		admin.POST("/ai/free-quota/overrides", handlers.AdminManageAiFreeQuotaOverride)
+
+		// @ai 评论机器人配置（§5.6）
+		admin.GET("/ai/bot/config", handlers.AdminGetAiBotConfig)
+		admin.PUT("/ai/bot/config", handlers.AdminSetAiBotConfig)
 		// 应用扩展安全审核：预检未通过的 ZIP 原样封存（不解压），管理员放行/驳回
 		admin.GET("/userhtmls", handlers.AdminListHTMLs)
 		admin.GET("/userhtmls/:id/scan", handlers.AdminGetHTMLScan)
