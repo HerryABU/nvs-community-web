@@ -16,6 +16,7 @@
         </div>
       <div class="ce-toolbar-right">
         <span v-if="lastSaved" class="ce-saved-time">已保存 {{ lastSaved }}</span>
+        <PublishQuotaHint />
         <el-button :icon="Link" @click="showRefPicker = true">插入站内链接</el-button>
         <el-button type="primary" :loading="saving" @click="saveChapter">保存章节</el-button>
       </div>

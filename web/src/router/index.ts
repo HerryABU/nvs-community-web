@@ -295,6 +295,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/daily-publish',
+      name: 'admin-daily-publish',
+      component: () => import('@/views/admin/AdminPublishQuota.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/badwords',
       name: 'admin-badwords',
       component: () => import('@/views/admin/AdminBadWords.vue'),

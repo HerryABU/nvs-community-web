@@ -2,6 +2,7 @@ import {
   Setting, View, DataAnalysis, Medal, Warning, Bell, DataLine, Monitor,
   Collection, Lock, Histogram, Stamp, Key, ChatDotRound, Cpu, WarningFilled,
   Box, Notebook, TrendCharts, Connection, Postcard, Lightning, Brush, Grid, Message,
+  Timer,
 } from '@element-plus/icons-vue';
 
 // 管理员控制台「管理功能」分类数据（F8：分类折叠 + ?category=/?item= 深链定位）。
@@ -83,6 +84,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: '博客分类与回收站', desc: '博客分类管理 · 全站用户自删内容监管', path: '/admin/blog-categories', icon: Notebook, color: 'var(--gradient-teal)' },
       { title: '社区动态', desc: '最近用户、作品、评论、帖子', path: '/admin/community', icon: TrendCharts, color: 'var(--gradient-teal)' },
       { title: 'web 项目额度与审核', desc: '广场发布额度配置 + 超额发布审核队列', path: '/admin/web-quota', icon: Box, color: 'var(--gradient-purple)' },
+      { title: '每日发文限额', desc: '按用户等级配置每日发布数量/字数 · 按人覆盖 · AI 计入', path: '/admin/daily-publish', icon: Timer, color: 'var(--gradient-indigo)' },
       { title: '公告栏', desc: '站点公告发布 · 合规通知', path: '/admin/announcements', icon: Bell, color: 'var(--gradient-blue)' },
       { title: '书目分类管理', desc: '平台书目分类的增删改', path: '/admin/categories', icon: Collection, color: 'var(--gradient-purple)' },
     ],
