@@ -107,6 +107,17 @@ export const aiApi = {
     return api.post<{ code: number; data: { context: string; tokens: number } }>('/ai/memory/context', data);
   },
 
+  // @ai 评论区机器人（§5.6）
+  botStatus() {
+    return api.get<{ code: number; data: { enabled: boolean; used: number; daily_left: number } }>('/ai/bot/status');
+  },
+  adminGetBotConfig() {
+    return api.get<{ code: number; data: { enabled: boolean; config: { daily_limit: number; agent_id: number; signature: string } } }>('/admin/ai/bot/config');
+  },
+  adminSetBotConfig(data: { enabled: boolean; daily_limit: number; agent_id: number; signature: string }) {
+    return api.put('/admin/ai/bot/config', data);
+  },
+
   // 管理端
   getConfig() {
     return api.get<{ code: number; data: { enabled: boolean } }>('/admin/ai/config');

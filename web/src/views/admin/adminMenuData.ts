@@ -108,6 +108,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: 'AI 模型池', desc: 'OpenAI 兼容上游配置 · 密钥加密存储 · 按量计费（对话/绘画/视频）', path: '/admin/ai-pool', icon: MagicStick, color: 'var(--gradient-purple)' },
       { title: 'AI 智能体', desc: '对话人设预设 · 系统提示词 · 工作台卡片', path: '/admin/ai-agents', icon: ChatLineRound, color: 'var(--gradient-indigo)' },
       { title: '免费 AI 额度', desc: '每日免费调用额度（次数/tokens）· 用尽才扣代币 · 按人覆盖', path: '/admin/ai-free-quota', icon: Present, color: 'var(--gradient-teal)' },
+      { title: 'AI 评论机器人', desc: '评论区 @ai 召唤回复 · 每日限流 · 发起人付费', path: '/admin/ai-bot', icon: ChatLineRound, color: 'var(--gradient-pink)' },
     ],
   },
   {

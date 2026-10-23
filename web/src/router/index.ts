@@ -331,6 +331,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/ai-bot',
+      name: 'admin-ai-bot',
+      component: () => import('@/views/admin/AdminAiBot.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/ai-agents',
       name: 'admin-ai-agents',
       component: () => import('@/views/admin/AdminAiAgents.vue'),

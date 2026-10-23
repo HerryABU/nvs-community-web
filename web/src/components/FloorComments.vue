@@ -86,6 +86,7 @@
             :id="`reply-${r.id}`"
           >
             <span class="reply-user">{{ displayName(r) }}</span>
+            <el-tag v-if="isAiBotComment(r)" size="small" type="primary" effect="plain" class="ai-bot-tag">AI</el-tag>
             <span v-if="r.reply_to_name" class="reply-arrow">回复</span>
             <span v-if="r.reply_to_name" class="reply-to">{{ r.reply_to_name }}</span>
             <span class="reply-colon">：</span>
@@ -132,7 +133,7 @@
             :source="mentionSource"
             :target-type="workType"
             :target-i-d="targetID"
-            :placeholder="replyPlaceholder + '（Ctrl+B 粗体 / Ctrl+I 斜体 / Ctrl+U 下划线 / Ctrl+S 回复，输入 @ 提及）'"
+            :placeholder="replyPlaceholder + replyHintSuffix"
             @save="submitReply"
           />
           <div class="reply-form-actions">
@@ -146,6 +147,7 @@
           <span class="floor-no">{{ floor.floor_no || '?' }}楼</span>
           <span class="floor-user">{{ displayName(floor) }}</span>
           <span class="floor-collapsed-meta">{{ repliesOf(floor.id).length }} 条回复 · {{ relTime(floor) }} · 点击展开</span>
+          <el-tag v-if="isAiBotComment(floor)" size="small" type="primary" effect="plain" class="ai-bot-tag">AI</el-tag>
         </div>
       </div>
     </div>
@@ -175,13 +177,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive } from 'vue';
+import { ref, computed, reactive, onMounted } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import MentionTextarea from './MentionTextarea.vue';
 import ReportButton from './ReportButton.vue';
 import LiveBadge from './comment/LiveBadge.vue';
 import { useLiveComments } from '@/composables/useLiveComments';
 import { commentApi, setFloorPassword } from '@/api/novel/comments';
+import { aiApi } from '@/api/ai';
 import { Lock } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { formatRelativeTime, formatAbsoluteMicro } from '@/utils/relativeTime';
@@ -300,6 +303,23 @@ const replyPlaceholder = computed(() => {
   if (!replyTarget.value) return '回复... 支持 Markdown 语法';
   const t = (props.items || []).find(i => i.id === replyTarget.value);
   return t ? `回复 ${displayName(t)}...` : '回复...';
+});
+
+// @ai 评论区机器人（§5.6）：开启后在输入提示中引导召唤
+const aiBotEnabled = ref(false);
+const replyHintSuffix = computed(() => {
+  const base = '（Ctrl+B 粗体 / Ctrl+I 斜体 / Ctrl+U 下划线 / Ctrl+S 回复，输入 @ 提及）';
+  return aiBotEnabled.value ? base + '，输入 @ai 召唤 AI 助手' : base;
+});
+
+function isAiBotComment(item: any): boolean {
+  return item && (item.username === 'ai_assistant' || item.username === 'AI 助手');
+}
+
+onMounted(() => {
+  aiApi.botStatus()
+    .then((res) => { if (res.data.code === 0) aiBotEnabled.value = !!res.data.data.enabled; })
+    .catch(() => { /* 静默：AI 未开启或未登录 */ });
 });
 
 function toggleReply(targetId: number) {
@@ -575,6 +595,7 @@ async function removeManage() {
   font-weight: 600;
 }
 .floor-lock-tag .lock-ico { font-size: 0.85rem; }
+.ai-bot-tag { flex-shrink: 0; margin-left: 2px; }
 
 .floor-locked {
   display: flex;
