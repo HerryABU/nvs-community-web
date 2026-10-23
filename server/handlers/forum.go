@@ -208,6 +208,12 @@ func CreateThread(c *gin.Context) {
 	raw := security.SanitizeUserContent(req.Content)
 	cleaned, badHits := processBadWords(raw, "forum")
 
+	// 每日发文限额预检（§13.4；后台关闭时不生效）
+	threadWords := len([]rune(cleaned))
+	if !enforceDailyPublish(c, models.PublishKindThread, threadWords) {
+		return
+	}
+
 	thread := &models.Thread{
 		ForumID: uint(forumID),
 		UserID:  userID,
@@ -219,6 +225,8 @@ func CreateThread(c *gin.Context) {
 		utils.InternalError(c, "发帖失败")
 		return
 	}
+	// 发布流水记账（计入每日发文限额）
+	models.RecordPublish(userID, models.PublishKindThread, thread.ID, threadWords)
 
 	// 违禁词 mark 动作命中 → 写入待审标记记录
 	flagBadWords(badHits, "thread", thread.ID, userID, raw, thread.Title)

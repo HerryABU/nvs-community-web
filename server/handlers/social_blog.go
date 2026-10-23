@@ -182,6 +182,12 @@ func CreateBlog(c *gin.Context) {
 	title := security.SanitizePlainText(req.Title)
 	summary := security.SanitizePlainText(req.Summary)
 
+	// 每日发文限额预检（§13.4；后台关闭时不生效）
+	blogWords := len([]rune(content))
+	if !enforceDailyPublish(c, models.PublishKindBlog, blogWords) {
+		return
+	}
+
 	// 先创建数据库记录获取 ID
 	blog := &models.AuthorBlog{
 		AuthorID: userID,
@@ -198,6 +204,8 @@ func CreateBlog(c *gin.Context) {
 		utils.InternalError(c, "创建失败")
 		return
 	}
+	// 发布流水记账（计入每日发文限额）
+	models.RecordPublish(userID, models.PublishKindBlog, blog.ID, blogWords)
 
 	// 违禁词 mark 动作命中 → 写入待审标记记录
 	flagBadWords(badHits, "blog", blog.ID, userID, raw, blog.Title)

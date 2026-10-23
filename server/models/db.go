@@ -67,6 +67,8 @@ func AllModels() []interface{} {
 		&UserHomeCustomize{}, &AuthorHomeCustomize{},
 		// web 项目额度与超额审核（F17：发布到广场需额度，超额进入审核队列）
 		&UserWebQuota{}, &WebQuotaRequest{},
+		// 每日发文限额 / 用户配额体系（§13.4：等级×每日数量/字数，按人覆盖，AI 计入）
+		&UserPublishLog{}, &UserPublishQuota{},
 		// 搜索热词埋点（F9：站内搜索 query 记录，聚合出搜索热词）
 		&SearchLog{},
 	}

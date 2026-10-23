@@ -296,6 +296,8 @@ func main() {
 		protected.GET("/web-quota/mine", handlers.MyWebQuota)
 		protected.POST("/web-quota/html-public", handlers.SetHTMLPublic)
 		protected.POST("/web-quota/frame-public", handlers.SetFramePublic)
+		// 每日发文限额（§13.4）：当前用户今日发文额度（发布表单展示剩余量）
+		protected.GET("/daily-publish/status", handlers.GetMyPublishQuota)
 		// 用户黑名单（F13：拉黑禁言/屏蔽内容）
 		protected.POST("/blacklist", security.RateLimit(20, 60), handlers.AddBlacklist)
 		protected.DELETE("/blacklist/:id", handlers.RemoveBlacklist)
@@ -595,6 +597,12 @@ func main() {
 		admin.GET("/forum-quota/users", handlers.ListUserForumQuotas)
 		admin.PUT("/forum-quota/users/:id", handlers.SetUserForumQuota)
 		admin.DELETE("/forum-quota/users/:id", handlers.DeleteUserForumQuota)
+		// 每日发文限额 / 用户配额体系（§13.4）：等级×每日数量/字数 + 按人覆盖
+		// 独立子树 /daily-publish：静态段，规避与既有 :id 通配段冲突
+		admin.GET("/daily-publish/config", handlers.AdminGetDailyPublishConfig)
+		admin.PUT("/daily-publish/config", handlers.AdminSetDailyPublishConfig)
+		admin.GET("/daily-publish/overrides", handlers.AdminListPublishOverrides)
+		admin.POST("/daily-publish/overrides", handlers.AdminManagePublishOverride)
 		// 应用扩展安全审核：预检未通过的 ZIP 原样封存（不解压），管理员放行/驳回
 		admin.GET("/userhtmls", handlers.AdminListHTMLs)
 		admin.GET("/userhtmls/:id/scan", handlers.AdminGetHTMLScan)

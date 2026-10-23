@@ -81,6 +81,11 @@ func CreateChapter(c *gin.Context) {
 
 	wordCount := len([]rune(stripHTML(req.Content)))
 
+	// 每日发文限额预检（§13.4；后台关闭时不生效）
+	if !enforceDailyPublish(c, models.PublishKindChapter, wordCount) {
+		return
+	}
+
 	chapter := &models.Chapter{
 		NovelID:          uint(novelID),
 		ChapterNumber:    nextNum,
@@ -96,6 +101,8 @@ func CreateChapter(c *gin.Context) {
 		utils.InternalError(c, "创建章节失败")
 		return
 	}
+	// 发布流水记账（计入每日发文限额）
+	models.RecordPublish(userID, models.PublishKindChapter, chapter.ID, wordCount)
 
 	// 违禁词 mark 动作命中 → 写入待审标记记录
 	flagBadWords(badHits, "chapter", chapter.ID, userID, raw, chapter.Title)

@@ -52,6 +52,11 @@ func CreateNovel(c *gin.Context) {
 		return
 	}
 
+	// 每日发文限额预检（§13.4；后台关闭时不生效）
+	if !enforceDailyPublish(c, models.PublishKindNovel, 0) {
+		return
+	}
+
 	var input CreateNovelInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
@@ -103,6 +108,8 @@ func CreateNovel(c *gin.Context) {
 		utils.InternalError(c, "创建作品失败")
 		return
 	}
+	// 发布流水记账（计入每日发文限额）
+	models.RecordPublish(userID, models.PublishKindNovel, novel.ID, 0)
 
 	// 保存多分类
 	saveNovelCategories(novel.ID, input.Categories, input.Category)
