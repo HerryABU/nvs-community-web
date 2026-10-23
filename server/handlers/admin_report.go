@@ -140,19 +140,32 @@ func targetPreview(targetType string, targetID uint) string {
 	return ""
 }
 
-// ListReports GET /api/admin/reports — 举报列表
+// ListReports GET /api/admin/reports — 举报列表（支持按状态、目标类型筛选，附内容预览）
 func ListReports(c *gin.Context) {
 	if !ensureAdmin(c) {
 		return
 	}
 	status := c.Query("status")
+	targetType := c.Query("target_type")
 	query := models.DB.Preload("Reporter").Order("created_at DESC")
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
+	if targetType != "" {
+		query = query.Where("target_type = ?", targetType)
+	}
 	var reports []models.Report
 	query.Find(&reports)
-	utils.Success(c, reports)
+
+	type reportItem struct {
+		models.Report
+		TargetPreview string `json:"target_preview"`
+	}
+	items := make([]reportItem, 0, len(reports))
+	for _, r := range reports {
+		items = append(items, reportItem{Report: r, TargetPreview: targetPreview(r.TargetType, r.TargetID)})
+	}
+	utils.Success(c, items)
 }
 
 // HandleReport POST /api/admin/reports/:id/handle — 处理举报（人工判定 + 可选删除目标）

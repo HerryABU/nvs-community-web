@@ -13,6 +13,15 @@
             <el-radio-button value="accepted">已成立</el-radio-button>
             <el-radio-button value="rejected">已驳回</el-radio-button>
           </el-radio-group>
+          <el-radio-group v-model="filterType" @change="load" class="type-filter">
+            <el-radio-button value="">全部对象</el-radio-button>
+            <el-radio-button value="comment">评论</el-radio-button>
+            <el-radio-button value="post">回帖</el-radio-button>
+            <el-radio-button value="thread">帖子</el-radio-button>
+            <el-radio-button value="novel">作品</el-radio-button>
+            <el-radio-button value="blog">博客</el-radio-button>
+            <el-radio-button value="user">用户</el-radio-button>
+          </el-radio-group>
           <el-button size="small" @click="load" :loading="loading" :icon="Refresh">刷新</el-button>
         </div>
 
@@ -20,6 +29,12 @@
           <el-table-column label="对象" width="90">
             <template #default="{ row }">
               <el-tag size="small" :type="targetTag(row.target_type)">{{ targetLabel(row.target_type) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="被举报内容" min-width="200" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span v-if="row.target_preview" class="preview-text">{{ row.target_preview }}</span>
+              <span v-else class="muted">（无预览）</span>
             </template>
           </el-table-column>
           <el-table-column label="理由" min-width="100">
@@ -56,6 +71,9 @@
           <el-descriptions-item label="举报理由">{{ current.reason }}</el-descriptions-item>
           <el-descriptions-item label="举报人">{{ current.reporter?.nickname || current.reporter?.username }}</el-descriptions-item>
         </el-descriptions>
+        <div v-if="current.target_preview" class="detail-box content-preview">
+          <div class="preview-label">被举报内容：</div>「{{ current.target_preview }}」
+        </div>
         <div v-if="current.detail" class="detail-box">「{{ current.detail }}」</div>
 
         <el-form label-position="top" style="margin-top:12px">
@@ -91,6 +109,7 @@ import { ElMessage } from 'element-plus';
 const reports = ref<any[]>([]);
 const loading = ref(false);
 const filterStatus = ref('pending');
+const filterType = ref('');
 
 const showHandle = ref(false);
 const current = ref<any>(null);
@@ -119,7 +138,7 @@ function statusTag(s: string) {
 async function load() {
   loading.value = true;
   try {
-    const res = await adminApi.getReports(filterStatus.value);
+    const res = await adminApi.getReports(filterStatus.value, filterType.value);
     if (res.data.code === 0) reports.value = res.data.data || [];
   } catch { /* ignore */ }
   loading.value = false;
@@ -159,9 +178,17 @@ onMounted(load);
 <style scoped>
 .admin-page { --admin-content-max: 1100px; min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
 .hint-text { color: var(--text-light, #666); font-size: 0.85rem; margin-bottom: 12px; }
+.admin-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.type-filter { margin-left: 4px; }
 .handle-body { color: var(--text-color, #333); }
 .detail-box { margin-top: 8px; padding: 8px 12px; background: rgba(0,0,0,0.04); border-radius: 6px; font-size: 0.85rem; color: var(--text-secondary, #666); }
+.content-preview { background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.2); }
+.preview-label { font-weight: 600; color: #ef4444; margin-bottom: 2px; }
+.preview-text { font-size: 0.82rem; color: var(--text-secondary, #555); }
 .muted { color: var(--text-light, #999); }
 [data-theme="dark"] .admin-page { background: #0f172a; }
 [data-theme="dark"] .detail-box { background: rgba(255,255,255,0.06); }
+[data-theme="dark"] .content-preview { background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.35); }
+[data-theme="dark"] .preview-text { color: #cbd5e1; }
+[data-theme="dark"] .preview-label { color: #f89898; }
 </style>

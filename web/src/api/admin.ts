@@ -220,8 +220,11 @@ export const adminApi = {
   },
 
   // 举报
-  getReports(status?: string) {
-    return api.get('/admin/reports', { params: status ? { status } : {} });
+  getReports(status?: string, targetType?: string) {
+    const params: Record<string, string> = {};
+    if (status) params.status = status;
+    if (targetType) params.target_type = targetType;
+    return api.get('/admin/reports', { params });
   },
   handleReport(id: number, data: { status: string; verdict: string; delete_target?: boolean }) {
     return api.post(`/admin/reports/${id}/handle`, data);

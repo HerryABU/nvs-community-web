@@ -24,9 +24,10 @@
         <el-radio-button value="flow">折线流程图</el-radio-button>
         <el-radio-button value="flowchart">标准流程图</el-radio-button>
         <el-radio-button value="divergent">发散形状</el-radio-button>
-        <el-radio-button value="tree">树状图</el-radio-button>
-        <el-radio-button value="tree-flow">树状流程图</el-radio-button>
-        <el-radio-button value="list">互动清单</el-radio-button>
+      <el-radio-button value="tree">树状图</el-radio-button>
+      <el-radio-button value="tree-flow">树状流程图</el-radio-button>
+      <el-radio-button value="mindmap">脑图式</el-radio-button>
+      <el-radio-button value="list">互动清单</el-radio-button>
       </el-radio-group>
       <span class="cn-toolbar-label">3D</span>
       <el-radio-group v-model="mode3d" size="small">
@@ -140,7 +141,7 @@ const props = defineProps<{
 const net = ref<CommentNetwork | null>(null);
 const loading = ref(false);
 
-type ViewMode = 'force' | 'flow' | 'flowchart' | 'divergent' | 'tree' | 'tree-flow' | '3d' | '3d-flow' | 'list';
+type ViewMode = 'force' | 'flow' | 'flowchart' | 'divergent' | 'tree' | 'tree-flow' | 'mindmap' | '3d' | '3d-flow' | 'list';
 const mode2d = ref<ViewMode>('force');
 const mode3d = ref<'' | '3d' | '3d-flow'>('');
 const viewMode = computed<ViewMode>(() => (mode3d.value || mode2d.value) as ViewMode);
@@ -149,7 +150,7 @@ watch(mode2d, (v) => { if (v) mode3d.value = ''; });
 watch(mode3d, (v) => { if (v) mode2d.value = ''; });
 
 const isGraph2D = computed(() => ['force', 'flow', 'flowchart', 'divergent'].includes(viewMode.value));
-const isTree2D = computed(() => viewMode.value === 'tree' || viewMode.value === 'tree-flow');
+const isTree2D = computed(() => viewMode.value === 'tree' || viewMode.value === 'tree-flow' || viewMode.value === 'mindmap');
 const is3D = computed(() => viewMode.value === '3d' || viewMode.value === '3d-flow');
 
 // 两组 2D 图表各自的 <v-chart> 实例引用（graph 系用 vue-echarts；tree 系因 vue-echarts 在
@@ -613,6 +614,73 @@ const divergentOption = computed(() => build2DOption('divergent'));
 const treeOptionTB = computed(() => buildTreeOption('TB'));
 const treeOptionLR = computed(() => buildTreeOption('LR'));
 
+// 脑图式（直角流程图）：横向树 + 直角(polyline)连接线 + 卡片节点，呈现思维导图/组织架构图观感。
+// 复用评论森林 commentTree；与 tree-flow（曲线边 + 圆形节点）形成「曲线 vs 直角」的视觉区分。
+function buildMindmapOption() {
+  const roots = commentTree.value.roots;
+  if (!roots.length) {
+    return {
+      title: {
+        text: '暂无回复关系（还没有评论引发其他评论）',
+        left: 'center',
+        top: 'center',
+        textStyle: { color: '#999', fontSize: 14 },
+      },
+      series: [],
+    };
+  }
+  const mkLabel = (d: any) => {
+    let s = '';
+    if (showUsername.value) s += `{a|${d.author}}`;
+    if (showComment.value && d.excerpt) s += (s ? '\n' : '') + `{b|${trunc(d.excerpt, 22)}}`;
+    return s;
+  };
+  const series: any = {
+    type: 'tree',
+    orient: 'LR',
+    roam: true,
+    expandAndCollapse: true,
+    initialTreeDepth: -1,
+    symbol: 'rect',
+    symbolSize: [150, 46],
+    data: roots,
+    top: '4%',
+    bottom: '4%',
+    left: '7%',
+    right: '16%',
+    edgeShape: 'polyline', // 直角连接线（脑图/流程图典型样式）
+    edgeForkPosition: '50%',
+    lineStyle: { color: '#6366f1', width: 1.5, curveness: 0 },
+    label: {
+      show: true,
+      position: 'inside',
+      fontSize: 10,
+      color: '#1e293b',
+      formatter: (p: any) => mkLabel(p.data),
+      rich: {
+        a: { fontSize: 11, color: '#1e293b', fontWeight: 'bold', lineHeight: 15, align: 'center' },
+        b: { fontSize: 9, color: '#475569', lineHeight: 12, align: 'center' },
+      },
+    },
+    itemStyle: { color: '#eef2ff', borderColor: '#6366f1', borderWidth: 1.5, borderRadius: 6 },
+    emphasis: { focus: 'descendant', itemStyle: { color: '#e0e7ff', borderColor: '#4338ca' } },
+    animationDuration: 300,
+    animationDurationUpdate: 300,
+  };
+  return {
+    tooltip: {
+      formatter: (p: any) => {
+        const d = p.data;
+        let s = `${d.author}`;
+        if (showComment.value && d.excerpt) s += `\n「${d.excerpt}」`;
+        return s;
+      },
+    },
+    series: [series],
+  };
+}
+const mindmapOption = computed(() => buildMindmapOption());
+
 const graphOption = computed(() => {
   if (!net.value) return { series: [] };
   switch (viewMode.value) {
@@ -624,7 +692,11 @@ const graphOption = computed(() => {
 });
 const treeOption = computed(() => {
   if (!net.value) return { series: [] };
-  return viewMode.value === 'tree-flow' ? treeOptionLR.value : treeOptionTB.value;
+  switch (viewMode.value) {
+    case 'tree-flow': return treeOptionLR.value;
+    case 'mindmap': return mindmapOption.value;
+    default: return treeOptionTB.value;
+  }
 });
 
 const graphHint = computed(() => {
@@ -634,6 +706,7 @@ const graphHint = computed(() => {
     case 'divergent': return '发散形状：中心为最活跃评论者，其余按互动距离呈辐射环展开。';
     case 'tree': return '树状图：以「评论」为节点，父子关系即「子评论回复了父评论」；沿枝向下即可看清哪条评论引发了哪些回复。可拖拽缩放、点击节点折叠/展开分支。';
     case 'tree-flow': return '树状流程图：横向展开评论回复树，根评论在左、回复向右衍生；箭头起点（父）引发箭头终点（子）。';
+    case 'mindmap': return '脑图式（直角流程图）：以「评论」为节点、回复关系为直角连接线，根评论在左、回复向右分叉；卡片内即「用户名 + 其评论正文」，沿直角连线即可看清内容演变脉络，像一张思维导图。';
     default: return '箭头 A→B 表示「A 回复了 B」；点击节点可下钻到该评论者的互动。';
   }
 });
