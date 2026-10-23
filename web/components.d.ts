@@ -13,6 +13,10 @@ declare module 'vue' {
   export interface GlobalComponents {
     AdminHeader: typeof import('./src/components/admin/AdminHeader.vue')['default']
     AdminMenuPanel: typeof import('./src/components/admin/AdminMenuPanel.vue')['default']
+    AiAssistPanel: typeof import('./src/components/editor/AiAssistPanel.vue')['default']
+    AiChatPanel: typeof import('./src/components/ai/AiChatPanel.vue')['default']
+    AiImagePanel: typeof import('./src/components/ai/AiImagePanel.vue')['default']
+    AiVideoPanel: typeof import('./src/components/ai/AiVideoPanel.vue')['default']
     AnimatedNumber: typeof import('./src/components/AnimatedNumber.vue')['default']
     AuthorCard: typeof import('./src/components/author/AuthorCard.vue')['default']
     BlockBlogs: typeof import('./src/components/home/BlockBlogs.vue')['default']
