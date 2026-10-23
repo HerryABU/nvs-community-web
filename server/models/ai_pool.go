@@ -1,0 +1,138 @@
+package models
+
+import (
+	"strings"
+	"time"
+
+	"nvs-server/utils"
+)
+
+// ==================== AI 模型池（§5.3 计费底座） ====================
+// AiModel 描述一个 OpenAI 兼容上游：base_url + api_key（AES-256-GCM 加密落库）+
+// 每 1K tokens 的代币单价（0 = 免费）。管理端 CRUD，用户端只读可用列表。
+//
+// 零值纪律：enabled=false / price=0 均为合法业务值，更新一律走 map 精确写，
+// 不用 struct Save（避免零值被 GORM 跳过或误判）。
+
+// AiModel AI 上游模型（OpenAI 兼容 /chat/completions）
+type AiModel struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	Name         string    `gorm:"size:64;not null" json:"name"`            // 展示名（如「默认模型」）
+	ModelID      string    `gorm:"size:128;not null" json:"model_id"`       // 上游模型标识（如 gpt-4o-mini）
+	BaseURL      string    `gorm:"size:256;not null" json:"base_url"`       // 上游地址（不含 /chat/completions）
+	ApiKeyEnc    string    `gorm:"type:text" json:"-"`                      // api_key 密文（EncryptField），不回传前端
+	PriceIn      int64     `gorm:"not null;default:0" json:"price_in"`      // 每 1K 输入 tokens 代币价（0=免费）
+	PriceOut     int64     `gorm:"not null;default:0" json:"price_out"`     // 每 1K 输出 tokens 代币价（0=免费）
+	MaxTokens    int       `gorm:"not null;default:2048" json:"max_tokens"` // 默认最大输出 tokens
+	Temperature  float64   `gorm:"not null;default:0.7" json:"temperature"` // 默认温度
+	Enabled      bool      `gorm:"not null;default:true" json:"enabled"`    // 是否启用
+	Priority     int       `gorm:"not null;default:0" json:"priority"`      // 优先级（大者优先，备用池预留）
+	Note         string    `gorm:"size:256;default:''" json:"note"`         // 备注
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+func (AiModel) TableName() string { return "ai_models" }
+
+// ---------- 配置开关 ----------
+
+const (
+	// AiEnabledKey AI 功能总开关（默认 false，站长在后台开启）
+	AiEnabledKey = "ai_enabled"
+)
+
+// IsAiEnabled AI 功能是否开启（默认关闭）
+func IsAiEnabled() bool {
+	return GetPlatformConfig(AiEnabledKey) == "true"
+}
+
+// SetAiEnabled 设置 AI 功能开关
+func SetAiEnabled(on bool) error {
+	if on {
+		return SetPlatformConfig(AiEnabledKey, "true")
+	}
+	return SetPlatformConfig(AiEnabledKey, "false")
+}
+
+// ---------- CRUD ----------
+
+// ListAiModels 模型列表（管理员视角：全部；onlyEnabled=true 时仅启用项）
+func ListAiModels(onlyEnabled bool) ([]AiModel, error) {
+	var list []AiModel
+	q := DB.Order("priority DESC, id ASC")
+	if onlyEnabled {
+		q = q.Where("enabled = ?", true)
+	}
+	err := q.Find(&list).Error
+	return list, err
+}
+
+// GetAiModel 按 ID 取模型
+func GetAiModel(id uint) (*AiModel, error) {
+	var m AiModel
+	if err := DB.Where("id = ?", id).First(&m).Error; err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
+// GetEnabledAiModel 取一个启用模型（不存在返回 nil, nil）
+func GetEnabledAiModel(id uint) (*AiModel, error) {
+	m, err := GetAiModel(id)
+	if err != nil {
+		return nil, err
+	}
+	if !m.Enabled {
+		return nil, nil
+	}
+	return m, nil
+}
+
+// CreateAiModel 创建模型；api_key 明文入参，加密落库
+func CreateAiModel(m *AiModel, apiKeyPlain string) error {
+	enc, err := utils.EncryptField(strings.TrimSpace(apiKeyPlain))
+	if err != nil {
+		return err
+	}
+	m.ApiKeyEnc = enc
+	now := time.Now()
+	m.CreatedAt = now
+	m.UpdatedAt = now
+	return DB.Create(m).Error
+}
+
+// UpdateAiModelFields map 精确更新（零值安全）；apiKeyPlain 非空时才轮换密钥
+func UpdateAiModelFields(id uint, fields map[string]interface{}, apiKeyPlain string) error {
+	if strings.TrimSpace(apiKeyPlain) != "" {
+		enc, err := utils.EncryptField(strings.TrimSpace(apiKeyPlain))
+		if err != nil {
+			return err
+		}
+		fields["api_key_enc"] = enc
+	}
+	if len(fields) == 0 {
+		return nil
+	}
+	fields["updated_at"] = time.Now()
+	return DB.Model(&AiModel{}).Where("id = ?", id).Updates(fields).Error
+}
+
+// DeleteAiModel 删除模型
+func DeleteAiModel(id uint) error {
+	return DB.Where("id = ?", id).Delete(&AiModel{}).Error
+}
+
+// DecryptApiKey 解密模型上游密钥（调用方用后即焚，不得落日志）
+func (m *AiModel) DecryptApiKey() (string, error) {
+	if m.ApiKeyEnc == "" {
+		return "", nil
+	}
+	return utils.DecryptField(m.ApiKeyEnc)
+}
+
+// CountEnabledAiModels 启用模型数量（status 页展示）
+func CountEnabledAiModels() (int64, error) {
+	var n int64
+	err := DB.Model(&AiModel{}).Where("enabled = ?", true).Count(&n).Error
+	return n, err
+}

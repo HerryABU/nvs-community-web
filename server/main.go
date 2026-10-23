@@ -302,6 +302,10 @@ func main() {
 		protected.GET("/token/status", handlers.TokenStatus)
 		protected.GET("/token/ledger", handlers.TokenLedgerList)
 		protected.POST("/token/redeem", handlers.RedeemCard)
+		// AI 调用（§5.3）：可用性/预估/补全计费（限流防刷）
+		protected.GET("/ai/status", handlers.AiStatus)
+		protected.POST("/ai/estimate", security.RateLimit(60, 60), handlers.AiEstimate)
+		protected.POST("/ai/complete", security.RateLimit(20, 60), handlers.AiComplete)
 		// 用户黑名单（F13：拉黑禁言/屏蔽内容）
 		protected.POST("/blacklist", security.RateLimit(20, 60), handlers.AddBlacklist)
 		protected.DELETE("/blacklist/:id", handlers.RemoveBlacklist)
@@ -615,6 +619,14 @@ func main() {
 		admin.POST("/token/cards", handlers.AdminGenerateCards)
 		admin.POST("/token/cards/:id/void", handlers.AdminVoidCard)
 		admin.POST("/token/adjust", handlers.AdminAdjustToken)
+		// AI 模型池（§5.3）：总开关 + 模型 CRUD（api_key 加密存储、只写不读）
+		// 独立子树 /ai：静态段，避让 :id 通配冲突
+		admin.GET("/ai/config", handlers.AdminGetAiConfig)
+		admin.PUT("/ai/config", handlers.AdminSetAiConfig)
+		admin.GET("/ai/models", handlers.AdminListAiModels)
+		admin.POST("/ai/models", handlers.AdminCreateAiModel)
+		admin.PUT("/ai/models/:id", handlers.AdminUpdateAiModel)
+		admin.DELETE("/ai/models/:id", handlers.AdminDeleteAiModel)
 		// 应用扩展安全审核：预检未通过的 ZIP 原样封存（不解压），管理员放行/驳回
 		admin.GET("/userhtmls", handlers.AdminListHTMLs)
 		admin.GET("/userhtmls/:id/scan", handlers.AdminGetHTMLScan)
