@@ -3,8 +3,18 @@
   <div class="ai-chat">
     <!-- 顶部：模型 + 长度 + 余额 -->
     <div class="ai-chat-topbar">
+      <el-select
+        v-if="vendors.length > 1"
+        v-model="vendor"
+        size="small"
+        style="width:132px"
+        :disabled="generating || useByok"
+      >
+        <el-option label="全部厂商" value="" />
+        <el-option v-for="v in vendors" :key="v" :label="v" :value="v" />
+      </el-select>
       <el-select v-model="modelId" size="small" style="width:200px" :disabled="generating || useByok">
-        <el-option v-for="m in status.chat_models" :key="m.id" :label="modelLabel(m)" :value="m.id" />
+        <el-option v-for="m in filteredModels" :key="m.id" :label="modelLabel(m)" :value="m.id" />
       </el-select>
       <el-radio-group v-model="maxTokens" size="small" :disabled="generating">
         <el-radio-button :value="1024">短</el-radio-button>
@@ -123,6 +133,26 @@ let abortCtrl: AbortController | null = null;
 let loadingSession = 0;
 
 const modelId = ref(0);
+const vendor = ref(''); // 厂商筛选（空=全部）
+// 厂商维度：只列出现过的厂商，避免空选项
+const vendors = computed(() => {
+  const set = new Set<string>();
+  for (const m of props.status.chat_models) {
+    const v = (m.vendor || '').trim();
+    if (v) set.add(v);
+  }
+  return Array.from(set);
+});
+const filteredModels = computed(() => {
+  if (!vendor.value) return props.status.chat_models;
+  return props.status.chat_models.filter((m) => (m.vendor || '').trim() === vendor.value);
+});
+// 切换厂商后若当前模型不在结果里，自动选第一个
+watch([vendor, filteredModels], () => {
+  const list = filteredModels.value;
+  if (!list.length) return;
+  if (!list.some((m) => m.id === modelId.value)) modelId.value = list[0].id;
+}, { immediate: true });
 const useByok = ref(false);
 const byokModel = ref('');
 // 提示词库
@@ -133,7 +163,7 @@ function onPickPrompt(content: string) {
 watch(
   () => props.status.chat_models,
   (list) => {
-    if (!modelId.value && list.length) modelId.value = list[0].id;
+    if (!modelId.value && list.length) modelId.value = (filteredModels.value[0] || list[0]).id;
   },
   { immediate: true },
 );

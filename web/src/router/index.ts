@@ -157,6 +157,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      // 灵感广场独立页（作品流公开可浏览）
+      path: '/ai/gallery',
+      name: 'ai-gallery',
+      component: () => import('@/views/AiGallery.vue'),
+    },
+    {
       // 公开只读分享页（令牌即凭据，无需登录）
       path: '/ai/share/:token',
       name: 'ai-shared',

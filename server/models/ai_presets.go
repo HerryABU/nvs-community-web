@@ -7,20 +7,32 @@ package models
 
 // AiModelPreset 模型预设
 type AiModelPreset struct {
-	Key      string `json:"key"`
-	Name     string `json:"name"`
-	Kind     string `json:"kind"`
-	ApiKind  string `json:"api_kind"`
-	ModelID  string `json:"model_id"`
-	BaseURL  string `json:"base_url"`
-	PriceCall int64 `json:"price_call"`
+	Key          string `json:"key"`
+	Name         string `json:"name"`
+	Kind         string `json:"kind"`
+	ApiKind      string `json:"api_kind"`
+	ModelID      string `json:"model_id"`
+	BaseURL      string `json:"base_url"`
+	PriceCall    int64  `json:"price_call"`
 	ProviderHint string `json:"provider_hint"`
-	Note     string `json:"note"`
+	Vendor       string `json:"vendor"`
+	Note         string `json:"note"`
+}
+
+// presetVendor 预设键 → 厂商（前端「全部厂商」筛选用）
+var presetVendor = map[string]string{
+	"mj": "Midjourney", "niji": "Midjourney",
+	"doubao-image": "字节跳动", "seedance": "字节跳动",
+	"gpt-image-2": "OpenAI", "sora": "OpenAI",
+	"nanobanana": "Google", "veo": "Google",
+	"sd35": "Stability", "kling": "快手", "runway": "Runway",
+	"hailuo": "MiniMax", "claude-sonnet": "Anthropic",
+	"deepseek": "DeepSeek", "qwen": "阿里云",
 }
 
 // ListAiModelPresets 全部预设（绘画 + 视频 + 对话参考）
 func ListAiModelPresets() []AiModelPreset {
-	return []AiModelPreset{
+	list := []AiModelPreset{
 		// ---------- 绘画 ----------
 		{
 			Key: "mj", Name: "Midjourney", Kind: AiKindImage, ApiKind: AiApiMJ,
@@ -108,4 +120,10 @@ func ListAiModelPresets() []AiModelPreset {
 			Note: "阿里云 DashScope OpenAI 兼容模式",
 		},
 	}
+	for i := range list {
+		if v, ok := presetVendor[list[i].Key]; ok {
+			list[i].Vendor = v
+		}
+	}
+	return list
 }

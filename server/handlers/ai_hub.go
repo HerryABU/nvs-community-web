@@ -46,6 +46,7 @@ func AiHubStatus(c *gin.Context) {
 					"price_call": m.PriceCall, "max_tokens": m.MaxTokens,
 					"api_kind": models.NormalizeAiApiKind(m.ApiKind),
 					"provider_hint": m.ProviderHint, "note": m.Note,
+					"vendor": m.Vendor,
 				})
 			}
 			return items

@@ -32,6 +32,7 @@ func aiModelVO(m *models.AiModel) gin.H {
 		"priority":    m.Priority,
 		"api_kind":    models.NormalizeAiApiKind(m.ApiKind),
 		"provider_hint": m.ProviderHint,
+		"vendor":        m.Vendor,
 		"note":        m.Note,
 		"created_at":  m.CreatedAt,
 		"updated_at":  m.UpdatedAt,
@@ -102,6 +103,7 @@ type aiModelInput struct {
 	Priority    *int    `json:"priority"`
 	ApiKind     string  `json:"api_kind"`
 	ProviderHint string `json:"provider_hint"`
+	Vendor      string  `json:"vendor"`
 	Note        string  `json:"note"`
 }
 
@@ -127,6 +129,7 @@ func AdminCreateAiModel(c *gin.Context) {
 		Name: name, Kind: kind, ModelID: modelID, BaseURL: baseURL,
 		ApiKind:      models.NormalizeAiApiKind(req.ApiKind),
 		ProviderHint: models.NormalizeProviderHint(req.ProviderHint),
+		Vendor:       strings.TrimSpace(req.Vendor),
 		Note:         strings.TrimSpace(req.Note),
 	}
 	if req.PriceIn != nil {
@@ -212,6 +215,7 @@ func AdminUpdateAiModel(c *gin.Context) {
 	if s := strings.TrimSpace(req.ProviderHint); s != "" {
 		fields["provider_hint"] = models.NormalizeProviderHint(s)
 	}
+	fields["vendor"] = strings.TrimSpace(req.Vendor)
 	fields["note"] = strings.TrimSpace(req.Note)
 	if err := models.UpdateAiModelFields(uint(id), fields, req.ApiKey); err != nil {
 		utils.InternalError(c, "保存失败")

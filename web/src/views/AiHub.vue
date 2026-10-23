@@ -1,10 +1,11 @@
 <template>
-  <div class="ai-hub">
+  <div class="ai-hub" :class="{ 'ai-hub-immersive': immersive }">
     <!-- ===== 左侧栏：新建 / 智能体 / 历史会话 ===== -->
     <aside class="ai-hub-side" :class="{ 'ai-hub-side-open': mobileSideOpen }">
       <div class="ai-hub-side-head">
         <el-button type="primary" class="ai-hub-new" @click="newChat">
           <el-icon><Plus /></el-icon> 新建对话
+          <span class="ai-hub-kbd">Ctrl K</span>
         </el-button>
         <el-button class="ai-hub-side-close" text @click="mobileSideOpen = false">
           <el-icon><Close /></el-icon>
@@ -73,6 +74,18 @@
         <span v-if="activeTab === 'chat' && activeSession" class="ai-hub-current">
           {{ activeSession.agent_name || 'AI 对话' }}
         </span>
+        <el-button
+          v-if="activeTab === 'gallery'"
+          size="small"
+          text
+          type="primary"
+          @click="$router.push('/ai/gallery')"
+        >独立页 ↗</el-button>
+        <el-tooltip :content="immersive ? '退出沉浸模式（Esc）' : '沉浸模式：隐藏侧栏与顶栏'" placement="bottom">
+          <el-button size="small" text class="ai-hub-immersive-btn" @click="toggleImmersive">
+            <el-icon><FullScreen /></el-icon>
+          </el-button>
+        </el-tooltip>
       </div>
 
       <!-- 未开启引导 -->
@@ -136,10 +149,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Close, Delete, Menu, ChatDotRound, Picture, VideoCamera, EditPen, Share, Star } from '@element-plus/icons-vue';
+import { Plus, Close, Delete, Menu, ChatDotRound, Picture, VideoCamera, EditPen, Share, Star, FullScreen } from '@element-plus/icons-vue';
 import { aiHubApi, type AiHubStatus, type AiAgent, type AiChatSession } from '@/api/aiHub';
 import { appPrefix } from '@/utils/prefix';
 import AiChatPanel from '@/components/ai/AiChatPanel.vue';
@@ -206,6 +219,32 @@ async function loadSessions() {
     const res = await aiHubApi.sessions();
     if (res.data.code === 0) sessions.value = res.data.data.list || [];
   } catch { /* ignore */ }
+}
+
+// ---------- 沉浸模式（本地偏好持久化） ----------
+const IMMERSIVE_KEY = 'nvs_ai_immersive';
+const immersive = ref(localStorage.getItem(IMMERSIVE_KEY) === '1');
+
+function applyImmersive(on: boolean) {
+  document.body.classList.toggle('ai-immersive', on);
+}
+function toggleImmersive() {
+  immersive.value = !immersive.value;
+  localStorage.setItem(IMMERSIVE_KEY, immersive.value ? '1' : '0');
+  applyImmersive(immersive.value);
+}
+
+// ---------- Ctrl+K / ⌘K：新建对话；Esc：退出沉浸 ----------
+function onKeydown(e: KeyboardEvent) {
+  const meta = e.ctrlKey || e.metaKey;
+  if (meta && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault();
+    newChat();
+    return;
+  }
+  if (e.key === 'Escape' && immersive.value) {
+    toggleImmersive();
+  }
 }
 
 function newChat() {
@@ -336,6 +375,8 @@ function onRemix(payload: { kind: string; prompt: string }) {
 }
 
 onMounted(() => {
+  applyImmersive(immersive.value);
+  window.addEventListener('keydown', onKeydown);
   loadAll();
   loadSessions();
   // 深链：/ai?tab=image&prompt=xxx
@@ -343,6 +384,11 @@ onMounted(() => {
   if (tab === 'image' || tab === 'video' || tab === 'gallery' || tab === 'mind') activeTab.value = tab;
   const p = String(route.query.prompt || '');
   if (p) remixPrompt.value = p;
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeydown);
+  applyImmersive(false);
 });</script>
 
 <style scoped>
@@ -401,6 +447,16 @@ onMounted(() => {
 }
 .ai-hub-menu-btn { display: none; }
 .ai-hub-current { font-size: 0.82rem; color: var(--text-light, #666); }
+.ai-hub-kbd {
+  margin-left: 6px; padding: 0 5px; border-radius: 4px; font-size: 0.62rem;
+  background: rgba(255, 255, 255, 0.22); color: #fff; letter-spacing: 0.02em;
+}
+.ai-hub-immersive-btn { margin-left: auto; }
+/* 沉浸模式：收起侧栏、撑满视口 */
+.ai-hub.ai-hub-immersive { height: 100vh; }
+.ai-hub.ai-hub-immersive .ai-hub-side { display: none; }
+.ai-hub.ai-hub-immersive .ai-hub-menu-btn { display: none; }
+.ai-hub.ai-hub-immersive .ai-hub-topbar { padding: 8px 12px; }
 .ai-hub-blocked { flex: 1; display: flex; align-items: center; justify-content: center; }
 
 /* ===== 窄屏：侧栏抽屉化 ===== */

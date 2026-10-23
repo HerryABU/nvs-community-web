@@ -206,6 +206,7 @@ export interface AdminAiModel {
   priority: number;
   api_kind?: string;
   provider_hint?: string;
+  vendor?: string;
   note: string;
   created_at: string;
   updated_at: string;
@@ -221,6 +222,7 @@ export interface AiModelPreset {
   base_url: string;
   price_call: number;
   provider_hint: string;
+  vendor?: string;
   note: string;
 }
 
@@ -239,5 +241,6 @@ export interface AdminAiModelInput {
   priority?: number;
   api_kind?: string;
   provider_hint?: string;
+  vendor?: string;
   note?: string;
 }

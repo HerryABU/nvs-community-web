@@ -16,26 +16,28 @@ import (
 
 // AiModel AI 上游模型（OpenAI 兼容）
 type AiModel struct {
-	ID           uint      `gorm:"primaryKey" json:"id"`
-	Name         string    `gorm:"size:64;not null" json:"name"`            // 展示名（如「默认模型」）
-	Kind         string    `gorm:"size:16;not null;default:chat;index" json:"kind"` // chat/image/video
-	ModelID      string    `gorm:"size:128;not null" json:"model_id"`       // 上游模型标识（如 gpt-4o-mini）
-	BaseURL      string    `gorm:"size:256;not null" json:"base_url"`       // 上游地址（不含 /chat/completions）
-	ApiKeyEnc    string    `gorm:"type:text" json:"-"`                      // api_key 密文（EncryptField），不回传前端
-	PriceIn      int64     `gorm:"not null;default:0" json:"price_in"`      // 每 1K 输入 tokens 代币价（0=免费，chat 用）
-	PriceOut     int64     `gorm:"not null;default:0" json:"price_out"`     // 每 1K 输出 tokens 代币价（0=免费，chat 用）
-	PriceCall    int64     `gorm:"not null;default:0" json:"price_call"`    // 每次调用代币价（image/video 用，0=免费）
-	MaxTokens    int       `gorm:"not null;default:2048" json:"max_tokens"` // 默认最大输出 tokens
-	Temperature  float64   `gorm:"not null;default:0.7" json:"temperature"` // 默认温度
-	Enabled      bool      `gorm:"not null;default:true" json:"enabled"`    // 是否启用
-	Priority     int       `gorm:"not null;default:0" json:"priority"`      // 优先级（大者优先，备用池预留）
+	ID          uint    `gorm:"primaryKey" json:"id"`
+	Name        string  `gorm:"size:64;not null" json:"name"`                    // 展示名（如「默认模型」）
+	Kind        string  `gorm:"size:16;not null;default:chat;index" json:"kind"` // chat/image/video
+	ModelID     string  `gorm:"size:128;not null" json:"model_id"`               // 上游模型标识（如 gpt-4o-mini）
+	BaseURL     string  `gorm:"size:256;not null" json:"base_url"`               // 上游地址（不含 /chat/completions）
+	ApiKeyEnc   string  `gorm:"type:text" json:"-"`                              // api_key 密文（EncryptField），不回传前端
+	PriceIn     int64   `gorm:"not null;default:0" json:"price_in"`              // 每 1K 输入 tokens 代币价（0=免费，chat 用）
+	PriceOut    int64   `gorm:"not null;default:0" json:"price_out"`             // 每 1K 输出 tokens 代币价（0=免费，chat 用）
+	PriceCall   int64   `gorm:"not null;default:0" json:"price_call"`            // 每次调用代币价（image/video 用，0=免费）
+	MaxTokens   int     `gorm:"not null;default:2048" json:"max_tokens"`         // 默认最大输出 tokens
+	Temperature float64 `gorm:"not null;default:0.7" json:"temperature"`         // 默认温度
+	Enabled     bool    `gorm:"not null;default:true" json:"enabled"`            // 是否启用
+	Priority    int     `gorm:"not null;default:0" json:"priority"`              // 优先级（大者优先，备用池预留）
 	// ApiKind 上游协议族：openai（默认 /v1/images/generations 等）/ mj（Midjourney 代理）/ gemini（generateContent）
 	ApiKind string `gorm:"size:16;not null;default:''" json:"api_kind"`
 	// ProviderHint 上游归属：domestic（境内）/ overseas（境外）/ 空（未标注）→ 用于合规提示
-	ProviderHint string    `gorm:"size:16;not null;default:''" json:"provider_hint"`
-	Note         string    `gorm:"size:256;default:''" json:"note"`         // 备注
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ProviderHint string `gorm:"size:16;not null;default:''" json:"provider_hint"`
+	// Vendor 厂商（OpenAI/Anthropic/Google/DeepSeek/阿里/字节/Midjourney…）→ 前端「全部厂商」筛选
+	Vendor    string    `gorm:"size:32;not null;default:'';index" json:"vendor"`
+	Note      string    `gorm:"size:256;default:''" json:"note"` // 备注
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func (AiModel) TableName() string { return "ai_models" }

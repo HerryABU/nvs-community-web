@@ -101,6 +101,9 @@
           </el-radio-group>
           <div class="kind-hint">{{ apiKindHint(form.api_kind) }}</div>
         </el-form-item>
+        <el-form-item label="厂商">
+          <el-input v-model="form.vendor" placeholder="如 OpenAI / Anthropic / Google / 字节跳动（用于前台厂商筛选）" maxlength="32" />
+        </el-form-item>
         <el-form-item label="上游归属">
           <el-select v-model="form.provider_hint" clearable placeholder="未标注" style="width:200px">
             <el-option label="境内（domestic）" value="domestic" />
@@ -220,7 +223,7 @@ function blankForm() {
     name: '', kind: 'chat', model_id: '', base_url: '', api_key: '',
     price_in: 0, price_out: 0, price_call: 0, max_tokens: 2048,
     temperature: 0.7, priority: 0, enabled: true, note: '',
-    api_kind: 'openai', provider_hint: '',
+    api_kind: 'openai', provider_hint: '', vendor: '',
   };
 }
 const form = reactive(blankForm());
@@ -263,6 +266,7 @@ function applyPreset(key: string) {
   form.base_url = p.base_url || form.base_url;
   form.api_kind = p.api_kind;
   form.provider_hint = p.provider_hint;
+  form.vendor = p.vendor || '';
   if (p.price_call) form.price_call = p.price_call;
   form.note = p.note;
   presetNote.value = `${p.note}${p.base_url ? '' : '（该厂商无统一公共端点，请填你自己中转的地址）'}`;
@@ -292,6 +296,7 @@ function openEdit(row: AdminAiModel) {
     max_tokens: row.max_tokens,
     temperature: row.temperature, priority: row.priority, enabled: row.enabled, note: row.note,
     api_kind: row.api_kind || 'openai', provider_hint: row.provider_hint || '',
+    vendor: row.vendor || '',
   });
   dialogVisible.value = true;
 }
@@ -317,6 +322,7 @@ async function saveModel() {
       enabled: form.enabled,
       api_kind: form.api_kind,
       provider_hint: form.provider_hint,
+      vendor: form.vendor,
       note: form.note.trim(),
     };
     if (form.api_key.trim()) payload.api_key = form.api_key.trim();

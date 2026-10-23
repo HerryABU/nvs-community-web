@@ -15,6 +15,7 @@ export interface AiHubModel {
   /** 上游协议族：openai / mj / gemini */
   api_kind?: string;
   provider_hint?: string;
+  vendor?: string;
   note?: string;
 }
 
