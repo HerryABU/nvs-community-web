@@ -17,6 +17,7 @@
           style="width:180px"
           placeholder="上游模型 ID"
         />
+        <span v-if="apiKindText" class="api-kind-tag">{{ apiKindText }}</span>
       </div>
       <div class="ai-media-row">
         <span class="ai-media-label">提示词</span>
@@ -36,7 +37,7 @@
           <el-radio-button value="1792x1024">横版</el-radio-button>
         </el-radio-group>
         <span class="ai-media-label" style="margin-left:16px">张数</span>
-        <el-radio-group v-model="n" size="small">
+        <el-radio-group v-model="n" size="small" :disabled="isMJ">
           <el-radio-button :value="1">1</el-radio-button>
           <el-radio-button :value="2">2</el-radio-button>
           <el-radio-button :value="4">4</el-radio-button>
@@ -115,6 +116,15 @@ watch(
 const currentModel = computed(() =>
   props.status.image_models.find((m) => m.id === modelId.value),
 );
+// 上游协议族：mj 单次仅出 1 张（出图约 30–90s），gemini 走 generateContent
+const apiKind = computed(() => currentModel.value?.api_kind || 'openai');
+const isMJ = computed(() => apiKind.value === 'mj');
+const apiKindText = computed(() => {
+  const map: Record<string, string> = { mj: 'MJ 代理 · 单次 1 张', gemini: 'Gemini 直出' };
+  return map[apiKind.value] || '';
+});
+
+watch(isMJ, (v) => { if (v) n.value = 1; });
 
 function modelLabel(m: { name: string; price_call: number }) {
   return `${m.name}（${m.price_call || '免费'}）`;
@@ -192,6 +202,10 @@ onMounted(loadHistory);
   background: var(--el-fill-color-light, #f8f9fa);
 }
 .ai-img-wrap { display: contents; }
+.api-kind-tag {
+  font-size: 0.68rem; padding: 1px 8px; border-radius: 999px;
+  background: rgba(64, 158, 255, 0.12); color: #3b82f6; white-space: nowrap;
+}
 .muted { color: var(--text-light, #999); }
 .small { font-size: 0.75rem; }
 </style>

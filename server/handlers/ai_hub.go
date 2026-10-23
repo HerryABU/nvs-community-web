@@ -44,6 +44,8 @@ func AiHubStatus(c *gin.Context) {
 					"id": m.ID, "name": m.Name, "model_id": m.ModelID,
 					"price_in": m.PriceIn, "price_out": m.PriceOut,
 					"price_call": m.PriceCall, "max_tokens": m.MaxTokens,
+					"api_kind": models.NormalizeAiApiKind(m.ApiKind),
+					"provider_hint": m.ProviderHint, "note": m.Note,
 				})
 			}
 			return items
@@ -270,12 +272,20 @@ func AiHubChatStream(c *gin.Context) {
 	var sb string
 	var realIn, realOut int
 	var streamErr string
-	for chunk := range client.CompleteStream(aiclient.ChatRequest{
+	chatReq := aiclient.ChatRequest{
 		Model:       upModel,
 		Messages:    messages,
 		MaxTokens:   tokensOut,
 		Temperature: temp,
-	}) {
+	}
+	// 协议族分发：Claude Messages API 与 OpenAI 兼容协议的事件流不同
+	var streamCh <-chan aiclient.StreamChunk
+	if models.NormalizeAiApiKind(m.ApiKind) == models.AiApiClaude {
+		streamCh = client.CompleteStreamClaude(chatReq)
+	} else {
+		streamCh = client.CompleteStream(chatReq)
+	}
+	for chunk := range streamCh {
 		if chunk.Err != "" {
 			streamErr = chunk.Err
 			break

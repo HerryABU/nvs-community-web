@@ -114,10 +114,7 @@ func AiHubImage(c *gin.Context) {
 		return
 	}
 	client := aiclient.NewClient(m.BaseURL, apiKey, 180*time.Second)
-	urls, gerr := client.GenerateImages(aiclient.ImagesRequest{
-		Model: m.ModelID, Prompt: prompt, N: n,
-		Size: strings.TrimSpace(req.Size), ResponseFormat: "url",
-	})
+	urls, gerr := generateImagesByApiKind(client, m, prompt, strings.TrimSpace(req.Size), strings.TrimSpace(req.Style), n)
 	if gerr != nil {
 		models.FailAiMediaTask(task.ID, gerr.Error(), false)
 		utils.BadRequest(c, "绘画失败："+gerr.Error()+"（未扣款）")
@@ -417,4 +414,57 @@ func AiHubMediaHistory(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{"list": list, "total": total, "page": page})
+}
+
+// ---------- 绘画协议族分发 ----------
+
+// aspectRatioOf 把尺寸映射成 MJ 需要的 --ar 值
+func aspectRatioOf(size string) string {
+	switch strings.ToLower(strings.TrimSpace(size)) {
+	case "1024x1792", "9:16", "2:3", "portrait":
+		return "2:3"
+	case "1792x1024", "16:9", "3:2", "landscape":
+		return "3:2"
+	default:
+		return "1:1"
+	}
+}
+
+// mjBotTypeOf 模型标识里含 niji 即走 Niji 机器人
+func mjBotTypeOf(modelID string) aiclient.MJBotType {
+	if strings.Contains(strings.ToLower(modelID), "niji") {
+		return aiclient.NijiJourney
+	}
+	return aiclient.MidJourney
+}
+
+// generateImagesByApiKind 按上游协议族分发：
+//   - mj     ：Midjourney 代理（含 Niji），同步轮询出图，单次 1 张
+//   - gemini ：generateContent（nanobanana），base64 内联返回
+//   - openai ：/v1/images/generations（豆包 Seedream / gpt-image-2 / 多数中转）
+func generateImagesByApiKind(client *aiclient.Client, m *models.AiModel, prompt, size, style string, n int) ([]string, error) {
+	switch models.NormalizeAiApiKind(m.ApiKind) {
+	case models.AiApiMJ:
+		p := prompt
+		if style != "" {
+			p += " --style " + style
+		}
+		p += " --ar " + aspectRatioOf(size)
+		return client.MJImagineAndWait(aiclient.MJImagineParams{
+			Prompt:  p,
+			BotType: mjBotTypeOf(m.ModelID),
+		}, 180*time.Second)
+	case models.AiApiGemini:
+		p := prompt
+		if style != "" {
+			p += "\n\nstyle: " + style
+		}
+		imgs, _, err := client.GeminiImage(m.ModelID, p, size)
+		return imgs, err
+	default:
+		return client.GenerateImages(aiclient.ImagesRequest{
+			Model: m.ModelID, Prompt: prompt, N: n,
+			Size: size, ResponseFormat: "url",
+		})
+	}
 }

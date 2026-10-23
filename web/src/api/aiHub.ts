@@ -12,6 +12,10 @@ export interface AiHubModel {
   price_out: number;
   price_call: number;
   max_tokens: number;
+  /** 上游协议族：openai / mj / gemini */
+  api_kind?: string;
+  provider_hint?: string;
+  note?: string;
 }
 
 export interface AiHubStatus {

@@ -125,6 +125,9 @@ export const aiApi = {
   setConfig(data: { enabled: boolean }) {
     return api.put('/admin/ai/config', data);
   },
+  aiModelPresets(params: { kind?: string } = {}) {
+    return api.get<{ code: number; data: { list: AiModelPreset[] } }>('/admin/ai/presets', { params });
+  },
   listModels() {
     return api.get<{ code: number; data: { list: AdminAiModel[]; total: number } }>('/admin/ai/models');
   },
@@ -201,9 +204,24 @@ export interface AdminAiModel {
   temperature: number;
   enabled: boolean;
   priority: number;
+  api_kind?: string;
+  provider_hint?: string;
   note: string;
   created_at: string;
   updated_at: string;
+}
+
+/** AI 模型预设（绘画/视频/对话，一键填充上游参数） */
+export interface AiModelPreset {
+  key: string;
+  name: string;
+  kind: string;
+  api_kind: string;
+  model_id: string;
+  base_url: string;
+  price_call: number;
+  provider_hint: string;
+  note: string;
 }
 
 export interface AdminAiModelInput {
@@ -219,5 +237,7 @@ export interface AdminAiModelInput {
   temperature?: number;
   enabled?: boolean;
   priority?: number;
+  api_kind?: string;
+  provider_hint?: string;
   note?: string;
 }

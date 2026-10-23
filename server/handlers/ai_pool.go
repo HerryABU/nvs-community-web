@@ -30,6 +30,8 @@ func aiModelVO(m *models.AiModel) gin.H {
 		"temperature": m.Temperature,
 		"enabled":     m.Enabled,
 		"priority":    m.Priority,
+		"api_kind":    models.NormalizeAiApiKind(m.ApiKind),
+		"provider_hint": m.ProviderHint,
 		"note":        m.Note,
 		"created_at":  m.CreatedAt,
 		"updated_at":  m.UpdatedAt,
@@ -98,6 +100,8 @@ type aiModelInput struct {
 	Temperature *float64 `json:"temperature"`
 	Enabled     *bool   `json:"enabled"`
 	Priority    *int    `json:"priority"`
+	ApiKind     string  `json:"api_kind"`
+	ProviderHint string `json:"provider_hint"`
 	Note        string  `json:"note"`
 }
 
@@ -121,7 +125,9 @@ func AdminCreateAiModel(c *gin.Context) {
 	kind := models.NormalizeAiKind(strings.TrimSpace(req.Kind))
 	m := &models.AiModel{
 		Name: name, Kind: kind, ModelID: modelID, BaseURL: baseURL,
-		Note: strings.TrimSpace(req.Note),
+		ApiKind:      models.NormalizeAiApiKind(req.ApiKind),
+		ProviderHint: models.NormalizeProviderHint(req.ProviderHint),
+		Note:         strings.TrimSpace(req.Note),
 	}
 	if req.PriceIn != nil {
 		m.PriceIn = *req.PriceIn
@@ -200,6 +206,12 @@ func AdminUpdateAiModel(c *gin.Context) {
 	if req.Priority != nil {
 		fields["priority"] = *req.Priority
 	}
+	if s := strings.TrimSpace(req.ApiKind); s != "" {
+		fields["api_kind"] = models.NormalizeAiApiKind(s)
+	}
+	if s := strings.TrimSpace(req.ProviderHint); s != "" {
+		fields["provider_hint"] = models.NormalizeProviderHint(s)
+	}
 	fields["note"] = strings.TrimSpace(req.Note)
 	if err := models.UpdateAiModelFields(uint(id), fields, req.ApiKey); err != nil {
 		utils.InternalError(c, "保存失败")
@@ -219,4 +231,25 @@ func AdminDeleteAiModel(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{"message": "已删除"})
+}
+
+// AdminAiModelPresets GET /api/admin/ai/presets — 模型预设（绘画/视频/对话）
+// 站长点「预设」即可填充 base_url / model_id / api_kind / 计费默认值，只需补自己的密钥。
+func AdminAiModelPresets(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	kind := strings.TrimSpace(c.Query("kind"))
+	all := models.ListAiModelPresets()
+	if kind == "" {
+		utils.Success(c, gin.H{"list": all})
+		return
+	}
+	out := make([]models.AiModelPreset, 0, len(all))
+	for _, p := range all {
+		if p.Kind == models.NormalizeAiKind(kind) {
+			out = append(out, p)
+		}
+	}
+	utils.Success(c, gin.H{"list": out})
 }

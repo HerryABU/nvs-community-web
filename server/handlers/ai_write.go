@@ -281,7 +281,11 @@ func AiComplete(c *gin.Context) {
 		temp = *req.Temperature
 	}
 	client := aiclient.NewClient(m.BaseURL, apiKey, 120*time.Second)
-	content, realIn, realOut, cerr := client.Complete(aiclient.ChatRequest{
+	completeFn := client.Complete
+	if models.NormalizeAiApiKind(m.ApiKind) == models.AiApiClaude {
+		completeFn = client.CompleteClaude // Anthropic Messages API
+	}
+	content, realIn, realOut, cerr := completeFn(aiclient.ChatRequest{
 		Model: m.ModelID,
 		Messages: []aiclient.Message{
 			{Role: "system", Content: systemPrefix + aiSystemPrompt(action)},

@@ -86,6 +86,28 @@
         <el-form-item label="上游地址" required>
           <el-input v-model="form.base_url" placeholder="如 https://api.openai.com/v1（不含 /chat/completions）" />
         </el-form-item>
+        <el-form-item label="快速预设">
+          <el-select v-model="presetKey" clearable filterable placeholder="选择厂商预设，一键填充上游参数" style="width:100%" @change="applyPreset">
+            <el-option v-for="p in presets" :key="p.key" :label="`${p.name} · ${kindLabel(p.kind)}`" :value="p.key" />
+          </el-select>
+          <div v-if="presetNote" class="kind-hint">{{ presetNote }}</div>
+        </el-form-item>
+        <el-form-item label="上游协议">
+          <el-radio-group v-model="form.api_kind">
+            <el-radio-button value="openai">OpenAI 兼容</el-radio-button>
+            <el-radio-button value="claude">Claude</el-radio-button>
+            <el-radio-button v-if="form.kind !== 'chat'" value="mj">MJ 代理</el-radio-button>
+            <el-radio-button v-if="form.kind !== 'chat'" value="gemini">Gemini</el-radio-button>
+          </el-radio-group>
+          <div class="kind-hint">{{ apiKindHint(form.api_kind) }}</div>
+        </el-form-item>
+        <el-form-item label="上游归属">
+          <el-select v-model="form.provider_hint" clearable placeholder="未标注" style="width:200px">
+            <el-option label="境内（domestic）" value="domestic" />
+            <el-option label="境外（overseas）" value="overseas" />
+          </el-select>
+          <span class="muted small">用于合规提示：境外端点会提示数据出境风险</span>
+        </el-form-item>
         <el-form-item label="API Key">
           <el-input
             v-model="form.api_key"
@@ -141,7 +163,7 @@ import { MagicStick, Plus } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import SectionHeader from '@/components/common/SectionHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
-import { aiApi, type AdminAiModel } from '@/api/ai';
+import { aiApi, type AdminAiModel, type AiModelPreset } from '@/api/ai';
 
 // ---------- 总开关 ----------
 const config = reactive<{ enabled: boolean }>({ enabled: false });
@@ -198,6 +220,7 @@ function blankForm() {
     name: '', kind: 'chat', model_id: '', base_url: '', api_key: '',
     price_in: 0, price_out: 0, price_call: 0, max_tokens: 2048,
     temperature: 0.7, priority: 0, enabled: true, note: '',
+    api_kind: 'openai', provider_hint: '',
   };
 }
 const form = reactive(blankForm());
@@ -219,6 +242,42 @@ function kindHint(kind: string) {
   return map[kind] || '';
 }
 
+// ---------- 厂商预设 ----------
+const presets = ref<AiModelPreset[]>([]);
+const presetKey = ref('');
+const presetNote = ref('');
+
+async function loadPresets() {
+  try {
+    const res = await aiApi.aiModelPresets();
+    if (res.data.code === 0) presets.value = res.data.data.list || [];
+  } catch { /* ignore */ }
+}
+
+function applyPreset(key: string) {
+  const p = presets.value.find((x) => x.key === key);
+  if (!p) { presetNote.value = ''; return; }
+  form.kind = p.kind;
+  form.name = p.name;
+  form.model_id = p.model_id;
+  form.base_url = p.base_url || form.base_url;
+  form.api_kind = p.api_kind;
+  form.provider_hint = p.provider_hint;
+  if (p.price_call) form.price_call = p.price_call;
+  form.note = p.note;
+  presetNote.value = `${p.note}${p.base_url ? '' : '（该厂商无统一公共端点，请填你自己中转的地址）'}`;
+}
+
+function apiKindHint(k: string) {
+  const map: Record<string, string> = {
+    openai: '标准 /v1/images/generations（豆包 Seedream、gpt-image-2、多数中转）',
+    mj: 'Midjourney 代理协议：/mj/submit/imagine + 任务轮询；模型标识含 niji 即走 Niji 机器人',
+    gemini: 'Google generateContent（responseModalities=IMAGE），如 gemini-2.5-flash-image（Nano Banana）',
+    claude: 'Anthropic Messages API：POST /v1/messages，x-api-key + anthropic-version；system 走顶层字段，响应为 content block 数组',
+  };
+  return map[k] || '';
+}
+
 function openCreate() {
   editing.value = null;
   Object.assign(form, blankForm());
@@ -232,6 +291,7 @@ function openEdit(row: AdminAiModel) {
     price_in: row.price_in, price_out: row.price_out, price_call: row.price_call || 0,
     max_tokens: row.max_tokens,
     temperature: row.temperature, priority: row.priority, enabled: row.enabled, note: row.note,
+    api_kind: row.api_kind || 'openai', provider_hint: row.provider_hint || '',
   });
   dialogVisible.value = true;
 }
@@ -255,6 +315,8 @@ async function saveModel() {
       temperature: form.temperature,
       priority: form.priority,
       enabled: form.enabled,
+      api_kind: form.api_kind,
+      provider_hint: form.provider_hint,
       note: form.note.trim(),
     };
     if (form.api_key.trim()) payload.api_key = form.api_key.trim();
@@ -287,7 +349,7 @@ async function removeModel(row: AdminAiModel) {
   }
 }
 
-onMounted(() => { loadConfig(); loadModels(); });
+onMounted(() => { loadConfig(); loadModels(); loadPresets(); });
 </script>
 
 <style scoped>

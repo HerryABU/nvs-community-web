@@ -29,6 +29,10 @@ type AiModel struct {
 	Temperature  float64   `gorm:"not null;default:0.7" json:"temperature"` // 默认温度
 	Enabled      bool      `gorm:"not null;default:true" json:"enabled"`    // 是否启用
 	Priority     int       `gorm:"not null;default:0" json:"priority"`      // 优先级（大者优先，备用池预留）
+	// ApiKind 上游协议族：openai（默认 /v1/images/generations 等）/ mj（Midjourney 代理）/ gemini（generateContent）
+	ApiKind string `gorm:"size:16;not null;default:''" json:"api_kind"`
+	// ProviderHint 上游归属：domestic（境内）/ overseas（境外）/ 空（未标注）→ 用于合规提示
+	ProviderHint string    `gorm:"size:16;not null;default:''" json:"provider_hint"`
 	Note         string    `gorm:"size:256;default:''" json:"note"`         // 备注
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
@@ -43,6 +47,41 @@ const (
 	AiKindImage = "image"
 	AiKindVideo = "video"
 )
+
+// ---------- 上游协议族（api_kind） ----------
+// 同一 kind 下不同厂商协议差异大：绘画需按协议族分发到不同适配器。
+const (
+	AiApiOpenAI = "openai" // OpenAI 兼容：/v1/images/generations、/v1/video/generations（豆包/gpt-image/多数中转）
+	AiApiMJ     = "mj"     // Midjourney 代理协议：/mj/submit/imagine + /mj/task/{id}/fetch（含 Niji）
+	AiApiGemini = "gemini" // Google generateContent（nanobanana / gemini-2.5-flash-image）
+	AiApiClaude = "claude" // Anthropic Messages API（/v1/messages + x-api-key + anthropic-version）
+)
+
+// NormalizeAiApiKind 归一化协议族（空/未知 → openai）
+func NormalizeAiApiKind(k string) string {
+	switch strings.ToLower(strings.TrimSpace(k)) {
+	case AiApiMJ:
+		return AiApiMJ
+	case AiApiGemini:
+		return AiApiGemini
+	case AiApiClaude:
+		return AiApiClaude
+	default:
+		return AiApiOpenAI
+	}
+}
+
+// NormalizeProviderHint 归一化归属标注
+func NormalizeProviderHint(h string) string {
+	switch strings.ToLower(strings.TrimSpace(h)) {
+	case "domestic", "境内":
+		return "domestic"
+	case "overseas", "境外":
+		return "overseas"
+	default:
+		return ""
+	}
+}
 
 // NormalizeAiKind 归一化类型（空串按 chat，非法按 chat）
 func NormalizeAiKind(kind string) string {

@@ -695,6 +695,7 @@ func main() {
 		admin.GET("/ai/config", handlers.AdminGetAiConfig)
 		admin.PUT("/ai/config", handlers.AdminSetAiConfig)
 		admin.GET("/ai/models", handlers.AdminListAiModels)
+		admin.GET("/ai/presets", handlers.AdminAiModelPresets)
 		admin.POST("/ai/models", handlers.AdminCreateAiModel)
 		admin.PUT("/ai/models/:id", handlers.AdminUpdateAiModel)
 		admin.DELETE("/ai/models/:id", handlers.AdminDeleteAiModel)
