@@ -473,6 +473,35 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.7.0 经济系统收尾：免费 AI 额度 + 用户自备密钥 + 长篇续写上下文 + @ai 评论机器人 + 在线支付通道（2026-10-23）
+
+> 1. **免费 AI 额度（§5.3，用尽才扣代币）**：平台默认 `calls_per_day=5`/`max_tokens_perday=0 不限`，按人覆盖（0=禁止/-1=不限）；`UserAiFreeUsage` 按日计数，`AiCallLog.FreeQuota` 列命中即 `cost=0` 不碰账本。编辑区补全、工作台 SSE、绘画、视频四条计费路径统一为「免费优先 → 代币预检」分支；管理端 `/admin/ai-free-quota` 三态单选 + resolveUser 按人覆盖。
+> 2. **用户自备 API Key（§5.5 BYOK，不扣平台代币）**：`UserAiKey` AES-256-GCM 加密存储、**只写不读**（添加后不可查看）、上限 5、首个自动默认；调用时以伪模型 `{ID:0}` 零费结算，绘画/视频任务按 `ModelID==0` 解析用户上游。钱包页「我的上游密钥」卡 + 各 AI 面板「使用我的密钥」勾选项（模型可临时改）。
+> 3. **长篇 AI 续写上下文（§13.5）**：两级记忆 `AiNovelMemory`（novel 级大纲 + 按 chapter 摘要，唯一索引 upsert）；`BuildNovelContext` 预算组装——尾部窗口 1200 runes 固定保留 → 最近 5 章摘要新→旧填充 → 有余量附大纲（默认 3000 tokens）；上下文 tokens 计入 `tokensIn` 保证预检/计费准确。编辑区「长篇上下文」折叠面板（开关/预算/存摘要/删摘要）。
+> 4. **@ai 评论区机器人（§5.6）**：系统用户 `ai_assistant`（随机密码哈希等价禁登录），评论中 `@ai`/`@智能体名`（词边界防 `@aiko` 误触）异步召唤回复——goroutine + recover 故障隔离、每日限流（默认 3 次/人）、同楼 60s 去重、按楼层模型挂靠（ParentID/RootID 继承）；费用由召唤人承担（免费额度→代币预检），回复带「AI」徽标与落款。管理端 `/admin/ai-bot`。
+> 5. **在线支付通道（§7.4 微信/支付宝聚合）**：`RechargeOrder` 状态机（pending/paid/closed）+ 档位 KV（固定面额+赠送，拒绝非档位金额）；`MarkOrderPaid` 条件更新 + **同事务入账**，渠道重推/管理端补单均幂等；`server/payment/` 提供者抽象——MockProvider（站内模拟收银台，演示不扣款）与 AggregateProvider（易支付/码支付类 MD5 签名下单验签，金额字符串解析无浮点）。公开回调 `/api/payment/notify/:channel` 验签准入（**验签 + 金额核对 + 幂等**三道闸门）；钱包页档位充值浮层（倒计时 + 2.5s 轮询到账）；管理端 `/admin/payment` 统计卡 + 网关三件套（密钥只写不读）+ 兑换比例/限额/TTL + 档位编辑器 + 订单筛选/补单。
+> 6. **版本号 3.6.0 → 3.7.0**（语义化顺延）：`server/version/version.go` / `web/package.json` / `web/src/stores/theme.ts`（window.NVS.version 桥）同步更新；`go test ./...` 全绿（新增 17 组支付/额度/密钥/记忆/机器人单测）、前端构建通过、`nvs-server.exe` 已重建（`orders/mark-paid`、`payment/mock/confirm`、`pay/mock/` 等串已验证嵌入）。
+
+| 类别 | 文件 | 说明 |
+|---|---|---|
+| 免费额度 | `server/models/ai_free_quota.go` | 配置 KV + 按人覆盖（SQL upsert 保零值）+ 每日用量 + Check/Record/Summarize |
+| 免费额度 | `server/models/ai_billing.go` / `ai_media.go` | AiCallLog.FreeQuota 列；结算命中 cost=0；MarkAiMediaFree |
+| 免费额度 | `server/handlers/ai_free_quota.go` | 用户状态 + 管理端配置/按人覆盖增删查 |
+| BYOK | `server/models/user_ai_key.go` | AES-256-GCM 加密、CRUD/默认/解析（删默认自动提升） |
+| BYOK | `server/handlers/user_ai_key.go` + `ai_write.go` / `ai_hub.go` / `ai_hub_media.go` | 我的密钥 CRUD；补全/SSE/绘画/视频 BYOK 零费分支 |
+| 长篇上下文 | `server/models/ai_memory.go` | 大纲/章节摘要 upsert + ListRecentChapterSummaries + BuildNovelContext 预算组装 |
+| 长篇上下文 | `server/handlers/ai_memory.go` + `ai_write.go` | 记忆 CRUD/上下文预览；system prompt 注入 + tokensIn 计入 |
+| @ai 机器人 | `server/models/ai_bot.go` | 机器人用户/限流/召唤解析（词边界防误触） |
+| @ai 机器人 | `server/handlers/ai_bot.go` + `comment.go` | 异步触发（recover/去重/楼层挂靠/通知广播）；CreateComment 挂点 |
+| 在线支付 | `server/models/payment.go` | 订单状态机、配置/档位 KV、MarkOrderPaid 同事务幂等到账、关单/统计 |
+| 在线支付 | `server/payment/{provider,mock,aggregate}.go` | Provider 接口；mock 站内收银台；聚合网关 MD5 签名下单/验签 |
+| 在线支付 | `server/handlers/{payment,payment_notify,admin_payment}.go` | 下单/轮询/订单/mock 确认；公开回调验签准入；管理端配置/档位/订单/补单 |
+| 路由/迁移 | `server/main.go` / `server/models/db.go` | payment 三组路由 + pay 根段 SPA 放行；5 张新表注册 |
+| 前端 | `web/src/api/{ai,aiHub,payment}.ts` | 免费额度/我的密钥/记忆/机器人/支付全量 API + 类型 |
+| 前端 | `web/src/views/Wallet.vue` / `PayMock.vue` / `PayResult.vue` | 档位充值浮层（倒计时轮询）；模拟收银台；网关跳转结果页 |
+| 前端 | `web/src/views/admin/{AdminAiFreeQuota,AdminAiBot,AdminPayment}.vue` | 三个管理端面板（默认关闭、开启即生效） |
+| 前端 | `web/src/components/ai/*` + `editor/AiAssistPanel.vue` + `FloorComments.vue` | 「我的密钥」勾选、免费标记；长篇上下文面板；@ai 召唤提示与 AI 徽标 |
+
 ### v3.6.0 实名五提供商 + 配置 .env 自动同步 + Web 项目双维度额度 + 登录方式/实名独立页（2026-10-17）
 
 > 1. **实名核验提供商抽象层（`server/realname/`）**：Provider 接口 + 注册表 + `Verify(ctx,cfg,name,idCard)` 统一路由，五通道落地——`national`（通用 JSON 代理，宽松解析 `{"code":0}`/`{"status":"match"}`/`{"result":true}`/嵌套 `data` 等形态）、`tencent`（TC3-HMAC-SHA256，`faceid.tencentcloudapi.com` IdCardVerification，结果码 0 一致 / -1 不一致 / 异常码抛错不收费）、`aliyun`（云市场 AppCode）、`huawei`（AK/SK + SDK-HMAC-SHA256）、`netease`（MD5 签名网关）。敏感凭据后台脱敏回显（`has_secret` 标记，secret 留空沿用旧值），「测试连接」用非法身份证探测链路（厂商对非法输入不收费）。
