@@ -17,6 +17,7 @@
       <div class="ce-toolbar-right">
         <span v-if="lastSaved" class="ce-saved-time">已保存 {{ lastSaved }}</span>
         <PublishQuotaHint />
+        <el-button :icon="MagicStick" @click="showAiPanel = true">AI 助手</el-button>
         <el-button :icon="Link" @click="showRefPicker = true">插入站内链接</el-button>
         <el-button type="primary" :loading="saving" @click="saveChapter">保存章节</el-button>
       </div>
@@ -24,6 +25,14 @@
 
     <!-- 站内内容引用选择器（16.2：章节正文引用其他小说/博客/论坛帖，相对路径可跳转） -->
     <ContentRefPicker v-model:visible="showRefPicker" @confirm="insertRefLink" />
+
+    <!-- AI 助手（§13.3：续写/润色/扩写/摘要，代币按量计费） -->
+    <AiAssistPanel
+      v-model:visible="showAiPanel"
+      :context-text="aiContextText"
+      @insert="aiInsert"
+      @replace="aiReplace"
+    />
 
     <div class="ce-body">
       <!-- 左侧章节列表 -->
@@ -95,9 +104,10 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router';
 import { novelApi, chapterApi, type Chapter } from '@/api/novel';
 import { ElMessage } from 'element-plus';
-import { ArrowLeft, Plus, Delete, Link } from '@element-plus/icons-vue';
+import { ArrowLeft, Plus, Delete, Link, MagicStick } from '@element-plus/icons-vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
+import AiAssistPanel from '@/components/editor/AiAssistPanel.vue';
 // engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
 import { renderMarkdown, editorEngineConfig } from '@/markdown/renderer';
 import { htmlToMarkdown } from '@/utils/turndown';
@@ -123,6 +133,49 @@ let cherryInstance: any = null;
 
 // ===== 站内内容引用（16.2）：正文引用其他小说/博客/论坛帖，相对路径可跳转 =====
 const showRefPicker = ref(false);
+
+// ===== AI 助手（§13.3）：续写/润色/扩写/摘要，代币按量计费 =====
+const showAiPanel = ref(false);
+
+// AI 面板上下文文本：MD 模式直接取源文；富文本模式去标签取纯文本
+const aiContextText = computed(() => {
+  if (editorMode.value === 'richtext') {
+    return richTextContent.value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+  return chapterContent.value;
+});
+
+// AI 结果插入编辑器：MD 模式优先插到光标处，失败回退追加；富文本模式追加
+function aiInsert(text: string) {
+  if (editorMode.value === 'md' && cherryInstance) {
+    const cm = cherryInstance.editor?.codemirror || cherryInstance.codemirror;
+    if (cm && cm.replaceSelection) {
+      cm.replaceSelection((cm.getValue() ? '\n\n' : '') + text);
+      ElMessage.success('已插入 AI 结果');
+      return;
+    }
+    if (cherryInstance.insert) {
+      cherryInstance.insert('\n\n' + text);
+      ElMessage.success('已插入 AI 结果');
+      return;
+    }
+    chapterContent.value = (chapterContent.value ? chapterContent.value + '\n\n' : '') + text;
+  } else {
+    richTextContent.value = (richTextContent.value ? richTextContent.value + '\n\n' : '') + text;
+  }
+  ElMessage.success('已插入 AI 结果');
+}
+
+// AI 结果替换整个正文
+function aiReplace(text: string) {
+  if (editorMode.value === 'md') {
+    chapterContent.value = text;
+    if (cherryInstance) cherryInstance.setValue(text);
+  } else {
+    richTextContent.value = renderMarkdown(text);
+  }
+  ElMessage.success('已替换正文');
+}
 
 // 在编辑器光标处插入 [标题](相对链接)；Markdown 模式走 Cherry 内 CodeMirror 光标处，
 // 富文本模式追加到 v-model 内容（RichTextEditor 内部按 md 渲染链接）
