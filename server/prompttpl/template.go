@@ -29,8 +29,10 @@ import (
 
 const (
 	SceneNovelChapter = "novel_chapter"
-	SceneBlog         = "blog"
-	SceneChat         = "chat"
+	// SceneNovelScript 话本气泡体专用模板（「角色：台词」形态的续写/台词/场景）
+	SceneNovelScript = "novel_script"
+	SceneBlog        = "blog"
+	SceneChat        = "chat"
 
 	KindChat  = "chat"
 	KindImage = "image"
@@ -101,6 +103,8 @@ func NormalizeScene(s string) string {
 		return SceneBlog
 	case SceneChat:
 		return SceneChat
+	case SceneNovelScript:
+		return SceneNovelScript
 	default:
 		return SceneNovelChapter
 	}
@@ -544,6 +548,49 @@ var builtinSeeds = []Template{
 		Vars: []TemplateVar{
 			{Name: "语体", Label: "语体", Default: "半文半白", MaxLen: 30},
 			{Name: "原文", Label: "原文", Required: true, MaxLen: 8000},
+		},
+	},
+	{
+		Key: "tl-script-continue", Title: "话本续写（气泡对话）", Scene: SceneNovelScript, Category: "话本", Kind: KindChat,
+		Note:    "按「角色：台词」续写，只输出可直接粘贴的话本行",
+		Content: "你是话本小说作者。请续写下面这段对话，约{{回合数}}个回合。\n\n硬性格式（必须遵守）：\n1. 每行一条，严格写成「角色名：台词」，冒号用中文全角「：」；\n2. 需要环境/动作时，整行写【场景或动作】，不要混进台词；\n3. 需要补充说明时整行写旁白，不要写成某人的台词；\n4. 同一角色连续说话就连续写多行，不要空行断开；\n5. 只输出话本正文，不要标题、不要解释、不要编号。\n\n内容要求：\n- 每人每句推进一个信息或一个意图，禁止「嗯」「哦」「好吧」这类无信息量的水词；\n- 保持角色口吻一致（用词层级、句长、口头禅见【角色信息】）；\n- 冲突或悬念要往前走一步，不要原地打转。\n\n【作品】{{作品名}}\n【角色信息】{{角色信息}}\n【前文】\n{{前文}}\n\n【本次要求】{{要求}}",
+		Vars: []TemplateVar{
+			{Name: "作品名", Label: "作品名", MaxLen: 60},
+			{Name: "角色信息", Label: "角色设定", MaxLen: 2000},
+			{Name: "前文", Label: "前文对话", Required: true, MaxLen: 8000},
+			{Name: "回合数", Label: "续写回合", Default: "6", MaxLen: 10},
+			{Name: "要求", Label: "本次要求", MaxLen: 500},
+		},
+	},
+	{
+		Key: "tl-script-voice", Title: "台词口吻校准", Scene: SceneNovelScript, Category: "话本", Kind: KindChat,
+		Note:    "让每个角色的台词带上自己的说话方式，不改情节",
+		Content: "请校准下面话本里{{角色名}}的台词：\n\n1. 不改情节、不改信息量，只改说话方式；\n2. 用词层级、句长、口头禅、称谓按【口吻】执行；\n3. 同一角色的不同情绪（{{情绪}}）要能从用词看出来，而不是靠「他生气地说」；\n4. 输出格式不变：仍是「角色名：台词」，只输出被改动的角色相关行（含上下文 2 行便于定位）。\n\n【口吻】见【角色信息】中该角色设定；未写明处按{{默认口吻}}处理。\n\n【角色信息】{{角色信息}}\n【话本】\n{{原文}}",
+		Vars: []TemplateVar{
+			{Name: "角色名", Label: "目标角色", Required: true, MaxLen: 40},
+			{Name: "情绪", Label: "目标情绪", Default: "克制但带压迫感", MaxLen: 40},
+			{Name: "默认口吻", Label: "默认口吻", Default: "短句、口语、少形容词", MaxLen: 60},
+			{Name: "角色信息", Label: "角色设定", MaxLen: 2000},
+			{Name: "原文", Label: "话本原文", Required: true, MaxLen: 8000},
+		},
+	},
+	{
+		Key: "tl-script-stage", Title: "场景提示生成", Scene: SceneNovelScript, Category: "话本", Kind: KindChat,
+		Note:    "生成可直接插入的【场景/动作】行，不写台词",
+		Content: "请为下面这段对话补写场景与动作提示，{{条数}}条以内。\n\n格式：每条整行写成【……】，只写看得见的动作/环境/物件变化，不写心理活动，不写评价。\n位置：直接说明该插在哪一句台词之前（用「插在：某角色：某句台词 之前」标注）。\n\n要求：\n- 用具体物件与动作推进（门、茶杯、影子、雨声），不要「气氛凝重」这类抽象词；\n- 与【设定】的世界规则自洽；\n- 只输出提示行与插入位置，不要改写台词。\n\n【作品】{{作品名}}\n【设定】{{设定}}\n【话本】\n{{原文}}",
+		Vars: []TemplateVar{
+			{Name: "作品名", Label: "作品名", MaxLen: 60},
+			{Name: "设定", Label: "世界观约束", MaxLen: 2000},
+			{Name: "原文", Label: "话本原文", Required: true, MaxLen: 8000},
+			{Name: "条数", Label: "提示条数", Default: "3", MaxLen: 10},
+		},
+	},
+	{
+		Key: "tl-script-water-check", Title: "对话去水与信息量检查", Scene: SceneNovelScript, Category: "话本", Kind: KindChat,
+		Note:    "挑出无信息量的台词并给出替换建议，不改变剧情走向",
+		Content: "请检查下面话本的信息密度：\n\n1. 逐行标出「无信息量」的台词（应酬、重复、纯情绪水词），说明为什么水；\n2. 对每条给出一句替换台词（写成「角色名：台词」），或建议直接删除；\n3. 标出对话里被反复解释、读者已知的信息（说明性对话）；\n4. 输出三部分：去水清单 / 替换后的话本片段 / 一句总体判断。\n不要新增情节，不要改动机。\n\n【话本】\n{{原文}}",
+		Vars: []TemplateVar{
+			{Name: "原文", Label: "话本原文", Required: true, MaxLen: 10000},
 		},
 	},
 	{
