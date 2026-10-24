@@ -473,6 +473,26 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.14.0 蜜罐等级 + 日志记录字段勾选（2026-10-24）
+
+**蜜罐（`server/honeypot`，`docs/honeypot-design.md` §5.1）**
+- 站长/管理员控制等级：`off` / `low`（仅 `.env`）/ `medium`（+`.git`、后台入口、路径清单）/ `high`（全量 + 延迟 + 命中即封）
+- 诱饵：`/.env`（每实例唯一金丝雀）、`/.git/config`、`/admin.php`、`/phpinfo.php`、`/actuator/env`、
+  `/wp-login.php`、`/backup/`、`/robots-disallow.txt`
+- 诱饵路径无条件注册，命中后按等级判定；**等级不覆盖时与普通 404 无差别**（不暴露蜜罐存在），等级热更新
+- 探路记录：常见扫描路径与 NoRoute 可疑 404（`.php/.env/.git/admin/backup/actuator/swagger`）静默记 `decoy_probe`
+- 会话聚合 + 事件时间轴 + 取证导出（导出动作留痕）+ 按留存天数清理 + 封禁/解封
+
+**日志记录字段（管理员勾选，同时作用于访问日志）**
+- 可勾选：User-Agent / Referer / X-Forwarded-For / Query / 请求头（白名单）/ Body 摘要
+- `Cookie`、`Authorization`、`X-API-Key` **强制永不记录**；Body 含 password/token/secret 字样整段省略
+- 关掉的字段**不落库**（不只是脱敏）：`middleware/access_log.go` 按策略裁剪后再入队
+- 与「日志脱敏」分工：脱敏管「记了之后遮」，本策略管「要不要记」
+
+**后台**：`/admin/honeypot`（概览卡片 / 等级 / 自动封禁与延迟 / 留存 / 六个记录字段复选框 / 会话与事件详情）
+
+**修复**：未建站（DB 未初始化）访问诱饵会 nil panic → 现按 off 静默失效，返回普通 404
+
 ### v3.13.0 OC 模式群组：角色卡 / 世界书 / 多智能体角色扮演 / 一键发布话本（2026-10-24）
 
 **定位**：OC（Original Character）是群组的**玩法层**，群组该有的治理（额度、先审后发、举报、取证、软删除留证）全部照旧适用。
