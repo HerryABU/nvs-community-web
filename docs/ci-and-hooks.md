@@ -26,7 +26,7 @@
 | `go build` / `go vet` / `go test` | `pre-push` | 分钟级，但推送频率低 |
 | 前端构建、embed 拼装、单 exe 真启动、产物密钥扫描 | CI | 需要干净环境；本地构建会覆盖正在用的 `dist/` |
 
-## 2. pre-commit 的六条规则与理由
+## 2. pre-commit 的七条规则与理由
 
 ### 2.1 禁提交路径
 
@@ -71,6 +71,23 @@ hook **不自动改文件**——静默改代码会让人以为是 IDE 干的，
 `sk-` / `sk-ant-` / `AKIA` / `ghp_` / `xox[baprs]-` / `-----BEGIN ... PRIVATE KEY-----`。
 跳过 `_test.go` 与 `testdata/`（用例里的 `sk-aaaa...` 是假密钥，否则天天误报）。
 文档（`.md`）也跳过——示例常需要写 `sk-xxx` 这种占位。
+
+### 2.7 脚本类文件必须是 LF
+
+`.githooks/*`、`*.sh`、`*.yml`、`Makefile` 在索引里若是 CRLF：
+
+- Linux / macOS 上 hook 直接 `bad interpreter: /usr/bin/env bash^M` ——**完全静默地不执行**，
+  是这类问题里最坏的一种失败形态（看起来"装了但没生效"）
+- YAML 带 CR 可能解析异常；`Makefile` 带 CR 会报 `missing separator`
+
+实现用 `git ls-files --eol` 读**索引状态**（而不是工作区），命中 `i/crlf` 即拒绝。
+
+> **写这条检查时踩的坑**：验证阶段用 `grep -c $'\r'` 统计，在 Git Bash 里 `$'\r'` 被吞成空模式，
+> `grep -c ''` 于是匹配了**所有行**，报出"158 行全是 CRLF"——而字节级检查实际是 0。
+> 结论：**检测行尾一律不要用 grep**，用 `git ls-files --eol`、`file`，或直接按字节判断。
+
+正常情况下这条不会触发：`.gitattributes` 声明了 `eol=lf` 后，`git add` 会自动把 CRLF 归一化。
+它的价值是在**属性被误删/误改**或有人用 `-c core.autocrlf=false` 提交时兜底。
 
 ## 3. pre-push 为什么默认不构建前端
 

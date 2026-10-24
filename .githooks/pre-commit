@@ -136,7 +136,27 @@ if [ -n "$secret_hits" ]; then
   hint "确属误报（如文档示例）可 SKIP_HOOKS=1；真密钥请改为环境变量并轮换"
 fi
 
-# ─────────────────────────── 7. debugger 残留 ───────────────────────────
+# ─────────────────────────── 7. 脚本类文件必须是 LF ───────────────────────────
+# CRLF 的 hook 在 Linux/macOS 上直接 "bad interpreter: /usr/bin/env bash^M"（完全不执行）；
+# YAML 带 CR 也可能解析异常。用 git ls-files --eol 读索引状态，而不是 grep：
+# `grep -c $'\r'` 在 Git Bash 里 $'\r' 可能被吞成空模式，反而"每行都匹配"。
+lf_files=()
+for f in "${files[@]}"; do
+  case "$f" in
+    .githooks/*|*.sh|*.bash|*.yml|*.yaml|Makefile) [ -f "$f" ] && lf_files+=("$f") ;;
+  esac
+done
+if [ "${#lf_files[@]}" -gt 0 ]; then
+  crlf=$(git ls-files --eol "${lf_files[@]}" 2>/dev/null | awk -F'\t' '$1 ~ /i\/crlf/ {print $NF}')
+  if [ -n "$crlf" ]; then
+    bad "以下脚本/配置在索引里是 CRLF（Linux/macOS 上 hook 会直接不可执行）："
+    printf '%s\n' "$crlf" | while IFS= read -r l; do hint "$l"; done
+    hint "修复：sed -i 's/\r$//' <文件> && git add <文件>"
+    hint "仓库 .gitattributes 已为这些类型声明 eol=lf，正常不应出现"
+  fi
+fi
+
+# ─────────────────────────── 8. debugger 残留 ───────────────────────────
 dbg=$(git diff --cached -U0 -- 'web/src/*.ts' 'web/src/*.vue' \
   | grep -E '^\+' | grep -vE '^\+\+\+' | grep -vE '^\+[[:space:]]*(//|/\*)' \
   | grep -E '(^|[^A-Za-z0-9_])debugger([^A-Za-z0-9_]|$)' | head -3)

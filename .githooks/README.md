@@ -20,7 +20,7 @@ make hooks
 
 | hook | 时机 | 检查什么 | 耗时 |
 |---|---|---|---|
-| `pre-commit` | 每次 commit | 禁提交路径（`.env` / `data/` / `dist/` / `*.exe` / 证书）、>2MB 大文件、冲突标记、`gofmt`、**前端硬编码 `/go-nvs`**、**疑似明文密钥**、前端 `debugger` | < 2s |
+| `pre-commit` | 每次 commit | 禁提交路径（`.env` / `data/` / `dist/` / `*.exe` / 证书）、>2MB 大文件、冲突标记、`gofmt`、**前端硬编码 `/go-nvs`**、**疑似明文密钥**、**脚本类文件必须 LF**、前端 `debugger` | < 2s |
 | `commit-msg` | 每次 commit | 约定式提交 `type(scope): 说明`，type 白名单，首行 ≤120 字符 | < 0.2s |
 | `pre-push` | 每次 push | `go build ./...` + `go vet ./...` + `go test ./... -count=1` | 1~3 min |
 
