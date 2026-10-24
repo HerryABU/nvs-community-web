@@ -53,6 +53,7 @@ func CreateChapter(c *gin.Context) {
 		AiAssisted bool   `json:"ai_assisted"` // 作者标记：本章含 AI 辅助生成
 		AiModel    string `json:"ai_model"`    // 使用的模型展示名
 		Publish    *bool  `json:"publish"`     // 是否直接发布（协作者无发布权时忽略）
+		Mode       string `json:"mode"`        // 本章叙事形态：空=继承作品 / prose / script / mixed
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请填写章节标题和内容")
@@ -119,6 +120,7 @@ func CreateChapter(c *gin.Context) {
 		WordCount:        wordCount,
 		Status:           status,
 		AuthorID:         userID,
+		Mode:             normalizeChapterMode(req.Mode),
 	}
 
 	if err := models.CreateChapter(chapter); err != nil {
@@ -193,6 +195,8 @@ func UpdateChapter(c *gin.Context) {
 		Branch      string `json:"branch"`
 		Force       bool   `json:"force"`
 		Message     string `json:"message"`
+		// 本章叙事形态：nil=不改 / 空串=继承作品 / prose / script / mixed
+		Mode *string `json:"mode"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请求参数错误")
@@ -211,6 +215,10 @@ func UpdateChapter(c *gin.Context) {
 
 	if req.Title != "" {
 		chapter.Title = bluemonday.StrictPolicy().Sanitize(req.Title)
+	}
+	// 章节级叙事形态：可继承作品，也可单独设为散文 / 话本 / 混排
+	if req.Mode != nil {
+		chapter.Mode = normalizeChapterMode(*req.Mode)
 	}
 
 	// 版本控制：先做冲突检测并落快照，再覆盖正文文件——避免吞掉他人的改动

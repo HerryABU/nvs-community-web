@@ -1,6 +1,9 @@
 package scriptmode
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseDialogueAndSides(t *testing.T) {
 	src := "【清晨，街角】\n李明：早啊。\n李明：今天也要加油。\n旁白：他笑了笑。\n王芳：你也是。\n"
@@ -39,10 +42,10 @@ func TestParseNotDialogue(t *testing.T) {
 
 func TestRenderHTMLEscapes(t *testing.T) {
 	out := RenderHTML(`小明：<script>alert(1)</script>`)
-	if want := "&lt;script&gt;"; !contains(out, want) {
+	if want := "&lt;script&gt;"; !strings.Contains(out, want) {
 		t.Fatalf("未转义危险内容：%s", out)
 	}
-	if !contains(out, `class="script-bubble sb-left"`) {
+	if !strings.Contains(out, `class="script-bubble sb-left"`) {
 		t.Fatalf("气泡结构缺失：%s", out)
 	}
 }
@@ -59,13 +62,48 @@ func TestSpeakersAndCount(t *testing.T) {
 	}
 }
 
-func contains(s, sub string) bool {
-	return len(s) >= len(sub) && (func() bool {
-		for i := 0; i+len(sub) <= len(s); i++ {
-			if s[i:i+len(sub)] == sub {
-				return true
-			}
+func TestEmoteAndImage(t *testing.T) {
+	out := RenderHTML("【夜】\n小明：你来了[笑]\n![街景](/uploads/street.png)\n")
+	if !strings.Contains(out, `class="sb-emote"`) || !strings.Contains(out, "😄") {
+		t.Fatalf("表情未渲染: %s", out)
+	}
+	if !strings.Contains(out, `<img class="sb-image" src="/uploads/street.png"`) {
+		t.Fatalf("图片未渲染: %s", out)
+	}
+	// 危险协议必须被拒，且不能出现在 src 里
+	bad := RenderHTML("小明：点我\n![x](javascript:alert(1))\n")
+	if strings.Contains(bad, "javascript:") || !strings.Contains(bad, "图片地址不被允许") {
+		t.Fatalf("危险图片地址未被拦截: %s", bad)
+	}
+	// data: 协议同样拒绝
+	if SafeURL("data:image/png;base64,AAAA") || SafeURL("jAvAsCrIpT:alert(1)") {
+		t.Fatal("SafeURL 白名单失效")
+	}
+	if !SafeURL("https://example.com/a.png") || !SafeURL("./local.png") {
+		t.Fatal("SafeURL 误拒合法地址")
+	}
+}
+
+func TestParseMixed(t *testing.T) {
+	src := "夜色沉沉，街灯一盏盏亮起来。\n\n连续的描写第二段。\n\n小明：你来了。\n【转场】\n小红：嗯。\n"
+	nodes := ParseMixed(src)
+	var prose, dialogue, stage int
+	for _, n := range nodes {
+		switch n.Type {
+		case NodeProse:
+			prose++
+		case NodeDialogue:
+			dialogue++
+		case NodeStage:
+			stage++
 		}
-		return false
-	})()
+	}
+	if prose != 1 || dialogue != 2 || stage != 1 {
+		t.Fatalf("混排解析错误: prose=%d dialogue=%d stage=%d (%+v)", prose, dialogue, stage, nodes)
+	}
+	html := RenderMixedHTML(src)
+	// 注意：气泡的 class 是「script-bubble sb-left/sb-right」，断言不带右引号
+	if !strings.Contains(html, `class="script-prose markdown-body"`) || !strings.Contains(html, `class="script-bubble sb-left"`) {
+		t.Fatalf("混排渲染缺结构: %s", html)
+	}
 }

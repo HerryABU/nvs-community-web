@@ -55,6 +55,10 @@ func GetChapters(c *gin.Context) {
 	}
 	// 章节署名（协作作品需要知道谁写的）
 	fillChapterAuthors(chapters, novel.AuthorID)
+	// 叙事形态回填为「生效值」（章节未指定时继承作品），前端据此渲染气泡/混排
+	for i := range chapters {
+		chapters[i].Mode = effectiveChapterMode(&chapters[i], novel)
+	}
 	utils.Success(c, chapters)
 }
 
@@ -121,10 +125,17 @@ func GetChapterContent(c *gin.Context) {
 		}
 	}
 
-	// 后端渲染：散文体走 Markdown；话本气泡体（script）按「角色：台词」解析为气泡
-	htmlContent := markdown.RenderMarkdown(string(content))
-	if novelMode(novel) == "script" {
+	// 后端渲染（按章节生效形态，章节未指定则继承作品）：
+	//   prose 散文体 → Markdown；script 话本 → 气泡；mixed 混排 → 对话气泡 + 散文块
+	mode := effectiveChapterMode(chapter, novel)
+	htmlContent := ""
+	switch mode {
+	case "script":
 		htmlContent = scriptmode.RenderHTML(string(content))
+	case "mixed":
+		htmlContent = scriptmode.RenderMixedHTML(string(content))
+	default:
+		htmlContent = markdown.RenderMarkdown(string(content))
 	}
 
 	// 本章作者（多人协作署名）
@@ -144,6 +155,7 @@ func GetChapterContent(c *gin.Context) {
 	utils.Success(c, gin.H{
 		"chapter":            chapter,
 		"novel_mode":         novelMode(novel),
+		"chapter_mode":       mode,
 		"html_content":       htmlContent,
 		"hash":               currentHash,
 		"hash_match":         currentHash == chapter.ContentHash,

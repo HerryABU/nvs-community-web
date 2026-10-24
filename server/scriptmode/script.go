@@ -12,7 +12,6 @@ package scriptmode
 // 安全性：所有文本一律 html.EscapeString 后再输出，绝不拼接原始 HTML。
 
 import (
-	"html"
 	"strings"
 	"unicode/utf8"
 )
@@ -24,6 +23,10 @@ const (
 	NodeDialogue  NodeType = "dialogue"
 	NodeNarration NodeType = "narration"
 	NodeStage     NodeType = "stage"
+	// NodeProse 散文块（仅混排模式出现）：走 Markdown 渲染，与气泡混在同一章
+	NodeProse NodeType = "prose"
+	// NodeImage 图片气泡：整行 ![说明](url)
+	NodeImage NodeType = "image"
 )
 
 // Node 解析后的一个渲染节点
@@ -33,6 +36,9 @@ type Node struct {
 	Text    string   `json:"text"`
 	Side    string   `json:"side,omitempty"` // 对话气泡左右：left / right
 	Initial string   `json:"initial,omitempty"`
+	// 图片节点
+	Alt string `json:"alt,omitempty"`
+	URL string `json:"url,omitempty"`
 }
 
 // maxSpeakerLen 角色名最大长度（超过按旁白处理，避免长句被误判为对话）
@@ -113,6 +119,11 @@ func Parse(src string) []Node {
 			last = nil
 			continue
 		}
+		if alt, url, ok := ParseImage(line); ok {
+			last = nil
+			nodes = append(nodes, Node{Type: NodeImage, Alt: alt, URL: url})
+			continue
+		}
 		if stage, ok := isStage(line); ok {
 			last = nil
 			nodes = append(nodes, Node{Type: NodeStage, Text: stage})
@@ -139,6 +150,79 @@ func Parse(src string) []Node {
 	return nodes
 }
 
+// ParseMixed 混排解析：对话/舞台/图片与纯话本一致，
+// 其余连续非空行聚成一个「散文块」（NodeProse），由 Markdown 渲染。
+// 用途：同一章里既有大段描写（散文）又有对话（气泡），不必整章二选一。
+func ParseMixed(src string) []Node {
+	src = strings.ReplaceAll(src, "\r\n", "\n")
+	src = strings.ReplaceAll(src, "\r", "\n")
+	lines := strings.Split(src, "\n")
+
+	nodes := make([]Node, 0, len(lines))
+	order := map[string]int{}
+	side := func(name string) string {
+		idx, ok := order[name]
+		if !ok {
+			idx = len(order)
+			order[name] = idx
+		}
+		if idx%2 == 0 {
+			return "left"
+		}
+		return "right"
+	}
+
+	var lastDialogue *Node
+	prose := make([]string, 0, 8)
+	flushProse := func() {
+		if len(prose) == 0 {
+			return
+		}
+		nodes = append(nodes, Node{Type: NodeProse, Text: strings.Join(prose, "\n")})
+		prose = prose[:0]
+	}
+
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" {
+			// 散文内部的空行是段落分隔（Markdown 语义），不切块；只有遇到对话/提示才结算
+			if len(prose) > 0 {
+				prose = append(prose, "")
+			}
+			lastDialogue = nil
+			continue
+		}
+		if alt, url, ok := ParseImage(line); ok {
+			flushProse()
+			lastDialogue = nil
+			nodes = append(nodes, Node{Type: NodeImage, Alt: alt, URL: url})
+			continue
+		}
+		if stage, ok := isStage(line); ok {
+			flushProse()
+			lastDialogue = nil
+			nodes = append(nodes, Node{Type: NodeStage, Text: stage})
+			continue
+		}
+		if name, text, ok := splitSpeaker(line); ok && text != "" && !narrationNames[name] {
+			flushProse()
+			if lastDialogue != nil && lastDialogue.Type == NodeDialogue && lastDialogue.Speaker == name {
+				lastDialogue.Text += "\n" + text
+				continue
+			}
+			n := Node{Type: NodeDialogue, Speaker: name, Text: text, Side: side(name), Initial: initial(name)}
+			nodes = append(nodes, n)
+			lastDialogue = &nodes[len(nodes)-1]
+			continue
+		}
+		// 非对话行 → 攒成散文块（空行或遇到对话时结算）
+		lastDialogue = nil
+		prose = append(prose, raw)
+	}
+	flushProse()
+	return nodes
+}
+
 // Speakers 按首次出现顺序返回角色名（供编辑器展示角色列表）
 func Speakers(src string) []string {
 	out := make([]string, 0, 8)
@@ -150,39 +234,6 @@ func Speakers(src string) []string {
 		}
 	}
 	return out
-}
-
-// RenderHTML 把话本源文本渲染为气泡 HTML（纯转义，无原始 HTML 拼接）
-func RenderHTML(src string) string {
-	nodes := Parse(src)
-	if len(nodes) == 0 {
-		return `<div class="script-chapter"></div>`
-	}
-	var b strings.Builder
-	b.WriteString(`<div class="script-chapter">`)
-	for _, n := range nodes {
-		switch n.Type {
-		case NodeStage:
-			b.WriteString(`<div class="script-stage">` + escapeWithBreaks(n.Text) + `</div>`)
-		case NodeNarration:
-			b.WriteString(`<div class="script-narration">` + escapeWithBreaks(n.Text) + `</div>`)
-		default:
-			b.WriteString(`<div class="script-bubble sb-` + n.Side + `">`)
-			b.WriteString(`<div class="sb-avatar">` + html.EscapeString(n.Initial) + `</div>`)
-			b.WriteString(`<div class="sb-body">`)
-			b.WriteString(`<div class="sb-name">` + html.EscapeString(n.Speaker) + `</div>`)
-			b.WriteString(`<div class="sb-text">` + escapeWithBreaks(n.Text) + `</div>`)
-			b.WriteString(`</div></div>`)
-		}
-	}
-	b.WriteString(`</div>`)
-	return b.String()
-}
-
-// escapeWithBreaks 转义后把 \n 变成 <br>（保证不引入未转义内容）
-func escapeWithBreaks(s string) string {
-	s = html.EscapeString(s)
-	return strings.ReplaceAll(s, "\n", "<br>")
 }
 
 // CountDialogue 统计对话条数与角色数（编辑器侧提示用）

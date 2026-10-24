@@ -17,6 +17,7 @@ func ScriptPreview(c *gin.Context) {
 	var req struct {
 		Content string `json:"content"`
 		NovelID uint   `json:"novel_id"`
+		Mode    string `json:"mode"` // script（纯话本，默认） / mixed（散文与话本混排）
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -43,10 +44,15 @@ func ScriptPreview(c *gin.Context) {
 		}
 	}
 	lines, speakers := scriptmode.CountDialogue(req.Content)
+	html := scriptmode.RenderHTML(req.Content)
+	if req.Mode == "mixed" {
+		html = scriptmode.RenderMixedHTML(req.Content)
+	}
 	utils.Success(c, gin.H{
-		"html":          scriptmode.RenderHTML(req.Content),
+		"html":          html,
 		"speakers":      scriptmode.Speakers(req.Content),
 		"lines":         lines,
 		"speaker_count": speakers,
+		"emote_keys":    scriptmode.EmoteKeys(), // 编辑器表情提示
 	})
 }

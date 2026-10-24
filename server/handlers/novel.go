@@ -359,3 +359,25 @@ func normalizeNovelMode(m string) string {
 	}
 	return "prose"
 }
+
+// normalizeChapterMode 章节叙事形态：”=继承作品（默认）/ prose / script / mixed（散文与话本混排）
+func normalizeChapterMode(m string) string {
+	switch strings.ToLower(strings.TrimSpace(m)) {
+	case "prose":
+		return "prose"
+	case "script":
+		return "script"
+	case "mixed":
+		return "mixed"
+	default:
+		return "" // 继承作品形态
+	}
+}
+
+// effectiveChapterMode 章节生效形态：章节显式指定优先，否则继承作品
+func effectiveChapterMode(chapter *models.Chapter, novel *models.Novel) string {
+	if chapter != nil && chapter.Mode != "" {
+		return chapter.Mode
+	}
+	return novelMode(novel)
+}
