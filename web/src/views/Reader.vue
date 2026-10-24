@@ -97,6 +97,14 @@
         </el-result>
       </div>
       <div v-else class="reader-content">
+        <!-- 话本气泡体：气泡视图 / 原文视图切换 -->
+        <div v-if="isScriptMode" class="reader-script-switch">
+          <el-radio-group v-model="scriptView" size="small" @change="renderCurrent">
+            <el-radio-button value="bubble">气泡对话</el-radio-button>
+            <el-radio-button value="text">原文</el-radio-button>
+          </el-radio-group>
+          <span class="rs-tip">话本作品：按「角色：台词」解析为对话气泡</span>
+        </div>
         <div v-if="chapter?.content" class="reader-md-wrap">
           <div class="reader-md markdown-body cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" v-html="renderedHtml" ref="mdContainer" @click="onMdClick"></div>
         </div>
@@ -347,6 +355,7 @@ async function loadChapter() {
     // 章节加载后取 AI 生成标识（无标记则徽标不显示）
     if (chapter.value?.id) loadAiMark('novel_chapter', chapter.value.id);
     htmlContent.value = detail?.html_content || '';
+    novelMode.value = (detail as any)?.novel_mode || novelRes.data.data.mode || 'prose';
     if (!chapter.value) {
       console.error('章节内容为空', detail);
     }
@@ -431,6 +440,11 @@ watch(
 const mdContainer = ref<HTMLElement | null>(null);
 const renderedHtml = ref('');
 
+// 话本气泡体：novel_mode=script 时正文按「角色：台词」渲染为气泡（服务端已渲染好 html_content）
+const novelMode = ref('prose');
+const isScriptMode = computed(() => novelMode.value === 'script');
+const scriptView = ref<'bubble' | 'text'>('bubble');
+
 // 章节标题大字（明确需求，不可去掉）：
 // 阅读器正文必须与编辑器/管理列表一样显示章节标题的大字（一级标题）。
 // 规则：
@@ -455,9 +469,15 @@ function ensureChapterTitle(md: string, num: number, title: string): string {
   return `# ${display}\n\n${md}`;
 }
 
-watch(() => chapter.value?.content, (content) => {
-  console.log('[NVS] Reader: content changed, length=', content?.length || 0);
+// 渲染入口：话本气泡视图直接用服务端渲染结果，其余走 Markdown
+function renderCurrent() {
+  const content = chapter.value?.content || '';
+  console.log('[NVS] Reader: content changed, length=', content.length);
   if (!content) { renderedHtml.value = ''; return; }
+  if (isScriptMode.value && scriptView.value === 'bubble') {
+    renderedHtml.value = htmlContent.value || '';
+    return;
+  }
   try {
     const md = ensureChapterTitle(content, chapterNum.value, chapter.value?.title || '');
     const html = renderMarkdown(md);
@@ -473,7 +493,9 @@ watch(() => chapter.value?.content, (content) => {
       renderChemfigBlocks(mdContainer.value);
     }
   });
-});
+}
+
+watch(() => chapter.value?.content, () => renderCurrent());
 
 // ── 精读：书签 + 批注（公开/私密） ──
 const myBookmark = ref<ReadingNote | null>(null);
@@ -807,6 +829,105 @@ onBeforeUnmount(() => {
 
 .reader-md-wrap {
   min-height: 200px;
+}
+
+/* ====== 话本气泡体（script mode）：服务端渲染的 .script-chapter 结构 ====== */
+.reader-script-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.rs-tip {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.reader-md :deep(.script-chapter) {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+/* 场景/动作提示：居中灰字斜体 */
+.reader-md :deep(.script-stage) {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 6px 10px;
+  background: var(--bg-soft);
+  border-radius: 6px;
+}
+
+/* 旁白：居中正文 */
+.reader-md :deep(.script-narration) {
+  text-align: center;
+  font-size: 0.95rem;
+  line-height: 1.9;
+  color: var(--text-color);
+  opacity: 0.9;
+  padding: 4px 12px;
+}
+
+/* 对话气泡：左右分侧 */
+.reader-md :deep(.script-bubble) {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 82%;
+}
+.reader-md :deep(.script-bubble.sb-right) {
+  flex-direction: row-reverse;
+  margin-left: auto;
+}
+.reader-md :deep(.sb-avatar) {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--gradient-primary, linear-gradient(135deg, #6366f1, #8b5cf6));
+}
+.reader-md :deep(.sb-right .sb-avatar) {
+  background: var(--gradient-accent, linear-gradient(135deg, #f59e0b, #ef4444));
+}
+.reader-md :deep(.sb-body) {
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border-color);
+  position: relative;
+}
+.reader-md :deep(.sb-right .sb-body) {
+  background: var(--el-color-primary-light-9);
+}
+.reader-md :deep(.sb-name) {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.reader-md :deep(.sb-right .sb-name) {
+  text-align: right;
+}
+.reader-md :deep(.sb-text) {
+  font-size: 1rem;
+  line-height: 1.8;
+  word-break: break-word;
+}
+
+[data-theme="dark"] .reader-md :deep(.sb-body) {
+  background: rgba(255, 255, 255, 0.05);
+}
+[data-theme="dark"] .reader-md :deep(.sb-right .sb-body) {
+  background: rgba(66, 133, 244, 0.18);
 }
 
 /* 正文渲染完全跟随 Cherry 默认（与编辑器预览一致）：字体/字号/行距/段落样式

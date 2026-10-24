@@ -465,6 +465,8 @@ func main() {
 		protected.GET("/collab/works", collabhandler.Works)
 		protected.POST("/collab/:novelId/respond", collabhandler.Respond)
 		protected.POST("/collab/:novelId/leave", collabhandler.Leave)
+		// 话本气泡体预览（不可挂 /novels 下，与 /novels/:id 通配段冲突）
+		protected.POST("/script-preview", handlers.ScriptPreview)
 		protected.GET("/author/novels", handlers.GetMyNovels)
 		protected.GET("/author/novels/:id/stats", handlers.GetNovelStats)
 		protected.GET("/author/banned-content", handlers.GetAuthorBannedContent)

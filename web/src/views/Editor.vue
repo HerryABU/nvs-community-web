@@ -66,6 +66,15 @@
             </el-form-item>
           </el-col>
         </el-row>
+        <el-form-item label="叙事形态">
+          <el-radio-group v-model="form.mode">
+            <el-radio value="prose">散文体</el-radio>
+            <el-radio value="script">话本气泡体</el-radio>
+          </el-radio-group>
+          <span style="margin-left:12px;font-size:0.8rem;color: var(--text-light, #999)">
+            话本气泡体：正文按「角色：台词」逐行解析为对话气泡，【场景】为提示，其余为旁白
+          </span>
+        </el-form-item>
         <!-- 隔离墙开关（仅编辑模式可见） -->
         <template v-if="isEditing">
           <el-divider content-position="left">隔离墙设置</el-divider>
@@ -284,6 +293,7 @@ const form = reactive<Partial<Novel>>({
   status: 'draft',
   source_type: 'original',
   creation_method: 'human',
+  mode: 'prose', // prose 散文体 / script 话本气泡体
 });
 
 // 导入相关
@@ -378,6 +388,8 @@ async function loadNovel() {
       status: novel.status,
       source_type: novel.source_type || 'original',
       creation_method: novel.creation_method || 'human',
+      // 叙事形态：prose 散文体 / script 话本气泡体
+      mode: novel.mode || 'prose',
       wall_enabled: novel.wall_enabled !== false,
       wall_warning: novel.wall_warning || '',
     });

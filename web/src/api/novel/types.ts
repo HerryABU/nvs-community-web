@@ -11,6 +11,7 @@ export interface Novel {
   status: string;
   source_type?: string;       // original / reprint
   creation_method?: string;   // human / ai / human_ai_assisted
+  mode?: string;              // prose 散文体 / script 话本气泡体
   total_words: number;
   total_chapters: number;
   created_at: string;

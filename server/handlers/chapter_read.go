@@ -7,6 +7,7 @@ import (
 	"nvs-server/collab"
 	"nvs-server/markdown"
 	"nvs-server/models"
+	"nvs-server/scriptmode"
 	"nvs-server/security"
 	"nvs-server/utils"
 
@@ -120,8 +121,11 @@ func GetChapterContent(c *gin.Context) {
 		}
 	}
 
-	// 后端渲染 Markdown → HTML
+	// 后端渲染：散文体走 Markdown；话本气泡体（script）按「角色：台词」解析为气泡
 	htmlContent := markdown.RenderMarkdown(string(content))
+	if novelMode(novel) == "script" {
+		htmlContent = scriptmode.RenderHTML(string(content))
+	}
 
 	// 本章作者（多人协作署名）
 	authorName := ""

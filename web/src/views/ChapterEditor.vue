@@ -17,6 +17,7 @@
       <div class="ce-toolbar-right">
         <span v-if="lastSaved" class="ce-saved-time">已保存 {{ lastSaved }}</span>
         <PublishQuotaHint />
+        <el-button v-if="isScriptMode" :icon="ChatDotRound" @click="openScriptPreview">气泡预览</el-button>
         <el-button :icon="MagicStick" @click="showAiPanel = true">AI 助手</el-button>
         <el-button :icon="Link" @click="showRefPicker = true">插入站内链接</el-button>
         <el-button type="primary" :loading="saving" @click="saveChapter">保存章节</el-button>
@@ -35,6 +36,19 @@
       @insert="aiInsert"
       @replace="aiReplace"
     />
+
+    <!-- 话本气泡预览（script mode）：服务端解析，转义后渲染 -->
+    <el-drawer v-model="scriptPreviewVisible" title="气泡预览" size="60%">
+      <div class="sp-wrap" v-loading="scriptPreviewing">
+        <div class="sp-hint">
+          写法：每行一条 <code>角色：台词</code>；整行 <code>【场景】</code> 为场景提示；其余行为旁白。
+        </div>
+        <div v-if="scriptSpeakers.length" class="sp-speakers">
+          <el-tag v-for="s in scriptSpeakers" :key="s" size="small">{{ s }}</el-tag>
+        </div>
+        <div class="sp-body" v-html="scriptPreviewHtml"></div>
+      </div>
+    </el-drawer>
 
     <div class="ce-body">
       <!-- 左侧章节列表 -->
@@ -78,6 +92,7 @@
       <!-- 编辑区 -->
       <main class="ce-main">
         <div class="ce-editor-header">
+          <el-tag v-if="isScriptMode" size="small" type="warning" class="ce-mode-tag">话本气泡体</el-tag>
           <el-input
             v-model="chapterTitle"
             placeholder="章节标题（如：第一章 开端）"
@@ -122,13 +137,14 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router';
 import { novelApi, chapterApi, type Chapter } from '@/api/novel';
 import { ElMessage } from 'element-plus';
-import { ArrowLeft, Plus, Delete, Link, MagicStick } from '@element-plus/icons-vue';
+import { ArrowLeft, Plus, Delete, Link, MagicStick, ChatDotRound } from '@element-plus/icons-vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
 import AiAssistPanel from '@/components/editor/AiAssistPanel.vue';
 import ChapterWorkflowBar from '@/components/collab/ChapterWorkflowBar.vue';
 import { collabApi, chapterStatusLabel, chapterStatusType, type CollabMe } from '@/api/collab';
 import { useAuthStore } from '@/stores/auth';
+import { scriptApi } from '@/api/novel/script';
 import { guardLeak } from '@/composables/useLeakGuard';
 // engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
 import { renderMarkdown, editorEngineConfig } from '@/markdown/renderer';
@@ -170,6 +186,30 @@ const showRefPicker = ref(false);
 
 // ===== AI 助手（§13.3）：续写/润色/扩写/摘要，代币按量计费 =====
 const showAiPanel = ref(false);
+
+// ===== 话本气泡体（script mode）：预览服务端解析结果 =====
+const novelMode = ref('prose');
+const isScriptMode = computed(() => novelMode.value === 'script');
+const scriptPreviewVisible = ref(false);
+const scriptPreviewHtml = ref('');
+const scriptSpeakers = ref<string[]>([]);
+const scriptPreviewing = ref(false);
+
+async function openScriptPreview() {
+  const content = await getContentToSave();
+  scriptPreviewVisible.value = true;
+  scriptPreviewing.value = true;
+  try {
+    const res = await scriptApi.preview(content, novelId.value);
+    scriptPreviewHtml.value = res.data.data?.html || '';
+    scriptSpeakers.value = res.data.data?.speakers || [];
+  } catch (e: any) {
+    scriptPreviewHtml.value = '';
+    ElMessage.error(e?.response?.data?.message || '预览失败');
+  } finally {
+    scriptPreviewing.value = false;
+  }
+}
 
 // AI 面板上下文文本：MD 模式直接取源文；富文本模式去标签取纯文本
 const aiContextText = computed(() => {
@@ -357,6 +397,7 @@ async function loadNovel() {
       chapterApi.getChapters(novelId.value),
     ]);
     novelTitle.value = novelRes.data.data.title;
+    novelMode.value = (novelRes.data.data as any).mode || 'prose';
     chapters.value = chaptersRes.data.data || [];
 
     if (chapters.value.length === 0) {
@@ -705,6 +746,93 @@ onBeforeUnmount(() => {
 .ce-ch-status {
   flex-shrink: 0;
   transform: scale(0.85);
+}
+
+.ce-mode-tag {
+  flex-shrink: 0;
+}
+
+/* 话本气泡预览（结构与阅读器一致，样式独立一份避免跨组件耦合） */
+.sp-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sp-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+.sp-hint code {
+  background: var(--bg-soft);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.sp-speakers {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.sp-body :deep(.script-chapter) {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sp-body :deep(.script-stage) {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-style: italic;
+  background: var(--bg-soft);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.sp-body :deep(.script-narration) {
+  text-align: center;
+  font-size: 0.95rem;
+  line-height: 1.9;
+  padding: 4px 12px;
+}
+.sp-body :deep(.script-bubble) {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 82%;
+}
+.sp-body :deep(.sb-right) {
+  flex-direction: row-reverse;
+  margin-left: auto;
+}
+.sp-body :deep(.sb-avatar) {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  background: var(--gradient-primary, linear-gradient(135deg, #6366f1, #8b5cf6));
+}
+.sp-body :deep(.sb-right .sb-avatar) {
+  background: var(--gradient-accent, linear-gradient(135deg, #f59e0b, #ef4444));
+}
+.sp-body :deep(.sb-body) {
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border-color);
+}
+.sp-body :deep(.sb-name) {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.sp-body :deep(.sb-text) {
+  font-size: 1rem;
+  line-height: 1.8;
+  word-break: break-word;
 }
 
 .ce-title-input :deep(.el-input__inner) {
