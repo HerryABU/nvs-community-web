@@ -132,6 +132,7 @@ declare module 'vue' {
     SiteFooter: typeof import('./src/components/SiteFooter.vue')['default']
     SlideCaptcha: typeof import('./src/components/SlideCaptcha.vue')['default']
     StarRating: typeof import('./src/components/StarRating.vue')['default']
+    StateBlock: typeof import('./src/components/common/StateBlock.vue')['default']
     WeChatQRLogin: typeof import('./src/components/auth/WeChatQRLogin.vue')['default']
     WorldBookManager: typeof import('./src/components/oc/WorldBookManager.vue')['default']
   }
