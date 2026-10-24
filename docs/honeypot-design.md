@@ -69,6 +69,44 @@ server/honeypot/
 | **M3** | 「先甜后卡」：触发「身份异常」+ 特殊人机验证页（恒失败）+ 指纹前置采集 | 越权操作 → 验证页；指纹落库并与 session 关联；验证提交 100% 失败 |
 | **M4** | 取证包导出 + 规则反哺 + 警方联动 + 90 天 TTL 归档 | 导出 zip 含哈希清单且审批留痕 |
 
+## 5.1 实现现状（v1，`server/honeypot`）
+
+v1 先落「主站内嵌诱饵」形态（不启独立进程/端口），把「谁在扫、扫到什么、要不要封」跑通：
+
+**等级（站长/管理员可配，`honeypot_settings.level`）**
+
+| 等级 | 挂载诱饵 | 行为 |
+|---|---|---|
+| `off` | 无 | 所有诱饵路径返回与普通 404 一致的响应，蜜罐存在不可见 |
+| `low` | `/.env` | 只记录 |
+| `medium` | `/.env`、`/.git/config`、`/admin.php`、`/robots-disallow.txt` | 只记录 |
+| `high` | 全量（+`/phpinfo.php`、`/actuator/env`、`/wp-login.php`、`/backup/`） | 可选延迟响应（≤2s）+ 命中即封禁 |
+
+- 诱饵路径**无条件注册**，命中后再按当前等级判定是否生效；等级热更新（15s 缓存）。
+- 探路记录：`/.git/HEAD`、`/phpmyadmin/`、`/swagger-ui.html` 等常见扫描路径，
+  以及 NoRoute 里命中 `.php/.env/.git/admin/backup/config/actuator/swagger` 的可疑 404，都静默记一条 `decoy_probe`。
+- 高等级 `auto_ban` 命中即封（进程内黑名单，重启清空；导出/解封在后台）。
+
+**日志记录字段（管理员勾选，`honeypot_settings` 同表）**
+
+| 字段 | 默认 | 说明 |
+|---|---|---|
+| `record_ua` | ✅ | UA |
+| `record_referer` | ✅ | Referer |
+| `record_xff` | ❌ | X-Forwarded-For（含代理链与内网信息，默认不记） |
+| `record_query` | ✅ | Query |
+| `record_headers` | ❌ | 请求头，仅白名单；`Cookie/Authorization/X-API-Key` **强制永不记录** |
+| `record_body_snippet` | ❌ | Body 摘要，含 password/token/secret 字样时整段省略 |
+
+- 这套策略**同时作用于访问日志**（`middleware/access_log.go`）：关掉的字段不落库。
+- 区别于「日志脱敏」（`/admin/log-redact`）：脱敏管「记了之后遮」，本策略管「要不要记」。
+
+**接口**：`GET/PUT /api/admin/honeypot/config`、`GET /honeypot/sessions`、`GET /honeypot/sessions/:sid`、
+`GET /honeypot/export`（导出留痕）、`POST /honeypot/cleanup`、`GET /honeypot/bans`、`POST /honeypot/ban|unban`。
+
+**与设计的差异（v1 未做）**：独立进程/端口、蜜罐 JWT 影子认证、验证页与指纹前置采集、
+`honeypot_fingerprints` 表、zip 取证包（当前为 JSON 导出）。这些属于 M2/M3，按 §5 路线继续。
+
 ## 6. 风险清单（必读）
 
 1. **验证页是最大暴露面**：模板化/固定 JS 路径/风格不一致 → 一眼识破。必须复用主站 CSS 变量与组件样式。

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"nvs-server/config"
+	"nvs-server/honeypot"
 	"nvs-server/models"
 	"nvs-server/security"
 	"nvs-server/utils"
@@ -142,6 +143,18 @@ func AccessLog() gin.HandlerFunc {
 			query := c.Request.URL.RawQuery
 			if len(query) > 512 {
 				query = query[:512]
+			}
+			// 日志字段策略（后台可勾选）：关掉的字段一律不落库——
+			// UA / Referer 之外，X-Forwarded-For 默认不记（含代理链路与内网信息）。
+			hpSet := honeypot.Current()
+			if !hpSet.RecordUA {
+				ua, uaFamily = "", "unknown"
+			}
+			if !hpSet.RecordXFF {
+				xff, proxyHops = "", 0
+			}
+			if !hpSet.RecordQuery {
+				query = ""
 			}
 			models.EnqueueWebAccess(&models.WebAccessLog{
 				UserID:        userID,

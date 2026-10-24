@@ -25,8 +25,10 @@ import (
 	chaptervcshandler "nvs-server/handlers/chaptervcs"
 	collabhandler "nvs-server/handlers/collab"
 	grouphandler "nvs-server/handlers/group"
+	honeypothandler "nvs-server/handlers/honeypot"
 	ochandler "nvs-server/handlers/oc"
 	prompthandler "nvs-server/handlers/prompts"
+	"nvs-server/honeypot"
 	"nvs-server/middleware"
 	"nvs-server/models"
 	"nvs-server/oc"
@@ -169,6 +171,9 @@ func main() {
 	// 挂在全局中间件链（门禁之后）：仅处理 /api/* 路径；携带有效 Key 的读取请求
 	// 按 Key 配额限流并跳过 route 级 IP 限流，无 Key 请求走匿名/爬虫低配额。
 	r.Use(security.APIKeyGuard())
+
+	// 蜜罐诱饵路由（root 级）：等级为 off 时响应与普通 404 无差别
+	honeypot.Register(r)
 
 	// 注入 gin 引擎供 API 聚合中间层（/api/batch）内存内转发使用
 	handlers.BatchEngine = r
@@ -708,6 +713,16 @@ func main() {
 		// 日志脱敏配置（176号令合规：生产环境日志敏感信息脱敏）
 		admin.GET("/log-redact", handlers.GetLogRedactConfig)
 		admin.PUT("/log-redact", handlers.UpdateLogRedactConfig)
+		// 蜜罐等级 + 日志记录字段勾选（docs/honeypot-design.md）
+		admin.GET("/honeypot/config", honeypothandler.GetConfig)
+		admin.PUT("/honeypot/config", honeypothandler.SaveConfig)
+		admin.GET("/honeypot/sessions", honeypothandler.ListSessions)
+		admin.GET("/honeypot/sessions/:sid", honeypothandler.SessionDetail)
+		admin.GET("/honeypot/export", honeypothandler.Export)
+		admin.POST("/honeypot/cleanup", honeypothandler.Cleanup)
+		admin.GET("/honeypot/bans", honeypothandler.Bans)
+		admin.POST("/honeypot/ban", honeypothandler.Ban)
+		admin.POST("/honeypot/unban", honeypothandler.Unban)
 		admin.POST("/log-redact/preview", handlers.PreviewLogRedact)
 		// 176号令合规补全：算法推荐管理（第七条第九项）
 		admin.GET("/algorithms", handlers.GetAlgoConfig)
@@ -1061,6 +1076,8 @@ func main() {
 
 	r.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
+		// 蜜罐：可疑探路（.php/.env/admin/backup…）静默记录，不改变响应
+		honeypot.ProbeNotFound(c)
 
 		// 1) 未匹配路由的 /api/* 一律 404（JSON），绝不落入 SPA fallback。
 		//    防止任意 /api/xxx（含被反向代理污染的前缀，如 /api/go-nvs/...，以及 ../ 穿越）被当作前端路由返回 200。
@@ -1437,6 +1454,10 @@ func initDatabase() error {
 	}
 	// OC 模式（独立功能包）：角色卡 / 世界书 / 群内 AI 角色 / 对话流 / 审核窗口 / 预算
 	if err := oc.Migrate(models.DB); err != nil {
+		return err
+	}
+	// 蜜罐（独立功能包）：诱饵命中会话/事件 + 等级与日志记录策略
+	if err := honeypot.Migrate(models.DB); err != nil {
 		return err
 	}
 	// 版本控制后端选择：NVS_VCS_BACKEND=git 时启用真实 git 仓库（需 -tags gitvcs 构建），
