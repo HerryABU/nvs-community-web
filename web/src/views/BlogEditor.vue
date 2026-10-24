@@ -33,6 +33,7 @@
     <!-- 编辑器内 AI 辅助（与章节编辑器共用同一面板：续写/润色/扩写/摘要，按量计费） -->
     <AiAssistPanel
       v-model:visible="showAiPanel"
+      scene="blog"
       :context-text="aiContextText"
       @insert="insertIntoEditor"
       @replace="aiReplaceAll"

@@ -57,6 +57,26 @@
           </el-radio-group>
           <div class="ai-action-hint">{{ currentActionHint }}</div>
         </el-form-item>
+        <!-- 场景化提示词模板（§13.1）：套用后正文变为渲染结果，动作切成「自定义」 -->
+        <el-form-item label="场景模板">
+          <el-select
+            v-model="tplId"
+            size="small"
+            clearable
+            filterable
+            placeholder="套用模板（类型文学默认框架）"
+            style="width:100%"
+            @change="applyTemplate"
+          >
+            <el-option
+              v-for="t in templates"
+              :key="t.id"
+              :label="`${t.title}${t.builtin ? ' · 内置' : ''}${t.category ? ' · ' + t.category : ''}`"
+              :value="t.id"
+            />
+          </el-select>
+          <div class="ai-action-hint">套用后未填的变量会保留 &#123;&#123;占位&#125;&#125;，补齐即可发送</div>
+        </el-form-item>
         <el-form-item label="输出长度">
           <el-radio-group v-model="form.max_tokens" size="small">
             <el-radio-button :value="512">短</el-radio-button>
@@ -181,6 +201,7 @@ import { ref, reactive, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { aiApi, AI_ACTIONS, type AiStatus, type AiEstimateResult, type AiNovelMemory } from '@/api/ai';
+import { templateApi, type PromptTemplate } from '@/api/ai/template';
 
 const usedModelName = computed(() => {
   const m = status.models.find((x) => x.id === form.model_id);
@@ -195,6 +216,8 @@ const props = defineProps<{
   novelId?: number;
   /** 当前章节 ID（§13.5；0=新章节） */
   chapterId?: number;
+  /** 模板场景（§13.1）：章节编辑器 novel_chapter / 博客编辑器 blog */
+  scene?: 'novel_chapter' | 'blog';
 }>();
 const emit = defineEmits<{
   (e: 'update:visible', v: boolean): void;
@@ -265,6 +288,50 @@ watch([() => form.text, () => form.model_id, () => form.max_tokens, () => form.a
   }
   estimateTimer = window.setTimeout(doEstimate, 600);
 });
+
+// ==================== 场景模板（§13.1） ====================
+const templates = ref<PromptTemplate[]>([]);
+const tplId = ref<number | undefined>(undefined);
+
+async function loadTemplates() {
+  try {
+    const res = await templateApi.list({ scene: props.scene || 'novel_chapter', kind: 'chat' });
+    if (res.data.code === 0) templates.value = res.data.data.list || [];
+  } catch {
+    /* 模板不可用不影响手动使用 */
+  }
+}
+
+/** 套用模板：以「当前正文尾部」作为通用变量注入，其余变量保留占位待补 */
+async function applyTemplate(id?: number) {
+  if (!id) return;
+  const t = templates.value.find((x) => x.id === id);
+  if (!t) return;
+  const ctx = (form.text || props.contextText || '').slice(-4000);
+  const vars: Record<string, string> = {};
+  for (const v of t.variables || []) {
+    if (['前文', '原文', '文本', '章节', '正文', '博客正文', '待审文本', '本章内容'].includes(v.name) && ctx) {
+      vars[v.name] = ctx;
+    } else if (v.default) {
+      vars[v.name] = v.default;
+    }
+  }
+  try {
+    const res = await templateApi.render(id, vars);
+    if (res.data.code === 0) {
+      form.text = res.data.data.text;
+      form.action = 'custom';
+      const miss = res.data.data.missing || [];
+      if (miss.length) {
+        ElMessage.warning(`已套用，请补齐占位：${miss.map((n) => `{{${n}}}`).join('、')}`);
+      } else {
+        ElMessage.success('已套用模板');
+      }
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '模板渲染失败');
+  }
+}
 
 async function doEstimate() {
   if (!form.text.trim() || !form.model_id) return;
@@ -437,6 +504,7 @@ watch(
   (v) => {
     if (v) {
       loadStatus();
+      loadTemplates();
       if (!form.text.trim() && props.contextText) form.text = props.contextText;
     }
   },

@@ -21,8 +21,10 @@ import (
 	"nvs-server/groups"
 	"nvs-server/handlers"
 	grouphandler "nvs-server/handlers/group"
+	prompthandler "nvs-server/handlers/prompts"
 	"nvs-server/middleware"
 	"nvs-server/models"
+	"nvs-server/prompttpl"
 	"nvs-server/security"
 	"nvs-server/security/sms"
 	"nvs-server/tlsconfig"
@@ -494,6 +496,9 @@ func main() {
 		protected.DELETE("/groups/:id/files/:fid", grouphandler.GroupFileDelete)
 		// 群内 AI 可用性
 		protected.GET("/groups/:id/ai", grouphandler.AiStatus)
+		// 场景化提示词模板（编辑器「模板」下拉 + 变量渲染）
+		protected.GET("/ai/templates", prompthandler.List)
+		protected.POST("/ai/templates/:id/render", prompthandler.Render)
 		// 用户自建论坛
 		protected.POST("/forums", handlers.CreateUserForum)
 		protected.POST("/forums/enter-by-code", handlers.EnterForumByRoomCode) // 房间号进入不可见论坛
@@ -774,6 +779,16 @@ func main() {
 		admin.PUT("/ai/coze-default", handlers.AdminSetAiCozeDefault)
 
 		// AI 功能开关 / 厂商字典 / 数据审计
+		// 提示词模板引擎（CRUD / 版本 / 回滚 / 预览）
+		admin.GET("/ai/templates", prompthandler.AdminList)
+		admin.POST("/ai/templates", prompthandler.AdminCreate)
+		admin.PUT("/ai/templates/:id", prompthandler.AdminUpdate)
+		admin.DELETE("/ai/templates/:id", prompthandler.AdminDelete)
+		admin.GET("/ai/templates/:id/versions", prompthandler.AdminVersions)
+		admin.POST("/ai/templates/:id/restore", prompthandler.AdminRestore)
+		// 预览用独立路径：/ai/templates/preview 会与 /ai/templates/:id 的通配段冲突（gin httprouter 限制）
+		admin.POST("/ai/template-preview", prompthandler.AdminPreview)
+
 		admin.GET("/ai/features", handlers.AdminGetAiFeatures)
 		admin.PUT("/ai/features", handlers.AdminSetAiFeatures)
 		admin.GET("/ai/vendors", handlers.AdminListAiVendors)
@@ -1339,6 +1354,11 @@ func initDatabase() error {
 	if err := groups.Migrate(models.DB); err != nil {
 		return err
 	}
+	// 提示词模板引擎（独立功能包）：建表 + 类型文学默认框架种子（幂等）
+	if err := prompttpl.Migrate(models.DB); err != nil {
+		return err
+	}
+	prompttpl.InitSeeds()
 	models.InitDefaultForums()
 	models.InitPlatformConfigs()
 	models.SeedDefaultAiAgents() // AI 智能体内置种子（表为空时写入）
