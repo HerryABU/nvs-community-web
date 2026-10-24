@@ -96,7 +96,7 @@ func (Event) TableName() string { return "honeypot_events" }
 
 // Migrate 建表 + 初始化默认策略
 func Migrate(db *gorm.DB) error {
-	if err := db.AutoMigrate(&Setting{}, &Session{}, &Event{}); err != nil {
+	if err := db.AutoMigrate(&Setting{}, &Session{}, &Event{}, &Fingerprint{}); err != nil {
 		return err
 	}
 	var n int64

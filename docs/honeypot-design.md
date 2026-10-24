@@ -104,8 +104,24 @@ v1 先落「主站内嵌诱饵」形态（不启独立进程/端口），把「�
 **接口**：`GET/PUT /api/admin/honeypot/config`、`GET /honeypot/sessions`、`GET /honeypot/sessions/:sid`、
 `GET /honeypot/export`（导出留痕）、`POST /honeypot/cleanup`、`GET /honeypot/bans`、`POST /honeypot/ban|unban`。
 
-**与设计的差异（v1 未做）**：独立进程/端口、蜜罐 JWT 影子认证、验证页与指纹前置采集、
-`honeypot_fingerprints` 表、zip 取证包（当前为 JSON 导出）。这些属于 M2/M3，按 §5 路线继续。
+**M2/M3/M4 已落地（v3.15.0）**
+
+| 模块 | 实现 | 关键约束 |
+|---|---|---|
+| 影子认证 | `jwt.go` + `shadowauth.go`：蜜罐独立密钥 `data/honeypot/secret.key`（0600），诱饵 `.env` 暴露的 `JWT_SECRET` **就是这把密钥**；`/api/v2/*` 下读接口返回合成数据，写入/提权返回 403「检测到异地登录，请重新验证」+ 验证页地址 | 与真实 `JWT_SECRET` 物理隔离；`alg=none` 拒绝；卡口**没有成功分支** |
+| 验证页 | `verify.go`：`/hp/verify`（内联采集脚本，`DOMContentLoaded` 即采）+ `/hp/fp`（上报恒失败）+ `/hp/verify`（提交恒失败、`retry:true` 诱导继续） | 页面不含任何 success 分支；检测到 headless **只标记不拒绝**（拒绝会暴露蜜罐） |
+| 指纹 | `honeypot_fingerprints`：canvas/webgl/fonts/tz/lang/screen/dpr/cores/memory/hints/headless/raw | 同会话同指纹去重；仅管理员可读；随留存天数清理 |
+| 取证包 | `forensics.go`：`GET /api/admin/honeypot/export.zip` → `session.json`/`events.jsonl`/`fingerprints.json`/`manifest.json`（SHA256 清单），响应头带 `X-Bundle-SHA256`，下载后删临时包 | 导出写一条 `export` 事件（审批留痕） |
+| 规则反哺 | `feedback.go`：从风险 ≥60 的事件提炼 UA/路径特征 → 写入爬虫阻断名单并 `security.ReloadBotRules()` 即时生效 | 只反哺明确恶意特征；关键词长度 ≥4 防误伤；重复反哺幂等；写 `feedback` 事件留痕 |
+
+**仍未做**：独立进程/端口（当前内嵌主站，等级 off 时与 404 无差别）、JA3/JA4 与 WebRTC 内网 IP 采集
+（需 TLS/浏览器侧支持）、警方联动工单、按项目归档的 90 天冷归档（当前是行级 TTL 清理）。
+
+### 5.1.1 影子路由前缀为什么是 `/api/v2/*`
+
+真实站点没有 v2 前缀（不会与主站路由冲突），但对攻击者而言「发现了新版 API」本身就是甜头：
+先给合成用户/统计（甜），一旦碰写入就落到卡口（卡）。所有合成数据都是假邮箱/假计数，
+**没有任何一条能用于真实站点**，也不会写入真实用户表。
 
 ## 6. 风险清单（必读）
 

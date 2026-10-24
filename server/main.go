@@ -172,8 +172,11 @@ func main() {
 	// 按 Key 配额限流并跳过 route 级 IP 限流，无 Key 请求走匿名/爬虫低配额。
 	r.Use(security.APIKeyGuard())
 
-	// 蜜罐诱饵路由（root 级）：等级为 off 时响应与普通 404 无差别
+	// 蜜罐：诱饵 + 影子认证（/api/v2/*）+ 验证页与指纹采集（/hp/*）
+	// 等级为 off 时这些路径与普通 404 无差别，不暴露蜜罐存在。
 	honeypot.Register(r)
+	honeypot.RegisterShadow(r)
+	honeypot.RegisterVerify(r)
 
 	// 注入 gin 引擎供 API 聚合中间层（/api/batch）内存内转发使用
 	handlers.BatchEngine = r
@@ -723,6 +726,10 @@ func main() {
 		admin.GET("/honeypot/bans", honeypothandler.Bans)
 		admin.POST("/honeypot/ban", honeypothandler.Ban)
 		admin.POST("/honeypot/unban", honeypothandler.Unban)
+		admin.GET("/honeypot/sessions/:sid/fingerprints", honeypothandler.Fingerprints)
+		admin.GET("/honeypot/export.zip", honeypothandler.ExportZip)
+		admin.GET("/honeypot/rules", honeypothandler.Rules)
+		admin.POST("/honeypot/rules", honeypothandler.ApplyRules)
 		admin.POST("/log-redact/preview", handlers.PreviewLogRedact)
 		// 176号令合规补全：算法推荐管理（第七条第九项）
 		admin.GET("/algorithms", handlers.GetAlgoConfig)
