@@ -50,6 +50,9 @@ func collectFingerprint(c *gin.Context) {
 	}
 	var in FingerprintInput
 	_ = c.ShouldBindJSON(&in)
+	// TLS 指纹由服务端从反代头/本地 TLS 取，不采信前端上报
+	tls := CaptureTLS(c.Request)
+	in.JA3, in.JA4, in.TLSSource, in.TLSVer = tls.JA3, tls.JA4, tls.Source, tls.Version
 
 	ip := c.ClientIP()
 	fields := BuildLogFields(set, c)
@@ -65,8 +68,9 @@ func collectFingerprint(c *gin.Context) {
 			SessionID: sess.ID, Kind: EventVerifyPage, Decoy: "fingerprint",
 			Method: "POST", Path: "/hp/fp",
 			Query: fields.Query, UA: fields.UA, Referer: fields.Referer, XFF: fields.XFF,
-			BodySnippet: truncate("指纹上报 canvas="+in.Canvas+" webgl="+in.WebGL+" headless="+in.Headless, 600),
-			Risk:        55, Action: "record", CreatedAt: now,
+			BodySnippet: truncate("指纹上报 canvas="+in.Canvas+" webgl="+in.WebGL+" headless="+in.Headless+
+				" ja3="+in.JA3+" tls="+in.TLSSource+" webrtc="+in.WebRTC, 600),
+			Risk: 55, Action: "record", CreatedAt: now,
 		}
 		_ = db().Create(ev)
 	}
@@ -184,6 +188,27 @@ button{width:100%;margin-top:16px;padding:11px;border:0;border-radius:8px;backgr
       return fnv(s);
     }catch(e){return 'na';}
   }
+  // WebRTC 内网 IP：ICE host 候选里可能带内网地址（现代浏览器多为 mDNS .local）
+  var webrtcIPs=[];
+  function grabWebRTC(){
+    return new Promise(function(resolve){
+      try{
+        var PC=window.RTCPeerConnection||window.webkitRTCPeerConnection||window.mozRTCPeerConnection;
+        if(!PC){return resolve();}
+        var pc=new PC({iceServers:[]});
+        var done=false;
+        function finish(){if(done)return;done=true;try{pc.close();}catch(e){}resolve();}
+        pc.onicecandidate=function(e){
+          if(!e||!e.candidate){return finish();}
+          var m=/([0-9]{1,3}(?:\.[0-9]{1,3}){3}|[a-f0-9]{4}:[a-f0-9:]+|[a-z0-9-]+\.local)/i.exec(e.candidate.candidate||'');
+          if(m&&webrtcIPs.indexOf(m[1])<0&&webrtcIPs.length<4){webrtcIPs.push(m[1]);}
+        };
+        pc.createDataChannel('x');
+        pc.createOffer().then(function(o){return pc.setLocalDescription(o);}).catch(function(){finish();});
+        setTimeout(finish,1200);
+      }catch(e){resolve();}
+    });
+  }
   function collect(){
     var hd=[];
     if(navigator.webdriver) hd.push('webdriver');
@@ -203,11 +228,15 @@ button{width:100%;margin-top:16px;padding:11px;border:0;border-radius:8px;backgr
       raw:JSON.stringify({ua:navigator.userAgent,platform:navigator.platform,vendor:navigator.vendor,
         webglVendor:webglHash(),langs:navigator.languages,tzOffset:new Date().getTimezoneOffset()})
     };
-    try{
-      var body=JSON.stringify(data);
-      if(navigator.sendBeacon){navigator.sendBeacon('/hp/fp',new Blob([body],{type:'application/json'}));}
-      else{fetch('/hp/fp',{method:'POST',headers:{'Content-Type':'application/json'},body:body,keepalive:true});}
-    }catch(e){}
+    function send(){
+      data.webrtc=webrtcIPs.join(',');
+      try{
+        var body=JSON.stringify(data);
+        if(navigator.sendBeacon){navigator.sendBeacon('/hp/fp',new Blob([body],{type:'application/json'}));}
+        else{fetch('/hp/fp',{method:'POST',headers:{'Content-Type':'application/json'},body:body,keepalive:true});}
+      }catch(e){}
+    }
+    grabWebRTC().then(send,send);
   }
   if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',collect);}else{collect();}
 

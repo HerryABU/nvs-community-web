@@ -84,6 +84,10 @@ func AllModels() []interface{} {
 		&AiPrompt{}, &AiVendor{}, &AiModelKey{}, &AiStyle{}, &AiContentMark{},
 		// 搜索热词埋点（F9：站内搜索 query 记录，聚合出搜索热词）
 		&SearchLog{},
+		// 运营位：自定义导航菜单 / 轮播 / 签到（gap-audit #20 #23）
+		&NavMenu{}, &Carousel{}, &CheckInRecord{},
+		// API Key 审计告警（多 IP / 解密失败 / 封禁后仍使用）
+		&ApiKeyAlarm{},
 	}
 }
 

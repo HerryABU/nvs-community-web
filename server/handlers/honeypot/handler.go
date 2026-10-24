@@ -9,6 +9,7 @@ import (
 
 	"nvs-server/honeypot"
 	"nvs-server/middleware"
+	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -175,4 +176,36 @@ func Ban(c *gin.Context) {
 	}
 	honeypot.Ban(in.IP, in.Minutes)
 	utils.SuccessMessage(c, "已封禁", nil)
+}
+
+// SQLiStats GET /api/admin/honeypot/sqli —— 注入蜜罐命中统计（gap-audit #3）
+func SQLiStats(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	type row struct {
+		Decoy string `json:"decoy"`
+		Kind  string `json:"kind"`
+		C     int64  `json:"count"`
+	}
+	var rows []row
+	_ = models.DB.Model(&honeypot.Event{}).
+		Select("decoy, kind, COUNT(1) as c").
+		Where("kind IN ?", []string{honeypot.EventSQLiHit, honeypot.EventSQLiProbe}).
+		Group("decoy, kind").Order("c DESC").Scan(&rows).Error
+	var hits, probes int64
+	_ = models.DB.Model(&honeypot.Event{}).Where("kind = ?", honeypot.EventSQLiHit).Count(&hits).Error
+	_ = models.DB.Model(&honeypot.Event{}).Where("kind = ?", honeypot.EventSQLiProbe).Count(&probes).Error
+	utils.Success(c, gin.H{
+		"hits": hits, "probes": probes, "breakdown": rows,
+		"note": "真实业务链路全部参数化，SQL 注入打不穿；这些是「钓鱼式假入口」的记录，用途是拿到完整 payload 与工具特征，并拖住攻击者。",
+	})
+}
+
+// TLSStats GET /api/admin/honeypot/tls —— JA3/JA4 采集率与配置模板（gap-audit #4）
+func TLSStats(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	utils.Success(c, honeypot.TLSStats())
 }

@@ -8,10 +8,12 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"nvs-server/config"
 	"nvs-server/models"
 	"nvs-server/payment"
+	"nvs-server/risk"
 
 	"github.com/gin-gonic/gin"
 )
@@ -59,9 +61,36 @@ func PaymentNotify(c *gin.Context) {
 		fail("amount mismatch")
 		return
 	}
+	// ── 充值风控（gap-audit #9）：入账前打分 ──
+	// block：不入账（钱收了但先不给，进人工复核队列）——比「先给再追回」安全得多
+	// hold：入账但打标，进复核队列
+	user, _ := models.GetUserByID(order.UserID)
+	deviceID := strings.TrimSpace(c.GetHeader("X-Device-Id"))
+	eval := risk.Evaluate(risk.EvalInput{
+		UserID: order.UserID, OrderNo: order.OrderNo, AmountFen: order.AmountFen,
+		Channel: order.Channel, IP: c.ClientIP(), DeviceID: deviceID,
+		UserCreatedAt: userCreatedAt(user),
+	})
+	if _, rerr := risk.Record(risk.EvalInput{
+		UserID: order.UserID, OrderNo: order.OrderNo, AmountFen: order.AmountFen,
+		Channel: order.Channel, IP: c.ClientIP(), DeviceID: deviceID,
+		UserCreatedAt: userCreatedAt(user),
+	}, eval); rerr != nil {
+		log.Printf("[payment] 风控事件写入失败 order=%s: %v", order.OrderNo, rerr)
+	}
+	if eval.Decision == risk.DecisionBlock {
+		// 应答成功：避免渠道无脑重试把队列打爆；同时后台能看到「收了钱没入账」的单
+		log.Printf("[payment] 风控拦截（不入账）order=%s score=%d reasons=%v",
+			order.OrderNo, eval.Score, eval.Reasons)
+		c.String(http.StatusOK, provider.NotifyAck(true))
+		return
+	}
 	if _, _, err := models.MarkOrderPaid(order.OrderNo, result.TxnID, raw); err != nil {
 		fail("mark paid: " + err.Error())
 		return
+	}
+	if eval.Decision == risk.DecisionHold {
+		log.Printf("[payment] 风控打标（已入账待复核）order=%s score=%d", order.OrderNo, eval.Score)
 	}
 	c.String(http.StatusOK, provider.NotifyAck(true))
 }
@@ -113,4 +142,12 @@ func parseNotifyForm(c *gin.Context) (url.Values, string) {
 		return nil, raw
 	}
 	return form, raw
+}
+
+// userCreatedAt 取注册时间（风控「新号大额」规则用；取不到时返回零值表示未知）
+func userCreatedAt(u *models.User) time.Time {
+	if u == nil {
+		return time.Time{}
+	}
+	return u.CreatedAt
 }

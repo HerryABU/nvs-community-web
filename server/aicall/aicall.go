@@ -35,6 +35,7 @@ type Result struct {
 	LatencyMs int            `json:"latency_ms"`
 	Fallbacks []FallbackNote `json:"fallbacks,omitempty"`
 	Strategy  string         `json:"strategy"`
+	QueuedMs  int64          `json:"queued_ms,omitempty"` // 排队等待耗时（全站并发闸门）
 }
 
 // ErrNoModel 没有可用模型
@@ -67,6 +68,21 @@ func Complete(req Request) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// 全站并发闸门（gap-audit #12）：超出并发就排队，排不上就明确告诉用户"忙"，
+	// 而不是把上游打到 429 让所有人一起失败。
+	budgetCfg := models.LoadAiBudgetConfig()
+	limit := models.EffectiveConcurrency(budgetCfg)
+	var release func()
+	var waited time.Duration
+	if limit > 0 {
+		timeout := time.Duration(budgetCfg.QueueTimeoutSec) * time.Second
+		release, waited, err = models.AcquireSlot(limit, timeout)
+		if err != nil {
+			return nil, err
+		}
+		defer release()
+	}
 	cfg := models.LoadAiRouteConfig()
 	strategy := models.EffectiveStrategy(cfg, req.Scene)
 
@@ -89,6 +105,7 @@ func Complete(req Request) (*Result, error) {
 		tried = append(tried, m.ID)
 		out, callErr := attempt(req, m, res)
 		if callErr == nil {
+			out.QueuedMs = waited.Milliseconds()
 			return out, nil
 		}
 		lastErr = callErr
@@ -124,6 +141,15 @@ func attempt(req Request, m *models.AiModel, res *Result) (*Result, error) {
 		temp = 0.7
 	}
 	est := models.EstimateTokens(req.System+"\n"+req.User) + maxTokens
+
+	// 平台总预算闸门：到线即拒（仅在 HardStop 时阻断，否则只观测）
+	if berr := models.CheckGlobalBudget(models.EstimateAiCost(m, est, maxTokens)); berr != nil {
+		return nil, berr
+	}
+	// 三维交叉限流：人×模型 / 人 / 模型
+	if terr := models.CheckAiThrottle(req.PayerID, m.ID); terr != nil {
+		return nil, terr
+	}
 
 	// 免费额度 / 余额预检（与既有一致：免费优先，其次代币）
 	freeOK, _, _ := models.CheckAiFreeQuota(req.PayerID, est)

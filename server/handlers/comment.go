@@ -65,6 +65,10 @@ func CreateComment(c *gin.Context) {
 	if checkRealNameRequired(c) {
 		return
 	}
+	// 注册门槛（账号年龄 / 新号每日上限，gap-audit #14）
+	if !checkPostGate(c, "comment") {
+		return
+	}
 
 	var req struct {
 		NovelID       uint   `json:"novel_id"`

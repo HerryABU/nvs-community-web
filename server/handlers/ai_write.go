@@ -27,6 +27,13 @@ func aiSystemPrompt(action string) string {
 		return "你是一位专业的中文小说写作助手。请对用户提供的内容进行扩写：丰富细节、对话与环境描写，只输出扩写后的正文。"
 	case "summarize":
 		return "你是一位专业的内容摘要助手。请用简洁中文概括用户提供的内容，只输出摘要本身。"
+	case "mindmap":
+		return "你是一位擅长把长文压缩成结构图的中文编辑。请把用户提供的内容整理成 Mermaid mindmap 语法，" +
+			"只输出一个 ```mermaid 代码块，其它什么都不要写。要求：" +
+			"1) 首行固定 `mindmap`，根节点用圆括号包裹主题；" +
+			"2) 层级 2~4 层，节点文字不超过 12 字，不要标点堆叠；" +
+			"3) 分支按原文逻辑（人物/事件/设定/因果）归并，不逐句罗列；" +
+			"4) 不编造原文没有的内容，宁可少一层。"
 	case "character":
 		return "你是一位资深的中文小说角色设定师。请根据用户提供的线索设计角色卡，按以下小标题输出：" +
 			"【姓名与称谓】【外貌（3 个可视觉化细节）】【性格与致命缺陷】【出身与当前处境】" +
@@ -41,7 +48,7 @@ func aiSystemPrompt(action string) string {
 // aiActionLabel 动作合法性（与 models.aiActionLabel 对应的白名单）
 func aiActionValid(action string) bool {
 	switch action {
-	case "continue", "polish", "expand", "summarize", "character", "custom":
+	case "continue", "polish", "expand", "summarize", "character", "mindmap", "custom":
 		return true
 	}
 	return false
@@ -121,13 +128,13 @@ func AiComplete(c *gin.Context) {
 	}
 	userID := currentUserID(c)
 	var req struct {
-		ModelID     uint   `json:"model_id"`
-		Action      string `json:"action"`
-		Text        string `json:"text"`
-		MaxTokens   int    `json:"max_tokens"`
+		ModelID     uint     `json:"model_id"`
+		Action      string   `json:"action"`
+		Text        string   `json:"text"`
+		MaxTokens   int      `json:"max_tokens"`
 		Temperature *float64 `json:"temperature"`
-		RefType     string `json:"ref_type"`
-		RefID       uint   `json:"ref_id"`
+		RefType     string   `json:"ref_type"`
+		RefID       uint     `json:"ref_id"`
 		// 自备密钥（§5.5 BYOK）：byok=true 时用用户自带上游，不扣平台代币
 		Byok      bool   `json:"byok"`
 		ByokModel string `json:"byok_model"`

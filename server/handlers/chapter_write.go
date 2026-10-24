@@ -24,6 +24,10 @@ import (
 )
 
 func CreateChapter(c *gin.Context) {
+	// 注册门槛（账号年龄 / 新号每日上限，gap-audit #14）
+	if !checkPostGate(c, "post") {
+		return
+	}
 	userID := currentUserID(c)
 	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 

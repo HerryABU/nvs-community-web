@@ -235,6 +235,8 @@ func aiActionLabel(action string) string {
 		return "摘要"
 	case "character":
 		return "角色设定"
+	case "mindmap":
+		return "思维导图"
 	default:
 		return "生成"
 	}

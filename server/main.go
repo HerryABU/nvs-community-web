@@ -19,6 +19,7 @@ import (
 	"nvs-server/collab"
 	"nvs-server/config"
 	"nvs-server/crypto"
+	"nvs-server/gate"
 	"nvs-server/gmcmd"
 	"nvs-server/groups"
 	"nvs-server/handlers"
@@ -32,7 +33,10 @@ import (
 	"nvs-server/middleware"
 	"nvs-server/models"
 	"nvs-server/oc"
+	"nvs-server/police"
 	"nvs-server/prompttpl"
+	"nvs-server/risk"
+	"nvs-server/scriptmode"
 	"nvs-server/security"
 	"nvs-server/security/sms"
 	"nvs-server/tlsconfig"
@@ -175,6 +179,8 @@ func main() {
 	// 蜜罐：诱饵 + 影子认证（/api/v2/*）+ 验证页与指纹采集（/hp/*）
 	// 等级为 off 时这些路径与普通 404 无差别，不暴露蜜罐存在。
 	honeypot.Register(r)
+	// SQL 注入蜜罐（gap-audit #3）：假 SQL 入口 + 预生成响应库；off/low 档与普通 404 无差别
+	honeypot.RegisterSQLi(r)
 	honeypot.RegisterShadow(r)
 	honeypot.RegisterVerify(r)
 
@@ -234,6 +240,14 @@ func main() {
 	public.Use(middleware.OptionalAuth()) // 公开路由也识别登录态（管理员豁免/我的论坛等权限判断）
 	{
 		public.POST("/auth/register", security.RateLimit(10, 60), handlers.Register) // 安全审计 M2：注册限流防批量灌号
+		// 注册门槛提示与预检（邀请码/设备指纹/账号年龄，gap-audit #14）
+		public.GET("/auth/register-hint", handlers.RegisterGateHint)
+		public.POST("/auth/register-check", security.RateLimit(20, 60), handlers.RegisterGateCheck)
+		// 运营位（gap-audit #20 #23）：导航菜单 / 轮播 / 签到状态 / 访客设置
+		public.GET("/nav-menus", handlers.PublicNavMenus)
+		public.GET("/carousels", handlers.PublicCarousels)
+		public.GET("/checkin/status", handlers.CheckInStatus)
+		public.GET("/visit-setting", handlers.PublicVisitSetting)
 		public.POST("/auth/login", security.RateLimit(5, 60), handlers.Login)
 		public.POST("/auth/logout", handlers.Logout)
 		// 🔒 无感续期：校验 HttpOnly 刷新令牌 Cookie，签发新的访问令牌（不要求已登录）
@@ -670,6 +684,28 @@ func main() {
 		bookshelf.DELETE("/:id", handlers.RemoveFromShelf)
 		bookshelf.GET("/check/:id", handlers.CheckShelf)
 		bookshelf.POST("/progress", handlers.UpdateShelfProgress)
+
+		// ===== 运营位（gap-audit #20 #23）=====
+		protected.POST("/checkin", handlers.DoCheckIn)
+		// ===== 语音合成 / 音乐（gap-audit #18）=====
+		protected.POST("/ai/speech", security.RateLimit(10, 60), handlers.Speech)
+		// ===== OC 表情包 + 角色卡/世界书导入导出（gap-audit #22 #24）=====
+		// 注意：/oc/characters/:cid 已是通配段，import 必须换前缀（gin 不允许同层静态+通配）
+		protected.GET("/oc/emotes", ochandler.ListEmotes)
+		protected.POST("/oc/emotes", ochandler.CreateEmote)
+		protected.DELETE("/oc/emotes/:id", ochandler.DeleteEmote)
+		protected.POST("/oc/import/character", ochandler.ImportCard)
+		protected.POST("/oc/import/book", ochandler.ImportBook)
+		protected.GET("/oc/characters/:cid/export", ochandler.ExportCard)
+		protected.GET("/oc/books/:bid/export", ochandler.ExportBook)
+
+		// ===== 警方联动工单（gap-audit #6）：角色校验在 handler 内 =====
+		protected.GET("/police/tickets", handlers.ListTickets)
+		protected.POST("/police/tickets", handlers.CreateTicket)
+		protected.GET("/police/tickets/:id", handlers.GetTicket)
+		protected.POST("/police/tickets/:id/assign", handlers.AssignTicket)
+		protected.POST("/police/tickets/:id/status", handlers.SetTicketStatus)
+		protected.POST("/police/tickets/:id/notes", handlers.AddTicketNote)
 	}
 
 	// 管理员路由
@@ -781,6 +817,38 @@ func main() {
 		admin.GET("/compliance/export-users", handlers.ExportComplianceUsers)
 		// 一键导出检查应对材料包（zip + SHA256 清单，导出留痕）
 		admin.GET("/compliance/bundle.zip", handlers.ExportComplianceBundle)
+		// ===== 注册门槛 / 邀请码 / 设备指纹（gap-audit #14）=====
+		admin.GET("/gate", handlers.AdminGateConfig)
+		admin.PUT("/gate", handlers.SaveGateConfig)
+		admin.GET("/gate/invites", handlers.AdminInvites)
+		admin.POST("/gate/invites", handlers.CreateInvites)
+		admin.POST("/gate/invites/:id/revoke", handlers.RevokeInvite)
+		admin.GET("/gate/devices", handlers.AdminDeviceBindings)
+		// ===== 充值风控（gap-audit #9）=====
+		admin.GET("/risk", handlers.AdminRiskConfig)
+		admin.PUT("/risk", handlers.SaveRiskConfig)
+		admin.GET("/risk/events", handlers.AdminRiskEvents)
+		admin.POST("/risk/events/:id/handle", handlers.HandleRiskEvent)
+		// ===== API Key 审计告警（告警口径补齐）=====
+		admin.GET("/api-key-alarms", handlers.AdminKeyAlarms)
+		admin.POST("/api-key-alarms/:id/ack", handlers.AckKeyAlarm)
+		// ===== 自定义导航菜单 / 轮播 / 签到 / 访客设置 =====
+		admin.GET("/nav-menus", handlers.AdminNavMenus)
+		admin.POST("/nav-menus", handlers.SaveNavMenu)
+		admin.DELETE("/nav-menus/:id", handlers.DeleteNavMenu)
+		admin.GET("/carousels", handlers.AdminCarousels)
+		admin.POST("/carousels", handlers.SaveCarousel)
+		admin.DELETE("/carousels/:id", handlers.DeleteCarousel)
+		admin.GET("/checkin", handlers.AdminCheckIn)
+		admin.PUT("/checkin", handlers.SaveCheckIn)
+		admin.GET("/visit-setting", handlers.AdminVisitSetting)
+		admin.PUT("/visit-setting", handlers.SaveVisitSetting)
+		// ===== 语音模型 / 转化漏斗 =====
+		admin.GET("/ai/audio-models", handlers.AdminSpeechModels)
+		admin.GET("/ai/funnel", handlers.AiFunnel)
+		// ===== 蜜罐：SQLi 命中与 TLS 采集率 =====
+		admin.GET("/honeypot/sqli", honeypothandler.SQLiStats)
+		admin.GET("/honeypot/tls", honeypothandler.TLSStats)
 		// 隔离墙配置
 		admin.GET("/wall-config", handlers.GetWallConfig)
 		admin.PUT("/wall-config", handlers.UpdateWallConfig)
@@ -1477,6 +1545,22 @@ func initDatabase() error {
 	if err := honeypot.Bootstrap(models.DB); err != nil {
 		return err
 	}
+	// 注册门槛（邀请码/设备指纹/账号年龄）+ 充值风控 + 警方工单 + OC 表情
+	if err := gate.Migrate(models.DB); err != nil {
+		return err
+	}
+	if err := risk.Migrate(models.DB); err != nil {
+		return err
+	}
+	if err := police.Migrate(models.DB); err != nil {
+		return err
+	}
+	if err := oc.MigrateEmote(models.DB); err != nil {
+		return err
+	}
+	// 自定义表情注册到渲染器（气泡由服务端渲染，需全局表；失败不影响启动）
+	oc.ReloadCustomEmotes()
+	scriptmode.RegisterCustomEmotes(oc.CustomEmoteMap())
 	// 版本控制后端选择：NVS_VCS_BACKEND=git 时启用真实 git 仓库（需 -tags gitvcs 构建），
 	// 失败或不可用自动回落自研版本链，不阻断启动
 	chaptervcs.Init()

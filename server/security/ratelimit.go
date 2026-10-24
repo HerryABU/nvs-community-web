@@ -227,7 +227,7 @@ func recordAccessLog(identity *models.KeyIdentity, method, path, ip, ua string, 
 }
 
 // touchKeyLastUsed 节流更新 Key 的 last_used_at（每 key 每分钟最多写一次）
-func touchKeyLastUsed(identity *models.KeyIdentity) {
+func touchKeyLastUsed(identity *models.KeyIdentity, ip string) {
 	if identity == nil || !identity.ValidKey {
 		return
 	}
@@ -247,6 +247,11 @@ func touchKeyLastUsed(identity *models.KeyIdentity) {
 	} else {
 		models.DB.Model(&models.APIKey{}).Where("id = ? AND user_id = ?", identity.ID, identity.UserID).
 			Updates(updates)
+		// 审计告警：同 key 多 IP 提醒（只提醒不封禁）+ 封禁 key 仍被使用
+		TrackKeyIP(identity.ID, identity.UserID, ip)
+		if identity.Banned {
+			ReportBannedKeyUse(identity.ID, identity.UserID, ip)
+		}
 	}
 }
 
@@ -335,7 +340,7 @@ func APIKeyGuard() gin.HandlerFunc {
 				if (method == "GET" || method == "HEAD") && !isSensitivePath(path) {
 					c.Set(CtxKeySkipIP, true)
 				}
-				touchKeyLastUsed(ident)
+				touchKeyLastUsed(ident, c.ClientIP())
 				recordAccessLog(ident, method, path, ip, ua, 0, "")
 				c.Next()
 				return

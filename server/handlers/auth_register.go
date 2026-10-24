@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	"nvs-server/gate"
 	"nvs-server/middleware"
 	"nvs-server/models"
 	"nvs-server/security/slidecaptcha"
@@ -21,6 +22,7 @@ type RegisterInput struct {
 	AgreeToGuidelines bool   `json:"agree_to_guidelines"`
 	VerifyCode        string `json:"verify_code"`   // 邮箱验证码（站长开启邮箱验证时必填）
 	CaptchaToken      string `json:"captcha_token"` // 滑块验证码 pass token（站长开启滑块时必填）
+	InviteCode        string `json:"invite_code"`   // 邀请码（站长开启邀请制时必填）
 }
 
 // POST /api/auth/register
@@ -46,6 +48,15 @@ func Register(c *gin.Context) {
 			utils.Forbidden(c, "请先完成滑块验证后再注册")
 			return
 		}
+	}
+
+	// 注册门槛（gap-audit #14）：邀请码 / 设备指纹 / 蜜罐 IP / 临时邮箱
+	deviceID, deviceSrc := gate.DeviceIDFrom(c)
+	if gerr := gate.CanRegister(gate.RegisterInput{
+		IP: c.ClientIP(), DeviceID: deviceID, Email: input.Email, Invite: input.InviteCode,
+	}); gerr != nil {
+		utils.Forbidden(c, gerr.Error())
+		return
 	}
 
 	// 邮箱域名黑白名单校验（黑名单禁止、白名单放行）
@@ -108,6 +119,17 @@ func Register(c *gin.Context) {
 		utils.InternalError(c, "注册失败")
 		return
 	}
+
+	// 邀请码消费（失败说明刚好被用尽——此时回滚用户，避免「无邀请码也能进」）
+	if cfg := gate.Load(); cfg.Enabled && cfg.RequireInvite && input.InviteCode != "" {
+		if uerr := gate.UseInvite(nil, input.InviteCode); uerr != nil {
+			_ = models.DB.Unscoped().Delete(&models.User{}, user.ID).Error
+			utils.BadRequest(c, "邀请码无效或已用尽")
+			return
+		}
+	}
+	// 设备指纹绑定（同设备账号数统计的基础；失败不阻断注册，只影响风控精度）
+	_ = gate.Bind(nil, deviceID, user.ID, c.ClientIP(), c.GetHeader("User-Agent"), deviceSrc)
 
 	// 合规审计：注册成功
 	recordUserAudit(c, user.ID, models.AuditRegister, "新用户注册，邮箱 "+user.Email, "success")
