@@ -202,7 +202,17 @@ async function submitReply() {
   replying.value = false;
 }
 
-defineExpose({ reload: load });
+/** 实时消息：抽屉打开且命中当前帖时刷新回复（其它情况只刷新计数） */
+async function refreshCurrent(postId?: number) {
+  if (!postVisible.value || !current.value) return;
+  if (postId && current.value.id !== postId) return;
+  try {
+    const res = await groupApi.replies(props.groupId, current.value.id, { page: 1, size: 100 });
+    if (res.data.code === 0) replies.value = res.data.data.list || [];
+  } catch { /* ignore */ }
+}
+
+defineExpose({ reload: load, refreshCurrent });
 load();
 </script>
 

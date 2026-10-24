@@ -5,6 +5,7 @@ import (
 	"nvs-server/middleware"
 	"strconv"
 	"strings"
+	"time"
 
 	"nvs-server/models"
 	"nvs-server/utils"
@@ -99,6 +100,12 @@ func GroupMemberApprove(c *gin.Context) {
 	if err := groups.ApproveMember(uint(gid), uid, middleware.UserRole(c), uint(target), req.Approve); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
+	}
+	if req.Approve {
+		publishGroupEvent(uint(gid), GroupEventMemberJoined, gin.H{
+			"user_id": uint(target), "at": time.Now().Unix(),
+		})
+		groups.RefreshGroupCounts(uint(gid))
 	}
 	msg := "已通过申请"
 	if !req.Approve {

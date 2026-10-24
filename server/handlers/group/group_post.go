@@ -6,6 +6,7 @@ import (
 	"nvs-server/security"
 	"strconv"
 	"strings"
+	"time"
 
 	"nvs-server/models"
 	"nvs-server/utils"
@@ -82,6 +83,11 @@ func GroupPostCreate(c *gin.Context) {
 	if p.AiAssisted {
 		_ = models.MarkAiContent(models.AiMarkGroupPost, p.ID, "")
 	}
+	// 实时消息：通知在线成员新帖（pending 由前端按状态提示「待审」）
+	publishGroupEvent(ctx.Group.ID, GroupEventPostCreated, gin.H{
+		"post_id": p.ID, "title": p.Title, "status": p.Status,
+		"author_id": uid, "author": displayNameOf(user), "at": time.Now().Unix(),
+	})
 	// 群内 @ai：异步生成机器人回复
 	maybeTriggerGroupAi(ctx.Group, p.ID, uid, p.Title, p.Content)
 
@@ -228,6 +234,10 @@ func GroupReplyCreate(c *gin.Context) {
 		return
 	}
 	markBadWords(badHits, "group_reply", r.ID, uid, cleaned, "")
+	publishGroupEvent(ctx.Group.ID, GroupEventReplyCreated, gin.H{
+		"post_id": uint(pid), "reply_id": r.ID, "author_id": uid,
+		"author": displayNameOf(user), "at": time.Now().Unix(),
+	})
 	maybeTriggerGroupAiReply(ctx.Group, uint(pid), uid, cleaned, r.ID)
 	utils.SuccessMessage(c, "回复成功", gin.H{"reply": r})
 }

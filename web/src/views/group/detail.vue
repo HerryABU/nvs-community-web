@@ -24,6 +24,9 @@
             <el-button v-else type="primary" size="small" :loading="joining" @click="join">加入群组</el-button>
           </template>
           <el-tag v-else size="small" type="success" effect="plain">我是{{ roleLabel(myRole) }}</el-tag>
+          <span class="gd-live" :class="{ on: streamConnected }" :title="streamConnected ? '实时消息已连接' : '实时消息连接中…'">
+            <i class="gd-live-dot" />{{ streamConnected ? '实时' : '连接中' }}
+          </span>
           <el-button size="small" @click="qrVisible = true">群二维码</el-button>
           <el-button v-if="isOwner" size="small" text type="danger" @click="leave">退出群组</el-button>
         </div>
@@ -77,9 +80,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ElMessage, ElMessageBox, ElNotification } from 'element-plus';
 import { groupApi, type Group } from '@/api/group';
 import { useAuthStore } from '@/stores/auth';
+import { useGroupStream } from '@/composables/useGroupStream';
 import EmptyState from '@/components/common/EmptyState.vue';
 import GroupPosts from '@/components/group/GroupPosts.vue';
 import GroupMembers from '@/components/group/GroupMembers.vue';
@@ -198,6 +202,57 @@ async function leave() {
   }
 }
 
+// ==================== G4 实时消息（SSE） ====================
+// 新帖/回复/公告/成员变动即时刷新；自己的操作不弹通知（避免自己收到自己的提醒）
+const pendingReload = ref<number | null>(null);
+function schedulePostsReload() {
+  if (pendingReload.value) window.clearTimeout(pendingReload.value);
+  pendingReload.value = window.setTimeout(() => {
+    pendingReload.value = null;
+    postsRef.value?.reload?.();
+  }, 400);
+}
+
+const { connected: streamConnected } = useGroupStream(() => groupId.value, (name, data) => {
+  const me = auth.user?.id;
+  switch (name) {
+    case 'post.created':
+      schedulePostsReload();
+      if (data?.author_id !== me) {
+        ElNotification({
+          title: '群里有新帖',
+          message: data?.title ? `${data.author || '成员'}：${data.title}` : '有新帖子',
+          type: 'info',
+          duration: 3500,
+        });
+      }
+      break;
+    case 'reply.created':
+      schedulePostsReload();
+      postsRef.value?.refreshCurrent?.(data?.post_id);
+      if (data?.author_id !== me && !data?.ai) {
+        ElNotification({ title: '新回复', message: `${data?.author || '成员'} 回复了帖子`, type: 'info', duration: 2500 });
+      }
+      break;
+    case 'post.reviewed':
+      load();
+      schedulePostsReload();
+      break;
+    case 'announcement':
+      load();
+      if (data?.preview) {
+        ElNotification({ title: '群公告更新', message: data.preview, type: 'warning', duration: 4000 });
+      }
+      break;
+    case 'member.joined':
+    case 'member.left':
+      load();
+      break;
+    default:
+      break;
+  }
+});
+
 onMounted(load);
 </script>
 
@@ -227,4 +282,12 @@ onMounted(load);
   background: var(--card-bg, #fff);
 }
 .gd-tabs { margin-top: 4px; }
+.gd-live {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 0.72rem;
+  color: var(--text-light, #94a3b8); border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 999px; padding: 2px 9px;
+}
+.gd-live.on { color: #10b981; border-color: rgba(16, 185, 129, 0.35); background: rgba(16, 185, 129, 0.06); }
+.gd-live-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.gd-live.on .gd-live-dot { box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15); }
 </style>

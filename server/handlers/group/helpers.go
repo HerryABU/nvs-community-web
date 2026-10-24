@@ -2,6 +2,7 @@ package grouphandler
 
 import (
 	"encoding/json"
+	"strings"
 
 	"nvs-server/middleware"
 	"nvs-server/models"
@@ -55,4 +56,15 @@ func snippetOf(s string) string {
 		return string(r[:200])
 	}
 	return s
+}
+
+// displayNameOf 用户展示名：昵称优先，其次用户名（nil 安全）
+func displayNameOf(u *models.User) string {
+	if u == nil {
+		return ""
+	}
+	if strings.TrimSpace(u.Nickname) != "" {
+		return u.Nickname
+	}
+	return u.Username
 }
