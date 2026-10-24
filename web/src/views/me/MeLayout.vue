@@ -3,9 +3,16 @@
     <template v-if="profile">
       <!-- 个人信息头（瘦：仅头部 + 计数，不渲染图表/评论/博客列表） -->
       <div class="me-header">
-        <el-avatar :size="80" :src="author.avatar_url || ''">
-          {{ initial }}
-        </el-avatar>
+        <el-tooltip content="更换头像 / 编辑资料" placement="bottom">
+          <el-avatar
+            :size="80"
+            :src="author.avatar_url || ''"
+            class="me-avatar"
+            @click="$router.push('/me/decorate')"
+          >
+            {{ initial }}
+          </el-avatar>
+        </el-tooltip>
         <div class="me-info">
           <h1>{{ author.nickname || author.username }}</h1>
           <p class="me-bio" v-if="author.bio">{{ author.bio }}</p>
@@ -72,8 +79,10 @@ const activeTab = computed({
   set: (t: string) => t,
 });
 
-function onTab(name: string) {
-  router.push(name === 'overview' ? '/me' : `/me/${name}`);
+// Element Plus 的 tab-change 传的是 string | number，这里统一按字符串处理
+function onTab(name: string | number) {
+  const t = String(name);
+  router.push(t === 'overview' ? '/me' : `/me/${t}`);
 }
 
 async function load() {
@@ -118,25 +127,25 @@ watch(() => authStore.user?.id, (v) => { if (v) { authorKey.value = String(v); l
   align-items: flex-start;
   margin-bottom: 24px;
   padding: 24px;
-  background: #fff;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
 }
-[data-theme="dark"] .me-header {
-  background: #1e293b;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
+.me-avatar {
+  cursor: pointer;
+  transition: box-shadow 0.18s;
 }
+.me-avatar:hover { box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.18); }
 .me-info h1 {
   font-size: 1.5rem;
-  color: var(--primary-color);
+  color: var(--text-color);
   margin-bottom: 6px;
 }
 .me-bio {
-  color: #666;
+  color: var(--text-light);
   margin-bottom: 6px;
   max-width: 500px;
 }
-[data-theme="dark"] .me-bio { color: #94a3b8; }
 .me-signature { color: var(--text-light); margin-bottom: 6px; font-size: 0.9rem; }
 .me-stats {
   display: flex;

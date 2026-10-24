@@ -158,7 +158,8 @@
             </template>
           </el-dropdown>
 
-          <el-dropdown trigger="click">
+          <!-- popper-class 便于测试与样式定位（下拉已瘦身为 5 项，服务入口在个人中心） -->
+          <el-dropdown trigger="click" popper-class="user-menu-popper">
             <span class="user-info">
               <el-avatar :size="32" :src="authStore.user?.avatar_url">
                 {{ authStore.user?.nickname?.[0] || authStore.user?.username?.[0] || 'U' }}
@@ -167,45 +168,13 @@
             </span>
             <template #dropdown>
               <el-dropdown-menu>
+                <!-- 下拉只留「去哪」的顶层入口；更换头像/钱包/API Key/私信/黑名单/特别关注/
+                     举报/模板设置/文档/账号设置等全部收进个人中心（/me），避免菜单越挂越长 -->
                 <el-dropdown-item @click="$router.push('/me')">
                   <el-icon><User /></el-icon> 个人中心
                 </el-dropdown-item>
-                <el-dropdown-item @click="triggerAvatarUpload"><el-icon><Camera /></el-icon> 更换头像</el-dropdown-item>
-                <el-dropdown-item @click="$router.push('/author/templates')">
-                  <el-icon><Brush /></el-icon> 模板设置
-                </el-dropdown-item>
-                <el-dropdown-item @click="$router.push('/reports')">
-                  <el-icon><Warning /></el-icon> 我的举报
-                </el-dropdown-item>
-                <el-dropdown-item @click="$router.push('/docs')">
-                  <el-icon><Document /></el-icon> 格式使用文档
-                </el-dropdown-item>
-                <el-dropdown-item @click="$router.push('/api-spider')">
-                  <el-icon><Connection /></el-icon> API Key 爬虫指南
-                </el-dropdown-item>
-                <el-dropdown-item @click="$router.push('/my-keys')">
-                  <el-icon><Key /></el-icon> 我的 API Key
-                </el-dropdown-item>
-                <el-dropdown-item @click="$router.push('/wallet')">
-                  <el-icon><Wallet /></el-icon> 我的钱包
-                </el-dropdown-item>
-                <el-dropdown-item @click="$router.push('/ai')">
-                  <el-icon><MagicStick /></el-icon> AI 工作台
-                </el-dropdown-item>
-                <el-dropdown-item @click="$router.push('/user/blacklist')">
-                  <el-icon><CircleClose /></el-icon> 黑名单管理
-                </el-dropdown-item>
-                <el-dropdown-item @click="$router.push('/user/special-follows')">
-                  <el-icon><Star /></el-icon> 特别关注
-                </el-dropdown-item>
-                <el-dropdown-item @click="$router.push('/feed')">
-                  <el-icon><Bell /></el-icon> 特别关注动态
-                </el-dropdown-item>
-                <el-dropdown-item @click="$router.push('/user/messages')">
-                  <el-icon><ChatLineRound /></el-icon> 我的私信
-                </el-dropdown-item>
-                <el-dropdown-item @click="$router.push('/settings')">
-                  <el-icon><Setting /></el-icon> 账号设置
+                <el-dropdown-item @click="$router.push(`/author/${authStore.user?.id}`)">
+                  <el-icon><HomeFilled /></el-icon> 我的主页
                 </el-dropdown-item>
                 <el-dropdown-item v-if="authStore.user?.role === 'admin'" divided @click="$router.push('/admin')">
                   <el-icon><Setting /></el-icon> 管理员面板
@@ -229,7 +198,6 @@
       </div>
     </div>
   </nav>
-  <input ref="avatarInput" type="file" accept="image/png,image/jpeg,image/gif" style="display:none" @change="onAvatarChange" />
 
   <!-- ====== 移动端导航抽屉 ====== -->
   <el-drawer
@@ -304,16 +272,9 @@
 
         <div class="mnav-group-title">账号</div>
         <div class="mnav-item" @click="mnavGo('/me')"><el-icon><User /></el-icon> 个人中心</div>
-        <div class="mnav-item" @click="mnavGo('/author/templates')"><el-icon><Brush /></el-icon> 模板设置</div>
-        <div class="mnav-item" @click="mnavGo('/reports')"><el-icon><Warning /></el-icon> 我的举报</div>
-        <div class="mnav-item" @click="mnavGo('/docs')"><el-icon><Document /></el-icon> 格式使用文档</div>
-        <div class="mnav-item" @click="mnavGo('/api-spider')"><el-icon><Connection /></el-icon> API Key 爬虫指南</div>
-        <div class="mnav-item" @click="mnavGo('/my-keys')"><el-icon><Key /></el-icon> 我的 API Key</div>
-        <div class="mnav-item" @click="mnavGo('/wallet')"><el-icon><Wallet /></el-icon> 我的钱包</div>
-        <div class="mnav-item" @click="mnavGo('/ai')"><el-icon><MagicStick /></el-icon> AI 工作台</div>
+        <div class="mnav-item" @click="mnavGo(`/author/${authStore.user?.id}`)"><el-icon><HomeFilled /></el-icon> 我的主页</div>
         <div class="mnav-item" v-if="authStore.user?.role === 'admin'" @click="mnavGo('/admin')"><el-icon><Setting /></el-icon> 管理员面板</div>
         <div class="mnav-item" v-if="authStore.user?.role === 'admin' || authStore.user?.role === 'police'" @click="mnavGo('/police-console')"><el-icon><Stamp /></el-icon> 警方取管台</div>
-        <div class="mnav-item" @click="mnavGo('/settings')"><el-icon><Setting /></el-icon> 账号设置</div>
         <div class="mnav-item mnav-logout" @click="mnavLogout"><el-icon><SwitchButton /></el-icon> 退出登录</div>
       </template>
       <template v-else>
@@ -334,15 +295,13 @@ import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useThemeStore } from '@/stores/theme';
 import { useAppStore } from '@/stores/app';
-import { authApi } from '@/api/auth';
 import { notificationApi } from '@/api/notification';
 import api from '@/api/index';
 import { opsApi, type NavMenuItem } from '@/api/ops';
 import { appPrefix } from '@/utils/prefix';
 import { ElMessage } from 'element-plus';
-import { Camera, Setting, Brush, Document, Warning, Bell, Menu, HomeFilled, ChatDotRound, Plus, Notebook, User, SwitchButton, Connection, Key, Stamp, CircleClose, ChatLineRound, Star, Wallet, MagicStick, ArrowDown, Search, EditPen } from '@element-plus/icons-vue';
+import { Setting, Document, Bell, Menu, HomeFilled, ChatDotRound, Plus, Notebook, User, SwitchButton, Stamp, MagicStick, ArrowDown, Search, EditPen } from '@element-plus/icons-vue';
 
-const avatarInput = ref<HTMLInputElement>();
 const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
@@ -424,26 +383,7 @@ const isAuthor = computed(() => {
   return role === 'author' || role === 'vip_author' || role === 'admin';
 });
 
-function triggerAvatarUpload() { avatarInput.value?.click(); }
-
-async function onAvatarChange(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0];
-  if (!file) return;
-  const fd = new FormData();
-  fd.append('avatar', file);
-  try {
-    const res = await authApi.uploadAvatar(fd);
-    if (res.data.code === 0) {
-      authStore.user!.avatar_url = res.data.data.avatar_url;
-      ElMessage.success('头像已更新');
-    } else {
-      ElMessage.error(res.data.message || '上传失败');
-    }
-  } catch (err: any) {
-    ElMessage.error(err?.response?.data?.message || '上传失败，请使用 JPG/PNG/GIF/WebP 格式');
-  }
-}
-
+// 头像上传已迁到「个人中心 → 装扮 → 资料卡」（下拉菜单不再挂 14 个入口）
 function handleSearch() {
   const q = searchText.value.trim();
   if (q) {

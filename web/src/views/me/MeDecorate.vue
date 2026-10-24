@@ -15,13 +15,18 @@
           <el-avatar :size="88" :src="form.avatar_url || ''">
             {{ (form.nickname || authStore.user?.username || 'A')[0] }}
           </el-avatar>
+          <div class="prof-avatar-btns">
+            <el-button size="small" :loading="avatarUploading" @click="pickAvatar">更换头像</el-button>
+            <el-button v-if="form.avatar_url" size="small" text type="danger" @click="form.avatar_url = ''">清除</el-button>
+          </div>
+          <input ref="avatarInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none" @change="onAvatarChange" />
           <el-input
             v-model="form.avatar_url"
             size="small"
             placeholder="/uploads/xxx.png 或 https://…"
             class="prof-avatar-input"
           />
-          <div class="prof-avatar-tip">站内上传路径或图片直链</div>
+          <div class="prof-avatar-tip">可上传本地图片，也可填站内路径 / 图片直链</div>
         </div>
 
         <div class="prof-fields">
@@ -162,6 +167,44 @@ const authorId = ref(0);
 // ── 资料卡（昵称 / 签名 / 简介 / 头像）──
 const form = reactive({ nickname: '', signature: '', bio: '', avatar_url: '' });
 const savingProfile = ref(false);
+
+// 头像上传：原来挂在导航栏下拉里（「更换头像」），现随入口一起搬进个人中心。
+// 上传成功后立即写回 store，导航栏头像同步刷新，不需要刷新页面。
+const avatarInput = ref<HTMLInputElement>();
+const avatarUploading = ref(false);
+
+function pickAvatar() {
+  avatarInput.value?.click();
+}
+
+async function onAvatarChange(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.warning('图片不能超过 5MB');
+    input.value = '';
+    return;
+  }
+  avatarUploading.value = true;
+  try {
+    const fd = new FormData();
+    fd.append('avatar', file);
+    const res = await authApi.uploadAvatar(fd);
+    if (res.data.code === 0) {
+      form.avatar_url = res.data.data.avatar_url;
+      if (authStore.user) authStore.user.avatar_url = res.data.data.avatar_url;
+      ElMessage.success('头像已更新（已即时生效）');
+    } else {
+      ElMessage.error((res.data as any).message || '上传失败');
+    }
+  } catch (err: any) {
+    ElMessage.error(err?.response?.data?.message || '上传失败，请使用 JPG/PNG/GIF/WebP 格式');
+  } finally {
+    avatarUploading.value = false;
+    input.value = ''; // 允许再次选同一个文件
+  }
+}
 
 const myRaw = ref('');
 const authorRaw = ref('');
@@ -323,6 +366,13 @@ onMounted(load);
   gap: 8px;
 }
 .prof-avatar-input { margin-top: 4px; }
+.prof-avatar-btns {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
 .prof-avatar-tip {
   font-size: 0.72rem;
   color: var(--text-muted, #94a3b8);
