@@ -22,7 +22,7 @@
 | 生成大纲 / 角色设定 | 🟡 | 大纲：`AiNovelMemory(outline)` + 编辑区动作；角色设定：未做专用动作 |
 | 章节摘要缓存 | ✅ | `models/ai_memory.go`（novel 大纲 + 章节摘要 + 预算组装） |
 | AI 输出回填编辑器、保存时走审核 | ✅ | `@insert/@replace` → 编辑器；保存走统一内容审核管线 |
-| AI 生成内容标识（显式+隐式） | 🟡 | `@ai` 回复有「AI」徽标；编辑区 AI 产出发布时**未统一打标**（缺显式标识字段） |
+| AI 生成内容标识（显式+隐式） | ✅ 后端+编辑器 / 🟡 展示 | `ai_content_marks` 侧表 + 保存落标（章节/博客）+ 编辑器上报 `ai_assisted/ai_model` + 公开 `GET /api/ai/marks`；**详情页徽标待接** |
 | AI 审核覆盖章节/评论/论坛/博客/群组/分享 | 🟡 | 违禁词库 + 举报 + 内容扫描已覆盖章节/评论/论坛/博客/分享；群组功能不存在故未覆盖 |
 | 人工兜底 | ✅ | 管理端审核队列（`/admin/reports`、`/admin/html-review` 等） |
 
@@ -76,7 +76,7 @@
 | 聚合支付（微信/支付宝）+ 回调验签 + 幂等 + 对账 | ✅ | `server/payment`（AggregateProvider + MockProvider）、`MarkOrderPaid` 幂等 |
 | 卡密（随机/哈希/一次性展示/有效期/比例固定） | ✅ | `/admin/token` 卡密管理 + 兑换 |
 | 账本可查/可对账/不可篡改（append-only） | ✅ | `AppendTokenLedger` + 流水页 |
-| 计费：预估 → 确认 → 扣款 → 快照 → 单次上限 | 🟡 | 有预估/预检/快照/流水；**单次上限 + 二次确认弹窗**未做 |
+| 计费：预估 → 确认 → 扣款 → 快照 → 单次上限 | ✅ | `AiFeatureFlags.max_cost_per_call` 上限 + `confirm_threshold` 阈值 → `models.CallGuard` 统一闸门（400 拒绝 / 428+42801 待确认），对话/绘画/视频三处生效；前端弹窗确认后带 `confirm=true` 重发 |
 | 退款规则、异常充值风控联动 | 🟡 | 视频失败自动退款；支付退款流程与蜜罐联动未做 |
 
 ## 8. 用户自备 API Key
@@ -164,7 +164,8 @@
 | 9 N-04 | 日志本地化、无远程上报 | ✅ | 全部本地文件/stdout |
 | 9 N-05 | 不内置地区策略、提供审计钩子 | ✅ | 国密模块不含实名/过滤；NVS 应用层另行实现 |
 | 10 | 验收 1（默认构建/测试通过） | ✅ | `go build ./...` + `go test ./...` 全绿 |
-| 10 | 验收 2/3/4（gm 轨握手、CGO、回退隔离） | ⛔ 未验证 | 需 Linux + Tongsuo + 首次 `make tidy-gm` 下载国密依赖；Windows 开发机无法完成 |
+| 10 | 验收 2（纯 Go 国密轨编译 + 双证书） | ✅ 本机验证 | Windows + `go.gm.mod`：`go build -tags gm ./...` 通过、`go vet -tags gm` 干净、`go test -tags gm ./cert/` 通过（自签 SM2 双证书加载 + RSA 证书被 OID 校验拒绝） |
+| 10 | 验收 3/4（Tongsuo CGO、dual 回退隔离握手） | ⛔ 未验证 | 需 Tongsuo C 库；本机/ WSL 均未装（WSL Ubuntu 24.04 有 gcc/make，缺 Go 与 Tongsuo） |
 | 10 | 验收 5（前端扫描 0 命中） | ✅ | `bash scripts/scan-frontend-secrets.sh server/dist` → 0 命中 |
 | 10 | 验收 6（gm-audit Markdown 字段齐全） | ✅ | 见 `gm-audit` 输出结构 |
 | 11 | 责任划分 | ✅ | 文档 + 管理端提示 |
