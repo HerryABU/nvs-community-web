@@ -744,12 +744,18 @@ router.beforeEach(async (to, _from, next) => {
     next('/install');
     return;
   }
+  if (to.meta.requiresAuth || to.meta.requiresAdmin || to.meta.requiresPolice) {
+    const authStore = useAuthStore();
+    // ⚠️ 必须 await 到底：早期写成 `if (!user && !loading) await fetchUser()`，
+    // 而页面初始化也会触发 fetchUser —— 守卫撞上 loading=true 就跳过等待，
+    // 此时 user 还没写入 → isLoggedIn=false → 已登录的管理员直接打开 /admin/users
+    // 会被踢到 /login?redirect=...（后台所有深链都受影响）。
+    // fetchUser 现在是幂等的：已恢复直接返回，正在请求则复用同一个 promise。
+    await authStore.fetchUser();
+  }
+
   if (to.meta.requiresAuth) {
     const authStore = useAuthStore();
-    // 如果用户信息还没加载，先尝试恢复
-    if (!authStore.user && !authStore.loading) {
-      await authStore.fetchUser();
-    }
     if (!authStore.isLoggedIn) {
       // 未登录，跳转到登录页，登录后返回原页面
       next({ path: '/login', query: { redirect: to.fullPath } });
@@ -760,9 +766,6 @@ router.beforeEach(async (to, _from, next) => {
   // 🔒 角色守卫：admin / police 专属路由拦截非对应角色（即使已登录也不放行）
   if (to.meta.requiresAdmin || to.meta.requiresPolice) {
     const authStore = useAuthStore();
-    if (!authStore.user && !authStore.loading) {
-      await authStore.fetchUser();
-    }
     const role = authStore.user?.role;
     if (to.meta.requiresAdmin && role !== 'admin') {
       next('/');
