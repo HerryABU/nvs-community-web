@@ -11,120 +11,97 @@
         <span class="brand-text">{{ siteName }}</span>
       </div>
 
-      <!-- 主页入口 -->
-      <router-link to="/" class="nav-link desktop-only">主页</router-link>
+      <!-- ===== 主导航（高频入口）=====
+           低频入口收进「更多」：导航项曾多达 13+，把整条导航撑出容器宽度，
+           而 overflow 又加在整个 navbar-inner 上 → 右侧头像/用户菜单被推出视野（"看不到用户"）。
+           现在：高频左对齐，「更多」收纳低频，右侧用户区 flex-shrink:0 永不参与滚动。 -->
+      <div class="nav-main">
+        <router-link to="/" class="nav-link desktop-only">主页</router-link>
+        <router-link to="/feed" class="nav-link desktop-only">小说</router-link>
 
-      <!-- 小说入口（作品信息流） -->
-      <router-link to="/feed" class="nav-link desktop-only">小说</router-link>
-
-      <!-- 分类下拉 -->
-      <el-dropdown class="category-dropdown" trigger="click">
-        <span class="category-trigger">
-          分类 <el-icon><ArrowDown /></el-icon>
-        </span>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item
-              v-for="cat in categories"
-              :key="cat"
-              @click="$router.push(`/category/${encodeURIComponent(cat)}`)"
-            >
-              {{ cat }}
-            </el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
-
-      <!-- 论坛入口 -->
-      <router-link to="/forums" class="nav-link desktop-only">论坛</router-link>
-
-      <!-- 群组入口（半私密协作空间：群号/二维码加入、群公告、群文件、群内 @ai） -->
-      <router-link to="/groups" class="nav-link desktop-only">群组</router-link>
-
-      <!-- 博客入口 -->
-      <router-link to="/blogs" class="nav-link desktop-only">博客</router-link>
-
-      <!-- AI 工作台（全 AI 台：对话/绘画/视频/智能体，与编辑器内「AI 辅助创作台」区分） -->
-      <router-link to="/ai" class="nav-link nav-link-ai desktop-only">✨ AI 工作台</router-link>
-
-      <!-- 扩展应用（管理+广场） -->
-      <router-link to="/htmls" class="nav-link nav-link-create desktop-only">🔌 扩展应用</router-link>
-
-      <!-- 站长自定义菜单（gap-audit #20）：站内路由用 router-link，外链用 a + noopener -->
-      <template v-for="m in dynamicMenus" :key="m.id">
-        <el-dropdown v-if="m.children && m.children.length" class="desktop-only" trigger="hover">
-          <span class="nav-link">
-            <span v-if="m.icon" class="nav-emoji">{{ m.icon }}</span>{{ m.title }}
-            <span v-if="m.badge" class="nav-badge">{{ m.badge }}</span>
+        <!-- 分类下拉 -->
+        <el-dropdown class="category-dropdown" trigger="click">
+          <span class="category-trigger">
+            分类 <el-icon><ArrowDown /></el-icon>
           </span>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item v-for="c in m.children" :key="c.id" @click="goMenu(c)">
-                <span v-if="c.icon" class="nav-emoji">{{ c.icon }}</span>{{ c.title }}
+              <el-dropdown-item
+                v-for="cat in categories"
+                :key="cat"
+                @click="$router.push(`/category/${encodeURIComponent(cat)}`)"
+              >
+                {{ cat }}
               </el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <a v-else-if="isExternal(m.url)" :href="m.url" target="_blank" rel="noopener noreferrer"
-           class="nav-link desktop-only">
-          <span v-if="m.icon" class="nav-emoji">{{ m.icon }}</span>{{ m.title }}
-          <span v-if="m.badge" class="nav-badge">{{ m.badge }}</span>
-        </a>
-        <router-link v-else :to="m.url" class="nav-link desktop-only">
-          <span v-if="m.icon" class="nav-emoji">{{ m.icon }}</span>{{ m.title }}
-          <span v-if="m.badge" class="nav-badge">{{ m.badge }}</span>
-        </router-link>
-      </template>
 
-      <!-- 自定义内容入口（需登录） -->
-      <el-dropdown v-if="authStore.isLoggedIn" class="desktop-only" trigger="click">
-        <span class="nav-link">
-          <el-icon><Brush /></el-icon> 自定义
-        </span>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item @click="$router.push('/frames')">
-              🎨 UI模板管理
-            </el-dropdown-item>
-            <el-dropdown-item @click="$router.push('/wasm')">
-              ⚙️ WASM 说明
-            </el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
+        <router-link to="/forums" class="nav-link desktop-only">论坛</router-link>
+        <router-link to="/groups" class="nav-link desktop-only">群组</router-link>
+        <router-link to="/blogs" class="nav-link desktop-only">博客</router-link>
+        <router-link to="/ai" class="nav-link nav-link-ai desktop-only">✨ AI 工作台</router-link>
 
-      <!-- 书架入口（需登录） -->
-      <router-link v-if="authStore.isLoggedIn" to="/bookshelf" class="nav-link desktop-only">📚 书架</router-link>
+        <!-- 更多：扩展/自定义/书架/直播/签到/互联/站长自定义菜单 -->
+        <el-dropdown class="desktop-only nav-more" trigger="click" popper-class="nav-more-popper">
+          <span class="nav-link nav-more-trigger">
+            更多 <el-icon class="nav-more-arrow"><ArrowDown /></el-icon>
+            <span v-if="liveStatus === 'live'" class="live-dot" />
+          </span>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item @click="$router.push('/htmls')">
+                <span class="nav-emoji">🔌</span> 扩展应用
+              </el-dropdown-item>
+              <el-dropdown-item v-if="authStore.isLoggedIn" @click="$router.push('/bookshelf')">
+                <span class="nav-emoji">📚</span> 书架
+              </el-dropdown-item>
+              <el-dropdown-item v-if="authStore.isLoggedIn" @click="$router.push('/frames')">
+                <span class="nav-emoji">🎨</span> UI 模板管理
+              </el-dropdown-item>
+              <el-dropdown-item v-if="authStore.isLoggedIn" @click="$router.push('/wasm')">
+                <span class="nav-emoji">⚙️</span> WASM 说明
+              </el-dropdown-item>
 
-      <!-- 直播入口（站长开启才显示，gap-audit #23） -->
-      <router-link v-if="liveEnabled" to="/live" class="nav-link desktop-only">
-        <span v-if="liveStatus === 'live'" class="live-dot" />📺 直播
-      </router-link>
+              <el-dropdown-item v-if="liveEnabled" divided @click="$router.push('/live')">
+                <span class="nav-emoji">📺</span> 直播
+              </el-dropdown-item>
+              <el-dropdown-item
+                v-if="authStore.isLoggedIn && checkinEnabled"
+                :disabled="checkinLoading"
+                @click="doCheckin"
+              >
+                <span class="nav-emoji">📅</span> {{ checkinDone ? '今日已签到' : '每日签到' }}
+              </el-dropdown-item>
 
-      <!-- 每日签到（站长开启才显示） -->
-      <button v-if="authStore.isLoggedIn && checkinEnabled" class="nav-link nav-checkin desktop-only"
-        :disabled="checkinLoading" :title="checkinDone ? '今天已签到' : '每日签到领代币'"
-        @click="doCheckin">
-        {{ checkinDone ? '✅ 已签到' : '📅 签到' }}
-      </button>
+              <el-dropdown-item
+                v-for="site in federatedSites"
+                :key="`fed-${site.id}`"
+                divided
+                @click="openFederated(site)"
+              >
+                <span class="nav-emoji">🌐</span> {{ site.name }}
+              </el-dropdown-item>
 
-      <!-- 远程站点 -->
-      <el-dropdown v-if="federatedSites.length > 0" class="desktop-only" trigger="click">
-        <span class="nav-link">
-          互联站点 <el-icon><ArrowDown /></el-icon>
-        </span>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item
-              v-for="site in federatedSites"
-              :key="site.id"
-              @click="openFederated(site)"
-            >
-              {{ site.name }}
-            </el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
+              <!-- 站长自定义菜单（扁平化避免三级嵌套；带子项的先用标题行分隔） -->
+              <template v-for="m in dynamicMenus" :key="`dm-${m.id}`">
+                <template v-if="m.children && m.children.length">
+                  <el-dropdown-item divided disabled>
+                    <span class="nav-emoji">{{ m.icon }}</span>{{ m.title }}
+                  </el-dropdown-item>
+                  <el-dropdown-item v-for="c in m.children" :key="`dm-${m.id}-${c.id}`" @click="goMenu(c)">
+                    <span class="nav-emoji">{{ c.icon }}</span>{{ c.title }}
+                  </el-dropdown-item>
+                </template>
+                <el-dropdown-item v-else divided @click="goMenu(m)">
+                  <span class="nav-emoji">{{ m.icon }}</span>{{ m.title }}
+                  <span v-if="m.badge" class="nav-badge">{{ m.badge }}</span>
+                </el-dropdown-item>
+              </template>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
 
       <!-- 搜索框 -->
       <div class="search-box">
@@ -275,13 +252,30 @@
         </el-input>
       </div>
 
-      <!-- 浏览 -->
+      <!-- 浏览（与桌面导航对齐：桌面收进「更多」的入口，移动端必须在这里补齐） -->
       <div class="mnav-group-title">浏览</div>
       <div class="mnav-item" @click="mnavGo('/')"><el-icon><HomeFilled /></el-icon> 首页</div>
+      <div class="mnav-item" @click="mnavGo('/feed')"><span class="mnav-emoji">📖</span> 小说</div>
       <div class="mnav-item" @click="mnavGo('/forums')"><el-icon><ChatDotRound /></el-icon> 论坛</div>
+      <div class="mnav-item" @click="mnavGo('/groups')"><span class="mnav-emoji">👥</span> 群组</div>
       <div class="mnav-item" @click="mnavGo('/blogs')"><el-icon><Document /></el-icon> 博客</div>
       <div class="mnav-item" @click="mnavGo('/htmls')"><span class="mnav-emoji">🔌</span> 扩展应用</div>
+      <div class="mnav-item" v-if="liveEnabled" @click="mnavGo('/live')"><span class="mnav-emoji">📺</span> 直播</div>
       <div class="mnav-item" v-if="federatedSites.length" @click="mnavFederated"><span class="mnav-emoji">🌐</span> 互联站点</div>
+
+      <!-- 站长自定义菜单（外链交给 goMenu，抽屉里不能直接 router.push） -->
+      <template v-for="m in dynamicMenus" :key="`mnav-${m.id}`">
+        <div v-if="!m.children || !m.children.length" class="mnav-item" @click="mnavMenu(m)">
+          <span class="mnav-emoji">{{ m.icon }}</span> {{ m.title }}
+          <span v-if="m.badge" class="mnav-badge">{{ m.badge }}</span>
+        </div>
+        <template v-else>
+          <div class="mnav-group-title">{{ m.title }}</div>
+          <div v-for="c in m.children" :key="`mnav-${m.id}-${c.id}`" class="mnav-item" @click="mnavMenu(c)">
+            <span class="mnav-emoji">{{ c.icon }}</span> {{ c.title }}
+          </div>
+        </template>
+      </template>
 
       <!-- 分类 -->
       <div class="mnav-group-title">分类</div>
@@ -301,6 +295,9 @@
         <div class="mnav-item" @click="mnavGo('/author')"><el-icon><HomeFilled /></el-icon> 作者工作台</div>
         <div class="mnav-item" @click="mnavGo('/ai')"><el-icon><MagicStick /></el-icon> AI 工作台</div>
         <div class="mnav-item" @click="mnavGo('/reading')"><el-icon><Notebook /></el-icon> 精读笔记</div>
+        <div v-if="checkinEnabled" class="mnav-item" @click="doCheckin">
+          <span class="mnav-emoji">📅</span> {{ checkinDone ? '今日已签到' : '每日签到' }}
+        </div>
 
         <div class="mnav-group-title">账号</div>
         <div class="mnav-item" @click="mnavGo('/me')"><el-icon><User /></el-icon> 个人中心</div>
@@ -357,6 +354,12 @@ const mobileMenuOpen = ref(false);
 function mnavGo(path: string) {
   mobileMenuOpen.value = false;
   router.push(path);
+}
+
+/** 抽屉里的自定义菜单：可能是外链，必须走 goMenu（isExternal → window.open） */
+function mnavMenu(m: NavMenuItem) {
+  mobileMenuOpen.value = false;
+  goMenu(m);
 }
 
 function mnavSearch() {
@@ -595,19 +598,38 @@ onUnmounted(() => {
 }
 
 .navbar-inner {
-  max-width: 1200px;
+  /* 从 1200 放宽：导航项 + 搜索 + 右侧用户区在 1280/1366 屏幕上需要这点空间 */
+  max-width: 1440px;
   margin: 0 auto;
   height: 100%;
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 14px;
   padding: 0 20px;
-  /* 防止窄屏下栏目被挤压成竖排：超宽时横向滚动兜底（隐藏滚动条） */
+  /* ⚠️ 这里**不能**加 overflow：曾把 overflow-x:auto 加在整个 inner 上，
+     导航项总宽超过容器时整条（含右侧头像）一起横向滚动 → 用户"看不到自己的头像"。
+     滚动只允许发生在中间的 .nav-main 内，右侧 .navbar-right 固定。 */
+  overflow: visible;
+}
+
+/* 主导航：唯一可滚动的区域；右侧用户区永远固定在视野内 */
+.nav-main {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;              /* 允许收缩，否则 flex 子项会撑破容器 */
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  scroll-behavior: smooth;
 }
-.navbar-inner::-webkit-scrollbar { display: none; }
+.nav-main::-webkit-scrollbar { display: none; }
+
+/* 「更多」触发器与下拉内的排版 */
+.nav-more-trigger { display: inline-flex; align-items: center; gap: 3px; }
+.nav-more-arrow { transition: transform 0.18s ease; }
+.nav-more:hover .nav-more-arrow { transform: rotate(180deg); }
 
 .navbar-brand {
   cursor: pointer;
@@ -788,8 +810,9 @@ onUnmounted(() => {
 
 /* Search box */
 .search-box {
-  flex: 1;
-  max-width: 360px;
+  /* 原来是 flex:1 + max 360，会和导航项抢宽度；改为固定上限、可收缩 */
+  flex: 0 1 220px;
+  min-width: 0;
 }
 
 /* Right section */
@@ -798,6 +821,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 14px;
   margin-left: auto;
+  /* 关键：不参与压缩/滚动，头像与用户菜单永远可见 */
   flex-shrink: 0;
 }
 
@@ -822,6 +846,9 @@ onUnmounted(() => {
 }
 
 @media (max-width: 768px) {
+  /* 移动端主导航整体隐藏，入口在汉堡抽屉里 */
+  .nav-main { display: none; }
+
   .search-box {
     display: none;
   }
