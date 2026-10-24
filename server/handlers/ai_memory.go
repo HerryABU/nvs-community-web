@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 
+	"nvs-server/collab"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -19,8 +20,9 @@ func ensureNovelOwner(c *gin.Context, novelID uint) bool {
 		utils.NotFound(c, "作品不存在")
 		return false
 	}
-	if n.AuthorID != currentUserID(c) {
-		utils.Error(c, 403, 40301, "仅作者本人可管理该作品的 AI 记忆")
+	// 多人协作：主笔 + 生效中的协作者都可维护记忆（否则协作作者无法用 AI 辅助）
+	if !collab.CanUseAiContext(n.ID, currentUserID(c), currentUserRole(c)) {
+		utils.Error(c, 403, 40301, "仅主笔或协作成员可管理该作品的 AI 记忆")
 		return false
 	}
 	return true

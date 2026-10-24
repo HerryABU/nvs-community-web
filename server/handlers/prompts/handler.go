@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 
+	"nvs-server/collab"
 	"nvs-server/middleware"
 	"nvs-server/models"
 	"nvs-server/prompttpl"
@@ -111,8 +112,8 @@ func RenderContext(c *gin.Context) {
 		return
 	}
 	// 归属校验：作品作者本人或平台管理员（上下文含未公开正文，不能跨用户读取）
-	if novel.AuthorID != uid && middleware.UserRole(c) != "admin" {
-		utils.Forbidden(c, "仅作者本人可使用该作品的上下文")
+	if !collab.CanUseAiContext(novel.ID, uid, middleware.UserRole(c)) {
+		utils.Forbidden(c, "仅主笔或协作成员可使用该作品的上下文")
 		return
 	}
 	if req.Vars == nil {

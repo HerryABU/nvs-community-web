@@ -10,9 +10,10 @@ import (
 // 并额外携带访客可见性策略，前端据此提示「需登录 / 试读上限」。
 type NovelView struct {
 	models.Novel
-	RequiresLogin bool `json:"requires_login"` // 匿名必须登录才能查看
-	IsTrial       bool `json:"is_trial"`       // 匿名仅可试读前 TrialLimit 章
-	TrialLimit    int  `json:"trial_limit"`    // 试读章节上限
+	RequiresLogin bool   `json:"requires_login"`   // 匿名必须登录才能查看
+	IsTrial       bool   `json:"is_trial"`         // 匿名仅可试读前 TrialLimit 章
+	TrialLimit    int    `json:"trial_limit"`      // 试读章节上限
+	Byline        string `json:"byline,omitempty"` // 多人协作署名：主笔：X · 协作：A、B
 }
 
 // NovelAccess 解析某作品对当前访问者的可见性策略。

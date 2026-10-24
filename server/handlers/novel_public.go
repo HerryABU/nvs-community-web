@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"nvs-server/collab"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -26,6 +27,7 @@ type CreateNovelInput struct {
 	Status          string   `json:"status"`
 	SourceType      string   `json:"source_type"`     // original / reprint
 	CreationMethod  string   `json:"creation_method"` // human / ai / human_ai_assisted
+	Mode            string   `json:"mode"`            // prose（散文体）/ script（话本气泡体）
 }
 
 type UpdateNovelInput struct {
@@ -41,6 +43,7 @@ type UpdateNovelInput struct {
 	CreationMethod  string   `json:"creation_method"` // human / ai / human_ai_assisted
 	WallEnabled     *bool    `json:"wall_enabled"`
 	WallWarning     *string  `json:"wall_warning"`
+	Mode            string   `json:"mode"` // prose / script
 }
 
 var htmlSanitizer = bluemonday.UGCPolicy()
@@ -244,6 +247,7 @@ func GetNovel(c *gin.Context) {
 		RequiresLogin: access.RequiresLogin,
 		IsTrial:       access.IsTrial,
 		TrialLimit:    access.TrialLimit,
+		Byline:        collab.Byline(novel.ID),
 	})
 }
 

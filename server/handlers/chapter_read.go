@@ -4,6 +4,7 @@ import (
 	"os"
 	"strconv"
 
+	"nvs-server/collab"
 	"nvs-server/markdown"
 	"nvs-server/models"
 	"nvs-server/security"
@@ -35,10 +36,24 @@ func GetChapters(c *gin.Context) {
 		utils.InternalError(c, "获取章节列表失败")
 		return
 	}
+	// 多人协作：非创作成员只能看到已发布章节（draft/pending/rejected 属于创作过程）
+	actor := collab.ActorOf(novel.ID, currentUserID(c), currentUserRole(c))
+	canSeeUnpublished := actor.IsOwner || actor.IsPlatform || actor.ActiveMember()
+	if !canSeeUnpublished {
+		published := make([]models.Chapter, 0, len(chapters))
+		for _, ch := range chapters {
+			if ch.Status == "" || ch.Status == models.ChapterStatusPublished {
+				published = append(published, ch)
+			}
+		}
+		chapters = published
+	}
 	// 试读模式：匿名仅返回前 TrialLimit 章（爬虫同样只能拿到试读部分）
 	if access.IsTrial && len(chapters) > access.TrialLimit {
 		chapters = chapters[:access.TrialLimit]
 	}
+	// 章节署名（协作作品需要知道谁写的）
+	fillChapterAuthors(chapters, novel.AuthorID)
 	utils.Success(c, chapters)
 }
 
@@ -95,11 +110,36 @@ func GetChapterContent(c *gin.Context) {
 	}
 
 	chapter.Content = string(content)
+
+	// 多人协作：未发布章节（草稿/待审/驳回）仅创作成员可读
+	if chapter.Status != "" && chapter.Status != models.ChapterStatusPublished {
+		actor := collab.ActorOf(novel.ID, currentUserID(c), currentUserRole(c))
+		if !actor.IsPlatform && !actor.CanEditChapter(chapter) {
+			utils.NotFound(c, "章节不存在")
+			return
+		}
+	}
+
 	// 后端渲染 Markdown → HTML
 	htmlContent := markdown.RenderMarkdown(string(content))
 
+	// 本章作者（多人协作署名）
+	authorName := ""
+	authorID := chapter.AuthorID
+	if authorID == 0 {
+		authorID = novel.AuthorID
+	}
+	if u, uerr := models.GetUserByID(authorID); uerr == nil && u != nil {
+		authorName = u.Nickname
+		if authorName == "" {
+			authorName = u.Username
+		}
+	}
+	chapter.AuthorName = authorName
+
 	utils.Success(c, gin.H{
 		"chapter":            chapter,
+		"novel_mode":         novelMode(novel),
 		"html_content":       htmlContent,
 		"hash":               currentHash,
 		"hash_match":         currentHash == chapter.ContentHash,
@@ -182,4 +222,43 @@ func VerifyChapter(c *gin.Context) {
 		"modified_at":        fileInfo.ModTime().Unix(),
 		"message":            msg,
 	})
+}
+
+// novelMode 作品叙事形态（prose/script），空值回落散文体
+func novelMode(n *models.Novel) string {
+	if n == nil || n.Mode == "" {
+		return "prose"
+	}
+	return n.Mode
+}
+
+// fillChapterAuthors 批量填章节作者展示名（0 表示沿用主笔）
+func fillChapterAuthors(chapters []models.Chapter, ownerID uint) {
+	if len(chapters) == 0 {
+		return
+	}
+	idSet := map[uint]bool{ownerID: true}
+	for i := range chapters {
+		if chapters[i].AuthorID == 0 {
+			chapters[i].AuthorID = ownerID
+		}
+		idSet[chapters[i].AuthorID] = true
+	}
+	ids := make([]uint, 0, len(idSet))
+	for id := range idSet {
+		ids = append(ids, id)
+	}
+	var users []models.User
+	models.DB.Select("id, username, nickname").Where("id IN ?", ids).Find(&users)
+	nameOf := map[uint]string{}
+	for _, u := range users {
+		if u.Nickname != "" {
+			nameOf[u.ID] = u.Nickname
+		} else {
+			nameOf[u.ID] = u.Username
+		}
+	}
+	for i := range chapters {
+		chapters[i].AuthorName = nameOf[chapters[i].AuthorID]
+	}
 }

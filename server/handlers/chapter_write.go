@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	"nvs-server/collab"
 	"nvs-server/config"
 	"nvs-server/models"
 	"nvs-server/security"
@@ -26,8 +27,13 @@ func CreateChapter(c *gin.Context) {
 	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	novel, err := models.GetNovelByID(uint(novelID))
-	if err != nil || novel.AuthorID != userID {
-		utils.Forbidden(c, "无权操作此作品")
+	if err != nil {
+		utils.NotFound(c, "作品不存在")
+		return
+	}
+	actor := collab.ActorOf(novel.ID, userID, currentUserRole(c))
+	if !actor.Can(collab.CapWriteChapter) {
+		utils.Forbidden(c, "只有主笔或协作作者可以新建章节")
 		return
 	}
 
@@ -45,6 +51,7 @@ func CreateChapter(c *gin.Context) {
 		Content    string `json:"content" binding:"required"`
 		AiAssisted bool   `json:"ai_assisted"` // 作者标记：本章含 AI 辅助生成
 		AiModel    string `json:"ai_model"`    // 使用的模型展示名
+		Publish    *bool  `json:"publish"`     // 是否直接发布（协作者无发布权时忽略）
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请填写章节标题和内容")
@@ -59,7 +66,9 @@ func CreateChapter(c *gin.Context) {
 	nextNum, _ := models.GetMaxChapterNumber(uint(novelID))
 	nextNum++
 
-	authorDir := filepath.Join(config.NovelDataDir, "authors", fmt.Sprintf("%d", userID), fmt.Sprintf("%d", novelID))
+	// 章节文件统一放「主笔目录」下：协作作者写入同一部作品的章节，编号与校验和才连续一致
+	ownerID := novel.AuthorID
+	authorDir := filepath.Join(config.NovelDataDir, "authors", fmt.Sprintf("%d", ownerID), fmt.Sprintf("%d", novelID))
 	if err := os.MkdirAll(authorDir, 0755); err != nil {
 		utils.InternalError(c, "创建目录失败")
 		return
@@ -88,6 +97,17 @@ func CreateChapter(c *gin.Context) {
 		return
 	}
 
+	// 状态：主笔默认直接发布；协作者默认草稿，除非其具备 publish 能力且显式 publish=true
+	status := models.ChapterStatusPublished
+	if !actor.IsOwner {
+		status = models.ChapterStatusDraft
+		if actor.Can(collab.CapPublishChapter) && req.Publish != nil && *req.Publish {
+			status = models.ChapterStatusPublished
+		}
+	} else if req.Publish != nil && !*req.Publish {
+		status = models.ChapterStatusDraft
+	}
+
 	chapter := &models.Chapter{
 		NovelID:          uint(novelID),
 		ChapterNumber:    nextNum,
@@ -96,15 +116,19 @@ func CreateChapter(c *gin.Context) {
 		ContentHash:      contentHash,
 		ContentSignature: contentSignature,
 		WordCount:        wordCount,
-		Status:           "published",
+		Status:           status,
+		AuthorID:         userID,
 	}
 
 	if err := models.CreateChapter(chapter); err != nil {
 		utils.InternalError(c, "创建章节失败")
 		return
 	}
-	// 发布流水记账（计入每日发文限额）
-	models.RecordPublish(userID, models.PublishKindChapter, chapter.ID, wordCount)
+	// 发布流水记账（计入每日发文限额）：草稿不计，提审通过时再记
+	if status == models.ChapterStatusPublished {
+		models.RecordPublish(userID, models.PublishKindChapter, chapter.ID, wordCount)
+		collab.LogChapterAction(novel.ID, userID, "publish", chapter.ID, "新建即发布")
+	}
 
 	// 违禁词 mark 动作命中 → 写入待审标记记录
 	flagBadWords(badHits, "chapter", chapter.ID, userID, raw, chapter.Title)
@@ -117,8 +141,8 @@ func CreateChapter(c *gin.Context) {
 	}
 
 	models.UpdateNovelStats(uint(novelID))
-	updateIndexJSON(uint(userID), uint(novelID))
-	generateChecksums(uint(userID), uint(novelID))
+	updateIndexJSON(ownerID, uint(novelID))
+	generateChecksums(ownerID, uint(novelID))
 
 	utils.Success(c, chapter)
 }
@@ -129,14 +153,18 @@ func UpdateChapter(c *gin.Context) {
 	chapterNum, _ := strconv.Atoi(c.Param("num"))
 
 	novel, err := models.GetNovelByID(uint(novelID))
-	if err != nil || novel.AuthorID != userID {
-		utils.Forbidden(c, "无权操作此作品")
+	if err != nil {
+		utils.NotFound(c, "作品不存在")
 		return
 	}
-
 	chapter, err := models.GetChapterByNovelAndNumber(uint(novelID), chapterNum)
 	if err != nil {
 		utils.NotFound(c, "章节不存在")
+		return
+	}
+	actor := collab.ActorOf(novel.ID, userID, currentUserRole(c))
+	if !actor.CanEditChapter(chapter) {
+		utils.Forbidden(c, "无权编辑本章（协作权限见作品协作设置）")
 		return
 	}
 
@@ -194,8 +222,8 @@ func UpdateChapter(c *gin.Context) {
 	}
 
 	models.UpdateNovelStats(uint(novelID))
-	updateIndexJSON(uint(userID), uint(novelID))
-	generateChecksums(uint(userID), uint(novelID))
+	updateIndexJSON(novel.AuthorID, uint(novelID))
+	generateChecksums(novel.AuthorID, uint(novelID))
 
 	utils.Success(c, chapter)
 }
@@ -206,20 +234,24 @@ func DeleteChapter(c *gin.Context) {
 	chapterNum, _ := strconv.Atoi(c.Param("num"))
 
 	novel, err := models.GetNovelByID(uint(novelID))
-	if err != nil || novel.AuthorID != userID {
-		utils.Forbidden(c, "无权操作此作品")
+	if err != nil {
+		utils.NotFound(c, "作品不存在")
 		return
 	}
-
 	chapter, err := models.GetChapterByNovelAndNumber(uint(novelID), chapterNum)
 	if err != nil {
 		utils.NotFound(c, "章节不存在")
 		return
 	}
+	actor := collab.ActorOf(novel.ID, userID, currentUserRole(c))
+	if !actor.CanDeleteChapter(chapter) {
+		utils.Forbidden(c, "无权删除本章（已发布章节请先撤回）")
+		return
+	}
 
 	// 合规留存：软删除被删章节，正文文件移入 .deleted/ 目录归档保留（可追溯）；
 	// 随后将后续章节编号前移补齐（文件同步重命名），保证章节编号始终连续。
-	authorDir := filepath.Join(config.NovelDataDir, "authors", fmt.Sprintf("%d", userID), fmt.Sprintf("%d", novelID))
+	authorDir := filepath.Join(config.NovelDataDir, "authors", fmt.Sprintf("%d", novel.AuthorID), fmt.Sprintf("%d", novelID))
 	deletedDir := filepath.Join(authorDir, ".deleted")
 	os.MkdirAll(deletedDir, 0755)
 	deletedPath := filepath.Join(deletedDir, fmt.Sprintf("%d_%d.html", chapterNum, time.Now().Unix()))
@@ -245,8 +277,8 @@ func DeleteChapter(c *gin.Context) {
 	renumberChapters(uint(novelID), chapterNum, authorDir)
 
 	models.UpdateNovelStats(uint(novelID))
-	updateIndexJSON(uint(userID), uint(novelID))
-	generateChecksums(uint(userID), uint(novelID))
+	updateIndexJSON(novel.AuthorID, uint(novelID))
+	generateChecksums(novel.AuthorID, uint(novelID))
 
 	utils.Success(c, gin.H{"message": "章节已删除（软删除留证，编号已自动补齐）"})
 }

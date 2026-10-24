@@ -7,31 +7,41 @@ import (
 )
 
 type Novel struct {
-	ID              uint           `gorm:"primaryKey" json:"id"`
-	AuthorID        uint           `gorm:"not null;index;index:idx_novels_author_status,priority:1" json:"author_id"`
-	Title           string         `gorm:"size:256;not null" json:"title"`
-	Category        string         `gorm:"size:64;default:其他;index" json:"category"`
-	Tags            string         `gorm:"type:json" json:"tags"` // JSON 数组，代码中保证默认 "[]"（MySQL JSON 不支持 DEFAULT）
-	Summary         string         `gorm:"type:text" json:"summary"`
-	CoverURL        string         `gorm:"size:512;default:''" json:"cover_url"`
-	PricePerChapter float64        `gorm:"type:decimal(10,2);default:0.00" json:"price_per_chapter"`
-	Status          string         `gorm:"size:32;default:draft;index:idx_novels_author_status,priority:2" json:"status"`
-	SourceType      string         `gorm:"size:32;default:original" json:"source_type"`  // original / reprint
-	CreationMethod  string         `gorm:"size:32;default:human" json:"creation_method"` // human / ai / human_ai_assisted
-	WallEnabled     bool           `gorm:"not null;default:false" json:"wall_enabled"`   // 作者隔离开关：true=外人需登录才能查看本作品
-	TotalWords      int            `gorm:"default:0" json:"total_words"`
-	TotalChapters   int            `gorm:"default:0" json:"total_chapters"`
-	ViewCount       int            `gorm:"default:0" json:"view_count"`
-	BanReason       string         `gorm:"type:text" json:"ban_reason"`                    // 封禁原因（可能很长）
-	DeletedBy       string         `gorm:"size:32;default:''" json:"deleted_by,omitempty"` // user/admin
-	CreatedAt       time.Time      `json:"created_at"`
-	UpdatedAt       time.Time      `json:"updated_at"`
-	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
+	ID              uint    `gorm:"primaryKey" json:"id"`
+	AuthorID        uint    `gorm:"not null;index;index:idx_novels_author_status,priority:1" json:"author_id"`
+	Title           string  `gorm:"size:256;not null" json:"title"`
+	Category        string  `gorm:"size:64;default:其他;index" json:"category"`
+	Tags            string  `gorm:"type:json" json:"tags"` // JSON 数组，代码中保证默认 "[]"（MySQL JSON 不支持 DEFAULT）
+	Summary         string  `gorm:"type:text" json:"summary"`
+	CoverURL        string  `gorm:"size:512;default:''" json:"cover_url"`
+	PricePerChapter float64 `gorm:"type:decimal(10,2);default:0.00" json:"price_per_chapter"`
+	Status          string  `gorm:"size:32;default:draft;index:idx_novels_author_status,priority:2" json:"status"`
+	SourceType      string  `gorm:"size:32;default:original" json:"source_type"`  // original / reprint
+	CreationMethod  string  `gorm:"size:32;default:human" json:"creation_method"` // human / ai / human_ai_assisted
+	// Mode 叙事形态：prose=散文体（默认）/ script=话本气泡体（对话为主，按「角色：台词」解析渲染）
+	Mode          string         `gorm:"size:12;not null;default:prose;index" json:"mode"`
+	WallEnabled   bool           `gorm:"not null;default:false" json:"wall_enabled"` // 作者隔离开关：true=外人需登录才能查看本作品
+	TotalWords    int            `gorm:"default:0" json:"total_words"`
+	TotalChapters int            `gorm:"default:0" json:"total_chapters"`
+	ViewCount     int            `gorm:"default:0" json:"view_count"`
+	BanReason     string         `gorm:"type:text" json:"ban_reason"`                    // 封禁原因（可能很长）
+	DeletedBy     string         `gorm:"size:32;default:''" json:"deleted_by,omitempty"` // user/admin
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
+	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
 
 	Author        *User           `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
 	Categories    []NovelCategory `gorm:"foreignKey:NovelID" json:"-"`
 	CategoryNames []string        `gorm:"-" json:"categories,omitempty"`
 }
+
+// 章节发布状态（多人协作：draft → pending → published / rejected）
+const (
+	ChapterStatusDraft     = "draft"
+	ChapterStatusPending   = "pending"
+	ChapterStatusPublished = "published"
+	ChapterStatusRejected  = "rejected"
+)
 
 // NovelCategory 作品多分类中间表
 type NovelCategory struct {
@@ -203,12 +213,16 @@ type Chapter struct {
 	ContentHash      string         `gorm:"size:64;default:''" json:"content_hash"`
 	ContentSignature string         `gorm:"size:64;default:''" json:"content_signature"` // HMAC-SHA256 作者签名
 	WordCount        int            `gorm:"default:0" json:"word_count"`
-	Status           string         `gorm:"size:32;default:draft" json:"status"`
+	Status           string         `gorm:"size:32;default:published;index" json:"status"`  // draft/pending/published/rejected
+	AuthorID         uint           `gorm:"not null;default:0;index" json:"author_id"`      // 本章作者（多人协作署名）
+	ReviewNote       string         `gorm:"size:256;default:''" json:"review_note"`         // 驳回/审核意见
 	BanReason        string         `gorm:"type:text" json:"ban_reason"`                    // 176号令封禁原因（封禁时写入）
 	DeletedBy        string         `gorm:"size:32;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
 	CreatedAt        time.Time      `json:"created_at"`
 	UpdatedAt        time.Time      `json:"updated_at"`
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
+
+	AuthorName string `gorm:"-" json:"author_name,omitempty"` // 本章作者展示名（运行时填充）
 }
 
 func (Chapter) TableName() string {

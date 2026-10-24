@@ -15,11 +15,13 @@ import (
 	"strings"
 	"time"
 
+	"nvs-server/collab"
 	"nvs-server/config"
 	"nvs-server/crypto"
 	"nvs-server/gmcmd"
 	"nvs-server/groups"
 	"nvs-server/handlers"
+	collabhandler "nvs-server/handlers/collab"
 	grouphandler "nvs-server/handlers/group"
 	prompthandler "nvs-server/handlers/prompts"
 	"nvs-server/middleware"
@@ -449,6 +451,20 @@ func main() {
 		protected.POST("/novels/:id/chapters", handlers.CreateChapter)
 		protected.PUT("/novels/:id/chapters/:num", handlers.UpdateChapter)
 		protected.DELETE("/novels/:id/chapters/:num", handlers.DeleteChapter)
+		// 章节工作流（多人协作）：提审 / 审核 / 直接发布 / 撤回
+		protected.POST("/novels/:id/chapters/:num/submit", handlers.SubmitChapterReview)
+		protected.POST("/novels/:id/chapters/:num/review", handlers.ReviewChapter)
+		protected.POST("/novels/:id/chapters/:num/publish", handlers.PublishChapter)
+		protected.POST("/novels/:id/chapters/:num/withdraw", handlers.WithdrawChapter)
+		// 多人协作：成员管理 / 邀请处理 / 我参与的协作
+		protected.GET("/novels/:id/collaborators", collabhandler.List)
+		protected.POST("/novels/:id/collaborators", collabhandler.Invite)
+		protected.PUT("/novels/:id/collaborators/:uid", collabhandler.Update)
+		protected.DELETE("/novels/:id/collaborators/:uid", collabhandler.Remove)
+		protected.GET("/collab/invites", collabhandler.Invites)
+		protected.GET("/collab/works", collabhandler.Works)
+		protected.POST("/collab/:novelId/respond", collabhandler.Respond)
+		protected.POST("/collab/:novelId/leave", collabhandler.Leave)
 		protected.GET("/author/novels", handlers.GetMyNovels)
 		protected.GET("/author/novels/:id/stats", handlers.GetNovelStats)
 		protected.GET("/author/banned-content", handlers.GetAuthorBannedContent)
@@ -1366,6 +1382,10 @@ func initDatabase() error {
 		return err
 	}
 	prompttpl.InitSeeds()
+	// 多人协作（独立功能包）：协作成员 + 协作审计
+	if err := collab.Migrate(models.DB); err != nil {
+		return err
+	}
 	models.InitDefaultForums()
 	models.InitPlatformConfigs()
 	models.SeedDefaultAiAgents() // AI 智能体内置种子（表为空时写入）

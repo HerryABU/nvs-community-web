@@ -98,6 +98,7 @@ func CreateNovel(c *gin.Context) {
 		Category:        input.Category,
 		Tags:            tags,
 		Summary:         input.Summary,
+		Mode:            normalizeNovelMode(input.Mode),
 		PricePerChapter: input.PricePerChapter,
 		Status:          status,
 		SourceType:      sourceType,
@@ -195,6 +196,9 @@ func UpdateNovel(c *gin.Context) {
 	}
 	if input.SourceType != "" {
 		novel.SourceType = input.SourceType
+	}
+	if input.Mode != "" {
+		novel.Mode = normalizeNovelMode(input.Mode)
 	}
 	if input.CreationMethod != "" {
 		novel.CreationMethod = input.CreationMethod
@@ -346,4 +350,12 @@ func loadCategoryNames(novelID uint) []string {
 		result = append(result, "其他")
 	}
 	return result
+}
+
+// normalizeNovelMode 归一化叙事形态：prose（散文体，默认）/ script（话本气泡体）
+func normalizeNovelMode(m string) string {
+	if m == "script" {
+		return "script"
+	}
+	return "prose"
 }
