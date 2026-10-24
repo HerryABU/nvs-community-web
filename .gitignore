@@ -60,3 +60,7 @@ server.pid
 
 # 冒烟测试临时目录（server/smoke_test.sh 运行产物）
 .smoke_*/
+
+# 冒烟/探测脚本与截图（本地 Playwright 验证产物，勿入库）
+/web/*.mjs
+/web/*.png
