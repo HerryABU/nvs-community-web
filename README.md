@@ -473,6 +473,27 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.16.0 蜜罐独立进程/独立库/冷归档 + 合规材料一键导出（2026-10-24）
+
+**蜜罐隔离与留存（补齐 `gap-audit` #1/#2/#5）**
+- 独立进程：`cmd/honeypot` → `nvs-honeypot.exe`（默认端口 18081），只挂诱饵 / 影子认证 / 验证页，
+  不加载任何业务路由；`GET /__hp/health` 自检等级与库路径；优雅停机
+- 独立库：`NVS_HONEYPOT_DB_PATH`（如 `data/honeypot/honeypot.db`）；主站设同一路径则**后台照旧可读**，
+  蜜罐数据与业务库物理隔离；`SetDB` 断言「蜜罐库 ≠ 主库」，同路径拒绝启动；未设则退回内嵌
+- 冷归档：`Cleanup` 改为 `ArchiveAndCleanup` —— 超期事件先写
+  `data/honeypot/archive/honeypot-events-YYYYMM.jsonl.gz`（fsync 成功）再分批删库；
+  新增 `GET /api/admin/honeypot/archives` 与 `GET /api/admin/honeypot/db`
+
+**合规材料一键导出（补齐 `gap-audit` #7）**
+- `GET /api/admin/compliance/bundle.zip`：自查报告 + 算法说明 + 等保定级 + 漏洞整改 + 用户规模汇总
+  （不含 PII）+ 蜜罐与日志策略摘要 + 30 天日志清单（含 SHA256 前 8 字节），并附 `00-manifest.json` 文件哈希清单
+- 导出动作写用户行为审计；下载后删除临时包（不堆敏感材料）
+- 后台「合规中心 → 检查应对工具箱」新增「一键导出材料包 ZIP」
+
+**文档订正**
+- `docs/gap-audit.md`：撤回一条误判 —— 「公开算法透明度页」其实早已实现
+  （首页 `HomeNoticeBar.vue`「📊 推荐说明」弹窗 + `GET /api/algorithms/description`），第一版只查了路由与后台页
+
 ### v3.15.0 蜜罐 M2/M3/M4：影子认证 + 验证页与指纹 + 取证包 + 规则反哺（2026-10-24）
 
 **影子认证（`server/honeypot/jwt.go` + `shadowauth.go`）**
