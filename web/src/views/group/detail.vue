@@ -218,6 +218,7 @@ const { connected: streamConnected } = useGroupStream(() => groupId.value, (name
   switch (name) {
     case 'post.created':
       schedulePostsReload();
+      void markRead();
       if (data?.author_id !== me) {
         ElNotification({
           title: '群里有新帖',
@@ -229,6 +230,7 @@ const { connected: streamConnected } = useGroupStream(() => groupId.value, (name
       break;
     case 'reply.created':
       schedulePostsReload();
+      void markRead();
       postsRef.value?.refreshCurrent?.(data?.post_id);
       if (data?.author_id !== me && !data?.ai) {
         ElNotification({ title: '新回复', message: `${data?.author || '成员'} 回复了帖子`, type: 'info', duration: 2500 });
@@ -253,7 +255,18 @@ const { connected: streamConnected } = useGroupStream(() => groupId.value, (name
   }
 });
 
-onMounted(load);
+// 未读：进入群详情即标记已读；页面可见期间有新消息也顺手标记
+async function markRead() {
+  if (!myRole.value || document.hidden) return;
+  try {
+    await groupApi.markRead(groupId.value);
+  } catch { /* 非成员/网络异常忽略 */ }
+}
+
+onMounted(async () => {
+  await load();
+  await markRead();
+});
 </script>
 
 <style scoped>

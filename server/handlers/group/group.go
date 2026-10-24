@@ -180,6 +180,7 @@ func GroupDetail(c *gin.Context) {
 		"my_role":   ctx.Role,
 		"my_status": ctx.Status,
 		"is_admin":  ctx.IsAdmin,
+		"unread":    groups.UnreadCount(g.ID, middleware.UserID(c)),
 	}
 	if ctx.Role != "" && ctx.Status == groups.GroupMemberActive {
 		// 群管待审数提示

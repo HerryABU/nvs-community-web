@@ -42,7 +42,10 @@
     <div v-loading="loading" class="ggrid">
       <div v-for="g in list" :key="g.id" class="gcard" @click="enter(g)">
         <div class="gcard-top">
-          <span class="gcard-name">{{ g.name }}</span>
+          <span class="gcard-name">
+            {{ g.name }}
+            <span v-if="(g.unread || 0) > 0" class="gcard-unread">{{ g.unread! > 99 ? '99+' : g.unread }}</span>
+          </span>
           <el-tag size="small" :type="visTag(g.visibility)" effect="plain">{{ visLabel(g.visibility) }}</el-tag>
         </div>
         <p class="gcard-desc">{{ g.description || '暂无简介' }}</p>
@@ -304,6 +307,11 @@ onMounted(load);
 .gcard-foot { display: flex; align-items: center; gap: 8px; margin-top: auto; }
 .gcard-cat { font-size: 0.7rem; padding: 1px 8px; border-radius: 999px; background: rgba(64, 158, 255, 0.1); color: #3b82f6; }
 .gcard-joined { font-size: 0.72rem; color: #10b981; }
+.gcard-unread {
+  display: inline-block; margin-left: 6px; min-width: 16px; padding: 0 5px;
+  border-radius: 999px; background: #ef4444; color: #fff;
+  font-size: 0.64rem; line-height: 16px; text-align: center; vertical-align: middle;
+}
 .gcard-pending { font-size: 0.72rem; color: #f59e0b; }
 .gpager { display: flex; justify-content: center; margin-top: 18px; }
 .fhint { font-size: 0.72rem; color: var(--text-light, #94a3b8); }

@@ -91,6 +91,7 @@ type Group struct {
 	MyStatus    string `gorm:"-" json:"my_status,omitempty"`   // active/pending
 	CanRead     bool   `gorm:"-" json:"can_read"`              // 当前用户能否读内容
 	InviteCode2 string `gorm:"-" json:"invite_code,omitempty"` // 仅群主/管理员下发
+	Unread      int64  `gorm:"-" json:"unread"`                // 未读数（已发布、非本人、晚于最后阅读）
 }
 
 func (Group) TableName() string { return "groups" }
@@ -474,6 +475,7 @@ func ListDiscoverGroups(userID uint, category, keyword string, page, size int) (
 	}
 	items := make([]GroupDiscoverItem, 0, len(list))
 	roles := GroupRolesOf(userID, groupIDsOf(list))
+	unread := UnreadCounts(userID, groupIDsOf(list))
 	for i := range list {
 		it := GroupDiscoverItem{Group: list[i]}
 		if r, ok := roles[list[i].ID]; ok {
@@ -486,6 +488,7 @@ func ListDiscoverGroups(userID uint, category, keyword string, page, size int) (
 			it.InviteCode2 = list[i].InviteCode
 		}
 		it.InviteCode = ""
+		it.Group.Unread = unread[list[i].ID]
 		items = append(items, it)
 	}
 	return items, total, nil
@@ -512,6 +515,7 @@ func ListMyGroups(userID uint) ([]GroupDiscoverItem, error) {
 	for _, g := range groups {
 		byID[g.ID] = g
 	}
+	unread := UnreadCounts(userID, ids)
 	out := make([]GroupDiscoverItem, 0, len(groups))
 	for _, id := range ids {
 		g, ok := byID[id]
@@ -527,6 +531,7 @@ func ListMyGroups(userID uint) ([]GroupDiscoverItem, error) {
 			it.InviteCode2 = g.InviteCode
 		}
 		it.InviteCode = ""
+		it.Group.Unread = unread[id]
 		out = append(out, it)
 	}
 	return out, nil

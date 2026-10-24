@@ -83,6 +83,8 @@ func GroupPostCreate(c *gin.Context) {
 	if p.AiAssisted {
 		_ = models.MarkAiContent(models.AiMarkGroupPost, p.ID, "")
 	}
+	// @提醒：只通知群内的被提及成员
+	notifyGroupMentions(ctx.Group, cleaned, uid, p.ID)
 	// 实时消息：通知在线成员新帖（pending 由前端按状态提示「待审」）
 	publishGroupEvent(ctx.Group.ID, GroupEventPostCreated, gin.H{
 		"post_id": p.ID, "title": p.Title, "status": p.Status,
@@ -234,6 +236,7 @@ func GroupReplyCreate(c *gin.Context) {
 		return
 	}
 	markBadWords(badHits, "group_reply", r.ID, uid, cleaned, "")
+	notifyGroupMentions(ctx.Group, cleaned, uid, uint(pid))
 	publishGroupEvent(ctx.Group.ID, GroupEventReplyCreated, gin.H{
 		"post_id": uint(pid), "reply_id": r.ID, "author_id": uid,
 		"author": displayNameOf(user), "at": time.Now().Unix(),

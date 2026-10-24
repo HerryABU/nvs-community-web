@@ -499,6 +499,8 @@ func main() {
 		protected.GET("/groups/:id/ai", grouphandler.AiStatus)
 		// 群组实时消息（SSE：新帖/回复/公告/成员变动，复用 realtime Hub 批量下发）
 		protected.GET("/groups/:id/stream", grouphandler.Stream)
+		// 群消息已读（未读计数归零）
+		protected.POST("/groups/:id/read", grouphandler.MarkRead)
 		// 场景化提示词模板（编辑器「模板」下拉 + 变量渲染）
 		protected.GET("/ai/templates", prompthandler.List)
 		protected.POST("/ai/templates/:id/render", prompthandler.Render)

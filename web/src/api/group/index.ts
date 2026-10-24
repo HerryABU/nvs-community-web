@@ -30,6 +30,7 @@ export interface Group {
   can_read?: boolean;
   is_member?: boolean;
   is_admin?: boolean;
+  unread?: number;
 }
 
 export interface GroupMember {
@@ -100,7 +101,7 @@ export const groupApi = {
       code: number;
       data: {
         group: Group; can_read: boolean; my_role: string; my_status: string; is_admin: boolean;
-        pending_requests?: number;
+        unread?: number; pending_requests?: number;
         allowed?: { invite: boolean; manage: boolean; owner: boolean };
       };
     }>(`/groups/${id}`);
@@ -212,6 +213,11 @@ export const groupApi = {
     a.download = name;
     a.click();
     URL.revokeObjectURL(url);
+  },
+
+  /** 标记群消息已读（未读计数归零） */
+  markRead(id: number, postId = 0) {
+    return api.post<{ code: number; data: { unread: number } }>(`/groups/${id}/read`, { post_id: postId });
   },
 
   aiStatus(id: number) {

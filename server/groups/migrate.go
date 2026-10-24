@@ -13,5 +13,6 @@ func Migrate(db *gorm.DB) error {
 		&GroupPostReply{},
 		&GroupFile{},
 		&UserGroupQuota{},
+		&GroupReadState{},
 	)
 }
