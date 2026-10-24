@@ -51,6 +51,10 @@ func ListMyReadingNotes(userID, novelID uint, chapterNumber int, noteType string
 }
 
 // ListPublicNotes 公开批注/书签（按作品+章节）
+//
+// ⚠️ 不要 Preload("User")：ReadingNote 没有 User 关联（Username 是 gorm:"-" 的运行时字段），
+// Preload 一个不存在的关联会让整个接口 500 —— 阅读器的公开划线因此一直是空的（后端报错，
+// 前端 catch 里静默降级成"本章没有别人的划线"）。用户名单独批量查。
 func ListPublicNotes(novelID uint, chapterNumber int) ([]ReadingNote, error) {
 	var list []ReadingNote
 	q := DB.Model(&ReadingNote{}).
@@ -58,8 +62,43 @@ func ListPublicNotes(novelID uint, chapterNumber int) ([]ReadingNote, error) {
 	if chapterNumber > 0 {
 		q = q.Where("chapter_number = ?", chapterNumber)
 	}
-	err := q.Preload("User").Order("created_at ASC").Find(&list).Error
-	return list, err
+	if err := q.Order("created_at ASC").Find(&list).Error; err != nil {
+		return nil, err
+	}
+	fillNoteUsernames(list)
+	return list, nil
+}
+
+// fillNoteUsernames 批量补用户名：一次查询取全部作者，避免 N+1。
+func fillNoteUsernames(list []ReadingNote) {
+	ids := make([]uint, 0, len(list))
+	seen := map[uint]bool{}
+	for i := range list {
+		uid := list[i].UserID
+		if uid == 0 || seen[uid] {
+			continue
+		}
+		seen[uid] = true
+		ids = append(ids, uid)
+	}
+	if len(ids) == 0 {
+		return
+	}
+	var users []User
+	if err := DB.Select("id", "username", "nickname").Where("id IN ?", ids).Find(&users).Error; err != nil {
+		return // 补名字失败不影响批注本体
+	}
+	nameOf := make(map[uint]string, len(users))
+	for _, u := range users {
+		n := u.Nickname
+		if n == "" {
+			n = u.Username
+		}
+		nameOf[u.ID] = n
+	}
+	for i := range list {
+		list[i].Username = nameOf[list[i].UserID]
+	}
 }
 
 // ListAllMyNotes 我的全部笔记（精读页，分页，带作品名/章节名）

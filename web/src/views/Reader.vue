@@ -35,8 +35,15 @@
         <el-button text :disabled="!hasSelection" :title="hasSelection ? '为选中内容添加批注' : '先选中正文文字再批注'" @click="openAnnotationDialog">
           <el-icon><EditPen /></el-icon><span class="desktop-only"> 批注</span>
         </el-button>
+        <!-- 本章划线列表：原来只能靠"碰巧点到正文里的下划线"才发现公开批注，
+             没人知道自己划了多少、别人划了什么。 -->
+        <el-button text :class="{ 'note-active': showNotesPanel }" title="本章划线 / 批注" @click="showNotesPanel = !showNotesPanel">
+          <el-icon><Notebook /></el-icon>
+          <span class="desktop-only"> 划线</span>
+          <span v-if="chapterNotes.length" class="note-count">{{ chapterNotes.length }}</span>
+        </el-button>
         <el-button text title="我的精读（书签+批注）" @click="$router.push('/reading')">
-          <el-icon><Notebook /></el-icon><span class="desktop-only"> 精读</span>
+          <el-icon><Collection /></el-icon><span class="desktop-only"> 精读</span>
         </el-button>
         <!-- 语音朗读（gap-audit #18）：服务端合成，产物落站内 uploads -->
         <el-button text :loading="ttsLoading" :title="ttsPlaying ? '停止朗读' : '朗读本章（消耗免费额度/代币）'"
@@ -138,6 +145,41 @@
         <p v-else style="text-align:center;color:var(--text-muted)">暂无内容（chapter 为 null）</p>
       </div>
     </div>
+
+    <!-- ===== 本章划线 / 批注面板 =====
+         自建侧栏而不是 el-drawer：本页是沉浸阅读场景，抽屉会挡住正文且要处理遮罩层级；
+         这里做成固定右侧窄栏，点条目滚动到正文对应划线并闪一下。 -->
+    <transition name="notes-slide">
+      <aside v-if="showNotesPanel" class="reader-notes" aria-label="本章划线">
+        <header class="rn-head">
+          <span class="rn-title">本章划线 <b>{{ chapterNotes.length }}</b></span>
+          <el-button text size="small" @click="showNotesPanel = false">收起</el-button>
+        </header>
+
+        <div v-if="chapterNotes.length === 0" class="rn-empty">
+          <p>还没有划线。</p>
+          <p class="rn-empty-hint">用鼠标选中正文里的一句话，在浮出的「批注」里写下想法 —— 公开批注别人也能看到。</p>
+        </div>
+
+        <ul v-else class="rn-list">
+          <li
+            v-for="n in chapterNotes"
+            :key="n.id"
+            class="rn-item"
+            :class="{ 'is-mine': n.user_id === authStore.user?.id }"
+            @click="focusNote(n)"
+          >
+            <p class="rn-quote">{{ n.selected_text }}</p>
+            <p class="rn-content">{{ n.content || '（未填写想法）' }}</p>
+            <div class="rn-meta">
+              <span class="rn-who">{{ n.user_id === authStore.user?.id ? '我' : (n.username || '匿名用户') }}</span>
+              <span v-if="n.visibility !== 'public'" class="rn-priv">仅自己可见</span>
+              <span class="rn-time">{{ formatNoteTime(n.created_at) }}</span>
+            </div>
+          </li>
+        </ul>
+      </aside>
+    </transition>
 
     <!-- 底部导航 -->
     <div v-if="!isTrialExceeded" class="reader-footer">
@@ -279,7 +321,7 @@ import { shouldShowGuard, markZoneConfirmed, setLastZone } from '@/utils/sensiti
 import { frameApi } from '@/api/frame';
 import { ElMessage } from 'element-plus';
 import { aiCostApi } from '@/api/costrisk';
-import { ArrowLeft, List, Star, EditPen, Notebook, Microphone } from '@element-plus/icons-vue';
+import { ArrowLeft, List, Star, EditPen, Notebook, Microphone, Collection } from '@element-plus/icons-vue';
 
 const authStore = useAuthStore();
 
@@ -566,6 +608,35 @@ watch(() => chapter.value?.content, () => renderCurrent());
 const myBookmark = ref<ReadingNote | null>(null);
 const myAnnotations = ref<ReadingNote[]>([]);
 const publicNotes = ref<ReadingNote[]>([]);
+const showNotesPanel = ref(false);
+
+/**
+ * 本章划线（自己的 + 公开的，按创建时间倒序）。
+ * 去重：自己已公开的批注会同时出现在 myAnnotations 与 publicNotes 里，
+ * 不去重会出现两条一模一样。
+ */
+const chapterNotes = computed<ReadingNote[]>(() => {
+  const seen = new Set<number>();
+  const all: ReadingNote[] = [];
+  for (const n of [...myAnnotations.value, ...publicNotes.value]) {
+    if (!n.selected_text || seen.has(n.id)) continue;
+    seen.add(n.id);
+    all.push(n);
+  }
+  return all.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+});
+
+/** 点侧栏条目：滚动到正文对应划线并闪一下（找不到就提示，不要静默失败） */
+async function focusNote(n: ReadingNote) {
+  const el = mdContainer.value?.querySelector(`mark.note-ann[data-note-id="${n.id}"]`) as HTMLElement | null;
+  if (!el) {
+    ElMessage.warning('正文里没找到这条划线（可能改写后文本已变化）');
+    return;
+  }
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  el.classList.add('is-flash');
+  window.setTimeout(() => el.classList.remove('is-flash'), 1400);
+}
 
 const showBookmarkDialog = ref(false);
 const bookmarkContent = ref('');
@@ -621,6 +692,101 @@ function onReaderMouseUp(e: MouseEvent) {
   if ((e.target as HTMLElement)?.closest?.('mark.note-ann')) return;
   // 稍作延迟，等待浏览器确定选区
   setTimeout(updateAnnoFloat, 20);
+}
+
+// ====== 气泡对话长按菜单 ======
+// ⚠️ 模板与样式早就写好了，脚本里却一直缺这组状态与方法 —— 渲染时访问 bubbleSheet.visible
+// 直接抛 TypeError，整个阅读器白屏（本页对所有人不可用）。这里补齐。
+// 评论区实例引用：模板里 ref="commentSectionRef" 需要脚本里有同名 ref 才绑得上
+const commentSectionRef = ref<{ setQuote?: (s: string) => void } | null>(null);
+const bubbleSheet = reactive({ visible: false, speaker: '', text: '' });
+let bubblePressTimer: number | undefined;
+let bubblePressFrom: { x: number; y: number } | null = null;
+
+function bubbleElFrom(t: EventTarget | null): HTMLElement | null {
+  return ((t as HTMLElement | null)?.closest?.('.script-bubble') as HTMLElement | null) || null;
+}
+
+function openBubbleSheet(el: HTMLElement) {
+  // 话本气泡结构：.sb-name 角色名 / .sb-text 台词 / .sb-emote 动作描写
+  const speaker = el.querySelector('.sb-name')?.textContent?.trim() || '';
+  const text = el.querySelector('.sb-text')?.textContent?.trim() || '';
+  const emote = el.querySelector('.sb-emote')?.textContent?.trim() || '';
+  if (!text && !emote) return;
+  bubbleSheet.speaker = speaker;
+  bubbleSheet.text = [text, emote].filter(Boolean).join(' ');
+  bubbleSheet.visible = true;
+  showAnnoFloat.value = false; // 与选区浮动按钮互斥
+}
+
+function onBubbleDown(e: PointerEvent) {
+  const el = bubbleElFrom(e.target);
+  if (!el) return;
+  bubblePressFrom = { x: e.clientX, y: e.clientY };
+  if (bubblePressTimer) window.clearTimeout(bubblePressTimer);
+  // 长按 480ms 弹菜单；期间手指/鼠标移动超过 8px 视为滑动，取消
+  bubblePressTimer = window.setTimeout(() => {
+    bubblePressTimer = undefined;
+    openBubbleSheet(el);
+  }, 480);
+}
+
+function cancelBubblePress() {
+  if (bubblePressTimer) {
+    window.clearTimeout(bubblePressTimer);
+    bubblePressTimer = undefined;
+  }
+  bubblePressFrom = null;
+}
+
+function onBubbleMove(e: PointerEvent) {
+  if (!bubblePressFrom) return;
+  if (Math.abs(e.clientX - bubblePressFrom.x) > 8 || Math.abs(e.clientY - bubblePressFrom.y) > 8) {
+    cancelBubblePress();
+  }
+}
+
+/** 桌面端：右键气泡也能唤出同一菜单（长按是移动端习惯） */
+function onBubbleContextMenu(e: MouseEvent) {
+  const el = bubbleElFrom(e.target);
+  if (!el) return;
+  e.preventDefault();
+  cancelBubblePress();
+  openBubbleSheet(el);
+}
+
+function closeBubbleSheet() {
+  bubbleSheet.visible = false;
+}
+
+async function bubbleCopy() {
+  const t = bubbleSheet.text;
+  closeBubbleSheet();
+  try {
+    await navigator.clipboard.writeText(t);
+    ElMessage.success('台词已复制');
+  } catch {
+    ElMessage.warning('复制失败，请手动选择');
+  }
+}
+
+/** 引用评论：把台词填进下方评论区（CommentSection 暴露了 setQuote） */
+function bubbleQuote() {
+  const t = bubbleSheet.text;
+  closeBubbleSheet();
+  const cmp = commentSectionRef.value as { setQuote?: (s: string) => void } | null;
+  if (cmp?.setQuote) {
+    cmp.setQuote(t);
+    ElMessage.success('已填入评论框');
+  } else {
+    ElMessage.info('已复制台词，可在评论区粘贴');
+    navigator.clipboard?.writeText(t).catch(() => {});
+  }
+}
+
+function bubbleBookmark() {
+  closeBubbleSheet();
+  toggleBookmark();
 }
 
 function onAnnoFloatClick() {
@@ -681,13 +847,29 @@ function applyNoteHighlights() {
     }
   });
   const anns = [...myAnnotations.value, ...publicNotes.value];
+  // 同一段文字在本章可能出现多次（例如"他笑了"）：只取第一处会导致两条不同批注
+  // 叠在同一个位置、后面那条把前面那条顶掉。这里按出现次序依次落位。
+  const usedCount = new Map<string, number>();
   for (const n of anns) {
     const target = (n.selected_text || '').trim();
     if (!target) continue;
+    const nth = usedCount.get(target) ?? 0;
+    usedCount.set(target, nth + 1);
+
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     let node: Text | null;
+    let remain = nth; // 跳过前面 nth 处
     while ((node = walker.nextNode() as Text | null)) {
-      const idx = node.textContent?.indexOf(target) ?? -1;
+      let from = 0;
+      let idx = -1;
+      // 单个文本节点里也可能出现多次
+      for (;;) {
+        const found = node.textContent?.indexOf(target, from) ?? -1;
+        if (found < 0) break;
+        if (remain === 0) { idx = found; break; }
+        remain -= 1;
+        from = found + target.length;
+      }
       if (idx < 0) continue;
       const range = document.createRange();
       range.setStart(node, idx);
@@ -1334,6 +1516,103 @@ onBeforeUnmount(() => {
 /* ====== 划线批注：选中句子 → 下划线标记 ======
    我的批注：蓝色实线；公开批注（他人）：琥珀色点线；
    文字保持原色（不遮背景），悬浮浅色底提示可点击查看批注内容与批注人 */
+/* ===== 本章划线面板 ===== */
+.note-count {
+  margin-left: 3px;
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 16px;
+  color: #fff;
+  background: var(--el-color-primary, #6366f1);
+}
+.reader-notes {
+  position: fixed;
+  top: 92px;
+  right: 18px;
+  bottom: 80px;
+  width: 300px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: var(--radius-lg, 14px);
+  box-shadow: var(--shadow-card, 0 8px 24px rgba(0, 0, 0, 0.08));
+  overflow: hidden;
+}
+.rn-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color, #f0f1f4);
+  font-size: var(--text-sm, 13px);
+}
+.rn-title { color: var(--text-color, #1f2328); font-weight: 600; }
+.rn-title b { color: var(--el-color-primary, #6366f1); }
+.rn-empty { padding: 18px 14px; color: var(--text-light, #6b7280); font-size: var(--text-sm, 13px); line-height: 1.7; }
+.rn-empty-hint { margin-top: 6px; font-size: var(--text-xs, 12px); opacity: 0.85; }
+.rn-list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; flex: 1; }
+.rn-item {
+  padding: 8px 10px;
+  border-radius: var(--radius-md, 10px);
+  border-left: 3px solid var(--border-color, #e5e7eb);
+  cursor: pointer;
+  transition: background 0.14s ease;
+}
+.rn-item:hover { background: var(--bg-page, #f7f8fa); }
+.rn-item.is-mine { border-left-color: var(--el-color-primary, #6366f1); }
+.rn-quote {
+  margin: 0 0 4px;
+  padding-left: 8px;
+  border-left: 2px solid var(--el-color-primary, #6366f1);
+  font-size: var(--text-sm, 13px);
+  color: var(--text-color, #1f2328);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rn-content {
+  margin: 0 0 4px;
+  font-size: var(--text-sm, 13px);
+  color: var(--text-light, #4b5563);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rn-meta { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-light, #9ca3af); }
+.rn-priv { padding: 0 4px; border-radius: 3px; background: var(--bg-page, #f1f5f9); }
+.rn-time { margin-left: auto; }
+
+/* 侧栏进出动画 */
+.notes-slide-enter-active, .notes-slide-leave-active { transition: transform 0.2s ease, opacity 0.2s ease; }
+.notes-slide-enter-from, .notes-slide-leave-to { transform: translateX(16px); opacity: 0; }
+
+/* 从侧栏定位到划线时闪一下，否则用户不知道该看哪 */
+mark.note-ann.is-flash {
+  background: rgba(251, 191, 36, 0.55);
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.35);
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+@media (max-width: 768px) {
+  /* 手机上改成底部抽屉，避免窄屏遮挡正文 */
+  .reader-notes {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 55vh;
+    border-radius: 14px 14px 0 0;
+  }
+}
+
 mark.note-ann {
   background: transparent;
   border-bottom: 2px solid rgba(245, 158, 11, 0.55);
