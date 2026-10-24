@@ -4,6 +4,7 @@ import { createPinia } from 'pinia';
 import App from './App.vue';
 import router from './router';
 import './styles/global.css';
+import './styles/scale.css';
 import './styles/admin.css';
 
 // ====== Element Plus 命令式组件样式（按需引入模式下必须显式引入） ======

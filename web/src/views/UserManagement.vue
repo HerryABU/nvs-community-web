@@ -35,6 +35,29 @@
     </AdminHeader>
 
     <div class="admin-page-body admin-panel">
+      <!-- 首次加载用骨架屏（内容高度不跳变）；翻页时 users 非空，走表格 + v-loading -->
+      <StateBlock v-if="loading && users.length === 0" state="loading" skeleton="table" :rows="6" />
+
+      <!-- 错误态：给出可执行的下一步，而不是只弹一条一闪而过的提示 -->
+      <StateBlock
+        v-else-if="loadError"
+        state="error"
+        title="用户列表加载失败"
+        description="可能是网络波动或登录状态过期。点重试即可；连续失败请到「健康检查」查看后端状态。"
+        @retry="loadUsers"
+      />
+
+      <!-- 空态：区分「筛选无结果」与「站点真的没有用户」，并给出对应动作 -->
+      <StateBlock
+        v-else-if="users.length === 0"
+        state="empty"
+        :title="hasFilter ? '没有匹配的用户' : '站点还没有注册用户'"
+        :description="hasFilter ? '当前搜索/筛选条件下没有结果，放宽条件再试。' : '用户注册后会出现在这里。'"
+        :action-text="hasFilter ? '清空筛选' : ''"
+        @action="resetFilters"
+      />
+
+      <template v-else>
       <el-table :data="users" v-loading="loading" stripe style="width: 100%">
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="username" label="用户名" width="140" />
@@ -84,6 +107,7 @@
           @current-change="loadUsers"
         />
       </div>
+      </template>
     </div>
 
     <!-- 编辑弹窗 -->
@@ -111,7 +135,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
@@ -135,6 +159,11 @@ const search = ref('');
 const roleFilter = ref('');
 const statusFilter = ref('');
 const loading = ref(false);
+/** 加载失败：交给 StateBlock 呈现（重试按钮比一闪而过的 toast 有用） */
+const loadError = ref(false);
+
+/** 是否有生效的筛选：决定空态该说「没匹配」还是「站点没用户」 */
+const hasFilter = computed(() => !!(search.value || roleFilter.value || statusFilter.value));
 const saving = ref(false);
 
 const editVisible = ref(false);
@@ -163,6 +192,7 @@ function roleTagType(role: string) {
 
 async function loadUsers() {
   loading.value = true;
+  loadError.value = false;
   try {
     const res = await adminApi.getUsers({
       page: page.value,
@@ -175,10 +205,20 @@ async function loadUsers() {
       total.value = res.data.data.total || 0;
     }
   } catch {
-    ElMessage.error('加载失败');
+    // 不弹 toast：页面上已经有错误态和重试按钮，再弹一条只是噪音
+    loadError.value = true;
   } finally {
     loading.value = false;
   }
+}
+
+/** 空态里的「清空筛选」：把条件复位再查，避免用户自己一个个清 */
+function resetFilters() {
+  search.value = '';
+  roleFilter.value = '';
+  statusFilter.value = '';
+  page.value = 1;
+  loadUsers();
 }
 
 function doSearch() {
