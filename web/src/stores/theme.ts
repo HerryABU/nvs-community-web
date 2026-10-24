@@ -191,7 +191,7 @@ function installNvsGlobal(): void {
   };
 
   const g: NVSGlobal = {
-    version: '3.9.0',
+    version: '3.10.0',
     get siteName() {
       try { return useAppStore().siteInfo?.site_name || document.title || ''; } catch { return document.title || ''; }
     },

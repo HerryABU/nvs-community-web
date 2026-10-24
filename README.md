@@ -473,6 +473,22 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.10.0 群组实时消息 + 模板上下文自动注入（2026-10-24）
+
+**群组 G4：实时消息（SSE）**
+- 后端 `GET /api/groups/:id/stream`：复用 `realtime.Hub` 批量下发，心跳 15s，`X-Accel-Buffering: no`
+- 事件：新帖 / 审核结果 / 新回复 / 群公告 / 成员加入与离开；AI 回复同样广播（`ai=true`）
+- 群组使用独立 Hub（800ms 批量窗口），不受「狂暴模式」开关影响
+- 前端 `api/group/stream.ts` + `composables/useGroupStream.ts`：fetch 流式解析、指数退避重连、页面隐藏暂停
+- 群详情头部「实时」状态徽标；他人动态弹通知，自己的操作不打扰
+
+**模板上下文自动注入（§13.2）**
+- `prompttpl.BuildNovelVars`：按作者作品自动填充 作品名/类型/简介/大纲/角色设定/前文摘要/前文/正文/作者样本
+- 新增记忆类型 `characters`（角色设定），编辑器「管理记忆」可直接编辑保存
+- 新接口 `POST /api/ai/templates/:id/render-context`（归属校验：作者本人或管理员）
+- 编辑器内容优先：`vars` 里的正文不会被旧章节覆盖；只回传模板实际用到且自动注入的变量，避免大纲整段回显
+- 编辑器套用模板时提示「已自动注入：大纲、角色信息…」
+
 ### v3.9.0 群组功能 + 提示词模板引擎（2026-10-24）
 
 **群组（独立领域包 server/groups + 接口层 server/handlers/group）**
