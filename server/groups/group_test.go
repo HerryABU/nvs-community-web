@@ -2,10 +2,12 @@ package groups
 
 import (
 	"archive/zip"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"testing"
+	"time"
 
 	"nvs-server/models"
 
@@ -16,7 +18,11 @@ import (
 // setupGroupTestDB 独立内存库（唯一名，避免与 models 包测试互相污染）
 func setupGroupTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open("file:groups_test?mode=memory&cache=shared"), &gorm.Config{})
+	// ⚠️ 内存库必须唯一命名：`file:groups_test?mode=memory&cache=shared` 是进程内同名共享库，
+	// 同包多个测试 / `-count=N` / 同一测试重跑都会复用同一份数据，
+	// 表现为「单独跑通过、全量跑或重复跑偶发失败」（本轮 TestUnreadAndMarkRead 就栽在这）。
+	dsn := fmt.Sprintf("file:groups_test_%d?mode=memory&cache=shared", time.Now().UnixNano())
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("打开测试库失败: %v", err)
 	}
