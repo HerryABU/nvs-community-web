@@ -186,6 +186,7 @@ action ∈ invite | accept | decline | update_role | update_caps | update_share 
 | AI 内容标识 | 按章节记录（不变），章节作者为实际保存人 |
 | 违禁词/审核 | 不变；`pending` 章节同样过违禁词 |
 | 隔离墙/警方取证 | 不变；协作者身份进审计，便于追责 |
+| 章节保存 | 每次保存落一个版本（`chaptervcs`），多人改同一章不再静默覆盖；详见 `docs/novel-version-control.md` |
 
 ---
 

@@ -18,6 +18,7 @@
         <span v-if="lastSaved" class="ce-saved-time">已保存 {{ lastSaved }}</span>
         <PublishQuotaHint />
         <el-button v-if="isScriptMode" :icon="ChatDotRound" @click="openScriptPreview">气泡预览</el-button>
+        <el-button :icon="Clock" @click="versionPanelVisible = true">版本</el-button>
         <el-button :icon="MagicStick" @click="showAiPanel = true">AI 助手</el-button>
         <el-button :icon="Link" @click="showRefPicker = true">插入站内链接</el-button>
         <el-button type="primary" :loading="saving" @click="saveChapter">保存章节</el-button>
@@ -35,6 +36,21 @@
       :chapter-id="currentChapterId"
       @insert="aiInsert"
       @replace="aiReplace"
+    />
+
+    <!-- 章节版本：分支 / 历史 / diff / 回滚 / 删除 / 合并 -->
+    <ChapterVersionPanel
+      :visible="versionPanelVisible"
+      :novel-id="novelId"
+      :chapter-num="currentNum"
+      @update:visible="onVersionPanelToggle"
+    />
+
+    <!-- 保存冲突：并排对比后由作者决定「以我的为准」或「放弃修改」 -->
+    <ConflictResolveDialog
+      v-model:visible="conflictVisible"
+      :conflict="conflictData"
+      @resolve="onConflictResolve"
     />
 
     <!-- 话本气泡预览（script mode）：服务端解析，转义后渲染 -->
@@ -137,11 +153,14 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router';
 import { novelApi, chapterApi, type Chapter } from '@/api/novel';
 import { ElMessage } from 'element-plus';
-import { ArrowLeft, Plus, Delete, Link, MagicStick, ChatDotRound } from '@element-plus/icons-vue';
+import { ArrowLeft, Plus, Delete, Link, MagicStick, ChatDotRound, Clock } from '@element-plus/icons-vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
 import AiAssistPanel from '@/components/editor/AiAssistPanel.vue';
 import ChapterWorkflowBar from '@/components/collab/ChapterWorkflowBar.vue';
+import ChapterVersionPanel from '@/components/collab/ChapterVersionPanel.vue';
+import ConflictResolveDialog from '@/components/collab/ConflictResolveDialog.vue';
+import { vcsApi, isConflictResponse, type ConflictPayload } from '@/api/novel/vcs';
 import { collabApi, chapterStatusLabel, chapterStatusType, type CollabMe } from '@/api/collab';
 import { useAuthStore } from '@/stores/auth';
 import { scriptApi } from '@/api/novel/script';
@@ -359,6 +378,45 @@ async function onModeChange(mode: string) {
   }
 }
 
+// ===== 版本控制（docs/novel-version-control.md） =====
+// baseVersion：打开/切换章节时记下的服务端版本号，保存时带上做冲突检测
+const baseVersion = ref(0);
+const currentBranch = ref('main');
+const versionPanelVisible = ref(false);
+const conflictVisible = ref(false);
+const conflictData = ref<ConflictPayload | null>(null);
+
+async function loadVersionHead() {
+  try {
+    const res = await vcsApi.listVersions(novelId.value, currentNum.value, currentBranch.value);
+    const d = res.data.data || ({} as any);
+    baseVersion.value = d.head || 0;
+  } catch {
+    baseVersion.value = 0; // 取不到就不做冲突检测（不阻断写作）
+  }
+}
+
+// 版本面板关闭（回滚/合并后）→ 重新载入章节正文与版本号
+function onVersionPanelToggle(v: boolean) {
+  versionPanelVisible.value = v;
+  if (!v) {
+    loadCurrentChapter();
+    loadVersionHead();
+  }
+}
+
+// 冲突处理：以我的为准（force 覆盖）/ 放弃修改（重载服务端）
+async function onConflictResolve(action: 'mine' | 'reload') {
+  conflictVisible.value = false;
+  if (action === 'mine') {
+    await saveChapter(true);
+    return;
+  }
+  await loadCurrentChapter();
+  await loadVersionHead();
+  ElMessage.info('已放弃本次修改，重载服务端最新版本');
+}
+
 // ─── 多人协作 ───
 
 // 我在该作品上的协作身份（主笔/协作作者/编辑/审稿）；非协作作品返回 null，保持原有直发行为
@@ -433,10 +491,13 @@ async function loadCurrentChapter() {
       // 等待 Cherry 初始化后再设置值——通过 chapterContent 同步
     }
     richTextContent.value = renderMarkdown(content);
+    // 记下服务端版本号，供本次编辑保存时做冲突检测
+    await loadVersionHead();
   } catch {
     chapterTitle.value = `第${currentNum.value}章`;
     chapterContent.value = '';
     richTextContent.value = '';
+    baseVersion.value = 0;
     if (editorMode.value === 'md' && cherryInstance) {
       cherryInstance.setValue('');
     }
@@ -462,6 +523,7 @@ async function addChapter() {
   chapterStatus.value = 'draft';
   reviewNote.value = '';
   canEditThis.value = true;
+  baseVersion.value = 0; // 新章节还没有历史版本
   currentNum.value = newNum;
   if (cherryInstance) cherryInstance.setValue('');
   chapters.value.push({
@@ -472,7 +534,7 @@ async function addChapter() {
   router.replace(`/author/editor/${novelId.value}/chapter/${newNum}`);
 }
 
-async function saveChapter() {
+async function saveChapter(force = false) {
   if (!chapterTitle.value.trim()) {
     ElMessage.warning('请输入章节标题');
     return;
@@ -484,14 +546,23 @@ async function saveChapter() {
   try {
     let chapterId = 0;
     const existing = chapters.value.find(c => c.chapter_number === currentNum.value && c.id > 0);
+    // 版本控制：base_version 落后即被服务端拒绝（409），前端弹并排对比
+    const vcsFields = {
+      base_version: baseVersion.value || 0,
+      branch: currentBranch.value,
+      force,
+    } as any;
     if (existing) {
-      await chapterApi.updateChapter(novelId.value, currentNum.value, {
+      const res = await chapterApi.updateChapter(novelId.value, currentNum.value, {
         title: chapterTitle.value,
         content: contentToSave,
         ai_assisted: aiUsed.value || undefined,
         ai_model: aiUsed.value ? aiModelName.value : undefined,
+        ...vcsFields,
       } as any);
       chapterId = existing.id;
+      const ver = Number(res?.data?.data?.version || 0);
+      if (ver > 0) baseVersion.value = ver;
     } else {
       const res = await chapterApi.createChapter(novelId.value, {
         title: chapterTitle.value,
@@ -500,6 +571,8 @@ async function saveChapter() {
         ai_model: aiUsed.value ? aiModelName.value : undefined,
       } as any);
       chapterId = Number(res.data?.data?.id) || 0;
+      const ver = Number(res?.data?.data?.version || 0);
+      if (ver > 0) baseVersion.value = ver;
     }
     const idx = chapters.value.findIndex(c => c.chapter_number === currentNum.value);
     if (idx >= 0) {
@@ -515,8 +588,14 @@ async function saveChapter() {
     }
     const now = new Date();
     lastSaved.value = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-    ElMessage.success('已保存');
+    ElMessage.success(force ? '已保存（强制覆盖，冲突现场已留版本）' : '已保存');
   } catch (e: any) {
+    const cf = isConflictResponse(e);
+    if (cf && !force) {
+      conflictData.value = cf;
+      conflictVisible.value = true;
+      return;
+    }
     ElMessage.error(e.response?.data?.message || '保存失败');
   } finally {
     saving.value = false;
@@ -528,20 +607,26 @@ async function saveChapterSilent() {
   if (!chapterTitle.value.trim() && !contentToSave.trim()) return;
   try {
     const existing = chapters.value.find(c => c.chapter_number === currentNum.value && c.id > 0);
+    const vcsFields = { base_version: baseVersion.value || 0, branch: currentBranch.value } as any;
     if (existing) {
-      await chapterApi.updateChapter(novelId.value, currentNum.value, {
+      const res = await chapterApi.updateChapter(novelId.value, currentNum.value, {
         title: chapterTitle.value,
         content: contentToSave,
         ai_assisted: aiUsed.value || undefined,
         ai_model: aiUsed.value ? aiModelName.value : undefined,
+        ...vcsFields,
       } as any);
+      const ver = Number(res?.data?.data?.version || 0);
+      if (ver > 0) baseVersion.value = ver;
     } else if (chapterTitle.value.trim()) {
-      await chapterApi.createChapter(novelId.value, {
+      const res = await chapterApi.createChapter(novelId.value, {
         title: chapterTitle.value,
         content: contentToSave,
         ai_assisted: aiUsed.value || undefined,
         ai_model: aiUsed.value ? aiModelName.value : undefined,
       } as any);
+      const ver = Number(res?.data?.data?.version || 0);
+      if (ver > 0) baseVersion.value = ver;
     }
   } catch { /* 静默保存失败不提示 */ }
 }
