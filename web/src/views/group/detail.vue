@@ -27,6 +27,8 @@
           <span class="gd-live" :class="{ on: streamConnected }" :title="streamConnected ? '实时消息已连接' : '实时消息连接中…'">
             <i class="gd-live-dot" />{{ streamConnected ? '实时' : '连接中' }}
           </span>
+          <!-- OC 模式：角色卡 / 世界书 / AI 角色互聊 / 一键发布话本小说 -->
+          <el-button size="small" @click="$router.push(`/group/${groupId}/oc`)">OC 模式</el-button>
           <el-button size="small" @click="qrVisible = true">群二维码</el-button>
           <el-button v-if="isOwner" size="small" text type="danger" @click="leave">退出群组</el-button>
         </div>

@@ -122,6 +122,13 @@ const router = createRouter({
       name: 'group-detail',
       component: () => import('@/views/group/detail.vue'),
     },
+    // OC 模式群组：角色卡 / 世界书 / 群内 AI 角色 / 对话流 / 一键发布（docs/oc-mode.md）
+    {
+      path: '/group/:id/oc',
+      name: 'group-oc',
+      component: () => import('@/views/group/OcPanel.vue'),
+      meta: { requiresAuth: true },
+    },
     {
       path: '/forums',
       name: 'forums',
