@@ -280,6 +280,8 @@ func main() {
 		public.GET("/ai/gallery", handlers.AiGalleryList)
 		// 风格字典（发布作品时下拉用）
 		public.GET("/ai/styles", handlers.AiStyleList)
+		// AI 生成内容标识（合规展示：只回模型名，不含内容）
+		public.GET("/ai/marks", handlers.AiMarks)
 		// 在线支付回调（§7.4）：网关异步通知（验签准入，无鉴权）+ 支付完成同步跳转
 		public.POST("/payment/notify/:channel", security.RateLimit(120, 60), handlers.PaymentNotify)
 		public.GET("/payment/return/:channel", handlers.PaymentReturn)

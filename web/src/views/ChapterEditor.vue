@@ -152,8 +152,14 @@ const aiContextText = computed(() => {
   return chapterContent.value;
 });
 
+// AI 生成标识：编辑过程中用过 AI 就置位，保存时随正文提交，供发布页/详情页打标
+const aiUsed = ref(false);
+const aiModelName = ref('');
+
 // AI 结果插入编辑器：MD 模式优先插到光标处，失败回退追加；富文本模式追加
-function aiInsert(text: string) {
+function aiInsert(text: string, meta?: { model?: string }) {
+  aiUsed.value = true;
+  if (meta?.model) aiModelName.value = meta.model;
   if (editorMode.value === 'md' && cherryInstance) {
     const cm = cherryInstance.editor?.codemirror || cherryInstance.codemirror;
     if (cm && cm.replaceSelection) {
@@ -174,7 +180,9 @@ function aiInsert(text: string) {
 }
 
 // AI 结果替换整个正文
-function aiReplace(text: string) {
+function aiReplace(text: string, meta?: { model?: string }) {
+  aiUsed.value = true;
+  if (meta?.model) aiModelName.value = meta.model;
   if (editorMode.value === 'md') {
     chapterContent.value = text;
     if (cherryInstance) cherryInstance.setValue(text);
@@ -374,13 +382,17 @@ async function saveChapter() {
       await chapterApi.updateChapter(novelId.value, currentNum.value, {
         title: chapterTitle.value,
         content: contentToSave,
-      });
+        ai_assisted: aiUsed.value || undefined,
+        ai_model: aiUsed.value ? aiModelName.value : undefined,
+      } as any);
       chapterId = existing.id;
     } else {
       const res = await chapterApi.createChapter(novelId.value, {
         title: chapterTitle.value,
         content: contentToSave,
-      });
+        ai_assisted: aiUsed.value || undefined,
+        ai_model: aiUsed.value ? aiModelName.value : undefined,
+      } as any);
       chapterId = Number(res.data?.data?.id) || 0;
     }
     const idx = chapters.value.findIndex(c => c.chapter_number === currentNum.value);
@@ -409,12 +421,16 @@ async function saveChapterSilent() {
       await chapterApi.updateChapter(novelId.value, currentNum.value, {
         title: chapterTitle.value,
         content: contentToSave,
-      });
+        ai_assisted: aiUsed.value || undefined,
+        ai_model: aiUsed.value ? aiModelName.value : undefined,
+      } as any);
     } else if (chapterTitle.value.trim()) {
       await chapterApi.createChapter(novelId.value, {
         title: chapterTitle.value,
         content: contentToSave,
-      });
+        ai_assisted: aiUsed.value || undefined,
+        ai_model: aiUsed.value ? aiModelName.value : undefined,
+      } as any);
     }
   } catch { /* 静默保存失败不提示 */ }
 }

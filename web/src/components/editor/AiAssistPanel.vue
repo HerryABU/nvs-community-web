@@ -168,8 +168,8 @@
         <div class="ai-result-actions">
           <el-button size="small" @click="copyResult">复制</el-button>
           <el-button v-if="memoryEnabled && props.chapterId" size="small" @click="saveResultAsSummary">存为章节摘要</el-button>
-          <el-button size="small" type="primary" plain @click="emit('replace', result!.content)">替换正文</el-button>
-          <el-button size="small" type="primary" @click="emit('insert', result!.content)">插入编辑器</el-button>
+          <el-button size="small" type="primary" plain @click="emit('replace', result!.content, { model: usedModelName })">替换正文</el-button>
+          <el-button size="small" type="primary" @click="emit('insert', result!.content, { model: usedModelName })">插入编辑器</el-button>
         </div>
       </div>
     </div>
@@ -181,6 +181,11 @@ import { ref, reactive, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { aiApi, AI_ACTIONS, type AiStatus, type AiEstimateResult, type AiNovelMemory } from '@/api/ai';
+
+const usedModelName = computed(() => {
+  const m = status.models.find((x) => x.id === form.model_id);
+  return m ? m.name : '';
+});
 
 const props = defineProps<{
   visible: boolean;

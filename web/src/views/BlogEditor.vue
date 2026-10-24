@@ -316,8 +316,10 @@ async function openAiPanel() {
 }
 
 // AI 结果整体替换正文（Markdown 模式写回 Cherry；富文本模式按 HTML 段落写入）
-async function aiReplaceAll(text: string) {
+async function aiReplaceAll(text: string, meta?: { model?: string }) {
   if (!text) return;
+  aiUsed.value = true;
+  if (meta?.model) aiModelName.value = meta.model;
   if (editorMode.value === 'md' && cherryInstance) {
     cherryInstance.setValue(text);
     blogContent.value = text;
@@ -328,7 +330,13 @@ async function aiReplaceAll(text: string) {
   ElMessage.success('已替换正文');
 }
 
-function insertIntoEditor(text: string) {
+// AI 生成标识（176 号令）：用过 AI 且回填正文后置位，保存时提交
+const aiUsed = ref(false);
+const aiModelName = ref('');
+
+function insertIntoEditor(text: string, meta?: { model?: string }) {
+  aiUsed.value = true;
+  if (meta?.model) aiModelName.value = meta.model;
   if (editorMode.value === 'md' && cherryInstance) {
     // Cherry 内部 CodeMirror 光标处插入；兼容 insert API
     const cm = cherryInstance.editor?.codemirror || cherryInstance.codemirror;
@@ -429,6 +437,8 @@ async function saveBlog() {
       category_id: blogCategoryId.value,
       tags: blogTags.value,
       topics: blogTopics.value,
+      ai_assisted: aiUsed.value || undefined,
+      ai_model: aiUsed.value ? aiModelName.value : undefined,
     };
     if (editingId.value) {
       await blogApi.update(editingId.value, payload);

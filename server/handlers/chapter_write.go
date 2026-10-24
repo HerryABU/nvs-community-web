@@ -41,8 +41,10 @@ func CreateChapter(c *gin.Context) {
 	}
 
 	var req struct {
-		Title   string `json:"title" binding:"required"`
-		Content string `json:"content" binding:"required"`
+		Title      string `json:"title" binding:"required"`
+		Content    string `json:"content" binding:"required"`
+		AiAssisted bool   `json:"ai_assisted"` // 作者标记：本章含 AI 辅助生成
+		AiModel    string `json:"ai_model"`    // 使用的模型展示名
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请填写章节标题和内容")
@@ -107,6 +109,13 @@ func CreateChapter(c *gin.Context) {
 	// 违禁词 mark 动作命中 → 写入待审标记记录
 	flagBadWords(badHits, "chapter", chapter.ID, userID, raw, chapter.Title)
 
+	// AI 生成内容标识（合规）：作者在编辑器用过 AI 时落标，发布页/详情页展示徽标
+	if req.AiAssisted {
+		_ = models.MarkAiContent(models.AiMarkChapter, chapter.ID, req.AiModel)
+	} else if chapter.ID > 0 {
+		_ = models.ClearAiContentMark(models.AiMarkChapter, chapter.ID)
+	}
+
 	models.UpdateNovelStats(uint(novelID))
 	updateIndexJSON(uint(userID), uint(novelID))
 	generateChecksums(uint(userID), uint(novelID))
@@ -132,8 +141,10 @@ func UpdateChapter(c *gin.Context) {
 	}
 
 	var req struct {
-		Title   string `json:"title"`
-		Content string `json:"content"`
+		Title      string `json:"title"`
+		Content    string `json:"content"`
+		AiAssisted bool   `json:"ai_assisted"`
+		AiModel    string `json:"ai_model"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请求参数错误")
@@ -174,6 +185,13 @@ func UpdateChapter(c *gin.Context) {
 
 	// 违禁词 mark 动作命中 → 写入待审标记记录
 	flagBadWords(badHits, "chapter", chapter.ID, userID, raw, chapter.Title)
+
+	// AI 生成内容标识（合规）：作者在编辑器用过 AI 时落标，发布页/详情页展示徽标
+	if req.AiAssisted {
+		_ = models.MarkAiContent(models.AiMarkChapter, chapter.ID, req.AiModel)
+	} else if chapter.ID > 0 {
+		_ = models.ClearAiContentMark(models.AiMarkChapter, chapter.ID)
+	}
 
 	models.UpdateNovelStats(uint(novelID))
 	updateIndexJSON(uint(userID), uint(novelID))

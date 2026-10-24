@@ -37,6 +37,9 @@ type CreateBlogInput struct {
 	CategoryID uint     `json:"category_id"`
 	Tags       []string `json:"tags"`   // 博客标签（#tag）
 	Topics     []string `json:"topics"` // 博客话题（#话题）
+	// AI 辅助生成标识（176 号令）：作者在编辑器用过 AI 且未全部改写时置 true
+	AiAssisted bool   `json:"ai_assisted"`
+	AiModel    string `json:"ai_model"`
 }
 
 type UpdateBlogInput struct {
@@ -45,6 +48,8 @@ type UpdateBlogInput struct {
 	Summary    string   `json:"summary"`
 	IsPinned   *bool    `json:"is_pinned"`
 	CategoryID *uint    `json:"category_id"`
+	AiAssisted bool     `json:"ai_assisted"`
+	AiModel    string   `json:"ai_model"`
 	Tags       []string `json:"tags"`   // 博客标签（#tag），null=不修改
 	Topics     []string `json:"topics"` // 博客话题（#话题），null=不修改
 }
@@ -209,6 +214,11 @@ func CreateBlog(c *gin.Context) {
 
 	// 违禁词 mark 动作命中 → 写入待审标记记录
 	flagBadWords(badHits, "blog", blog.ID, userID, raw, blog.Title)
+
+	// AI 生成内容标识（合规）
+	if req.AiAssisted {
+		_ = models.MarkAiContent(models.AiMarkBlog, blog.ID, req.AiModel)
+	}
 
 	// 写入文件系统
 	authorDir := filepath.Join(blogDataDir(), fmt.Sprintf("%d", userID))
