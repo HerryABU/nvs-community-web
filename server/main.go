@@ -473,6 +473,8 @@ func main() {
 		protected.POST("/novels/:id/collaborators", collabhandler.Invite)
 		protected.PUT("/novels/:id/collaborators/:uid", collabhandler.Update)
 		protected.DELETE("/novels/:id/collaborators/:uid", collabhandler.Remove)
+		// 主笔转让（不可逆，前端二次确认输入作品标题）
+		protected.POST("/novels/:id/transfer", collabhandler.Transfer)
 		protected.GET("/collab/invites", collabhandler.Invites)
 		protected.GET("/collab/works", collabhandler.Works)
 		protected.POST("/collab/:novelId/respond", collabhandler.Respond)

@@ -46,6 +46,7 @@ export const AI_ACTIONS = [
   { value: 'polish', label: '润色', hint: '修正语病、提升表达，篇幅大致不变' },
   { value: 'expand', label: '扩写', hint: '丰富细节、对话与环境描写' },
   { value: 'summarize', label: '摘要', hint: '概括内容要点' },
+  { value: 'character', label: '角色设定', hint: '按线索生成角色卡（外貌/缺陷/秘密/说话方式）' },
   { value: 'custom', label: '自定义', hint: '把输入当作完整指令执行' },
 ] as const;
 

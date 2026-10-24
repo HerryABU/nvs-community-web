@@ -171,7 +171,11 @@ action ∈ invite | accept | decline | update_role | update_caps | update_share 
 
 1. **实时共同编辑**（OT/CRDT、光标同步）——成本高、与现有「文件存储章节」架构冲突，暂不做
 2. **自动分账/提现**——需支付与合同体系配套，先登记
-3. **主笔转让**——未实现（无字段/接口/界面），见 `docs/gap-audit.md` #21
+3. **主笔转让**（v3.18.0 已实现）：`POST /api/novels/:id/transfer {to_user_id}`
+   - 仅现任主笔本人或平台可发起；受让人**必须是已接受的协作者**（防转错人）
+   - 事务内完成「换 `Novel.AuthorID` + 受让人退出成员表 + 原主笔降为 editor（保留 `can_edit_others`）」，杜绝无主笔中间态
+   - 不可逆：前端二次确认需**输入作品标题**；审计记 `transfer_owner`（before/after 主笔 ID）
+   - 历史收益不追溯（分成按流水归属，改主笔不改已产生的账）
 4. **协作者查看收益金额**——只显示比例，不显示平台经营数据
 5. **私密作品协作邀请的站外分享**——邀请仅站内通知
 

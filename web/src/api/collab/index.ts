@@ -83,6 +83,10 @@ export interface CollabUpdateInput {
 }
 
 export const collabApi = {
+  /** 主笔转让（不可逆）：受让人必须是已接受的协作者 */
+  transferOwner(novelId: number, toUserId: number) {
+    return api.post(`/novels/${novelId}/transfer`, { to_user_id: toUserId });
+  },
   /** 协作成员 + 我的能力（主笔或成员可见） */
   list(novelId: number) {
     return api.get<{ code: number; data: CollabListData }>(`/novels/${novelId}/collaborators`);

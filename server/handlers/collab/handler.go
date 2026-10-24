@@ -58,13 +58,13 @@ func List(c *gin.Context) {
 		"owner_name": ownerName,
 		"byline":     collab.Byline(uint(novelID)),
 		"me": gin.H{
-			"is_owner":         actor.IsOwner,
-			"role":             actor.Role,
-			"status":           actor.Status,
-			"can_publish":      actor.Can(collab.CapPublishChapter),
-			"can_review":       actor.Can(collab.CapReviewChapter),
-			"can_edit_others":  actor.Can(collab.CapEditOthers),
-			"can_write":        actor.Can(collab.CapWriteChapter),
+			"is_owner":        actor.IsOwner,
+			"role":            actor.Role,
+			"status":          actor.Status,
+			"can_publish":     actor.Can(collab.CapPublishChapter),
+			"can_review":      actor.Can(collab.CapReviewChapter),
+			"can_edit_others": actor.Can(collab.CapEditOthers),
+			"can_write":       actor.Can(collab.CapWriteChapter),
 		},
 	})
 }
@@ -246,4 +246,30 @@ func Works(c *gin.Context) {
 		})
 	}
 	utils.Success(c, gin.H{"list": out})
+}
+
+// Transfer POST /api/novels/:id/transfer { to_user_id }
+// 主笔转让：只有现任主笔或平台可发起；受让人必须是已接受的协作者。
+// 高风险不可逆操作，前端必须二次确认（输入作品标题）。
+func Transfer(c *gin.Context) {
+	uid := middleware.UserID(c)
+	if uid == 0 {
+		utils.Unauthorized(c, "请先登录")
+		return
+	}
+	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	var in struct {
+		ToUserID uint `json:"to_user_id"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil || in.ToUserID == 0 {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	role := middleware.UserRole(c)
+	isPlatform := role == models.RoleAdmin || role == models.RolePolice
+	if err := collab.Transfer(uint(novelID), uid, in.ToUserID, isPlatform); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+	utils.SuccessMessage(c, "主笔已转让（原主笔保留编辑权限）", nil)
 }

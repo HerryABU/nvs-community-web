@@ -233,6 +233,8 @@ func aiActionLabel(action string) string {
 		return "扩写"
 	case "summarize":
 		return "摘要"
+	case "character":
+		return "角色设定"
 	default:
 		return "生成"
 	}

@@ -36,7 +36,28 @@
         </el-select>
         <el-button type="primary" :loading="inviting" @click="doInvite">发送邀请</el-button>
         <span class="cp-tip">受邀人接受后生效，未接受不授予任何权限</span>
+        <el-button text type="danger" size="small" style="margin-left:auto" @click="openTransfer">转让主笔</el-button>
       </div>
+
+      <!-- 转让主笔（不可逆，二次确认） -->
+      <el-dialog v-model="transferVisible" title="转让主笔" width="470px" append-to-body>
+        <el-alert type="warning" :closable="false" class="cp-warn"
+          title="转让后你不再是主笔：作品归受让人，你保留「编辑」权限。此操作不可撤销，历史收益不追溯。" />
+        <el-form label-width="90px" style="margin-top:12px">
+          <el-form-item label="受让人">
+            <el-select v-model="transferTo" placeholder="选择已接受的协作者" style="width:100%">
+              <el-option v-for="m in transferCandidates" :key="m.user_id" :label="`${m.username || m.user_id}`" :value="m.user_id" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="确认">
+            <el-input v-model="transferConfirm" placeholder="输入作品标题以确认" />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="transferVisible = false">取消</el-button>
+          <el-button type="danger" :loading="transferring" @click="doTransfer">确认转让</el-button>
+        </template>
+      </el-dialog>
 
       <!-- 成员表 -->
       <el-table :data="members" size="small" class="cp-table">
@@ -137,7 +158,7 @@ import {
   type CollabRole,
 } from '@/api/collab';
 
-const props = defineProps<{ visible: boolean; novelId: number }>();
+const props = defineProps<{ visible: boolean; novelId: number; novelTitle?: string }>();
 const emit = defineEmits<{ 'update:visible': [boolean] }>();
 
 const loading = ref(false);
@@ -146,6 +167,39 @@ const ownerId = ref(0);
 const ownerName = ref('');
 const byline = ref<string[]>([]);
 const isOwner = ref(false);
+const transferVisible = ref(false);
+const transferTo = ref<number>(0);
+const transferConfirm = ref('');
+const transferring = ref(false);
+const transferCandidates = computed(() => members.value.filter((m: any) => m.status === 'active' && m.user_id !== ownerId.value));
+
+function openTransfer() {
+  transferTo.value = 0;
+  transferConfirm.value = '';
+  transferVisible.value = true;
+}
+
+async function doTransfer() {
+  if (!transferTo.value) {
+    ElMessage.warning('请选择受让人');
+    return;
+  }
+  if ((transferConfirm.value || '').trim() !== (props.novelTitle || '').trim()) {
+    ElMessage.warning('请准确输入作品标题以确认');
+    return;
+  }
+  transferring.value = true;
+  try {
+    await collabApi.transferOwner(props.novelId, transferTo.value);
+    ElMessage.success('主笔已转让');
+    transferVisible.value = false;
+    await load();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '转让失败');
+  } finally {
+    transferring.value = false;
+  }
+}
 
 const ownerInitial = computed(() => (ownerName.value || '主')[0]);
 const bylineText = computed(() => (byline.value.length > 0 ? byline.value.join(' · ') : ownerName.value || '主笔'));

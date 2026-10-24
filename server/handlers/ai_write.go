@@ -27,6 +27,12 @@ func aiSystemPrompt(action string) string {
 		return "你是一位专业的中文小说写作助手。请对用户提供的内容进行扩写：丰富细节、对话与环境描写，只输出扩写后的正文。"
 	case "summarize":
 		return "你是一位专业的内容摘要助手。请用简洁中文概括用户提供的内容，只输出摘要本身。"
+	case "character":
+		return "你是一位资深的中文小说角色设定师。请根据用户提供的线索设计角色卡，按以下小标题输出：" +
+			"【姓名与称谓】【外貌（3 个可视觉化细节）】【性格与致命缺陷】【出身与当前处境】" +
+			"【核心欲望 / 深层需求】【秘密（读者后知）】【与主角的关系张力】" +
+			"【说话方式（口头禅 / 句长 / 用词层级）】【三个可推进情节的行动选项】。" +
+			"要求：每条都能直接落到场景里，不要写成简历，不要评价文笔，只输出设定卡。"
 	default:
 		return "你是一位乐于助人的中文写作助手，请根据用户的要求完成创作，只输出结果正文。"
 	}
@@ -35,7 +41,7 @@ func aiSystemPrompt(action string) string {
 // aiActionLabel 动作合法性（与 models.aiActionLabel 对应的白名单）
 func aiActionValid(action string) bool {
 	switch action {
-	case "continue", "polish", "expand", "summarize", "custom":
+	case "continue", "polish", "expand", "summarize", "character", "custom":
 		return true
 	}
 	return false

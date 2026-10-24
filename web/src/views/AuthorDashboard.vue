@@ -380,7 +380,7 @@
       </div>
 
       <!-- 多人协作：协作者 / 角色 / 分成 / 署名（docs/novel-collaboration.md） -->
-      <CollaboratorsPanel v-model:visible="collabVisible" :novel-id="collabNovelId" />
+      <CollaboratorsPanel v-model:visible="collabVisible" :novel-id="collabNovelId" :novel-title="collabNovelTitle" />
     </div>
 
   </div>
@@ -409,8 +409,11 @@ import CollaboratorsPanel from '@/components/collab/CollaboratorsPanel.vue';
 // 多人协作：作品级协作者管理面板（docs/novel-collaboration.md）
 const collabVisible = ref(false);
 const collabNovelId = ref(0);
+const collabNovelTitle = ref('');
 function openCollab(novelId: number) {
   collabNovelId.value = novelId;
+  const n = novels.value.find((x: any) => x.id === novelId);
+  collabNovelTitle.value = n?.title || '';
   collabVisible.value = true;
 }
 
