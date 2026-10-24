@@ -101,6 +101,48 @@
       description="站长还没有配置会员套餐。"
     />
 
+    <!-- ===== 权益对比 =====
+         数字取真实配置（/api/membership 的 free_quota），不写"平台配置"这种空话 -->
+    <section class="mb-compare">
+      <h2 class="mb-compare-title">权益对比</h2>
+      <p class="mb-compare-sub">会员与注册用户的差别在额度倍数与续费规则上，其余功能一视同仁。</p>
+
+      <div class="mb-table-wrap">
+        <table class="mb-table">
+          <thead>
+            <tr>
+              <th class="mb-th-feat">权益</th>
+              <th>游客</th>
+              <th>注册用户</th>
+              <th class="mb-th-member">会员</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in compareRows" :key="row.name">
+              <td class="mb-td-feat">
+                <span>{{ row.name }}</span>
+                <small v-if="row.note">{{ row.note }}</small>
+              </td>
+              <td :class="{ 'mb-yes': row.guest === true, 'mb-no': row.guest === false }">
+                {{ cell(row.guest) }}
+              </td>
+              <td :class="{ 'mb-yes': row.user === true, 'mb-no': row.user === false }">
+                {{ cell(row.user) }}
+              </td>
+              <td class="mb-td-member" :class="{ 'mb-yes': row.member === true, 'mb-no': row.member === false }">
+                {{ cell(row.member) }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="mb-compare-note">
+        免费额度由站长配置；会员按
+        <b>×{{ info.free_quota?.member_multiplier || 2 }}</b>
+        发放，按人单独配置的额度优先，不再叠加倍数。
+      </p>
+    </section>
+
     <p class="mb-foot">
       代币为平台内消费积分，不可提现、不可转账。会员到期后权益自动失效，不会自动续费。
     </p>
@@ -144,6 +186,7 @@ const info = reactive<MembershipInfo>({
   token_per_fen: 10,
   payment_enabled: false,
   token_enabled: true,
+  free_quota: { enabled: false, calls_per_day: 0, max_tokens: 0, member_multiplier: 2 },
 });
 
 const tokenName = computed(() => '代币');
@@ -170,6 +213,96 @@ function mmss(sec: number) {
   const s = sec % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
+
+/** 单元格值：true → ✓，false → —，字符串/数字原样 */
+function cell(v: boolean | string | number) {
+  if (v === true) return '✓';
+  if (v === false) return '—';
+  return v;
+}
+
+interface CompareRow {
+  name: string;
+  note?: string;
+  guest: boolean | string;
+  user: boolean | string;
+  member: boolean | string;
+}
+
+// 全部取自站内真实能力，不编造"会员专属"卖点
+const compareRows = computed<CompareRow[]>(() => {
+  const q = info.free_quota;
+  const quotaEnabled = !!q?.enabled && (q?.calls_per_day || 0) !== 0;
+  const mult = q?.member_multiplier || 2;
+  const calls = q?.calls_per_day || 0;
+  const tokens = q?.max_tokens || 0;
+  const callsText = quotaEnabled
+    ? calls < 0
+      ? '不限'
+      : `${calls} 次 / 日`
+    : '未开放';
+  const memberCallsText = quotaEnabled
+    ? calls < 0
+      ? '不限'
+      : `${calls * mult} 次 / 日`
+    : '未开放';
+
+  return [
+    {
+      name: '浏览灵感广场',
+      note: '公开作品与提示词',
+      guest: true,
+      user: true,
+      member: true,
+    },
+    {
+      name: 'AI 对话 · 绘画 · 视频',
+      note: '站长开启 AI 后可用',
+      guest: false,
+      user: true,
+      member: true,
+    },
+    {
+      name: '每日免费 AI 次数',
+      note: quotaEnabled ? undefined : '站长未开放免费额度',
+      guest: false,
+      user: callsText,
+      member: callsText === '未开放' ? callsText : memberCallsText,
+    },
+    {
+      name: '每日免费 tokens',
+      note: tokens > 0 ? undefined : '不限或未开放',
+      guest: false,
+      user: tokens > 0 ? `${tokens}` : '不限',
+      member: tokens > 0 ? `${tokens * mult}` : '不限',
+    },
+    {
+      name: '发布作品到灵感广场',
+      guest: false,
+      user: true,
+      member: true,
+    },
+    {
+      name: '创作记忆（大纲 / 角色 / 摘要）',
+      guest: false,
+      user: true,
+      member: true,
+    },
+    {
+      name: '导出作品 ZIP（含哈希清单）',
+      guest: false,
+      user: true,
+      member: true,
+    },
+    {
+      name: '提前续费时长叠加',
+      note: '不清零剩余天数',
+      guest: false,
+      user: false,
+      member: true,
+    },
+  ];
+});
 
 async function load() {
   loading.value = true;
@@ -391,6 +524,67 @@ onUnmounted(stopPolling);
   line-height: 1.7;
 }
 
+/* ---------- 权益对比表 ---------- */
+.mb-compare { margin-top: var(--space-7, 48px); }
+.mb-compare-title {
+  margin: 0 0 var(--space-1, 4px);
+  font-size: var(--text-xl, 22px);
+  font-weight: 700;
+  color: var(--text-color, #1f2328);
+}
+.mb-compare-sub {
+  margin: 0 0 var(--space-4, 16px);
+  font-size: var(--text-sm, 13px);
+  color: var(--text-light, #6b7280);
+}
+.mb-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: var(--radius-lg, 16px);
+  background: var(--bg-card, #fff);
+}
+.mb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm, 13px);
+  min-width: 560px;
+}
+.mb-table th,
+.mb-table td {
+  padding: 12px 16px;
+  text-align: center;
+  border-bottom: 1px solid var(--border-color, #f0f1f4);
+}
+.mb-table thead th {
+  font-size: var(--text-xs, 12px);
+  font-weight: 600;
+  color: var(--text-light, #6b7280);
+  background: var(--bg-page, #f7f8fa);
+  white-space: nowrap;
+}
+.mb-table tbody tr:last-child td { border-bottom: none; }
+.mb-table tbody tr:hover { background: var(--bg-page, #fafbfc); }
+.mb-th-feat, .mb-td-feat { text-align: left; }
+.mb-td-feat { color: var(--text-color, #1f2328); }
+.mb-td-feat small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-light, #9ca3af);
+}
+/* 会员列高亮：一眼看出差异在哪里 */
+.mb-th-member { color: var(--el-color-primary, #6366f1) !important; }
+.mb-td-member { background: rgba(99, 102, 241, 0.05); font-weight: 600; color: var(--text-color, #1f2328); }
+.mb-yes { color: #16a34a; font-weight: 600; }
+.mb-no { color: var(--text-light, #cbd5e1); }
+.mb-compare-note {
+  margin: var(--space-3, 12px) 0 0;
+  font-size: var(--text-xs, 12px);
+  color: var(--text-light, #9ca3af);
+  line-height: 1.6;
+}
+.mb-compare-note b { color: var(--text-color, #1f2328); }
+
 /* ---------- 收银台 ---------- */
 .pay-box { display: flex; flex-direction: column; gap: 10px; }
 .pay-row {
@@ -419,6 +613,16 @@ onUnmounted(stopPolling);
 [data-theme="dark"] .mb-card-feats li,
 [data-theme="dark"] .pay-row b { color: #e2e8f0; }
 [data-theme="dark"] .pay-row code { background: #0f172a; }
+[data-theme="dark"] .mb-table-wrap { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .mb-table thead th { background: #0f172a; }
+[data-theme="dark"] .mb-table th,
+[data-theme="dark"] .mb-table td { border-color: #334155; }
+[data-theme="dark"] .mb-table tbody tr:hover { background: #0f172a; }
+[data-theme="dark"] .mb-td-feat,
+[data-theme="dark"] .mb-td-member,
+[data-theme="dark"] .mb-compare-title,
+[data-theme="dark"] .mb-compare-note b { color: #e2e8f0; }
+[data-theme="dark"] .mb-td-member { background: rgba(99, 102, 241, 0.12); }
 
 @media (max-width: 640px) {
   .mb-page { padding: var(--space-4, 16px); }

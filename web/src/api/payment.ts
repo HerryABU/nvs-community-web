@@ -20,12 +20,19 @@ export interface MembershipStatus {
   until?: string;
   days_left: number;
 }
+export interface MembershipFreeQuota {
+  enabled: boolean;
+  calls_per_day: number;
+  max_tokens: number;
+  member_multiplier: number;
+}
 export interface MembershipInfo {
   status: MembershipStatus;
   tiers: PaymentTier[];
   token_per_fen: number;
   payment_enabled: boolean;
   token_enabled: boolean;
+  free_quota?: MembershipFreeQuota;
 }
 export interface PaymentStatus {
   enabled: boolean;

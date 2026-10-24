@@ -193,11 +193,20 @@ func PaymentMockConfirm(c *gin.Context) {
 func MembershipInfo(c *gin.Context) {
 	uid := currentUserID(c)
 	cfg := models.GetPaymentConfig()
+	// 权益对比表要显示真实数字，不能写"平台配置"这种空话
+	quota := models.GetAiFreeQuotaConfig()
 	utils.Success(c, gin.H{
 		"status":          models.GetMembershipStatus(uid),
 		"tiers":           models.GetPaymentTiers(),
 		"token_per_fen":   cfg.TokenPerFen,
 		"payment_enabled": models.IsPaymentEnabled(),
 		"token_enabled":   models.IsTokenEnabled(),
+		"free_quota": gin.H{
+			"enabled":       models.IsAiFreeQuotaEnabled(),
+			"calls_per_day": quota.CallsPerDay,
+			"max_tokens":    quota.MaxTokensPerDay,
+			// 会员倍数：与 models.memberFreeQuotaMultiplier 保持一致
+			"member_multiplier": 2,
+		},
 	})
 }

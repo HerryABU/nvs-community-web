@@ -1,149 +1,201 @@
 <template>
-  <!-- AI 绘画面板（§5.4）：文生图 / 混图 / 换脸 + 模型卡片墙 + 五档比例 -->
-  <div class="ai-media">
-    <!-- 模式 -->
-    <div class="ai-mode-tabs">
-      <button
-        v-for="m in MODES"
-        :key="m.key"
-        type="button"
-        :class="['ai-mode', { active: mode === m.key }]"
-        @click="mode = m.key"
-      >
-        <span class="ai-mode-name">{{ m.name }}</span>
-        <span class="ai-mode-desc">{{ m.desc }}</span>
-      </button>
-    </div>
-
-    <!-- 模型卡片墙 -->
-    <div class="ai-model-wall">
-      <div
-        v-for="m in status.image_models"
-        :key="m.id"
-        :class="['ai-model-card', { active: modelId === m.id }]"
-        @click="modelId = m.id"
-      >
-        <div class="ai-model-head">
-          <span class="ai-model-name">{{ m.name }}</span>
-          <span v-if="apiKindTag(m)" class="ai-model-kind">{{ apiKindTag(m) }}</span>
-        </div>
-        <div class="ai-model-note">{{ m.note || m.model_id }}</div>
-        <div class="ai-model-price">{{ m.price_call || '免费' }} {{ status.token_name }}/张</div>
-      </div>
-      <el-empty v-if="!status.image_models.length" description="暂无可用绘画模型" :image-size="50" />
-    </div>
-
-    <div class="ai-media-form">
-      <div class="ai-media-row">
-        <span class="ai-media-label">提示词</span>
-        <el-input
-          v-model="prompt"
-          type="textarea"
-          :rows="3"
-          resize="none"
-          :placeholder="promptPlaceholder"
-        />
-      </div>
-
-      <div class="ai-media-row">
-        <span class="ai-media-label">比例</span>
-        <div class="ai-ratio-row">
-          <span
-            v-for="r in RATIOS"
-            :key="r.value"
-            :class="['ai-ratio', { active: ratio === r.value }]"
-            @click="ratio = r.value"
-          >
-            <b>{{ r.value }}</b>
-            <i>{{ r.label }}</i>
-          </span>
-        </div>
-      </div>
-
-      <!-- 参考图（混图 / 换脸） -->
-      <div v-if="mode !== 't2i'" class="ai-media-row">
-        <span class="ai-media-label">参考图</span>
-        <div class="ai-refs">
-          <div v-for="(img, i) in refImages" :key="i" class="ai-ref-item">
-            <img :src="img" alt="参考图" />
-            <span class="ai-ref-del" @click="removeRef(i)">×</span>
-            <span class="ai-ref-index">{{ i + 1 }}</span>
+  <!-- AI 绘画面板：左侧 320 参数区 + 右侧纵向作品流（布局参照参考站 painting 页） -->
+  <div class="ai-paint">
+    <!-- ===== 左：参数（固定 320，独立滚动） ===== -->
+    <aside class="pd-side">
+      <div class="pd-side-scroll">
+        <div class="pd-block">
+          <div class="pd-block-title">模式</div>
+          <div class="pd-modes">
+            <button
+              v-for="m in MODES"
+              :key="m.key"
+              type="button"
+              :class="['pd-mode', { active: mode === m.key }]"
+              @click="mode = m.key"
+            >
+              <b>{{ m.name }}</b>
+              <span>{{ m.desc }}</span>
+            </button>
           </div>
-          <label v-if="refImages.length < maxRefs" class="ai-ref-add">
-            <input type="file" accept="image/png,image/jpeg,image/webp" hidden @change="onPickRef" />
-            <span>＋</span>
-            <i>{{ refImages.length }}/{{ maxRefs }}</i>
-          </label>
         </div>
-        <span class="muted small ai-ref-hint">{{ modeHint }}</span>
+
+        <div class="pd-block">
+          <div class="pd-block-title">模型</div>
+          <div v-if="!status.image_models.length" class="pd-empty">暂无绘画模型</div>
+          <button
+            v-for="m in status.image_models"
+            :key="m.id"
+            type="button"
+            :class="['pd-model', { active: modelId === m.id }]"
+            @click="modelId = m.id"
+          >
+            <span class="pd-model-main">
+              <span class="pd-model-name">{{ m.name }}</span>
+              <span v-if="apiKindTag(m)" class="pd-model-tag">{{ apiKindTag(m) }}</span>
+            </span>
+            <span class="pd-model-price">{{ m.price_call || 0 }} {{ status.token_name }}/张</span>
+          </button>
+        </div>
+
+        <div class="pd-block">
+          <div class="pd-block-title">
+            提示词
+            <button class="pd-link" type="button" @click="promptOpen = true">提示词库</button>
+          </div>
+          <el-input v-model="prompt" type="textarea" :rows="4" resize="none" :placeholder="promptPlaceholder" />
+        </div>
+
+        <div class="pd-block">
+          <div class="pd-block-title">比例</div>
+          <div class="pd-ratios">
+            <button
+              v-for="r in RATIOS"
+              :key="r.value"
+              type="button"
+              :class="['pd-ratio', { active: ratio === r.value }]"
+              @click="ratio = r.value"
+            >
+              <b>{{ r.value }}</b>
+              <span>{{ r.label }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 参考图（混图 / 换脸） -->
+        <div v-if="mode !== 't2i'" class="pd-block">
+          <div class="pd-block-title">
+            参考图 <span class="pd-block-sub">{{ refImages.length }}/{{ maxRefs }}</span>
+          </div>
+          <div class="pd-refs">
+            <div v-for="(img, i) in refImages" :key="i" class="pd-ref">
+              <img :src="img" alt="参考图" />
+              <span class="pd-ref-del" @click="removeRef(i)">×</span>
+              <span class="pd-ref-index">{{ i + 1 }}</span>
+            </div>
+            <label v-if="refImages.length < maxRefs" class="pd-ref-add">
+              <input type="file" accept="image/png,image/jpeg,image/webp" hidden @change="onPickRef" />
+              <span>＋</span>
+            </label>
+          </div>
+          <p class="pd-hint">{{ modeHint }}</p>
+        </div>
+
+        <div class="pd-block">
+          <div class="pd-block-title">风格</div>
+          <el-input v-model="style" size="small" placeholder="可选，如 anime / 国风" />
+        </div>
+
+        <div class="pd-block">
+          <div class="pd-block-title">张数</div>
+          <el-radio-group v-model="n" size="small" :disabled="isMJ">
+            <el-radio-button :value="1">1</el-radio-button>
+            <el-radio-button :value="2">2</el-radio-button>
+            <el-radio-button :value="4">4</el-radio-button>
+          </el-radio-group>
+          <p v-if="isMJ" class="pd-hint">Midjourney 协议单次 1 张</p>
+        </div>
       </div>
 
-      <div class="ai-media-row">
-        <span class="ai-media-label">风格</span>
-        <el-input v-model="style" size="small" style="width:180px" placeholder="可选，如 anime / 国风" />
-        <span class="ai-media-label" style="margin-left:16px">张数</span>
-        <el-radio-group v-model="n" size="small" :disabled="isMJ">
-          <el-radio-button :value="1">1</el-radio-button>
-          <el-radio-button :value="2">2</el-radio-button>
-          <el-radio-button :value="4">4</el-radio-button>
-        </el-radio-group>
-        <el-button size="small" plain style="margin-left:auto" @click="promptOpen = true">
-          <el-icon><Collection /></el-icon> 提示词库
+      <!-- 底部固定：费用 + 生成 -->
+      <div class="pd-side-foot">
+        <div class="pd-cost">
+          <span class="pd-cost-model">{{ currentModel?.name || '未选模型' }}</span>
+          <span class="pd-cost-balance">余额 {{ status.balance }} {{ status.token_name }}</span>
+        </div>
+        <el-button
+          type="primary"
+          size="large"
+          class="pd-generate"
+          :loading="generating"
+          :disabled="!prompt.trim()"
+          @click="generate"
+        >
+          生成 · {{ (currentModel?.price_call || 0) * n }} {{ status.token_name }}
         </el-button>
       </div>
+    </aside>
 
-      <div class="ai-media-row ai-media-actions">
-        <span class="muted small">
-          {{ currentModel?.name || '未选模型' }} · 单价 {{ currentModel?.price_call || 0 }} {{ status.token_name }} / 张 ·
-          余额 {{ status.balance }}
-        </span>
-        <el-button type="primary" :loading="generating" :disabled="!prompt.trim()" @click="generate">
-          生成（{{ (currentModel?.price_call || 0) * n }} {{ status.token_name }}）
-        </el-button>
-      </div>
-    </div>
+    <!-- ===== 右：纵向作品流 ===== -->
+    <section class="pd-stream">
+      <header class="pd-stream-head">
+        <div>
+          <h2 class="pd-stream-title">作品流</h2>
+          <p class="pd-stream-sub">
+            <template v-if="history.length">共 {{ history.length }} 次生成，按时间倒序</template>
+            <template v-else>生成结果会按时间倒序出现在这里</template>
+          </p>
+        </div>
+        <el-button size="small" text :loading="exporting" @click="exportHistory">导出 ZIP</el-button>
+      </header>
 
-    <!-- 结果 -->
-    <div v-if="lastImages.length" class="ai-media-result">
-      <div class="ai-media-result-label">
-        <template v-if="lastFree">本次结果（免费额度，余额 {{ lastBalance }}）</template>
-        <template v-else>本次结果（扣除 {{ lastCost }}，余额 {{ lastBalance }}）</template>
+      <!-- 本次结果提示：结果本身已经在下面的流里，这里只交代花了多少 -->
+      <div v-if="lastImages.length" class="pd-notice">
+        <span v-if="lastFree">本次使用免费额度，余额 {{ lastBalance }} {{ status.token_name }}</span>
+        <span v-else>本次扣除 {{ lastCost }} {{ status.token_name }}，余额 {{ lastBalance }}</span>
       </div>
-      <div class="ai-img-grid">
-        <img v-for="(img, i) in lastImages" :key="i" :src="img" class="ai-img-item" alt="AI 绘画结果" />
-      </div>
-    </div>
 
-    <!-- 历史 -->
-    <div class="ai-media-history">
-      <div class="ai-media-result-label ai-history-head">
-        <span>历史作品</span>
-        <span class="ai-history-tools">
-          <el-button size="small" text :loading="exporting" @click="exportHistory">导出历史 ZIP</el-button>
-        </span>
-      </div>
-      <el-empty v-if="!history.length" description="暂无绘画记录" :image-size="60" />
-      <div v-else class="ai-img-grid">
-        <div v-for="t in history" :key="t.id" class="ai-img-cell">
+      <StateBlock
+        v-if="!history.length"
+        state="empty"
+        title="还没有作品"
+        description="在左侧写好提示词，点「生成」即可。每次生成会在这里留下一张任务卡。"
+      />
+
+      <!-- 任务卡：每次生成一张，纵向堆叠 -->
+      <article
+        v-for="t in history"
+        :key="t.id"
+        class="pd-card"
+        :class="{ 'is-latest': isLatest(t), 'is-failed': t.status === 'failed' }"
+      >
+        <header class="pd-card-head">
+          <span class="pd-card-model">{{ t.model_name || 'AI 绘画' }}</span>
+          <span class="pd-card-time">{{ formatTime(t.created_at) }}</span>
+          <span v-if="t.is_public" class="pd-card-flag">已发布</span>
+          <span v-if="t.status === 'failed'" class="pd-card-flag is-err">失败</span>
+          <span v-if="t.cost" class="pd-card-cost">-{{ t.cost }} {{ status.token_name }}</span>
+          <span class="pd-card-spacer" />
+          <button class="pd-card-tool" type="button" @click="reusePrompt(t)">再来一张</button>
+          <button class="pd-card-tool" type="button" @click="copyPrompt(t)">复制提示词</button>
+          <button class="pd-card-tool" type="button" @click="openPublish(t)">
+            {{ t.is_public ? '管理发布' : '发布' }}
+          </button>
+          <button class="pd-card-tool" type="button" @click="exportOne(t)">导出</button>
+        </header>
+
+        <p
+          class="pd-card-prompt"
+          :class="{ 'is-open': expandedIds.has(t.id) }"
+          :title="expandedIds.has(t.id) ? '点击收起' : '点击展开'"
+          @click="toggleExpand(t.id)"
+        >
+          {{ t.prompt || '（无提示词）' }}
+        </p>
+
+        <p v-if="t.status === 'failed' && t.error" class="pd-card-error">{{ t.error }}</p>
+
+        <div class="pd-card-images" :class="`cols-${imgCount(t)}`">
           <img
             v-for="(img, i) in parseImages(t.result)"
             :key="i"
             :src="img"
-            class="ai-img-item"
-            :title="t.prompt"
-            alt="历史绘画"
+            alt="AI 绘画结果"
+            loading="lazy"
+            @click="preview(img)"
           />
-          <div v-if="attachmentsOf(t).length" class="ai-img-attach">
-            参考图 {{ attachmentsOf(t).length }} 张
-          </div>
-          <div class="ai-img-actions">
-            <button type="button" @click="openPublish(t)">
-              {{ t.is_public ? '已发布' : '发布到灵感广场' }}
-            </button>
-            <button type="button" @click="exportOne(t)">导出</button>
-          </div>
         </div>
-      </div>
+
+        <footer v-if="attachmentsOf(t).length" class="pd-card-foot">
+          参考图 {{ attachmentsOf(t).length }} 张
+        </footer>
+      </article>
+    </section>
+
+    <!-- 大图预览：自建遮罩层（按需导入模式下 el-image-viewer 不会自动注册） -->
+    <div v-if="previewVisible" class="pd-preview" @click="previewVisible = false">
+      <img :src="previewSrc" alt="预览" @click.stop />
+      <button class="pd-preview-close" type="button" title="关闭" @click.stop="previewVisible = false">×</button>
     </div>
 
     <!-- 发布弹窗 -->
@@ -174,6 +226,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { Collection } from '@element-plus/icons-vue';
 import { aiHubApi, type AiHubModel, type AiHubStatus } from '@/api/aiHub';
 import AiPromptLibrary from '@/components/ai/AiPromptLibrary.vue';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const props = defineProps<{ status: AiHubStatus; initialPrompt?: string }>();
 
@@ -423,6 +476,56 @@ async function exportOne(t: any) {
   }
 }
 
+// ---------- 作品流交互 ----------
+const expandedIds = ref<Set<number>>(new Set());
+function toggleExpand(id: number) {
+  if (expandedIds.value.has(id)) expandedIds.value.delete(id);
+  else expandedIds.value.add(id);
+  // Set 是引用类型，Vue 不会因 mutate 触发更新，需换一个新实例
+  expandedIds.value = new Set(expandedIds.value);
+}
+
+/** 最新一条（本次生成后 history 会重排，第一项就是它） */
+function isLatest(t: any) {
+  return history.value.length > 0 && history.value[0].id === t.id;
+}
+
+function imgCount(t: any) {
+  const n = parseImages(t.result).length;
+  return n >= 4 ? 4 : n === 2 ? 2 : 1;
+}
+
+function formatTime(iso: string) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (v: number) => String(v).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function copyPrompt(t: any) {
+  try {
+    await navigator.clipboard.writeText(t.prompt || '');
+    ElMessage.success('提示词已复制');
+  } catch {
+    ElMessage.warning('复制失败，请手动选择');
+  }
+}
+
+/** 再来一张：回填提示词与风格，滚动到左侧顶部（不自动扣费） */
+function reusePrompt(t: any) {
+  prompt.value = t.prompt || '';
+  if (t.style) style.value = t.style;
+  ElMessage.success('提示词已回填，确认参数后点「生成」');
+}
+
+// 大图预览
+const previewVisible = ref(false);
+const previewSrc = ref('');
+function preview(src: string) {
+  previewSrc.value = src;
+  previewVisible.value = true;
+}
+
 async function loadHistory() {
   try {
     const res = await aiHubApi.mediaHistory('image', 1);
@@ -434,101 +537,396 @@ onMounted(loadHistory);
 </script>
 
 <style scoped>
-.ai-media { padding: 16px; max-width: 900px; }
-.ai-history-head { display: flex; align-items: center; justify-content: space-between; }
-.ai-history-tools { display: flex; gap: 6px; }
-.ai-img-attach { font-size: 0.7rem; color: var(--text-light, #888); padding: 2px 4px; }
+/* ===== 布局：左 320 参数 + 右作品流（参照站 320 + 936） ===== */
+.ai-paint {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* ---------- 左：参数 ---------- */
+.pd-side {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card, #fff);
+  border-right: 1px solid var(--border-color, #ebeef5);
+  min-height: 0;
+}
+.pd-side-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-3, 12px);
+  scrollbar-width: thin;
+}
+.pd-block { margin-bottom: var(--space-4, 16px); }
+.pd-block-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2, 8px);
+  font-size: var(--text-xs, 12px);
+  font-weight: 600;
+  color: var(--text-light, #6b7280);
+  letter-spacing: 0.02em;
+}
+.pd-block-sub { font-weight: 400; color: var(--text-light, #9ca3af); }
+.pd-link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--el-color-primary, #6366f1);
+  font-size: var(--text-xs, 12px);
+  cursor: pointer;
+  font-family: inherit;
+}
+.pd-empty {
+  padding: 10px;
+  font-size: var(--text-sm, 13px);
+  color: var(--text-light, #9ca3af);
+  text-align: center;
+  border: 1px dashed var(--border-color, #e5e7eb);
+  border-radius: var(--radius-md, 10px);
+}
+
 /* 模式 */
-.ai-mode-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
-.ai-mode {
-  flex: 1; display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
-  padding: 8px 12px; border-radius: 10px; cursor: pointer; text-align: left;
-  border: 1px solid var(--el-border-color, #e5e7eb); background: var(--el-bg-color, #fff);
+.pd-modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.pd-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 6px;
+  cursor: pointer;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: var(--radius-md, 10px);
+  background: var(--bg-card, #fff);
+  font-family: inherit;
+  text-align: center;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
-.ai-mode.active { border-color: var(--el-color-primary, #409eff); background: var(--el-color-primary-light-9, #ecf5ff); }
-.ai-mode-name { font-size: 0.86rem; font-weight: 600; color: var(--text-color, #333); }
-.ai-mode-desc { font-size: 0.7rem; color: var(--text-light, #888); }
-/* 模型卡片墙 */
-.ai-model-wall {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 10px; margin-bottom: 14px;
+.pd-mode b { font-size: var(--text-sm, 13px); color: var(--text-color, #1f2328); }
+.pd-mode span { font-size: 10px; color: var(--text-light, #9ca3af); line-height: 1.3; }
+.pd-mode.active {
+  border-color: var(--el-color-primary, #6366f1);
+  background: var(--el-color-primary-light-9, #eef2ff);
 }
-.ai-model-card {
-  border: 1px solid var(--el-border-color, #e5e7eb); border-radius: 12px;
-  padding: 10px 12px; cursor: pointer; background: var(--el-bg-color, #fff);
-  transition: border-color 0.15s, box-shadow 0.15s;
+.pd-mode.active b { color: var(--el-color-primary, #6366f1); }
+
+/* 模型 */
+.pd-model {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: var(--radius-md, 10px);
+  background: var(--bg-card, #fff);
+  font-family: inherit;
+  text-align: left;
 }
-.ai-model-card:hover { border-color: var(--el-color-primary-light-5, #a0cfff); }
-.ai-model-card.active {
-  border-color: var(--el-color-primary, #409eff);
-  box-shadow: 0 2px 10px rgba(64, 158, 255, 0.15);
+.pd-model:hover { border-color: var(--el-color-primary, #6366f1); }
+.pd-model.active {
+  border-color: var(--el-color-primary, #6366f1);
+  background: var(--el-color-primary-light-9, #eef2ff);
 }
-.ai-model-head { display: flex; align-items: center; gap: 6px; }
-.ai-model-name { font-size: 0.86rem; font-weight: 600; color: var(--text-color, #333); }
-.ai-model-kind {
-  font-size: 0.62rem; padding: 0 6px; border-radius: 999px;
-  background: rgba(64, 158, 255, 0.12); color: #3b82f6; white-space: nowrap;
+.pd-model-main { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.pd-model-name {
+  font-size: var(--text-sm, 13px);
+  color: var(--text-color, #1f2328);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.ai-model-note {
-  margin-top: 4px; font-size: 0.7rem; color: var(--text-light, #888); line-height: 1.5;
-  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+.pd-model-tag {
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 0 4px;
+  border-radius: 3px;
+  color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.12);
 }
-.ai-model-price { margin-top: 6px; font-size: 0.72rem; color: var(--el-color-primary, #409eff); }
-/* 表单 */
-.ai-media-form { background: var(--el-fill-color-light, #f8f9fa); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
-.ai-media-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
-.ai-media-row:last-child { margin-bottom: 0; }
-.ai-media-label { font-size: 0.85rem; font-weight: 600; min-width: 48px; color: var(--text-color, #333); }
-.ai-media-actions { justify-content: space-between; }
+.pd-model-price {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-light, #9ca3af);
+}
+
 /* 比例 */
-.ai-ratio-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.ai-ratio {
-  display: flex; flex-direction: column; align-items: center; gap: 1px;
-  padding: 4px 10px; border-radius: 8px; cursor: pointer;
-  border: 1px solid var(--el-border-color, #e5e7eb); background: var(--el-bg-color, #fff);
+.pd-ratios { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.pd-ratio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 6px 2px;
+  cursor: pointer;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 8px;
+  background: var(--bg-card, #fff);
+  font-family: inherit;
 }
-.ai-ratio b { font-size: 0.78rem; color: var(--text-color, #333); }
-.ai-ratio i { font-style: normal; font-size: 0.64rem; color: var(--text-light, #999); }
-.ai-ratio.active { border-color: var(--el-color-primary, #409eff); background: var(--el-color-primary-light-9, #ecf5ff); }
+.pd-ratio b { font-size: 11px; color: var(--text-color, #1f2328); }
+.pd-ratio span { font-size: 9px; color: var(--text-light, #9ca3af); transform: scale(0.92); }
+.pd-ratio.active {
+  border-color: var(--el-color-primary, #6366f1);
+  background: var(--el-color-primary-light-9, #eef2ff);
+}
+.pd-ratio.active b { color: var(--el-color-primary, #6366f1); }
+
 /* 参考图 */
-.ai-refs { display: flex; gap: 8px; align-items: center; }
-.ai-ref-item { position: relative; width: 62px; height: 62px; border-radius: 8px; overflow: hidden; }
-.ai-ref-item img { width: 100%; height: 100%; object-fit: cover; }
-.ai-ref-del {
-  position: absolute; top: 0; right: 0; width: 18px; height: 18px; line-height: 16px; text-align: center;
-  background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 0.75rem; cursor: pointer; border-bottom-left-radius: 6px;
+.pd-refs { display: flex; flex-wrap: wrap; gap: 6px; }
+.pd-ref {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-md, 10px);
+  overflow: hidden;
+  border: 1px solid var(--border-color, #e5e7eb);
 }
-.ai-ref-index {
-  position: absolute; bottom: 0; left: 0; padding: 0 5px; font-size: 0.62rem;
-  background: rgba(0, 0, 0, 0.55); color: #fff; border-top-right-radius: 6px;
+.pd-ref img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pd-ref-del {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
 }
-.ai-ref-add {
-  width: 62px; height: 62px; border-radius: 8px; cursor: pointer;
-  border: 1px dashed var(--el-border-color, #c0c4cc); display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 2px; background: var(--el-bg-color, #fff);
+.pd-ref-index {
+  position: absolute;
+  left: 3px;
+  bottom: 2px;
+  font-size: 10px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 3px;
+  padding: 0 3px;
 }
-.ai-ref-add span { font-size: 1.1rem; color: var(--text-light, #999); }
-.ai-ref-add i { font-style: normal; font-size: 0.62rem; color: var(--text-light, #999); }
-.ai-ref-hint { margin-left: 4px; }
-/* 结果 */
-.ai-media-result { margin-bottom: 16px; }
-.ai-media-result-label { font-size: 0.85rem; font-weight: 600; margin-bottom: 8px; color: var(--text-color, #333); }
-.ai-img-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
-.ai-img-cell { position: relative; }
-.ai-img-item {
-  width: 100%; aspect-ratio: 1; object-fit: cover;
-  border-radius: 10px; border: 1px solid var(--el-border-color, #ebeef5);
-  background: var(--el-fill-color-light, #f8f9fa);
+.pd-ref-add {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--border-color, #d1d5db);
+  border-radius: var(--radius-md, 10px);
+  color: var(--text-light, #9ca3af);
+  font-size: 18px;
+  cursor: pointer;
 }
-.ai-img-actions {
-  position: absolute; left: 6px; right: 6px; bottom: 6px; display: flex; justify-content: center; opacity: 0;
-  transition: opacity 0.15s;
+.pd-ref-add:hover { border-color: var(--el-color-primary, #6366f1); color: var(--el-color-primary, #6366f1); }
+.pd-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-light, #9ca3af);
 }
-.ai-img-cell:hover .ai-img-actions { opacity: 1; }
-.ai-img-actions button {
-  border: 0; cursor: pointer; padding: 3px 10px; border-radius: 999px;
-  font-size: 0.68rem; color: #fff; background: rgba(0, 0, 0, 0.6);
+
+/* 底部生成区 */
+.pd-side-foot {
+  flex-shrink: 0;
+  padding: var(--space-3, 12px);
+  border-top: 1px solid var(--border-color, #ebeef5);
+  background: var(--bg-card, #fff);
 }
-.muted { color: var(--text-light, #999); }
-.small { font-size: 0.75rem; }
+.pd-cost {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--text-light, #6b7280);
+}
+.pd-cost-model { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pd-cost-balance { flex-shrink: 0; }
+.pd-generate { width: 100%; }
+
+/* ---------- 右：作品流 ---------- */
+.pd-stream {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: var(--space-5, 24px);
+  scrollbar-width: thin;
+}
+.pd-stream-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  margin-bottom: var(--space-3, 12px);
+}
+.pd-stream-title {
+  margin: 0 0 2px;
+  font-size: var(--text-lg, 18px);
+  font-weight: 600;
+  color: var(--text-color, #1f2328);
+}
+.pd-stream-sub { margin: 0; font-size: var(--text-xs, 12px); color: var(--text-light, #9ca3af); }
+
+.pd-notice {
+  margin-bottom: var(--space-3, 12px);
+  padding: 8px 12px;
+  border-radius: var(--radius-md, 10px);
+  font-size: var(--text-sm, 13px);
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.09);
+  border: 1px solid rgba(22, 163, 74, 0.22);
+}
+
+/* 任务卡 */
+.pd-card {
+  margin-bottom: var(--space-4, 16px);
+  padding: var(--space-3, 12px);
+  border-radius: var(--radius-lg, 16px);
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  box-shadow: var(--shadow-xs, 0 1px 3px rgba(0, 0, 0, 0.04));
+}
+.pd-card.is-latest { border-color: var(--el-color-primary, #6366f1); box-shadow: 0 4px 16px rgba(99, 102, 241, 0.12); }
+.pd-card.is-failed { border-color: rgba(239, 68, 68, 0.4); }
+
+.pd-card-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--border-color, #e5e7eb);
+  font-size: 11px;
+  color: var(--text-light, #9ca3af);
+}
+.pd-card-model { font-size: var(--text-sm, 13px); font-weight: 600; color: var(--text-color, #1f2328); }
+.pd-card-flag {
+  padding: 0 6px;
+  border-radius: 3px;
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.1);
+}
+.pd-card-flag.is-err { color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+.pd-card-cost { color: var(--text-light, #9ca3af); }
+.pd-card-spacer { flex: 1; }
+.pd-card-tool {
+  border: none;
+  background: none;
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-size: 11px;
+  color: var(--text-light, #6b7280);
+  cursor: pointer;
+  font-family: inherit;
+}
+.pd-card-tool:hover { background: var(--bg-page, #f5f6f8); color: var(--el-color-primary, #6366f1); }
+
+.pd-card-prompt {
+  margin: 8px 0 10px;
+  font-size: var(--text-sm, 13px);
+  line-height: 1.6;
+  color: var(--text-color, #374151);
+  cursor: pointer;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pd-card-prompt.is-open { -webkit-line-clamp: unset; line-clamp: unset; display: block; }
+.pd-card-error {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.08);
+}
+.pd-card-images { display: grid; gap: 8px; justify-content: center; }
+.pd-card-images.cols-1 { grid-template-columns: 1fr; }
+.pd-card-images.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.pd-card-images.cols-4 { grid-template-columns: repeat(2, 1fr); }
+.pd-card-images img {
+  width: 100%;
+  max-width: 820px;
+  margin: 0 auto;
+  border-radius: var(--radius-md, 10px);
+  display: block;
+  cursor: zoom-in;
+  background: var(--bg-page, #f5f6f8);
+  transition: transform 0.16s ease;
+}
+.pd-card-images img:hover { transform: scale(1.005); }
+.pd-card-foot { margin-top: 8px; font-size: 11px; color: var(--text-light, #9ca3af); }
+
+/* 大图预览 */
+.pd-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.86);
+  cursor: zoom-out;
+}
+.pd-preview img {
+  max-width: 92vw;
+  max-height: 92vh;
+  border-radius: var(--radius-md, 10px);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+  cursor: default;
+}
+.pd-preview-close {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.pd-preview-close:hover { background: rgba(255, 255, 255, 0.28); }
+
+/* ---------- 深色 ---------- */
+[data-theme="dark"] .pd-side,
+[data-theme="dark"] .pd-side-foot,
+[data-theme="dark"] .pd-card { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .pd-mode,
+[data-theme="dark"] .pd-model,
+[data-theme="dark"] .pd-ratio { background: #0f172a; border-color: #334155; }
+[data-theme="dark"] .pd-mode.active,
+[data-theme="dark"] .pd-model.active,
+[data-theme="dark"] .pd-ratio.active { background: rgba(99, 102, 241, 0.18); }
+[data-theme="dark"] .pd-stream-title,
+[data-theme="dark"] .pd-card-model,
+[data-theme="dark"] .pd-card-prompt,
+[data-theme="dark"] .pd-mode b,
+[data-theme="dark"] .pd-model-name,
+[data-theme="dark"] .pd-ratio b { color: #e2e8f0; }
+
+/* ---------- 窄屏：上下堆叠 ---------- */
+@media (max-width: 900px) {
+  .ai-paint { flex-direction: column; }
+  .pd-side { width: 100%; max-height: 52vh; border-right: none; border-bottom: 1px solid var(--border-color, #ebeef5); }
+  .pd-stream { padding: var(--space-4, 16px); }
+  .pd-card-images.cols-2, .pd-card-images.cols-4 { grid-template-columns: 1fr; }
+}
 </style>
