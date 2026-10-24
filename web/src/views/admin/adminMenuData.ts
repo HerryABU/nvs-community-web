@@ -2,7 +2,7 @@ import {
   Setting, View, DataAnalysis, Medal, Warning, Bell, DataLine, Monitor,
   Collection, Lock, Histogram, Stamp, Key, ChatDotRound, Cpu, WarningFilled,
   Box, Notebook, TrendCharts, Connection, Postcard, Lightning, Brush, Grid, Message,
-  Timer, Coin, MagicStick, ChatLineRound, Present, DataAnalysis, Operation, CreditCard,
+  Timer, Coin, MagicStick, ChatLineRound, Present, DataAnalysis, Operation, CreditCard, Aim,
 } from '@element-plus/icons-vue';
 
 // 管理员控制台「管理功能」分类数据（F8：分类折叠 + ?category=/?item= 深链定位）。
@@ -50,6 +50,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: '合规中心', desc: '等保指引 · 检查工具箱 · 自查报告', path: '/admin/compliance', icon: Medal, color: 'var(--gradient-success)' },
       { title: '漏洞管理', desc: '漏洞整改闭环留痕 · 报告导出', path: '/admin/vulnerabilities', icon: Warning, color: 'var(--gradient-danger)' },
       { title: '日志脱敏', desc: '生产环境日志敏感信息脱敏 · 176号令合规', path: '/admin/log-redact', icon: View, color: 'var(--gradient-danger)' },
+      { title: '蜜罐与日志记录', desc: '蜜罐等级 · 记录字段勾选 · 攻击会话取证', path: '/admin/honeypot', icon: Aim, color: 'var(--gradient-danger)' },
       { title: '隔离墙配置', desc: '敏感分区列表与确认流程', path: '/admin/wall', icon: Lock, color: 'var(--gradient-accent)' },
       { title: '隔离墙访问记录', desc: '谁/何时进入敏感分区 · 176号令合规', path: '/admin/wall-access', icon: Histogram, color: 'var(--gradient-blue)' },
       { title: '网络诊断与攻击流量', desc: '用户分布 · IP/UA 分类 · 防爬攻击识别', path: '/admin/net-diag', icon: Connection, color: 'var(--gradient-accent)' },

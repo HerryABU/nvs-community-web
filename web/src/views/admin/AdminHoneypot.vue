@@ -1,0 +1,302 @@
+<template>
+  <div class="hp-page" v-loading="loading">
+    <div class="hp-head">
+      <h2>蜜罐与日志记录</h2>
+      <span class="hp-sub">等级由站长控制；日志记录字段可勾选——关掉的字段不落库。</span>
+    </div>
+
+    <!-- 概览 -->
+    <div class="hp-cards">
+      <div class="hp-card"><div class="hp-num">{{ overview?.session_count ?? 0 }}</div><div class="hp-label">攻击会话</div></div>
+      <div class="hp-card"><div class="hp-num">{{ overview?.event_count ?? 0 }}</div><div class="hp-label">命中事件</div></div>
+      <div class="hp-card"><div class="hp-num">{{ overview?.high_risk ?? 0 }}</div><div class="hp-label">高风险会话</div></div>
+      <div class="hp-card"><div class="hp-num">{{ overview?.last_24h ?? 0 }}</div><div class="hp-label">24h 事件</div></div>
+      <div class="hp-card"><div class="hp-num">{{ overview?.banned_count ?? 0 }}</div><div class="hp-label">当前封禁 IP</div></div>
+    </div>
+
+    <el-card class="hp-section">
+      <template #header><span>蜜罐等级</span></template>
+      <el-form label-width="120px">
+        <el-form-item label="启用">
+          <el-switch v-model="form.enabled" />
+          <span class="hp-tip">关闭后所有诱饵路径与普通 404 无差别</span>
+        </el-form-item>
+        <el-form-item label="等级">
+          <el-radio-group v-model="form.level" :disabled="!form.enabled">
+            <el-radio-button value="low">低（仅 .env）</el-radio-button>
+            <el-radio-button value="medium">中（+.git/后台/清单）</el-radio-button>
+            <el-radio-button value="high">高（全量 + 延迟响应）</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="自动封禁">
+          <el-switch v-model="form.auto_ban" />
+          <el-input-number v-model="form.ban_minutes" :min="1" :max="10080" style="margin-left:10px" />
+          <span class="hp-tip">分钟（进程内封禁，重启清空）</span>
+        </el-form-item>
+        <el-form-item label="命中延迟">
+          <el-input-number v-model="form.delay_ms" :min="0" :max="2000" :step="100" />
+          <span class="hp-tip">毫秒（高等级生效，上限 2s，拖住自动化）</span>
+        </el-form-item>
+        <el-form-item label="留存天数">
+          <el-input-number v-model="form.retention_days" :min="1" :max="365" />
+          <span class="hp-tip">超期事件可手动清理</span>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
+    <el-card class="hp-section">
+      <template #header>
+        <div class="hp-section-head">
+          <span>日志记录字段</span>
+          <span class="hp-tip">勾选后才写入日志（蜜罐事件与访问日志共用这套策略）</span>
+        </div>
+      </template>
+      <el-form label-width="120px">
+        <el-form-item label="记录项">
+          <div class="hp-check-grid">
+            <el-checkbox v-model="form.record_ua">User-Agent</el-checkbox>
+            <el-checkbox v-model="form.record_referer">Referer</el-checkbox>
+            <el-checkbox v-model="form.record_xff">X-Forwarded-For（代理链）</el-checkbox>
+            <el-checkbox v-model="form.record_query">Query 参数</el-checkbox>
+            <el-checkbox v-model="form.record_headers">请求头（白名单）</el-checkbox>
+            <el-checkbox v-model="form.record_body_snippet">请求体摘要</el-checkbox>
+          </div>
+        </el-form-item>
+        <el-form-item v-if="form.record_headers" label="请求头白名单">
+          <el-input v-model="form.header_allowlist" :placeholder="defaultAllow" />
+          <div class="hp-tip">
+            逗号分隔；Cookie / Authorization / X-API-Key 永远不记录（强制过滤）
+          </div>
+        </el-form-item>
+        <el-form-item v-if="form.record_body_snippet" label="摘要长度">
+          <el-input-number v-model="form.body_snippet_limit" :min="64" :max="4096" :step="64" />
+          <span class="hp-tip">字节；含 password/token/secret 等字样时整段省略</span>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" :loading="saving" @click="save">保存策略</el-button>
+          <el-button :loading="loading" @click="load">刷新</el-button>
+          <el-button type="danger" plain @click="cleanup">清理过期事件</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
+    <el-card class="hp-section">
+      <template #header>
+        <div class="hp-section-head">
+          <span>攻击会话</span>
+          <div class="hp-filters">
+            <el-input v-model="keyword" size="small" placeholder="IP / HID / UA" clearable style="width: 200px" @change="loadSessions" />
+            <el-select v-model="minRisk" size="small" style="width: 130px" @change="loadSessions">
+              <el-option label="全部风险" :value="0" />
+              <el-option label="风险 ≥ 40" :value="40" />
+              <el-option label="风险 ≥ 60" :value="60" />
+            </el-select>
+            <el-button size="small" @click="doExport(0)">导出全部</el-button>
+          </div>
+        </div>
+      </template>
+      <el-table :data="sessions" size="small" @row-click="openDetail">
+        <el-table-column prop="src_ip" label="来源 IP" width="140" />
+        <el-table-column prop="hid" label="会话" width="110" />
+        <el-table-column prop="ua_norm" label="UA" min-width="200" show-overflow-tooltip />
+        <el-table-column prop="event_count" label="事件" width="70" />
+        <el-table-column label="风险" width="90">
+          <template #default="{ row }">
+            <el-tag :type="row.max_risk >= 60 ? 'danger' : row.max_risk >= 40 ? 'warning' : 'info'" size="small">
+              {{ row.max_risk }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="封禁" width="80">
+          <template #default="{ row }">
+            <el-tag v-if="row.banned" size="small" type="danger">已封</el-tag>
+            <span v-else class="hp-tip">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="最近" width="170">
+          <template #default="{ row }">{{ fmt(row.last_seen) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="150">
+          <template #default="{ row }">
+            <el-button size="small" text type="primary" @click.stop="openDetail(row)">详情</el-button>
+            <el-button size="small" text @click.stop="doExport(row.id)">导出</el-button>
+            <el-button v-if="!row.banned" size="small" text type="danger" @click.stop="banIp(row.src_ip)">封禁</el-button>
+          </template>
+        </el-table-column>
+        <template #empty><el-empty description="还没有命中记录" :image-size="60" /></template>
+      </el-table>
+    </el-card>
+
+    <!-- 会话详情 -->
+    <el-drawer v-model="detailVisible" :title="`会话 ${detail?.session?.src_ip || ''}`" size="62%">
+      <div v-if="detail" class="hp-detail">
+        <el-descriptions :column="3" size="small" border>
+          <el-descriptions-item label="IP">{{ detail.session.src_ip }}</el-descriptions-item>
+          <el-descriptions-item label="HID">{{ detail.session.hid }}</el-descriptions-item>
+          <el-descriptions-item label="风险">{{ detail.session.max_risk }}</el-descriptions-item>
+          <el-descriptions-item label="首次">{{ fmt(detail.session.first_seen) }}</el-descriptions-item>
+          <el-descriptions-item label="最近">{{ fmt(detail.session.last_seen) }}</el-descriptions-item>
+          <el-descriptions-item label="事件数">{{ detail.session.event_count }}</el-descriptions-item>
+        </el-descriptions>
+        <el-timeline class="hp-timeline">
+          <el-timeline-item
+            v-for="e in detail.events"
+            :key="e.id"
+            :timestamp="fmt(e.created_at)"
+            :type="e.risk >= 60 ? 'danger' : e.risk >= 40 ? 'warning' : 'primary'"
+          >
+            <div class="hp-ev-head">
+              <el-tag size="small">{{ e.kind }}</el-tag>
+              <b>{{ e.method }} {{ e.path }}</b>
+              <el-tag v-if="e.decoy" size="small" type="info">{{ e.decoy }}</el-tag>
+              <span class="hp-tip">风险 {{ e.risk }} · {{ e.action }}</span>
+            </div>
+            <div v-if="e.query" class="hp-ev-line">Query: {{ e.query }}</div>
+            <div v-if="e.ua" class="hp-ev-line">UA: {{ e.ua }}</div>
+            <div v-if="e.referer" class="hp-ev-line">Referer: {{ e.referer }}</div>
+            <div v-if="e.xff" class="hp-ev-line">XFF: {{ e.xff }}</div>
+            <div v-if="e.headers" class="hp-ev-line">Headers: {{ e.headers }}</div>
+            <div v-if="e.body_snippet" class="hp-ev-line">Body: {{ e.body_snippet }}</div>
+          </el-timeline-item>
+        </el-timeline>
+      </div>
+    </el-drawer>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, onMounted } from 'vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import {
+  honeypotApi,
+  type HoneypotSetting,
+  type HoneypotOverview,
+  type HoneypotSession,
+  type HoneypotEvent,
+} from '@/api/admin/honeypot';
+
+const defaultAllow = 'X-Forwarded-For,X-Real-IP,X-Requested-With,Sec-Fetch-Site,CF-Connecting-IP';
+const loading = ref(false);
+const saving = ref(false);
+const overview = ref<HoneypotOverview | null>(null);
+const sessions = ref<HoneypotSession[]>([]);
+const keyword = ref('');
+const minRisk = ref(0);
+const detailVisible = ref(false);
+const detail = ref<{ session: HoneypotSession; events: HoneypotEvent[] } | null>(null);
+
+const form = reactive<HoneypotSetting>({
+  enabled: false, level: 'off',
+  record_ua: true, record_referer: true, record_xff: false, record_query: true,
+  record_headers: false, record_body_snippet: false, body_snippet_limit: 512,
+  header_allowlist: defaultAllow,
+  auto_ban: false, ban_minutes: 60, delay_ms: 0, retention_days: 90,
+});
+
+function fmt(t: string) {
+  return t ? String(t).replace('T', ' ').slice(0, 19) : '';
+}
+
+async function load() {
+  loading.value = true;
+  try {
+    const res = await honeypotApi.getConfig();
+    overview.value = res.data.data;
+    if (res.data.data?.setting) {
+      Object.assign(form, res.data.data.setting);
+      if (!form.header_allowlist) form.header_allowlist = defaultAllow;
+    }
+    await loadSessions();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '加载失败');
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function loadSessions() {
+  try {
+    const res = await honeypotApi.listSessions({ keyword: keyword.value, min_risk: minRisk.value, page_size: 50 });
+    sessions.value = res.data.data?.list || [];
+  } catch { /* 静默 */ }
+}
+
+async function save() {
+  saving.value = true;
+  try {
+    await honeypotApi.saveConfig({ ...form });
+    ElMessage.success('已保存');
+    await load();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function openDetail(row: HoneypotSession) {
+  try {
+    const res = await honeypotApi.sessionDetail(row.id);
+    detail.value = res.data.data;
+    detailVisible.value = true;
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '加载详情失败');
+  }
+}
+
+async function banIp(ip: string) {
+  try {
+    await honeypotApi.ban(ip, form.ban_minutes || 60);
+    ElMessage.success(`已封禁 ${ip}`);
+    await loadSessions();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '封禁失败');
+  }
+}
+
+async function doExport(sessionId: number) {
+  try {
+    const res: any = await honeypotApi.export(sessionId);
+    const blob = new Blob([JSON.stringify(res.data.data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `honeypot-export-${sessionId || 'all'}-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    ElMessage.success('已导出（导出动作会留痕）');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '导出失败');
+  }
+}
+
+async function cleanup() {
+  try {
+    await ElMessageBox.confirm('按留存天数清理过期事件？此操作不可撤销。', '清理确认', { type: 'warning' });
+    const res: any = await honeypotApi.cleanup();
+    ElMessage.success(`已清理 ${res?.data?.data?.deleted ?? 0} 条`);
+    await load();
+  } catch { /* 取消 */ }
+}
+
+onMounted(load);
+</script>
+
+<style scoped>
+.hp-page { padding: 16px 20px 48px; max-width: 1180px; margin: 0 auto; }
+.hp-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.hp-head h2 { margin: 0; font-size: 1.3rem; }
+.hp-sub { color: var(--text-muted); font-size: 0.82rem; }
+.hp-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.hp-card { border: 1px solid var(--border-color); border-radius: 10px; padding: 12px; background: var(--bg-card); text-align: center; }
+.hp-num { font-size: 1.6rem; font-weight: 700; }
+.hp-label { font-size: 0.78rem; color: var(--text-muted); }
+.hp-section { margin-bottom: 14px; }
+.hp-section-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hp-filters { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.hp-tip { font-size: 0.75rem; color: var(--text-muted); margin-left: 8px; }
+.hp-check-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px 12px; }
+.hp-detail { display: flex; flex-direction: column; gap: 12px; }
+.hp-timeline { padding-left: 4px; }
+.hp-ev-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hp-ev-line { font-size: 0.78rem; color: var(--text-muted); word-break: break-all; }
+</style>

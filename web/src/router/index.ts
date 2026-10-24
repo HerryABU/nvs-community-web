@@ -306,6 +306,13 @@ const router = createRouter({
       component: () => import('@/views/admin/AdminLogRedact.vue'),
       meta: { requiresAuth: true },
     },
+    // 蜜罐等级 + 日志记录字段勾选
+    {
+      path: '/admin/honeypot',
+      name: 'admin-honeypot',
+      component: () => import('@/views/admin/AdminHoneypot.vue'),
+      meta: { requiresAuth: true },
+    },
     {
       path: '/admin/algorithms',
       name: 'admin-algorithms',
