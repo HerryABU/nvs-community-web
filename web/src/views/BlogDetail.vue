@@ -12,6 +12,10 @@
               </el-button>
               <h1>{{ blog.title }}</h1>
               <el-tag v-if="blog.is_pinned" size="small" type="danger">置顶</el-tag>
+              <!-- AI 生成内容显式标识（176 号令）：后端仅回模型名 -->
+              <el-tag v-if="aiMarkLabel" size="small" type="warning" effect="plain" class="bd-ai-mark">
+                {{ aiMarkLabel }}
+              </el-tag>
             </div>
             <div class="blog-meta-line">
               <router-link :to="`/author/${blog.author_id}`" class="blog-author">
@@ -146,6 +150,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, onBeforeUnmount } from 'vue';
+import { useAiMark } from '@/composables/useAiMark';
 import { useRoute, useRouter } from 'vue-router';
 import { blogApi } from '@/api/social';
 import { frameApi } from '@/api/frame';
@@ -158,6 +163,8 @@ import { ElMessage } from 'element-plus';
 import { CaretTop, Check, Fold, Expand } from '@element-plus/icons-vue';
 
 const route = useRoute();
+// AI 生成标识（详情页徽标）
+const { label: aiMarkLabel, load: loadAiMark } = useAiMark();
 const router = useRouter();
 const authStore = useAuthStore();
 const blog = ref<any>(null);
@@ -313,6 +320,7 @@ function formatDate(d?: string) {
 }
 
 onMounted(async () => {
+  loadAiMark('blog', String(route.params.id || ''));
   // 兼容两种路由：/author/:key/blogs/:blogId（:key 可为数字主键或用户名）与旧 /blog/:id
   const blogId = Number(route.params.blogId || route.params.id);
   loading.value = true;
@@ -378,6 +386,7 @@ onBeforeUnmount(() => {
 }
 .template-iframe { width: 100%; min-height: 150px; border: none; display: block; }
 .bh-title-row { display: flex; align-items: center; gap: 10px; }
+.bd-ai-mark { margin-left: 4px; }
 .bd-toc-restore { flex-shrink: 0; }
 .blog-header h1 { font-size: 1.5rem; margin-bottom: 8px; }
 .blog-meta-line {

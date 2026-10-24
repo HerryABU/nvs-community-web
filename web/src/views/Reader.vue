@@ -9,6 +9,7 @@
         <el-icon><List /></el-icon><span class="desktop-only"> 目录</span>
       </el-button>
       <span class="reader-title">{{ novelTitle }} · 第{{ chapterNum }}章 {{ chapter?.title }}</span>
+      <el-tag v-if="aiMarkLabel" size="small" type="warning" effect="plain" class="reader-ai-mark">{{ aiMarkLabel }}</el-tag>
       <!-- 精读：书签 / 批注 -->
       <template v-if="authStore.isLoggedIn && !isTrialExceeded">
         <el-button
@@ -216,6 +217,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
+import { useAiMark } from '@/composables/useAiMark';
 import { useRoute, useRouter } from 'vue-router';
 import { novelApi, chapterApi, type Chapter } from '@/api/novel';
 import { bookshelfApi } from '@/api/bookshelf';
@@ -238,6 +240,8 @@ const novelId = ref(Number(route.params.id));
 const chapterNum = ref(Number(route.params.chapter));
 const loading = ref(false);
 const chapter = ref<Chapter | null>(null);
+// AI 生成标识（章节详情徽标）
+const { label: aiMarkLabel, load: loadAiMark } = useAiMark();
 const htmlContent = ref('');
 const novelTitle = ref('');
 const novelCategory = ref('');
@@ -340,6 +344,8 @@ async function loadChapter() {
     ]);
     const detail = chRes.data.data;
     chapter.value = detail?.chapter || null;
+    // 章节加载后取 AI 生成标识（无标记则徽标不显示）
+    if (chapter.value?.id) loadAiMark('novel_chapter', chapter.value.id);
     htmlContent.value = detail?.html_content || '';
     if (!chapter.value) {
       console.error('章节内容为空', detail);
@@ -757,6 +763,7 @@ onBeforeUnmount(() => {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
+.reader-ai-mark { margin-left: 8px; }
 .reader-title {
   flex: 1;
   font-weight: 500;
