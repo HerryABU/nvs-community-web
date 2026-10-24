@@ -29,6 +29,7 @@ declare module 'vue' {
     BlockThreads: typeof import('./src/components/home/BlockThreads.vue')['default']
     ChapterVersionPanel: typeof import('./src/components/collab/ChapterVersionPanel.vue')['default']
     ChapterWorkflowBar: typeof import('./src/components/collab/ChapterWorkflowBar.vue')['default']
+    CharacterManager: typeof import('./src/components/oc/CharacterManager.vue')['default']
     CollaboratorsPanel: typeof import('./src/components/collab/CollaboratorsPanel.vue')['default']
     CommentItem: typeof import('./src/components/CommentItem.vue')['default']
     CommentNetworkView: typeof import('./src/components/CommentNetworkView.vue')['default']
@@ -92,6 +93,7 @@ declare module 'vue' {
     ElUpload: typeof import('element-plus/es')['ElUpload']
     EmptyState: typeof import('./src/components/common/EmptyState.vue')['default']
     FloorComments: typeof import('./src/components/FloorComments.vue')['default']
+    FlowPanel: typeof import('./src/components/oc/FlowPanel.vue')['default']
     ForgotPasswordDialog: typeof import('./src/components/auth/ForgotPasswordDialog.vue')['default']
     GroupFiles: typeof import('./src/components/group/GroupFiles.vue')['default']
     GroupMembers: typeof import('./src/components/group/GroupMembers.vue')['default']
@@ -127,6 +129,7 @@ declare module 'vue' {
     SlideCaptcha: typeof import('./src/components/SlideCaptcha.vue')['default']
     StarRating: typeof import('./src/components/StarRating.vue')['default']
     WeChatQRLogin: typeof import('./src/components/auth/WeChatQRLogin.vue')['default']
+    WorldBookManager: typeof import('./src/components/oc/WorldBookManager.vue')['default']
   }
   export interface GlobalDirectives {
     vLoading: typeof import('element-plus/es')['ElLoadingDirective']
