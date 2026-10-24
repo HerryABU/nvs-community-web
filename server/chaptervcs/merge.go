@@ -32,7 +32,7 @@ type MergeResult struct {
 }
 
 // CreateBranch 基于某分支的某版本开新分支：把该版本内容复制为新分支的 v1
-func CreateBranch(ownerID, novelID uint, chapter *models.Chapter, name, fromBranch string, fromVer int, authorID uint) (*ChapterVersion, error) {
+func createBranchDefault(ownerID, novelID uint, chapter *models.Chapter, name, fromBranch string, fromVer int, authorID uint) (*ChapterVersion, error) {
 	newName := NormalizeBranch(name)
 	if newName == DefaultBranch {
 		return nil, errors.New("不能创建与默认分支同名的分支")
@@ -43,13 +43,13 @@ func CreateBranch(ownerID, novelID uint, chapter *models.Chapter, name, fromBran
 	}
 	// 源版本：未指定则取源分支 head
 	if fromVer <= 0 {
-		fromVer = Head(chapter.ID, src)
+		fromVer = headDefault(chapter.ID, src)
 	}
 	content := ""
 	title := chapter.Title
 	if fromVer > 0 {
-		if sv, err := Get(chapter.ID, src, fromVer); err == nil {
-			content, _ = Content(ownerID, novelID, sv)
+		if sv, err := getDefault(chapter.ID, src, fromVer); err == nil {
+			content, _ = contentDefault(ownerID, novelID, sv)
 			if sv.Title != "" {
 				title = sv.Title
 			}
@@ -61,7 +61,7 @@ func CreateBranch(ownerID, novelID uint, chapter *models.Chapter, name, fromBran
 	// 记录分叉点（三方合并的 base）
 	_ = models.DB.Model(&ChapterBranch{}).Where("chapter_id = ? AND name = ?", chapter.ID, newName).
 		Updates(map[string]interface{}{"from_ver": fromVer, "from_branch": src}).Error
-	v, _, err := Commit(CommitInput{
+	v, _, err := commitDefault(CommitInput{
 		OwnerID:  ownerID,
 		Chapter:  chapter,
 		AuthorID: authorID,
@@ -74,7 +74,7 @@ func CreateBranch(ownerID, novelID uint, chapter *models.Chapter, name, fromBran
 }
 
 // Merge 把 fromBranch 合并进 intoBranch（默认 main）
-func Merge(ownerID, novelID uint, chapter *models.Chapter, fromBranch, intoBranch string, authorID uint, message string) (*MergeResult, error) {
+func mergeDefault(ownerID, novelID uint, chapter *models.Chapter, fromBranch, intoBranch string, authorID uint, message string) (*MergeResult, error) {
 	from := NormalizeBranch(fromBranch)
 	into := NormalizeBranch(intoBranch)
 	if from == into {
@@ -108,14 +108,14 @@ func Merge(ownerID, novelID uint, chapter *models.Chapter, fromBranch, intoBranc
 		return res, nil
 	}
 	title := chapter.Title
-	if hv, err := HeadVersion(chapter.ID, into); err == nil && hv.Title != "" {
+	if hv, err := headVersionDefault(chapter.ID, into); err == nil && hv.Title != "" {
 		title = hv.Title
 	}
 	msg := message
 	if strings.TrimSpace(msg) == "" {
 		msg = "合并分支 " + from + " → " + into
 	}
-	v, _, err := Commit(CommitInput{
+	v, _, err := commitDefault(CommitInput{
 		OwnerID:      ownerID,
 		Chapter:      chapter,
 		AuthorID:     authorID,
@@ -139,11 +139,11 @@ func contentOfVer(ownerID, novelID, chapterID uint, branch string, ver int) (str
 	if ver <= 0 {
 		return "", nil
 	}
-	v, err := Get(chapterID, NormalizeBranch(branch), ver)
+	v, err := getDefault(chapterID, NormalizeBranch(branch), ver)
 	if err != nil {
 		return "", err
 	}
-	return Content(ownerID, novelID, v)
+	return contentDefault(ownerID, novelID, v)
 }
 
 // ─── 三方合并（hunk 级） ───

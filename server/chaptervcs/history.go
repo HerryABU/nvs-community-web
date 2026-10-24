@@ -36,7 +36,7 @@ func EnsureBranch(chapterID uint, branch string, authorID uint) (*ChapterBranch,
 }
 
 // Head 分支头版本号（无提交返回 0）
-func Head(chapterID uint, branch string) int {
+func headDefault(chapterID uint, branch string) int {
 	var b ChapterBranch
 	if err := models.DB.Where("chapter_id = ? AND name = ?", chapterID, NormalizeBranch(branch)).First(&b).Error; err != nil {
 		return 0
@@ -45,16 +45,16 @@ func Head(chapterID uint, branch string) int {
 }
 
 // HeadVersion 分支头版本对象
-func HeadVersion(chapterID uint, branch string) (*ChapterVersion, error) {
-	ver := Head(chapterID, branch)
+func headVersionDefault(chapterID uint, branch string) (*ChapterVersion, error) {
+	ver := headDefault(chapterID, branch)
 	if ver <= 0 {
 		return nil, ErrNoVersion
 	}
-	return Get(chapterID, NormalizeBranch(branch), ver)
+	return getDefault(chapterID, NormalizeBranch(branch), ver)
 }
 
 // Get 取指定版本（按 章节 + 分支 + 版本号）
-func Get(chapterID uint, branch string, version int) (*ChapterVersion, error) {
+func getDefault(chapterID uint, branch string, version int) (*ChapterVersion, error) {
 	var v ChapterVersion
 	err := models.DB.Where("chapter_id = ? AND branch = ? AND version = ?", chapterID, NormalizeBranch(branch), version).First(&v).Error
 	if err != nil {
@@ -64,7 +64,7 @@ func Get(chapterID uint, branch string, version int) (*ChapterVersion, error) {
 }
 
 // List 分支上的版本列表（倒序：新 → 旧）
-func List(chapterID uint, branch string) ([]ChapterVersion, error) {
+func listDefault(chapterID uint, branch string) ([]ChapterVersion, error) {
 	name := NormalizeBranch(branch)
 	var list []ChapterVersion
 	if err := models.DB.Where("chapter_id = ? AND branch = ?", chapterID, name).
@@ -72,7 +72,7 @@ func List(chapterID uint, branch string) ([]ChapterVersion, error) {
 		return nil, err
 	}
 	fillAuthorNames(list)
-	head := Head(chapterID, name)
+	head := headDefault(chapterID, name)
 	for i := range list {
 		if list[i].Version == head {
 			list[i].IsHead = true
@@ -82,7 +82,7 @@ func List(chapterID uint, branch string) ([]ChapterVersion, error) {
 }
 
 // Branches 章节的分支列表（含 head 版本号）
-func Branches(chapterID uint) ([]ChapterBranch, error) {
+func branchesDefault(chapterID uint) ([]ChapterBranch, error) {
 	var list []ChapterBranch
 	if err := models.DB.Where("chapter_id = ?", chapterID).Order("id ASC").Find(&list).Error; err != nil {
 		return nil, err
@@ -119,7 +119,7 @@ func fillAuthorNames(list []ChapterVersion) {
 }
 
 // Content 读取某版本的正文快照（快照被清理时返回空串）
-func Content(ownerID, novelID uint, v *ChapterVersion) (string, error) {
+func contentDefault(ownerID, novelID uint, v *ChapterVersion) (string, error) {
 	if v == nil {
 		return "", errors.New("版本不存在")
 	}
@@ -130,12 +130,12 @@ func Content(ownerID, novelID uint, v *ChapterVersion) (string, error) {
 }
 
 // Revert 回滚：以历史版本内容再提交一次（不删历史，保持可追溯）
-func Revert(ownerID uint, novelID uint, chapter *models.Chapter, target *ChapterVersion, authorID uint) (*ChapterVersion, error) {
-	content, err := Content(ownerID, novelID, target)
+func revertDefault(ownerID uint, novelID uint, chapter *models.Chapter, target *ChapterVersion, authorID uint) (*ChapterVersion, error) {
+	content, err := contentDefault(ownerID, novelID, target)
 	if err != nil {
 		return nil, err
 	}
-	v, _, err := Commit(CommitInput{
+	v, _, err := commitDefault(CommitInput{
 		Chapter:  chapter,
 		AuthorID: authorID,
 		Title:    target.Title,
@@ -149,12 +149,12 @@ func Revert(ownerID uint, novelID uint, chapter *models.Chapter, target *Chapter
 
 // DeleteVersion 作者删除历史快照：只清正文文件，保留元数据（作者/时间/哈希/说明）以便追溯。
 // 约束：不能删除分支头（需先回滚或切分支），避免正文出现「有章节无内容」的空洞。
-func DeleteVersion(ownerID, novelID, chapterID uint, branch string, version int) error {
+func deleteVersionDefault(ownerID, novelID, chapterID uint, branch string, version int) error {
 	name := NormalizeBranch(branch)
-	if version == Head(chapterID, name) {
+	if version == headDefault(chapterID, name) {
 		return errors.New("不能删除分支最新版本，请先回滚到其他版本")
 	}
-	v, err := Get(chapterID, name, version)
+	v, err := getDefault(chapterID, name, version)
 	if err != nil {
 		return errors.New("版本不存在")
 	}

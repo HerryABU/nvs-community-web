@@ -2,7 +2,7 @@
 # 用法：
 #   make build            默认国际轨（零国密依赖）
 #   make build-gm         纯 Go 国密轨（-tags gm，依赖 go.gm.mod）
-#   make build-gm-cgo     CGO 国密轨（-tags "gm tongsuo"，需系统安装 Tongsuo --enable-ntls）
+#   make build-gitvcs     版本控制启用真实 git 仓库后端（-tags gitvcs，运行时 NVS_VCS_BACKEND=git）
 #   make test / test-gm   对应轨的测试
 #   make gm-audit         输出国密自检报告（Markdown）
 #   make credential-age   凭据年龄报表
@@ -12,10 +12,17 @@ SHELL := /bin/bash
 GO ?= go
 VERSION := $(shell grep -oE '[0-9]+\.[0-9]+\.[0-9]+' server/version/version.go | head -1)
 
-.PHONY: build build-gm build-gm-cgo test test-gm dist gm-audit credential-age scan-secrets tidy-gm clean
+.PHONY: build build-gitvcs build-gm build-gm-cgo test test-gitvcs test-gm dist gm-audit credential-age scan-secrets tidy-gm clean
 
 build:
 	cd server && CGO_ENABLED=0 $(GO) build -trimpath -ldflags "-s -w" -o ../nvs-server.exe .
+
+# 章节版本控制走真实 git 仓库（go-git）：构建带 gitvcs 标签，运行时设 NVS_VCS_BACKEND=git
+build-gitvcs:
+	cd server && CGO_ENABLED=0 $(GO) build -tags gitvcs -trimpath -ldflags "-s -w" -o ../nvs-server-gitvcs.exe .
+
+test-gitvcs:
+	cd server && $(GO) test -tags gitvcs ./... -count=1
 
 build-gm:
 	@test -f go.gm.mod || (echo "缺少 go.gm.mod"; exit 1)

@@ -1403,6 +1403,9 @@ func initDatabase() error {
 	if err := chaptervcs.Migrate(models.DB); err != nil {
 		return err
 	}
+	// 版本控制后端选择：NVS_VCS_BACKEND=git 时启用真实 git 仓库（需 -tags gitvcs 构建），
+	// 失败或不可用自动回落自研版本链，不阻断启动
+	chaptervcs.Init()
 	models.InitDefaultForums()
 	models.InitPlatformConfigs()
 	models.SeedDefaultAiAgents() // AI 智能体内置种子（表为空时写入）

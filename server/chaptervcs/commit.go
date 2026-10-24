@@ -39,7 +39,7 @@ type Conflict struct {
 }
 
 // Commit 产生一次提交；发生冲突且未强制时返回 Conflict（不写库）
-func Commit(in CommitInput) (*ChapterVersion, *Conflict, error) {
+func commitDefault(in CommitInput) (*ChapterVersion, *Conflict, error) {
 	if in.Chapter == nil || in.Chapter.ID == 0 {
 		return nil, nil, errors.New("章节不存在")
 	}
@@ -54,16 +54,16 @@ func Commit(in CommitInput) (*ChapterVersion, *Conflict, error) {
 
 	// 冲突检测：客户端基于的版本 ≠ 服务端 head
 	if in.BaseVer > 0 && head > 0 && head != in.BaseVer && !in.Force {
-		headV, herr := Get(in.Chapter.ID, branch, head)
-		baseV, berr := Get(in.Chapter.ID, branch, in.BaseVer)
+		headV, herr := getDefault(in.Chapter.ID, branch, head)
+		baseV, berr := getDefault(in.Chapter.ID, branch, in.BaseVer)
 		if herr == nil {
 			serverContent := ""
-			if c, cerr := Content(ownerID, novelID, headV); cerr == nil {
+			if c, cerr := contentDefault(ownerID, novelID, headV); cerr == nil {
 				serverContent = c
 			}
 			baseContent := ""
 			if berr == nil {
-				if c, cerr := Content(ownerID, novelID, baseV); cerr == nil {
+				if c, cerr := contentDefault(ownerID, novelID, baseV); cerr == nil {
 					baseContent = c
 				}
 			}
@@ -80,7 +80,7 @@ func Commit(in CommitInput) (*ChapterVersion, *Conflict, error) {
 
 	// 内容未变（哈希一致）→ 不产生新版本（与 git 一致，避免刷历史）
 	if head > 0 {
-		if hv, herr := Get(in.Chapter.ID, branch, head); herr == nil && hv.ContentHash == hashOf(in.Content) && hv.Title == in.Title {
+		if hv, herr := getDefault(in.Chapter.ID, branch, head); herr == nil && hv.ContentHash == hashOf(in.Content) && hv.Title == in.Title {
 			hv.AuthorName = ""
 			return hv, nil, nil
 		}
