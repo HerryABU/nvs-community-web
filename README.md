@@ -473,6 +473,36 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.8.0 AI 管理台与多厂商协议落地（2026-10-23）
+
+**AI 工作台（前后端）**
+- 渲染安全：新增 `renderAiMarkdown`（ALLOWED_TAGS 白名单、URI 仅 http(s)/mailto、外链 noopener/nofollow、图片 no-referrer、异常全量转义），流式输出同源渲染（120ms 节流）
+- 会话：重命名、分享（公开只读快照 `/ai/share/:token`，不含余额与费用）
+- 提示词库：平台预设 19 条 + 用户自定义（上限 200），变量占位，插入输入框/保存当前输入
+- 多厂商协议族：`AiModel.api_kind` = openai / mj（含 Niji）/ gemini / claude；Claude 走 `/v1/messages`（x-api-key + anthropic-version）
+- 绘画：模型卡片墙、五档比例、混图/换脸（参考图仅 data URL，防 SSRF）、作品发布到灵感广场
+- 视频：视频广场（复用作品流 kind=video）
+- 智能体：扣子 Coze 接入（v3/chat 提交 → 轮询 → 取 answer，`third_conv_id` 续接多轮）、分类与使用量
+- 思维导图：LLM 出层级大纲 → mermaid 渲染
+- 体验：厂商维度筛选、`Ctrl+K` 新建对话、沉浸模式、灵感广场独立页 `/ai/gallery`
+- 编辑器内 AI：章节编辑器 + 博客编辑器共用 `AiAssistPanel`（续写/润色/扩写/摘要），回填后保存走审核
+
+**AI 管理台（前后端）**
+- 数据审计 `/admin/ai-logs`：会话 / 作品 / 调用流水三视图 + 会话详情
+- 功能配置 `/admin/ai-features`：BYOK、混图、换脸、上下文条数、每日对话上限、广场公开（均真实生效）、厂商字典、风格字典、扣子默认值
+- API 卡池：`ai_model_keys` 多密钥权重轮询、失败计数、连续 3 次自动停用、探活测试、池空回退
+- 模型池：`api_kind` / `vendor` / `provider_hint` + 15 个厂商预设一键填充
+
+**国密双轨（默认关闭）**
+- `config/crypto.go`（intl/gm/dual + fail-fast）、`crypto/`（Provider + 国际轨 + 纯 Go gmtls + Tongsuo CGO）、`cert/`（SM2 双证书）、`tlsconfig/`（握手 JSONL）、`crypto/secret`、`aiapi`（ProviderHint 合规提示 + 错误分类）、`audit/`（gm-audit / credential-age）、`gmcmd`
+- 构建：根 `Makefile`（build / build-gm / build-gm-cgo / test-gm / gm-audit / scan-secrets）、`go.gm.mod`（默认 go.mod 零国密依赖）
+- 文档：`docs/gm-mapping.md`（GB/T 39786 映射 + 免责声明）、`scripts/scan-frontend-secrets.sh`
+
+**修复**
+- SPA 深链白名单补 12 个根段（`/ai` `/wallet` `/me` `/user` 等直接访问不再 404）
+- 导航栏栏目被挤压成竖排（flex-shrink / nowrap / 分档收紧间距）
+- 个人中心菜单归置：个人项收进下拉分组，管理员面板 / 警方取管台 / 退出登录独立在外
+
 ### v3.7.0 经济系统收尾：免费 AI 额度 + 用户自备密钥 + 长篇续写上下文 + @ai 评论机器人 + 在线支付通道（2026-10-23）
 
 > 1. **免费 AI 额度（§5.3，用尽才扣代币）**：平台默认 `calls_per_day=5`/`max_tokens_perday=0 不限`，按人覆盖（0=禁止/-1=不限）；`UserAiFreeUsage` 按日计数，`AiCallLog.FreeQuota` 列命中即 `cost=0` 不碰账本。编辑区补全、工作台 SSE、绘画、视频四条计费路径统一为「免费优先 → 代币预检」分支；管理端 `/admin/ai-free-quota` 三态单选 + resolveUser 按人覆盖。
