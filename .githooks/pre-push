@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# NVS pre-push：推送前跑「慢但必须绿的」检查。
+#
+# 边界：
+#   - 后端：build + vet + test（全量，约 1~3 分钟；后端是主要风险面）
+#   - 前端：默认不跑构建（CI 是权威门，且本地构建会覆盖 dist 影响正在跑的站点）；
+#           需要时 CHECK_WEB=1 git push 强制跑 npm run build
+#
+# 绕过：
+#   SKIP_HOOKS=1 git push      跳过全部
+#   SKIP_TESTS=1 git push      只 build + vet（紧急修文档时用）
+set -uo pipefail
+
+if [ "${SKIP_HOOKS:-}" = "1" ] || [ "${SKIP_PREPUSH:-}" = "1" ]; then
+  echo "[pre-push] SKIP_HOOKS=1，跳过检查"
+  exit 0
+fi
+
+red() { printf '\033[31m%s\033[0m\n' "$*"; }
+green() { printf '\033[32m%s\033[0m\n' "$*"; }
+step() { printf '\033[36m[pre-push] %s\033[0m\n' "$*"; }
+
+# stdin: <local ref> <local sha> <remote ref> <remote sha>
+# 删除远程分支时 local sha 全是 0，不需要检查
+need_check=0
+while read -r _local_ref local_sha _remote_ref _remote_sha; do
+  [ -z "${local_sha:-}" ] && continue
+  case "$local_sha" in
+    0000000000000000000000000000000000000000) continue ;;
+  esac
+  need_check=1
+done
+if [ "$need_check" -eq 0 ]; then
+  exit 0
+fi
+
+root=$(git rev-parse --show-toplevel)
+cd "$root" || exit 1
+
+if ! command -v go >/dev/null 2>&1; then
+  red "[pre-push] 未找到 go，无法校验后端"
+  echo "  装 Go 后重试，或 SKIP_HOOKS=1 git push"
+  exit 1
+fi
+
+step "1/3 go build ./..."
+if ! (cd server && go build ./...); then
+  red "[pre-push] 编译失败"
+  exit 1
+fi
+
+step "2/3 go vet ./..."
+if ! (cd server && go vet ./...); then
+  red "[pre-push] go vet 未通过（这些是真实缺陷，不是风格问题）"
+  exit 1
+fi
+
+if [ "${SKIP_TESTS:-}" = "1" ]; then
+  echo "[pre-push] SKIP_TESTS=1，跳过单测"
+else
+  step "3/3 go test ./... -count=1"
+  if ! (cd server && go test ./... -count=1); then
+    red "[pre-push] 单测失败"
+    echo "  只修文档时可用 SKIP_TESTS=1 git push"
+    exit 1
+  fi
+fi
+
+# 前端：仅在显式要求且依赖已装时构建
+if [ "${CHECK_WEB:-}" = "1" ]; then
+  if [ -d web/node_modules ]; then
+    step "前端 npm run build（CHECK_WEB=1）"
+    if ! (cd web && npm run build); then
+      red "[pre-push] 前端构建失败"
+      exit 1
+    fi
+  else
+    echo "[pre-push] web/node_modules 不存在，跳过前端构建（先 cd web && npm ci）"
+  fi
+fi
+
+green "[pre-push] 通过"
+exit 0

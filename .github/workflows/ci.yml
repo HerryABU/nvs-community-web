@@ -1,0 +1,183 @@
+name: CI
+
+# 触发：主干推送 / PR / 手动。
+# 设计原则：这里才是「权威门」——本地 hooks 可以被绕过，CI 不能。
+on:
+  push:
+    branches: [v3, main, master]
+  pull_request:
+  workflow_dispatch:
+
+# 同一分支的新推送取消旧的运行，避免排队堆积
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ─────────────────────────── 后端 ───────────────────────────
+  backend:
+    name: 后端 build / vet / test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: go build
+        working-directory: server
+        run: go build ./...
+
+      # vet 是真实缺陷（格式化字符串不匹配、锁拷贝、不可达代码…），不是风格问题，必须阻断
+      - name: go vet
+        working-directory: server
+        run: go vet ./...
+
+      - name: go test
+        working-directory: server
+        run: go test ./... -count=1
+
+      # 双轨构建：默认轨不带 go-git，gitvcs 标签轨必须也能编译
+      - name: go build（gitvcs 标签轨）
+        working-directory: server
+        run: go build -tags gitvcs ./...
+
+  # ─────────────────────────── 前端 ───────────────────────────
+  frontend:
+    name: 前端构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # npm ci 严格按 lock 安装，保证 CI 与本地一致（不用 install，它会改 lock）
+      - name: npm ci
+        working-directory: web
+        run: npm ci
+
+      - name: vite build
+        working-directory: web
+        run: npm run build
+
+      - name: 上传前端产物（供 embed 冒烟与快照复用）
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+          retention-days: 7
+
+  # ─────────────────────────── 单二进制冒烟 ───────────────────────────
+  # 后端是 go:embed 打包前端产物的，所以「前端产物 + Go 二进制」必须一起验证：
+  # 只跑 go test 是发现不了「embed 路径错了 / index.html 缺了」这类问题的。
+  embed-smoke:
+    name: 内嵌产物冒烟（单 exe）
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+      - name: 同步产物到 embed 目录
+        run: |
+          set -euo pipefail
+          rm -rf server/dist
+          cp -a dist server/dist
+          test -f server/dist/index.html
+          echo "assets=$(ls server/dist/assets | wc -l)"
+
+      - name: 前端产物密钥扫描
+        run: bash scripts/scan-frontend-secrets.sh server/dist
+
+      - name: 构建单二进制
+        working-directory: server
+        run: CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /tmp/nvs-server .
+
+      - name: 启动冒烟
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ci/novels
+          SERVER_PORT=18088 DB_PATH=/tmp/ci/nvs.db NOVEL_DATA_DIR=/tmp/ci/novels \
+            /tmp/nvs-server > /tmp/ci/run.log 2>&1 &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true' EXIT
+
+          # 等就绪（最多 30s），别用固定 sleep
+          for i in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://127.0.0.1:18088/ 2>/dev/null; then break; fi
+            sleep 1
+          done
+
+          code() { curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18088$1"; }
+
+          echo "首页            -> $(code /)"
+          echo "蜜罐诱饵 .env   -> $(code /.env)"
+          echo "影子认证 v2     -> $(code /api/v2/user/me)"
+
+          test "$(code /)" = "200" || { echo "首页不是 200"; cat /tmp/ci/run.log; exit 1; }
+          # 默认蜜罐等级 off：诱饵必须与普通 404 无差别（不暴露蜜罐存在）
+          test "$(code /.env)" = "404" || { echo "off 档诱饵应 404"; exit 1; }
+          test "$(code /api/v2/user/me)" = "404" || { echo "off 档影子认证应 404"; exit 1; }
+
+          if grep -qiE 'panic|conflicts with existing wildcard' /tmp/ci/run.log; then
+            echo "启动日志出现 panic 或路由冲突"; cat /tmp/ci/run.log; exit 1
+          fi
+          echo "冒烟通过"
+
+  # ─────────────────────────── 快照产物 ───────────────────────────
+  # 每次推主干产出一个 linux-amd64 二进制，站长可直接下载试跑（不用自己装 Go/Node）。
+  snapshot:
+    name: 快照二进制（linux-amd64）
+    runs-on: ubuntu-latest
+    needs: [embed-smoke]
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+      - name: 构建
+        run: |
+          set -euo pipefail
+          rm -rf server/dist
+          cp -a dist server/dist
+          cd server
+          mkdir -p ../out
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -trimpath -ldflags "-s -w" -o ../out/nvs-server-linux-amd64 .
+          cd ..
+          sha256sum out/nvs-server-linux-amd64 > out/nvs-server-linux-amd64.sha256
+          ls -lh out
+          cat out/nvs-server-linux-amd64.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nvs-server-linux-amd64-snapshot
+          path: out/
+          retention-days: 14

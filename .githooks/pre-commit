@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+# NVS pre-commit：只做「快、能自动判死」的检查（秒级），重活留给 pre-push 与 CI。
+#
+# 设计原则：
+#   1. 不自动改文件（hook 静默改代码会让人以为是 IDE 干的）；
+#   2. 只查「暂存区内容」，不查整个工作区（避免无关文件背锅）；
+#   3. 每条失败都给「怎么修」与「怎么绕过」，不留哑谜。
+#
+# 绕过：SKIP_HOOKS=1 git commit ...   （或 SKIP_PRECOMMIT=1）
+set -uo pipefail
+
+if [ "${SKIP_HOOKS:-}" = "1" ] || [ "${SKIP_PRECOMMIT:-}" = "1" ]; then
+  echo "[pre-commit] SKIP_HOOKS=1，跳过检查"
+  exit 0
+fi
+
+red() { printf '\033[31m%s\033[0m\n' "$*"; }
+yellow() { printf '\033[33m%s\033[0m\n' "$*"; }
+green() { printf '\033[32m%s\033[0m\n' "$*"; }
+
+fail=0
+bad() { red "  ✗ $*"; fail=1; }
+hint() { printf '     %s\n' "$*"; }
+
+# 暂存的新增/修改/重命名文件（删除的文件不检查内容）
+files=()
+while IFS= read -r f; do
+  [ -n "$f" ] && files+=("$f")
+done < <(git diff --cached --name-only --diff-filter=ACMR)
+if [ "${#files[@]}" -eq 0 ]; then
+  exit 0
+fi
+
+echo "[pre-commit] 检查 ${#files[@]} 个暂存文件"
+
+# ─────────────────────────── 1. 禁止提交的路径 ───────────────────────────
+# .gitignore 已经挡了一层，这里挡的是 `git add -f` 与「换机器后忽略规则失效」。
+for f in "${files[@]}"; do
+  case "$f" in
+    .env|*/.env|.env.local|*/.env.local)
+      bad "禁止提交环境变量文件：$f"
+      hint "它含密钥；请改用 .env.example 之类的模板"
+      ;;
+    data/*|server/data/*|*/data/*.db|*/data/*.key)
+      bad "禁止提交运行时数据：$f"
+      hint "data/ 是本地站点数据（db / 密钥 / uploads / 作品正文），删了会丢"
+      ;;
+    dist/*|server/dist/*|web/dist/*|release/*)
+      bad "禁止提交构建产物：$f"
+      hint "产物由 CI 构建；本地构建请留在工作区（已在 .gitignore）"
+      ;;
+    *.exe|*.dll|*.so|*.dylib)
+      bad "禁止提交二进制：$f"
+      hint "发布产物走 GitHub Release，不进仓库"
+      ;;
+    *.pem|*.p12|*.pfx|*.keystore)
+      bad "禁止提交证书/私钥：$f"
+      hint "证书由站长在部署环境配置"
+      ;;
+  esac
+done
+
+# ─────────────────────────── 2. 大文件（>2MB） ───────────────────────────
+# 二进制/图片进历史后无法真正删除（只能改写历史），代价极高，所以提前拦。
+for f in "${files[@]}"; do
+  size=$(git cat-file -s ":$f" 2>/dev/null || echo 0)
+  if [ "${size:-0}" -gt 2097152 ]; then
+    bad "文件过大（$((size / 1024 / 1024))MB）：$f"
+    hint ">2MB 的文件请放 Release / 对象存储；确需入库请说明理由并 SKIP_HOOKS=1"
+  fi
+done
+
+# ─────────────────────────── 3. 冲突标记 ───────────────────────────
+# 只拦真正的冲突标记（<<<<<<< / >>>>>>> / ======= 整行）。
+# 不用 `git diff --cached --check`：它把「行尾空白」也算错误，历史上遗留文件一多就整片红，
+# 门禁第一天就开始被绕过，比没有还糟。
+conflicts=$(git diff --cached -U0 \
+  | grep -E '^\+(<{7}|>{7}|={7})( |$)' \
+  | head -5)
+if [ -n "$conflicts" ]; then
+  bad "存在未解决的冲突标记："
+  printf '%s\n' "$conflicts" | while IFS= read -r l; do hint "${l:0:120}"; done
+  hint "搜索：grep -rnE '^(<{7}|>{7}|={7})' <文件>"
+fi
+
+# ─────────────────────────── 4. Go 格式 ───────────────────────────
+go_files=()
+for f in "${files[@]}"; do
+  case "$f" in
+    *.go) [ -f "$f" ] && go_files+=("$f") ;;
+  esac
+done
+if [ "${#go_files[@]}" -gt 0 ] && command -v gofmt >/dev/null 2>&1; then
+  unformatted=$(gofmt -l "${go_files[@]}" 2>/dev/null)
+  if [ -n "$unformatted" ]; then
+    bad "Go 文件未格式化："
+    printf '%s\n' "$unformatted" | while IFS= read -r l; do hint "$l"; done
+    hint "修复：gofmt -w ${go_files[*]}"
+  fi
+fi
+
+# ─────────────────────────── 5. 项目铁律：前端前缀不可硬编码 ───────────────────────────
+# NVS 部署在反向代理前缀下（如 /go-nvs/），前缀必须由 appPrefix / 运行时注入解析。
+# 只匹配「引号内以 /go-nvs 开头」的真实字面量，放过注释里的说明文字。
+web_changed=0
+for f in "${files[@]}"; do
+  case "$f" in
+    web/src/*) web_changed=1 ;;
+  esac
+done
+if [ "$web_changed" -eq 1 ]; then
+  hits=$(git diff --cached -U0 -- 'web/src/*.ts' 'web/src/*.vue' \
+    | grep -E '^\+' \
+    | grep -vE '^\+\+\+' \
+    | grep -E "['\"\`]/go-nvs(/|['\"\`])" \
+    | grep -vE '^\+[[:space:]]*(//|\*|/\*)' \
+    | head -5)
+  if [ -n "$hits" ]; then
+    bad "前端出现硬编码前缀 /go-nvs（部署前缀可变，必须走 appPrefix）："
+    printf '%s\n' "$hits" | while IFS= read -r l; do hint "${l:0:140}"; done
+    hint "改用 @/utils/prefix 的 appPrefix；只有 src/utils/prefix.ts 允许出现字面量"
+  fi
+fi
+
+# ─────────────────────────── 6. 疑似密钥 ───────────────────────────
+# 只查新增行，且跳过测试文件（用例里的 sk-aaa... 是假密钥）。
+secret_re='(sk-[A-Za-z0-9]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|xox[baprs]-[A-Za-z0-9-]{10,}|-----BEGIN (RSA |EC |)PRIVATE KEY-----)'
+secret_hits=$(git diff --cached -U0 \
+  | awk '/^\+\+\+ /{file=$2} /^\+/ && !/^\+\+\+/ {print file": "$0}' \
+  | grep -vE '_test\.go|/testdata/|\.md: ' \
+  | grep -E "$secret_re" \
+  | head -5)
+if [ -n "$secret_hits" ]; then
+  bad "检测到疑似密钥（明文入库后会永久留在 git 历史）："
+  printf '%s\n' "$secret_hits" | while IFS= read -r l; do hint "${l:0:140}"; done
+  hint "确属误报（如文档示例）可 SKIP_HOOKS=1；真密钥请改为环境变量并轮换"
+fi
+
+# ─────────────────────────── 7. debugger 残留 ───────────────────────────
+dbg=$(git diff --cached -U0 -- 'web/src/*.ts' 'web/src/*.vue' \
+  | grep -E '^\+' | grep -vE '^\+\+\+' | grep -vE '^\+[[:space:]]*(//|/\*)' \
+  | grep -E '(^|[^A-Za-z0-9_])debugger([^A-Za-z0-9_]|$)' | head -3)
+if [ -n "$dbg" ]; then
+  bad "前端残留 debugger 语句（生产构建会中断执行）："
+  printf '%s\n' "$dbg" | while IFS= read -r l; do hint "${l:0:140}"; done
+fi
+
+# ─────────────────────────── 结果 ───────────────────────────
+if [ "$fail" -ne 0 ]; then
+  echo
+  red "[pre-commit] 提交被拒绝"
+  echo "  逐条修好后重试；确认是误报可绕过："
+  echo "    SKIP_HOOKS=1 git commit -m \"...\""
+  exit 1
+fi
+
+green "[pre-commit] 通过"
+exit 0

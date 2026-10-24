@@ -1,0 +1,209 @@
+name: Release
+
+# 打 tag 即发布：v3.20.1 → GitHub Release（多平台单二进制 + 校验和）。
+# 手动触发时只构建并留 artifact，不创建 Release（避免误发）。
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # 创建 Release 需要
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ─────────────────────────── 前置：前端 + 版本一致性 ───────────────────────────
+  prep:
+    name: 前端产物 + 版本校验
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: npm ci
+        working-directory: web
+        run: npm ci
+
+      - name: vite build
+        working-directory: web
+        run: npm run build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+          retention-days: 3
+
+      # 版本三处同步是硬约束（version.go / package.json / README），
+      # 其中前两处能被机器校验：tag 与代码版本不一致直接失败，避免发出"版本号对不上"的包。
+      - name: 版本一致性
+        id: ver
+        run: |
+          set -euo pipefail
+          CODE_VERSION=$(grep -E '^var AppVersion' server/version/version.go | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          PKG_VERSION=$(node -p "require('./web/package.json').version")
+          echo "version.go    = $CODE_VERSION"
+          echo "package.json  = $PKG_VERSION"
+          if [ "$CODE_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::version.go($CODE_VERSION) 与 package.json($PKG_VERSION) 不一致"
+            exit 1
+          fi
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG_VERSION="${GITHUB_REF_NAME#v}"
+            echo "tag           = $TAG_VERSION"
+            if [ "$TAG_VERSION" != "$CODE_VERSION" ]; then
+              echo "::error::tag($TAG_VERSION) 与代码版本($CODE_VERSION) 不一致；先改版本号再打 tag"
+              exit 1
+            fi
+          fi
+          echo "version=$CODE_VERSION" >> "$GITHUB_OUTPUT"
+
+  # ─────────────────────────── 多平台二进制 ───────────────────────────
+  binaries:
+    name: 构建 ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    needs: [prep]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: windows, goarch: amd64, name: windows-amd64,  ext: .exe }
+          - { goos: windows, goarch: arm64, name: windows-arm64,  ext: .exe }
+          - { goos: linux,   goarch: amd64, name: linux-amd64,    ext: '' }
+          - { goos: linux,   goarch: arm64, name: linux-arm64,    ext: '' }
+          - { goos: linux,   goarch: arm,   name: linux-armv7,    ext: '', goarm: '7' }
+          - { goos: darwin,  goarch: amd64, name: macos-amd64,    ext: '' }
+          - { goos: darwin,  goarch: arm64, name: macos-arm64,    ext: '' }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+      # embed 是编译期打包：必须先放好前端产物再 go build，顺序反了会把空目录嵌进 exe
+      - name: 准备 embed 产物
+        run: |
+          set -euo pipefail
+          rm -rf server/dist
+          cp -a dist server/dist
+          test -f server/dist/index.html
+
+      - name: 交叉编译
+        env:
+          CGO_ENABLED: '0'
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm || '' }}
+        run: |
+          set -euo pipefail
+          BIN="nvs-server${{ matrix.ext }}"
+          (cd server && go build -trimpath -ldflags "-s -w" -o "../out/${BIN}" .)
+          ls -lh "out/${BIN}"
+
+      - name: 打包
+        run: |
+          set -euo pipefail
+          cd out
+          cp ../README.md ../LICENSE ../SECURITY.md .
+          BASE="nvs-server_${{ needs.prep.outputs.version }}_${{ matrix.name }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip -9 -q "${BASE}.zip" nvs-server.exe README.md LICENSE SECURITY.md
+            sha256sum "${BASE}.zip" > "${BASE}.zip.sha256"
+          else
+            # 只给可执行文件加执行位（zip 不保留权限，tar 保留）
+            chmod +x nvs-server
+            tar -czf "${BASE}.tar.gz" nvs-server README.md LICENSE SECURITY.md
+            sha256sum "${BASE}.tar.gz" > "${BASE}.tar.gz.sha256"
+          fi
+          rm -f nvs-server nvs-server.exe README.md LICENSE SECURITY.md
+          ls -lh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.name }}
+          path: out/*
+          retention-days: 3
+
+  # ─────────────────────────── 发布 ───────────────────────────
+  publish:
+    name: 创建 Release
+    runs-on: ubuntu-latest
+    needs: [prep, binaries]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: 汇总校验和
+        run: |
+          set -euo pipefail
+          cd dist
+          ls -lh
+          sha256sum *.zip *.tar.gz > SHA256SUMS
+          echo "---- SHA256SUMS ----"
+          cat SHA256SUMS
+
+      - name: 创建 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: NVS v${{ needs.prep.outputs.version }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          append_body: true
+          body: |
+            ## 下载
+
+            单二进制，前端已内嵌（`go:embed`），解压即用，无需 Node / Go 环境。
+
+            | 平台 | 文件 |
+            |---|---|
+            | Windows x64 | `nvs-server_${{ needs.prep.outputs.version }}_windows-amd64.zip` |
+            | Windows ARM64 | `nvs-server_${{ needs.prep.outputs.version }}_windows-arm64.zip` |
+            | Linux x64 | `nvs-server_${{ needs.prep.outputs.version }}_linux-amd64.tar.gz` |
+            | Linux ARM64 | `nvs-server_${{ needs.prep.outputs.version }}_linux-arm64.tar.gz` |
+            | Linux ARMv7 | `nvs-server_${{ needs.prep.outputs.version }}_linux-armv7.tar.gz` |
+            | macOS Intel | `nvs-server_${{ needs.prep.outputs.version }}_macos-amd64.tar.gz` |
+            | macOS Apple Silicon | `nvs-server_${{ needs.prep.outputs.version }}_macos-arm64.tar.gz` |
+
+            校验：`sha256sum -c SHA256SUMS`（Windows 可用 `certutil -hashfile <文件> SHA256` 对照）。
+
+            ## 部署
+
+            ```bash
+            # Linux / macOS
+            chmod +x nvs-server && ./nvs-server
+            # Windows
+            nvs-server.exe
+            ```
+
+            首次启动会进入建站向导；反代前缀部署见 `docs/deploy-prefix.md`。
+
+            > 二进制未做代码签名（Windows SmartScreen 可能提示）。介意的话请自行用源码构建：
+            > `cd web && npm ci && npm run build && cd ../server && go build -o nvs-server .`
+          files: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/SHA256SUMS
+          fail_on_unmatched_files: true

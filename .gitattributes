@@ -1,0 +1,27 @@
+# 行尾策略：只约束"必须 LF，否则直接坏掉"的文件类型。
+#
+# 刻意不写 `* text=auto` 与 `*.go eol=lf`：那会让 git 对整个仓库重新规范化行尾，
+# 一次性把上万个文件刷成"修改"，真实改动反而被淹没（本项目 Go 源码历史上是 CRLF 工作区）。
+# 需要规范化的文件单独列。
+.githooks/*  text eol=lf
+*.sh         text eol=lf
+*.bash       text eol=lf
+Makefile     text eol=lf
+*.yml        text eol=lf
+*.yaml       text eol=lf
+Dockerfile   text eol=lf
+
+# 二进制（禁止 diff / 合并，避免 git 当成文本处理）
+*.exe   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+*.gz    binary
+*.br    binary
+*.db    binary
+*.zip   binary

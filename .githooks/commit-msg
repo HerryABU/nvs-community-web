@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# NVS commit-msg：约定式提交（Conventional Commits）。
+#
+# 为什么强制：版本记录（README）与 Release Notes 都靠 type/scope 归类，
+# 提交信息一旦随意，回溯"哪个版本改了什么"就只能靠读 diff。
+#
+# 格式：type(scope)!: subject
+#   type  : feat|fix|refactor|perf|docs|test|build|ci|chore|security|style
+#   scope : 可选，如 vcs / oc / honeypot / web / ai
+#   !     : 可选，标记不兼容变更
+#   subject: 至少 2 个字符，建议中文动宾短语
+#
+# 绕过：SKIP_HOOKS=1 git commit ...
+set -uo pipefail
+
+if [ "${SKIP_HOOKS:-}" = "1" ] || [ "${SKIP_COMMITMSG:-}" = "1" ]; then
+  exit 0
+fi
+
+msg_file="${1:-}"
+if [ -z "$msg_file" ] || [ ! -f "$msg_file" ]; then
+  echo "[commit-msg] 无法读取提交信息文件" >&2
+  exit 1
+fi
+
+# 只取首行（其余是正文）；去掉 CRLF 里的 \r
+first=$(head -n 1 "$msg_file" | tr -d '\r')
+
+# 空信息（--amend --no-edit 时会走到这里，交给 git 自己判断）
+[ -z "$first" ] && exit 0
+
+# 允许 git 自动生成与工具生成的提交
+case "$first" in
+  Merge\ *|merge:*|Revert\ *|revert:*|fixup!*|squash!*) exit 0 ;;
+  # 中文本地化的自动合并信息（部分 Git 版本会输出中文）
+  \合并*|还原*) exit 0 ;;
+esac
+
+re='^(feat|fix|refactor|perf|docs|test|build|ci|chore|security|style)(\([a-zA-Z0-9._/-]+\))?!?: .{2,}'
+if ! printf '%s' "$first" | grep -qE "$re"; then
+  echo ""
+  echo -e "\033[31m[commit-msg] 提交信息不符合约定式提交\033[0m"
+  echo "  实际：$first"
+  echo ""
+  echo "  应为：type(scope): 说明"
+  echo "    type  ∈ feat|fix|refactor|perf|docs|test|build|ci|chore|security|style"
+  echo "    scope 可选，例：feat(oc): 角色卡支持酒馆 V2 导入"
+  echo "    不兼容变更加 !：refactor(vcs)!: 移除独立蜜罐进程"
+  echo ""
+  echo "  绕过：SKIP_HOOKS=1 git commit ..."
+  exit 1
+fi
+
+# 首行长度：git log --oneline 与 GitHub 列表都会截断，超过 120 字符就很难读
+len=$(printf '%s' "$first" | wc -m | tr -d ' ')
+if [ "${len:-0}" -gt 120 ]; then
+  echo -e "\033[31m[commit-msg] 首行 ${len} 字符，超过 120\033[0m"
+  echo "  把细节放到正文（空一行后继续写）"
+  exit 1
+fi
+
+exit 0

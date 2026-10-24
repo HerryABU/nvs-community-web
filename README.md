@@ -334,9 +334,10 @@ cd server && go build -ldflags="-s -w" -o nvs-server.exe . && cd ..
 
 | 工具 | 版本 | 用途 |
 |------|------|------|
-| Go | ≥ 1.22 | 后端编译 |
-| Node.js | ≥ 18 | 前端构建 |
+| Go | ≥ 1.25（见 `server/go.mod`） | 后端编译 |
+| Node.js | ≥ 20（CI 用 22） | 前端构建（Vite 5） |
 | npm | ≥ 9 | 依赖管理 |
+| Git | ≥ 2.9 | 须支持 `core.hooksPath`（仓库内 hooks 依赖它） |
 
 ### 本地开发
 
@@ -352,9 +353,82 @@ npm run dev
 
 浏览器打开 **http://localhost:5173** 进行前端开发（热重载）。Vite 自动将 `/api` 请求代理到 `localhost:8080`。
 
+### Git hooks（提交门禁，新克隆必做一次）
+
+hooks 随仓库走（`.githooks/`），不需要问"你本地装没装"：
+
+```bash
+bash .githooks/install.sh        # Linux / macOS / Git Bash / WSL
+# 或 Windows PowerShell
+powershell -ExecutionPolicy Bypass -File .githooks\install.ps1
+# 或
+make hooks
+```
+
+| hook | 检查内容 | 耗时 |
+|---|---|---|
+| `pre-commit` | 禁提交 `.env` / `data/` / `dist/` / `*.exe` / 证书、>2MB 大文件、冲突标记、`gofmt`、**前端硬编码 `/go-nvs`**、**疑似明文密钥**、`debugger` | < 2s |
+| `commit-msg` | 约定式提交 `type(scope): 说明`，首行 ≤120 字符 | < 0.2s |
+| `pre-push` | `go build` + `go vet` + `go test ./...`（前端由 CI 兜底，`CHECK_WEB=1` 可强制本地构建） | 1~3 min |
+
+为什么 commit 阶段不跑编译：提交是高频动作，3 分钟的门会让人人 `--no-verify`，等于没有门。
+提交只拦"事后无法挽回"的错（密钥进历史、二进制进历史、前缀硬编码），正确性验证放在 push 与 CI。
+
+需要绕过时（请别养成习惯）：
+
+```bash
+SKIP_HOOKS=1 git commit -m "..."   # 全部跳过
+SKIP_TESTS=1 git push              # push 只 build + vet
+CHECK_WEB=1 git push               # push 额外构建前端
+```
+
+详见 `.githooks/README.md`。
+
+### 已提供的构建目标
+
+```bash
+make check        # 本地等价 CI：后端 build + vet + test，前端 build
+make check-all    # check + 同步 embed + 产物自检 + 前端产物密钥扫描
+make dist         # 只构建前端并同步到 server/dist（embed 源）
+make dist-check   # 校验 server/dist 有 index.html 且资源数正常（防"空 embed 打进 exe"）
+make version      # 校验 version.go 与 package.json 版本一致
+make hooks        # 启用 .githooks
+make build        # 单平台（当前系统）产出 nvs-server.exe
+make build-gitvcs # 章节版本控制走真实 git 仓库（-tags gitvcs，运行时 NVS_VCS_BACKEND=git）
+make build-gm     # 国密轨（-tags gm，依赖 go.gm.mod）
+```
+
+> **构建顺序不能反**：`npm run build`（产出 `dist/`）→ 同步到 `server/dist/` → `go build`。
+> `//go:embed all:dist` 是**编译期**打包，顺序反了会把旧前端（或空目录）嵌进 exe。
+
+### 自动构建（GitHub Actions）
+
+| workflow | 触发 | 做什么 |
+|---|---|---|
+| `ci.yml` | push 到 `v3` / `main` / `master`、PR、手动 | ① 后端 `build` + `vet` + `test` + `gitvcs` 标签轨编译；② 前端 `npm ci` + `vite build`；③ **内嵌产物冒烟**（拼出单 exe，真启动，断言首页 200、off 档诱饵 404、日志无 panic）；④ 推主干产出 `linux-amd64` 快照 artifact |
+| `release.yml` | push tag `v*` | 校验 **tag = version.go = package.json**；多平台交叉编译（Win x64/ARM64、Linux x64/ARM64/ARMv7、macOS Intel/ARM64）；打包 zip/tar.gz + `SHA256SUMS`；创建 GitHub Release |
+
+发布流程（版本号三处同步后打 tag）：
+
+```bash
+# 1) 改版本（三处必须一致）
+#    server/version/version.go  var AppVersion = "x.y.z"
+#    web/package.json           "version": "x.y.z"
+#    README.md                  版本更新记录新增段落
+
+# 2) 本地先过一遍
+make version && make check-all
+
+# 3) 提交 + 打 tag（tag 必须与版本一致，否则 release 直接失败）
+git add -A && git commit -m "chore(release): x.y.z <摘要>"
+git tag vx.y.z && git push origin v3 --tags
+```
+
+Release 里的二进制**已内嵌前端**，解压即用，无需 Node / Go 环境；Windows 包为 zip，其余为 tar.gz，附 `SHA256SUMS` 与各自 `.sha256`。
+
 ### 全平台交叉编译
 
-项目提供 `build-all.ps1` 脚本，自动为 **10 个目标平台** 生成预编译二进制文件：
+项目提供 `build-all.ps1` 脚本，自动为 **13 个目标平台** 生成预编译二进制文件（本地发布用；CI 的 Release 覆盖 7 个主流平台）：
 
 ```bash
 # Windows（需 PowerShell）

@@ -157,7 +157,8 @@ func sendEmail(cfg SMTPConfig, to, subject, body string) error {
 		return fmt.Errorf("SMTP 未配置，请联系站长")
 	}
 
-	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
+	// JoinHostPort：IPv6 字面量会自动加方括号（[::1]:587），拼 "%s:%s" 会得到 ::1:587 而连接失败
+	addr := net.JoinHostPort(cfg.Host, cfg.Port)
 	dialer := &net.Dialer{Timeout: smtpDialTimeout}
 	proto := smtpProtocol(cfg.Port)
 
@@ -261,7 +262,8 @@ func DiagnoseSMTP(cfg SMTPConfig, to string) ([]SMTPDiagStep, bool) {
 			fmt.Sprintf("配置有效：%s:%s（发件人 %s）", cfg.Host, cfg.Port, cfg.From), start))
 	}
 
-	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
+	// JoinHostPort：IPv6 字面量会自动加方括号（[::1]:587），拼 "%s:%s" 会得到 ::1:587 而连接失败
+	addr := net.JoinHostPort(cfg.Host, cfg.Port)
 
 	// 2) DNS 解析（host 为 IP 时跳过）
 	{

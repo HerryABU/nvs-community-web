@@ -10,9 +10,10 @@
 #   make dist             构建前端并同步到 server/dist（embed 源）
 SHELL := /bin/bash
 GO ?= go
-VERSION := $(shell grep -oE '[0-9]+\.[0-9]+\.[0-9]+' server/version/version.go | head -1)
+# 只认 `var AppVersion` 那一行：version.go 的注释里出现过的版本号会盖掉真实值（曾经取到过 2.3.1）
+VERSION := $(shell grep -E '^var AppVersion' server/version/version.go | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
 
-.PHONY: build build-gitvcs build-gm build-gm-cgo test test-gitvcs test-gm dist gm-audit credential-age scan-secrets tidy-gm clean
+.PHONY: build build-gitvcs build-gm build-gm-cgo test test-gitvcs test-gm dist dist-check hooks check check-all gm-audit credential-age scan-secrets tidy-gm clean version
 
 build:
 	cd server && CGO_ENABLED=0 $(GO) build -trimpath -ldflags "-s -w" -o ../nvs-server.exe .
@@ -45,9 +46,39 @@ test-gm:
 tidy-gm:
 	cd server && $(GO) mod tidy -modfile=../go.gm.mod
 
+# 构建前端并同步到 embed 源（Windows 下用 robocopy；其它平台用 cp）
 dist:
 	cd web && node node_modules/vite/bin/vite.js build
-	robocopy dist server/dist /MIR /XF *.gz *.br || true
+	@if command -v robocopy >/dev/null 2>&1; then \
+		robocopy dist server/dist /MIR /XF *.gz *.br >/dev/null || true; \
+	else \
+		rm -rf server/dist && cp -a dist server/dist; \
+	fi
+	@test -f server/dist/index.html && echo "dist ok: server/dist/index.html"
+
+# 产物自检：embed 目录必须有 index.html 且资源数量合理（防"空 embed 打进 exe"）
+dist-check:
+	@test -f server/dist/index.html || (echo "server/dist/index.html 缺失：先 make dist"; exit 1)
+	@n=$$(ls server/dist/assets 2>/dev/null | wc -l); echo "assets=$$n"; test "$$n" -gt 20 || (echo "资源数量异常（$$n）"; exit 1)
+
+# 启用仓库内 hooks（新克隆后执行一次）
+hooks:
+	@bash .githooks/install.sh
+
+# 本地等价 CI（推送前自己跑一遍，和 CI 的 backend + frontend 对齐）
+check:
+	cd server && $(GO) build ./... && $(GO) vet ./... && $(GO) test ./... -count=1
+	cd web && npm run build
+
+# check + embed 冒烟（最接近 CI 的完整本地校验）
+check-all: check dist dist-check
+	bash scripts/scan-frontend-secrets.sh server/dist
+	@echo "本地完整校验通过（发布前建议再跑一次 make build）"
+
+# 打 tag 发布由 GitHub Actions 完成（.github/workflows/release.yml），本地只校验版本
+version:
+	@echo "版本：$(VERSION)"
+	@cd web && test "$$(node -p 'require("./package.json").version')" = "$(VERSION)" && echo "version.go 与 package.json 一致"
 
 gm-audit:
 	cd server && $(GO) run . gm-audit
