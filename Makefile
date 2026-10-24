@@ -67,6 +67,7 @@ hooks:
 
 # 本地等价 CI（推送前自己跑一遍，和 CI 的 backend + frontend 对齐）
 check:
+	bash scripts/check-spa-roots.sh
 	cd server && $(GO) build ./... && $(GO) vet ./... && $(GO) test ./... -count=1
 	cd web && npm run build
 

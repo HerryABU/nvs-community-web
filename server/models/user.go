@@ -20,7 +20,9 @@ type User struct {
 	Signature    string `gorm:"size:256;default:''" json:"signature"`
 	Bio          string `gorm:"type:text" json:"bio"`
 	Role         string `gorm:"size:32;default:reader" json:"role"`
-	SigningKey   string `gorm:"size:64;default:''" json:"-"` // base64(AES-256 key), only set for authors
+	// 会员有效期（购买含 Days 的套餐后延长；nil 或已过期 = 非会员）
+	MemberUntil *time.Time `gorm:"index" json:"member_until,omitempty"`
+	SigningKey  string     `gorm:"size:64;default:''" json:"-"` // base64(AES-256 key), only set for authors
 	// 手机号登录（F10）：普通索引 + 应用层唯一校验（空串唯一索引在多行下冲突，故不用 DB uniqueIndex）
 	Phone string `gorm:"size:20;index;default:''" json:"phone,omitempty"`
 	// 实名制（F10，公安部令第176号合规）：姓名 AES-256-GCM 加密存储；身份证仅存哈希+脱敏展示

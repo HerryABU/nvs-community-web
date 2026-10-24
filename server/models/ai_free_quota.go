@@ -23,7 +23,7 @@ const (
 
 // AiFreeQuotaConfig 平台默认免费额度
 type AiFreeQuotaConfig struct {
-	CallsPerDay     int `json:"calls_per_day"`     // 每日免费次数（-1 不限 / 0 不提供）
+	CallsPerDay     int `json:"calls_per_day"`      // 每日免费次数（-1 不限 / 0 不提供）
 	MaxTokensPerDay int `json:"max_tokens_per_day"` // 每日免费 tokens 上限（-1 不限 / 0 不限）
 }
 
@@ -86,14 +86,14 @@ func SetAiFreeQuotaConfig(cfg AiFreeQuotaConfig) error {
 
 // UserAiFreeQuota 按人免费额度覆盖（无记录=跟随平台默认）
 type UserAiFreeQuota struct {
-	ID              uint      `gorm:"primaryKey" json:"id"`
-	UserID          uint      `gorm:"uniqueIndex;not null" json:"user_id"`
-	DailyCalls      int       `gorm:"not null;default:-1" json:"daily_calls"`      // -1 不限 / 0 禁止
-	DailyTokens     int       `gorm:"not null;default:0" json:"daily_tokens"`      // 0 不限 / -1 禁止 tokens 维度
-	Note            string    `gorm:"size:256;default:''" json:"note"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
-	Username        string    `gorm:"-" json:"username,omitempty"` // 列表填充
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	UserID      uint      `gorm:"uniqueIndex;not null" json:"user_id"`
+	DailyCalls  int       `gorm:"not null;default:-1" json:"daily_calls"` // -1 不限 / 0 禁止
+	DailyTokens int       `gorm:"not null;default:0" json:"daily_tokens"` // 0 不限 / -1 禁止 tokens 维度
+	Note        string    `gorm:"size:256;default:''" json:"note"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Username    string    `gorm:"-" json:"username,omitempty"` // 列表填充
 }
 
 func (UserAiFreeQuota) TableName() string { return "user_ai_free_quotas" }
@@ -138,11 +138,27 @@ func ListUserAiFreeQuotas() ([]UserAiFreeQuota, error) {
 }
 
 // EffectiveAiFreeLimit 用户生效的免费额度（按人覆盖优先）
+// memberFreeQuotaMultiplier 会员每日免费额度倍数（会员权益之一）
+const memberFreeQuotaMultiplier = 2
+
+// EffectiveAiFreeLimit 有效每日免费额度。
+// 优先级：按人覆盖 > 会员倍数 > 平台默认。
+// 按人覆盖排在最前：站长给某人单独配的额度应当精确生效，不能再被会员倍数放大。
 func EffectiveAiFreeLimit(userID uint) (calls, tokens int) {
 	cfg := GetAiFreeQuotaConfig()
 	calls, tokens = cfg.CallsPerDay, cfg.MaxTokensPerDay
 	if o := GetUserAiFreeQuotaOverride(userID); o != nil {
 		calls, tokens = o.DailyCalls, o.DailyTokens
+		return calls, tokens
+	}
+	// 0 = 不提供 / 不限，语义特殊，不参与放大
+	if DB != nil && userID > 0 && IsMember(userID) {
+		if calls > 0 {
+			calls *= memberFreeQuotaMultiplier
+		}
+		if tokens > 0 {
+			tokens *= memberFreeQuotaMultiplier
+		}
 	}
 	return calls, tokens
 }
@@ -219,11 +235,11 @@ func CheckAiFreeQuota(userID uint, estTokens int) (eligible bool, callsLeft, tok
 // AiFreeQuotaSummary 用户免费额度摘要（handler 组装响应用）
 type AiFreeQuotaSummary struct {
 	Enabled     bool  `json:"enabled"`
-	CallsLeft   int   `json:"calls_left"`   // -1=不限
-	TokensLeft  int   `json:"tokens_left"`  // -1=不限
+	CallsLeft   int   `json:"calls_left"`  // -1=不限
+	TokensLeft  int   `json:"tokens_left"` // -1=不限
 	UsedCalls   int64 `json:"used_calls"`
 	UsedTokens  int64 `json:"used_tokens"`
-	CallsPerDay int   `json:"calls_per_day"`     // 生效上限（-1 不限）
+	CallsPerDay int   `json:"calls_per_day"`      // 生效上限（-1 不限）
 	MaxTokens   int   `json:"max_tokens_per_day"` // 生效上限（-1 不限）
 }
 
@@ -233,9 +249,9 @@ func SummarizeAiFreeQuota(userID uint) AiFreeQuotaSummary {
 	usedCalls, usedTokens := GetTodayAiFreeUsage(userID)
 	eligible, callsLeft, tokensLeft := CheckAiFreeQuota(userID, 0)
 	s := AiFreeQuotaSummary{
-		Enabled:     IsAiFreeQuotaEnabled(),
-		CallsLeft:   0, TokensLeft: 0,
-		UsedCalls:   usedCalls, UsedTokens: usedTokens,
+		Enabled:   IsAiFreeQuotaEnabled(),
+		CallsLeft: 0, TokensLeft: 0,
+		UsedCalls: usedCalls, UsedTokens: usedTokens,
 		CallsPerDay: calls, MaxTokens: tokens,
 	}
 	if !IsAiFreeQuotaEnabled() || calls == 0 {

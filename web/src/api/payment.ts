@@ -10,7 +10,22 @@ export interface PaymentChannel {
 export interface PaymentTier {
   fen: number; // 面额（分）
   bonus: number; // 赠送代币
-  label: string; // 展示名（如「10 元」）
+  label: string; // 展示名（如「月卡」）
+  days?: number; // 会员天数（0/缺省 = 纯充值，不加时长）
+  badge?: string; // 角标：推荐 / 最超值
+  features?: string[]; // 权益说明（会员页逐条展示）
+}
+export interface MembershipStatus {
+  is_member: boolean;
+  until?: string;
+  days_left: number;
+}
+export interface MembershipInfo {
+  status: MembershipStatus;
+  tiers: PaymentTier[];
+  token_per_fen: number;
+  payment_enabled: boolean;
+  token_enabled: boolean;
 }
 export interface PaymentStatus {
   enabled: boolean;
@@ -32,6 +47,7 @@ export interface PaymentOrder {
   expires_at: string;
   paid_at: string | null;
   pay_url?: string;
+  member_days?: number;
 }
 export interface PaymentOrderItem extends PaymentOrder {
   id: number;
@@ -79,6 +95,10 @@ export const paymentApi = {
   // 用户侧
   status() {
     return api.get<{ code: number; data: PaymentStatus }>('/payment/status');
+  },
+  /** 会员页初始化：我的会员状态 + 在售套餐 + 支付可用性 */
+  membership() {
+    return api.get<{ code: number; data: MembershipInfo }>('/membership');
   },
   createOrder(data: { channel: string; fen: number }) {
     return api.post<{ code: number; data: PaymentOrder }>('/payment/order', data);

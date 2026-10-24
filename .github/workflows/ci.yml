@@ -29,6 +29,11 @@ jobs:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
 
+      # 前端路由首段必须全部登记到 knownSPARoots，否则直接访问/刷新会 404
+      # （点链接进得去、刷新就挂，是最难自查的一类回归）
+      - name: SPA 回退白名单校验
+        run: bash scripts/check-spa-roots.sh
+
       - name: go build
         working-directory: server
         run: go build ./...

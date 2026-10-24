@@ -105,26 +105,46 @@
       </p>
     </el-card>
 
-    <!-- 档位管理 -->
+    <!-- 会员套餐 / 充值档位 -->
     <el-card shadow="never" class="cfg-card">
       <div class="card-title">
-        充值档位
-        <span class="muted small">（用户只能选择固定面额，赠送代币按比例另算）</span>
+        会员套餐
+        <span class="muted small">
+          （天数为 0 = 纯充值档位，不延长会员；天数 &gt; 0 会在支付到账时同事务延长会员有效期）
+        </span>
       </div>
-      <el-table :data="tiers" size="small" border style="max-width: 640px">
-        <el-table-column label="面额（分）" width="150">
+      <el-table :data="tiers" size="small" border style="max-width: 980px">
+        <el-table-column label="面额（分）" width="140">
           <template #default="{ row }">
-            <el-input-number v-model="row.fen" :min="100" :max="100000000" :step="100" size="small" controls-position="right" style="width: 130px" />
+            <el-input-number v-model="row.fen" :min="100" :max="100000000" :step="100" size="small" controls-position="right" style="width: 120px" />
           </template>
         </el-table-column>
-        <el-table-column label="赠送代币" width="150">
+        <el-table-column label="赠送代币" width="130">
           <template #default="{ row }">
-            <el-input-number v-model="row.bonus" :min="0" :step="10" size="small" controls-position="right" style="width: 130px" />
+            <el-input-number v-model="row.bonus" :min="0" :step="10" size="small" controls-position="right" style="width: 110px" />
           </template>
         </el-table-column>
-        <el-table-column label="展示名">
+        <el-table-column label="展示名" width="150">
           <template #default="{ row }">
-            <el-input v-model="row.label" maxlength="16" size="small" style="width: 140px" />
+            <el-input v-model="row.label" maxlength="16" size="small" style="width: 130px" />
+          </template>
+        </el-table-column>
+        <el-table-column label="会员天数" width="120">
+          <template #default="{ row }">
+            <el-input-number v-model="row.days" :min="0" :max="3650" size="small" controls-position="right" style="width: 100px" />
+          </template>
+        </el-table-column>
+        <el-table-column label="角标" width="110">
+          <template #default="{ row }">
+            <el-input v-model="row.badge" maxlength="8" size="small" placeholder="推荐" style="width: 90px" />
+          </template>
+        </el-table-column>
+        <!-- 权益用弹窗编辑：内联 textarea 在表格里会挤成一条线，站长根本改不了 -->
+        <el-table-column label="权益" width="110">
+          <template #default="{ row, $index }">
+            <el-button text type="primary" size="small" @click="openFeatures($index)">
+              {{ (row.features || []).length }} 条
+            </el-button>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="80">
@@ -134,10 +154,36 @@
         </el-table-column>
       </el-table>
       <div class="tier-actions">
-        <el-button size="small" :icon="Plus" @click="tiers.push({ fen: 1000, bonus: 0, label: '10 元' })">添加档位</el-button>
-        <el-button type="primary" size="small" :loading="tiersSaving" @click="saveTiers">保存档位（立即生效，仅影响新订单）</el-button>
+        <el-button
+          size="small"
+          :icon="Plus"
+          @click="tiers.push({ fen: 1000, bonus: 0, label: '新套餐', days: 0, badge: '', features: [] })"
+        >添加套餐</el-button>
+        <el-button type="primary" size="small" :loading="tiersSaving" @click="saveTiers">
+          保存（立即生效，仅影响新订单）
+        </el-button>
       </div>
     </el-card>
+
+    <!-- 权益编辑 -->
+    <el-dialog v-model="featuresVisible" title="编辑权益说明" width="520px">
+      <p class="muted small" style="margin-top:0">
+        一行一条，会员页会按顺序逐条展示。不要在这里写"赠送多少代币"——代币由兑换比例实时换算，
+        写死会与实际到账不一致。
+      </p>
+      <el-input
+        v-model="featuresText"
+        type="textarea"
+        :rows="6"
+        maxlength="400"
+        show-word-limit
+        placeholder="会员 30 天&#10;每日免费 AI 次数 ×2"
+      />
+      <template #footer>
+        <el-button @click="featuresVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveFeatures">保存</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 订单列表 -->
     <el-card shadow="never" class="cfg-card">
@@ -288,10 +334,43 @@ async function saveConfig() {
   saving.value = false;
 }
 
+// ---------- 权益弹窗 ----------
+const featuresVisible = ref(false);
+const featuresText = ref('');
+const featuresIndex = ref(-1);
+
+function openFeatures(i: number) {
+  featuresIndex.value = i;
+  featuresText.value = (tiers.value[i].features || []).join('\n');
+  featuresVisible.value = true;
+}
+
+function saveFeatures() {
+  const i = featuresIndex.value;
+  if (i < 0 || !tiers.value[i]) return;
+  tiers.value[i].features = featuresText.value
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+  featuresVisible.value = false;
+}
+
 async function saveTiers() {
   tiersSaving.value = true;
   try {
-    const res = await paymentApi.setTiers(tiers.value.map((t) => ({ fen: Number(t.fen), bonus: Number(t.bonus), label: t.label.trim() })));
+    // ⚠️ 必须整条透传：早期这里只挑 fen/bonus/label，结果站长一保存，
+    // 套餐的 days / badge / features 全被抹掉，会员页瞬间退回"纯充值"。
+    const res = await paymentApi.setTiers(
+      tiers.value.map((t) => ({
+        fen: Number(t.fen),
+        bonus: Number(t.bonus),
+        label: String(t.label || '').trim(),
+        days: Number(t.days || 0),
+        badge: String(t.badge || '').trim(),
+        features: (t.features || []).map((f) => String(f).trim()).filter(Boolean),
+      })),
+    );
     if (res.data.code === 0) {
       ElMessage.success('档位已保存（立即生效）');
       await load();

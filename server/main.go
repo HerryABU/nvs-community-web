@@ -68,6 +68,9 @@ var knownSPARoots = map[string]bool{
 	"about": true, "ai": true, "api-spider": true, "feed": true,
 	"me": true, "messages": true, "my-keys": true, "police-console": true,
 	"reading": true, "topics": true, "user": true, "wallet": true,
+	// 新增页面漏登记会直接 404（且只在「直接访问/刷新」时暴露，点链接进去是正常的），
+	// 属于最难自查的一类回归。CI 里有 `make spa-roots-check` 做前后端对撞。
+	"membership": true, "collab": true, "live": true,
 }
 
 // firstPathSegment 返回去前导斜杠后的路径首段，如 "novel/1"→"novel"，"admin"→"admin"
@@ -380,6 +383,8 @@ func main() {
 		protected.GET("/payment/order/:no", handlers.PaymentOrderStatus)
 		protected.GET("/payment/orders", handlers.PaymentMyOrders)
 		protected.POST("/payment/mock/confirm", security.RateLimit(20, 60), handlers.PaymentMockConfirm)
+		// 会员套餐：状态 + 在售套餐 + 支付可用性（会员页一次拉齐）
+		protected.GET("/membership", handlers.MembershipInfo)
 		// AI 调用（§5.3）：可用性/预估/补全计费（限流防刷）
 		protected.GET("/ai/status", handlers.AiStatus)
 		protected.POST("/ai/estimate", security.RateLimit(60, 60), handlers.AiEstimate)

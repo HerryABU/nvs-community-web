@@ -183,3 +183,21 @@ func PaymentMockConfirm(c *gin.Context) {
 		"balance":      models.GetTokenBalance(userID),
 	})
 }
+
+// ==================== 会员套餐 ====================
+
+// MembershipInfo GET /api/membership — 会员页初始化数据
+//
+// 一次请求返回「我的会员状态 + 在售套餐 + 支付可用性」：
+// 会员页是首屏，分成三次请求会出现"卡片先出来、按钮后变灰"的跳变。
+func MembershipInfo(c *gin.Context) {
+	uid := currentUserID(c)
+	cfg := models.GetPaymentConfig()
+	utils.Success(c, gin.H{
+		"status":          models.GetMembershipStatus(uid),
+		"tiers":           models.GetPaymentTiers(),
+		"token_per_fen":   cfg.TokenPerFen,
+		"payment_enabled": models.IsPaymentEnabled(),
+		"token_enabled":   models.IsTokenEnabled(),
+	})
+}

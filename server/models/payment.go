@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -69,10 +70,10 @@ var PayStatusLabels = map[string]string{
 
 // PaymentConfig 支付通道配置（secret 只写不读：管理端 GET 不返回明文）
 type PaymentConfig struct {
-	Provider     string `json:"provider"`      // mock / aggregate
-	GatewayURL   string `json:"gateway_url"`   // 聚合网关下单地址
-	AppID        string `json:"app_id"`        // 商户 ID（pid）
-	Secret       string `json:"secret"`        // 商户密钥（验签用，GET 时掩码）
+	Provider    string `json:"provider"`      // mock / aggregate
+	GatewayURL  string `json:"gateway_url"`   // 聚合网关下单地址
+	AppID       string `json:"app_id"`        // 商户 ID（pid）
+	Secret      string `json:"secret"`        // 商户密钥（验签用，GET 时掩码）
 	NotifyURL   string `json:"notify_url"`    // 异步通知地址（公网可达）
 	ReturnURL   string `json:"return_url"`    // 支付完成后跳转地址
 	TokenPerFen int64  `json:"token_per_fen"` // 每 1 分钱兑换代币数（默认 10 → 1 元 = 1000）
@@ -124,21 +125,34 @@ func normalizePaymentConfig(cfg PaymentConfig) PaymentConfig {
 	return cfg
 }
 
-// PaymentTier 充值档位（固定面额 + 赠送代币）
+// PaymentTier 会员套餐（面额 + 赠送代币 + 会员时长）
+//
+// 历史背景：它最早只是「充值档位」（面额 + 赠送代币），没有时长概念。
+// 参考 SparkAi 类站点的会员页（天卡/周卡/月卡 + 权益清单）后扩展为套餐：
+// Days=0 的档位仍是纯充值（兼容老配置），Days>0 的档位会同时延长会员有效期。
 type PaymentTier struct {
-	Fen   int64  `json:"fen"`   // 面额（分）
-	Bonus int64  `json:"bonus"` // 赠送代币
-	Label string `json:"label"` // 展示名（如「10 元」）
+	Fen      int64    `json:"fen"`                // 面额（分）
+	Bonus    int64    `json:"bonus"`              // 赠送代币
+	Label    string   `json:"label"`              // 展示名（如「月卡」）
+	Days     int      `json:"days,omitempty"`     // 会员有效天数（0 = 纯充值，不加时长）
+	Badge    string   `json:"badge,omitempty"`    // 角标：推荐 / 最超值 / 限时
+	Features []string `json:"features,omitempty"` // 权益说明（前端逐条展示）
 }
 
-// DefaultPaymentTiers 默认档位
+// DefaultPaymentTiers 默认套餐：天 / 周 / 月 / 季。
+//
+// 权益里刻意不写「赠送多少代币」——那由 TokenPerFen 实时换算（默认 1 元 = 1000），
+// 写死在文案里一旦站长改了比例就会与实际到账不一致。
 func DefaultPaymentTiers() []PaymentTier {
 	return []PaymentTier{
-		{Fen: 100, Bonus: 0, Label: "1 元"},
-		{Fen: 500, Bonus: 60, Label: "5 元"},
-		{Fen: 1000, Bonus: 150, Label: "10 元"},
-		{Fen: 5000, Bonus: 1000, Label: "50 元"},
-		{Fen: 10000, Bonus: 2800, Label: "100 元"},
+		{Fen: 600, Bonus: 0, Label: "天卡体验", Days: 1,
+			Features: []string{"会员 1 天", "每日免费 AI 次数 ×2", "全部对话 / 绘画 / 视频模型"}},
+		{Fen: 1200, Bonus: 0, Label: "周卡特惠", Days: 7,
+			Features: []string{"会员 7 天", "每日免费 AI 次数 ×2", "额度按周结算更省"}},
+		{Fen: 3800, Bonus: 0, Label: "月卡", Days: 30, Badge: "推荐",
+			Features: []string{"会员 30 天", "每日免费 AI 次数 ×2", "优先使用高峰期通道"}},
+		{Fen: 9800, Bonus: 0, Label: "季卡", Days: 90, Badge: "最超值",
+			Features: []string{"会员 90 天", "每日免费 AI 次数 ×2", "折合每月更便宜"}},
 	}
 }
 
@@ -211,6 +225,20 @@ func ValidatePaymentTiers(tiers []PaymentTier) error {
 		if len([]rune(strings.TrimSpace(t.Label))) == 0 || len([]rune(t.Label)) > 16 {
 			return fmt.Errorf("档位展示名需在 1 ~ 16 字之间")
 		}
+		if t.Days < 0 || t.Days > 3650 {
+			return fmt.Errorf("会员天数需在 0 ~ 3650 之间（0 表示纯充值）")
+		}
+		if len([]rune(t.Badge)) > 8 {
+			return fmt.Errorf("角标不超过 8 字")
+		}
+		if len(t.Features) > 8 {
+			return fmt.Errorf("权益条目不超过 8 条")
+		}
+		for _, f := range t.Features {
+			if len([]rune(f)) > 40 {
+				return fmt.Errorf("单条权益说明不超过 40 字")
+			}
+		}
 	}
 	return nil
 }
@@ -246,19 +274,21 @@ func TierTokenAmount(t PaymentTier, tokenPerFen int64) int64 {
 
 // RechargeOrder 在线充值订单
 type RechargeOrder struct {
-	ID            uint       `gorm:"primaryKey" json:"id"`
-	OrderNo       string     `gorm:"size:32;uniqueIndex;not null" json:"order_no"`   // 平台订单号
-	UserID        uint       `gorm:"index;not null" json:"user_id"`                  // 下单用户
-	Channel       string     `gorm:"size:16;not null" json:"channel"`                // wechat/alipay/mock
-	Provider      string     `gorm:"size:16;not null;default:mock" json:"provider"`  // mock/aggregate
-	AmountFen     int64      `gorm:"not null" json:"amount_fen"`                     // 实付金额（分）
-	TokenAmount   int64      `gorm:"not null" json:"token_amount"`                   // 到账代币
+	ID          uint   `gorm:"primaryKey" json:"id"`
+	OrderNo     string `gorm:"size:32;uniqueIndex;not null" json:"order_no"`  // 平台订单号
+	UserID      uint   `gorm:"index;not null" json:"user_id"`                 // 下单用户
+	Channel     string `gorm:"size:16;not null" json:"channel"`               // wechat/alipay/mock
+	Provider    string `gorm:"size:16;not null;default:mock" json:"provider"` // mock/aggregate
+	AmountFen   int64  `gorm:"not null" json:"amount_fen"`                    // 实付金额（分）
+	TokenAmount int64  `gorm:"not null" json:"token_amount"`                  // 到账代币
+	// 会员天数快照：下单时从档位取值，避免事后站长改档位影响已下单未支付的订单
+	MemberDays    int        `gorm:"not null;default:0" json:"member_days"`
 	Status        string     `gorm:"size:16;not null;default:pending;index" json:"status"` // pending/paid/failed/closed
-	PayURL        string     `gorm:"type:text" json:"pay_url"`                       // 收银台地址（mock 为站内模拟页）
-	TransactionID string     `gorm:"size:64;default:'';index" json:"transaction_id"` // 渠道流水号
-	ExpiresAt     time.Time  `gorm:"index" json:"expires_at"`                        // 过期时间
-	PaidAt        *time.Time `json:"paid_at"`                                       // 到账时间
-	NotifyRaw     string     `gorm:"type:text" json:"notify_raw"`                    // 回调原始报文（存证）
+	PayURL        string     `gorm:"type:text" json:"pay_url"`                             // 收银台地址（mock 为站内模拟页）
+	TransactionID string     `gorm:"size:64;default:'';index" json:"transaction_id"`       // 渠道流水号
+	ExpiresAt     time.Time  `gorm:"index" json:"expires_at"`                              // 过期时间
+	PaidAt        *time.Time `json:"paid_at"`                                              // 到账时间
+	NotifyRaw     string     `gorm:"type:text" json:"notify_raw"`                          // 回调原始报文（存证）
 	CreatedAt     time.Time  `gorm:"index" json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
 
@@ -309,6 +339,7 @@ func CreateRechargeOrder(userID uint, channel string, fen int64) (*RechargeOrder
 		Provider:    cfg.Provider,
 		AmountFen:   tier.Fen,
 		TokenAmount: TierTokenAmount(tier, cfg.TokenPerFen),
+		MemberDays:  tier.Days,
 		Status:      PayStatusPending,
 		ExpiresAt:   time.Now().Add(time.Duration(cfg.OrderTTLMin) * time.Minute),
 		CreatedAt:   time.Now(),
@@ -397,6 +428,12 @@ func MarkOrderPaid(orderNo, txnID, notifyRaw string) (*RechargeOrder, bool, erro
 			"pay_order", o.ID, "在线充值（"+PayChannelLabels[o.Channel]+"）", ""); e != nil {
 			return e
 		}
+		// 会员时长与代币在同一事务：避免「钱已到账但会员没生效」这种要人工补单的脏状态
+		if o.MemberDays > 0 {
+			if e := extendMembershipTx(tx, o.UserID, o.MemberDays); e != nil {
+				return e
+			}
+		}
 		order = &o
 		credited = true
 		return nil
@@ -405,6 +442,61 @@ func MarkOrderPaid(orderNo, txnID, notifyRaw string) (*RechargeOrder, bool, erro
 		return nil, false, err
 	}
 	return order, credited, nil
+}
+
+// ---------- 会员 ----------
+
+// extendMembershipTx 在同一事务内延长会员有效期。
+// 起点取「现在」与「现有到期时间」中较晚者：提前续费不会吞掉剩余天数。
+func extendMembershipTx(tx *gorm.DB, userID uint, days int) error {
+	if userID == 0 || days <= 0 {
+		return nil
+	}
+	var u User
+	if err := tx.Select("id", "member_until").Where("id = ?", userID).First(&u).Error; err != nil {
+		return err
+	}
+	base := time.Now()
+	if u.MemberUntil != nil && u.MemberUntil.After(base) {
+		base = *u.MemberUntil
+	}
+	until := base.AddDate(0, 0, days)
+	return tx.Model(&User{}).Where("id = ?", userID).Update("member_until", until).Error
+}
+
+// MembershipStatus 会员状态
+type MembershipStatus struct {
+	IsMember bool       `json:"is_member"`
+	Until    *time.Time `json:"until,omitempty"`
+	DaysLeft int        `json:"days_left"`
+}
+
+// GetMembershipStatus 读取会员状态。只选必要列，避免把用户整行（含密文）读出来。
+func GetMembershipStatus(userID uint) MembershipStatus {
+	st := MembershipStatus{}
+	if userID == 0 {
+		return st
+	}
+	var u User
+	if err := DB.Select("id", "member_until").Where("id = ?", userID).First(&u).Error; err != nil {
+		return st
+	}
+	if u.MemberUntil == nil {
+		return st
+	}
+	now := time.Now()
+	if u.MemberUntil.After(now) {
+		st.IsMember = true
+		st.Until = u.MemberUntil
+		// 向上取整：还剩 12 小时算 1 天，避免显示「0 天」却仍可享受权益
+		st.DaysLeft = int(math.Ceil(u.MemberUntil.Sub(now).Hours() / 24))
+	}
+	return st
+}
+
+// IsMember 当前是否为有效会员
+func IsMember(userID uint) bool {
+	return GetMembershipStatus(userID).IsMember
 }
 
 // appendTokenLedgerTx 在既有事务内追加流水（与 AppendTokenLedger 同逻辑，

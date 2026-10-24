@@ -168,6 +168,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/membership',
+      name: 'membership',
+      component: () => import('@/views/Membership.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/pay/mock/:orderNo',
       name: 'pay-mock',
       component: () => import('@/views/PayMock.vue'),
