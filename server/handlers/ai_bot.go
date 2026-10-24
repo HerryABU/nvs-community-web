@@ -221,8 +221,16 @@ func generateAiBotReply(triggerUser uint, trigger *models.Comment, cfg models.Ai
 
 // AiBotStatus GET /api/ai/bot/status — 召唤状态与今日剩余次数
 func AiBotStatus(c *gin.Context) {
+	// 「AI 未开启」是正常状态而不是客户端错误：早期这里返回 400，
+	// 结果是每个带评论区的页面都会在控制台打一条 4xx（还会被后台异常横幅统计进来）。
+	// 现在统一 200 + enabled=false，前端只判断 enabled 即可。
 	if !models.IsAiEnabled() {
-		utils.BadRequest(c, "AI 功能未开启")
+		utils.Success(c, gin.H{
+			"ai_enabled": false,
+			"enabled":    false,
+			"used":       0,
+			"daily_left": 0,
+		})
 		return
 	}
 	cfg := models.GetAiBotConfig()
@@ -258,10 +266,10 @@ func AdminSetAiBotConfig(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Enabled   bool   `json:"enabled"`
-		DailyLimit int   `json:"daily_limit"`
-		AgentID   uint   `json:"agent_id"`
-		Signature string `json:"signature"`
+		Enabled    bool   `json:"enabled"`
+		DailyLimit int    `json:"daily_limit"`
+		AgentID    uint   `json:"agent_id"`
+		Signature  string `json:"signature"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")

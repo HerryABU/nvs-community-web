@@ -594,6 +594,16 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
   编辑弹窗补 `police` 选项与审计路径提示。
 - 修 `AdminAiPool` 缺 `adminApi` 导入、`AdminDatabase` 残留的不存在函数 `loadHealth()`、
   `AdminAiBot` 调错接口名（`adminListAgents`→`adminAgents`）、`AiAssistPanel` emits 缺 `meta` 参数。
+- `GET /api/ai/bot/status`：「AI 未开启」不再返回 400，改 200 + `enabled:false`
+  （原实现让每个带评论区的页面都在控制台留一条 4xx，且会被后台异常横幅统计）。
+
+**验收脚本**
+- `scripts/browser-smoke.mjs`：真浏览器四档宽度（375/768/1024/1440）回归，
+  断言 `scrollWidth` 无横向溢出、关键元素存在且可见、`/api/*` 无失败、console 无错误，
+  截图与 `report.json` 落盘。非 `/api` 的 404 记为「提示」（test_go 里存有攻击性测试数据）。
+- `scripts/browser-func.mjs`：功能级回归——资料卡保存并回读落库、作者主页四分栏可切、
+  评论排序真的带 `sort=` 参数、密度切换真的改 DOM 高度、朗读真的请求 `/api/ai/speech`
+  且失败时有可读提示、按钮不会永久转圈。
 
 ### v3.20.1 蜜罐收回归内嵌主程序（2026-10-24）
 
