@@ -161,7 +161,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { Collection } from '@element-plus/icons-vue';
 import { aiHubApi, type AiHubModel, type AiHubStatus } from '@/api/aiHub';
 import AiPromptLibrary from '@/components/ai/AiPromptLibrary.vue';
@@ -271,7 +271,7 @@ function onPickRef(e: Event) {
   reader.readAsDataURL(f);
 }
 
-async function generate() {
+async function generate(confirmed = false) {
   if (!modelId.value) {
     ElMessage.warning('请先选择模型');
     return;
@@ -294,6 +294,7 @@ async function generate() {
       n: n.value,
       mode: mode.value,
       ref_images: refImages.value.length ? refImages.value : undefined,
+      confirm: confirmed || undefined,
     });
     if (res.data.code === 0) {
       lastImages.value = res.data.data.images || [];
@@ -304,7 +305,20 @@ async function generate() {
       ElMessage.success('生成成功');
     }
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.message || '生成失败');
+    const code = e?.response?.data?.code;
+    const msg = e?.response?.data?.message || '生成失败';
+    if (code === 42801 && !confirmed) {
+      generating.value = false;
+      try {
+        await ElMessageBox.confirm(msg, '确认消耗', { type: 'warning', confirmButtonText: '确认并继续', cancelButtonText: '取消' });
+        await generate(true);
+        return;
+      } catch {
+        ElMessage.info('已取消');
+        return;
+      }
+    }
+    ElMessage.error(msg);
   }
   generating.value = false;
 }

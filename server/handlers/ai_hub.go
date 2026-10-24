@@ -122,6 +122,7 @@ func AiHubChatStream(c *gin.Context) {
 		// 自备密钥（§5.5 BYOK）：byok=true 时用用户自带上游，不扣平台代币
 		Byok      bool   `json:"byok"`
 		ByokModel string `json:"byok_model"`
+		Confirm   bool   `json:"confirm"` // 二次确认：预估超阈值时前端确认后置 true
 		ByokKeyID uint   `json:"byok_key_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -248,6 +249,20 @@ func AiHubChatStream(c *gin.Context) {
 			cost := models.EstimateAiCost(m, tokensIn, tokensOut)
 			utils.Error(c, 429, 42902, fmt.Sprintf("%s不足：本次约需 %d，当前余额 %d，请先充值",
 				models.GetTokenName(), cost, models.GetTokenBalance(userID)))
+			return
+		}
+	}
+
+	// ── 资金闸门：单次上限 + 二次确认（BYOK 不涉平台代币，跳过） ──
+	if !req.Byok && !freeOK {
+		estCost := models.EstimateAiCost(m, tokensIn, tokensOut)
+		allowed, needConfirm, reason := models.CallGuard(estCost, req.Confirm)
+		if !allowed {
+			utils.BadRequest(c, reason+"（未扣款）")
+			return
+		}
+		if needConfirm {
+			utils.Error(c, 428, 42801, reason+"，请确认后重试")
 			return
 		}
 	}

@@ -32,6 +32,7 @@ func AiHubVideoSubmit(c *gin.Context) {
 		Byok      bool   `json:"byok"`
 		ByokModel string `json:"byok_model"`
 		ByokKeyID uint   `json:"byok_key_id"`
+		Confirm   bool   `json:"confirm"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -60,6 +61,18 @@ func AiHubVideoSubmit(c *gin.Context) {
 	}
 	// 免费额度优先（按次消耗 1 次）
 	freeOK, _, _ := models.CheckAiFreeQuota(userID, 0)
+	// 资金闸门：按次单价的单次上限与二次确认
+	if !freeOK && !req.Byok && m.PriceCall > 0 {
+		allowed, needConfirm, reason := models.CallGuard(m.PriceCall, req.Confirm)
+		if !allowed {
+			utils.BadRequest(c, reason+"（未扣款）")
+			return
+		}
+		if needConfirm {
+			utils.Error(c, 428, 42801, reason+"，请确认后重试")
+			return
+		}
+	}
 	// 非免费预检：余额 ≥ 单次价（BYOK 不扣平台代币）
 	if !freeOK && !req.Byok {
 		if !models.IsTokenEnabled() {

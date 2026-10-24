@@ -117,11 +117,11 @@ export const aiHubApi = {
   image(data: {
     model_id: number; prompt: string; size?: string; ratio?: string; style?: string; n?: number;
     mode?: 't2i' | 'i2i' | 'faceswap'; ref_images?: string[];
-    byok?: boolean; byok_model?: string;
+    byok?: boolean; byok_model?: string; confirm?: boolean;
   }) {
     return api.post<{ code: number; data: { task_id: number; images: string[]; cost: number; free?: boolean; byok?: boolean; balance_after: number } }>('/ai/image', data);
   },
-  videoSubmit(data: { model_id: number; prompt: string; duration?: number; size?: string; byok?: boolean; byok_model?: string }) {
+  videoSubmit(data: { model_id: number; prompt: string; duration?: number; size?: string; byok?: boolean; byok_model?: string; confirm?: boolean }) {
     return api.post<{ code: number; data: { task_id: number; status: string; cost: number; free?: boolean; byok?: boolean; balance_after: number } }>('/ai/video', data);
   },
   videoStatus(id: number) {
@@ -177,7 +177,7 @@ export const aiHubApi = {
 
 /** 流式对话：fetch 读取 SSE，onChunk 收增量，返回最终结果 */
 export async function streamChat(
-  payload: { session_id?: number; model_id: number; agent_id?: number; message: string; max_tokens?: number; byok?: boolean; byok_model?: string },
+  payload: { session_id?: number; model_id: number; agent_id?: number; message: string; max_tokens?: number; byok?: boolean; byok_model?: string; confirm?: boolean },
   onChunk: (text: string) => void,
   signal?: AbortSignal,
 ): Promise<{ content: string; cost: number; free?: boolean; balance_after: number; session_id: number } | null> {
@@ -191,11 +191,17 @@ export async function streamChat(
   });
   if (!resp.ok || !resp.body) {
     let msg = `请求失败（${resp.status}）`;
+    let code = 0;
     try {
       const err = await resp.json();
       if (err?.message) msg = err.message;
+      if (typeof err?.code === 'number') code = err.code;
     } catch { /* ignore */ }
-    throw new Error(msg);
+    // 携带业务错误码，供上层区分「需二次确认（42801）」等场景
+    const e = new Error(msg) as Error & { code?: number; status?: number };
+    e.code = code;
+    e.status = resp.status;
+    throw e;
   }
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();

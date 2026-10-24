@@ -105,7 +105,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { CopyDocument, RefreshRight, Collection } from '@element-plus/icons-vue';
 import { renderAiMarkdown } from '@/markdown/renderer';
 import AiPromptLibrary from '@/components/ai/AiPromptLibrary.vue';
@@ -256,7 +256,7 @@ watch(
   { immediate: true },
 );
 
-async function send(rawText?: string) {
+async function send(rawText?: string, confirmed = false) {
   const isRetry = typeof rawText === 'string';
   const text = (isRetry ? rawText : inputText.value).trim();
   if (!text || generating.value) return;
@@ -293,6 +293,7 @@ async function send(rawText?: string) {
         max_tokens: maxTokens.value,
         byok: useByok.value || undefined,
         byok_model: useByok.value ? byokModel.value.trim() : undefined,
+        confirm: confirmed || undefined,
       },
       (chunk) => {
         streamingText.value += chunk;
@@ -314,6 +315,23 @@ async function send(rawText?: string) {
       emit('sessions-changed');
     }
   } catch (e: any) {
+    // 42801：预估超阈值，需二次确认（后端未扣款）
+    if (e?.code === 42801 && !confirmed) {
+      try {
+        await ElMessageBox.confirm(String(e.message || '本次调用消耗较高，确认继续？'), '确认消耗', {
+          type: 'warning',
+          confirmButtonText: '确认并继续',
+          cancelButtonText: '取消',
+        });
+        generating.value = false;
+        if (streamTimer) { window.clearTimeout(streamTimer); streamTimer = null; }
+        streamingText.value = '';
+        await send(text, true);
+        return;
+      } catch {
+        ElMessage.info('已取消');
+      }
+    }
     if (e?.name === 'AbortError') {
       // 用户主动停止：保留已流式内容为一条助手消息
       if (streamingText.value) {

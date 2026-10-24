@@ -52,6 +52,20 @@
         </div>
         <div class="cfg-row">
           <div class="cfg-item">
+            <div class="cfg-name">单次调用上限（代币）</div>
+            <div class="cfg-desc">0 = 不限制；超过直接拒绝，防一次点击烧穿余额</div>
+          </div>
+          <el-input-number v-model="flags.max_cost_per_call" :min="0" :max="1000000" size="small" controls-position="right" />
+        </div>
+        <div class="cfg-row">
+          <div class="cfg-item">
+            <div class="cfg-name">二次确认阈值（代币）</div>
+            <div class="cfg-desc">0 = 不要求；单次预估达到该值弹窗确认后才扣款</div>
+          </div>
+          <el-input-number v-model="flags.confirm_threshold" :min="0" :max="1000000" size="small" controls-position="right" />
+        </div>
+        <div class="cfg-row">
+          <div class="cfg-item">
             <div class="cfg-name">每人每日对话上限</div>
             <div class="cfg-desc">-1 不限 / 0 关闭对话 / N 次（按调用流水统计）</div>
           </div>
@@ -203,6 +217,8 @@ const flags = reactive<AiFeatureFlags>({
   context_msgs: 20,
   daily_chat_limit: -1,
   public_gallery: true,
+  max_cost_per_call: 0,
+  confirm_threshold: 0,
 });
 
 async function loadFlags() {

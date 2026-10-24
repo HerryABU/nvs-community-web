@@ -323,6 +323,8 @@ export interface AiFeatureFlags {
   context_msgs: number;
   daily_chat_limit: number;
   public_gallery: boolean;
+  max_cost_per_call: number;
+  confirm_threshold: number;
 }
 
 /** AI 厂商（含引用计数，便于判断能否删除） */

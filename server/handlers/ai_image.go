@@ -32,6 +32,7 @@ func AiHubImage(c *gin.Context) {
 		Byok      bool   `json:"byok"`
 		ByokModel string `json:"byok_model"`
 		ByokKeyID uint   `json:"byok_key_id"`
+		Confirm   bool   `json:"confirm"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -149,6 +150,18 @@ func AiHubImage(c *gin.Context) {
 	n := req.N
 	if n < 1 || n > 4 {
 		n = 1
+	}
+	// 资金闸门：按 单价 × 张数
+	if est := m.PriceCall * int64(n); est > 0 {
+		allowed, needConfirm, reason := models.CallGuard(est, req.Confirm)
+		if !allowed {
+			utils.BadRequest(c, reason+"（未扣款）")
+			return
+		}
+		if needConfirm {
+			utils.Error(c, 428, 42801, reason+"，请确认后重试")
+			return
+		}
 	}
 	task, terr := models.CreateAiMediaTask(userID, m, models.AiKindImage, prompt, models.AiMediaParams{
 		Size: size, Style: strings.TrimSpace(req.Style), N: n,
