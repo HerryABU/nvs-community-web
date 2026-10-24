@@ -27,45 +27,15 @@
             />
           </template>
           <el-table-column label="用户等级" min-width="120">
-            <template #empty>
-              <StateBlock
-                state="empty"
-                skeleton="table"
-                :rows="4"
-                compact
-                title="暂无数据"
-                description="换个筛选条件试试，或等有数据后再来看。"
-              />
-            </template>
             <template #default="{ row }">{{ PUBLISH_ROLE_LABELS[row.role] || row.role }}</template>
           </el-table-column>
           <el-table-column label="每日发布数量" min-width="220">
-            <template #empty>
-              <StateBlock
-                state="empty"
-                skeleton="table"
-                :rows="4"
-                compact
-                title="暂无数据"
-                description="换个筛选条件试试，或等有数据后再来看。"
-              />
-            </template>
             <template #default="{ row }">
               <el-input-number v-model="row.limit.count" :min="-1" :max="100000" :step="1" size="small" controls-position="right" />
               <span class="muted small">{{ limitText(row.limit.count) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="每日总字数（可选）" min-width="240">
-            <template #empty>
-              <StateBlock
-                state="empty"
-                skeleton="table"
-                :rows="4"
-                compact
-                title="暂无数据"
-                description="换个筛选条件试试，或等有数据后再来看。"
-              />
-            </template>
             <template #default="{ row }">
               <el-input-number v-model="row.limit.word_cap" :min="0" :max="100000000" :step="1000" size="small" controls-position="right" />
               <span class="muted small">{{ row.limit.word_cap > 0 ? `${row.limit.word_cap} 字` : '不限' }}</span>

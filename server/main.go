@@ -298,6 +298,8 @@ func main() {
 		public.GET("/author/profile/:id", handlers.GetAuthorProfile)
 		public.GET("/users/resolve", handlers.ResolveUserByKey) // 用户标识解析（id/用户名，数字是主键）
 		public.GET("/author/forum/:id", handlers.GetAuthorForum)
+		// 公开的「被访问者粉丝/关注数」（注意与 protected 的 /follow/stats 区分：后者是浏览者自己的口径）
+		public.GET("/author/:id/follow-stats", handlers.GetAuthorFollowStats)
 		public.GET("/search/authors", handlers.SearchAuthors)
 		public.GET("/userframes/public", handlers.ListPublicFrames)
 		public.GET("/template/novel/:id", handlers.GetTemplateAPI)

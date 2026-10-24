@@ -70,6 +70,11 @@ jobs:
         working-directory: web
         run: npm ci
 
+      # 模板里用了、脚本里没导入的组件（典型：图标 <ArrowDown />）不会让构建失败，
+      # 只会在运行时静默消失 —— 必须在 CI 里挡住
+      - name: 未定义组件审计
+        run: node scripts/audit-unresolved-components.mjs --strict
+
       - name: vite build
         working-directory: web
         run: npm run build

@@ -340,7 +340,7 @@ import api from '@/api/index';
 import { opsApi, type NavMenuItem } from '@/api/ops';
 import { appPrefix } from '@/utils/prefix';
 import { ElMessage } from 'element-plus';
-import { Camera, Setting, Brush, Document, Warning, Bell, Menu, HomeFilled, ChatDotRound, Plus, Notebook, User, SwitchButton, Connection, Key, Stamp, CircleClose, ChatLineRound, Star, Wallet, MagicStick } from '@element-plus/icons-vue';
+import { Camera, Setting, Brush, Document, Warning, Bell, Menu, HomeFilled, ChatDotRound, Plus, Notebook, User, SwitchButton, Connection, Key, Stamp, CircleClose, ChatLineRound, Star, Wallet, MagicStick, ArrowDown, Search, EditPen } from '@element-plus/icons-vue';
 
 const avatarInput = ref<HTMLInputElement>();
 const router = useRouter();

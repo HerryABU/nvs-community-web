@@ -29,16 +29,6 @@
           <el-table-column prop="url" label="地址" min-width="220" />
           <el-table-column prop="sort_order" label="排序" width="80" />
           <el-table-column label="可见性" width="180">
-            <template #empty>
-              <StateBlock
-                state="empty"
-                skeleton="table"
-                :rows="4"
-                compact
-                title="暂无数据"
-                description="换个筛选条件试试，或等有数据后再来看。"
-              />
-            </template>
             <template #default="{ row }">
               <el-tag v-if="!row.visible" size="small" type="info">隐藏</el-tag>
               <el-tag v-if="row.require_login" size="small" type="warning">需登录</el-tag>
@@ -47,16 +37,6 @@
             </template>
           </el-table-column>
           <el-table-column label="操作" width="200">
-            <template #empty>
-              <StateBlock
-                state="empty"
-                skeleton="table"
-                :rows="4"
-                compact
-                title="暂无数据"
-                description="换个筛选条件试试，或等有数据后再来看。"
-              />
-            </template>
             <template #default="{ row }">
               <el-button text size="small" @click="editMenu(row)">编辑</el-button>
               <el-button text size="small" @click="editMenu({ parent_id: row.id, visible: true, sort_order: 0 })">
@@ -86,16 +66,6 @@
             />
           </template>
           <el-table-column label="图" width="110">
-            <template #empty>
-              <StateBlock
-                state="empty"
-                skeleton="table"
-                :rows="4"
-                compact
-                title="暂无数据"
-                description="换个筛选条件试试，或等有数据后再来看。"
-              />
-            </template>
             <template #default="{ row }">
               <img :src="row.image_url" class="thumb" />
             </template>
@@ -104,46 +74,16 @@
           <el-table-column prop="link_url" label="跳转" min-width="200" />
           <el-table-column prop="sort_order" label="排序" width="80" />
           <el-table-column label="状态" width="100">
-            <template #empty>
-              <StateBlock
-                state="empty"
-                skeleton="table"
-                :rows="4"
-                compact
-                title="暂无数据"
-                description="换个筛选条件试试，或等有数据后再来看。"
-              />
-            </template>
             <template #default="{ row }">
               <el-tag size="small" :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '关闭' }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="时段" width="230">
-            <template #empty>
-              <StateBlock
-                state="empty"
-                skeleton="table"
-                :rows="4"
-                compact
-                title="暂无数据"
-                description="换个筛选条件试试，或等有数据后再来看。"
-              />
-            </template>
             <template #default="{ row }">
               <span class="small">{{ row.start_at ? fmt(row.start_at) : '—' }} ~ {{ row.end_at ? fmt(row.end_at) : '—' }}</span>
             </template>
           </el-table-column>
           <el-table-column label="操作" width="150">
-            <template #empty>
-              <StateBlock
-                state="empty"
-                skeleton="table"
-                :rows="4"
-                compact
-                title="暂无数据"
-                description="换个筛选条件试试，或等有数据后再来看。"
-              />
-            </template>
             <template #default="{ row }">
               <el-button text size="small" @click="editSlide(row)">编辑</el-button>
               <el-button text size="small" type="danger" @click="delSlide(row)">删除</el-button>

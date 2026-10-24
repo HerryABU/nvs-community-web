@@ -231,10 +231,11 @@ const props = defineProps<{
   /** 模板场景（§13.1）：章节编辑器 novel_chapter / 话本形态 novel_script / 博客编辑器 blog */
   scene?: 'novel_chapter' | 'novel_script' | 'blog';
 }>();
+// meta 携带生成本次内容的模型名（父组件用于「AI 参与」留痕）；第二个参数可省略
 const emit = defineEmits<{
   (e: 'update:visible', v: boolean): void;
-  (e: 'insert', text: string): void;
-  (e: 'replace', text: string): void;
+  (e: 'insert', text: string, meta?: { model?: string }): void;
+  (e: 'replace', text: string, meta?: { model?: string }): void;
 }>();
 
 const router = useRouter();

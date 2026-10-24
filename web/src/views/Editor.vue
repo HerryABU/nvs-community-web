@@ -268,7 +268,7 @@ import { novelApi, chapterApi, type Novel, type Chapter } from '@/api/novel';
 import { publicApi } from '@/api/admin';
 import { authApi } from '@/api/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Upload, Plus, UploadFilled } from '@element-plus/icons-vue';
+import { Upload, Plus, UploadFilled, Delete } from '@element-plus/icons-vue';
 
 const route = useRoute();
 const router = useRouter();

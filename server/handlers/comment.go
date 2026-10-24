@@ -18,6 +18,8 @@ func GetComments(c *gin.Context) {
 	chapterNum, _ := strconv.Atoi(c.DefaultQuery("chapter_number", "0"))
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	// 排序：new(默认)/old/hot —— 白名单归一化，不拼用户输入进 SQL
+	sortKey := models.CommentSortOrder(c.Query("sort"))
 
 	// 楼层模型：List = 本页楼层 + 这些楼层下的全部回复（平铺，前端按 root_id 分组成「楼」）
 	// 🔒 警方/管理员取证视图：includeDeleted=true 一并返回已删除评论，前端以红字标注
@@ -25,9 +27,9 @@ func GetComments(c *gin.Context) {
 	var pg models.CommentsPage
 	var err error
 	if blogID > 0 {
-		pg, err = models.GetCommentsByBlog(uint(blogID), page, pageSize, includeDeleted)
+		pg, err = models.GetCommentsByBlog(uint(blogID), page, pageSize, includeDeleted, sortKey)
 	} else {
-		pg, err = models.GetCommentsByNovel(uint(novelID), chapterNum, page, pageSize, includeDeleted)
+		pg, err = models.GetCommentsByNovel(uint(novelID), chapterNum, page, pageSize, includeDeleted, sortKey)
 	}
 	if err != nil {
 		utils.InternalError(c, "获取评论失败")
@@ -50,6 +52,7 @@ func GetComments(c *gin.Context) {
 		"floor_total": pg.FloorTotal,
 		"has_more":    pg.HasMore,
 		"page":        page,
+		"sort":        sortKey,
 	})
 }
 

@@ -1,6 +1,9 @@
 import api from '@/api/index';
 import type { Comment } from './types';
 
+// 评论排序：new=最新楼在前 / old=最早在前 / hot=楼内回复多的在前
+export type CommentSort = 'new' | 'old' | 'hot';
+
 // 楼加密解锁态：楼层 id → 访问密码（sessionStorage 持久化，关页即焚）。
 // 读取加密楼评论/楼详情时以 X-Floor-Password 头携带（密码不进 URL）。
 const FLOOR_PWD_KEY = 'nvs:floor-passwords';
@@ -37,11 +40,12 @@ export function floorPasswordHeaders(items: any[]): Record<string, string> {
 
 export const commentApi = {
   // 楼层模型：list = 本页楼层 + 这些楼层下的全部回复（平铺，前端按 root_id 分组成「楼」）
-  getComments(params: { novel_id: number; blog_id?: number; chapter_number?: number; page?: number; items?: any[] }) {
+  // sort: new(默认，最新楼在前) / old(最早在前) / hot(楼内回复多的在前)；非法值后端回落 new
+  getComments(params: { novel_id: number; blog_id?: number; chapter_number?: number; page?: number; sort?: CommentSort; items?: any[] }) {
     const { items, ...query } = params;
     return api.get<{
       code: number;
-      data: { list: Comment[]; total: number; floor_total: number; has_more: boolean; page: number };
+      data: { list: Comment[]; total: number; floor_total: number; has_more: boolean; page: number; sort?: CommentSort };
     }>('/comments', {
       params: query,
       headers: floorPasswordHeaders(items),

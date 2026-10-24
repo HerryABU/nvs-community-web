@@ -1,6 +1,57 @@
 <template>
   <div class="decorate-page">
-    <!-- ============ 区块一：我的主页装扮（仅本人可见，原始 HTML） ============ -->
+    <!-- ============ 区块一：资料卡（他人看到的主页头部） ============ -->
+    <div class="dec-card">
+      <div class="dec-card-head">
+        <h2>🪪 资料卡</h2>
+        <div class="dec-head-right">
+          <el-tag size="small" type="success">所有人可见</el-tag>
+          <el-button size="small" text @click="openPublicPage">看看别人怎么看到我 →</el-button>
+        </div>
+      </div>
+
+      <div class="prof-layout">
+        <div class="prof-avatar-col">
+          <el-avatar :size="88" :src="form.avatar_url || ''">
+            {{ (form.nickname || authStore.user?.username || 'A')[0] }}
+          </el-avatar>
+          <el-input
+            v-model="form.avatar_url"
+            size="small"
+            placeholder="/uploads/xxx.png 或 https://…"
+            class="prof-avatar-input"
+          />
+          <div class="prof-avatar-tip">站内上传路径或图片直链</div>
+        </div>
+
+        <div class="prof-fields">
+          <el-form label-width="72px" label-position="left">
+            <el-form-item label="昵称">
+              <el-input v-model="form.nickname" maxlength="32" show-word-limit placeholder="别人看到的名字" />
+            </el-form-item>
+            <el-form-item label="一句话签名">
+              <el-input v-model="form.signature" maxlength="128" show-word-limit placeholder="如：写故事的人，偶尔写代码" />
+            </el-form-item>
+            <el-form-item label="简介">
+              <el-input
+                v-model="form.bio"
+                type="textarea"
+                :rows="3"
+                maxlength="500"
+                show-word-limit
+                placeholder="介绍一下自己：创作方向、更新节奏、想对读者说的话…"
+              />
+            </el-form-item>
+          </el-form>
+          <div class="dec-foot">
+            <span class="dec-tip">资料卡会显示在 <code>/author/{{ authStore.user?.id }}</code> 主页顶部</span>
+            <el-button type="primary" :loading="savingProfile" @click="saveProfile">保存资料</el-button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 区块二：我的主页装扮（仅本人可见，原始 HTML） ============ -->
     <div class="dec-card">
       <div class="dec-card-head">
         <h2>🎨 我的主页装扮</h2>
@@ -15,7 +66,7 @@
       <el-input
         v-model="myRaw"
         type="textarea"
-        :rows="12"
+        :rows="10"
         class="dec-editor"
         placeholder="在此粘贴 / 编写自定义 HTML 片段，例如：&#10;<div style=&quot;padding:16px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-radius:12px&quot;>&#10;  &lt;h2&gt;欢迎来到我的主页&lt;/h2&gt;&#10;&lt;/div&gt;"
         @keydown="onMyKeydown"
@@ -33,7 +84,7 @@
       </el-collapse>
     </div>
 
-    <!-- ============ 区块二：作者公开主页（消毒 + 站长审核） ============ -->
+    <!-- ============ 区块三：作者公开主页（消毒 + 站长审核） ============ -->
     <div class="dec-card">
       <div class="dec-card-head">
         <h2>🌐 作者公开主页</h2>
@@ -41,7 +92,7 @@
       </div>
       <el-alert type="warning" :closable="false" show-icon class="dec-hint">
         <template #title>对外可见 · 需消毒与审核</template>
-        他人访问你的作者主页时会看到这段内容。提交后服务端会<b>自动消毒</b>（剥离脚本 / 危险 CSS），
+        他人访问你的作者主页时会看到这段内容（作为主页<b>封面</b>展示）。提交后服务端会<b>自动消毒</b>（剥离脚本 / 危险 CSS），
         并进入<b>站长 / 管理员审核</b>队列。若预检发现需清理的内容，原文会一并送站长复核。
       </el-alert>
 
@@ -56,7 +107,7 @@
       <el-input
         v-model="authorRaw"
         type="textarea"
-        :rows="12"
+        :rows="10"
         class="dec-editor"
         placeholder="在此编写对外展示的作者主页片段（将自动消毒后送审）"
         @keydown="onAuthorKeydown"
@@ -97,13 +148,20 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { authApi } from '@/api/auth';
 import { homeCustomizeApi, type AuthorSubmitResult } from '@/api/homeCustomize';
 import { editorKeydownHandler, HTML_TOKENS } from '@/utils/editorShortcuts';
 import { ElMessage } from 'element-plus';
 
+const router = useRouter();
 const authStore = useAuthStore();
 const authorId = ref(0);
+
+// ── 资料卡（昵称 / 签名 / 简介 / 头像）──
+const form = reactive({ nickname: '', signature: '', bio: '', avatar_url: '' });
+const savingProfile = ref(false);
 
 const myRaw = ref('');
 const authorRaw = ref('');
@@ -128,8 +186,19 @@ function statusLabel(s: string) {
   return (s === 'approved' ? '已通过' : s === 'rejected' ? '已驳回' : s === 'pending' ? '待审核' : '未提交') as string;
 }
 
+function openPublicPage() {
+  if (!authorId.value) return;
+  router.push(`/author/${authorId.value}`);
+}
+
 async function load() {
   authorId.value = authStore.user?.id ?? 0;
+  // 资料卡先用登录态里的值铺底（避免接口慢时空白）
+  form.nickname = authStore.user?.nickname || authStore.user?.username || '';
+  form.signature = authStore.user?.signature || '';
+  form.bio = authStore.user?.bio || '';
+  form.avatar_url = authStore.user?.avatar_url || '';
+
   try {
     const res = await homeCustomizeApi.getMyHomeCustomize();
     if (res.data.code === 0) {
@@ -139,7 +208,33 @@ async function load() {
       authorRaw.value = d.author?.raw_html || '';
       authorSafePreview.value = d.author?.safe_html || '';
     }
-  } catch { /* ignore */ }
+  } catch { /* 装扮接口不可用不阻断资料编辑 */ }
+}
+
+async function saveProfile() {
+  const nick = form.nickname.trim();
+  if (!nick) { ElMessage.warning('昵称不能为空'); return; }
+  savingProfile.value = true;
+  try {
+    // 注意：头像传空串 = 清除头像（后端接受空串清空）
+    const res = await authApi.updateProfile({
+      nickname: nick,
+      signature: form.signature.trim(),
+      bio: form.bio.trim(),
+      avatar_url: form.avatar_url.trim(),
+    });
+    if (res.data.code === 0) {
+      ElMessage.success('资料已保存');
+      // 同步登录态，导航栏头像/昵称立即更新
+      await authStore.fetchUser(true);
+    } else {
+      ElMessage.error((res.data as any).message || '保存失败');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  } finally {
+    savingProfile.value = false;
+  }
 }
 
 async function saveMy() {
@@ -149,7 +244,7 @@ async function saveMy() {
     if (res.data.code === 0) {
       ElMessage.success('我的主页装扮已保存');
     } else {
-      ElMessage.error(res.data.message || '保存失败');
+      ElMessage.error((res.data as any).message || '保存失败');
     }
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '保存失败');
@@ -171,7 +266,7 @@ async function submitAuthor() {
       review.author.had_issues = r.had_issues;
       ElMessage.success(r.had_issues ? '已消毒并送站长复核' : '已提交，等待站长审核');
     } else {
-      ElMessage.error(res.data.message || '提交失败');
+      ElMessage.error((res.data as any).message || '提交失败');
     }
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '提交失败');
@@ -179,11 +274,12 @@ async function submitAuthor() {
   submittingAuthor.value = false;
 }
 
-function onMyKeydown(e: KeyboardEvent) {
-  editorKeydownHandler(e, { tokens: HTML_TOKENS, onSave: saveMy });
+// el-input 的 keydown 事件类型是 Event | KeyboardEvent，这里收窄后交快捷键工具处理
+function onMyKeydown(e: Event | KeyboardEvent) {
+  if (e instanceof KeyboardEvent) editorKeydownHandler(e, { tokens: HTML_TOKENS, onSave: saveMy });
 }
-function onAuthorKeydown(e: KeyboardEvent) {
-  editorKeydownHandler(e, { tokens: HTML_TOKENS, onSave: submitAuthor });
+function onAuthorKeydown(e: Event | KeyboardEvent) {
+  if (e instanceof KeyboardEvent) editorKeydownHandler(e, { tokens: HTML_TOKENS, onSave: submitAuthor });
 }
 
 onMounted(load);
@@ -192,34 +288,79 @@ onMounted(load);
 <style scoped>
 .decorate-page { display: flex; flex-direction: column; gap: 20px; }
 .dec-card {
-  background: #fff;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 20px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
 }
-[data-theme="dark"] .dec-card { background: #1e293b; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25); }
-.dec-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.dec-card-head h2 { font-size: 1.15rem; margin: 0; color: var(--primary-color); }
+.dec-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.dec-card-head h2 {
+  font-size: 1.05rem;
+  margin: 0;
+  color: var(--text-color);
+}
+.dec-head-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* 资料卡布局：头像列 + 字段列 */
+.prof-layout {
+  display: flex;
+  gap: 22px;
+  align-items: flex-start;
+}
+.prof-avatar-col {
+  width: 200px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.prof-avatar-input { margin-top: 4px; }
+.prof-avatar-tip {
+  font-size: 0.72rem;
+  color: var(--text-muted, #94a3b8);
+  text-align: center;
+  line-height: 1.5;
+}
+.prof-fields { flex: 1; min-width: 0; }
+
 .dec-hint { margin-bottom: 14px; }
 .dec-status-bar {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  background: #f8fafc; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 0.85rem;
+  background: var(--bg-soft, #f8fafc); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 0.85rem;
 }
-[data-theme="dark"] .dec-status-bar { background: #0f172a; }
 .dec-status-label { color: var(--text-light); }
 .dec-status-issue { color: var(--el-color-warning); }
 .dec-status-note { color: var(--text-muted); }
 .dec-editor { font-family: 'SF Mono', 'Fira Code', Consolas, monospace; font-size: 0.85rem; }
 .dec-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
 .dec-tip { font-size: 0.78rem; color: var(--text-muted); }
+.dec-tip code { background: var(--bg-soft, #f1f5f9); padding: 1px 4px; border-radius: 3px; }
 .dec-submit-result { margin-top: 12px; }
 .dec-removed-list { margin: 6px 0 0 18px; padding: 0; font-size: 0.82rem; }
 .dec-removed-list li { margin: 2px 0; }
 .dec-preview-collapse { margin-top: 12px; }
 .dec-preview-title { font-size: 0.85rem; color: var(--text-light); }
 .dec-preview {
-  border: 1px dashed #cbd5e1; border-radius: 8px; padding: 16px; min-height: 48px;
-  background: #fff; font-size: 0.9rem; overflow: auto;
+  border: 1px dashed var(--border-color, #cbd5e1);
+  border-radius: 8px;
+  padding: 16px;
+  min-height: 48px;
+  background: var(--bg-body, #fff);
+  font-size: 0.9rem;
+  overflow: auto;
 }
-[data-theme="dark"] .dec-preview { background: #0f172a; border-color: #334155; }
+
+@media (max-width: 640px) {
+  .prof-layout { flex-direction: column; }
+  .prof-avatar-col { width: 100%; }
+  .prof-fields { width: 100%; }
+}
 </style>

@@ -548,6 +548,53 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.21.0 前台精细阅读 / 个人主页 / 警方台深化（2026-10-24）
+
+**主题**：把「能用」推到「好用」——评论区可排序可调密度、阅读器朗读真的能用、
+个人主页有资料卡、他人主页分栏展示、后台清理死代码并收敛高危操作。
+
+**评论区（`components/CommentSection.vue` + 后端 `GET /api/comments`）**
+- 新增 `sort=new|old|hot`（白名单归一化）：`hot` 按楼内回复数排序（子查询，排除已删除回复），
+  楼内回复恒按时间正序；非法值回落 `new`。附 `models/comment_sort_test.go`（三种排序 + 删除后热度）。
+- 工具条：总数/楼层数 + 排序切换 + 紧凑/舒适密度（`localStorage` 记住偏好）。
+- 补齐四态：骨架屏、空态引导、错误态可重试；「加载更多」显示 `已显示 X / 共 Y`。
+- 修 **P0 合规门禁**：`crossDomainCheck` 漏 `await`，`shouldShowGuard` 返回 Promise，
+  `guard?.needed` 恒 undefined → 敏感分区的两级确认从未生效。
+
+**阅读器（`views/Reader.vue`）**
+- 「朗读」按钮此前是空壳（`ttsLoading/ttsPlaying/toggleTTS/stopTTS` 全未定义，
+  卸载时 `stopTTS()` 直接 ReferenceError 中断后续清理）。现按 `POST /api/ai/speech` 真正实现：
+  按句切段（≤1800 字/段、单次≤8 段）、顺序播放、可随时停止、离开页面释放音频。
+- 清理 `[NVS]` 调试日志。
+
+**个人主页**
+- `me/MeDecorate`：新增资料卡（头像/昵称/签名/简介）+「看看别人怎么看到我」，
+  装扮与公开主页两段保留；后端 `PUT /api/author/profile` 支持 `bio`（≤500 字）与
+  `avatar_url`（白名单：`/uploads/` `/static/` `http(s)://`，拒绝 `javascript:`/`data:`）。
+- `views/AuthorHome.vue` 重写为「封面 + 资料头 + 分栏（作品/博客/数据/留言）」：
+  修 **粉丝数张冠李戴**（原来用 `/follow/stats`＝浏览者自己的口径），新增公开接口
+  `GET /api/author/:id/follow-stats`；新增私信直达（`/user/messages?peer=`）、举报、编辑入口；
+  数据页去掉了重复渲染的两个图表实例。
+- `views/user/Messages.vue`：支持 `?peer=` 直达会话；修「首次私信时轮询把会话关掉」。
+
+**小说详情（`views/NovelDetail.vue`）**
+- 目录工具条：章节搜索 + 正序/倒序 + 「跳到上次阅读」；上次阅读章节整行高亮（读 `reading-progress-*`）。
+- 头部补齐状态/体裁/来源/AI 参与/单价标签与标签跳转；空目录改用区块级空态。
+
+**后台**
+- 新增 `scripts/audit-unresolved-components.mjs`：揪「模板用了、脚本没导入」的组件。
+  本次共修 8 处静默失效图标（NavBar 搜索/编辑/下拉箭头、NovelDetail 折叠箭头、
+  Editor 删除、UserManagement 搜索、RealNameCard）。已接入 `make check` 与 CI 前端 job。
+- 新增 `scripts/fix-table-empty-slots.mjs`：清理 **114 处列级 `#empty` 插槽**（`el-table-column`
+  没有 empty 插槽，这些块永远不渲染，涉及 18 个后台页）。
+- `AdminPoliceConsole`：概览类型 chips（点击筛选）、关键词过滤、客户端分页、错误态；
+  全量取证包导出加二次确认并写明「含个人信息、仅限依法调取」。
+- `police/PoliceForumPatrol`：空态/错误态改用 `StateBlock`（去掉 297px 的 `el-empty`）。
+- `UserManagement`：封禁/提权/撤销警方收进「更多」下拉（仍各自二次确认），
+  编辑弹窗补 `police` 选项与审计路径提示。
+- 修 `AdminAiPool` 缺 `adminApi` 导入、`AdminDatabase` 残留的不存在函数 `loadHealth()`、
+  `AdminAiBot` 调错接口名（`adminListAgents`→`adminAgents`）、`AiAssistPanel` emits 缺 `meta` 参数。
+
 ### v3.20.1 蜜罐收回归内嵌主程序（2026-10-24）
 
 **口径修正**：蜜罐**只存在于主程序**，不产出第二个二进制。此前 v3.16.0 提供的独立进程形态

@@ -525,6 +525,108 @@ watch(
 const mdContainer = ref<HTMLElement | null>(null);
 const renderedHtml = ref('');
 
+// ---------- 语音朗读（服务端合成 POST /api/ai/speech，分段顺序播放）----------
+// 后端限制单次 ≤2000 字且按次计费，所以按句切段（每段 ≤1800 字）、一次最多 8 段，
+// 避免一次点击就把免费额度/代币刷光；播放中可以随时停止，离开页面必须 stopTTS 释放音频。
+const TTS_MAX_RUNES = 1800;
+const TTS_MAX_CHUNKS = 8;
+const ttsLoading = ref(false);
+const ttsPlaying = ref(false);
+const ttsQueue = ref<string[]>([]);
+let ttsAudio: HTMLAudioElement | null = null;
+let ttsCursor = 0;
+
+/** 取可朗读的纯文本：剔除代码块/图片/HTML 标签/Markdown 标记（代码念出来没有意义） */
+function ttsPlainText(): string {
+  const raw = chapter.value?.content || '';
+  return raw
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/[#>*_~`|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** 按句切段（不用 lookbehind 正则，避免旧 Safari 解析期报错） */
+function ttsSplit(text: string): string[] {
+  const sentences = text.match(/[^。！？；.!?;]+[。！？；.!?;]?/g) || [text];
+  const out: string[] = [];
+  let buf = '';
+  for (const sRaw of sentences) {
+    let s = sRaw.trim();
+    if (!s) continue;
+    while (s.length > TTS_MAX_RUNES) {
+      if (buf) { out.push(buf); buf = ''; }
+      out.push(s.slice(0, TTS_MAX_RUNES));
+      s = s.slice(TTS_MAX_RUNES);
+    }
+    if ((buf + s).length > TTS_MAX_RUNES) {
+      if (buf) out.push(buf);
+      buf = s;
+    } else {
+      buf += s;
+    }
+  }
+  if (buf.trim()) out.push(buf);
+  return out.slice(0, TTS_MAX_CHUNKS);
+}
+
+function stopTTS() {
+  ttsPlaying.value = false;
+  ttsLoading.value = false;
+  ttsQueue.value = [];
+  ttsCursor = 0;
+  if (ttsAudio) {
+    ttsAudio.onended = null;
+    ttsAudio.onerror = null;
+    ttsAudio.pause();
+    ttsAudio.src = '';
+    ttsAudio = null;
+  }
+}
+
+async function playTTSAt(i: number) {
+  const queue = ttsQueue.value;
+  if (i >= queue.length) { stopTTS(); return; }
+  ttsCursor = i;
+  ttsLoading.value = true;
+  try {
+    const res = await aiCostApi.speech({ text: queue[i], kind: 'tts' });
+    const url = res.data?.data?.url;
+    if (!url) throw new Error('未返回音频地址');
+    if (ttsCursor !== i) return; // 期间被停止/重新开始
+    const audio = new Audio(url);
+    ttsAudio = audio;
+    audio.onended = () => { if (ttsAudio === audio) playTTSAt(i + 1); };
+    audio.onerror = () => { ElMessage.error('音频播放失败'); stopTTS(); };
+    await audio.play();
+    ttsPlaying.value = true;
+  } catch (e: any) {
+    stopTTS();
+    const msg = e?.response?.data?.message || e?.message || '语音合成失败';
+    ElMessage.error(msg);
+  } finally {
+    ttsLoading.value = false;
+  }
+}
+
+async function toggleTTS() {
+  if (ttsPlaying.value || ttsLoading.value) { stopTTS(); return; }
+  if (!authStore.isLoggedIn) {
+    ElMessage.warning('登录后才能使用朗读');
+    router.push('/login');
+    return;
+  }
+  const text = ttsPlainText();
+  if (!text) { ElMessage.warning('本章没有可朗读的正文'); return; }
+  const chunks = ttsSplit(text);
+  if (!chunks.length) { ElMessage.warning('本章没有可朗读的正文'); return; }
+  ttsQueue.value = chunks;
+  await playTTSAt(0);
+}
+
 // 叙事形态：章节形态优先（script 话本 / mixed 散文与话本混排），未设置则继承作品
 // ---------- 阅读字号（小 / 中 / 大，持久化）----------
 const FONT_SIZES = ['0.95rem', '1.05rem', '1.2rem'];
@@ -579,7 +681,6 @@ function ensureChapterTitle(md: string, num: number, title: string): string {
 // 渲染入口：话本气泡视图直接用服务端渲染结果，其余走 Markdown
 function renderCurrent() {
   const content = chapter.value?.content || '';
-  console.log('[NVS] Reader: content changed, length=', content.length);
   if (!content) { renderedHtml.value = ''; return; }
   if (isScriptMode.value && scriptView.value === 'bubble') {
     renderedHtml.value = htmlContent.value || '';
@@ -588,7 +689,6 @@ function renderCurrent() {
   try {
     const md = ensureChapterTitle(content, chapterNum.value, chapter.value?.title || '');
     const html = renderMarkdown(md);
-    console.log('[NVS] Reader: rendered, html length=', html.length);
     renderedHtml.value = html;
   } catch (e: any) {
     console.error('[NVS] Reader: renderMarkdown error:', e);
@@ -814,8 +914,8 @@ async function loadNotes() {
         readingApi.listPublic({ novel_id: novelId.value, chapter_number: chapterNum.value }),
       ]);
       const mine = mineRes.data.data || [];
-      myBookmark.value = mine.find((n) => n.type === 'bookmark') || null;
-      myAnnotations.value = mine.filter((n) => n.type === 'annotation');
+      myBookmark.value = mine.find((n: ReadingNote) => n.type === 'bookmark') || null;
+      myAnnotations.value = mine.filter((n: ReadingNote) => n.type === 'annotation');
       publicNotes.value = pubRes.data.data || [];
     } else {
       const pubRes = await readingApi.listPublic({ novel_id: novelId.value, chapter_number: chapterNum.value });
@@ -895,7 +995,7 @@ function applyNoteHighlights() {
 // 正文点击委托：点中批注高亮 → 打开详情
 function onMdClick(e: MouseEvent) {
   const el = e.target as HTMLElement;
-  const mark = el.closest?.('mark.note-ann');
+  const mark = el.closest?.('mark.note-ann') as HTMLElement | null;
   if (!mark) return;
   const id = Number(mark.dataset.noteId);
   const note = [...myAnnotations.value, ...publicNotes.value].find((n) => n.id === id);

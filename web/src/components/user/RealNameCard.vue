@@ -76,6 +76,7 @@ import { ref, reactive, onMounted } from 'vue';
 import { authApi } from '@/api/auth';
 import { useAppStore } from '@/stores/app';
 import { ElMessage } from 'element-plus';
+import { Postcard } from '@element-plus/icons-vue';
 
 const appStore = useAppStore();
 const status = ref<{ real_name_verified: boolean; id_card_masked: string; birth_date: string | null; minor_protected: boolean } | null>(null);

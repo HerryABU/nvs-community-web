@@ -41,31 +41,13 @@
           </template>
         <el-table-column prop="name" label="漏洞名称" min-width="160" show-overflow-tooltip />
         <el-table-column label="严重程度" width="90">
-          <template #empty>
-            <StateBlock
-              state="empty"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
+
           <template #default="{ row }">
             <el-tag :type="sevTag(row.severity)" size="small">{{ sevCN(row.severity) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="100">
-          <template #empty>
-            <StateBlock
-              state="empty"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
+
           <template #default="{ row }">
             <el-tag :type="statusTag(row.status)" size="small">{{ statusCN(row.status) }}</el-tag>
           </template>
@@ -73,29 +55,11 @@
         <el-table-column prop="affected" label="影响范围" min-width="120" show-overflow-tooltip />
         <el-table-column prop="reported_by" label="报告者" width="110" show-overflow-tooltip />
         <el-table-column prop="created_at" label="发现时间" width="150">
-          <template #empty>
-            <StateBlock
-              state="empty"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
+
           <template #default="{ row }">{{ fmt(row.created_at) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
-          <template #empty>
-            <StateBlock
-              state="empty"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
+
           <template #default="{ row }">
             <el-button size="small" @click="openEdit(row)">编辑</el-button>
             <el-popconfirm title="确认删除该漏洞记录？" @confirm="remove(row.id)">

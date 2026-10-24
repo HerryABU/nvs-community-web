@@ -244,7 +244,9 @@ function startPolling(jobId: string) {
         stopPolling();
         ElMessage.success(job.value.message || '任务完成');
         loadBackups();
-        loadHealth();
+        // 本页没有独立的健康检查面板：曾有残留的 loadHealth() 调用（函数根本不存在），
+        // 任务成功后走到这行会直接 ReferenceError，导致「任务完成」后列表不刷新。
+        loadSched();
         return;
       }
       if (job.value?.status === 'error') {

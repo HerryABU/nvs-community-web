@@ -71,59 +71,19 @@
             />
           </template>
           <el-table-column prop="code" label="邀请码" width="220">
-            <template #empty>
-              <StateBlock
-                state="empty"
-                skeleton="table"
-                :rows="4"
-                compact
-                title="暂无数据"
-                description="换个筛选条件试试，或等有数据后再来看。"
-              />
-            </template>
             <template #default="{ row }">
               <code class="code">{{ row.code }}</code>
               <el-button text size="small" @click="copy(row.code)">复制</el-button>
             </template>
           </el-table-column>
           <el-table-column label="用量" width="100">
-            <template #empty>
-              <StateBlock
-                state="empty"
-                skeleton="table"
-                :rows="4"
-                compact
-                title="暂无数据"
-                description="换个筛选条件试试，或等有数据后再来看。"
-              />
-            </template>
             <template #default="{ row }">{{ row.used }} / {{ row.max_uses }}</template>
           </el-table-column>
           <el-table-column prop="note" label="备注" />
           <el-table-column label="过期" width="170">
-            <template #empty>
-              <StateBlock
-                state="empty"
-                skeleton="table"
-                :rows="4"
-                compact
-                title="暂无数据"
-                description="换个筛选条件试试，或等有数据后再来看。"
-              />
-            </template>
             <template #default="{ row }">{{ row.expires_at ? fmt(row.expires_at) : '永久' }}</template>
           </el-table-column>
           <el-table-column label="操作" width="90">
-            <template #empty>
-              <StateBlock
-                state="empty"
-                skeleton="table"
-                :rows="4"
-                compact
-                title="暂无数据"
-                description="换个筛选条件试试，或等有数据后再来看。"
-              />
-            </template>
             <template #default="{ row }">
               <el-button text type="danger" size="small" @click="revoke(row)">作废</el-button>
             </template>
@@ -152,16 +112,6 @@
           </template>
           <el-table-column prop="device_id" label="设备 ID" min-width="240" />
           <el-table-column prop="accounts" label="账号数" width="100">
-            <template #empty>
-              <StateBlock
-                state="empty"
-                skeleton="table"
-                :rows="4"
-                compact
-                title="暂无数据"
-                description="换个筛选条件试试，或等有数据后再来看。"
-              />
-            </template>
             <template #default="{ row }">
               <el-tag :type="row.accounts >= 3 ? 'danger' : 'info'" size="small">{{ row.accounts }}</el-tag>
             </template>
@@ -187,70 +137,20 @@
           <span class="hint">多 IP 只是提醒（移动网络切换会触发），是否处置由人决定</span>
         </div>
         <el-table :data="alarms" size="small" class="panel">
-          <template #empty>
-            <StateBlock
-              state="empty"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
           <el-table-column prop="kind" label="类型" width="130" />
           <el-table-column prop="detail" label="详情" min-width="300" />
           <el-table-column label="Key / 用户" width="140">
-            <template #empty>
-              <StateBlock
-                state="empty"
-                skeleton="table"
-                :rows="4"
-                compact
-                title="暂无数据"
-                description="换个筛选条件试试，或等有数据后再来看。"
-              />
-            </template>
             <template #default="{ row }">#{{ row.key_id }} / {{ row.user_id }}</template>
           </el-table-column>
           <el-table-column label="时间" width="170">
-            <template #empty>
-              <StateBlock
-                state="empty"
-                skeleton="table"
-                :rows="4"
-                compact
-                title="暂无数据"
-                description="换个筛选条件试试，或等有数据后再来看。"
-              />
-            </template>
             <template #default="{ row }">{{ fmt(row.created_at) }}</template>
           </el-table-column>
           <el-table-column label="状态" width="110">
-            <template #empty>
-              <StateBlock
-                state="empty"
-                skeleton="table"
-                :rows="4"
-                compact
-                title="暂无数据"
-                description="换个筛选条件试试，或等有数据后再来看。"
-              />
-            </template>
             <template #default="{ row }">
               <el-tag :type="row.acked ? 'info' : 'warning'" size="small">{{ row.acked ? '已处理' : '待处理' }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="操作" width="90">
-            <template #empty>
-              <StateBlock
-                state="empty"
-                skeleton="table"
-                :rows="4"
-                compact
-                title="暂无数据"
-                description="换个筛选条件试试，或等有数据后再来看。"
-              />
-            </template>
             <template #default="{ row }">
               <el-button v-if="!row.acked" text size="small" @click="ack(row)">标记处理</el-button>
             </template>

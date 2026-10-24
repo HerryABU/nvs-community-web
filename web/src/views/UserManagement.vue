@@ -77,23 +77,33 @@
           <span v-else class="muted">—</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="340" fixed="right">
+      <el-table-column label="操作" width="280" fixed="right">
         <template #default="{ row }">
           <el-button size="small" type="primary" plain @click="openEdit(row)">编辑</el-button>
           <el-button v-if="!isMuted(row)" size="small" type="warning" plain @click="openMute(row)">禁言</el-button>
           <el-button v-else size="small" type="success" plain @click="doUnmute(row)">解禁</el-button>
-          <el-popconfirm
-            title="确定要封禁该用户吗？将软删除并留证到 softdel 表（可追溯）。"
-            confirm-button-text="封禁"
-            cancel-button-text="取消"
-            @confirm="doDelete(row.id)"
-          >
-            <template #reference>
-              <el-button size="small" type="danger" plain>封禁</el-button>
+          <!-- 高危动作收进「更多」：封禁 / 提权警方（都有二次确认 + 审计留痕），
+               避免一行挤 5~6 个按钮、误点封禁 -->
+          <el-dropdown trigger="click" class="um-more" @command="(c: string) => onMoreCommand(c, row)">
+            <el-button size="small" text>更多 ▾</el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="ban" :disabled="row.role === 'admin'">
+                  封禁（软删除留证）
+                </el-dropdown-item>
+                <el-dropdown-item
+                  v-if="row.role !== 'police' && row.role !== 'admin'"
+                  command="promote"
+                  divided
+                >
+                  提权为警方取管台
+                </el-dropdown-item>
+                <el-dropdown-item v-else-if="row.role === 'police'" command="revoke" divided>
+                  撤销警方权限
+                </el-dropdown-item>
+              </el-dropdown-menu>
             </template>
-          </el-popconfirm>
-          <el-button v-if="row.role !== 'police' && row.role !== 'admin'" size="small" type="danger" plain @click="doPromote(row)">提权警方</el-button>
-          <el-button v-else-if="row.role === 'police'" size="small" type="info" plain @click="doRevoke(row)">撤销警方</el-button>
+          </el-dropdown>
         </template>
       </el-table-column>
     </el-table>
@@ -122,8 +132,12 @@
             <el-option label="作者 (author)" value="author" />
             <el-option label="VIP作者 (vip_author)" value="vip_author" />
             <el-option label="仲裁员 (arbitrator)" value="arbitrator" />
+            <el-option label="警方 (police)" value="police" />
             <el-option label="管理员 (admin)" value="admin" />
           </el-select>
+          <div v-if="editForm.role === 'police'" class="um-role-hint">
+            警方角色建议用列表里的「更多 → 撤销警方权限」处理，那条路径会写提权/撤销审计。
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -139,7 +153,7 @@ import { ref, computed, onMounted } from 'vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
-import { User } from '@element-plus/icons-vue';
+import { User, Search } from '@element-plus/icons-vue';
 
 interface UserRow {
   id: number;
@@ -292,6 +306,25 @@ async function doUnmute(row: UserRow) {
 }
 
 // 提权为警方取管台账号（不可自注册，只能由管理员提权）
+/** 「更多」下拉的命令分发：封禁 / 提权 / 撤销 */
+function onMoreCommand(cmd: string, row: UserRow) {
+  if (cmd === 'ban') return doBan(row);
+  if (cmd === 'promote') return doPromote(row);
+  if (cmd === 'revoke') return doRevoke(row);
+}
+
+/** 封禁（软删除留证）：下拉里没有 popconfirm，这里用确认框把后果写清楚 */
+async function doBan(row: UserRow) {
+  try {
+    await ElMessageBox.confirm(
+      `确认封禁用户「${row.nickname || row.username}」？账号将被软删除并留证到 softdel 表（可追溯、可恢复）。`,
+      '封禁确认',
+      { confirmButtonText: '确认封禁', cancelButtonText: '取消', type: 'warning' },
+    );
+    await doDelete(row.id);
+  } catch { /* 取消 */ }
+}
+
 async function doPromote(row: UserRow) {
   try {
     await ElMessageBox.confirm(
@@ -334,6 +367,14 @@ onMounted(() => {
 .um-actions { display: flex; align-items: center; gap: 8px; }
 .um-pagination { margin-top: 16px; display: flex; justify-content: flex-end; }
 .muted { color: var(--text-light); }
+/* 「更多」下拉触发器：与左侧 plain 按钮同一行对齐 */
+.um-more { margin-left: 8px; vertical-align: middle; }
+.um-role-hint {
+  margin-top: 4px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--el-color-warning);
+}
 [data-theme="dark"] .admin-page { background: #0f172a; }
 
 /* ====== 移动端用户管理适配 ====== */

@@ -177,13 +177,15 @@ func minInt(a, b int) int {
 	return b
 }
 
-// PUT /api/author/profile — 更新作者资料（昵称、签名、隔离开关）
+// PUT /api/author/profile — 更新作者资料（昵称、签名、简介、头像、隔离开关）
 func UpdateAuthorProfile(c *gin.Context) {
 	userID := currentUserID(c)
 
 	var req struct {
 		Nickname    *string `json:"nickname"`
 		Signature   *string `json:"signature"`
+		Bio         *string `json:"bio"`          // 个人简介（主页展示，可多行）
+		AvatarURL   *string `json:"avatar_url"`   // 头像地址（站内 /uploads/... 或 http(s)）
 		WallEnabled *bool   `json:"wall_enabled"` // 针对某个作品
 		NovelID     *uint   `json:"novel_id"`     // 可选：指定作品
 	}
@@ -215,6 +217,31 @@ func UpdateAuthorProfile(c *gin.Context) {
 		models.DB.Model(&models.User{}).Where("id = ?", userID).Update("signature", bluemonday.StrictPolicy().Sanitize(sig))
 	}
 
+	// 更新个人简介（主页展示；保留换行，剥标签）
+	if req.Bio != nil {
+		bio := strings.TrimSpace(*req.Bio)
+		if len([]rune(bio)) > 500 {
+			utils.BadRequest(c, "简介不能超过 500 个字符")
+			return
+		}
+		bio = bluemonday.StrictPolicy().Sanitize(bio)
+		models.DB.Model(&models.User{}).Where("id = ?", userID).Update("bio", bio)
+	}
+
+	// 更新头像地址：只接受站内上传路径或 http(s) 图片，禁止 javascript:/data:text 等
+	if req.AvatarURL != nil {
+		av := strings.TrimSpace(*req.AvatarURL)
+		if len(av) > 512 {
+			utils.BadRequest(c, "头像地址过长")
+			return
+		}
+		if av != "" && !isSafeAvatarURL(av) {
+			utils.BadRequest(c, "头像地址仅支持站内上传（/uploads/...）或 http(s) 链接")
+			return
+		}
+		models.DB.Model(&models.User{}).Where("id = ?", userID).Update("avatar_url", av)
+	}
+
 	// 更新作品隔离墙开关
 	if req.WallEnabled != nil && req.NovelID != nil {
 		models.DB.Model(&models.Novel{}).
@@ -223,4 +250,14 @@ func UpdateAuthorProfile(c *gin.Context) {
 	}
 
 	utils.SuccessMessage(c, "更新成功", nil)
+}
+
+// isSafeAvatarURL 头像地址白名单：站内相对上传路径 / 或 http(s) 绝对地址。
+// 显式拒绝 javascript:、data:（可承载 SVG 脚本）、协议相对 //evil.com 等。
+func isSafeAvatarURL(u string) bool {
+	if strings.HasPrefix(u, "/uploads/") || strings.HasPrefix(u, "/static/") {
+		return true
+	}
+	lower := strings.ToLower(u)
+	return strings.HasPrefix(lower, "https://") || strings.HasPrefix(lower, "http://")
 }

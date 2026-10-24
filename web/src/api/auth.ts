@@ -202,8 +202,8 @@ export const authApi = {
     );
   },
 
-  // 更新作者资料（昵称/签名/隔离开关）
-  updateProfile(data: { nickname?: string; signature?: string; wall_enabled?: boolean }) {
+  // 更新作者资料（昵称/签名/简介/头像/隔离开关）
+  updateProfile(data: { nickname?: string; signature?: string; bio?: string; avatar_url?: string; wall_enabled?: boolean }) {
     return api.put<{ code: number; message: string }>('/author/profile', data);
   },
 

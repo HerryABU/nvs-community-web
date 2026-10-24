@@ -19,31 +19,13 @@
         <el-table-column prop="id" label="ID" width="60" />
         <el-table-column prop="name" label="板块名称" min-width="140" />
         <el-table-column label="类型" width="110">
-          <template #empty>
-            <StateBlock
-              state="empty"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
+
           <template #default="{ row }">
             <el-tag size="small" :type="forumTypeTag(row.type)">{{ forumTypeLabel(row.type) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="审查" width="100" v-if="hasCustomForums">
-          <template #empty>
-            <StateBlock
-              state="empty"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
+
           <template #default="{ row }">
             <template v-if="row.type === 'custom'">
               <el-tag size="small" :type="forumReviewTag(row.review_status)">{{ forumReviewLabel(row.review_status) }}</el-tag>
@@ -55,16 +37,7 @@
         <el-table-column prop="thread_count" label="帖子数" width="80" />
         <el-table-column prop="sort_order" label="排序" width="70" />
         <el-table-column label="操作" width="220" fixed="right">
-          <template #empty>
-            <StateBlock
-              state="empty"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
+
           <template #default="{ row }">
             <template v-if="row.type === 'custom' && row.review_status === 'pending'">
               <el-button size="small" type="success" @click="reviewForum(row, 'approve')">通过</el-button>
@@ -131,16 +104,7 @@
         <el-table-column prop="user_id" label="用户ID" width="80" />
         <el-table-column prop="username" label="用户名" width="130" />
         <el-table-column label="建版上限" width="130">
-          <template #empty>
-            <StateBlock
-              state="empty"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
+
           <template #default="{ row }">
             <el-tag v-if="row.max_forums === 0" type="danger" size="small">禁止创建</el-tag>
             <span v-else-if="row.max_forums < 0" class="muted">跟随全局</span>
@@ -148,29 +112,11 @@
           </template>
         </el-table-column>
         <el-table-column prop="note" label="备注" min-width="160">
-          <template #empty>
-            <StateBlock
-              state="empty"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
+
           <template #default="{ row }">{{ row.note || '—' }}</template>
         </el-table-column>
         <el-table-column label="操作" width="140" fixed="right">
-          <template #empty>
-            <StateBlock
-              state="empty"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
+
           <template #default="{ row }">
             <el-button size="small" text @click="editUserQuota(row)">编辑</el-button>
             <el-button size="small" text type="danger" @click="revokeUserQuota(row)">撤销</el-button>

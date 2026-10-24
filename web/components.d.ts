@@ -11,6 +11,8 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AdminApiAlert: typeof import('./src/components/admin/AdminApiAlert.vue')['default']
+    AdminFilterBar: typeof import('./src/components/admin/AdminFilterBar.vue')['default']
     AdminHeader: typeof import('./src/components/admin/AdminHeader.vue')['default']
     AdminMenuPanel: typeof import('./src/components/admin/AdminMenuPanel.vue')['default']
     AiAgentsPanel: typeof import('./src/components/ai/AiAgentsPanel.vue')['default']

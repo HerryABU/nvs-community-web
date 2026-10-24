@@ -70,10 +70,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import MessageChat from '@/components/message/MessageChat.vue';
 import { messageApi, type ConversationItem } from '@/api/message';
 
+const route = useRoute();
 const convs = ref<ConversationItem[]>([]);
 const activePeer = ref<ConversationItem | null>(null);
 const loading = ref(false);
@@ -111,8 +113,12 @@ async function loadConversations() {
       if (activePeer.value) {
         const fresh = convs.value.find((c) => c.peer_id === activePeer.value?.peer_id);
         // 当前打开的会话由聊天窗实时标记已读，轮询回来先清零，避免未读红点闪烁
-        if (fresh) fresh.unread = 0;
-        activePeer.value = fresh || null;
+        if (fresh) {
+          fresh.unread = 0;
+          activePeer.value = fresh;
+        }
+        // fresh 不存在 = 首次私信、还没有任何消息的会话：
+        // 不能把 activePeer 置空（否则轮询一到就把聊天窗关掉，用户刚打的字全没）
       }
     }
   } catch { ElMessage.error('加载会话列表失败'); }
@@ -165,6 +171,20 @@ async function saveSettings() {
 
 onMounted(() => {
   loading.value = true;
+  // 从他人主页「私信」按钮直达：/user/messages?peer=<id>&name=xxx&avatar=xxx
+  // 该会话可能还不存在（首次私信），先用 query 里的资料合成一个占位会话。
+  const peerId = Number(route.query.peer || 0);
+  if (peerId > 0) {
+    activePeer.value = {
+      peer_id: peerId,
+      peer_username: String(route.query.name || ''),
+      peer_nickname: String(route.query.name || ''),
+      peer_avatar_url: String(route.query.avatar || ''),
+      last_message: null,
+      unread: 0,
+      last_at: '',
+    };
+  }
   loadConversations().finally(() => (loading.value = false));
   // 轻量轮询刷新会话列表（未读红点/最后消息）
   pollTimer = window.setInterval(loadConversations, 15000);

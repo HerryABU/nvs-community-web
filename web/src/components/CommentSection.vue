@@ -34,11 +34,25 @@
       <router-link to="/login">登录</router-link> 后即可发表评论
     </div>
 
-    <!-- 评论网分析入口 -->
-    <div class="comment-network-entry">
-      <el-button size="small" text type="primary" @click="networkDrawer = true">
-        🕸 评论网分析（社交图谱）
-      </el-button>
+    <!-- 工具条：计数 + 排序 + 密度 + 评论网入口（把低频入口收进工具条，减少纵向空白） -->
+    <div class="comment-toolbar">
+      <span class="ct-count">
+        <template v-if="totalCount > 0">共 <b>{{ totalCount }}</b> 条评论 · {{ floorTotal }} 层楼</template>
+        <template v-else>还没有评论</template>
+      </span>
+      <div class="ct-right">
+        <el-radio-group v-model="sortKey" size="small" class="ct-sort" @change="onSortChange">
+          <el-radio-button value="new">最新</el-radio-button>
+          <el-radio-button value="old">最早</el-radio-button>
+          <el-radio-button value="hot">最热</el-radio-button>
+        </el-radio-group>
+        <el-tooltip :content="density === 'compact' ? '切换为舒适视图' : '切换为紧凑视图'" placement="top">
+          <el-button size="small" text class="ct-density" :aria-label="density === 'compact' ? '切换为舒适视图' : '切换为紧凑视图'" @click="toggleDensity">
+            <el-icon><component :is="density === 'compact' ? Expand : Fold" /></el-icon>
+          </el-button>
+        </el-tooltip>
+        <el-button size="small" text type="primary" @click="networkDrawer = true">🕸 评论网</el-button>
+      </div>
     </div>
 
     <!-- 新评论提示条 -->
@@ -47,8 +61,30 @@
     </div>
 
     <!-- 评论列表（楼层模型：楼 + 楼内可折叠回复，与作品/博客/作者共用同一套） -->
-    <div class="comment-list">
+    <div class="comment-list" :class="`density-${density}`">
+      <!-- 首次加载骨架 -->
+      <div v-if="loading" class="comment-skeleton" aria-busy="true">
+        <div v-for="i in 2" :key="i" class="cs-row">
+          <div class="cs-line cs-line-head"></div>
+          <div class="cs-line"></div>
+          <div class="cs-line cs-line-short"></div>
+        </div>
+      </div>
+
+      <!-- 错误态：可重试 -->
+      <div v-else-if="loadError" class="comment-error">
+        <p>{{ loadError }}</p>
+        <el-button size="small" @click="fetchComments(true)">重试</el-button>
+      </div>
+
+      <!-- 空态：引导发言 -->
+      <div v-else-if="comments.length === 0" class="comment-empty">
+        <p class="ce-title">还没有评论</p>
+        <p class="ce-tip">{{ authStore.isLoggedIn ? '说点什么，让作者看到你的想法。' : '登录后即可参与讨论。' }}</p>
+      </div>
+
       <FloorComments
+        v-else
         :items="comments"
         :owner-id="ownerUserId"
         target-type="comment"
@@ -65,7 +101,7 @@
 
     <!-- 加载更多 -->
     <div class="load-more" v-if="hasMore">
-      <el-button text :loading="loadingMore" @click="loadMore">加载更多</el-button>
+      <el-button text :loading="loadingMore" @click="loadMore">加载更多（已显示 {{ comments.length }} / {{ totalCount }}）</el-button>
     </div>
 
     <!-- 评论网分析抽屉 -->
@@ -79,11 +115,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { novelApi, commentApi, type Comment } from '@/api/novel';
-import { getFloorPasswords, mentionApi } from '@/api/novel/comments';
+import { commentApi, type Comment } from '@/api/novel';
+import { getFloorPasswords, mentionApi, type CommentSort } from '@/api/novel/comments';
 import { novelCommentChannel, blogCommentChannel, liveApi } from '@/api/live';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { Fold, Expand } from '@element-plus/icons-vue';
 import { shouldShowGuard } from '@/utils/sensitiveZone';
 import FloorComments from './FloorComments.vue';
 import MentionTextarea from './MentionTextarea.vue';
@@ -160,6 +197,39 @@ const page = ref(1);
 const hasMore = ref(false);
 const loadingMore = ref(false);
 
+// ── 列表四态：加载骨架 / 空态引导 / 错误重试 / 内容 ──
+const loading = ref(true);
+const loadError = ref('');
+// 计数：totalCount 含楼内回复，floorTotal 为楼层数（后端 total / floor_total）
+const totalCount = ref(0);
+const floorTotal = ref(0);
+
+// ── 排序与密度（浏览器记住偏好，跨页面一致）──
+const SORT_STORE_KEY = 'nvs:comment-sort';
+const DENSITY_STORE_KEY = 'nvs:comment-density';
+type Density = 'cozy' | 'compact';
+
+function readSortPref(): CommentSort {
+  const v = localStorage.getItem(SORT_STORE_KEY);
+  return v === 'old' || v === 'hot' ? v : 'new';
+}
+function readDensityPref(): Density {
+  return localStorage.getItem(DENSITY_STORE_KEY) === 'compact' ? 'compact' : 'cozy';
+}
+
+const sortKey = ref<CommentSort>(readSortPref());
+const density = ref<Density>(readDensityPref());
+
+function onSortChange() {
+  localStorage.setItem(SORT_STORE_KEY, sortKey.value);
+  fetchComments(true);
+}
+
+function toggleDensity() {
+  density.value = density.value === 'compact' ? 'cozy' : 'compact';
+  localStorage.setItem(DENSITY_STORE_KEY, density.value);
+}
+
 // 楼主：优先取父组件传入，其次用评论项里的主内容作者信息
 const ownerUserId = computed(() => props.ownerId || 0);
 
@@ -188,13 +258,18 @@ function onLiveComment(c: any) {
 // 楼层模型：后端返回平铺列表（本页楼层 + 这些楼层下的全部回复），
 // 由 FloorComments 按 root_id 分组成「楼」，楼内回复可折叠。
 async function fetchComments(reset = false) {
-  if (reset) page.value = 1;
+  if (reset) {
+    page.value = 1;
+    loading.value = true;
+    loadError.value = '';
+  }
   try {
     const res = await commentApi.getComments({
       novel_id: props.blogId ? 0 : props.novelId,
       blog_id: props.blogId || 0,
       chapter_number: props.chapterNumber,
       page: page.value,
+      sort: sortKey.value,
       items: comments.value, // 带上已解锁楼密码（X-Floor-Password 头）
     });
     const data = res.data.data;
@@ -207,10 +282,18 @@ async function fetchComments(reset = false) {
       const seen = new Set(comments.value.map(c => c.id));
       comments.value.push(...(data.list || []).filter((c: Comment) => !seen.has(c.id)));
     }
+    totalCount.value = Number(data.total) || 0;
+    floorTotal.value = Number(data.floor_total) || 0;
     hasMore.value = Boolean(data.has_more);
-    emit('loaded', Number(data.total) || comments.value.length);
-  } catch (e) {
+    emit('loaded', totalCount.value || comments.value.length);
+  } catch (e: any) {
+    // 首屏失败要给用户出路（重试），追加失败只提示不清空已看内容
+    const msg = e?.response?.data?.message || '评论加载失败，请稍后重试';
+    if (reset) loadError.value = msg;
+    else ElMessage.error(msg);
     console.error(e);
+  } finally {
+    if (reset) loading.value = false;
   }
 }
 
@@ -220,6 +303,8 @@ const newComments = ref(0);
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 async function pollNewComments() {
+  // 「最早」排序下用户是按时间顺序补读，弹「有新评论」会打断阅读 → 不轮询
+  if (sortKey.value === 'old') return;
   try {
     const res = await commentApi.getComments({
       novel_id: props.blogId ? 0 : props.novelId,
@@ -253,7 +338,9 @@ async function crossDomainCheck(): Promise<boolean> {
   const cat = props.novelCategory;
   if (!cat) return true;
 
-  const guard = shouldShowGuard(cat);
+  // shouldShowGuard 是 async（内部要先拉分区配置）——漏 await 时拿到的是 Promise，
+  // guard?.needed 恒为 undefined，两级确认会被静默跳过（合规门禁形同虚设）。
+  const guard = await shouldShowGuard(cat);
   if (!guard?.needed) return true;
 
   const key = `nvs-cross-comment-warned-${cat}`;
@@ -434,6 +521,101 @@ defineExpose({ setQuote });
 
 .comment-network-entry {
   margin: 4px 0 10px;
+}
+
+/* ====== 工具条：计数 + 排序 + 密度 ====== */
+.comment-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 4px 0 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color, #eef0f3);
+}
+.ct-count {
+  font-size: 0.82rem;
+  color: var(--text-light, #8a92a6);
+}
+.ct-count b {
+  color: var(--text-color, #1f2430);
+  font-weight: 600;
+}
+.ct-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ct-density {
+  padding: 4px 6px;
+}
+
+/* ====== 骨架 / 空态 / 错误态 ====== */
+.comment-skeleton .cs-row {
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--border-color, #f0f0f0);
+}
+.cs-line {
+  height: 12px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.24), rgba(148, 163, 184, 0.12));
+  background-size: 200% 100%;
+  animation: cs-shimmer 1.3s ease-in-out infinite;
+}
+.cs-line-head { width: 32%; height: 10px; }
+.cs-line-short { width: 58%; margin-bottom: 0; }
+@keyframes cs-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.comment-empty,
+.comment-error {
+  text-align: center;
+  padding: 28px 16px;
+  border: 1px dashed var(--border-color, #e3e6ec);
+  border-radius: 10px;
+  background: var(--bg-card, #fbfcfe);
+}
+.comment-empty .ce-title {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-color, #1f2430);
+}
+.comment-empty .ce-tip {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--text-light, #8a92a6);
+}
+.comment-error p {
+  margin: 0 0 12px;
+  font-size: 0.86rem;
+  color: var(--danger-color, #e5484d);
+}
+
+/* ====== 密度：紧凑视图（压楼间距与字号，长评论区一屏看更多） ====== */
+.density-compact :deep(.floor) {
+  padding: 8px 10px;
+}
+.density-compact :deep(.floor-head) {
+  margin-bottom: 3px;
+}
+.density-compact :deep(.floor-content) {
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+.density-compact :deep(.floor-replies) {
+  margin-top: 6px;
+  padding: 5px 9px;
+}
+.density-compact :deep(.reply) {
+  padding: 2px 0;
+  font-size: 0.84rem;
+  line-height: 1.55;
 }
 .mention-source-row {
   display: flex;

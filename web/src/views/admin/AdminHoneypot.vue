@@ -146,7 +146,6 @@
         <el-table-column prop="decoy" label="假入口" width="180" />
         <el-table-column prop="kind" label="类型" width="140" />
         <el-table-column prop="count" label="次数" width="100" />
-        <template #empty><el-empty description="还没有人试注入（等级 low 及以上才启用）" :image-size="60" /></template>
       </el-table>
     </el-card>
 

@@ -85,10 +85,27 @@ func CheckFollow(c *gin.Context) {
 	utils.Success(c, gin.H{"is_following": isFollow})
 }
 
-// GET /api/follow/stats — 关注统计
+// GET /api/follow/stats — 关注统计（当前登录用户自己的）
 func GetFollowStats(c *gin.Context) {
 	userID := currentUserID(c)
 	following := models.GetFollowingCount(userID)
 	followers := models.GetFollowersCount(userID)
 	utils.Success(c, gin.H{"following": following, "followers": followers})
+}
+
+// GetAuthorFollowStats GET /api/author/:id/follow-stats — 公开的「某人的粉丝/关注数」。
+// 主页上的数字必须是**被访问者**的，而不是浏览者的；旧前端误用了 /follow/stats
+// （当前登录用户口径），导致「看别人主页时显示的是自己的粉丝数」。
+// 只回计数，不暴露关注关系；:id 兼容用户名。
+func GetAuthorFollowStats(c *gin.Context) {
+	u, err := ResolveUserKey(c.Param("id"))
+	if err != nil || u == nil {
+		utils.NotFound(c, "用户不存在")
+		return
+	}
+	utils.Success(c, gin.H{
+		"author_id": u.ID,
+		"following": models.GetFollowingCount(u.ID),
+		"followers": models.GetFollowersCount(u.ID),
+	})
 }

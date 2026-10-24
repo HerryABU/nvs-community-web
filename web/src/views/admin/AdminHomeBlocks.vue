@@ -36,16 +36,6 @@
           />
         </template>
         <el-table-column label="顺序" width="70" align="center">
-          <template #empty>
-            <StateBlock
-              :state="loading ? 'loading' : 'empty'"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
           <template #default="{ row, $index }">
             <div class="order-ctrl">
               <el-button link :disabled="$index === 0" @click="move($index, -1)"><el-icon><Top /></el-icon></el-button>
@@ -54,46 +44,16 @@
           </template>
         </el-table-column>
         <el-table-column label="类型" width="120">
-          <template #empty>
-            <StateBlock
-              :state="loading ? 'loading' : 'empty'"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
           <template #default="{ row }">{{ typeName(row.type) }}</template>
         </el-table-column>
         <el-table-column label="标题" min-width="160" prop="title" show-overflow-tooltip />
         <el-table-column label="启用" width="90" align="center">
-          <template #empty>
-            <StateBlock
-              :state="loading ? 'loading' : 'empty'"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
           <template #default="{ row }">
             <el-switch v-model="row.enabled" :disabled="saving" @change="(v: any) => toggleEnabled(row, v)" />
           </template>
         </el-table-column>
         <el-table-column label="排序值" width="90" align="center" prop="sort_order" />
         <el-table-column label="操作" width="150" fixed="right">
-          <template #empty>
-            <StateBlock
-              :state="loading ? 'loading' : 'empty'"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
           <template #default="{ row }">
             <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
             <el-button link type="danger" @click="remove(row)">删除</el-button>

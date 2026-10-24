@@ -68,29 +68,9 @@
         </template>
         <el-table-column prop="user_id" label="用户 ID" width="90" />
         <el-table-column prop="username" label="用户名" min-width="120" show-overflow-tooltip>
-          <template #empty>
-            <StateBlock
-              :state="loading ? 'loading' : 'empty'"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
           <template #default="{ row }">{{ row.username || '—' }}</template>
         </el-table-column>
         <el-table-column label="每日免费次数" min-width="130">
-          <template #empty>
-            <StateBlock
-              :state="loading ? 'loading' : 'empty'"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
           <template #default="{ row }">
             <el-tag size="small" :type="row.daily_calls === 0 ? 'danger' : row.daily_calls < 0 ? 'info' : 'success'">
               {{ row.daily_calls === 0 ? '禁止' : row.daily_calls < 0 ? '不限' : row.daily_calls + ' 次' }}
@@ -98,32 +78,12 @@
           </template>
         </el-table-column>
         <el-table-column label="每日 tokens" min-width="120">
-          <template #empty>
-            <StateBlock
-              :state="loading ? 'loading' : 'empty'"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
           <template #default="{ row }">
             {{ row.daily_tokens < 0 ? '不可用' : row.daily_tokens === 0 ? '不限' : row.daily_tokens }}
           </template>
         </el-table-column>
         <el-table-column prop="note" label="备注" min-width="140" show-overflow-tooltip />
         <el-table-column label="操作" width="80" fixed="right">
-          <template #empty>
-            <StateBlock
-              :state="loading ? 'loading' : 'empty'"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
           <template #default="{ row }">
             <el-button text type="danger" size="small" @click="removeOverride(row)">撤销</el-button>
           </template>

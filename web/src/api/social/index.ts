@@ -17,8 +17,16 @@ export const followApi = {
   listFollowers(page: number = 1) {
     return api.get('/followers', { params: { page } });
   },
+  // 当前登录用户自己的关注统计（我的主页用）
   stats() {
-    return api.get('/follow/stats');
+    return api.get<{ code: number; data: { following: number; followers: number } }>('/follow/stats');
+  },
+  // 被访问者的关注统计（他人主页用，公开接口）。别用 stats()：
+  // 那是「浏览者自己」的口径，看别人主页会显示成自己的粉丝数。
+  authorStats(authorKey: number | string) {
+    return api.get<{ code: number; data: { author_id: number; following: number; followers: number } }>(
+      `/author/${authorKey}/follow-stats`,
+    );
   },
 };
 

@@ -446,7 +446,7 @@ func PreviewEmergencyContent(c *gin.Context) {
 		preview["content_raw"] = content
 		preview["content_plain"] = toPlainText(content)
 		preview["created_at"] = b.CreatedAt
-		if pg, err := models.GetCommentsByBlog(uint(id), 1, 500, false); err == nil {
+		if pg, err := models.GetCommentsByBlog(uint(id), 1, 500, false, "old"); err == nil {
 			preview["comments"] = buildCommentList(pg.List)
 		}
 	case "novel":

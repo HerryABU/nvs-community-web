@@ -34,21 +34,21 @@ type Comment struct {
 	// 语义与「加密论坛」同构——未解锁者（非楼作者、非警方/管理员）读取时
 	// content 脱敏为占位、楼内回复不返回；凭 X-Floor-Password 头解锁。
 	// 注意：内容本身不做加密存储， PasswordHash 仅用于入口校验。
-	HasPassword  bool           `gorm:"default:false;index" json:"has_password"`
-	PasswordHash string         `gorm:"size:128;default:''" json:"-"` // bcrypt，不序列化外泄
-	Locked       bool           `gorm:"-" json:"locked"`              // 运行时：当前请求未解锁（脱敏占位标记）
-	IsMarkdown   bool           `gorm:"default:true" json:"is_markdown"`
-	Username     string         `gorm:"-" json:"username,omitempty"`
-	ReplyToName  string         `gorm:"-" json:"reply_to_name,omitempty"`               // 被回复者昵称（运行时填充，展示「X 回复 Y」）
-	DeletedBy    string         `gorm:"size:16;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
-	IsDeleted    bool           `gorm:"-" json:"is_deleted"`                            // 运行时计算：是否已软删除（警方/管理员取证视图用）
+	HasPassword  bool   `gorm:"default:false;index" json:"has_password"`
+	PasswordHash string `gorm:"size:128;default:''" json:"-"` // bcrypt，不序列化外泄
+	Locked       bool   `gorm:"-" json:"locked"`              // 运行时：当前请求未解锁（脱敏占位标记）
+	IsMarkdown   bool   `gorm:"default:true" json:"is_markdown"`
+	Username     string `gorm:"-" json:"username,omitempty"`
+	ReplyToName  string `gorm:"-" json:"reply_to_name,omitempty"`               // 被回复者昵称（运行时填充，展示「X 回复 Y」）
+	DeletedBy    string `gorm:"size:16;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
+	IsDeleted    bool   `gorm:"-" json:"is_deleted"`                            // 运行时计算：是否已软删除（警方/管理员取证视图用）
 	// 微秒级时间戳（Unix 微秒）：用于评论网分析的时间估计与精确排序；旧数据回填为 0
 	CreatedMicro int64 `gorm:"default:0;index" json:"created_micro"`
 	// @ 提及：存储 JSON 数组 [{"name":"foo","user_id":5}]；运行时由 AfterFind/MentionsRefs 解析到 Mentions
-	MentionsRaw string       `gorm:"type:text;default:''" json:"-"`
-	Mentions    []MentionRef `gorm:"-" json:"mentions,omitempty"` // 解析后的提及列表（展示/跳转用）
-	CreatedAt   time.Time    `gorm:"index:idx_comments_novel_created,priority:2" json:"created_at"`
-	UpdatedAt   time.Time    `json:"updated_at"`
+	MentionsRaw string         `gorm:"type:text;default:''" json:"-"`
+	Mentions    []MentionRef   `gorm:"-" json:"mentions,omitempty"` // 解析后的提及列表（展示/跳转用）
+	CreatedAt   time.Time      `gorm:"index:idx_comments_novel_created,priority:2" json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
 	// 关联
@@ -220,10 +220,35 @@ func fillReplyToName(list []Comment) {
 	}
 }
 
+// CommentSortOrder 归一化评论排序参数（白名单，禁止把用户输入拼进 SQL）。
+// new=最新楼在前（默认，评论区惯例）；old=最早在前（追更/补读）；hot=楼内回复多的在前。
+func CommentSortOrder(key string) string {
+	switch key {
+	case "old", "hot":
+		return key
+	default:
+		return "new"
+	}
+}
+
+// floorOrderClause 返回楼层维度排序 SQL 片段（只影响「楼」的顺序，楼内回复恒按时间正序）。
+func floorOrderClause(sortKey string) string {
+	switch CommentSortOrder(sortKey) {
+	case "old":
+		return "comments.created_at ASC, comments.id ASC"
+	case "hot":
+		// 热度 = 该楼已删除之外的楼内回复数；同热度按时间倒序，保证分页稳定
+		return "(SELECT COUNT(*) FROM comments c2 WHERE c2.root_id = comments.id AND c2.deleted_at IS NULL) DESC, comments.created_at DESC, comments.id DESC"
+	default:
+		return "comments.created_at DESC, comments.id DESC"
+	}
+}
+
 // loadCommentsPage 通用分页：先取本页楼层，再取这些楼层下的全部回复。
 // includeDeleted=true 时（警方/管理员取证视图）用 Unscoped 绕过软删除作用域，
 // 一并取回已删除楼层/回复，由前端以红字标注。
-func loadCommentsPage(scope func(*gorm.DB) *gorm.DB, page, pageSize int, includeDeleted bool) (CommentsPage, error) {
+// sortKey 见 CommentSortOrder（new/old/hot）。
+func loadCommentsPage(scope func(*gorm.DB) *gorm.DB, page, pageSize int, includeDeleted bool, sortKey string) (CommentsPage, error) {
 	var out CommentsPage
 	if page < 1 {
 		page = 1
@@ -243,9 +268,9 @@ func loadCommentsPage(scope func(*gorm.DB) *gorm.DB, page, pageSize int, include
 	base.Model(&Comment{}).Scopes(scope).Count(&out.Total)
 
 	var floors []Comment
-	if err := base.Scopes(scope).Where("parent_id IS NULL").
+	if err := base.Scopes(scope).Where("comments.parent_id IS NULL").
 		Preload("User").
-		Order("created_at DESC").
+		Order(floorOrderClause(sortKey)).
 		Offset((page - 1) * pageSize).Limit(pageSize).
 		Find(&floors).Error; err != nil {
 		return out, err
@@ -454,8 +479,8 @@ func novelCommentScope(novelID uint, chapterNumber int) func(*gorm.DB) *gorm.DB 
 }
 
 // GetCommentsByNovel 作品/章节评论（楼层分页）。includeDeleted=true 时一并返回已删除评论（警方取证视图）。
-func GetCommentsByNovel(novelID uint, chapterNumber int, page, pageSize int, includeDeleted bool) (CommentsPage, error) {
-	return loadCommentsPage(novelCommentScope(novelID, chapterNumber), page, pageSize, includeDeleted)
+func GetCommentsByNovel(novelID uint, chapterNumber int, page, pageSize int, includeDeleted bool, sortKey string) (CommentsPage, error) {
+	return loadCommentsPage(novelCommentScope(novelID, chapterNumber), page, pageSize, includeDeleted, sortKey)
 }
 
 // GetCommentByID 按 id 取单条评论（含 User 预加载）。
@@ -527,8 +552,8 @@ func DeleteComment(id uint) error {
 }
 
 // GetCommentsByBlog 博客评论（楼层分页）。includeDeleted=true 时一并返回已删除评论（警方取证视图）。
-func GetCommentsByBlog(blogID uint, page, pageSize int, includeDeleted bool) (CommentsPage, error) {
+func GetCommentsByBlog(blogID uint, page, pageSize int, includeDeleted bool, sortKey string) (CommentsPage, error) {
 	return loadCommentsPage(func(db *gorm.DB) *gorm.DB {
 		return db.Where("blog_id = ?", blogID)
-	}, page, pageSize, includeDeleted)
+	}, page, pageSize, includeDeleted, sortKey)
 }

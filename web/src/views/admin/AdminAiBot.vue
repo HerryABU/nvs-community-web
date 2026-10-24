@@ -68,7 +68,7 @@ watch(limitMode, (m) => {
 async function load() {
   loading.value = true;
   try {
-    const [cfg, ag] = await Promise.all([aiApi.adminGetBotConfig(), aiHubApi.adminListAgents()]);
+    const [cfg, ag] = await Promise.all([aiApi.adminGetBotConfig(), aiHubApi.adminAgents()]);
     if (cfg.data.code === 0) {
       form.enabled = cfg.data.data.enabled;
       form.daily_limit = cfg.data.data.config.daily_limit;

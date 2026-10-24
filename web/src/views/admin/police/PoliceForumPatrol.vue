@@ -73,7 +73,17 @@
           <el-button size="small" type="primary" plain @click="enter(row)">进入查看</el-button>
         </template>
       </el-table-column>
-      <template #empty><el-empty description="暂无论坛" /></template>
+      <template #empty>
+        <StateBlock
+          :state="loading ? 'loading' : loadError ? 'error' : 'empty'"
+          skeleton="table"
+          :rows="4"
+          compact
+          :title="loadError ? '论坛列表加载失败' : '暂无论坛'"
+          :description="loadError || '当前没有任何论坛记录。'"
+          @retry="load"
+        />
+      </template>
     </el-table>
   </div>
 </template>
@@ -85,6 +95,7 @@ import { adminApi } from '@/api/admin';
 import api from '@/api';
 import { ElMessage } from 'element-plus';
 import { Search, Refresh } from '@element-plus/icons-vue';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 interface ForumRow {
   id: number;
@@ -104,6 +115,7 @@ interface ForumRow {
 const router = useRouter();
 const rows = ref<ForumRow[]>([]);
 const loading = ref(false);
+const loadError = ref('');
 const keyword = ref('');
 const visFilter = ref('');
 // 已删除内容高亮色：与警方取证台统一（警方可读）
@@ -142,13 +154,17 @@ function reviewTag(s: string) {
 
 async function load() {
   loading.value = true;
+  loadError.value = '';
   try {
     const res = await adminApi.policeListForums();
     if (res.data.code === 0) {
       rows.value = res.data.data?.forums || [];
+    } else {
+      loadError.value = (res.data as any).message || '加载论坛失败';
     }
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.message || '加载论坛失败');
+    loadError.value = e?.response?.data?.message || '加载论坛失败，请稍后重试';
+    ElMessage.error(loadError.value);
   } finally {
     loading.value = false;
   }

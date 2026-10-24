@@ -50,32 +50,12 @@
           />
         </template>
         <el-table-column label="用户" min-width="160">
-          <template #empty>
-            <StateBlock
-              :state="loading ? 'loading' : 'empty'"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
           <template #default="{ row }">
             <span class="cell-user">{{ row.nickname || row.username || '游客' }}</span>
             <span class="cell-uid" v-if="row.username">@{{ row.username }} #{{ row.user_id }}</span>
           </template>
         </el-table-column>
         <el-table-column label="分区" width="150">
-          <template #empty>
-            <StateBlock
-              :state="loading ? 'loading' : 'empty'"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
           <template #default="{ row }">
             <el-tag type="danger" size="small">{{ row.zone }}</el-tag>
           </template>
@@ -83,31 +63,11 @@
         <el-table-column label="进入时间" prop="entered_at" width="180" sortable />
         <el-table-column label="IP" prop="ip" width="150" />
         <el-table-column label="User-Agent" min-width="260" show-overflow-tooltip>
-          <template #empty>
-            <StateBlock
-              :state="loading ? 'loading' : 'empty'"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
           <template #default="{ row }">
             <span class="ua-text">{{ row.user_agent || '—' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right">
-          <template #empty>
-            <StateBlock
-              :state="loading ? 'loading' : 'empty'"
-              skeleton="table"
-              :rows="4"
-              compact
-              title="暂无数据"
-              description="换个筛选条件试试，或等有数据后再来看。"
-            />
-          </template>
           <template #default="{ row }">
             <el-button size="small" text type="primary" @click="openDetail(row)">详情</el-button>
           </template>
