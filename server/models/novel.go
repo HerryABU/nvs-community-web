@@ -223,6 +223,9 @@ type Chapter struct {
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
 	AuthorName string `gorm:"-" json:"author_name,omitempty"` // 本章作者展示名（运行时填充）
+	// 版本控制（server/chaptervcs）：当前分支上的最新版本号，供前端下次保存时带 base_version
+	Version int `gorm:"-" json:"version,omitempty"`
+	Branch  string `gorm:"-" json:"branch,omitempty"`
 }
 
 func (Chapter) TableName() string {

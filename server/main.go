@@ -15,12 +15,14 @@ import (
 	"strings"
 	"time"
 
+	"nvs-server/chaptervcs"
 	"nvs-server/collab"
 	"nvs-server/config"
 	"nvs-server/crypto"
 	"nvs-server/gmcmd"
 	"nvs-server/groups"
 	"nvs-server/handlers"
+	chaptervcshandler "nvs-server/handlers/chaptervcs"
 	collabhandler "nvs-server/handlers/collab"
 	grouphandler "nvs-server/handlers/group"
 	prompthandler "nvs-server/handlers/prompts"
@@ -467,6 +469,15 @@ func main() {
 		protected.POST("/collab/:novelId/leave", collabhandler.Leave)
 		// 话本气泡体预览（不可挂 /novels 下，与 /novels/:id 通配段冲突）
 		protected.POST("/script-preview", handlers.ScriptPreview)
+		// 章节版本控制：历史 / 分支 / 合并（docs/novel-version-control.md）
+		protected.GET("/novels/:id/chapters/:num/versions", chaptervcshandler.ListVersions)
+		protected.GET("/novels/:id/chapters/:num/versions/:ver", chaptervcshandler.GetVersion)
+		protected.GET("/novels/:id/chapters/:num/versions/:ver/diff", chaptervcshandler.DiffVersions)
+		protected.POST("/novels/:id/chapters/:num/versions/:ver/revert", chaptervcshandler.RevertVersion)
+		protected.DELETE("/novels/:id/chapters/:num/versions/:ver", chaptervcshandler.DeleteVersion)
+		protected.GET("/novels/:id/chapters/:num/branches", chaptervcshandler.ListBranches)
+		protected.POST("/novels/:id/chapters/:num/branches", chaptervcshandler.CreateBranch)
+		protected.POST("/novels/:id/chapters/:num/merge", chaptervcshandler.MergeBranch)
 		protected.GET("/author/novels", handlers.GetMyNovels)
 		protected.GET("/author/novels/:id/stats", handlers.GetNovelStats)
 		protected.GET("/author/banned-content", handlers.GetAuthorBannedContent)
@@ -1386,6 +1397,10 @@ func initDatabase() error {
 	prompttpl.InitSeeds()
 	// 多人协作（独立功能包）：协作成员 + 协作审计
 	if err := collab.Migrate(models.DB); err != nil {
+		return err
+	}
+	// 章节版本控制（独立功能包）：提交历史 + 分支指针
+	if err := chaptervcs.Migrate(models.DB); err != nil {
 		return err
 	}
 	models.InitDefaultForums()

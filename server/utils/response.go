@@ -21,6 +21,7 @@ const (
 	CodeForbidden     = 3
 	CodeNotFound      = 4
 	CodeInternalError = 5
+	CodeConflict      = 6 // 版本冲突（HTTP 409）：保存时 base_version 落后于服务端
 )
 
 func Success(c *gin.Context, data interface{}) {
@@ -65,4 +66,13 @@ func NotFound(c *gin.Context, message string) {
 
 func InternalError(c *gin.Context, message string) {
 	Error(c, http.StatusInternalServerError, CodeInternalError, message)
+}
+
+// Conflict 版本冲突（HTTP 409）：data 里带三方内容（base / server / mine）供前端并排对比
+func Conflict(c *gin.Context, message string, data interface{}) {
+	c.JSON(http.StatusConflict, Response{
+		Code:    CodeConflict,
+		Message: message,
+		Data:    data,
+	})
 }

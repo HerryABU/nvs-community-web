@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	"nvs-server/chaptervcs"
 	"nvs-server/collab"
 	"nvs-server/config"
 	"nvs-server/models"
@@ -140,6 +141,19 @@ func CreateChapter(c *gin.Context) {
 		_ = models.ClearAiContentMark(models.AiMarkChapter, chapter.ID)
 	}
 
+	// 版本控制：新建章节即产生 v1（快照 + 提交记录）
+	if v, _, verr := chaptervcs.Commit(chaptervcs.CommitInput{
+		OwnerID:  ownerID,
+		Chapter:  chapter,
+		AuthorID: userID,
+		Title:    chapter.Title,
+		Content:  req.Content,
+		Message:  "新建章节",
+	}); verr == nil && v != nil {
+		chapter.Version = v.Version
+		chapter.Branch = v.Branch
+	}
+
 	models.UpdateNovelStats(uint(novelID))
 	updateIndexJSON(ownerID, uint(novelID))
 	generateChecksums(ownerID, uint(novelID))
@@ -173,6 +187,12 @@ func UpdateChapter(c *gin.Context) {
 		Content    string `json:"content"`
 		AiAssisted bool   `json:"ai_assisted"`
 		AiModel    string `json:"ai_model"`
+		// 版本控制（docs/novel-version-control.md §3）：
+		// base_version 为打开编辑器时的版本号，落后即报冲突；force=true 表示「以我的为准」
+		BaseVersion int    `json:"base_version"`
+		Branch      string `json:"branch"`
+		Force       bool   `json:"force"`
+		Message     string `json:"message"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请求参数错误")
@@ -192,6 +212,34 @@ func UpdateChapter(c *gin.Context) {
 	if req.Title != "" {
 		chapter.Title = bluemonday.StrictPolicy().Sanitize(req.Title)
 	}
+
+	// 版本控制：先做冲突检测并落快照，再覆盖正文文件——避免吞掉他人的改动
+	// （docs/novel-version-control.md §3：base_version 落后即返回 409 + 三方内容）
+	var newVer *chaptervcs.ChapterVersion
+	if req.Content != "" {
+		v, cf, cerr := chaptervcs.Commit(chaptervcs.CommitInput{
+			OwnerID:  novel.AuthorID,
+			Chapter:  chapter,
+			AuthorID: userID,
+			Title:    chapter.Title,
+			Content:  req.Content,
+			Branch:   req.Branch,
+			BaseVer:  req.BaseVersion,
+			Force:    req.Force,
+			Message:  req.Message,
+		})
+		if cerr != nil {
+			utils.InternalError(c, "记录章节版本失败")
+			return
+		}
+		if cf != nil {
+			utils.Conflict(c, fmt.Sprintf("本章已被他人更新（你基于 v%d，当前 v%d）：请对比后选择「以我的为准」或放弃修改",
+				cf.BaseVersion, cf.ServerVersion), cf)
+			return
+		}
+		newVer = v
+	}
+
 	if req.Content != "" {
 		// 直接存储原始 Markdown 内容
 		if err := os.WriteFile(utils.ResolveContentPath(chapter.ContentPath), []byte(req.Content), 0644); err != nil {
@@ -219,6 +267,12 @@ func UpdateChapter(c *gin.Context) {
 		_ = models.MarkAiContent(models.AiMarkChapter, chapter.ID, req.AiModel)
 	} else if chapter.ID > 0 {
 		_ = models.ClearAiContentMark(models.AiMarkChapter, chapter.ID)
+	}
+
+	// 回传最新版本号，前端下次保存带 base_version 做冲突检测
+	if newVer != nil {
+		chapter.Version = newVer.Version
+		chapter.Branch = newVer.Branch
 	}
 
 	models.UpdateNovelStats(uint(novelID))
