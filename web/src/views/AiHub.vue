@@ -1,59 +1,83 @@
 <template>
   <div class="ai-hub" :class="{ 'ai-hub-immersive': immersive }">
-    <!-- ===== 左侧栏：新建 / 智能体 / 历史会话 ===== -->
-    <aside v-if="showSide" class="ai-hub-side" :class="{ 'ai-hub-side-open': mobileSideOpen }">
-      <div class="ai-hub-side-head">
-        <el-button type="primary" class="ai-hub-new" @click="newChat">
-          <el-icon><Plus /></el-icon> 新建对话
-          <span class="ai-hub-kbd">Ctrl K</span>
-        </el-button>
-        <el-button class="ai-hub-side-close" text @click="mobileSideOpen = false">
-          <el-icon><Close /></el-icon>
-        </el-button>
+    <!-- ===== 左侧功能导航 184px =====
+         布局参照 testlo（SparkAi）：左侧固定竖向导航 + 56px 顶栏 + 主区。
+         竖向导航比宫格更像"工作台"：入口常驻，切功能不用回首页。 -->
+    <aside class="ai-nav" :class="{ 'ai-nav-open': mobileSideOpen }">
+      <div class="ai-nav-head">
+        <span class="ai-nav-logo">✦</span>
+        <span class="ai-nav-name">AI 工作台</span>
       </div>
 
-      <div class="ai-hub-side-scroll">
-        <template v-for="g in agentGroups" :key="g.name">
-          <div class="ai-hub-side-title">{{ g.name }}</div>
+      <div class="ai-nav-body">
+        <button class="ai-nav-new" type="button" @click="newChat">
+          <el-icon><Plus /></el-icon>
+          <span class="ai-nav-new-text">新建对话</span>
+          <kbd class="ai-nav-kbd">Ctrl K</kbd>
+        </button>
+
+        <div class="ai-nav-group">功能</div>
+        <button
+          v-for="e in navEntries"
+          :key="e.key"
+          type="button"
+          class="ai-nav-item"
+          :class="{ active: activeTab === e.key, 'is-dim': e.needsAi && !status.ai_enabled }"
+          @click="onNavigate(e.key)"
+        >
+          <span class="ai-nav-emoji">{{ e.emoji }}</span>
+          <span class="ai-nav-label">{{ e.title }}</span>
+          <span v-if="e.badge" class="ai-nav-badge">{{ e.badge }}</span>
+          <span v-if="e.needsAi && !status.ai_enabled" class="ai-nav-dot" title="AI 未开启" />
+        </button>
+
+        <!-- 历史会话：只在对话面板出现，避免其它面板被会话列表干扰 -->
+        <template v-if="activeTab === 'chat'">
+          <div class="ai-nav-group">
+            历史会话
+            <button class="ai-nav-refresh" type="button" title="刷新" @click="loadSessions">↻</button>
+          </div>
+          <div v-if="!sessions.length" class="ai-nav-empty">暂无会话</div>
           <div
-            v-for="a in g.items"
-            :key="a.id"
-            :class="['ai-agent-item', { active: activeAgentId === a.id && !activeSessionId }]"
-            @click="pickAgent(a)"
+            v-for="s in sessions"
+            :key="s.id"
+            class="ai-nav-session"
+            :class="{ active: activeSessionId === s.id }"
+            @click="openSession(s)"
           >
-            <span class="ai-agent-emoji">{{ a.emoji || '🤖' }}</span>
-            <span class="ai-agent-name">{{ a.name }}</span>
-            <span v-if="a.upstream === 'coze'" class="ai-agent-coze">Coze</span>
-            <span v-if="a.used_count" class="ai-agent-used">{{ formatCount(a.used_count) }}</span>
+            <span class="ai-nav-session-title">{{ s.title || '新对话' }}</span>
+            <span v-if="s.share_token" class="ai-nav-share" title="已分享">🔗</span>
+            <el-dropdown trigger="click" @command="(cmd: string) => onSessionCmd(cmd, s)">
+              <button class="ai-nav-session-more" type="button" @click.stop>⋯</button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="rename">重命名</el-dropdown-item>
+                  <el-dropdown-item command="share">分享</el-dropdown-item>
+                  <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </template>
-
-        <div class="ai-hub-side-title">历史会话</div>
-        <div
-          v-for="s in sessions"
-          :key="s.id"
-          :class="['ai-session-item', { active: activeSessionId === s.id }]"
-          @click="openSession(s)"
-        >
-          <span class="ai-session-title">{{ s.title || '新对话' }}</span>
-          <span v-if="s.share_token" class="ai-session-shared" title="已分享">🔗</span>
-          <span class="ai-session-tools">
-            <el-icon title="重命名" @click.stop="renameSession(s)"><EditPen /></el-icon>
-            <el-icon title="分享" @click.stop="openShare(s)"><Share /></el-icon>
-            <el-icon class="ai-session-del" title="删除" @click.stop="deleteSession(s)"><Delete /></el-icon>
-          </span>
-        </div>
-        <el-empty v-if="!sessions.length" description="暂无会话" :image-size="50" />
       </div>
 
-      <div class="ai-hub-side-foot">
-        <span>余额 {{ status.balance }} {{ status.token_name }}</span>
-        <el-button text type="primary" size="small" @click="$router.push('/wallet')">充值</el-button>
-        <template v-if="status.free_quota?.enabled">
-          <span class="ai-hub-free" :class="{ exhausted: status.free_quota.calls_left === 0 }">
-            今日免费剩余 {{ status.free_quota.calls_left < 0 ? '不限' : status.free_quota.calls_left }} 次
-          </span>
-        </template>
+      <div class="ai-nav-foot">
+        <div class="ai-nav-balance">
+          <b>{{ status.balance }}</b>
+          <span>{{ status.token_name }}</span>
+          <el-button text type="primary" size="small" @click="$router.push('/wallet')">充值</el-button>
+        </div>
+        <div
+          v-if="status.free_quota?.enabled"
+          class="ai-nav-free"
+          :class="{ exhausted: status.free_quota.calls_left === 0 }"
+        >
+          今日免费 {{ status.free_quota.calls_left < 0 ? '不限' : status.free_quota.calls_left }} 次
+        </div>
+        <button class="ai-nav-item ai-nav-back" type="button" @click="$router.push('/')">
+          <span class="ai-nav-emoji">↩</span>
+          <span class="ai-nav-label">返回站点</span>
+        </button>
       </div>
     </aside>
     <div v-if="mobileSideOpen" class="ai-hub-mask" @click="mobileSideOpen = false" />
@@ -61,47 +85,39 @@
     <!-- ===== 主区 ===== -->
     <main class="ai-hub-main">
       <div class="ai-hub-topbar">
-        <el-button v-if="showSide" class="ai-hub-menu-btn" text @click="mobileSideOpen = true">
+        <el-button class="ai-hub-menu-btn" text @click="mobileSideOpen = true">
           <el-icon><Menu /></el-icon>
         </el-button>
-
-        <!-- 入口式导航下，面板是"二级页"，必须有一眼可见的返回 -->
-        <el-button v-if="activeTab !== 'home'" text class="ai-hub-back" @click="goHome">
-          <el-icon><ArrowLeft /></el-icon> 工作台
-        </el-button>
-
         <span class="ai-hub-current">{{ currentTitle }}</span>
+        <span v-if="!status.ai_enabled" class="ai-hub-status">AI 未开启</span>
 
-        <el-button v-if="activeTab === 'gallery'" size="small" text type="primary" @click="$router.push('/ai/gallery')">
-          独立页 ↗
-        </el-button>
-        <el-button v-if="activeTab === 'chat'" size="small" text @click="newChat">
-          <el-icon><Plus /></el-icon> 新建对话
-        </el-button>
-        <el-tooltip :content="immersive ? '退出沉浸模式（Esc）' : '沉浸模式：隐藏侧栏与顶栏'" placement="bottom">
-          <el-button size="small" text class="ai-hub-immersive-btn" @click="toggleImmersive">
-            <el-icon><FullScreen /></el-icon>
+        <div class="ai-hub-topbar-right">
+          <el-button
+            v-if="activeTab === 'gallery'"
+            size="small"
+            text
+            type="primary"
+            @click="$router.push('/ai/gallery')"
+          >
+            独立页 ↗
           </el-button>
-        </el-tooltip>
+          <el-button v-if="activeTab === 'chat'" size="small" text @click="newChat">
+            <el-icon><Plus /></el-icon> 新建
+          </el-button>
+          <el-tooltip
+            :content="immersive ? '退出沉浸模式（Esc）' : '沉浸模式：隐藏侧栏与顶栏'"
+            placement="bottom"
+          >
+            <el-button size="small" text @click="toggleImmersive">
+              <el-icon><FullScreen /></el-icon>
+            </el-button>
+          </el-tooltip>
+        </div>
       </div>
-
-      <!-- ===== 首屏门户：永远可见 =====
-           即使 AI 未开启也要让用户看到"这里能干什么"。
-           之前整页只有一个「站长暂未开启 AI 功能」的空态，连入口控件都没有。 -->
-      <AiHomePanel
-        v-if="activeTab === 'home'"
-        :status="status"
-        :agents="agents"
-        :sessions="sessions"
-        :is-admin="isAdmin"
-        @navigate="onNavigate"
-        @open-session="openSession"
-        @admin="onAdminJump"
-      />
 
       <!-- 模型 / 智能体 / 灵感广场不依赖总开关：没开启时也能先看有什么 -->
       <AiModelSquare
-        v-else-if="activeTab === 'models'"
+        v-if="activeTab === 'models'"
         :status="status"
         :is-admin="isAdmin"
         @use="onUseModel"
@@ -213,11 +229,7 @@
           @balance-updated="onBalanceUpdated"
           @sessions-changed="loadSessions"
         />
-        <AiImagePanel
-          v-else-if="activeTab === 'image'"
-          :status="status"
-          :initial-prompt="remixPrompt"
-        />
+        <AiImagePanel v-else-if="activeTab === 'image'" :status="status" :initial-prompt="remixPrompt" />
         <AiVideoPanel v-else-if="activeTab === 'video'" :status="status" />
         <MindMapPanel v-else :status="status" />
       </template>
@@ -226,7 +238,9 @@
     <!-- 分享对话框 -->
     <el-dialog v-model="shareVisible" title="分享会话" width="520px">
       <template v-if="shareLink">
-        <p class="share-tip">任何人通过此链接可查看该会话的只读快照（不含余额与费用信息）。取消分享后链接立即失效。</p>
+        <p class="share-tip">
+          任何人通过此链接可查看该会话的只读快照（不含余额与费用信息）。取消分享后链接立即失效。
+        </p>
         <el-input :model-value="shareLink" readonly>
           <template #append>
             <el-button @click="copyShareLink">复制</el-button>
@@ -252,7 +266,7 @@ import { Plus, Close, Delete, Menu, EditPen, Share, ArrowLeft, FullScreen } from
 import { aiHubApi, type AiHubStatus, type AiAgent, type AiChatSession } from '@/api/aiHub';
 import { useAuthStore } from '@/stores/auth';
 import { appPrefix } from '@/utils/prefix';
-import AiHomePanel from '@/components/ai/AiHomePanel.vue';
+import { AI_ENTRIES } from '@/components/ai/aiEntries';
 import AiModelSquare from '@/components/ai/AiModelSquare.vue';
 import AiAgentsPanel from '@/components/ai/AiAgentsPanel.vue';
 import AiChatPanel from '@/components/ai/AiChatPanel.vue';
@@ -283,20 +297,19 @@ const activeAgentId = ref(0);
 /** 从「大模型广场」点某个模型进来时，把它带给对话面板预选 */
 const presetModelId = ref(0);
 
-type HubTab = 'home' | 'chat' | 'models' | 'image' | 'video' | 'gallery' | 'agents' | 'mind';
-// 默认落在门户：入口式布局下，用户先看"能干什么"，再决定进哪个面板
-const activeTab = ref<HubTab>('home');
+type HubTab = 'chat' | 'models' | 'image' | 'video' | 'gallery' | 'agents' | 'mind';
+// 开门见山：进来直接是对话界面，不做中间门户页（参考站同样一进即功能页）
+const activeTab = ref<HubTab>('chat');
 const remixPrompt = ref('');
 const mobileSideOpen = ref(false);
 const loading = ref(true);
 
 const activeSession = computed(() => sessions.value.find((s) => s.id === activeSessionId.value) || null);
 
-/** 侧栏（智能体 + 历史会话）只在对话面板需要，其它面板留出整幅宽度 */
-const showSide = computed(() => activeTab.value === 'chat');
+/** 左侧竖向导航的入口（与门户宫格共用一份配置，避免两处漂移） */
+const navEntries = computed(() => AI_ENTRIES);
 
 const TAB_TITLES: Record<HubTab, string> = {
-  home: 'AI 工作台',
   chat: 'AI 对话',
   models: '大模型广场',
   image: '专业绘画',
@@ -376,16 +389,17 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
+/** 引导卡片里的「返回」：回到对话（原来回门户，门户已移除） */
 function goHome() {
-  activeTab.value = 'home';
+  activeTab.value = 'chat';
   mobileSideOpen.value = false;
 }
 
-/** 门户卡片跳转：会员与额度不在 Hub 内，需要出站到钱包 */
+/** 门户卡片跳转：会员与额度不在 Hub 内，出站到会员页（页内有充值入口） */
 function onNavigate(tab: string) {
   mobileSideOpen.value = false;
   if (tab === 'membership') {
-    router.push('/wallet');
+    router.push('/membership');
     return;
   }
   activeTab.value = tab as HubTab;
@@ -437,6 +451,13 @@ function openSession(s: AiChatSession) {
   activeAgentId.value = s.agent_id || 0;
   activeTab.value = 'chat';
   mobileSideOpen.value = false;
+}
+
+/** 左侧导航里会话条目的 ⋯ 菜单 */
+function onSessionCmd(cmd: string, s: AiChatSession) {
+  if (cmd === 'rename') return renameSession(s);
+  if (cmd === 'share') return openShare(s);
+  if (cmd === 'delete') return deleteSession(s);
 }
 
 function onSessionCreated(id: number) {
@@ -552,7 +573,7 @@ onMounted(() => {
   loadSessions();
   // 深链：/ai?tab=image&prompt=xxx
   const tab = String(route.query.tab || '');
-  const validTabs: HubTab[] = ['home', 'chat', 'models', 'image', 'video', 'gallery', 'agents', 'mind'];
+  const validTabs: HubTab[] = ['chat', 'models', 'image', 'video', 'gallery', 'agents', 'mind'];
   if (validTabs.includes(tab as HubTab)) activeTab.value = tab as HubTab;
   const p = String(route.query.prompt || '');
   if (p) remixPrompt.value = p;
@@ -564,75 +585,249 @@ onUnmounted(() => {
 });</script>
 
 <style scoped>
-.ai-hub { display: flex; height: calc(100vh - 60px); min-height: 0; background: var(--bg-page, #f5f7fa); }
-.ai-hub-side {
-  width: 250px; flex-shrink: 0; display: flex; flex-direction: column;
-  background: var(--el-bg-color, #fff); border-right: 1px solid var(--el-border-color, #ebeef5);
+/* ===== 容器：左侧 184px 导航 + 主区（尺寸参照 testlo）===== */
+.ai-hub {
+  display: flex;
+  height: calc(100vh - 60px);
+  min-height: 0;
+  background: var(--bg-page, #f5f7fa);
 }
-.ai-hub-side-head { display: flex; gap: 8px; padding: 12px; border-bottom: 1px solid var(--el-border-color, #ebeef5); }
-.ai-hub-new { flex: 1; }
-.ai-hub-side-close { display: none; }
-.ai-hub-side-scroll { flex: 1; overflow-y: auto; padding: 8px; min-height: 0; }
-.ai-hub-side-title {
-  font-size: 0.72rem; color: var(--text-light, #999);
-  padding: 10px 8px 4px; letter-spacing: 0.05em;
+
+/* ===== 左侧功能导航 ===== */
+.ai-nav {
+  width: 184px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card, #fff);
+  border-right: 1px solid var(--border-color, #ebeef5);
 }
-.ai-agent-item, .ai-session-item {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 10px; border-radius: 8px; cursor: pointer;
-  font-size: 0.85rem; color: var(--text-color, #333);
+.ai-nav-head {
+  height: 48px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border-color, #ebeef5);
 }
-.ai-agent-item:hover, .ai-session-item:hover { background: var(--el-fill-color-light, #f5f7fa); }
-.ai-agent-item.active, .ai-session-item.active {
-  background: var(--el-color-primary-light-9, #ecf5ff);
-  color: var(--el-color-primary, #409eff);
+.ai-nav-logo {
+  font-size: 16px;
+  color: var(--el-color-primary, #6366f1);
 }
-.ai-agent-emoji { font-size: 1.1rem; }
-.ai-agent-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ai-agent-coze {
-  font-size: 0.6rem; padding: 0 5px; border-radius: 4px; flex-shrink: 0;
-  background: rgba(139, 92, 246, 0.12); color: #8b5cf6;
+.ai-nav-name {
+  font-size: var(--text-base, 14px);
+  font-weight: 600;
+  color: var(--text-color, #1f2328);
 }
-.ai-agent-used { font-size: 0.66rem; color: var(--text-light, #999); flex-shrink: 0; }
-.ai-session-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ai-session-shared { font-size: 0.7rem; opacity: 0.7; flex-shrink: 0; }
-.ai-session-tools { display: none; align-items: center; gap: 6px; flex-shrink: 0; }
-.ai-session-tools .el-icon { color: var(--text-light, #888); }
-.ai-session-tools .el-icon:hover { color: var(--el-color-primary, #409eff); }
-.ai-session-item:hover .ai-session-tools { display: inline-flex; }
-.ai-session-del { color: #ef4444; }
-.share-tip { font-size: 0.82rem; color: var(--text-light, #666); margin: 0 0 10px; line-height: 1.6; }
-.share-actions { margin-top: 10px; text-align: right; }
-.ai-hub-side-foot {
-  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px;
-  padding: 10px 14px; border-top: 1px solid var(--el-border-color, #ebeef5);
-  font-size: 0.8rem; color: var(--text-light, #666);
+.ai-nav-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 8px;
+  scrollbar-width: thin;
 }
-.ai-hub-free { color: #16a34a; }
-.ai-hub-free.exhausted { color: #ef4444; }
-.ai-hub-mask { display: none; }
-.ai-hub-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.ai-nav-new {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px;
+  margin-bottom: 6px;
+  border: none;
+  border-radius: var(--radius-md, 10px);
+  background: var(--gradient-primary, linear-gradient(135deg, #6366f1, #8b5cf6));
+  color: #fff;
+  font-size: var(--text-sm, 13px);
+  font-family: inherit;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.ai-nav-new:hover { filter: brightness(1.06); }
+.ai-nav-new-text { flex: 1; text-align: left; }
+.ai-nav-kbd {
+  font-size: 10px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.22);
+  font-family: inherit;
+}
+
+.ai-nav-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 8px 4px;
+  font-size: var(--text-xs, 12px);
+  color: var(--text-light, #9ca3af);
+  letter-spacing: 0.02em;
+}
+.ai-nav-refresh {
+  border: none;
+  background: none;
+  color: var(--text-light, #9ca3af);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+}
+.ai-nav-refresh:hover { color: var(--el-color-primary, #6366f1); }
+
+.ai-nav-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  margin-bottom: 2px;
+  border: none;
+  border-radius: var(--radius-md, 10px);
+  background: transparent;
+  color: var(--text-color, #374151);
+  font-size: var(--text-sm, 13px);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.ai-nav-item:hover { background: var(--bg-page, #f5f6f8); }
+.ai-nav-item.active {
+  background: var(--el-color-primary-light-9, #eef2ff);
+  color: var(--el-color-primary, #6366f1);
+  font-weight: 600;
+}
+.ai-nav-item.is-dim { opacity: 0.66; }
+.ai-nav-emoji { width: 16px; text-align: center; font-size: 13px; flex-shrink: 0; }
+.ai-nav-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-nav-badge {
+  font-size: 9px;
+  line-height: 1.5;
+  padding: 0 4px;
+  border-radius: 3px;
+  color: #fff;
+  background: var(--gradient-danger, linear-gradient(135deg, #f43f5e, #e11d48));
+  flex-shrink: 0;
+}
+.ai-nav-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
+  flex-shrink: 0;
+}
+
+/* 历史会话条目 */
+.ai-nav-empty {
+  padding: 4px 10px 8px;
+  font-size: var(--text-xs, 12px);
+  color: var(--text-light, #9ca3af);
+}
+.ai-nav-session {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 6px 0 10px;
+  margin-bottom: 1px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-color, #374151);
+  font-size: var(--text-sm, 13px);
+}
+.ai-nav-session:hover { background: var(--bg-page, #f5f6f8); }
+.ai-nav-session.active {
+  background: var(--el-color-primary-light-9, #eef2ff);
+  color: var(--el-color-primary, #6366f1);
+}
+.ai-nav-session-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-nav-share { font-size: 10px; opacity: 0.7; flex-shrink: 0; }
+.ai-nav-session-more {
+  border: none;
+  background: none;
+  color: var(--text-light, #9ca3af);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 3px;
+  border-radius: 4px;
+  opacity: 0;
+  flex-shrink: 0;
+}
+.ai-nav-session:hover .ai-nav-session-more { opacity: 1; }
+.ai-nav-session-more:hover { background: rgba(0, 0, 0, 0.06); }
+
+/* 底部账户区 */
+.ai-nav-foot {
+  flex-shrink: 0;
+  padding: 8px;
+  border-top: 1px solid var(--border-color, #ebeef5);
+}
+.ai-nav-balance {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+  font-size: var(--text-xs, 12px);
+  color: var(--text-light, #6b7280);
+}
+.ai-nav-balance b { color: var(--text-color, #1f2328); font-size: var(--text-base, 14px); }
+.ai-nav-free {
+  margin: 2px 4px 4px;
+  font-size: 11px;
+  color: #16a34a;
+}
+.ai-nav-free.exhausted { color: #ef4444; }
+.ai-nav-back { margin-top: 2px; }
+
+/* ===== 主区 ===== */
+.ai-hub-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
 .ai-hub-topbar {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 16px; background: var(--el-bg-color, #fff);
-  border-bottom: 1px solid var(--el-border-color, #ebeef5);
+  height: 56px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  background: var(--bg-card, #fff);
+  border-bottom: 1px solid var(--border-color, #ebeef5);
+}
+.ai-hub-current {
+  font-size: var(--text-md, 16px);
+  font-weight: 600;
+  color: var(--text-color, #1f2328);
+}
+.ai-hub-status {
+  font-size: var(--text-xs, 12px);
+  padding: 1px 8px;
+  border-radius: 999px;
+  color: #b45309;
+  background: rgba(180, 83, 9, 0.1);
+}
+.ai-hub-topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .ai-hub-menu-btn { display: none; }
-.ai-hub-current { font-size: 0.82rem; color: var(--text-light, #666); }
-.ai-hub-kbd {
-  margin-left: 6px; padding: 0 5px; border-radius: 4px; font-size: 0.62rem;
-  background: rgba(255, 255, 255, 0.22); color: #fff; letter-spacing: 0.02em;
-}
-.ai-hub-immersive-btn { margin-left: auto; }
-/* 沉浸模式：收起侧栏、撑满视口 */
-.ai-hub.ai-hub-immersive { height: 100vh; }
-.ai-hub.ai-hub-immersive .ai-hub-side { display: none; }
-.ai-hub.ai-hub-immersive .ai-hub-menu-btn { display: none; }
-.ai-hub.ai-hub-immersive .ai-hub-topbar { padding: 8px 12px; }
-.ai-hub-blocked { flex: 1; display: flex; align-items: center; justify-content: center; padding: var(--space-6, 32px); overflow-y: auto; }
+.ai-hub-mask { display: none; }
 
-/* ===== 未就绪引导卡片 =====
-   刻意不用 el-empty：空状态图标 + 一句话既说不清"为什么空"，也给不出下一步。 */
+.ai-hub-blocked {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6, 32px);
+  overflow-y: auto;
+}
+
+/* ===== 未就绪引导卡片 ===== */
 .ai-guide-card {
   max-width: 620px;
   background: var(--bg-card, #fff);
@@ -699,25 +894,54 @@ onUnmounted(() => {
   justify-content: center;
 }
 
-[data-theme="dark"] .ai-guide-card { background: #1e293b; border-color: #334155; }
-[data-theme="dark"] .ai-guide-title { color: #e2e8f0; }
-[data-theme="dark"] .ai-guide-steps li { background: #0f172a; }
+.share-tip {
+  font-size: var(--text-sm, 13px);
+  color: var(--text-light, #666);
+  margin: 0 0 10px;
+  line-height: 1.6;
+}
+.share-actions { margin-top: 10px; text-align: right; }
 
-/* ===== 窄屏：侧栏抽屉化 ===== */
+/* ===== 沉浸模式 ===== */
+.ai-hub.ai-hub-immersive { height: 100vh; }
+.ai-hub.ai-hub-immersive .ai-nav { display: none; }
+.ai-hub.ai-hub-immersive .ai-hub-menu-btn { display: none; }
+.ai-hub.ai-hub-immersive .ai-hub-topbar { height: 44px; padding: 0 12px; }
+
+/* ===== 窄屏：导航抽屉化 ===== */
 @media (max-width: 860px) {
-  .ai-hub-side {
-    position: fixed; top: 0; bottom: 0; left: 0; z-index: 20;
-    transform: translateX(-100%); transition: transform 0.25s;
-    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.1);
+  .ai-nav {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 20;
+    transform: translateX(-100%);
+    transition: transform 0.25s;
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.12);
   }
-  .ai-hub-side-open { transform: translateX(0); }
-  .ai-hub-side-close { display: inline-flex; }
+  .ai-nav-open { transform: translateX(0); }
   .ai-hub-menu-btn { display: inline-flex; }
   .ai-hub-mask {
-    display: block; position: fixed; inset: 0; z-index: 10;
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 10;
     background: rgba(0, 0, 0, 0.4);
   }
 }
-[data-theme="dark"] .ai-hub-side,
-[data-theme="dark"] .ai-hub-topbar { background: #0f172a; }
+
+/* ===== 深色 ===== */
+[data-theme="dark"] .ai-nav,
+[data-theme="dark"] .ai-hub-topbar { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .ai-nav-name,
+[data-theme="dark"] .ai-hub-current { color: #e2e8f0; }
+[data-theme="dark"] .ai-nav-item { color: #cbd5e1; }
+[data-theme="dark"] .ai-nav-item:hover,
+[data-theme="dark"] .ai-nav-session:hover { background: #0f172a; }
+[data-theme="dark"] .ai-nav-item.active,
+[data-theme="dark"] .ai-nav-session.active { background: rgba(99, 102, 241, 0.18); }
+[data-theme="dark"] .ai-guide-card { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .ai-guide-title { color: #e2e8f0; }
+[data-theme="dark"] .ai-guide-steps li { background: #0f172a; }
 </style>

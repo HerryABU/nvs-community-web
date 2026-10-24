@@ -53,6 +53,9 @@
               <el-dropdown-item @click="$router.push('/htmls')">
                 <span class="nav-emoji">🔌</span> 扩展应用
               </el-dropdown-item>
+              <el-dropdown-item v-if="authStore.isLoggedIn" @click="$router.push('/membership')">
+                <span class="nav-emoji">💎</span> 会员套餐
+              </el-dropdown-item>
               <el-dropdown-item v-if="authStore.isLoggedIn" @click="$router.push('/bookshelf')">
                 <span class="nav-emoji">📚</span> 书架
               </el-dropdown-item>

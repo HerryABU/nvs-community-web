@@ -57,15 +57,9 @@
     <StateBlock
       v-else
       state="empty"
-      :title="all.length ? '没有匹配的模型' : '还没有可用模型'"
-      :description="
-        all.length
-          ? '换个关键词或厂商再试。'
-          : isAdmin
-            ? '到「AI 模型池」用预设一键添加模型并填入上游密钥。'
-            : '站长还没有配置可用模型，稍后再来。'
-      "
-      :action-text="!all.length && isAdmin ? '去配置模型' : all.length ? '清空筛选' : ''"
+      :title="emptyTitle"
+      :description="emptyDesc"
+      :action-text="emptyAction"
       @action="onEmptyAction"
     />
   </div>
@@ -130,6 +124,30 @@ const filtered = computed(() => {
   });
 });
 
+/** AI 未开启 / 已开启但无模型 / 筛选无果 —— 三种空态的正确下一步各不相同 */
+const emptyTitle = computed(() => {
+  if (filtered.value.length) return '';
+  if (all.value.length) return '没有匹配的模型';
+  if (!props.status.ai_enabled) return 'AI 功能还没开启';
+  return '还没有可用模型';
+});
+const emptyDesc = computed(() => {
+  if (all.value.length) return '换个关键词或厂商再试。';
+  if (!props.status.ai_enabled) {
+    return props.isAdmin
+      ? 'AI 是默认关闭的增值能力：先在「AI 功能配置」打开总开关，再到「AI 模型池」添加一个模型。'
+      : '站长还没有开放 AI 功能，稍后再来看看。';
+  }
+  return props.isAdmin
+    ? '到「AI 模型池」用预设一键添加模型，填入上游密钥后把「启用」打开。'
+    : '站长还没有配置可用模型，稍后再来。';
+});
+const emptyAction = computed(() => {
+  if (all.value.length) return '清空筛选';
+  if (!props.isAdmin) return '';
+  return props.status.ai_enabled ? '去配置模型' : '去开启 AI';
+});
+
 function kindLabel(k: Kind) {
   return { chat: '对话', image: '绘画', video: '视频' }[k];
 }
@@ -155,7 +173,7 @@ function use(m: Row) {
 
 function onEmptyAction() {
   if (!all.value.length && props.isAdmin) {
-    router.push('/admin/ai-pool');
+    router.push(props.status.ai_enabled ? '/admin/ai-pool' : '/admin/ai-features');
     return;
   }
   keyword.value = '';

@@ -1,27 +1,13 @@
 <template>
   <!-- AI 对话面板（§5.4）：流式输出 / 停止生成 / Markdown 渲染 / 消耗展示 -->
   <div class="ai-chat">
-    <!-- 顶部：模型 + 长度 + 余额 -->
+    <!-- 顶部：只留上下文操作。模型/长度/发送都移到输入区，
+         顶部不再被一排控件占满（这是标准 AI 站的做法） -->
     <div class="ai-chat-topbar">
-      <el-select
-        v-if="vendors.length > 1"
-        v-model="vendor"
-        size="small"
-        style="width:132px"
-        :disabled="generating || useByok"
-      >
-        <el-option label="全部厂商" value="" />
-        <el-option v-for="v in vendors" :key="v" :label="v" :value="v" />
-      </el-select>
-      <el-select v-model="modelId" size="small" style="width:200px" :disabled="generating || useByok">
-        <el-option v-for="m in filteredModels" :key="m.id" :label="modelLabel(m)" :value="m.id" />
-      </el-select>
-      <el-radio-group v-model="maxTokens" size="small" :disabled="generating">
-        <el-radio-button :value="1024">短</el-radio-button>
-        <el-radio-button :value="2048">中</el-radio-button>
-        <el-radio-button :value="4096">长</el-radio-button>
-      </el-radio-group>
-      <el-tooltip content="使用「我的钱包 → 上游密钥」中配置的密钥，不消耗平台代币" placement="top">
+      <el-button size="small" text @click="promptOpen = true">
+        <el-icon><Collection /></el-icon> 提示词库
+      </el-button>
+      <el-tooltip content="使用「我的钱包 → 上游密钥」中配置的密钥，不消耗平台代币" placement="bottom">
         <el-checkbox v-model="useByok" size="small" :disabled="generating">我的密钥</el-checkbox>
       </el-tooltip>
       <el-input
@@ -32,18 +18,32 @@
         placeholder="上游模型 ID"
         :disabled="generating"
       />
-      <el-button size="small" plain @click="promptOpen = true">
-        <el-icon><Collection /></el-icon> 提示词
-      </el-button>
       <span class="ai-chat-balance">余额 <b>{{ status.balance }}</b> {{ status.token_name }}</span>
     </div>
 
     <!-- 消息列表 -->
     <div ref="msgListEl" class="ai-chat-messages">
-      <div v-if="messages.length === 0 && !streamingText" class="ai-chat-welcome">
-        <div class="ai-chat-welcome-emoji">{{ currentAgentEmoji }}</div>
-        <div class="ai-chat-welcome-title">{{ currentAgentName }}</div>
-        <div class="ai-chat-welcome-hint">{{ currentAgentGreeting || '输入内容开始对话' }}</div>
+      <!-- 空态：大标题 + 推荐问题（标准 AI 站首屏，而不是一句「输入内容开始对话」） -->
+      <div v-if="messages.length === 0 && !streamingText" class="ai-welcome">
+        <div class="ai-welcome-emoji">{{ currentAgentEmoji }}</div>
+        <h1 class="ai-welcome-title">{{ currentAgentName }}</h1>
+        <p class="ai-welcome-hint">{{ currentAgentGreeting || '今天想聊点什么？' }}</p>
+
+        <div class="ai-preset-grid">
+          <button
+            v-for="(p, pi) in presetPrompts"
+            :key="pi"
+            type="button"
+            class="ai-preset"
+            @click="usePrompt(p.text)"
+          >
+            <span class="ai-preset-emoji">{{ p.emoji }}</span>
+            <span class="ai-preset-body">
+              <b>{{ p.title }}</b>
+              <span>{{ p.text }}</span>
+            </span>
+          </button>
+        </div>
       </div>
       <div
         v-for="m in messages"
@@ -76,22 +76,60 @@
       </div>
     </div>
 
-    <!-- 输入区 -->
-    <div class="ai-chat-input">
-      <el-input
-        v-model="inputText"
-        type="textarea"
-        :rows="3"
-        resize="none"
-        placeholder="输入消息，Enter 发送，Shift+Enter 换行"
-        :disabled="generating"
-        @keydown.enter.exact.prevent="send"
-      />
-      <div class="ai-chat-actions">
-        <span class="muted small">按量计费，停止生成前的内容正常计费</span>
-        <el-button v-if="generating" type="danger" plain @click="stop">停止生成</el-button>
-        <el-button v-else type="primary" :disabled="!inputText.trim()" @click="send">发送</el-button>
+    <!-- 输入区：圆角大输入框 + 底部工具行（模型 / 长度 / 发送） -->
+    <div class="ai-composer">
+      <div class="ai-composer-box" :class="{ 'is-focus': composerFocus, 'is-generating': generating }">
+        <textarea
+          ref="composerEl"
+          v-model="inputText"
+          class="ai-composer-input"
+          rows="1"
+          :disabled="generating"
+          placeholder="给 AI 发消息…"
+          @focus="composerFocus = true"
+          @blur="composerFocus = false"
+          @input="autoGrow"
+          @keydown.enter.exact.prevent="send"
+        />
+        <div class="ai-composer-tools">
+          <div class="ai-composer-left">
+            <el-select
+              v-if="vendors.length > 1"
+              v-model="vendor"
+              size="small"
+              style="width:104px"
+              :disabled="generating || useByok"
+            >
+              <el-option label="全部厂商" value="" />
+              <el-option v-for="v in vendors" :key="v" :label="v" :value="v" />
+            </el-select>
+            <el-select v-model="modelId" size="small" style="width:168px" :disabled="generating || useByok">
+              <el-option v-for="m in filteredModels" :key="m.id" :label="modelLabel(m)" :value="m.id" />
+            </el-select>
+            <el-select v-model="maxTokens" size="small" style="width:100px" :disabled="generating">
+              <el-option :value="1024" label="短回复" />
+              <el-option :value="2048" label="中回复" />
+              <el-option :value="4096" label="长回复" />
+            </el-select>
+          </div>
+          <div class="ai-composer-right">
+            <button v-if="generating" type="button" class="ai-send-btn is-stop" title="停止生成" @click="stop">
+              <el-icon><VideoPause /></el-icon>
+            </button>
+            <button
+              v-else
+              type="button"
+              class="ai-send-btn"
+              :disabled="!inputText.trim()"
+              title="发送（Enter）"
+              @click="send"
+            >
+              <el-icon><Top /></el-icon>
+            </button>
+          </div>
+        </div>
       </div>
+      <p class="ai-composer-tip">Enter 发送 · Shift+Enter 换行 · 停止生成前的内容正常计费</p>
     </div>
 
     <AiPromptLibrary
@@ -106,7 +144,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { CopyDocument, RefreshRight, Collection } from '@element-plus/icons-vue';
+import { CopyDocument, RefreshRight, Collection, Top, VideoPause } from '@element-plus/icons-vue';
 import { renderAiMarkdown } from '@/markdown/renderer';
 import AiPromptLibrary from '@/components/ai/AiPromptLibrary.vue';
 import { streamChat, type AiHubStatus, type AiAgent, type AiChatMessage, type AiChatSession } from '@/api/aiHub';
@@ -177,6 +215,33 @@ watch(
 );
 
 const currentAgent = computed(() => props.agents.find((a) => a.id === props.agentId));
+
+// ---------- 空态推荐提示词 ----------
+// 不用行业模板话术，全部贴着本站的写作/阅读场景，点一下直接进输入框（还能自己改）
+const presetPrompts = [
+  { emoji: '✍️', title: '续写一段', text: '帮我接着往下写 300 字，保持第一人称和现有的语气，不要收尾。' },
+  { emoji: '🎭', title: '人物小传', text: '给我设计一个配角的人设：姓名、年龄、外貌特征、说话习惯、一个不愿提起的过去。' },
+  { emoji: '⚡', title: '制造冲突', text: '当前剧情太平淡，给我三个能立刻提升张力的冲突方案，并说明各自的代价。' },
+  { emoji: '🔍', title: '挑毛病', text: '把下面这段文字按「逻辑漏洞 / 冗余表达 / 视角混乱」三类问题逐条挑出来：\n\n' },
+];
+
+function usePrompt(text: string) {
+  inputText.value = text;
+  nextTick(() => {
+    composerEl.value?.focus();
+    autoGrow();
+  });
+}
+
+// ---------- 输入框自适应高度 ----------
+const composerEl = ref<HTMLTextAreaElement>();
+const composerFocus = ref(false);
+function autoGrow() {
+  const el = composerEl.value;
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+}
 const currentAgentName = computed(() => currentAgent.value?.name || 'AI 对话');
 const currentAgentEmoji = computed(() => currentAgent.value?.emoji || '💬');
 const currentAgentGreeting = computed(() => currentAgent.value?.greeting || '');
@@ -374,10 +439,68 @@ function stop() {
 .ai-chat-balance { margin-left: auto; font-size: 0.82rem; color: var(--text-light, #666); }
 .ai-chat-balance b { color: var(--el-color-primary, #409eff); }
 .ai-chat-messages { flex: 1; overflow-y: auto; padding: 16px; min-height: 0; }
-.ai-chat-welcome { text-align: center; padding: 60px 0 30px; color: var(--text-light, #888); }
-.ai-chat-welcome-emoji { font-size: 3rem; }
-.ai-chat-welcome-title { font-size: 1.1rem; font-weight: 600; color: var(--text-color, #333); margin: 10px 0 6px; }
-.ai-chat-welcome-hint { font-size: 0.85rem; }
+/* ===== 空态：问候 + 推荐词（标准 AI 站首屏）===== */
+.ai-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-7, 48px) var(--space-4, 16px) var(--space-5, 24px);
+  min-height: 60%;
+}
+.ai-welcome-emoji { font-size: 40px; line-height: 1; margin-bottom: var(--space-3, 12px); }
+.ai-welcome-title {
+  margin: 0 0 var(--space-2, 8px);
+  font-size: var(--text-2xl, 28px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-color, #1f2328);
+}
+.ai-welcome-hint {
+  margin: 0 0 var(--space-5, 24px);
+  font-size: var(--text-base, 14px);
+  color: var(--text-light, #6b7280);
+  max-width: 560px;
+  line-height: 1.6;
+}
+.ai-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-3, 12px);
+  width: 100%;
+  max-width: 720px;
+}
+.ai-preset {
+  display: flex;
+  gap: 10px;
+  padding: var(--space-3, 12px);
+  text-align: left;
+  cursor: pointer;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: var(--radius-md, 10px);
+  font-family: inherit;
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+.ai-preset:hover {
+  transform: translateY(-1px);
+  border-color: var(--el-color-primary, #6366f1);
+  box-shadow: var(--shadow-sm, 0 4px 12px rgba(0, 0, 0, 0.06));
+}
+.ai-preset-emoji { font-size: 16px; line-height: 1.4; flex-shrink: 0; }
+.ai-preset-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ai-preset-body b { font-size: var(--text-sm, 13px); color: var(--text-color, #1f2328); }
+.ai-preset-body span {
+  font-size: var(--text-xs, 12px);
+  line-height: 1.5;
+  color: var(--text-light, #6b7280);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .ai-msg { display: flex; margin-bottom: 14px; }
 .ai-msg-user { justify-content: flex-end; }
 .ai-msg-bubble {
@@ -423,8 +546,74 @@ function stop() {
   vertical-align: text-bottom; animation: ai-blink 0.8s infinite;
 }
 @keyframes ai-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-.ai-chat-input { border-top: 1px solid var(--el-border-color, #ebeef5); padding: 12px 16px; }
-.ai-chat-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+/* ===== 输入区：圆角大输入框 + 内嵌工具行 ===== */
+.ai-composer {
+  padding: var(--space-3, 12px) var(--space-4, 16px) var(--space-3, 12px);
+  border-top: 1px solid var(--border-color, #ebeef5);
+  background: var(--bg-card, #fff);
+}
+.ai-composer-box {
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: var(--radius-lg, 16px);
+  background: var(--bg-card, #fff);
+  box-shadow: var(--shadow-xs, 0 1px 3px rgba(0, 0, 0, 0.04));
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  max-width: 900px;
+  margin: 0 auto;
+}
+.ai-composer-box.is-focus {
+  border-color: var(--el-color-primary, #6366f1);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+.ai-composer-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  padding: var(--space-3, 12px) var(--space-3, 12px) 4px;
+  font-family: inherit;
+  font-size: var(--text-base, 14px);
+  line-height: 1.6;
+  color: var(--text-color, #1f2328);
+  max-height: 200px;
+  overflow-y: auto;
+}
+.ai-composer-input::placeholder { color: var(--text-light, #9ca3af); }
+.ai-composer-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2, 8px);
+  padding: 4px var(--space-2, 8px) var(--space-2, 8px);
+}
+.ai-composer-left { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.ai-composer-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.ai-send-btn {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #fff;
+  background: var(--gradient-primary, linear-gradient(135deg, #6366f1, #8b5cf6));
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.ai-send-btn:hover:not(:disabled) { transform: scale(1.05); }
+.ai-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.ai-send-btn.is-stop { background: #ef4444; }
+.ai-composer-tip {
+  margin: 6px auto 0;
+  max-width: 900px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-light, #9ca3af);
+}
 .muted { color: var(--text-light, #999); }
 .small { font-size: 0.75rem; }
 [data-theme="dark"] .ai-msg-assistant .ai-msg-bubble { background: #1e293b; color: #e2e8f0; }

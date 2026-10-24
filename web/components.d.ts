@@ -17,7 +17,6 @@ declare module 'vue' {
     AiAssistPanel: typeof import('./src/components/editor/AiAssistPanel.vue')['default']
     AiChatPanel: typeof import('./src/components/ai/AiChatPanel.vue')['default']
     AiGalleryPanel: typeof import('./src/components/ai/AiGalleryPanel.vue')['default']
-    AiHomePanel: typeof import('./src/components/ai/AiHomePanel.vue')['default']
     AiImagePanel: typeof import('./src/components/ai/AiImagePanel.vue')['default']
     AiModelSquare: typeof import('./src/components/ai/AiModelSquare.vue')['default']
     AiPromptLibrary: typeof import('./src/components/ai/AiPromptLibrary.vue')['default']
