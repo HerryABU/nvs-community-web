@@ -1561,3 +1561,17 @@ body {
 /* ===== AI 工作台沉浸模式：隐藏站点导航，专注对话 ===== */
 body.ai-immersive .navbar { display: none !important; }
 body.ai-immersive { padding-top: 0 !important; }
+
+/* ===== 首页区块的紧凑空态 =====
+   各区块（博客/版块/最新帖/模块）共用：一条虚线框 + 一行说明，
+   取代原来每个区块各放一个 el-empty（默认约 297px，新站首页会堆出上千像素空白）。 */
+.home-block-empty {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-page);
+  font-size: var(--text-sm);
+  color: var(--text-light);
+  text-align: center;
+}

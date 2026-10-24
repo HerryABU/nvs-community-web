@@ -29,13 +29,12 @@ const html = computed(() => {
 
 <style scoped>
 .home-block {
-  background: #fff;
+  background: var(--bg-card);
   border-radius: var(--radius-lg);
   padding: 22px 26px;
   margin-bottom: 26px;
   box-shadow: var(--shadow-card);
 }
-[data-theme="dark"] .home-block { background: #1a1d27; }
 .bc-header h2 { margin: 0 0 12px; font-size: 1.15rem; font-weight: 600; }
 .bc-body { font-size: .92rem; line-height: 1.7; }
 </style>

@@ -7,7 +7,7 @@
       :module="m"
       :featured="featuredFirst && i === 0"
     />
-    <el-empty v-if="!modules.length" description="未配置任何模块" />
+    <p v-if="!modules.length" class="home-block-empty">未配置任何模块，站长可在「后台 → 首页布局」添加。</p>
   </div>
 </template>
 

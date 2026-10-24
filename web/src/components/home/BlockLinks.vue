@@ -46,13 +46,12 @@ function go(url: string) {
 
 <style scoped>
 .home-block {
-  background: #fff;
+  background: var(--bg-card);
   border-radius: var(--radius-lg);
   padding: 18px 26px;
   margin-bottom: 26px;
   box-shadow: var(--shadow-card);
 }
-[data-theme="dark"] .home-block { background: #1a1d27; }
 .bl-header h2 { margin: 0 0 10px; font-size: 1.05rem; font-weight: 600; }
 .bl-body { display: flex; flex-wrap: wrap; gap: 10px; }
 </style>

@@ -19,7 +19,7 @@
           </span>
         </article>
       </template>
-      <el-empty v-else-if="!loading" description="暂无讨论" :image-size="60" />
+      <p v-else-if="!loading" class="home-block-empty">还没有讨论。去发第一帖吧。</p>
     </div>
   </section>
 </template>
@@ -57,13 +57,12 @@ onMounted(async () => {
 
 <style scoped>
 .home-block {
-  background: #fff;
+  background: var(--bg-card);
   border-radius: var(--radius-lg);
   padding: 22px 26px;
   margin-bottom: 26px;
   box-shadow: var(--shadow-card);
 }
-[data-theme="dark"] .home-block { background: #1a1d27; }
 
 .bt-header {
   display: flex;

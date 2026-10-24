@@ -12,9 +12,19 @@
       </el-button>
     </div>
 
-    <div v-loading="loading" class="hms-body">
+    <div class="hms-body">
+      <!-- 首次加载用骨架：避免"先空一块、再突然撑开"的跳动 -->
+      <div v-if="loading" class="hms-skeleton">
+        <template v-if="module === 'novels'">
+          <div v-for="i in 4" :key="i" class="hms-skeleton-card" />
+        </template>
+        <template v-else>
+          <div v-for="i in 4" :key="i" class="hms-skeleton-row" />
+        </template>
+      </div>
+
       <!-- 小说：卡片网格 -->
-      <div v-if="module === 'novels'" class="hms-grid">
+      <div v-else-if="module === 'novels'" class="hms-grid">
         <NovelCard
           v-for="item in items"
           :key="item.id"
@@ -24,7 +34,7 @@
       </div>
 
       <!-- 博客 / 论坛：列表 -->
-      <ul v-else class="hms-list">
+      <ul v-else-if="!isEmpty" class="hms-list">
         <li
           v-for="item in items"
           :key="item.id"
@@ -36,7 +46,18 @@
         </li>
       </ul>
 
-      <el-empty v-if="!loading && items.length === 0" :description="`暂无${meta.title}`" />
+      <!-- 空态：新站首页曾出现三块各 297px 的 el-empty，整页上千像素全是"暂无"。
+           改成一行紧凑提示 + 一个真能点的下一步。 -->
+      <div v-if="!loading && isEmpty" class="hms-empty">
+        <span class="hms-empty-icon">{{ meta.icon }}</span>
+        <div class="hms-empty-text">
+          <b>{{ meta.emptyTitle }}</b>
+          <span>{{ meta.emptyHint }}</span>
+        </div>
+        <el-button size="small" type="primary" plain @click="goEmptyAction">
+          {{ meta.emptyAction }}
+        </el-button>
+      </div>
     </div>
   </section>
 </template>
@@ -54,17 +75,42 @@ type ModuleType = 'novels' | 'blogs' | 'forums';
 const props = defineProps<{ module: ModuleType; featured?: boolean }>();
 const router = useRouter();
 
-const metaMap: Record<ModuleType, { title: string; icon: string; more: string }> = {
-  novels: { title: '类型文学', icon: '📚', more: '/forums' },
-  blogs: { title: '创作博客', icon: '✍️', more: '/blogs' },
-  forums: { title: '讨论论坛', icon: '💬', more: '/forums' },
+// more 是「查看全部」的去处：小说的列表页是 /feed（原来错写成 /forums，
+// 点"查看全部"会从文学作品跳到论坛，是明显的串台）
+const metaMap: Record<
+  ModuleType,
+  { title: string; icon: string; more: string; emptyTitle: string; emptyHint: string; emptyAction: string }
+> = {
+  novels: {
+    title: '类型文学', icon: '📚', more: '/feed',
+    emptyTitle: '还没有作品', emptyHint: '第一篇永远是最难写的，但也是最值得的。',
+    emptyAction: '去发布作品',
+  },
+  blogs: {
+    title: '创作博客', icon: '✍️', more: '/blogs',
+    emptyTitle: '还没有博客', emptyHint: '写下创作手记、灵感碎片，或者连载之外的碎碎念。',
+    emptyAction: '写第一篇',
+  },
+  forums: {
+    title: '讨论论坛', icon: '💬', more: '/forums',
+    emptyTitle: '还没有版块', emptyHint: '版块是讨论的起点，站长可以在后台创建。',
+    emptyAction: '去论坛看看',
+  },
 };
 const meta = computed(() => metaMap[props.module]);
 
 interface Item { id: number; title: string; subtitle: string; to: string }
 
 const items = ref<Item[]>([]);
-const loading = ref(false);
+const loading = ref(true);
+const isEmpty = computed(() => items.value.length === 0);
+
+/** 空态按钮：新站引导用户去"能产生内容"的地方 */
+function goEmptyAction() {
+  if (props.module === 'novels') return router.push('/author/editor');
+  if (props.module === 'blogs') return router.push('/author/editor');
+  return router.push('/forums');
+}
 
 function normalize(list: any[], module: ModuleType): any[] {
   return (list || []).map((r: any) => {
@@ -130,14 +176,13 @@ onMounted(load);
 
 <style scoped>
 .home-module-section {
-  background: #fff;
+  /* 用令牌而不是写死 #fff + 单独覆盖深色：后者每加一个区块就要再写一遍，漏一处就是白底 */
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: 22px 26px;
   margin-bottom: 26px;
   box-shadow: var(--shadow-card);
-}
-[data-theme="dark"] .home-module-section {
-  background: #1a1d27;
 }
 .hms-header {
   display: flex;
@@ -168,6 +213,46 @@ onMounted(load);
   margin: 0;
   padding: 0;
 }
+/* ---- 加载骨架 ---- */
+.hms-skeleton { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; }
+.hms-skeleton-card {
+  height: 210px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(90deg, var(--bg-page) 25%, var(--bg-soft) 37%, var(--bg-page) 63%);
+  background-size: 400% 100%;
+  animation: hms-shimmer 1.4s ease infinite;
+}
+.hms-skeleton-row {
+  grid-column: 1 / -1;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--bg-page) 25%, var(--bg-soft) 37%, var(--bg-page) 63%);
+  background-size: 400% 100%;
+  animation: hms-shimmer 1.4s ease infinite;
+}
+@keyframes hms-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hms-skeleton-card, .hms-skeleton-row { animation: none; }
+}
+
+/* ---- 紧凑空态 ---- */
+.hms-empty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-page);
+}
+.hms-empty-icon { font-size: 20px; line-height: 1; opacity: .7; }
+.hms-empty-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.hms-empty-text b { font-size: var(--text-sm); color: var(--text-color); }
+.hms-empty-text span { font-size: var(--text-xs); color: var(--text-light); }
+
 .hms-list-item {
   display: flex;
   justify-content: space-between;
