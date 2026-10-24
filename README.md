@@ -473,6 +473,23 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.17.0 AI 路由策略 + 故障自动降级（2026-10-24）
+
+**路由策略（`models/ai_router.go`，补齐 gap-audit #10）**
+- `manual`（默认，保持既有语义：按 priority）｜`cheapest`（输入价+输出价，免费优先）｜
+  `fastest`（近 7 天实测平均延迟，无样本排最后并退化为价格序）｜`scene`（按场景覆盖）
+- 默认场景映射：`oc_turn`/`group_bot`/`oc_publish` → cheapest，`ai_hub` → fastest
+- 合规开关 `prefer_domestic`：境内厂商优先（只影响排序，不硬性排除境外）
+- 后台「AI 模型池 → 路由策略」可配置，并显示各场景**当前生效策略**；保存即时生效
+- `AiCallLog` 新增 `latency_ms`：fastest 的数据来源，同时便于排查慢模型
+
+**故障自动降级（`server/aicall`，补齐 gap-audit #11）**
+- 统一调用入口 `aicall.Complete`：选模型 → 免费额度/余额预检 → 密钥租约 → 调用 → 结算，失败按
+  `max_fallback`（1~3）自动切下一个候选，**绝不静默换模型**：`Result.Notice()` 生成
+  「模型已降级：A → B（原因）」，没有备用时明确写「无可用备用模型」
+- 已接入 OC 发言（`oc_turn`）与群内 AI（`group_bot`）：降级提示直接写进正文尾部
+- 计费与既有账本一致（免费额度优先、失败不扣款、价格快照随流水）
+
 ### v3.16.0 蜜罐独立进程/独立库/冷归档 + 合规材料一键导出（2026-10-24）
 
 **蜜罐隔离与留存（补齐 `gap-audit` #1/#2/#5）**
