@@ -1,11 +1,15 @@
-# 群组功能 · 设计与实现状态（v3.9.0 已实现 G1~G3）
+# 群组功能 · 设计与实现状态（v3.10.0 已实现 G1~G4）
 
 > **实现落点**：领域层 `server/groups/`（group / member / post / file / quota / migrate / 测试）、
 > 接口层 `server/handlers/group/`（group / member / post / file / ai / admin）、
 > 前端 `api/group` + `components/group` + `views/group` + `views/admin/group`。
 > 已完成：群号、可见性、三种加入方式、角色与拉人/踢人/禁言/公告、配额（按角色 + 按人）、
 > 群内帖子先审后发、群文件隔离与 ZIP 炸弹检测、群内 `@ai`。
-> 未完成：G4 实时消息（当前为异步发帖，WebSocket 需单独评估）。
+> G4 实时消息（v3.10.0）：**选型 SSE 而非 WebSocket** —— 群消息是服务端→客户端单向广播，
+> 复用站内 `realtime.Hub`（批量 flush / 慢客户端踢除 / 心跳），零新依赖、过 nginx 无需额外配置、
+> Cookie 鉴权无需把 token 放进 URL。群组使用独立 Hub 实例，不受「狂暴模式」开关影响。
+> 事件：post.created / post.reviewed / reply.created / announcement / member.joined / member.left。
+> 前端 fetch + ReadableStream 读取，指数退避重连（1s→30s），页面隐藏暂停、回前台重连。
 
 > 目标：在公开社区（论坛/博客）之外补「半私密/私密」协作空间，复用既有审核、额度、举报、未成年保护体系。
 
