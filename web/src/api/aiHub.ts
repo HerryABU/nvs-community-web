@@ -129,7 +129,17 @@ export const aiHubApi = {
     return api.post<{ code: number; data: { task_id: number; status: string; cost: number; free?: boolean; byok?: boolean; balance_after: number } }>('/ai/video', data);
   },
   videoStatus(id: number) {
-    return api.get<{ code: number; data: { task_id: number; status: string; video?: string; result?: string; error?: string; cost: number } }>(`/ai/video/${id}`);
+    return api.get<{
+      code: number;
+      data: { task_id: number; status: string; video?: string; result?: string; error?: string; cost: number; refunded?: boolean };
+    }>(`/ai/video/${id}`);
+  },
+  /** 取消异步视频任务：立即停止等待，已扣款原路退回 */
+  videoCancel(id: number) {
+    return api.post<{
+      code: number;
+      data: { task_id: number; status: string; refunded: boolean; refund_amount: number; balance_after: number; message: string };
+    }>(`/ai/video/${id}/cancel`, {});
   },
   /** 上传出图附件（参考图/素材），返回站内 URL（gap-audit #17） */
   attachMedia(file: File) {

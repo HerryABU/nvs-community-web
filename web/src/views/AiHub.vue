@@ -230,7 +230,7 @@
           @sessions-changed="loadSessions"
         />
         <AiImagePanel v-else-if="activeTab === 'image'" :status="status" :initial-prompt="remixPrompt" />
-        <AiVideoPanel v-else-if="activeTab === 'video'" :status="status" />
+        <AiVideoPanel v-else-if="activeTab === 'video'" :status="status" @balance-updated="onBalanceUpdated" />
         <MindMapPanel v-else :status="status" />
       </template>
     </main>

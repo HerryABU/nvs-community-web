@@ -128,6 +128,21 @@
             type="button"
             @click="publishVideo(t)"
           >{{ t.is_public ? '管理发布' : '发布' }}</button>
+          <!-- 失败重试：用原参数直接重新提交，不用先回填再点一次 -->
+          <button
+            v-if="t.status === 'failed'"
+            class="pd-card-tool is-primary"
+            type="button"
+            :disabled="submitting"
+            @click="retryTask(t)"
+          >重新提交</button>
+          <!-- 取消：异步任务要能中断等待，否则只能刷新页面看着它转 -->
+          <button
+            v-if="t.status === 'pending' || t.status === 'running'"
+            class="pd-card-tool is-danger"
+            type="button"
+            @click="cancelTask(t)"
+          >停止等待</button>
           <button class="pd-card-tool" type="button" @click="reusePrompt(t)">再来一条</button>
           <button class="pd-card-tool" type="button" @click="copyPrompt(t)">复制提示词</button>
         </header>
@@ -150,9 +165,15 @@
           class="pd-video"
         />
 
-        <!-- 失败 -->
+        <!-- 失败：退款与否必须如实说清楚（曾经一直是"已自动退款"，实际一分没退） -->
         <p v-else-if="t.status === 'failed'" class="pd-card-error">
-          {{ t.error || '生成失败（已自动退款）' }}
+          {{ t.error || '生成失败' }}
+          <span class="pd-card-refund">{{ t.refunded ? '费用已原路退回' : (t.cost ? '本次未退款，请联系站长' : '本次未扣费') }}</span>
+        </p>
+
+        <!-- 已取消 -->
+        <p v-else-if="t.status === 'cancelled'" class="pd-card-error is-muted">
+          {{ t.error || '已取消' }}
         </p>
 
         <!-- 进行中：状态条 + 进度 -->
@@ -188,6 +209,8 @@ import { aiHubApi, type AiHubStatus } from '@/api/aiHub';
 import StateBlock from '@/components/common/StateBlock.vue';
 
 const props = defineProps<{ status: AiHubStatus }>();
+// 取消/退款后余额变了，通知父组件刷新（父组件已有 onBalanceUpdated）
+const emit = defineEmits<{ (e: 'balance-updated', balance: number): void }>();
 
 const DURATIONS = [
   { value: 5, label: '短片' },
@@ -226,13 +249,14 @@ function modelLabel(m: { name: string; price_call: number }) {
 
 function statusText(s: string) {
   const map: Record<string, string> = {
-    pending: '排队中', running: '生成中', succeeded: '已完成', failed: '失败',
+    pending: '排队中', running: '生成中', succeeded: '已完成', failed: '失败', cancelled: '已取消',
   };
   return map[s] || s;
 }
 function statusClass(s: string) {
   if (s === 'succeeded') return 'is-ok';
   if (s === 'failed') return 'is-err';
+  if (s === 'cancelled') return 'is-cancel';
   return 'is-run';
 }
 
@@ -288,6 +312,17 @@ function reusePrompt(t: any) {
 }
 
 // ---------- 提交与轮询 ----------
+interface VideoSubmitArgs {
+  modelId: number;
+  prompt: string;
+  duration: number;
+  size: string;
+  byok?: boolean;
+  byokModel?: string;
+  /** 重试：成功后不覆盖左侧输入框（用户可能已经在改别的稿子） */
+  isRetry?: boolean;
+}
+
 async function submit() {
   if (!modelId.value && !useByok.value) {
     ElMessage.warning('请先选择模型');
@@ -297,28 +332,123 @@ async function submit() {
     ElMessage.warning('使用我的密钥时需填写上游模型 ID');
     return;
   }
+  await doSubmit({
+    modelId: modelId.value,
+    prompt: prompt.value.trim(),
+    duration: duration.value,
+    size: vsize.value,
+    byok: useByok.value || undefined,
+    byokModel: useByok.value ? byokModel.value.trim() : undefined,
+  });
+}
+
+/** 实际提交（正常提交与"重新提交"共用） */
+async function doSubmit(a: VideoSubmitArgs) {
+  if (!a.prompt) {
+    ElMessage.warning('提示词不能为空');
+    return;
+  }
   submitting.value = true;
   try {
     const res = await aiHubApi.videoSubmit({
-      model_id: modelId.value,
-      prompt: prompt.value.trim(),
-      duration: duration.value,
-      size: vsize.value,
-      byok: useByok.value || undefined,
-      byok_model: useByok.value ? byokModel.value.trim() : undefined,
+      model_id: a.modelId,
+      prompt: a.prompt,
+      duration: a.duration,
+      size: a.size,
+      byok: a.byok || undefined,
+      byok_model: a.byokModel || undefined,
     });
     if (res.data.code === 0) {
       // 任务立即进流（不在下方另开"当前任务"区，避免同一任务出现两次）
       latestTaskId.value = res.data.data.task_id;
-      prompt.value = '';
+      if (!a.isRetry) prompt.value = '';
       await loadHistory();
       startPolling();
-      ElMessage.success('已提交，生成完成后会自动出现');
+      emit('balance-updated', res.data.data.balance_after);
+      ElMessage.success(a.isRetry ? '已重新提交' : '已提交，生成完成后会自动出现');
     }
   } catch (e: any) {
+    // 428/42801：按次单价触发的二次确认
+    if (e?.response?.status === 428) {
+      try {
+        await ElMessageBox.confirm(e.response.data?.message || '本次消费较高，确认继续？', '确认消费', {
+          confirmButtonText: '已知悉，继续',
+          cancelButtonText: '取消',
+          type: 'warning',
+        });
+      } catch {
+        return;
+      }
+      submitting.value = false;
+      await doSubmit({ ...a, isRetry: a.isRetry });
+      return;
+    }
     ElMessage.error(e?.response?.data?.message || '提交失败');
   }
   submitting.value = false;
+}
+
+/** 失败任务用原参数重新提交 */
+async function retryTask(t: any) {
+  // BYOK 任务不记上游模型 ID（提交时由用户临时填写），无法可靠重放，退回"回填 + 手动提交"
+  if (!t.model_id) {
+    reusePrompt(t);
+    ElMessage.warning('自备密钥任务未记录上游模型 ID，已回填提示词，请确认参数后重新提交');
+    return;
+  }
+  const p = parseTaskParams(t.params);
+  await doSubmit({
+    modelId: t.model_id,
+    prompt: String(t.prompt || '').trim(),
+    duration: p.duration || duration.value,
+    size: p.size || vsize.value,
+    isRetry: true,
+  });
+}
+
+/** 取消进行中的任务：停止等待 + 已扣款原路退回 */
+async function cancelTask(t: any) {
+  const charged = Number(t.cost || 0) > 0 && !t.refunded;
+  const tip = charged
+    ? '取消后会立即停止等待，已扣的代币原路退回。\n\n注意：上游可能已经开始生成，这部分算力成本只能由本站承担，请尽量不要频繁取消。'
+    : '取消后会立即停止等待。本次走的是免费额度/自备密钥，不涉及退款。';
+  try {
+    await ElMessageBox.confirm(tip, '取消这个生成任务？', {
+      confirmButtonText: '停止等待',
+      cancelButtonText: '继续生成',
+      type: 'warning',
+    });
+  } catch {
+    return;
+  }
+  try {
+    const res = await aiHubApi.videoCancel(t.id);
+    if (res.data.code === 0) {
+      const d = res.data.data;
+      t.status = d.status || 'cancelled';
+      t.refunded = !!d.refunded;
+      t.error = d.message || '已取消';
+      if (t.id === latestTaskId.value) {
+        stopPolling();
+        latestTaskId.value = 0;
+      }
+      emit('balance-updated', d.balance_after);
+      await loadHistory();
+      ElMessage.success(d.message || '已取消');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '取消失败');
+  }
+}
+
+/** 读任务存档的生成参数 */
+function parseTaskParams(raw: string): { duration?: number; size?: string } {
+  try {
+    const p = JSON.parse(raw || '{}');
+    return { duration: Number(p.duration) || undefined, size: p.size || undefined };
+  } catch {
+    return {};
+  }
 }
 
 /**
@@ -338,12 +468,19 @@ async function pollOnce() {
       if (st.video) item.result = JSON.stringify({ video: st.video });
       if (st.error) item.error = st.error;
     }
-    if (st.status === 'succeeded' || st.status === 'failed') {
+    if (st.status === 'succeeded' || st.status === 'failed' || st.status === 'cancelled') {
       stopPolling();
       latestTaskId.value = 0;
       await loadHistory();
-      if (st.status === 'failed') ElMessage.warning('视频生成失败，已自动退款');
-      else ElMessage.success('视频已生成');
+      // 别再写死"已自动退款"：后端以前确实没退（RefundAiMediaTask 只认 succeeded 状态，
+      // 而运行中任务是 running），现在按真实退款结果说话
+      if (st.status === 'failed') {
+        ElMessage.warning(st.refunded ? '视频生成失败，费用已退回' : '视频生成失败（本次未扣费或未退款）');
+      } else if (st.status === 'cancelled') {
+        ElMessage.info('任务已取消');
+      } else {
+        ElMessage.success('视频已生成');
+      }
     }
   } catch { /* 轮询失败保持原状，下次继续 */ }
 }
@@ -486,6 +623,7 @@ onUnmounted(stopPolling);
 .pd-card-flag.is-ok { color: #16a34a; background: rgba(22, 163, 74, 0.1); }
 .pd-card-flag.is-err { color: #ef4444; background: rgba(239, 68, 68, 0.1); }
 .pd-card-flag.is-run { color: #2563eb; background: rgba(37, 99, 235, 0.1); }
+.pd-card-flag.is-cancel { color: var(--text-light, #6b7280); background: var(--bg-page, #f1f5f9); }
 .pd-card-cost { color: var(--text-light, #9ca3af); }
 .pd-card-spacer { flex: 1; }
 .pd-card-tool {
@@ -493,6 +631,11 @@ onUnmounted(stopPolling);
   font-size: 11px; color: var(--text-light, #6b7280); cursor: pointer; font-family: inherit;
 }
 .pd-card-tool:hover { background: var(--bg-page, #f5f6f8); color: var(--el-color-primary, #6366f1); }
+.pd-card-tool.is-primary { color: var(--el-color-primary, #6366f1); border-color: rgba(99, 102, 241, 0.4); }
+.pd-card-tool.is-primary:hover { background: rgba(99, 102, 241, 0.1); }
+.pd-card-tool.is-danger { color: #ef4444; border-color: rgba(239, 68, 68, 0.35); }
+.pd-card-tool.is-danger:hover { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+.pd-card-tool:disabled { opacity: .5; cursor: not-allowed; }
 
 .pd-card-prompt {
   margin: 8px 0 10px; font-size: var(--text-sm, 13px); line-height: 1.6;
@@ -503,6 +646,13 @@ onUnmounted(stopPolling);
 .pd-card-prompt.is-open { -webkit-line-clamp: unset; line-clamp: unset; display: block; }
 
 .pd-video { width: 100%; max-width: 820px; border-radius: var(--radius-md, 10px); background: #000; display: block; }
+.pd-card-refund {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: .85;
+}
+.pd-card-error.is-muted { color: var(--text-light, #6b7280); background: var(--bg-page, #f8fafc); }
 .pd-card-error {
   margin: 0; padding: 8px 10px; border-radius: 8px;
   font-size: 12px; color: #b91c1c; background: rgba(239, 68, 68, 0.08);

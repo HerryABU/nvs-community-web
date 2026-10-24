@@ -420,6 +420,10 @@ func main() {
 		protected.POST("/ai/image", security.RateLimit(20, 60), handlers.AiHubImage)
 		protected.POST("/ai/video", security.RateLimit(10, 60), handlers.AiHubVideoSubmit)
 		protected.GET("/ai/video/:id", handlers.AiHubVideoStatus)
+		// 取消异步视频任务：置终态停止等待 + 已扣款原路退回
+		// 注意路径形态：POST 下已有 /ai/video 静态段，这里必须继续往下挂 :id 子节点，
+		// 不能与静态段同级加通配（gin 会 panic: conflicts with existing wildcard）
+		protected.POST("/ai/video/:id/cancel", handlers.AiHubVideoCancel)
 		protected.GET("/ai/media", handlers.AiHubMediaHistory)
 		// 出图附件上传 + 历史导出（gap-audit #17）
 		// 注意：/ai/media 下不能加静态段（已有 /ai/media 精确路由 + /ai/media/:id/... 通配），

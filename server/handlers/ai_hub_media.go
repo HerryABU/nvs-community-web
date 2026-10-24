@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -183,10 +184,13 @@ func AiHubVideoStatus(c *gin.Context) {
 		utils.NotFound(c, "任务不存在")
 		return
 	}
-	if task.Status == models.AiMediaSucceeded || task.Status == models.AiMediaFailed {
+	// 终态直接返回，不再打上游：已取消的任务若漏在这里，会被继续轮询到成功，
+	// 已退的款又变回「已扣款」——既多花钱又对不上账。
+	if models.IsAiMediaTerminal(task.Status) {
 		utils.Success(c, gin.H{
 			"task_id": task.ID, "status": task.Status,
 			"result": task.Result, "error": task.Error, "cost": task.Cost,
+			"refunded": task.Refunded,
 		})
 		return
 	}
@@ -274,17 +278,99 @@ func AiHubVideoStatus(c *gin.Context) {
 		if msg == "" {
 			msg = "上游任务失败"
 		}
-		// 已扣款任务：退款
-		if task.Status == models.AiMediaRunning || task.Status == models.AiMediaPending {
+		// 已扣款任务退款。退款成功时 RefundAiMediaTask 自己会把状态落成 failed + refunded，
+		// 所以这里不能再调 FailAiMediaTask（那会把 refunded 覆盖回 false，前端就报错账）。
+		refunded := false
+		if task.Cost > 0 && !task.Refunded {
 			if _, rerr := models.RefundAiMediaTask(task.ID, "视频生成失败退款"); rerr == nil {
-				models.FailAiMediaTask(task.ID, msg, true)
+				refunded = true
 			} else {
 				models.FailAiMediaTask(task.ID, msg, false)
 			}
+		} else {
+			models.FailAiMediaTask(task.ID, msg, false)
 		}
-		utils.Success(c, gin.H{"task_id": task.ID, "status": models.AiMediaFailed, "error": msg, "cost": task.Cost})
+		utils.Success(c, gin.H{
+			"task_id": task.ID, "status": models.AiMediaFailed,
+			"error": msg, "cost": task.Cost, "refunded": refunded,
+		})
 	default:
 		utils.Success(c, gin.H{"task_id": task.ID, "status": models.AiMediaRunning, "cost": task.Cost})
+	}
+}
+
+// AiHubVideoCancel POST /api/ai/video/:id/cancel — 用户主动取消视频任务
+//
+// 为什么需要它：视频是异步任务，一次常要几分钟。原来前端只能一直轮询到上游出结果，
+// 想放弃就只能刷新页面（轮询还在后台跑），已扣的代币也拿不回来。
+// 现在：立即置终态停止等待，已扣款原路退回。
+//
+// 上游账单说明：是否真的撤销了上游任务取决于上游是否支持（本实现会尝试一次 best-effort
+// 取消），撤销不了的部分由站长承担——这一点在 UI 的确认文案里如实写明。
+func AiHubVideoCancel(c *gin.Context) {
+	userID := currentUserID(c)
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	if id == 0 {
+		utils.BadRequest(c, "任务 ID 无效")
+		return
+	}
+	task, err := models.GetAiMediaTask(uint(id), userID)
+	if err != nil {
+		utils.NotFound(c, "任务不存在")
+		return
+	}
+	if task.Kind != models.AiKindVideo {
+		utils.BadRequest(c, "只有异步任务支持取消")
+		return
+	}
+	// best-effort：上游若支持撤销就撤销，失败不影响本地退款
+	if task.RemoteID != "" {
+		cancelUpstreamVideo(task, userID)
+	}
+	refunded, cerr := models.CancelAiMediaTask(uint(id), userID)
+	if cerr != nil {
+		utils.BadRequest(c, cerr.Error())
+		return
+	}
+	utils.Success(c, gin.H{
+		"task_id":       task.ID,
+		"status":        models.AiMediaCancelled,
+		"refunded":      refunded > 0,
+		"refund_amount": refunded,
+		"balance_after": models.GetTokenBalance(userID),
+		"message":       map[bool]string{true: "已取消，费用已退回", false: "已取消"}[refunded > 0],
+	})
+}
+
+// cancelUpstreamVideo 尝试撤销上游任务（尽力而为，失败只记日志）
+func cancelUpstreamVideo(task *models.AiMediaTask, userID uint) {
+	var baseURL, apiKey string
+	if task.ModelID == 0 {
+		// BYOK 任务：用用户自己的密钥
+		uk, err := models.ResolveUserAiKey(userID, 0)
+		if err != nil || uk == nil {
+			return
+		}
+		k, derr := uk.DecryptApiKey()
+		if derr != nil {
+			return
+		}
+		baseURL, apiKey = uk.BaseURL, k
+	} else {
+		m, merr := models.GetAiModel(task.ModelID)
+		if merr != nil {
+			return
+		}
+		lease, kerr := models.AcquireModelKey(m)
+		if kerr != nil {
+			return
+		}
+		baseURL, apiKey = m.BaseURL, lease.Key
+	}
+	client := aiclient.NewClient(baseURL, apiKey, 10*time.Second)
+	if err := client.CancelVideo(task.RemoteID); err != nil {
+		log.Printf("[ai-video] 上游取消失败（不影响本地退款）task=%d remote=%s err=%v",
+			task.ID, task.RemoteID, err)
 	}
 }
 

@@ -18,6 +18,8 @@ const (
 	AiMediaRunning   = "running"   // 已提交上游执行中（视频）
 	AiMediaSucceeded = "succeeded" // 成功（已扣款）
 	AiMediaFailed    = "failed"    // 失败（未扣款或已退款）
+	// AiMediaCancelled 用户主动取消（终态）：停止轮询；已扣款则原路退回
+	AiMediaCancelled = "cancelled"
 )
 
 // AiMediaTask 绘画/视频任务
@@ -33,6 +35,10 @@ type AiMediaTask struct {
 	RemoteID  string `gorm:"size:128;default:''" json:"remote_id"` // 上游任务 ID（视频）
 	Result    string `gorm:"type:text" json:"result"`              // 结果 JSON（图片 URL/b64 列表 / 视频 URL）
 	Cost      int64  `gorm:"not null;default:0" json:"cost"`
+	// Refunded 是否已退款：失败/取消后原路退回代币时置 true。
+	// 单独存一列而不是「用 cost 是否归零推断」：归零会让历史里看不出这单原本多少钱，
+	// 也区分不了「本来就免费」和「扣了又退」。
+	Refunded  bool   `gorm:"not null;default:false" json:"refunded"`
 	CallLogID uint   `gorm:"not null;default:0" json:"call_log_id"`
 	Error     string `gorm:"size:256;default:''" json:"error"`
 	// Attachments 附件（参考图/素材）JSON：[{url,name,size}]。
@@ -156,21 +162,75 @@ func FailAiMediaTask(taskID uint, errMsg string, charged bool) {
 	}).Error
 }
 
-// RefundAiMediaTask 退款已扣款任务（视频上游失败场景）
+// IsAiMediaTerminal 任务是否已结束（终态不再轮询上游）
+func IsAiMediaTerminal(status string) bool {
+	return status == AiMediaSucceeded || status == AiMediaFailed || status == AiMediaCancelled
+}
+
+// RefundAiMediaTask 退款已扣款任务（视频上游失败 / 用户取消）
+//
+// 可退状态必须包含 running：提交链路是
+//
+//	Create(pending) → ChargeAiMediaTask(succeeded, cost>0) → MarkAiMediaSubmitted(running)
+//
+// 任务真正跑起来后状态是 running 而不是 succeeded。
+// 早期这里只允许 succeeded，于是「视频失败退款」永远报「该任务不可退款」——
+// 用户付了钱、视频没出来，一分没退，前端却提示「已自动退款」（假话）。
 func RefundAiMediaTask(taskID uint, reason string) (int64, error) {
 	var t AiMediaTask
 	if err := DB.Where("id = ?", taskID).First(&t).Error; err != nil {
 		return 0, err
 	}
-	if t.Status != AiMediaSucceeded || t.Cost <= 0 {
-		return 0, fmt.Errorf("该任务不可退款")
+	if t.Refunded {
+		return 0, fmt.Errorf("该任务已退款")
 	}
-	nb, err := AppendTokenLedger(t.UserID, TokenTypeRefund, t.Cost, "ai", t.ID, reason, mediaPriceSnapshot(&AiModel{ID: t.ModelID, Name: t.ModelName}, t.Cost))
+	if t.Cost <= 0 {
+		return 0, fmt.Errorf("该任务没有可退金额")
+	}
+	if t.Status != AiMediaSucceeded && t.Status != AiMediaRunning && t.Status != AiMediaPending {
+		return 0, fmt.Errorf("该任务状态不可退款：%s", t.Status)
+	}
+	nb, err := AppendTokenLedger(t.UserID, TokenTypeRefund, t.Cost, "ai", t.ID, reason,
+		mediaPriceSnapshot(&AiModel{ID: t.ModelID, Name: t.ModelName}, t.Cost))
 	if err != nil {
 		return 0, err
 	}
-	_ = DB.Model(&AiMediaTask{}).Where("id = ?", taskID).Update("status", AiMediaFailed).Error
+	_ = DB.Model(&AiMediaTask{}).Where("id = ?", taskID).
+		Updates(map[string]interface{}{"status": AiMediaFailed, "refunded": true, "updated_at": time.Now()}).Error
 	return nb, nil
+}
+
+// CancelAiMediaTask 用户取消任务（仅 pending / running 可取消）
+//
+// 已扣款的取消走原路退回：用户没拿到产出就不该付钱；
+// 上游那边的账单只能由站长承担（不保证上游支持撤销），UI 文案如实说明这一点。
+func CancelAiMediaTask(taskID, userID uint) (refunded int64, err error) {
+	var t AiMediaTask
+	if err := DB.Where("id = ? AND user_id = ?", taskID, userID).First(&t).Error; err != nil {
+		return 0, fmt.Errorf("任务不存在")
+	}
+	if IsAiMediaTerminal(t.Status) {
+		return 0, fmt.Errorf("任务已结束，无法取消")
+	}
+	doRefund := t.Cost > 0 && !t.Refunded
+	if doRefund {
+		if _, rerr := AppendTokenLedger(t.UserID, TokenTypeRefund, t.Cost, "ai", t.ID,
+			"取消 AI 视频任务退款", mediaPriceSnapshot(&AiModel{ID: t.ModelID, Name: t.ModelName}, t.Cost)); rerr != nil {
+			return 0, fmt.Errorf("退款失败：%v", rerr)
+		}
+		refunded = t.Cost
+	}
+	msg := "已取消"
+	if doRefund {
+		msg = "已取消，费用已原路退回"
+	}
+	_ = DB.Model(&AiMediaTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
+		"status":     AiMediaCancelled,
+		"refunded":   doRefund,
+		"error":      msg,
+		"updated_at": time.Now(),
+	}).Error
+	return refunded, nil
 }
 
 // ---------- 查询 ----------

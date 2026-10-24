@@ -259,6 +259,33 @@ func (c *Client) CreateVideo(req VideosCreateRequest) (string, string, error) {
 }
 
 // QueryVideo 查询视频任务状态与成品地址
+// CancelVideo 尝试撤销上游视频任务（DELETE /videos/{id}）。
+//
+// 各家上游支持度不一：OpenAI 风格的 /videos 支持 DELETE，部分聚合网关只支持查询。
+// 因此调用方必须把这里的失败当成「可忽略」——本地取消与退款不依赖它。
+func (c *Client) CancelVideo(remoteID string) error {
+	if c.BaseURL == "" || remoteID == "" {
+		return fmt.Errorf("缺少上游任务标识")
+	}
+	httpReq, err := http.NewRequest(http.MethodDelete, c.BaseURL+"/videos/"+remoteID, nil)
+	if err != nil {
+		return err
+	}
+	if c.APIKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+c.APIKey)
+	}
+	resp, derr := c.HTTP.Do(httpReq)
+	if derr != nil {
+		return derr
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+	return fmt.Errorf("上游返回 %d：%s", resp.StatusCode, strings.TrimSpace(string(raw)))
+}
+
 func (c *Client) QueryVideo(remoteID string) (status, videoURL, errMsg string, err error) {
 	if c.BaseURL == "" || remoteID == "" {
 		return "", "", "", fmt.Errorf("参数不完整")
