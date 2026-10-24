@@ -28,6 +28,8 @@ func AiHubImage(c *gin.Context) {
 		N         int      `json:"n"`
 		Mode      string   `json:"mode"`       // t2i（默认）/ i2i 混图 / faceswap 换脸
 		RefImages []string `json:"ref_images"` // data URL 参考图（最多 3 张）
+		// AttachURLs 已上传的附件（站内 /uploads/… 或 http(s)），会随任务落库供历史查看与导出
+		AttachURLs []string `json:"attach_urls"`
 		// 自备密钥（§5.5 BYOK）
 		Byok      bool   `json:"byok"`
 		ByokModel string `json:"byok_model"`
@@ -47,6 +49,24 @@ func AiHubImage(c *gin.Context) {
 		utils.BadRequest(c, "提示词过长（上限 4000 字）")
 		return
 	}
+	// ── 附件（参考图/素材）：只存地址不做下载（导出时才安全抓取），并校验协议 ──
+	attachments := make([]models.MediaAttachment, 0, len(req.AttachURLs))
+	for _, raw := range req.AttachURLs {
+		u := strings.TrimSpace(raw)
+		if u == "" {
+			continue
+		}
+		low := strings.ToLower(u)
+		if !strings.HasPrefix(u, "/uploads/") && !strings.HasPrefix(low, "http://") && !strings.HasPrefix(low, "https://") {
+			utils.BadRequest(c, "附件地址仅支持站内 /uploads/ 或 http(s)")
+			return
+		}
+		attachments = append(attachments, models.MediaAttachment{URL: u})
+		if len(attachments) >= 6 {
+			break
+		}
+	}
+
 	// ── 参考图（混图/换脸）：仅接受上传的 data URL，绝不拉外链（防 SSRF） ──
 	refs, rerr := aiclient.ImageRefsFromDataURLs(req.RefImages)
 	if rerr != nil {
@@ -169,6 +189,9 @@ func AiHubImage(c *gin.Context) {
 	if terr != nil {
 		utils.InternalError(c, "创建任务失败")
 		return
+	}
+	if len(attachments) > 0 {
+		_ = models.SetMediaAttachments(task.ID, attachments)
 	}
 	lease, kerr := models.AcquireModelKey(m)
 	apiKey := ""

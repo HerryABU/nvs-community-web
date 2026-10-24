@@ -99,6 +99,49 @@
         </el-table>
       </el-tab-pane>
 
+      <!-- 直播 -->
+      <el-tab-pane label="直播" name="live">
+        <el-alert type="info" :closable="false" class="mb"
+          title="本站不提供推流/转码/HLS：只做入口与嵌入。外部直播间填 embed_url（必须 https），录播可填 video_url 直链。" />
+        <el-form label-width="150px" class="panel" style="max-width: 760px">
+          <el-form-item label="启用直播入口"><el-switch v-model="live.enabled" /></el-form-item>
+          <el-form-item label="标题"><el-input v-model="live.title" /></el-form-item>
+          <el-form-item label="状态">
+            <el-radio-group v-model="live.status">
+              <el-radio-button value="offline">未开播</el-radio-button>
+              <el-radio-button value="preview">预告</el-radio-button>
+              <el-radio-button value="live">直播中</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item label="嵌入地址(https)">
+            <el-input v-model="live.embed_url" placeholder="https://live.example.com/room/123" />
+          </el-form-item>
+          <el-form-item label="视频直链(可选)">
+            <el-input v-model="live.video_url" placeholder="https://cdn.example.com/live.mp4 或 /uploads/..." />
+          </el-form-item>
+          <el-form-item label="海报(可选)">
+            <el-input v-model="live.poster_url" placeholder="/uploads/... 或 https://" />
+          </el-form-item>
+          <el-form-item label="开播时间">
+            <el-date-picker v-model="live.starts_at" type="datetime" placeholder="可选，用于倒计时" />
+          </el-form-item>
+          <el-form-item label="公告">
+            <el-input v-model="live.notice" type="textarea" :rows="2" placeholder="如：今晚 8 点连麦答疑" />
+          </el-form-item>
+          <el-form-item label="聊天群组 ID">
+            <el-input-number v-model="live.chat_group_id" :min="0" />
+            <span class="hint">0 = 不关联；关联后直播页给「进入直播聊天群」按钮（复用群组，不新造聊天）</span>
+          </el-form-item>
+          <el-form-item label="需要登录">
+            <el-switch v-model="live.require_login" />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" :loading="savingLive" @click="saveLive">保存</el-button>
+            <el-button @click="$router.push('/live')">预览直播页</el-button>
+          </el-form-item>
+        </el-form>
+      </el-tab-pane>
+
       <!-- 访客 -->
       <el-tab-pane label="访客设置" name="visit">
         <el-form label-width="170px" class="panel" style="max-width: 700px">
@@ -172,6 +215,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import api from '@/api/index';
 import { opsApi, type NavMenuItem, type Carousel, type CheckInConfig, type VisitSetting } from '@/api/ops';
 
 const tab = ref('menu');
@@ -194,6 +238,13 @@ const visit = reactive<VisitSetting>({
 });
 const visitStats = ref<any[]>([]);
 const savingVisit = ref(false);
+
+// 直播（gap-audit #23）
+const live = reactive<any>({
+  enabled: false, title: '直播间', status: 'offline', embed_url: '', video_url: '',
+  poster_url: '', starts_at: null, notice: '', chat_group_id: 0, require_login: false,
+});
+const savingLive = ref(false);
 
 function fmt(s?: string | null) {
   return s ? new Date(s).toLocaleString('zh-CN') : '';
@@ -267,6 +318,22 @@ async function saveCheckin() {
     savingCheckin.value = false;
   }
 }
+async function loadLive() {
+  const res = await api.get<{ code: number; data: { config: any } }>('/admin/live');
+  Object.assign(live, res.data.data.config);
+}
+async function saveLive() {
+  savingLive.value = true;
+  try {
+    await api.put('/admin/live', { ...live });
+    ElMessage.success('已保存');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  } finally {
+    savingLive.value = false;
+  }
+}
+
 async function loadVisit() {
   const res = await opsApi.adminVisit();
   Object.assign(visit, res.data.data.config);
@@ -289,6 +356,7 @@ onMounted(async () => {
   await loadSlides();
   await loadCheckin();
   await loadVisit();
+  await loadLive();
 });
 </script>
 

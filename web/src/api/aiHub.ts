@@ -127,6 +127,29 @@ export const aiHubApi = {
   videoStatus(id: number) {
     return api.get<{ code: number; data: { task_id: number; status: string; video?: string; result?: string; error?: string; cost: number } }>(`/ai/video/${id}`);
   },
+  /** 上传出图附件（参考图/素材），返回站内 URL（gap-audit #17） */
+  attachMedia(file: File) {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post<{ code: number; data: { url: string; name: string; size: number } }>(
+      '/ai/media/attach', fd, { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+  },
+  /** 历史导出 zip（items.json + files/ + manifest 哈希） */
+  exportMedia(kind: 'image' | 'video', month = '') {
+    return api.get('/ai/export/media.zip', {
+      params: { kind, month: month || undefined },
+      responseType: 'blob',
+    });
+  },
+  /** 单任务导出（json；files=1 时 zip 含图） */
+  exportMediaTask(id: number, files = false) {
+    return api.get(`/ai/media/${id}/export`, {
+      params: files ? { files: 1 } : undefined,
+      responseType: 'blob',
+    });
+  },
+
   mediaHistory(kind: 'image' | 'video', page = 1) {
     return api.get<{ code: number; data: { list: any[]; total: number } }>('/ai/media', { params: { kind, page } });
   },

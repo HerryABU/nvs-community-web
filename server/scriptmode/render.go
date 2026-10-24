@@ -22,6 +22,7 @@ func renderNodes(nodes []Node) string {
 		return `<div class="script-chapter"></div>`
 	}
 	var b strings.Builder
+	idx := 0 // 气泡序号（长按互动定位用；舞台/旁白/散文不占号）
 	b.WriteString(`<div class="script-chapter">`)
 	for _, n := range nodes {
 		switch n.Type {
@@ -46,7 +47,14 @@ func renderNodes(nodes []Node) string {
 			}
 			b.WriteString(`</div>`)
 		default:
-			b.WriteString(`<div class="script-bubble sb-` + n.Side + `">`)
+			// data-* 供前端「长按互动」使用（复制/引用/收藏/举报）：
+			// 正文是服务端渲染的 HTML，前端只能靠属性拿到说话人与原文，
+			// 全部经 html.EscapeString 转义，属性值里的引号不会破结构。
+			idx++
+			b.WriteString(`<div class="script-bubble sb-` + n.Side + `" data-bubble="` +
+				itoa(idx) + `" data-speaker="` + html.EscapeString(n.Speaker) +
+				`" data-side="` + html.EscapeString(n.Side) + `" data-text="` +
+				html.EscapeString(n.Text) + `">`)
 			b.WriteString(`<div class="sb-avatar">` + html.EscapeString(n.Initial) + `</div>`)
 			b.WriteString(`<div class="sb-body">`)
 			b.WriteString(`<div class="sb-name">` + html.EscapeString(n.Speaker) + `</div>`)
@@ -56,6 +64,19 @@ func renderNodes(nodes []Node) string {
 	}
 	b.WriteString(`</div>`)
 	return b.String()
+}
+
+// itoa 小整数转字符串（避免引入 strconv 只为这一处）
+func itoa(v int) string {
+	if v <= 0 {
+		return "0"
+	}
+	buf := make([]byte, 0, 6)
+	for v > 0 {
+		buf = append([]byte{byte('0' + v%10)}, buf...)
+		v /= 10
+	}
+	return string(buf)
 }
 
 // RenderHTML 纯话本渲染：所有文本转义后输出，表情与图片白名单处理

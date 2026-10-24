@@ -66,7 +66,7 @@
         <div class="ai-refs">
           <div v-for="(img, i) in refImages" :key="i" class="ai-ref-item">
             <img :src="img" alt="参考图" />
-            <span class="ai-ref-del" @click="refImages.splice(i, 1)">×</span>
+            <span class="ai-ref-del" @click="removeRef(i)">×</span>
             <span class="ai-ref-index">{{ i + 1 }}</span>
           </div>
           <label v-if="refImages.length < maxRefs" class="ai-ref-add">
@@ -116,7 +116,12 @@
 
     <!-- 历史 -->
     <div class="ai-media-history">
-      <div class="ai-media-result-label">历史作品</div>
+      <div class="ai-media-result-label ai-history-head">
+        <span>历史作品</span>
+        <span class="ai-history-tools">
+          <el-button size="small" text :loading="exporting" @click="exportHistory">导出历史 ZIP</el-button>
+        </span>
+      </div>
       <el-empty v-if="!history.length" description="暂无绘画记录" :image-size="60" />
       <div v-else class="ai-img-grid">
         <div v-for="t in history" :key="t.id" class="ai-img-cell">
@@ -128,10 +133,14 @@
             :title="t.prompt"
             alt="历史绘画"
           />
+          <div v-if="attachmentsOf(t).length" class="ai-img-attach">
+            参考图 {{ attachmentsOf(t).length }} 张
+          </div>
           <div class="ai-img-actions">
             <button type="button" @click="openPublish(t)">
               {{ t.is_public ? '已发布' : '发布到灵感广场' }}
             </button>
+            <button type="button" @click="exportOne(t)">导出</button>
           </div>
         </div>
       </div>
@@ -197,6 +206,8 @@ const history = ref<any[]>([]);
 const promptOpen = ref(false);
 
 const maxRefs = computed(() => (mode.value === 'faceswap' ? 2 : 3));
+// 参考图同时上传一份到站内（attach_urls），这样历史里能看到「当时用了什么图」，也能随导出带走
+const attachUrls = ref<string[]>([]);
 const promptPlaceholder = computed(() => {
   if (mode.value === 'faceswap') return '描述换脸后想要的风格/光影；面部替换动作由前两张图决定';
   if (mode.value === 'i2i') return '描述要保留什么、改变什么，如：保留人物姿态，改为赛博朋克夜景霓虹光';
@@ -269,6 +280,19 @@ function onPickRef(e: Event) {
     refImages.value.push(s);
   };
   reader.readAsDataURL(f);
+  // 附件落库（异步）：失败只提示，不阻断出图
+  aiHubApi.attachMedia(f).then((res) => {
+    const url = res.data?.data?.url;
+    if (url) attachUrls.value.push(url);
+  }).catch(() => {
+    ElMessage.warning('参考图已用于生成，但附件未能保存（历史里看不到这张图）');
+  });
+}
+
+function removeRef(i: number) {
+  refImages.value.splice(i, 1);
+  // data URL 与 attach URL 一一对应（同一顺序），同步删掉
+  if (attachUrls.value.length > i) attachUrls.value.splice(i, 1);
 }
 
 async function generate(confirmed = false) {
@@ -294,10 +318,13 @@ async function generate(confirmed = false) {
       n: n.value,
       mode: mode.value,
       ref_images: refImages.value.length ? refImages.value : undefined,
+      attach_urls: attachUrls.value.length ? attachUrls.value : undefined,
       confirm: confirmed || undefined,
     });
     if (res.data.code === 0) {
       lastImages.value = res.data.data.images || [];
+      // 附件已随任务落库，清空避免串到下一次生成
+      attachUrls.value = [];
       lastCost.value = res.data.data.cost;
       lastFree.value = !!res.data.data.free;
       lastBalance.value = res.data.data.balance_after;
@@ -353,6 +380,49 @@ async function doPublish(publicFlag: boolean) {
   }
 }
 
+// ── 导出与附件（gap-audit #17）──
+const exporting = ref(false);
+
+function attachmentsOf(t: any): any[] {
+  try {
+    const arr = JSON.parse(t.attachments || '[]');
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveBlob(res: any, filename: string) {
+  const blob = res.data instanceof Blob ? res.data : new Blob([res.data]);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function exportHistory() {
+  exporting.value = true;
+  try {
+    const res = await aiHubApi.exportMedia('image');
+    saveBlob(res, `ai-images-${Date.now()}.zip`);
+    ElMessage.success('已导出（含 manifest 哈希清单）');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '导出失败');
+  } finally {
+    exporting.value = false;
+  }
+}
+
+async function exportOne(t: any) {
+  try {
+    const res = await aiHubApi.exportMediaTask(t.id, true);
+    saveBlob(res, `ai-media-${t.id}.zip`);
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '导出失败');
+  }
+}
+
 async function loadHistory() {
   try {
     const res = await aiHubApi.mediaHistory('image', 1);
@@ -365,6 +435,9 @@ onMounted(loadHistory);
 
 <style scoped>
 .ai-media { padding: 16px; max-width: 900px; }
+.ai-history-head { display: flex; align-items: center; justify-content: space-between; }
+.ai-history-tools { display: flex; gap: 6px; }
+.ai-img-attach { font-size: 0.7rem; color: var(--text-light, #888); padding: 2px 4px; }
 /* 模式 */
 .ai-mode-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
 .ai-mode {

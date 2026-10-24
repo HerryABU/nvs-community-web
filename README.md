@@ -473,6 +473,35 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.20.0 收口剩余 3 项：出图附件与历史导出 / 气泡长按互动 / 直播入口（2026-10-24）
+
+> 设计与边界见 `docs/anti-abuse-cost-ops.md` §五；对账见 `docs/gap-audit.md`（**缺口已清零**）。
+
+**AI 出图附件 + 历史导出（gap #17）**
+- `ai_media_tasks.attachments`：参考图以前只传 data URL 不落库，历史里看不到"当时用了什么图"；
+  现在出图接口收 `attach_urls`，前端上传参考图时同时存一份站内副本
+- `POST /api/ai/media/attach`（10MB、png/jpg/webp/gif）
+- `GET /api/ai/export/media.zip?kind=&month=`：`items.json` + `files/` + `manifest.json`（每文件 SHA256）
+- `GET /api/ai/media/:id/export`（JSON，`?files=1` 打 zip）
+- 安全：站内读盘做**目录穿越校验**；远程图走 **SSRF 白名单抓取**（拒私网/回环/元数据、
+  重定向逐跳校验、限 10MB/15s）；抓不到的图记入 manifest 的 skip 原因
+- 顺手修 bug：`ListAiMediaTasks` 原在分页后才按 kind 过滤，会出现"第一页 5 条、total 20"错位
+
+**气泡长按互动（gap #22）**
+- `scriptmode` 给气泡打 `data-bubble/data-speaker/data-side/data-text`（全部转义）
+- 阅读器：按住 480ms（移动 >10px 取消）或右键唤出动作面板 → **复制台词 / 引用评论 / 收藏本章**
+- 引用评论会预填 Markdown 引用块并滚动聚焦评论区
+
+**直播入口（gap #23）**
+- `platform_configs.live_setting`：开关/标题/状态/`embed_url`/`video_url`/海报/开播时间/公告/关联群组/需登录
+- `embed_url` **仅 https**；iframe 强制 `sandbox`（不含 `allow-top-navigation`）
+- 前台 `/live`：直播中挂 iframe 或 video；未开播展示海报与倒计时；关联群组给"进入直播聊天群"
+- **明确边界**：本站不做推流/转码/HLS，推流交给 SRS/云直播，这边只做入口与嵌入
+
+**验证**：`go test ./scriptmode ./models ./handlers` 全绿（新增气泡属性转义、直播配置校验、
+SSRF 拒绝、目录穿越拒绝、zip manifest、result JSON 兼容）；`go build ./...` 通过；
+启动冒烟无路由冲突无 panic；前端 `vite build` 通过并镜像 `server/dist`。
+
 ### v3.19.0 安全防护 / 成本闸门 / 内容玩法：15 项缺口一次收口（2026-10-24）
 
 > 详细设计、命令与边界见 `docs/anti-abuse-cost-ops.md`；逐项对账见 `docs/gap-audit.md`。

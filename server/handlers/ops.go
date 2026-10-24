@@ -233,3 +233,58 @@ func SaveVisitSetting(c *gin.Context) {
 	}
 	utils.SuccessMessage(c, "已保存", models.LoadVisitSetting())
 }
+
+// ─────────────── 直播入口（gap-audit #23）───────────────
+
+// PublicLive GET /api/live —— 前台直播状态（未开启时 enabled=false，前端不显示入口）
+func PublicLive(c *gin.Context) {
+	s := models.LoadLiveSetting()
+	if !s.Enabled {
+		utils.Success(c, gin.H{"enabled": false})
+		return
+	}
+	// 需要登录才看内容时，未登录只回「有直播 + 要不要登录」
+	login := currentUserID(c) > 0
+	pay := gin.H{
+		"enabled": true, "title": s.Title, "status": s.Status,
+		"notice": s.Notice, "starts_at": s.StartsAt,
+		"chat_group_id": s.ChatGroupID, "require_login": s.RequireLogin,
+	}
+	if s.RequireLogin && !login {
+		pay["need_login"] = true
+		utils.Success(c, pay)
+		return
+	}
+	pay["embed_url"] = s.EmbedURL
+	pay["video_url"] = s.VideoURL
+	pay["poster_url"] = s.PosterURL
+	utils.Success(c, pay)
+}
+
+// AdminLive GET /api/admin/live
+func AdminLive(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	utils.Success(c, gin.H{
+		"config": models.LoadLiveSetting(),
+		"note":   "本站不提供推流/转码/HLS：这里只做入口与嵌入。外部直播间填 embed_url（必须 https），录播可填 video_url 直链。",
+	})
+}
+
+// SaveLive PUT /api/admin/live
+func SaveLive(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	var in models.LiveSetting
+	if err := c.ShouldBindJSON(&in); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	if err := models.SaveLiveSetting(in); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+	utils.SuccessMessage(c, "已保存", models.LoadLiveSetting())
+}

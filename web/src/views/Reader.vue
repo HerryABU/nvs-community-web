@@ -114,7 +114,13 @@
           </span>
         </div>
         <div v-if="chapter?.content" class="reader-md-wrap">
-          <div class="reader-md markdown-body cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" v-html="renderedHtml" ref="mdContainer" @click="onMdClick"></div>
+          <div class="reader-md markdown-body cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" v-html="renderedHtml" ref="mdContainer"
+            @click="onMdClick"
+            @pointerdown="onBubbleDown"
+            @pointerup="cancelBubblePress"
+            @pointercancel="cancelBubblePress"
+            @pointermove="onBubbleMove"
+            @contextmenu="onBubbleContextMenu"></div>
         </div>
         <p v-else-if="chapter" style="text-align:center;color:var(--warning-color)">章节已加载但内容为空（content长度=0）</p>
         <p v-else style="text-align:center;color:var(--text-muted)">暂无内容（chapter 为 null）</p>
@@ -164,7 +170,7 @@
     <!-- 评论 -->
     <div class="page-container" v-if="!isTrialExceeded">
       <h2 class="section-title">本章评论</h2>
-      <CommentSection :novel-id="novelId" :chapter-number="chapterNum" :novel-category="novelCategory" :owner-id="novelAuthorId" />
+      <CommentSection ref="commentSectionRef" :novel-id="novelId" :chapter-number="chapterNum" :novel-category="novelCategory" :owner-id="novelAuthorId" />
     </div>
 
     <!-- 书签对话框 -->
@@ -228,11 +234,26 @@
       @confirm="onZoneConfirmed"
       @cancel="onZoneCancelled"
     />
+    <!-- 气泡长按互动（gap-audit #22）：复制 / 引用评论 / 收藏本章 -->
+    <div v-if="bubbleSheet.visible" class="bubble-sheet-mask" @click.self="closeBubbleSheet">
+      <div class="bubble-sheet">
+        <div class="bs-head">
+          <span class="bs-speaker">{{ bubbleSheet.speaker || '旁白' }}</span>
+          <span class="bs-text">{{ bubbleSheet.text }}</span>
+        </div>
+        <div class="bs-actions">
+          <button class="bs-btn" @click="bubbleCopy">📋 复制台词</button>
+          <button class="bs-btn" @click="bubbleQuote">💬 引用评论</button>
+          <button class="bs-btn" @click="bubbleBookmark">⭐ 收藏本章</button>
+          <button class="bs-btn bs-cancel" @click="closeBubbleSheet">取消</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import { useAiMark } from '@/composables/useAiMark';
 import { useRoute, useRouter } from 'vue-router';
 import { novelApi, chapterApi, type Chapter } from '@/api/novel';
@@ -775,6 +796,34 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+/* 气泡长按互动弹层 */
+.bubble-sheet-mask {
+  position: fixed; inset: 0; z-index: 3000;
+  background: rgb(0 0 0 / 35%);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.bubble-sheet {
+  width: 100%; max-width: 560px;
+  background: var(--bg-card);
+  border-radius: 14px 14px 0 0;
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -6px 24px rgb(0 0 0 / 18%);
+}
+.bs-head { display: flex; gap: 8px; align-items: baseline; margin-bottom: 10px; }
+.bs-speaker { font-weight: 700; font-size: 0.86rem; white-space: nowrap; }
+.bs-text {
+  font-size: 0.84rem; color: var(--text-muted); line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.bs-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.bs-btn {
+  border: 1px solid var(--border-color); background: var(--bg-muted);
+  border-radius: 10px; padding: 10px 12px; font-size: 0.86rem; cursor: pointer;
+  color: var(--text-main);
+}
+.bs-btn:hover { border-color: var(--el-color-primary); }
+.bs-cancel { grid-column: span 2; color: var(--text-muted); }
+
 .reader-page {
   background: var(--reader-bg);
   min-height: calc(100vh - 60px);

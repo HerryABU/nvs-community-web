@@ -3,6 +3,7 @@ package models
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -21,26 +22,30 @@ const (
 
 // AiMediaTask 绘画/视频任务
 type AiMediaTask struct {
-	ID           uint      `gorm:"primaryKey" json:"id"`
-	UserID       uint      `gorm:"not null;index:idx_ai_media_user,priority:1" json:"user_id"`
-	Kind         string    `gorm:"size:16;not null;index" json:"kind"` // image / video
-	ModelID      uint      `gorm:"not null" json:"model_id"`
-	ModelName    string    `gorm:"size:64;default:''" json:"model_name"`
-	Prompt       string    `gorm:"type:text" json:"prompt"`
-	Params       string    `gorm:"type:text" json:"params"`     // 生成参数 JSON（尺寸/风格/时长）
-	Status       string    `gorm:"size:16;not null;default:pending;index" json:"status"`
-	RemoteID     string    `gorm:"size:128;default:''" json:"remote_id"` // 上游任务 ID（视频）
-	Result       string    `gorm:"type:text" json:"result"`     // 结果 JSON（图片 URL/b64 列表 / 视频 URL）
-	Cost         int64     `gorm:"not null;default:0" json:"cost"`
-	CallLogID    uint      `gorm:"not null;default:0" json:"call_log_id"`
-	Error        string    `gorm:"size:256;default:''" json:"error"`
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	UserID    uint   `gorm:"not null;index:idx_ai_media_user,priority:1" json:"user_id"`
+	Kind      string `gorm:"size:16;not null;index" json:"kind"` // image / video
+	ModelID   uint   `gorm:"not null" json:"model_id"`
+	ModelName string `gorm:"size:64;default:''" json:"model_name"`
+	Prompt    string `gorm:"type:text" json:"prompt"`
+	Params    string `gorm:"type:text" json:"params"` // 生成参数 JSON（尺寸/风格/时长）
+	Status    string `gorm:"size:16;not null;default:pending;index" json:"status"`
+	RemoteID  string `gorm:"size:128;default:''" json:"remote_id"` // 上游任务 ID（视频）
+	Result    string `gorm:"type:text" json:"result"`              // 结果 JSON（图片 URL/b64 列表 / 视频 URL）
+	Cost      int64  `gorm:"not null;default:0" json:"cost"`
+	CallLogID uint   `gorm:"not null;default:0" json:"call_log_id"`
+	Error     string `gorm:"size:256;default:''" json:"error"`
+	// Attachments 附件（参考图/素材）JSON：[{url,name,size}]。
+	// 为什么单独存：混图/换脸的参考图以前只以 data URL 传给上游、不落库，
+	// 导致「历史里看不到当时用了什么图、也无法导出/复用」——这是 gap-audit #17 的要害。
+	Attachments string `gorm:"type:text" json:"attachments"`
 	// 作品广场（灵感广场）：作者主动发布后公开可见
-	IsPublic bool   `gorm:"not null;default:false;index" json:"is_public"`
-	Title    string `gorm:"size:128;default:''" json:"title"`
-	Style    string `gorm:"size:32;default:'';index" json:"style"`
-	Likes    int64  `gorm:"not null;default:0" json:"likes"`
-	CreatedAt    time.Time `gorm:"index:idx_ai_media_user,priority:2" json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	IsPublic  bool      `gorm:"not null;default:false;index" json:"is_public"`
+	Title     string    `gorm:"size:128;default:''" json:"title"`
+	Style     string    `gorm:"size:32;default:'';index" json:"style"`
+	Likes     int64     `gorm:"not null;default:0" json:"likes"`
+	CreatedAt time.Time `gorm:"index:idx_ai_media_user,priority:2" json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func (AiMediaTask) TableName() string { return "ai_media_tasks" }
@@ -61,7 +66,7 @@ func CreateAiMediaTask(userID uint, m *AiModel, kind, prompt string, params AiMe
 	t := &AiMediaTask{
 		UserID: userID, Kind: kind, ModelID: m.ID, ModelName: m.Name,
 		Prompt: prompt, Params: string(pj), Status: AiMediaPending,
-		Style: params.Style, // 作品广场按风格筛选
+		Style:     params.Style, // 作品广场按风格筛选
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	if err := DB.Create(t).Error; err != nil {
@@ -192,21 +197,66 @@ func ListAiMediaTasks(userID uint, kind string, page, pageSize int) ([]AiMediaTa
 		q = q.Where("kind = ?", kind)
 	}
 	var total int64
-	q.Count(&total)
-	var list []AiMediaTask
-	err := DB.Where("user_id = ?", userID).Order("created_at DESC").
-		Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error
-	if kind != "" {
-		// Find 未带 kind 条件时重新过滤（上面 Count 已带）
-		filtered := make([]AiMediaTask, 0, len(list))
-		for _, t := range list {
-			if t.Kind == kind {
-				filtered = append(filtered, t)
-			}
-		}
-		list = filtered
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
 	}
+	var list []AiMediaTask
+	// 注意：kind 过滤必须在 SQL 层（早期版本是分页后内存过滤，会「第一页返回 5 条、total 却是 20」）
+	err := q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).
+		Find(&list).Error
 	return list, total, err
+}
+
+// ListAiMediaForExport 导出用：按时间范围取（不分页），limit 兜底防一次导出打爆内存
+func ListAiMediaForExport(userID uint, kind string, since, until time.Time, limit int) ([]AiMediaTask, error) {
+	if limit <= 0 || limit > 2000 {
+		limit = 500
+	}
+	q := DB.Model(&AiMediaTask{}).Where("user_id = ?", userID)
+	if kind != "" {
+		q = q.Where("kind = ?", kind)
+	}
+	if !since.IsZero() {
+		q = q.Where("created_at >= ?", since)
+	}
+	if !until.IsZero() {
+		q = q.Where("created_at < ?", until)
+	}
+	var list []AiMediaTask
+	err := q.Order("created_at ASC").Limit(limit).Find(&list).Error
+	return list, err
+}
+
+// MediaAttachment 任务附件（参考图/素材）
+type MediaAttachment struct {
+	URL  string `json:"url"`
+	Name string `json:"name,omitempty"`
+	Size int64  `json:"size,omitempty"`
+}
+
+// ParseAttachments 解析附件 JSON（坏数据返回空，不让脏字段把整条任务弄崩）
+func ParseAttachments(raw string) []MediaAttachment {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var list []MediaAttachment
+	if err := json.Unmarshal([]byte(raw), &list); err != nil {
+		return nil
+	}
+	return list
+}
+
+// SetMediaAttachments 写入附件（覆盖；调用方负责校验 URL）
+func SetMediaAttachments(taskID uint, list []MediaAttachment) error {
+	if taskID == 0 {
+		return nil
+	}
+	b, err := json.Marshal(list)
+	if err != nil {
+		return err
+	}
+	return DB.Model(&AiMediaTask{}).Where("id = ?", taskID).
+		Update("attachments", string(b)).Error
 }
 
 // mediaKindLabel 任务类型中文名

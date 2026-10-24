@@ -113,6 +113,11 @@ const router = createRouter({
       component: () => import('@/views/BlogDetail.vue'),
     },
     {
+      path: '/live',
+      name: 'live',
+      component: () => import('@/views/Live.vue'),
+    },
+    {
       path: '/groups',
       name: 'groups',
       component: () => import('@/views/group/index.vue'),

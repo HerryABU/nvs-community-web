@@ -366,6 +366,23 @@ async function loadMore() {
   await fetchComments(false);
   loadingMore.value = false;
 }
+// 供父组件调用：把话本气泡原文预填为引用（长按互动，gap-audit #22 的一部分）
+function setQuote(text: string, speaker?: string) {
+  const body = (text || '').trim();
+  if (!body) return;
+  // 引用格式：每行 > 前缀，首行带说话人（Markdown 引用块）
+  const lines = body.split('\n');
+  if (speaker) lines[0] = `${speaker}：${lines[0]}`;
+  const quoted = lines.map((l) => `> ${l}`).join('\n');
+  newComment.value = `${quoted}\n\n`;
+  // 滚到输入框并聚焦（移动端键盘不强行拉起，交给用户点）
+  const el = document.querySelector('.comment-section .comment-form');
+  if (el && 'scrollIntoView' in el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const ta = document.querySelector('.comment-section textarea') as HTMLTextAreaElement | null;
+  if (ta) setTimeout(() => ta.focus(), 200);
+}
+
+defineExpose({ setQuote });
 </script>
 
 <style scoped>

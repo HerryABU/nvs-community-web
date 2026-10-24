@@ -248,6 +248,8 @@ func main() {
 		public.GET("/carousels", handlers.PublicCarousels)
 		public.GET("/checkin/status", handlers.CheckInStatus)
 		public.GET("/visit-setting", handlers.PublicVisitSetting)
+		// 直播入口（gap-audit #23）：只做入口与嵌入，不提供推流
+		public.GET("/live", handlers.PublicLive)
 		public.POST("/auth/login", security.RateLimit(5, 60), handlers.Login)
 		public.POST("/auth/logout", handlers.Logout)
 		// 🔒 无感续期：校验 HttpOnly 刷新令牌 Cookie，签发新的访问令牌（不要求已登录）
@@ -414,6 +416,12 @@ func main() {
 		protected.POST("/ai/video", security.RateLimit(10, 60), handlers.AiHubVideoSubmit)
 		protected.GET("/ai/video/:id", handlers.AiHubVideoStatus)
 		protected.GET("/ai/media", handlers.AiHubMediaHistory)
+		// 出图附件上传 + 历史导出（gap-audit #17）
+		// 注意：/ai/media 下不能加静态段（已有 /ai/media 精确路由 + /ai/media/:id/... 通配），
+		// 所以历史导出放 /ai/export/media.zip 独立子树
+		protected.POST("/ai/media/attach", security.RateLimit(30, 60), handlers.AttachMedia)
+		protected.GET("/ai/media/:id/export", handlers.ExportMediaTask)
+		protected.GET("/ai/export/media.zip", handlers.ExportMediaHistory)
 
 		// AI 提示词库：平台预设（只读）+ 我的自定义（增删改）
 		protected.GET("/ai/prompts", handlers.AiPromptList)
@@ -843,6 +851,8 @@ func main() {
 		admin.PUT("/checkin", handlers.SaveCheckIn)
 		admin.GET("/visit-setting", handlers.AdminVisitSetting)
 		admin.PUT("/visit-setting", handlers.SaveVisitSetting)
+		admin.GET("/live", handlers.AdminLive)
+		admin.PUT("/live", handlers.SaveLive)
 		// ===== 语音模型 / 转化漏斗 =====
 		admin.GET("/ai/audio-models", handlers.AdminSpeechModels)
 		admin.GET("/ai/funnel", handlers.AiFunnel)

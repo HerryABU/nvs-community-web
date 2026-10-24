@@ -96,6 +96,11 @@
       <!-- 书架入口（需登录） -->
       <router-link v-if="authStore.isLoggedIn" to="/bookshelf" class="nav-link desktop-only">📚 书架</router-link>
 
+      <!-- 直播入口（站长开启才显示，gap-audit #23） -->
+      <router-link v-if="liveEnabled" to="/live" class="nav-link desktop-only">
+        <span v-if="liveStatus === 'live'" class="live-dot" />📺 直播
+      </router-link>
+
       <!-- 每日签到（站长开启才显示） -->
       <button v-if="authStore.isLoggedIn && checkinEnabled" class="nav-link nav-checkin desktop-only"
         :disabled="checkinLoading" :title="checkinDone ? '今天已签到' : '每日签到领代币'"
@@ -331,6 +336,7 @@ import { useThemeStore } from '@/stores/theme';
 import { useAppStore } from '@/stores/app';
 import { authApi } from '@/api/auth';
 import { notificationApi } from '@/api/notification';
+import api from '@/api/index';
 import { opsApi, type NavMenuItem } from '@/api/ops';
 import { appPrefix } from '@/utils/prefix';
 import { ElMessage } from 'element-plus';
@@ -485,6 +491,17 @@ async function loadMenus() {
   } catch { /* 菜单不可用不影响导航主体 */ }
 }
 
+// ===== 直播入口（gap-audit #23）=====
+const liveEnabled = ref(false);
+const liveStatus = ref('');
+async function loadLive() {
+  try {
+    const res = await api.get('/live');
+    liveEnabled.value = !!res.data?.data?.enabled;
+    liveStatus.value = res.data?.data?.status || '';
+  } catch { /* 未开启或接口不可用，静默 */ }
+}
+
 // ===== 每日签到（gap-audit #23）=====
 const checkinEnabled = ref(false);
 const checkinDone = ref(false);
@@ -522,6 +539,7 @@ onMounted(() => {
   appStore.bootstrap(); // 幂等：与 App.vue 重复调用只会发一次 /api/batch
   window.addEventListener('nvs:unread', onUnreadEvent);
   loadMenus();
+  loadLive();
   if (authStore.isLoggedIn) loadCheckin();
 });
 
@@ -541,6 +559,11 @@ onUnmounted(() => {
   margin-left: 4px; font-size: 0.6rem; padding: 0 4px; border-radius: 6px;
   background: var(--el-color-danger); color: #fff; vertical-align: super;
 }
+.live-dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--el-color-danger); margin-right: 4px; animation: live-pulse 1.4s infinite;
+}
+@keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
 .nav-checkin {
   background: none; border: 0; cursor: pointer; font: inherit; color: inherit;
   display: inline-flex; align-items: center;
