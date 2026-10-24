@@ -17,6 +17,9 @@
           <el-button size="large" @click="goMyBlogs">
             <el-icon><Notebook /></el-icon>我的博客
           </el-button>
+          <el-button size="large" @click="$router.push('/collab')">
+            <el-icon><UserFilled /></el-icon>协作
+          </el-button>
         </div>
       </div>
 
@@ -277,6 +280,9 @@
                 <el-button size="small" plain @click="$router.push(`/novel/${novel.id}`)">
                   <el-icon><View /></el-icon>查看
                 </el-button>
+                <el-button size="small" plain @click="openCollab(novel.id)">
+                  <el-icon><UserFilled /></el-icon>协作
+                </el-button>
                 <el-dropdown trigger="click" @command="(fmt: string) => handleExport(novel.id, fmt)">
                   <el-button size="small" type="warning" plain :loading="exportingId === novel.id">
                     <el-icon><Download /></el-icon>导出<el-icon class="el-icon--right"><ArrowDown /></el-icon>
@@ -372,6 +378,9 @@
           </div>
         </div>
       </div>
+
+      <!-- 多人协作：协作者 / 角色 / 分成 / 署名（docs/novel-collaboration.md） -->
+      <CollaboratorsPanel v-model:visible="collabVisible" :novel-id="collabNovelId" />
     </div>
 
   </div>
@@ -395,6 +404,15 @@ import {
 import AnimatedNumber from '@/components/AnimatedNumber.vue';
 import DashboardCharts from '@/components/DashboardCharts.vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
+import CollaboratorsPanel from '@/components/collab/CollaboratorsPanel.vue';
+
+// 多人协作：作品级协作者管理面板（docs/novel-collaboration.md）
+const collabVisible = ref(false);
+const collabNovelId = ref(0);
+function openCollab(novelId: number) {
+  collabNovelId.value = novelId;
+  collabVisible.value = true;
+}
 
 const route = useRoute();
 const router = useRouter();

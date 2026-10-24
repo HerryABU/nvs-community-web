@@ -85,6 +85,13 @@ const router = createRouter({
       component: () => import('@/views/ChapterEditor.vue'),
       meta: { requiresAuth: true },
     },
+    // 多人协作：我参与的协作作品 + 待处理邀请
+    {
+      path: '/collab',
+      name: 'collab-works',
+      component: () => import('@/views/CollabWorks.vue'),
+      meta: { requiresAuth: true },
+    },
     {
       path: '/category/:name',
       name: 'category',

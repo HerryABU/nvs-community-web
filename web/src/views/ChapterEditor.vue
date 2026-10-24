@@ -54,6 +54,12 @@
           >
             <span class="ce-ch-num">{{ ch.chapter_number }}</span>
             <span class="ce-ch-title">{{ ch.title || '无标题' }}</span>
+            <el-tag
+              v-if="ch.status && ch.status !== 'published'"
+              size="small"
+              :type="chapterStatusType(ch.status)"
+              class="ce-ch-status"
+            >{{ chapterStatusLabel(ch.status) }}</el-tag>
             <span class="ce-ch-words">{{ ch.word_count }}字</span>
             <el-popconfirm
               title="确认删除此章节？"
@@ -77,6 +83,16 @@
             placeholder="章节标题（如：第一章 开端）"
             size="large"
             class="ce-title-input"
+          />
+          <!-- 多人协作：章节状态机（提审 / 审核 / 发布 / 撤回） -->
+          <ChapterWorkflowBar
+            :novel-id="novelId"
+            :chapter-num="currentNum"
+            :status="chapterStatus"
+            :me="collabMe"
+            :can-edit="canEditThis"
+            :review-note="reviewNote"
+            @changed="onWorkflowChanged"
           />
         </div>
 
@@ -110,6 +126,9 @@ import { ArrowLeft, Plus, Delete, Link, MagicStick } from '@element-plus/icons-v
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
 import AiAssistPanel from '@/components/editor/AiAssistPanel.vue';
+import ChapterWorkflowBar from '@/components/collab/ChapterWorkflowBar.vue';
+import { collabApi, chapterStatusLabel, chapterStatusType, type CollabMe } from '@/api/collab';
+import { useAuthStore } from '@/stores/auth';
 import { guardLeak } from '@/composables/useLeakGuard';
 // engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
 import { renderMarkdown, editorEngineConfig } from '@/markdown/renderer';
@@ -126,8 +145,15 @@ const currentChapterId = computed(() => {
   return c && c.id > 0 ? c.id : 0;
 });
 
+const authStore = useAuthStore();
+
 const novelTitle = ref('');
 const chapters = ref<Chapter[]>([]);
+// 多人协作：我的协作身份与本章状态
+const collabMe = ref<CollabMe | null>(null);
+const chapterStatus = ref('draft');
+const reviewNote = ref('');
+const canEditThis = ref(true);
 const chapterTitle = ref('');
 const chapterContent = ref('');       // Markdown 源文本
 const richTextContent = ref('');      // 富文本 HTML 内容
@@ -293,6 +319,35 @@ async function onModeChange(mode: string) {
   }
 }
 
+// ─── 多人协作 ───
+
+// 我在该作品上的协作身份（主笔/协作作者/编辑/审稿）；非协作作品返回 null，保持原有直发行为
+async function loadCollab() {
+  try {
+    const res = await collabApi.list(novelId.value);
+    collabMe.value = res.data.data?.me || null;
+  } catch {
+    collabMe.value = null;
+  }
+}
+
+// 我能否编辑本章：主笔 / 有 edit_others / 本章是我写的
+function computeCanEdit(ch: { author_id?: number }): boolean {
+  const me = collabMe.value;
+  if (!me) return true;
+  if (me.is_owner || me.can_edit_others) return true;
+  const authorId = Number(ch?.author_id || 0);
+  return authorId > 0 && authorId === Number(authStore.user?.id || 0);
+}
+
+// 工作流回调：本地同步状态（后端已落库）
+function onWorkflowChanged(next: string) {
+  chapterStatus.value = next;
+  if (next !== 'rejected') reviewNote.value = '';
+  const idx = chapters.value.findIndex((c) => c.chapter_number === currentNum.value);
+  if (idx >= 0) (chapters.value[idx] as Chapter).status = next;
+}
+
 // ─── 章节操作 ───
 
 async function loadNovel() {
@@ -322,10 +377,14 @@ async function loadCurrentChapter() {
   try {
     const res = await chapterApi.getChapter(novelId.value, currentNum.value);
     const detail = res.data.data;
-    const ch = detail.chapter;
+    const ch = detail.chapter as Chapter & { review_note?: string; author_id?: number };
     chapterTitle.value = ch.title || '';
     const content = ch.content || '';
     chapterContent.value = content;
+    // 协作状态机：草稿/待审/已发布/已驳回 + 驳回意见 + 我能否改本章
+    chapterStatus.value = ch.status || 'draft';
+    reviewNote.value = ch.review_note || '';
+    canEditThis.value = computeCanEdit(ch);
 
     if (editorMode.value === 'md' && cherryInstance) {
       cherryInstance.setValue(content);
@@ -359,6 +418,9 @@ async function addChapter() {
   chapterTitle.value = `第${newNum}章`;
   chapterContent.value = '';
   richTextContent.value = '';
+  chapterStatus.value = 'draft';
+  reviewNote.value = '';
+  canEditThis.value = true;
   currentNum.value = newNum;
   if (cherryInstance) cherryInstance.setValue('');
   chapters.value.push({
@@ -404,6 +466,11 @@ async function saveChapter() {
       chapters.value[idx].word_count = contentToSave.length;
       // 用真实章节 ID 标记（>0），后续保存走更新而非重复创建
       if (chapters.value[idx].id <= 0 && chapterId > 0) chapters.value[idx].id = chapterId;
+    }
+    // 新建章节的初始状态：主笔/有发布权者直接发布，协作者落到草稿待提审
+    if (!existing) {
+      const me = collabMe.value;
+      chapterStatus.value = me && !me.is_owner && !me.can_publish ? 'draft' : 'published';
     }
     const now = new Date();
     lastSaved.value = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
@@ -467,8 +534,10 @@ function onKeyDown(e: KeyboardEvent) {
 
 // ─── 生命周期 ───
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('keydown', onKeyDown);
+  // 先解析协作身份，再加载章节（章节可见性与编辑权依赖身份）
+  await loadCollab();
   loadNovel();
   // 初始模式为 MD 时初始化 Cherry
   if (editorMode.value === 'md') {
@@ -624,9 +693,18 @@ onBeforeUnmount(() => {
 }
 
 .ce-editor-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 8px 16px;
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.ce-ch-status {
+  flex-shrink: 0;
+  transform: scale(0.85);
 }
 
 .ce-title-input :deep(.el-input__inner) {
