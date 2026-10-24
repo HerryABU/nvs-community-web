@@ -50,6 +50,32 @@
       <!-- 扩展应用（管理+广场） -->
       <router-link to="/htmls" class="nav-link nav-link-create desktop-only">🔌 扩展应用</router-link>
 
+      <!-- 站长自定义菜单（gap-audit #20）：站内路由用 router-link，外链用 a + noopener -->
+      <template v-for="m in dynamicMenus" :key="m.id">
+        <el-dropdown v-if="m.children && m.children.length" class="desktop-only" trigger="hover">
+          <span class="nav-link">
+            <span v-if="m.icon" class="nav-emoji">{{ m.icon }}</span>{{ m.title }}
+            <span v-if="m.badge" class="nav-badge">{{ m.badge }}</span>
+          </span>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item v-for="c in m.children" :key="c.id" @click="goMenu(c)">
+                <span v-if="c.icon" class="nav-emoji">{{ c.icon }}</span>{{ c.title }}
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <a v-else-if="isExternal(m.url)" :href="m.url" target="_blank" rel="noopener noreferrer"
+           class="nav-link desktop-only">
+          <span v-if="m.icon" class="nav-emoji">{{ m.icon }}</span>{{ m.title }}
+          <span v-if="m.badge" class="nav-badge">{{ m.badge }}</span>
+        </a>
+        <router-link v-else :to="m.url" class="nav-link desktop-only">
+          <span v-if="m.icon" class="nav-emoji">{{ m.icon }}</span>{{ m.title }}
+          <span v-if="m.badge" class="nav-badge">{{ m.badge }}</span>
+        </router-link>
+      </template>
+
       <!-- 自定义内容入口（需登录） -->
       <el-dropdown v-if="authStore.isLoggedIn" class="desktop-only" trigger="click">
         <span class="nav-link">
@@ -69,6 +95,13 @@
 
       <!-- 书架入口（需登录） -->
       <router-link v-if="authStore.isLoggedIn" to="/bookshelf" class="nav-link desktop-only">📚 书架</router-link>
+
+      <!-- 每日签到（站长开启才显示） -->
+      <button v-if="authStore.isLoggedIn && checkinEnabled" class="nav-link nav-checkin desktop-only"
+        :disabled="checkinLoading" :title="checkinDone ? '今天已签到' : '每日签到领代币'"
+        @click="doCheckin">
+        {{ checkinDone ? '✅ 已签到' : '📅 签到' }}
+      </button>
 
       <!-- 远程站点 -->
       <el-dropdown v-if="federatedSites.length > 0" class="desktop-only" trigger="click">
@@ -298,6 +331,7 @@ import { useThemeStore } from '@/stores/theme';
 import { useAppStore } from '@/stores/app';
 import { authApi } from '@/api/auth';
 import { notificationApi } from '@/api/notification';
+import { opsApi, type NavMenuItem } from '@/api/ops';
 import { appPrefix } from '@/utils/prefix';
 import { ElMessage } from 'element-plus';
 import { Camera, Setting, Brush, Document, Warning, Bell, Menu, HomeFilled, ChatDotRound, Plus, Notebook, User, SwitchButton, Connection, Key, Stamp, CircleClose, ChatLineRound, Star, Wallet, MagicStick } from '@element-plus/icons-vue';
@@ -431,9 +465,64 @@ function openFederated(site: any) {
   window.open(`${appPrefix}/${site.id}`, '_blank');
 }
 
+// ===== 站长自定义菜单（gap-audit #20）=====
+const dynamicMenus = ref<NavMenuItem[]>([]);
+
+function isExternal(u: string) {
+  return /^https?:\/\//i.test(u || '');
+}
+function goMenu(m: NavMenuItem) {
+  if (isExternal(m.url)) {
+    window.open(m.url, '_blank', 'noopener,noreferrer');
+  } else {
+    router.push(m.url);
+  }
+}
+async function loadMenus() {
+  try {
+    const res = await opsApi.navMenus();
+    dynamicMenus.value = res.data.data?.items || [];
+  } catch { /* 菜单不可用不影响导航主体 */ }
+}
+
+// ===== 每日签到（gap-audit #23）=====
+const checkinEnabled = ref(false);
+const checkinDone = ref(false);
+const checkinLoading = ref(false);
+async function loadCheckin() {
+  try {
+    const res = await opsApi.checkInStatus();
+    checkinEnabled.value = !!res.data.data?.enabled;
+    checkinDone.value = !!res.data.data?.checked;
+  } catch { /* 未开启或未登录，静默 */ }
+}
+async function doCheckin() {
+  if (checkinDone.value) {
+    ElMessage.info('今天已经签到过了');
+    return;
+  }
+  checkinLoading.value = true;
+  try {
+    const res: any = await opsApi.checkIn();
+    const d = res.data.data;
+    if (d?.already) {
+      ElMessage.info('今天已经签到过了');
+    } else {
+      ElMessage.success(`签到成功：+${d?.reward ?? 0}（连签 ${d?.streak ?? 1} 天）`);
+    }
+    checkinDone.value = true;
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '签到失败');
+  } finally {
+    checkinLoading.value = false;
+  }
+}
+
 onMounted(() => {
   appStore.bootstrap(); // 幂等：与 App.vue 重复调用只会发一次 /api/batch
   window.addEventListener('nvs:unread', onUnreadEvent);
+  loadMenus();
+  if (authStore.isLoggedIn) loadCheckin();
 });
 
 onUnmounted(() => {
@@ -446,6 +535,18 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* 自定义菜单与签到（gap-audit #20 #23） */
+.nav-emoji { margin-right: 4px; }
+.nav-badge {
+  margin-left: 4px; font-size: 0.6rem; padding: 0 4px; border-radius: 6px;
+  background: var(--el-color-danger); color: #fff; vertical-align: super;
+}
+.nav-checkin {
+  background: none; border: 0; cursor: pointer; font: inherit; color: inherit;
+  display: inline-flex; align-items: center;
+}
+.nav-checkin:disabled { opacity: 0.6; cursor: default; }
+
 /* ====== NavBar — Glassmorphism 2024 ====== */
 .navbar {
   position: fixed;

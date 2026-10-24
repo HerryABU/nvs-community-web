@@ -846,6 +846,11 @@ func main() {
 		// ===== 语音模型 / 转化漏斗 =====
 		admin.GET("/ai/audio-models", handlers.AdminSpeechModels)
 		admin.GET("/ai/funnel", handlers.AiFunnel)
+		// 全站总预算 + 并发排队 / 三维限流
+		admin.GET("/ai/budget", handlers.GetAiBudget)
+		admin.PUT("/ai/budget", handlers.SaveAiBudget)
+		admin.GET("/ai/throttle", handlers.GetAiThrottle)
+		admin.PUT("/ai/throttle", handlers.SaveAiThrottle)
 		// ===== 蜜罐：SQLi 命中与 TLS 采集率 =====
 		admin.GET("/honeypot/sqli", honeypothandler.SQLiStats)
 		admin.GET("/honeypot/tls", honeypothandler.TLSStats)

@@ -47,6 +47,7 @@ export const AI_ACTIONS = [
   { value: 'expand', label: '扩写', hint: '丰富细节、对话与环境描写' },
   { value: 'summarize', label: '摘要', hint: '概括内容要点' },
   { value: 'character', label: '角色设定', hint: '按线索生成角色卡（外貌/缺陷/秘密/说话方式）' },
+  { value: 'mindmap', label: '思维导图', hint: '把内容整理成 Mermaid mindmap（可插入正文，阅读器可渲染）' },
   { value: 'custom', label: '自定义', hint: '把输入当作完整指令执行' },
 ] as const;
 

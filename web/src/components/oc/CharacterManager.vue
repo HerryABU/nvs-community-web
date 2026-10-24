@@ -7,6 +7,8 @@
       </el-radio-group>
       <el-input v-model="keyword" placeholder="搜索角色名" size="small" style="width: 180px" clearable @change="load" />
       <el-button type="primary" size="small" @click="openEditor()">新建角色卡</el-button>
+      <el-button size="small" @click="importVisible = true">导入酒馆卡</el-button>
+      <input ref="fileInput" type="file" accept=".json,application/json" hidden @change="onPickFile" />
     </div>
 
     <div class="ocm-grid">
@@ -29,6 +31,7 @@
         </div>
         <div class="ocm-actions">
           <el-button size="small" text type="primary" @click="openEditor(c)">编辑</el-button>
+          <el-button size="small" text @click="exportCard(c)">导出</el-button>
           <el-button v-if="canBind" size="small" text @click="bindAgent(c)">加入本群 AI</el-button>
           <el-popconfirm title="确认删除该角色卡？（保留记录以备追溯）" @confirm="remove(c)">
             <template #reference><el-button size="small" text type="danger">删除</el-button></template>
@@ -95,12 +98,29 @@
         <el-button type="primary" :loading="saving" @click="save">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 导入酒馆角色卡（gap-audit #24） -->
+    <el-dialog v-model="importVisible" title="导入角色卡" width="540px">
+      <el-alert type="info" :closable="false"
+        title="支持酒馆 V2（chara_card_v2）与 V1 扁平 JSON；若卡片内嵌 character_book，会一并创建世界书。" />
+      <div class="imp-row">
+        <el-button :loading="importing" @click="fileInput?.click()">选择 JSON 文件</el-button>
+        <span class="imp-hint">或粘贴 JSON：</span>
+      </div>
+      <el-input v-model="pasteJSON" type="textarea" :rows="6" placeholder='{"spec":"chara_card_v2","data":{...}}' />
+      <template #footer>
+        <el-button @click="importVisible = false">取消</el-button>
+        <el-button type="primary" :loading="importing" @click="importByPaste">导入</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue';
 import { ElMessage } from 'element-plus';
+import api from '@/api/index';
+import { appPrefix } from '@/utils/prefix';
 import { ocApi, type OcCharacter, type OcWorldBook } from '@/api/oc';
 
 const props = defineProps<{ groupId: number; canBind: boolean }>();
@@ -119,6 +139,68 @@ const form = reactive<Partial<OcCharacter>>({
   scenario: '', first_message: '', mes_example: '', system_prompt: '',
   book_id: 0, tags: '', emote_map: '', visibility: 'private',
 });
+
+// ── 导入 / 导出（gap-audit #24）──
+const fileInput = ref<HTMLInputElement | null>(null);
+const importVisible = ref(false);
+const importing = ref(false);
+const pasteJSON = ref('');
+
+async function onPickFile(ev: Event) {
+  const input = ev.target as HTMLInputElement;
+  const f = input.files?.[0];
+  if (!f) return;
+  importing.value = true;
+  try {
+    const fd = new FormData();
+    fd.append('file', f);
+    const res: any = await api.post('/oc/import/character', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    const d = res.data?.data;
+    ElMessage.success(`已导入「${d?.character?.name || '角色'}」${d?.entries ? `，世界书 ${d.entries} 条` : ''}`);
+    importVisible.value = false;
+    await load();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '导入失败');
+  } finally {
+    importing.value = false;
+    input.value = '';
+  }
+}
+
+async function importByPaste() {
+  if (!pasteJSON.value.trim()) {
+    ElMessage.warning('请粘贴 JSON');
+    return;
+  }
+  let parsed: any;
+  try {
+    parsed = JSON.parse(pasteJSON.value);
+  } catch {
+    ElMessage.error('不是合法 JSON');
+    return;
+  }
+  importing.value = true;
+  try {
+    const res: any = await api.post('/oc/import/character', parsed);
+    const d = res.data?.data;
+    ElMessage.success(`已导入「${d?.character?.name || '角色'}」`);
+    importVisible.value = false;
+    pasteJSON.value = '';
+    await load();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '导入失败');
+  } finally {
+    importing.value = false;
+  }
+}
+
+// 导出走浏览器直接下载（Cookie 鉴权，不需要前端拼文件）
+function exportCard(c: any) {
+  // 不硬编码前缀：用运行时解析出的 appPrefix（反代挂载自动适配）
+  window.open(`${appPrefix}/api/oc/characters/${c.id}/export`, '_blank');
+}
 
 async function load() {
   loading.value = true;
@@ -194,6 +276,8 @@ onMounted(() => { load(); loadBooks(); });
 </script>
 
 <style scoped>
+.imp-row { display: flex; align-items: center; gap: 10px; margin: 10px 0 6px; }
+.imp-hint { color: var(--text-muted); font-size: 0.78rem; }
 .ocm-bar {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;
 }

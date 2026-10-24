@@ -8,7 +8,7 @@
 
 ## 0. 一句话结论
 
-- **真实缺口 15 项**（累计修掉 8 项；P0 已清零），其中安全合规 4 项、AI 平台能力 9 项、内容玩法 2 项。
+- **真实缺口 3 项**（v3.19.0 一次性修掉 15 项；P0/P1 已清零）：#17 AI 出图附件与历史导出、#22 气泡长按互动、#23 直播入口。
 - **文档过时/核对误判 5 项**（多密钥卡池、沉浸模式、蜜罐 M2-M4、大纲记忆、算法透明度页），已标注并修正。
 - **明确取舍 4 项**（实时共同编辑、验证页放行分支、headless 直接拒绝、蜜罐记录真实凭据），不算缺口。
 
@@ -16,6 +16,10 @@
 > - ✅ 已完成：#1 蜜罐独立进程、#2 独立 DB + 同路径断言、#5 冷归档、#7 合规材料一键导出
 > - ✅ v3.17.0 完成：#10 路由策略（最便宜/最快/按场景）、#11 故障自动降级（必须提示，不静默）
 > - ✅ v3.18.0 完成：#16 角色设定 AI 动作、#21 主笔转让
+> - ✅ v3.19.0 完成：#3 SQLi 蜜罐、#4 JA3/JA4+WebRTC、#6 警方工单、#9 充值风控、#12 总预算+排队、
+>   #13 转化漏斗、#14 注册门槛+设备指纹、#15 三维限流、#18 TTS/音乐、#19 思维导图、
+>   #20 自定义菜单、#22 表情包（长按互动除外）、#23 轮播/签到/访客（直播除外）、#24 OC 卡互通，
+>   外加「告警口径」：API Key HMAC 审计指纹 + 多 IP 提醒 + 解密失败 + 封禁后仍使用
 > - ⚠️ 撤回误判：#8「公开算法透明度页」**其实早已实现**——首页 `HomeNoticeBar.vue` 的「📊 推荐说明」弹窗 +
 >   公开接口 `/api/algorithms/description`（第一版只 grep 路由与后台页，漏了组件内弹窗）
 > - 仍在清单：#3 #4 #6 #9 #10 #11 #12 #13 #14 #15 #16 #17 #18 #19 #20 #21 #22 #23 #24
@@ -28,13 +32,13 @@
 |---|---|---|---|---|---|
 | 1 | 蜜罐独立进程 / 独立端口 | `honeypot-design.md` §1 约束 5 | ✅ v3.16.0：`cmd/honeypot`（`nvs-honeypot.exe`，默认 18081），只挂诱饵/影子/验证页 + `/__hp/health` | 已做 | — |
 | 2 | 蜜罐独立 DB + 启动断言 | 同上 §6 风险 2 | ✅ v3.16.0：`NVS_HONEYPOT_DB_PATH` 切独立库，`SetDB` 断言「蜜罐库 ≠ 主库」，同路径拒绝启动 | 已做 | — |
-| 3 | SQL 注入蜜罐（预生成响应库） | `requirements-audit.md` 蜜罐段 | 无 sqli 相关代码（真实链路全参数化，注入打不穿） | GAP | P1 |
-| 4 | JA3 / JA4 指纹、WebRTC 内网 IP | `honeypot-design.md` §2 表字段 | `honeypot_fingerprints` 无 ja3/ja4/webrtc 列 | GAP | P1 |
+| 3 | SQL 注入蜜罐（预生成响应库） | `requirements-audit.md` 蜜罐段 | ✅ v3.19.0：`honeypot/sqli.go` 假 SQL 入口 + 预生成响应库（假表/假用户/金丝雀）+ 10 类注入特征；事件 sqli_hit/probe | 已做 | — |
+| 4 | JA3 / JA4 指纹、WebRTC 内网 IP | `honeypot-design.md` §2 表字段 | ✅ v3.19.0：反代头 X-JA3-Hash/X-JA4 采集（缺失记 missing 不伪造）+ 指纹表加 ja3/ja4/tls_source/tls_version/webrtc_ips + 验证页 RTCPeerConnection 采内网 IP | 已做 | — |
 | 5 | 90 天 TTL **冷归档**（而非只删） | 同上 §5 M4 | ✅ v3.16.0：`ArchiveAndCleanup()` 先写 `archive/honeypot-events-YYYYMM.jsonl.gz`（fsync）再分批删；`GET /honeypot/archives` | 已做 | — |
-| 6 | 警方联动工单 | 同上 §5 M4 | 有 `police` 角色与取证下载，无工单流转 | GAP | P2 |
+| 6 | 警方联动工单 | 同上 §5 M4 | ✅ v3.19.0：`server/police` 建单/派单/进展/结案（结单必填结论）+ 超期与未派单口径 + 操作日志 | 已做 | — |
 | 7 | 一键导出合规检查材料 | `requirements-audit.md` 等保条 | ✅ v3.16.0：`GET /api/admin/compliance/bundle.zip`（报告+算法说明+定级+漏洞+用户汇总+蜜罐摘要+日志清单+SHA256 manifest），导出写审计 | 已做 | — |
 | 8 | ~~公开的算法透明度说明页~~ | 同上「算法透明度」条 | **误判**：首页 `HomeNoticeBar.vue`「📊 推荐说明」弹窗 + `GET /api/algorithms/description` 早已存在 | STALE（我漏查组件） | — |
-| 9 | 充值异常 / 退款与风控联动 | `requirements-audit.md` 支付条 | 视频失败自动退款有；与蜜罐/风控无联动 | GAP | P1 |
+| 9 | 充值异常 / 退款与风控联动 | `requirements-audit.md` 支付条 | ✅ v3.19.0：`server/risk` 入账前打分（蜜罐 IP/同设备多账号/高频/退款率/新号大额），allow/hold/block 三处置，回调接入 | 已做 | — |
 
 补充：i18n 中英双语（`requirements-audit.md` N-03）—— 前端无 `vue-i18n`，**GAP**，但若只做国内站可降为 P2。
 
@@ -44,24 +48,24 @@
 |---|---|---|---|---|---|
 | 10 | 路由策略：最便宜 / 最快 / 场景自动 | `requirements-audit.md` 池子条 | ✅ v3.17.0：`models/ai_router.go`（cheapest=价+价、fastest=近 7 天实测延迟、scene=场景覆盖、manual=优先级）+ 后台「AI 模型池 → 路由策略」 | 已做 | — |
 | 11 | 故障自动降级（必须提示，不静默） | 同上 | ✅ v3.17.0：`aicall.Complete` 降级链 + `Result.Notice()`；OC 发言与群内 AI 已接入，正文尾部标注「模型已降级：A → B（原因）」 | 已做 | — |
-| 12 | 全站总预算上限、高峰排队 | 同上 | 有单次上限/每日限额/群级预算；无全站总预算与排队 | GAP | P1 |
-| 13 | 转化漏斗（免费额度 → 付费） | 同上「成本监控」 | 有消耗统计与开关，无漏斗 | GAP | P2 |
-| 14 | 注册后 N 小时门槛 / 设备指纹防刷 | 同上「防刷」 | 有每日限额 + 速率限制；`grep device_fingerprint` 无命中 | GAP | P1 |
-| 15 | 三维交叉限流（人 / 模型 / 时间窗） | 同上 | 用户级速率 + 每日限额 + 单模型调用，未做三维交叉 | GAP | P2 |
+| 12 | 全站总预算上限、高峰排队 | 同上 | ✅ v3.19.0：`models/ai_budget.go` 日/月上限（HardStop 可软可硬）+ 并发闸门与排队超时 + 峰时上限 | 已做 | — |
+| 13 | 转化漏斗（免费额度 → 付费） | 同上「成本监控」 | ✅ v3.19.0：`GET /api/admin/ai/funnel` 六段漏斗（去重用户）+ 最弱一跳洞察 | 已做 | — |
+| 14 | 注册后 N 小时门槛 / 设备指纹防刷 | 同上「防刷」 | ✅ v3.19.0：`server/gate` 邀请码 + 设备指纹绑定 + 账号年龄 + 新号每日上限 + 临时邮箱 + 蜜罐 IP；注册/评论/发文三处生效 | 已做 | — |
+| 15 | 三维交叉限流（人 / 模型 / 时间窗） | 同上 | ✅ v3.19.0：`models/ai_throttle.go` 用户×模型 / 用户 / 模型 三窗口 + 快照 | 已做 | — |
 | 16 | 角色设定专用 AI 动作 | 同上「生成大纲 / 角色设定」 | ✅ v3.18.0：`AI_ACTIONS` 新增 `character`（后端 `aiSystemPrompt` + 流水标签），输出结构化角色卡 | 已做 | — |
-| 17 | 附件上传、历史导出（AI 出图） | 同上 | 有 max_tokens/比例/张数/风格，无附件与历史导出 | GAP | P2 |
-| 18 | TTS / 音乐（音频模型） | `sparkai-reference.md` | 模型池有 kind 扩展位，无实现 | GAP | P2 |
-| 19 | 思维导图 | 同上 | 只有 Reader 的 Mermaid 渲染（能画，但没有「生成思维导图」功能） | GAP | P2 |
-| 20 | 自定义应用菜单（可挂外部） | 同上 | 有「扩展应用 /frames」，无自定义菜单配置 | GAP | P2 |
+| 17 | 附件上传、历史导出（AI 出图） | 同上 | 有 max_tokens/比例/张数/风格；**附件与历史导出仍未做**（本轮未纳入 15 项清单） | GAP | P2 |
+| 18 | TTS / 音乐（音频模型） | `sparkai-reference.md` | ✅ v3.19.0：`aiclient/audio.go` + `POST /api/ai/speech`（kind=audio，2000 字上限，落 uploads）+ 阅读器朗读按钮 | 已做 | — |
+| 19 | 思维导图 | 同上 | ✅ v3.19.0：AI_ACTIONS 新增 mindmap（约束输出 mermaid mindmap，阅读器已能渲染） | 已做 | — |
+| 20 | 自定义应用菜单（可挂外部） | 同上 | ✅ v3.19.0：`models/nav_menu.go` 两级菜单 + 协议白名单 + 登录/角色可见性 + 导航栏渲染 | 已做 | — |
 
 ## 3. 内容 / 玩法（4 项）
 
 | # | 项 | 文档出处 | 代码核对 | 结论 | 优先级 |
 |---|---|---|---|---|---|
 | 21 | 主笔转让 | `novel-collaboration.md` §9 | ✅ v3.18.0：`collab.Transfer` + `POST /api/novels/:id/transfer`；受让人须为已接受协作者，事务内换主笔+原主笔降 editor，二次确认输入标题，审计留痕 | 已做 | — |
-| 22 | 气泡头像自定义 / 长按互动 / 表情包上传 | `novel-script-mode.md` §7 | 只有 `emote_map`（情绪→URL）与内置表情词典，无上传与管理 | GAP | P2 |
-| 23 | 画廊轮播图 / 直播入口 / 签到奖励 / 访客设置 | `admin-reference.md` 运营条 | `grep 签到/carousel/签到` 无命中 | GAP | P2（运营侧，非主线） |
-| 24 | OC 角色卡导出/导入（酒馆 V2 卡互通） | `oc-mode.md` §11.1（借鉴对照时隐含） | 无 import/export 卡片接口 | GAP | P2 |
+| 22 | 气泡头像自定义 / 长按互动 / 表情包上传 | `novel-script-mode.md` §7 | ✅ v3.19.0：`oc/emote.go` 自定义表情（键全局唯一、URL 白名单）+ scriptmode 渲染为 img + OC「表情包」页签；头像走既有上传；长按互动未做 | 部分 | — |
+| 23 | 画廊轮播图 / 直播入口 / 签到奖励 / 访客设置 | `admin-reference.md` 运营条 | ✅ v3.19.0：轮播（时段过滤）+ 签到（幂等、连签加成）+ 访客设置与 PV/UV；直播入口未做 | 部分 | — |
+| 24 | OC 角色卡导出/导入（酒馆 V2 卡互通） | `oc-mode.md` §11.1（借鉴对照时隐含） | ✅ v3.19.0：`oc/card_io.go` V2/V1 双向 + character_book 互通 + extensions.nvs 保留 + 未知字段留存 | 已做 | — |
 
 ## 4. 文档过时（STALE，其实已做）
 

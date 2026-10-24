@@ -26,6 +26,12 @@
         <el-button text title="我的精读（书签+批注）" @click="$router.push('/reading')">
           <el-icon><Notebook /></el-icon><span class="desktop-only"> 精读</span>
         </el-button>
+        <!-- 语音朗读（gap-audit #18）：服务端合成，产物落站内 uploads -->
+        <el-button text :loading="ttsLoading" :title="ttsPlaying ? '停止朗读' : '朗读本章（消耗免费额度/代币）'"
+          @click="toggleTTS">
+          <el-icon><Microphone /></el-icon>
+          <span class="desktop-only"> {{ ttsPlaying ? '停止' : '朗读' }}</span>
+        </el-button>
       </template>
       <div class="reader-nav desktop-only" v-if="!isTrialExceeded">
         <el-button size="small" :disabled="chapterNum <= 1" @click="goChapter(chapterNum - 1)">
@@ -239,7 +245,8 @@ import SensitiveZoneGuard from '@/components/SensitiveZoneGuard.vue';
 import { shouldShowGuard, markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';
 import { frameApi } from '@/api/frame';
 import { ElMessage } from 'element-plus';
-import { ArrowLeft, List, Star, EditPen, Notebook } from '@element-plus/icons-vue';
+import { aiCostApi } from '@/api/costrisk';
+import { ArrowLeft, List, Star, EditPen, Notebook, Microphone } from '@element-plus/icons-vue';
 
 const authStore = useAuthStore();
 
@@ -761,6 +768,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  stopTTS();
   document.removeEventListener('mouseup', onReaderMouseUp);
   document.removeEventListener('mousedown', onGlobalMouseDown);
 });

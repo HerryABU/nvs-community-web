@@ -50,7 +50,9 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: '合规中心', desc: '等保指引 · 检查工具箱 · 自查报告', path: '/admin/compliance', icon: Medal, color: 'var(--gradient-success)' },
       { title: '漏洞管理', desc: '漏洞整改闭环留痕 · 报告导出', path: '/admin/vulnerabilities', icon: Warning, color: 'var(--gradient-danger)' },
       { title: '日志脱敏', desc: '生产环境日志敏感信息脱敏 · 176号令合规', path: '/admin/log-redact', icon: View, color: 'var(--gradient-danger)' },
-      { title: '蜜罐与日志记录', desc: '蜜罐等级 · 记录字段勾选 · 攻击会话取证', path: '/admin/honeypot', icon: Aim, color: 'var(--gradient-danger)' },
+      { title: '蜜罐与日志记录', desc: '蜜罐等级 · 记录字段勾选 · SQLi 诱饵 · JA3 采集率 · 攻击会话取证', path: '/admin/honeypot', icon: Aim, color: 'var(--gradient-danger)' },
+      { title: '注册门槛与防刷', desc: '邀请码 · 设备指纹 · 账号年龄 · 新号限额 · API Key 告警', path: '/admin/gate', icon: Lock, color: 'var(--gradient-danger)' },
+      { title: '充值风控', desc: '入账前打分 · 打标/拦截待复核 · 蜜罐与设备联动', path: '/admin/risk', icon: CreditCard, color: 'var(--gradient-rose)' },
       { title: '隔离墙配置', desc: '敏感分区列表与确认流程', path: '/admin/wall', icon: Lock, color: 'var(--gradient-accent)' },
       { title: '隔离墙访问记录', desc: '谁/何时进入敏感分区 · 176号令合规', path: '/admin/wall-access', icon: Histogram, color: 'var(--gradient-blue)' },
       { title: '网络诊断与攻击流量', desc: '用户分布 · IP/UA 分类 · 防爬攻击识别', path: '/admin/net-diag', icon: Connection, color: 'var(--gradient-accent)' },
@@ -90,6 +92,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: '代币与卡密', desc: '平台内消费积分开关/命名 · 卡密生成作废 · 授信调整', path: '/admin/token', icon: Coin, color: 'var(--gradient-amber)' },
       { title: '在线支付通道', desc: '微信/支付宝聚合充值 · 档位面额 · 幂等到账 · 手动补单', path: '/admin/payment', icon: CreditCard, color: 'var(--gradient-success)' },
       { title: '公告栏', desc: '站点公告发布 · 合规通知', path: '/admin/announcements', icon: Bell, color: 'var(--gradient-blue)' },
+      { title: '运营位', desc: '自定义导航菜单 · 首页轮播 · 每日签到 · 访客设置', path: '/admin/ops', icon: Grid, color: 'var(--gradient-teal)' },
       { title: '书目分类管理', desc: '平台书目分类的增删改', path: '/admin/categories', icon: Collection, color: 'var(--gradient-purple)' },
     ],
   },
@@ -115,6 +118,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: 'AI 功能配置', desc: '能力开关（BYOK/混图/换脸）· 上下文条数 · 每日限额 · 厂商字典', path: '/admin/ai-features', icon: Operation, color: 'var(--gradient-teal)' },
       { title: '提示词模板', desc: '类型文学默认框架 · 变量注入 · 版本回滚 · 渲染预览', path: '/admin/ai-templates', icon: MagicStick, color: 'var(--gradient-purple)' },
       { title: 'AI 评论机器人', desc: '评论区 @ai 召唤回复 · 每日限流 · 发起人付费', path: '/admin/ai-bot', icon: ChatLineRound, color: 'var(--gradient-pink)' },
+      { title: 'AI 成本与转化', desc: '全站总预算 · 高峰排队 · 三维限流 · 免费→付费漏斗 · 语音模型', path: '/admin/ai-cost', icon: Coin, color: 'var(--gradient-amber)' },
     ],
   },
   {
@@ -124,6 +128,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
     color: 'var(--gradient-danger)',
     items: [
       { title: '警方取管台', desc: '取证留证 · 软删除查看 · 凭证下载', path: '/police-console', icon: Stamp, color: 'var(--gradient-danger)' },
+      { title: '联动工单', desc: '建单/派单/进展/结案 · 超期与未派单口径', path: '/admin/tickets', icon: Postcard, color: 'var(--gradient-danger)' },
     ],
   },
 ];

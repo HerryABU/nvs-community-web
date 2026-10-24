@@ -313,6 +313,37 @@ const router = createRouter({
       component: () => import('@/views/admin/AdminHoneypot.vue'),
       meta: { requiresAuth: true },
     },
+    // 注册门槛与防刷 / 充值风控 / 警方工单 / 运营位 / AI 成本与转化
+    {
+      path: '/admin/gate',
+      name: 'admin-gate',
+      component: () => import('@/views/admin/AdminGate.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/risk',
+      name: 'admin-risk',
+      component: () => import('@/views/admin/AdminRisk.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/tickets',
+      name: 'admin-tickets',
+      component: () => import('@/views/admin/AdminTickets.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/ops',
+      name: 'admin-ops',
+      component: () => import('@/views/admin/AdminOps.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/ai-cost',
+      name: 'admin-ai-cost',
+      component: () => import('@/views/admin/AdminAiCost.vue'),
+      meta: { requiresAuth: true },
+    },
     {
       path: '/admin/algorithms',
       name: 'admin-algorithms',

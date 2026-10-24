@@ -103,6 +103,10 @@
         </div>
       </el-tab-pane>
 
+      <el-tab-pane label="表情包" name="emotes">
+        <EmoteManager />
+      </el-tab-pane>
+
       <el-tab-pane label="对话流" name="flow">
         <FlowPanel :group-id="groupId" />
       </el-tab-pane>
@@ -118,6 +122,7 @@ import { ocApi, type OcSetting, type OcAgent } from '@/api/oc';
 import CharacterManager from '@/components/oc/CharacterManager.vue';
 import WorldBookManager from '@/components/oc/WorldBookManager.vue';
 import FlowPanel from '@/components/oc/FlowPanel.vue';
+import EmoteManager from '@/components/oc/EmoteManager.vue';
 
 const route = useRoute();
 const groupId = computed(() => Number(route.params.id) || 0);

@@ -473,6 +473,48 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.19.0 安全防护 / 成本闸门 / 内容玩法：15 项缺口一次收口（2026-10-24）
+
+> 详细设计、命令与边界见 `docs/anti-abuse-cost-ops.md`；逐项对账见 `docs/gap-audit.md`。
+
+**安全防护**
+- **SQL 注入蜜罐**（`honeypot/sqli.go`）：假 SQL 入口 + 预生成响应库（假表/假用户/金丝雀），
+  10 类注入特征识别；`off`/`low` 与普通 404 无差别。真实链路全参数化，"打不穿"是事实，
+  这里的目的是拿 payload、拖时间、反哺规则
+- **JA3/JA4 + WebRTC**：采信反代 `X-JA3-Hash`/`X-JA4`（缺失记 `missing` **不伪造**），
+  指纹表加 `ja3/ja4/tls_source/tls_version/webrtc_ips`；验证页用 RTCPeerConnection 收内网 IP；
+  后台给采集率诊断与 nginx/caddy 配置模板
+- **注册门槛**（`server/gate`）：邀请码（限次/限时/可作废）+ 设备指纹（`X-Device-Id` 优先，ip+ua 兜底）
+  + 账号年龄 + 新号每日上限 + 临时邮箱 + 蜜罐 IP；注册/评论/发文三处生效
+- **充值风控**（`server/risk`）：入账前打分（蜜罐 IP/同设备多账号/高频/退款率/新号大额），
+  `allow` / `hold`（入账打标）/ `block`（不入账）三处置；**绝不自动扣回已到账余额**
+- **警方联动工单**（`server/police`）：建单/派单/进展/结案（**结单必须写结论**），
+  超期与未派单口径；工单只存证据引用，不存证据本体
+- **API Key 告警口径**：HMAC 审计指纹（不存明文也能对号）+ 多 IP 提醒（只提醒不封禁）
+  + 解密失败 + 封禁后仍使用
+
+**成本闸门**
+- **全站总预算 + 高峰排队**（`models/ai_budget.go`）：日/月代币上限（`HardStop` 可软可硬）、
+  并发闸门与排队超时（排不上返回"忙"，不打上游 429）、峰时上限（高于全站上限自动钳制）
+- **三维交叉限流**（`models/ai_throttle.go`）：用户×模型 / 用户 / 模型 三窗口
+- **转化漏斗**：触达→使用→额度用尽→进收银台→付费→复购，含"最弱一跳"洞察
+- **TTS/音乐**（`aiclient/audio.go` + `POST /api/ai/speech`）：OpenAI 兼容 `/audio/speech`，
+  2000 字上限、必须 `kind=audio` 模型（没有就明说未配置）、产物随机名落 uploads；阅读器「朗读」
+
+**内容玩法**
+- **自定义导航菜单**：两级树 + 协议白名单（拒 `javascript:`/`data:`/`//host`）+ 登录/角色可见性
+- **轮播 / 签到 / 访客**：轮播后端按时段过滤；签到幂等（唯一索引 + 先落记录后发币）与连签加成；
+  访客设置 + 14 天 PV/UV
+- **自定义表情包**：键全局唯一（服务端渲染无用户上下文）、URL 白名单，渲染为 `<img>`
+- **OC 角色卡/世界书互通**：酒馆 V2/V1 双向、`character_book` 互通、`extensions.nvs` 保留自家字段、
+  未知字段留存不丢数据
+- **思维导图**：AI 动作 `mindmap`，强制输出 Mermaid `mindmap` 代码块（阅读器已能渲染）
+
+**验证**：`go test ./gate ./risk ./police ./honeypot ./oc ./models ./aicall ./scriptmode ./collab ./chaptervcs` 全绿；
+`go build ./...` 通过；启动冒烟无路由冲突无 panic；前端 `vite build` 通过并同步 `server/dist`。
+
+**仍未做（明确边界）**：AI 出图附件上传与历史导出、气泡长按互动、直播入口、进程内 JA3 计算、集群级精确限流。
+
 ### v3.18.0 主笔转让 + 角色设定 AI 动作（2026-10-24）
 
 **主笔转让（`collab.Transfer`，补齐 gap-audit #21）**

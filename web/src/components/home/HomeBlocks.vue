@@ -12,6 +12,8 @@
           :categories="categories"
           :show-categories="showCategories(b.config)"
         />
+        <!-- 轮播（运营位） -->
+        <BlockCarousel v-else-if="b.type === 'carousel'" :config="b.config" />
         <!-- 公告栏 -->
         <HomeNoticeBar v-else-if="b.type === 'notice'" ref="noticeRefs" :max-items="maxItems(b.config)" />
         <!-- 模块区（小说/博客/论坛） -->
@@ -55,6 +57,7 @@ import BlockForums from '@/components/home/BlockForums.vue';
 import BlockThreads from '@/components/home/BlockThreads.vue';
 import BlockCustom from '@/components/home/BlockCustom.vue';
 import BlockLinks from '@/components/home/BlockLinks.vue';
+import BlockCarousel from '@/components/home/BlockCarousel.vue';
 
 const appStore = useAppStore();
 const { siteName, categories } = storeToRefs(appStore);

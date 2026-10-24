@@ -128,6 +128,50 @@
       </el-table>
     </el-card>
 
+    <!-- SQL 注入蜜罐（gap-audit #3） -->
+    <el-card class="hp-section">
+      <template #header>
+        <div class="hp-section-head">
+          <span>SQL 注入蜜罐</span>
+          <span class="hp-tip">真实链路全参数化，「注入打不穿」；这里是钓鱼式假入口，只记录 payload 与工具特征</span>
+        </div>
+      </template>
+      <div class="hp-cards">
+        <div class="hp-card"><div class="hp-num">{{ sqli?.hits ?? 0 }}</div><div class="hp-label">带注入特征</div></div>
+        <div class="hp-card"><div class="hp-num">{{ sqli?.probes ?? 0 }}</div><div class="hp-label">仅探路</div></div>
+      </div>
+      <el-table :data="sqli?.breakdown || []" size="small">
+        <el-table-column prop="decoy" label="假入口" width="180" />
+        <el-table-column prop="kind" label="类型" width="140" />
+        <el-table-column prop="count" label="次数" width="100" />
+        <template #empty><el-empty description="还没有人试注入（等级 low 及以上才启用）" :image-size="60" /></template>
+      </el-table>
+    </el-card>
+
+    <!-- TLS 指纹采集率（gap-audit #4） -->
+    <el-card class="hp-section">
+      <template #header>
+        <div class="hp-section-head">
+          <span>TLS 指纹（JA3/JA4）</span>
+          <span class="hp-tip">JA3 只有终止 TLS 的那一层算得出来；本进程在反代后面时依赖反代透传</span>
+        </div>
+      </template>
+      <div class="hp-cards">
+        <div class="hp-card"><div class="hp-num">{{ tls?.fingerprints ?? 0 }}</div><div class="hp-label">指纹总数</div></div>
+        <div class="hp-card"><div class="hp-num">{{ tls?.with_ja3 ?? 0 }}</div><div class="hp-label">含 JA3</div></div>
+        <div class="hp-card"><div class="hp-num">{{ tls?.with_ja4 ?? 0 }}</div><div class="hp-label">含 JA4</div></div>
+        <div class="hp-card"><div class="hp-num">{{ tls?.with_webrtc ?? 0 }}</div><div class="hp-label">含 WebRTC 内网 IP</div></div>
+      </div>
+      <el-alert :type="(tls?.ja3_ratio ?? 0) > 50 ? 'success' : 'warning'" :closable="false"
+        :title="tls?.diagnosis || ''" />
+      <div v-if="tls?.hint" class="hp-tls-hint">
+        <div class="hp-fp-head">反代透传配置</div>
+        <pre class="hp-pre">{{ tls.hint.nginx }}</pre>
+        <pre class="hp-pre">{{ tls.hint.caddy }}</pre>
+        <div class="hp-tip">{{ tls.hint.note }}</div>
+      </div>
+    </el-card>
+
     <!-- 规则反哺 -->
     <el-card class="hp-section">
       <template #header>
@@ -240,6 +284,8 @@ const rules = ref<HoneypotRuleSuggestion[]>([]);
 const selectedRules = ref<string[]>([]);
 const rulesLoading = ref(false);
 const applying = ref(false);
+const sqli = ref<any>(null);
+const tls = ref<any>(null);
 
 const form = reactive<HoneypotSetting>({
   enabled: false, level: 'off',
@@ -381,9 +427,18 @@ async function cleanup() {
   } catch { /* 取消 */ }
 }
 
+async function loadAntiAbuse() {
+  try {
+    const [a, b] = await Promise.all([honeypotApi.sqliStats(), honeypotApi.tlsStats()]);
+    sqli.value = a.data.data;
+    tls.value = b.data.data;
+  } catch { /* 未启用或表不存在时静默 */ }
+}
+
 onMounted(async () => {
   await load();
   await loadRules();
+  await loadAntiAbuse();
 });
 </script>
 
@@ -411,4 +466,9 @@ onMounted(async () => {
 .hp-fp-item:first-of-type { border-top: 0; }
 .hp-fp-line { display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.75rem; color: var(--text-muted); }
 .hp-fp-warn { color: var(--el-color-danger); }
+.hp-tls-hint { margin-top: 10px; }
+.hp-pre {
+  background: var(--bg-muted); border-radius: 6px; padding: 8px 10px;
+  font-size: 0.72rem; white-space: pre-wrap; margin: 6px 0;
+}
 </style>

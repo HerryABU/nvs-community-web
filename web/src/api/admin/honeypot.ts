@@ -93,6 +93,14 @@ export const honeypotApi = {
   ban(ip: string, minutes = 60) {
     return api.post('/admin/honeypot/ban', { ip, minutes });
   },
+  /** SQL 注入蜜罐命中统计（gap-audit #3） */
+  sqliStats() {
+    return api.get('/admin/honeypot/sqli');
+  },
+  /** JA3/JA4 采集率与反代配置模板（gap-audit #4） */
+  tlsStats() {
+    return api.get('/admin/honeypot/tls');
+  },
   unban(ip: string) {
     return api.post('/admin/honeypot/unban', { ip });
   },
