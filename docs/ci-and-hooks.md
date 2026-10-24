@@ -119,7 +119,7 @@ snapshot     推主干时产出 linux-amd64 单文件（站长可直接下）
 |---|---|
 | `GET /` = 200 | 内嵌资源可用 |
 | `GET /.env` = 404 | 默认蜜罐等级 `off`，诱饵必须与普通 404 无差别（否则等于自报家门） |
-| `GET /api/v2/user/me` = 404 | 同上，影子认证在 off 档不暴露 |
+| `GET /api/v2/user/me` = **404 或 503** | 影子认证在 off 档不能"甜"。全新库是**未建站**状态，`/api/*` 会先被 setup 中间件挡成 503；已建站实例才是 404。断言只排除「看起来可用」的响应（200/401/403） |
 | 日志无 `panic` / `conflicts with existing wildcard` | gin 路由冲突会在启动时 panic，这是历史高发问题 |
 | `scan-frontend-secrets.sh` 通过 | 前端产物不许带密钥 |
 

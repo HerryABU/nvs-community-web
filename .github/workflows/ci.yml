@@ -133,9 +133,18 @@ jobs:
           echo "影子认证 v2     -> $(code /api/v2/user/me)"
 
           test "$(code /)" = "200" || { echo "首页不是 200"; cat /tmp/ci/run.log; exit 1; }
+
           # 默认蜜罐等级 off：诱饵必须与普通 404 无差别（不暴露蜜罐存在）
           test "$(code /.env)" = "404" || { echo "off 档诱饵应 404"; exit 1; }
-          test "$(code /api/v2/user/me)" = "404" || { echo "off 档影子认证应 404"; exit 1; }
+
+          # 影子认证在 off 档不能"甜"：既不能 200（放行），也不能 401/403（暴露接口存在）。
+          # 全新库是**未建站**状态，/api/* 会先被 setup 中间件挡成 503；已建站的实例才是 404。
+          # 两种都算正确，只排除「看起来可用」的响应。
+          v2=$(code /api/v2/user/me)
+          case "$v2" in
+            404|503) echo "/api/v2/user/me -> $v2（off 档不暴露，符合预期）" ;;
+            *) echo "off 档影子认证响应异常: $v2（应为 404 或未建站的 503）"; exit 1 ;;
+          esac
 
           if grep -qiE 'panic|conflicts with existing wildcard' /tmp/ci/run.log; then
             echo "启动日志出现 panic 或路由冲突"; cat /tmp/ci/run.log; exit 1
