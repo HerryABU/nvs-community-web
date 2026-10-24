@@ -48,6 +48,24 @@ func newCtx(path string) (*gin.Context, *httptest.ResponseRecorder) {
 	return c, w
 }
 
+// TestCurrentWithoutDB DB 未初始化（未建站）时不得 panic，一律按 off 处理
+func TestCurrentWithoutDB(t *testing.T) {
+	old := models.DB
+	models.DB = nil
+	ResetCache()
+	defer func() { models.DB = old; ResetCache() }()
+
+	set := Current()
+	if set.Level != LevelOff || set.Enabled {
+		t.Fatalf("无 DB 时应为 off: %+v", set)
+	}
+	// 诱饵 handler 也要能安全返回（不 panic）
+	c, _ := newCtx("/.env")
+	if ev, err := Record(set, c, allDecoys()["/.env"]); err != nil || ev != nil {
+		t.Fatalf("off 态不应记录: %+v err=%v", ev, err)
+	}
+}
+
 // TestLevelControlsDecoys 等级决定诱饵数量：off 无、low 1 个、medium 4 个、high 全量
 func TestLevelControlsDecoys(t *testing.T) {
 	setupHP(t)

@@ -26,8 +26,18 @@ var (
 	cacheTTL = 15 * time.Second
 )
 
+// offSetting 关闭态默认值（DB 未就绪时回落）
+func offSetting() Setting {
+	return Setting{ID: 1, Level: LevelOff, RecordUA: true, RecordReferer: true, RecordQuery: true,
+		BodySnippetLimit: 512, BanMinutes: 60, RetentionDays: 90}
+}
+
 // Current 读取当前策略（15 秒进程缓存，避免每请求打库）
 func Current() Setting {
+	// 未完成建站 / DB 尚未初始化时，诱饵必须静默失效（不能 panic，否则裸奔期直接被扫崩）
+	if models.DB == nil {
+		return offSetting()
+	}
 	setMu.RLock()
 	if time.Since(cacheAt) < cacheTTL && cached.ID > 0 {
 		s := cached
@@ -39,8 +49,7 @@ func Current() Setting {
 	var s Setting
 	err := models.DB.Where("id = 1").First(&s).Error
 	if err != nil {
-		s = Setting{ID: 1, Level: LevelOff, RecordUA: true, RecordReferer: true, RecordQuery: true,
-			BodySnippetLimit: 512, BanMinutes: 60, RetentionDays: 90}
+		s = offSetting()
 	}
 	setMu.Lock()
 	cached, cacheAt = s, time.Now()
