@@ -1,5 +1,10 @@
 <template>
-  <div class="reader-page" v-loading="loading">
+  <div class="reader-page" v-loading="loading" :style="{ '--reader-font-size': fontSizePx }">
+    <!-- 阅读进度（长章节必备：知道还剩多少） -->
+    <div class="reader-progress" :title="`已读 ${progressPct}%`">
+      <span class="reader-progress-bar" :style="{ width: progressPct + '%' }" />
+    </div>
+
     <!-- 顶部导航 -->
     <div class="reader-toolbar">
       <el-button text @click="$router.push(`/novel/${novelId}`)">
@@ -8,6 +13,13 @@
       <el-button text @click="openToc">
         <el-icon><List /></el-icon><span class="desktop-only"> 目录</span>
       </el-button>
+      <!-- 字号调节：小 / 中 / 大，按浏览器记住。中文长章节全靠这个 -->
+      <el-tooltip :content="`正文字号：${FONT_LABELS[fontLevel]}（点击切换）`" placement="bottom">
+        <el-button text class="reader-font-btn" @click="cycleFont">
+          <span class="reader-font-glyph">A</span>
+          <span class="reader-font-dot">{{ fontLevel + 1 }}</span>
+        </el-button>
+      </el-tooltip>
       <span class="reader-title">{{ novelTitle }} · 第{{ chapterNum }}章 {{ chapter?.title }}</span>
       <el-tag v-if="aiMarkLabel" size="small" type="warning" effect="plain" class="reader-ai-mark">{{ aiMarkLabel }}</el-tag>
       <!-- 精读：书签 / 批注 -->
@@ -472,6 +484,26 @@ const mdContainer = ref<HTMLElement | null>(null);
 const renderedHtml = ref('');
 
 // 叙事形态：章节形态优先（script 话本 / mixed 散文与话本混排），未设置则继承作品
+// ---------- 阅读字号（小 / 中 / 大，持久化）----------
+const FONT_SIZES = ['0.95rem', '1.05rem', '1.2rem'];
+const FONT_LABELS = ['小', '中', '大'];
+const FONT_KEY = 'nvs_reader_font_level';
+const fontLevel = ref(Math.min(2, Math.max(0, Number(localStorage.getItem(FONT_KEY) ?? 1) || 0)));
+const fontSizePx = computed(() => FONT_SIZES[fontLevel.value]);
+
+function cycleFont() {
+  fontLevel.value = (fontLevel.value + 1) % FONT_SIZES.length;
+  localStorage.setItem(FONT_KEY, String(fontLevel.value));
+}
+
+// ---------- 阅读进度 ----------
+const progressPct = ref(0);
+function updateProgress() {
+  const doc = document.documentElement;
+  const total = doc.scrollHeight - window.innerHeight;
+  progressPct.value = total <= 0 ? 0 : Math.min(100, Math.max(0, Math.round((window.scrollY / total) * 100)));
+}
+
 const novelMode = ref('prose');
 const chapterMode = ref('');
 const effectiveMode = computed(() => chapterMode.value || novelMode.value || 'prose');
@@ -786,12 +818,18 @@ onMounted(() => {
   // 选区浮动批注按钮：正文 mouseup 检测选区，document mousedown 收起
   document.addEventListener('mouseup', onReaderMouseUp);
   document.addEventListener('mousedown', onGlobalMouseDown);
+  // 阅读进度条
+  updateProgress();
+  window.addEventListener('scroll', updateProgress, { passive: true });
+  window.addEventListener('resize', updateProgress);
 });
 
 onBeforeUnmount(() => {
   stopTTS();
   document.removeEventListener('mouseup', onReaderMouseUp);
   document.removeEventListener('mousedown', onGlobalMouseDown);
+  window.removeEventListener('scroll', updateProgress);
+  window.removeEventListener('resize', updateProgress);
 });
 </script>
 
@@ -873,6 +911,37 @@ onBeforeUnmount(() => {
 .template-iframe {
   width: 100%; min-height: 150px; border: none;
   display: block;
+}
+
+/* ===== 阅读进度条（贴顶，2px，不抢视线） ===== */
+.reader-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 60;
+  background: transparent;
+  pointer-events: none;
+}
+.reader-progress-bar {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--gradient-primary, linear-gradient(90deg, #6366f1, #8b5cf6));
+  transition: width 0.12s linear;
+}
+
+/* ===== 字号按钮 ===== */
+.reader-font-btn { display: inline-flex; align-items: center; gap: 1px; }
+.reader-font-glyph { font-size: 15px; font-weight: 600; line-height: 1; }
+.reader-font-dot {
+  font-size: 9px;
+  line-height: 1;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: var(--bg-page, #f0f1f4);
+  color: var(--text-light, #6b7280);
 }
 
 .reader-content {
@@ -1052,8 +1121,11 @@ onBeforeUnmount(() => {
 /* Markdown 正文排版（基于 .markdown-body，与 Cherry 编辑器预览统一） */
 .markdown-body {
   color: var(--text-color);
-  font-size: 1.05rem;
+  /* 跟随工具栏的字号档位（--reader-font-size 由 .reader-page 注入） */
+  font-size: var(--reader-font-size, 1.05rem);
   line-height: 2;
+  /* 中文长正文：首行不缩进、段间距由 Cherry 提供，这里只保证行宽舒适 */
+  word-break: break-word;
 }
 [data-theme="dark"] .markdown-body {
   color: #e2e8f0;

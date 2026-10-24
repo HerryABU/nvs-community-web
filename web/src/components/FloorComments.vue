@@ -456,9 +456,13 @@ async function removeManage() {
   --deleted-bg: rgba(208, 48, 80, 0.08);
 }
 .floor {
-  padding: 14px 0;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 16px 12px;
+  border-bottom: 1px solid var(--border-color, #f0f0f0);
+  /* 长列表里 hover 高亮整楼，比只靠一条分隔线好定位 */
+  border-radius: 8px;
+  transition: background 0.14s ease;
 }
+.floor:hover { background: var(--bg-page, #fafbfc); }
 .floor:last-child { border-bottom: none; }
 
 .floor-head {
@@ -523,12 +527,13 @@ async function removeManage() {
 
 /* ====== 楼内回复：贴左缩进 + 浅底，视觉上「属于这一楼」 ====== */
 .floor-replies {
-  margin-top: 8px;
-  margin-left: 0;
-  padding: 8px 10px;
+  margin-top: 10px;
+  /* 缩进 + 左侧竖线：让「楼中楼」一眼看出是从属关系，而不是与主楼平级 */
+  margin-left: 10px;
+  padding: 8px 12px;
   background: var(--bg-subtle, #f8fafc);
   border-radius: 8px;
-  border-left: 2px solid #e2e8f0;
+  border-left: 2px solid var(--border-color, #e2e8f0);
 }
 
 .reply {
@@ -673,6 +678,9 @@ async function removeManage() {
 [data-theme="dark"] .floor-content { color: #cbd5e1; }
 [data-theme="dark"] .deleted-content { color: #f89898; border-left-color: #f89898; background: rgba(208,48,80,.15); }
 [data-theme="dark"] .deleted-banner { color: #f89898; }
+[data-theme="dark"] .floor { border-bottom-color: #334155; }
+[data-theme="dark"] .floor:hover { background: #1a2436; }
+
 [data-theme="dark"] .floor-replies {
   background: rgba(255,255,255,.03);
   border-left-color: rgba(255,255,255,.1);
