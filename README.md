@@ -473,6 +473,20 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.18.0 主笔转让 + 角色设定 AI 动作（2026-10-24）
+
+**主笔转让（`collab.Transfer`，补齐 gap-audit #21）**
+- `POST /api/novels/:id/transfer { to_user_id }`：仅现任主笔或平台可发起
+- 受让人**必须是已接受的协作者**（陌生人先邀请，防转错人）
+- 事务内完成三步：换 `Novel.AuthorID`、受让人退出成员表（主笔身份由作品字段体现）、
+  原主笔降为 `editor` 且保留 `can_edit_others`（接手即失去权限是常见的坑）
+- 不可逆：前端二次确认要**输入作品标题**；审计记 `transfer_owner`（before/after）
+- 历史收益不追溯（分成按流水归属）
+
+**角色设定 AI 动作（补齐 gap-audit #16）**
+- `AI_ACTIONS` 新增 `character`：输出结构化角色卡（姓名/外貌 3 个视觉细节/性格与致命缺陷/处境/
+  欲望与需求/秘密/关系张力/说话方式/三个行动选项），流水标签记「角色设定」
+
 ### v3.17.0 AI 路由策略 + 故障自动降级（2026-10-24）
 
 **路由策略（`models/ai_router.go`，补齐 gap-audit #10）**
