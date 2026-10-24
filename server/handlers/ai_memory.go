@@ -47,11 +47,12 @@ func AiMemoryList(c *gin.Context) {
 	}
 	outline, summaries := models.CountNovelMemories(uint(novelID))
 	utils.Success(c, gin.H{
-		"list":      list,
-		"outline":   outline,
-		"summaries": int(summaries),
-		"budget":    models.AiContextBudget,
-		"recent":    models.AiContextRecentChapters,
+		"list":       list,
+		"outline":    outline,
+		"characters": models.GetNovelCharacters(uint(novelID)),
+		"summaries":  int(summaries),
+		"budget":     models.AiContextBudget,
+		"recent":     models.AiContextRecentChapters,
 	})
 }
 
@@ -85,6 +86,39 @@ func AiMemorySaveOutline(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{"message": "大纲已保存"})
+}
+
+// AiMemorySaveCharacters PUT /api/ai/memory/characters — 保存/更新角色设定
+// 角色设定是模板「角色信息」变量的来源，也是续写注入的稳定人设锚点。
+func AiMemorySaveCharacters(c *gin.Context) {
+	if !models.IsAiEnabled() {
+		utils.BadRequest(c, "AI 功能未开启")
+		return
+	}
+	var req struct {
+		NovelID uint   `json:"novel_id"`
+		Content string `json:"content"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	if req.NovelID == 0 {
+		utils.BadRequest(c, "novel_id 无效")
+		return
+	}
+	if !ensureNovelOwner(c, req.NovelID) {
+		return
+	}
+	if len([]rune(req.Content)) > 8000 {
+		utils.BadRequest(c, "角色设定过长（上限 8000 字）")
+		return
+	}
+	if err := models.UpsertNovelCharacters(req.NovelID, req.Content); err != nil {
+		utils.InternalError(c, "保存失败")
+		return
+	}
+	utils.Success(c, gin.H{"message": "角色设定已保存"})
 }
 
 // AiMemorySaveSummary PUT /api/ai/memory/summary — 保存/更新章节摘要

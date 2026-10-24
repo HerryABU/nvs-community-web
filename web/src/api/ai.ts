@@ -100,6 +100,9 @@ export const aiApi = {
   saveSummary(data: { novel_id: number; chapter_id: number; content: string }) {
     return api.put('/ai/memory/summary', data);
   },
+  memorySaveCharacters(data: { novel_id: number; content: string }) {
+    return api.put('/ai/memory/characters', data);
+  },
   deleteSummary(data: { novel_id: number; chapter_id: number }) {
     return api.delete('/ai/memory/summary', { data });
   },

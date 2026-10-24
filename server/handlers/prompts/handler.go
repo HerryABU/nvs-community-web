@@ -73,6 +73,73 @@ func Render(c *gin.Context) {
 	})
 }
 
+// RenderContext POST /api/ai/templates/:id/render-context
+// 自动注入作品上下文：作品名/类型/大纲/角色设定/前文摘要/前文/正文/作者样本。
+// 编辑器正在写的内容（vars 里的 原文/正文）优先，不会被旧章节覆盖。
+func RenderContext(c *gin.Context) {
+	uid := middleware.UserID(c)
+	if uid == 0 {
+		utils.Unauthorized(c, "请先登录")
+		return
+	}
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	t, err := prompttpl.Get(uint(id))
+	if err != nil {
+		utils.NotFound(c, err.Error())
+		return
+	}
+	if !t.Enabled {
+		utils.BadRequest(c, "该模板已停用")
+		return
+	}
+	var req struct {
+		NovelID   uint              `json:"novel_id"`
+		ChapterID uint              `json:"chapter_id"`
+		Vars      map[string]string `json:"vars"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	if req.NovelID == 0 {
+		utils.BadRequest(c, "novel_id 无效")
+		return
+	}
+	novel, nerr := models.GetNovelByID(req.NovelID)
+	if nerr != nil || novel == nil {
+		utils.NotFound(c, "作品不存在")
+		return
+	}
+	// 归属校验：作品作者本人或平台管理员（上下文含未公开正文，不能跨用户读取）
+	if novel.AuthorID != uid && middleware.UserRole(c) != "admin" {
+		utils.Forbidden(c, "仅作者本人可使用该作品的上下文")
+		return
+	}
+	if req.Vars == nil {
+		req.Vars = map[string]string{}
+	}
+	ctxRes, cerr := prompttpl.BuildNovelVars(req.NovelID, req.ChapterID, req.Vars, 0)
+	if cerr != nil {
+		utils.BadRequest(c, cerr.Error())
+		return
+	}
+	vars := prompttpl.FilterVars(t.Content, ctxRes.Vars)
+	rendered := prompttpl.Render(t.Content, t.Vars, vars)
+	// 只回传实际用到且自动填充的变量（避免把作者大纲整段回显到前端日志）
+	autoUsed := make([]string, 0, len(ctxRes.AutoFilled))
+	for _, name := range ctxRes.AutoFilled {
+		if _, ok := vars[name]; ok {
+			autoUsed = append(autoUsed, name)
+		}
+	}
+	utils.Success(c, gin.H{
+		"template_id": t.ID, "title": t.Title, "version": t.Version,
+		"text": rendered.Text, "missing": rendered.Missing,
+		"auto_filled": autoUsed, "sources": ctxRes.Sources,
+		"novel_title": ctxRes.NovelTitle, "chapter_title": ctxRes.ChapterTitle,
+	})
+}
+
 // ---------- 管理端 ----------
 
 // AdminList GET /api/admin/ai/templates?scene=&kind=
@@ -180,9 +247,9 @@ func AdminPreview(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Content   string                `json:"content"`
+		Content   string                  `json:"content"`
 		Variables []prompttpl.TemplateVar `json:"variables"`
-		Vars      map[string]string     `json:"vars"`
+		Vars      map[string]string       `json:"vars"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")

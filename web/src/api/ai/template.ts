@@ -48,6 +48,24 @@ export const templateApi = {
     );
   },
 
+  /**
+   * 带作品上下文的渲染：服务端自动注入 作品名/类型/大纲/角色设定/前文摘要/前文/作者样本。
+   * vars 里显式传的「原文/正文」优先，不被旧章节覆盖。
+   */
+  renderContext(id: number, data: { novel_id: number; chapter_id?: number; vars?: Record<string, string> }) {
+    return api.post<{
+      code: number;
+      data: RenderResult & {
+        title: string;
+        version: number;
+        auto_filled: string[];
+        sources: Record<string, string>;
+        novel_title: string;
+        chapter_title: string;
+      };
+    }>(`/ai/templates/${id}/render-context`, data);
+  },
+
   // ---------- 管理端 ----------
   adminList(params: { scene?: string; kind?: string } = {}) {
     return api.get<{ code: number; data: { list: PromptTemplate[] } }>('/admin/ai/templates', { params });

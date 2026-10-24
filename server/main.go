@@ -368,6 +368,7 @@ func main() {
 		// 长篇 AI 记忆（§13.5）：大纲/章节摘要/上下文组装（:id 通配在不同前缀段，无冲突）
 		protected.GET("/ai/memory", handlers.AiMemoryList)
 		protected.PUT("/ai/memory/outline", handlers.AiMemorySaveOutline)
+		protected.PUT("/ai/memory/characters", handlers.AiMemorySaveCharacters)
 		protected.PUT("/ai/memory/summary", handlers.AiMemorySaveSummary)
 		protected.DELETE("/ai/memory/summary", handlers.AiMemoryDeleteSummary)
 		protected.POST("/ai/memory/context", handlers.AiMemoryContext)
@@ -501,6 +502,8 @@ func main() {
 		// 场景化提示词模板（编辑器「模板」下拉 + 变量渲染）
 		protected.GET("/ai/templates", prompthandler.List)
 		protected.POST("/ai/templates/:id/render", prompthandler.Render)
+		// 带作品上下文的渲染：自动注入大纲/角色设定/前文摘要/前文/作者样本
+		protected.POST("/ai/templates/:id/render-context", prompthandler.RenderContext)
 		// 用户自建论坛
 		protected.POST("/forums", handlers.CreateUserForum)
 		protected.POST("/forums/enter-by-code", handlers.EnterForumByRoomCode) // 房间号进入不可见论坛

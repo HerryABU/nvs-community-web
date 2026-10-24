@@ -89,7 +89,7 @@
           <div class="ai-memory-block">
             <el-checkbox v-model="form.use_memory" size="small">注入作品记忆</el-checkbox>
             <span class="muted small">
-              大纲 {{ memory.outline ? '已设' : '未设' }} · 摘要 {{ memory.summaries }} 条 ·
+              大纲 {{ memory.outline ? '已设' : '未设' }} · 角色 {{ memory.characters ? '已设' : '未设' }} · 摘要 {{ memory.summaries }} 条 ·
               最近 {{ memory.recent }} 章入上下文 · 预算 {{ memory.budget }} tokens
             </span>
             <el-button text type="primary" size="small" @click="memoryPanelOpen = !memoryPanelOpen">
@@ -108,6 +108,18 @@
             />
             <div class="ai-memory-actions">
               <el-button size="small" type="primary" :loading="memorySaving" @click="saveOutline">保存大纲</el-button>
+            </div>
+            <div class="ai-memory-sub">角色设定（模板「角色信息」变量的来源）</div>
+            <el-input
+              v-model="charactersDraft"
+              type="textarea"
+              :rows="3"
+              resize="none"
+              placeholder="人物卡合集：姓名 / 身份 / 欲望 / 缺陷 / 关系。模板套用与续写都会注入这段设定"
+              maxlength="8000"
+            />
+            <div class="ai-memory-actions">
+              <el-button size="small" type="primary" :loading="memorySaving" @click="saveCharacters">保存角色设定</el-button>
             </div>
             <div class="ai-memory-sub">章节摘要（按章保存，新→旧取最近 {{ memory.recent }} 条）</div>
             <el-table :data="memoryList" size="small" :show-header="true" max-height="220">
@@ -317,16 +329,33 @@ async function applyTemplate(id?: number) {
     }
   }
   try {
-    const res = await templateApi.render(id, vars);
-    if (res.data.code === 0) {
-      form.text = res.data.data.text;
-      form.action = 'custom';
-      const miss = res.data.data.missing || [];
-      if (miss.length) {
-        ElMessage.warning(`已套用，请补齐占位：${miss.map((n) => `{{${n}}}`).join('、')}`);
-      } else {
-        ElMessage.success('已套用模板');
-      }
+    // 有作品上下文时由服务端注入：作品名/类型/大纲/角色设定/前文摘要/前文/作者样本。
+    // 编辑器里的正文以 vars 传入，服务端不会用旧章节覆盖。
+    let data: any = null;
+    if (props.novelId) {
+      const res = await templateApi.renderContext(id, {
+        novel_id: props.novelId,
+        chapter_id: props.chapterId || undefined,
+        vars,
+      });
+      if (res.data.code === 0) data = res.data.data;
+    } else {
+      const res = await templateApi.render(id, vars);
+      if (res.data.code === 0) data = res.data.data;
+    }
+    if (!data) return;
+
+    form.text = data.text;
+    form.action = 'custom';
+    const miss: string[] = data.missing || [];
+    const auto: string[] = data.auto_filled || [];
+    const autoText = auto.length ? `已自动注入：${auto.slice(0, 6).join('、')}${auto.length > 6 ? ' 等' : ''}` : '';
+    if (miss.length) {
+      ElMessage.warning(`已套用，请补齐占位：${miss.map((n) => `{{${n}}}`).join('、')}${autoText ? '；' + autoText : ''}`);
+    } else if (autoText) {
+      ElMessage.success(`已套用模板，${autoText}`);
+    } else {
+      ElMessage.success('已套用模板');
     }
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '模板渲染失败');
@@ -394,7 +423,8 @@ async function run() {
 const memoryEnabled = computed(() => !!props.novelId);
 const memoryPanelOpen = ref(false);
 const memorySaving = ref(false);
-const memory = reactive({ outline: false, summaries: 0, budget: 3000, recent: 5 });
+const memory = reactive({ outline: false, characters: false, summaries: 0, budget: 3000, recent: 5 });
+const charactersDraft = ref('');
 const memoryList = ref<AiNovelMemory[]>([]);
 const outlineDraft = ref('');
 
@@ -405,14 +435,33 @@ async function refreshMemory() {
     if (res.data.code === 0) {
       const d = res.data.data;
       memory.outline = d.outline;
+      memory.characters = !!(d as any).characters;
       memory.summaries = d.summaries;
       memory.budget = d.budget;
       memory.recent = d.recent;
       memoryList.value = d.list.filter((m) => m.kind === 'chapter_summary');
       const outline = d.list.find((m) => m.kind === 'outline');
       if (outline && !outlineDraft.value) outlineDraft.value = outline.content;
+      const chars = d.list.find((m) => m.kind === 'characters');
+      if (chars && !charactersDraft.value) charactersDraft.value = chars.content;
+      else if ((d as any).characters && !charactersDraft.value) charactersDraft.value = (d as any).characters;
     }
   } catch { /* ignore */ }
+}
+
+async function saveCharacters() {
+  if (!props.novelId) return;
+  memorySaving.value = true;
+  try {
+    const res = await aiApi.memorySaveCharacters({ novel_id: props.novelId, content: charactersDraft.value });
+    if (res.data.code === 0) {
+      ElMessage.success('角色设定已保存');
+      await refreshMemory();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  }
+  memorySaving.value = false;
 }
 
 async function saveOutline() {

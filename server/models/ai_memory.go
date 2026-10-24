@@ -14,6 +14,8 @@ const (
 	AiMemoryOutline = "outline"
 	// AiMemoryChapterSummary 章节摘要（按 chapter 唯一）
 	AiMemoryChapterSummary = "chapter_summary"
+	// AiMemoryCharacters 角色设定（novel 级唯一）：供模板/续写注入「角色信息」
+	AiMemoryCharacters = "characters"
 
 	// AiContextBudget 上下文组装默认 token 预算
 	AiContextBudget = 3000
@@ -27,7 +29,7 @@ const (
 type AiNovelMemory struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	NovelID   uint      `gorm:"uniqueIndex:idx_ai_memory,priority:1;not null" json:"novel_id"`
-	Kind      string    `gorm:"size:24;uniqueIndex:idx_ai_memory,priority:2;not null" json:"kind"` // outline / chapter_summary
+	Kind      string    `gorm:"size:24;uniqueIndex:idx_ai_memory,priority:2;not null" json:"kind"`         // outline / chapter_summary
 	ChapterID uint      `gorm:"uniqueIndex:idx_ai_memory,priority:3;not null;default:0" json:"chapter_id"` // 0=大纲
 	Content   string    `gorm:"type:text;not null" json:"content"`
 	Tokens    int       `gorm:"not null;default:0" json:"tokens"`
@@ -51,6 +53,25 @@ func UpsertNovelOutline(novelID uint, content string) error {
 func GetNovelOutline(novelID uint) string {
 	var m AiNovelMemory
 	if err := DB.Where("novel_id = ? AND kind = ?", novelID, AiMemoryOutline).First(&m).Error; err != nil {
+		return ""
+	}
+	return m.Content
+}
+
+// UpsertNovelCharacters 保存/更新角色设定（人物卡合集，纯文本）
+func UpsertNovelCharacters(novelID uint, content string) error {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return DB.Where("novel_id = ? AND kind = ?", novelID, AiMemoryCharacters).
+			Delete(&AiNovelMemory{}).Error
+	}
+	return upsertAiMemory(novelID, AiMemoryCharacters, 0, content)
+}
+
+// GetNovelCharacters 读取角色设定（无则空串）
+func GetNovelCharacters(novelID uint) string {
+	var m AiNovelMemory
+	if err := DB.Where("novel_id = ? AND kind = ?", novelID, AiMemoryCharacters).First(&m).Error; err != nil {
 		return ""
 	}
 	return m.Content
