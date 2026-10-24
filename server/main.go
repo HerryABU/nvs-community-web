@@ -855,6 +855,9 @@ func main() {
 		admin.GET("/ai/config", handlers.AdminGetAiConfig)
 		admin.PUT("/ai/config", handlers.AdminSetAiConfig)
 		admin.GET("/ai/models", handlers.AdminListAiModels)
+		// AI 路由策略（最便宜/最快/场景）+ 失败降级开关
+		admin.GET("/ai/route", handlers.GetAiRouteConfig)
+		admin.PUT("/ai/route", handlers.UpdateAiRouteConfig)
 		admin.GET("/ai/presets", handlers.AdminAiModelPresets)
 
 		// API 卡池（多密钥轮询）

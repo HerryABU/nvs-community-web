@@ -18,6 +18,47 @@
         <p class="muted small" style="margin:0">关闭后用户端 AI 入口立即隐藏，进行中的调用不受影响。</p>
       </div>
 
+      <!-- ============ 路由策略 ============ -->
+      <div class="admin-panel" style="margin-top:16px">
+        <SectionHeader title="路由策略" subtitle="自动选模型：最便宜 / 最快 / 按场景；失败自动降级并在输出里明确提示" :icon="'🧭'" gradient="blue" />
+        <el-form label-width="120px" style="max-width:760px;margin-top:10px">
+          <el-form-item label="全局策略">
+            <el-radio-group v-model="route.strategy">
+              <el-radio-button value="manual">手动（按优先级）</el-radio-button>
+              <el-radio-button value="cheapest">最便宜</el-radio-button>
+              <el-radio-button value="fastest">最快（近 7 天实测）</el-radio-button>
+              <el-radio-button value="scene">按场景</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item v-if="route.strategy === 'scene'" label="场景策略">
+            <div class="route-scenes">
+              <div v-for="(v, k) in route.scene_strategy" :key="k" class="route-scene-row">
+                <span class="route-scene-key">{{ k }}</span>
+                <el-select v-model="route.scene_strategy[k]" size="small" style="width:150px">
+                  <el-option label="最便宜" value="cheapest" />
+                  <el-option label="最快" value="fastest" />
+                  <el-option label="手动" value="manual" />
+                </el-select>
+              </div>
+              <span class="muted small">场景：ai_hub（工作台）/ oc_turn（OC 发言）/ oc_publish（发布润色）/ group_bot（群内 AI）</span>
+            </div>
+          </el-form-item>
+          <el-form-item label="失败降级">
+            <el-switch v-model="route.fallback" />
+            <el-input-number v-model="route.max_fallback" :min="1" :max="3" style="margin-left:12px" />
+            <span class="muted small" style="margin-left:8px">最多切换几个备用模型；降级会在输出里标注「模型已降级：A → B（原因）」</span>
+          </el-form-item>
+          <el-form-item label="境内优先">
+            <el-switch v-model="route.prefer_domestic" />
+            <span class="muted small" style="margin-left:8px">仅影响排序（合规取向），不硬性排除境外模型</span>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" :loading="routeSaving" @click="saveRoute">保存策略</el-button>
+            <span class="muted small" style="margin-left:10px">{{ routeHint }}</span>
+          </el-form-item>
+        </el-form>
+      </div>
+
       <!-- ============ 模型列表 ============ -->
       <div class="admin-panel" style="margin-top:16px">
         <SectionHeader title="模型列表" subtitle="可配置多个上游，按优先级取用" :icon="'🤖'" gradient="purple" />
@@ -519,7 +560,46 @@ async function removeModel(row: AdminAiModel) {
   }
 }
 
-onMounted(() => { loadConfig(); loadModels(); loadPresets(); });
+const route = reactive({
+  strategy: 'manual',
+  scene_strategy: {} as Record<string, string>,
+  prefer_domestic: false,
+  fallback: true,
+  max_fallback: 1,
+});
+const routeSaving = ref(false);
+const routeHint = ref('');
+
+async function loadRoute() {
+  try {
+    const res = await adminApi.getAiRoute();
+    const cfg = res.data.data?.config;
+    if (cfg) {
+      route.strategy = cfg.strategy;
+      route.scene_strategy = cfg.scene_strategy || {};
+      route.prefer_domestic = !!cfg.prefer_domestic;
+      route.fallback = !!cfg.fallback;
+      route.max_fallback = cfg.max_fallback || 1;
+    }
+    const scenes = res.data.data?.preview?.scenes || {};
+    routeHint.value = Object.entries(scenes).map(([k, v]) => `${k}=${v}`).join(' · ');
+  } catch { /* 策略不可用不阻断模型管理 */ }
+}
+
+async function saveRoute() {
+  routeSaving.value = true;
+  try {
+    await adminApi.updateAiRoute({ ...route });
+    ElMessage.success('路由策略已保存并即时生效');
+    await loadRoute();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  } finally {
+    routeSaving.value = false;
+  }
+}
+
+onMounted(() => { loadConfig(); loadModels(); loadPresets(); loadRoute(); });
 </script>
 
 <style scoped>

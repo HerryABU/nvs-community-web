@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"nvs-server/aiclient"
+	"nvs-server/aicall"
 	"nvs-server/models"
 	"nvs-server/security"
 )
@@ -53,22 +53,14 @@ func Step(flowID, operatorID uint) (*StepResult, error) {
 			m = mm
 		}
 	}
-	if m == nil {
-		list, lerr := models.ListAiModelsByKind(models.AiKindChat, true)
-		if lerr != nil || len(list) == 0 {
-			return nil, errors.New("没有可用的对话模型")
-		}
-		m = &list[0]
-	}
-
 	prompt, ctx, perr := buildPrompt(f, ag)
 	if perr != nil {
 		return nil, perr
 	}
-	estTokens := models.EstimateTokens(prompt) + 512
 
-	// 预算闸门
-	if berr := CheckBudget(f.GroupID, f.ID, ag.ID, int(models.EstimateAiCost(m, estTokens, m.MaxTokens))); berr != nil {
+	// 预算闸门（用首选模型估算；降级后实际成本会略差，记账按真实值累加）
+	estForBudget := int(models.EstimateAiCost(m, models.EstimateTokens(prompt)+512, m.MaxTokens))
+	if berr := CheckBudget(f.GroupID, f.ID, ag.ID, estForBudget); berr != nil {
 		_ = SetFlowStatus(f.ID, FlowPaused, "预算上限")
 		return &StepResult{Stopped: true, Reason: berr.Error()}, nil
 	}
@@ -78,67 +70,32 @@ func Step(flowID, operatorID uint) (*StepResult, error) {
 	if payer == 0 {
 		payer = operatorID
 	}
-	freeOK, _, _ := models.CheckAiFreeQuota(payer, estTokens)
-	if !freeOK {
-		if !models.IsTokenEnabled() {
-			return nil, errors.New("代币未启用且免费额度已用完")
-		}
-		if _, ok := models.PrecheckAiBalance(payer, m, estTokens, m.MaxTokens); !ok {
-			return nil, errors.New("余额不足")
-		}
-	}
 
-	lease, kerr := models.AcquireModelKey(m)
-	if kerr != nil {
-		return nil, errors.New("模型忙，请稍后重试")
-	}
-	apiKey := ""
-	if lease != nil {
-		apiKey = lease.Key
-	}
-	callLog, lerr := models.CreateAiCallLog(payer, m, "oc_turn", "oc_flow", f.ID,
-		models.EstimateTokens(prompt), m.MaxTokens, freeOK)
-	if lerr != nil {
-		return nil, errors.New("创建调用记录失败")
-	}
-
-	client := aiclient.NewClient(m.BaseURL, apiKey, 90*time.Second)
-	content, realIn, realOut, cerr := client.Complete(aiclient.ChatRequest{
-		Model: m.ModelID,
-		Messages: []aiclient.Message{
-			{Role: "system", Content: prompt},
-			{Role: "user", Content: ctx},
-		},
+	// 统一调用入口：路由策略（最便宜/最快/场景）+ 失败自动降级（降级事实必须提示）
+	res, aerr := aicall.Complete(aicall.Request{
+		PayerID: payer, Scene: "oc_turn", Action: "oc_turn",
+		RefType: "oc_flow", RefID: f.ID,
+		System: prompt, User: ctx,
 		MaxTokens: m.MaxTokens, Temperature: 0.8,
+		PreferModel: ag.ModelID,
 	})
-	if cerr != nil {
-		lease.Fail()
-		models.FailAiCallLog(callLog.ID, cerr.Error())
-		return nil, errors.New("模型调用失败")
+	if aerr != nil {
+		return nil, errors.New("模型调用失败：" + aerr.Error())
 	}
-	if strings.TrimSpace(content) == "" {
-		models.FailAiCallLog(callLog.ID, "上游未返回内容")
-		return nil, errors.New("模型未返回内容")
-	}
-	if realIn <= 0 {
-		realIn = estTokens
-	}
-	if realOut <= 0 {
-		realOut = models.EstimateTokens(content)
-	}
-	cost := models.EstimateAiCost(m, realIn, realOut)
-	if freeOK {
-		_ = models.RecordAiFreeUsage(payer, 1, realIn+realOut)
-		cost = 0
-	} else if _, serr := models.SettleAiCallLog(callLog.ID, realIn, realOut); serr != nil {
-		return nil, errors.New("结算失败")
-	}
-	lease.OK()
+	content := res.Content
+	realIn, realOut, cost := res.TokensIn, res.TokensOut, res.Cost
+	m = &models.AiModel{ID: res.ModelID, Name: res.ModelName}
+	// 降级提示：贴进正文尾部（不静默换模型），并单独存字段供前端标黄
+	degradeNote := res.Notice()
 
 	// 输出侧审核（角色设定不能成为绕过审核的理由）
 	cleaned, hits := security.ApplyBadWords(content, "oc")
 	if len([]rune(cleaned)) > MaxTurnOutput {
 		cleaned = string([]rune(cleaned)[:MaxTurnOutput])
+	}
+	// 降级提示：写进正文尾部（用户必须能看见换了模型）
+	if degradeNote != "" {
+		cleaned += "\n\n—— " + degradeNote
 	}
 	// 情绪标记：剥离出来单独存，用于立绘/气泡表情与状态养成
 	emotion, cleaned := ParseEmotion(cleaned)

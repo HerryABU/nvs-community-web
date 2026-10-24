@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"nvs-server/aiclient"
+	"nvs-server/aicall"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -73,24 +73,6 @@ func triggerGroupAi(g *groups.Group, postID, triggerUser uint, content string) {
 
 // generateGroupAiReply 异步生成并以机器人身份回帖
 func generateGroupAiReply(groupID, agentID, postID, triggerUser uint, question string, cfg models.AiBotConfig) {
-	// 模型：平台启用的第一个 chat 模型
-	list, err := models.ListAiModelsByKind(models.AiKindChat, true)
-	if err != nil || len(list) == 0 {
-		return
-	}
-	m := &list[0]
-
-	estTokens := models.EstimateTokens(question) + 512
-	freeOK, _, _ := models.CheckAiFreeQuota(triggerUser, estTokens)
-	if !freeOK {
-		if !models.IsTokenEnabled() {
-			return
-		}
-		if _, ok := models.PrecheckAiBalance(triggerUser, m, estTokens, m.MaxTokens); !ok {
-			return
-		}
-	}
-
 	// 人设：群绑定的智能体优先，其次平台默认
 	systemPrompt := "你是群组里的 AI 助手，回答简洁、贴合讨论，直接输出内容，不要解释。"
 	pickedID := agentID
@@ -103,52 +85,16 @@ func generateGroupAiReply(groupID, agentID, postID, triggerUser uint, question s
 		}
 	}
 
-	prompt := systemPrompt + "\n\n【群内提问】\n" + question + "\n\n请回答。"
-	lease, kerr := models.AcquireModelKey(m)
-	apiKey := ""
-	if lease != nil {
-		apiKey = lease.Key
-	}
-	if kerr != nil {
-		return
-	}
-	client := aiclient.NewClient(m.BaseURL, apiKey, 90*time.Second)
-	callLog, lerr := models.CreateAiCallLog(triggerUser, m, "group_bot", "group_post", postID,
-		models.EstimateTokens(prompt), m.MaxTokens, freeOK)
-	if lerr != nil {
-		return
-	}
-	content, realIn, realOut, cerr := client.Complete(aiclient.ChatRequest{
-		Model: m.ModelID,
-		Messages: []aiclient.Message{
-			{Role: "system", Content: prompt},
-			{Role: "user", Content: question},
-		},
-		MaxTokens: m.MaxTokens, Temperature: 0.7,
+	// 统一调用入口：按路由策略选模型，失败自动降级并在正文里明确提示（不静默换模型）
+	res, aerr := aicall.Complete(aicall.Request{
+		PayerID: triggerUser, Scene: "group_bot", Action: "group_bot",
+		RefType: "group_post", RefID: postID,
+		System: systemPrompt, User: question,
+		MaxTokens: 512, Temperature: 0.7,
 	})
-	if cerr != nil {
-		lease.Fail()
-		models.FailAiCallLog(callLog.ID, cerr.Error())
+	if aerr != nil {
 		return
 	}
-	if strings.TrimSpace(content) == "" {
-		models.FailAiCallLog(callLog.ID, "上游未返回内容")
-		return
-	}
-	if realIn <= 0 {
-		realIn = estTokens
-	}
-	if realOut <= 0 {
-		realOut = models.EstimateTokens(content)
-	}
-	cost := models.EstimateAiCost(m, realIn, realOut)
-	if freeOK {
-		_ = models.RecordAiFreeUsage(triggerUser, 1, realIn+realOut)
-		cost = 0
-	} else if _, serr := models.SettleAiCallLog(callLog.ID, realIn, realOut); serr != nil {
-		return
-	}
-	lease.OK()
 	models.RecordAiBotUsage(triggerUser)
 
 	botID, berr := models.EnsureAiBotUser()
@@ -156,10 +102,13 @@ func generateGroupAiReply(groupID, agentID, postID, triggerUser uint, question s
 		return
 	}
 	// 输出侧过违禁词（与用户投稿同一套规则）
-	cleaned, _ := security.ApplyBadWords(content, "group")
-	body := cleaned + "\n\n—— AI 生成 · " + m.Name
-	if !freeOK && cost > 0 {
-		body += fmt.Sprintf(" · 消耗 %d %s", cost, models.GetTokenName())
+	cleaned, _ := security.ApplyBadWords(res.Content, "group")
+	body := cleaned + "\n\n—— AI 生成 · " + res.ModelName
+	if res.Cost > 0 {
+		body += fmt.Sprintf(" · 消耗 %d %s", res.Cost, models.GetTokenName())
+	}
+	if note := res.Notice(); note != "" {
+		body += "\n—— " + note
 	}
 	reply := &groups.GroupPostReply{
 		GroupID: groupID, PostID: postID, UserID: botID,

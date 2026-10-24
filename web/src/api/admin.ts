@@ -79,6 +79,13 @@ export const adminApi = {
   exportComplianceLogs(from: string, to: string) {
     return api.get('/admin/compliance/export-logs', { params: { from, to }, responseType: 'blob' });
   },
+  // AI 路由策略（最便宜/最快/场景 + 失败降级）
+  getAiRoute() {
+    return api.get('/admin/ai/route');
+  },
+  updateAiRoute(data: Record<string, any>) {
+    return api.put('/admin/ai/route', data);
+  },
   exportComplianceUsers() {
     return api.get('/admin/compliance/export-users', { responseType: 'blob' });
   },

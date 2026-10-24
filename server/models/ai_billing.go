@@ -16,30 +16,32 @@ import (
 // ---------- 调用状态 ----------
 
 const (
-	AiCallPending   = "pending"   // 已发起，未结算
-	AiCallSettled   = "settled"   // 已扣款
-	AiCallFailed    = "failed"    // 上游失败，未扣款
-	AiCallRefunded  = "refunded"  // 已退款（扣款后异常回滚）
+	AiCallPending  = "pending"  // 已发起，未结算
+	AiCallSettled  = "settled"  // 已扣款
+	AiCallFailed   = "failed"   // 上游失败，未扣款
+	AiCallRefunded = "refunded" // 已退款（扣款后异常回滚）
 )
 
 // AiCallLog AI 调用记录（计费凭据）
 type AiCallLog struct {
-	ID            uint      `gorm:"primaryKey" json:"id"`
-	UserID        uint      `gorm:"not null;index:idx_ai_call_user,priority:1" json:"user_id"`
-	ModelID       uint      `gorm:"not null;index" json:"model_id"`
-	ModelName     string    `gorm:"size:64;default:''" json:"model_name"`
-	Action        string    `gorm:"size:32;not null" json:"action"` // continue/polish/expand/summarize/custom
-	RefType       string    `gorm:"size:24;default:''" json:"ref_type"`
-	RefID         uint      `gorm:"default:0" json:"ref_id"`
-	TokensIn      int       `gorm:"not null;default:0" json:"tokens_in"`
-	TokensOut     int       `gorm:"not null;default:0" json:"tokens_out"`
-	Cost          int64     `gorm:"not null;default:0" json:"cost"` // 实扣代币（免费额度调用为 0）
-	Status        string    `gorm:"size:16;not null;default:pending;index" json:"status"`
-	PriceSnapshot string    `gorm:"type:text" json:"price_snapshot"` // 计费快照 JSON
-	FreeQuota     bool      `gorm:"not null;default:false" json:"free_quota"` // 走免费额度（结算不扣款）
-	Error         string    `gorm:"size:256;default:''" json:"error"`
-	CreatedAt     time.Time `gorm:"index:idx_ai_call_user,priority:2" json:"created_at"`
-	SettledAt     *time.Time `json:"settled_at"`
+	ID            uint   `gorm:"primaryKey" json:"id"`
+	UserID        uint   `gorm:"not null;index:idx_ai_call_user,priority:1" json:"user_id"`
+	ModelID       uint   `gorm:"not null;index" json:"model_id"`
+	ModelName     string `gorm:"size:64;default:''" json:"model_name"`
+	Action        string `gorm:"size:32;not null" json:"action"` // continue/polish/expand/summarize/custom
+	RefType       string `gorm:"size:24;default:''" json:"ref_type"`
+	RefID         uint   `gorm:"default:0" json:"ref_id"`
+	TokensIn      int    `gorm:"not null;default:0" json:"tokens_in"`
+	TokensOut     int    `gorm:"not null;default:0" json:"tokens_out"`
+	Cost          int64  `gorm:"not null;default:0" json:"cost"` // 实扣代币（免费额度调用为 0）
+	Status        string `gorm:"size:16;not null;default:pending;index" json:"status"`
+	PriceSnapshot string `gorm:"type:text" json:"price_snapshot"`          // 计费快照 JSON
+	FreeQuota     bool   `gorm:"not null;default:false" json:"free_quota"` // 走免费额度（结算不扣款）
+	Error         string `gorm:"size:256;default:''" json:"error"`
+	// LatencyMs 上游耗时（毫秒）：路由策略 fastest 的依据；失败也记录（0=未测）
+	LatencyMs int        `gorm:"not null;default:0" json:"latency_ms"`
+	CreatedAt time.Time  `gorm:"index:idx_ai_call_user,priority:2" json:"created_at"`
+	SettledAt *time.Time `json:"settled_at"`
 }
 
 func (AiCallLog) TableName() string { return "ai_call_logs" }
@@ -234,4 +236,12 @@ func aiActionLabel(action string) string {
 	default:
 		return "生成"
 	}
+}
+
+// SetAiCallLatency 记录本次调用耗时（供 fastest 路由与故障排查；失败不阻断）
+func SetAiCallLatency(id uint, ms int) {
+	if id == 0 || ms <= 0 {
+		return
+	}
+	_ = DB.Model(&AiCallLog{}).Where("id = ?", id).Update("latency_ms", ms).Error
 }
