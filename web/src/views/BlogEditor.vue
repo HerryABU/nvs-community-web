@@ -160,6 +160,7 @@ import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
 // engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
 import { renderMarkdown, editorEngineConfig } from '@/markdown/renderer';
 import AiAssistPanel from '@/components/editor/AiAssistPanel.vue';
+import { guardLeak } from '@/composables/useLeakGuard';
 import { htmlToMarkdown } from '@/utils/turndown';
 
 const route = useRoute();
@@ -427,6 +428,8 @@ async function saveBlog() {
   if (!blogTitle.value.trim()) { ElMessage.warning('请输入标题'); return; }
   const content = await getContentToSave();
   if (!content.trim()) { ElMessage.warning('请输入内容'); return; }
+  // 个人信息泄漏提示（本地检测，高危需确认；后端只收命中类型计数）
+  if (!(await guardLeak(content, '博客正文'))) return;
   saving.value = true;
   try {
     const payload = {

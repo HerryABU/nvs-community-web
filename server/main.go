@@ -389,6 +389,9 @@ func main() {
 		protected.POST("/ai/gallery/:id/like", handlers.AiGalleryLike)
 		protected.GET("/ai/media/:id/public", handlers.AiMyMediaPublic)
 		protected.POST("/ai/mindmap", security.RateLimit(10, 60), handlers.AiMindmap)
+
+		// 个人信息泄漏提示：只累计命中类型，不接收内容（检测不留痕）
+		protected.POST("/security/leak-hint", handlers.RecordLeakHint)
 		// 用户黑名单（F13：拉黑禁言/屏蔽内容）
 		protected.POST("/blacklist", security.RateLimit(20, 60), handlers.AddBlacklist)
 		protected.DELETE("/blacklist/:id", handlers.RemoveBlacklist)
@@ -736,6 +739,9 @@ func main() {
 		admin.GET("/ai/audit/sessions/:id/messages", handlers.AdminAiAuditSessionMessages)
 		admin.GET("/ai/audit/media", handlers.AdminAiAuditMedia)
 		admin.GET("/ai/audit/calls", handlers.AdminAiAuditCalls)
+
+		// 个人信息泄漏提示统计（仅类型计数，无内容）
+		admin.GET("/security/leak-hint/stats", handlers.AdminLeakHintStats)
 		admin.POST("/ai/models", handlers.AdminCreateAiModel)
 		admin.PUT("/ai/models/:id", handlers.AdminUpdateAiModel)
 		admin.DELETE("/ai/models/:id", handlers.AdminDeleteAiModel)

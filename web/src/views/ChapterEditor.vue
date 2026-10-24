@@ -110,6 +110,7 @@ import { ArrowLeft, Plus, Delete, Link, MagicStick } from '@element-plus/icons-v
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
 import AiAssistPanel from '@/components/editor/AiAssistPanel.vue';
+import { guardLeak } from '@/composables/useLeakGuard';
 // engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
 import { renderMarkdown, editorEngineConfig } from '@/markdown/renderer';
 import { htmlToMarkdown } from '@/utils/turndown';
@@ -374,6 +375,8 @@ async function saveChapter() {
     return;
   }
   const contentToSave = await getContentToSave();
+  // 个人信息泄漏提示（本地检测，高危需确认；后端只收命中类型计数）
+  if (!(await guardLeak(contentToSave, '章节正文'))) return;
   saving.value = true;
   try {
     let chapterId = 0;
