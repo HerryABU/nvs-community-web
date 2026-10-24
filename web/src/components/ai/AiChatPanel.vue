@@ -51,7 +51,12 @@
         :class="['ai-msg', m.role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant']"
       >
         <div class="ai-msg-bubble">
-          <div v-if="m.role === 'assistant'" class="ai-msg-md" v-html="renderMd(m.content)" />
+          <div
+            v-if="m.role === 'assistant'"
+            class="ai-msg-md"
+            v-html="renderMd(m.content)"
+            @click="onMdClick"
+          />
           <div v-else class="ai-msg-plain">{{ m.content }}</div>
           <div v-if="m.role === 'assistant'" class="ai-msg-tools">
             <button class="ai-msg-tool" type="button" title="复制内容" @click="copyMsg(m.content)">
@@ -70,7 +75,7 @@
       <!-- 流式中的消息（同样走严格 Markdown 渲染） -->
       <div v-if="streamingText" class="ai-msg ai-msg-assistant">
         <div class="ai-msg-bubble">
-          <div class="ai-msg-md" v-html="streamingHtml" />
+          <div class="ai-msg-md" v-html="streamingHtml" @click="onMdClick" />
           <span class="ai-cursor" />
         </div>
       </div>
@@ -253,10 +258,60 @@ function modelLabel(m: { name: string; price_in: number; price_out: number }) {
 
 function renderMd(md: string) {
   // AI 生成内容按不可信输入处理：严格白名单 + 全量转义兜底
+  let html: string;
   try {
-    return renderAiMarkdown(md);
+    html = renderAiMarkdown(md);
   } catch {
-    return md.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    html = md.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  return enhanceCodeBlocks(html);
+}
+
+/**
+ * 给每个代码块挂一个「复制」按钮。
+ * 用 DOMParser 后处理而不是改渲染引擎：cherry 的 HTML 结构随版本会变，
+ * 而 v-html 出来的是标准 pre/code，按 DOM 处理最稳。
+ * 先把原文存到 data-code，再插按钮——否则按钮文字会被当成代码内容复制走。
+ */
+function enhanceCodeBlocks(html: string): string {
+  if (!html.includes('<pre')) return html;
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('pre').forEach((pre) => {
+      if (pre.querySelector('.code-copy')) return;
+      const code = pre.textContent || '';
+      if (!code.trim()) return;
+      const bar = doc.createElement('div');
+      bar.className = 'code-bar';
+      const btn = doc.createElement('button');
+      btn.type = 'button';
+      btn.className = 'code-copy';
+      btn.textContent = '复制';
+      btn.setAttribute('data-code', code);
+      bar.appendChild(btn);
+      pre.appendChild(bar);
+    });
+    return doc.body.innerHTML;
+  } catch {
+    return html;
+  }
+}
+
+/** 代码块复制（事件委托：v-html 内部无法直接绑事件） */
+async function onMdClick(e: MouseEvent) {
+  const btn = (e.target as HTMLElement)?.closest?.('.code-copy') as HTMLElement | null;
+  if (!btn) return;
+  const code = btn.getAttribute('data-code') || '';
+  try {
+    await navigator.clipboard.writeText(code);
+    btn.textContent = '已复制';
+    btn.classList.add('is-done');
+    window.setTimeout(() => {
+      btn.textContent = '复制';
+      btn.classList.remove('is-done');
+    }, 1500);
+  } catch {
+    ElMessage.warning('复制失败，请手动选择');
   }
 }
 
@@ -292,15 +347,28 @@ async function copyMsg(text: string) {
 }
 
 // 重试：找到该助手消息之前最近的一条用户消息，重新发起
+/**
+ * 重新生成。
+ * 原实现只是「拿上一条用户消息再发一次」——会再 push 一条相同的用户消息，
+ * 且旧回复仍留在列表里，点两次就变成一问多答的乱账。
+ * 正确做法：先截断到该提问之后（丢掉这条回复及其后续），再以 skipPush 重发。
+ */
 function regenerate(m: AiChatMessage) {
   if (generating.value) return;
   const idx = messages.value.findIndex((x) => x.id === m.id);
+  if (idx < 0) return;
+  let userIdx = -1;
   for (let i = idx - 1; i >= 0; i--) {
     if (messages.value[i].role === 'user') {
-      send(messages.value[i].content);
-      return;
+      userIdx = i;
+      break;
     }
   }
+  if (userIdx < 0) return;
+  const text = messages.value[userIdx].content;
+  // 保留到该提问（含）为止，移除被重新生成的回复与其后的所有消息
+  messages.value = messages.value.slice(0, idx);
+  send(text, false, true);
 }
 
 function scrollBottom() {
@@ -329,7 +397,7 @@ watch(
   { immediate: true },
 );
 
-async function send(rawText?: string, confirmed = false) {
+async function send(rawText?: string, confirmed = false, skipPush = false) {
   const isRetry = typeof rawText === 'string';
   const text = (isRetry ? rawText : inputText.value).trim();
   if (!text || generating.value) return;
@@ -346,11 +414,13 @@ async function send(rawText?: string, confirmed = false) {
     return;
   }
   if (!isRetry) inputText.value = '';
-  // 乐观上屏
-  messages.value.push({
-    id: -Date.now(), role: 'user', content: text,
-    tokens_in: 0, tokens_out: 0, cost: 0, created_at: '',
-  });
+  // 乐观上屏（重新生成时提问已在列表里，skipPush 避免重复）
+  if (!skipPush) {
+    messages.value.push({
+      id: -Date.now(), role: 'user', content: text,
+      tokens_in: 0, tokens_out: 0, cost: 0, created_at: '',
+    });
+  }
   generating.value = true;
   streamingText.value = '';
   streamingHtml.value = '';
@@ -519,8 +589,28 @@ function stop() {
 .ai-msg-md :deep(p) { margin: 0 0 8px; }
 .ai-msg-md :deep(p:last-child) { margin-bottom: 0; }
 .ai-msg-md :deep(pre) {
+  position: relative;
   background: #1e293b; color: #e2e8f0; padding: 10px 12px;
   border-radius: 8px; overflow-x: auto; font-size: 0.82rem;
+}
+/* 代码块右上角复制按钮：默认半透明，hover 代码块才完全显形（避免干扰阅读） */
+.ai-msg-md :deep(.code-bar) {
+  position: absolute; top: 6px; right: 6px;
+  display: flex; gap: 4px; opacity: 0.55; transition: opacity 0.15s ease;
+}
+.ai-msg-md :deep(pre:hover .code-bar) { opacity: 1; }
+.ai-msg-md :deep(.code-copy) {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1; font-size: 11px; line-height: 1;
+  padding: 4px 8px; border-radius: 6px; cursor: pointer;
+  font-family: inherit;
+}
+.ai-msg-md :deep(.code-copy:hover) { background: rgba(255, 255, 255, 0.18); color: #fff; }
+.ai-msg-md :deep(.code-copy.is-done) {
+  border-color: rgba(34, 197, 94, 0.5);
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
 }
 .ai-msg-md :deep(code) { font-family: Consolas, monospace; }
 .ai-msg-md :deep(ul), .ai-msg-md :deep(ol) { margin: 4px 0 8px; padding-left: 20px; }
