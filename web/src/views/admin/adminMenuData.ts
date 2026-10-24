@@ -2,7 +2,7 @@ import {
   Setting, View, DataAnalysis, Medal, Warning, Bell, DataLine, Monitor,
   Collection, Lock, Histogram, Stamp, Key, ChatDotRound, Cpu, WarningFilled,
   Box, Notebook, TrendCharts, Connection, Postcard, Lightning, Brush, Grid, Message,
-  Timer, Coin, MagicStick, ChatLineRound, Present, DataAnalysis, Operation, CreditCard, Aim,
+  Timer, Coin, MagicStick, ChatLineRound, Present, Operation, CreditCard, Aim, User,
 } from '@element-plus/icons-vue';
 
 // 管理员控制台「管理功能」分类数据（F8：分类折叠 + ?category=/?item= 深链定位）。
@@ -83,6 +83,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
     icon: ChatDotRound,
     color: 'var(--gradient-teal)',
     items: [
+      { title: '用户管理', desc: '搜索/筛选用户 · 角色与状态 · 封禁解封 · 额度覆盖', path: '/admin/users', icon: User, color: 'var(--gradient-primary)' },
       { title: '论坛板块管理', desc: '板块增删、审查、排序', path: '/admin/forums', icon: ChatDotRound, color: 'var(--gradient-blue)' },
       { title: '群组管理', desc: '群列表 · 封禁/解散 · 建群额度（按角色 + 按人覆盖）', path: '/admin/groups', icon: Present, color: 'var(--gradient-teal)' },
       { title: '博客分类与回收站', desc: '博客分类管理 · 全站用户自删内容监管', path: '/admin/blog-categories', icon: Notebook, color: 'var(--gradient-teal)' },
