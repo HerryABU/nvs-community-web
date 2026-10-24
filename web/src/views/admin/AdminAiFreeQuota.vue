@@ -1,5 +1,7 @@
 <template>
   <div class="admin-page" v-loading="loading">
+    <!-- 接口异常常驻提示：本页没有 AdminHeader，靠这一行拿到全局错误反馈 -->
+    <AdminApiAlert />
     <SectionHeader title="免费 AI 额度" subtitle="每日免费调用额度，用尽才扣代币；支持按人覆盖" />
 
     <el-card class="cfg-card" shadow="never">
@@ -182,6 +184,7 @@ import SectionHeader from '@/components/common/SectionHeader.vue';
 import { aiApi, type AdminAiFreeQuotaOverride } from '@/api/ai';
 import { adminApi } from '@/api/admin';
 import StateBlock from '@/components/common/StateBlock.vue';
+import AdminApiAlert from '@/components/admin/AdminApiAlert.vue';
 
 const loading = ref(false);
 const listLoading = ref(false);

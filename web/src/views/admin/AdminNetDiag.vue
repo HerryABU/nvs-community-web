@@ -162,30 +162,40 @@
       <!-- 访问明细 -->
       <div class="admin-panel">
         <SectionHeader title="访问明细" subtitle="按条件检索 Web 访问日志" :icon="'🗂️'" gradient="primary" />
-        <div class="admin-toolbar">
-          <el-input v-model="filters.ip" placeholder="IP" size="small" style="width:140px" clearable @keyup.enter="reload" />
-          <el-input v-model="filters.ua" placeholder="User-Agent 关键词" size="small" style="width:180px" clearable @keyup.enter="reload" />
-          <el-select v-model="filters.ua_family" placeholder="UA 家族" clearable size="small" style="width:130px">
-            <el-option v-for="f in families" :key="f" :label="f" :value="f" />
-          </el-select>
-          <el-select v-model="filters.identity" placeholder="身份" clearable size="small" style="width:120px">
-            <el-option label="key" value="key" />
-            <el-option label="user" value="user" />
-            <el-option label="anonymous" value="anonymous" />
-            <el-option label="bot" value="bot" />
-          </el-select>
-          <el-select v-model="filters.is_bot" placeholder="是否爬虫" clearable size="small" style="width:120px">
-            <el-option label="是" value="1" />
-            <el-option label="否" value="0" />
-          </el-select>
-          <el-input v-model="filters.status" placeholder="状态码" size="small" style="width:100px" clearable @keyup.enter="reload" />
-          <el-date-picker v-model="filters.from" type="date" placeholder="起始" size="small" value-format="YYYY-MM-DD" style="width:140px" />
-          <el-date-picker v-model="filters.to" type="date" placeholder="结束" size="small" value-format="YYYY-MM-DD" style="width:140px" />
-          <el-checkbox v-model="filters.attack" size="small" border>仅看攻击流量</el-checkbox>
-          <el-button size="small" type="primary" @click="reload" :icon="Search">查询</el-button>
-          <el-button size="small" @click="resetFilters" :icon="RefreshLeft">重置</el-button>
-          <el-button size="small" type="danger" plain @click="cleanup" :icon="Delete">清空日志</el-button>
-        </div>
+        <!-- 9 个筛选条件一行排不下会折成 3 行，把表格顶到 800px 以下；
+             常用的（时间范围 / IP / 身份）留在外面，其余收进「更多筛选」。 -->
+        <AdminFilterBar storage-key="net-diag" :more-count="5">
+          <template #primary>
+            <el-date-picker v-model="filters.from" type="date" placeholder="起始" size="small" value-format="YYYY-MM-DD" style="width:140px" />
+            <el-date-picker v-model="filters.to" type="date" placeholder="结束" size="small" value-format="YYYY-MM-DD" style="width:140px" />
+            <el-input v-model="filters.ip" placeholder="IP" size="small" style="width:140px" clearable @keyup.enter="reload" />
+            <el-select v-model="filters.identity" placeholder="身份" clearable size="small" style="width:120px">
+              <el-option label="key" value="key" />
+              <el-option label="user" value="user" />
+              <el-option label="anonymous" value="anonymous" />
+              <el-option label="bot" value="bot" />
+            </el-select>
+          </template>
+
+          <template #more>
+            <el-input v-model="filters.ua" placeholder="User-Agent 关键词" size="small" style="width:180px" clearable @keyup.enter="reload" />
+            <el-select v-model="filters.ua_family" placeholder="UA 家族" clearable size="small" style="width:130px">
+              <el-option v-for="f in families" :key="f" :label="f" :value="f" />
+            </el-select>
+            <el-select v-model="filters.is_bot" placeholder="是否爬虫" clearable size="small" style="width:120px">
+              <el-option label="是" value="1" />
+              <el-option label="否" value="0" />
+            </el-select>
+            <el-input v-model="filters.status" placeholder="状态码" size="small" style="width:100px" clearable @keyup.enter="reload" />
+            <el-checkbox v-model="filters.attack" size="small" border>仅看攻击流量</el-checkbox>
+          </template>
+
+          <template #actions>
+            <el-button size="small" type="primary" @click="reload" :icon="Search">查询</el-button>
+            <el-button size="small" @click="resetFilters" :icon="RefreshLeft">重置</el-button>
+            <el-button size="small" type="danger" plain @click="cleanup" :icon="Delete">清空日志</el-button>
+          </template>
+        </AdminFilterBar>
 
         <el-table :data="rows" v-loading="loading" stripe border style="width:100%"
                   :row-class-name="rowCls" :default-sort="{ prop: 'created_at', order: 'descending' }">
@@ -274,6 +284,7 @@ import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import StateBlock from '@/components/common/StateBlock.vue';
+import AdminFilterBar from '@/components/admin/AdminFilterBar.vue';
 
 interface WebRow {
   id: number; user_id: number; identity_type: string; ua_family: string;

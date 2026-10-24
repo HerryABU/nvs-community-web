@@ -38,6 +38,14 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// axios 的 config.url 是**相对路径**（如 /admin/risk），baseURL（/api）不在里面。
+// 判断「哪个 API 分组」时必须拼全，否则 /admin 与 /police 全被当成同一组、
+// 任何成功都会清掉失败告警（这个坑实测让横幅时有时无）。
+function fullUrl(cfg?: { baseURL?: string; url?: string }): string {
+  if (!cfg) return '';
+  return `${cfg.baseURL || ''}${cfg.url || ''}`;
+}
+
 // 响应拦截器：统一错误处理 + 访问令牌过期无感续期
 // 🔒 安全设计：访问令牌（token Cookie）短期有效，过期返回 401 时，
 // 拦截器静默调用 /api/auth/refresh（携带 HttpOnly 刷新令牌 Cookie）换发新令牌，
@@ -83,17 +91,21 @@ async function silentRefresh(): Promise<boolean> {
 
 api.interceptors.response.use(
   (response) => {
-    // 后台请求成功即认为后端健康（清掉页头的异常提示）
-    const url = response.config?.url || '';
-    if (url.includes('/admin/')) clearAdminApiError();
+    // 同一 API 分组内成功才算恢复：后台页会并发请求 /api/setup/status 等公共接口，
+    // 那些成功不该抹掉 admin 接口的失败告警（否则横幅一闪就没）。
+    clearAdminApiError(fullUrl(response.config));
     return response;
   },
   async (error) => {
     const { config, response } = error;
-    // 后台页的硬失败（网络错误 / 5xx）统一登记：页面各自 catch 里只打日志或弹 toast，
-    // 用户实际看到的是"表格空白"。由 AdminHeader 常驻提示 + 提供重试。
-    const failedUrl = config?.url || '';
-    if (failedUrl.includes('/admin/') && (!response || response.status >= 500)) {
+    // 硬失败（网络错误 / 5xx）统一登记：后台页的 catch 里基本只打日志或弹 toast，
+    // 用户实际看到的是"表格空白"。由 AdminHeader / AdminApiAlert 常驻提示 + 提供重试。
+    //
+    // ⚠️ 不要只匹配 /admin/：后台页也会调 /api/police/tickets（警方联动工单）、
+    // /api/payments 等非 admin 前缀接口，限定前缀会漏掉整整一类页面（实测漏了工单页）。
+    // 这条状态只在后台页面渲染，公共页面调这些接口失败不会弹给普通用户。
+    const failedUrl = fullUrl(config);
+    if (!response || response.status >= 500) {
       reportAdminApiError(
         failedUrl,
         response?.status || 0,

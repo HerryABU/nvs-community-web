@@ -1,5 +1,7 @@
 <template>
   <div class="admin-page">
+    <!-- 接口异常常驻提示：本页没有 AdminHeader，靠这一行拿到全局错误反馈 -->
+    <AdminApiAlert />
     <div class="head">
       <h2>注册门槛与防刷</h2>
       <span class="sub">邀请码 · 设备指纹 · 账号年龄 · 新号限额 · API Key 审计告警</span>
@@ -264,6 +266,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { gateApi, type GateConfig, type Invite, type DeviceRow, type KeyAlarm } from '@/api/gate';
 import StateBlock from '@/components/common/StateBlock.vue';
+import AdminApiAlert from '@/components/admin/AdminApiAlert.vue';
 
 const tab = ref('config');
 const cfg = reactive<GateConfig>({

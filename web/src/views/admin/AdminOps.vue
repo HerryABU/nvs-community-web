@@ -1,5 +1,7 @@
 <template>
   <div class="page">
+    <!-- 接口异常常驻提示：本页没有 AdminHeader，靠这一行拿到全局错误反馈 -->
+    <AdminApiAlert />
     <div class="head">
       <h2>运营位</h2>
       <span class="sub">自定义导航菜单 · 首页轮播 · 每日签到 · 访客设置</span>
@@ -318,6 +320,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import api from '@/api/index';
 import { opsApi, type NavMenuItem, type Carousel, type CheckInConfig, type VisitSetting } from '@/api/ops';
 import StateBlock from '@/components/common/StateBlock.vue';
+import AdminApiAlert from '@/components/admin/AdminApiAlert.vue';
 
 const tab = ref('menu');
 

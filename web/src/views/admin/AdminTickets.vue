@@ -1,5 +1,7 @@
 <template>
   <div class="page">
+    <!-- 接口异常常驻提示：本页没有 AdminHeader，靠这一行拿到全局错误反馈 -->
+    <AdminApiAlert />
     <div class="head">
       <h2>警方联动工单</h2>
       <span class="sub">建单 → 派单 → 进展 → 结案（结单必须写结论）；工单只存证据引用，不存证据本体</span>
@@ -221,6 +223,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { ticketApi, type Ticket, type TicketLog } from '@/api/costrisk';
 import StateBlock from '@/components/common/StateBlock.vue';
+import AdminApiAlert from '@/components/admin/AdminApiAlert.vue';
 
 const list = ref<Ticket[]>([]);
 const stats = ref<any>(null);

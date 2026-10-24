@@ -1,5 +1,7 @@
 <template>
   <div class="page">
+    <!-- 接口异常常驻提示：本页没有 AdminHeader，靠这一行拿到全局错误反馈 -->
+    <AdminApiAlert />
     <div class="head">
       <h2>充值风控</h2>
       <span class="sub">入账前打分：allow 正常入账 · hold 入账打标待复核 · block 不入账待复核</span>
@@ -158,6 +160,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { riskApi, type RiskConfig, type RiskEvent } from '@/api/costrisk';
 import StateBlock from '@/components/common/StateBlock.vue';
+import AdminApiAlert from '@/components/admin/AdminApiAlert.vue';
 
 const cfg = reactive<RiskConfig>({
   enabled: true, hold_score: 60, block_score: 85, rapid_window_min: 10, rapid_count: 5,

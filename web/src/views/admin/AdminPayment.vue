@@ -1,5 +1,7 @@
 <template>
   <div class="admin-page" v-loading="loading">
+    <!-- 接口异常常驻提示：本页没有 AdminHeader，靠这一行拿到全局错误反馈 -->
+    <AdminApiAlert />
     <SectionHeader
       title="在线支付通道"
       subtitle="微信/支付宝聚合充值 · 档位面额 · 幂等到账 · 手动补单"
@@ -419,6 +421,7 @@ import { Plus } from '@element-plus/icons-vue';
 import SectionHeader from '@/components/common/SectionHeader.vue';
 import { paymentApi, PAY_STATUS_LABELS, PAY_CHANNEL_LABELS, type PaymentAdminConfig, type PaymentTier, type PaymentOrderItem } from '@/api/payment';
 import StateBlock from '@/components/common/StateBlock.vue';
+import AdminApiAlert from '@/components/admin/AdminApiAlert.vue';
 
 const loading = ref(false);
 const saving = ref(false);

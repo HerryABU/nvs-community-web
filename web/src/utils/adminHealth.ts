@@ -36,8 +36,26 @@ export function reportAdminApiError(url: string, status: number, message: string
   lastError.value = { url, status, message, at: Date.now() };
 }
 
-/** 一次成功即可清除（说明后端恢复） */
-export function clearAdminApiError() {
+/**
+ * 取 URL 的 API 分组：/api/admin/xxx → admin，/api/police/xxx → police。
+ * 用来判断「这次成功是否与之前的失败同一类」。
+ */
+function apiGroup(url: string): string {
+  const m = url.match(/\/api\/([^/?#]+)/);
+  return m ? m[1] : '';
+}
+
+/**
+ * 同一分组内成功才清除告警。
+ *
+ * ⚠️ 不能「任一请求成功就清除」：后台页除了 /api/admin/*，还会并发请求
+ * /api/setup/status、/api/theme 等公共接口 —— 那些接口正常返回就会把刚记下的
+ * admin 失败抹掉，横幅一闪即逝（实测：运营位/风控/支付三页全被这样清空了）。
+ */
+export function clearAdminApiError(url?: string) {
+  if (url && lastError.value) {
+    if (apiGroup(url) !== apiGroup(lastError.value.url)) return;
+  }
   failStreak.value = 0;
   if (lastError.value) lastError.value = null;
 }

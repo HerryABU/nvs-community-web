@@ -1,5 +1,7 @@
 <template>
   <div class="hp-page" v-loading="loading">
+    <!-- 接口异常常驻提示：本页没有 AdminHeader，靠这一行拿到全局错误反馈 -->
+    <AdminApiAlert />
     <div class="hp-head">
       <h2>蜜罐与日志记录</h2>
       <span class="hp-sub">等级由站长控制；日志记录字段可勾选——关掉的字段不落库。</span>
@@ -261,6 +263,7 @@
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import StateBlock from '@/components/common/StateBlock.vue';
+import AdminApiAlert from '@/components/admin/AdminApiAlert.vue';
 import {
   honeypotApi,
   type HoneypotSetting,

@@ -1,5 +1,7 @@
 <template>
   <div class="page">
+    <!-- 接口异常常驻提示：本页没有 AdminHeader，靠这一行拿到全局错误反馈 -->
+    <AdminApiAlert />
     <div class="head">
       <h2>AI 成本与转化</h2>
       <span class="sub">全站总预算 · 高峰排队 · 三维限流 · 免费→付费转化漏斗 · 语音模型</span>
@@ -167,6 +169,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { aiCostApi, type BudgetConfig } from '@/api/costrisk';
 import StateBlock from '@/components/common/StateBlock.vue';
+import AdminApiAlert from '@/components/admin/AdminApiAlert.vue';
 
 const tab = ref('budget');
 

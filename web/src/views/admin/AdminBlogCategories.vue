@@ -1,5 +1,7 @@
 <template>
   <div class="admin-page">
+    <!-- 接口异常常驻提示：本页没有 AdminHeader，靠这一行拿到全局错误反馈 -->
+    <AdminApiAlert />
     <el-tabs v-model="tab">
       <!-- ── 博客分类管理（按用户 + 事后审核） ── -->
       <el-tab-pane label="博客分类管理" name="cats">
@@ -134,6 +136,7 @@
 import { ref, computed, reactive, onMounted } from 'vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import AdminApiAlert from '@/components/admin/AdminApiAlert.vue';
 
 const tab = ref('cats');
 const statusFilter = ref('');

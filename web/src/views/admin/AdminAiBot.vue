@@ -1,5 +1,7 @@
 <template>
   <div class="admin-page" v-loading="loading">
+    <!-- 接口异常常驻提示：本页没有 AdminHeader，靠这一行拿到全局错误反馈 -->
+    <AdminApiAlert />
     <SectionHeader title="AI 评论机器人" subtitle="评论区 @ai 召唤回复 · 限流防刷 · 发起人付费" />
 
     <el-card shadow="never" class="cfg-card">
@@ -50,6 +52,7 @@ import { ElMessage } from 'element-plus';
 import SectionHeader from '@/components/common/SectionHeader.vue';
 import { aiApi } from '@/api/ai';
 import { aiHubApi } from '@/api/aiHub';
+import AdminApiAlert from '@/components/admin/AdminApiAlert.vue';
 
 const loading = ref(false);
 const saving = ref(false);
