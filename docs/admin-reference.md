@@ -33,7 +33,7 @@
 | 调用流水（计费） | `/admin/ai-logs` → 调用流水 Tab（tokens/实扣/免费/状态） | ✅ 本轮新增 |
 | Agent 应用管理 | `/admin/ai-agents`（含扣子 upstream/bot_id/PAT） | ✅ 已有 |
 | Coze 配置管理 | 折进 Agent 表单（bot_id + API 域名 + PAT），未做全局默认值 | 🟡 部分 |
-| API 卡池列表（多密钥轮询） | 无（当前每模型单密钥） | ⛔ 待做（下文方案） |
+| API 卡池列表（多密钥轮询） | `/admin/ai-pool` 模型详情内维护多把 Key（`ai_model_keys`：Label/Weight/FailCount/Enabled），`AcquireModelKey` 加权轮询 + 失败降权 | ✅ 已有（本文旧版写的「每模型单密钥」已过时） |
 | 绘画全局配置 / MJ 配置 / GPT-Image-2 配置 / Nano Banana 配置 | 折进模型池：每模型自带 api_kind + base_url + 单价 | ✅ 等价（更精简） |
 | 作品风格分类 / 视频风格分类 | 作品发布时手填 style + 广场按 style 聚合 | 🟡 部分（缺字典） |
 | 套餐设置 / 卡密管理 / 订单列表 | `/admin/payment`（档位/订单/补单）+ `/admin/token`（卡密） | ✅ 已有 |
