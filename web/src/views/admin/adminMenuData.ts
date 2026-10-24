@@ -81,6 +81,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
     color: 'var(--gradient-teal)',
     items: [
       { title: '论坛板块管理', desc: '板块增删、审查、排序', path: '/admin/forums', icon: ChatDotRound, color: 'var(--gradient-blue)' },
+      { title: '群组管理', desc: '群列表 · 封禁/解散 · 建群额度（按角色 + 按人覆盖）', path: '/admin/groups', icon: Present, color: 'var(--gradient-teal)' },
       { title: '博客分类与回收站', desc: '博客分类管理 · 全站用户自删内容监管', path: '/admin/blog-categories', icon: Notebook, color: 'var(--gradient-teal)' },
       { title: '社区动态', desc: '最近用户、作品、评论、帖子', path: '/admin/community', icon: TrendCharts, color: 'var(--gradient-teal)' },
       { title: 'web 项目额度与审核', desc: '广场发布额度配置 + 超额发布审核队列', path: '/admin/web-quota', icon: Box, color: 'var(--gradient-purple)' },
@@ -111,6 +112,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: '免费 AI 额度', desc: '每日免费调用额度（次数/tokens）· 用尽才扣代币 · 按人覆盖', path: '/admin/ai-free-quota', icon: Present, color: 'var(--gradient-teal)' },
       { title: 'AI 数据审计', desc: '会话/作品/调用流水只读查询 · 排查与对账', path: '/admin/ai-logs', icon: DataAnalysis, color: 'var(--gradient-blue)' },
       { title: 'AI 功能配置', desc: '能力开关（BYOK/混图/换脸）· 上下文条数 · 每日限额 · 厂商字典', path: '/admin/ai-features', icon: Operation, color: 'var(--gradient-teal)' },
+      { title: '提示词模板', desc: '类型文学默认框架 · 变量注入 · 版本回滚 · 渲染预览', path: '/admin/ai-templates', icon: MagicStick, color: 'var(--gradient-purple)' },
       { title: 'AI 评论机器人', desc: '评论区 @ai 召唤回复 · 每日限流 · 发起人付费', path: '/admin/ai-bot', icon: ChatLineRound, color: 'var(--gradient-pink)' },
     ],
   },

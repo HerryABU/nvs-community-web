@@ -106,6 +106,16 @@ const router = createRouter({
       component: () => import('@/views/BlogDetail.vue'),
     },
     {
+      path: '/groups',
+      name: 'groups',
+      component: () => import('@/views/group/index.vue'),
+    },
+    {
+      path: '/group/:id',
+      name: 'group-detail',
+      component: () => import('@/views/group/detail.vue'),
+    },
+    {
       path: '/forums',
       name: 'forums',
       component: () => import('@/views/Forums.vue'),
@@ -355,9 +365,21 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/groups',
+      name: 'admin-groups',
+      component: () => import('@/views/admin/group/index.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/ai-logs',
       name: 'admin-ai-logs',
       component: () => import('@/views/admin/AdminAiLogs.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/ai-templates',
+      name: 'admin-ai-templates',
+      component: () => import('@/views/admin/ai/templates.vue'),
       meta: { requiresAuth: true },
     },
     {

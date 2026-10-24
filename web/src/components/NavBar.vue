@@ -38,6 +38,9 @@
       <!-- 论坛入口 -->
       <router-link to="/forums" class="nav-link desktop-only">论坛</router-link>
 
+      <!-- 群组入口（半私密协作空间：群号/二维码加入、群公告、群文件、群内 @ai） -->
+      <router-link to="/groups" class="nav-link desktop-only">群组</router-link>
+
       <!-- 博客入口 -->
       <router-link to="/blogs" class="nav-link desktop-only">博客</router-link>
 
