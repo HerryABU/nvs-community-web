@@ -1,4 +1,11 @@
-# 群组功能 · 立项设计（P3）
+# 群组功能 · 设计与实现状态（v3.9.0 已实现 G1~G3）
+
+> **实现落点**：领域层 `server/groups/`（group / member / post / file / quota / migrate / 测试）、
+> 接口层 `server/handlers/group/`（group / member / post / file / ai / admin）、
+> 前端 `api/group` + `components/group` + `views/group` + `views/admin/group`。
+> 已完成：群号、可见性、三种加入方式、角色与拉人/踢人/禁言/公告、配额（按角色 + 按人）、
+> 群内帖子先审后发、群文件隔离与 ZIP 炸弹检测、群内 `@ai`。
+> 未完成：G4 实时消息（当前为异步发帖，WebSocket 需单独评估）。
 
 > 目标：在公开社区（论坛/博客）之外补「半私密/私密」协作空间，复用既有审核、额度、举报、未成年保护体系。
 
