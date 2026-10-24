@@ -473,6 +473,27 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.9.0 群组功能 + 提示词模板引擎（2026-10-24）
+
+**群组（独立领域包 server/groups + 接口层 server/handlers/group）**
+- 群号（7 位唯一数字）、可见性（公开/半公开/私密）、加入方式（直接/申请/邀请码）、角色（群主/管理员/成员）
+- 群管理：拉人、申请审核、踢人、任命管理员、禁言、群公告（变更推送）、解散；配额（总开关/人数硬顶/每日发帖/按角色/按人覆盖）
+- 群内帖子与回复：复用违禁词库与「先审后发」；AI 辅助标识接入 `ai_content_marks`
+- 群文件：`data/groups` 独立存储、扩展名白名单、50MB/512MB 限额、ZIP 炸弹检测、鉴权下载 + 路径穿越防护
+- 群内 `@ai`：绑定智能体（AiEnabled/AiAgentID），复用机器人身份与计费账本，输出过违禁词并带 AI 标识
+- 前端：`api/group`、`components/group`（QrCard/QrScanDialog/Posts/Members/Files/Settings）、`views/group`（列表/详情）、`views/admin/group`
+- 二维码：本地 qrcode 生成；jsQR 纯前端解析（PC 粘贴/拖入/选择图片，手机摄像头扫码），**图片不上传服务器**；支持手输群号/邀请码
+
+**提示词模板引擎（独立功能包 server/prompttpl + 接口层 server/handlers/prompts）**
+- `ai_prompt_templates` + `ai_prompt_template_versions`：变量声明、版本快照与回滚、场景挂载、优先级、启停
+- 渲染引擎：`{{变量}}` 纯文本替换、必填/默认值/长度截断、missing/unused 诊断；不执行任何模板指令
+- 内置 9 条类型文学默认框架（续写/硬科幻/悬疑/架空历史/实验文学/角色卡/摘要/润色/博客），不含爽文模板
+- 管理端 `/admin/ai-templates`：变量编辑、实时渲染预览、版本历史与一键回滚
+- 编辑区：AI 助手新增「场景模板」下拉（章节/博客两种场景），套用后自动切「自定义」并提示待补占位
+
+**其他**
+- 修复：版本号三处同步（server/version、web/package.json、theme store）
+
 ### v3.8.0 AI 管理台与多厂商协议落地（2026-10-23）
 
 **AI 工作台（前后端）**
