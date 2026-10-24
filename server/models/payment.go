@@ -4,7 +4,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"math"
 	"strings"
 	"time"
@@ -454,6 +456,13 @@ func extendMembershipTx(tx *gorm.DB, userID uint, days int) error {
 	}
 	var u User
 	if err := tx.Select("id", "member_until").Where("id = ?", userID).First(&u).Error; err != nil {
+		// 用户已被删除：**不能**让整笔到账回滚。
+		// 钱在上游已经收了，这里回滚会导致「支付成功但订单没记、代币也没入账」，
+		// 只能人工补单。会员时长无处可加，跳过即可（代币流水仍然正常记录）。
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("[payment] 会员延期跳过：用户 %d 不存在（订单照常到账）", userID)
+			return nil
+		}
 		return err
 	}
 	base := time.Now()

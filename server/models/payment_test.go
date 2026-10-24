@@ -19,13 +19,18 @@ func TestPaymentDefaultOff(t *testing.T) {
 	if cfg.TokenPerFen != 10 {
 		t.Fatalf("默认每分 10 代币，实际 %d", cfg.TokenPerFen)
 	}
-	// 默认档位：1/5/10/50/100 元
+	// 默认档位：会员套餐四档（天 600 / 周 1200 / 月 3800 / 季 9800），每档都要带会员天数
 	tiers := GetPaymentTiers()
-	if len(tiers) != 5 || tiers[0].Fen != 100 || tiers[4].Fen != 10000 {
-		t.Fatalf("默认档位异常：%+v", tiers)
+	if len(tiers) != 4 || tiers[0].Fen != 600 || tiers[3].Fen != 9800 {
+		t.Fatalf("默认套餐异常：%+v", tiers)
 	}
-	// 关闭状态下不允许下单
-	if _, err := CreateRechargeOrder(1, PayChannelWeChat, 1000); err == nil {
+	for i, tier := range tiers {
+		if tier.Days <= 0 {
+			t.Fatalf("第 %d 档缺少会员天数：%+v", i, tier)
+		}
+	}
+	// 关闭状态下不允许下单（用真实存在的档位，否则失败原因会变成"档位无效"）
+	if _, err := CreateRechargeOrder(1, PayChannelWeChat, 600); err == nil {
 		t.Fatal("关闭状态下不应允许下单")
 	}
 }
@@ -38,16 +43,20 @@ func TestRechargeOrderFlowAndIdempotentCredit(t *testing.T) {
 	if err := SetPaymentEnabled(true); err != nil {
 		t.Fatalf("开启支付失败: %v", err)
 	}
-	// 10 元档：1000 分 ×10 + 赠送 150 = 10150
-	order, err := CreateRechargeOrder(42, PayChannelMock, 1000)
+	// 会员时长需要真实用户行（会员到期时间挂在 users.member_until 上）
+	if err := DB.Create(&User{ID: 42, Username: "buyer", Email: "buyer@example.com", Role: RoleReader}).Error; err != nil {
+		t.Fatalf("建用户失败: %v", err)
+	}
+	// 月卡档：3800 分 × 10 代币/分 = 38000（默认档位无赠送与优惠）
+	order, err := CreateRechargeOrder(42, PayChannelMock, 3800)
 	if err != nil {
 		t.Fatalf("下单失败: %v", err)
 	}
 	if order.Status != PayStatusPending {
 		t.Fatalf("新单应为 pending，实际 %s", order.Status)
 	}
-	if order.TokenAmount != 10150 {
-		t.Fatalf("10 元档应到账 10150 代币，实际 %d", order.TokenAmount)
+	if order.TokenAmount != 38000 {
+		t.Fatalf("月卡应到账 38000 代币，实际 %d", order.TokenAmount)
 	}
 	if order.PayURL == "" {
 		_ = UpdateOrderPayURL(order.OrderNo, "/pay/mock/"+order.OrderNo)
@@ -67,8 +76,12 @@ func TestRechargeOrderFlowAndIdempotentCredit(t *testing.T) {
 	if paid.Status != PayStatusPaid || paid.TransactionID != "TXN-001" {
 		t.Fatalf("订单状态/流水号异常：%s/%s", paid.Status, paid.TransactionID)
 	}
-	if bal := GetTokenBalance(42); bal != 10150 {
-		t.Fatalf("到账后余额应为 10150，实际 %d", bal)
+	if bal := GetTokenBalance(42); bal != 38000 {
+		t.Fatalf("到账后余额应为 38000，实际 %d", bal)
+	}
+	// 会员时长必须与代币在同一事务里生效（月卡 = 30 天）
+	if st := GetMembershipStatus(42); !st.IsMember || st.DaysLeft < 29 {
+		t.Fatalf("月卡应生效 30 天，实际 is_member=%v days_left=%d", st.IsMember, st.DaysLeft)
 	}
 	// 重复回调：幂等，不重复入账
 	_, credited2, err := MarkOrderPaid(order.OrderNo, "TXN-001", "notify raw 2")
@@ -78,8 +91,8 @@ func TestRechargeOrderFlowAndIdempotentCredit(t *testing.T) {
 	if credited2 {
 		t.Fatal("重复回调不应再次入账")
 	}
-	if bal := GetTokenBalance(42); bal != 10150 {
-		t.Fatalf("重复回调后余额应仍为 10150，实际 %d", bal)
+	if bal := GetTokenBalance(42); bal != 38000 {
+		t.Fatalf("重复回调后余额应仍为 38000，实际 %d", bal)
 	}
 }
 
@@ -91,7 +104,7 @@ func TestCloseExpiredOrders(t *testing.T) {
 	if err := SetPaymentEnabled(true); err != nil {
 		t.Fatalf("开启支付失败: %v", err)
 	}
-	order, err := CreateRechargeOrder(7, PayChannelMock, 500)
+	order, err := CreateRechargeOrder(7, PayChannelMock, 1200)
 	if err != nil {
 		t.Fatalf("下单失败: %v", err)
 	}
