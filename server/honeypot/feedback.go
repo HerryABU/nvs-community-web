@@ -32,7 +32,7 @@ func SuggestRules(limit int) []Suggestion {
 		limit = 15
 	}
 	var events []Event
-	_ = models.DB.Where("risk >= ?", 60).Order("created_at DESC").Limit(500).Find(&events).Error
+	_ = db().Where("risk >= ?", 60).Order("created_at DESC").Limit(500).Find(&events).Error
 
 	uaCount := map[string]int{}
 	pathCount := map[string]int{}
@@ -119,6 +119,6 @@ func ApplyRules(keywords []string) ([]string, error) {
 		BodySnippet: truncate("反哺关键词："+strings.Join(added, ","), 600),
 		Risk:        0, Action: "feedback", CreatedAt: time.Now(),
 	}
-	_ = models.DB.Create(ev).Error
+	_ = db().Create(ev).Error
 	return added, nil
 }

@@ -116,8 +116,18 @@ v1 先落「主站内嵌诱饵」形态（不启独立进程/端口），把「�
 | 取证包 | `forensics.go`：`GET /api/admin/honeypot/export.zip` → `session.json`/`events.jsonl`/`fingerprints.json`/`manifest.json`（SHA256 清单），响应头带 `X-Bundle-SHA256`，下载后删临时包 | 导出写一条 `export` 事件（审批留痕） |
 | 规则反哺 | `feedback.go`：从风险 ≥60 的事件提炼 UA/路径特征 → 写入爬虫阻断名单并 `security.ReloadBotRules()` 即时生效 | 只反哺明确恶意特征；关键词长度 ≥4 防误伤；重复反哺幂等；写 `feedback` 事件留痕 |
 
-**仍未做**：独立进程/端口（当前内嵌主站，等级 off 时与 404 无差别）、JA3/JA4 与 WebRTC 内网 IP 采集
-（需 TLS/浏览器侧支持）、警方联动工单、按项目归档的 90 天冷归档（当前是行级 TTL 清理）。
+**隔离形态与留存（v3.16.0）**
+
+- **独立进程**：`cmd/honeypot`（产物 `nvs-honeypot.exe`，默认端口 18081），只挂诱饵/影子认证/验证页，
+  不加载任何业务路由；反向代理把诱饵路径指过来即可。`GET /__hp/health` 自检（含当前等级与库路径）。
+- **独立库**：`NVS_HONEYPOT_DB_PATH`（如 `data/honeypot/honeypot.db`）。主站设同一个路径即可
+  **后台照旧读得到**，而蜜罐数据与业务库物理隔离；启动断言「蜜罐库 ≠ 主库」，同路径直接拒绝启动。
+  未设该变量时退回内嵌形态（表在主库）。
+- **冷归档**：`Cleanup` 改为 `ArchiveAndCleanup` —— 超期事件先写
+  `data/honeypot/archive/honeypot-events-YYYYMM.jsonl.gz`，`fsync` 成功后才分批删库；
+  `GET /api/admin/honeypot/archives` 可看归档文件。
+
+**仍未做**：JA3/JA4 与 WebRTC 内网 IP 采集（需 TLS/浏览器侧支持）、警方联动工单。
 
 ### 5.1.1 影子路由前缀为什么是 `/api/v2/*`
 

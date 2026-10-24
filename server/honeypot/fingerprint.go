@@ -8,8 +8,6 @@ package honeypot
 import (
 	"encoding/json"
 	"time"
-
-	"nvs-server/models"
 )
 
 // Fingerprint 浏览器/环境指纹
@@ -52,7 +50,7 @@ type FingerprintInput struct {
 // SaveFingerprint 落库（同会话同指纹去重）
 func SaveFingerprint(sessionID uint, in FingerprintInput) error {
 	var n int64
-	models.DB.Model(&Fingerprint{}).
+	db().Model(&Fingerprint{}).
 		Where("session_id = ? AND canvas = ? AND webgl = ?", sessionID, in.Canvas, in.WebGL).
 		Count(&n)
 	if n > 0 {
@@ -61,7 +59,7 @@ func SaveFingerprint(sessionID uint, in FingerprintInput) error {
 	if len(in.Raw) > 4000 {
 		in.Raw = in.Raw[:4000]
 	}
-	return models.DB.Create(&Fingerprint{
+	return db().Create(&Fingerprint{
 		SessionID: sessionID,
 		Canvas:    truncate(in.Canvas, 64), WebGL: truncate(in.WebGL, 64),
 		Fonts: truncate(in.Fonts, 64), TZ: truncate(in.TZ, 64), Lang: truncate(in.Lang, 64),
@@ -75,7 +73,7 @@ func SaveFingerprint(sessionID uint, in FingerprintInput) error {
 // ListFingerprints 会话的指纹
 func ListFingerprints(sessionID uint) ([]Fingerprint, error) {
 	var list []Fingerprint
-	if err := models.DB.Where("session_id = ?", sessionID).
+	if err := db().Where("session_id = ?", sessionID).
 		Order("id DESC").Limit(20).Find(&list).Error; err != nil {
 		return nil, err
 	}

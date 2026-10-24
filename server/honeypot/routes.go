@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -109,7 +108,7 @@ func serveProbe(c *gin.Context, path string) {
 				Headers: fields.Headers, BodySnippet: fields.BodySnippet,
 				Risk: 40, Action: "record", CreatedAt: now,
 			}
-			_ = models.DB.Create(ev)
+			_ = db().Create(ev)
 			_ = updateSessionStats(sess, 40, now)
 		}
 	}
@@ -153,6 +152,6 @@ func ProbeNotFound(c *gin.Context) {
 		Query: fields.Query, UA: fields.UA, Referer: fields.Referer, XFF: fields.XFF,
 		Headers: fields.Headers, Risk: 35, Action: "record", CreatedAt: now,
 	}
-	_ = models.DB.Create(ev)
+	_ = db().Create(ev)
 	_ = updateSessionStats(sess, 35, now)
 }

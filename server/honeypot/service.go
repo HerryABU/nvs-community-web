@@ -12,8 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"nvs-server/models"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -35,7 +33,7 @@ func offSetting() Setting {
 // Current 读取当前策略（15 秒进程缓存，避免每请求打库）
 func Current() Setting {
 	// 未完成建站 / DB 尚未初始化时，诱饵必须静默失效（不能 panic，否则裸奔期直接被扫崩）
-	if models.DB == nil {
+	if db() == nil {
 		return offSetting()
 	}
 	setMu.RLock()
@@ -47,7 +45,7 @@ func Current() Setting {
 	setMu.RUnlock()
 
 	var s Setting
-	err := models.DB.Where("id = 1").First(&s).Error
+	err := db().Where("id = 1").First(&s).Error
 	if err != nil {
 		s = offSetting()
 	}
@@ -84,14 +82,14 @@ func SaveSetting(in Setting) (*Setting, error) {
 	in.UpdatedAt = time.Now()
 
 	var old Setting
-	if err := models.DB.Where("id = 1").First(&old).Error; err != nil {
+	if err := db().Where("id = 1").First(&old).Error; err != nil {
 		in.ID = 1
-		if err := models.DB.Create(&in).Error; err != nil {
+		if err := db().Create(&in).Error; err != nil {
 			return nil, err
 		}
 	} else {
 		in.ID = old.ID
-		if err := models.DB.Model(&Setting{}).Where("id = ?", old.ID).Updates(map[string]interface{}{
+		if err := db().Model(&Setting{}).Where("id = ?", old.ID).Updates(map[string]interface{}{
 			"enabled": in.Enabled, "level": in.Level,
 			"record_ua": in.RecordUA, "record_referer": in.RecordReferer,
 			"record_xff": in.RecordXFF, "record_query": in.RecordQuery,
@@ -304,11 +302,11 @@ func Record(set Setting, c *gin.Context, decoy Decoy) (*Event, error) {
 		Headers: fields.Headers, BodySnippet: fields.BodySnippet,
 		Risk: decoy.Risk, Action: action, CreatedAt: now,
 	}
-	if err := models.DB.Create(ev).Error; err != nil {
+	if err := db().Create(ev).Error; err != nil {
 		return nil, err
 	}
-	_ = models.DB.Model(&Session{}).Where("id = ?", sess.ID).Updates(map[string]interface{}{
-		"event_count": models.DB.Raw("event_count + 1"),
+	_ = db().Model(&Session{}).Where("id = ?", sess.ID).Updates(map[string]interface{}{
+		"event_count": db().Raw("event_count + 1"),
 		"last_seen":   now,
 		"max_risk":    maxInt(sess.MaxRisk, decoy.Risk),
 		"banned":      action == "ban",
@@ -318,7 +316,7 @@ func Record(set Setting, c *gin.Context, decoy Decoy) (*Event, error) {
 
 func ensureSession(ip, ua, referer, xff string, now time.Time) (*Session, error) {
 	var s Session
-	err := models.DB.Where("src_ip = ? AND ua_norm = ?", ip, truncate(ua, 256)).First(&s).Error
+	err := db().Where("src_ip = ? AND ua_norm = ?", ip, truncate(ua, 256)).First(&s).Error
 	if err == nil {
 		return &s, nil
 	}
@@ -327,7 +325,7 @@ func ensureSession(ip, ua, referer, xff string, now time.Time) (*Session, error)
 		Referer: truncate(referer, 512), XFF: truncate(xff, 256),
 		FirstSeen: now, LastSeen: now,
 	}
-	if cerr := models.DB.Create(&s).Error; cerr != nil {
+	if cerr := db().Create(&s).Error; cerr != nil {
 		return nil, cerr
 	}
 	return &s, nil
@@ -335,8 +333,8 @@ func ensureSession(ip, ua, referer, xff string, now time.Time) (*Session, error)
 
 // updateSessionStats 会话计数与风险汇总（探测路径也走这里）
 func updateSessionStats(sess *Session, risk int, now time.Time) error {
-	return models.DB.Model(&Session{}).Where("id = ?", sess.ID).Updates(map[string]interface{}{
-		"event_count": models.DB.Raw("event_count + 1"),
+	return db().Model(&Session{}).Where("id = ?", sess.ID).Updates(map[string]interface{}{
+		"event_count": db().Raw("event_count + 1"),
 		"last_seen":   now,
 		"max_risk":    maxInt(sess.MaxRisk, risk),
 	}).Error
@@ -359,7 +357,7 @@ func ListSessions(page, pageSize int, keyword string, minRisk int) ([]Session, i
 	if pageSize <= 0 || pageSize > 100 {
 		pageSize = 20
 	}
-	q := models.DB.Model(&Session{})
+	q := db().Model(&Session{})
 	if kw := strings.TrimSpace(keyword); kw != "" {
 		q = q.Where("src_ip LIKE ? OR hid LIKE ? OR ua_norm LIKE ?", "%"+kw+"%", "%"+kw+"%", "%"+kw+"%")
 	}
@@ -380,11 +378,11 @@ func ListSessions(page, pageSize int, keyword string, minRisk int) ([]Session, i
 // SessionDetail 会话详情（含事件时间轴）
 func SessionDetail(id uint) (*Session, []Event, error) {
 	var s Session
-	if err := models.DB.Where("id = ?", id).First(&s).Error; err != nil {
+	if err := db().Where("id = ?", id).First(&s).Error; err != nil {
 		return nil, nil, errors.New("会话不存在")
 	}
 	var events []Event
-	_ = models.DB.Where("session_id = ?", id).Order("created_at ASC").Limit(500).Find(&events).Error
+	_ = db().Where("session_id = ?", id).Order("created_at ASC").Limit(500).Find(&events).Error
 	return &s, events, nil
 }
 
@@ -402,10 +400,10 @@ type Overview struct {
 func GetOverview() Overview {
 	var o Overview
 	o.Setting = Current()
-	models.DB.Model(&Session{}).Count(&o.SessionCount)
-	models.DB.Model(&Event{}).Count(&o.EventCount)
-	models.DB.Model(&Session{}).Where("max_risk >= ?", 60).Count(&o.HighRisk)
-	models.DB.Model(&Event{}).Where("created_at >= ?", time.Now().Add(-24*time.Hour)).Count(&o.Last24h)
+	db().Model(&Session{}).Count(&o.SessionCount)
+	db().Model(&Event{}).Count(&o.EventCount)
+	db().Model(&Session{}).Where("max_risk >= ?", 60).Count(&o.HighRisk)
+	db().Model(&Event{}).Where("created_at >= ?", time.Now().Add(-24*time.Hour)).Count(&o.Last24h)
 	o.BannedCount = len(BannedList())
 	return o
 }
@@ -422,9 +420,9 @@ func Export(sessionID uint, operatorID uint) (map[string]interface{}, error) {
 		out["events"] = events
 	} else {
 		var sessions []Session
-		_ = models.DB.Order("last_seen DESC").Limit(1000).Find(&sessions).Error
+		_ = db().Order("last_seen DESC").Limit(1000).Find(&sessions).Error
 		var events []Event
-		_ = models.DB.Order("created_at DESC").Limit(5000).Find(&events).Error
+		_ = db().Order("created_at DESC").Limit(5000).Find(&events).Error
 		out["sessions"] = sessions
 		out["events"] = events
 	}
@@ -441,7 +439,7 @@ func LogExport(sessionID, operatorID uint) {
 		BodySnippet: "操作人：" + strconv.FormatUint(uint64(operatorID), 10),
 		Risk:        0, Action: "export", CreatedAt: now,
 	}
-	_ = models.DB.Create(ev).Error
+	_ = db().Create(ev).Error
 }
 
 // Cleanup 按留存天数清理（append-only 的例外：TTL 归档）
@@ -452,6 +450,6 @@ func Cleanup() int64 {
 		days = 90
 	}
 	cutoff := time.Now().AddDate(0, 0, -days)
-	res := models.DB.Where("created_at < ?", cutoff).Delete(&Event{})
+	res := db().Where("created_at < ?", cutoff).Delete(&Event{})
 	return res.RowsAffected
 }

@@ -723,6 +723,8 @@ func main() {
 		admin.GET("/honeypot/sessions/:sid", honeypothandler.SessionDetail)
 		admin.GET("/honeypot/export", honeypothandler.Export)
 		admin.POST("/honeypot/cleanup", honeypothandler.Cleanup)
+		admin.GET("/honeypot/archives", honeypothandler.Archives)
+		admin.GET("/honeypot/db", honeypothandler.DBInfo)
 		admin.GET("/honeypot/bans", honeypothandler.Bans)
 		admin.POST("/honeypot/ban", honeypothandler.Ban)
 		admin.POST("/honeypot/unban", honeypothandler.Unban)
@@ -1463,8 +1465,9 @@ func initDatabase() error {
 	if err := oc.Migrate(models.DB); err != nil {
 		return err
 	}
-	// 蜜罐（独立功能包）：诱饵命中会话/事件 + 等级与日志记录策略
-	if err := honeypot.Migrate(models.DB); err != nil {
+	// 蜜罐（独立功能包）：等级与日志策略 + 会话/事件/指纹
+	// 设 NVS_HONEYPOT_DB_PATH 则使用独立库（与业务库物理隔离，后台仍可读）
+	if err := honeypot.Bootstrap(models.DB); err != nil {
 		return err
 	}
 	// 版本控制后端选择：NVS_VCS_BACKEND=git 时启用真实 git 仓库（需 -tags gitvcs 构建），

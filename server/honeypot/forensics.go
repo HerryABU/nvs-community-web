@@ -13,8 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-
-	"nvs-server/models"
 )
 
 // ForensicsBundle 一次取证导出
@@ -67,9 +65,9 @@ func BuildForensicsZip(sessionID, operatorID uint) (*ForensicsBundle, error) {
 			return nil, err
 		}
 		var events []Event
-		_ = models.DB.Order("created_at DESC").Limit(5000).Find(&events).Error
+		_ = db().Order("created_at DESC").Limit(5000).Find(&events).Error
 		var fps []Fingerprint
-		_ = models.DB.Order("id DESC").Limit(1000).Find(&fps).Error
+		_ = db().Order("id DESC").Limit(1000).Find(&fps).Error
 		if err := add("sessions.json", sessions); err != nil {
 			return nil, err
 		}

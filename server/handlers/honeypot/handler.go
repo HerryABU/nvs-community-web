@@ -95,13 +95,42 @@ func Export(c *gin.Context) {
 	utils.Success(c, data)
 }
 
-// Cleanup POST /api/admin/honeypot/cleanup —— 按留存天数清理
+// Cleanup POST /api/admin/honeypot/cleanup —— 先冷归档再删除（合规留存）
 func Cleanup(c *gin.Context) {
 	if !ensureAdmin(c) {
 		return
 	}
-	n := honeypot.Cleanup()
-	utils.SuccessMessage(c, "已清理过期事件", gin.H{"deleted": n})
+	res, err := honeypot.ArchiveAndCleanup()
+	if err != nil {
+		utils.InternalError(c, "归档失败，未删除任何数据")
+		return
+	}
+	if res.Skipped {
+		utils.SuccessMessage(c, "没有超期事件", res)
+		return
+	}
+	utils.SuccessMessage(c, "已归档并清理", res)
+}
+
+// Archives GET /api/admin/honeypot/archives —— 已归档文件列表
+func Archives(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	list, err := honeypot.ListArchives()
+	if err != nil {
+		utils.InternalError(c, "读取归档目录失败")
+		return
+	}
+	utils.Success(c, gin.H{"list": list, "dir_hint": "data/honeypot/archive"})
+}
+
+// DBInfo GET /api/admin/honeypot/db —— 当前是内嵌库还是独立库
+func DBInfo(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	utils.Success(c, gin.H{"isolated": honeypot.Isolated(), "path": honeypot.DBPath()})
 }
 
 // Bans GET /api/admin/honeypot/bans

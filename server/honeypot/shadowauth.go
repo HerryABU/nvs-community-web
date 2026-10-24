@@ -13,8 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"nvs-server/models"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -146,7 +144,7 @@ func recordShadow(c *gin.Context, kind, decoy string, risk int, note string) {
 		Headers: fields.Headers, BodySnippet: truncate(note+" | "+fields.BodySnippet, 600),
 		Risk: risk, Action: "record", CreatedAt: now,
 	}
-	_ = models.DB.Create(ev)
+	_ = db().Create(ev)
 	_ = updateSessionStats(sess, risk, now)
 
 	// 高等级 + 自动封禁：提权尝试直接封

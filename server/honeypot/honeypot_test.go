@@ -27,7 +27,7 @@ func setupHP(t *testing.T) *gorm.DB {
 	}
 	old := models.DB
 	models.DB = db
-	ResetCache()
+	ResetDB()
 	t.Cleanup(func() {
 		models.DB = old
 		ResetCache()

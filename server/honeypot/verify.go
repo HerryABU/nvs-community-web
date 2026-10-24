@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"nvs-server/models"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -70,7 +68,7 @@ func collectFingerprint(c *gin.Context) {
 			BodySnippet: truncate("指纹上报 canvas="+in.Canvas+" webgl="+in.WebGL+" headless="+in.Headless, 600),
 			Risk:        55, Action: "record", CreatedAt: now,
 		}
-		_ = models.DB.Create(ev)
+		_ = db().Create(ev)
 	}
 	// 恒失败：与真实风控失败一致
 	c.JSON(http.StatusOK, gin.H{"ok": false, "reason": "risk_control"})
@@ -98,7 +96,7 @@ func verifySubmit(c *gin.Context) {
 			BodySnippet: truncate("验证提交（恒失败）；body="+fields.BodySnippet, 600),
 			Risk:        75, Action: "record", CreatedAt: now,
 		}
-		_ = models.DB.Create(ev)
+		_ = db().Create(ev)
 		_ = updateSessionStats(sess, 75, now)
 	}
 	// 每次都「差一点」：给一个看似可重试的失败原因，诱导继续消耗
