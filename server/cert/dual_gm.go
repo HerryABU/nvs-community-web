@@ -6,6 +6,7 @@ package cert
 // 通过 OID 1.2.156.10197.1.301 识别 SM2 公钥（标准库 crypto/x509 识别有限）。
 
 import (
+	"crypto/ecdsa"
 	"crypto/tls"
 	"encoding/pem"
 	"fmt"
@@ -47,9 +48,10 @@ func loadSM2KeyPair(certFile, keyFile string) (tls.Certificate, error) {
 	if err != nil {
 		return tls.Certificate{}, fmt.Errorf("解析证书失败: %w", err)
 	}
-	// SM2 公钥识别：gmsm 将 SM2 公钥呈现为 ECDSA 算法 + SM2 曲线，
-	// 以底层 *sm2.PublicKey 类型断言为准（对应 OID 1.2.156.10197.1.301）。
-	if _, ok := leaf.PublicKey.(*sm2.PublicKey); !ok {
+	// SM2 公钥识别（gmsm v0.45+）：SM2 公钥即标准 *ecdsa.PublicKey，曲线为 SM2，
+	// 对应 OID 1.2.156.10197.1.301。标准库 x509 不识别该 OID，故经 smx509 解析。
+	pub, ok := leaf.PublicKey.(*ecdsa.PublicKey)
+	if !ok || pub.Curve != sm2.P256() {
 		return tls.Certificate{}, fmt.Errorf("证书 %s 公钥不是 SM2（OID 1.2.156.10197.1.301）：%s", certFile, leaf.PublicKeyAlgorithm)
 	}
 	priv, err := parseSM2PrivateKeyPEM(keyPEM)

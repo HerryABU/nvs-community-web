@@ -6,7 +6,7 @@ package crypto
 //
 // TLCP 握手由 github.com/aiyang-zh/zhenyi-base/zgmtls 实现（GM/T 0024-2014 风格，
 // 版本标识 VersionGMSSL=0x0101）；SM2 证书解析经 gmsm/smx509（OID 1.2.156.10197.1.301）。
-// dual 轨使用 zgmtls.NewBasicAutoSwitchConfig：按 ClientHello 的 SupportedVersions
+// dual 轨使用 gmtls.NewBasicAutoSwitchConfig：按 ClientHello 的 SupportedVersions
 // 是否含 VersionGMSSL 决定进入国密握手还是标准 TLS 握手（需求文档 §5.2）。
 
 import (
@@ -15,7 +15,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/aiyang-zh/zhenyi-base/zgmtls"
+	gmtls "github.com/aiyang-zh/zhenyi-base/zgmtls"
 	"nvs-server/cert"
 	"nvs-server/config"
 	"nvs-server/tlsconfig"
@@ -45,13 +45,13 @@ func (pureGoProvider) Name() string { return "purego" }
 // 静态 ECC 双证书 GMTLS_SM2_WITH_SM4_SM3（0xE011 类）兜底。
 func (pureGoProvider) SupportedCipherSuites() []uint16 {
 	return []uint16{
-		zgmtls.GMTLS_ECDHE_SM2_WITH_SM4_SM3,
-		zgmtls.GMTLS_SM2_WITH_SM4_SM3,
+		gmtls.GMTLS_ECDHE_SM2_WITH_SM4_SM3,
+		gmtls.GMTLS_SM2_WITH_SM4_SM3,
 	}
 }
 
-// BuildServerTLSConfig zgmtls.Config 为 crypto/tls.Config 的国密扩展分支
-// （含 GMSupport / GetKECertificate），装配须经 BuildListener → zgmtls.NewListener
+// BuildServerTLSConfig gmtls.Config 为 crypto/tls.Config 的国密扩展分支
+// （含 GMSupport / GetKECertificate），装配须经 BuildListener → gmtls.NewListener
 // （需求文档 §5.2 封装层；避免 unsafe 指针转换带来的布局兼容风险）。
 func (pureGoProvider) BuildServerTLSConfig(cfg *config.CryptoConfig) (*tls.Config, error) {
 	return nil, ErrUseBuildListener
@@ -66,44 +66,44 @@ func (pureGoProvider) BuildListener(inner net.Listener, cfg *config.CryptoConfig
 	signCert := toGMTLSCert(dual.Sign)
 	encCert := toGMTLSCert(dual.Enc)
 
-	var gmCfg *zgmtls.Config
+	var gmCfg *gmtls.Config
 	if cfg.Track == config.TrackDual {
-		// 双轨：标准证书走 zgmtls.LoadX509KeyPair（RSA/ECC）
-		stdCert, err := zgmtls.LoadX509KeyPair(cfg.IntlCertFile, cfg.IntlKeyFile)
+		// 双轨：标准证书走 gmtls.LoadX509KeyPair（RSA/ECC）
+		stdCert, err := gmtls.LoadX509KeyPair(cfg.IntlCertFile, cfg.IntlKeyFile)
 		if err != nil {
 			return nil, fmt.Errorf("加载国际轨证书失败（dual 回退路径）: %w", err)
 		}
-		gmCfg, err = zgmtls.NewBasicAutoSwitchConfig(&signCert, &encCert, &stdCert)
+		gmCfg, err = gmtls.NewBasicAutoSwitchConfig(&signCert, &encCert, &stdCert)
 		if err != nil {
 			return nil, fmt.Errorf("构建双轨自适应配置失败: %w", err)
 		}
 	} else {
 		// 纯国密：签名证书在前、加密证书在后（TLCP 双证书）
-		gmCfg = &zgmtls.Config{
-			GMSupport:    zgmtls.NewGMSupport(),
-			Certificates: []zgmtls.Certificate{signCert, encCert},
+		gmCfg = &gmtls.Config{
+			GMSupport:    gmtls.NewGMSupport(),
+			Certificates: []gmtls.Certificate{signCert, encCert},
 			CipherSuites: []uint16{
-				zgmtls.GMTLS_ECDHE_SM2_WITH_SM4_SM3,
-				zgmtls.GMTLS_SM2_WITH_SM4_SM3,
+				gmtls.GMTLS_ECDHE_SM2_WITH_SM4_SM3,
+				gmtls.GMTLS_SM2_WITH_SM4_SM3,
 			},
-			MinVersion: zgmtls.VersionGMSSL,
-			MaxVersion: zgmtls.VersionGMSSL,
+			MinVersion: gmtls.VersionGMSSL,
+			MaxVersion: gmtls.VersionGMSSL,
 			// 显式证书回调：静态 ECC 双证书套件（0xE011 类）需要加密证书参与密钥交换
-			GetCertificate:   func(*zgmtls.ClientHelloInfo) (*zgmtls.Certificate, error) { return &signCert, nil },
-			GetKECertificate: func(*zgmtls.ClientHelloInfo) (*zgmtls.Certificate, error) { return &encCert, nil },
+			GetCertificate:   func(*gmtls.ClientHelloInfo) (*gmtls.Certificate, error) { return &signCert, nil },
+			GetKECertificate: func(*gmtls.ClientHelloInfo) (*gmtls.Certificate, error) { return &encCert, nil },
 		}
 	}
 	if cfg.SessionTicketsDisabled {
 		gmCfg.SessionTicketsDisabled = true
 	}
-	// zgmtls.Config 无 VerifyConnection 回调，握手完成后经 ConnectionState 观测（§5.4）
-	return &recordedListener{Listener: zgmtls.NewListener(inner, gmCfg)}, nil
+	// gmtls.Config 无 VerifyConnection 回调，握手完成后经 ConnectionState 观测（§5.4）
+	return &recordedListener{Listener: gmtls.NewListener(inner, gmCfg)}, nil
 }
 
-// toGMTLSCert std tls.Certificate → zgmtls.Certificate（字段同名同构；
+// toGMTLSCert std tls.Certificate → gmtls.Certificate（字段同名同构；
 // SM2 私钥为 gmsm *sm2.PrivateKey，zgmtls 同样使用 gmsm，类型互通）。
-func toGMTLSCert(c tls.Certificate) zgmtls.Certificate {
-	return zgmtls.Certificate{Certificate: c.Certificate, PrivateKey: c.PrivateKey}
+func toGMTLSCert(c tls.Certificate) gmtls.Certificate {
+	return gmtls.Certificate{Certificate: c.Certificate, PrivateKey: c.PrivateKey}
 }
 
 // recordedListener 握手观测包装（需求文档 §5.4 / N-02 隔离）。
@@ -135,7 +135,7 @@ func (c *recordedGMConn) Write(b []byte) (int, error) {
 // observe 首次 I/O（握手已完成）时记录协商结果。
 func (c *recordedGMConn) observe() {
 	c.once.Do(func() {
-		gc, ok := c.Conn.(*zgmtls.Conn)
+		gc, ok := c.Conn.(*gmtls.Conn)
 		if !ok {
 			return
 		}
