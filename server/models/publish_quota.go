@@ -27,22 +27,23 @@ const DailyPublishConfigKey = "daily_publish"
 
 // 发布内容类型（计入发文限额的维度）
 const (
-	PublishKindNovel   = "novel"
-	PublishKindChapter = "chapter"
-	PublishKindBlog    = "blog"
-	PublishKindThread  = "thread"
+	PublishKindNovel     = "novel"
+	PublishKindChapter   = "chapter"
+	PublishKindBlog      = "blog"
+	PublishKindThread    = "thread"
+	PublishKindGroupPost = "group_post" // 群组发帖（同样计入每日发文额度）
 )
 
 // DailyPublishRoleLimit 单个等级的每日限额
 type DailyPublishRoleLimit struct {
-	Count   int `json:"count"`   // 每日发布数量上限；-1=不限；0=禁止发布
+	Count   int `json:"count"`    // 每日发布数量上限；-1=不限；0=禁止发布
 	WordCap int `json:"word_cap"` // 每日发布总字数上限；<=0=不限字数
 }
 
 // DailyPublishConfig 每日发文限额总配置
 type DailyPublishConfig struct {
-	Enabled bool                              `json:"enabled"` // 总开关（默认 false）
-	Roles   map[string]DailyPublishRoleLimit  `json:"roles"`   // role → 限额
+	Enabled bool                             `json:"enabled"` // 总开关（默认 false）
+	Roles   map[string]DailyPublishRoleLimit `json:"roles"`   // role → 限额
 }
 
 // DefaultDailyPublishConfig 默认配置（关闭 + 保守的等级限额，一旦开启即有 sane 值）

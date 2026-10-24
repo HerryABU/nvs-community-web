@@ -18,7 +18,9 @@ import (
 	"nvs-server/config"
 	"nvs-server/crypto"
 	"nvs-server/gmcmd"
+	"nvs-server/groups"
 	"nvs-server/handlers"
+	grouphandler "nvs-server/handlers/group"
 	"nvs-server/middleware"
 	"nvs-server/models"
 	"nvs-server/security"
@@ -47,6 +49,7 @@ var knownSPARoots = map[string]bool{
 	"login": true, "novel": true, "plaza": true, "register": true,
 	"reports": true, "run": true, "settings": true, "setup": true,
 	"thread": true, "wasm": true, "pay": true,
+	"groups": true, "group": true,
 	// 以下根段此前遗漏，导致直接访问/刷新这些页面被 404（SPA 深链失效）
 	"about": true, "ai": true, "api-spider": true, "feed": true,
 	"me": true, "messages": true, "my-keys": true, "police-console": true,
@@ -250,6 +253,10 @@ func main() {
 		public.POST("/batch", security.RateLimit(30, 60), handlers.BatchHandler)
 		public.GET("/novels/:id/rating", handlers.GetNovelRating)
 		public.GET("/forums", handlers.ListForums)
+		// 群组（公开/半公开可浏览；私密仅成员）
+		public.GET("/groups", grouphandler.GroupList)
+		public.GET("/groups/:id", grouphandler.GroupDetail)
+		public.GET("/group-lookup", grouphandler.GroupSearchByNo) // 群号/邀请码预览（独立路径，避开 /groups/:id 通配）
 		public.GET("/forums/:id", handlers.GetForum)
 		public.GET("/novels/:id/forum", handlers.GetNovelForum)
 		public.GET("/threads/:id", handlers.GetThread)
@@ -456,6 +463,37 @@ func main() {
 		protected.POST("/threads/:id/posts", handlers.CreatePost)
 		protected.DELETE("/threads/:id", handlers.DeleteThreadByModerator)
 		protected.DELETE("/posts/:id", handlers.DeletePostByModerator)
+		// 群组：建群/改设置/解散/加入/按群号加入
+		protected.POST("/groups", grouphandler.GroupCreate)
+		protected.PUT("/groups/:id", grouphandler.GroupUpdate)
+		protected.DELETE("/groups/:id", grouphandler.GroupDissolve)
+		protected.POST("/groups/:id/join", grouphandler.GroupJoin)
+		protected.POST("/group-join", grouphandler.GroupJoinByNo) // 按群号/邀请码加入（独立路径避通配冲突）
+		// 群成员：拉人/审核/角色/禁言/踢退
+		protected.GET("/groups/:id/members", grouphandler.GroupMembers)
+		protected.POST("/groups/:id/invite", grouphandler.GroupInvite)
+		protected.POST("/groups/:id/requests/:uid", grouphandler.GroupMemberApprove)
+		protected.PUT("/groups/:id/members/:uid", grouphandler.GroupMemberSetRole)
+		protected.PUT("/groups/:id/members/:uid/mute", grouphandler.GroupMemberMute)
+		protected.DELETE("/groups/:id/members/:uid", grouphandler.GroupMemberRemove)
+		protected.GET("/groups/:id/invite-code", grouphandler.GroupInviteCode)
+		protected.PUT("/groups/:id/announcement", grouphandler.GroupAnnounce)
+		// 群内帖子/回复
+		protected.GET("/groups/:id/posts", grouphandler.GroupPostList)
+		protected.POST("/groups/:id/posts", grouphandler.GroupPostCreate)
+		protected.GET("/groups/:id/posts/:pid", grouphandler.GroupPostDetail)
+		protected.POST("/groups/:id/posts/:pid/review", grouphandler.GroupPostReview)
+		protected.DELETE("/groups/:id/posts/:pid", grouphandler.GroupPostDelete)
+		protected.GET("/groups/:id/posts/:pid/replies", grouphandler.GroupReplyList)
+		protected.POST("/groups/:id/posts/:pid/replies", grouphandler.GroupReplyCreate)
+		protected.DELETE("/groups/:id/posts/:pid/replies/:rid", grouphandler.GroupReplyDelete)
+		// 群文件（鉴权上传/下载，存储隔离在 data/groups）
+		protected.GET("/groups/:id/files", grouphandler.GroupFileList)
+		protected.POST("/groups/:id/files", grouphandler.GroupFileUpload)
+		protected.GET("/groups/:id/files/:fid/download", grouphandler.GroupFileDownload)
+		protected.DELETE("/groups/:id/files/:fid", grouphandler.GroupFileDelete)
+		// 群内 AI 可用性
+		protected.GET("/groups/:id/ai", grouphandler.AiStatus)
 		// 用户自建论坛
 		protected.POST("/forums", handlers.CreateUserForum)
 		protected.POST("/forums/enter-by-code", handlers.EnterForumByRoomCode) // 房间号进入不可见论坛
@@ -678,6 +716,14 @@ func main() {
 		admin.DELETE("/ratelimit/users/:id/quota", handlers.AdminDeleteUserAPIPolicy)
 		admin.POST("/ratelimit/users/:id/keys/ban", handlers.AdminBanUserAPIKeys)
 		admin.POST("/ratelimit/users/:id/keys/unban", handlers.AdminUnbanUserAPIKeys)
+		// 群组管理
+		admin.GET("/groups", grouphandler.AdminListGroups)
+		admin.POST("/groups/:id/ban", grouphandler.AdminBanGroup)
+		admin.DELETE("/groups/:id", grouphandler.AdminDeleteGroup)
+		// 群组额度：全局 + 按人（独立子树 /group-quota，避 /groups/:id 通配冲突）
+		admin.GET("/group-quota", grouphandler.AdminGetGroupQuota)
+		admin.PUT("/group-quota", grouphandler.AdminSetGroupQuota)
+		admin.PUT("/group-quota/users/:id", grouphandler.AdminSetUserGroupQuota)
 		// 论坛管理
 		admin.GET("/forums", handlers.AdminListForums)
 		admin.POST("/forums", handlers.AdminCreateForum)
@@ -1287,6 +1333,10 @@ func initDatabase() error {
 	log.Printf("[sms] 验证码存储后端: %s", utils.PhoneCodeBackend())
 
 	if err := models.AutoMigrateAll(models.DB); err != nil {
+		return err
+	}
+	// 群组模块（独立功能包）建表：紧随主迁移，避免 models 包反向依赖子包
+	if err := groups.Migrate(models.DB); err != nil {
 		return err
 	}
 	models.InitDefaultForums()

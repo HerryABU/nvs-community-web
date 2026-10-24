@@ -12,10 +12,11 @@ import (
 
 // AI 内容类型
 const (
-	AiMarkBlog    = "blog"
-	AiMarkChapter = "novel_chapter"
-	AiMarkForum   = "forum_post"
-	AiMarkComment = "comment"
+	AiMarkBlog      = "blog"
+	AiMarkChapter   = "novel_chapter"
+	AiMarkForum     = "forum_post"
+	AiMarkComment   = "comment"
+	AiMarkGroupPost = "group_post" // 群组帖子
 )
 
 // AiContentMark AI 辅助生成标记
