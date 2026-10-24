@@ -159,6 +159,48 @@ git ls-files -s .githooks           # mode 必须是 100755（Windows 上 chmod 
 git update-index --chmod=+x .githooks/pre-commit .githooks/commit-msg .githooks/pre-push
 ```
 
+### `pre-push` 报单测失败，但输出里全是 `ok`
+
+这是**输出被截断**的经典错觉：`go test ./...` 的失败行在列表中间，`tail` 只留了尾部。
+hook 已把完整日志落盘并在失败时高亮 `FAIL` / `--- FAIL` 行：
+
+```
+[pre-push] 单测失败（完整日志：/tmp/nvs-pretest-xxxx.log）
+  失败的包 / 用例：
+    FAIL    nvs-server/handlers    12.3s
+    --- FAIL: TestXxx (0.01s)
+```
+
+排查顺序：
+
+```bash
+cd server && go test ./<包>/ -run <用例> -v     # 单跑失败用例
+for i in 1 2 3; do go test ./... -count=1; done  # 确认是否偶发
+```
+
+> 实测在 Windows 本地全量测试偶发过一次失败（连续 4 次重跑均通过），属环境性抖动
+> （并行包 + 临时目录/端口竞争）。**CI（Linux 干净环境）才是权威判定**；
+> 本地偶发时先重跑确认，别急着改代码。
+
+### 不推送也想验证 workflow
+
+```bash
+# nektos/act：用 Docker 本地跑 GitHub Actions
+act -j backend          # 只跑后端 job
+act -j embed-smoke      # 跑"拼单 exe + 真启动"冒烟
+act -l                  # 列出所有 job
+```
+
+注意 `act` 的镜像与 GitHub 托管 runner 不完全一致（尤其是 `ubuntu-latest` 的预装软件），
+它适合验证「YAML 语法 + 脚本逻辑」，不适合替代真实 CI。
+
+### 自动构建没触发
+
+- `ci.yml` 只在 `v3` / `main` / `master` 三条分支上 push 时触发，或 PR、手动 `Run workflow`
+- `release.yml` 只认 **tag push**（`v*`），普通提交不会发布
+- 若 tag 推上去了但 Release 失败，先看是不是版本校验没过：`tag ≠ version.go` 会直接 fail
+  （这是有意设计，防止发出"版本号对不上"的包）
+
 ### `bad interpreter: /usr/bin/env bash^M`
 
 行尾被 CRLF 污染。仓库根 `.gitattributes` 已声明 `.githooks/* text eol=lf`，

@@ -78,6 +78,9 @@ ls -l .githooks/pre-commit          # 需可执行（Windows 下看 git ls-files
 git ls-files -s .githooks           # mode 必须是 100755，否则 Linux/macOS 上直接不执行
 ```
 
+`pre-push` 报单测失败但满屏 `ok`：那是输出被截断，失败行在中间。hook 会把完整日志
+落盘并高亮失败包（路径会打印出来），先看日志再改代码；Windows 本地偶发抖动时先 `for i in 1 2 3; do go test ./... -count=1; done` 确认。
+
 Windows 上如果 hook 报 `bad interpreter`，是行尾被改成 CRLF 了：
 
 ```bash

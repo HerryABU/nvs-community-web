@@ -59,8 +59,16 @@ if [ "${SKIP_TESTS:-}" = "1" ]; then
   echo "[pre-push] SKIP_TESTS=1，跳过单测"
 else
   step "3/3 go test ./... -count=1"
-  if ! (cd server && go test ./... -count=1); then
-    red "[pre-push] 单测失败"
+  # 完整输出落日志：失败时只 tail 会给不出"哪个包挂了"，而 go test 的失败原因是排查的全部线索。
+  # 注意 pipefail 已在文件头开启，但仍用 PIPESTATUS 取 go 的退出码（tee 自己永远成功）。
+  log=$(mktemp -t nvs-pretest-XXXXXX.log 2>/dev/null || echo "/tmp/nvs-pretest.log")
+  (cd server && go test ./... -count=1) 2>&1 | tee "$log"
+  rc=${PIPESTATUS[0]}
+  if [ "${rc:-1}" -ne 0 ]; then
+    red "[pre-push] 单测失败（完整日志：$log）"
+    echo "  失败的包 / 用例："
+    grep -E '^(FAIL|--- FAIL|ok\s+\S+\s+\[build failed\])' "$log" | head -20 | sed 's/^/    /'
+    echo "  只跑某个包：cd server && go test ./<包>/ -run <用例> -v"
     echo "  只修文档时可用 SKIP_TESTS=1 git push"
     exit 1
   fi
