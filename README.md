@@ -473,6 +473,27 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.11.0 多人协作 + 话本气泡体 + 章节版本控制（2026-10-24）
+
+**多人协作写作（规则先定：`docs/novel-collaboration.md`）**
+- 角色：主笔（唯一）/ 协作作者 / 编辑 / 审稿；细粒度能力 `can_publish` / `can_review` / `can_edit_others`
+- 邀请需对方接受才生效（pending 不授予任何权限）；收益分成用万分比登记（主笔拿剩余），署名顺序主笔固定第一
+- 章节状态机 `draft → pending → published / rejected` + 撤回；未发布章节仅创作成员可见，章节按 `author_id` 署名
+- 后端 `server/collab` + `server/handlers/collab`；前端：作品卡片「协作」面板、`/collab`「我的协作」、编辑器工作流条
+- 所有协作变更落 `novel_collab_audits`（append-only）
+
+**话本气泡体（script mode，`docs/novel-script-mode.md`）**
+- 作品新增叙事形态 `prose` / `script`；话本正文按「角色：台词」逐行解析为气泡，同角色连句合并、左右分侧
+- 【场景】为舞台提示、其余为旁白；解析与渲染在服务端完成（`server/scriptmode`），全部转义输出
+- 阅读器默认气泡视图可切「原文」；编辑器提供「气泡预览」抽屉；`POST /api/script-preview` 实时预览
+
+**章节版本控制（git 语义，`docs/novel-version-control.md`）**
+- 每次保存 = 一次提交（快照落作品目录 `.versions/{章}/{分支}/{版本}.md`，DB 只存元数据 + 哈希）
+- 保存携带 `base_version`，落后于服务端 head 即返回 409 冲突现场（base / server / mine），前端并排对比后
+  选择「以我的为准」（force，仍生成新版本留痕）或「放弃修改重载」
+- 分支与三方合并：以分叉点为 base 做行级三方合并，同处冲突不写库、回传三段内容由作者确认
+- 历史：版本时间线、并排 diff、回滚（再提交不抹历史）、删除快照（只清正文，元数据保留，禁删 head）
+
 ### v3.10.0 群组实时消息 + 模板上下文自动注入（2026-10-24）
 
 **群组 G4：实时消息（SSE）**
