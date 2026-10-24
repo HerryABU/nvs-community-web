@@ -1,7 +1,7 @@
 <template>
   <div class="ai-hub" :class="{ 'ai-hub-immersive': immersive }">
     <!-- ===== 左侧栏：新建 / 智能体 / 历史会话 ===== -->
-    <aside class="ai-hub-side" :class="{ 'ai-hub-side-open': mobileSideOpen }">
+    <aside v-if="showSide" class="ai-hub-side" :class="{ 'ai-hub-side-open': mobileSideOpen }">
       <div class="ai-hub-side-head">
         <el-button type="primary" class="ai-hub-new" @click="newChat">
           <el-icon><Plus /></el-icon> 新建对话
@@ -61,26 +61,23 @@
     <!-- ===== 主区 ===== -->
     <main class="ai-hub-main">
       <div class="ai-hub-topbar">
-        <el-button class="ai-hub-menu-btn" text @click="mobileSideOpen = true">
+        <el-button v-if="showSide" class="ai-hub-menu-btn" text @click="mobileSideOpen = true">
           <el-icon><Menu /></el-icon>
         </el-button>
-        <el-radio-group v-model="activeTab" size="small">
-          <el-radio-button value="chat"><el-icon><ChatDotRound /></el-icon> 对话</el-radio-button>
-          <el-radio-button value="image"><el-icon><Picture /></el-icon> 绘画</el-radio-button>
-          <el-radio-button value="video"><el-icon><VideoCamera /></el-icon> 视频</el-radio-button>
-          <el-radio-button value="gallery"><el-icon><Star /></el-icon> 灵感广场</el-radio-button>
-          <el-radio-button value="mind"><el-icon><Share /></el-icon> 思维导图</el-radio-button>
-        </el-radio-group>
-        <span v-if="activeTab === 'chat' && activeSession" class="ai-hub-current">
-          {{ activeSession.agent_name || 'AI 对话' }}
-        </span>
-        <el-button
-          v-if="activeTab === 'gallery'"
-          size="small"
-          text
-          type="primary"
-          @click="$router.push('/ai/gallery')"
-        >独立页 ↗</el-button>
+
+        <!-- 入口式导航下，面板是"二级页"，必须有一眼可见的返回 -->
+        <el-button v-if="activeTab !== 'home'" text class="ai-hub-back" @click="goHome">
+          <el-icon><ArrowLeft /></el-icon> 工作台
+        </el-button>
+
+        <span class="ai-hub-current">{{ currentTitle }}</span>
+
+        <el-button v-if="activeTab === 'gallery'" size="small" text type="primary" @click="$router.push('/ai/gallery')">
+          独立页 ↗
+        </el-button>
+        <el-button v-if="activeTab === 'chat'" size="small" text @click="newChat">
+          <el-icon><Plus /></el-icon> 新建对话
+        </el-button>
         <el-tooltip :content="immersive ? '退出沉浸模式（Esc）' : '沉浸模式：隐藏侧栏与顶栏'" placement="bottom">
           <el-button size="small" text class="ai-hub-immersive-btn" @click="toggleImmersive">
             <el-icon><FullScreen /></el-icon>
@@ -88,30 +85,130 @@
         </el-tooltip>
       </div>
 
-      <!-- 未开启引导 -->
-      <div v-if="!loading && !status.ai_enabled" class="ai-hub-blocked">
-        <el-empty description="站长暂未开启 AI 功能">
-          <template #description>
-            <p>AI 工作台包含对话、绘画、视频与智能体能力，开启后即可使用。</p>
-          </template>
-        </el-empty>
+      <!-- ===== 首屏门户：永远可见 =====
+           即使 AI 未开启也要让用户看到"这里能干什么"。
+           之前整页只有一个「站长暂未开启 AI 功能」的空态，连入口控件都没有。 -->
+      <AiHomePanel
+        v-if="activeTab === 'home'"
+        :status="status"
+        :agents="agents"
+        :sessions="sessions"
+        :is-admin="isAdmin"
+        @navigate="onNavigate"
+        @open-session="openSession"
+        @admin="onAdminJump"
+      />
+
+      <!-- 模型 / 智能体 / 灵感广场不依赖总开关：没开启时也能先看有什么 -->
+      <AiModelSquare
+        v-else-if="activeTab === 'models'"
+        :status="status"
+        :is-admin="isAdmin"
+        @use="onUseModel"
+      />
+      <AiAgentsPanel
+        v-else-if="activeTab === 'agents'"
+        :agents="agents"
+        :is-admin="isAdmin"
+        @start="onStartAgent"
+      />
+      <AiGalleryPanel v-else-if="activeTab === 'gallery'" @remix="onRemix" />
+
+      <!-- ===== 需要 AI 已开启的面板：给可操作引导 ===== -->
+      <div v-else-if="!loading && !status.ai_enabled" class="ai-hub-blocked">
+        <div class="ai-guide-card">
+          <div class="ai-guide-emoji">🤖</div>
+          <h2 class="ai-guide-title">这项功能需要先开启 AI</h2>
+          <p class="ai-guide-desc">
+            <template v-if="isAdmin">
+              AI 是<strong>默认关闭</strong>的增值能力 —— 这不是故障。按下面三步配置，几分钟就能用起来。
+            </template>
+            <template v-else>
+              站长还没有开放 AI 功能。你可以先去看看灵感广场里的作品，或者联系站长开通。
+            </template>
+          </p>
+
+          <ol v-if="isAdmin" class="ai-guide-steps">
+            <li>
+              <span class="ai-guide-num">1</span>
+              <div>
+                <b>打开总开关</b>
+                <p>在「AI 功能配置」里启用 AI，并决定是否发放每日免费额度。</p>
+              </div>
+            </li>
+            <li>
+              <span class="ai-guide-num">2</span>
+              <div>
+                <b>添加至少一个模型</b>
+                <p>在「AI 模型池」用预设一键创建（DeepSeek / 通义千问 / 豆包 / GPT 等），再补上上游密钥。</p>
+              </div>
+            </li>
+            <li>
+              <span class="ai-guide-num">3</span>
+              <div>
+                <b>回来试一句</b>
+                <p>对话、绘画、视频分别独立开关；只开对话也能先用起来。</p>
+              </div>
+            </li>
+          </ol>
+
+          <div class="ai-guide-actions">
+            <template v-if="isAdmin">
+              <el-button type="primary" size="large" @click="$router.push('/admin/ai-features')">
+                去开启 AI
+              </el-button>
+              <el-button size="large" @click="$router.push('/admin/ai-pool')">配置模型池</el-button>
+            </template>
+            <template v-else>
+              <el-button type="primary" size="large" @click="$router.push('/ai/gallery')">
+                看看灵感广场
+              </el-button>
+            </template>
+            <el-button text size="large" @click="goHome">返回工作台</el-button>
+          </div>
+        </div>
       </div>
+
+      <!-- 已开启但没有任何模型：同样给可执行的下一步，而不是干说「暂无可用模型」 -->
       <div v-else-if="!loading && noModels" class="ai-hub-blocked">
-        <el-empty description="暂无可用模型">
-          <template #description>
-            <p>站长尚未在「AI 模型池」中配置启用的模型。</p>
-          </template>
-        </el-empty>
+        <div class="ai-guide-card">
+          <div class="ai-guide-emoji">🧩</div>
+          <h2 class="ai-guide-title">AI 已开启，但还没有可用模型</h2>
+          <p class="ai-guide-desc">
+            <template v-if="isAdmin">
+              功能开关是开的，但「AI 模型池」里没有<strong>已启用</strong>的模型。
+              模型池支持预设一键创建，填完密钥后把「启用」打开即可。
+            </template>
+            <template v-else>
+              站长开启 AI 了，但还没配置可用模型。可以先逛逛灵感广场，稍后再来。
+            </template>
+          </p>
+          <div class="ai-guide-actions">
+            <template v-if="isAdmin">
+              <el-button type="primary" size="large" @click="$router.push('/admin/ai-pool')">
+                去配置模型
+              </el-button>
+              <el-button size="large" @click="$router.push('/admin/ai-features')">查看功能配置</el-button>
+            </template>
+            <template v-else>
+              <el-button type="primary" size="large" @click="$router.push('/ai/gallery')">
+                看看灵感广场
+              </el-button>
+            </template>
+            <el-button text size="large" @click="goHome">返回工作台</el-button>
+          </div>
+        </div>
       </div>
 
       <template v-else>
         <AiChatPanel
           v-if="activeTab === 'chat'"
-          :key="'chat-' + (activeSessionId || 'new-' + activeAgentId)"
+          :key="'chat-' + (activeSessionId || 'new-' + activeAgentId) + '-' + presetModelId"
           :status="status"
           :agents="agents"
           :session-id="activeSessionId"
           :agent-id="activeAgentId"
+          :preset-model-id="presetModelId"
           @session-created="onSessionCreated"
           @balance-updated="onBalanceUpdated"
           @sessions-changed="loadSessions"
@@ -122,7 +219,6 @@
           :initial-prompt="remixPrompt"
         />
         <AiVideoPanel v-else-if="activeTab === 'video'" :status="status" />
-        <AiGalleryPanel v-else-if="activeTab === 'gallery'" @remix="onRemix" />
         <MindMapPanel v-else :status="status" />
       </template>
     </main>
@@ -150,11 +246,15 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Close, Delete, Menu, ChatDotRound, Picture, VideoCamera, EditPen, Share, Star, FullScreen } from '@element-plus/icons-vue';
+import { Plus, Close, Delete, Menu, EditPen, Share, ArrowLeft, FullScreen } from '@element-plus/icons-vue';
 import { aiHubApi, type AiHubStatus, type AiAgent, type AiChatSession } from '@/api/aiHub';
+import { useAuthStore } from '@/stores/auth';
 import { appPrefix } from '@/utils/prefix';
+import AiHomePanel from '@/components/ai/AiHomePanel.vue';
+import AiModelSquare from '@/components/ai/AiModelSquare.vue';
+import AiAgentsPanel from '@/components/ai/AiAgentsPanel.vue';
 import AiChatPanel from '@/components/ai/AiChatPanel.vue';
 import AiImagePanel from '@/components/ai/AiImagePanel.vue';
 import AiVideoPanel from '@/components/ai/AiVideoPanel.vue';
@@ -162,6 +262,10 @@ import AiGalleryPanel from '@/components/ai/AiGalleryPanel.vue';
 import MindMapPanel from '@/components/ai/MindMapPanel.vue';
 
 const route = useRoute();
+const router = useRouter();
+const authStore = useAuthStore();
+/** 未就绪态的文案与按钮按角色分流：管理员看到的是「怎么开」，普通用户看到的是「找谁开」 */
+const isAdmin = computed(() => authStore.user?.role === 'admin');
 const status = reactive<AiHubStatus>({
   ai_enabled: false,
   token_enabled: true,
@@ -176,12 +280,37 @@ const agents = ref<AiAgent[]>([]);
 const sessions = ref<AiChatSession[]>([]);
 const activeSessionId = ref<number | null>(null);
 const activeAgentId = ref(0);
-const activeTab = ref<'chat' | 'image' | 'video' | 'gallery' | 'mind'>('chat');
+/** 从「大模型广场」点某个模型进来时，把它带给对话面板预选 */
+const presetModelId = ref(0);
+
+type HubTab = 'home' | 'chat' | 'models' | 'image' | 'video' | 'gallery' | 'agents' | 'mind';
+// 默认落在门户：入口式布局下，用户先看"能干什么"，再决定进哪个面板
+const activeTab = ref<HubTab>('home');
 const remixPrompt = ref('');
 const mobileSideOpen = ref(false);
 const loading = ref(true);
 
 const activeSession = computed(() => sessions.value.find((s) => s.id === activeSessionId.value) || null);
+
+/** 侧栏（智能体 + 历史会话）只在对话面板需要，其它面板留出整幅宽度 */
+const showSide = computed(() => activeTab.value === 'chat');
+
+const TAB_TITLES: Record<HubTab, string> = {
+  home: 'AI 工作台',
+  chat: 'AI 对话',
+  models: '大模型广场',
+  image: '专业绘画',
+  video: '视频创作',
+  gallery: '灵感广场',
+  agents: 'AI 智能体',
+  mind: '思维导图',
+};
+const currentTitle = computed(() => {
+  if (activeTab.value === 'chat' && activeSession.value) {
+    return activeSession.value.agent_name || TAB_TITLES.chat;
+  }
+  return TAB_TITLES[activeTab.value];
+});
 
 // 智能体按分类分组（空分类归「通用」）
 const agentGroups = computed(() => {
@@ -245,6 +374,48 @@ function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && immersive.value) {
     toggleImmersive();
   }
+}
+
+function goHome() {
+  activeTab.value = 'home';
+  mobileSideOpen.value = false;
+}
+
+/** 门户卡片跳转：会员与额度不在 Hub 内，需要出站到钱包 */
+function onNavigate(tab: string) {
+  mobileSideOpen.value = false;
+  if (tab === 'membership') {
+    router.push('/wallet');
+    return;
+  }
+  activeTab.value = tab as HubTab;
+}
+
+/** 未开启态里的「去开启 / 配模型」：直接进后台对应页 */
+function onAdminJump(to: 'features' | 'pool') {
+  router.push(to === 'features' ? '/admin/ai-features' : '/admin/ai-pool');
+}
+
+/** 模型广场点「开始对话」：带上模型预选，新开一个会话 */
+function onUseModel(payload: { kind: 'chat' | 'image' | 'video'; modelId: number }) {
+  if (payload.kind === 'chat') {
+    presetModelId.value = payload.modelId;
+    activeSessionId.value = null;
+    activeAgentId.value = 0;
+    activeTab.value = 'chat';
+    return;
+  }
+  // 绘画 / 视频面板自带模型选择，切过去即可（模型池顺序里第一个仍是默认）
+  activeTab.value = payload.kind === 'image' ? 'image' : 'video';
+}
+
+/** 智能体卡片：像从侧栏选智能体一样，新开对话 */
+function onStartAgent(a: AiAgent) {
+  presetModelId.value = 0;
+  activeSessionId.value = null;
+  activeAgentId.value = a.id;
+  activeTab.value = 'chat';
+  mobileSideOpen.value = false;
 }
 
 function newChat() {
@@ -381,7 +552,8 @@ onMounted(() => {
   loadSessions();
   // 深链：/ai?tab=image&prompt=xxx
   const tab = String(route.query.tab || '');
-  if (tab === 'image' || tab === 'video' || tab === 'gallery' || tab === 'mind') activeTab.value = tab;
+  const validTabs: HubTab[] = ['home', 'chat', 'models', 'image', 'video', 'gallery', 'agents', 'mind'];
+  if (validTabs.includes(tab as HubTab)) activeTab.value = tab as HubTab;
   const p = String(route.query.prompt || '');
   if (p) remixPrompt.value = p;
 });
@@ -457,7 +629,79 @@ onUnmounted(() => {
 .ai-hub.ai-hub-immersive .ai-hub-side { display: none; }
 .ai-hub.ai-hub-immersive .ai-hub-menu-btn { display: none; }
 .ai-hub.ai-hub-immersive .ai-hub-topbar { padding: 8px 12px; }
-.ai-hub-blocked { flex: 1; display: flex; align-items: center; justify-content: center; }
+.ai-hub-blocked { flex: 1; display: flex; align-items: center; justify-content: center; padding: var(--space-6, 32px); overflow-y: auto; }
+
+/* ===== 未就绪引导卡片 =====
+   刻意不用 el-empty：空状态图标 + 一句话既说不清"为什么空"，也给不出下一步。 */
+.ai-guide-card {
+  max-width: 620px;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.06));
+  padding: var(--space-6, 32px);
+  text-align: center;
+}
+.ai-guide-emoji { font-size: 44px; line-height: 1; margin-bottom: var(--space-3, 12px); }
+.ai-guide-title {
+  margin: 0 0 var(--space-2, 8px);
+  font-size: var(--text-xl, 20px);
+  font-weight: 600;
+  color: var(--text-color, #1f2328);
+}
+.ai-guide-desc {
+  margin: 0;
+  font-size: var(--text-base, 14px);
+  line-height: 1.7;
+  color: var(--text-light, #6b7280);
+}
+.ai-guide-steps {
+  list-style: none;
+  margin: var(--space-5, 24px) 0 0;
+  padding: 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+}
+.ai-guide-steps li {
+  display: flex;
+  gap: var(--space-3, 12px);
+  padding: var(--space-3, 12px);
+  border-radius: var(--radius-md, 10px);
+  background: var(--bg-page, #f7f8fa);
+}
+.ai-guide-num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs, 12px);
+  font-weight: 600;
+  color: #fff;
+  background: var(--gradient-primary, linear-gradient(135deg, #6366f1, #8b5cf6));
+}
+.ai-guide-steps b { font-size: var(--text-base, 14px); color: var(--text-color, #1f2328); }
+.ai-guide-steps p {
+  margin: 2px 0 0;
+  font-size: var(--text-sm, 13px);
+  line-height: 1.6;
+  color: var(--text-light, #6b7280);
+}
+.ai-guide-actions {
+  margin-top: var(--space-5, 24px);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3, 12px);
+  justify-content: center;
+}
+
+[data-theme="dark"] .ai-guide-card { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .ai-guide-title { color: #e2e8f0; }
+[data-theme="dark"] .ai-guide-steps li { background: #0f172a; }
 
 /* ===== 窄屏：侧栏抽屉化 ===== */
 @media (max-width: 860px) {

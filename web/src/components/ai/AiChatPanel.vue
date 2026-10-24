@@ -116,6 +116,8 @@ const props = defineProps<{
   agents: AiAgent[];
   sessionId: number | null;
   agentId: number;
+  /** 从「大模型广场」带入的模型 id（0 = 用默认第一个） */
+  presetModelId?: number;
 }>();
 const emit = defineEmits<{
   (e: 'session-created', id: number): void;
@@ -163,7 +165,13 @@ function onPickPrompt(content: string) {
 watch(
   () => props.status.chat_models,
   (list) => {
-    if (!modelId.value && list.length) modelId.value = (filteredModels.value[0] || list[0]).id;
+    if (!list.length) return;
+    // 广场带入的模型优先（用户是从模型卡片点进来的，不要给他换成默认第一个）；下架则回落默认
+    if (props.presetModelId && list.some((m) => m.id === props.presetModelId)) {
+      if (modelId.value !== props.presetModelId) modelId.value = props.presetModelId;
+      return;
+    }
+    if (!modelId.value) modelId.value = (filteredModels.value[0] || list[0]).id;
   },
   { immediate: true },
 );

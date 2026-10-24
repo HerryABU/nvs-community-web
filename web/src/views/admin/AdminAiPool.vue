@@ -66,7 +66,42 @@
           <span class="muted small">共 {{ models.length }} 个模型（启用 {{ enabledCount }} 个）</span>
           <el-button type="primary" :icon="Plus" @click="openCreate">添加模型</el-button>
         </div>
-        <el-table :data="models" v-loading="loading" style="width:100%">
+
+        <!-- 空态：直接给可点的预设卡片。
+             原来只有一行「暂无模型，点击右上角添加」，而"添加模型"弹窗里有 11 个字段要填
+             （上游地址 / 模型标识 / API 协议 / 三档价格…）—— 多数站长在这里就放弃了，
+             这也是「AI 开了但啥也没有」最常见的原因。 -->
+        <div v-if="!loading && models.length === 0" class="pool-empty">
+          <p class="pool-empty-tip">
+            还没有模型。选一个预设<strong>一键创建</strong>，创建后到「密钥池」补上游密钥即可使用：
+          </p>
+          <div class="pool-preset-grid">
+            <button
+              v-for="p in quickPresets"
+              :key="p.key"
+              type="button"
+              class="pool-preset"
+              :disabled="quickAdding === p.key"
+              @click="quickAdd(p)"
+            >
+              <span class="pool-preset-name">{{ p.name }}</span>
+              <span class="pool-preset-meta">
+                <el-tag size="small" :type="kindTag(p.kind)">{{ kindLabel(p.kind) }}</el-tag>
+                <span v-if="p.vendor" class="pool-preset-vendor">{{ p.vendor }}</span>
+              </span>
+              <span class="pool-preset-price">
+                {{ p.kind === 'chat' ? '按 tokens 计费' : `${p.price_call || 0} 代币 / 次` }}
+              </span>
+              <span v-if="!p.base_url" class="pool-preset-warn">需填中转地址</span>
+              <span v-else class="pool-preset-ready">✓ 可一键创建</span>
+            </button>
+          </div>
+          <div class="pool-empty-foot">
+            <el-button text type="primary" @click="openCreate">手工添加（自定义上游）</el-button>
+          </div>
+        </div>
+
+        <el-table v-else :data="models" v-loading="loading" style="width:100%">
           <el-table-column prop="name" label="展示名" min-width="110" show-overflow-tooltip />
           <el-table-column label="类型" width="80">
             <template #default="{ row }">
@@ -475,6 +510,61 @@ function applyPreset(key: string) {
   if (p.price_call) form.price_call = p.price_call;
   form.note = p.note;
   presetNote.value = `${p.note}${p.base_url ? '' : '（该厂商无统一公共端点，请填你自己中转的地址）'}`;
+}
+
+// ---------- 空态「一键创建」----------
+// 只展示 8 个，并且把「开箱可用」（base_url 非空）的排前面：
+// MJ / Kling / Sora 这类没有统一公共端点，必须填中转地址，直接创建会得到一个连不上的模型。
+const quickPresets = computed(() => {
+  const kindOrder = ['chat', 'image', 'video'];
+  return [...presets.value]
+    .sort((a, b) => {
+      const ua = a.base_url ? 0 : 1;
+      const ub = b.base_url ? 0 : 1;
+      if (ua !== ub) return ua - ub;
+      return kindOrder.indexOf(a.kind) - kindOrder.indexOf(b.kind);
+    })
+    .slice(0, 8);
+});
+const quickAdding = ref('');
+
+async function quickAdd(p: AiModelPreset) {
+  // base_url 空 → 不能直接落地，改为打开弹窗并预填，让站长补自己的中转地址
+  if (!p.base_url) {
+    openCreate();
+    presetKey.value = p.key;
+    applyPreset(p.key);
+    ElMessage.info('该厂商没有统一公共端点，请填写你自己的中转地址');
+    return;
+  }
+  quickAdding.value = p.key;
+  try {
+    const res = await aiApi.createModel({
+      name: p.name,
+      kind: p.kind,
+      model_id: p.model_id,
+      base_url: p.base_url,
+      price_in: 0,
+      price_out: 0,
+      price_call: p.price_call || 0,
+      max_tokens: 2048,
+      temperature: 0.7,
+      priority: 0,
+      enabled: true,
+      api_kind: p.api_kind,
+      provider_hint: p.provider_hint || '',
+      vendor: p.vendor || '',
+      note: p.note || '',
+    });
+    if (res.data.code === 0) {
+      // 明确说清"还没完"：少了密钥，用户侧仍然调不通，是最容易卡住的一步
+      ElMessage.success(`已添加「${p.name}」，下一步：点该行「密钥池」填入上游密钥`);
+      await loadModels();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '添加失败');
+  }
+  quickAdding.value = '';
 }
 
 function apiKindHint(k: string) {
