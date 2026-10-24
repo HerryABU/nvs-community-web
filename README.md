@@ -473,6 +473,25 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.12.0 话本增强（表情/图片/章节级混排/AI 模板） + 版本控制 git 后端（2026-10-24）
+
+**话本气泡体增强（`docs/novel-script-mode.md` v2）**
+- 气泡内表情：行内 `[笑]` 等标记渲染为表情字符（内置约 40 个词），只在已转义文本上替换；
+  编辑器预览可点击插入
+- 气泡内图片：整行 `![说明](地址)` 渲染为图片气泡，URL 白名单（http/https/站内相对），
+  `javascript:` / `data:` / `file:` 一律拒绝，非法地址降级提示而不拼进 `src`
+- 章节级混排：`chapters.mode`（继承作品 / 散文 / 话本 / 混排），`mixed` 下连续非对话行
+  聚成散文块走 Markdown，与对话气泡同章共存；阅读器按「章节形态优先」渲染
+- 话本专用 AI 模板：新增场景 `novel_script`，内置话本续写、台词口吻校准、场景提示生成、
+  对话去水检查 4 个模板；编辑器在话本形态下自动切换场景
+
+**章节版本控制：真实 git 仓库后端（`docs/novel-version-control.md` §8）**
+- `chaptervcs.Backend` 抽象：默认自研版本链（零依赖），可选真实 git 仓库（go-git）
+- git 后端：`make build-gitvcs`（`-tags gitvcs`）+ 运行时 `NVS_VCS_BACKEND=git`；
+  仓库在 `作品目录/.vcsrepo`，分支 `ch{章}/{分支名}`，提交即版本
+- 冲突检测 / 三方合并 / 回滚在两个后端上语义一致；差异：git 历史不可删除，引导用回滚
+- 未带标签构建不引入 go-git 依赖；后端不可用时自动回落自研版本链，不阻断启动
+
 ### v3.11.0 多人协作 + 话本气泡体 + 章节版本控制（2026-10-24）
 
 **多人协作写作（规则先定：`docs/novel-collaboration.md`）**
