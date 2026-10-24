@@ -25,9 +25,11 @@ import (
 	chaptervcshandler "nvs-server/handlers/chaptervcs"
 	collabhandler "nvs-server/handlers/collab"
 	grouphandler "nvs-server/handlers/group"
+	ochandler "nvs-server/handlers/oc"
 	prompthandler "nvs-server/handlers/prompts"
 	"nvs-server/middleware"
 	"nvs-server/models"
+	"nvs-server/oc"
 	"nvs-server/prompttpl"
 	"nvs-server/security"
 	"nvs-server/security/sms"
@@ -469,6 +471,36 @@ func main() {
 		protected.POST("/collab/:novelId/leave", collabhandler.Leave)
 		// 话本气泡体预览（不可挂 /novels 下，与 /novels/:id 通配段冲突）
 		protected.POST("/script-preview", handlers.ScriptPreview)
+		// ===== OC 模式（docs/oc-mode.md）=====
+		// 角色卡 / 世界书（不挂 /groups 下，避免与 /groups/:id 通配冲突）
+		protected.GET("/oc/characters", ochandler.ListCharacters)
+		protected.POST("/oc/characters", ochandler.CreateCharacter)
+		protected.GET("/oc/characters/:cid", ochandler.GetCharacter)
+		protected.PUT("/oc/characters/:cid", ochandler.UpdateCharacter)
+		protected.DELETE("/oc/characters/:cid", ochandler.DeleteCharacter)
+		protected.GET("/oc/books", ochandler.ListBooks)
+		protected.POST("/oc/books", ochandler.CreateBook)
+		protected.GET("/oc/books/:bid", ochandler.GetBook)
+		protected.PUT("/oc/books/:bid", ochandler.UpdateBook)
+		protected.DELETE("/oc/books/:bid", ochandler.DeleteBook)
+		protected.POST("/oc/books/:bid/entries", ochandler.SaveEntry)
+		protected.DELETE("/oc/books/:bid/entries/:eid", ochandler.DeleteEntry)
+		// 群级配置 / AI 角色 / 对话流
+		protected.GET("/groups/:id/oc", ochandler.GetSetting)
+		protected.PUT("/groups/:id/oc", ochandler.SaveSetting)
+		protected.POST("/groups/:id/oc/agents", ochandler.AddAgent)
+		protected.PUT("/groups/:id/oc/agents/:aid", ochandler.UpdateAgent)
+		protected.DELETE("/groups/:id/oc/agents/:aid", ochandler.RemoveAgent)
+		protected.GET("/groups/:id/oc/flows", ochandler.ListFlows)
+		protected.POST("/groups/:id/oc/flows", ochandler.CreateFlow)
+		protected.GET("/oc/flows/:fid/turns", ochandler.ListTurns)
+		protected.POST("/oc/flows/:fid/turns", ochandler.HumanTurn)
+		protected.POST("/oc/flows/:fid/step", ochandler.StepFlow)
+		protected.POST("/oc/flows/:fid/status", ochandler.SetFlowStatus)
+		protected.POST("/oc/flows/:fid/audit", ochandler.AuditFlow)
+		protected.GET("/oc/flows/:fid/windows", ochandler.Windows)
+		protected.GET("/oc/flows/:fid/report", ochandler.Report)
+		protected.POST("/oc/flows/:fid/publish", ochandler.Publish)
 		// 章节版本控制：历史 / 分支 / 合并（docs/novel-version-control.md）
 		protected.GET("/novels/:id/chapters/:num/versions", chaptervcshandler.ListVersions)
 		protected.GET("/novels/:id/chapters/:num/versions/:ver", chaptervcshandler.GetVersion)
@@ -1401,6 +1433,10 @@ func initDatabase() error {
 	}
 	// 章节版本控制（独立功能包）：提交历史 + 分支指针
 	if err := chaptervcs.Migrate(models.DB); err != nil {
+		return err
+	}
+	// OC 模式（独立功能包）：角色卡 / 世界书 / 群内 AI 角色 / 对话流 / 审核窗口 / 预算
+	if err := oc.Migrate(models.DB); err != nil {
 		return err
 	}
 	// 版本控制后端选择：NVS_VCS_BACKEND=git 时启用真实 git 仓库（需 -tags gitvcs 构建），

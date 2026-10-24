@@ -216,6 +216,8 @@ type Chapter struct {
 	Status           string         `gorm:"size:32;default:published;index" json:"status"`  // draft/pending/published/rejected
 	// Mode 本章叙事形态：空=继承作品 / prose 散文体 / script 话本气泡体 / mixed 散文与话本混排
 	Mode string `gorm:"size:8;default:''" json:"mode"`
+	// SourceFlowID 来源追溯：由 OC 群组对话流一键发布而来（0 = 非 OC 来源）
+	SourceFlowID uint `gorm:"not null;default:0;index" json:"source_flow_id"`
 	AuthorID         uint           `gorm:"not null;default:0;index" json:"author_id"`      // 本章作者（多人协作署名）
 	ReviewNote       string         `gorm:"size:256;default:''" json:"review_note"`         // 驳回/审核意见
 	BanReason        string         `gorm:"type:text" json:"ban_reason"`                    // 176号令封禁原因（封禁时写入）
