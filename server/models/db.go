@@ -12,6 +12,7 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
+	"nvs-server/config"
 	"nvs-server/utils"
 )
 
@@ -109,7 +110,13 @@ func BuildDialector(cfg DBConfig) (gorm.Dialector, error) {
 	case "sqlite":
 		path := cfg.Path
 		if path == "" {
-			path = "data/nvs.db"
+			// 优先用 DB_PATH（容器挂载卷 / 自定义目录），否则回落默认。
+			// 原来这里硬编码 data/nvs.db，导致设了 DB_PATH 的部署在建站向导阶段
+			// 仍把库写进工作目录 —— 容器重启即丢数据，且与运行时连接的库不是同一个。
+			path = config.DBPath
+			if path == "" {
+				path = "data/nvs.db"
+			}
 		}
 		// _pragma=foreign_keys(1)：每个新连接自动启用外键约束（数据一致性保障）
 		// _pragma=busy_timeout(5000)：写锁等待 5s，避免并发写 SQLite 直接报 database is locked
@@ -132,10 +139,13 @@ func OpenDB(cfg DBConfig) (*gorm.DB, error) {
 		return nil, err
 	}
 	if cfg.Driver == "sqlite" {
-		// 确保 sqlite 文件父目录存在
+		// 确保 sqlite 文件父目录存在（默认值与 BuildDialector 保持同一口径）
 		path := cfg.Path
 		if path == "" {
-			path = "data/nvs.db"
+			path = config.DBPath
+			if path == "" {
+				path = "data/nvs.db"
+			}
 		}
 		if dir := filepath.Dir(path); dir != "." && dir != "" {
 			_ = os.MkdirAll(dir, 0755)
