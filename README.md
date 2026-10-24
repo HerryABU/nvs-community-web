@@ -473,6 +473,30 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.15.0 蜜罐 M2/M3/M4：影子认证 + 验证页与指纹 + 取证包 + 规则反哺（2026-10-24）
+
+**影子认证（`server/honeypot/jwt.go` + `shadowauth.go`）**
+- 蜜罐**独立密钥** `data/honeypot/secret.key`（0600，首次启动生成），与真实 `JWT_SECRET` 物理隔离
+- 诱饵 `.env` 暴露的 `JWT_SECRET` 就是这把密钥 → 攻击者伪造的 token **在蜜罐内验签通过**（先甜）
+- `/api/v2/*`：读接口返回合成用户/统计/用户列表；写入与提权返回 403「检测到异地登录，请重新验证」+ 验证页地址（卡）
+- `alg=none` 直接拒绝并记录；记录 role/is_admin 篡改特征，卡口**没有成功分支**
+
+**验证页与指纹（`verify.go` + `fingerprint.go`）**
+- `/hp/verify`：内联采集脚本 `DOMContentLoaded` 即采；`/hp/fp` 上报恒 `ok:false`；
+  `/hp/verify` 提交恒失败且 `retry:true`（诱导继续，但永不放行）
+- 采集项：canvas / webgl / fonts / 时区 / 语言 / 屏幕 / DPR / 核数 / 内存 / Client Hints / 自动化痕迹
+- 服务端另做 headless 标记（UA 关键字、缺 Sec-Fetch/Accept-Language/Referer），**只标记不拒绝**
+
+**取证包（`forensics.go`）**
+- `GET /api/admin/honeypot/export.zip` → `session.json` / `events.jsonl` / `fingerprints.json` / `manifest.json`
+- manifest 内含每个文件的 SHA256，响应头带 `X-Bundle-SHA256`；下载后删临时包；导出写 `export` 事件留痕
+
+**规则反哺（`feedback.go`）**
+- 从风险 ≥60 的事件提炼 UA（sqlmap/nuclei/…）与路径（`/.env`、`/.git/`…）特征
+- 一键写入爬虫阻断名单并 `security.ReloadBotRules()` 即时生效；长度 <4 与重复项自动跳过，写 `feedback` 事件留痕
+
+**后台**：新增「规则反哺」面板（勾选后反哺）、会话详情新增「浏览器指纹」区块、会话/全部取证包下载
+
 ### v3.14.0 蜜罐等级 + 日志记录字段勾选（2026-10-24）
 
 **蜜罐（`server/honeypot`，`docs/honeypot-design.md` §5.1）**
