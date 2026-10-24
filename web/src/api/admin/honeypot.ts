@@ -96,4 +96,47 @@ export const honeypotApi = {
   unban(ip: string) {
     return api.post('/admin/honeypot/unban', { ip });
   },
+  /** 会话指纹（验证页前置采集） */
+  fingerprints(sessionId: number) {
+    return api.get<{ code: number; data: { list: HoneypotFingerprint[] } }>(
+      `/admin/honeypot/sessions/${sessionId}/fingerprints`,
+    );
+  },
+  /** 取证包 zip（含 SHA256 清单；导出动作留痕） */
+  exportZip(sessionId = 0) {
+    return api.get('/admin/honeypot/export.zip', { params: { session_id: sessionId }, responseType: 'blob' });
+  },
+  /** 规则反哺候选 */
+  rules() {
+    return api.get<{ code: number; data: { list: HoneypotRuleSuggestion[] } }>('/admin/honeypot/rules');
+  },
+  /** 应用规则（写入爬虫阻断名单并即时生效） */
+  applyRules(keywords: string[]) {
+    return api.post('/admin/honeypot/rules', { keywords });
+  },
 };
+
+export interface HoneypotFingerprint {
+  id: number;
+  session_id: number;
+  canvas: string;
+  webgl: string;
+  fonts: string;
+  tz: string;
+  lang: string;
+  screen: string;
+  dpr: string;
+  cores: string;
+  memory: string;
+  client_hints: string;
+  headless_flags: string;
+  raw: string;
+  created_at: string;
+}
+
+export interface HoneypotRuleSuggestion {
+  keyword: string;
+  reason: string;
+  hits: number;
+  kind: 'ua' | 'path';
+}

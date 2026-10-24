@@ -91,7 +91,7 @@
               <el-option label="风险 ≥ 40" :value="40" />
               <el-option label="风险 ≥ 60" :value="60" />
             </el-select>
-            <el-button size="small" @click="doExport(0)">导出全部</el-button>
+            <el-button size="small" @click="doExportZip(0)">取证包（全部）</el-button>
           </div>
         </div>
       </template>
@@ -119,11 +119,40 @@
         <el-table-column label="操作" width="150">
           <template #default="{ row }">
             <el-button size="small" text type="primary" @click.stop="openDetail(row)">详情</el-button>
-            <el-button size="small" text @click.stop="doExport(row.id)">导出</el-button>
+            <el-button size="small" text @click.stop="doExport(row.id)">导出 JSON</el-button>
+            <el-button size="small" text @click.stop="doExportZip(row.id)">取证包</el-button>
             <el-button v-if="!row.banned" size="small" text type="danger" @click.stop="banIp(row.src_ip)">封禁</el-button>
           </template>
         </el-table-column>
         <template #empty><el-empty description="还没有命中记录" :image-size="60" /></template>
+      </el-table>
+    </el-card>
+
+    <!-- 规则反哺 -->
+    <el-card class="hp-section">
+      <template #header>
+        <div class="hp-section-head">
+          <span>规则反哺</span>
+          <span class="hp-tip">把蜜罐命中里的工具特征写进爬虫阻断名单（即时生效，自动去重）</span>
+          <div class="hp-filters">
+            <el-button size="small" :loading="rulesLoading" @click="loadRules">重新提炼</el-button>
+            <el-button size="small" type="primary" :disabled="selectedRules.length === 0" :loading="applying" @click="applyRules">
+              反哺选中（{{ selectedRules.length }}）
+            </el-button>
+          </div>
+        </div>
+      </template>
+      <el-table :data="rules" size="small" @selection-change="(rows: any[]) => (selectedRules = rows.map((r) => r.keyword))">
+        <el-table-column type="selection" width="42" />
+        <el-table-column prop="keyword" label="特征" width="180" />
+        <el-table-column prop="kind" label="类型" width="80">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.kind === 'ua' ? 'warning' : 'info'">{{ row.kind }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="reason" label="来源" min-width="180" />
+        <el-table-column prop="hits" label="命中" width="80" />
+        <template #empty><el-empty description="暂无候选（需要风险 ≥ 60 的命中事件）" :image-size="50" /></template>
       </el-table>
     </el-card>
 
@@ -138,6 +167,26 @@
           <el-descriptions-item label="最近">{{ fmt(detail.session.last_seen) }}</el-descriptions-item>
           <el-descriptions-item label="事件数">{{ detail.session.event_count }}</el-descriptions-item>
         </el-descriptions>
+        <div v-if="fingerprints.length" class="hp-fp">
+          <div class="hp-fp-head">浏览器指纹（验证页加载即采集）</div>
+          <div v-for="fp in fingerprints" :key="fp.id" class="hp-fp-item">
+            <div class="hp-fp-line">
+              <span>canvas {{ fp.canvas }}</span>
+              <span>webgl {{ fp.webgl }}</span>
+              <span>fonts {{ fp.fonts }}</span>
+              <span>UA-DPR {{ fp.dpr }}</span>
+              <span>核 {{ fp.cores }} / 内存 {{ fp.memory }}</span>
+            </div>
+            <div class="hp-fp-line">
+              <span>时区 {{ fp.tz }}</span>
+              <span>语言 {{ fp.lang }}</span>
+              <span>屏幕 {{ fp.screen }}</span>
+              <span>平台 {{ fp.client_hints || '—' }}</span>
+            </div>
+            <div v-if="fp.headless_flags" class="hp-fp-line hp-fp-warn">自动化痕迹：{{ fp.headless_flags }}</div>
+          </div>
+        </div>
+
         <el-timeline class="hp-timeline">
           <el-timeline-item
             v-for="e in detail.events"
@@ -173,6 +222,8 @@ import {
   type HoneypotOverview,
   type HoneypotSession,
   type HoneypotEvent,
+  type HoneypotFingerprint,
+  type HoneypotRuleSuggestion,
 } from '@/api/admin/honeypot';
 
 const defaultAllow = 'X-Forwarded-For,X-Real-IP,X-Requested-With,Sec-Fetch-Site,CF-Connecting-IP';
@@ -184,6 +235,11 @@ const keyword = ref('');
 const minRisk = ref(0);
 const detailVisible = ref(false);
 const detail = ref<{ session: HoneypotSession; events: HoneypotEvent[] } | null>(null);
+const fingerprints = ref<HoneypotFingerprint[]>([]);
+const rules = ref<HoneypotRuleSuggestion[]>([]);
+const selectedRules = ref<string[]>([]);
+const rulesLoading = ref(false);
+const applying = ref(false);
 
 const form = reactive<HoneypotSetting>({
   enabled: false, level: 'off',
@@ -239,6 +295,11 @@ async function openDetail(row: HoneypotSession) {
     const res = await honeypotApi.sessionDetail(row.id);
     detail.value = res.data.data;
     detailVisible.value = true;
+    fingerprints.value = [];
+    try {
+      const fp = await honeypotApi.fingerprints(row.id);
+      fingerprints.value = fp.data.data?.list || [];
+    } catch { /* 无指纹不阻断 */ }
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '加载详情失败');
   }
@@ -269,6 +330,48 @@ async function doExport(sessionId: number) {
   }
 }
 
+async function doExportZip(sessionId: number) {
+  try {
+    const res: any = await honeypotApi.exportZip(sessionId);
+    const blob = res.data instanceof Blob ? res.data : new Blob([res.data], { type: 'application/zip' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `honeypot-forensics-${sessionId || 'all'}-${Date.now()}.zip`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    ElMessage.success('取证包已下载（含 SHA256 清单，导出已留痕）');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '导出失败');
+  }
+}
+
+async function loadRules() {
+  rulesLoading.value = true;
+  try {
+    const res = await honeypotApi.rules();
+    rules.value = res.data.data?.list || [];
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '提炼失败');
+  } finally {
+    rulesLoading.value = false;
+  }
+}
+
+async function applyRules() {
+  applying.value = true;
+  try {
+    const res: any = await honeypotApi.applyRules(selectedRules.value);
+    const added = res?.data?.data?.added || [];
+    ElMessage.success(added.length ? `已写入 ${added.length} 条规则` : '这些规则已存在');
+    selectedRules.value = [];
+    await loadRules();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '写入失败');
+  } finally {
+    applying.value = false;
+  }
+}
+
 async function cleanup() {
   try {
     await ElMessageBox.confirm('按留存天数清理过期事件？此操作不可撤销。', '清理确认', { type: 'warning' });
@@ -278,7 +381,10 @@ async function cleanup() {
   } catch { /* 取消 */ }
 }
 
-onMounted(load);
+onMounted(async () => {
+  await load();
+  await loadRules();
+});
 </script>
 
 <style scoped>
@@ -299,4 +405,10 @@ onMounted(load);
 .hp-timeline { padding-left: 4px; }
 .hp-ev-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .hp-ev-line { font-size: 0.78rem; color: var(--text-muted); word-break: break-all; }
+.hp-fp { border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; }
+.hp-fp-head { font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; }
+.hp-fp-item { border-top: 1px dashed var(--border-color); padding: 6px 0; }
+.hp-fp-item:first-of-type { border-top: 0; }
+.hp-fp-line { display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.75rem; color: var(--text-muted); }
+.hp-fp-warn { color: var(--el-color-danger); }
 </style>
