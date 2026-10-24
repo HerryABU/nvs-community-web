@@ -422,6 +422,7 @@ make version && make check-all
 # 3) 提交 + 打 tag（tag 必须与版本一致，否则 release 直接失败）
 git add -A && git commit -m "chore(release): x.y.z <摘要>"
 git tag vx.y.z && git push origin v3 --tags
+#   tag 命名两种都认：v3.20.1（推荐）或 3.20.1（兼容本仓库历史 tag）
 ```
 
 Release 里的二进制**已内嵌前端**，解压即用，无需 Node / Go 环境；Windows 包为 zip，其余为 tar.gz，附 `SHA256SUMS` 与各自 `.sha256`。
