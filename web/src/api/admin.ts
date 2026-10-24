@@ -82,6 +82,10 @@ export const adminApi = {
   exportComplianceUsers() {
     return api.get('/admin/compliance/export-users', { responseType: 'blob' });
   },
+  /** 一键材料包：报告+算法说明+定级+漏洞+用户汇总+蜜罐摘要+日志清单，附 SHA256 清单 */
+  exportComplianceBundle() {
+    return api.get('/admin/compliance/bundle.zip', { responseType: 'blob' });
+  },
 
   // 统计数据
   getStats() {

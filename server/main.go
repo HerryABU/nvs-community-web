@@ -777,6 +777,8 @@ func main() {
 		admin.GET("/compliance/report", handlers.GetComplianceReport)
 		admin.GET("/compliance/export-logs", handlers.ExportComplianceLogs)
 		admin.GET("/compliance/export-users", handlers.ExportComplianceUsers)
+		// 一键导出检查应对材料包（zip + SHA256 清单，导出留痕）
+		admin.GET("/compliance/bundle.zip", handlers.ExportComplianceBundle)
 		// 隔离墙配置
 		admin.GET("/wall-config", handlers.GetWallConfig)
 		admin.PUT("/wall-config", handlers.UpdateWallConfig)

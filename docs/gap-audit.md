@@ -8,9 +8,15 @@
 
 ## 0. 一句话结论
 
-- **真实缺口 24 项**，其中安全合规 9 项、AI 平台能力 11 项、内容玩法 4 项。
-- **文档过时 4 项**（多密钥卡池、沉浸模式、蜜罐 M2-M4、大纲记忆），已在本文标注并同步修正原文档。
-- **明确取舍 5 项**（实时共同编辑、SQLi 蜜罐的「预生成响应库」路线、独立蜜罐 DB 等），不算缺口。
+- **真实缺口 19 项**（本轮修掉 4 项），其中安全合规 5 项、AI 平台能力 11 项、内容玩法 3 项。
+- **文档过时/核对误判 5 项**（多密钥卡池、沉浸模式、蜜罐 M2-M4、大纲记忆、算法透明度页），已标注并修正。
+- **明确取舍 4 项**（实时共同编辑、验证页放行分支、headless 直接拒绝、蜜罐记录真实凭据），不算缺口。
+
+> 🔄 2026-10-24 第二轮更新（v3.16.0）
+> - ✅ 已完成：#1 蜜罐独立进程、#2 独立 DB + 同路径断言、#5 冷归档、#7 合规材料一键导出
+> - ⚠️ 撤回误判：#8「公开算法透明度页」**其实早已实现**——首页 `HomeNoticeBar.vue` 的「📊 推荐说明」弹窗 +
+>   公开接口 `/api/algorithms/description`（第一版只 grep 路由与后台页，漏了组件内弹窗）
+> - 仍在清单：#3 #4 #6 #9 #10 #11 #12 #13 #14 #15 #16 #17 #18 #19 #20 #21 #22 #23 #24
 
 ---
 
@@ -18,14 +24,14 @@
 
 | # | 项 | 文档出处 | 代码核对 | 结论 | 优先级 |
 |---|---|---|---|---|---|
-| 1 | 蜜罐独立进程 / 独立端口 | `honeypot-design.md` §1 约束 5、§5 M1 | 只有 `honeypot.Register(r)` 内嵌主站；无 `cmd/honeypot` | GAP | **P0**（隔离失败影响主站） |
-| 2 | 蜜罐独立 DB（`honeypot.db`）+ 启动断言 DSN 不含生产库 | 同上 §6 风险 2 | 与主库同库同表前缀 | GAP | **P0** |
+| 1 | 蜜罐独立进程 / 独立端口 | `honeypot-design.md` §1 约束 5 | ✅ v3.16.0：`cmd/honeypot`（`nvs-honeypot.exe`，默认 18081），只挂诱饵/影子/验证页 + `/__hp/health` | 已做 | — |
+| 2 | 蜜罐独立 DB + 启动断言 | 同上 §6 风险 2 | ✅ v3.16.0：`NVS_HONEYPOT_DB_PATH` 切独立库，`SetDB` 断言「蜜罐库 ≠ 主库」，同路径拒绝启动 | 已做 | — |
 | 3 | SQL 注入蜜罐（预生成响应库） | `requirements-audit.md` 蜜罐段 | 无 sqli 相关代码（真实链路全参数化，注入打不穿） | GAP | P1 |
 | 4 | JA3 / JA4 指纹、WebRTC 内网 IP | `honeypot-design.md` §2 表字段 | `honeypot_fingerprints` 无 ja3/ja4/webrtc 列 | GAP | P1 |
-| 5 | 90 天 TTL **冷归档**（而非只删） | 同上 §5 M4、§2 | `Cleanup()` 直接 `Delete`，无归档表/归档文件 | GAP | **P0**（合规留存） |
+| 5 | 90 天 TTL **冷归档**（而非只删） | 同上 §5 M4 | ✅ v3.16.0：`ArchiveAndCleanup()` 先写 `archive/honeypot-events-YYYYMM.jsonl.gz`（fsync）再分批删；`GET /honeypot/archives` | 已做 | — |
 | 6 | 警方联动工单 | 同上 §5 M4 | 有 `police` 角色与取证下载，无工单流转 | GAP | P2 |
-| 7 | 一键导出合规检查材料 | `requirements-audit.md` 等保条 | `/admin/compliance`、`/admin/vulnerabilities` 有页面；`grep func.*Export` 无命中 | GAP | **P0**（等保要材料） |
-| 8 | 公开的算法透明度说明页 | 同上「算法透明度」条 | 只有后台 `AdminAlgorithms.vue`（配置用），无前台公开页 | GAP | **P0**（算法备案口径） |
+| 7 | 一键导出合规检查材料 | `requirements-audit.md` 等保条 | ✅ v3.16.0：`GET /api/admin/compliance/bundle.zip`（报告+算法说明+定级+漏洞+用户汇总+蜜罐摘要+日志清单+SHA256 manifest），导出写审计 | 已做 | — |
+| 8 | ~~公开的算法透明度说明页~~ | 同上「算法透明度」条 | **误判**：首页 `HomeNoticeBar.vue`「📊 推荐说明」弹窗 + `GET /api/algorithms/description` 早已存在 | STALE（我漏查组件） | — |
 | 9 | 充值异常 / 退款与风控联动 | `requirements-audit.md` 支付条 | 视频失败自动退款有；与蜜罐/风控无联动 | GAP | P1 |
 
 补充：i18n 中英双语（`requirements-audit.md` N-03）—— 前端无 `vue-i18n`，**GAP**，但若只做国内站可降为 P2。
@@ -63,6 +69,7 @@
 | 沉浸模式 | `sparkai-reference.md`「⏳ 未做」 | `AiHub.vue` 的 `immersive` + `global.css .ai-immersive` 已实现 |
 | 蜜罐 JWT / 影子认证 / append-only / 导出审批 | `requirements-audit.md` 四行写 ⛔ | v3.15.0 已落地（`honeypot/jwt.go`、`shadowauth.go`、`forensics.go`、`export` 事件留痕） |
 | 生成大纲 | `requirements-audit.md` 写「角色设定未做」（大纲已做） | 大纲：`AiNovelMemory(outline)` 已可用；**只有角色设定动作仍缺** |
+| 算法透明度公开页 | 本报告第一版列为 P0 GAP | 实际已有（首页「推荐说明」弹窗 + 公开接口），属**核对误判** |
 
 ## 5. 明确取舍（BY DESIGN，不算缺口）
 

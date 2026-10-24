@@ -42,6 +42,11 @@ func GetComplianceReport(c *gin.Context) {
 	if !ensureAdmin(c) {
 		return
 	}
+	utils.Success(c, buildComplianceReport())
+}
+
+// buildComplianceReport 组装合规自查报告（报告接口与材料包共用同一份口径）
+func buildComplianceReport() ComplianceReport {
 	icp, psb, psbLink := models.GetSiteFiling()
 	grade, note := models.GetSecurityGrade()
 	var userCount, announceCount int64
@@ -73,7 +78,7 @@ func GetComplianceReport(c *gin.Context) {
 		{"item": "算法说明文档", "ready": true, "detail": "首页「📊 推荐说明」+ 后台算法管理"},
 		{"item": "公告栏（安全公告/通知）", "ready": announceCount > 0, "detail": fmt.Sprintf("共 %d 条公告", announceCount)},
 	}
-	utils.Success(c, report)
+	return report
 }
 
 // ExportComplianceLogs 按时间范围导出访问日志 ZIP（管理后台）

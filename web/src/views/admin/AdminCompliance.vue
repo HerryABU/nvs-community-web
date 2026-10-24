@@ -61,6 +61,12 @@
       <div class="admin-panel">
         <div class="admin-section-title">📦 检查应对工具箱（176号令 5.2 检查材料清单）</div>
         <el-form label-width="130px">
+          <el-form-item label="检查材料包">
+            <el-button type="primary" :loading="exporting.bundle" @click="exportBundle">一键导出材料包 ZIP</el-button>
+            <span class="hint-text">
+              报告 + 算法说明 + 等保定级 + 漏洞整改 + 用户规模 + 蜜罐摘要 + 日志清单，附 SHA256 清单；导出动作写入审计
+            </span>
+          </el-form-item>
           <el-form-item label="访问日志导出">
             <div style="display:flex; gap:8px; align-items:center">
               <el-date-picker v-model="logRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" style="width: 280px" />
@@ -101,7 +107,7 @@ const quizResult = ref('');
 const gradeForm = reactive({ grade: '未定级', note: '' });
 const gradeSaving = ref(false);
 const logRange = ref<[string, string]>(['', '']);
-const exporting = reactive({ logs: false, users: false });
+const exporting = reactive({ logs: false, users: false, bundle: false });
 
 const quizQuestions = [
   '网站是否存储 50 万条以上个人信息？',
@@ -164,6 +170,16 @@ async function exportLogs() {
   } catch (e: any) { ElMessage.error(e?.response?.data?.message || '导出失败'); }
   finally { exporting.logs = false; }
 }
+async function exportBundle() {
+  exporting.bundle = true;
+  try {
+    const res = await adminApi.exportComplianceBundle();
+    downloadBlob(res, `compliance-bundle_${new Date().toISOString().slice(0, 10)}.zip`);
+    ElMessage.success('材料包已导出（含 SHA256 清单）');
+  } catch { ElMessage.error('导出失败'); }
+  finally { exporting.bundle = false; }
+}
+
 async function exportUsers() {
   exporting.users = true;
   try {
