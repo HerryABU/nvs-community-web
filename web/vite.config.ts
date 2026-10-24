@@ -30,7 +30,10 @@ export default defineConfig({
   base: './',
   build: {
     outDir: '../dist',
-    emptyOutDir: false,
+    // ⚠️ 必须清空：outDir 在项目根之外，默认不清空会**累积历史 chunk**
+    // （实测曾出现两份 vendor-mermaid 同时存在，dist 39M、内嵌 exe 从 52M 涨到 60M）。
+    // 若某些受限环境拦截删除，构建前先 `mv dist dist_old_$(date +%s)` 再跑。
+    emptyOutDir: true,
     // 体积告警阈值放宽（重型库本就独立分包）
     chunkSizeWarningLimit: 4000,
     rollupOptions: {

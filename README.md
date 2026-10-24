@@ -473,6 +473,26 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
+### v3.20.1 蜜罐收回归内嵌主程序（2026-10-24）
+
+**口径修正**：蜜罐**只存在于主程序**，不产出第二个二进制。此前 v3.16.0 提供的独立进程形态
+（`nvs-honeypot.exe` / 端口 18081）已移除，站长只需部署一个 `nvs-server.exe`。
+
+- 挂载点（全部在主 gin 引擎，`main.go` 注册）：诱饵 `honeypot.Register`、SQLi 假入口
+  `honeypot.RegisterSQLi`、影子认证 `honeypot.RegisterShadow`、验证页 `honeypot.RegisterVerify`、
+  可疑 404 探路 `honeypot.ProbeNotFound`、迁移/引导 `honeypot.Bootstrap`
+- 等级 `off` 时这些路径与普通 404 无差别，不暴露蜜罐存在
+- **不提供公开 health 端点**（内嵌形态下 `/__hp/health` 等于自报家门）；
+  运行状态走管理端：`GET /api/admin/honeypot/db`（是否独立库/路径）、
+  `GET /api/admin/honeypot/overview`（会话/事件/高风险计数）
+- **数据隔离仍可选**：`NVS_HONEYPOT_DB_PATH=data/honeypot/honeypot.db` →
+  蜜罐数据与业务库物理隔离（启动断言「蜜罐库 ≠ 主库」），后台照旧可读；
+  不设则表落主库，零配置
+- 移除：`server/cmd/honeypot`、`nvs-honeypot.exe`；文档与对账表同步改口径
+
+**验证**：`go build ./...` 通过；单测（honeypot/oc/models/handlers/scriptmode）全绿；
+单 exe 启动冒烟：首页 200、内嵌资源 200、`/.env` 在 off 档返回 404、无 panic、无路由冲突。
+
 ### v3.20.0 收口剩余 3 项：出图附件与历史导出 / 气泡长按互动 / 直播入口（2026-10-24）
 
 > 设计与边界见 `docs/anti-abuse-cost-ops.md` §五；对账见 `docs/gap-audit.md`（**缺口已清零**）。
@@ -578,7 +598,7 @@ SSRF 拒绝、目录穿越拒绝、zip manifest、result JSON 兼容）；`go bu
 ### v3.16.0 蜜罐独立进程/独立库/冷归档 + 合规材料一键导出（2026-10-24）
 
 **蜜罐隔离与留存（补齐 `gap-audit` #1/#2/#5）**
-- 独立进程：`cmd/honeypot` → `nvs-honeypot.exe`（默认端口 18081），只挂诱饵 / 影子认证 / 验证页，
+- 独立进程（**v3.20.1 起已收回归内嵌主程序**，此处保留历史记录）：`cmd/honeypot` → `nvs-honeypot.exe`（默认端口 18081），只挂诱饵 / 影子认证 / 验证页，
   不加载任何业务路由；`GET /__hp/health` 自检等级与库路径；优雅停机
 - 独立库：`NVS_HONEYPOT_DB_PATH`（如 `data/honeypot/honeypot.db`）；主站设同一路径则**后台照旧可读**，
   蜜罐数据与业务库物理隔离；`SetDB` 断言「蜜罐库 ≠ 主库」，同路径拒绝启动；未设则退回内嵌
