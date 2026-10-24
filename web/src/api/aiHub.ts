@@ -205,9 +205,15 @@ export async function streamChat(
   signal?: AbortSignal,
 ): Promise<{ content: string; cost: number; free?: boolean; balance_after: number; session_id: number } | null> {
   const base = (api.defaults.baseURL || '') as string;
+  // ⚠️ 必须带 X-Requested-With：CSRFGuard 对「已登录 Cookie + 非安全方法」强制校验该头，
+  // 而 axios 实例的默认头不会作用于原生 fetch。漏了就是 403 —— 表现为"发出去没反应"，
+  // 前端看不到任何错误（流式响应没有 body），极难排查。
   const resp = await fetch(`${base}/ai/chat/stream`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
     credentials: 'include',
     body: JSON.stringify(payload),
     signal,
