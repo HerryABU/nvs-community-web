@@ -17,7 +17,7 @@
       <div class="ce-toolbar-right">
         <span v-if="lastSaved" class="ce-saved-time">已保存 {{ lastSaved }}</span>
         <PublishQuotaHint />
-        <el-button v-if="isScriptMode" :icon="ChatDotRound" @click="openScriptPreview">气泡预览</el-button>
+        <el-button v-if="isBubbleMode(effectiveMode)" :icon="ChatDotRound" @click="openScriptPreview">气泡预览</el-button>
         <el-button :icon="Clock" @click="versionPanelVisible = true">版本</el-button>
         <el-button :icon="MagicStick" @click="showAiPanel = true">AI 助手</el-button>
         <el-button :icon="Link" @click="showRefPicker = true">插入站内链接</el-button>
@@ -34,6 +34,7 @@
       :context-text="aiContextText"
       :novel-id="novelId"
       :chapter-id="currentChapterId"
+      :scene="isBubbleMode(effectiveMode) ? 'novel_script' : 'novel_chapter'"
       @insert="aiInsert"
       @replace="aiReplace"
     />
@@ -57,10 +58,24 @@
     <el-drawer v-model="scriptPreviewVisible" title="气泡预览" size="60%">
       <div class="sp-wrap" v-loading="scriptPreviewing">
         <div class="sp-hint">
-          写法：每行一条 <code>角色：台词</code>；整行 <code>【场景】</code> 为场景提示；其余行为旁白。
+          写法：每行一条 <code>角色：台词</code>；整行 <code>【场景】</code> 为场景提示；
+          整行 <code>![说明](图片地址)</code> 插入图片；行内 <code>[笑]</code> 插表情。
+          <template v-if="effectiveMode === 'mixed'">
+            混排模式下，不含对话的连续段落按<strong>散文（Markdown）</strong>渲染。
+          </template>
         </div>
         <div v-if="scriptSpeakers.length" class="sp-speakers">
           <el-tag v-for="s in scriptSpeakers" :key="s" size="small">{{ s }}</el-tag>
+        </div>
+        <div v-if="scriptEmoteKeys.length" class="sp-speakers">
+          <el-tag
+            v-for="k in scriptEmoteKeys"
+            :key="k"
+            size="small"
+            type="info"
+            class="sp-emote"
+            @click="insertEmote(k)"
+          >[{{ k }}]</el-tag>
         </div>
         <div class="sp-body" v-html="scriptPreviewHtml"></div>
       </div>
@@ -108,7 +123,12 @@
       <!-- 编辑区 -->
       <main class="ce-main">
         <div class="ce-editor-header">
-          <el-tag v-if="isScriptMode" size="small" type="warning" class="ce-mode-tag">话本气泡体</el-tag>
+          <el-tag v-if="isBubbleMode(effectiveMode)" size="small" type="warning" class="ce-mode-tag">
+            {{ effectiveMode === 'mixed' ? '混排' : '话本气泡体' }}
+          </el-tag>
+          <el-select v-model="chapterMode" size="small" style="width: 150px" @change="onChapterModeChange">
+            <el-option v-for="m in CHAPTER_MODE_OPTIONS" :key="m.value" :label="m.label" :value="m.value" />
+          </el-select>
           <el-input
             v-model="chapterTitle"
             placeholder="章节标题（如：第一章 开端）"
@@ -163,7 +183,12 @@ import ConflictResolveDialog from '@/components/collab/ConflictResolveDialog.vue
 import { vcsApi, isConflictResponse, type ConflictPayload } from '@/api/novel/vcs';
 import { collabApi, chapterStatusLabel, chapterStatusType, type CollabMe } from '@/api/collab';
 import { useAuthStore } from '@/stores/auth';
-import { scriptApi } from '@/api/novel/script';
+import {
+  scriptApi,
+  CHAPTER_MODE_OPTIONS,
+  isBubbleMode,
+  type ChapterMode,
+} from '@/api/novel/script';
 import { guardLeak } from '@/composables/useLeakGuard';
 // engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
 import { renderMarkdown, editorEngineConfig } from '@/markdown/renderer';
@@ -206,12 +231,15 @@ const showRefPicker = ref(false);
 // ===== AI 助手（§13.3）：续写/润色/扩写/摘要，代币按量计费 =====
 const showAiPanel = ref(false);
 
-// ===== 话本气泡体（script mode）：预览服务端解析结果 =====
+// ===== 叙事形态（作品级 + 章节级）与话本预览 =====
 const novelMode = ref('prose');
-const isScriptMode = computed(() => novelMode.value === 'script');
+// 章节形态：'' = 继承作品（后端存空值），显式设置时为 prose/script/mixed
+const chapterMode = ref<ChapterMode>('');
+const effectiveMode = computed(() => chapterMode.value || novelMode.value || 'prose');
 const scriptPreviewVisible = ref(false);
 const scriptPreviewHtml = ref('');
 const scriptSpeakers = ref<string[]>([]);
+const scriptEmoteKeys = ref<string[]>([]);
 const scriptPreviewing = ref(false);
 
 async function openScriptPreview() {
@@ -219,15 +247,44 @@ async function openScriptPreview() {
   scriptPreviewVisible.value = true;
   scriptPreviewing.value = true;
   try {
-    const res = await scriptApi.preview(content, novelId.value);
+    const res = await scriptApi.preview(content, novelId.value, effectiveMode.value);
     scriptPreviewHtml.value = res.data.data?.html || '';
     scriptSpeakers.value = res.data.data?.speakers || [];
+    scriptEmoteKeys.value = res.data.data?.emote_keys || [];
   } catch (e: any) {
     scriptPreviewHtml.value = '';
     ElMessage.error(e?.response?.data?.message || '预览失败');
   } finally {
     scriptPreviewing.value = false;
   }
+}
+
+// 切形态只改标记，保存时随正文一起提交（后端按章存储）
+function onChapterModeChange() {
+  ElMessage.info(
+    chapterMode.value === ''
+      ? '本章将继承作品形态，保存后生效'
+      : `本章形态已设为「${CHAPTER_MODE_OPTIONS.find((m) => m.value === chapterMode.value)?.label}」，保存后生效`,
+  );
+}
+
+// 预览抽屉里点表情 → 插入编辑器
+function insertEmote(key: string) {
+  const mark = `[${key}]`;
+  if (editorMode.value === 'md' && cherryInstance) {
+    const cm = cherryInstance.editor?.codemirror || cherryInstance.codemirror;
+    if (cm && cm.replaceSelection) {
+      cm.replaceSelection(mark);
+      return;
+    }
+    if (cherryInstance.insert) {
+      cherryInstance.insert(mark);
+      return;
+    }
+  }
+  chapterContent.value += mark;
+  richTextContent.value += mark;
+  ElMessage.success(`已插入 ${mark}`);
 }
 
 // AI 面板上下文文本：MD 模式直接取源文；富文本模式去标签取纯文本
@@ -484,6 +541,8 @@ async function loadCurrentChapter() {
     chapterStatus.value = ch.status || 'draft';
     reviewNote.value = ch.review_note || '';
     canEditThis.value = computeCanEdit(ch);
+    // 章节叙事形态（空=继承作品；这里取 DB 原值，未被列表回填的生效值污染）
+    chapterMode.value = ((ch as any).mode || '') as ChapterMode;
 
     if (editorMode.value === 'md' && cherryInstance) {
       cherryInstance.setValue(content);
@@ -523,6 +582,7 @@ async function addChapter() {
   chapterStatus.value = 'draft';
   reviewNote.value = '';
   canEditThis.value = true;
+  chapterMode.value = ''; // 新章节默认继承作品形态
   baseVersion.value = 0; // 新章节还没有历史版本
   currentNum.value = newNum;
   if (cherryInstance) cherryInstance.setValue('');
@@ -558,6 +618,7 @@ async function saveChapter(force = false) {
         content: contentToSave,
         ai_assisted: aiUsed.value || undefined,
         ai_model: aiUsed.value ? aiModelName.value : undefined,
+        mode: chapterMode.value, // '' = 继承作品形态
         ...vcsFields,
       } as any);
       chapterId = existing.id;
@@ -569,6 +630,7 @@ async function saveChapter(force = false) {
         content: contentToSave,
         ai_assisted: aiUsed.value || undefined,
         ai_model: aiUsed.value ? aiModelName.value : undefined,
+        mode: chapterMode.value,
       } as any);
       chapterId = Number(res.data?.data?.id) || 0;
       const ver = Number(res?.data?.data?.version || 0);
@@ -918,6 +980,34 @@ onBeforeUnmount(() => {
   font-size: 1rem;
   line-height: 1.8;
   word-break: break-word;
+}
+.sp-body :deep(.sb-emote) {
+  font-size: 1.25em;
+  margin: 0 2px;
+}
+.sp-body :deep(.script-image-block) {
+  text-align: center;
+  margin: 4px auto;
+}
+.sp-body :deep(.script-image-block.sb-invalid) {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.sp-body :deep(.sb-image) {
+  max-width: 100%;
+  border-radius: 10px;
+}
+.sp-body :deep(.script-prose) {
+  padding: 0 4px;
+}
+.sp-emote {
+  cursor: pointer;
+}
+.sp-emote:hover {
+  opacity: 0.75;
 }
 
 .ce-title-input :deep(.el-input__inner) {

@@ -103,7 +103,9 @@
             <el-radio-button value="bubble">气泡对话</el-radio-button>
             <el-radio-button value="text">原文</el-radio-button>
           </el-radio-group>
-          <span class="rs-tip">话本作品：按「角色：台词」解析为对话气泡</span>
+          <span class="rs-tip">
+            {{ effectiveMode === 'mixed' ? '混排作品：对话为气泡，其余段落按正文排版' : '话本作品：按「角色：台词」解析为对话气泡' }}
+          </span>
         </div>
         <div v-if="chapter?.content" class="reader-md-wrap">
           <div class="reader-md markdown-body cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" v-html="renderedHtml" ref="mdContainer" @click="onMdClick"></div>
@@ -356,6 +358,7 @@ async function loadChapter() {
     if (chapter.value?.id) loadAiMark('novel_chapter', chapter.value.id);
     htmlContent.value = detail?.html_content || '';
     novelMode.value = (detail as any)?.novel_mode || novelRes.data.data.mode || 'prose';
+    chapterMode.value = (detail as any)?.chapter_mode || '';
     if (!chapter.value) {
       console.error('章节内容为空', detail);
     }
@@ -440,9 +443,11 @@ watch(
 const mdContainer = ref<HTMLElement | null>(null);
 const renderedHtml = ref('');
 
-// 话本气泡体：novel_mode=script 时正文按「角色：台词」渲染为气泡（服务端已渲染好 html_content）
+// 叙事形态：章节形态优先（script 话本 / mixed 散文与话本混排），未设置则继承作品
 const novelMode = ref('prose');
-const isScriptMode = computed(() => novelMode.value === 'script');
+const chapterMode = ref('');
+const effectiveMode = computed(() => chapterMode.value || novelMode.value || 'prose');
+const isScriptMode = computed(() => effectiveMode.value === 'script' || effectiveMode.value === 'mixed');
 const scriptView = ref<'bubble' | 'text'>('bubble');
 
 // 章节标题大字（明确需求，不可去掉）：
@@ -921,6 +926,44 @@ onBeforeUnmount(() => {
   font-size: 1rem;
   line-height: 1.8;
   word-break: break-word;
+}
+
+/* 气泡内表情 */
+.reader-md :deep(.sb-emote) {
+  font-size: 1.25em;
+  line-height: 1;
+  margin: 0 2px;
+  vertical-align: -0.1em;
+}
+
+/* 图片气泡 */
+.reader-md :deep(.script-image-block) {
+  align-self: center;
+  max-width: 100%;
+  text-align: center;
+  margin: 4px auto;
+}
+.reader-md :deep(.script-image-block.sb-invalid) {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.reader-md :deep(.sb-image) {
+  max-width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+}
+.reader-md :deep(.sb-image-caption) {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* 混排：散文块（Markdown 渲染） */
+.reader-md :deep(.script-prose) {
+  padding: 0 6px;
 }
 
 [data-theme="dark"] .reader-md :deep(.sb-body) {

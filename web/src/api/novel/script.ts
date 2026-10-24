@@ -9,14 +9,30 @@ export interface ScriptPreview {
   speakers: string[];
   lines: number;
   speaker_count: number;
+  emote_keys: string[];
+}
+
+/** 章节叙事形态：''=继承作品 / prose=散文 / script=话本气泡 / mixed=散文与话本混排 */
+export type ChapterMode = '' | 'prose' | 'script' | 'mixed';
+
+export const CHAPTER_MODE_OPTIONS: { value: ChapterMode; label: string }[] = [
+  { value: '', label: '继承作品' },
+  { value: 'prose', label: '散文体' },
+  { value: 'script', label: '话本气泡体' },
+  { value: 'mixed', label: '混排（散文+气泡）' },
+];
+
+export function isBubbleMode(mode: string): boolean {
+  return mode === 'script' || mode === 'mixed';
 }
 
 export const scriptApi = {
-  /** 预览话本气泡（传 novel_id 时服务端校验创作成员身份） */
-  preview(content: string, novelId?: number) {
+  /** 预览话本气泡（传 novel_id 时服务端校验创作成员身份；mixed 走混排解析） */
+  preview(content: string, novelId?: number, mode?: string) {
     return api.post<{ code: number; data: ScriptPreview }>('/script-preview', {
       content,
       novel_id: novelId || 0,
+      mode: mode || 'script',
     });
   },
 };

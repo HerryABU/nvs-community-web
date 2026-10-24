@@ -228,8 +228,8 @@ const props = defineProps<{
   novelId?: number;
   /** 当前章节 ID（§13.5；0=新章节） */
   chapterId?: number;
-  /** 模板场景（§13.1）：章节编辑器 novel_chapter / 博客编辑器 blog */
-  scene?: 'novel_chapter' | 'blog';
+  /** 模板场景（§13.1）：章节编辑器 novel_chapter / 话本形态 novel_script / 博客编辑器 blog */
+  scene?: 'novel_chapter' | 'novel_script' | 'blog';
 }>();
 const emit = defineEmits<{
   (e: 'update:visible', v: boolean): void;
