@@ -51,6 +51,11 @@
         :class="['ai-msg', m.role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant']"
       >
         <div class="ai-msg-bubble">
+          <!-- 思考型模型的推理过程：默认折叠，不干扰阅读 -->
+          <details v-if="m.role === 'assistant' && m.reasoning" class="ai-think">
+            <summary>思考过程（{{ m.reasoning.length }} 字）</summary>
+            <div class="ai-think-body">{{ m.reasoning }}</div>
+          </details>
           <div
             v-if="m.role === 'assistant'"
             class="ai-msg-md"
@@ -73,9 +78,14 @@
         </div>
       </div>
       <!-- 流式中的消息（同样走严格 Markdown 渲染） -->
-      <div v-if="streamingText" class="ai-msg ai-msg-assistant">
+      <div v-if="streamingText || streamingReasoning" class="ai-msg ai-msg-assistant">
         <div class="ai-msg-bubble">
-          <div class="ai-msg-md" v-html="streamingHtml" @click="onMdClick" />
+          <details v-if="streamingReasoning" class="ai-think" open>
+            <summary>思考过程{{ streamingText ? '' : '（正在思考…）' }}</summary>
+            <div class="ai-think-body">{{ streamingReasoning }}</div>
+          </details>
+          <div v-if="streamingText" class="ai-msg-md" v-html="streamingHtml" @click="onMdClick" />
+          <span v-if="!streamingText" class="ai-think-hint">模型正在推理，正文稍后出现…</span>
           <span class="ai-cursor" />
         </div>
       </div>
@@ -111,6 +121,9 @@
             <el-select v-model="modelId" size="small" style="width:168px" :disabled="generating || useByok">
               <el-option v-for="m in filteredModels" :key="m.id" :label="modelLabel(m)" :value="m.id" />
             </el-select>
+            <el-tag v-if="selectedThinking" size="small" type="warning" effect="plain" title="先输出推理过程，再给正文；思考过程可折叠">
+              思考型
+            </el-tag>
             <el-select v-model="maxTokens" size="small" style="width:100px" :disabled="generating">
               <el-option :value="1024" label="短回复" />
               <el-option :value="2048" label="中回复" />
@@ -172,6 +185,8 @@ const messages = ref<AiChatMessage[]>([]);
 const inputText = ref('');
 const generating = ref(false);
 const streamingText = ref('');
+// 思考型模型的推理增量（与正文分开：正文还没来时先给用户看到"它在想"）
+const streamingReasoning = ref('');
 const msgListEl = ref<HTMLElement>();
 const maxTokens = ref(2048);
 let abortCtrl: AbortController | null = null;
@@ -250,6 +265,11 @@ function autoGrow() {
 const currentAgentName = computed(() => currentAgent.value?.name || 'AI 对话');
 const currentAgentEmoji = computed(() => currentAgent.value?.emoji || '💬');
 const currentAgentGreeting = computed(() => currentAgent.value?.greeting || '');
+
+/** 当前选中的模型是否为「思考型」（先出推理再出正文） */
+const selectedThinking = computed(
+  () => !useByok.value && !!filteredModels.value.find((m) => m.id === modelId.value)?.thinking,
+);
 
 function modelLabel(m: { name: string; price_in: number; price_out: number }) {
   const price = m.price_in === 0 && m.price_out === 0 ? '免费' : `${m.price_in}/${m.price_out}`;
@@ -423,6 +443,7 @@ async function send(rawText?: string, confirmed = false, skipPush = false) {
   }
   generating.value = true;
   streamingText.value = '';
+  streamingReasoning.value = '';
   streamingHtml.value = '';
   scrollBottom();
   abortCtrl = new AbortController();
@@ -443,13 +464,22 @@ async function send(rawText?: string, confirmed = false, skipPush = false) {
         scrollBottom();
       },
       abortCtrl?.signal,
+      (chunk) => {
+        streamingReasoning.value += chunk;
+        scrollBottom();
+      },
     );
     if (!result) {
       ElMessage.warning('连接中断，未生成完整内容');
     } else {
       messages.value.push({
         id: -Date.now() - 1, role: 'assistant', content: result.content,
-        tokens_in: 0, tokens_out: 0, cost: result.cost, free: result.free, created_at: '',
+        tokens_in: 0, tokens_out: 0, cost: result.cost, free: result.free,
+        // 推理过程只留在本地（后端未持久化），刷新后不再显示。
+        // 若整段回答本就来自 reasoning（思考型模型 content 为空），
+        // 它已经是正文了，再折叠一次就等于同一段文字出现两遍。
+        reasoning: result.answerInReasoning ? undefined : result.reasoning || undefined,
+        created_at: '',
       });
       emit('balance-updated', result.balance_after);
       if (!props.sessionId && result.session_id) {
@@ -588,6 +618,39 @@ function stop() {
 .ai-msg-plain { white-space: pre-wrap; }
 .ai-msg-md :deep(p) { margin: 0 0 8px; }
 .ai-msg-md :deep(p:last-child) { margin-bottom: 0; }
+/* ===== 思考过程（思考型模型）===== */
+.ai-think {
+  margin: 0 0 8px;
+  border: 1px dashed var(--border-color, #e5e7eb);
+  border-radius: 8px;
+  background: var(--bg-page, #fafbfc);
+  font-size: 12px;
+}
+.ai-think summary {
+  cursor: pointer;
+  padding: 6px 10px;
+  color: var(--text-light, #6b7280);
+  user-select: none;
+  list-style: none;
+}
+.ai-think summary::-webkit-details-marker { display: none; }
+.ai-think summary::before { content: '▸ '; }
+.ai-think[open] summary::before { content: '▾ '; }
+.ai-think-body {
+  padding: 0 10px 8px;
+  max-height: 240px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  line-height: 1.65;
+  color: var(--text-light, #6b7280);
+}
+.ai-think-hint {
+  display: block;
+  font-size: 12px;
+  color: var(--text-light, #9ca3af);
+  font-style: italic;
+}
+
 .ai-msg-md :deep(pre) {
   position: relative;
   background: #1e293b; color: #e2e8f0; padding: 10px 12px;

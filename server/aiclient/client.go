@@ -35,7 +35,12 @@ type ChatRequest struct {
 // ChatResponse /chat/completions 响应体（只取需要的字段）
 type ChatResponse struct {
 	Choices []struct {
-		Message Message `json:"message"`
+		Message struct {
+			Role             string `json:"role"`
+			Content          string `json:"content"`
+			ReasoningContent string `json:"reasoning_content"`
+			Reasoning        string `json:"reasoning"`
+		} `json:"message"`
 	} `json:"choices"`
 	Usage struct {
 		PromptTokens     int `json:"prompt_tokens"`
@@ -108,5 +113,16 @@ func (c *Client) Complete(req ChatRequest) (content string, tokensIn, tokensOut 
 	if len(cr.Choices) == 0 {
 		return "", 0, 0, fmt.Errorf("上游未返回内容")
 	}
-	return cr.Choices[0].Message.Content, cr.Usage.PromptTokens, cr.Usage.CompletionTokens, nil
+	msg := cr.Choices[0].Message
+	content = msg.Content
+	// 思考型模型的正文可能在 reasoning 字段里：content 为空时不能直接当失败返回，
+	// 否则「模型明明答了」却被判成「上游未返回内容」，还会把这次调用记为失败。
+	if strings.TrimSpace(content) == "" {
+		if r := strings.TrimSpace(msg.ReasoningContent); r != "" {
+			content = r
+		} else if r := strings.TrimSpace(msg.Reasoning); r != "" {
+			content = r
+		}
+	}
+	return content, cr.Usage.PromptTokens, cr.Usage.CompletionTokens, nil
 }

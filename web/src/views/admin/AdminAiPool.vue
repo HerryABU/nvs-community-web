@@ -224,6 +224,13 @@
         <el-form-item label="启用">
           <el-switch v-model="form.enabled" />
         </el-form-item>
+        <el-form-item v-if="form.kind === 'chat'" label="思考型">
+          <el-switch v-model="form.thinking" />
+          <span class="muted small">
+            先输出推理过程再给正文（DeepSeek-R1 / GLM / Qwen thinking 等）。
+            勾选后前端会把思考过程折叠展示，不会因为「正文来晚了」被当成卡死
+          </span>
+        </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.note" placeholder="选填" maxlength="256" />
         </el-form-item>
@@ -365,7 +372,7 @@ function blankForm() {
     name: '', kind: 'chat', model_id: '', base_url: '', api_key: '',
     price_in: 0, price_out: 0, price_call: 0, max_tokens: 2048,
     temperature: 0.7, priority: 0, enabled: true, note: '',
-    api_kind: 'openai', provider_hint: '', vendor: '',
+    api_kind: 'openai', provider_hint: '', vendor: '', thinking: false,
   };
 }
 const form = reactive(blankForm());
@@ -591,7 +598,7 @@ function openEdit(row: AdminAiModel) {
     max_tokens: row.max_tokens,
     temperature: row.temperature, priority: row.priority, enabled: row.enabled, note: row.note,
     api_kind: row.api_kind || 'openai', provider_hint: row.provider_hint || '',
-    vendor: row.vendor || '',
+    vendor: row.vendor || '', thinking: !!row.thinking,
   });
   dialogVisible.value = true;
 }
@@ -618,6 +625,7 @@ async function saveModel() {
       api_kind: form.api_kind,
       provider_hint: form.provider_hint,
       vendor: form.vendor,
+      thinking: !!form.thinking,
       note: form.note.trim(),
     };
     if (form.api_key.trim()) payload.api_key = form.api_key.trim();

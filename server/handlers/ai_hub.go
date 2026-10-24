@@ -44,9 +44,11 @@ func AiHubStatus(c *gin.Context) {
 					"id": m.ID, "name": m.Name, "model_id": m.ModelID,
 					"price_in": m.PriceIn, "price_out": m.PriceOut,
 					"price_call": m.PriceCall, "max_tokens": m.MaxTokens,
-					"api_kind": models.NormalizeAiApiKind(m.ApiKind),
+					"api_kind":      models.NormalizeAiApiKind(m.ApiKind),
 					"provider_hint": m.ProviderHint, "note": m.Note,
 					"vendor": m.Vendor,
+					// 思考型：前端在模型选择处给出提示，避免用户以为「卡住了」
+					"thinking": m.Thinking,
 				})
 			}
 			return items
@@ -313,6 +315,9 @@ func AiHubChatStream(c *gin.Context) {
 	temp := m.Temperature
 	client := aiclient.NewClient(baseURL, apiKey, 180*time.Second)
 	var sb string
+	// 思考型模型的推理过程单独累积：前端展示成可折叠的「思考过程」，
+	// 且当 content 整段为空时用它兜底（否则用户只看到「AI 未返回内容」）
+	var sbReasoning string
 	var realIn, realOut int
 	var streamErr string
 	chatReq := aiclient.ChatRequest{
@@ -333,6 +338,10 @@ func AiHubChatStream(c *gin.Context) {
 			streamErr = chunk.Err
 			break
 		}
+		if chunk.Reasoning != "" {
+			sbReasoning += chunk.Reasoning
+			sseEvent(c, gin.H{"reasoning": chunk.Reasoning})
+		}
 		if chunk.Content != "" {
 			sb += chunk.Content
 			sseEvent(c, gin.H{"content": chunk.Content})
@@ -349,6 +358,16 @@ func AiHubChatStream(c *gin.Context) {
 		models.FailAiCallLog(callLog.ID, streamErr)
 		sseEvent(c, gin.H{"error": "AI 调用失败：" + streamErr})
 		return
+	}
+	// 兜底：思考型模型可能把整段回答放在 reasoning 里，content 一直为空。
+	// 以前这里直接判失败并把这次调用记为错误——用户看到的却是「模型明明答了」。
+	// 注意**不要**再把 reasoning 当 content 增量推一遍：前端已经在「思考过程」里
+	// 实时展示过它，重复推送会让同一段文字出现两次。改为标记 answer_in_reasoning，
+	// 由前端在收尾时把它落成正文。
+	answerInReasoning := false
+	if sb == "" && sbReasoning != "" {
+		sb = sbReasoning
+		answerInReasoning = true
 	}
 	if sb == "" {
 		models.FailAiCallLog(callLog.ID, "上游未返回内容")
@@ -388,5 +407,7 @@ func AiHubChatStream(c *gin.Context) {
 		"free":          freeOK && !req.Byok,
 		"byok":          req.Byok,
 		"balance_after": nb,
+		// 正文为空、由 reasoning 兜底：前端据此决定把这段文字当正文而非思考过程
+		"answer_in_reasoning": answerInReasoning,
 	})
 }

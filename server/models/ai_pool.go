@@ -34,7 +34,12 @@ type AiModel struct {
 	// ProviderHint 上游归属：domestic（境内）/ overseas（境外）/ 空（未标注）→ 用于合规提示
 	ProviderHint string `gorm:"size:16;not null;default:''" json:"provider_hint"`
 	// Vendor 厂商（OpenAI/Anthropic/Google/DeepSeek/阿里/字节/Midjourney…）→ 前端「全部厂商」筛选
-	Vendor    string    `gorm:"size:32;not null;default:'';index" json:"vendor"`
+	Vendor string `gorm:"size:32;not null;default:'';index" json:"vendor"`
+	// Thinking 思考型模型（DeepSeek-R1 / GLM / Qwen thinking 等）：
+	// 它们的正文可能整段落在 reasoning 字段里，content 为空。
+	// 二值标记只用于「给站长一个解释」与前端展示提示，不影响调用逻辑
+	//（客户端已自动透传 reasoning 并在 content 为空时兜底）。
+	Thinking  bool      `gorm:"not null;default:false" json:"thinking"`
 	Note      string    `gorm:"size:256;default:''" json:"note"` // 备注
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

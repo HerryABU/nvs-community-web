@@ -282,6 +282,8 @@ export interface AdminAiModel {
   api_kind?: string;
   provider_hint?: string;
   vendor?: string;
+  /** 思考型模型：正文可能落在 reasoning 字段里 */
+  thinking?: boolean;
   note: string;
   created_at: string;
   updated_at: string;

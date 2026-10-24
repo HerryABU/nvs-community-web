@@ -17,6 +17,8 @@ export interface AiHubModel {
   provider_hint?: string;
   vendor?: string;
   note?: string;
+  /** 思考型模型：正文可能在 reasoning 字段，先出思考过程再出正文 */
+  thinking?: boolean;
 }
 
 export interface AiHubStatus {
@@ -74,6 +76,8 @@ export interface AiChatMessage {
   tokens_out: number;
   cost: number;
   free?: boolean;
+  /** 思考型模型的推理过程：仅本次会话内可见（后端不入库，刷新后消失） */
+  reasoning?: string;
   created_at: string;
 }
 
@@ -203,7 +207,18 @@ export async function streamChat(
   payload: { session_id?: number; model_id: number; agent_id?: number; message: string; max_tokens?: number; byok?: boolean; byok_model?: string; confirm?: boolean },
   onChunk: (text: string) => void,
   signal?: AbortSignal,
-): Promise<{ content: string; cost: number; free?: boolean; balance_after: number; session_id: number } | null> {
+  /** 思考型模型的推理增量（与正文分开推送，前端折叠展示） */
+  onReasoning?: (text: string) => void,
+): Promise<{
+  content: string;
+  reasoning: string;
+  /** 正文为空、整段回答来自 reasoning：前端应把 reasoning 落成正文而不是折叠块 */
+  answerInReasoning: boolean;
+  cost: number;
+  free?: boolean;
+  balance_after: number;
+  session_id: number;
+} | null> {
   const base = (api.defaults.baseURL || '') as string;
   // ⚠️ 必须带 X-Requested-With：CSRFGuard 对「已登录 Cookie + 非安全方法」强制校验该头，
   // 而 axios 实例的默认头不会作用于原生 fetch。漏了就是 403 —— 表现为"发出去没反应"，
@@ -236,6 +251,7 @@ export async function streamChat(
   const decoder = new TextDecoder();
   let buffer = '';
   let content = '';
+  let reasoning = '';
   let final: any = null;
   for (;;) {
     const { done, value } = await reader.read();
@@ -254,6 +270,10 @@ export async function streamChat(
         try {
           const ev = JSON.parse(dataStr);
           if (ev.error) throw new Error(ev.error);
+          if (ev.reasoning) {
+            reasoning += ev.reasoning;
+            onReasoning?.(ev.reasoning);
+          }
           if (ev.content) {
             content += ev.content;
             onChunk(ev.content);
@@ -268,6 +288,8 @@ export async function streamChat(
   if (!final) return null;
   return {
     content,
+    reasoning,
+    answerInReasoning: !!final.answer_in_reasoning,
     cost: final.cost || 0,
     free: !!final.free,
     balance_after: final.balance_after || 0,

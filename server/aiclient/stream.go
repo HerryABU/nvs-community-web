@@ -15,7 +15,11 @@ import (
 // StreamChunk 流式增量；最后一包 Done=true 且带 usage（上游未返回则为 0）。
 // Err 非空表示上游失败（内容增量不可用）。
 type StreamChunk struct {
-	Content   string `json:"content"`
+	Content string `json:"content"`
+	// Reasoning 思考型模型（DeepSeek-R1 / GLM / Qwen thinking 等）的推理过程。
+	// 这类模型经常 content 为空、正文全在 reasoning_content 里，只取 content 会表现为
+	// 「模型没回复」——接入第三方网关时踩过（glm-5.3-flash / Qwen3.8-Flash-Next）。
+	Reasoning string `json:"reasoning,omitempty"`
 	Done      bool   `json:"done"`
 	TokensIn  int    `json:"tokens_in,omitempty"`
 	TokensOut int    `json:"tokens_out,omitempty"`
@@ -27,6 +31,9 @@ type sseLine struct {
 	Choices []struct {
 		Delta struct {
 			Content string `json:"content"`
+			// 各家命名不一致：DeepSeek / vLLM 用 reasoning_content，OpenRouter / 部分网关用 reasoning
+			ReasoningContent string `json:"reasoning_content"`
+			Reasoning        string `json:"reasoning"`
 		} `json:"delta"`
 	} `json:"choices"`
 	Usage *struct {
@@ -98,6 +105,11 @@ func (c *Client) CompleteStream(req ChatRequest) <-chan StreamChunk {
 				tokensOut = sl.Usage.CompletionTokens
 			}
 			for _, choice := range sl.Choices {
+				if r := choice.Delta.ReasoningContent; r != "" {
+					ch <- StreamChunk{Reasoning: r}
+				} else if r := choice.Delta.Reasoning; r != "" {
+					ch <- StreamChunk{Reasoning: r}
+				}
 				if choice.Delta.Content != "" {
 					ch <- StreamChunk{Content: choice.Delta.Content}
 				}

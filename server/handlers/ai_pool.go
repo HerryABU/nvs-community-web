@@ -17,25 +17,25 @@ import (
 // aiModelVO 列表视图（密钥脱敏）
 func aiModelVO(m *models.AiModel) gin.H {
 	return gin.H{
-		"id":          m.ID,
-		"name":        m.Name,
-		"kind":        models.NormalizeAiKind(m.Kind),
-		"model_id":    m.ModelID,
-		"base_url":    m.BaseURL,
-		"has_api_key": m.ApiKeyEnc != "",
-		"price_in":    m.PriceIn,
-		"price_out":   m.PriceOut,
-		"price_call":  m.PriceCall,
-		"max_tokens":  m.MaxTokens,
-		"temperature": m.Temperature,
-		"enabled":     m.Enabled,
-		"priority":    m.Priority,
-		"api_kind":    models.NormalizeAiApiKind(m.ApiKind),
+		"id":            m.ID,
+		"name":          m.Name,
+		"kind":          models.NormalizeAiKind(m.Kind),
+		"model_id":      m.ModelID,
+		"base_url":      m.BaseURL,
+		"has_api_key":   m.ApiKeyEnc != "",
+		"price_in":      m.PriceIn,
+		"price_out":     m.PriceOut,
+		"price_call":    m.PriceCall,
+		"max_tokens":    m.MaxTokens,
+		"temperature":   m.Temperature,
+		"enabled":       m.Enabled,
+		"priority":      m.Priority,
+		"api_kind":      models.NormalizeAiApiKind(m.ApiKind),
 		"provider_hint": m.ProviderHint,
 		"vendor":        m.Vendor,
-		"note":        m.Note,
-		"created_at":  m.CreatedAt,
-		"updated_at":  m.UpdatedAt,
+		"note":          m.Note,
+		"created_at":    m.CreatedAt,
+		"updated_at":    m.UpdatedAt,
 	}
 }
 
@@ -89,22 +89,23 @@ func AdminListAiModels(c *gin.Context) {
 
 // aiModelInput 创建/更新共用入参
 type aiModelInput struct {
-	Name        string  `json:"name"`
-	Kind        string  `json:"kind"`
-	ModelID     string  `json:"model_id"`
-	BaseURL     string  `json:"base_url"`
-	ApiKey      string  `json:"api_key"` // 留空=不轮换
-	PriceIn     *int64  `json:"price_in"`
-	PriceOut    *int64  `json:"price_out"`
-	PriceCall   *int64  `json:"price_call"`
-	MaxTokens   *int    `json:"max_tokens"`
-	Temperature *float64 `json:"temperature"`
-	Enabled     *bool   `json:"enabled"`
-	Priority    *int    `json:"priority"`
-	ApiKind     string  `json:"api_kind"`
-	ProviderHint string `json:"provider_hint"`
-	Vendor      string  `json:"vendor"`
-	Note        string  `json:"note"`
+	Name         string   `json:"name"`
+	Kind         string   `json:"kind"`
+	ModelID      string   `json:"model_id"`
+	BaseURL      string   `json:"base_url"`
+	ApiKey       string   `json:"api_key"` // 留空=不轮换
+	PriceIn      *int64   `json:"price_in"`
+	PriceOut     *int64   `json:"price_out"`
+	PriceCall    *int64   `json:"price_call"`
+	MaxTokens    *int     `json:"max_tokens"`
+	Temperature  *float64 `json:"temperature"`
+	Enabled      *bool    `json:"enabled"`
+	Priority     *int     `json:"priority"`
+	ApiKind      string   `json:"api_kind"`
+	ProviderHint string   `json:"provider_hint"`
+	Vendor       string   `json:"vendor"`
+	Thinking     *bool    `json:"thinking"`
+	Note         string   `json:"note"`
 }
 
 // AdminCreateAiModel POST /api/admin/ai/models
@@ -131,6 +132,9 @@ func AdminCreateAiModel(c *gin.Context) {
 		ProviderHint: models.NormalizeProviderHint(req.ProviderHint),
 		Vendor:       strings.TrimSpace(req.Vendor),
 		Note:         strings.TrimSpace(req.Note),
+	}
+	if req.Thinking != nil {
+		m.Thinking = *req.Thinking
 	}
 	if req.PriceIn != nil {
 		m.PriceIn = *req.PriceIn
@@ -217,6 +221,9 @@ func AdminUpdateAiModel(c *gin.Context) {
 	}
 	fields["vendor"] = strings.TrimSpace(req.Vendor)
 	fields["note"] = strings.TrimSpace(req.Note)
+	if req.Thinking != nil {
+		fields["thinking"] = *req.Thinking
+	}
 	if err := models.UpdateAiModelFields(uint(id), fields, req.ApiKey); err != nil {
 		utils.InternalError(c, "保存失败")
 		return

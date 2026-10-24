@@ -40,6 +40,9 @@
             <span class="ms-card-vendor">{{ m.vendor || m.provider_hint || '未标注厂商' }}</span>
           </div>
           <el-tag size="small" :type="kindTag(m.kind)">{{ kindLabel(m.kind) }}</el-tag>
+          <el-tag v-if="m.thinking" size="small" type="warning" effect="plain" title="先输出推理过程，再给正文">
+            思考型
+          </el-tag>
         </header>
 
         <p v-if="m.note" class="ms-card-note">{{ m.note }}</p>
