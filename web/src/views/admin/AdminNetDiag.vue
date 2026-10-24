@@ -49,6 +49,16 @@
           <div class="dist-box">
             <div class="dist-title">Top IP（请求数）</div>
             <el-table :data="stats.top_ips" size="small" max-height="220" border>
+              <template #empty>
+                <StateBlock
+                  :state="loading ? 'loading' : 'empty'"
+                  skeleton="table"
+                  :rows="4"
+                  compact
+                  title="暂无数据"
+                  description="换个筛选条件试试，或等有数据后再来看。"
+                />
+              </template>
               <el-table-column prop="ip" label="IP" min-width="140" />
               <el-table-column prop="cnt" label="次数" width="80" />
             </el-table>
@@ -56,7 +66,27 @@
           <div class="dist-box">
             <div class="dist-title">状态码分布</div>
             <el-table :data="stats.status_dist" size="small" max-height="220" border>
+              <template #empty>
+                <StateBlock
+                  :state="loading ? 'loading' : 'empty'"
+                  skeleton="table"
+                  :rows="4"
+                  compact
+                  title="暂无数据"
+                  description="换个筛选条件试试，或等有数据后再来看。"
+                />
+              </template>
               <el-table-column label="状态码" width="100">
+                <template #empty>
+                  <StateBlock
+                    :state="loading ? 'loading' : 'empty'"
+                    skeleton="table"
+                    :rows="4"
+                    compact
+                    title="暂无数据"
+                    description="换个筛选条件试试，或等有数据后再来看。"
+                  />
+                </template>
                 <template #default="{ row }"><span :class="['st', 'st-' + String(row.status_code)[0]]">{{ row.status_code }}</span></template>
               </el-table-column>
               <el-table-column prop="cnt" label="次数" width="80" />
@@ -65,7 +95,27 @@
           <div class="dist-box">
             <div class="dist-title">UA 家族分布</div>
             <el-table :data="stats.ua_family_dist" size="small" max-height="220" border>
+              <template #empty>
+                <StateBlock
+                  :state="loading ? 'loading' : 'empty'"
+                  skeleton="table"
+                  :rows="4"
+                  compact
+                  title="暂无数据"
+                  description="换个筛选条件试试，或等有数据后再来看。"
+                />
+              </template>
               <el-table-column label="家族" width="120">
+                <template #empty>
+                  <StateBlock
+                    :state="loading ? 'loading' : 'empty'"
+                    skeleton="table"
+                    :rows="4"
+                    compact
+                    title="暂无数据"
+                    description="换个筛选条件试试，或等有数据后再来看。"
+                  />
+                </template>
                 <template #default="{ row }"><el-tag :type="familyTag(row.family)" size="small">{{ row.family }}</el-tag></template>
               </el-table-column>
               <el-table-column prop="cnt" label="次数" width="80" />
@@ -74,6 +124,16 @@
           <div class="dist-box">
             <div class="dist-title">爬虫命中原因</div>
             <el-table :data="stats.bot_reason_dist" size="small" max-height="220" border>
+              <template #empty>
+                <StateBlock
+                  :state="loading ? 'loading' : 'empty'"
+                  skeleton="table"
+                  :rows="4"
+                  compact
+                  title="暂无数据"
+                  description="换个筛选条件试试，或等有数据后再来看。"
+                />
+              </template>
               <el-table-column prop="reason" label="原因" min-width="140" />
               <el-table-column prop="cnt" label="次数" width="80" />
             </el-table>
@@ -83,6 +143,16 @@
         <div class="dist-box dist-paths">
           <div class="dist-title">Top 路径（请求数）</div>
           <el-table :data="stats.top_paths" size="small" max-height="200" border>
+            <template #empty>
+              <StateBlock
+                :state="loading ? 'loading' : 'empty'"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <el-table-column prop="path" label="路径" min-width="300" show-overflow-tooltip />
             <el-table-column prop="cnt" label="次数" width="90" />
           </el-table>
@@ -203,6 +273,7 @@ import { Connection, Search, RefreshLeft, Delete } from '@element-plus/icons-vue
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 interface WebRow {
   id: number; user_id: number; identity_type: string; ua_family: string;

@@ -138,6 +138,7 @@ import { Plus, Search, Refresh, Key } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const rules = ref<any[]>([]);
 const loading = ref(false);

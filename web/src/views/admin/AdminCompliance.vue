@@ -9,8 +9,28 @@
           生成/刷新自查报告
         </el-button>
         <el-table v-if="report" :data="report.checklist" border stripe size="small">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <el-table-column prop="item" label="检查材料" min-width="180" />
           <el-table-column label="就绪状态" width="100">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <el-tag :type="row.ready ? 'success' : 'warning'" size="small">{{ row.ready ? '已就绪' : '待补充' }}</el-tag>
             </template>
@@ -98,6 +118,7 @@ import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { appPrefix } from '@/utils/prefix';
 import { ElMessage } from 'element-plus';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const report = ref<any>(null);
 const reportLoading = ref(false);

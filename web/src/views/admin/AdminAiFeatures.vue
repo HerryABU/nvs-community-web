@@ -208,6 +208,7 @@ import AdminHeader from '@/components/admin/AdminHeader.vue';
 import SectionHeader from '@/components/common/SectionHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import { aiApi, type AiFeatureFlags, type AiVendor, type AiStyle, type AiCozeDefault } from '@/api/ai';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const saving = ref(false);
 const flags = reactive<AiFeatureFlags>({

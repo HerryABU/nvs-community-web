@@ -55,9 +55,29 @@
         </el-form>
 
         <el-table :data="overrides" style="width:100%;margin-top:8px" v-loading="loadingOverrides">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <el-table-column prop="user_id" label="用户 ID" width="90" />
           <el-table-column prop="username" label="用户名" min-width="110" show-overflow-tooltip />
           <el-table-column label="数量额度" width="140">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <el-tag size="small" :type="row.quota === -1 ? 'info' : (row.quota === 0 ? 'danger' : 'success')">
                 {{ row.quota === -1 ? '跟随全局' : (row.quota === 0 ? '禁止公开' : row.quota + ' 个') }}
@@ -65,6 +85,16 @@
             </template>
           </el-table-column>
           <el-table-column label="大小额度" width="150">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <el-tag size="small" :type="sizeTagType(row.quota_size_mb)">
                 {{ sizeLabel(row.quota_size_mb) }}
@@ -73,6 +103,16 @@
           </el-table-column>
           <el-table-column prop="note" label="备注" min-width="120" show-overflow-tooltip />
           <el-table-column label="操作" width="90" fixed="right">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <el-button size="small" type="danger" text @click="removeOverride(row)">撤销</el-button>
             </template>
@@ -94,7 +134,27 @@
       </div>
 
       <el-table :data="requests" v-loading="loadingRequests" style="width:100%;margin-top:12px">
+        <template #empty>
+          <StateBlock
+            state="empty"
+            skeleton="table"
+            :rows="4"
+            compact
+            title="暂无数据"
+            description="换个筛选条件试试，或等有数据后再来看。"
+          />
+        </template>
         <el-table-column label="类型" width="100">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag size="small" :type="row.target_type === 'frame' ? 'primary' : 'success'">
               {{ row.target_type === 'frame' ? 'UI 模板' : 'HTML 扩展' }}
@@ -105,12 +165,32 @@
         <el-table-column prop="username" label="申请人" width="120" show-overflow-tooltip />
         <el-table-column prop="reason" label="申请理由" min-width="180" show-overflow-tooltip />
         <el-table-column label="状态" width="100">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag size="small" :type="reqTag(row.status)">{{ reqLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="created_at" label="提交时间" width="170" show-overflow-tooltip />
         <el-table-column label="操作" width="160" fixed="right">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">
             <template v-if="row.status === 'pending'">
               <el-button size="small" type="success" text @click="openReview(row, 'approve')">批准</el-button>
@@ -146,6 +226,7 @@ import { Refresh, Stamp } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { webQuotaApi } from '@/api/webQuota';
 import { ElMessage } from 'element-plus';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 interface QuotaRequest {
   id: number; user_id: number; target_type: string; target_id: number; status: string;

@@ -37,22 +37,72 @@
     </div>
 
     <el-table :data="list" size="small" class="panel" @row-click="openDetail">
+      <template #empty>
+        <StateBlock
+          state="empty"
+          skeleton="table"
+          :rows="4"
+          compact
+          title="暂无数据"
+          description="换个筛选条件试试，或等有数据后再来看。"
+        />
+      </template>
       <el-table-column prop="no" label="工单号" width="150" />
       <el-table-column prop="title" label="标题" min-width="220" />
       <el-table-column label="类型/优先级" width="150">
+        <template #empty>
+          <StateBlock
+            state="empty"
+            skeleton="table"
+            :rows="4"
+            compact
+            title="暂无数据"
+            description="换个筛选条件试试，或等有数据后再来看。"
+          />
+        </template>
         <template #default="{ row }">
           {{ kindLabel(row.kind) }} · <el-tag size="small" :type="priType(row.priority)">{{ priLabel(row.priority) }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column label="状态" width="110">
+        <template #empty>
+          <StateBlock
+            state="empty"
+            skeleton="table"
+            :rows="4"
+            compact
+            title="暂无数据"
+            description="换个筛选条件试试，或等有数据后再来看。"
+          />
+        </template>
         <template #default="{ row }">
           <el-tag size="small" :type="row.status === 'closed' ? 'info' : 'warning'">{{ stLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="handler_id" label="处理人" width="90">
+        <template #empty>
+          <StateBlock
+            state="empty"
+            skeleton="table"
+            :rows="4"
+            compact
+            title="暂无数据"
+            description="换个筛选条件试试，或等有数据后再来看。"
+          />
+        </template>
         <template #default="{ row }">{{ row.handler_id || '—' }}</template>
       </el-table-column>
       <el-table-column label="建单/截止" width="170">
+        <template #empty>
+          <StateBlock
+            state="empty"
+            skeleton="table"
+            :rows="4"
+            compact
+            title="暂无数据"
+            description="换个筛选条件试试，或等有数据后再来看。"
+          />
+        </template>
         <template #default="{ row }">
           <div class="small">{{ fmt(row.created_at) }}</div>
           <div class="small" :class="{ overdue: row.due_at && !row.closed_at && isOverdue(row.due_at) }">
@@ -170,6 +220,7 @@
 import { onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { ticketApi, type Ticket, type TicketLog } from '@/api/costrisk';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const list = ref<Ticket[]>([]);
 const stats = ref<any>(null);

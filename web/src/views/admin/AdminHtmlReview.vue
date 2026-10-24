@@ -265,6 +265,7 @@ import AdminHeader from '@/components/admin/AdminHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage } from 'element-plus';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 interface ReviewItem {
   type: string; id: number; user_id: number; owner_name: string;

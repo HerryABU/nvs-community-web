@@ -38,22 +38,82 @@
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="width: 100%">
+      <template #empty>
+        <StateBlock
+          :state="loading ? 'loading' : 'empty'"
+          skeleton="table"
+          :rows="4"
+          compact
+          title="暂无数据"
+          description="换个筛选条件试试，或等有数据后再来看。"
+        />
+      </template>
       <el-table-column prop="type" label="类型" width="110">
+        <template #empty>
+          <StateBlock
+            :state="loading ? 'loading' : 'empty'"
+            skeleton="table"
+            :rows="4"
+            compact
+            title="暂无数据"
+            description="换个筛选条件试试，或等有数据后再来看。"
+          />
+        </template>
         <template #default="{ row }"><el-tag size="small">{{ typeLabel(row.type) }}</el-tag></template>
       </el-table-column>
       <el-table-column prop="original_id" label="原ID" width="90" />
       <el-table-column prop="operator" label="处置人" width="130" />
       <el-table-column prop="source" label="来源" width="100" />
       <el-table-column prop="reason" label="原因" min-width="180" show-overflow-tooltip>
+        <template #empty>
+          <StateBlock
+            :state="loading ? 'loading' : 'empty'"
+            skeleton="table"
+            :rows="4"
+            compact
+            title="暂无数据"
+            description="换个筛选条件试试，或等有数据后再来看。"
+          />
+        </template>
         <template #default="{ row }"><span :style="{ color: delColor }">{{ row.reason }}</span></template>
       </el-table-column>
       <el-table-column prop="summary" label="摘要" min-width="200" show-overflow-tooltip>
+        <template #empty>
+          <StateBlock
+            :state="loading ? 'loading' : 'empty'"
+            skeleton="table"
+            :rows="4"
+            compact
+            title="暂无数据"
+            description="换个筛选条件试试，或等有数据后再来看。"
+          />
+        </template>
         <template #default="{ row }"><span :style="{ color: delColor }">{{ row.summary }}</span></template>
       </el-table-column>
       <el-table-column prop="deleted_at" label="删除时间" width="170">
+        <template #empty>
+          <StateBlock
+            :state="loading ? 'loading' : 'empty'"
+            skeleton="table"
+            :rows="4"
+            compact
+            title="暂无数据"
+            description="换个筛选条件试试，或等有数据后再来看。"
+          />
+        </template>
         <template #default="{ row }">{{ formatDate(row.deleted_at) }}</template>
       </el-table-column>
       <el-table-column label="操作" width="220" fixed="right">
+        <template #empty>
+          <StateBlock
+            :state="loading ? 'loading' : 'empty'"
+            skeleton="table"
+            :rows="4"
+            compact
+            title="暂无数据"
+            description="换个筛选条件试试，或等有数据后再来看。"
+          />
+        </template>
         <template #default="{ row }">
           <el-button size="small" type="primary" plain @click="openDetail(row)">详情</el-button>
           <el-button size="small" type="success" plain @click="doDownload(row)">
@@ -100,6 +160,7 @@ import { ElMessage } from 'element-plus';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import PoliceForumPatrol from './police/PoliceForumPatrol.vue';
 import { Stamp, Search, Download } from '@element-plus/icons-vue';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const DefaultPoliceDelColor = '#ff4d4f';
 

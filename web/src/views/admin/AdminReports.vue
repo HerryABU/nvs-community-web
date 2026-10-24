@@ -105,6 +105,7 @@ import { Refresh, Warning } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage } from 'element-plus';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const reports = ref<any[]>([]);
 const loading = ref(false);

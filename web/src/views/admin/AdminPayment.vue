@@ -114,33 +114,103 @@
         </span>
       </div>
       <el-table :data="tiers" size="small" border style="max-width: 980px">
+        <template #empty>
+          <StateBlock
+            :state="loading ? 'loading' : 'empty'"
+            skeleton="table"
+            :rows="4"
+            compact
+            title="暂无数据"
+            description="换个筛选条件试试，或等有数据后再来看。"
+          />
+        </template>
         <el-table-column label="面额（分）" width="140">
+          <template #empty>
+            <StateBlock
+              :state="loading ? 'loading' : 'empty'"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">
             <el-input-number v-model="row.fen" :min="100" :max="100000000" :step="100" size="small" controls-position="right" style="width: 120px" />
           </template>
         </el-table-column>
         <el-table-column label="赠送代币" width="130">
+          <template #empty>
+            <StateBlock
+              :state="loading ? 'loading' : 'empty'"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">
             <el-input-number v-model="row.bonus" :min="0" :step="10" size="small" controls-position="right" style="width: 110px" />
           </template>
         </el-table-column>
         <el-table-column label="展示名" width="150">
+          <template #empty>
+            <StateBlock
+              :state="loading ? 'loading' : 'empty'"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">
             <el-input v-model="row.label" maxlength="16" size="small" style="width: 130px" />
           </template>
         </el-table-column>
         <el-table-column label="会员天数" width="120">
+          <template #empty>
+            <StateBlock
+              :state="loading ? 'loading' : 'empty'"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">
             <el-input-number v-model="row.days" :min="0" :max="3650" size="small" controls-position="right" style="width: 100px" />
           </template>
         </el-table-column>
         <el-table-column label="角标" width="110">
+          <template #empty>
+            <StateBlock
+              :state="loading ? 'loading' : 'empty'"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">
             <el-input v-model="row.badge" maxlength="8" size="small" placeholder="推荐" style="width: 90px" />
           </template>
         </el-table-column>
         <!-- 权益用弹窗编辑：内联 textarea 在表格里会挤成一条线，站长根本改不了 -->
         <el-table-column label="权益" width="110">
+          <template #empty>
+            <StateBlock
+              :state="loading ? 'loading' : 'empty'"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row, $index }">
             <el-button text type="primary" size="small" @click="openFeatures($index)">
               {{ (row.features || []).length }} 条
@@ -148,6 +218,16 @@
           </template>
         </el-table-column>
         <el-table-column label="操作" width="80">
+          <template #empty>
+            <StateBlock
+              :state="loading ? 'loading' : 'empty'"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ $index }">
             <el-button text type="danger" size="small" @click="tiers.splice($index, 1)">删除</el-button>
           </template>
@@ -203,20 +283,80 @@
         <el-button v-if="orderFilter.userID" text type="primary" @click="clearUserFilter">清除用户筛选</el-button>
       </div>
       <el-table :data="orders.list" v-loading="ordersLoading" size="small">
+        <template #empty>
+          <StateBlock
+            :state="loading ? 'loading' : 'empty'"
+            skeleton="table"
+            :rows="4"
+            compact
+            title="暂无数据"
+            description="换个筛选条件试试，或等有数据后再来看。"
+          />
+        </template>
         <el-table-column prop="order_no" label="订单号" min-width="160" show-overflow-tooltip />
         <el-table-column label="用户" min-width="110" show-overflow-tooltip>
+          <template #empty>
+            <StateBlock
+              :state="loading ? 'loading' : 'empty'"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">{{ row.username || row.user_id }}</template>
         </el-table-column>
         <el-table-column label="渠道" width="90">
+          <template #empty>
+            <StateBlock
+              :state="loading ? 'loading' : 'empty'"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">{{ PAY_CHANNEL_LABELS[row.channel] || row.channel }}</template>
         </el-table-column>
         <el-table-column label="金额" width="90">
+          <template #empty>
+            <StateBlock
+              :state="loading ? 'loading' : 'empty'"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">¥{{ (row.amount_fen / 100).toFixed(2) }}</template>
         </el-table-column>
         <el-table-column label="到账代币" width="100">
+          <template #empty>
+            <StateBlock
+              :state="loading ? 'loading' : 'empty'"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">+{{ row.token_amount }}</template>
         </el-table-column>
         <el-table-column label="状态" width="90">
+          <template #empty>
+            <StateBlock
+              :state="loading ? 'loading' : 'empty'"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag size="small" :type="row.status === 'paid' ? 'success' : row.status === 'pending' ? 'warning' : 'info'">
               {{ PAY_STATUS_LABELS[row.status] || row.status }}
@@ -224,10 +364,30 @@
           </template>
         </el-table-column>
         <el-table-column prop="transaction_id" label="渠道流水号" min-width="120" show-overflow-tooltip>
+          <template #empty>
+            <StateBlock
+              :state="loading ? 'loading' : 'empty'"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">{{ row.transaction_id || '—' }}</template>
         </el-table-column>
         <el-table-column prop="created_at" label="下单时间" min-width="150" show-overflow-tooltip />
         <el-table-column label="操作" width="90" fixed="right">
+          <template #empty>
+            <StateBlock
+              :state="loading ? 'loading' : 'empty'"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">
             <el-button
               v-if="row.status === 'pending'"
@@ -258,6 +418,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus } from '@element-plus/icons-vue';
 import SectionHeader from '@/components/common/SectionHeader.vue';
 import { paymentApi, PAY_STATUS_LABELS, PAY_CHANNEL_LABELS, type PaymentAdminConfig, type PaymentTier, type PaymentOrderItem } from '@/api/payment';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const loading = ref(false);
 const saving = ref(false);

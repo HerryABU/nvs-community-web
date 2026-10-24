@@ -83,6 +83,16 @@
         </el-form>
 
         <el-table :data="throttleTop" size="small" class="panel">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <el-table-column prop="key" label="维度键" min-width="200" />
           <el-table-column prop="dimension" label="维度" width="140" />
           <el-table-column prop="count_1min" label="近 1 分钟次数" width="140" />
@@ -117,10 +127,30 @@
         <el-alert :type="audioCount ? 'success' : 'warning'" :closable="false" class="mb"
           :title="audioCount ? `已配置 ${audioCount} 个 audio 模型` : '未配置 audio 模型：/api/ai/speech 会返回「未配置」而不是假装生成'" />
         <el-table :data="audioModels" size="small" class="panel">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <el-table-column prop="name" label="展示名" width="180" />
           <el-table-column prop="model_id" label="上游模型" min-width="180" />
           <el-table-column prop="price_call" label="每次代币" width="110" />
           <el-table-column label="启用" width="90">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <el-tag size="small" :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '是' : '否' }}</el-tag>
             </template>
@@ -136,6 +166,7 @@
 import { onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { aiCostApi, type BudgetConfig } from '@/api/costrisk';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const tab = ref('budget');
 

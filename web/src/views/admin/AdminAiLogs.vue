@@ -193,6 +193,7 @@ import { ElMessage } from 'element-plus';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import { aiApi } from '@/api/ai';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const tab = ref<'sessions' | 'media' | 'calls'>('sessions');
 const loading = ref(false);

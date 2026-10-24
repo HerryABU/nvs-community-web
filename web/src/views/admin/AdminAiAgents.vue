@@ -121,6 +121,7 @@ import { Avatar, Plus } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import { aiHubApi } from '@/api/aiHub';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const agents = ref<any[]>([]);
 const loading = ref(false);

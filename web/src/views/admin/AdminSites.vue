@@ -7,10 +7,30 @@
         <el-button type="primary" size="small" @click="showAddSiteDialog">添加站点</el-button>
       </div>
       <el-table :data="sites" v-loading="loadingSites" style="width:100%">
+        <template #empty>
+          <StateBlock
+            state="empty"
+            skeleton="table"
+            :rows="4"
+            compact
+            title="暂无数据"
+            description="换个筛选条件试试，或等有数据后再来看。"
+          />
+        </template>
         <el-table-column prop="name" label="站点名称" min-width="120" />
         <el-table-column prop="url" label="站点地址" min-width="180" show-overflow-tooltip />
         <el-table-column prop="api_url" label="API 地址" min-width="200" show-overflow-tooltip />
         <el-table-column prop="status" label="状态" width="90">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag :type="row.status === 'active' ? 'success' : 'danger'" size="small">
               {{ row.status === 'active' ? '启用' : '停用' }}
@@ -19,6 +39,16 @@
         </el-table-column>
         <el-table-column prop="novel_count" label="缓存作品" width="90" />
         <el-table-column label="操作" width="330" fixed="right">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">
             <el-button size="small" @click="syncSite(row)" :loading="syncingId === row.id">同步</el-button>
             <el-button size="small" type="primary" plain @click="openKeys(row)">联邦 Key</el-button>
@@ -39,20 +69,70 @@
           对方需在「API 地址」填到 <code>/api/federated</code>，同步时会自动向本站自报身份。
         </p>
         <el-table :data="inbound" v-loading="loadingInbound" size="small" style="width:100%">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <el-table-column prop="name" label="站点名" min-width="120">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <strong>{{ row.name || '（未自报）' }}</strong>
             </template>
           </el-table-column>
           <el-table-column prop="url" label="站点地址" min-width="200" show-overflow-tooltip>
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">{{ row.url || '—' }}</template>
           </el-table-column>
           <el-table-column prop="ip" label="来源 IP" width="140" />
           <el-table-column label="接口" width="140">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }"><code>{{ row.endpoint }}</code></template>
           </el-table-column>
           <el-table-column prop="count" label="访问次数" width="90" />
           <el-table-column label="最近访问" width="170">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">{{ formatTime(row.last_seen) }}</template>
           </el-table-column>
         </el-table>
@@ -110,24 +190,94 @@
         </div>
         <p class="hint-text">将完整 Key 转交给对方站，填入其「远程站点互通 → 该站点 → 对方签发给本站的 Key」。</p>
         <el-table :data="inboundKeys" size="small" style="width: 100%">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <el-table-column label="Key 前缀" width="170">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }"><code>{{ row.key_prefix }}</code></template>
           </el-table-column>
           <el-table-column label="签发方" width="130">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">{{ row.issuer_name || '—' }}</template>
           </el-table-column>
           <el-table-column label="配额" width="110">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">{{ row.quota_per_min }} 次/分</template>
           </el-table-column>
           <el-table-column label="状态" width="80">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <el-tag :type="row.is_active ? 'success' : 'danger'" size="small">{{ row.is_active ? '启用' : '停用' }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="最近使用" width="150">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">{{ formatTime(row.last_used_at) }}</template>
           </el-table-column>
           <el-table-column label="操作" width="120">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <el-button size="small" text @click="toggleKey(row)">{{ row.is_active ? '停用' : '启用' }}</el-button>
               <el-button size="small" text type="danger" @click="deleteKey(row)">吊销</el-button>
@@ -147,18 +297,68 @@
           <el-button size="small" type="primary" @click="saveOutboundKey" :loading="savingOutbound">保存</el-button>
         </div>
         <el-table v-if="outboundKeys.length" :data="outboundKeys" size="small" style="width: 100%">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <el-table-column label="Key 前缀" width="170">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }"><code>{{ row.key_prefix }}</code></template>
           </el-table-column>
           <el-table-column label="签发方" width="160">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">{{ row.issuer_name || '—' }}</template>
           </el-table-column>
           <el-table-column label="状态" width="80">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <el-tag :type="row.is_active ? 'success' : 'danger'" size="small">{{ row.is_active ? '启用' : '停用' }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="操作" width="120">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <el-button size="small" text @click="toggleKey(row)">{{ row.is_active ? '停用' : '启用' }}</el-button>
               <el-button size="small" text type="danger" @click="deleteKey(row)">吊销</el-button>
@@ -186,6 +386,7 @@ import { Connection } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const sites = ref<any[]>([]);
 const loadingSites = ref(false);

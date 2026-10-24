@@ -168,6 +168,7 @@ import { Lock, Refresh, Search } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const search = ref('');
 const novels = ref<any[]>([]);

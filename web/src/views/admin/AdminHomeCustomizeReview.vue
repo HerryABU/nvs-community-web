@@ -127,6 +127,7 @@ import AdminHeader from '@/components/admin/AdminHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import { homeCustomizeApi, type HomeCustomizeReviewItem } from '@/api/homeCustomize';
 import { ElMessage } from 'element-plus';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const items = ref<HomeCustomizeReviewItem[]>([]);
 const loading = ref(false);

@@ -123,19 +123,69 @@
         <h3 class="panel-title">全站 API Key 一览</h3>
         <p class="hint-text">所有用户创建的用户级 Key（站长 / 作者 / 读者）。联邦 Key 请在「远程站点互通」中管理。</p>
         <el-table :data="allKeys" v-loading="loadingKeys" size="small" style="width: 100%">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <el-table-column prop="username" label="用户名" width="110" />
           <el-table-column prop="name" label="备注" min-width="100">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">{{ row.name || '—' }}</template>
           </el-table-column>
           <el-table-column label="身份" width="80">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <el-tag :type="roleTag(row.role)" size="small">{{ roleLabel(row.role) }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="key_prefix" label="Key 前缀" width="170">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }"><code>{{ row.key_prefix }}</code></template>
           </el-table-column>
           <el-table-column label="配额" width="130">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <span>{{ row.effective_req ?? row.quota_per_min }} 次/分</span>
               <el-tooltip v-if="row.user_quota > 0" content="管理员为该用户设置了专属配额（取更严格值）" placement="top">
@@ -144,6 +194,16 @@
             </template>
           </el-table-column>
           <el-table-column label="状态" width="170">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <el-tag v-if="row.is_banned || row.user_banned" type="danger" size="small">
                 {{ row.user_banned ? '用户已封禁' : 'Key 已封禁' }}
@@ -152,12 +212,42 @@
             </template>
           </el-table-column>
           <el-table-column label="最近使用" width="160">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">{{ formatTime(row.last_used_at) }}</template>
           </el-table-column>
           <el-table-column label="调用次数" width="90">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">{{ row.total_calls ?? 0 }}</template>
           </el-table-column>
           <el-table-column label="操作" width="250" fixed="right">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <el-button size="small" text @click="toggleKey(row)">{{ row.is_active ? '停用' : '启用' }}</el-button>
               <el-button
@@ -226,9 +316,29 @@
         <el-divider />
         <h3 class="panel-title">已单独设置 / 封禁的用户</h3>
         <el-table :data="userPolicies" v-loading="loadingPolicies" size="small" style="width: 100%">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <el-table-column prop="user_id" label="用户ID" width="80" />
           <el-table-column prop="username" label="用户名" width="130" />
           <el-table-column label="封禁" width="120">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <el-tag v-if="row.keys_banned" type="danger" size="small">
                 {{ row.ban_until ? '至 ' + formatTime(row.ban_until) : '永久' }}
@@ -237,18 +347,58 @@
             </template>
           </el-table-column>
           <el-table-column label="专属配额" width="150">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <span v-if="row.quota_per_min > 0">{{ row.quota_per_min }} 次/{{ row.window_secs || 60 }}秒</span>
               <span v-else class="muted">跟随全局</span>
             </template>
           </el-table-column>
           <el-table-column label="Key 上限" width="90">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">{{ row.max_keys > 0 ? row.max_keys : '不限' }}</template>
           </el-table-column>
           <el-table-column prop="ban_reason" label="封禁原因" min-width="140">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">{{ row.ban_reason || row.note || '—' }}</template>
           </el-table-column>
           <el-table-column label="操作" width="180" fixed="right">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <el-button size="small" text @click="editPolicy(row)">编辑</el-button>
               <el-button v-if="row.keys_banned" size="small" text type="success" @click="unbanUserKeysDirect(row)">解封</el-button>
@@ -286,30 +436,100 @@
           </el-select>
         </div>
         <el-table :data="logs" v-loading="loadingLogs" size="small" style="width: 100%">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <el-table-column prop="created_at" label="时间" width="160">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
           </el-table-column>
           <el-table-column label="身份" width="80">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <el-tag :type="logTypeTag(row.identity_type)" size="small">{{ roleLabel(row.identity_type) }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="key_prefix" label="Key 前缀" width="150">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }"><code>{{ row.key_prefix || '—' }}</code></template>
           </el-table-column>
           <el-table-column label="请求" min-width="180">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <span class="http-method" :class="'m-' + row.method.toLowerCase()">{{ row.method }}</span>
               <span class="http-path">{{ row.path }}</span>
             </template>
           </el-table-column>
           <el-table-column label="状态" width="70">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <span :class="row.status_code >= 400 ? 'status-err' : 'status-ok'">{{ row.status_code || 200 }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="request_ip" label="IP" width="120" />
           <el-table-column prop="bot_reason" label="命中原因" min-width="140">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">{{ row.bot_reason || '—' }}</template>
           </el-table-column>
         </el-table>
@@ -333,6 +553,7 @@ import { Key } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const statLabels: Record<string, string> = {
   total: '限流条目总数', by_key: '按 Key', by_bot: '爬虫通道',

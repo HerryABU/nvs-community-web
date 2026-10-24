@@ -156,6 +156,7 @@ import AdminHeader from '@/components/admin/AdminHeader.vue';
 import SectionHeader from '@/components/common/SectionHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import { tokenApi } from '@/api/token';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 // ---------- 基础配置 ----------
 const config = reactive<{ enabled: boolean; name: string }>({ enabled: false, name: '代币' });

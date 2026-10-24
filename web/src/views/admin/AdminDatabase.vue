@@ -102,6 +102,7 @@ import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { apiPrefix } from '@/api/index';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const activeTab = ref('migrate');
 

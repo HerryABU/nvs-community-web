@@ -93,6 +93,7 @@ import { ref, computed, onMounted } from 'vue';
 import { Box, Refresh } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const records = ref<any[]>([]);
 const loading = ref(false);

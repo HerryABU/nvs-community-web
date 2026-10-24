@@ -206,3 +206,92 @@
     flex-shrink: 0;
   }
 }
+
+/* =========================================================================
+   后台表格密度与观感统一（2026-10-24）
+   -------------------------------------------------------------------------
+   背景：48 个后台页里共有 455 个 el-table，其中 415 个没设 size（走默认大行高）、
+   448 个没斑马纹、442 个没边框 —— 同一套后台里行高/表头/留白各不相同，
+   这就是"逐页看都觉得粗糙"的根因。逐页改属性要动 48 个文件且必然再次漂移，
+   这里用一组作用域限定在 .admin-page 内的全局规则统一，页面里显式写的属性仍然优先。
+   ========================================================================= */
+.admin-page .el-table {
+  --el-table-border-color: var(--border-color);
+  --el-table-header-bg-color: var(--bg-page);
+  --el-table-row-hover-bg-color: var(--bg-page);
+  font-size: var(--text-sm);
+}
+
+/* 单元格密度：默认 12~14px 上下留白太松，后台是"扫读"场景，8px 更合适。
+   ⚠️ 必须 !important：Element Plus 自带 `.el-table .el-table__cell` 等规则，
+   与这里特异性接近且加载顺序在后，不加的话实测仍是 14px（试过）。 */
+.admin-page .el-table th.el-table__cell,
+.admin-page .el-table td.el-table__cell {
+  padding: 8px 0 !important;
+}
+.admin-page .el-table th.el-table__cell {
+  padding: 9px 0 !important;
+  font-weight: 600;
+  font-size: var(--text-xs);
+  color: var(--text-light);
+  letter-spacing: 0.02em;
+  background: var(--bg-page);
+}
+/* 表头与内容之间给一条实线，扫读时不容易串行 */
+.admin-page .el-table th.el-table__cell {
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* 第一列与最后一列留一点边距，别贴着卡片边 */
+.admin-page .el-table .el-table__cell:first-child .cell { padding-left: 4px; }
+.admin-page .el-table .el-table__cell:last-child .cell { padding-right: 4px; }
+
+/* 行内操作按钮：默认 el-button 之间 12px，表格里太散，收到 4px */
+.admin-page .el-table .cell > .el-button + .el-button {
+  margin-left: 4px;
+}
+
+/* 空态：Element Plus 默认给一个 60px 插画 + 大留白，后台表格空一行时特别占地方。
+   这里压成"一行说明"的紧凑形态（不隐藏图标，避免有的页面靠图标传达状态）。 */
+.admin-page .el-table__empty-block {
+  min-height: 120px;
+  padding: 16px 0;
+}
+.admin-page .el-table__empty-text {
+  font-size: var(--text-sm);
+  color: var(--text-light);
+  line-height: 1.8;
+}
+.admin-page .el-table__empty-block .el-empty {
+  padding: 0;
+}
+.admin-page .el-table__empty-block .el-empty__image {
+  width: 48px;
+  height: 48px;
+}
+
+/* 工具栏统一：15 个页面用了 .admin-toolbar，其余各写各的 flex。
+   这里把间距/换行固定下来，页面内的局部微调仍然可以覆盖。 */
+.admin-page .admin-toolbar {
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.admin-page .admin-toolbar > .el-button:last-child {
+  margin-left: auto;   /* 「刷新/新增」类主操作靠右，避免每条工具栏都写 margin-left:auto */
+}
+@media (max-width: 768px) {
+  .admin-page .admin-toolbar > .el-button:last-child {
+    margin-left: 0;
+  }
+}
+
+/* 深色模式：表头底色与分隔线跟随令牌，避免白底表头躺在深色卡片里 */
+[data-theme="dark"] .admin-page .el-table {
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-header-bg-color: #0f172a;
+  --el-table-row-hover-bg-color: #0f172a;
+  --el-table-border-color: #334155;
+  --el-table-text-color: #e2e8f0;
+  --el-table-header-text-color: #94a3b8;
+}

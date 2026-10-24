@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { appPrefix } from '@/utils/prefix';
+import { reportAdminApiError, clearAdminApiError } from '@/utils/adminHealth';
 
 // 为 AxiosRequestConfig 扩展内部标记字段（仅本拦截器使用，不影响外部类型）
 declare module 'axios' {
@@ -81,9 +82,24 @@ async function silentRefresh(): Promise<boolean> {
 }
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // 后台请求成功即认为后端健康（清掉页头的异常提示）
+    const url = response.config?.url || '';
+    if (url.includes('/admin/')) clearAdminApiError();
+    return response;
+  },
   async (error) => {
     const { config, response } = error;
+    // 后台页的硬失败（网络错误 / 5xx）统一登记：页面各自 catch 里只打日志或弹 toast，
+    // 用户实际看到的是"表格空白"。由 AdminHeader 常驻提示 + 提供重试。
+    const failedUrl = config?.url || '';
+    if (failedUrl.includes('/admin/') && (!response || response.status >= 500)) {
+      reportAdminApiError(
+        failedUrl,
+        response?.status || 0,
+        response?.data?.message || error?.message || '网络异常',
+      );
+    }
     if (response) {
       const { status, data } = response;
       switch (status) {

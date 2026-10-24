@@ -13,10 +13,30 @@
           <span class="hint">外链只允许 http(s)；站内需以 / 开头。外链默认新窗口打开。</span>
         </div>
         <el-table :data="menus" size="small" row-key="id" default-expand-all class="panel">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <el-table-column prop="title" label="标题" min-width="160" />
           <el-table-column prop="url" label="地址" min-width="220" />
           <el-table-column prop="sort_order" label="排序" width="80" />
           <el-table-column label="可见性" width="180">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <el-tag v-if="!row.visible" size="small" type="info">隐藏</el-tag>
               <el-tag v-if="row.require_login" size="small" type="warning">需登录</el-tag>
@@ -25,6 +45,16 @@
             </template>
           </el-table-column>
           <el-table-column label="操作" width="200">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <el-button text size="small" @click="editMenu(row)">编辑</el-button>
               <el-button text size="small" @click="editMenu({ parent_id: row.id, visible: true, sort_order: 0 })">
@@ -43,7 +73,27 @@
           <span class="hint">后端按时段过滤：过期/未开始/关闭的不会下发到前台</span>
         </div>
         <el-table :data="slides" size="small" class="panel">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <el-table-column label="图" width="110">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <img :src="row.image_url" class="thumb" />
             </template>
@@ -52,16 +102,46 @@
           <el-table-column prop="link_url" label="跳转" min-width="200" />
           <el-table-column prop="sort_order" label="排序" width="80" />
           <el-table-column label="状态" width="100">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <el-tag size="small" :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '关闭' }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="时段" width="230">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <span class="small">{{ row.start_at ? fmt(row.start_at) : '—' }} ~ {{ row.end_at ? fmt(row.end_at) : '—' }}</span>
             </template>
           </el-table-column>
           <el-table-column label="操作" width="150">
+            <template #empty>
+              <StateBlock
+                state="empty"
+                skeleton="table"
+                :rows="4"
+                compact
+                title="暂无数据"
+                description="换个筛选条件试试，或等有数据后再来看。"
+              />
+            </template>
             <template #default="{ row }">
               <el-button text size="small" @click="editSlide(row)">编辑</el-button>
               <el-button text size="small" type="danger" @click="delSlide(row)">删除</el-button>
@@ -93,6 +173,16 @@
           </el-form-item>
         </el-form>
         <el-table :data="checkinStats" size="small" class="panel">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <el-table-column prop="date" label="日期" width="140" />
           <el-table-column prop="users" label="签到人数" width="120" />
           <el-table-column prop="reward" label="发出代币" width="120" />
@@ -166,6 +256,16 @@
           </el-form-item>
         </el-form>
         <el-table :data="visitStats" size="small" class="panel">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <el-table-column prop="date" label="日期" width="140" />
           <el-table-column prop="pv" label="PV" width="120" />
           <el-table-column prop="uv" label="UV（按 IP）" width="140" />
@@ -217,6 +317,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import api from '@/api/index';
 import { opsApi, type NavMenuItem, type Carousel, type CheckInConfig, type VisitSetting } from '@/api/ops';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const tab = ref('menu');
 

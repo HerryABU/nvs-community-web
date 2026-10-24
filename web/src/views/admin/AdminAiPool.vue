@@ -316,6 +316,7 @@ import AdminHeader from '@/components/admin/AdminHeader.vue';
 import SectionHeader from '@/components/common/SectionHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import { aiApi, type AdminAiModel, type AiModelPreset } from '@/api/ai';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 // ---------- 总开关 ----------
 const config = reactive<{ enabled: boolean }>({ enabled: false });

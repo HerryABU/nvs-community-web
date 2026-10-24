@@ -69,20 +69,60 @@
         </div>
       </template>
       <el-table :data="events" size="small">
+        <template #empty>
+          <StateBlock
+            state="empty"
+            skeleton="table"
+            :rows="4"
+            compact
+            title="暂无数据"
+            description="换个筛选条件试试，或等有数据后再来看。"
+          />
+        </template>
         <el-table-column prop="order_no" label="订单号" width="180" />
         <el-table-column prop="user_id" label="用户" width="80" />
         <el-table-column prop="score" label="分" width="70" />
         <el-table-column label="处置" width="90">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag size="small" :type="decisionType(row.decision)">{{ decisionLabel(row.decision) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="原因" min-width="280">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">
             <span class="reason">{{ reasonText(row.reasons) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="100">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag size="small" :type="row.status === 'open' ? 'warning' : 'info'">
               {{ statusLabel(row.status) }}
@@ -90,6 +130,16 @@
           </template>
         </el-table-column>
         <el-table-column label="操作" width="160">
+          <template #empty>
+            <StateBlock
+              state="empty"
+              skeleton="table"
+              :rows="4"
+              compact
+              title="暂无数据"
+              description="换个筛选条件试试，或等有数据后再来看。"
+            />
+          </template>
           <template #default="{ row }">
             <template v-if="row.status === 'open'">
               <el-button text size="small" @click="handle(row, 'cleared')">放行</el-button>
@@ -107,6 +157,7 @@
 import { onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { riskApi, type RiskConfig, type RiskEvent } from '@/api/costrisk';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const cfg = reactive<RiskConfig>({
   enabled: true, hold_score: 60, block_score: 85, rapid_window_min: 10, rapid_count: 5,

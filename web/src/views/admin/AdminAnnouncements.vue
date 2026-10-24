@@ -86,6 +86,7 @@ import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { renderMarkdown } from '@/markdown/renderer';
 import { ElMessage } from 'element-plus';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 // 列表按「置顶优先 + 创建时间倒序」展示（后端 AdminListAnnouncements 已同序，前端再保险）
 const list = ref<any[]>([]);

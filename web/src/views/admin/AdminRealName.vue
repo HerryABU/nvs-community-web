@@ -142,6 +142,7 @@ import EmptyState from '@/components/common/EmptyState.vue';
 import RealNameProviderForm from '@/components/admin/RealNameProviderForm.vue';
 import { Postcard, Search, RefreshLeft } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 interface RealNameRow {
   user_id: number; username: string; nickname: string; role: string; phone: string;
