@@ -1111,6 +1111,10 @@ func main() {
 		police.GET("/del-color", handlers.PoliceGetDelColor)     // 已删除内容高亮色（警方可读）
 		police.PUT("/del-color", handlers.PoliceSetDelColor)     // 已删除内容高亮色（仅管理员可写）
 		police.GET("/export", handlers.PoliceExportPackage)      // 导出全部取证包
+		// 警方内容治理镜像（与站长内容治理板块同口径，留证仅含操作者用户名、不含 PII；
+		// Snapshot 等敏感截面在 handler 内已置空，合规与安全敏感信息警方不可见）
+		police.GET("/governance/overview", handlers.PoliceGovernanceOverview)
+		police.GET("/governance/banned", handlers.PoliceGovernanceList)
 	}
 
 	// 远程站点公开接口
