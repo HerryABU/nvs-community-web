@@ -429,6 +429,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/ai-safety',
+      name: 'admin-ai-safety',
+      component: () => import('@/views/admin/AdminAiSafety.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/moderation',
       name: 'admin-moderation',
       component: () => import('@/views/admin/AdminModerationQueue.vue'),

@@ -566,6 +566,12 @@ async function send(rawText?: string, confirmed = false, skipPush = false) {
         streamingReasoning.value += chunk;
         scrollBottom();
       },
+      // 输出侧安全闸整段替换：已流出去的内容作废，直接换成拒答文案
+      (text) => {
+        streamingText.value = text;
+        streamingReasoning.value = '';
+        scrollBottom();
+      },
     );
     if (!result) {
       ElMessage.warning('连接中断，未生成完整内容');
@@ -579,6 +585,9 @@ async function send(rawText?: string, confirmed = false, skipPush = false) {
         reasoning: result.answerInReasoning ? undefined : result.reasoning || undefined,
         created_at: '',
       });
+      if (result.blocked) {
+        ElMessage.warning('该回答触发内容安全策略，已拦截');
+      }
       emit('balance-updated', result.balance_after);
       if (!props.sessionId && result.session_id) {
         emit('session-created', result.session_id);

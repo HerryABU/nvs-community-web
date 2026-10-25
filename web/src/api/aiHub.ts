@@ -252,9 +252,17 @@ export async function streamChat(
   signal?: AbortSignal,
   /** 思考型模型的推理增量（与正文分开推送，前端折叠展示） */
   onReasoning?: (text: string) => void,
+  /**
+   * 安全闸整段替换。
+   * 输出侧拦截时，已经流出去的内容作废，服务端下发 replace 全文——
+   * 前端必须把当前气泡整体替换，否则用户会看到「危险片段 + 拒绝文案」拼在一起。
+   */
+  onReplace?: (text: string) => void,
 ): Promise<{
   content: string;
   reasoning: string;
+  /** 本次回答被内容安全闸拦截（整段替换为拒绝文案） */
+  blocked?: boolean;
   /** 正文为空、整段回答来自 reasoning：前端应把 reasoning 落成正文而不是折叠块 */
   answerInReasoning: boolean;
   cost: number;
@@ -295,6 +303,7 @@ export async function streamChat(
   let buffer = '';
   let content = '';
   let reasoning = '';
+  let blocked = false;
   let final: any = null;
   for (;;) {
     const { done, value } = await reader.read();
@@ -313,6 +322,16 @@ export async function streamChat(
         try {
           const ev = JSON.parse(dataStr);
           if (ev.error) throw new Error(ev.error);
+          if (ev.replace) {
+            // 服务端拦截：丢弃已累积内容，整段换成拒绝文案。
+            // content 也要跟着换 —— 调用方用 result.content 落消息列表，
+            // 只清空不回填会让气泡变成空白。
+            content = ev.replace;
+            reasoning = '';
+            blocked = true;
+            onReplace?.(ev.replace);
+          }
+          if (ev.blocked && ev.done) blocked = true;
           if (ev.reasoning) {
             reasoning += ev.reasoning;
             onReasoning?.(ev.reasoning);
@@ -332,6 +351,7 @@ export async function streamChat(
   return {
     content,
     reasoning,
+    blocked: blocked || !!final.blocked,
     answerInReasoning: !!final.answer_in_reasoning,
     cost: final.cost || 0,
     free: !!final.free,
