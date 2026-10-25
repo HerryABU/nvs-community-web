@@ -143,6 +143,94 @@
       </div>
     </div>
 
+    <!-- ============ 厂商管理 ============ -->
+    <div class="admin-panel" style="margin-top:16px">
+      <SectionHeader title="厂商管理" subtitle="厂商 = 模型 ID 前缀（如 deepseek），按厂商聚合与筛选；导入时按前缀归类" :icon="'🏷️'" gradient="teal" />
+      <div class="table-toolbar">
+        <span class="muted small">共 {{ vendors.length }} 个厂商（启用 {{ enabledVendorCount }} 个）</span>
+        <el-button type="primary" :icon="Plus" @click="openVendorCreate">添加厂商</el-button>
+      </div>
+      <el-table :data="vendors" v-loading="vendorLoading">
+        <el-table-column prop="name" label="厂商名" min-width="120" show-overflow-tooltip />
+        <el-table-column label="ID 前缀" min-width="130" show-overflow-tooltip>
+          <template #default="{ row }"><code v-if="row.prefix">{{ row.prefix }}</code><span v-else class="muted">—</span></template>
+        </el-table-column>
+        <el-table-column prop="models" label="模型数" width="90" />
+        <el-table-column label="启用" width="80">
+          <template #default="{ row }"><el-switch v-model="row.enabled" size="small" @change="toggleVendor(row)" /></template>
+        </el-table-column>
+        <el-table-column label="操作" width="160" fixed="right">
+          <template #default="{ row }">
+            <el-button size="small" text type="primary" @click="openVendorEdit(row)">编辑</el-button>
+            <el-button size="small" text type="danger" @click="removeVendor(row)">删除</el-button>
+          </template>
+        </el-table-column>
+        <template #empty><EmptyState icon="🏷️" text="暂无厂商，点击右上角添加" /></template>
+      </el-table>
+    </div>
+
+    <!-- ============ 厂商版本矩阵（管理端专用） ============ -->
+    <div class="admin-panel" style="margin-top:16px">
+      <SectionHeader title="厂商版本矩阵" subtitle="按 厂商→版本→亚版本 聚合；同一版本下高亮最新亚版本（仅管理端可见，用户侧只看主名字）" :icon="'🧬'" gradient="indigo" />
+      <div class="matrix-wrap" v-loading="matrixLoading">
+        <div v-for="v in matrix" :key="v.id" class="matrix-vendor">
+          <div class="matrix-vendor-head">
+            <strong>{{ v.name }}</strong>
+            <code v-if="v.prefix" class="matrix-prefix">{{ v.prefix }}</code>
+            <span class="muted small">（{{ v.models }} 个模型）</span>
+          </div>
+          <div v-if="!v.versions.length" class="muted small" style="padding:6px 0">无版本信息</div>
+          <div v-for="ver in v.versions" :key="ver.version" class="matrix-version">
+            <div class="matrix-version-head">
+              <span class="matrix-version-tag">{{ ver.version }}</span>
+              <el-tag v-if="ver.newest_sub_version" size="small" type="success">最新亚版本：{{ ver.newest_sub_version }}</el-tag>
+              <span class="muted small">{{ ver.count }} 个</span>
+            </div>
+            <div class="matrix-subs">
+              <span
+                v-for="it in ver.items"
+                :key="it.id"
+                class="matrix-sub"
+                :class="{ 'matrix-sub-newest': it.newest }"
+              >{{ it.sub_version || '（无亚版本）' }}<em v-if="it.newest">★</em></span>
+            </div>
+          </div>
+        </div>
+        <EmptyState v-if="!matrixLoading && !matrix.length" icon="🧬" text="暂无厂商版本数据" />
+      </div>
+    </div>
+
+    <!-- ============ 聚合分类定价 ============ -->
+    <div class="admin-panel" style="margin-top:16px">
+      <SectionHeader title="聚合分类定价" subtitle="按 chat / image / video 三类设默认单价；导入模型未显式给价时自动套用" :icon="'💰'" gradient="amber" />
+      <div class="price-grid">
+        <div v-for="p in categoryPrices" :key="p.kind" class="price-card">
+          <div class="price-card-head">
+            <el-tag size="small" :type="kindTag(p.kind)">{{ kindLabel(p.kind) }}</el-tag>
+            <span class="muted small">{{ p.kind }}</span>
+          </div>
+          <template v-if="p.kind === 'chat'">
+            <div class="price-row">
+              <span class="price-label">输入价</span>
+              <el-input-number v-model="p.price_in" :min="0" :max="1000000" :step="1" controls-position="right" size="small" />
+              <span class="muted small">每 1K tokens</span>
+            </div>
+            <div class="price-row">
+              <span class="price-label">输出价</span>
+              <el-input-number v-model="p.price_out" :min="0" :max="1000000" :step="1" controls-position="right" size="small" />
+              <span class="muted small">每 1K tokens</span>
+            </div>
+          </template>
+          <div v-else class="price-row">
+            <span class="price-label">单次价</span>
+            <el-input-number v-model="p.price_call" :min="0" :max="1000000" :step="1" controls-position="right" size="small" />
+            <span class="muted small">每次调用</span>
+          </div>
+          <el-button size="small" type="primary" :loading="p._saving" @click="saveCategoryPrice(p)">保存</el-button>
+        </div>
+      </div>
+    </div>
+
     <!-- ============ 创建 / 编辑对话框 ============ -->
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑模型' : '添加模型'" width="560px">
       <el-form :model="form" label-width="110px">
@@ -305,6 +393,29 @@
         <template #empty><EmptyState icon="🔑" text="尚未添加密钥（当前使用模型自带密钥）" /></template>
       </el-table>
     </el-drawer>
+
+    <!-- ============ 厂商创建 / 编辑对话框 ============ -->
+    <el-dialog v-model="vendorDialog" :title="vendorEditing ? '编辑厂商' : '添加厂商'" width="440px">
+      <el-form label-width="90px">
+        <el-form-item label="厂商名" required>
+          <el-input v-model="vendorForm.name" placeholder="如 DeepSeek / 阿里通义 / 字节跳动" maxlength="32" />
+        </el-form-item>
+        <el-form-item label="ID 前缀" required>
+          <el-input v-model="vendorForm.prefix" placeholder="如 deepseek（模型 ID 约定：前缀-版本-亚版本）" maxlength="64" />
+          <div class="kind-hint">模型 ID 约定：前缀-版本-亚版本（如 deepseek-v3.1-turbo），导入时按此前缀归类，用户侧只看厂商主名字</div>
+        </el-form-item>
+        <el-form-item label="排序">
+          <el-input-number v-model="vendorForm.sort_order" :min="0" :max="999" controls-position="right" />
+        </el-form-item>
+        <el-form-item label="启用" v-if="vendorEditing">
+          <el-switch v-model="vendorForm.enabled" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="vendorDialog = false">取消</el-button>
+        <el-button type="primary" :loading="vendorSaving" @click="saveVendor">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -315,7 +426,7 @@ import { MagicStick, Plus } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import SectionHeader from '@/components/common/SectionHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
-import { aiApi, type AdminAiModel, type AiModelPreset } from '@/api/ai';
+import { aiApi, type AdminAiModel, type AiModelPreset, type AiVendor, type AiCategoryPrice, type AiVendorMatrixEntry } from '@/api/ai';
 import { adminApi } from '@/api/admin';
 import StateBlock from '@/components/common/StateBlock.vue';
 
@@ -699,7 +810,134 @@ async function saveRoute() {
   }
 }
 
-onMounted(() => { loadConfig(); loadModels(); loadPresets(); loadRoute(); });
+onMounted(() => { loadConfig(); loadModels(); loadPresets(); loadRoute(); loadVendors(); loadMatrix(); loadCategoryPrices(); });
+
+// ---------- 厂商管理 ----------
+const vendors = ref<AiVendor[]>([]);
+const vendorLoading = ref(false);
+const vendorDialog = ref(false);
+const vendorSaving = ref(false);
+const vendorEditing = ref<AiVendor | null>(null);
+const vendorForm = reactive({ name: '', prefix: '', sort_order: 0, enabled: true });
+const enabledVendorCount = computed(() => vendors.value.filter((v) => v.enabled).length);
+
+async function loadVendors() {
+  vendorLoading.value = true;
+  try {
+    const res = await aiApi.listAiVendors();
+    if (res.data.code === 0) vendors.value = res.data.data.list || [];
+  } catch { /* ignore */ }
+  vendorLoading.value = false;
+}
+
+async function toggleVendor(row: AiVendor) {
+  try {
+    const res = await aiApi.updateAiVendor(row.id, { name: row.name, sort_order: row.sort_order, enabled: row.enabled, prefix: row.prefix });
+    if (res.data.code !== 0) row.enabled = !row.enabled;
+  } catch {
+    row.enabled = !row.enabled;
+    ElMessage.error('操作失败');
+  }
+}
+
+function openVendorCreate() {
+  vendorEditing.value = null;
+  Object.assign(vendorForm, { name: '', prefix: '', sort_order: vendors.value.length + 1, enabled: true });
+  vendorDialog.value = true;
+}
+
+function openVendorEdit(row: AiVendor) {
+  vendorEditing.value = row;
+  Object.assign(vendorForm, { name: row.name, prefix: row.prefix, sort_order: row.sort_order, enabled: row.enabled });
+  vendorDialog.value = true;
+}
+
+async function saveVendor() {
+  if (!vendorForm.name.trim() || !vendorForm.prefix.trim()) {
+    ElMessage.warning('厂商名与 ID 前缀均为必填');
+    return;
+  }
+  vendorSaving.value = true;
+  try {
+    const payload = {
+      name: vendorForm.name.trim(),
+      prefix: vendorForm.prefix.trim(),
+      sort_order: vendorForm.sort_order,
+      enabled: vendorForm.enabled,
+    };
+    const res = vendorEditing.value
+      ? await aiApi.updateAiVendor(vendorEditing.value.id, payload)
+      : await aiApi.createAiVendor(payload);
+    if (res.data.code === 0) {
+      ElMessage.success('已保存');
+      vendorDialog.value = false;
+      await loadVendors();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  }
+  vendorSaving.value = false;
+}
+
+async function removeVendor(row: AiVendor) {
+  if (row.models > 0) {
+    ElMessage.warning(`仍有 ${row.models} 个模型属于「${row.name}」，请先改走其他厂商`);
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(`删除厂商「${row.name}」？`, '删除确认', { type: 'warning' });
+  } catch { return; }
+  try {
+    const res = await aiApi.deleteAiVendor(row.id);
+    if (res.data.code === 0) {
+      ElMessage.success('已删除');
+      await loadVendors();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '删除失败');
+  }
+}
+
+// ---------- 厂商版本矩阵（管理端专用，含 newest 标记） ----------
+const matrix = ref<AiVendorMatrixEntry[]>([]);
+const matrixLoading = ref(false);
+
+async function loadMatrix() {
+  matrixLoading.value = true;
+  try {
+    const res = await aiApi.getVendorMatrix();
+    if (res.data.code === 0) matrix.value = res.data.data.vendors || [];
+  } catch { /* ignore */ }
+  matrixLoading.value = false;
+}
+
+// ---------- 聚合分类定价（chat/image/video 默认单价） ----------
+const categoryPrices = ref<(AiCategoryPrice & { _saving?: boolean })[]>([]);
+
+async function loadCategoryPrices() {
+  try {
+    const res = await aiApi.getCategoryPrices();
+    if (res.data.code === 0) {
+      categoryPrices.value = (res.data.data.list || []).map((p: AiCategoryPrice) => ({ ...p, _saving: false }));
+    }
+  } catch { /* ignore */ }
+}
+
+async function saveCategoryPrice(p: AiCategoryPrice & { _saving?: boolean }) {
+  p._saving = true;
+  try {
+    const res = await aiApi.setCategoryPrice({
+      kind: p.kind,
+      price_in: p.price_in || 0,
+      price_out: p.price_out || 0,
+      price_call: p.price_call || 0,
+    });
+    if (res.data.code === 0) ElMessage.success('已保存');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  }
+  p._saving = false;
+}
 </script>
 
 <style scoped>
@@ -717,4 +955,25 @@ onMounted(() => { loadConfig(); loadModels(); loadPresets(); loadRoute(); });
 .mono { font-family: Consolas, 'Courier New', monospace; }
 .kind-hint { font-size: 0.75rem; color: var(--text-light, #999); margin-top: 2px; }
 [data-theme="dark"] .admin-page { background: #0f172a; }
+
+/* 厂商版本矩阵 */
+.matrix-wrap { display: flex; flex-direction: column; gap: 12px; }
+.matrix-vendor { border: 1px solid var(--border-color, #ebeef5); border-radius: 10px; padding: 10px 14px; background: var(--bg-card, #fff); }
+.matrix-vendor-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.matrix-prefix { background: var(--el-fill-color-light, #f4f4f5); border-radius: 4px; padding: 1px 6px; font-size: 0.78rem; color: var(--text-light, #888); }
+.matrix-version { padding: 6px 0; border-top: 1px dashed var(--border-color, #eee); }
+.matrix-version:first-of-type { border-top: none; }
+.matrix-version-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.matrix-version-tag { font-family: Consolas, 'Courier New', monospace; font-weight: 600; color: var(--text-main, #333); }
+.matrix-subs { display: flex; flex-wrap: wrap; gap: 6px; }
+.matrix-sub { font-size: 0.78rem; padding: 2px 8px; border-radius: 12px; background: var(--el-fill-color-light, #f4f4f5); color: var(--text-light, #888); }
+.matrix-sub-newest { background: var(--gradient-success, #67c23a); color: #fff; font-weight: 600; }
+.matrix-sub-newest em { font-style: normal; margin-left: 2px; }
+
+/* 聚合分类定价 */
+.price-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.price-card { border: 1px solid var(--border-color, #ebeef5); border-radius: 10px; padding: 14px; background: var(--bg-card, #fff); }
+.price-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.price-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.price-label { width: 56px; font-size: 0.82rem; color: var(--text-light, #666); }
 </style>

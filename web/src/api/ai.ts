@@ -155,14 +155,25 @@ export const aiApi = {
   listAiVendors() {
     return api.get<{ code: number; data: { list: AiVendor[] } }>('/admin/ai/vendors');
   },
-  createAiVendor(data: { name: string; sort_order?: number }) {
+  createAiVendor(data: { name: string; sort_order?: number; prefix?: string }) {
     return api.post('/admin/ai/vendors', data);
   },
-  updateAiVendor(id: number, data: { name: string; sort_order?: number; enabled?: boolean }) {
+  updateAiVendor(id: number, data: { name: string; sort_order?: number; enabled?: boolean; prefix?: string }) {
     return api.put(`/admin/ai/vendors/${id}`, data);
   },
   deleteAiVendor(id: number) {
     return api.delete(`/admin/ai/vendors/${id}`);
+  },
+  // 聚合分类定价（chat/image/video 默认单价）
+  getCategoryPrices() {
+    return api.get<{ code: number; data: { list: AiCategoryPrice[] } }>('/admin/ai/category-prices');
+  },
+  setCategoryPrice(data: { kind: string; price_in?: number; price_out?: number; price_call?: number }) {
+    return api.put('/admin/ai/category-prices', data);
+  },
+  // 厂商→版本→亚版本矩阵（管理端专用，含 newest 标记）
+  getVendorMatrix() {
+    return api.get<{ code: number; data: { vendors: AiVendorMatrixEntry[] } }>('/admin/ai/vendors/matrix');
   },
   // ---------- API 卡池（多密钥轮询） ----------
   aiModelKeys(modelId: number) {
@@ -338,9 +349,42 @@ export interface AiFeatureFlags {
 export interface AiVendor {
   id: number;
   name: string;
+  prefix: string;
   sort_order: number;
   enabled: boolean;
   models: number;
+}
+
+/** 聚合分类定价（chat/image/video 默认单价） */
+export interface AiCategoryPrice {
+  kind: string;
+  price_in: number;
+  price_out: number;
+  price_call: number;
+  updated_at?: string;
+}
+
+/** 厂商→版本→亚版本矩阵（管理端专用） */
+export interface AiVendorMatrixEntry {
+  id: number;
+  name: string;
+  prefix: string;
+  enabled: boolean;
+  models: number;
+  versions: {
+    version: string;
+    newest_sub_version: string;
+    count: number;
+    items: {
+      id: number;
+      name: string;
+      model_id: string;
+      sub_version: string;
+      newest: boolean;
+      enabled: boolean;
+      user_visible: boolean;
+    }[];
+  }[];
 }
 
 /** 作品风格字典 */

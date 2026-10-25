@@ -23,6 +23,7 @@ declare module 'vue' {
     AiModelSquare: typeof import('./src/components/ai/AiModelSquare.vue')['default']
     AiPromptLibrary: typeof import('./src/components/ai/AiPromptLibrary.vue')['default']
     AiVideoPanel: typeof import('./src/components/ai/AiVideoPanel.vue')['default']
+    AiWriteLayer: typeof import('./src/components/ai/floating/AiWriteLayer.vue')['default']
     AnimatedNumber: typeof import('./src/components/AnimatedNumber.vue')['default']
     AuthorCard: typeof import('./src/components/author/AuthorCard.vue')['default']
     BlockBlogs: typeof import('./src/components/home/BlockBlogs.vue')['default']
