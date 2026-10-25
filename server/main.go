@@ -671,6 +671,8 @@ func main() {
 		protected.DELETE("/blogs/:id", handlers.DeleteBlog)
 		protected.POST("/blogs/:id/like", handlers.ToggleBlogLike) // 博客点赞/取消
 		protected.POST("/upload", handlers.UploadFile)             // 通用上传：博客图片/音视频
+		// AI 工作台附件：图片/文档上传（存盘不解析，发消息时原样内联给上游 API）
+		protected.POST("/ai/attachment", handlers.AiAttachmentUpload)
 		// 博客分类管理（登录作者/管理员均可：新增/编辑/删除/挂靠，支持三级；普通作者创建=待审核）
 		protected.GET("/blog-categories/manage", handlers.ListMyBlogCategories)
 		protected.POST("/blog-categories", handlers.CreateBlogCategory)

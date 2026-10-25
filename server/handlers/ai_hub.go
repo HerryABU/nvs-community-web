@@ -126,19 +126,42 @@ func AiHubChatStream(c *gin.Context) {
 		ByokModel string `json:"byok_model"`
 		Confirm   bool   `json:"confirm"` // 二次确认：预估超阈值时前端确认后置 true
 		ByokKeyID uint   `json:"byok_key_id"`
+		// 附件（图片/文档）：先走 /api/ai/attachment 上传，这里只传引用。
+		// 文件按原样内联给上游（image_url / file part），平台不做本地解析。
+		Attachments []AiChatAttachment `json:"attachments"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
 	msg := strings.TrimSpace(req.Message)
-	if msg == "" {
+	// 允许「只发附件不打字」：这时用附件名兜底成一句可见文本
+	if msg == "" && len(req.Attachments) == 0 {
 		utils.BadRequest(c, "请输入内容")
 		return
 	}
 	if len([]rune(msg)) > 20000 {
 		utils.BadRequest(c, "内容过长（上限 20000 字）")
 		return
+	}
+	if len(req.Attachments) > 10 {
+		utils.BadRequest(c, "单次最多带 10 个附件")
+		return
+	}
+	// 附件读取（读文件 + base64）。放在前置校验里：失败就别建会话、别记账。
+	attImages, attFiles, attErr := buildAttachmentParts(req.Attachments)
+	if attErr != nil {
+		utils.BadRequest(c, attErr.Error())
+		return
+	}
+	// 落库/展示用的文本：打字内容 + 附件名摘要（历史里能看出这轮带了什么）
+	storeMsg := msg
+	if len(req.Attachments) > 0 {
+		names := attachmentNames(req.Attachments)
+		if storeMsg == "" {
+			storeMsg = "（已发送附件）"
+		}
+		storeMsg += "\n\n📎 " + strings.Join(names, "、")
 	}
 
 	// ── 平台开关：每日对话上限 + 是否允许自备密钥 ──
@@ -226,12 +249,26 @@ func AiHubChatStream(c *gin.Context) {
 	for _, h := range history[start:] {
 		messages = append(messages, aiclient.Message{Role: h.Role, Content: h.Content})
 	}
-	messages = append(messages, aiclient.Message{Role: "user", Content: msg})
+	// 本轮用户消息：有附件时 content 是 parts 数组（图片/文件原样给上游）
+	messages = append(messages, aiclient.Message{
+		Role:    "user",
+		Content: aiclient.MultimodalContent(msg, attImages, attFiles),
+	})
 
 	// ── 预检（不足直接 429，不开流） ──
 	tokensIn := models.EstimateTokens(msg)
 	for _, h := range history[start:] {
 		tokensIn += models.EstimateTokens(h.Content)
+	}
+	// 附件按经验值估算（图片/文档由上游自己计量，这里只用于预检与额度判定）：
+	// 图片约 800 tokens/张，文档按大小折算（每 4 字节 base64 ≈ 1 token，封顶 20k）
+	tokensIn += 800 * len(attImages)
+	for _, f := range attFiles {
+		est := len(f.FileData) / 4
+		if est > 20000 {
+			est = 20000
+		}
+		tokensIn += est
 	}
 	tokensOut := req.MaxTokens
 	if tokensOut <= 0 {
@@ -270,8 +307,9 @@ func AiHubChatStream(c *gin.Context) {
 	}
 
 	// ── 落用户消息 + pending 流水 ──
-	models.AppendAiChatMessage(session.ID, "user", msg, 0, 0, 0, 0)
-	models.TouchAiChatSession(session.ID, msg)
+	// 落库用 storeMsg（含附件名摘要），上游用的是 msg + parts
+	models.AppendAiChatMessage(session.ID, "user", storeMsg, 0, 0, 0, 0)
+	models.TouchAiChatSession(session.ID, storeMsg)
 	callLog, lerr := models.CreateAiCallLog(userID, m, "chat", "session", session.ID, tokensIn, tokensOut, freeOK || req.Byok)
 	if lerr != nil {
 		utils.InternalError(c, "记录调用失败")

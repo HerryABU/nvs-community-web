@@ -18,8 +18,10 @@ const DefaultTimeout = 90 * time.Second
 
 // Message 对话消息
 type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role string `json:"role"`
+	// Content 普通对话为字符串；带图片/文件时是 ContentPart 数组。
+	// OpenAI 兼容上游与 Anthropic 都接受 content: string | parts[]。
+	Content any `json:"content"`
 }
 
 // ChatRequest /chat/completions 请求体

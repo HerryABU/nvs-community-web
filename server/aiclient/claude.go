@@ -19,10 +19,10 @@ import (
 // ClaudeVersion 当前 Messages API 版本（Anthropic 要求显式声明）
 const ClaudeVersion = "2023-06-01"
 
-// claudeMessage 消息体（content 统一用字符串块，够用且安全）
+// claudeMessage 消息体：content 可以是字符串（普通对话）或 block 数组（图片/文件）
 type claudeMessage struct {
 	Role    string `json:"role"`
-	Content string `json:"content"`
+	Content any    `json:"content"`
 }
 
 type claudeRequest struct {
@@ -59,9 +59,11 @@ func buildClaudeRequest(req ChatRequest) claudeRequest {
 	}
 	sys := []string{}
 	for _, m := range req.Messages {
+		// content 可能是纯字符串，也可能是多模态 parts；统一转成 Claude 需要的样子
+		content := claudeContentOf(m)
 		if m.Role == "system" {
-			if strings.TrimSpace(m.Content) != "" {
-				sys = append(sys, m.Content)
+			if s, ok := content.(string); ok && strings.TrimSpace(s) != "" {
+				sys = append(sys, s)
 			}
 			continue
 		}
@@ -69,7 +71,7 @@ func buildClaudeRequest(req ChatRequest) claudeRequest {
 		if role != "assistant" {
 			role = "user"
 		}
-		cr.Messages = append(cr.Messages, claudeMessage{Role: role, Content: m.Content})
+		cr.Messages = append(cr.Messages, claudeMessage{Role: role, Content: content})
 	}
 	cr.System = strings.Join(sys, "\n\n")
 	// Claude 要求至少一条 user 消息
@@ -77,6 +79,23 @@ func buildClaudeRequest(req ChatRequest) claudeRequest {
 		cr.Messages = []claudeMessage{{Role: "user", Content: "hi"}}
 	}
 	return cr
+}
+
+// claudeContentOf 把 Message.Content（string 或 parts）转成 Claude 的 content：
+// 字符串原样返回；parts 转成 text/image/document block 数组。
+func claudeContentOf(m Message) any {
+	switch v := m.Content.(type) {
+	case string:
+		return v
+	case []ContentPart:
+		blocks := ClaudeBlocksFromParts(v)
+		if len(blocks) == 0 {
+			return ""
+		}
+		return blocks
+	default:
+		return m.Content
+	}
 }
 
 func (c *Client) claudeURL() string {
