@@ -119,6 +119,24 @@ type SafetyConfig struct {
 
 	JudgePrompt string `gorm:"type:text" json:"judge_prompt"` // B 的判定提示词（可改）
 
+	// ── 对话终止 ──
+	// 判定有害后不只是拦当轮，而是把整个会话锁死。
+	// 理由：模型一旦吐出配方，这段内容就已经进了上下文，
+	// 之后任何一句「继续」「然后呢」都会在污染过的上下文里接着生成。
+	TerminateOnBlock bool `json:"terminate_on_block"`
+	// TerminateScore 触发终止所需分数（高于普通拦截线，避免一次误判就锁死会话）
+	TerminateScore int `json:"terminate_score"`
+	// TerminateMode 终止模式：
+	//   strict   严格：整个会话组都不能再问答（锁死，只能新建）
+	//   moderate 中档：可以继续上下文，但向模型注入「前面内容已被拦截，不得延续」的提示
+	//   loose    宽松：可以继续上下文，本档只拦当轮，不留额外限制
+	TerminateMode         string `gorm:"size:16;default:strict" json:"terminate_mode"`
+	SessionTerminatedText string `gorm:"type:text" json:"session_terminated_text"`
+	// ContaminatedNoticeText 中档模式注入给模型的提示词
+	ContaminatedNoticeText string `gorm:"type:text" json:"contaminated_notice_text"`
+	// ModerateBlockedText 中档模式下给用户看的提示（不锁会话，语气比 strict 轻）
+	ModerateBlockedText string `gorm:"type:text" json:"moderate_blocked_text"`
+
 	// SchemaVersion 配置结构版本。
 	// 作用：新版本加了列之后，老行里这些列是零值（bool=false / int=0），
 	// 站长打开后台看着「已保存」，实际新功能从未启用过——这种静默失效必须靠版本号回填解决。

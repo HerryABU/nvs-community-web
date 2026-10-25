@@ -507,6 +507,14 @@ func (g *OutputGuard) record(res Result) {
 // RefusalText 给用户看的拒绝文案（配置为空时用内置默认）。
 func RefusalText(cfg *SafetyConfig) string { return refusal(cfg) }
 
+// TerminatedText 会话被终止时的提示文案。
+func TerminatedText(cfg *SafetyConfig) string {
+	if cfg == nil || strings.TrimSpace(cfg.SessionTerminatedText) == "" {
+		return defaultTerminated
+	}
+	return cfg.SessionTerminatedText
+}
+
 // refusalFor 按拦截原因选文案。
 func refusalFor(cfg *SafetyConfig, res Result) string {
 	if res.Substance || res.ProcessCount > 0 || res.ParamCount > 0 {

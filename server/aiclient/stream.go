@@ -55,7 +55,13 @@ func (c *Client) CompleteStream(req ChatRequest) <-chan StreamChunk {
 		req.Stream = true
 		req.StreamOptions = map[string]interface{}{"include_usage": true}
 		body, _ := json.Marshal(req)
-		httpReq, err := http.NewRequest(http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(body))
+		var httpReq *http.Request
+		var err error
+		if req.Ctx != nil {
+			httpReq, err = http.NewRequestWithContext(req.Ctx, http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(body))
+		} else {
+			httpReq, err = http.NewRequest(http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(body))
+		}
 		if err != nil {
 			ch <- StreamChunk{Done: true}
 			return

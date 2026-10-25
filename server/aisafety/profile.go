@@ -91,9 +91,14 @@ func RecordHit(req HitRequest) (*SafetyProfile, error) {
 		action = ActionBlock
 	}
 	// 只有「真的拦下了」才算命中次数。
-	// 仅记录（review）和被蓝队复核放行（released）只轻微加分——
-	// 否则「可疑但放行」也在累计，一次误判就把人推向冷却，等于自己制造误伤。
-	countsAsHit := action != ActionReview && action != ActionReleased
+	//
+	// 三类不计入：
+	//   review   仅记录（可疑但放行）
+	//   released 被蓝队复核推翻、已放行
+	//   out      输出侧拦截 —— 这是「模型自己吐了」，当轮用户输入可能完全正常
+	//            （比如贴了一份含配方的 PDF 让它总结）。算成用户命中会误伤正常人，
+	//            而用户特征本应衡量「这个账号在索取什么」，不是「模型说了什么」。
+	countsAsHit := action != ActionReview && action != ActionReleased && req.Direction != DirOut
 	if countsAsHit {
 		p.RiskScore = p.DecayedScore(cfg, now) + req.Score/2
 		p.BlockCount++

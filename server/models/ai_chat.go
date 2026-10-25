@@ -14,34 +14,61 @@ import (
 
 // AiChatSession AI 会话
 type AiChatSession struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	UserID    uint      `gorm:"not null;index:idx_ai_session_user,priority:1" json:"user_id"`
-	AgentID   uint      `gorm:"not null;default:0;index" json:"agent_id"` // 0 = 无智能体
-	AgentName string    `gorm:"size:64;default:''" json:"agent_name"`
-	ModelID   uint      `gorm:"not null;default:0" json:"model_id"`
-	Title     string    `gorm:"size:128;default:''" json:"title"`
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	UserID    uint   `gorm:"not null;index:idx_ai_session_user,priority:1" json:"user_id"`
+	AgentID   uint   `gorm:"not null;default:0;index" json:"agent_id"` // 0 = 无智能体
+	AgentName string `gorm:"size:64;default:''" json:"agent_name"`
+	ModelID   uint   `gorm:"not null;default:0" json:"model_id"`
+	Title     string `gorm:"size:128;default:''" json:"title"`
 	// ThirdConvID 第三方会话 ID（扣子 conversation_id；用于多轮上下文续接）
 	ThirdConvID string `gorm:"size:64;default:''" json:"-"`
 	// ShareToken 分享令牌（nil = 未分享）；非 nil 即公开可读（只读快照）
 	ShareToken *string    `gorm:"size:32;unique" json:"share_token,omitempty"`
 	SharedAt   *time.Time `json:"shared_at,omitempty"`
-	CreatedAt  time.Time  `gorm:"index:idx_ai_session_user,priority:2" json:"created_at"`
-	UpdatedAt  time.Time  `json:"updated_at"`
+
+	// ── 内容安全终止 ──
+	// 判定有害后整个会话被锁死，而不是只拦当轮。
+	// 理由：一旦模型已经吐出配方，这段内容就已经进了上下文，
+	// 后续任何一句「继续」「然后呢」都会在污染过的上下文里接着生成。
+	Locked     bool       `gorm:"not null;default:false;index" json:"locked"`
+	LockedAt   *time.Time `json:"locked_at,omitempty"`
+	LockReason string     `gorm:"size:255;default:''" json:"lock_reason"`
+	LockedBy   uint       `gorm:"not null;default:0" json:"locked_by"` // 0=系统审核判定，>0=管理员手动
+
+	// Contaminated 上下文已污染（中档模式）。
+	// 与 Locked 的区别：会话还能继续聊，但每轮都会向模型注入「前面有被拦截的内容，
+	// 不要延续/补全/换个说法恢复那个话题」的提示。适用于「一次误判就锁死太狠、
+	// 但完全不提醒又会被顺着继续」的场景。
+	Contaminated   bool       `gorm:"not null;default:false;index" json:"contaminated"`
+	ContaminatedAt *time.Time `json:"contaminated_at,omitempty"`
+
+	// ── 对话分支 ──
+	// 当前活跃叶子：显示哪条分支的末端。0 = 老数据/空会话。
+	ActiveLeafID uint      `gorm:"not null;default:0" json:"active_leaf_id"`
+	CreatedAt    time.Time `gorm:"index:idx_ai_session_user,priority:2" json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 func (AiChatSession) TableName() string { return "ai_chat_sessions" }
 
 // AiChatMessage 会话消息
 type AiChatMessage struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	SessionID uint      `gorm:"not null;index:idx_ai_msg_session,priority:1" json:"session_id"`
-	Role      string    `gorm:"size:16;not null" json:"role"` // user / assistant
-	Content   string    `gorm:"type:text" json:"content"`
-	TokensIn  int       `gorm:"not null;default:0" json:"tokens_in"`
-	TokensOut int       `gorm:"not null;default:0" json:"tokens_out"`
-	Cost      int64     `gorm:"not null;default:0" json:"cost"`
-	CallLogID uint      `gorm:"not null;default:0" json:"call_log_id"` // 关联 AiCallLog（对账）
-	CreatedAt time.Time `gorm:"index:idx_ai_msg_session,priority:2" json:"created_at"`
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	SessionID uint   `gorm:"not null;index:idx_ai_msg_session,priority:1" json:"session_id"`
+	Role      string `gorm:"size:16;not null" json:"role"` // user / assistant
+	Content   string `gorm:"type:text" json:"content"`
+	TokensIn  int    `gorm:"not null;default:0" json:"tokens_in"`
+	TokensOut int    `gorm:"not null;default:0" json:"tokens_out"`
+	Cost      int64  `gorm:"not null;default:0" json:"cost"`
+	CallLogID uint   `gorm:"not null;default:0" json:"call_log_id"` // 关联 AiCallLog（对账）
+	// ParentID 上一条消息（0 = 会话根）。
+	// 有它才能做分支：对同一条消息「重新生成」或「编辑后重发」时，
+	// 新消息与原消息共享同一个 parent，于是成为兄弟分支，可左右切换。
+	ParentID uint `gorm:"not null;default:0;index" json:"parent_id"`
+	// SafetyBlocked 这条助手消息是安全闸拦截后写入的占位内容（不是模型的真实回答）。
+	// 前端据此渲染成「警告块」而不是普通气泡 —— 否则用户会以为 AI 真的这样回答了。
+	SafetyBlocked bool      `gorm:"not null;default:false" json:"safety_blocked"`
+	CreatedAt     time.Time `gorm:"index:idx_ai_msg_session,priority:2" json:"created_at"`
 }
 
 func (AiChatMessage) TableName() string { return "ai_chat_messages" }

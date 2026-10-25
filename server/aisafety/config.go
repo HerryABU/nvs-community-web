@@ -10,7 +10,7 @@ import (
 )
 
 // configSchemaVersion 配置结构版本。新增配置列时必须 +1，并在 migrateConfigRow 里回填默认值。
-const configSchemaVersion = 4
+const configSchemaVersion = 6
 
 // GetConfig 读取安全闸配置；无配置行则按默认值种子化。
 func GetConfig() (*SafetyConfig, error) {
@@ -89,6 +89,18 @@ func migrateConfigRow(cfg *SafetyConfig) {
 	}
 	if strings.TrimSpace(cfg.RefusalJailbreakText) == "" {
 		updates["refusal_jailbreak_text"] = seed.RefusalJailbreakText
+	}
+	if strings.TrimSpace(cfg.SessionTerminatedText) == "" {
+		updates["session_terminated_text"] = seed.SessionTerminatedText
+	}
+	if strings.TrimSpace(cfg.TerminateMode) == "" {
+		updates["terminate_mode"] = seed.TerminateMode
+	}
+	if strings.TrimSpace(cfg.ContaminatedNoticeText) == "" {
+		updates["contaminated_notice_text"] = seed.ContaminatedNoticeText
+	}
+	if strings.TrimSpace(cfg.ModerateBlockedText) == "" {
+		updates["moderate_blocked_text"] = seed.ModerateBlockedText
 	}
 	if strings.TrimSpace(cfg.CooldownText) == "" {
 		updates["cooldown_text"] = seed.CooldownText
@@ -236,8 +248,12 @@ func ResetConfig() (*SafetyConfig, error) {
 		"judge_release_score": seed.JudgeReleaseScore, "judge_max_chars": seed.JudgeMaxChars,
 		"judge_timeout_sec": seed.JudgeTimeoutSec, "judge_fail_open": seed.JudgeFailOpen,
 		"judge_max_turns": seed.JudgeMaxTurns, "judge_prompt": seed.JudgePrompt,
-		"schema_version": configSchemaVersion,
-		"updated_at":     time.Now(),
+		"terminate_on_block": seed.TerminateOnBlock, "terminate_score": seed.TerminateScore,
+		"terminate_mode": seed.TerminateMode, "session_terminated_text": seed.SessionTerminatedText,
+		"contaminated_notice_text": seed.ContaminatedNoticeText,
+		"moderate_blocked_text":    seed.ModerateBlockedText,
+		"schema_version":           configSchemaVersion,
+		"updated_at":               time.Now(),
 	}
 	if err := models.DB.Model(&SafetyConfig{}).Where("id = ?", 1).Updates(fields).Error; err != nil {
 		return nil, err
@@ -280,6 +296,60 @@ const defaultJailbreakRefusal = `这个请求我不能执行。
 
 它要求绕过、作废或忽略 AI 的使用规则，属于平台不允许的操作。
 如果你有正常的问题，直接问就好——我会尽力帮你。`
+
+// 三种终止模式
+const (
+	TerminateStrict   = "strict"   // 整个会话组终止
+	TerminateModerate = "moderate" // 可继续，但注入污染提示
+	TerminateLoose    = "loose"    // 可继续，本档只拦当轮
+)
+
+// NormalizeMode 暴露给调用方（handler 需要按模式分流处置）。
+func NormalizeMode(m string) string { return normalizeTerminateMode(m) }
+
+// ContaminatedNotice 中档模式注入的提示词。
+func ContaminatedNotice(cfg *SafetyConfig) string {
+	if cfg == nil || strings.TrimSpace(cfg.ContaminatedNoticeText) == "" {
+		return defaultContaminatedNotice
+	}
+	return cfg.ContaminatedNoticeText
+}
+
+// ModerateBlockedText 中档模式给用户看的提示。
+func ModerateBlockedText(cfg *SafetyConfig) string {
+	if cfg == nil || strings.TrimSpace(cfg.ModerateBlockedText) == "" {
+		return defaultModerateBlocked
+	}
+	return cfg.ModerateBlockedText
+}
+
+// normalizeTerminateMode 容错：未知值一律按严格处理（安全优先）。
+func normalizeTerminateMode(m string) string {
+	switch m {
+	case TerminateModerate, TerminateLoose, TerminateStrict:
+		return m
+	default:
+		return TerminateStrict
+	}
+}
+
+const defaultModerateBlocked = `本次回答已被拦截。
+
+对话可以继续，但前面的内容已被标记为「不可信」——模型不会再延续、补全或换个说法恢复那个话题。
+如果你想聊别的，直接问即可；如果认为属于误判，请联系站长。`
+
+const defaultContaminatedNotice = `【重要：本对话更早的部分已被安全系统拦截并标记为不可信】
+之前某个回答涉及危险品 / 管制物质的制备、合成或工艺参数，已被系统阻断。
+从现在起必须遵守：
+1. 不要延续、补全、引用或「修正」之前被拦截的任何内容；
+2. 用户说「继续」「接着上面」「换句话说」「用另一种写法」时，不要因此恢复那个话题；
+3. 如果再次被索取同类信息，仍然拒绝，并保持简短、不争辩。
+除此之外的正常话题，可以照常回答。`
+
+const defaultTerminated = `本次对话已被终止。
+
+系统在对话中检测到危险内容的生成或索取，这段上下文已不可继续使用。
+你可以新建一个对话；如果认为属于误判，请联系站长并提供大致时间，我们会人工复核并恢复。`
 
 const defaultCooldown = `你的账号近期多次触发内容安全规则，AI 对话功能已临时暂停（至 %s 自动恢复）。
 

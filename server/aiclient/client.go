@@ -5,6 +5,7 @@ package aiclient
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,6 +27,10 @@ type Message struct {
 
 // ChatRequest /chat/completions 请求体
 type ChatRequest struct {
+	// Ctx 只用于「掐断上游」，不参与序列化。
+	// 安全闸判定有害时要立刻停止读取模型输出，而不是把流优雅读完 ——
+	// 继续读等于让危险内容逐字回吐，只是不给前端看，白烧 token 还拖慢响应。
+	Ctx           context.Context        `json:"-"`
 	Model         string                 `json:"model"`
 	Messages      []Message              `json:"messages"`
 	MaxTokens     int                    `json:"max_tokens,omitempty"`
@@ -87,7 +92,13 @@ func (c *Client) Complete(req ChatRequest) (content string, tokensIn, tokensOut 
 	if merr != nil {
 		return "", 0, 0, merr
 	}
-	httpReq, rerr := http.NewRequest(http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(body))
+	var httpReq *http.Request
+	var rerr error
+	if req.Ctx != nil {
+		httpReq, rerr = http.NewRequestWithContext(req.Ctx, http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(body))
+	} else {
+		httpReq, rerr = http.NewRequest(http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(body))
+	}
 	if rerr != nil {
 		return "", 0, 0, rerr
 	}

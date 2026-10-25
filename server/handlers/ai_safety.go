@@ -53,24 +53,34 @@ func toJudgeTurns(history []models.AiChatMessage) []aisafety.JudgeTurn {
 }
 
 // serveSafetyRefusal 输入侧拦截后的响应：落库（用户要看到自己问了什么）+ 拒答 + 不扣费。
-func serveSafetyRefusal(c *gin.Context, session *models.AiChatSession, storeMsg string, dec *aisafety.InputDecision) {
-	models.AppendAiChatMessage(session.ID, "user", storeMsg, 0, 0, 0, 0)
+func serveSafetyRefusal(c *gin.Context, session *models.AiChatSession, storeMsg string, dec *aisafety.InputDecision, term terminateOutcome, parentID uint) {
+	// 被拦截的提问也要落进消息树（用户要能看到自己问了什么），
+	// 并挂在当前分支上——否则前端重载后这一轮会消失。
+	um, _ := models.AppendAiChatMessageWithParent(session.ID, "user", storeMsg, parentID, 0, 0, 0, 0)
 	models.TouchAiChatSession(session.ID, storeMsg)
-	text := dec.Refusal
+	text := term.Text
+	if strings.TrimSpace(text) == "" {
+		text = dec.Refusal
+	}
 	if strings.TrimSpace(text) == "" {
 		text = "抱歉，这个请求我不能提供。"
 	}
-	am, _ := models.AppendAiChatMessage(session.ID, "assistant", text, 0, 0, 0, 0)
+	am, _ := models.AppendSafetyBlockedMessage(session.ID, um.ID, text, 0)
+	if am != nil && am.ID > 0 {
+		models.SetActiveLeaf(session.ID, am.ID)
+	}
 	models.TouchAiChatSession(session.ID, "")
 
 	setupSSE(c)
 	sseEvent(c, gin.H{
-		"blocked": true, "replace": text, "reason": text,
+		"blocked": true, "terminated": term.Terminated, "terminate_mode": term.Mode,
+		"replace": text, "reason": text,
 		"action": dec.Action, "score": dec.Score, "categories": dec.Categories,
 	})
 	sseEvent(c, gin.H{
 		"done": true, "session_id": session.ID, "message_id": am.ID,
-		"blocked": true, "cost": 0, "tokens_in": 0, "tokens_out": 0, "free": false,
+		"blocked": true, "terminated": term.Terminated, "terminate_mode": term.Mode,
+		"cost": 0, "tokens_in": 0, "tokens_out": 0, "free": false,
 	})
 }
 
@@ -310,4 +320,49 @@ func AiSafetyStats(c *gin.Context) {
 		"judge_released": judgeReleased, "judge_failed": judgeFailed,
 		"active_watch": activeWatch, "active_cooldown": activeCooldown,
 	})
+}
+
+// ---------- 会话终止 ----------
+
+// ListLockedSessions GET /api/admin/ai/safety/locked-sessions
+// 被内容安全终止的会话（供站长复审）。
+func ListLockedSessions(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+	size, _ := strconv.Atoi(c.DefaultQuery("page_size", "30"))
+	if size < 1 || size > 200 {
+		size = 30
+	}
+	q := models.DB.Model(&models.AiChatSession{}).Where("locked = ?", true)
+	var total int64
+	q.Count(&total)
+	var list []models.AiChatSession
+	q.Order("locked_at DESC, id DESC").Offset((page - 1) * size).Limit(size).Find(&list)
+	utils.Success(c, gin.H{"items": list, "total": total, "page": page})
+}
+
+// UnlockChatSession POST /api/admin/ai/safety/sessions/:sid/unlock
+// 管理员解除终止。
+//
+// 故意只开给管理端：用户侧没有自助解锁入口 —— 否则被判定有害后
+// 自己点一下「恢复」就能接着问，闸门等于摆设。
+func UnlockChatSession(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	sid, _ := strconv.ParseUint(c.Param("sid"), 10, 64)
+	if sid == 0 {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	if err := models.UnlockAiChatSession(uint(sid)); err != nil {
+		utils.InternalError(c, "操作失败")
+		return
+	}
+	utils.Success(c, gin.H{"message": "已恢复该会话"})
 }

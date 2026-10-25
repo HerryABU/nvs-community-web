@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -81,12 +82,13 @@ func AiHubSessionMessages(c *gin.Context) {
 		utils.NotFound(c, "会话不存在")
 		return
 	}
-	list, err := models.ListAiChatMessages(s.ID, 200)
+	// 按活跃叶子回溯当前分支，并附上兄弟信息（前端渲染「‹ 2/3 ›」）
+	list, err := models.ListAiChatThread(s.ID, s.ActiveLeafID)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"session": s, "messages": list})
+	utils.Success(c, gin.H{"session": s, "messages": chatMessageView(list)})
 }
 
 // AiHubDeleteSession DELETE /api/ai/sessions/:id — 删除会话
@@ -139,6 +141,13 @@ func AiHubChatStream(c *gin.Context) {
 		// 附件（图片/文档）：先走 /api/ai/attachment 上传，这里只传引用。
 		// 文件按原样内联给上游（image_url / file part），平台不做本地解析。
 		Attachments []AiChatAttachment `json:"attachments"`
+
+		// ── 对话分支（同 DeepSeek / Qwen 官网）──
+		// EditMsgID：编辑某条用户消息并重发 → 新建 user 兄弟节点
+		// RegenerateMsgID：对某条助手回复重新生成 → 新建 assistant 兄弟节点
+		// 两者都只影响插入位置，不删除原分支（可左右切换）
+		EditMsgID       uint `json:"edit_msg_id"`
+		RegenerateMsgID uint `json:"regenerate_msg_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -238,8 +247,66 @@ func AiHubChatStream(c *gin.Context) {
 		session = s
 	}
 
+	// ── 已终止的会话：不再产生任何新内容 ──
+	// 判定有害时整段上下文已经不可用（模型吐过的配方还在历史里），
+	// 继续在这个会话里问「然后呢」只是在污染过的上下文上接着生成。
+	if session.Locked {
+		tcfg, _ := aisafety.GetConfig()
+		text := aisafety.TerminatedText(tcfg)
+		setupSSE(c)
+		sseEvent(c, gin.H{
+			"blocked": true, "terminated": true, "terminate_mode": aisafety.TerminateStrict,
+			"replace": text, "reason": session.LockReason, "session_id": session.ID,
+		})
+		sseEvent(c, gin.H{
+			"done": true, "session_id": session.ID, "blocked": true,
+			"terminated": true, "cost": 0, "tokens_in": 0, "tokens_out": 0, "free": false,
+		})
+		return
+	}
+
+	// ── 分支：确定本轮消息的插入位置 ──
+	//
+	// 默认接在当前活跃叶子后面；编辑/重新生成时接到「原消息的父节点」后面，
+	// 于是新消息与原消息成为兄弟分支，互不覆盖、可来回切。
+	parentID := session.ActiveLeafID
+	var regenUser *models.AiChatMessage
+	if req.EditMsgID > 0 {
+		old, e := models.GetAiChatMessage(req.EditMsgID, session.ID)
+		if e != nil || old == nil {
+			utils.NotFound(c, "被编辑的消息不存在")
+			return
+		}
+		if old.Role != "user" {
+			utils.BadRequest(c, "只能编辑用户消息")
+			return
+		}
+		parentID = old.ParentID
+	} else if req.RegenerateMsgID > 0 {
+		old, e := models.GetAiChatMessage(req.RegenerateMsgID, session.ID)
+		if e != nil || old == nil {
+			utils.NotFound(c, "被重新生成的消息不存在")
+			return
+		}
+		if old.Role != "assistant" {
+			utils.BadRequest(c, "只能重新生成助手回复")
+			return
+		}
+		parentID = old.ParentID
+		// 复用原提问：前端不必再传一遍，也避免两次内容不一致
+		if u, e2 := models.GetAiChatMessage(old.ParentID, session.ID); e2 == nil && u != nil {
+			regenUser = u
+			msg = u.Content
+		} else {
+			utils.BadRequest(c, "原提问已不存在，无法重新生成")
+			return
+		}
+	}
+
 	// ── 历史 + 系统提示词 ──
-	history, _ := models.ListAiChatMessages(session.ID, 50)
+	// 按 parentID 回溯当前线程，而不是整表按时间取 —— 有分支后时间顺序会把
+	// 兄弟分支串在一起，模型会看到「问一次、答两次」的错乱上下文。
+	history, _ := models.ListAiChatThread(session.ID, parentID)
 
 	// ── 内容安全闸（输入侧）──
 	// 放在消息组装之前：拦下来就不该再算 token 预算，也不该把危险内容喂进上下文。
@@ -260,7 +327,14 @@ func AiHubChatStream(c *gin.Context) {
 			FallbackModel:   m,
 		})
 		if dec.Block {
-			serveSafetyRefusal(c, session, storeMsg, dec)
+			// 按模式处置：strict 锁会话 / moderate 打污染标记 / loose 只拦当轮。
+			// 冷却（cooldown）只是暂停功能，不触发终止 —— 冷却结束还能接着聊这段。
+			term := terminateOutcome{Text: dec.Refusal}
+			if safetyCfg.TerminateOnBlock && dec.Action != aisafety.ActionCooldown &&
+				dec.Score >= safetyCfg.TerminateScore {
+				term = applyTermination(session, safetyCfg, "内容安全判定："+dec.Hits)
+			}
+			serveSafetyRefusal(c, session, storeMsg, dec, term, parentID)
 			return
 		}
 	}
@@ -277,6 +351,13 @@ func AiHubChatStream(c *gin.Context) {
 		if gp := aisafety.SystemPrompt(safetyCfg); gp != "" {
 			systemPrompt = gp + "\n\n" + systemPrompt
 		}
+		// 中档模式：这个会话之前被拦截过，上下文里有不可信内容。
+		// 每轮都注入提醒 —— 只在拦截当轮提示没有用，用户换个说法问就绕过去了。
+		if session.Contaminated {
+			if notice := aisafety.ContaminatedNotice(safetyCfg); notice != "" {
+				systemPrompt = notice + "\n\n" + systemPrompt
+			}
+		}
 	}
 	messages := []aiclient.Message{{Role: "system", Content: systemPrompt}}
 	// 仅带最近 N 条进上下文（N 由「AI 功能配置」控制，默认 20）
@@ -292,10 +373,13 @@ func AiHubChatStream(c *gin.Context) {
 		messages = append(messages, aiclient.Message{Role: h.Role, Content: h.Content})
 	}
 	// 本轮用户消息：有附件时 content 是 parts 数组（图片/文件原样给上游）
-	messages = append(messages, aiclient.Message{
-		Role:    "user",
-		Content: aiclient.MultimodalContent(msg, attImages, attFiles),
-	})
+	// 重新生成时原提问已经在 history 末尾，再追加一次等于同一句出现两遍。
+	if regenUser == nil {
+		messages = append(messages, aiclient.Message{
+			Role:    "user",
+			Content: aiclient.MultimodalContent(msg, attImages, attFiles),
+		})
+	}
 
 	// ── 预检（不足直接 429，不开流） ──
 	tokensIn := models.EstimateTokens(msg)
@@ -349,9 +433,20 @@ func AiHubChatStream(c *gin.Context) {
 	}
 
 	// ── 落用户消息 + pending 流水 ──
-	// 落库用 storeMsg（含附件名摘要），上游用的是 msg + parts
-	models.AppendAiChatMessage(session.ID, "user", storeMsg, 0, 0, 0, 0)
-	models.TouchAiChatSession(session.ID, storeMsg)
+	// 落库用 storeMsg（含附件名摘要），上游用的是 msg + parts。
+	// 重新生成时不新增用户消息：原提问已经在树里，只是换一个助手回复挂在它下面。
+	var userMsgID uint
+	if regenUser != nil {
+		userMsgID = regenUser.ID
+	} else {
+		um, uerr := models.AppendAiChatMessageWithParent(session.ID, "user", storeMsg, parentID, 0, 0, 0, 0)
+		if uerr != nil {
+			utils.InternalError(c, "记录消息失败")
+			return
+		}
+		userMsgID = um.ID
+		models.TouchAiChatSession(session.ID, storeMsg)
+	}
 	callLog, lerr := models.CreateAiCallLog(userID, m, "chat", "session", session.ID, tokensIn, tokensOut, freeOK || req.Byok)
 	if lerr != nil {
 		utils.InternalError(c, "记录调用失败")
@@ -396,7 +491,13 @@ func AiHubChatStream(c *gin.Context) {
 	var sbReasoning string
 	var realIn, realOut int
 	var streamErr string
+	// 可取消的上游上下文：安全闸判定有害时立刻掐断，
+	// 而不是把模型剩下的输出读完（继续读=让危险内容逐字回吐，白烧 token 还拖慢响应）。
+	// 用独立 ctx 而不是 c.Request.Context()：后者在浏览器断开时也会取消，语义容易混。
+	upCtx, upCancel := context.WithCancel(context.Background())
+	defer upCancel()
 	chatReq := aiclient.ChatRequest{
+		Ctx:         upCtx,
 		Model:       upModel,
 		Messages:    messages,
 		MaxTokens:   tokensOut,
@@ -441,7 +542,8 @@ func AiHubChatStream(c *gin.Context) {
 				out, bad := og.Feed(chunk.Content)
 				if bad {
 					blockedByGuard = true
-					continue
+					upCancel() // 掐断上游
+					break
 				}
 				if out != "" {
 					sseEvent(c, gin.H{"content": out})
@@ -455,6 +557,7 @@ func AiHubChatStream(c *gin.Context) {
 	if !blockedByGuard && og != nil {
 		if out, bad := og.Finish(); bad {
 			blockedByGuard = true
+			upCancel()
 		} else if out != "" {
 			sseEvent(c, gin.H{"content": out})
 		}
@@ -465,17 +568,28 @@ func AiHubChatStream(c *gin.Context) {
 		// 上游 token 已经烧了，但用户没拿到内容 → 不扣费、不占免费额度，成本由站长承担。
 		// 记成失败而不是成功结算，否则账单上和「正常回答」分不开。
 		models.FailAiCallLog(callLog.ID, "内容安全拦截："+og.Reason())
-		text := aisafety.RefusalText(safetyCfg)
-		am, _ := models.AppendAiChatMessage(session.ID, "assistant", text, 0, 0, 0, callLog.ID)
+		// 输出侧拦截意味着「模型真的吐出来了」，上下文必然已被污染。
+		// 这里不再看分数，直接按模式处置。
+		term := terminateOutcome{Text: aisafety.RefusalText(safetyCfg)}
+		if safetyCfg != nil && safetyCfg.TerminateOnBlock {
+			term = applyTermination(session, safetyCfg, "输出侧拦截："+og.Reason())
+		}
+		text := term.Text
+		am, _ := models.AppendSafetyBlockedMessage(session.ID, userMsgID, text, callLog.ID)
+		if am != nil && am.ID > 0 {
+			models.SetActiveLeaf(session.ID, am.ID)
+		}
 		models.TouchAiChatSession(session.ID, "")
 		sseEvent(c, gin.H{
-			"replace": text, "blocked": true, "reason": og.Reason(),
+			"replace": text, "blocked": true, "terminated": term.Terminated,
+			"terminate_mode": term.Mode, "reason": og.Reason(),
 			"session_id": session.ID, "message_id": am.ID,
 		})
 		sseEvent(c, gin.H{
 			"done": true, "session_id": session.ID, "message_id": am.ID,
 			"tokens_in": realIn, "tokens_out": realOut,
 			"cost": 0, "free": false, "byok": req.Byok, "blocked": true,
+			"terminated": term.Terminated, "terminate_mode": term.Mode,
 		})
 		return
 	}
@@ -522,7 +636,11 @@ func AiHubChatStream(c *gin.Context) {
 		models.TouchUserAiKey(uk.ID)
 		cost = 0
 	}
-	am, _ := models.AppendAiChatMessage(session.ID, "assistant", sb, realIn, realOut, cost, callLog.ID)
+	am, _ := models.AppendAiChatMessageWithParent(session.ID, "assistant", sb, userMsgID, realIn, realOut, cost, callLog.ID)
+	// 新回复成为活跃叶子：下次「继续追问」接在它后面，而不是接在旧分支上
+	if am != nil && am.ID > 0 {
+		models.SetActiveLeaf(session.ID, am.ID)
+	}
 	models.TouchAiAgent(session.AgentID)
 	models.TouchAiChatSession(session.ID, "")
 	sseEvent(c, gin.H{

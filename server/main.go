@@ -417,6 +417,8 @@ func main() {
 		protected.GET("/ai/bot/status", handlers.AiBotStatus)
 		protected.GET("/ai/sessions", handlers.AiHubSessions)
 		protected.GET("/ai/sessions/:id/messages", handlers.AiHubSessionMessages)
+		// 对话分支：切到指定消息所在分支（不删任何消息，只改显示位置）
+		protected.POST("/ai/sessions/:id/switch", handlers.AiHubSwitchBranch)
 		protected.DELETE("/ai/sessions/:id", handlers.AiHubDeleteSession)
 		protected.PUT("/ai/sessions/:id", handlers.AiHubRenameSession)
 		protected.POST("/ai/sessions/:id/share", handlers.AiHubShareSession)
@@ -1015,6 +1017,8 @@ func main() {
 		admin.POST("/ai/safety/profiles/:uid/reset", handlers.ResetAiSafetyProfile)
 		admin.GET("/ai/safety/judge-logs", handlers.ListJudgeLogs)
 		admin.GET("/ai/safety/stats", handlers.AiSafetyStats)
+		admin.GET("/ai/safety/locked-sessions", handlers.ListLockedSessions)
+		admin.POST("/ai/safety/sessions/:sid/unlock", handlers.UnlockChatSession)
 		admin.GET("/ai/vendors", handlers.AdminListAiVendors)
 		admin.POST("/ai/vendors", handlers.AdminCreateAiVendor)
 		admin.PUT("/ai/vendors/:id", handlers.AdminUpdateAiVendor)
@@ -1640,6 +1644,9 @@ func initDatabase() error {
 	if err := aisafety.Migrate(models.DB); err != nil {
 		return err
 	}
+	// 对话分支：把老数据（parent_id 全 0）串成链并补活跃叶子。
+	// 不做的话升级后打开旧对话只能看到最后一条 —— 数据没丢但用户以为丢了。
+	models.BackfillMessageParents()
 	// 审核调度器（定时批量审核论坛/评论区），失败不阻断启动
 	moderation.Init()
 	// 「AI 判违规自动下架」接到软删留证（moderation 包不依赖 handlers，靠回调注入）
