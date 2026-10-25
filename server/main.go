@@ -1009,6 +1009,12 @@ func main() {
 		admin.POST("/ai/models", handlers.AdminCreateAiModel)
 		admin.PUT("/ai/models/:id", handlers.AdminUpdateAiModel)
 		admin.DELETE("/ai/models/:id", handlers.AdminDeleteAiModel)
+		// AI 模型资产管理：渠道拉取 / 批量导入 / 可见性 / 按渠道合并拆分
+		admin.POST("/ai/models/pull", handlers.AdminPullAiModels)
+		admin.POST("/ai/models/import", handlers.AdminImportAiModels)
+		admin.POST("/ai/models/:id/visibility", handlers.AdminSetModelVisibility)
+		admin.POST("/ai/models/merge", handlers.AdminMergeModels)
+		admin.POST("/ai/models/split", handlers.AdminSplitModels)
 		// AI 智能体管理（§5.4）：预设增删改
 		admin.GET("/ai/agents", handlers.AdminListAiAgents)
 		admin.POST("/ai/agents", handlers.AdminCreateAiAgent)

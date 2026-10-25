@@ -34,7 +34,7 @@ func AiHubStatus(c *gin.Context) {
 	if aiEnabled {
 		collect := func(kind string) []gin.H {
 			items := []gin.H{}
-			list, err := models.ListAiModelsByKind(kind, true)
+			list, err := models.ListUserVisibleAiModelsByKind(kind, true)
 			if err != nil {
 				return items
 			}

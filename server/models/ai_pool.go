@@ -39,10 +39,18 @@ type AiModel struct {
 	// 它们的正文可能整段落在 reasoning 字段里，content 为空。
 	// 二值标记只用于「给站长一个解释」与前端展示提示，不影响调用逻辑
 	//（客户端已自动透传 reasoning 并在 content 为空时兜底）。
-	Thinking  bool      `gorm:"not null;default:false" json:"thinking"`
-	Note      string    `gorm:"size:256;default:''" json:"note"` // 备注
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Thinking bool   `gorm:"not null;default:false" json:"thinking"`
+	Note     string `gorm:"size:256;default:''" json:"note"` // 备注
+	// 模型资产管理（§AI 模型渠道/分类）：
+	// Alias 用户展示别名（自动去除尾部后缀，管理员可覆盖）；Channel 渠道分组（合并/开放控制）；
+	// CategoryTags 分类标签 JSON（如 ["chat","reasoning"]）；
+	// UserVisible 是否对用户开放（站长按需选择，NULL=遗留模型默认可见，false=拉取模型默认隐藏）。
+	Alias        string    `gorm:"size:128;default:''" json:"alias"`
+	Channel      string    `gorm:"size:64;default:'';index" json:"channel"`
+	CategoryTags string    `gorm:"size:256;default:''" json:"category_tags"`
+	UserVisible  *bool     `gorm:"default:null" json:"user_visible"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 func (AiModel) TableName() string { return "ai_models" }
@@ -182,6 +190,25 @@ func GetEnabledAiModelOfKind(id uint, kind string) (*AiModel, error) {
 		return nil, nil
 	}
 	return m, nil
+}
+
+// ListUserVisibleAiModelsByKind 用户侧可用模型：仅返回开放给用户且启用的模型。
+// UserVisible 为 NULL（遗留模型）或 true 视为可见；拉取导入的模型默认 false（隐藏），由站长按需开放。
+func ListUserVisibleAiModelsByKind(kind string, onlyEnabled bool) ([]AiModel, error) {
+	kind = NormalizeAiKind(kind)
+	var list []AiModel
+	q := DB.Order("priority DESC, id ASC")
+	if kind == AiKindChat {
+		q = q.Where("kind IN ?", []string{AiKindChat, ""})
+	} else {
+		q = q.Where("kind = ?", kind)
+	}
+	q = q.Where("user_visible IS NULL OR user_visible = ?", true)
+	if onlyEnabled {
+		q = q.Where("enabled = ?", true)
+	}
+	err := q.Find(&list).Error
+	return list, err
 }
 
 // CreateAiModel 创建模型；api_key 明文入参，加密落库
