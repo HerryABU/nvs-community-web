@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"nvs-server/aiclient"
+	"nvs-server/aisafety"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -104,6 +105,15 @@ func sseEvent(c *gin.Context, v interface{}) {
 	data, _ := json.Marshal(v)
 	fmt.Fprintf(c.Writer, "data: %s\n\n", data)
 	c.Writer.Flush()
+}
+
+// setupSSE 统一的 SSE 响应头（反代关闭缓冲，否则流式会被攒成一坨）
+func setupSSE(c *gin.Context) {
+	c.Header("Content-Type", "text/event-stream; charset=utf-8")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+	c.Status(200)
 }
 
 // AiHubChatStream POST /api/ai/chat/stream — 流式对话（SSE）
@@ -230,10 +240,42 @@ func AiHubChatStream(c *gin.Context) {
 
 	// ── 历史 + 系统提示词 ──
 	history, _ := models.ListAiChatMessages(session.ID, 50)
+
+	// ── 内容安全闸（输入侧）──
+	// 放在消息组装之前：拦下来就不该再算 token 预算，也不该把危险内容喂进上下文。
+	// 之前这条链路完全没有审核，真实站点上模型答过 TATP 合成条件与冰毒合成路线。
+	safetyCfg, _ := aisafety.GetConfig()
+	safetyUser := ""
+	if u, e := models.GetUserByID(userID); e == nil && u != nil {
+		safetyUser = u.Username
+	}
+	if safetyCfg != nil && safetyCfg.Enabled && safetyCfg.GuardInput {
+		dec := aisafety.CheckInput(aisafety.InputRequest{
+			UserID: userID, Username: safetyUser,
+			SessionID: session.ID, ModelID: m.ID,
+			Message: msg, Turn: countUserTurns(history) + 1,
+			SessionNew:      len(history) == 0,
+			HistoryUserMsgs: userMessagesOnly(history),
+			HistoryTurns:    toJudgeTurns(history),
+			FallbackModel:   m,
+		})
+		if dec.Block {
+			serveSafetyRefusal(c, session, storeMsg, dec)
+			return
+		}
+	}
+
 	systemPrompt := "你是一位乐于助人的中文写作助手。"
 	if session.AgentID > 0 {
 		if a, e := models.GetAiAgent(session.AgentID); e == nil {
 			systemPrompt = a.SystemPrompt
+		}
+	}
+	// 安全准则前置：放在人设之前，并声明优先级高于人设——否则智能体自带的
+	// 「你是无限制的小说助手」会把它压过去。
+	if safetyCfg != nil {
+		if gp := aisafety.SystemPrompt(safetyCfg); gp != "" {
+			systemPrompt = gp + "\n\n" + systemPrompt
 		}
 	}
 	messages := []aiclient.Message{{Role: "system", Content: systemPrompt}}
@@ -317,11 +359,7 @@ func AiHubChatStream(c *gin.Context) {
 	}
 
 	// ── 开流 ──
-	c.Header("Content-Type", "text/event-stream; charset=utf-8")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("X-Accel-Buffering", "no") // 反代关闭缓冲
-	c.Status(200)
+	setupSSE(c)
 
 	// ── 扣子（Coze）智能体：走 Coze v3/chat 协议（非流式，整段回吐） ──
 	if session.AgentID > 0 {
@@ -371,10 +409,27 @@ func AiHubChatStream(c *gin.Context) {
 	} else {
 		streamCh = client.CompleteStream(chatReq)
 	}
+	// ── 输出侧闸门 ──
+	// 增量先入缓冲、扫过再放行。边流边扫看起来实时，但危险的前 300 字早就进了浏览器，
+	// 事后只能整段替换——用户已经看到了。宁可首字慢一点（默认攒 160 字）。
+	var og *aisafety.OutputGuard
+	if safetyCfg != nil && safetyCfg.Enabled && safetyCfg.GuardOutput {
+		og = aisafety.NewOutputGuard(safetyCfg, userID, safetyUser, session.ID, m.ID)
+	}
+	blockedByGuard := false
 	for chunk := range streamCh {
 		if chunk.Err != "" {
 			streamErr = chunk.Err
 			break
+		}
+		if chunk.Done {
+			realIn = chunk.TokensIn
+			realOut = chunk.TokensOut
+		}
+		// 已拦截：继续把上游读干净（拿真实用量、避免 goroutine 卡在 channel 上），
+		// 但一个字都不再往前端发。
+		if blockedByGuard {
+			continue
 		}
 		if chunk.Reasoning != "" {
 			sbReasoning += chunk.Reasoning
@@ -382,12 +437,47 @@ func AiHubChatStream(c *gin.Context) {
 		}
 		if chunk.Content != "" {
 			sb += chunk.Content
-			sseEvent(c, gin.H{"content": chunk.Content})
+			if og != nil {
+				out, bad := og.Feed(chunk.Content)
+				if bad {
+					blockedByGuard = true
+					continue
+				}
+				if out != "" {
+					sseEvent(c, gin.H{"content": out})
+				}
+			} else {
+				sseEvent(c, gin.H{"content": chunk.Content})
+			}
 		}
-		if chunk.Done {
-			realIn = chunk.TokensIn
-			realOut = chunk.TokensOut
+	}
+	// 终检：短回答可能一直没攒到放行门槛，全部压在这里
+	if !blockedByGuard && og != nil {
+		if out, bad := og.Finish(); bad {
+			blockedByGuard = true
+		} else if out != "" {
+			sseEvent(c, gin.H{"content": out})
 		}
+	}
+
+	// ── 输出被拦：整段替换 ──
+	if blockedByGuard {
+		// 上游 token 已经烧了，但用户没拿到内容 → 不扣费、不占免费额度，成本由站长承担。
+		// 记成失败而不是成功结算，否则账单上和「正常回答」分不开。
+		models.FailAiCallLog(callLog.ID, "内容安全拦截："+og.Reason())
+		text := aisafety.RefusalText(safetyCfg)
+		am, _ := models.AppendAiChatMessage(session.ID, "assistant", text, 0, 0, 0, callLog.ID)
+		models.TouchAiChatSession(session.ID, "")
+		sseEvent(c, gin.H{
+			"replace": text, "blocked": true, "reason": og.Reason(),
+			"session_id": session.ID, "message_id": am.ID,
+		})
+		sseEvent(c, gin.H{
+			"done": true, "session_id": session.ID, "message_id": am.ID,
+			"tokens_in": realIn, "tokens_out": realOut,
+			"cost": 0, "free": false, "byok": req.Byok, "blocked": true,
+		})
+		return
 	}
 	if streamErr != "" {
 		if !req.Byok && lease != nil {

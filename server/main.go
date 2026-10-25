@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"nvs-server/aisafety"
 	"nvs-server/chaptervcs"
 	"nvs-server/collab"
 	"nvs-server/config"
@@ -1003,6 +1004,17 @@ func main() {
 
 		admin.GET("/ai/features", handlers.AdminGetAiFeatures)
 		admin.PUT("/ai/features", handlers.AdminSetAiFeatures)
+
+		// AI 内容安全闸（提示词 + 用户特征 + 蓝队模型 B）
+		admin.GET("/ai/safety/config", handlers.GetAiSafetyConfig)
+		admin.PUT("/ai/safety/config", handlers.SaveAiSafetyConfig)
+		admin.POST("/ai/safety/config/reset", handlers.ResetAiSafetyConfig)
+		admin.GET("/ai/safety/events", handlers.ListAiSafetyEvents)
+		admin.GET("/ai/safety/profiles", handlers.ListAiSafetyProfiles)
+		admin.POST("/ai/safety/profiles/:uid/clear", handlers.ClearAiSafetyCooldown)
+		admin.POST("/ai/safety/profiles/:uid/reset", handlers.ResetAiSafetyProfile)
+		admin.GET("/ai/safety/judge-logs", handlers.ListJudgeLogs)
+		admin.GET("/ai/safety/stats", handlers.AiSafetyStats)
 		admin.GET("/ai/vendors", handlers.AdminListAiVendors)
 		admin.POST("/ai/vendors", handlers.AdminCreateAiVendor)
 		admin.PUT("/ai/vendors/:id", handlers.AdminUpdateAiVendor)
@@ -1622,6 +1634,10 @@ func initDatabase() error {
 	}
 	// AI 内容审核（独立功能包）：审核记录 / 配置 / 恶意举报者 / 隐藏内容
 	if err := moderation.Migrate(models.DB); err != nil {
+		return err
+	}
+	// AI 对话内容安全闸：配置 / 用户画像 / 事件 / 蓝队判定日志
+	if err := aisafety.Migrate(models.DB); err != nil {
 		return err
 	}
 	// 审核调度器（定时批量审核论坛/评论区），失败不阻断启动
