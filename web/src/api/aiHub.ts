@@ -78,6 +78,15 @@ export interface AiChatMessage {
   free?: boolean;
   /** 思考型模型的推理过程：仅本次会话内可见（后端不入库，刷新后消失） */
   reasoning?: string;
+  /** 分支：父消息 id（0 = 会话根） */
+  parent_id?: number;
+  /** 同一父节点下同角色兄弟中的位置（1 起）与总数；>1 时前端显示「‹ 2/3 ›」 */
+  sibling_index?: number;
+  sibling_count?: number;
+  /** 兄弟消息 id（升序），点击切换时用它 */
+  sibling_ids?: number[];
+  /** 这条助手消息是安全闸拦截后写入的占位内容（不是模型的真实回答） */
+  safety_blocked?: boolean;
   created_at: string;
 }
 
@@ -93,6 +102,13 @@ export const aiHubApi = {
   },
   sessionMessages(id: number) {
     return api.get<{ code: number; data: { session: AiChatSession; messages: AiChatMessage[] } }>(`/ai/sessions/${id}/messages`);
+  },
+  /** 切到某条消息所在分支（只改显示位置，不删消息） */
+  switchBranch(id: number, messageId: number) {
+    return api.post<{ code: number; data: { session: AiChatSession; messages: AiChatMessage[] } }>(
+      `/ai/sessions/${id}/switch`,
+      { message_id: messageId },
+    );
   },
   deleteSession(id: number) {
     return api.delete(`/ai/sessions/${id}`);
@@ -213,6 +229,13 @@ export const aiHubApi = {
 };
 
 /** 对话附件（先调 uploadChatAttachment 拿到引用，再随消息回传） */
+/** 分支切换 / 会话终止相关 */
+export interface AiChatSessionLock {
+  locked?: boolean;
+  lock_reason?: string;
+  locked_at?: string;
+}
+
 export interface ChatAttachment {
   kind: 'image' | 'file';
   name: string;
@@ -247,6 +270,10 @@ export async function streamChat(
     confirm?: boolean;
     /** 附件引用（图片/文档原样发给上游） */
     attachments?: ChatAttachment[];
+    /** 编辑某条用户消息并重发 → 新建 user 兄弟分支 */
+    edit_msg_id?: number;
+    /** 对某条助手回复重新生成 → 新建 assistant 兄弟分支 */
+    regenerate_msg_id?: number;
   },
   onChunk: (text: string) => void,
   signal?: AbortSignal,
@@ -263,6 +290,10 @@ export async function streamChat(
   reasoning: string;
   /** 本次回答被内容安全闸拦截（整段替换为拒绝文案） */
   blocked?: boolean;
+  /** 本次拦截导致整段对话被终止（上下文已污染，不能继续） */
+  terminated?: boolean;
+  /** 终止模式：strict 锁会话 / moderate 打污染标记 / loose 仅拦当轮 */
+  terminate_mode?: string;
   /** 正文为空、整段回答来自 reasoning：前端应把 reasoning 落成正文而不是折叠块 */
   answerInReasoning: boolean;
   cost: number;
@@ -304,6 +335,8 @@ export async function streamChat(
   let content = '';
   let reasoning = '';
   let blocked = false;
+  let terminated = false;
+  let terminateMode = '';
   let final: any = null;
   for (;;) {
     const { done, value } = await reader.read();
@@ -332,6 +365,7 @@ export async function streamChat(
             onReplace?.(ev.replace);
           }
           if (ev.blocked && ev.done) blocked = true;
+          if (ev.terminated) terminated = true;
           if (ev.reasoning) {
             reasoning += ev.reasoning;
             onReasoning?.(ev.reasoning);
@@ -341,17 +375,27 @@ export async function streamChat(
             onChunk(ev.content);
           }
           if (ev.done) final = ev;
+          if (ev.terminate_mode) terminateMode = String(ev.terminate_mode);
         } catch (e: any) {
           if (e?.message && e.message !== 'Unexpected end of JSON input') throw e;
         }
       }
     }
   }
+  // 已收到 done：主动取消读取，立刻断开这条 SSE，而不是等连接自然结束。
+  // 「终止」必须是链路层面的掐断，否则前端还会挂着一个半开的流。
+  try {
+    await reader.cancel();
+  } catch {
+    // 已经关闭的流 cancel 会抛，忽略
+  }
   if (!final) return null;
   return {
     content,
     reasoning,
     blocked: blocked || !!final.blocked,
+    terminated: terminated || !!final.terminated,
+    terminate_mode: terminateMode || (final.terminate_mode ? String(final.terminate_mode) : ''),
     answerInReasoning: !!final.answer_in_reasoning,
     cost: final.cost || 0,
     free: !!final.free,

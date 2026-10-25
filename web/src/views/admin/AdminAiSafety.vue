@@ -173,6 +173,39 @@
           </div>
 
           <div class="admin-panel">
+            <SectionHeader
+              title="终止处置"
+              subtitle="判定有害后不是回一句「无法回答」——而是掐断流并按模式处置会话"
+              :icon="'⛔'"
+              gradient="danger"
+            />
+            <el-form label-width="170px" class="safety-form">
+              <el-form-item label="启用终止">
+                <el-switch v-model="cfg.terminate_on_block" />
+                <span class="muted small">关闭后只做拦截，不处置会话</span>
+              </el-form-item>
+              <el-form-item label="终止模式">
+                <el-radio-group v-model="cfg.terminate_mode">
+                  <el-radio-button value="strict">严格 · 整对话终止</el-radio-button>
+                  <el-radio-button value="moderate">中档 · 可继续但注入提示</el-radio-button>
+                  <el-radio-button value="loose">宽松 · 只拦当轮</el-radio-button>
+                </el-radio-group>
+              </el-form-item>
+              <el-form-item label="模式说明">
+                <div class="mode-hint">
+                  <p><b>严格</b>：整个对话锁死，之后任何提问都不再产生内容，只能新建对话。适合出现真实泄露时。</p>
+                  <p><b>中档</b>：对话能继续，但上下文被标记为不可信，之后每一轮都会向模型注入「不得延续/补全/换说法恢复该话题」的提示。</p>
+                  <p><b>宽松</b>：对话能继续，也不注入提示，只拦当轮。适合误判率较高的场景。</p>
+                </div>
+              </el-form-item>
+              <el-form-item label="触发终止的分数">
+                <el-input-number v-model="cfg.terminate_score" :min="1" :max="200" />
+                <span class="muted small">高于普通拦截线，避免一次误判就锁死会话（输出侧拦截无条件终止）</span>
+              </el-form-item>
+            </el-form>
+          </div>
+
+          <div class="admin-panel">
             <SectionHeader title="文案与自定义词表" subtitle="拒绝文案要稳定、不复述问题、不给参数" :icon="'💬'" gradient="blue" />
             <el-form label-width="170px" class="safety-form">
               <el-form-item label="安全系统提示词">
@@ -185,6 +218,18 @@
               <el-form-item label="越狱拒答文案">
                 <el-input v-model="cfg.refusal_jailbreak_text" type="textarea" :rows="3" />
                 <span class="muted small">仅「忽略以上指令」这类话术时用；否则回危险品文案会很荒谬</span>
+              </el-form-item>
+              <el-form-item label="严格终止文案">
+                <el-input v-model="cfg.session_terminated_text" type="textarea" :rows="4" />
+                <span class="muted small">整段对话被终止时给用户看</span>
+              </el-form-item>
+              <el-form-item label="中档拦截文案">
+                <el-input v-model="cfg.moderate_blocked_text" type="textarea" :rows="3" />
+                <span class="muted small">中档模式下语气要轻一些（对话还能继续）</span>
+              </el-form-item>
+              <el-form-item label="中档注入提示词">
+                <el-input v-model="cfg.contaminated_notice_text" type="textarea" :rows="6" />
+                <span class="muted small">中档模式下每轮注入给模型，告知前面内容已被拦截、不得延续</span>
               </el-form-item>
               <el-form-item label="冷却文案">
                 <el-input v-model="cfg.cooldown_text" type="textarea" :rows="3" />
@@ -333,6 +378,52 @@
           />
         </el-tab-pane>
 
+        <!-- ========== 已终止会话 ========== -->
+        <el-tab-pane label="已终止会话" name="locked">
+          <div class="queue-toolbar">
+            <span class="muted small">
+              共 {{ lockedTotal }} 个对话被终止。用户申诉时按会话编号在这里定位，复核后可直接恢复。
+            </span>
+          </div>
+          <StateBlock v-if="lockedError" state="error" title="加载失败" @retry="loadLocked(lockedPage)" />
+          <el-table v-else v-loading="lockedLoading" :data="lockedSessions" size="small">
+            <el-table-column label="会话" width="90" prop="id" />
+            <el-table-column label="用户" width="150">
+              <template #default="{ row }">
+                #{{ row.user_id }}
+              </template>
+            </el-table-column>
+            <el-table-column label="标题" min-width="180">
+              <template #default="{ row }">{{ row.title || '（未命名）' }}</template>
+            </el-table-column>
+            <el-table-column label="终止原因" min-width="220">
+              <template #default="{ row }">
+                <span class="small">{{ row.lock_reason || '—' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="终止时间" width="150">
+              <template #default="{ row }">{{ fmt(row.locked_at) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="120">
+              <template #default="{ row }">
+                <el-button size="small" text type="primary" @click="onUnlock(row)">恢复对话</el-button>
+              </template>
+            </el-table-column>
+            <template #empty>
+              <StateBlock state="empty" title="没有被终止的对话" description="判定有害并触发严格模式后，会话会出现在这里" />
+            </template>
+          </el-table>
+          <el-pagination
+            v-if="lockedTotal > lockedSize"
+            class="safety-pager"
+            layout="prev, pager, next"
+            :total="lockedTotal"
+            :page-size="lockedSize"
+            :current-page="lockedPage"
+            @current-change="loadLocked"
+          />
+        </el-tab-pane>
+
         <!-- ========== 用户画像 ========== -->
         <el-tab-pane label="用户画像" name="profiles">
           <div class="queue-toolbar">
@@ -440,6 +531,14 @@ const judgePage = ref(1);
 const judgeSize = 30;
 const judgeOnlyBad = ref(false);
 
+// 已终止会话
+const lockedSessions = ref<any[]>([]);
+const lockedLoading = ref(false);
+const lockedError = ref(false);
+const lockedTotal = ref(0);
+const lockedPage = ref(1);
+const lockedSize = 30;
+
 // 用户画像
 const profiles = ref<SafetyProfile[]>([]);
 const profLoading = ref(false);
@@ -545,6 +644,43 @@ async function loadJudge(page = 1) {
   }
 }
 
+async function loadLocked(page = 1) {
+  lockedPage.value = page;
+  lockedLoading.value = true;
+  lockedError.value = false;
+  try {
+    const res = await aiSafetyApi.lockedSessions({ page, page_size: lockedSize });
+    if (res.data.code === 0 && res.data.data) {
+      lockedSessions.value = res.data.data.items || [];
+      lockedTotal.value = res.data.data.total || 0;
+    }
+  } catch {
+    lockedError.value = true;
+  } finally {
+    lockedLoading.value = false;
+  }
+}
+
+async function onUnlock(row: any) {
+  try {
+    await ElMessageBox.confirm(
+      `恢复会话 #${row.id}？解除后用户可继续在这个对话里提问（历史内容保留）。`,
+      '恢复对话',
+      { type: 'warning', confirmButtonText: '恢复', cancelButtonText: '取消' },
+    );
+  } catch {
+    return;
+  }
+  try {
+    await aiSafetyApi.unlockSession(row.id);
+    ElMessage.success('已恢复');
+    loadLocked(lockedPage.value);
+    loadStats();
+  } catch {
+    ElMessage.error('操作失败');
+  }
+}
+
 async function loadProfiles(page = 1) {
   profPage.value = page;
   profLoading.value = true;
@@ -572,6 +708,7 @@ async function loadAll() {
   if (tab.value === 'events') loadEvents(evPage.value);
   if (tab.value === 'judge') loadJudge(judgePage.value);
   if (tab.value === 'profiles') loadProfiles(profPage.value);
+  if (tab.value === 'locked') loadLocked(lockedPage.value);
 }
 
 async function onSave() {
@@ -657,6 +794,7 @@ onMounted(() => {
   loadEvents(1);
   loadJudge(1);
   loadProfiles(1);
+  loadLocked(1);
 });
 </script>
 
@@ -700,5 +838,7 @@ onMounted(() => {
   word-break: break-all;
 }
 .safety-pager { margin-top: 12px; justify-content: flex-end; }
+.mode-hint p { margin: 0 0 4px; font-size: 0.78rem; line-height: 1.55; color: var(--text-light, #666); }
+.mode-hint b { color: var(--text-main, #303133); }
 [data-theme='dark'] .safety-stat { background: #161b28; border-color: #262d3d; }
 </style>

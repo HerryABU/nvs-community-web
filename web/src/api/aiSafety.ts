@@ -40,6 +40,13 @@ export interface SafetyConfig {
   system_guard_prompt: string;
   refusal_text: string;
   refusal_jailbreak_text: string;
+
+  terminate_on_block: boolean;
+  terminate_score: number;
+  terminate_mode: 'strict' | 'moderate' | 'loose';
+  session_terminated_text: string;
+  contaminated_notice_text: string;
+  moderate_blocked_text: string;
   cooldown_text: string;
   watch_notice_text: string;
   extra_terms: string;
@@ -157,6 +164,15 @@ export const aiSafetyApi = {
       '/admin/ai/safety/judge-logs',
       { params },
     );
+  },
+  lockedSessions(params: { page?: number; page_size?: number } = {}) {
+    return api.get<{ code: number; data: { items: any[]; total: number; page: number } }>(
+      '/admin/ai/safety/locked-sessions',
+      { params },
+    );
+  },
+  unlockSession(sid: number) {
+    return api.post(`/admin/ai/safety/sessions/${sid}/unlock`);
   },
   stats() {
     return api.get<{ code: number; data: SafetyStats }>('/admin/ai/safety/stats');

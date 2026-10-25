@@ -51,25 +51,68 @@
         :class="['ai-msg', m.role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant']"
       >
         <div class="ai-msg-bubble">
-          <!-- 思考型模型的推理过程：默认折叠，不干扰阅读 -->
-          <details v-if="m.role === 'assistant' && m.reasoning" class="ai-think">
-            <summary>思考过程（{{ m.reasoning.length }} 字）</summary>
-            <div class="ai-think-body">{{ m.reasoning }}</div>
-          </details>
+          <!-- 被安全闸拦截的回答：渲染成警告块，不当作普通回答展示 -->
           <div
-            v-if="m.role === 'assistant'"
-            class="ai-msg-md"
-            v-html="renderMd(m.content)"
-            @click="onMdClick"
-          />
-          <div v-else class="ai-msg-plain">{{ m.content }}</div>
-          <div v-if="m.role === 'assistant'" class="ai-msg-tools">
+            v-if="m.role === 'assistant' && m.safety_blocked"
+            class="ai-blocked-card"
+            :class="{ 'is-strict': sessionLocked }"
+          >
+            <div class="ai-blocked-title">
+              <el-icon><CircleCloseFilled /></el-icon>
+              <span>{{ sessionLocked ? '该回答涉嫌违规，已被安全系统拦截' : '该回答未通过安全审核，已拦截' }}</span>
+            </div>
+            <p class="ai-blocked-text">{{ m.content }}</p>
+          </div>
+          <template v-else-if="m.role === 'assistant'">
+            <!-- 思考型模型的推理过程：默认折叠，不干扰阅读 -->
+            <details v-if="m.reasoning" class="ai-think">
+              <summary>思考过程（{{ m.reasoning.length }} 字）</summary>
+              <div class="ai-think-body">{{ m.reasoning }}</div>
+            </details>
+            <div class="ai-msg-md" v-html="renderMd(m.content)" @click="onMdClick" />
+          </template>
+          <template v-else>
+            <div class="ai-msg-plain">{{ m.content }}</div>
+            <div v-if="(m.sibling_count || 0) > 1" class="ai-branch ai-branch-user">
+              <button
+                class="ai-msg-tool"
+                type="button"
+                :disabled="(m.sibling_index || 1) <= 1"
+                @click="switchSibling(m, -1)"
+              >‹</button>
+              <span class="ai-branch-idx">{{ m.sibling_index }}/{{ m.sibling_count }}</span>
+              <button
+                class="ai-msg-tool"
+                type="button"
+                :disabled="(m.sibling_index || 1) >= (m.sibling_count || 1)"
+                @click="switchSibling(m, 1)"
+              >›</button>
+            </div>
+          </template>
+          <div v-if="m.role === 'assistant' && !m.safety_blocked" class="ai-msg-tools">
             <button class="ai-msg-tool" type="button" title="复制内容" @click="copyMsg(m.content)">
               <el-icon><CopyDocument /></el-icon> 复制
             </button>
-            <button class="ai-msg-tool" type="button" title="重新发送" @click="regenerate(m)">
-              <el-icon><RefreshRight /></el-icon> 重试
+            <button class="ai-msg-tool" type="button" title="重新生成（会产生分支，可左右切换）" @click="regenerate(m)">
+              <el-icon><RefreshRight /></el-icon> 重新生成
             </button>
+            <span v-if="(m.sibling_count || 0) > 1" class="ai-branch">
+              <button
+                class="ai-msg-tool"
+                type="button"
+                :disabled="(m.sibling_index || 1) <= 1"
+                title="上一个分支"
+                @click="switchSibling(m, -1)"
+              >‹</button>
+              <span class="ai-branch-idx">{{ m.sibling_index }}/{{ m.sibling_count }}</span>
+              <button
+                class="ai-msg-tool"
+                type="button"
+                :disabled="(m.sibling_index || 1) >= (m.sibling_count || 1)"
+                title="下一个分支"
+                @click="switchSibling(m, 1)"
+              >›</button>
+            </span>
             <span v-if="m.cost > 0 || m.free" class="ai-msg-meta">
               <span v-if="m.free" class="ai-msg-free">免费额度</span>
               <template v-else>消耗 {{ m.cost }} {{ status.token_name }}</template>
@@ -91,8 +134,40 @@
       </div>
     </div>
 
+    <!-- 内容安全：严格模式锁死整个对话；中档模式只标记「上下文不可信」，仍可继续聊别的 -->
+    <div
+      v-if="sessionLocked || contaminated"
+      class="ai-locked-banner"
+      :class="{ 'is-moderate': !sessionLocked }"
+    >
+      <el-icon><Lock /></el-icon>
+      <div class="ai-locked-body">
+        <strong>{{ sessionLocked ? '本次对话已终止' : '对话已标记为「上下文不可信」' }}</strong>
+        <p v-if="sessionLocked">
+          {{ sessionLockReason || '检测到危险内容的生成或索取，这段上下文已不可继续使用。' }}
+        </p>
+        <p v-else>
+          前面的回答已被拦截并标记为不可信。模型不会再延续、补全，也不会因为你换个说法就恢复那个话题；
+          其他话题可以照常聊。
+        </p>
+        <p class="ai-locked-hint">
+          {{ sessionLocked
+            ? '如认为属于误判，可以申诉；管理员复核后可恢复该会话。'
+            : '提示：同一个话题反复试探会被升级为终止整个对话。' }}
+        </p>
+        <el-button v-if="sessionLocked" size="small" class="ai-appeal-btn" @click="onAppeal">
+          申诉 / 反馈
+        </el-button>
+      </div>
+    </div>
+
     <!-- 输入区：圆角大输入框 + 底部工具行（模型 / 长度 / 发送） -->
     <div class="ai-composer">
+      <!-- 中档模式：对话还能继续，但要让用户知道审查已收紧，而不是莫名其妙被拦 -->
+      <div v-if="contaminated && !sessionLocked" class="ai-safety-hint">
+        <el-icon><WarningFilled /></el-icon>
+        <span>安全提示：由于上下文存在敏感讨论，本对话已切换至严格审查模式，请文明交流。</span>
+      </div>
       <div class="ai-composer-box" :class="{ 'is-focus': composerFocus, 'is-generating': generating }">
         <!-- 附件预览：图片出缩略图，文档出文件名 + 大小 -->
         <div v-if="attachments.length" class="ai-attach-list">
@@ -113,12 +188,12 @@
           v-model="inputText"
           class="ai-composer-input"
           rows="1"
-          :disabled="generating"
-          placeholder="给 AI 发消息…"
+          :disabled="generating || sessionLocked"
+          :placeholder="sessionLocked ? '本对话已被终止，请新建对话并遵守社区规范' : '给 AI 发消息…'"
           @focus="composerFocus = true"
           @blur="composerFocus = false"
           @input="autoGrow"
-          @keydown.enter.exact.prevent="send"
+          @keydown.enter.exact.prevent="send()"
         />
         <div class="ai-composer-tools">
           <div class="ai-composer-left">
@@ -201,7 +276,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { CopyDocument, RefreshRight, Collection, Top, VideoPause, Paperclip, Close } from '@element-plus/icons-vue';
 import { renderAiMarkdown } from '@/markdown/renderer';
 import AiPromptLibrary from '@/components/ai/AiPromptLibrary.vue';
-import { streamChat, uploadChatAttachment, type AiHubStatus, type AiAgent, type AiChatMessage, type AiChatSession, type ChatAttachment } from '@/api/aiHub';
+import { aiHubApi, streamChat, uploadChatAttachment, type AiHubStatus, type AiAgent, type AiChatMessage, type AiChatSession, type ChatAttachment } from '@/api/aiHub';
 
 const props = defineProps<{
   status: AiHubStatus;
@@ -219,6 +294,11 @@ const emit = defineEmits<{
 
 const messages = ref<AiChatMessage[]>([]);
 const inputText = ref('');
+// 会话被内容安全终止：整段上下文不可用，输入区禁用，只能新建对话
+const sessionLocked = ref(false);
+const sessionLockReason = ref('');
+// 中档模式：会话可继续，但上下文被标记为不可信（每轮注入提示词）
+const contaminated = ref(false);
 
 // ===== 附件（图片 / 文档）=====
 // 平台不解析文件：上传后拿到引用，发送时后端原样内联给上游 API。
@@ -456,13 +536,14 @@ async function copyMsg(text: string) {
 
 // 重试：找到该助手消息之前最近的一条用户消息，重新发起
 /**
- * 重新生成。
- * 原实现只是「拿上一条用户消息再发一次」——会再 push 一条相同的用户消息，
- * 且旧回复仍留在列表里，点两次就变成一问多答的乱账。
- * 正确做法：先截断到该提问之后（丢掉这条回复及其后续），再以 skipPush 重发。
+ * 重新生成（分支版）。
+ *
+ * 以前是「截断到该提问之后重发」——旧回复直接被删掉，想对比两个回答就没了。
+ * 现在改成新建兄弟分支：原回复保留，新回复挂在同一个提问下，用「‹ 1/2 ›」切换。
+ * 后端按 regenerate_msg_id 把新回复的 parent 指向原提问，不覆盖任何东西。
  */
 function regenerate(m: AiChatMessage) {
-  if (generating.value) return;
+  if (generating.value || sessionLocked.value) return;
   const idx = messages.value.findIndex((x) => x.id === m.id);
   if (idx < 0) return;
   let userIdx = -1;
@@ -473,10 +554,42 @@ function regenerate(m: AiChatMessage) {
     }
   }
   if (userIdx < 0) return;
-  const text = messages.value[userIdx].content;
-  // 保留到该提问（含）为止，移除被重新生成的回复与其后的所有消息
-  messages.value = messages.value.slice(0, idx);
-  send(text, false, true);
+  // 内容不重要（后端会用库里原提问），但必须非空才过 send 的前置校验
+  send(messages.value[userIdx].content, false, true, { regenerateMsgId: m.id });
+}
+
+/**
+ * 申诉指引。
+ *
+ * 不做「点一下自动解封」——那等于给闸门开后门。
+ * 这里只把管理员复核需要的信息整理好让用户带走，
+ * 后台「已终止会话」列表里能按会话号直接定位并恢复。
+ */
+function onAppeal() {
+  const sid = props.sessionId || 0;
+  ElMessageBox.alert(
+    `会话编号：#${sid}\n终止原因：${sessionLockReason.value || '内容安全策略'}\n\n` +
+      '请把上面这行信息发给站长。管理员可在后台「内容治理 → AI 防越狱 → 已终止会话」中复核并恢复。',
+    '申诉 / 反馈',
+    { confirmButtonText: '我知道了', cancelButtonText: '', type: 'info' },
+  ).catch(() => {});
+}
+
+/** 切换兄弟分支：只改显示位置，不删任何消息 */
+async function switchSibling(m: AiChatMessage, dir: number) {
+  const ids = m.sibling_ids || [];
+  const cur = ids.indexOf(m.id);
+  const nextID = ids[cur + dir];
+  if (!nextID || !props.sessionId) return;
+  try {
+    const res = await aiHubApi.switchBranch(props.sessionId, nextID);
+    if (res.data.code === 0) {
+      messages.value = res.data.data.messages || [];
+      scrollBottom();
+    }
+  } catch {
+    ElMessage.error('切换分支失败');
+  }
 }
 
 function scrollBottom() {
@@ -485,27 +598,44 @@ function scrollBottom() {
   });
 }
 
+// 加载当前分支的消息（含终止状态与兄弟分支信息）
+async function reloadMessages() {
+  const id = props.sessionId;
+  if (!id) return;
+  const token = ++loadingSession;
+  try {
+    const res = await aiHubApi.sessionMessages(id);
+    if (token !== loadingSession) return; // 防竞态
+    if (res.data.code === 0) {
+      messages.value = res.data.data.messages || [];
+      const s = res.data.data.session as any;
+      sessionLocked.value = !!s?.locked;
+      sessionLockReason.value = s?.lock_reason || '';
+      contaminated.value = !!s?.contaminated;
+    }
+  } catch {
+    // 加载失败不弹窗：切会话时偶发失败会自己再触发一次
+  }
+  scrollBottom();
+}
+
 // 切换会话：加载历史
 watch(
   () => props.sessionId,
-  async (id) => {
+  (id) => {
     if (!id) {
       messages.value = [];
+      sessionLocked.value = false;
+      sessionLockReason.value = '';
+      contaminated.value = false;
       return;
     }
-    const token = ++loadingSession;
-    try {
-      const { aiHubApi } = await import('@/api/aiHub');
-      const res = await aiHubApi.sessionMessages(id);
-      if (token !== loadingSession) return; // 防竞态
-      if (res.data.code === 0) messages.value = res.data.data.messages || [];
-    } catch { /* ignore */ }
-    scrollBottom();
+    reloadMessages();
   },
   { immediate: true },
 );
 
-async function send(rawText?: string, confirmed = false, skipPush = false) {
+async function send(rawText?: string, confirmed = false, skipPush = false, opts: { regenerateMsgId?: number } = {}) {
   const isRetry = typeof rawText === 'string';
   const text = (isRetry ? rawText : inputText.value).trim();
   // 重新生成不重发附件（附件只在首次发送时随请求带上）
@@ -556,6 +686,8 @@ async function send(rawText?: string, confirmed = false, skipPush = false) {
         confirm: confirmed || undefined,
         // 图片/文档：后端读回文件原样内联给上游（平台不解析）
         attachments: pendingAtts.length ? pendingAtts : undefined,
+        // 重新生成：把新回复挂到原提问下成为兄弟分支（不覆盖旧回复）
+        regenerate_msg_id: opts.regenerateMsgId,
       },
       (chunk) => {
         streamingText.value += chunk;
@@ -586,8 +718,16 @@ async function send(rawText?: string, confirmed = false, skipPush = false) {
         created_at: '',
       });
       if (result.blocked) {
-        ElMessage.warning('该回答触发内容安全策略，已拦截');
+        ElMessage.warning(result.terminated ? '该对话已被终止' : '该回答触发内容安全策略，已拦截');
       }
+      if (result.terminated) {
+        sessionLocked.value = true;
+      }
+      if (result.terminate_mode === 'moderate') {
+        contaminated.value = true;
+      }
+      // 重新生成产生了兄弟分支：重载才能拿到「‹ 1/2 ›」切换信息
+      if (opts.regenerateMsgId) await reloadMessages();
       emit('balance-updated', result.balance_after);
       if (!props.sessionId && result.session_id) {
         emit('session-created', result.session_id);
@@ -872,6 +1012,90 @@ function stop() {
 }
 .ai-attach-btn:hover:not(:disabled) { background: var(--el-fill-color, #e9eaf0); color: var(--el-color-primary, #6366f1); }
 .ai-attach-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── 对话分支切换 ── */
+.ai-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+  padding: 0 4px;
+  border-radius: 6px;
+  background: var(--bg-hover, rgba(127, 127, 127, 0.08));
+}
+.ai-branch-user { margin: 6px 0 0; align-self: flex-end; }
+.ai-branch .ai-msg-tool { padding: 0 4px; font-size: 0.95rem; line-height: 1; }
+.ai-branch .ai-msg-tool:disabled { opacity: 0.3; cursor: not-allowed; }
+.ai-branch-idx { font-size: 0.72rem; color: var(--text-light, #888); min-width: 26px; text-align: center; }
+
+/* ── 会话已终止 ── */
+.ai-locked-banner {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0 16px 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--el-color-danger, #f56c6c);
+  background: rgba(245, 108, 108, 0.08);
+  color: var(--text-main, #303133);
+}
+.ai-locked-banner .el-icon { color: var(--el-color-danger, #f56c6c); margin-top: 2px; }
+.ai-locked-body strong { display: block; font-size: 0.9rem; margin-bottom: 4px; }
+.ai-locked-body p { margin: 0; font-size: 0.8rem; line-height: 1.5; color: var(--text-light, #666); }
+.ai-locked-hint { margin-top: 4px !important; font-size: 0.75rem !important; opacity: 0.8; }
+
+/* 被拦截的回答：警告块而不是普通气泡 */
+.ai-blocked-card {
+  border: 1px dashed var(--el-color-warning, #e6a23c);
+  background: rgba(230, 162, 60, 0.07);
+  border-radius: 10px;
+  padding: 10px 12px;
+  max-width: 100%;
+}
+.ai-blocked-card.is-strict {
+  border-color: var(--el-color-danger, #f56c6c);
+  background: rgba(245, 108, 108, 0.07);
+}
+.ai-blocked-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--el-color-warning, #e6a23c);
+  margin-bottom: 6px;
+}
+.ai-blocked-card.is-strict .ai-blocked-title { color: var(--el-color-danger, #f56c6c); }
+.ai-blocked-text {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--text-light, #666);
+  white-space: pre-wrap;
+}
+
+/* 中档模式：输入框上方的安全提示（不打断，但要让人看得见） */
+.ai-safety-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: rgba(230, 162, 60, 0.1);
+  border: 1px solid rgba(230, 162, 60, 0.35);
+  font-size: 0.78rem;
+  color: var(--el-color-warning, #b88230);
+}
+.ai-appeal-btn { margin-top: 6px; }
+
+/* 中档模式：只是标记，不是终止 —— 用橙色而不是红色，避免用户以为对话废了 */
+.ai-locked-banner.is-moderate {
+  border-color: var(--el-color-warning, #e6a23c);
+  background: rgba(230, 162, 60, 0.08);
+}
+.ai-locked-banner.is-moderate .el-icon { color: var(--el-color-warning, #e6a23c); }
 
 [data-theme='dark'] .ai-attach-item { background: #1c2030; border-color: #2b3145; }
 [data-theme='dark'] .ai-attach-name { color: #e5e7eb; }
