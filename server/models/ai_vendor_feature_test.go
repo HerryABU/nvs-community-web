@@ -43,6 +43,45 @@ func TestAiVendorCRUD(t *testing.T) {
 	}
 }
 
+// TestSeedAiVendorsBackfillsPrefix 老库升级：ai_vendors 没有 prefix 列 →
+// AutoMigrate 只加列、存量全是空串，SeedAiVendors 必须把前缀补回来，
+// 否则「按模型 ID 前缀匹配厂商」在老站上永远匹配不上（且界面看不出异常）。
+func TestSeedAiVendorsBackfillsPrefix(t *testing.T) {
+	db := setupAiTestDB(t)
+	old := DB
+	DB = db
+	defer func() { DB = old }()
+
+	// 模拟老数据：预置厂商 + 自建厂商，前缀都是空
+	DB.Create(&AiVendor{Name: "OpenAI", Prefix: "", SortOrder: 1, Enabled: true})
+	DB.Create(&AiVendor{Name: "DeepSeek", Prefix: "", SortOrder: 2, Enabled: true})
+	DB.Create(&AiVendor{Name: "My Vendor", Prefix: "", SortOrder: 3, Enabled: true})
+	// 管理员手工改过的前缀不能被覆盖
+	DB.Create(&AiVendor{Name: "Google", Prefix: "g-custom", SortOrder: 4, Enabled: true})
+
+	SeedAiVendors()
+
+	cases := map[string]string{
+		"OpenAI":    "openai",
+		"DeepSeek":  "deepseek",
+		"My Vendor": "myvendor",
+		"Google":    "g-custom", // 已有值保持不动
+	}
+	for name, want := range cases {
+		var v AiVendor
+		if err := DB.Where("name = ?", name).First(&v).Error; err != nil {
+			t.Fatalf("厂商 %s 不存在", name)
+		}
+		if v.Prefix != want {
+			t.Fatalf("厂商 %s 前缀回填错误：得到 %q，期望 %q", name, v.Prefix, want)
+		}
+	}
+	// 回填后应能按前缀匹配
+	if got := MatchVendorByPrefix("deepseek"); got == nil || got.Name != "DeepSeek" {
+		t.Fatalf("按前缀匹配失败：%+v", got)
+	}
+}
+
 // TestAiFeatureFlags AI 功能开关：默认值、范围校正、持久化
 func TestAiFeatureFlags(t *testing.T) {
 	db := setupAiTestDB(t)

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 
@@ -266,6 +267,89 @@ func AdminSetCategoryPrice(c *gin.Context) {
 
 // ---------- 厂商→版本→亚版本矩阵（管理端专用，含 newest 标记） ----------
 
+// matrixModel 归一化后的矩阵条目：老数据缺 vendor/version/sub_version 时，
+// 用模型 ID 的「前缀-版本-亚版本」兜底推导（功能上线前建的模型不用重导也能归类）。
+type matrixModel struct {
+	models.AiModel
+	VendorName string
+	Version    string
+	Sub        string
+}
+
+// normalizeMatrixModel 归一化单条模型
+func normalizeMatrixModel(m models.AiModel) matrixModel {
+	p := vendor.ParseModelID(m.ModelID)
+	name := m.Vendor
+	if name == "" {
+		// 前缀 → 厂商（如 DeepSeek-V4-Flash 的 DeepSeek → deepseek 前缀命中 DeepSeek）
+		if v := models.MatchVendorByPrefix(p.Prefix); v != nil {
+			name = v.Name
+		}
+	}
+	if name == "" {
+		name = "未分类"
+	}
+	ver := m.Version
+	if ver == "" {
+		ver = p.Version
+	}
+	sub := m.SubVersion
+	if sub == "" {
+		sub = p.SubVersion
+	}
+	return matrixModel{AiModel: m, VendorName: name, Version: ver, Sub: sub}
+}
+
+// buildVendorGroup 把一个厂商下的模型聚成「版本 → 亚版本」两级
+func buildVendorGroup(group []matrixModel) []gin.H {
+	byVer := map[string][]matrixModel{}
+	for _, m := range group {
+		ver := m.Version
+		if ver == "" {
+			ver = "—"
+		}
+		byVer[ver] = append(byVer[ver], m)
+	}
+	// 版本按名字排序，保证每次返回顺序稳定（map 遍历是随机的）
+	verKeys := make([]string, 0, len(byVer))
+	for k := range byVer {
+		verKeys = append(verKeys, k)
+	}
+	sort.Strings(verKeys)
+
+	versions := make([]gin.H, 0, len(verKeys))
+	for _, ver := range verKeys {
+		items := byVer[ver]
+		subs := make([]string, 0, len(items))
+		for _, m := range items {
+			if m.Sub != "" {
+				subs = append(subs, m.Sub)
+			}
+		}
+		newest := ""
+		if len(subs) > 0 {
+			newest = vendor.NewestSubVersion(subs)
+		}
+		subItems := make([]gin.H, 0, len(items))
+		for _, m := range items {
+			uv := m.UserVisible == nil || *m.UserVisible
+			subItems = append(subItems, gin.H{
+				"id": m.ID, "name": m.Name, "model_id": m.ModelID,
+				"sub_version": m.Sub,
+				// 只有真的存在亚版本、且就是最新那个时才打星；
+				// 空亚版本（如手工建的模型）不该被标成「最新」
+				"newest":  newest != "" && m.Sub == newest,
+				"enabled": m.Enabled, "user_visible": uv,
+			})
+		}
+		versions = append(versions, gin.H{
+			"version": ver, "newest_sub_version": newest,
+			"count": len(items), "items": subItems,
+		})
+	}
+	return versions
+}
+
 // AdminAiVendorMatrix GET /api/admin/ai/vendors/matrix
 // 把模型按「厂商→版本→亚版本」三级聚合，并在同一版本下标出最新亚版本（newest）。
 // 该「谁最新」比较仅管理端可见，用户侧只看厂商主名字（不暴露亚版本噪声）。
@@ -283,111 +367,36 @@ func AdminAiVendorMatrix(c *gin.Context) {
 		utils.InternalError(c, "查询失败")
 		return
 	}
-	// 按厂商名归并模型（空厂商名归到「未分类」）
-	byVendor := map[string][]models.AiModel{}
-	for i := range allModels {
-		name := allModels[i].Vendor
-		if name == "" {
-			name = "未分类"
-		}
-		byVendor[name] = append(byVendor[name], allModels[i])
+
+	byVendor := map[string][]matrixModel{}
+	for _, m := range allModels {
+		n := normalizeMatrixModel(m)
+		byVendor[n.VendorName] = append(byVendor[n.VendorName], n)
 	}
-	out := make([]gin.H, 0, len(vendors))
+
+	out := make([]gin.H, 0, len(vendors)+1)
+	seen := map[string]bool{}
 	for _, v := range vendors {
 		group := byVendor[v.Name]
-		// 按版本分组（空版本用占位符）
-		byVer := map[string][]models.AiModel{}
-		for _, m := range group {
-			ver := m.Version
-			if ver == "" {
-				ver = "—"
-			}
-			byVer[ver] = append(byVer[ver], m)
-		}
-		versions := make([]gin.H, 0, len(byVer))
-		for ver, items := range byVer {
-			subs := make([]string, 0, len(items))
-			for _, m := range items {
-				if m.SubVersion != "" {
-					subs = append(subs, m.SubVersion)
-				}
-			}
-			newest := ""
-			if len(subs) > 0 {
-				newest = vendor.NewestSubVersion(subs)
-			}
-			subItems := make([]gin.H, 0, len(items))
-			for _, m := range items {
-				uv := m.UserVisible == nil || *m.UserVisible
-				subItems = append(subItems, gin.H{
-					"id": m.ID, "name": m.Name, "model_id": m.ModelID,
-					"sub_version": m.SubVersion,
-					// 只有真的存在亚版本、且就是最新那个时才打星；
-					// 空亚版本（如手工建的模型）不该被标成「最新」
-					"newest":  newest != "" && m.SubVersion == newest,
-					"enabled": m.Enabled, "user_visible": uv,
-				})
-			}
-			versions = append(versions, gin.H{
-				"version": ver, "newest_sub_version": newest,
-				"count": len(items), "items": subItems,
-			})
-		}
+		seen[v.Name] = true
 		out = append(out, gin.H{
 			"id": v.ID, "name": v.Name, "prefix": v.Prefix, "enabled": v.Enabled,
-			"models": len(group), "versions": versions,
+			"models": len(group), "versions": buildVendorGroup(group),
 		})
 	}
-	// 未被厂商字典覆盖的模型（厂商名不在字典里）单独成组，避免遗漏
-	for name, group := range byVendor {
-		found := false
-		for _, v := range vendors {
-			if v.Name == name {
-				found = true
-				break
-			}
+	// 未在厂商字典里的模型（未分类 / 自建厂商名）单独成组，避免遗漏
+	rest := make([]string, 0, len(byVendor))
+	for name := range byVendor {
+		if !seen[name] {
+			rest = append(rest, name)
 		}
-		if found {
-			continue
-		}
-		byVer := map[string][]models.AiModel{}
-		for _, m := range group {
-			ver := m.Version
-			if ver == "" {
-				ver = "—"
-			}
-			byVer[ver] = append(byVer[ver], m)
-		}
-		versions := make([]gin.H, 0, len(byVer))
-		for ver, items := range byVer {
-			subs := make([]string, 0, len(items))
-			for _, m := range items {
-				if m.SubVersion != "" {
-					subs = append(subs, m.SubVersion)
-				}
-			}
-			newest := ""
-			if len(subs) > 0 {
-				newest = vendor.NewestSubVersion(subs)
-			}
-			subItems := make([]gin.H, 0, len(items))
-			for _, m := range items {
-				uv := m.UserVisible == nil || *m.UserVisible
-				subItems = append(subItems, gin.H{
-					"id": m.ID, "name": m.Name, "model_id": m.ModelID,
-					"sub_version": m.SubVersion,
-					"newest":      newest != "" && m.SubVersion == newest,
-					"enabled":     m.Enabled, "user_visible": uv,
-				})
-			}
-			versions = append(versions, gin.H{
-				"version": ver, "newest_sub_version": newest,
-				"count": len(items), "items": subItems,
-			})
-		}
+	}
+	sort.Strings(rest)
+	for _, name := range rest {
+		group := byVendor[name]
 		out = append(out, gin.H{
 			"id": 0, "name": name, "prefix": "", "enabled": true,
-			"models": len(group), "versions": versions,
+			"models": len(group), "versions": buildVendorGroup(group),
 		})
 	}
 	utils.Success(c, gin.H{"vendors": out})

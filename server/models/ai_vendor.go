@@ -55,14 +55,7 @@ func CreateAiVendor(name string, sortOrder int, prefix ...string) (*AiVendor, er
 	}
 	if pfx == "" {
 		// 默认前缀：厂商名转小写、去除非字母数字字符
-		pfx = strings.ToLower(strings.Map(func(r rune) rune {
-			switch {
-			case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-				return r
-			default:
-				return -1
-			}
-		}, name))
+		pfx = derivePrefix(name)
 	}
 	v := &AiVendor{Name: name, Prefix: pfx, SortOrder: sortOrder, Enabled: true, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	if err := DB.Create(v).Error; err != nil {
@@ -112,7 +105,27 @@ func DeleteAiVendor(id uint) error {
 	return DB.Where("id = ?", id).Delete(&AiVendor{}).Error
 }
 
-// SeedAiVendors 首次启动写入常见厂商（幂等）
+// derivePrefix 由厂商名推导前缀（小写、去非字母数字）。
+// 用于「新厂商未填前缀」与「老库升级后回填」（老版本 ai_vendors 没有 prefix 列）。
+//
+// ⚠️ 必须先 ToLower 再过滤：反过来写会把大写字母当非法字符丢掉
+// （"OpenAI" → "pen"、"My Vendor" → "yendor"），前缀从此永远匹配不上。
+func derivePrefix(name string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			return r
+		default:
+			return -1
+		}
+	}, strings.ToLower(strings.TrimSpace(name)))
+}
+
+// SeedAiVendors 首次启动写入常见厂商（幂等），并回填老数据缺失的前缀。
+//
+// ⚠️ 回填很重要：老版本的 ai_vendors 表没有 prefix 列，AutoMigrate 只加列、
+// 已有行一律是空串。不做回填的话，「按模型 ID 前缀匹配厂商」在老站升级后
+// 会静默失效（前缀永远匹配不上），而且界面上看起来一切正常。
 func SeedAiVendors() {
 	seeds := []struct {
 		name   string
@@ -124,24 +137,33 @@ func SeedAiVendors() {
 		{"MiniMax", "minimax"}, {"快手", "kling"}, {"Runway", "runway"},
 		{"Stability", "stable-diffusion"}, {"其他", ""},
 	}
+	now := time.Now()
 	for i, s := range seeds {
-		var n int64
-		DB.Model(&AiVendor{}).Where("name = ?", s.name).Count(&n)
-		if n > 0 {
-			continue
-		}
 		pfx := s.prefix
 		if pfx == "" {
-			pfx = strings.ToLower(strings.Map(func(r rune) rune {
-				switch {
-				case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-					return r
-				default:
-					return -1
-				}
-			}, s.name))
+			pfx = derivePrefix(s.name)
 		}
-		DB.Create(&AiVendor{Name: s.name, Prefix: pfx, SortOrder: i + 1, Enabled: true, CreatedAt: time.Now(), UpdatedAt: time.Now()})
+		var v AiVendor
+		if err := DB.Where("name = ?", s.name).First(&v).Error; err == nil {
+			// 已存在：仅当前缀为空时回填，不覆盖管理员手工改过的值
+			if strings.TrimSpace(v.Prefix) == "" && pfx != "" {
+				DB.Model(&AiVendor{}).Where("id = ?", v.ID).
+					Updates(map[string]interface{}{"prefix": pfx, "updated_at": now})
+			}
+			continue
+		}
+		DB.Create(&AiVendor{Name: s.name, Prefix: pfx, SortOrder: i + 1, Enabled: true, CreatedAt: now, UpdatedAt: now})
+	}
+	// 非预置厂商（管理员自建 / 老数据）：同样按名字推导回填空前缀
+	var blank []AiVendor
+	DB.Where("prefix IS NULL OR prefix = ''").Find(&blank)
+	for _, v := range blank {
+		p := derivePrefix(v.Name)
+		if p == "" {
+			continue
+		}
+		DB.Model(&AiVendor{}).Where("id = ?", v.ID).
+			Updates(map[string]interface{}{"prefix": p, "updated_at": now})
 	}
 }
 
