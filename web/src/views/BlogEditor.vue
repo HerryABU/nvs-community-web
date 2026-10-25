@@ -7,8 +7,8 @@
           <el-icon><ArrowLeft /></el-icon>返回工作台
         </el-button>
         <el-button text :icon="Link" @click="showRefPicker = true">插入站内链接</el-button>
-        <el-button text @click="openAiPanel">
-          <el-icon><MagicStick /></el-icon>AI 助手
+        <el-button text @click="openAiWrite">
+          <el-icon><MagicStick /></el-icon>AI 写作
         </el-button>
       </div>
       <div class="be-toolbar-center">
@@ -30,13 +30,15 @@
     <!-- 站内内容引用选择器（16.2：博客正文引用其他小说/博客/论坛帖，相对路径可跳转） -->
     <ContentRefPicker v-model:visible="showRefPicker" @confirm="insertRefLink" />
 
-    <!-- 编辑器内 AI 辅助（与章节编辑器共用同一面板：续写/润色/扩写/摘要，按量计费） -->
-    <AiAssistPanel
-      v-model:visible="showAiPanel"
+    <!-- AI 写作：浮动可拖拽层，流式直接写入编辑器（ESC 不关闭，仅 X/取消可关） -->
+    <AiWriteLayer
+      v-model:visible="showAiWrite"
       scene="blog"
       :context-text="aiContextText"
-      @insert="insertIntoEditor"
-      @replace="aiReplaceAll"
+      :selection-text="aiSelectionText"
+      @stream-begin="onAiWriteBegin"
+      @stream-chunk="onAiWriteChunk"
+      @stream-end="onAiWriteEnd"
     />
 
     <!-- 批量导入对话框（CSDN 式：可指定导入到哪个专栏） -->
@@ -160,7 +162,8 @@ import RichTextEditor from '@/components/RichTextEditor.vue';
 import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
 // engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
 import { renderMarkdown, editorEngineConfig } from '@/markdown/renderer';
-import AiAssistPanel from '@/components/editor/AiAssistPanel.vue';
+import AiWriteLayer from '@/components/ai/floating/AiWriteLayer.vue';
+import { beginStream, writeStreamChunk, endStream, type StreamSession, type StreamTarget } from '@/utils/editorStream';
 import { guardLeak } from '@/composables/useLeakGuard';
 import { htmlToMarkdown } from '@/utils/turndown';
 
@@ -301,11 +304,14 @@ function onMediaFileChange(file: any) {
   if (file.raw) mediaFile.value = file.raw;
 }
 
-// ===== 编辑器内 AI 辅助 =====
-const showAiPanel = ref(false);
+// ===== 编辑器内 AI 辅助（浮动层，流式写入） =====
+const showAiWrite = ref(false);
+const aiSelectionText = ref('');
+const aiStreamSess = ref<StreamSession | null>(null);
 const aiContextText = ref('');
-// 优先用富文本纯文本，其次 Markdown 原文；截取尾部避免超长
-async function openAiPanel() {
+// 打开前：预填全文上下文 + 当前选区
+async function openAiWrite() {
+  aiSelectionText.value = currentSelectionText();
   try {
     const raw = editorMode.value === 'richtext'
       ? richTextContent.value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
@@ -314,22 +320,37 @@ async function openAiPanel() {
   } catch {
     aiContextText.value = '';
   }
-  showAiPanel.value = true;
+  showAiWrite.value = true;
 }
 
-// AI 结果整体替换正文（Markdown 模式写回 Cherry；富文本模式按 HTML 段落写入）
-async function aiReplaceAll(text: string, meta?: { model?: string }) {
-  if (!text) return;
-  aiUsed.value = true;
-  if (meta?.model) aiModelName.value = meta.model;
-  if (editorMode.value === 'md' && cherryInstance) {
-    cherryInstance.setValue(text);
-    blogContent.value = text;
-  } else {
-    const html = renderMarkdown(text);
-    richTextContent.value = html;
+// 取当前 CodeMirror 选区（无选区返回空串）
+function currentSelectionText(): string {
+  const cm = cherryInstance?.editor?.codemirror || cherryInstance?.codemirror;
+  if (cm && typeof cm.getSelection === 'function') {
+    const s = cm.getSelection();
+    if (s) return s;
   }
-  ElMessage.success('已替换正文');
+  return '';
+}
+
+// ── AI 写作流式写入编辑器 ──
+function onAiWriteBegin(target: StreamTarget) {
+  aiStreamSess.value = beginStream(cherryInstance, editorMode.value, target);
+  aiUsed.value = true;
+}
+function onAiWriteChunk(chunk: string) {
+  const sess = aiStreamSess.value;
+  if (!sess || sess.rich) {
+    if (editorMode.value === 'richtext') richTextContent.value += chunk;
+    else blogContent.value += chunk;
+    return;
+  }
+  writeStreamChunk(sess, chunk);
+}
+function onAiWriteEnd(payload: { content: string; model: string }) {
+  aiModelName.value = payload.model;
+  if (aiStreamSess.value) endStream(aiStreamSess.value);
+  aiStreamSess.value = null;
 }
 
 // AI 生成标识（176 号令）：用过 AI 且回填正文后置位，保存时提交

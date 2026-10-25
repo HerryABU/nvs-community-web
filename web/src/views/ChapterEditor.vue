@@ -19,7 +19,7 @@
         <PublishQuotaHint />
         <el-button v-if="isBubbleMode(effectiveMode)" :icon="ChatDotRound" @click="openScriptPreview">气泡预览</el-button>
         <el-button :icon="Clock" @click="versionPanelVisible = true">版本</el-button>
-        <el-button :icon="MagicStick" @click="showAiPanel = true">AI 助手</el-button>
+        <el-button :icon="MagicStick" @click="openAiWrite">AI 写作</el-button>
         <el-button :icon="Link" @click="showRefPicker = true">插入站内链接</el-button>
         <el-button type="primary" :loading="saving" @click="saveChapter">保存章节</el-button>
       </div>
@@ -28,15 +28,15 @@
     <!-- 站内内容引用选择器（16.2：章节正文引用其他小说/博客/论坛帖，相对路径可跳转） -->
     <ContentRefPicker v-model:visible="showRefPicker" @confirm="insertRefLink" />
 
-    <!-- AI 助手（§13.3：续写/润色/扩写/摘要，代币按量计费；§13.5 长篇上下文） -->
-    <AiAssistPanel
-      v-model:visible="showAiPanel"
+    <!-- AI 写作：浮动可拖拽层，流式直接写入编辑器（ESC 不关闭，仅 X/取消可关） -->
+    <AiWriteLayer
+      v-model:visible="showAiWrite"
       :context-text="aiContextText"
-      :novel-id="novelId"
-      :chapter-id="currentChapterId"
+      :selection-text="aiSelectionText"
       :scene="isBubbleMode(effectiveMode) ? 'novel_script' : 'novel_chapter'"
-      @insert="aiInsert"
-      @replace="aiReplace"
+      @stream-begin="onAiWriteBegin"
+      @stream-chunk="onAiWriteChunk"
+      @stream-end="onAiWriteEnd"
     />
 
     <!-- 章节版本：分支 / 历史 / diff / 回滚 / 删除 / 合并 -->
@@ -176,7 +176,8 @@ import { ElMessage } from 'element-plus';
 import { ArrowLeft, Plus, Delete, Link, MagicStick, ChatDotRound, Clock } from '@element-plus/icons-vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
-import AiAssistPanel from '@/components/editor/AiAssistPanel.vue';
+import AiWriteLayer from '@/components/ai/floating/AiWriteLayer.vue';
+import { beginStream, writeStreamChunk, endStream, type StreamSession, type StreamTarget } from '@/utils/editorStream';
 import ChapterWorkflowBar from '@/components/collab/ChapterWorkflowBar.vue';
 import ChapterVersionPanel from '@/components/collab/ChapterVersionPanel.vue';
 import ConflictResolveDialog from '@/components/collab/ConflictResolveDialog.vue';
@@ -229,7 +230,9 @@ let cherryInstance: any = null;
 const showRefPicker = ref(false);
 
 // ===== AI 助手（§13.3）：续写/润色/扩写/摘要，代币按量计费 =====
-const showAiPanel = ref(false);
+const showAiWrite = ref(false);
+const aiSelectionText = ref('');
+const aiStreamSess = ref<StreamSession | null>(null);
 
 // ===== 叙事形态（作品级 + 章节级）与话本预览 =====
 const novelMode = ref('prose');
@@ -299,40 +302,44 @@ const aiContextText = computed(() => {
 const aiUsed = ref(false);
 const aiModelName = ref('');
 
-// AI 结果插入编辑器：MD 模式优先插到光标处，失败回退追加；富文本模式追加
-function aiInsert(text: string, meta?: { model?: string }) {
-  aiUsed.value = true;
-  if (meta?.model) aiModelName.value = meta.model;
-  if (editorMode.value === 'md' && cherryInstance) {
-    const cm = cherryInstance.editor?.codemirror || cherryInstance.codemirror;
-    if (cm && cm.replaceSelection) {
-      cm.replaceSelection((cm.getValue() ? '\n\n' : '') + text);
-      ElMessage.success('已插入 AI 结果');
-      return;
-    }
-    if (cherryInstance.insert) {
-      cherryInstance.insert('\n\n' + text);
-      ElMessage.success('已插入 AI 结果');
-      return;
-    }
-    chapterContent.value = (chapterContent.value ? chapterContent.value + '\n\n' : '') + text;
-  } else {
-    richTextContent.value = (richTextContent.value ? richTextContent.value + '\n\n' : '') + text;
-  }
-  ElMessage.success('已插入 AI 结果');
+// ── AI 写作（浮动层，流式直接写入编辑器） ──
+function openAiWrite() {
+  aiSelectionText.value = currentSelectionText();
+  showAiWrite.value = true;
 }
 
-// AI 结果替换整个正文
-function aiReplace(text: string, meta?: { model?: string }) {
-  aiUsed.value = true;
-  if (meta?.model) aiModelName.value = meta.model;
-  if (editorMode.value === 'md') {
-    chapterContent.value = text;
-    if (cherryInstance) cherryInstance.setValue(text);
-  } else {
-    richTextContent.value = renderMarkdown(text);
+// 取当前 CodeMirror 选区（无选区返回空串）
+function currentSelectionText(): string {
+  const cm = cherryInstance?.editor?.codemirror || cherryInstance?.codemirror;
+  if (cm && typeof cm.getSelection === 'function') {
+    const s = cm.getSelection();
+    if (s) return s;
   }
-  ElMessage.success('已替换正文');
+  return '';
+}
+
+// 流式开始：在编辑器里按目标点（cursor/selection/all）腾好锚点并标记「已用 AI」
+function onAiWriteBegin(target: StreamTarget) {
+  aiStreamSess.value = beginStream(cherryInstance, editorMode.value, target);
+  aiUsed.value = true;
+}
+
+// 流式增量：实时写入编辑器（MD 走 CM bookmark；富文本/回退追加到变量）
+function onAiWriteChunk(chunk: string) {
+  const sess = aiStreamSess.value;
+  if (!sess || sess.rich) {
+    if (editorMode.value === 'richtext') richTextContent.value += chunk;
+    else chapterContent.value += chunk;
+    return;
+  }
+  writeStreamChunk(sess, chunk);
+}
+
+// 流式结束：记录模型、清理锚点
+function onAiWriteEnd(payload: { content: string; model: string }) {
+  aiModelName.value = payload.model;
+  if (aiStreamSess.value) endStream(aiStreamSess.value);
+  aiStreamSess.value = null;
 }
 
 // 在编辑器光标处插入 [标题](相对链接)；Markdown 模式走 Cherry 内 CodeMirror 光标处，
