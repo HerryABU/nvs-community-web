@@ -163,7 +163,7 @@ import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
 // engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
 import { renderMarkdown, editorEngineConfig } from '@/markdown/renderer';
 import AiWriteLayer from '@/components/ai/floating/AiWriteLayer.vue';
-import { beginStream, writeStreamChunk, endStream, type StreamSession, type StreamTarget } from '@/utils/editorStream';
+import { beginStream, writeStreamChunk, endStream, insertAtCursor, readEditorSelection, type StreamSession, type StreamTarget } from '@/utils/editorStream';
 import { guardLeak } from '@/composables/useLeakGuard';
 import { htmlToMarkdown } from '@/utils/turndown';
 
@@ -323,14 +323,9 @@ async function openAiWrite() {
   showAiWrite.value = true;
 }
 
-// 取当前 CodeMirror 选区（无选区返回空串）
+// 取当前编辑器选区（无选区返回空串）
 function currentSelectionText(): string {
-  const cm = cherryInstance?.editor?.codemirror || cherryInstance?.codemirror;
-  if (cm && typeof cm.getSelection === 'function') {
-    const s = cm.getSelection();
-    if (s) return s;
-  }
-  return '';
+  return readEditorSelection(cherryInstance);
 }
 
 // ── AI 写作流式写入编辑器 ──
@@ -361,11 +356,10 @@ function insertIntoEditor(text: string, meta?: { model?: string }) {
   aiUsed.value = true;
   if (meta?.model) aiModelName.value = meta.model;
   if (editorMode.value === 'md' && cherryInstance) {
-    // Cherry 内部 CodeMirror 光标处插入；兼容 insert API
-    const cm = cherryInstance.editor?.codemirror || cherryInstance.codemirror;
-    if (cm && cm.replaceSelection) { cm.replaceSelection(text); }
-    else if (cherryInstance.insert) { cherryInstance.insert(text); }
-    else { blogContent.value += '\n\n' + text; }
+    // Cherry 编辑器光标处插入（CM6 适配器优先，退回 Cherry insert API）
+    if (!insertAtCursor(cherryInstance, text)) {
+      blogContent.value += '\n\n' + text;
+    }
   } else {
     richTextContent.value += (richTextContent.value ? '<p></p>' : '') + text;
   }

@@ -188,7 +188,7 @@ import RichTextEditor from '@/components/RichTextEditor.vue';
 import ScriptBubbleEditor from '@/components/editor/script/ScriptBubbleEditor.vue';
 import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
 import AiWriteLayer from '@/components/ai/floating/AiWriteLayer.vue';
-import { beginStream, writeStreamChunk, endStream, type StreamSession, type StreamTarget } from '@/utils/editorStream';
+import { beginStream, writeStreamChunk, endStream, insertAtCursor, readEditorSelection, type StreamSession, type StreamTarget } from '@/utils/editorStream';
 import ChapterWorkflowBar from '@/components/collab/ChapterWorkflowBar.vue';
 import ChapterVersionPanel from '@/components/collab/ChapterVersionPanel.vue';
 import ConflictResolveDialog from '@/components/collab/ConflictResolveDialog.vue';
@@ -292,13 +292,8 @@ function onChapterModeChange() {
 function insertEmote(key: string) {
   const mark = `[${key}]`;
   if (editorMode.value === 'md' && cherryInstance) {
-    const cm = cherryInstance.editor?.codemirror || cherryInstance.codemirror;
-    if (cm && cm.replaceSelection) {
-      cm.replaceSelection(mark);
-      return;
-    }
-    if (cherryInstance.insert) {
-      cherryInstance.insert(mark);
+    if (insertAtCursor(cherryInstance, mark)) {
+      ElMessage.success(`已插入 ${mark}`);
       return;
     }
   }
@@ -325,14 +320,9 @@ function openAiWrite() {
   showAiWrite.value = true;
 }
 
-// 取当前 CodeMirror 选区（无选区返回空串）
+// 取当前编辑器选区（无选区返回空串）
 function currentSelectionText(): string {
-  const cm = cherryInstance?.editor?.codemirror || cherryInstance?.codemirror;
-  if (cm && typeof cm.getSelection === 'function') {
-    const s = cm.getSelection();
-    if (s) return s;
-  }
-  return '';
+  return readEditorSelection(cherryInstance);
 }
 
 // 流式开始：在编辑器里按目标点（cursor/selection/all）腾好锚点并标记「已用 AI」
@@ -359,14 +349,12 @@ function onAiWriteEnd(payload: { content: string; model: string }) {
   aiStreamSess.value = null;
 }
 
-// 在编辑器光标处插入 [标题](相对链接)；Markdown 模式走 Cherry 内 CodeMirror 光标处，
+// 在编辑器光标处插入 [标题](相对链接)；Markdown 模式走 Cherry 编辑器光标处，
 // 富文本模式追加到 v-model 内容（RichTextEditor 内部按 md 渲染链接）
 function insertRefLink(link: string, ref: { type: string; id: number; title: string }) {
   const md = `[${ref.title || link}](${link})`;
   if (editorMode.value === 'md' && cherryInstance) {
-    const cm = cherryInstance.editor?.codemirror || cherryInstance.codemirror;
-    if (cm && cm.replaceSelection) { cm.replaceSelection(md); ElMessage.success('已插入引用'); return; }
-    if (cherryInstance.insert) { cherryInstance.insert(md); ElMessage.success('已插入引用'); return; }
+    if (insertAtCursor(cherryInstance, md)) { ElMessage.success('已插入引用'); return; }
     chapterContent.value += '\n\n' + md;
   } else {
     richTextContent.value += (richTextContent.value ? '\n\n' : '') + md;
