@@ -12,6 +12,7 @@ import (
 
 	"nvs-server/config"
 	"nvs-server/models"
+	"nvs-server/moderation"
 	"nvs-server/security"
 	"nvs-server/utils"
 
@@ -239,6 +240,8 @@ func CreateBlog(c *gin.Context) {
 	blog.ContentHash = contentHash
 	blog.Content = content
 	blog.Category = models.GetBlogCategoryName(blog.CategoryID)
+	// AI 内容审核（博客发布时送检，链路逻辑见 moderation.ReviewOnWrite，开关来自后台配置）
+	go moderation.ReviewOnWrite(moderation.ScopeBlog, blog.ID)
 	// 同步标签（去重/去#前缀）
 	if len(req.Tags) > 0 {
 		if err := models.SyncBlogTags(blog.ID, req.Tags); err == nil {
@@ -470,6 +473,10 @@ func UpdateBlog(c *gin.Context) {
 			utils.InternalError(c, "更新失败")
 			return
 		}
+	}
+	// AI 内容审核（博客内容被更新后送检，开关来自后台配置）
+	if req.Content != "" {
+		go moderation.ReviewOnWrite(moderation.ScopeBlog, blog.ID)
 	}
 
 	loadBlogContent(blog)

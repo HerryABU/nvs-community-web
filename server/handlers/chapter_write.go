@@ -16,6 +16,7 @@ import (
 	"nvs-server/collab"
 	"nvs-server/config"
 	"nvs-server/models"
+	"nvs-server/moderation"
 	"nvs-server/security"
 	"nvs-server/utils"
 
@@ -135,6 +136,8 @@ func CreateChapter(c *gin.Context) {
 	if status == models.ChapterStatusPublished {
 		models.RecordPublish(userID, models.PublishKindChapter, chapter.ID, wordCount)
 		collab.LogChapterAction(novel.ID, userID, "publish", chapter.ID, "新建即发布")
+		// AI 内容审核（发布时送检，链路逻辑见 moderation.ReviewOnWrite，开关来自后台配置）
+		go moderation.ReviewOnWrite(moderation.ScopeChapter, chapter.ID)
 	}
 
 	// 违禁词 mark 动作命中 → 写入待审标记记录
@@ -269,6 +272,10 @@ func UpdateChapter(c *gin.Context) {
 	if err := models.UpdateChapter(chapter); err != nil {
 		utils.InternalError(c, "更新章节失败")
 		return
+	}
+	// AI 内容审核（已发布章节被重新编辑后送检，开关来自后台配置）
+	if req.Content != "" && chapter.Status == models.ChapterStatusPublished {
+		go moderation.ReviewOnWrite(moderation.ScopeChapter, chapter.ID)
 	}
 
 	// 违禁词 mark 动作命中 → 写入待审标记记录

@@ -32,6 +32,7 @@ import (
 	"nvs-server/honeypot"
 	"nvs-server/middleware"
 	"nvs-server/models"
+	"nvs-server/moderation"
 	"nvs-server/oc"
 	"nvs-server/police"
 	"nvs-server/prompttpl"
@@ -761,6 +762,14 @@ func main() {
 		admin.POST("/vip-applications/:id/approve", handlers.ApproveVip)
 		admin.GET("/reports", handlers.ListReports)
 		admin.POST("/reports/:id/handle", handlers.HandleReport)
+		// AI 内容审核中枢
+		admin.GET("/moderation/config", handlers.GetModerationConfig)
+		admin.PUT("/moderation/config", handlers.SaveModerationConfig)
+		admin.GET("/moderation/records", handlers.ListModerationRecords)
+		admin.POST("/moderation/batch", handlers.RunModerationBatch)
+		admin.GET("/moderation/stats", handlers.GetModerationStats)
+		admin.GET("/moderation/malicious", handlers.ListMaliciousReporters)
+		admin.POST("/moderation/malicious/:id/unban", handlers.UnbanReporter)
 		// HTML 内容审查（人工复核）
 		admin.GET("/html-reviews", handlers.ListHTMLReviews)
 		admin.GET("/html-reviews/:type/:id", handlers.GetHTMLReview)
@@ -1586,6 +1595,12 @@ func initDatabase() error {
 	if err := police.Migrate(models.DB); err != nil {
 		return err
 	}
+	// AI 内容审核（独立功能包）：审核记录 / 配置 / 恶意举报者 / 隐藏内容
+	if err := moderation.Migrate(models.DB); err != nil {
+		return err
+	}
+	// 审核调度器（定时批量审核论坛/评论区），失败不阻断启动
+	moderation.Init()
 	if err := oc.MigrateEmote(models.DB); err != nil {
 		return err
 	}

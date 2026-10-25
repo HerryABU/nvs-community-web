@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"nvs-server/models"
+	"nvs-server/moderation"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -49,6 +50,12 @@ func CreateReport(c *gin.Context) {
 		reasonLabel = r.Label
 	}
 
+	// 举报功能被没收（不实举报累计达阈值）的用户禁止再举报
+	if moderation.IsReportingBanned(userID) {
+		utils.BadRequest(c, "您的举报功能已被限制，暂不可举报")
+		return
+	}
+
 	// 防止同一用户对同一目标重复举报
 	var dupCount int64
 	models.DB.Model(&models.Report{}).
@@ -72,6 +79,8 @@ func CreateReport(c *gin.Context) {
 		utils.InternalError(c, "提交举报失败")
 		return
 	}
+	// 被举报立刻送检 AI（异步，不阻塞举报响应）；链路逻辑见 moderation.OnReport
+	go moderation.OnReport(userID, req.TargetType, req.TargetID)
 	utils.Success(c, r)
 }
 
