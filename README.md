@@ -2,7 +2,7 @@
   <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go" alt="Go">
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?style=flat&logo=vuedotjs" alt="Vue">
   <img src="https://img.shields.io/badge/SQLite-3-003B57?style=flat&logo=sqlite" alt="SQLite">
-  <img src="https://img.shields.io/badge/version-3.21.1-4F46E5?style=flat" alt="Version">
+  <img src="https://img.shields.io/badge/version-3.21.2-4F46E5?style=flat" alt="Version">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue?style=flat" alt="Platform">
   <img src="https://img.shields.io/badge/CPU-x86%20%7C%20ARM%20%7C%20MIPS64%20%7C%20RISC--V-orange?style=flat" alt="CPU">
   <img src="https://img.shields.io/badge/license-AGPL%20v3-blue.svg" alt="License">
@@ -707,7 +707,12 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## 📝 版本更新记录（文件级改动说明）
 
-### 🔧 修 CI 后端 job 必挂：`//go:embed all:dist` 在全新 clone 里无目录可嵌（2026-10-25 · 未发版）
+### v3.21.2 修 CI 后端 job（双编译轨）+ README 全量补全（2026-10-25）
+
+本版两块：**CI 从「每次必挂」修成绿**，以及**把落后于代码的 README 全量补齐**。运行期行为零变更
+（`nodist` 只影响编译方式，不进入发布物）。
+
+#### 一、修 CI 后端 job：`//go:embed all:dist` 在全新 clone 里无目录可嵌
 
 **症状**：push 后 `CI / 后端 build / vet / test` **16 秒**就红，注释只有一句
 `pattern all:dist: no matching files found`；前端 job 反而正常。
@@ -732,7 +737,7 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 `-tags nodist` 下 `build` / `vet` / `go test ./... -count=1` 全绿；`-tags "nodist gitvcs"` 可编译；
 恢复 `server/dist` 后发布轨 `go build ./...` 仍通过。
 
-### 📄 README 全面补全（2026-10-25 · 仅文档，无代码变更）
+#### 二、README 全量补全（此前「特性」停在旧范围）
 
 **背景**：功能迭代快于文档，README 里「特性」停在旧范围（AI 工作台 / 会员 / 群组 / 话本协作 / 精读朗读
 只在 changelog 里有，特性区看不到），「项目结构」还是 70 个 handler、21 个后台页的旧规模，
@@ -758,6 +763,10 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 - **新增 `.env.example`**（仓库根，6691 字节）—— 此前 README 引用它但文件并不存在。
   由 `server/config/config.go` 的 `defaultEnvTemplate` 生成，密钥项留空（避免示例值被当真值使用），
   并在文件头注明「改这里请同步改 Go 模板」
+
+**顺带修正**：`web/package-lock.json` 的根版本长期停在 `3.8.0`（与 `package.json` 自相矛盾），
+本次一并对齐到 `3.21.2`；版本号现在是「四处一致」——`version.go` / `package.json` /
+`package-lock.json` / README 徽章。
 
 ### v3.21.1 个人中心收拢入口，头像下拉瘦身（2026-10-24）
 
