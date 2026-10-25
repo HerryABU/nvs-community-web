@@ -516,7 +516,7 @@ NVS_BASE=http://127.0.0.1:8000 node scripts/browser-smoke.mjs
 
 | workflow | 触发 | 做什么 |
 |---|---|---|
-| `ci.yml` | push 到 `v3` / `main` / `master`、PR、手动 | ① 后端 `build` + `vet` + `test` + `gitvcs` 标签轨（均走 `nodist` 轨，不依赖前端产物）+ 发布轨占位编译；② 前端 `npm ci` + `vite build`；③ **内嵌产物冒烟**（拼出单 exe，真启动，断言首页 200、off 档诱饵 404、日志无 panic）；④ 推主干产出 `linux-amd64` 快照 artifact |
+| `ci.yml` | push 到 `v4` / `v3` / `main` / `master`、PR、手动 | ① 后端 `build` + `vet` + `test` + `gitvcs` 标签轨（均走 `nodist` 轨，不依赖前端产物）+ 发布轨占位编译；② 前端 `npm ci` + `vite build`；③ **内嵌产物冒烟**（拼出单 exe，真启动，断言首页 200、off 档诱饵 404、日志无 panic）；④ 推主干产出 `linux-amd64` 快照 artifact |
 | `release.yml` | push tag `v*` | 校验 **tag = version.go = package.json**；多平台交叉编译（Win x64/ARM64、Linux x64/ARM64/ARMv7、macOS Intel/ARM64）；打包 zip/tar.gz + `SHA256SUMS`；创建 GitHub Release |
 
 发布流程（版本号三处同步后打 tag）：

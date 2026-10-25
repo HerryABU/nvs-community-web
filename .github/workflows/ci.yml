@@ -2,9 +2,12 @@ name: CI
 
 # 触发：主干推送 / PR / 手动。
 # 设计原则：这里才是「权威门」——本地 hooks 可以被绕过，CI 不能。
+#
+# 分支说明：`v4` 是当前主线（功能开发都在这里），`v3` 只接 bugfix / 安全修补，
+# `main` / `master` 为发布镜像线。三条线都要有 CI，否则主线推送等于没有门禁。
 on:
   push:
-    branches: [v3, main, master]
+    branches: [v4, v3, main, master]
   pull_request:
   workflow_dispatch:
 
