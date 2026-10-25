@@ -22,7 +22,7 @@
         <el-button :icon="Clock" @click="versionPanelVisible = true">版本</el-button>
         <el-button :icon="MagicStick" @click="openAiWrite">AI 写作</el-button>
         <el-button :icon="Link" @click="showRefPicker = true">插入站内链接</el-button>
-        <el-button type="primary" :loading="saving" @click="saveChapter">保存章节</el-button>
+        <el-button type="primary" :loading="saving" @click="saveChapter()">保存章节</el-button>
       </div>
     </div>
 
@@ -651,6 +651,10 @@ async function saveChapter(force = false) {
     ElMessage.warning('请输入章节标题');
     return;
   }
+  // ⚠️ 必须严格判 true：模板里 @click="saveChapter" 会把 MouseEvent 当第一个参数传进来，
+  // 直接把事件对象塞进请求体的 force 字段 → 后端 bool 绑定失败 → 400「请求参数错误」，
+  // 表现为「点保存没反应」。这里统一收口成真正的布尔值。
+  const forceSave = force === true;
   const contentToSave = await getContentToSave();
   // 个人信息泄漏提示（本地检测，高危需确认；后端只收命中类型计数）
   if (!(await guardLeak(contentToSave, '章节正文'))) return;
@@ -662,7 +666,7 @@ async function saveChapter(force = false) {
     const vcsFields = {
       base_version: baseVersion.value || 0,
       branch: currentBranch.value,
-      force,
+      force: forceSave,
     } as any;
     if (existing) {
       const res = await chapterApi.updateChapter(novelId.value, currentNum.value, {
