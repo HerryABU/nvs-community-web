@@ -45,12 +45,17 @@ type AiModel struct {
 	// Alias 用户展示别名（自动去除尾部后缀，管理员可覆盖）；Channel 渠道分组（合并/开放控制）；
 	// CategoryTags 分类标签 JSON（如 ["chat","reasoning"]）；
 	// UserVisible 是否对用户开放（站长按需选择，NULL=遗留模型默认可见，false=拉取模型默认隐藏）。
-	Alias        string    `gorm:"size:128;default:''" json:"alias"`
-	Channel      string    `gorm:"size:64;default:'';index" json:"channel"`
-	CategoryTags string    `gorm:"size:256;default:''" json:"category_tags"`
-	UserVisible  *bool     `gorm:"default:null" json:"user_visible"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	Alias        string `gorm:"size:128;default:''" json:"alias"`
+	Channel      string `gorm:"size:64;default:'';index" json:"channel"`
+	CategoryTags string `gorm:"size:256;default:''" json:"category_tags"`
+	UserVisible  *bool  `gorm:"default:null" json:"user_visible"`
+	// 版本解析（厂商管理：模型 ID 约定 前缀-版本-亚版本，如 deepseek-v3.1-turbo）：
+	// Version=中间版本号（v3.1），SubVersion=末尾亚版本号（turbo）。
+	// 同 Version 下比较亚版本「谁最新」仅在管理端可见（见 models.NewestSubVersion / 分组接口）。
+	Version    string    `gorm:"size:64;default:'';index" json:"version"`
+	SubVersion string    `gorm:"size:64;default:'';index" json:"sub_version"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 func (AiModel) TableName() string { return "ai_models" }

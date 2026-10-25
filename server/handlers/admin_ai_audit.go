@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 
+	"nvs-server/aiapi/vendor"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -162,13 +163,14 @@ func AdminCreateAiVendor(c *gin.Context) {
 	}
 	var req struct {
 		Name      string `json:"name"`
+		Prefix    string `json:"prefix"`
 		SortOrder int    `json:"sort_order"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	v, err := models.CreateAiVendor(req.Name, req.SortOrder)
+	v, err := models.CreateAiVendor(req.Name, req.SortOrder, req.Prefix)
 	if err != nil {
 		utils.BadRequest(c, err.Error())
 		return
@@ -184,6 +186,7 @@ func AdminUpdateAiVendor(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var req struct {
 		Name      string `json:"name"`
+		Prefix    string `json:"prefix"`
 		SortOrder int    `json:"sort_order"`
 		Enabled   *bool  `json:"enabled"`
 	}
@@ -195,7 +198,7 @@ func AdminUpdateAiVendor(c *gin.Context) {
 	if req.Enabled != nil {
 		enabled = *req.Enabled
 	}
-	if err := models.UpdateAiVendor(uint(id), strings.TrimSpace(req.Name), req.SortOrder, enabled); err != nil {
+	if err := models.UpdateAiVendor(uint(id), strings.TrimSpace(req.Name), req.SortOrder, enabled, req.Prefix); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
@@ -213,4 +216,175 @@ func AdminDeleteAiVendor(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{"message": "已删除"})
+}
+
+// ---------- 聚合分类定价（§厂商管理：按 chat/image/video 设价） ----------
+
+// AdminGetCategoryPrices GET /api/admin/ai/category-prices — 3 种聚合分类的默认单价
+func AdminGetCategoryPrices(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	list, err := models.AllCategoryPrices()
+	if err != nil {
+		utils.InternalError(c, "查询失败")
+		return
+	}
+	utils.Success(c, gin.H{"list": list})
+}
+
+// AdminSetCategoryPrice PUT /api/admin/ai/category-prices — 保存某分类默认价
+func AdminSetCategoryPrice(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	var req struct {
+		Kind      string `json:"kind"`
+		PriceIn   int64  `json:"price_in"`
+		PriceOut  int64  `json:"price_out"`
+		PriceCall int64  `json:"price_call"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	req.Kind = models.NormalizeAiKind(req.Kind)
+	if req.Kind != models.AiKindChat && req.Kind != models.AiKindImage && req.Kind != models.AiKindVideo {
+		utils.BadRequest(c, "kind 必须是 chat/image/video 之一")
+		return
+	}
+	if req.PriceIn < 0 || req.PriceOut < 0 || req.PriceCall < 0 {
+		utils.BadRequest(c, "价格不能为负")
+		return
+	}
+	if err := models.SetCategoryPrice(req.Kind, req.PriceIn, req.PriceOut, req.PriceCall); err != nil {
+		utils.InternalError(c, "保存失败")
+		return
+	}
+	utils.Success(c, gin.H{"message": "已保存"})
+}
+
+// ---------- 厂商→版本→亚版本矩阵（管理端专用，含 newest 标记） ----------
+
+// AdminAiVendorMatrix GET /api/admin/ai/vendors/matrix
+// 把模型按「厂商→版本→亚版本」三级聚合，并在同一版本下标出最新亚版本（newest）。
+// 该「谁最新」比较仅管理端可见，用户侧只看厂商主名字（不暴露亚版本噪声）。
+func AdminAiVendorMatrix(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	vendors, err := models.ListAiVendors(false)
+	if err != nil {
+		utils.InternalError(c, "查询失败")
+		return
+	}
+	allModels, err := models.ListAiModels(false)
+	if err != nil {
+		utils.InternalError(c, "查询失败")
+		return
+	}
+	// 按厂商名归并模型（空厂商名归到「未分类」）
+	byVendor := map[string][]models.AiModel{}
+	for i := range allModels {
+		name := allModels[i].Vendor
+		if name == "" {
+			name = "未分类"
+		}
+		byVendor[name] = append(byVendor[name], allModels[i])
+	}
+	out := make([]gin.H, 0, len(vendors))
+	for _, v := range vendors {
+		group := byVendor[v.Name]
+		// 按版本分组（空版本用占位符）
+		byVer := map[string][]models.AiModel{}
+		for _, m := range group {
+			ver := m.Version
+			if ver == "" {
+				ver = "—"
+			}
+			byVer[ver] = append(byVer[ver], m)
+		}
+		versions := make([]gin.H, 0, len(byVer))
+		for ver, items := range byVer {
+			subs := make([]string, 0, len(items))
+			for _, m := range items {
+				if m.SubVersion != "" {
+					subs = append(subs, m.SubVersion)
+				}
+			}
+			newest := ""
+			if len(subs) > 0 {
+				newest = vendor.NewestSubVersion(subs)
+			}
+			subItems := make([]gin.H, 0, len(items))
+			for _, m := range items {
+				uv := m.UserVisible == nil || *m.UserVisible
+				subItems = append(subItems, gin.H{
+					"id": m.ID, "name": m.Name, "model_id": m.ModelID,
+					"sub_version": m.SubVersion, "newest": m.SubVersion == newest,
+					"enabled": m.Enabled, "user_visible": uv,
+				})
+			}
+			versions = append(versions, gin.H{
+				"version": ver, "newest_sub_version": newest,
+				"count": len(items), "items": subItems,
+			})
+		}
+		out = append(out, gin.H{
+			"id": v.ID, "name": v.Name, "prefix": v.Prefix, "enabled": v.Enabled,
+			"models": len(group), "versions": versions,
+		})
+	}
+	// 未被厂商字典覆盖的模型（厂商名不在字典里）单独成组，避免遗漏
+	for name, group := range byVendor {
+		found := false
+		for _, v := range vendors {
+			if v.Name == name {
+				found = true
+				break
+			}
+		}
+		if found {
+			continue
+		}
+		byVer := map[string][]models.AiModel{}
+		for _, m := range group {
+			ver := m.Version
+			if ver == "" {
+				ver = "—"
+			}
+			byVer[ver] = append(byVer[ver], m)
+		}
+		versions := make([]gin.H, 0, len(byVer))
+		for ver, items := range byVer {
+			subs := make([]string, 0, len(items))
+			for _, m := range items {
+				if m.SubVersion != "" {
+					subs = append(subs, m.SubVersion)
+				}
+			}
+			newest := ""
+			if len(subs) > 0 {
+				newest = vendor.NewestSubVersion(subs)
+			}
+			subItems := make([]gin.H, 0, len(items))
+			for _, m := range items {
+				uv := m.UserVisible == nil || *m.UserVisible
+				subItems = append(subItems, gin.H{
+					"id": m.ID, "name": m.Name, "model_id": m.ModelID,
+					"sub_version": m.SubVersion, "newest": m.SubVersion == newest,
+					"enabled": m.Enabled, "user_visible": uv,
+				})
+			}
+			versions = append(versions, gin.H{
+				"version": ver, "newest_sub_version": newest,
+				"count": len(items), "items": subItems,
+			})
+		}
+		out = append(out, gin.H{
+			"id": 0, "name": name, "prefix": "", "enabled": true,
+			"models": len(group), "versions": versions,
+		})
+	}
+	utils.Success(c, gin.H{"vendors": out})
 }

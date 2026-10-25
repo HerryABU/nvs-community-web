@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"nvs-server/aiapi"
+	"nvs-server/aiapi/vendor"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -77,6 +78,9 @@ func AdminImportAiModels(c *gin.Context) {
 			alias = it.RawID
 		}
 		uv := it.UserVisible
+		// 解析「前缀-版本-亚版本」（如 deepseek-v3.1-turbo）→ 落库 version/sub_version，
+		// 便于管理端按版本矩阵比较「谁最新」；用户侧始终只看主名字（不暴露亚版本噪声）。
+		parsed := vendor.ParseModelID(it.RawID)
 		m := &models.AiModel{
 			Name:         alias,
 			Kind:         kind,
@@ -91,6 +95,16 @@ func AdminImportAiModels(c *gin.Context) {
 			Enabled:      true,
 			MaxTokens:    2048,
 			Temperature:  0.7,
+			Version:      parsed.Version,
+			SubVersion:   parsed.SubVersion,
+		}
+		// 未显式给价时套用分类默认价（管理员在「聚合分类定价」里维护）
+		if m.PriceIn == 0 && m.PriceOut == 0 && m.PriceCall == 0 {
+			if cp := models.GetCategoryPrice(kind); cp.Kind != "" {
+				m.PriceIn = cp.PriceIn
+				m.PriceOut = cp.PriceOut
+				m.PriceCall = cp.PriceCall
+			}
 		}
 		if err := models.CreateAiModel(m, req.APIKey); err != nil {
 			continue

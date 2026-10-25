@@ -998,6 +998,11 @@ func main() {
 		admin.POST("/ai/vendors", handlers.AdminCreateAiVendor)
 		admin.PUT("/ai/vendors/:id", handlers.AdminUpdateAiVendor)
 		admin.DELETE("/ai/vendors/:id", handlers.AdminDeleteAiVendor)
+		// 聚合分类定价（chat/image/video 默认单价，导入时未显式给价则套用）
+		admin.GET("/ai/category-prices", handlers.AdminGetCategoryPrices)
+		admin.PUT("/ai/category-prices", handlers.AdminSetCategoryPrice)
+		// 厂商→版本→亚版本矩阵（管理端专用，含 newest 标记，用户侧不可见）
+		admin.GET("/ai/vendors/matrix", handlers.AdminAiVendorMatrix)
 		admin.GET("/ai/audit/stats", handlers.AdminAiAuditStats)
 		admin.GET("/ai/audit/sessions", handlers.AdminAiAuditSessions)
 		admin.GET("/ai/audit/sessions/:id/messages", handlers.AdminAiAuditSessionMessages)

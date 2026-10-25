@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	vparse "nvs-server/aiapi/vendor"
 )
 
 // ProviderModelSuggestion 从渠道拉取的模型条目 + 服务端推断的分类信息。
@@ -18,6 +20,10 @@ type ProviderModelSuggestion struct {
 	Vendor   string `json:"vendor"`   // 推断厂商（OpenAI/DeepSeek/阿里通义…）
 	Channel  string `json:"channel"`  // 推断渠道分组（openai/anthropic/alibaba…）
 	Category string `json:"category"` // 推断类别 chat/image/video/audio/embedding/reasoning
+	// 版本解析（厂商管理：前缀-版本-亚版本）
+	Prefix     string `json:"prefix"`      // 前缀（如 deepseek）
+	Version    string `json:"version"`     // 版本（如 v3.1）
+	SubVersion string `json:"sub_version"` // 亚版本（如 turbo）
 }
 
 // PullProviderModels 从 OpenAI 兼容渠道拉取模型清单（GET {base}/models），
@@ -70,7 +76,11 @@ func ClassifyModel(raw string) ProviderModelSuggestion {
 	vendor, channel := inferVendor(lower)
 	category := inferCategory(lower)
 	alias := stripSuffix(s)
-	return ProviderModelSuggestion{RawID: s, Alias: alias, Vendor: vendor, Channel: channel, Category: category}
+	parsed := vparse.ParseModelID(s)
+	return ProviderModelSuggestion{
+		RawID: s, Alias: alias, Vendor: vendor, Channel: channel, Category: category,
+		Prefix: parsed.Prefix, Version: parsed.Version, SubVersion: parsed.SubVersion,
+	}
 }
 
 func inferVendor(lower string) (string, string) {

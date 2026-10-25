@@ -26,7 +26,7 @@ func TestAiVendorCRUD(t *testing.T) {
 		t.Fatalf("仍有模型引用时应拒绝删除")
 	}
 
-	// 改名级联
+	// 改名级联（prefix 不传则保留原值）
 	if err := UpdateAiVendor(v.ID, "OpenAI Inc", 3, true); err != nil {
 		t.Fatalf("改名失败：%v", err)
 	}
