@@ -480,3 +480,63 @@ func AdminDeleteAPIKey(c *gin.Context) {
 	}
 	utils.Success(c, gin.H{"message": "已删除（吊销）"})
 }
+
+// AdminTestAPIKey POST /api/admin/ratelimit/keys/:id/test
+// 平台 API Key 连通性/有效性体检。
+// 原始密钥仅存 sha256 哈希（创建时展示一次），无法做网络级 ping，
+// 故此处校验「该 Key 当前是否可正常用于鉴权」：活跃、未封禁、未过期、
+// 归属账号存在且未被按人策略禁用、配额 > 0。任一项异常即标记不通。
+func AdminTestAPIKey(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	var key models.APIKey
+	if err := models.DB.First(&key, id).Error; err != nil {
+		utils.NotFound(c, "Key 不存在")
+		return
+	}
+	now := time.Now()
+	ok := true
+	note := func(passed bool, name, passDetail, failDetail string) gin.H {
+		if !passed {
+			ok = false
+		}
+		d := passDetail
+		if !passed {
+			d = failDetail
+		}
+		return gin.H{"name": name, "ok": passed, "detail": d}
+	}
+	checks := []gin.H{
+		note(key.IsActive, "密钥启用", "已启用", "已停用（IsActive=false）"),
+		note(!key.IsBanned, "未被封禁", "未被封禁", "已被封禁："+key.BanReason),
+		note(key.ExpiresAt == nil || key.ExpiresAt.After(now), "未过期",
+			"无过期时间", "已于 "+key.ExpiresAt.Format("2006-01-02 15:04:05")+" 过期"),
+		note(key.QuotaPerMin > 0, "配额有效", "配额 "+strconv.Itoa(key.QuotaPerMin)+" 次/分", "配额 ≤ 0，请求将被拒绝"),
+	}
+
+	// 归属账号与按人策略
+	if u, uerr := models.GetUserByID(key.UserID); uerr != nil || u == nil {
+		checks = append(checks, gin.H{"name": "归属账号", "ok": false, "detail": "归属用户不存在或已删除"})
+		ok = false
+	} else {
+		checks = append(checks, gin.H{"name": "归属账号", "ok": true, "detail": "用户 @" + u.Username + " 存在"})
+		if p := models.GetUserAPIPolicy(key.UserID); p != nil && p.IsBannedNow() {
+			reason := p.BanReason
+			if reason == "" {
+				reason = "管理员已封禁该用户 API 访问"
+			}
+			checks = append(checks, gin.H{"name": "按人策略", "ok": false, "detail": reason})
+			ok = false
+		} else {
+			checks = append(checks, gin.H{"name": "按人策略", "ok": true, "detail": "无按人封禁"})
+		}
+	}
+
+	msg := "连通性正常，Key 可用于鉴权"
+	if !ok {
+		msg = "检测到异常，Key 可能无法正常使用"
+	}
+	utils.Success(c, gin.H{"ok": ok, "message": msg, "checks": checks})
+}

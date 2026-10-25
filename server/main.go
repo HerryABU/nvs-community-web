@@ -913,6 +913,7 @@ func main() {
 		// 按把封禁 / 解封
 		admin.POST("/ratelimit/keys/:id/ban", handlers.AdminBanAPIKey)
 		admin.POST("/ratelimit/keys/:id/unban", handlers.AdminUnbanAPIKey)
+		admin.POST("/ratelimit/keys/:id/test", handlers.AdminTestAPIKey) // 平台 Key 连通性/有效性体检
 		// 按人管控：封禁该用户全部 Key + 专属限流配额
 		admin.GET("/ratelimit/users", handlers.AdminListUserAPIPolicies)
 		admin.GET("/ratelimit/users/:id/quota", handlers.AdminGetUserAPIQuota)
