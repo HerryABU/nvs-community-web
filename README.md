@@ -2,10 +2,14 @@
   <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go" alt="Go">
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?style=flat&logo=vuedotjs" alt="Vue">
   <img src="https://img.shields.io/badge/SQLite-3-003B57?style=flat&logo=sqlite" alt="SQLite">
+  <img src="https://img.shields.io/badge/version-3.21.1-4F46E5?style=flat" alt="Version">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue?style=flat" alt="Platform">
   <img src="https://img.shields.io/badge/CPU-x86%20%7C%20ARM%20%7C%20MIPS64%20%7C%20RISC--V-orange?style=flat" alt="CPU">
   <img src="https://img.shields.io/badge/license-AGPL%20v3-blue.svg" alt="License">
 </p>
+
+> 版本徽章与 `server/version/version.go`、`web/package.json` 必须三处一致（`make version` 会校验）；
+> 发版时同步更新本徽章与下方「版本更新记录」。
 
 <h1 align="center">📚 NVS — 去中心化网络小说平台</h1>
 
@@ -51,14 +55,15 @@
 - 💾 **备份 / 恢复 / 定时备份** — SQLite `VACUUM INTO` 无损快照 / MySQL 全表 JSON 快照，支持按间隔定时调度
 - 🔀 **站点路径前缀挂载（反向代理）** — 通过 `URL_PREFIX`（如 `/go-nvs`）将整站挂到任意子路径（`http://网关:8088/go-nvs/login`），供 nginx / 自建网关等反向代理使用；前端**自动感知前缀**（Vue Router base / axios baseURL / 资源绝对前缀 / 跳转），支持「保留前缀」「去前缀」两种转发模式，**前缀名任意配置、严禁硬编码**；反向代理仅改写 `<base href>` 时前端自动从 `document.baseURI` 推导实际挂载前缀
 - ⚡ **静态资源强缓存** — Vite 产物 `assets/*`（文件名即内容指纹）→ `Cache-Control: immutable` 一年；`index.html` → `no-cache` 每次重新验证，发布新版本后浏览器立即拿到，杜绝重复全量下载 js/css
-- 🏷️ **页脚开源署名** — 参考 alist「Powered by」风格，站底常驻「由 **NVS** 驱动 v2.2.2」并链接 GitHub 仓库（`HerryABU/nvs-community-web`），与 ICP/公安备案号同排展示；版本号统一管理（Go `version` 包 + 前端 `package.json` 单一来源，`/api/health`、建站向导、健康页、启动日志同步一致）
+- 🏷️ **页脚开源署名** — 参考 alist「Powered by」风格，站底常驻「由 **NVS** 驱动 vX.Y.Z」并链接 GitHub 仓库（`HerryABU/nvs-community-web`），与 ICP/公安备案号同排展示；版本号统一管理（Go `version` 包 + 前端 `package.json` + README 顶部徽章，`/api/setup/status`、建站向导、健康页、启动日志同步一致）
 
 ### 用户系统
 - 🔐 **JWT HttpOnly Cookie 认证** — `SameSite=Lax`，72h 过期
 - 🔑 **bcrypt 密码哈希**
 - 📧 **邮箱验证码** — 支持 QQ邮箱/Gmail/163 SMTP，6位数字验证码，10分钟有效
 - 🧩 **滑块验证码** — `ENABLE_CAPTCHA` 开关控制
-- 👥 **用户分级** — 普通用户 / 作者 / VIP作者 / 管理员 / 仲裁员
+- 👥 **用户分级** — 普通用户（reader）/ 作者（author）/ VIP作者（vip_author）/ **警方（police）** / 仲裁员（arbitrator）/ 管理员（admin）；其中 **警方不可自注册**，只能由管理员在「用户管理 → 更多」提权，撤销/提权均写审计留痕
+- 🪪 **个人中心统一入口** — 头像下拉只保留 5 项（个人中心 / 我的主页 / 管理员面板 / 警方取管台 / 退出登录）；更换头像、账号设置、钱包、API Key、私信、黑名单、特别关注、举报、模板设置、文档等 **14 个入口全部收进 `/me` 的「我的服务」**，按「账号与资料 / 互动与关注 / 资产与开放能力 / 外观与帮助」四组归类
 - 📍 **注册/登录 IP 留存** — 记录 `registration_ip` / `last_login_ip` / `last_login_at`（176号令合规）
 - 🕵️ **用户行为审计日志** — 登录成功/失败、登出、改密、注册全记录（含 IP / User-Agent）
 
@@ -71,10 +76,59 @@
 - 📥 **多格式导入** — 支持 ZIP / Markdown / TXT 导入，自动解析章节结构，支持预览确认
 - 📦 **批量导入** — 小说批量导入支持三种模式：**一个文件一章**（标题取文件名，默认）/ 自定义正则拆分（快捷规则：第X章 / Markdown 标题 / 分割线）/ 自动识别标题；可选项「章节标题加第N章前缀」；**编辑模式下导入/批量导入自动追加到当前作品末尾，不会新建书本**（单文件导入同样支持追加）；**博客批量导入**：多文件一键创建多篇博客
 
+### 🤖 AI 工作台（对话 / 绘画 / 视频 / 智能体）
+
+> 默认**关闭**（`ai_enabled=false`）—— 未开启时入口仍可见并标注「未开启」，管理员可就地开启并配置模型池。
+
+- 🧭 **竖列式入口**（184px 左导航 + 56px 顶栏）：AI 对话 / 大模型广场 / 专业绘画 / 视频创作 / 灵感广场 / AI 智能体 / 思维导图 / 会员与额度，**打开即落地对话页**（不做九宫格门户）
+- 💬 **标准对话页**：空态大标题 + 推荐词卡；圆角自适应输入框（聚焦描边）+ 行内「厂商/模型/长度」+ 圆形发送/停止；历史会话、代码块一键复制、**真正的重新生成**（先截断再重发，不会一问多答）
+- 🧠 **思考型模型**（DeepSeek-R1 / GLM / Qwen thinking）—— 上游把正文放在 `reasoning` / `reasoning_content` 字段，两种命名都识别；推理过程进「思考过程」折叠块、正文不重复推送，`answer_in_reasoning` 时自动落正文
+- 🎨 **专业绘画**：左 320 参数栏 + 右纵向作品流（每任务一卡：模型/时间/提示词/图片栅格/参考图数），**不自建「本次结果」区块**（结果就是流里最新一项）
+- 🎬 **视频创作**：与绘画页同构；进行中有状态条（排队/生成 + 自动刷新），支持**停止等待（取消 + 原路退款）**与**失败重新提交**；刷新页面自动恢复轮询；终态判定统一走 `IsAiMediaTerminal`（含 `cancelled`）
+- 🧩 **智能体 / 思维导图 / 灵感广场 / 提示词库**：智能体卡片墙、mindmap 面板、灵感广场（图文/视频）、提示词模板一键填入
+- 🎛 **模型池与路由**：多厂商协议（OpenAI 兼容 / Anthropic / Gemini / MJ / Kling / Coze…）、密钥池轮询与失败熔断、**路由策略**（最便宜/最快/按场景）+ 故障自动降级、成本闸门与按次计费、`thinking` 标记、15 个开箱预设（`base_url` 为空的预设必须先填中转地址）
+- 🔑 **BYOK**：用户可绑定自己的模型 Key（加密存储，仅本人可用），不占站内额度
+- 📊 **成本与漏斗台**：调用量 / 成功率 / 首字延迟 / 花费排行 / 模型维度漏斗
+
+### 📖 阅读体验（精读 · 朗读 · 评论）
+
+- 🔤 **阅读器**：字号三档（小/中/大，`localStorage` 记忆）、顶部 2px 阅读进度条、目录抽屉、上/下一章、书签与阅读进度同步书架
+- ✍️ **划线批注**：选中正文 → 浮动按钮 → 写批注（`reading_notes.type=annotation`），本章划线面板可列出「我的 + 他人公开」批注，点击定位并闪烁；同一句多处出现按次序落位，不会互相覆盖；支持「仅自己可见」
+- 🔊 **语音朗读**：服务端合成（`POST /api/ai/speech`），按句切段（≤1800 字/段、单次 ≤8 段）顺序播放，可随时停止，离开页面自动释放音频；未配置 audio 模型时给出明确提示而非静默
+- 💬 **楼层式评论区**（公众号评论区 + Discuz 楼中楼）：回复主内容 = 开新楼（`floor_no` 递增），回复楼内某条 = 挂靠该楼并显示「X 回复 Y」可折叠
+- 🔃 **评论排序**：`new`（最新楼在前，默认）/ `old`（最早在前，追更补读）/ `hot`（楼内回复多的在前，排除已删除回复）；排序只影响「楼」的顺序，**楼内回复恒按时间正序**
+- 🎚 **评论密度**：紧凑 / 舒适一键切换（`localStorage` 记忆），四态齐全（骨架 / 空态引导 / 错误重试 / 内容）
+- 🕸 **评论网（社交图谱）**：按「谁回复了谁」构建力导向图，识别互刷、抱团与孤岛
+- 🔒 **加密楼**：楼可设访问密码（入口限制，内容不加密存储），未解锁者只见占位、楼内回复不外泄；凭 `X-Floor-Password` 头解锁，警方/管理员豁免
+
+### 👥 群组与实时消息
+
+- 🏘 **群组**：群号/邀请码可搜可预览、成员管理、群公告、群内发帖与回帖、未读红点
+- 📡 **SSE 实时推送**（`realtime.Hub`，每业务域独立实例，不蹭「狂暴模式」的 DefaultHub）：`post.created` / `post.reviewed` / `reply.created` / `announcement` / `member.joined` / `member.left`
+- 🔔 **未读计数**：`MarkGroupRead` 记 `last_read_post_id`，判定走 `id > last_read_post_id`（ID 优先、时间兜底且加容差）——纯时间戳口径在「同一毫秒入群 + 发帖」时会永久漏掉一条
+- 💌 **私信**：一对一会话、撤回（2 分钟内）、单方删除、未读数、互相关注才能发消息（陌生人可发 2 条）；支持 `/user/messages?peer=<id>` 直达会话
+- 📣 **消息中心**：评论回复 / 帖子回复 / 作品评论 / 博客评论聚合，导航栏铃铛未读徽标，`nvs:unread` 事件跨组件同步
+
+### 🎭 话本 · 协作 · 版本控制 · OC 模式
+
+- 💬 **话本气泡体**：散文体 / 话本体 / 章节级混排三种形态；气泡对话支持长按互动（复制、引用为评论、存为书签）、表情与图片、AI 模板生成
+- 👥 **多人协作**：按作品邀请协作者、主笔转让（权限与署名同步）、协作台集中查看
+- 🗂 **章节版本控制**：每次保存留版本，可视化 diff 与回滚；默认内置实现，`make build-gitvcs` + `NVS_VCS_BACKEND=git` 可切真实 git 仓库后端
+- 🎭 **OC 模式群组**：角色卡（性格/口吻/开场白）、世界书（设定注入）、多智能体角色扮演、一键把对话发布为话本章节
+- 🧾 **提示词模板引擎**：模板 CRUD + 变量白名单；上下文自动注入（作品/大纲/角色/摘要/前文/样本），**客户端变量优先**，只回传模板实际用到的变量
+
+### 💎 会员与额度
+
+- 💳 **代币经济**：充值档位（纯充值 / 充值+会员天数）、代币消费（AI 调用、绘画、视频）、余额与流水
+- 👑 **会员套餐**：`PaymentTier{fen,bonus,label,days,badge,features}`；下单时把 `member_days` 记成**快照**，事后改档位不影响已下单订单；到账与会员延长在**同一事务**（`MarkOrderPaid → extendMembershipTx`），续费起点取 `max(now, 到期)`
+- 🎁 **每日免费 AI 额度**：游客 / 注册 / 会员三档，会员为注册用户 ×2；**站长按人覆盖优先于会员倍数**
+- 🧾 **会员页**：3 列套餐 + 权益对比表（游客/注册/会员，会员列整列高亮），数字全部来自 `/api/membership`，站内不存在的权益不写进表
+- 🔁 **支付通道**：在线支付 + 模拟收银台（`/pay/mock`）便于本地联调；风控台可配「大额人工复核 / 短时高频拦截 / 退款率上限」
+
 ### 社区互动
-- 💬 **评论系统** — 支持章评和书评，IP 限流保护
+- 💬 **评论系统** — 章评/书评双轨，**楼层模型**（新楼 + 楼中楼折叠）、排序（最新/最早/最热）、密度（紧凑/舒适）、加密楼、评论网社交图谱、30s 新评论提示（不打断阅读）；IP 限流 + 违禁词 + 黑名单 hide/block 双模式
 - ⭐ **多维度评分** — 类型完成度 / 叙事质量 / 思想深度 / 社区口碑 / 更新稳定性
-- 📚 **书架** — 收藏追读，自动记录阅读进度
+- 📚 **书架** — 收藏追读，自动记录阅读进度（与阅读器双向同步）
 - 🏠 **论坛双轨制** — 公共论坛广场 + 作品专属子论坛 + 作者专属论坛
 - 👑 **作者工作台** — 仪表盘（多指标可切换图表：章节增长/字数增长/评论趋势/收藏/阅读·折线⇄柱状二选一）、作品管理、收益统计、提现申请
 - 📝 **作者博客** — 认证作者可发布博客文章，支持置顶、**点赞**、评论，**CSDN 式一/二级分类**（管理员可任意管理），MD 文章右侧**可折叠目录**（#~######）；作者删除的内容进入**回收站**可自行恢复（区分管理员封禁，被封禁仅管理员可恢复、管理员可在「回收站监管」查看全站用户自删内容）
@@ -102,6 +156,11 @@
 - 🔐 **JWT 随机密钥** — 默认自动生成随机密钥并持久化 `data/.jwt_secret`，杜绝公开默认密钥伪造管理员 Token
 - 📢 **公告栏** — 站点公告管理端 CRUD + 首页公告条 + 公告列表/详情弹窗（置顶优先）
 - 🧭 **176号令合规工具箱** — 算法推荐透明度（公开说明 + 用户个性化推荐关闭权）、联网备案引导（ICP/公安备案字段 + 页脚展示）、等保/关基自测定级、漏洞整改闭环管理、检查材料一键导出（日志 ZIP / 用户 CSV / 合规自查报告）
+- 🕵️ **蜜罐体系（四档可调）** — 诱饵路径 + 影子认证 + 验证页与浏览器指纹 + 取证包 + 规则反哺；**全部内嵌主程序**（不再产出第二个二进制），每次命中记录来源 IP / UA / 载荷 / 处置结果
+- 🧱 **隔离墙访问仪表盘** — 谁在什么时候试图进入哪个敏感分区、从哪个 IP / UA 来（`ZoneAccessLog` 可视化 + 分页筛选 + 聚合统计），用于举证与反驳
+- 📡 **网络诊断与攻击流量面板** — 独立 `WebAccessLog`（中间件异步批量写入），支持 Top IP / Top 路径 / 状态码分布 / UA 家族 / 爬虫原因分布；TTL 以 `X-Forwarded-For` 跳数近似并**在界面上标注该限制**
+- 🚨 **警方取管台（police 角色）** — 只看取证相关：软删除留证全量查看（按类型筛选 + 关键词 + 分页）、单条凭证下载、**全量取证包导出（二次确认并写明含个人信息、仅限依法调取）**、论坛巡查（含隐藏/加密/已删除）；**无**普通管理权，角色只能由管理员提权
+- 🧯 **AI 内容可追溯** — 章节/博客记录「AI 参与」标记与生成模型名，评论可 @ai 召唤助手（配额可控、每日上限可关）
 
 ### 站点互通
 - 🌐 **联邦站点** — 支持远程站点互联与跨站作品同步（模仿 alist）
@@ -145,7 +204,8 @@ NVS 允许作者通过自定义 HTML 模板深度美化作品展示页面和作�
 | strict（只读） | `allow-scripts allow-same-origin` | 纯展示 |
 | interactive（交互） | + `allow-forms allow-popups` | 含按钮/表单 |
 
-**模板设置入口**：用户头像下拉 → 「🎨 模板设置」→ 分Tab管理阅读模板和作者展现模板
+**模板设置入口**：**个人中心 → 我的服务 → 模板设置**（`/author/templates`）→ 分 Tab 管理阅读模板与作者展现模板
+（v3.21.1 起头像下拉只保留 5 项，其余入口统一收进个人中心）
 
 ---
 
@@ -223,13 +283,16 @@ Markdown/富文本编辑器支持 `[expand title="标题"]...[/expand]` 语法�
 
 | 层级 | 技术 |
 |------|------|
-| 后端 | Go 1.22+ · Gin · GORM (SQLite/MySQL) |
-| 前端 | Vue 3 · Vite · Element Plus · TypeScript · TipTap · Cherry Markdown 0.11.9（完整版，编辑器/阅读器同源引擎） · ECharts · KaTeX (physics/mhchem) · Mermaid · smiles-drawer (chemfig) |
+| 后端 | Go 1.25 · Gin · GORM (SQLite/MySQL) |
+| 前端 | Vue 3.4 · Vite 5 · Element Plus 2.7（按需导入） · TypeScript 5.5 · TipTap · Cherry Markdown 0.11.9（完整版，编辑器/阅读器同源引擎） · ECharts 6 · KaTeX (physics/mhchem) · Mermaid · smiles-drawer (chemfig) · three.js / 3d-force-graph（评论网图谱） |
+| AI | 多厂商协议（OpenAI 兼容 / Anthropic / Gemini / MJ / Kling / Coze）· SSE 流式 · 密钥池与熔断 · 路由策略与自动降级 · 思考型模型 reasoning 透传 · 语音合成 |
 | 数据库 | SQLite（默认，零配置） / MySQL 8.0（支持在线热迁移） |
 | 缓存 | Redis 7（可选，MySQL 模式推荐） |
+| 实时 | SSE（每业务域独立 Hub；单向广播、过反代简单、Cookie 鉴权无需 token 进 URL） |
 | 存储 | 文件系统（HTML + JSON） + 内存 VFS（沙盒虚拟文件系统） |
 | 扩展 | 自定义 HTML-UI 模板 · ZIP 托管 · WASM · 端口代理 · 虚拟路径 |
-| 安全 | 内容扫描（23条规则）· 动态 XSS 规则引擎 · 违禁词库（标记/删除/替换 + 关键词/正则）· 软删除（8表）· 审计日志 · 访问日志关联 user_id · 日志完整性保护 · ZIP炸弹检测 · CSP · iframe sandbox · 目录锁定 · 数据库配置 AES-256 加密 |
+| 安全 | 内容扫描（23条规则）· 动态 XSS 规则引擎 · 违禁词库（标记/删除/替换 + 关键词/正则）· 软删除（8表）· 审计日志 · 访问日志关联 user_id · 日志完整性保护 · 日志脱敏 · 滑块验证码 · CSRF · ZIP炸弹检测 · CSP · iframe sandbox · 目录锁定 · 数据库配置 AES-256 加密 |
+| 质量 | `make check`（SPA 白名单 + 组件解析审计 + go build/vet/test + 前端 build）· Playwright-core 四档宽度与功能级真浏览器验收 · 仓库内 git hooks · GitHub Actions（CI + 多平台 Release） |
 | 构建 | Go `embed` 前端 → 单二进制文件 |
 
 ---
@@ -338,6 +401,10 @@ cd server && go build -ldflags="-s -w" -o nvs-server.exe . && cd ..
 | Node.js | ≥ 20（CI 用 22） | 前端构建（Vite 5） |
 | npm | ≥ 9 | 依赖管理 |
 | Git | ≥ 2.9 | 须支持 `core.hooksPath`（仓库内 hooks 依赖它） |
+| make | 可选 | `make check/dist/build` 等便捷目标；**Windows 的 Git Bash 通常不带 make**，等价命令见各小节 |
+
+> 真浏览器验收脚本需要 `playwright-core` 与已下载的 Chromium（不在 `web/package.json` 里，
+> 由运行环境提供；脚本默认从 `%LOCALAPPDATA%\ms-playwright` 找浏览器，可用 `NVS_CHROME` 指定）。
 
 ### 本地开发
 
@@ -387,7 +454,7 @@ CHECK_WEB=1 git push               # push 额外构建前端
 ### 已提供的构建目标
 
 ```bash
-make check        # 本地等价 CI：后端 build + vet + test，前端 build
+make check        # 本地等价 CI：SPA 白名单 + 组件解析审计 + 后端 build/vet/test + 前端 build
 make check-all    # check + 同步 embed + 产物自检 + 前端产物密钥扫描
 make dist         # 只构建前端并同步到 server/dist（embed 源）
 make dist-check   # 校验 server/dist 有 index.html 且资源数正常（防"空 embed 打进 exe"）
@@ -400,6 +467,40 @@ make build-gm     # 国密轨（-tags gm，依赖 go.gm.mod）
 
 > **构建顺序不能反**：`npm run build`（产出 `dist/`）→ 同步到 `server/dist/` → `go build`。
 > `//go:embed all:dist` 是**编译期**打包，顺序反了会把旧前端（或空目录）嵌进 exe。
+
+### 质量门禁与验收脚本
+
+`scripts/` 下是**可重复执行**的静态检查与真浏览器验收脚本（不是"我本地跑过一次"的口头结论）：
+
+| 脚本 | 查什么 | 何时跑 |
+|---|---|---|
+| `scripts/check-spa-roots.sh` | 前端**路由首段**是否全部登记到 `server/main.go` 的 `knownSPARoots`（漏登记 = 点链接能进、刷新 404） | `make check` / CI |
+| `scripts/audit-unresolved-components.mjs` | 模板里用了、`<script setup>` 里没导入的组件（Element Plus 按需导入只解析 `El*`，`<ArrowDown />` 少了 import 会**静默不渲染**） | `make check` / CI |
+| `scripts/audit-admin-pages.mjs` | 后台页四态体检（表格 / StateBlock / `#empty` / 骨架 / 分页 / 筛选 / 错误态），`--strict` 有表格无四态即退出码 1 | 改后台页后 |
+| `scripts/fix-table-empty-slots.mjs` | 清理**列级 `#empty` 死插槽**（`el-table-column` 没有 empty 插槽，写了永远不渲染）；`--write` 才实改 | 需要时手动 |
+| `scripts/scan-frontend-secrets.sh` | 前端产物里是否混入密钥/令牌 | `make check-all` / CI |
+| `scripts/browser-smoke.mjs` | 真浏览器 **四档宽度（375/768/1024/1440）**回归：无横向溢出、关键元素存在且可见、`/api/*` 无失败、console 无错误；截图 + `report.json` 落盘 | 改前台页面后 |
+| `scripts/browser-func.mjs` | **功能级**回归：保存资料并回读落库、作者主页四分栏可切、评论排序真带 `sort=` 参数、密度切换真改 DOM 高度、朗读真请求 `/api/ai/speech` 且失败有可读提示 | 改交互逻辑后 |
+| `scripts/browser-me-center.mjs` | 个人中心专项：下拉只剩 5 项、13 个入口已迁出、`/me` 服务链接逐个直达不 404 不弹登录、头像上传落点 | 改导航/个人中心后 |
+
+三个浏览器脚本都用 `playwright-core` + 已登录 cookie：
+
+```bash
+# 1) 登录拿 cookie（测试实例若开了滑块，需临时把 captcha_enabled 置 false，跑完改回）
+curl -s --noproxy '*' -c /tmp/nvs_cookie.txt \
+  -H 'Content-Type: application/json' -H 'X-Requested-With: XMLHttpRequest' \
+  -d '{"email":"admin@nvs.local","password":"你的密码"}' \
+  http://127.0.0.1:8000/api/auth/login
+
+# 2) 跑验收（Windows 下 cookie 路径要传 Windows 绝对路径，Node 不认 MSYS 的 /tmp）
+NVS_COOKIE="C:/Users/<你>/AppData/Local/Temp/nvs_cookie.txt" \
+NVS_BASE=http://127.0.0.1:8000 node scripts/browser-smoke.mjs
+```
+
+> 为什么必须有真浏览器：`vite build` 成功 **≠** 页面能跑。本仓库踩过的坑里，
+> 模板引用未定义变量导致整页白屏、图标漏 import 静默消失、`overflow` 加错容器导致头像被挤出视野，
+> 全都是构建期无感的。另：非 `/api` 的 404 只会产生一条不带 URL 的 `Failed to load resource`，
+> 静态检查与肉眼都定位不到。
 
 ### 自动构建（GitHub Actions）
 
@@ -414,7 +515,7 @@ make build-gm     # 国密轨（-tags gm，依赖 go.gm.mod）
 # 1) 改版本（三处必须一致）
 #    server/version/version.go  var AppVersion = "x.y.z"
 #    web/package.json           "version": "x.y.z"
-#    README.md                  版本更新记录新增段落
+#    README.md                  顶部 version 徽章 + 版本更新记录新增段落
 
 # 2) 本地先过一遍
 make version && make check-all
@@ -468,19 +569,34 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 
 ## ⚙️ 配置参考（.env）
 
-启动时自动生成，也可手动创建或基于 `.env.example` 拷贝：
+启动时自动生成（模板见 `server/config/config.go` 的 `defaultEnvTemplate`），也可复制仓库根的 **`.env.example`** 改名 `.env` 后填写。
+
+> 密钥类项在示例文件中**留空**：留空时启动会自动生成/派生（JWT 密钥落盘 `data/.jwt_secret`）。生产环境请显式填写。
 
 ### 数据库
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `DB_DRIVER` | `sqlite` | 数据库驱动（`sqlite` / `mysql`） |
+| `DB_PATH` | `data/nvs.db` | SQLite 文件路径（**装 DLL/容器挂载卷时务必设成绝对路径**） |
+| `DB_MEMORY` | `false` | SQLite 内存模式（测试用，进程退出即丢） |
 | `DB_HOST` | `127.0.0.1` | MySQL 主机 |
 | `DB_PORT` | `3306` | MySQL 端口 |
 | `DB_USER` | `nvs_user` | MySQL 用户名 |
-| `DB_PASSWORD` | `nvs_pass_2026` | MySQL 密码 |
+| `DB_PASSWORD` | 空 | MySQL 密码 |
 | `DB_NAME` | `nvs` | MySQL 数据库名 |
+| `DB_ROOT_PASSWORD` | 空 | 仅供建站向导创建库/用户时使用，创建后可删 |
 
-> 🔐 **数据库密码加密存储**：通过建站向导或后台「数据库迁移」设置的 MySQL 连接信息（含密码）会经 **AES-256-GCM** 加密写入 `data/secure-config.json`（密钥存 `data/.secret.key`，仅本机可读），并自动从 `.env` 移除明文 `DB_*` 行，避免密码明文残留。`config.Init()` 启动时会优先解密加载该加密配置覆盖内存变量。
+> 🔐 **数据库密码加密存储**：通过建站向导或后台「数据库迁移」设置的 MySQL 连接信息（含密码）会经 **AES-256-GCM** 加密写入 `data/secure-config.json`（密钥存 `data/.secret.key`，0600 权限仅本机可读），并自动从 `.env` 移除明文 `DB_*` 行，避免密码明文残留。`config.Init()` 启动时会优先解密加载该加密配置覆盖内存变量。
+>
+> ⚠️ `config.IsInstalled()` 的判据是 **`data/secure-config.json` 是否存在**（进程内 once 缓存）：把它挪走，哪怕数据库已建站，实例也会退回建站向导。
+
+### Redis（可选，SQLite 模式下不需要）
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `REDIS_HOST` | `127.0.0.1` | Redis 主机 |
+| `REDIS_PORT` | `6379` | Redis 端口 |
+| `REDIS_PASSWORD` | 空 | Redis 密码 |
+| `REDIS_DB` | `0` | 库序号 |
 
 ### 网络与端口
 | 变量 | 默认值 | 说明 |
@@ -502,8 +618,9 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 ### JWT
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `JWT_SECRET` | `change-me-in-production` | JWT 签名密钥（务必修改） |
-| `JWT_EXPIRE_HOURS` | `72` | Token 过期时间 |
+| `JWT_SECRET` | 空（自动生成） | JWT 签名密钥；留空启动自动生成随机密钥并持久化，**务必不要用示例值上线** |
+| `JWT_EXPIRE_HOURS` | `72` | 访问令牌过期时间（小时） |
+| `JWT_REFRESH_EXPIRE_HOURS` | `720` | 刷新令牌过期时间（小时，默认 30 天，用于无感续期） |
 
 ### SMTP 邮件
 | 变量 | 默认值 | 说明 |
@@ -514,11 +631,30 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 | `SMTP_PASSWORD` | — | SMTP 授权码 |
 | `SMTP_FROM` | — | 发件人地址 |
 
-### 存储
+### 短信网关（手机号登录 / 验证码）
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `SMS_GATEWAY` | `log` | `log`=开发网关（验证码只写服务日志，不真发）；`http`=通用 HTTP 网关 |
+| `SMS_HTTP_URL` | 空 | `http` 网关地址（POST JSON `{phone,code,sign_name,template_code}`） |
+| `SMS_HTTP_TOKEN` | 空 | 网关令牌（请求头 `Authorization: Bearer <token>`） |
+| `SMS_SIGN_NAME` | `星海文学` | 短信签名（需在短信平台报备） |
+| `SMS_TEMPLATE_CODE` | 空 | 模板 Code（模板内容须含验证码占位符） |
+| `SMS_TIMEOUT_SEC` | `5` | 网关超时（秒） |
+
+### 微信扫码登录（开放平台网站应用）
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `WECHAT_APP_ID` | 空 | 开放平台 AppID |
+| `WECHAT_APP_SECRET` | 空 | 开放平台 AppSecret |
+| `WECHAT_CALLBACK` | 空 | 完整回调地址（须与平台登记域名一致，含路径前缀），如 `https://example.com/go-nvs/api/auth/wechat/callback` |
+
+### 存储与用户自定义内容
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `NOVEL_DATA_DIR` | `./data/novels` | 小说文件存储目录 |
 | `UPLOAD_DIR` | `./data/uploads` | 上传文件存储目录 |
+| `USER_FRAME_DIR` | `./data/userframe` | 自定义 HTML-UI 模板目录 |
+| `USER_HTML_DIR` | `./data/userhtml` | 扩展应用（HTML 托管）目录 |
 
 ### 平台功能
 | 变量 | 默认值 | 说明 |
@@ -526,7 +662,7 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 | `PLATFORM_FEE_RATE` | `0.10` | 平台抽成比例 |
 | `SITE_NAME` | `NVS 类型文学平台` | 站点名称 |
 | `EMAIL_VERIFY_ENABLED` | `false` | 邮箱验证开关 |
-| `CAPTCHA_ENABLED` | `false` | 滑块验证码开关 |
+| `CAPTCHA_ENABLED` | `false` | 滑块验证码开关（**开站后建议开启**，登录/注册/发码/找回密码统一走一次性 pass token） |
 
 ### 安全 / 反向代理
 | 变量 | 默认值 | 说明 |
@@ -534,19 +670,59 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 | `TRUSTED_PROXIES` | 空 | 信任的反向代理地址（逗号分隔 IP/CIDR）。留空=不信任任何代理头，客户端 IP 取真实 TCP 对端（防 `X-Forwarded-For` 伪造越权） |
 | `COOKIE_SECURE` | `false` | JWT Cookie 强制 Secure（仅 HTTPS 传输；生产启用 HTTPS 后务必 `true`） |
 | `SETUP_LOCAL_ONLY` | `true` | 建站向导仅允许本机 localhost 访问（防公网/反向代理越权进入安装向导） |
+| `REAL_NAME_ENC_KEY` | 空 | 实名信息（姓名/证件）AES-256-GCM 密钥（hex 或 base64 的 32 字节）。留空则从 `JWT_SECRET` 派生 —— **轮换 JWT_SECRET 会导致历史实名数据不可解密**，生产请独立配置 |
+
+### 国密 / TLS 双轨（可选模块）
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `NVS_CRYPTO_TRACK` | `intl` | `intl`=标准 RSA/ECC+AES（零国密依赖）/ `gm`=纯国密 SM2/SM3/SM4+TLCP / `dual`=双轨自适应协商 |
+| `NVS_CRYPTO_INTL_CERT` / `NVS_CRYPTO_INTL_KEY` | 空 | 国际轨证书；都不配 = 纯 HTTP（适合反代终止 TLS） |
+| `NVS_CRYPTO_GM_PROVIDER` | 空 | 国密实现：`tongsuo`（CGO，官方绑定）/ `purego`（纯 Go，无 CGO） |
+| `NVS_CRYPTO_SM_SIGN_CERT` / `_SIGN_KEY` / `_ENC_CERT` / `_ENC_KEY` | 空 | 国密双证书四件套（TLCP 需签名+加密两套） |
+| `NVS_CRYPTO_SESSION_TICKETS_DISABLED` | `false` | 禁用 TLS 会话复用 |
+| `NVS_TLS_HANDSHAKE_LOG` | 空 | 握手记录 JSONL 路径（记录协议/套件/SNI，不含业务数据） |
+
+> 责任边界：框架不代做等保/密评；是否启用及合规责任由站长自行承担（见 `docs/gm-mapping.md`）。
 
 ### 日志敏感信息脱敏（176号令合规）
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `LOG_REDACT_SENSITIVE` | `false` | 日志脱敏开关：`true`=生产模式（自动脱敏 Cookie/Authorization 令牌、body/query 敏感字段）；`false`=开发模式（保留原始数据，方便调试） |
-| `LOG_REDACT_MASK` | `******` | 脱敏掩码（密码类固定 `******`，其余字段可用此掩码） |
-| `LOG_SENSITIVE_FIELDS` | `password,token,authorization,secret,email` | 需脱敏的字段名列表（逗号分隔，可扩展） |
+| `LOG_REDACT_MASK` | `***REDACTED***` | 脱敏掩码（密码类固定 `******`，其余字段可用此掩码） |
+| `LOG_SENSITIVE_FIELDS` | `password,token,authorization,cookie,secret,apikey` | 需脱敏的字段名列表（逗号分隔，可扩展） |
 
 > 🧾 脱敏配置支持管理后台可视化维护（`/admin/log-redact`），保存后运行时热更新，无需重启；`.env` 仅为种子默认值。
 
 ---
 
 ## 📝 版本更新记录（文件级改动说明）
+
+### 📄 README 全面补全（2026-10-25 · 仅文档，无代码变更）
+
+**背景**：功能迭代快于文档，README 里「特性」停在旧范围（AI 工作台 / 会员 / 群组 / 话本协作 / 精读朗读
+只在 changelog 里有，特性区看不到），「项目结构」还是 70 个 handler、21 个后台页的旧规模，
+配置表缺短信 / 微信 / 国密 / 实名加密整段，且有几处**指路已失效**。
+
+**改动**
+- 顶部加 **version 徽章**（与 `version.go` / `package.json` 三处一致，`make version` 校验）
+- 特性区新增 6 个板块：**AI 工作台**（对话/绘画/视频/智能体/模型池/路由降级/思考型模型/BYOK/成本台）、
+  **阅读体验**（字号/进度/书签/划线批注/语音朗读；楼层评论 + 排序 + 密度 + 评论网 + 加密楼）、
+  **群组与实时消息**（SSE 事件、ID 优先的未读计数、私信、消息中心）、
+  **话本·协作·版本控制·OC 模式**、**会员与额度**（套餐快照 + 同事务延长 + 每日免费额度 + 权益对比表）
+- 安全合规补 5 条：**蜜罐四档**、**隔离墙访问仪表盘**、**网络诊断与攻击流量面板**、**警方取管台**、**AI 内容可追溯**
+- 修指路失效：`模板设置` 入口（头像下拉 → **个人中心 → 我的服务**）；用户分级补 **police 角色**；
+  页脚版本号不再写死 `v2.2.2`
+- 「技术栈」补 AI / 实时 / 质量三行，Go 版本对齐 `go.mod`（1.25），前端版本对齐 `package.json`
+- 新增 **「质量门禁与验收脚本」** 段落：8 个脚本各查什么、何时跑，附真浏览器验收的 cookie 取得方式与
+  「为什么必须真浏览器」的踩坑说明
+- 「项目结构」重写：补 `scripts/` 8 个脚本、server 的 14 个功能子包（aiclient/aiapi/aicall/chaptervcs/
+  collab/groups/oc/prompttpl/realtime/honeypot/gate/risk/payment/police）、models 80 文件 / handlers 139 文件、
+  web 的 117 条路由 / 50 页面 / 48 后台页 / 70 组件 / 5 个 views 子目录
+- 「配置参考」补齐：Redis、短信网关、微信登录、存储与自定义目录、实名加密密钥、国密 TLS 双轨；
+  修正 JWT / 日志脱敏的默认值（与 `config.go` 模板一致），并补 `DB_PATH` / `DB_MEMORY` / `JWT_REFRESH_EXPIRE_HOURS`
+- **新增 `.env.example`**（仓库根，6691 字节）—— 此前 README 引用它但文件并不存在。
+  由 `server/config/config.go` 的 `defaultEnvTemplate` 生成，密钥项留空（避免示例值被当真值使用），
+  并在文件头注明「改这里请同步改 Go 模板」
 
 ### v3.21.1 个人中心收拢入口，头像下拉瘦身（2026-10-24）
 
@@ -1427,9 +1603,20 @@ nvs/
 ├── .env.example                   # 环境变量模板
 ├── .env                           # [自动生成] 运行时配置
 ├── docker-compose.yml             # Docker 容器编排
+├── Makefile                       # check / check-all / dist / build / version 等目标
+├──
+├── scripts/                       # 质量门禁与真浏览器验收（可在本地重复执行）
+│   ├── check-spa-roots.sh         # 路由首段 vs knownSPARoots 对撞（防深链 404）
+│   ├── audit-unresolved-components.mjs  # 模板用了但没 import 的组件
+│   ├── audit-admin-pages.mjs      # 后台页四态体检（--strict）
+│   ├── fix-table-empty-slots.mjs  # 清理列级 #empty 死插槽（--write）
+│   ├── scan-frontend-secrets.sh   # 前端产物密钥扫描
+│   ├── browser-smoke.mjs          # 四档宽度几何回归（375/768/1024/1440）
+│   ├── browser-func.mjs           # 功能级回归（排序参数/密度/朗读/落库）
+│   └── browser-me-center.mjs      # 个人中心与下拉菜单专项
 │
 ├── server/                        # Go 后端
-│   ├── main.go                    # 入口：配置初始化 → 数据库 → 路由 → SPA fallback → 启动
+│   ├── main.go                    # 入口：配置初始化 → 数据库 → 子包 Migrate → 路由 → SPA fallback → 启动
 │   ├── embed.go                   # //go:embed all:dist 前端嵌入
 │   ├── Dockerfile
 │   ├── init.sql                   # MySQL 手动建表脚本
@@ -1439,150 +1626,84 @@ nvs/
 │   │   ├── config.go              # 自动创建 .env + 加载 + IPv4/IPv6 检测 + URL_PREFIX 解析
 │   │   ├── secure.go              # 数据库配置 AES-256-GCM 加密存储（.secret.key + secure-config.json）
 │   │   ├── redact_config.go       # 日志脱敏配置（RedactManager：.env 种子 + DB 持久化 + 热更新）
+│   │   ├── envfile.go             # .env 键映射与自动补写
 │   │   └── setup.go               # 建站向导状态 / 一次性安装密钥
 │   │
-│   ├── models/                    # 数据层（40+ 结构体）
-│   │   ├── user.go                # User + 管理员 / VIP 检查（含注册/登录 IP）
+│   ├── models/                    # 数据层（80 个文件 / 120+ 结构体）
+│   │   ├── user.go                # User（角色含 police / 会员有效期 / 实名 / 未成年保护 / 禁言）
 │   │   ├── novel.go               # Novel + Chapter + NovelCategory（软删除）
-│   │   ├── comment.go             # Comment（软删除）
-│   │   ├── forum.go               # Forum / Thread / Post / ForumMute（软删除）
-│   │   ├── blog.go                # AuthorBlog 作者博客（软删除）
-│   │   ├── blog_category.go       # BlogCategory 三级分类（审核状态/归属用户/排序）
-│   │   ├── blog_tag.go            # 博客标签（#标签云 / 筛选）
-│   │   ├── blog_topic.go          # 话题：BlogTopic + BlogTopicLink（#话题 聚合）
-│   │   ├── bookshelf.go           # BookShelf（收藏 + 阅读进度）
-│   │   ├── rating.go              # Rating 五维度评分
-│   │   ├── follow.go              # Follow 关注关系
-│   │   ├── userframe.go           # UserFrame / UserHTML 自定义模板与扩展（软删除）
-│   │   ├── platform.go            # VipApplication / Report / WithdrawalRequest
-│   │   │                          #   / EarningsRecord / BlacklistIP
-│   │   ├── platform_config.go     # PlatformConfig 站长配置键值（含 log_redact_* 脱敏配置）
-│   │   ├── platform_federated.go  # FederatedSite / FederatedNovel / FederatedInbound
-│   │   ├── platform_wall.go       # WallConfig 隔离墙配置
-│   │   ├── user_audit.go          # UserAuditLog 用户行为审计日志
-│   │   ├── emergency_audit.go     # EmergencyAuditLog 管理员审计日志
-│   │   ├── log_archive.go         # 访问/数据库日志归档调度（SHA256 + gzip + 6个月保留，适配小时文件）
-│   │   ├── xss_rule.go            # XssRule 动态 XSS 正则规则
-│   │   ├── badword.go             # BadWord 违禁词规则 + BadWordFlag 标记待审记录
-│   │   ├── announcement.go        # Announcement 站点公告（置顶/发布状态）
-│   │   ├── vulnerability.go       # Vulnerability 漏洞整改闭环记录（176号令）
+│   │   ├── comment.go             # Comment：楼层模型（root_id / floor_no）+ 加密楼 + 排序白名单
+│   │   ├── forum.go / groups.go   # 论坛（Forum/Thread/Post）与群组（Group/GroupPost/成员/公告）
+│   │   ├── blog*.go               # 作者博客 / 三级分类 / 标签 / 话题
+│   │   ├── bookshelf.go / rating.go / follow.go / reading_note.go  # 书架·评分·关注·书签批注
+│   │   ├── ai*.go                 # 模型池 / 密钥池 / 路由策略 / 调用日志 / 会话 / 媒体任务 / 成本
+│   │   ├── membership*.go         # 会员套餐 / 充值订单 / 代币流水 / 免费额度
+│   │   ├── chapter_vcs.go         # 章节版本（内置实现 / git 后端可切）
+│   │   ├── collab.go / oc*.go     # 协作成员与主笔 / OC 角色卡·世界书·多智能体会话
+│   │   ├── prompt_template.go     # 提示词模板 + 变量白名单
+│   │   ├── live.go / realtime/    # 直播状态与 SSE Hub
+│   │   ├── softdel.go             # softdel_* 留证表统一写入（8 类内容）
 │   │   ├── zone_access.go         # ZoneAccessLog 隔离墙进入记录（176号令专项）
-│   │   ├── backup.go              # 备份 / 恢复 / 定时备份调度器
+│   │   ├── web_access.go          # WebAccessLog 攻击流量/爬虫统计
+│   │   ├── police*.go             # 警方工单 / 取证
+│   │   ├── payment.go / risk.go   # 支付通道 / 充值风控
+│   │   ├── platform*.go           # 站长配置 / 公告 / 隔离墙 / 联邦站点 / 备案与合规
+│   │   ├── xss_rule.go / badword.go / vulnerability.go / log_archive.go
 │   │   └── db.go                  # AllModels 迁移 + 跨库复制 + 热切换
 │   │
-│   ├── handlers/                  # API 处理器（按功能拆分，70+ 文件）
-│   │   ├── auth_register.go       # 注册（记录注册 IP + 审计 + 限流）
-│   │   ├── auth_login.go          # 登录 / 登出 / 当前用户（登录 IP + 审计 + 账号锁定）
-│   │   ├── auth_password.go       # 邮箱验证码 / 忘记重置密码 / 改密码（审计）
-│   │   ├── novel.go               # 作品 CRUD / 分类列表 / 分类统计（软删除）
-│   │   ├── novel_public.go        # 公开作品列表 / 搜索 / 旧路径 301
-│   │   ├── chapter_read.go        # 章节读取 / 完整性校验
-│   │   ├── chapter_write.go       # 章节 CRUD / SHA256 + HMAC 签名（软删除归档）
-│   │   ├── comment.go             # 评论 CRUD（软删除）
-│   │   ├── rating.go              # 五维评分 upsert / 查询
-│   │   ├── forum.go               # 论坛 / 帖子 / 回帖（隐藏论坛元数据 + 自定义头解锁）
-│   │   ├── forum_custom.go        # 用户自建论坛 / 版主删除（审计）
-│   │   ├── bookshelf.go           # 书架管理 + 阅读进度
-│   │   ├── social_follow.go       # 关注 / 取关 / 统计
-│   │   ├── social_blog.go         # 作者博客 CRUD + 标签 + 话题（软删除）
-│   │   ├── social.go              # 博客点赞 / 公开博客列表 / 标签云
-│   │   ├── blog_category.go       # 三级分类管理（作者自建待审 / 管理员审核）
-│   │   ├── blog_topic.go          # 话题（#话题）列表 / 详情 / 参与
-│   │   ├── author_profile.go      # 作者主页 / 头像 / 资料
-│   │   ├── author_dashboard.go    # 作者数据大屏
-│   │   ├── import_export.go       # 导入预览 / 多格式导入导出
-│   │   ├── export_format.go       # EPUB / Markdown / TXT / DOCX 导出
-│   │   ├── setup.go               # 建站向导（环境检查 / DB 测试 / 安装）
-│   │   ├── db_admin.go            # 数据库健康 / 在线热迁移 / 备份恢复
-│   │   ├── admin.go               # 管理后台（统计/大屏/社区动态）
-│   │   ├── admin_user.go          # 用户管理 / 禁言 / 封禁（审计）+ 用户审计查询
-│   │   ├── admin_report.go        # 举报处理（审计）
-│   │   ├── admin_forum.go         # 论坛管理 / 审查
-│   │   ├── admin_site.go          # 站长配置 / 隔离墙 / 联邦站点 / 入站记录 / 公告
-│   │   ├── admin_announce.go      # 公告栏管理端 CRUD
-│   │   ├── admin_redact.go        # 日志脱敏配置管理（GET/PUT/preview）
-│   │   ├── admin_compliance.go    # 等保/关基自测定级（176号令）
-│   │   ├── admin_toolbox.go       # 检查工具箱（日志导出 ZIP / 用户 CSV / 自查报告）
-│   │   ├── admin_vuln.go          # 漏洞整改闭环管理（CRUD + 导出）
-│   │   ├── public_compliance.go   # 合规公开接口（算法说明 / 公告 / 用户偏好）
-│   │   ├── emergency.go           # 内容抢救台（二级密码 + 硬删除 + 审计，token 走 body）
-│   │   ├── userframe.go           # UserFrame 模板 CRUD
-│   │   ├── userhtml.go            # UserHTML 扩展 ZIP 上传 / CRUD（pathWithin 防穿越）
-│   │   ├── html_review.go         # HTML 内容人工复核
-│   │   ├── sandbox_vfs.go         # 沙盒虚拟文件系统 VFS（写操作鉴权）
-│   │   ├── port.go                # 端口分配 / 命名代理（归属校验）
-│   │   ├── proxy.go               # 联邦同步代理（SSRF 白名单校验）
-│   │   ├── xss_rule.go            # XSS 规则库 CRUD / 测试
-│   │   ├── badword.go             # 违禁词库 CRUD / 测试 + 标记待审处理（确认/删除/放行）
-│   │   ├── batch.go               # API 聚合（一次请求批量获取）
-│   │   └── context.go             # 鉴权上下文统一封装（currentUserID 等）
+│   ├── handlers/                  # API 处理器（139 个文件，按功能拆分）
+│   │   ├── auth_*.go              # 注册 / 登录 / 验证码与改密（含账号锁定与审计）
+│   │   ├── novel*.go / chapter*.go# 作品与章节读写（SHA256 + HMAC 签名、软删除归档）
+│   │   ├── comment.go             # 评论（楼层分页 + sort=new/old/hot + 加密楼 + 取证视图）
+│   │   ├── ai_*.go                # AI 对话（流式）/ 绘画 / 视频 / 智能体 / 模型池 / 路由 / 成本 / 语音
+│   │   ├── admin_*.go             # 后台：用户 / 举报 / 论坛 / 站点 / 合规 / 漏洞 / 额度 / AI
+│   │   ├── police.go              # 警方取管台：软删除查看 / 凭证下载 / 全量取证包 / 论坛巡查
+│   │   ├── social_*.go            # 关注 / 博客 / 话题 / 私信 / 黑名单 / 特别关注
+│   │   ├── home_customize.go      # 个人主页装扮（双作用域 + 消毒 + 站长审核）
+│   │   ├── emergency.go           # 内容抢救台（二级密码 + 硬删除 + 审计）
+│   │   ├── setup.go / db_admin.go # 建站向导 / 数据库健康·热迁移·备份恢复
+│   │   └── context.go             # 鉴权上下文统一封装（currentUserID / UserRole 等）
 │   │
-│   ├── middleware/
-│   │   ├── auth.go                # JWT 鉴权 + 角色检查 + Cookie 管理
-│   │   ├── csrf.go                # CSRF 防护（登录态写操作强制 X-Requested-With）
-│   │   ├── context.go             # 鉴权上下文 key 常量 + getter（单一权威来源）
-│   │   ├── access_log.go          # 访问日志（JSON + user_id + 按小时滚动 + 敏感信息脱敏）
-│   │   ├── redact.go              # 日志脱敏引擎（Header/Body JSON/Query 三类）
-│   │   ├── header_logger.go       # 请求头日志（敏感头脱敏 + 静态资源单行摘要）
-│   │   ├── urlprefix.go           # 站点路径前缀剥离 + index.html 前缀注入（反向代理挂载）
-│   │   ├── recovery.go            # panic 恢复（不泄露堆栈）
-│   │   ├── sandbox.go             # 沙盒安全头（CSP / COOP / COEP）
-│   │   ├── sandbox_fs.go          # 沙盒写入保护 / 脚本扩展名拦截
-│   │   └── portproxy.go           # 命名端口反向代理
-│   │
-│   ├── security/
-│   │   ├── ratelimit.go           # IP 滑动窗口限流（内存）
-│   │   ├── sanitize.go            # bluemonday XSS 净化 + 动态规则 + 危险标签移除
-│   │   ├── sign.go                # HMAC-SHA256 内容签名 + 作者签名密钥
-│   │   ├── content_scan.go        # 内容安全扫描（23 条规则）
-│   │   ├── badwords.go            # 违禁词引擎（关键词/正则编译缓存 + 扫描/净化 + 范围过滤）
-│   │   └── sandbox_fs.go          # 沙盒目录锁定 / 路径穿越防护
-│   │
-│   ├── utils/
-│   │   ├── jwt.go                 # JWT 生成/解析
-│   │   ├── password.go            # bcrypt 密码哈希
-│   │   ├── response.go            # 统一 JSON 响应格式
-│   │   ├── email.go               # SMTP 验证码发送与校验
-│   │   └── zipbomb.go             # ZIP 炸弹检测（压缩比/大小/数量/穿越）
+│   ├── aiclient/  aiapi/  aicall/ # 多厂商模型协议（OpenAI 兼容 / Anthropic / Gemini / MJ / Kling / Coze）
+│   ├── chaptervcs/  collab/       # 章节版本控制后端 / 协作
+│   ├── groups/  oc/  prompttpl/  realtime/   # 群组 / OC 模式 / 提示词模板 / SSE 推送
+│   ├── honeypot/  gate/  risk/    # 蜜罐（诱饵·影子认证·指纹·取证）/ 准入闸门 / 充值风控
+│   ├── payment/  police/  audit/  # 支付通道 / 警方取证 / 审计
+│   ├── middleware/                # 鉴权 / CSRF / 访问日志 / 脱敏 / 前缀剥离 / 沙盒头 / 端口代理
+│   ├── security/                  # 限流 / XSS 净化 / 内容签名 / 内容扫描 / 违禁词 / 滑块验证码 / 正则安全
+│   ├── markdown/  scriptmode/     # Markdown 渲染（Mermaid/chemfig）/ 话本气泡体解析
+│   ├── realname/  crypto/  tlsconfig/  utils/  version/
 │   │
 │   └── dist/                      # [自动生成] 前端构建产物（Go embed 使用）
 │
 ├── web/                           # Vue 3 前端
-│   ├── vite.config.ts             # outDir → ../dist / dev 代理 /api → 8080
-│   ├── package.json               # TipTap · ECharts · KaTeX · Mermaid · Element Plus
+│   ├── vite.config.ts             # outDir → ../dist / dev 代理 /api → 8080 / 按需导入 Element Plus
+│   ├── package.json               # TipTap · ECharts · KaTeX · Mermaid · Element Plus · three
 │   └── src/
-│       ├── router/index.ts        # 60+ 路由 + JWT 路由守卫（base 自动感知前缀）
-│       ├── stores/                # Pinia
-│       │   ├── auth.ts            # 用户认证状态
-│       │   └── theme.ts           # 主题切换（亮/暗）
-│       ├── api/                   # axios 封装（baseURL 自动带前缀 + CSRF 头）
-│       ├── utils/
-│       │   ├── prefix.ts          # 站点路径前缀智能解析（__NVS_PREFIX__ 优先 + baseURI 推导兜底）
-│       │   ├── sensitiveZone.ts   # 敏感区隔离墙守卫
-│       │   ├── userKey.ts         # 用户标识解析（数字=主键 / 用户名兼容）
-│       │   └── turndown.ts        # HTML → Markdown 转换
-│       ├── views/                 # 30+ 页面组件
-│       │   ├── Home.vue / Login.vue / Register.vue
-│       │   ├── NovelDetail.vue / Reader.vue
-│       │   ├── Editor.vue / ChapterEditor.vue
-│       │   ├── AuthorDashboard.vue / AuthorHome.vue / AuthorBlogs.vue
-│       │   ├── BlogList.vue / BlogDetail.vue / BlogEditor.vue / BlogHome.vue / BlogManager.vue
-│       │   ├── BlogCategoryManage.vue / BlogCategorySettings.vue / Topics.vue
-│       │   ├── CategoryView.vue / Bookshelf.vue / Follows.vue
-│       │   ├── Forums.vue / ForumDetail.vue / ThreadDetail.vue
-│       │   ├── AdminDashboard.vue / UserManagement.vue
-│       │   ├── admin/ — AdminSecurity / AdminBadWords / AdminReports / AdminSoftDel / AdminBan /
-│       │   │           AdminAlgorithms(算法) / AdminAnnouncements(公告) / AdminLogRedact(日志脱敏) /
-│       │   │           AdminVulnerabilities(漏洞) / AdminCompliance(等保自测) / AdminHealth / AdminDatabase 等 21 项
-│       │   └── frame/ — FrameManager / HTMLManager / HtmlRunner / SandboxPreview / WasmRunner
-│       └── components/            # 15+ 通用组件
-│           ├── NavBar.vue / NovelCard.vue / HomeSearchResults.vue
-│           ├── CommentSection.vue / CommentItem.vue
-│           ├── StarRating.vue / SensitiveZoneGuard.vue / SlideCaptcha.vue
-│           ├── RichTextEditor.vue / AnimatedNumber.vue / DashboardCharts.vue
-│           ├── admin/ — AdminSiteSettings.vue / AdminCommunity.vue
-│           └── author/ — AuthorCard.vue
-│       └── styles/                # 全局样式（含 dark mode）
+│       ├── router/index.ts        # 117 条路由 + 角色守卫（requiresAdmin / requiresPolice）+ base 自动感知前缀
+│       ├── stores/                # Pinia：auth（幂等 fetchUser）/ theme / app（站点配置与未读数）
+│       ├── api/                   # 43 个模块：axios 封装（前缀 + CSRF 头）、各业务域
+│       ├── utils/                 # prefix / sensitiveZone / userKey / adminHealth / editorShortcuts / turndown
+│       ├── styles/                # global.css（设计令牌）/ scale.css（间距·字号·容器档位）/ admin.css
+│       ├── views/                 # 50 个顶层页面 + 5 个子目录
+│       │   ├── Home / Login / Register / SetupWizard
+│       │   ├── NovelDetail / Reader（精读·朗读·划线）/ Editor / ChapterEditor
+│       │   ├── AuthorDashboard / AuthorHome（封面+分栏）/ AuthorBlogs / AuthorTemplateSettings
+│       │   ├── BlogList / BlogDetail / BlogEditor / BlogHome / BlogManager / BlogCategory*
+│       │   ├── Forums / ForumDetail / ThreadDetail / Topics / Feed / Bookshelf / ReadingNotes
+│       │   ├── AiHub（竖列：对话/广场/绘画/视频/灵感/智能体/思维导图）/ Membership / PayMock / PayResult
+│       │   ├── CollabWorks / Live / MessageCenter / Wallet / MyApiKeys / APIKeySpider / DocsPage
+│       │   ├── admin/ — 48 个后台页（AdminAiPool / AdminPoliceConsole / AdminWallAccess / AdminNetDiag …）
+│       │   ├── me/    — MeLayout + 概况/作品/博客/留言/数据/装扮（「我的服务」四组入口）
+│       │   ├── user/  — 私信 / 黑名单 / 特别关注 / 微信绑定 / 网页额度
+│       │   ├── group/ — 群组列表 / 详情 / 发帖
+│       │   └── frame/ — FrameManager / HTMLManager / HtmlRunner / WasmRunner / SandboxPreview
+│       └── components/            # 70 个通用组件
+│           ├── NavBar（下拉只剩 5 项）/ CommentSection / FloorComments（楼层模型）
+│           ├── StateBlock（骨架/空/错误三态）/ AdminHeader / AdminFilterBar / AdminApiAlert
+│           ├── DashboardCharts / StarRating / SensitiveZoneGuard / SlideCaptcha / MentionTextarea
+│           ├── ai/ — AiChatPanel / AiImagePanel / AiVideoPanel / AiModelSquare / AiAgentsPanel / MindMapPanel
+│           ├── admin/ · author/ · editor/ · group/ · message/ · user/（按域分子目录）
 │
 ├── dist/                          # [自动生成] 前端构建产物（项目根目录）
 ├── data/                          # [运行时生成]
