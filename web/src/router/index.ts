@@ -421,6 +421,19 @@ const router = createRouter({
       component: () => import('@/views/admin/AdminAiPool.vue'),
       meta: { requiresAuth: true },
     },
+    // 内容治理：AI 审核（功能配置） / 审核（待办处置）——两个独立入口
+    {
+      path: '/admin/ai-moderation',
+      name: 'admin-ai-moderation',
+      component: () => import('@/views/admin/AdminAiModeration.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/moderation',
+      name: 'admin-moderation',
+      component: () => import('@/views/admin/AdminModerationQueue.vue'),
+      meta: { requiresAuth: true },
+    },
     {
       path: '/admin/ai-free-quota',
       name: 'admin-ai-free-quota',
