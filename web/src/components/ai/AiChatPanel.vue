@@ -273,7 +273,18 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { CopyDocument, RefreshRight, Collection, Top, VideoPause, Paperclip, Close } from '@element-plus/icons-vue';
+import {
+  CopyDocument,
+  RefreshRight,
+  Collection,
+  Top,
+  VideoPause,
+  Paperclip,
+  Close,
+  Lock,
+  CircleCloseFilled,
+  WarningFilled,
+} from '@element-plus/icons-vue';
 import { renderAiMarkdown } from '@/markdown/renderer';
 import AiPromptLibrary from '@/components/ai/AiPromptLibrary.vue';
 import { aiHubApi, streamChat, uploadChatAttachment, type AiHubStatus, type AiAgent, type AiChatMessage, type AiChatSession, type ChatAttachment } from '@/api/aiHub';
