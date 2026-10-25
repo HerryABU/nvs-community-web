@@ -321,7 +321,10 @@ func AdminAiVendorMatrix(c *gin.Context) {
 				uv := m.UserVisible == nil || *m.UserVisible
 				subItems = append(subItems, gin.H{
 					"id": m.ID, "name": m.Name, "model_id": m.ModelID,
-					"sub_version": m.SubVersion, "newest": m.SubVersion == newest,
+					"sub_version": m.SubVersion,
+					// 只有真的存在亚版本、且就是最新那个时才打星；
+					// 空亚版本（如手工建的模型）不该被标成「最新」
+					"newest":  newest != "" && m.SubVersion == newest,
 					"enabled": m.Enabled, "user_visible": uv,
 				})
 			}
@@ -372,8 +375,9 @@ func AdminAiVendorMatrix(c *gin.Context) {
 				uv := m.UserVisible == nil || *m.UserVisible
 				subItems = append(subItems, gin.H{
 					"id": m.ID, "name": m.Name, "model_id": m.ModelID,
-					"sub_version": m.SubVersion, "newest": m.SubVersion == newest,
-					"enabled": m.Enabled, "user_visible": uv,
+					"sub_version": m.SubVersion,
+					"newest":      newest != "" && m.SubVersion == newest,
+					"enabled":     m.Enabled, "user_visible": uv,
 				})
 			}
 			versions = append(versions, gin.H{
