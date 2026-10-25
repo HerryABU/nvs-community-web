@@ -107,3 +107,67 @@ func TestParseMixed(t *testing.T) {
 		t.Fatalf("混排渲染缺结构: %s", html)
 	}
 }
+
+// TestParseExplicitSide 显式左右标记：# 左侧 / ## 右侧
+func TestParseExplicitSide(t *testing.T) {
+	src := "#李明：早啊。\n##王芳：你也是。\n"
+	nodes := Parse(src)
+	if len(nodes) != 2 {
+		t.Fatalf("期望 2 个气泡，实际 %d：%+v", len(nodes), nodes)
+	}
+	if nodes[0].Side != "left" || nodes[0].Speaker != "李明" {
+		t.Fatalf("左侧标记解析错误：%+v", nodes[0])
+	}
+	if nodes[1].Side != "right" || nodes[1].Speaker != "王芳" {
+		t.Fatalf("右侧标记解析错误：%+v", nodes[1])
+	}
+}
+
+// TestParseExplicitSideKeepsMarkdownSafe Markdown 标题不得被误判成气泡
+func TestParseExplicitSideKeepsMarkdownSafe(t *testing.T) {
+	nodes := Parse("## 小标题\n正文一句\n# 另一个标题\n")
+	for _, n := range nodes {
+		if n.Type == NodeDialogue {
+			t.Fatalf("Markdown 标题被误判为对话：%+v", n)
+		}
+	}
+}
+
+// TestParseExplicitSideFixesCharacterSide 显式标记固定该角色左右，后续无标记行也跟随
+func TestParseExplicitSideFixesCharacterSide(t *testing.T) {
+	nodes := Parse("#李明：早。\n李明：今天也要加油。\n")
+	if len(nodes) != 1 {
+		t.Fatalf("同角色同侧应合并为一个气泡，实际 %d：%+v", len(nodes), nodes)
+	}
+	if nodes[0].Side != "left" {
+		t.Fatalf("显式左侧应固定该角色左右，得到 %s", nodes[0].Side)
+	}
+	if nodes[0].Text != "早。\n今天也要加油。" {
+		t.Fatalf("合并文本错误：%q", nodes[0].Text)
+	}
+}
+
+// TestParseDifferentSideNotMerged 同角色但左右不同 → 不合并
+func TestParseDifferentSideNotMerged(t *testing.T) {
+	nodes := Parse("#李明：一句。\n##李明：另一句。\n")
+	if len(nodes) != 2 {
+		t.Fatalf("左右不同不应合并，实际 %d：%+v", len(nodes), nodes)
+	}
+	if nodes[0].Side != "left" || nodes[1].Side != "right" {
+		t.Fatalf("左右解析错误：%s / %s", nodes[0].Side, nodes[1].Side)
+	}
+}
+
+// TestParseMixedExplicitSide 混排模式同样支持显式左右
+func TestParseMixedExplicitSide(t *testing.T) {
+	nodes := ParseMixed("一段描写。\n\n#小明：你好。\n##小红：嗯。\n")
+	var sides []string
+	for _, n := range nodes {
+		if n.Type == NodeDialogue {
+			sides = append(sides, n.Side)
+		}
+	}
+	if len(sides) != 2 || sides[0] != "left" || sides[1] != "right" {
+		t.Fatalf("混排显式左右错误：%v", sides)
+	}
+}

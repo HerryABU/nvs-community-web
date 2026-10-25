@@ -31,6 +31,8 @@ type DBConfig struct {
 func AllModels() []interface{} {
 	return []interface{}{
 		&User{}, &Novel{}, &NovelCategory{}, &Chapter{}, &Comment{}, &Rating{},
+		// 作品角色表（话本气泡体的角色管理：头像/主题色/默认左右）
+		&NovelCharacter{},
 		&Forum{}, &Thread{}, &Post{}, &ForumMute{}, &VipApplication{}, &Report{},
 		&WithdrawalRequest{}, &EarningsRecord{}, &BlacklistIP{}, &PlatformConfig{},
 		&FederatedSite{}, &FederatedNovel{}, &FederatedInbound{}, &BookShelf{}, &Follow{}, &AuthorBlog{},

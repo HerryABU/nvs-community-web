@@ -91,61 +91,111 @@ func initial(name string) string {
 	return "?"
 }
 
+// ==================== 显式左右标记（# 左侧 / ## 右侧） ====================
+// 约定（话本小说 / 橙光 / 汤圆创作同款写法）：
+//
+//	#李明：早啊。      → 左侧气泡
+//	##王芳：你也是。  → 右侧气泡
+//	李明：随便一句。  → 不带标记：按角色首现顺序自动左右交替
+//
+// 安全约束：标记只有在「去掉标记后仍能解析出『角色：台词』」时才生效。
+// 否则 `## 标题` 这类 Markdown 标题会被误伤成气泡，保持按旁白/散文处理。
+// 显式标记一旦出现，该角色后续所有气泡都固定在同一侧（charSide 记忆）。
+
+// explicitSide 拆出行首的 # / ## 左右标记
+func explicitSide(line string) (side string, rest string, ok bool) {
+	if strings.HasPrefix(line, "##") {
+		return "right", strings.TrimSpace(line[2:]), true
+	}
+	if strings.HasPrefix(line, "#") {
+		return "left", strings.TrimSpace(line[1:]), true
+	}
+	return "", "", false
+}
+
+// parseDialogue 解析一行对话，返回角色、台词、显式左右（空=自动分配）、是否是对话。
+func parseDialogue(line string) (name, text, side string, ok bool) {
+	if s, rest, has := explicitSide(line); has {
+		if n, t, ok2 := splitSpeaker(rest); ok2 && t != "" && !narrationNames[n] {
+			return n, t, s, true
+		}
+	}
+	n, t, ok2 := splitSpeaker(line)
+	if !ok2 || t == "" || narrationNames[n] {
+		return "", "", "", false
+	}
+	return n, t, "", true
+}
+
 // Parse 把话本源文本解析为节点序列。
 // 连续的同角色对话合并为一个气泡（Text 内用 \n 分段），符合话本小说网「一人连说多句」的观感。
+//
+// 左右归属：优先用行首的 # / ## 显式标记；没有标记的角色按首现顺序自动左右交替。
 func Parse(src string) []Node {
 	src = strings.ReplaceAll(src, "\r\n", "\n")
 	src = strings.ReplaceAll(src, "\r", "\n")
 	lines := strings.Split(src, "\n")
 
 	nodes := make([]Node, 0, len(lines))
-	order := map[string]int{} // 角色首次出现顺序 → 决定左右
-	side := func(name string) string {
-		idx, ok := order[name]
-		if !ok {
-			idx = len(order)
-			order[name] = idx
+	charSide := map[string]string{} // 角色 → 固定左右
+	autoCount := 0
+	autoSide := func(name string) string {
+		if s, ok := charSide[name]; ok {
+			return s
 		}
-		if idx%2 == 0 {
-			return "left"
+		s := "left"
+		if autoCount%2 == 1 {
+			s = "right"
 		}
-		return "right"
+		autoCount++
+		charSide[name] = s
+		return s
 	}
 
-	var last *Node
+	// 用下标而不是指针记录「上一个可合并节点」：
+	// append 可能触发底层数组扩容，旧的 *Node 会指向已被丢弃的旧数组，导致合并文本丢失。
+	lastIdx := -1
 	for _, raw := range lines {
 		line := strings.TrimSpace(raw)
 		if line == "" {
-			last = nil
+			lastIdx = -1
 			continue
 		}
 		if alt, url, ok := ParseImage(line); ok {
-			last = nil
+			lastIdx = -1
 			nodes = append(nodes, Node{Type: NodeImage, Alt: alt, URL: url})
 			continue
 		}
 		if stage, ok := isStage(line); ok {
-			last = nil
+			lastIdx = -1
 			nodes = append(nodes, Node{Type: NodeStage, Text: stage})
 			continue
 		}
-		if name, text, ok := splitSpeaker(line); ok && text != "" && !narrationNames[name] {
-			if last != nil && last.Type == NodeDialogue && last.Speaker == name {
-				last.Text += "\n" + text
-				continue
+		if name, text, explicit, ok := parseDialogue(line); ok {
+			s := explicit
+			if s == "" {
+				s = autoSide(name)
+			} else {
+				charSide[name] = s // 显式标记：固定该角色左右
 			}
-			n := Node{Type: NodeDialogue, Speaker: name, Text: text, Side: side(name), Initial: initial(name)}
-			nodes = append(nodes, n)
-			last = &nodes[len(nodes)-1]
+			if lastIdx >= 0 {
+				last := &nodes[lastIdx]
+				if last.Type == NodeDialogue && last.Speaker == name && last.Side == s {
+					last.Text += "\n" + text
+					continue
+				}
+			}
+			nodes = append(nodes, Node{Type: NodeDialogue, Speaker: name, Text: text, Side: s, Initial: initial(name)})
+			lastIdx = len(nodes) - 1
 			continue
 		}
 		// 无角色的行：旁白（含「角色名：」但台词为空的情形）
-		if last != nil && last.Type == NodeNarration {
-			last.Text += "\n" + line
+		if lastIdx >= 0 && nodes[lastIdx].Type == NodeNarration {
+			nodes[lastIdx].Text += "\n" + line
 			continue
 		}
 		nodes = append(nodes, Node{Type: NodeNarration, Text: line})
-		last = &nodes[len(nodes)-1]
+		lastIdx = len(nodes) - 1
 	}
 	return nodes
 }
@@ -153,26 +203,31 @@ func Parse(src string) []Node {
 // ParseMixed 混排解析：对话/舞台/图片与纯话本一致，
 // 其余连续非空行聚成一个「散文块」（NodeProse），由 Markdown 渲染。
 // 用途：同一章里既有大段描写（散文）又有对话（气泡），不必整章二选一。
+//
+// 左右归属与 Parse 一致：# / ## 显式标记优先，其余按首现顺序交替。
 func ParseMixed(src string) []Node {
 	src = strings.ReplaceAll(src, "\r\n", "\n")
 	src = strings.ReplaceAll(src, "\r", "\n")
 	lines := strings.Split(src, "\n")
 
 	nodes := make([]Node, 0, len(lines))
-	order := map[string]int{}
-	side := func(name string) string {
-		idx, ok := order[name]
-		if !ok {
-			idx = len(order)
-			order[name] = idx
+	charSide := map[string]string{}
+	autoCount := 0
+	autoSide := func(name string) string {
+		if s, ok := charSide[name]; ok {
+			return s
 		}
-		if idx%2 == 0 {
-			return "left"
+		s := "left"
+		if autoCount%2 == 1 {
+			s = "right"
 		}
-		return "right"
+		autoCount++
+		charSide[name] = s
+		return s
 	}
 
-	var lastDialogue *Node
+	// 下标而非指针：append 扩容会让旧 *Node 指向废弃数组（合并文本会丢）
+	lastIdx := -1
 	prose := make([]string, 0, 8)
 	flushProse := func() {
 		if len(prose) == 0 {
@@ -189,34 +244,42 @@ func ParseMixed(src string) []Node {
 			if len(prose) > 0 {
 				prose = append(prose, "")
 			}
-			lastDialogue = nil
+			lastIdx = -1
 			continue
 		}
 		if alt, url, ok := ParseImage(line); ok {
 			flushProse()
-			lastDialogue = nil
+			lastIdx = -1
 			nodes = append(nodes, Node{Type: NodeImage, Alt: alt, URL: url})
 			continue
 		}
 		if stage, ok := isStage(line); ok {
 			flushProse()
-			lastDialogue = nil
+			lastIdx = -1
 			nodes = append(nodes, Node{Type: NodeStage, Text: stage})
 			continue
 		}
-		if name, text, ok := splitSpeaker(line); ok && text != "" && !narrationNames[name] {
+		if name, text, explicit, ok := parseDialogue(line); ok {
 			flushProse()
-			if lastDialogue != nil && lastDialogue.Type == NodeDialogue && lastDialogue.Speaker == name {
-				lastDialogue.Text += "\n" + text
-				continue
+			s := explicit
+			if s == "" {
+				s = autoSide(name)
+			} else {
+				charSide[name] = s
 			}
-			n := Node{Type: NodeDialogue, Speaker: name, Text: text, Side: side(name), Initial: initial(name)}
-			nodes = append(nodes, n)
-			lastDialogue = &nodes[len(nodes)-1]
+			if lastIdx >= 0 {
+				last := &nodes[lastIdx]
+				if last.Type == NodeDialogue && last.Speaker == name && last.Side == s {
+					last.Text += "\n" + text
+					continue
+				}
+			}
+			nodes = append(nodes, Node{Type: NodeDialogue, Speaker: name, Text: text, Side: s, Initial: initial(name)})
+			lastIdx = len(nodes) - 1
 			continue
 		}
 		// 非对话行 → 攒成散文块（空行或遇到对话时结算）
-		lastDialogue = nil
+		lastIdx = -1
 		prose = append(prose, raw)
 	}
 	flushProse()

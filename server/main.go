@@ -29,6 +29,7 @@ import (
 	honeypothandler "nvs-server/handlers/honeypot"
 	ochandler "nvs-server/handlers/oc"
 	prompthandler "nvs-server/handlers/prompts"
+	scripthandler "nvs-server/handlers/script"
 	"nvs-server/honeypot"
 	"nvs-server/middleware"
 	"nvs-server/models"
@@ -515,6 +516,11 @@ func main() {
 		protected.POST("/collab/:novelId/leave", collabhandler.Leave)
 		// 话本气泡体预览（不可挂 /novels 下，与 /novels/:id 通配段冲突）
 		protected.POST("/script-preview", handlers.ScriptPreview)
+		// 话本气泡体：作品角色管理（头像 / 主题色 / 默认左右）
+		protected.GET("/novels/:id/characters", scripthandler.ListCharacters)
+		protected.POST("/novels/:id/characters", scripthandler.CreateCharacter)
+		protected.PUT("/novels/:id/characters/:cid", scripthandler.UpdateCharacter)
+		protected.DELETE("/novels/:id/characters/:cid", scripthandler.DeleteCharacter)
 		// ===== OC 模式（docs/oc-mode.md）=====
 		// 角色卡 / 世界书（不挂 /groups 下，避免与 /groups/:id 通配冲突）
 		protected.GET("/oc/characters", ochandler.ListCharacters)
