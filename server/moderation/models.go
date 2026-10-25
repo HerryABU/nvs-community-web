@@ -42,22 +42,41 @@ const (
 	VerdictSkipped = "skipped" // 举报数已达上限，停止 AI 复检（内容仍存续）
 )
 
+// 人工处置状态（AI 只给结论，最终动作由人定）
+const (
+	ReviewPending  = "pending"  // 待处理
+	ReviewResolved = "resolved" // 已处置
+)
+
+// 人工处置动作
+const (
+	ActionPass   = "pass"   // 放行（内容不动）
+	ActionDelete = "delete" // 删除并留证
+	ActionBan    = "ban"    // 封禁并留证
+)
+
 // ModerationRecord 一条 AI 审核记录
 type ModerationRecord struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Scope       string    `gorm:"size:16;index:idx_mod_target,priority:1" json:"scope"`
-	TargetType  string    `gorm:"size:16;index:idx_mod_target,priority:2" json:"target_type"`
-	TargetID    uint      `gorm:"index:idx_mod_target,priority:3" json:"target_id"`
-	Trigger     string    `gorm:"size:16" json:"trigger"`
-	ModelID     uint      `json:"model_id"`
-	ModelName   string    `gorm:"size:64" json:"model_name"`
-	Verdict     string    `gorm:"size:16" json:"verdict"`
-	Compliant   bool      `json:"compliant"` // 是否合规（fail=false，pass/review=true）
-	Reason      string    `gorm:"type:text" json:"reason"`
-	Categories  string    `gorm:"type:text" json:"categories"` // JSON 数组：命中的违规类别
-	ReportCount int       `json:"report_count"`                // 触发本次审核时该内容累计举报数（用于复检判定）
-	ReTriggered bool      `json:"re_triggered"`                // 是否因「重复举报达阈值」复检
-	CreatedAt   time.Time `json:"created_at"`
+	ID          uint   `gorm:"primaryKey" json:"id"`
+	Scope       string `gorm:"size:16;index:idx_mod_target,priority:1" json:"scope"`
+	TargetType  string `gorm:"size:16;index:idx_mod_target,priority:2" json:"target_type"`
+	TargetID    uint   `gorm:"index:idx_mod_target,priority:3" json:"target_id"`
+	Trigger     string `gorm:"size:16" json:"trigger"`
+	ModelID     uint   `json:"model_id"`
+	ModelName   string `gorm:"size:64" json:"model_name"`
+	Verdict     string `gorm:"size:16" json:"verdict"`
+	Compliant   bool   `json:"compliant"` // 是否合规（fail=false，pass/review=true）
+	Reason      string `gorm:"type:text" json:"reason"`
+	Categories  string `gorm:"type:text" json:"categories"` // JSON 数组：命中的违规类别
+	ReportCount int    `json:"report_count"`                // 触发本次审核时该内容累计举报数（用于复检判定）
+	ReTriggered bool   `json:"re_triggered"`                // 是否因「重复举报达阈值」复检
+	// 人工处置（管理端「审核」页填写；老数据为空串，按 pending 处理）
+	ReviewStatus string     `gorm:"size:16;index;default:'pending'" json:"review_status"`
+	ReviewAction string     `gorm:"size:16;default:''" json:"review_action"`
+	ReviewerID   uint       `json:"reviewer_id"`
+	ReviewNote   string     `gorm:"size:256;default:''" json:"review_note"`
+	ReviewedAt   *time.Time `json:"reviewed_at"`
+	CreatedAt    time.Time  `json:"created_at"`
 }
 
 func (ModerationRecord) TableName() string { return "moderation_records" }

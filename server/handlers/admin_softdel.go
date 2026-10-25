@@ -72,7 +72,17 @@ func AdminModerateContent(c *gin.Context) {
 // softDeleteContent 归档 + 软删除的通用实现（供管理员治理、举报处置等复用）。
 // 返回 errContentNotFound 表示目标不存在。
 func softDeleteContent(c *gin.Context, ctype string, id uint, reason, source, action string) error {
-	operatorID := currentUserID(c)
+	return doSoftDelete(ctype, id, reason, source, action, currentUserID(c), c)
+}
+
+// softDeleteContentSystem 系统自动处置（AI 审核判定违规后自动下架）：
+// 没有 HTTP 请求上下文，操作者记 0（系统），审计写审计表。
+func softDeleteContentSystem(ctype string, id uint, reason, source, action string) error {
+	return doSoftDelete(ctype, id, reason, source, action, 0, nil)
+}
+
+// doSoftDelete 归档 + 软删除的通用实现；c 可为 nil（系统自动处置）。
+func doSoftDelete(ctype string, id uint, reason, source, action string, operatorID uint, c *gin.Context) error {
 	operator := ""
 	if operatorID > 0 {
 		if u, err := models.GetUserByID(operatorID); err == nil && u != nil {
@@ -82,6 +92,18 @@ func softDeleteContent(c *gin.Context, ctype string, id uint, reason, source, ac
 	auditAction := models.AuditContentDelete
 	if action == "ban" {
 		auditAction = models.AuditUserBan
+	}
+	// 审计留痕：有请求上下文走抢救台审计（带 IP/UA）；
+	// 系统自动处置（c == nil）没有请求，改记系统操作者，避免丢痕迹。
+	audit := func(a, targetType string, targetID uint, detail string) {
+		if c != nil {
+			auditEmergency(c, a, targetType, targetID, detail)
+			return
+		}
+		models.RecordEmergencyAudit(&models.EmergencyAuditLog{
+			OperatorID: 0, Operator: "system:moderation", IP: "-",
+			Action: a, TargetType: targetType, TargetID: targetID, Detail: detail,
+		})
 	}
 	// 封禁原因兜底：ban_reason 是「封禁 vs 作者自删」的区分标记（GetAuthorBannedContent
 	// 仅展示 ban_reason 非空的记录），管理员封禁未填写原因时写默认值，保证语义清晰。
@@ -102,7 +124,7 @@ func softDeleteContent(c *gin.Context, ctype string, id uint, reason, source, ac
 		if err := models.DeleteComment(id); err != nil {
 			return err
 		}
-		auditEmergency(c, auditAction, "comment", id, fmt.Sprintf("管理员删除评论（作者 %s）| 原因：%s", userOf(cm.UserID), reason))
+		audit(auditAction, "comment", id, fmt.Sprintf("管理员删除评论（作者 %s）| 原因：%s", userOf(cm.UserID), reason))
 
 	case "user":
 		u, err := models.GetUserByID(id)
@@ -115,7 +137,7 @@ func softDeleteContent(c *gin.Context, ctype string, id uint, reason, source, ac
 		if err := models.DB.Delete(&models.User{}, id).Error; err != nil {
 			return err
 		}
-		auditEmergency(c, models.AuditUserBan, "user", id, fmt.Sprintf("管理员封禁用户 %s | 原因：%s", u.Username, reason))
+		audit(models.AuditUserBan, "user", id, fmt.Sprintf("管理员封禁用户 %s | 原因：%s", u.Username, reason))
 
 	case "novel":
 		n, err := models.GetNovelByID(id)
@@ -135,7 +157,7 @@ func softDeleteContent(c *gin.Context, ctype string, id uint, reason, source, ac
 		if err := models.DeleteNovel(id); err != nil {
 			return err
 		}
-		auditEmergency(c, auditAction, "novel", id, fmt.Sprintf("管理员封禁作品《%s》（作者 %s）| 原因：%s", n.Title, userOf(n.AuthorID), reason))
+		audit(auditAction, "novel", id, fmt.Sprintf("管理员封禁作品《%s》（作者 %s）| 原因：%s", n.Title, userOf(n.AuthorID), reason))
 
 	case "chapter":
 		ch, err := models.GetChapterByID(id)
@@ -150,7 +172,7 @@ func softDeleteContent(c *gin.Context, ctype string, id uint, reason, source, ac
 		if err := models.DeleteChapter(id); err != nil {
 			return err
 		}
-		auditEmergency(c, auditAction, "chapter", id, fmt.Sprintf("管理员封禁章节《%s》（第 %d 章）| 原因：%s", ch.Title, ch.ChapterNumber, reason))
+		audit(auditAction, "chapter", id, fmt.Sprintf("管理员封禁章节《%s》（第 %d 章）| 原因：%s", ch.Title, ch.ChapterNumber, reason))
 
 	case "thread":
 		t, err := models.GetThreadByID(id)
@@ -172,7 +194,7 @@ func softDeleteContent(c *gin.Context, ctype string, id uint, reason, source, ac
 		if err := models.DB.Delete(&models.Thread{}, id).Error; err != nil {
 			return err
 		}
-		auditEmergency(c, auditAction, "thread", id, fmt.Sprintf("管理员删除帖子《%s》（作者 %s）| 原因：%s", t.Title, userOf(t.UserID), reason))
+		audit(auditAction, "thread", id, fmt.Sprintf("管理员删除帖子《%s》（作者 %s）| 原因：%s", t.Title, userOf(t.UserID), reason))
 
 	case "post":
 		var p models.Post
@@ -189,7 +211,7 @@ func softDeleteContent(c *gin.Context, ctype string, id uint, reason, source, ac
 			models.DB.Model(&models.Thread{}).Where("id = ?", p.ThreadID).
 				UpdateColumn("post_count", models.DB.Raw("CASE WHEN post_count > 0 THEN post_count - 1 ELSE 0 END"))
 		}
-		auditEmergency(c, auditAction, "post", id, fmt.Sprintf("管理员删除回复（作者 %s）| 原因：%s", userOf(p.UserID), reason))
+		audit(auditAction, "post", id, fmt.Sprintf("管理员删除回复（作者 %s）| 原因：%s", userOf(p.UserID), reason))
 
 	case "blog":
 		b, err := models.GetBlogByID(id)
@@ -203,7 +225,7 @@ func softDeleteContent(c *gin.Context, ctype string, id uint, reason, source, ac
 		if err := models.DeleteBlog(id); err != nil {
 			return err
 		}
-		auditEmergency(c, auditAction, "blog", id, fmt.Sprintf("管理员删除博客《%s》（作者 %s）| 原因：%s", b.Title, userOf(b.AuthorID), reason))
+		audit(auditAction, "blog", id, fmt.Sprintf("管理员删除博客《%s》（作者 %s）| 原因：%s", b.Title, userOf(b.AuthorID), reason))
 
 	case "forum":
 		f, err := models.GetForumByID(id)
@@ -216,7 +238,7 @@ func softDeleteContent(c *gin.Context, ctype string, id uint, reason, source, ac
 		if err := models.DeleteForum(id); err != nil {
 			return err
 		}
-		auditEmergency(c, auditAction, "forum", id, fmt.Sprintf("管理员删除论坛「%s」| 原因：%s", f.Name, reason))
+		audit(auditAction, "forum", id, fmt.Sprintf("管理员删除论坛「%s」| 原因：%s", f.Name, reason))
 
 	default:
 		return fmt.Errorf("不支持的内容类型: %s", ctype)

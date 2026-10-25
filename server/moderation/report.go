@@ -67,6 +67,11 @@ func OnReport(reporterID uint, targetType string, targetID uint) {
 	}
 	_ = CreateRecord(rec)
 
+	// 判定违规且站长开启了「自动处置」→ 交给注入的处置回调（软删留证）
+	if res.Verdict == VerdictFail && cfg.AutoHideOnFail {
+		runFailHook(targetType, targetID, res.Reason)
+	}
+
 	// 更新举报者画像
 	if rec.Compliant {
 		// 内容被判合规 → 本次举报大概率不实

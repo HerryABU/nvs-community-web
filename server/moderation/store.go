@@ -87,9 +87,12 @@ func CountTargetReports(targetType string, targetID uint) (int64, error) {
 
 // RecordFilter 审核记录查询条件。
 type RecordFilter struct {
-	Scope    string
-	Verdict  string
-	Trigger  string
+	Scope        string
+	Verdict      string
+	Trigger      string
+	ReviewStatus string // pending / resolved；空=全部
+	// Todo 待办口径：违规/存疑 且 未处置（与 PendingCount 完全一致，供「审核」页默认视图）
+	Todo     bool
 	Page     int
 	PageSize int
 }
@@ -105,6 +108,16 @@ func ListRecords(f RecordFilter) ([]ModerationRecord, int64, error) {
 	}
 	if f.Trigger != "" {
 		q = q.Where("trigger = ?", f.Trigger)
+	}
+	// 老数据的 review_status 是空串（加字段前建的记录），与 pending 等价
+	if f.ReviewStatus == ReviewPending {
+		q = q.Where("review_status IS NULL OR review_status = '' OR review_status = ?", ReviewPending)
+	} else if f.ReviewStatus == ReviewResolved {
+		q = q.Where("review_status = ?", ReviewResolved)
+	}
+	if f.Todo {
+		q = q.Where("verdict IN ?", []string{VerdictFail, VerdictReview}).
+			Where("review_status IS NULL OR review_status = '' OR review_status = ?", ReviewPending)
 	}
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
@@ -122,6 +135,40 @@ func ListRecords(f RecordFilter) ([]ModerationRecord, int64, error) {
 		return nil, 0, err
 	}
 	return list, total, nil
+}
+
+// GetRecord 取单条审核记录。
+func GetRecord(id uint) (*ModerationRecord, error) {
+	var r ModerationRecord
+	if err := models.DB.Where("id = ?", id).First(&r).Error; err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+// MarkReviewed 写回人工处置结果（map 精确更新，零值安全）。
+// 只更新审核记录，不碰内容本身——内容处置由 handler 层调 softDeleteContent 完成，
+// 避免本包反向依赖 handlers。
+func MarkReviewed(id uint, action, note string, reviewerID uint) error {
+	now := time.Now()
+	return models.DB.Model(&ModerationRecord{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"review_status": ReviewResolved,
+		"review_action": action,
+		"review_note":   note,
+		"reviewer_id":   reviewerID,
+		"reviewed_at":   &now,
+	}).Error
+}
+
+// PendingCount 待人工处理的记录数（fail / review 且未处置）。
+// 用于菜单角标与「审核」页顶部提示。
+func PendingCount() (int64, error) {
+	var n int64
+	err := models.DB.Model(&ModerationRecord{}).
+		Where("verdict IN ?", []string{VerdictFail, VerdictReview}).
+		Where("review_status IS NULL OR review_status = '' OR review_status = ?", ReviewPending).
+		Count(&n).Error
+	return n, err
 }
 
 // GetOrCreateMaliciousReporter 取或建举报者画像。
@@ -191,6 +238,7 @@ type ModerationStats struct {
 	FailCount          int64 `json:"fail_count"`
 	ReviewCount        int64 `json:"review_count"`
 	SkippedCount       int64 `json:"skipped_count"`
+	PendingCount       int64 `json:"pending_count"` // 待人工处置（fail/review 且未处置）
 	MaliciousReporters int64 `json:"malicious_reporters"`
 	BannedReporters    int64 `json:"banned_reporters"`
 	HiddenCount        int64 `json:"hidden_count"`
@@ -218,6 +266,9 @@ func GetStats() (*ModerationStats, error) {
 		return nil, e
 	}
 	if s.SkippedCount, e = countByVerdict(VerdictSkipped); e != nil {
+		return nil, e
+	}
+	if s.PendingCount, e = PendingCount(); e != nil {
 		return nil, e
 	}
 	if e = models.DB.Model(&MaliciousReporter{}).Where("malicious_count > 0").Count(&s.MaliciousReporters).Error; e != nil {

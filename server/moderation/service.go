@@ -40,6 +40,32 @@ func ReviewOnWrite(scope string, targetID uint) {
 		ModelID: res.ModelID, ModelName: res.ModelName, Verdict: res.Verdict,
 		Compliant: res.Verdict != VerdictFail, Reason: res.Reason, Categories: joinJSON(res.Categories),
 	})
+	// 判定违规且站长开启了「自动处置」→ 交给注入的处置回调（软删留证）
+	if res.Verdict == VerdictFail && cfg.AutoHideOnFail {
+		runFailHook(scope, targetID, res.Reason)
+	}
+}
+
+// ── 违规自动处置回调 ────────────────────────────────────────────────
+// 本包不依赖 handlers（避免反向 import），由 main 启动时用 SetOnFailHook 注入
+// 「软删 + 留证」的实现。未注入时自动处置静默跳过（只记录，不处置）。
+var failHook func(scope string, targetID uint, reason string)
+
+// SetOnFailHook 注册违规自动处置回调（main 启动时调用一次）。
+func SetOnFailHook(fn func(scope string, targetID uint, reason string)) {
+	failHook = fn
+}
+
+// runFailHook 触发自动处置；无回调时安全跳过。
+func runFailHook(scope string, targetID uint, reason string) {
+	if failHook == nil {
+		return
+	}
+	defer func() {
+		// 处置失败不能影响审核主链路
+		_ = recover()
+	}()
+	failHook(scope, targetID, reason)
 }
 
 // IsHidden 判断某内容是否对指定用户隐藏（恶意举报者可见性控制）。

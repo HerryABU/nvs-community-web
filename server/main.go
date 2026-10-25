@@ -772,6 +772,7 @@ func main() {
 		admin.GET("/moderation/config", handlers.GetModerationConfig)
 		admin.PUT("/moderation/config", handlers.SaveModerationConfig)
 		admin.GET("/moderation/records", handlers.ListModerationRecords)
+		admin.POST("/moderation/records/:id/decide", handlers.DecideModerationRecord)
 		admin.POST("/moderation/batch", handlers.RunModerationBatch)
 		admin.GET("/moderation/stats", handlers.GetModerationStats)
 		admin.GET("/moderation/malicious", handlers.ListMaliciousReporters)
@@ -1623,6 +1624,8 @@ func initDatabase() error {
 	}
 	// 审核调度器（定时批量审核论坛/评论区），失败不阻断启动
 	moderation.Init()
+	// 「AI 判违规自动下架」接到软删留证（moderation 包不依赖 handlers，靠回调注入）
+	handlers.RegisterModerationHooks()
 	if err := oc.MigrateEmote(models.DB); err != nil {
 		return err
 	}
