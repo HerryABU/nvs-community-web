@@ -94,6 +94,20 @@
     <!-- 输入区：圆角大输入框 + 底部工具行（模型 / 长度 / 发送） -->
     <div class="ai-composer">
       <div class="ai-composer-box" :class="{ 'is-focus': composerFocus, 'is-generating': generating }">
+        <!-- 附件预览：图片出缩略图，文档出文件名 + 大小 -->
+        <div v-if="attachments.length" class="ai-attach-list">
+          <div v-for="(a, i) in attachments" :key="a.url" class="ai-attach-item" :title="a.name">
+            <img v-if="a.kind === 'image'" :src="a.url" class="ai-attach-thumb" :alt="a.name" />
+            <span v-else class="ai-attach-file">
+              <span class="ai-attach-ext">{{ (a.name.split('.').pop() || 'file').toUpperCase() }}</span>
+              <span class="ai-attach-name">{{ a.name }}</span>
+              <span class="ai-attach-size">{{ fmtSize(a.size) }}</span>
+            </span>
+            <button type="button" class="ai-attach-del" title="移除" @click="removeAttachment(i)">
+              <el-icon><Close /></el-icon>
+            </button>
+          </div>
+        </div>
         <textarea
           ref="composerEl"
           v-model="inputText"
@@ -131,6 +145,23 @@
             </el-select>
           </div>
           <div class="ai-composer-right">
+            <input
+              ref="fileInputRef"
+              type="file"
+              multiple
+              :accept="ATTACH_ACCEPT"
+              style="display: none"
+              @change="onFilesPicked"
+            />
+            <button
+              type="button"
+              class="ai-attach-btn"
+              :disabled="generating || uploading"
+              :title="uploading ? '上传中…' : '上传图片 / 文档（PDF、Word、文本等）'"
+              @click="pickFiles"
+            >
+              <el-icon><Paperclip /></el-icon>
+            </button>
             <button v-if="generating" type="button" class="ai-send-btn is-stop" title="停止生成" @click="stop">
               <el-icon><VideoPause /></el-icon>
             </button>
@@ -138,7 +169,7 @@
               v-else
               type="button"
               class="ai-send-btn"
-              :disabled="!inputText.trim()"
+              :disabled="(!inputText.trim() && !attachments.length) || uploading"
               title="发送（Enter）"
               @click="send"
             >
@@ -147,7 +178,12 @@
           </div>
         </div>
       </div>
-      <p class="ai-composer-tip">Enter 发送 · Shift+Enter 换行 · 停止生成前的内容正常计费</p>
+      <p class="ai-composer-tip">
+        Enter 发送 · Shift+Enter 换行 · 停止生成前的内容正常计费
+        <span v-if="attachments.length" class="ai-composer-tip-attach">
+          · 附件按原样随 API 发给模型，需模型本身支持图片 / 文档输入
+        </span>
+      </p>
     </div>
 
     <AiPromptLibrary
@@ -162,10 +198,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { CopyDocument, RefreshRight, Collection, Top, VideoPause } from '@element-plus/icons-vue';
+import { CopyDocument, RefreshRight, Collection, Top, VideoPause, Paperclip, Close } from '@element-plus/icons-vue';
 import { renderAiMarkdown } from '@/markdown/renderer';
 import AiPromptLibrary from '@/components/ai/AiPromptLibrary.vue';
-import { streamChat, type AiHubStatus, type AiAgent, type AiChatMessage, type AiChatSession } from '@/api/aiHub';
+import { streamChat, uploadChatAttachment, type AiHubStatus, type AiAgent, type AiChatMessage, type AiChatSession, type ChatAttachment } from '@/api/aiHub';
 
 const props = defineProps<{
   status: AiHubStatus;
@@ -183,6 +219,58 @@ const emit = defineEmits<{
 
 const messages = ref<AiChatMessage[]>([]);
 const inputText = ref('');
+
+// ===== 附件（图片 / 文档）=====
+// 平台不解析文件：上传后拿到引用，发送时后端原样内联给上游 API。
+const attachments = ref<ChatAttachment[]>([]);
+const uploading = ref(false);
+const fileInputRef = ref<HTMLInputElement>();
+const ATTACH_ACCEPT = '.png,.jpg,.jpeg,.webp,.gif,.pdf,.docx,.doc,.txt,.md,.csv,.json,.xlsx,.pptx';
+const IMAGE_MAX = 10 * 1024 * 1024;
+const FILE_MAX = 20 * 1024 * 1024;
+
+function pickFiles() {
+  fileInputRef.value?.click();
+}
+
+async function onFilesPicked(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const files = Array.from(input.files || []);
+  input.value = ''; // 允许重复选择同一文件
+  if (!files.length) return;
+  for (const f of files) {
+    if (attachments.value.length >= 10) {
+      ElMessage.warning('单次最多带 10 个附件');
+      break;
+    }
+    const isImg = /^image\//.test(f.type) || /\.(png|jpe?g|webp|gif)$/i.test(f.name);
+    const limit = isImg ? IMAGE_MAX : FILE_MAX;
+    if (f.size > limit) {
+      ElMessage.warning(`${f.name} 超过 ${limit >> 20}MB，已跳过`);
+      continue;
+    }
+    uploading.value = true;
+    try {
+      const res = await uploadChatAttachment(f);
+      if (res.data.code === 0 && res.data.data) {
+        attachments.value.push(res.data.data);
+      }
+    } catch (err: any) {
+      ElMessage.error(err?.response?.data?.message || `${f.name} 上传失败`);
+    } finally {
+      uploading.value = false;
+    }
+  }
+}
+
+function removeAttachment(i: number) {
+  attachments.value.splice(i, 1);
+}
+
+function fmtSize(n?: number) {
+  if (!n) return '';
+  return n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`;
+}
 const generating = ref(false);
 const streamingText = ref('');
 // 思考型模型的推理增量（与正文分开：正文还没来时先给用户看到"它在想"）
@@ -420,7 +508,9 @@ watch(
 async function send(rawText?: string, confirmed = false, skipPush = false) {
   const isRetry = typeof rawText === 'string';
   const text = (isRetry ? rawText : inputText.value).trim();
-  if (!text || generating.value) return;
+  // 重新生成不重发附件（附件只在首次发送时随请求带上）
+  const pendingAtts = isRetry ? [] : attachments.value.slice();
+  if ((!text && !pendingAtts.length) || generating.value) return;
   if (!useByok.value && !modelId.value) {
     ElMessage.warning('暂无可用模型');
     return;
@@ -433,11 +523,17 @@ async function send(rawText?: string, confirmed = false, skipPush = false) {
     ElMessage.warning('代币系统未开启，可使用「我的密钥」或联系站长');
     return;
   }
-  if (!isRetry) inputText.value = '';
+  if (!isRetry) {
+    inputText.value = '';
+    attachments.value = [];
+  }
   // 乐观上屏（重新生成时提问已在列表里，skipPush 避免重复）
   if (!skipPush) {
+    const names = pendingAtts.map((a) => a.name).join('、');
+    const shown = text || '（已发送附件）';
     messages.value.push({
-      id: -Date.now(), role: 'user', content: text,
+      id: -Date.now(), role: 'user',
+      content: names ? `${shown}\n\n📎 ${names}` : shown,
       tokens_in: 0, tokens_out: 0, cost: 0, created_at: '',
     });
   }
@@ -458,6 +554,8 @@ async function send(rawText?: string, confirmed = false, skipPush = false) {
         byok: useByok.value || undefined,
         byok_model: useByok.value ? byokModel.value.trim() : undefined,
         confirm: confirmed || undefined,
+        // 图片/文档：后端读回文件原样内联给上游（平台不解析）
+        attachments: pendingAtts.length ? pendingAtts : undefined,
       },
       (chunk) => {
         streamingText.value += chunk;
@@ -718,6 +816,58 @@ function stop() {
   border-color: var(--el-color-primary, #6366f1);
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
 }
+
+/* ===== 附件（图片 / 文档）===== */
+.ai-attach-list {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 10px 12px 0;
+}
+.ai-attach-item {
+  position: relative;
+  display: flex; align-items: center;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 10px;
+  background: var(--el-fill-color-light, #f7f8fa);
+  padding: 4px 22px 4px 6px;
+  max-width: 260px;
+}
+.ai-attach-thumb {
+  width: 44px; height: 44px; object-fit: cover; border-radius: 6px; display: block;
+}
+.ai-attach-file { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ai-attach-ext {
+  flex-shrink: 0;
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.02em;
+  color: #fff; background: var(--gradient-blue, #6366f1);
+  border-radius: 4px; padding: 2px 5px;
+}
+.ai-attach-name {
+  font-size: 0.78rem; color: var(--text-color, #1f2328);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px;
+}
+.ai-attach-size { font-size: 0.7rem; color: var(--text-light, #999); flex-shrink: 0; }
+.ai-attach-del {
+  position: absolute; top: 2px; right: 2px;
+  width: 18px; height: 18px; border: none; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.45); color: #fff; cursor: pointer; padding: 0;
+}
+.ai-attach-del:hover { background: rgba(0, 0, 0, 0.7); }
+.ai-attach-del .el-icon { font-size: 11px; }
+.ai-attach-btn {
+  width: 30px; height: 30px; border-radius: 50%; border: none;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--el-fill-color-light, #f2f3f5);
+  color: var(--text-regular, #606266); cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.ai-attach-btn:hover:not(:disabled) { background: var(--el-fill-color, #e9eaf0); color: var(--el-color-primary, #6366f1); }
+.ai-attach-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+[data-theme='dark'] .ai-attach-item { background: #1c2030; border-color: #2b3145; }
+[data-theme='dark'] .ai-attach-name { color: #e5e7eb; }
+[data-theme='dark'] .ai-attach-btn { background: #232839; color: #c7ccd8; }
+.ai-composer-tip-attach { color: var(--el-color-warning, #e6a23c); }
 .ai-composer-input {
   display: block;
   width: 100%;

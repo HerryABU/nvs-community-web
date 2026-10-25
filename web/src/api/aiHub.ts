@@ -212,9 +212,42 @@ export const aiHubApi = {
   },
 };
 
+/** 对话附件（先调 uploadChatAttachment 拿到引用，再随消息回传） */
+export interface ChatAttachment {
+  kind: 'image' | 'file';
+  name: string;
+  url: string;
+  mime: string;
+  size?: number;
+}
+
+/** 上传对话附件（图片/文档）。平台不解析文件，发送时由后端原样内联给上游 API。 */
+export function uploadChatAttachment(file: File, onProgress?: (pct: number) => void) {
+  const fd = new FormData();
+  fd.append('file', file);
+  return api.post<{ code: number; data: ChatAttachment }>('/ai/attachment', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 180000,
+    onUploadProgress: (e: { loaded: number; total?: number }) => {
+      if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
+    },
+  });
+}
+
 /** 流式对话：fetch 读取 SSE，onChunk 收增量，返回最终结果 */
 export async function streamChat(
-  payload: { session_id?: number; model_id: number; agent_id?: number; message: string; max_tokens?: number; byok?: boolean; byok_model?: string; confirm?: boolean },
+  payload: {
+    session_id?: number;
+    model_id: number;
+    agent_id?: number;
+    message: string;
+    max_tokens?: number;
+    byok?: boolean;
+    byok_model?: string;
+    confirm?: boolean;
+    /** 附件引用（图片/文档原样发给上游） */
+    attachments?: ChatAttachment[];
+  },
   onChunk: (text: string) => void,
   signal?: AbortSignal,
   /** 思考型模型的推理增量（与正文分开推送，前端折叠展示） */

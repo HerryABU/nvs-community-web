@@ -23,6 +23,7 @@ import Cherry from 'cherry-markdown';
 import katex from 'katex';
 import DOMPurify from 'dompurify';
 import 'katex/dist/contrib/mhchem.mjs';
+import { normalizeLatexDelimiters } from './latex';
 
 // ═══ physics 物理宏包 ────────────────────────────────────────────
 // KaTeX 不自带 physics 扩展，通过 macros 注入常用命令。
@@ -425,13 +426,16 @@ function hardenAiHtml(html: string): string {
 /**
  * renderAiMarkdown — AI 对话/生成内容的专用渲染器（不可信输入）。
  * 支持 GFM（标题/列表/表格/代码块/引用/加粗斜体删除线），HTML 与危险语法一律剔除。
+ *
+ * 数学：Cherry 只认 `$$` / `$`，模型却常输出 `\[ … \]` / `\( … \)`，
+ * 解析前先归一化定界符，避免公式被当成普通文本显示（代码块内不动）。
  */
 export function renderAiMarkdown(content: string): string {
   if (!content) return '';
   try {
     const engine = getHeadlessEngine();
     if (!engine) throw new Error('Cherry 引擎不可用');
-    const html = engine.makeHtml(content) as string;
+    const html = engine.makeHtml(normalizeLatexDelimiters(content)) as string;
     const clean = DOMPurify.sanitize(html, AI_DOMPURIFY_CONFIG as any) as string;
     return hardenAiHtml(clean);
   } catch (e) {
