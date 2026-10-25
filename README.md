@@ -2,7 +2,7 @@
   <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go" alt="Go">
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?style=flat&logo=vuedotjs" alt="Vue">
   <img src="https://img.shields.io/badge/SQLite-3-003B57?style=flat&logo=sqlite" alt="SQLite">
-  <img src="https://img.shields.io/badge/version-3.21.2-4F46E5?style=flat" alt="Version">
+  <img src="https://img.shields.io/badge/version-4.0.0-4F46E5?style=flat" alt="Version">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue?style=flat" alt="Platform">
   <img src="https://img.shields.io/badge/CPU-x86%20%7C%20ARM%20%7C%20MIPS64%20%7C%20RISC--V-orange?style=flat" alt="CPU">
   <img src="https://img.shields.io/badge/license-AGPL%20v3-blue.svg" alt="License">
@@ -706,6 +706,18 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 ---
 
 ## 📝 版本更新记录（文件级改动说明）
+
+### v4.0.0 新主线分支起点（2026-10-25）
+
+**性质**：这是 `v4` 分支的起点版本，**代码与 `v3.21.2` 完全一致**（同一个提交），
+仅版本号从 `3.21.2` 顺延为 `4.0.0`，用于把「新主线」与「v3 维护线」在发布物上区分开。
+
+- `v3.21.2`：v3 线的最后一个发布（也是本次并入 `master` / `main` 的版本）
+- `v4.0.0`：v4 线的起点（内容同上，便于后续在 v4 上做破坏性演进而不影响 v3 的补丁发布）
+- 版本号四处一致：`server/version/version.go` / `web/package.json` /
+  `web/package-lock.json` / README 顶部徽章
+
+> 后续 v4 的功能开发不再回灌 v3；v3 只接受 bugfix 与安全修补，各自独立打 tag。
 
 ### v3.21.2 修 CI 后端 job（双编译轨）+ README 全量补全（2026-10-25）
 

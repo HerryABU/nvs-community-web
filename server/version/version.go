@@ -12,4 +12,4 @@ package version
 //
 // ⚠️ 机器解析约定：本行必须是文件里**唯一**的 `var AppVersion = "x.y.z"`，
 // Makefile 与 GitHub Actions 都按 `^var AppVersion` 取版本，改这里就够。
-var AppVersion = "3.21.2"
+var AppVersion = "4.0.0"
