@@ -1163,9 +1163,14 @@ func main() {
 	r.StaticFS("/uploads", gin.Dir(config.UploadDir, false))
 
 	// 嵌入的前端 (SPA)
-	frontendFS, err := fs.Sub(distFS, "dist")
+	// 注意：`-tags nodist` 构建（CI 后端 job / 新克隆跑测试）不含真实前端产物，
+	// 这里拿到的是占位页 FS，启动日志会给出醒目提示（见 embed_nodist.go）。
+	frontendFS, err := getFrontendFS()
 	if err != nil {
 		log.Fatalf("前端资源加载失败（dist 目录不存在，请先运行 npm run build）: %v", err)
+	}
+	if nodistBuild {
+		log.Println("⚠️  本二进制为 nodist 构建：未嵌入前端产物，仅可用于编译/接口调试，不可作为发布物")
 	}
 
 	// 注入前端资源探针（供 /health 检查前端 SPA 是否可服务）

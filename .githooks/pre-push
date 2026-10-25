@@ -43,14 +43,18 @@ if ! command -v go >/dev/null 2>&1; then
   exit 1
 fi
 
-step "1/3 go build ./..."
-if ! (cd server && go build ./...); then
+# 后端一律走 nodist 轨：server/dist 是构建产物、不入库（.gitignore），
+# 而 //go:embed all:dist 要求目录非空 —— 新克隆里没构建过前端时，
+# 裸 `go build ./...` 会直接死在 "pattern all:dist: no matching files found"。
+# nodist 只验证业务代码可编译/可测，发布物的 embed 由 CI 的「内嵌产物冒烟」job 把关。
+step "1/3 go build ./...（nodist 轨）"
+if ! (cd server && go build -tags nodist ./...); then
   red "[pre-push] 编译失败"
   exit 1
 fi
 
-step "2/3 go vet ./..."
-if ! (cd server && go vet ./...); then
+step "2/3 go vet ./...（nodist 轨）"
+if ! (cd server && go vet -tags nodist ./...); then
   red "[pre-push] go vet 未通过（这些是真实缺陷，不是风格问题）"
   exit 1
 fi
@@ -58,11 +62,11 @@ fi
 if [ "${SKIP_TESTS:-}" = "1" ]; then
   echo "[pre-push] SKIP_TESTS=1，跳过单测"
 else
-  step "3/3 go test ./... -count=1"
+  step "3/3 go test ./... -count=1（nodist 轨）"
   # 完整输出落日志：失败时只 tail 会给不出"哪个包挂了"，而 go test 的失败原因是排查的全部线索。
   # 注意 pipefail 已在文件头开启，但仍用 PIPESTATUS 取 go 的退出码（tee 自己永远成功）。
   log=$(mktemp -t nvs-pretest-XXXXXX.log 2>/dev/null || echo "/tmp/nvs-pretest.log")
-  (cd server && go test ./... -count=1) 2>&1 | tee "$log"
+  (cd server && go test -tags nodist ./... -count=1) 2>&1 | tee "$log"
   rc=${PIPESTATUS[0]}
   if [ "${rc:-1}" -ne 0 ]; then
     red "[pre-push] 单测失败（完整日志：$log）"

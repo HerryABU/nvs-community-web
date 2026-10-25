@@ -454,12 +454,14 @@ CHECK_WEB=1 git push               # push 额外构建前端
 ### 已提供的构建目标
 
 ```bash
-make check        # 本地等价 CI：SPA 白名单 + 组件解析审计 + 后端 build/vet/test + 前端 build
+make check        # 本地等价 CI：SPA 白名单 + 组件审计 + 后端 build/vet/test（nodist 轨）+ 前端 build
 make check-all    # check + 同步 embed + 产物自检 + 前端产物密钥扫描
 make dist         # 只构建前端并同步到 server/dist（embed 源）
 make dist-check   # 校验 server/dist 有 index.html 且资源数正常（防"空 embed 打进 exe"）
 make version      # 校验 version.go 与 package.json 版本一致
 make hooks        # 启用 .githooks
+make test         # 后端单测（nodist 轨，**不需要**先构建前端）
+make test-embed   # 带真实 embed 产物的单测（需先 make dist）
 make build        # 单平台（当前系统）产出 nvs-server.exe
 make build-gitvcs # 章节版本控制走真实 git 仓库（-tags gitvcs，运行时 NVS_VCS_BACKEND=git）
 make build-gm     # 国密轨（-tags gm，依赖 go.gm.mod）
@@ -467,6 +469,14 @@ make build-gm     # 国密轨（-tags gm，依赖 go.gm.mod）
 
 > **构建顺序不能反**：`npm run build`（产出 `dist/`）→ 同步到 `server/dist/` → `go build`。
 > `//go:embed all:dist` 是**编译期**打包，顺序反了会把旧前端（或空目录）嵌进 exe。
+
+> 🏷 **两条编译轨（`nodist` 标签）**：`server/dist` 是构建产物、不入库，而 `//go:embed all:dist`
+> 要求目录非空 —— 所以**全新 clone 里直接 `go build ./...` 会报 `pattern all:dist: no matching files found`**。
+> - **发布轨**（默认，不带标签）：必须先 `make dist`，产出物才内含前端（`make build` / Release / 内嵌冒烟用它）
+> - **业务轨**（`-tags nodist`）：嵌入一个提示页，只用于 `go build` / `go vet` / `go test`（CI 后端 job、
+>   `make check` / `make test`、pre-push 钩子都用它）；该轨产物启动时会打印醒目警告，**不可作为发布物**
+>
+> 两条轨并存还配了一道防回归：CI 会额外用「最小 dist 占位 + 不带标签」编译一次，确保 nodist 开关没把发布轨弄坏。
 
 ### 质量门禁与验收脚本
 
@@ -506,7 +516,7 @@ NVS_BASE=http://127.0.0.1:8000 node scripts/browser-smoke.mjs
 
 | workflow | 触发 | 做什么 |
 |---|---|---|
-| `ci.yml` | push 到 `v3` / `main` / `master`、PR、手动 | ① 后端 `build` + `vet` + `test` + `gitvcs` 标签轨编译；② 前端 `npm ci` + `vite build`；③ **内嵌产物冒烟**（拼出单 exe，真启动，断言首页 200、off 档诱饵 404、日志无 panic）；④ 推主干产出 `linux-amd64` 快照 artifact |
+| `ci.yml` | push 到 `v3` / `main` / `master`、PR、手动 | ① 后端 `build` + `vet` + `test` + `gitvcs` 标签轨（均走 `nodist` 轨，不依赖前端产物）+ 发布轨占位编译；② 前端 `npm ci` + `vite build`；③ **内嵌产物冒烟**（拼出单 exe，真启动，断言首页 200、off 档诱饵 404、日志无 panic）；④ 推主干产出 `linux-amd64` 快照 artifact |
 | `release.yml` | push tag `v*` | 校验 **tag = version.go = package.json**；多平台交叉编译（Win x64/ARM64、Linux x64/ARM64/ARMv7、macOS Intel/ARM64）；打包 zip/tar.gz + `SHA256SUMS`；创建 GitHub Release |
 
 发布流程（版本号三处同步后打 tag）：
@@ -696,6 +706,31 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 ---
 
 ## 📝 版本更新记录（文件级改动说明）
+
+### 🔧 修 CI 后端 job 必挂：`//go:embed all:dist` 在全新 clone 里无目录可嵌（2026-10-25 · 未发版）
+
+**症状**：push 后 `CI / 后端 build / vet / test` **16 秒**就红，注释只有一句
+`pattern all:dist: no matching files found`；前端 job 反而正常。
+
+**根因**：`server/dist` 是构建产物、不入库（`be82047` 起 `.gitignore` 掉并在提交里删除）。
+`//go:embed all:dist` 要求目录**至少一个文件**，于是全新 clone 里 `cd server && go build ./...`
+在编译期就失败 —— 与代码质量无关，是「业务编译依赖前端产物」的结构问题。
+更麻烦的是同一段逻辑也卡住了**新贡献者**：clone 下来 `go test ./...` 直接不可能通过。
+
+**改法（两条编译轨，不改发布链路）**
+- 新增 `server/embed_nodist.go`（`//go:build nodist`）：嵌入 `nodist_placeholder/index.html` 一个提示页，
+  让 `fs.Sub` 成功、页面明确写着「这是占位页，请先 npm run build → 同步 server/dist → 不带标签重新编译」；
+  `server/embed.go` 加 `//go:build !nodist`，`main.go` 改用 `getFrontendFS()` 并标注 `nodistBuild`，
+  该轨启动时打印醒目警告（避免被误当发布物）
+- CI 后端 job 的 `build` / `vet` / `test` / `gitvcs` 全部加 `-tags nodist`（只验证业务代码）；
+  **另加一道防回归**：`mkdir dist 占位 + 不带标签 go build`，确保 nodist 开关没把发布轨弄坏
+- `make check` / `make test` / `.githooks/pre-push` 同步走 nodist 轨（新克隆不必先构建前端即可跑测试）；
+  新增 `make test-embed` 用真实产物验证 embed 本身
+- 发布链路完全不变：`make build`、`release.yml`、CI 的「内嵌产物冒烟」仍是不带标签 + 先准备 `server/dist`
+
+**验证**：把 `server/dist` 挪走模拟全新 clone —— 裸 `go build ./...` 复现原报错；
+`-tags nodist` 下 `build` / `vet` / `go test ./... -count=1` 全绿；`-tags "nodist gitvcs"` 可编译；
+恢复 `server/dist` 后发布轨 `go build ./...` 仍通过。
 
 ### 📄 README 全面补全（2026-10-25 · 仅文档，无代码变更）
 
@@ -1617,7 +1652,9 @@ nvs/
 │
 ├── server/                        # Go 后端
 │   ├── main.go                    # 入口：配置初始化 → 数据库 → 子包 Migrate → 路由 → SPA fallback → 启动
-│   ├── embed.go                   # //go:embed all:dist 前端嵌入
+│   ├── embed.go                   # 发布轨：//go:embed all:dist（需先 make dist）
+│   ├── embed_nodist.go            # 业务轨（-tags nodist）：嵌入提示页，不依赖前端产物即可编译/测试
+│   ├── nodist_placeholder/        # 上面那轨嵌的提示页（告诉你怎么构建真正的发布物）
 │   ├── Dockerfile
 │   ├── init.sql                   # MySQL 手动建表脚本
 │   ├── go.mod / go.sum

@@ -34,23 +34,40 @@ jobs:
       - name: SPA 回退白名单校验
         run: bash scripts/check-spa-roots.sh
 
+      # ⚠️ 后端 job 不带前端产物：server/dist 是构建产物不入库（.gitignore），
+      # 而 //go:embed all:dist 要求目录非空 —— 直接 `go build ./...` 会死在
+      # `pattern all:dist: no matching files found`。所以这里统一走 nodist 轨：
+      # 只验证「业务代码能编译 / 能 vet / 能测」，与发布物解耦。
+      # 真实 embed 由下面的「内嵌产物冒烟」job 验证（先下载前端 artifact 再编译）。
       - name: go build
         working-directory: server
-        run: go build ./...
+        run: go build -tags nodist ./...
 
       # vet 是真实缺陷（格式化字符串不匹配、锁拷贝、不可达代码…），不是风格问题，必须阻断
       - name: go vet
         working-directory: server
-        run: go vet ./...
+        run: go vet -tags nodist ./...
 
       - name: go test
         working-directory: server
-        run: go test ./... -count=1
+        run: go test -tags nodist ./... -count=1
 
       # 双轨构建：默认轨不带 go-git，gitvcs 标签轨必须也能编译
       - name: go build（gitvcs 标签轨）
         working-directory: server
-        run: go build -tags gitvcs ./...
+        run: go build -tags "nodist gitvcs" ./...
+
+      # 防回归：确认「nodist 开关本身没把发布轨弄坏」——补一个最小 dist 占位后，
+      # 必须仍能用不带标签的方式编译。这样 nodist 轨一旦写错（例如两个文件都定义了
+      # 同一个变量），这里会立刻红，而不是等到发布时才发现单文件里没有前端。
+      - name: go build（发布轨，带最小 dist 占位）
+        working-directory: server
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          printf '<!doctype html><meta charset=utf-8><title>ci placeholder</title>' > dist/index.html
+          go build ./...
+          rm -rf dist
 
   # ─────────────────────────── 前端 ───────────────────────────
   frontend:

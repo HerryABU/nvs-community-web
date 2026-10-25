@@ -3,7 +3,8 @@
 #   make build            默认国际轨（零国密依赖）
 #   make build-gm         纯 Go 国密轨（-tags gm，依赖 go.gm.mod）
 #   make build-gitvcs     版本控制启用真实 git 仓库后端（-tags gitvcs，运行时 NVS_VCS_BACKEND=git）
-#   make test / test-gm   对应轨的测试
+#   make test / test-gm   对应轨的测试（test 走 nodist 轨，不要求先构建前端）
+#   make test-embed       带真实 embed 产物的测试（需先 make dist）
 #   make gm-audit         输出国密自检报告（Markdown）
 #   make credential-age   凭据年龄报表
 #   make scan-secrets     扫描前端产物中的疑似密钥
@@ -13,7 +14,7 @@ GO ?= go
 # 只认 `var AppVersion` 那一行：version.go 的注释里出现过的版本号会盖掉真实值（曾经取到过 2.3.1）
 VERSION := $(shell grep -E '^var AppVersion' server/version/version.go | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
 
-.PHONY: build build-gitvcs build-gm build-gm-cgo test test-gitvcs test-gm dist dist-check hooks check check-all gm-audit credential-age scan-secrets tidy-gm clean version
+.PHONY: build build-gitvcs build-gm build-gm-cgo test test-embed test-gitvcs test-gm dist dist-check hooks check check-all gm-audit credential-age scan-secrets tidy-gm clean version
 
 build:
 	cd server && CGO_ENABLED=0 $(GO) build -trimpath -ldflags "-s -w" -o ../nvs-server.exe .
@@ -37,6 +38,10 @@ build-gm-cgo:
 	cd server && CGO_ENABLED=1 $(GO) build -modfile=../go.gm.mod -tags "gm tongsuo" -trimpath -o ../nvs-server-gm-cgo.exe .
 
 test:
+	cd server && $(GO) test -tags nodist ./... -count=1
+
+# 带真实前端产物的后端测试（需要先 make dist；用于验证 embed 本身）
+test-embed:
 	cd server && $(GO) test ./... -count=1
 
 test-gm:
@@ -69,7 +74,9 @@ hooks:
 check:
 	bash scripts/check-spa-roots.sh
 	node scripts/audit-unresolved-components.mjs --strict
-	cd server && $(GO) build ./... && $(GO) vet ./... && $(GO) test ./... -count=1
+	# 后端走 nodist 轨：server/dist 不入库，新克隆里没它时 //go:embed all:dist 会直接编译失败；
+	# nodist 只验证业务代码可编译/可测，发布物仍由 make build（不带标签）产出
+	cd server && $(GO) build -tags nodist ./... && $(GO) vet -tags nodist ./... && $(GO) test -tags nodist ./... -count=1
 	cd web && npm run build
 
 # check + embed 冒烟（最接近 CI 的完整本地校验）
