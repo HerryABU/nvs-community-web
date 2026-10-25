@@ -12,6 +12,7 @@
           <el-radio-group v-model="editorMode" size="small" @change="onModeChange">
             <el-radio-button value="md">Markdown</el-radio-button>
             <el-radio-button value="richtext">富文本</el-radio-button>
+            <el-radio-button v-if="isBubbleMode(effectiveMode)" value="bubble">气泡</el-radio-button>
           </el-radio-group>
         </div>
       <div class="ce-toolbar-right">
@@ -163,6 +164,15 @@
             @save="saveChapter"
           />
         </div>
+
+        <!-- 话本气泡体专用编辑器：角色气泡 + 头像 + 左右分侧 + 角色管理 -->
+        <div v-show="editorMode === 'bubble'" class="ce-bubble-wrapper">
+          <ScriptBubbleEditor
+            v-model="bubbleContent"
+            :mode="effectiveMode === 'mixed' ? 'mixed' : 'script'"
+            :novel-id="novelId"
+          />
+        </div>
       </main>
     </div>
   </div>
@@ -175,6 +185,7 @@ import { novelApi, chapterApi, type Chapter } from '@/api/novel';
 import { ElMessage } from 'element-plus';
 import { ArrowLeft, Plus, Delete, Link, MagicStick, ChatDotRound, Clock } from '@element-plus/icons-vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
+import ScriptBubbleEditor from '@/components/editor/script/ScriptBubbleEditor.vue';
 import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
 import AiWriteLayer from '@/components/ai/floating/AiWriteLayer.vue';
 import { beginStream, writeStreamChunk, endStream, type StreamSession, type StreamTarget } from '@/utils/editorStream';
@@ -218,7 +229,8 @@ const canEditThis = ref(true);
 const chapterTitle = ref('');
 const chapterContent = ref('');       // Markdown 源文本
 const richTextContent = ref('');      // 富文本 HTML 内容
-const editorMode = ref<'md' | 'richtext'>('md');
+const bubbleContent = ref('');        // 话本气泡编辑器内容（源文本形态）
+const editorMode = ref<'md' | 'richtext' | 'bubble'>('md');
 const saving = ref(false);
 const lastSaved = ref('');
 
@@ -264,6 +276,11 @@ async function openScriptPreview() {
 
 // 切形态只改标记，保存时随正文一起提交（后端按章存储）
 function onChapterModeChange() {
+  // 形态切走（不再是话本/混排）→ 气泡编辑器不可用，退回 Markdown
+  if (!isBubbleMode(effectiveMode.value) && editorMode.value === 'bubble') {
+    editorMode.value = 'md';
+    prevEditorMode.value = 'md';
+  }
   ElMessage.info(
     chapterMode.value === ''
       ? '本章将继承作品形态，保存后生效'
@@ -363,6 +380,10 @@ async function getContentToSave(): Promise<string> {
   if (editorMode.value === 'richtext' && richTextContent.value.trim()) {
     return await htmlToMarkdown(richTextContent.value);
   }
+  // 气泡编辑模式：内容由气泡编辑器直接维护
+  if (editorMode.value === 'bubble') {
+    return bubbleContent.value;
+  }
   // MD 模式：如果 Cherry 已初始化，从 Cherry 取值；否则用 chapterContent
   if (editorMode.value === 'md' && cherryInstance) {
     return cherryInstance.getValue() || chapterContent.value;
@@ -421,14 +442,49 @@ const editorHeight = computed(() => window.innerHeight - 160);
 
 // ─── 模式切换 ───
 
+// 编辑模式切换：md / richtext / bubble
+// 注意：v-model 会在 @change 之前改写 editorMode，所以这里用 prevEditorMode 记录「切换前」的模式。
+const prevEditorMode = ref<'md' | 'richtext' | 'bubble'>('md');
+
+/** 取某个编辑模式下的源文本 */
+async function contentOf(mode: 'md' | 'richtext' | 'bubble'): Promise<string> {
+  if (mode === 'bubble') return bubbleContent.value;
+  if (mode === 'richtext' && richTextContent.value.trim()) {
+    return await htmlToMarkdown(richTextContent.value);
+  }
+  if (cherryInstance) return cherryInstance.getValue() || chapterContent.value;
+  return chapterContent.value;
+}
+
 async function onModeChange(mode: string) {
-  if (mode === 'richtext') {
+  const from = prevEditorMode.value;
+  const to = mode as 'md' | 'richtext' | 'bubble';
+  prevEditorMode.value = to;
+
+  if (to === 'bubble') {
+    // 其他模式 → 气泡：取当前源文本作为气泡编辑器的初始内容
+    bubbleContent.value = await contentOf(from);
+    return;
+  }
+  if (from === 'bubble') {
+    // 气泡 → 其他模式：气泡内容是准的，先落到 Cherry / 富文本，避免丢内容
+    chapterContent.value = bubbleContent.value;
+    if (cherryInstance) cherryInstance.setValue(bubbleContent.value);
+    if (to === 'richtext') {
+      richTextContent.value = renderMarkdown(bubbleContent.value);
+    }
+    if (to === 'md' && !cherryReady) {
+      nextTick(() => initCherryEditor());
+    }
+    return;
+  }
+  if (to === 'richtext') {
     // Markdown → 富文本：从 Cherry 或 chapterContent 取 Markdown，转为 HTML
     const mdContent = cherryInstance ? (cherryInstance.getValue() || '') : chapterContent.value;
     richTextContent.value = renderMarkdown(mdContent);
-  } else if (mode === 'md') {
+  } else if (to === 'md') {
     // 富文本 → Markdown
-    if (richTextContent.value.trim()) {
+    if (from === 'richtext' && richTextContent.value.trim()) {
       const md = await htmlToMarkdown(richTextContent.value);
       chapterContent.value = md;
       if (cherryInstance) {
@@ -557,6 +613,7 @@ async function loadCurrentChapter() {
       // 等待 Cherry 初始化后再设置值——通过 chapterContent 同步
     }
     richTextContent.value = renderMarkdown(content);
+    bubbleContent.value = content; // 气泡编辑器的初始内容（切到气泡模式时直接用）
     // 记下服务端版本号，供本次编辑保存时做冲突检测
     await loadVersionHead();
   } catch {
@@ -1041,6 +1098,15 @@ onBeforeUnmount(() => {
   flex: 1;
   overflow-y: auto;
   padding: 16px;
+}
+
+/* 话本气泡体专用编辑器 */
+.ce-bubble-wrapper {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  padding: 12px 16px;
 }
 </style>
 
