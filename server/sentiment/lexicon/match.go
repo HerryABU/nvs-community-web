@@ -15,6 +15,8 @@ type Hit struct {
 	EscalateUnder []topic.Group
 	// Variant 是否靠「变形归一」才匹配上（原样没匹配，加壳被拆穿）
 	Variant bool
+	// ForceBlock 无视话题直接拦截
+	ForceBlock bool
 }
 
 // Scan 用内置基线词表扫描。
@@ -69,6 +71,7 @@ func ScanWith(terms []Term, text string) []Hit {
 		hits = append(hits, Hit{
 			Word: t.Word, Cat: t.Cat, Severity: t.Severity,
 			EscalateUnder: t.EscalateUnder, Variant: variant,
+			ForceBlock: t.ForceBlock,
 		})
 	}
 	return hits

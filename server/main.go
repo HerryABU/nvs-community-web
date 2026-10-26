@@ -42,6 +42,7 @@ import (
 	"nvs-server/scriptmode"
 	"nvs-server/security"
 	"nvs-server/security/sms"
+	sentimentstore "nvs-server/sentiment/store"
 	"nvs-server/tlsconfig"
 	"nvs-server/utils"
 	"nvs-server/version"
@@ -1642,6 +1643,11 @@ func initDatabase() error {
 	}
 	// AI 对话内容安全闸：配置 / 用户画像 / 事件 / 蓝队判定日志
 	if err := aisafety.Migrate(models.DB); err != nil {
+		return err
+	}
+	// 社区舆情守卫（话题驱动条件拦截 + 词表 + 命中记录）
+	sentimentstore.SetDB(models.DB)
+	if err := sentimentstore.Migrate(models.DB); err != nil {
 		return err
 	}
 	// 对话分支：把老数据（parent_id 全 0）串成链并补活跃叶子。

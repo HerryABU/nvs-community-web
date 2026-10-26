@@ -24,6 +24,9 @@ type Term struct {
 	EscalateUnder []topic.Group `json:"escalate_under"`
 	// Severity 1-3，仅用于记录与后台排序，不直接决定拦截
 	Severity int `json:"severity"`
+	// ForceBlock 无视话题直接拦截（站长在后台对某词点「强制」时置 true）。
+	// 默认 false —— 绝大多数词都应走「话题条件」，否则就成了全局黑名单。
+	ForceBlock bool `json:"force_block"`
 }
 
 func gs(g ...topic.Group) []topic.Group { return g }

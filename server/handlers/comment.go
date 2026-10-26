@@ -132,6 +132,14 @@ func CreateComment(c *gin.Context) {
 	raw := security.SanitizeUserContent(req.Content)
 	cleaned, badHits := processBadWords(raw, "comment")
 
+	// ── 评论区舆情守卫（话题驱动的条件拦截）──
+	// 放在落库之前：拦下来就不该产生评论行，也不该发通知/广播。
+	// 判定依据是「内容话题（AI 敲定）+ 本次文本」，不是纯关键词。
+	if blocked, reason := guardComment(c, req.NovelID, req.BlogID, userID, cleaned); blocked {
+		utils.Forbidden(c, "该评论在当前话题下不适宜发布（"+reason+"），请调整措辞后重试")
+		return
+	}
+
 	// @ 提及：从已净化正文解析被提及用户（按 username/nickname 命中）
 	mentions := models.ParseMentions(cleaned)
 
