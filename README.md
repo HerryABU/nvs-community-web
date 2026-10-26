@@ -2,7 +2,7 @@
   <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go" alt="Go">
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?style=flat&logo=vuedotjs" alt="Vue">
   <img src="https://img.shields.io/badge/SQLite-3-003B57?style=flat&logo=sqlite" alt="SQLite">
-  <img src="https://img.shields.io/badge/version-4.1.0-4F46E5?style=flat" alt="Version">
+  <img src="https://img.shields.io/badge/version-4.2.0-4F46E5?style=flat" alt="Version">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue?style=flat" alt="Platform">
   <img src="https://img.shields.io/badge/CPU-x86%20%7C%20ARM%20%7C%20MIPS64%20%7C%20RISC--V-orange?style=flat" alt="CPU">
   <img src="https://img.shields.io/badge/license-AGPL%20v3-blue.svg" alt="License">
@@ -706,6 +706,57 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 ---
 
 ## 📝 版本更新记录（文件级改动说明）
+
+### v4.2.0 舆情守卫 + 警方台独立（2026-10-26）
+
+v4 线第二个功能版本：12 个提交，主线是**评论区舆情条件拦截**（新增 `server/sentiment` 六包）
+与**警方台从 `/admin` 彻底独立到 `/police/*`**。核心立场：不搞「一刀切删评论」，
+按**话题 × 敏感词 × 置信度**分级处置，不够格的只标注不拦。
+
+#### 一、舆情守卫（`server/sentiment`，新增）
+
+- **话题矩阵**（`sentiment/topic`）：内容先归类到话题，再按「话题 × 词族」查表决定处置强度。
+  同一批词在 A 话题下必须拦、在 B 话题下只标注——**词本身没有罪，语境才有**。
+- **抗变形词表**（`sentiment/lexicon`）：`normalize` 统一还原全角 / 零宽 / 拆字 / 同音替换，
+  **单字词独立成词**（不做子串匹配，避免「一」类单字把整篇内容打成命中）。
+- **四级风险 × 三种动作**（`sentiment/guard`）：话题风险分低 / 中 / 中高 / 高，
+  动作只有放行 / 标注 / 拦截三个。**拦截前要过三道降级闸**——话题策略是「仅标注」、
+  标签待人工复核、标签置信度低于门槛，任一命中就降级为标注转人工。
+  即「宁可漏一次，也不拿不可信的标签去删用户评论」；**黑话词级默认不足 2 不进拦截**
+  （否则「亚文化话题 + 乐子」会把整个二次元评论区删光）。门槛全部后台可调，站长掌握限度。
+- **落库**（`sentiment/store`，4 张表 `sentiment_content_topics` / `_terms` / `_hits` / `_term_audits`）：
+  每条命中都留证（命中词、话题、分值、最终处置），改动词表也进审计。
+- **词表每日自动更新**（`sentiment/updater`）：走厂商 `/search` 检索 + 模型总结的**两步链路**，
+  只把「新词 + 释义」入库，**检索原文不落库**；单次更新有量上限，失败不覆盖旧词表。
+- **AI 审核顺带敲定话题标签**：复用同一次审核调用返回 `topics` / `topic_confidence`，
+  **不额外花一次模型调用**；AI 判定可被人工修正，人工结论优先。
+- 后台页 `/admin/sentiment`（内容治理 → 舆情守卫）：配置 / 词表增删审 / 命中留证 / 话题改写 / 手动触发更新。
+
+#### 二、评论区条件拦截
+
+- 评论/回帖发布时过守卫：满足「话题 + 词 + 门槛」才拦截并给出原因；不满足则**只写入标注**
+  （后台可见，读者无感）。
+- **长文本自动折叠**：阈值由服务端下发（前端不写死），展开状态刷新保持。
+- **软删内容在评论区的红字高亮仅管理端可见**，普通读者看到的是正常空位，不给围观者二次传播。
+
+#### 三、警方台独立 `/police/*`
+
+- **全部迁移**：内容治理子集（论坛巡查 / 软删留证 / 取证下载 / 封禁名单）只注册在 `police` 组，
+  旧 `/police-console` 前端路由自动重定向；后台菜单不再给警方出现「合规/安全」相关入口。
+- **白名单中间件** `middleware/governance.go`：正则锚定路径 + 方法精确匹配 + 每次放行/拒绝都审计。
+  单测 10 条放行 / 13 条拒绝，越权路径一律 403。
+- **舆情只给计数与趋势**（`/police/sentiment/stats`、`/trend`）：警方看得到「拦了多少」，
+  看不到词表、命中原文与判定细节；**合规与安全（AI 安全闸）对警方完全不可见**。
+- 前端：**非 admin/police 连 admin/police 路由都进不去**（守卫按 role 拦，不靠后端兜底）。
+
+#### 四、本版修掉的静默失效
+
+- **三个图标组件模板用了没导入**（`Lock` / `CircleCloseFilled` / `WarningFilled`）→
+  AI 安全横幅与警告块一直**不显示图标**，`vite build` 依然成功、只在浏览器 console 报错。
+  已补导入，并把 `scripts/audit-unresolved-components.mjs --strict` 接入 CI 常驻拦截。
+
+> 版本号四处一致：`server/version/version.go` / `web/package.json` /
+> `web/package-lock.json` / README 顶部徽章。
 
 ### v4.1.0 AI 工作台成型 + 内容安全闸 + 话本气泡体（2026-10-25）
 
