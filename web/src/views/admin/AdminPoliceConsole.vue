@@ -20,6 +20,16 @@
       style="margin-bottom: 16px"
     />
 
+    <!-- 内容治理子集：警方专用的三条处置入口（都走 /police/*，不进 /admin） -->
+    <div class="pc-nav">
+      <el-button size="small" @click="$router.push('/police/moderation')">审核待办</el-button>
+      <el-button size="small" @click="$router.push('/police/reports')">举报处理</el-button>
+      <el-button size="small" @click="$router.push('/police/ban')">内容封禁</el-button>
+      <span class="pc-nav-hint">
+        仅开放内容治理子集；合规与安全（脱敏/实名/密钥/取证细节）不对警方开放，越权请求会被拒绝并记审计
+      </span>
+    </div>
+
     <el-tabs v-model="activeTab" class="pc-tabs" @tab-change="onTabChange">
       <!-- 舆情看板：放在最前，警方进来先看「这个站的舆论有没有失控」 -->
       <el-tab-pane label="舆情看板" name="sentiment">
@@ -517,6 +527,18 @@ onMounted(() => {
 .pc-color { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .pc-color-label { color: var(--text-light); font-size: 13px; }
 .pc-color-hint { color: var(--text-light); font-size: 12px; }
+.pc-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+}
+.pc-nav-hint {
+  font-size: 0.74rem;
+  color: var(--text-light, #999);
+  line-height: 1.5;
+}
 .pc-note {
   margin: 10px 0 4px;
   font-size: 0.78rem;

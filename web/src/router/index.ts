@@ -274,6 +274,27 @@ const router = createRouter({
       component: () => import('@/views/admin/AdminPoliceConsole.vue'),
       meta: { requiresAuth: true },
     },
+    // ── 警方：内容治理子集（复用后台视图，但整段 /police/* 强制 requiresPolice）──
+    // 之所以能复用：这些页面只依赖「内容治理」白名单内的接口，
+    // 越权路径（合规与安全、AI 配置、用户管理）后端会直接 403 并记审计。
+    {
+      path: '/police/moderation',
+      name: 'police-moderation',
+      component: () => import('@/views/admin/AdminModerationQueue.vue'),
+      meta: { requiresPolice: true },
+    },
+    {
+      path: '/police/reports',
+      name: 'police-reports',
+      component: () => import('@/views/admin/AdminReports.vue'),
+      meta: { requiresPolice: true },
+    },
+    {
+      path: '/police/ban',
+      name: 'police-ban',
+      component: () => import('@/views/admin/AdminBan.vue'),
+      meta: { requiresPolice: true },
+    },
     {
       path: '/admin/sites',
       name: 'admin-sites',

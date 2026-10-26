@@ -747,7 +747,9 @@ func main() {
 	admin := r.Group("/api/admin")
 	// 🔒 纵深防御：组级强制 admin 角色（除登录校验外再叠加角色校验），
 	// 防止「新增 handler 漏写 ensureAdmin」导致越权。具体写操作仍由各 handler 内部 ensureAdmin 兜底。
-	admin.Use(middleware.AuthRequired(), middleware.AdminRequired())
+	// 警方不再进 /admin：这里改成「admin 全放行 + police 仅白名单（内容治理子集）」。
+	// 白名单见 middleware/governance.go，非白名单路径对 police 一律 403 并记审计。
+	admin.Use(middleware.AuthRequired(), middleware.AdminOrPoliceGovernance())
 	{
 		admin.GET("/stats", handlers.GetAdminStats)
 		admin.GET("/dashboard", handlers.GetDashboardStats)
