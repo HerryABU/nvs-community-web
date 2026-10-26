@@ -1019,6 +1019,20 @@ func main() {
 		admin.POST("/ai/safety/profiles/:uid/reset", handlers.ResetAiSafetyProfile)
 		admin.GET("/ai/safety/judge-logs", handlers.ListJudgeLogs)
 		admin.GET("/ai/safety/stats", handlers.AiSafetyStats)
+
+		// 社区舆情守卫（话题驱动条件拦截 + 词表 + 命中留证）
+		admin.GET("/sentiment/config", handlers.GetSentimentConfig)
+		admin.PUT("/sentiment/config", handlers.SaveSentimentConfig)
+		admin.GET("/sentiment/terms", handlers.ListSentimentTerms)
+		admin.POST("/sentiment/terms", handlers.CreateSentimentTerm)
+		admin.PUT("/sentiment/terms/:id", handlers.UpdateSentimentTerm)
+		admin.DELETE("/sentiment/terms/:id", handlers.DeleteSentimentTerm)
+		admin.POST("/sentiment/terms/:id/review", handlers.ReviewSentimentTerm)
+		admin.GET("/sentiment/audits", handlers.ListTermAudits)
+		admin.GET("/sentiment/hits", handlers.ListSentimentHits)
+		admin.GET("/sentiment/topics", handlers.GetContentTopic)
+		admin.PUT("/sentiment/topics", handlers.SetContentTopic)
+		admin.POST("/sentiment/run-update", handlers.RunSentimentUpdate)
 		admin.GET("/ai/safety/locked-sessions", handlers.ListLockedSessions)
 		admin.POST("/ai/safety/sessions/:sid/unlock", handlers.UnlockChatSession)
 		admin.GET("/ai/vendors", handlers.AdminListAiVendors)
@@ -1141,8 +1155,11 @@ func main() {
 		police.GET("/evidence", handlers.PoliceGetEvidence)      // 单条取证凭证详情（?type=&id=）
 		police.GET("/download", handlers.PoliceDownloadEvidence) // 下载单条取证凭证（?type=&id=）
 		police.GET("/del-color", handlers.PoliceGetDelColor)     // 已删除内容高亮色（警方可读）
-		police.PUT("/del-color", handlers.PoliceSetDelColor)     // 已删除内容高亮色（仅管理员可写）
-		police.GET("/export", handlers.PoliceExportPackage)      // 导出全部取证包
+		// 舆情面板：只给聚合计数（按天/按决策/按话题），不给被拦截内容正文
+		police.GET("/sentiment/stats", handlers.PoliceSentimentStats)
+		police.GET("/sentiment/trend", handlers.PoliceSentimentTrend)
+		police.PUT("/del-color", handlers.PoliceSetDelColor) // 已删除内容高亮色（仅管理员可写）
+		police.GET("/export", handlers.PoliceExportPackage)  // 导出全部取证包
 		// 警方内容治理镜像（与站长内容治理板块同口径，留证仅含操作者用户名、不含 PII；
 		// Snapshot 等敏感截面在 handler 内已置空，合规与安全敏感信息警方不可见）
 		police.GET("/governance/overview", handlers.PoliceGovernanceOverview)
