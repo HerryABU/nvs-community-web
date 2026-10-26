@@ -40,6 +40,8 @@ func ReviewOnWrite(scope string, targetID uint) {
 		ModelID: res.ModelID, ModelName: res.ModelName, Verdict: res.Verdict,
 		Compliant: res.Verdict != VerdictFail, Reason: res.Reason, Categories: joinJSON(res.Categories),
 	})
+	// 同一次 AI 调用顺带产出的话题标注：评论区守卫要用它决定「拦还是只标注」
+	persistTopic(scope, targetID, res)
 	// 判定违规且站长开启了「自动处置」→ 交给注入的处置回调（软删留证）
 	if res.Verdict == VerdictFail && cfg.AutoHideOnFail {
 		runFailHook(scope, targetID, res.Reason)

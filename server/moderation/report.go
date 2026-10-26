@@ -66,6 +66,7 @@ func OnReport(reporterID uint, targetType string, targetID uint) {
 		ReportCount: int(reportCount), ReTriggered: reTrigger,
 	}
 	_ = CreateRecord(rec)
+	persistTopic(targetType, targetID, res)
 
 	// 判定违规且站长开启了「自动处置」→ 交给注入的处置回调（软删留证）
 	if res.Verdict == VerdictFail && cfg.AutoHideOnFail {

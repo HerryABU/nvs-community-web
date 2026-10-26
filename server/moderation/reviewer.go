@@ -16,13 +16,26 @@ type ReviewResult struct {
 	Reason     string
 	ModelID    uint
 	ModelName  string
+	// Topics AI 敲定的**舆论话题标签**（亚文化/性别议题/政治批判…），
+	// 与 Categories（违规类别）不是一回事：Categories 判「违不违规」，
+	// Topics 判「这段话处在什么舆论语境」，后者决定评论区该拦还是只标注。
+	Topics []string
+	// TopicConfidence 话题标注置信度 0-100；低于门槛时守卫只标注、不拦截
+	TopicConfidence int
 }
 
 // reviewSystemPrompt 中立审核系统提示词（强制客观，不受「被举报」干扰）。
 const reviewSystemPrompt = `你是一名客观中立的内容安全审核员。请仅依据内容本身判断是否存在违规，不要被"被举报"等外部因素左右。
 必须严格以如下 JSON 输出，不要输出任何多余文字：
-{"verdict":"pass"|"fail"|"review","categories":["类别1","类别2"],"reason":"不超过60字的中文判定依据"}
-其中：pass=内容合规；fail=明显违规（如色情、暴力、违法、仇恨言论等）；review=无法判定、需人工复核。categories 仅列出命中的违规类别（没有则为空数组）。`
+{"verdict":"pass"|"fail"|"review","categories":["类别1"],"reason":"不超过60字","topics":["话题标签"],"topic_confidence":0}
+其中：
+- verdict：pass=合规；fail=明显违规（色情/暴力/违法/仇恨言论等）；review=无法判定需人工复核。
+- categories：命中的违规类别，没有则空数组。
+- topics：这段话所处的**舆论话题标签**，从下列词里选（可多选，无关则空数组）：
+  亚文化、二次元、性别议题、政治批判、资本批判、地域民族、医疗教育、饭圈追星。
+  注意：话题标签不是违规判定——「政治批判」是合法表达，它只表示这段内容容易引发舆论冲突。
+- topic_confidence：你对 topics 判断的把握，0-100。拿不准就给低分（<60），不要硬猜。
+`
 
 // ReviewText 对单段文本做中立判定。
 // reTrigger=true 表示因重复举报达阈值而复检，提示词会强制注入「客观中立、不预设立场」要求。
@@ -71,6 +84,7 @@ func ReviewText(scope string, content string, reTrigger bool, reportCount int) (
 	res.Verdict = verdict
 	res.Categories = cats
 	res.Reason = reason
+	res.Topics, res.TopicConfidence = extractTopics(out)
 	switch res.Verdict {
 	case VerdictPass, VerdictFail, VerdictReview:
 	default:

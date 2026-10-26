@@ -57,11 +57,58 @@ func UpsertTopic(ct *ContentTopic) error {
 		"public_opinion_score": ct.PublicOpinionScore,
 		"public_opinion_high":  ct.PublicOpinionHigh,
 		"source":               ct.Source,
+		"confidence":           ct.Confidence,
+		"review_status":        ct.ReviewStatus,
 		"updated_at":           ct.UpdatedAt,
 	}).Error
 }
 
-// ApplyAssessment 把 topic.Assessment 落成 ContentTopic 并写入。
+// ApplyAIAssessment AI 审核写标注。
+//
+// 三条硬规则：
+//  1. **人工标注优先**：existing.Source == manual 时直接跳过，AI 不得覆盖人；
+//  2. 置信度低于门槛 → review_status=needs_review（守卫据此只标注、不拦截）；
+//  3. 不覆盖管理端已设的策略（policy）——那是站长的决定，不是模型的。
+func ApplyAIAssessment(contentType string, contentID uint, tags []string, confidence int) error {
+	if DB == nil || contentID == 0 || len(tags) == 0 {
+		return nil
+	}
+	if existing, err := TopicOf(contentType, contentID); err == nil && existing != nil {
+		if existing.Source == "manual" {
+			return nil // 人工改过的标注，AI 只读不写
+		}
+	}
+	minConf := 60
+	if cfg, err := GetConfig(); err == nil && cfg != nil && cfg.MinConfidence > 0 {
+		minConf = cfg.MinConfidence
+	}
+	a := topic.Assess(tags, "")
+	tagsJSON, _ := json.Marshal(a.Tags)
+	gs := make([]string, 0, len(a.Groups))
+	for _, g := range a.Groups {
+		gs = append(gs, string(g))
+	}
+	groupsJSON, _ := json.Marshal(gs)
+	rs := ReviewAuto
+	if confidence < minConf {
+		rs = ReviewNeedsReview
+	}
+	return UpsertTopic(&ContentTopic{
+		ContentType:        contentType,
+		ContentID:          contentID,
+		Tags:               string(tagsJSON),
+		Groups:             string(groupsJSON),
+		BaseRisk:           a.BaseRisk.String(),
+		Risk:               a.Risk.String(),
+		PublicOpinionScore: a.PublicOpinionScore,
+		PublicOpinionHigh:  a.PublicOpinionHigh,
+		Source:             SourceAI,
+		Confidence:         confidence,
+		ReviewStatus:       rs,
+	})
+}
+
+// ApplyAssessment 把 topic.Assessment 落成 ContentTopic 并写入（人工/系统路径）。
 func ApplyAssessment(contentType string, contentID uint, a topic.Assessment, source string) error {
 	gs := make([]string, 0, len(a.Groups))
 	for _, g := range a.Groups {
@@ -79,6 +126,8 @@ func ApplyAssessment(contentType string, contentID uint, a topic.Assessment, sou
 		PublicOpinionScore: a.PublicOpinionScore,
 		PublicOpinionHigh:  a.PublicOpinionHigh,
 		Source:             source,
+		Confidence:         100,
+		ReviewStatus:       ReviewConfirmed,
 	})
 }
 
