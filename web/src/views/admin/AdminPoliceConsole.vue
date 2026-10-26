@@ -20,7 +20,82 @@
       style="margin-bottom: 16px"
     />
 
-    <el-tabs v-model="activeTab" class="pc-tabs">
+    <el-tabs v-model="activeTab" class="pc-tabs" @tab-change="onTabChange">
+      <!-- 舆情看板：放在最前，警方进来先看「这个站的舆论有没有失控」 -->
+      <el-tab-pane label="舆情看板" name="sentiment">
+        <StateBlock v-if="sentLoading" state="loading" skeleton="card" :rows="4" />
+        <StateBlock
+          v-else-if="sentError"
+          state="error"
+          title="统计加载失败"
+          description="请稍后重试"
+          action-text="重试"
+          @action="loadSentiment"
+        />
+        <template v-else>
+          <div class="pc-stats">
+            <div class="pc-stat">
+              <span class="pc-stat-num">{{ sent?.last_24h ?? 0 }}</span>
+              <span class="pc-stat-label">24 小时命中</span>
+            </div>
+            <div class="pc-stat pc-stat--danger">
+              <span class="pc-stat-num">{{ sent?.blocked ?? 0 }}</span>
+              <span class="pc-stat-label">累计拦截</span>
+            </div>
+            <div class="pc-stat">
+              <span class="pc-stat-num">{{ sent?.flagged ?? 0 }}</span>
+              <span class="pc-stat-label">仅标注</span>
+            </div>
+            <div class="pc-stat pc-stat--warn">
+              <span class="pc-stat-num">{{ sent?.high_risk ?? 0 }}</span>
+              <span class="pc-stat-label">高风险话题命中</span>
+            </div>
+            <div class="pc-stat">
+              <span class="pc-stat-num">{{ sent?.pending_terms ?? 0 }}</span>
+              <span class="pc-stat-label">待审词条</span>
+            </div>
+          </div>
+
+          <div class="pc-note">
+            本页只给聚合计数，不含被拦截评论正文。逐条内容取证请用「软删除留证」或评论区留证视图
+            （均带权限校验与审计留痕）。
+          </div>
+
+          <div class="pc-panels">
+            <div class="pc-panel">
+              <h4>话题分布（近 30 天）</h4>
+              <StateBlock v-if="!sent?.top_groups?.length" state="empty" title="暂无数据" description="有命中记录后会出现" />
+              <ul v-else class="pc-rank">
+                <li v-for="g in sent.top_groups" :key="g.key">
+                  <span>{{ groupLabel(g.key) }}</span>
+                  <b>{{ g.count }}</b>
+                </li>
+              </ul>
+            </div>
+            <div class="pc-panel">
+              <h4>高频命中词（近 30 天）</h4>
+              <StateBlock v-if="!sent?.top_words?.length" state="empty" title="暂无数据" description="有命中记录后会出现" />
+              <ul v-else class="pc-rank">
+                <li v-for="w in sent.top_words" :key="w.key">
+                  <span>{{ w.key }}</span>
+                  <b>{{ w.count }}</b>
+                </li>
+              </ul>
+            </div>
+            <div class="pc-panel">
+              <h4>近 14 天趋势</h4>
+              <StateBlock v-if="!trend.length" state="empty" title="暂无数据" description="按天统计拦截与标注" />
+              <ul v-else class="pc-rank">
+                <li v-for="t in trend" :key="t.day">
+                  <span>{{ t.day }}</span>
+                  <b>拦截 {{ t.blocked }} · 标注 {{ t.flagged }}</b>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </template>
+      </el-tab-pane>
+
       <el-tab-pane label="软删除留证" name="softdel">
         <!-- 概览：按类型计数（点击即筛选） -->
         <div class="pc-stats">
@@ -173,7 +248,43 @@ interface SoftDelRow {
 }
 
 const authStore = useAuthStore();
-const activeTab = ref('softdel');
+// 默认落在舆情看板：警方进来先看「舆论有没有失控」，再决定要不要翻留证
+const activeTab = ref('sentiment');
+
+// ── 舆情看板（只有聚合计数，不含正文）──
+const sent = ref<any>(null);
+const trend = ref<Array<{ day: string; blocked: number; flagged: number }>>([]);
+const sentLoading = ref(false);
+const sentError = ref(false);
+
+const groupNames: Record<string, string> = {
+  subculture: '亚文化', gender: '性别议题', politics: '政治批判',
+  capital: '资本批判', region: '地域民族', other: '其它争议',
+};
+function groupLabel(g: string) {
+  return groupNames[g] || g;
+}
+
+async function loadSentiment() {
+  sentLoading.value = true;
+  sentError.value = false;
+  try {
+    const res = await api.get('/police/sentiment/stats', { params: { days: 30 } });
+    if (res.data.code === 0 && res.data.data) sent.value = res.data.data.stats;
+    const tr = await api.get('/police/sentiment/trend', { params: { days: 14 } });
+    if (tr.data.code === 0 && tr.data.data) trend.value = tr.data.data.items || [];
+  } catch {
+    // 失败必须可见：警方看不到统计会误以为「没有舆情」，
+    // 这比报错更危险，所以走错误态而不是静默
+    sentError.value = true;
+  } finally {
+    sentLoading.value = false;
+  }
+}
+
+function onTabChange(name: string | number) {
+  if (name === 'sentiment' && !sent.value) loadSentiment();
+}
 const list = ref<SoftDelRow[]>([]);
 const loading = ref(false);
 const loadError = ref('');
@@ -355,6 +466,7 @@ async function doExport() {
 }
 
 onMounted(() => {
+  loadSentiment();
   loadList();
   loadDelColor();
 });
@@ -405,6 +517,45 @@ onMounted(() => {
 .pc-color { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .pc-color-label { color: var(--text-light); font-size: 13px; }
 .pc-color-hint { color: var(--text-light); font-size: 12px; }
+.pc-note {
+  margin: 10px 0 4px;
+  font-size: 0.78rem;
+  color: var(--text-light, #888);
+  line-height: 1.6;
+}
+.pc-panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+.pc-panel {
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--bg-card, #fff);
+}
+.pc-panel h4 {
+  margin: 0 0 8px;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+.pc-rank {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.8rem;
+}
+.pc-rank li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--border-color, #eee);
+}
+.pc-rank li:last-child { border-bottom: none; }
+.pc-stat--warn .pc-stat-num { color: var(--el-color-warning, #e6a23c); }
+
 .pc-tabs { border: none; background: transparent; }
 .pc-tabs :deep(.el-tabs__content) { padding: 16px 0 0; }
 .pc-count { color: var(--text-light); font-size: 0.82rem; }
