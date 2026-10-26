@@ -95,6 +95,11 @@ jobs:
       - name: 未定义组件审计
         run: node scripts/audit-unresolved-components.mjs --strict
 
+      # 版本四处（version.go / package.json / package-lock / README 徽章）漂移是
+      # 打 tag 时才爆的老问题，提前到每次推送就挡；脚本本身不需要 make
+      - name: 版本一致性校验
+        run: bash scripts/check-version.sh
+
       - name: vite build
         working-directory: web
         run: npm run build

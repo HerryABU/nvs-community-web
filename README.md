@@ -8,7 +8,10 @@
   <img src="https://img.shields.io/badge/license-AGPL%20v3-blue.svg" alt="License">
 </p>
 
-> 版本徽章与 `server/version/version.go`、`web/package.json` 必须三处一致（`make version` 会校验）；
+> 版本号**四处**必须一致：`server/version/version.go`、`web/package.json`、
+> `web/package-lock.json`（root 与 `packages[""]`）、本页顶部徽章。
+> 校验/一键同步只用一条命令（纯 bash + node，**不需要 make**）：`bash scripts/check-version.sh`
+> ／改版本 `bash scripts/check-version.sh --set x.y.z`（有 make 时 `make version` 等价）。
 > 发版时同步更新本徽章与下方「版本更新记录」。
 
 <h1 align="center">📚 NVS — 去中心化网络小说平台</h1>
@@ -458,7 +461,7 @@ make check        # 本地等价 CI：SPA 白名单 + 组件审计 + 后端 buil
 make check-all    # check + 同步 embed + 产物自检 + 前端产物密钥扫描
 make dist         # 只构建前端并同步到 server/dist（embed 源）
 make dist-check   # 校验 server/dist 有 index.html 且资源数正常（防"空 embed 打进 exe"）
-make version      # 校验 version.go 与 package.json 版本一致
+make version      # 校验版本号四处一致（等价 bash scripts/check-version.sh，本机无 make 时跑脚本）
 make hooks        # 启用 .githooks
 make test         # 后端单测（nodist 轨，**不需要**先构建前端）
 make test-embed   # 带真实 embed 产物的单测（需先 make dist）
@@ -484,6 +487,7 @@ make build-gm     # 国密轨（-tags gm，依赖 go.gm.mod）
 
 | 脚本 | 查什么 | 何时跑 |
 |---|---|---|
+| `scripts/check-version.sh` | 版本号**四处一致**（`version.go` / `package.json` / `package-lock.json` 两个 root 字段 / README 徽章）；`--tag` 连 tag 一起校验，`--set x.y.z` 一键同步（**不需要 make**，纯 bash + node） | `make check` / 改版本 / 打 tag 前 |
 | `scripts/check-spa-roots.sh` | 前端**路由首段**是否全部登记到 `server/main.go` 的 `knownSPARoots`（漏登记 = 点链接能进、刷新 404） | `make check` / CI |
 | `scripts/audit-unresolved-components.mjs` | 模板里用了、`<script setup>` 里没导入的组件（Element Plus 按需导入只解析 `El*`，`<ArrowDown />` 少了 import 会**静默不渲染**） | `make check` / CI |
 | `scripts/audit-admin-pages.mjs` | 后台页四态体检（表格 / StateBlock / `#empty` / 骨架 / 分页 / 筛选 / 错误态），`--strict` 有表格无四态即退出码 1 | 改后台页后 |
@@ -517,18 +521,21 @@ NVS_BASE=http://127.0.0.1:8000 node scripts/browser-smoke.mjs
 | workflow | 触发 | 做什么 |
 |---|---|---|
 | `ci.yml` | push 到 `v4` / `v3` / `main` / `master`、PR、手动 | ① 后端 `build` + `vet` + `test` + `gitvcs` 标签轨（均走 `nodist` 轨，不依赖前端产物）+ 发布轨占位编译；② 前端 `npm ci` + `vite build`；③ **内嵌产物冒烟**（拼出单 exe，真启动，断言首页 200、off 档诱饵 404、日志无 panic）；④ 推主干产出 `linux-amd64` 快照 artifact |
-| `release.yml` | push tag `v*` | 校验 **tag = version.go = package.json**；多平台交叉编译（Win x64/ARM64、Linux x64/ARM64/ARMv7、macOS Intel/ARM64）；打包 zip/tar.gz + `SHA256SUMS`；创建 GitHub Release |
+| `release.yml` | push tag `v*` | 校验 **tag = version.go = package.json = package-lock = README 徽章**（`scripts/check-version.sh --tag`）；多平台交叉编译（Win x64/ARM64、Linux x64/ARM64/ARMv7、macOS Intel/ARM64）；打包 zip/tar.gz + `SHA256SUMS`；创建 GitHub Release |
 
-发布流程（版本号三处同步后打 tag）：
+发布流程（版本号四处同步后打 tag）：
 
 ```bash
-# 1) 改版本（三处必须一致）
+# 1) 改版本 —— 一条命令搞定四处（含 package-lock 的两个 root 字段，不碰依赖自己的 version）
+bash scripts/check-version.sh --set x.y.z
+#    等价的手工改动位置：
 #    server/version/version.go  var AppVersion = "x.y.z"
 #    web/package.json           "version": "x.y.z"
+#    web/package-lock.json      顶层 version 与 packages[""].version
 #    README.md                  顶部 version 徽章 + 版本更新记录新增段落
 
-# 2) 本地先过一遍
-make version && make check-all
+# 2) 本地先过一遍（make version 就是脚本的壳，没有 make 直接跑脚本）
+bash scripts/check-version.sh && make check-all
 
 # 3) 提交 + 打 tag（tag 必须与版本一致，否则 release 直接失败）
 git add -A && git commit -m "chore(release): x.y.z <摘要>"
@@ -915,7 +922,7 @@ v4 线第一个真正意义上的功能版本：21 个提交，主线是**把 AI
 配置表缺短信 / 微信 / 国密 / 实名加密整段，且有几处**指路已失效**。
 
 **改动**
-- 顶部加 **version 徽章**（与 `version.go` / `package.json` 三处一致，`make version` 校验）
+- 顶部加 **version 徽章**（与 `version.go` / `package.json` / `package-lock.json` 四处一致，`bash scripts/check-version.sh` 校验）
 - 特性区新增 6 个板块：**AI 工作台**（对话/绘画/视频/智能体/模型池/路由降级/思考型模型/BYOK/成本台）、
   **阅读体验**（字号/进度/书签/划线批注/语音朗读；楼层评论 + 排序 + 密度 + 评论网 + 加密楼）、
   **群组与实时消息**（SSE 事件、ID 优先的未读计数、私信、消息中心）、

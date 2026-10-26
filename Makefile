@@ -72,6 +72,7 @@ hooks:
 
 # 本地等价 CI（推送前自己跑一遍，和 CI 的 backend + frontend 对齐）
 check:
+	bash scripts/check-version.sh
 	bash scripts/check-spa-roots.sh
 	node scripts/audit-unresolved-components.mjs --strict
 	# 后端走 nodist 轨：server/dist 不入库，新克隆里没它时 //go:embed all:dist 会直接编译失败；
@@ -84,10 +85,13 @@ check-all: check dist dist-check
 	bash scripts/scan-frontend-secrets.sh server/dist
 	@echo "本地完整校验通过（发布前建议再跑一次 make build）"
 
-# 打 tag 发布由 GitHub Actions 完成（.github/workflows/release.yml），本地只校验版本
+# 打 tag 发布由 GitHub Actions 完成（.github/workflows/release.yml），本地只校验版本。
+# ⚠️ 逻辑在 scripts/check-version.sh（纯 bash + node，**不需要 make**）：
+#    本机若没有 make，直接 `bash scripts/check-version.sh`；
+#    改版本用 `bash scripts/check-version.sh --set x.y.z`（四处一起改，含 package-lock 的两个 root 字段，
+#    且不会碰依赖自己的 version —— 全文替换会改坏依赖树）。
 version:
-	@echo "版本：$(VERSION)"
-	@cd web && test "$$(node -p 'require("./package.json").version')" = "$(VERSION)" && echo "version.go 与 package.json 一致"
+	@bash scripts/check-version.sh
 
 gm-audit:
 	cd server && $(GO) run . gm-audit
