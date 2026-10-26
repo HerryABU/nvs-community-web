@@ -132,7 +132,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
     icon: Stamp,
     color: 'var(--gradient-danger)',
     items: [
-      { title: '警方取管台', desc: '取证留证 · 软删除查看 · 凭证下载', path: '/police-console', icon: Stamp, color: 'var(--gradient-danger)' },
+      { title: '警方取管台', desc: '取证留证 · 软删除查看 · 凭证下载', path: '/police', icon: Stamp, color: 'var(--gradient-danger)' },
       { title: '联动工单', desc: '建单/派单/进展/结案 · 超期与未派单口径', path: '/admin/tickets', icon: Postcard, color: 'var(--gradient-danger)' },
     ],
   },

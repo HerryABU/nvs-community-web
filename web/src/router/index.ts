@@ -264,8 +264,13 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      // 旧地址兼容：历史书签、站内老链接仍指向 /police-console
       path: '/police-console',
-      name: 'police-console',
+      redirect: '/police',
+    },
+    {
+      path: '/police',
+      name: 'police',
       component: () => import('@/views/admin/AdminPoliceConsole.vue'),
       meta: { requiresAuth: true },
     },
@@ -736,13 +741,15 @@ const router = createRouter({
   ],
 });
 
-// 🔒 组级角色守卫：所有 /admin/* 路由强制 requiresAdmin，/police-console 强制 requiresPolice。
+// 🔒 组级角色守卫：所有 /admin/* 路由强制 requiresAdmin，/police/* 强制 requiresPolice。
 // 此前仅在 NavBar 用 v-if 隐藏入口，路由层未拦截，普通用户手输 URL 即可直达后台模板。
 router.getRoutes().forEach((r) => {
   if (r.path.startsWith('/admin')) {
     r.meta = { ...(r.meta || {}), requiresAdmin: true };
   }
-  if (r.path === '/police-console') {
+  // 警方台独立成 /police/*：整段都要 requiresPolice，
+  // 只守入口页的话，将来加子页面（/police/xxx）会漏掉权限
+  if (r.path === '/police' || r.path.startsWith('/police/')) {
     r.meta = { ...(r.meta || {}), requiresPolice: true };
   }
 });

@@ -1372,7 +1372,7 @@ SSRF 拒绝、目录穿越拒绝、zip manifest、result JSON 兼容）；`go bu
 
 > 1. **新增 police 角色（准管理员）**：权限模型扩展 `police` 角色。警方账号**不可自注册**（注册恒为 reader，且无 role 注入路径），只能由管理员在「用户管理」中通过专用提权接口（`POST /api/admin/users/:id/promote-police`）显式提权，防止越权/漏洞提权；撤销走 `POST /api/admin/users/:id/revoke-police`（回退为 reader）。
 > 2. **提权审计留痕**：提权/撤销均写入 emergency 审计日志（`user_promote_police` / `user_revoke_police`），并在 `users` 表记录 `police_granted_by` / `police_granted_at`；通用「编辑用户」接口拒绝直接设置 police 角色，强制走审计通道。
-> 3. **警方取管台（`/police-console`）**：独立取证台，仅 admin / police 可访问（`/api/police/*`）。可查看全部软删除留证（`softdel_*` 表，满足「看到软删除」），按类型筛选，单条查看完整快照并**下载取证凭证（JSON）**，以及一键「导出全部取证包」（含软删除留证 + 隔离墙访问 + Web 访问 + 用户审计），便于提前准备取证材料。
+> 3. **警方取管台（`/police/*`，旧地址 `/police-console` 自动重定向）**：独立取证台，仅 admin / police 可访问（`/api/police/*`）。可查看全部软删除留证（`softdel_*` 表，满足「看到软删除」），按类型筛选，单条查看完整快照并**下载取证凭证（JSON）**，以及一键「导出全部取证包」（含软删除留证 + 隔离墙访问 + Web 访问 + 用户审计），便于提前准备取证材料。
 > 4. **权限边界**：police 仅能进取管台，看不到 `/api/admin` 普通管理功能（用户封禁、内容治理等）；前端后台大屏与导航新增「警方取管台」入口。
 
 ### v3.4.1 网络诊断与攻击流量面板（2026-08-30）

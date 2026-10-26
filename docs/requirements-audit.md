@@ -44,7 +44,7 @@
 | 蜜罐 JWT（独立密钥 + hid + 会话表） | ✅ | `honeypot/jwt.go`：`data/honeypot/secret.key`（0600）与真实 `JWT_SECRET` 物理隔离；`ShadowClaims.hid` 绑会话；`alg=none` 拒绝 |
 | SQL 注入蜜罐（预生成响应库） | ⛔ | 未实现（真实链路全部参数化查询，注入打不穿）；仍列在 `gap-audit.md` #3 |
 | 蜜罐事件 append-only + 哈希对齐 + 导出审批 | ✅（部分） | 事件只 INSERT + 行级 TTL 清理；取证包 `manifest.json` 带每文件 SHA256（`X-Bundle-SHA256`）；导出写 `export` 事件留痕。**冷归档未做**（见 gap-audit #5） |
-| 警方定位为「溯源辅助」 | ✅ | `/police-console` 已按此定位 |
+| 警方定位为「溯源辅助」 | ✅ | `/police/*`（旧 `/police-console` 重定向）已按此定位 |
 
 > 该项是**整套子系统**，不是补丁式改动。建议单独立项：`server/honeypot`（假 .env 生成器 / 蜜罐 JWT 签发 / 会话表 / 载荷匹配响应库 / 事件表 / 威慑页）+ 管理端「蜜罐事件」面板 + 取证包导出审批。
 

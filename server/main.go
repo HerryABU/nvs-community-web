@@ -72,6 +72,8 @@ var knownSPARoots = map[string]bool{
 	// 以下根段此前遗漏，导致直接访问/刷新这些页面被 404（SPA 深链失效）
 	"about": true, "ai": true, "api-spider": true, "feed": true,
 	"me": true, "messages": true, "my-keys": true, "police-console": true,
+	// 警方台独立成 /police/*（旧 /police-console 保留为前端重定向）
+	"police":  true,
 	"reading": true, "topics": true, "user": true, "wallet": true,
 	// 新增页面漏登记会直接 404（且只在「直接访问/刷新」时暴露，点链接进去是正常的），
 	// 属于最难自查的一类回归。CI 里有 `make spa-roots-check` 做前后端对撞。

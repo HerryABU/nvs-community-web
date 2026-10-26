@@ -182,7 +182,7 @@
                 <el-dropdown-item
                   v-if="authStore.user?.role === 'admin' || authStore.user?.role === 'police'"
                   :divided="authStore.user?.role !== 'admin'"
-                  @click="$router.push('/police-console')"
+                  @click="$router.push('/police')"
                 >
                   <el-icon><Stamp /></el-icon> 警方取管台
                 </el-dropdown-item>
@@ -274,7 +274,7 @@
         <div class="mnav-item" @click="mnavGo('/me')"><el-icon><User /></el-icon> 个人中心</div>
         <div class="mnav-item" @click="mnavGo(`/author/${authStore.user?.id}`)"><el-icon><HomeFilled /></el-icon> 我的主页</div>
         <div class="mnav-item" v-if="authStore.user?.role === 'admin'" @click="mnavGo('/admin')"><el-icon><Setting /></el-icon> 管理员面板</div>
-        <div class="mnav-item" v-if="authStore.user?.role === 'admin' || authStore.user?.role === 'police'" @click="mnavGo('/police-console')"><el-icon><Stamp /></el-icon> 警方取管台</div>
+        <div class="mnav-item" v-if="authStore.user?.role === 'admin' || authStore.user?.role === 'police'" @click="mnavGo('/police')"><el-icon><Stamp /></el-icon> 警方取管台</div>
         <div class="mnav-item mnav-logout" @click="mnavLogout"><el-icon><SwitchButton /></el-icon> 退出登录</div>
       </template>
       <template v-else>
