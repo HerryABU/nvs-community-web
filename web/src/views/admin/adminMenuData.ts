@@ -69,6 +69,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: 'AI 审核', desc: 'AI 内容审核功能：开关 · 判定模型 · 送检策略 · 批次间隔 · 处置阈值 · 恶意举报者', path: '/admin/ai-moderation', icon: MagicStick, color: 'var(--gradient-purple)' },
       { title: '审核', desc: 'AI 判定后的待办复核：放行 / 删除留证 / 封禁留证（违规与存疑优先）', path: '/admin/moderation', icon: WarningFilled, color: 'var(--gradient-accent)' },
       { title: 'AI 防越狱', desc: '对话内容安全闸：规则 + 蓝队模型批次判定 + 用户观察期/冷却', path: '/admin/ai-safety', icon: Lock, color: 'var(--gradient-danger)' },
+      { title: '舆情守卫', desc: '评论区话题条件拦截：同一句话在亚文化下只标注、在性别/政治议题下才拦；词表每日自动更新', path: '/admin/sentiment', icon: ChatLineRound, color: 'var(--gradient-purple)' },
       { title: '举报处理', desc: '审核举报、删除违规内容', path: '/admin/reports', icon: Warning, color: 'var(--gradient-accent)' },
       { title: '违禁词库', desc: '标记/删除/替换 · 关键词+正则双模式', path: '/admin/badwords', icon: Warning, color: 'var(--gradient-danger)' },
       { title: '内容封禁', desc: '小说/章节封禁 · 记录176原因 · 可解封', path: '/admin/ban', icon: Lock, color: 'var(--gradient-danger)' },

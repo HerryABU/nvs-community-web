@@ -435,6 +435,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/sentiment',
+      name: 'admin-sentiment',
+      component: () => import('@/views/admin/AdminSentiment.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/moderation',
       name: 'admin-moderation',
       component: () => import('@/views/admin/AdminModerationQueue.vue'),
