@@ -54,10 +54,17 @@
             >删除</el-button>
           </span>
         </div>
-        <template v-if="!isFloorCollapsed(floor.id)"><div v-if="!floor.Locked" class="floor-content cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" :class="{ 'deleted-content': showDeleted(floor) }">
+        <template v-if="!isFloorCollapsed(floor.id)"><div v-if="!floor.Locked" class="floor-content cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" :class="{ 'deleted-content': showDeleted(floor), 'is-collapsed': isLongText(floor.content) && !isTextExpanded(floor.id) }">
           <div v-if="showDeleted(floor)" class="deleted-banner">⚠ 该内容已被删除，以下为警方取证留证（删除人：{{ floor.deleted_by === 'admin' ? '管理员' : floor.deleted_by === 'user' ? '用户自删' : '系统' }}）</div>
           <div v-else-if="floor.is_deleted && !isModerator" class="deleted-placeholder">[ 该内容已删除 ]</div>
           <div v-html="renderCommentHTML(floor.content, floor.mentions)"></div>
+        </div>
+        <!-- 长文本折叠：阈值来自服务端（sentiments/config.fold_chars），前端不写死 -->
+        <div v-if="!floor.Locked && isLongText(floor.content)" class="text-fold">
+          <el-button text size="small" @click="toggleTextExpand(floor.id)">
+            {{ isTextExpanded(floor.id) ? '收起' : '展开全文' }}
+          </el-button>
+          <span class="text-fold-hint">共 {{ plainLen(floor.content) }} 字</span>
         </div>
         <div v-else class="floor-locked">
           <div class="locked-icon"><el-icon><Lock /></el-icon></div>
@@ -202,6 +209,7 @@ const props = withDefaults(defineProps<{
   canModerate?: boolean;        // 版主/管理员：可删他人内容
   canMute?: boolean;            // 版主：可禁言
   previewCount?: number;        // 楼内回复默认展示条数，超出折叠
+  foldChars?: number;           // 长文本折叠阈值（字符）；由服务端配置下发
   liveChannel?: string;         // 狂暴模式（F19）SSE 频道 key；传入即开启实时评论订阅
   // 新增：@ 提及相关
   mentionSource?: string;       // participants / global / manual（生效的提及来源）
@@ -214,6 +222,7 @@ const props = withDefaults(defineProps<{
   replyable: true,
   canModerate: false,
   canMute: false,
+  foldChars: 400,
   previewCount: 3,
   liveChannel: '',
   mentionSource: 'participants',
@@ -232,6 +241,36 @@ const emit = defineEmits<{
 // 狂暴模式（F19）：评论区实时订阅。频道为空（未开启/未传）时 composable 内部直接短路不建连接；
 // 传 getter 以便频道异步就绪（确认开启后）自动重建连接。组件卸载时由 composable 自行断开。
 const live = useLiveComments(() => props.liveChannel || '', (c: any) => emit('live', c));
+
+// ── 长文本折叠 ──
+// 用纯字符数判定（不按行）：中文评论在不同屏宽下换行数会变，按行会抖。
+// 展开状态存 localStorage，刷新后保持，避免每次都要重新点。
+const textExpanded = ref<Record<number, boolean>>({});
+function plainLen(text: string): number {
+  return (text || '').replace(/\s+/g, '').length;
+}
+function isLongText(text: string): boolean {
+  return props.foldChars > 0 && plainLen(text) > props.foldChars;
+}
+function isTextExpanded(id: number): boolean {
+  if (textExpanded.value[id] === undefined) {
+    try {
+      textExpanded.value[id] = localStorage.getItem(`nvs_floor_expanded_${id}`) === '1';
+    } catch {
+      textExpanded.value[id] = false; // 隐私模式：退化为不记忆
+    }
+  }
+  return textExpanded.value[id];
+}
+function toggleTextExpand(id: number) {
+  const next = !isTextExpanded(id);
+  textExpanded.value[id] = next;
+  try {
+    localStorage.setItem(`nvs_floor_expanded_${id}`, next ? '1' : '0');
+  } catch {
+    // 写不进去不该打断交互
+  }
+}
 const liveConnected = live.connected;
 
 const authStore = useAuthStore();
@@ -505,6 +544,25 @@ async function removeManage() {
   line-height: 1.7;
   white-space: normal;
 }
+
+/* ====== 长文本折叠 ====== */
+.floor-content.is-collapsed {
+  position: relative;
+  max-height: 12em;
+  overflow: hidden;
+}
+.floor-content.is-collapsed::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3em;
+  background: linear-gradient(to bottom, transparent, var(--bg-card, #fff));
+  pointer-events: none;
+}
+.text-fold { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.text-fold-hint { font-size: 0.72rem; color: var(--text-light, #999); }
 
 /* ====== 警方/管理员取证视图：已删除内容红字标注 ====== */
 .deleted-content {

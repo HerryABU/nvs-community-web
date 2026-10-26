@@ -7,6 +7,7 @@ import (
 	"nvs-server/models"
 	"nvs-server/realtime"
 	"nvs-server/security"
+	sentimentstore "nvs-server/sentiment/store"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -46,7 +47,13 @@ func GetComments(c *gin.Context) {
 	_, isStaff, floorPwdHeader := resolveFloorPasswordViewer(c)
 	pg.List = models.RedactLockedComments(pg.List, viewerID, isStaff, parseFloorPasswords(floorPwdHeader))
 
+	// 折叠阈值由服务端下发：前端不写死数字，改配置即可全站生效
+	foldChars := 0
+	if cfg, cerr := sentimentstore.GetConfig(); cerr == nil && cfg != nil {
+		foldChars = cfg.FoldChars
+	}
 	utils.Success(c, gin.H{
+		"fold_chars":  foldChars,
 		"list":        pg.List,
 		"total":       pg.Total,
 		"floor_total": pg.FloorTotal,
