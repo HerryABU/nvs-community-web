@@ -43,6 +43,7 @@ import (
 	"nvs-server/security"
 	"nvs-server/security/sms"
 	sentimentstore "nvs-server/sentiment/store"
+	"nvs-server/sentiment/updater"
 	"nvs-server/tlsconfig"
 	"nvs-server/utils"
 	"nvs-server/version"
@@ -1650,6 +1651,8 @@ func initDatabase() error {
 	if err := sentimentstore.Migrate(models.DB); err != nil {
 		return err
 	}
+	// 每日词表自动更新（默认关闭，站长在后台开启后才会真正请求上游）
+	updater.Start()
 	// 对话分支：把老数据（parent_id 全 0）串成链并补活跃叶子。
 	// 不做的话升级后打开旧对话只能看到最后一条 —— 数据没丢但用户以为丢了。
 	models.BackfillMessageParents()

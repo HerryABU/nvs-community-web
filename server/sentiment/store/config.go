@@ -34,6 +34,10 @@ type Config struct {
 	SearchPath string `gorm:"size:64" json:"search_path"`
 	// SearchQuery 搜索词模板，{date} 会被替换为当天日期
 	SearchQuery string `gorm:"size:255" json:"search_query"`
+	// SearchBudgetPerDay 每天最多调用几次 /search（两次 AI 调用 = 检索 + 总结，成本要设上限）
+	SearchBudgetPerDay int `gorm:"not null;default:20" json:"search_budget_per_day"`
+	// RecencyDays 检索时间窗（天）：黑话更新快，搜太久远的语境等于判断过时用法
+	RecencyDays int `gorm:"not null;default:30" json:"recency_days"`
 	// AutoUpdateHour 每天几点跑（0-23，服务器本地时区）
 	AutoUpdateHour int `gorm:"not null;default:4" json:"auto_update_hour"`
 	// DailyQuota 每天最多新增多少条词（防止词表爆炸）
@@ -63,6 +67,7 @@ func defaultConfig() Config {
 		LearnFromAI: false, SearchEnabled: false,
 		SearchPath: "/search", SearchQuery: "网络 最新 黑话 缩写 {date}",
 		AutoUpdateHour: 4, DailyQuota: 50, RequireReview: true,
+		SearchBudgetPerDay: 20, RecencyDays: 30,
 		MinConfidence: 60,
 		FoldChars:     400,
 	}
@@ -86,16 +91,18 @@ func GetConfig() (*Config, error) {
 	}
 	// Create 会跳过零值字段（GORM 行为），用显式 Updates 写回布尔/数值默认值
 	DB.Model(&Config{}).Where("id = ?", 1).Updates(map[string]interface{}{
-		"enabled":          seed.Enabled,
-		"flood_block":      seed.FloodBlock,
-		"learn_from_ai":    seed.LearnFromAI,
-		"search_enabled":   seed.SearchEnabled,
-		"require_review":   seed.RequireReview,
-		"auto_update_hour": seed.AutoUpdateHour,
-		"daily_quota":      seed.DailyQuota,
-		"min_confidence":   seed.MinConfidence,
-		"fold_chars":       seed.FoldChars,
-		"schema_version":   seed.SchemaVersion,
+		"enabled":               seed.Enabled,
+		"flood_block":           seed.FloodBlock,
+		"learn_from_ai":         seed.LearnFromAI,
+		"search_enabled":        seed.SearchEnabled,
+		"require_review":        seed.RequireReview,
+		"search_budget_per_day": seed.SearchBudgetPerDay,
+		"recency_days":          seed.RecencyDays,
+		"auto_update_hour":      seed.AutoUpdateHour,
+		"daily_quota":           seed.DailyQuota,
+		"min_confidence":        seed.MinConfidence,
+		"fold_chars":            seed.FoldChars,
+		"schema_version":        seed.SchemaVersion,
 	})
 	return &seed, nil
 }
@@ -105,22 +112,24 @@ func (c *Config) Save() error {
 	c.UpdatedAt = time.Now()
 	c.SchemaVersion = configSchemaVersion
 	fields := map[string]interface{}{
-		"enabled":          c.Enabled,
-		"block_risk":       c.BlockRisk,
-		"flag_risk":        c.FlagRisk,
-		"flood_block":      c.FloodBlock,
-		"learn_from_ai":    c.LearnFromAI,
-		"search_enabled":   c.SearchEnabled,
-		"search_model_id":  c.SearchModelID,
-		"search_path":      c.SearchPath,
-		"search_query":     c.SearchQuery,
-		"auto_update_hour": c.AutoUpdateHour,
-		"daily_quota":      c.DailyQuota,
-		"require_review":   c.RequireReview,
-		"min_confidence":   c.MinConfidence,
-		"fold_chars":       c.FoldChars,
-		"schema_version":   c.SchemaVersion,
-		"updated_at":       c.UpdatedAt,
+		"enabled":               c.Enabled,
+		"block_risk":            c.BlockRisk,
+		"flag_risk":             c.FlagRisk,
+		"flood_block":           c.FloodBlock,
+		"learn_from_ai":         c.LearnFromAI,
+		"search_enabled":        c.SearchEnabled,
+		"search_model_id":       c.SearchModelID,
+		"search_path":           c.SearchPath,
+		"search_query":          c.SearchQuery,
+		"search_budget_per_day": c.SearchBudgetPerDay,
+		"recency_days":          c.RecencyDays,
+		"auto_update_hour":      c.AutoUpdateHour,
+		"daily_quota":           c.DailyQuota,
+		"require_review":        c.RequireReview,
+		"min_confidence":        c.MinConfidence,
+		"fold_chars":            c.FoldChars,
+		"schema_version":        c.SchemaVersion,
+		"updated_at":            c.UpdatedAt,
 	}
 	return DB.Model(&Config{}).Where("id = ?", 1).Updates(fields).Error
 }
