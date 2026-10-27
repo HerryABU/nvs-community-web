@@ -43,7 +43,36 @@
           <el-input-number v-model="form.retention_days" :min="1" :max="365" />
           <span class="hp-tip">超期事件可手动清理</span>
         </el-form-item>
+        <el-form-item label="注释">
+          <el-input v-model="form.annotation" type="textarea" :rows="2" placeholder="站长可灵活备注：蜜罐用途、投放策略、对接事项等" />
+        </el-form-item>
       </el-form>
+    </el-card>
+
+    <el-card class="hp-section">
+      <template #header><span>蜜罐密钥</span></template>
+      <el-form label-width="120px">
+        <el-form-item label="当前密钥">
+          <code class="hp-key">{{ maskKey(overview?.key_b64) }}</code>
+          <el-button size="small" style="margin-left:10px" :loading="regening" type="primary" @click="regenerate">重新生成</el-button>
+          <span class="hp-tip">与真实站点密钥物理隔离；重新生成后旧诱饵 .env 暴露值即失效</span>
+        </el-form-item>
+        <el-form-item label="手动修改">
+          <el-input v-model="manualKey" size="small" style="max-width:420px" placeholder="粘贴 base64 密钥（解码后须 ≥ 32 字节）；留空则点「应用」等价于重新生成" />
+          <el-button size="small" style="margin-left:10px" :loading="regening" @click="applyManual">应用</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
+    <el-card class="hp-section">
+      <template #header>
+        <div class="hp-section-head">
+          <span>自定义诱饵内容</span>
+          <span class="hp-tip">JSON 数组；可覆盖内置诱饵（env/git/admin…）内容，或为额外路径（/.ssh/id_rsa、/config.yml 等）填内容</span>
+        </div>
+      </template>
+      <el-input v-model="form.custom_decoys" type="textarea" :rows="8" placeholder='[{"id":"env","path":"/.env","content":"DB_PASSWORD=xxx","risk":70,"headers":{"Content-Type":"text/plain"}}]' />
+      <div class="hp-tip">留空则使用内置默认内容；保存后立即生效（路径需为已注册诱饵路径之一）。</div>
     </el-card>
 
     <el-card class="hp-section">
@@ -289,6 +318,8 @@ const rulesLoading = ref(false);
 const applying = ref(false);
 const sqli = ref<any>(null);
 const tls = ref<any>(null);
+const regening = ref(false);
+const manualKey = ref('');
 
 const form = reactive<HoneypotSetting>({
   enabled: false, level: 'off',
@@ -296,7 +327,52 @@ const form = reactive<HoneypotSetting>({
   record_headers: false, record_body_snippet: false, body_snippet_limit: 512,
   header_allowlist: defaultAllow,
   auto_ban: false, ban_minutes: 60, delay_ms: 0, retention_days: 90,
+  annotation: '', custom_decoys: '',
 });
+
+function maskKey(k?: string) {
+  if (!k) return '（无）';
+  if (k.length <= 12) return k;
+  return k.slice(0, 8) + '…' + k.slice(-4) + `（${k.length} 字符）`;
+}
+
+async function regenerate() {
+  try {
+    await ElMessageBox.confirm(
+      '重新生成蜜罐密钥？旧的诱饵 .env 暴露值将失效，已签发的影子 token 全部作废。',
+      '重新生成确认',
+      { type: 'warning' },
+    );
+  } catch {
+    return;
+  }
+  regening.value = true;
+  try {
+    const res: any = await honeypotApi.regenerateKey({});
+    overview.value = overview.value || ({} as any);
+    overview.value!.key_b64 = res?.data?.data?.key_b64;
+    ElMessage.success('蜜罐密钥已重新生成');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '生成失败');
+  } finally {
+    regening.value = false;
+  }
+}
+
+async function applyManual() {
+  regening.value = true;
+  try {
+    const res: any = await honeypotApi.regenerateKey({ key: manualKey.value });
+    overview.value = overview.value || ({} as any);
+    overview.value!.key_b64 = res?.data?.data?.key_b64;
+    manualKey.value = '';
+    ElMessage.success('蜜罐密钥已更新');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '更新失败');
+  } finally {
+    regening.value = false;
+  }
+}
 
 function fmt(t: string) {
   return t ? String(t).replace('T', ' ').slice(0, 19) : '';
@@ -473,5 +549,10 @@ onMounted(async () => {
 .hp-pre {
   background: var(--bg-muted); border-radius: 6px; padding: 8px 10px;
   font-size: 0.72rem; white-space: pre-wrap; margin: 6px 0;
+}
+.hp-key {
+  background: var(--bg-muted); border-radius: 6px; padding: 4px 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem;
+  word-break: break-all; max-width: 360px; display: inline-block;
 }
 </style>

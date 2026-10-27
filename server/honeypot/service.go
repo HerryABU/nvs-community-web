@@ -79,6 +79,12 @@ func SaveSetting(in Setting) (*Setting, error) {
 	if in.DelayMs < 0 {
 		in.DelayMs = 0
 	}
+	// 自定义诱饵 JSON 做轻量合法性校验：非空却解析不出任何条目 → 视为非法 JSON，拒绝保存
+	if strings.TrimSpace(in.CustomDecoys) != "" {
+		if parseCustomDecoys(in) == nil {
+			return nil, errors.New("自定义诱饵不是合法 JSON 数组")
+		}
+	}
 	in.UpdatedAt = time.Now()
 
 	var old Setting
@@ -96,7 +102,10 @@ func SaveSetting(in Setting) (*Setting, error) {
 			"record_headers": in.RecordHeaders, "record_body_snippet": in.RecordBodySnippet,
 			"body_snippet_limit": in.BodySnippetLimit, "header_allowlist": in.HeaderAllowlist,
 			"auto_ban": in.AutoBan, "ban_minutes": in.BanMinutes, "delay_ms": in.DelayMs,
-			"retention_days": in.RetentionDays, "updated_at": in.UpdatedAt,
+			"retention_days": in.RetentionDays,
+			"annotation":     in.Annotation,
+			"custom_decoys":  in.CustomDecoys,
+			"updated_at":     in.UpdatedAt,
 		}).Error; err != nil {
 			return nil, err
 		}
@@ -394,6 +403,7 @@ type Overview struct {
 	HighRisk     int64   `json:"high_risk"`
 	Last24h      int64   `json:"last_24h"`
 	BannedCount  int     `json:"banned_count"`
+	KeyB64       string  `json:"key_b64"` // 蜜罐密钥（base64），即诱饵 .env 应暴露的值；仅供管理员查看
 }
 
 // GetOverview 概览
@@ -405,6 +415,7 @@ func GetOverview() Overview {
 	db().Model(&Session{}).Where("max_risk >= ?", 60).Count(&o.HighRisk)
 	db().Model(&Event{}).Where("created_at >= ?", time.Now().Add(-24*time.Hour)).Count(&o.Last24h)
 	o.BannedCount = len(BannedList())
+	o.KeyB64 = ShadowSecretB64()
 	return o
 }
 

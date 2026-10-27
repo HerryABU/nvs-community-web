@@ -6,6 +6,7 @@ package honeypothandler
 
 import (
 	"strconv"
+	"strings"
 
 	"nvs-server/honeypot"
 	"nvs-server/middleware"
@@ -30,6 +31,31 @@ func GetConfig(c *gin.Context) {
 		return
 	}
 	utils.Success(c, honeypot.GetOverview())
+}
+
+// RegenerateKey POST /api/admin/honeypot/regenerate-key
+// 蜜罐密钥「重新生成」（随机新密钥）或「手动修改」（自带 base64 密钥）。
+// 重新生成后，旧诱饵 .env 暴露值失效、已签发影子 token 全部作废。
+func RegenerateKey(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	var in struct {
+		Key string `json:"key"` // 可选：传入则手动指定（base64），留空则自动随机生成
+	}
+	_ = c.ShouldBindJSON(&in)
+	var b64 string
+	var err error
+	if strings.TrimSpace(in.Key) != "" {
+		b64, err = honeypot.ModifyShadowKey(in.Key)
+	} else {
+		b64, err = honeypot.RegenerateShadowKey()
+	}
+	if err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+	utils.SuccessMessage(c, "蜜罐密钥已更新（请同步更新诱饵 .env 暴露值）", gin.H{"key_b64": b64})
 }
 
 // SaveConfig PUT /api/admin/honeypot/config

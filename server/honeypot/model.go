@@ -50,6 +50,10 @@ type Setting struct {
 	DelayMs       int  `gorm:"not null;default:0" json:"delay_ms"`        // 命中后延迟响应（拖住自动化）
 	RetentionDays int  `gorm:"not null;default:90" json:"retention_days"` // 事件/指纹留存天数
 
+	// 站长可编辑项
+	Annotation   string `gorm:"type:text" json:"annotation"`    // 站长备注 / 注释（灵活记录）
+	CustomDecoys string `gorm:"type:text" json:"custom_decoys"` // 自定义诱饵 JSON：[{"id","path","content","risk","headers":{}}]（覆盖默认内容或新增路径）
+
 	UpdatedAt time.Time `json:"updated_at"`
 }
 

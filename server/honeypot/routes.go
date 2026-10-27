@@ -38,9 +38,16 @@ func Register(r *gin.Engine) {
 			serveProbe(c, path)
 		})
 	}
+	// 额外诱饵路径：启动即注册静态路由，内容默认由模板生成，可由 CustomDecoys 覆盖
+	for _, p := range extraBaitPaths {
+		path := p
+		r.Any(path, func(c *gin.Context) {
+			serveBaitFile(c, path)
+		})
+	}
 }
 
-// serveDecoy 返回诱饵内容（按等级）
+// serveDecoy 返回诱饵内容（按等级）；若站长在 CustomDecoys 覆盖本路径，则优先用自定义内容
 func serveDecoy(c *gin.Context, d Decoy) {
 	set := Current()
 	if !set.Enabled || set.Level == LevelOff {
@@ -53,6 +60,19 @@ func serveDecoy(c *gin.Context, d Decoy) {
 		if x.ID == d.ID {
 			covered = true
 			break
+		}
+	}
+	// 站长显式自定义了本路径内容 → 视为有意投放，覆盖等级限制
+	if cd := customByPath(set, d.Path); cd != nil {
+		covered = true
+		if cd.Content != "" {
+			d.Content = cd.Content
+		}
+		if cd.Risk > 0 {
+			d.Risk = cd.Risk
+		}
+		if len(cd.Headers) > 0 {
+			d.Headers = cd.Headers
 		}
 	}
 	if !covered {
@@ -85,6 +105,41 @@ func serveDecoy(c *gin.Context, d Decoy) {
 		c.Header(k, v)
 	}
 	c.Header("X-Robots-Tag", "noindex")
+	c.String(http.StatusOK, d.Content)
+}
+
+// serveBaitFile 额外诱饵路径（extraBaitPaths）：启动即注册路由，内容默认由模板生成，
+// 可被 CustomDecoys 按路径覆盖；命中即记录（与内置诱饵同口径）。
+func serveBaitFile(c *gin.Context, path string) {
+	set := Current()
+	if !set.Enabled || set.Level == LevelOff {
+		utils.NotFound(c, "页面不存在")
+		return
+	}
+	if IsBanned(c.ClientIP()) {
+		c.Status(http.StatusTooManyRequests)
+		return
+	}
+	var d Decoy
+	if cd := customByPath(set, path); cd != nil {
+		d = Decoy{ID: cd.ID, Path: path, Risk: cd.Risk, Content: cd.Content, Headers: cd.Headers}
+	} else {
+		d = Decoy{
+			ID:      "custom",
+			Path:    path,
+			Risk:    60,
+			Content: defaultBaitContent(path),
+			Headers: map[string]string{"Content-Type": "text/plain; charset=utf-8"},
+		}
+	}
+	if d.Risk <= 0 {
+		d.Risk = 60
+	}
+	_, _ = Record(set, c, d)
+	c.Header("X-Robots-Tag", "noindex")
+	for k, v := range d.Headers {
+		c.Header(k, v)
+	}
 	c.String(http.StatusOK, d.Content)
 }
 

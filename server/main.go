@@ -803,6 +803,7 @@ func main() {
 		// 蜜罐等级 + 日志记录字段勾选（docs/honeypot-design.md）
 		admin.GET("/honeypot/config", honeypothandler.GetConfig)
 		admin.PUT("/honeypot/config", honeypothandler.SaveConfig)
+		admin.POST("/honeypot/regenerate-key", honeypothandler.RegenerateKey)
 		admin.GET("/honeypot/sessions", honeypothandler.ListSessions)
 		admin.GET("/honeypot/sessions/:sid", honeypothandler.SessionDetail)
 		admin.GET("/honeypot/export", honeypothandler.Export)

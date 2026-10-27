@@ -8,6 +8,7 @@ package honeypot
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -204,4 +205,73 @@ func slowDelay(set Setting) time.Duration {
 		ms = 5000
 	}
 	return time.Duration(ms) * time.Millisecond
+}
+
+// ==================== 自定义诱饵（站长可编辑内容） ====================
+// 站长在后台填写的 JSON 数组；用途有二：
+//   1. 覆盖内置诱饵（env/git/admin…）的返回内容 / 风险 / 头；
+//   2. 为「额外诱饵路径」（extraBaitPaths，启动即注册路由）提供内容。
+// 解析失败一律回落到默认：绝不因配置脏而让蜜罐静默失效。
+
+// CustomDecoy 单条自定义诱饵
+type CustomDecoy struct {
+	ID      string            `json:"id"`
+	Path    string            `json:"path"`
+	Content string            `json:"content"`
+	Risk    int               `json:"risk"`
+	Headers map[string]string `json:"headers"`
+}
+
+// extraBaitPaths 额外诱饵路径：启动即注册静态路由（gin 路由表必须静态）。
+// 未自定义时返回可信的「误泄露」默认内容；站长可在后台为任意一条填自定义内容。
+var extraBaitPaths = []string{
+	"/.git/credentials", "/.ssh/id_rsa", "/config.yml",
+	"/.npmrc", "/id_rsa", "/secret.txt", "/.htpasswd", "/server.key",
+	"/db_backup.sql", "/.env.bak", "/docker-compose.override.yml", "/.gitignore",
+}
+
+// parseCustomDecoys 解析 Setting 里的自定义诱饵（脏数据回落空）
+func parseCustomDecoys(set Setting) []CustomDecoy {
+	if strings.TrimSpace(set.CustomDecoys) == "" {
+		return nil
+	}
+	var out []CustomDecoy
+	if err := json.Unmarshal([]byte(set.CustomDecoys), &out); err != nil || len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// customByPath 按路径取自定义诱饵（覆盖优先）；CustomDecoys 为空时直接返回 nil
+func customByPath(set Setting, path string) *CustomDecoy {
+	if strings.TrimSpace(set.CustomDecoys) == "" {
+		return nil
+	}
+	list := parseCustomDecoys(set)
+	for i := range list {
+		if list[i].Path == path {
+			return &list[i]
+		}
+	}
+	return nil
+}
+
+// defaultBaitContent 为未自定义的新诱饵路径生成可信泄露内容（按扩展名挑模板）
+func defaultBaitContent(path string) string {
+	lower := strings.ToLower(path)
+	switch {
+	case strings.Contains(lower, "id_rsa") || strings.Contains(lower, "server.key") || strings.Contains(lower, ".pem"):
+		return "-----BEGIN OPENSSH PRIVATE KEY-----\n" + randHex(48) + "\n-----END OPENSSH PRIVATE KEY-----\n"
+	case strings.Contains(lower, "credentials") || strings.Contains(lower, ".npmrc") || strings.Contains(lower, ".htpasswd"):
+		return "# 内部凭据（请勿提交）\n" + randHex(16) + ":" + randHex(12) + "\n"
+	case strings.Contains(lower, "aws"):
+		return "[default]\naws_access_key_id = AKIA" + strings.ToUpper(randHex(8)) +
+			"\naws_secret_access_key = " + randHex(24) + "\n"
+	case strings.Contains(lower, "sql") || strings.Contains(lower, "db_backup"):
+		return "-- mysqldump 残留\nINSERT INTO users VALUES (1,'admin','" + randHex(12) + "',now());\n"
+	case strings.Contains(lower, "yml") || strings.Contains(lower, "yaml") || strings.Contains(lower, "config"):
+		return "APP_ENV=production\nDB_HOST=10.0.12.31\nDB_PASSWORD=" + randHex(12) + "\nJWT_SECRET=" + randHex(24) + "\n"
+	default:
+		return "leaked-config\nCANARY=" + canary() + "\n"
+	}
 }

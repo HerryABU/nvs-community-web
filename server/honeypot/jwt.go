@@ -153,3 +153,44 @@ func TokenFromRequest(c interface {
 	}
 	return ""
 }
+
+// ==================== 蜜罐密钥：修改 / 重新生成 ====================
+// 蜜罐密钥与真实 config.JWTSecret 物理隔离（data/honeypot/secret.key）。
+// 站长可在后台「重新自动生成」（随机新密钥）或「手动修改」（自带密钥）；
+// 重新生成后，旧诱饵 .env 暴露的值即失效，已签发的影子 token 全部作废。
+
+// writeShadowKey 写入新密钥并热替换内存值（不触碰 secretOnce 之外的状态）
+func writeShadowKey(raw []byte) (string, error) {
+	if len(raw) < 32 {
+		return "", errors.New("密钥过短（须 ≥ 32 字节）")
+	}
+	p := secretPath()
+	if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(p, raw, 0600); err != nil {
+		return "", err
+	}
+	secretMu.Lock()
+	shadowKey = raw
+	secretMu.Unlock()
+	return base64.StdEncoding.EncodeToString(raw), nil
+}
+
+// RegenerateShadowKey 生成新的随机蜜罐密钥（32 字节），落盘并热替换
+func RegenerateShadowKey() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return writeShadowKey(buf)
+}
+
+// ModifyShadowKey 由站长手动指定蜜罐密钥（base64；解码后须 ≥ 32 字节）
+func ModifyShadowKey(b64 string) (string, error) {
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(b64))
+	if err != nil {
+		return "", errors.New("密钥不是合法 base64")
+	}
+	return writeShadowKey(raw)
+}

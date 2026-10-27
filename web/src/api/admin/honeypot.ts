@@ -22,6 +22,9 @@ export interface HoneypotSetting {
   ban_minutes: number;
   delay_ms: number;
   retention_days: number;
+  // 站长可编辑项
+  annotation?: string;
+  custom_decoys?: string;
   updated_at?: string;
 }
 
@@ -32,6 +35,7 @@ export interface HoneypotOverview {
   high_risk: number;
   last_24h: number;
   banned_count: number;
+  key_b64?: string;
 }
 
 export interface HoneypotSession {
@@ -72,6 +76,10 @@ export const honeypotApi = {
   },
   saveConfig(data: Partial<HoneypotSetting>) {
     return api.put('/admin/honeypot/config', data);
+  },
+  /** 重新生成 / 手动修改蜜罐密钥（base64）。留空则随机新密钥；传入 key 则手动指定 */
+  regenerateKey(data: { key?: string } = {}) {
+    return api.post('/admin/honeypot/regenerate-key', data);
   },
   listSessions(params: { page?: number; page_size?: number; keyword?: string; min_risk?: number } = {}) {
     return api.get<{ code: number; data: { list: HoneypotSession[]; total: number } }>('/admin/honeypot/sessions', { params });
