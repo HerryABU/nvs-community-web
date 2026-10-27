@@ -54,10 +54,16 @@ const loadingMore = ref(false);
 const typeLabels: Record<string, string> = {
   thread_reply: '帖子回复', comment_reply: '评论回复',
   novel_comment: '作品评论', blog_comment: '博客评论',
+  // 未成年人心理危机保护：抚慰私信 / 保护提示 / 危机后的柔和通知
+  crisis_comfort: '关怀', shield_notice: '保护提示',
+  // 仅站长会收到：AI 判危后的上报
+  youth_crisis: '危机告警',
 };
 const typeIcons: Record<string, string> = {
   thread_reply: '💬', comment_reply: '↩️',
   novel_comment: '📖', blog_comment: '✍️',
+  crisis_comfort: '🌿', shield_notice: '🛡️',
+  youth_crisis: '⚠️',
 };
 function typeLabel(t: string) { return typeLabels[t] || '通知'; }
 function typeIcon(t: string) { return typeIcons[t] || '🔔'; }
