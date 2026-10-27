@@ -324,6 +324,12 @@ export const adminApi = {
   testBadWord(data: { match_type?: string; pattern: string; action?: string; replacement?: string; text: string }) {
     return api.post('/admin/bad-words/test', data);
   },
+  exportBadWords() {
+    return api.get('/admin/bad-words/export');
+  },
+  importBadWords(data: any[]) {
+    return api.post('/admin/bad-words/import', data);
+  },
   // 违禁词标记待审
   getBadWordFlags(params: { status?: string; page?: number; page_size?: number }) {
     return api.get('/admin/bad-word-flags', { params });

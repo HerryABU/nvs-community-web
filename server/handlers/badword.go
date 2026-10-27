@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -26,6 +27,8 @@ func ReloadBadWords() {
 		dyn = append(dyn, security.DynamicBadWord{
 			ID:          w.ID,
 			Name:        w.Name,
+			Category:    w.Category,
+			Tags:        w.Tags,
 			MatchType:   w.MatchType,
 			Pattern:     w.Pattern,
 			Action:      w.Action,
@@ -77,6 +80,29 @@ func normalizeBadWordScope(scope string) string {
 	return strings.Join(parts, ",")
 }
 
+// normalizeBadWordCategory 归一化分类：去空白；空归为「其他」
+func normalizeBadWordCategory(cat string) string {
+	cat = strings.TrimSpace(cat)
+	if cat == "" {
+		return "其他"
+	}
+	return cat
+}
+
+// normalizeBadWordTags 归一化组合标签：去空白、去重、按逗号拼接
+func normalizeBadWordTags(tags string) string {
+	seen := map[string]bool{}
+	var parts []string
+	for _, t := range strings.Split(tags, ",") {
+		t = strings.TrimSpace(t)
+		if t != "" && !seen[t] {
+			seen[t] = true
+			parts = append(parts, t)
+		}
+	}
+	return strings.Join(parts, ",")
+}
+
 // validateBadWordPattern 校验正则合法性（仅 regex 模式）：长度上限 + RE2 编译。
 // 第二个返回值为误用提示（如嵌套量词），可保存但需提醒管理员。
 func validateBadWordPattern(matchType, pattern string) (error, string) {
@@ -109,6 +135,8 @@ func CreateBadWord(c *gin.Context) {
 	}
 	var req struct {
 		Name        string `json:"name"`
+		Category    string `json:"category"`
+		Tags        string `json:"tags"`
 		MatchType   string `json:"match_type"`
 		Pattern     string `json:"pattern"`
 		Action      string `json:"action"`
@@ -144,6 +172,8 @@ func CreateBadWord(c *gin.Context) {
 	}
 	word := &models.BadWord{
 		Name:        req.Name,
+		Category:    normalizeBadWordCategory(req.Category),
+		Tags:        normalizeBadWordTags(req.Tags),
 		MatchType:   matchType,
 		Pattern:     req.Pattern,
 		Action:      action,
@@ -173,6 +203,8 @@ func UpdateBadWord(c *gin.Context) {
 	}
 	var req struct {
 		Name        string `json:"name"`
+		Category    string `json:"category"`
+		Tags        string `json:"tags"`
 		MatchType   string `json:"match_type"`
 		Pattern     string `json:"pattern"`
 		Action      string `json:"action"`
@@ -187,6 +219,12 @@ func UpdateBadWord(c *gin.Context) {
 	}
 	if req.Name != "" {
 		word.Name = req.Name
+	}
+	if req.Category != "" {
+		word.Category = normalizeBadWordCategory(req.Category)
+	}
+	if req.Tags != "" {
+		word.Tags = normalizeBadWordTags(req.Tags)
 	}
 	if req.MatchType != "" {
 		word.MatchType = normalizeBadWordMatchType(req.MatchType)
@@ -236,6 +274,54 @@ func DeleteBadWord(c *gin.Context) {
 	}
 	ReloadBadWords()
 	utils.Success(c, gin.H{"message": "规则已删除"})
+}
+
+// GET /api/admin/bad-words/export — 导出全部规则为 JSON 数组（含分类/标签）
+func ExportBadWords(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	words, err := models.ExportBadWords()
+	if err != nil {
+		utils.InternalError(c, "导出失败")
+		return
+	}
+	c.Header("Content-Type", "application/json; charset=utf-8")
+	c.Header("Content-Disposition", "attachment; filename=\"bad-words.json\"")
+	utils.Success(c, words)
+}
+
+// POST /api/admin/bad-words/import — 从 JSON 数组批量导入（按 name+match_type+pattern 去重，已存在则跳过）
+func ImportBadWords(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	var items []models.BadWordImportItem
+	if err := c.ShouldBindJSON(&items); err != nil {
+		utils.BadRequest(c, "请求体须为 JSON 数组")
+		return
+	}
+	// 兼容「外层包了 { data: [...] }」的写法
+	if len(items) == 0 {
+		var wrapper struct {
+			Data []models.BadWordImportItem `json:"data"`
+		}
+		if err := c.ShouldBindJSON(&wrapper); err == nil {
+			items = wrapper.Data
+		}
+	}
+	created, skipped, err := models.ImportBadWords(items)
+	if err != nil {
+		utils.InternalError(c, "导入失败："+err.Error())
+		return
+	}
+	ReloadBadWords()
+	utils.Success(c, gin.H{
+		"total":   len(items),
+		"created": created,
+		"skipped": skipped,
+		"message": fmt.Sprintf("导入完成：新建 %d 条，跳过（已存在/无效）%d 条", created, skipped),
+	})
 }
 
 // POST /api/admin/bad-words/test — 测试违禁词规则（不落库，返回匹配与处理结果）

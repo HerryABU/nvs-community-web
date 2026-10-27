@@ -20,6 +20,8 @@ import (
 type DynamicBadWord struct {
 	ID          uint
 	Name        string
+	Category    string // 分类：政治/色情/暴力/赌博/诈骗/广告/违禁品/辱骂/其他
+	Tags        string // 组合标签（逗号分隔）
 	MatchType   string // literal / regex
 	Pattern     string
 	Action      string // mark / delete / replace
@@ -28,13 +30,14 @@ type DynamicBadWord struct {
 }
 
 type compiledBadWord struct {
-	id      uint
-	name    string
-	re      *regexp.Regexp
-	action  string
-	replace string
-	all     bool // scope 是否覆盖全部内容类型
-	scopes  map[string]bool
+	id       uint
+	name     string
+	category string
+	re       *regexp.Regexp
+	action   string
+	replace  string
+	all      bool // scope 是否覆盖全部内容类型
+	scopes   map[string]bool
 }
 
 var (
@@ -62,13 +65,14 @@ func SetDynamicBadWords(words []DynamicBadWord) {
 			action = "mark"
 		}
 		c := compiledBadWord{
-			id:      w.ID,
-			name:    w.Name,
-			re:      re,
-			action:  action,
-			replace: w.Replacement,
-			all:     w.Scope == "" || w.Scope == "all",
-			scopes:  make(map[string]bool),
+			id:       w.ID,
+			name:     w.Name,
+			category: w.Category,
+			re:       re,
+			action:   action,
+			replace:  w.Replacement,
+			all:      w.Scope == "" || w.Scope == "all",
+			scopes:   make(map[string]bool),
 		}
 		for _, s := range strings.Split(w.Scope, ",") {
 			s = strings.TrimSpace(s)
@@ -87,9 +91,10 @@ func SetDynamicBadWords(words []DynamicBadWord) {
 type BadWordHit struct {
 	RuleID   uint   `json:"rule_id"`
 	RuleName string `json:"rule_name"`
-	Action   string `json:"action"`  // mark / delete / replace
-	Matched  string `json:"matched"` // 命中的文本片段
-	Index    int    `json:"index"`   // 命中起始位置
+	Category string `json:"category"` // 该规则的分类（政治/色情/…）
+	Action   string `json:"action"`   // mark / delete / replace
+	Matched  string `json:"matched"`  // 命中的文本片段
+	Index    int    `json:"index"`    // 命中起始位置
 }
 
 // ruleInScope 判断规则是否作用于指定内容类型
@@ -119,6 +124,7 @@ func ScanBadWords(content, scope string) []BadWordHit {
 			hits = append(hits, BadWordHit{
 				RuleID:   r.id,
 				RuleName: r.name,
+				Category: r.category,
 				Action:   r.action,
 				Matched:  content[idx[0]:idx[1]],
 				Index:    idx[0],
@@ -148,17 +154,17 @@ func ApplyBadWords(content, scope string) (string, []BadWordHit) {
 		switch r.action {
 		case "replace":
 			for _, idx := range r.re.FindAllStringIndex(result, -1) {
-				hits = append(hits, BadWordHit{RuleID: r.id, RuleName: r.name, Action: r.action, Matched: result[idx[0]:idx[1]], Index: idx[0]})
+				hits = append(hits, BadWordHit{RuleID: r.id, RuleName: r.name, Category: r.category, Action: r.action, Matched: result[idx[0]:idx[1]], Index: idx[0]})
 			}
 			result = r.re.ReplaceAllString(result, r.replace)
 		case "delete":
 			for _, idx := range r.re.FindAllStringIndex(result, -1) {
-				hits = append(hits, BadWordHit{RuleID: r.id, RuleName: r.name, Action: r.action, Matched: result[idx[0]:idx[1]], Index: idx[0]})
+				hits = append(hits, BadWordHit{RuleID: r.id, RuleName: r.name, Category: r.category, Action: r.action, Matched: result[idx[0]:idx[1]], Index: idx[0]})
 			}
 			result = r.re.ReplaceAllString(result, "")
 		default: // mark：只记录命中，不改文本
 			for _, idx := range r.re.FindAllStringIndex(scanned, -1) {
-				hits = append(hits, BadWordHit{RuleID: r.id, RuleName: r.name, Action: r.action, Matched: scanned[idx[0]:idx[1]], Index: idx[0]})
+				hits = append(hits, BadWordHit{RuleID: r.id, RuleName: r.name, Category: r.category, Action: r.action, Matched: scanned[idx[0]:idx[1]], Index: idx[0]})
 			}
 		}
 	}
@@ -167,4 +173,47 @@ func ApplyBadWords(content, scope string) (string, []BadWordHit) {
 		result += content[MaxScanBytes:]
 	}
 	return result, hits
+}
+
+// ═══ 违禁词组合分类 ═══
+// 不同类型违规同时命中时，按「组合」给出更高层级的归类，便于运营分级处置。
+// 例：政治 + 暴力 → 「高危·政治暴力」；涉赌 + 诈骗 → 「高危·诈骗赌博」。
+var (
+	// 高危组合：命中任一即升为「高危」
+	highRiskCategories = map[string]bool{
+		"政治": true, "暴恐": true, "违禁品": true, "诈骗": true, "赌博": true,
+	}
+	// 低危/运营类：单独命中不升高危
+	lowRiskCategories = map[string]bool{
+		"色情": true, "暴力": true, "广告": true, "辱骂": true, "其他": true,
+	}
+)
+
+// ClassifyCombo 将一组（去重后的）分类归并为组合标签。
+// 返回：组合后的分类标签（如「政治,暴力」「高危·政治暴力」）、是否高危、参与组合的原始分类列表。
+func ClassifyCombo(categories []string) (combined string, highRisk bool, parts []string) {
+	seen := make(map[string]bool)
+	for _, c := range categories {
+		c = strings.TrimSpace(c)
+		if c == "" || seen[c] {
+			continue
+		}
+		seen[c] = true
+		parts = append(parts, c)
+		if highRiskCategories[c] {
+			highRisk = true
+		}
+	}
+	switch len(parts) {
+	case 0:
+		return "未分类", false, parts
+	case 1:
+		return parts[0], highRiskCategories[parts[0]], parts
+	default:
+		label := strings.Join(parts, ",")
+		if highRisk {
+			return "高危·" + label, true, parts
+		}
+		return label, false, parts
+	}
 }

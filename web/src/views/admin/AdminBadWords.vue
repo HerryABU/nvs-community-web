@@ -18,6 +18,8 @@
             <el-button type="primary" size="small" @click="openAdd"><el-icon><Plus /></el-icon> 新增违禁词</el-button>
             <el-button size="small" @click="openTest()"><el-icon><Search /></el-icon> 测试规则</el-button>
             <el-button size="small" @click="loadWords" :loading="loading"><el-icon><Refresh /></el-icon> 刷新</el-button>
+            <el-button size="small" type="success" plain @click="doExport"><el-icon><Download /></el-icon> 导出 JSON</el-button>
+            <el-button size="small" type="success" plain @click="showImport = true"><el-icon><Upload /></el-icon> 导入 JSON</el-button>
             <el-button size="small" type="warning" plain @click="switchToFlags"><el-icon><Warning /></el-icon> 待审列表（{{ pendingCount }}）</el-button>
           </div>
 
@@ -37,6 +39,13 @@
             <el-table-column label="动作" width="90">
               <template #default="{ row }">
                 <el-tag size="small" :type="actionTag(row.action)">{{ actionLabel(row.action) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="分类" width="120">
+              <template #default="{ row }">
+                <el-tag v-if="row.category" size="small" :type="categoryTag(row.category)" effect="plain">{{ row.category }}</el-tag>
+                <span v-else class="muted">—</span>
+                <div v-if="row.tags" class="row-tags">{{ row.tags }}</div>
               </template>
             </el-table-column>
             <el-table-column label="替换文本" width="110">
@@ -198,6 +207,15 @@
         <el-form-item label="说明">
           <el-input v-model="form.description" type="textarea" :rows="2" placeholder="可选：规则用途说明" />
         </el-form-item>
+        <el-form-item label="分类">
+          <el-select v-model="form.category" size="default" filterable allow-create default-first-option placeholder="选择或输入分类" style="width: 100%">
+            <el-option v-for="c in presetCategories" :key="c" :label="c" :value="c" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="组合标签">
+          <el-input v-model="form.tags" placeholder="可选：逗号分隔的二次分类标签，如 涉政,引流" maxlength="255" />
+          <div class="hint-text">用于对「不同类型的违规组合」做二次归类（如「政治+暴力」→ 高危组合），导入导出 JSON 时一并携带。</div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showDialog = false">取消</el-button>
@@ -253,12 +271,34 @@
         </div>
       </div>
     </el-dialog>
+
+    <!-- 导入 JSON 弹窗 -->
+    <el-dialog v-model="showImport" title="导入违禁词 JSON" width="640px">
+      <el-alert type="info" :closable="false" show-icon style="margin-bottom: 14px"
+        title="导入格式"
+        description="粘贴一个 JSON 数组，每项含 name / pattern / match_type 等字段（category、tags、action、scope、replacement 可选）。已存在（同名+同方式+同词）的规则自动跳过，不会重复创建。" />
+      <el-upload
+        action="#"
+        :auto-upload="false"
+        :show-file-list="false"
+        :on-change="onImportFile"
+        accept=".json,application/json"
+        style="margin-bottom: 12px"
+      >
+        <el-button size="small"><el-icon><Upload /></el-icon> 选择 .json 文件</el-button>
+      </el-upload>
+      <el-input v-model="importText" type="textarea" :rows="10" placeholder='[{"name":"示例","pattern":"示例词","category":"广告","tags":"引流","match_type":"literal","action":"mark","scope":"all"}]' />
+      <template #footer>
+        <el-button @click="showImport = false">取消</el-button>
+        <el-button type="primary" :loading="importing" @click="doImport">开始导入</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
-import { Plus, Search, Refresh, Warning } from '@element-plus/icons-vue';
+import { Plus, Search, Refresh, Warning, Download, Upload } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -266,13 +306,21 @@ import StateBlock from '@/components/common/StateBlock.vue';
 
 const activeTab = ref('rules');
 
+// 预设分类（可自定义扩展：前端 allow-create 允许输入新分类）
+const presetCategories = ['政治', '色情', '暴力', '赌博', '诈骗', '广告', '违禁品', '辱骂', '其他'];
+
 // ═══════════ 规则管理 ═══════════
 const words = ref<any[]>([]);
 const loading = ref(false);
 const showDialog = ref(false);
 const editingId = ref<number | null>(null);
 const submitting = ref(false);
-const form = reactive({ name: '', match_type: 'literal', pattern: '', action: 'mark', replacement: '', scopeList: [] as string[], enabled: true, description: '' });
+const form = reactive({ name: '', category: '', tags: '', match_type: 'literal', pattern: '', action: 'mark', replacement: '', scopeList: [] as string[], enabled: true, description: '' });
+
+// ═══════════ 导入 ═══════════
+const showImport = ref(false);
+const importing = ref(false);
+const importText = ref('');
 
 // ═══════════ 标记待审 ═══════════
 const flags = ref<any[]>([]);
@@ -335,6 +383,8 @@ function formToScope(list: string[]) {
 function openAdd() {
   editingId.value = null;
   form.name = '';
+  form.category = '';
+  form.tags = '';
   form.match_type = 'literal';
   form.pattern = '';
   form.action = 'mark';
@@ -348,6 +398,8 @@ function openAdd() {
 function openEdit(row: any) {
   editingId.value = row.id;
   form.name = row.name || '';
+  form.category = row.category || '';
+  form.tags = row.tags || '';
   form.match_type = row.match_type || 'literal';
   form.pattern = row.pattern || '';
   form.action = row.action || 'mark';
@@ -365,6 +417,8 @@ async function submitWord() {
   submitting.value = true;
   const payload = {
     name: form.name,
+    category: form.category || '其他',
+    tags: form.tags,
     match_type: form.match_type,
     pattern: form.pattern,
     action: form.action,
@@ -474,6 +528,67 @@ function formatTime(t?: string) {
   return t.replace('T', ' ').slice(0, 16);
 }
 
+// 分类配色：高危类用 danger/warning，运营类用 info
+function categoryTag(c?: string): string {
+  const danger = ['政治', '暴恐', '违禁品', '诈骗', '赌博'];
+  const warn = ['色情', '暴力'];
+  if (danger.includes(c || '')) return 'danger';
+  if (warn.includes(c || '')) return 'warning';
+  return 'info';
+}
+
+// ═══════════ 导出 / 导入 JSON ═══════════
+async function doExport() {
+  try {
+    const res = await adminApi.exportBadWords();
+    const data = res.data?.data || [];
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bad-words-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    ElMessage.success(`已导出 ${data.length} 条规则`);
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '导出失败');
+  }
+}
+
+function onImportFile(_file: any, _list: any) {
+  const raw = _file?.raw as File;
+  if (!raw) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    importText.value = String(reader.result || '');
+  };
+  reader.readAsText(raw);
+}
+
+async function doImport() {
+  let arr: any[];
+  try {
+    arr = JSON.parse(importText.value);
+    if (!Array.isArray(arr)) throw new Error('必须为数组');
+  } catch (e: any) {
+    ElMessage.error('JSON 解析失败：' + (e?.message || '格式错误'));
+    return;
+  }
+  if (!arr.length) { ElMessage.warning('没有可导入的数据'); return; }
+  importing.value = true;
+  try {
+    const res = await adminApi.importBadWords(arr);
+    const d = res.data?.data || {};
+    ElMessage.success(d.message || `导入完成：新建 ${d.created || 0}，跳过 ${d.skipped || 0}`);
+    showImport.value = false;
+    importText.value = '';
+    await loadWords();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '导入失败');
+  }
+  importing.value = false;
+}
+
 onMounted(() => {
   loadWords();
   loadPendingCount();
@@ -487,6 +602,7 @@ onMounted(() => {
 .admin-page-body { max-width: 1200px; }
 .hint-text { font-size: 0.8rem; color: var(--text-light, #999); line-height: 1.6; }
 .muted { color: var(--text-light, #999); }
+.row-tags { font-size: 0.72rem; color: var(--text-light, #999); margin-top: 2px; line-height: 1.3; }
 .mono { font-family: 'Consolas', 'Monaco', monospace; }
 .rule-pattern { font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: var(--el-color-danger); background: var(--el-color-danger-light-9); padding: 2px 6px; border-radius: 3px; }
 .rule-replace { color: var(--el-color-primary); font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; }

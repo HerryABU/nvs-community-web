@@ -983,6 +983,8 @@ func main() {
 		admin.GET("/ai/route", handlers.GetAiRouteConfig)
 		admin.PUT("/ai/route", handlers.UpdateAiRouteConfig)
 		admin.GET("/ai/presets", handlers.AdminAiModelPresets)
+		// L5 渠道对账：拉取上游余额/消费 + 真实连通性探针
+		admin.GET("/ai/models/:id/channel", handlers.AdminAiModelChannel)
 
 		// API 卡池（多密钥轮询）
 		admin.GET("/ai/models/:id/keys", handlers.AdminListAiModelKeys)
@@ -1105,6 +1107,8 @@ func main() {
 		admin.PUT("/bad-words/:id", handlers.UpdateBadWord)
 		admin.DELETE("/bad-words/:id", handlers.DeleteBadWord)
 		admin.POST("/bad-words/test", handlers.TestBadWord)
+		admin.GET("/bad-words/export", handlers.ExportBadWords)
+		admin.POST("/bad-words/import", handlers.ImportBadWords)
 		// 违禁词标记待审（mark 动作命中记录，管理员确认/放行）
 		admin.GET("/bad-word-flags", handlers.ListBadWordFlags)
 		admin.PUT("/bad-word-flags/:id", handlers.HandleBadWordFlag)
