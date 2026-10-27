@@ -1113,6 +1113,8 @@ func main() {
 		// 违禁词标记待审（mark 动作命中记录，管理员确认/放行）
 		admin.GET("/bad-word-flags", handlers.ListBadWordFlags)
 		admin.PUT("/bad-word-flags/:id", handlers.HandleBadWordFlag)
+		// 未成年人心理危机：高危观察期用户总览 +《高危用户心理干预报告》
+		admin.GET("/crisis-report", handlers.GetCrisisReport)
 		// 内容抢救台（二级密码 + 应急预览/硬删除；unlock 加 IP 限流防爆破）
 		admin.POST("/emergency/set-password", handlers.SetEmergencyPassword)
 		admin.POST("/emergency/unlock", security.RateLimit(10, 60), handlers.UnlockEmergency)

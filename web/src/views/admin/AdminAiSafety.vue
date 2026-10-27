@@ -36,7 +36,7 @@
         </div>
       </div>
 
-      <el-tabs v-model="tab" class="safety-tabs">
+      <el-tabs v-model="tab" class="safety-tabs" @tab-change="onTabChange">
         <!-- ========== 策略配置 ========== -->
         <el-tab-pane label="策略配置" name="config">
           <div class="admin-panel">
@@ -252,6 +252,118 @@
                 <span class="muted small">字符；留证据供人工复核，也涉及用户隐私，按站规取舍</span>
               </el-form-item>
             </el-form>
+          </div>
+
+          <div class="admin-panel">
+            <SectionHeader
+              title="未成年人心理危机保护"
+              subtitle="把冷冰冰的拦截变成有温度的救赎：识别黑话与绝望语义 → 折叠 / 先审后发 → 推送热线与抚慰 → 绝对保护模式 → 报给站长"
+              :icon="'🫶'"
+              gradient="blue"
+            />
+            <el-form label-width="170px" class="safety-form">
+              <el-form-item label="启用危机防护">
+                <el-switch v-model="cfg.minor_crisis_enabled" />
+                <span class="muted small">
+                  关闭后：黑话识别、AI 判危、绝对保护模式、热线推送全部停用
+                </span>
+              </el-form-item>
+              <el-form-item label="观察期时长（小时）">
+                <el-input-number v-model="cfg.minor_observation_hours" :min="1" :max="2160" />
+                <span class="muted small">
+                  命中危机信号后进入高危观察期；期间指向他的攻击性评论会被自动折叠
+                </span>
+              </el-form-item>
+              <el-form-item label="危机干预热线">
+                <el-input v-model="cfg.minor_crisis_hotline" type="textarea" :rows="4" />
+                <span class="muted small">会展示给用户、写进私信与报告；建议填本地 24 小时资源</span>
+              </el-form-item>
+              <el-form-item label="抚慰私信文案">
+                <el-input v-model="cfg.minor_crisis_comfort" type="textarea" :rows="8" />
+                <span class="muted small">
+                  心理干预智能体的语气，刻意不写成「你的内容违规」—— 那种话只会把人推得更远
+                </span>
+              </el-form-item>
+              <el-form-item label="心理危机判定提示词">
+                <el-input v-model="cfg.minor_crisis_prompt" type="textarea" :rows="16" spellcheck="false" />
+                <span class="muted small">
+                  AI 专用提示词：讲的是「语义绝望特征组合」的判定原理，词表接不住的那一类全靠它
+                </span>
+              </el-form-item>
+            </el-form>
+          </div>
+        </el-tab-pane>
+
+        <!-- ========== 心理危机干预 ========== -->
+        <el-tab-pane label="心理危机干预" name="crisis">
+          <div class="admin-panel">
+            <SectionHeader
+              title="高危观察期用户"
+              subtitle="AI 负责识别、留痕、汇总；最后「要不要报警 / 要不要发关怀邮件」由你按"
+              :icon="'🫶'"
+              gradient="blue"
+            />
+            <div class="safety-actions" style="margin-bottom:12px">
+              <el-button size="small" :loading="crisisLoading" @click="loadCrisisUsers">刷新</el-button>
+            </div>
+
+            <StateBlock
+              v-if="crisisLoading"
+              state="loading"
+              title="正在读取观察期用户"
+              description="加载中…"
+            />
+            <StateBlock
+              v-else-if="crisisError"
+              state="error"
+              title="读取失败"
+              :description="crisisError"
+              @retry="loadCrisisUsers"
+            />
+            <StateBlock
+              v-else-if="crisisUsers.length === 0"
+              state="empty"
+              title="当前没有处于高危观察期的用户"
+              description="出现自残/抑郁黑话或 AI 判危时，用户会自动进入观察期并出现在这里"
+            />
+            <el-table v-else :data="crisisUsers" size="small" stripe>
+              <el-table-column prop="user_id" label="ID" width="70" />
+              <el-table-column label="用户" min-width="140">
+                <template #default="{ row }">
+                  {{ row.nickname || row.username }}
+                  <span class="muted small">@{{ row.username }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="未成年" width="80">
+                <template #default="{ row }">
+                  <el-tag v-if="row.is_minor" size="small" type="warning" effect="plain">未成年</el-tag>
+                  <span v-else class="muted small">—</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="event_count" label="危机事件" width="90" />
+              <el-table-column label="观察期至" min-width="150">
+                <template #default="{ row }">
+                  <span class="muted small">{{ row.observe_until || '—' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="120" fixed="right">
+                <template #default="{ row }">
+                  <el-button size="small" text type="primary" @click="openCrisisReport(row)">
+                    查看报告
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
+          <div v-if="crisisReportText" class="admin-panel">
+            <SectionHeader
+              title="高危用户心理干预报告"
+              subtitle="AI 已完成识别、留痕与汇总；最后的处置动作必须由人工决定"
+              :icon="'📋'"
+              gradient="amber"
+            />
+            <pre class="crisis-report">{{ crisisReportText }}</pre>
           </div>
         </el-tab-pane>
 
@@ -484,6 +596,7 @@ import StateBlock from '@/components/common/StateBlock.vue';
 import { aiApi } from '@/api/ai';
 import {
   aiSafetyApi,
+  type CrisisUser,
   type JudgeLog,
   type SafetyConfig,
   type SafetyEvent,
@@ -709,6 +822,43 @@ async function loadAll() {
   if (tab.value === 'judge') loadJudge(judgePage.value);
   if (tab.value === 'profiles') loadProfiles(profPage.value);
   if (tab.value === 'locked') loadLocked(lockedPage.value);
+  if (tab.value === 'crisis') loadCrisisUsers();
+}
+
+// ---------- 心理危机干预 ----------
+
+// 高危观察期用户 + 干预报告
+const crisisUsers = ref<CrisisUser[]>([]);
+const crisisLoading = ref(false);
+const crisisError = ref('');
+const crisisReportText = ref('');
+
+async function loadCrisisUsers() {
+  crisisLoading.value = true;
+  crisisError.value = '';
+  try {
+    const res = await aiSafetyApi.crisisUsers();
+    crisisUsers.value = res.data?.data?.users || [];
+  } catch (e: any) {
+    // 统计类失败要落到可见 hint ref（catch 里啥都不做 = 静默失败）
+    crisisError.value = e?.response?.data?.message || '读取观察期用户失败，请稍后重试';
+  } finally {
+    crisisLoading.value = false;
+  }
+}
+
+// 切到心理危机页时才拉数据：这一页是低频操作，不该跟首屏一起抢请求
+function onTabChange(name: string | number) {
+  if (name === 'crisis') loadCrisisUsers();
+}
+
+async function openCrisisReport(row: CrisisUser) {
+  try {
+    const res = await aiSafetyApi.crisisReport(row.user_id);
+    crisisReportText.value = res.data?.data?.report || '（报告为空）';
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '生成报告失败');
+  }
 }
 
 async function onSave() {
@@ -827,6 +977,22 @@ onMounted(() => {
 .safety-form { max-width: 860px; margin-top: 8px; }
 .safety-form :deep(.el-form-item) { margin-bottom: 14px; }
 .safety-form :deep(.muted) { margin-left: 10px; }
+
+/* 干预报告：Markdown 原文直出，等宽字体保留排版 */
+.crisis-report {
+  margin: 8px 0 0;
+  padding: 16px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color, #eef0f3);
+  background: var(--bg-card, #fbfcfe);
+  font-size: 0.86rem;
+  line-height: 1.85;
+  color: var(--text-color, #1f2430);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 70vh;
+  overflow: auto;
+}
 .queue-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .excerpt {
   display: -webkit-box;

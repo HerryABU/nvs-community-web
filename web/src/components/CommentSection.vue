@@ -1,5 +1,21 @@
 <template>
   <div class="comment-section">
+    <!-- 未成年人心理危机保护：柔和卡片（求助通道，不是冷冰冰的处罚通知） -->
+    <div v-if="crisisCard" class="crisis-card" role="alert">
+      <div class="cc-head">
+        <span class="cc-title">🌿 我们看见了你写下的这段话</span>
+        <button class="cc-close" type="button" aria-label="关闭" @click="crisisCard = null">×</button>
+      </div>
+      <p v-if="crisisCard.comfort" class="cc-comfort">{{ crisisCard.comfort }}</p>
+      <div v-if="crisisCard.hotline" class="cc-hotline">
+        <span class="cc-hotline-label">心理危机干预热线</span>
+        <pre class="cc-hotline-text">{{ crisisCard.hotline }}</pre>
+      </div>
+      <p class="cc-foot">
+        这条内容已被我们悄悄收起，没有公开；站长也会看到它，并在需要的时候联系你。
+      </p>
+    </div>
+
     <!-- 发表评论 -->
     <div class="comment-form" v-if="authStore.isLoggedIn">
       <div v-if="mentionCanEdit" class="mention-source-row">
@@ -117,6 +133,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { commentApi, type Comment } from '@/api/novel';
 import { getFloorPasswords, mentionApi, type CommentSort } from '@/api/novel/comments';
+import type { CommentCrisis } from '@/api/novel/types';
 import { novelCommentChannel, blogCommentChannel, liveApi } from '@/api/live';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -196,6 +213,10 @@ const submitting = ref(false);
 const page = ref(1);
 const hasMore = ref(false);
 const loadingMore = ref(false);
+
+// 未成年人心理危机保护：命中后展示柔和卡片（附危机干预热线）。
+// 刻意不做成会自动消失的 toast —— 这是一条求助通道，不能让人错过。
+const crisisCard = ref<CommentCrisis | null>(null);
 
 // ── 列表四态：加载骨架 / 空态引导 / 错误重试 / 内容 ──
 const loading = ref(true);
@@ -387,14 +408,14 @@ async function submitComment() {
 
   submitting.value = true;
   try {
-    await commentApi.createComment({
+    const res = await commentApi.createComment({
       novel_id: props.blogId ? 0 : props.novelId,
       blog_id: props.blogId || 0,
       chapter_number: props.chapterNumber,
       content: newComment.value.trim(),
     });
     newComment.value = '';
-    ElMessage.success('评论发表成功');
+    afterCreate(res, false);
     fetchComments(true);
   } catch (e: any) {
     ElMessage.error(e.response?.data?.message || '发表失败');
@@ -403,19 +424,38 @@ async function submitComment() {
   }
 }
 
+// 发布后的统一反馈：区分「正常公开」「先审后发」「触发危机保护」。
+// 三种情况的措辞刻意不同 —— 危机那一条不能写成「发表成功」，
+// 那等于在一个人求救的时候告诉他系统收到了他的请求但什么也没发生。
+function afterCreate(res: any, isReply: boolean) {
+  const data = res?.data?.data;
+  const crisis = data?.crisis as CommentCrisis | undefined;
+  if (crisis?.triggered) {
+    crisisCard.value = crisis;
+    ElMessage.warning('我们收到了这段话，并已交给人工复核');
+    return;
+  }
+  const status = data?.moderation_status;
+  if (status === 'pending' || status === 'folded') {
+    ElMessage.info('内容已提交，正在人工复核后公开');
+    return;
+  }
+  ElMessage.success(isReply ? '回复成功' : '评论发表成功');
+}
+
 // parentId 为 null 表示回复主内容（开新楼）；有值表示回复楼内某条（挂靠该楼）
 async function handleReply(parentId: number | null, content: string) {
   const allowed = await crossDomainCheck();
   if (!allowed) return;
   try {
-    await commentApi.createComment({
+    const res = await commentApi.createComment({
       novel_id: props.blogId ? 0 : props.novelId,
       blog_id: props.blogId || 0,
       chapter_number: props.chapterNumber,
       content,
       parent_id: parentId || undefined,
     }, replyFloorHeaders(parentId));
-    ElMessage.success(parentId ? '回复成功' : '评论发表成功');
+    afterCreate(res, true);
     fetchComments(true);
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '回复失败');
@@ -475,6 +515,74 @@ defineExpose({ setQuote });
 <style scoped>
 .comment-form {
   margin-bottom: 24px;
+}
+
+/* ====== 心理危机柔和卡片 ======
+   配色刻意避开错误红：这不是处罚通知，是一条求助通道。
+   冷冰冰的红色警告只会把正在求救的人推得更远。 */
+.crisis-card {
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.08), rgba(167, 139, 250, 0.08));
+  box-shadow: 0 4px 18px rgba(56, 189, 248, 0.08);
+}
+.cc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cc-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-color, #1f2430);
+}
+.cc-close {
+  border: none;
+  background: transparent;
+  font-size: 1.2rem;
+  line-height: 1;
+  color: var(--text-light, #8a92a6);
+  cursor: pointer;
+  padding: 0 4px;
+}
+.cc-close:hover { color: var(--text-color, #1f2430); }
+.cc-comfort {
+  margin: 10px 0 0;
+  font-size: 0.9rem;
+  line-height: 1.75;
+  color: var(--text-color, #1f2430);
+  white-space: pre-wrap;
+}
+.cc-hotline {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+}
+.cc-hotline-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-light, #64748b);
+  margin-bottom: 6px;
+}
+.cc-hotline-text {
+  margin: 0;
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1.8;
+  color: var(--text-color, #1f2430);
+  white-space: pre-wrap;
+}
+.cc-foot {
+  margin: 12px 0 0;
+  font-size: 0.8rem;
+  color: var(--text-light, #8a92a6);
 }
 
 .form-actions {
@@ -634,6 +742,24 @@ defineExpose({ setQuote });
   color: #94a3b8;
 }
 [data-theme="dark"] .tip-text {
+  color: #94a3b8;
+}
+/* 深色主题下柔和卡片：底色压暗、热线区块用半透明深色，文字保持可读 */
+[data-theme="dark"] .crisis-card {
+  border-color: rgba(56, 189, 248, 0.28);
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.12), rgba(167, 139, 250, 0.12));
+}
+[data-theme="dark"] .crisis-card .cc-title,
+[data-theme="dark"] .crisis-card .cc-comfort,
+[data-theme="dark"] .crisis-card .cc-hotline-text {
+  color: #e2e8f0;
+}
+[data-theme="dark"] .crisis-card .cc-hotline {
+  background: rgba(15, 23, 42, 0.5);
+  border-color: rgba(148, 163, 184, 0.25);
+}
+[data-theme="dark"] .crisis-card .cc-hotline-label,
+[data-theme="dark"] .crisis-card .cc-foot {
   color: #94a3b8;
 }
 

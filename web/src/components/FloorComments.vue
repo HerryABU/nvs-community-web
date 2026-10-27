@@ -19,6 +19,7 @@
           <span class="floor-collapse" @click="toggleFloor(floor.id)">{{ isFloorCollapsed(floor.id) ? '▸' : '▾' }}</span>
           <span class="floor-no">{{ floor.floor_no || '?' }}楼</span>
           <span class="floor-user">{{ displayName(floor) }}</span>
+          <el-tag v-if="showHeld(floor)" size="small" type="warning" effect="plain" class="floor-held-tag">危机复核</el-tag>
           <el-tag v-if="showDeleted(floor)" size="small" type="danger" effect="dark">已删除</el-tag>
           <el-tag v-if="ownerId && floor.user_id === ownerId" size="small" type="danger" effect="plain">楼主</el-tag>
           <el-tag v-if="floor.has_password" size="small" type="warning" effect="plain" class="floor-lock-tag">
@@ -55,9 +56,10 @@
           </span>
         </div>
         <template v-if="!isFloorCollapsed(floor.id)"><div v-if="!floor.Locked" class="floor-content cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" :class="{ 'deleted-content': showDeleted(floor), 'is-collapsed': isLongText(floor.content) && !isTextExpanded(floor.id) }">
-          <div v-if="showDeleted(floor)" class="deleted-banner">⚠ 该内容已被删除，以下为警方取证留证（删除人：{{ floor.deleted_by === 'admin' ? '管理员' : floor.deleted_by === 'user' ? '用户自删' : '系统' }}）</div>
+          <div v-if="showHeld(floor) && !isModerator" class="held-placeholder">🌿 该内容正在由人工复核，暂时不会公开</div>
+          <div v-else-if="showDeleted(floor)" class="deleted-banner">⚠ 该内容已被删除，以下为警方取证留证（删除人：{{ floor.deleted_by === 'admin' ? '管理员' : floor.deleted_by === 'user' ? '用户自删' : '系统' }}）</div>
           <div v-else-if="floor.is_deleted && !isModerator" class="deleted-placeholder">[ 该内容已删除 ]</div>
-          <div v-html="renderCommentHTML(floor.content, floor.mentions)"></div>
+          <div v-if="!showHeld(floor) || isModerator" v-html="renderCommentHTML(floor.content, floor.mentions)"></div>
         </div>
         <!-- 长文本折叠：阈值来自服务端（sentiments/config.fold_chars），前端不写死 -->
         <div v-if="!floor.Locked && isLongText(floor.content)" class="text-fold">
@@ -98,9 +100,11 @@
             <span v-if="r.reply_to_name" class="reply-to">{{ r.reply_to_name }}</span>
             <span class="reply-colon">：</span>
             <span class="reply-body cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" :class="{ 'deleted-content': showDeleted(r) }">
+              <el-tag v-if="showHeld(r)" size="small" type="warning" effect="plain" class="reply-held-tag">危机复核</el-tag>
               <el-tag v-if="showDeleted(r)" size="small" type="danger" effect="dark" class="reply-deleted-tag">已删除</el-tag>
+              <span v-if="showHeld(r) && !isModerator">[ 该内容正在由人工复核，暂时不会公开 ]</span>
               <span v-if="showDeleted(r) === false && r.is_deleted && !isModerator">[ 该内容已删除 ]</span>
-              <span v-html="renderCommentHTML(r.content, r.mentions)"></span>
+              <span v-if="!showHeld(r)" v-html="renderCommentHTML(r.content, r.mentions)"></span>
             </span>
             <span class="reply-meta">
               <el-tooltip :content="absTime(r)" placement="top">
@@ -301,6 +305,12 @@ const isModerator = computed(() => {
 // 已删除内容是否应以红字展示（仅警方/管理员）
 function showDeleted(item: any) {
   return isModerator.value && !!item?.is_deleted;
+}
+// 未成年人心理危机保护：被自动折叠（folded）或先审后发（pending）的评论。
+// 后端已把这类评论挡在普通读者的列表之外；这里兜底处理实时推送等旁路，
+// 保证内容不会因为漏网一条而直接暴露在读者眼前。
+function showHeld(item: any) {
+  return !!item && (item.moderation_status === 'folded' || item.moderation_status === 'pending');
 }
 
 const floors = computed(() =>
@@ -581,6 +591,13 @@ async function removeManage() {
   margin-bottom: 4px;
 }
 .deleted-placeholder { color: var(--text-light, #999); font-style: italic; }
+/* 危机保护占位：刻意用柔和语气（不是处罚通知），别把求助的人推得更远 */
+.held-placeholder {
+  color: var(--text-light, #8a92a6);
+  font-size: 0.86rem;
+  padding: 2px 0;
+}
+.floor-held-tag, .reply-held-tag { margin-left: 6px; }
 .reply-deleted-tag { margin-right: 4px; vertical-align: middle; }
 
 /* ====== 楼内回复：贴左缩进 + 浅底，视觉上「属于这一楼」 ====== */

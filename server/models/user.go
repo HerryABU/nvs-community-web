@@ -33,6 +33,11 @@ type User struct {
 	// 未成年保护（F21.1）：出生日期 + 未成年人标记（可由生日推算或国家实名 API 返回）
 	BirthDate      *time.Time `json:"birth_date,omitempty"`
 	MinorProtected bool       `gorm:"default:false" json:"minor_protected"`
+	// 高危观察期（未成年人心理危机防护 /「赛博守护神」方案）：
+	// 命中自残/抑郁黑话或 AI 判危后进入观察期，期间其评论受「绝对保护模式」保护
+	// （指向他的攻击性评论自动折叠 + 向本人柔和提示）。截止时间过后自动退出。
+	RiskYouthMental      bool       `gorm:"default:false" json:"risk_youth_mental"`
+	RiskYouthMentalUntil *time.Time `json:"risk_youth_mental_until,omitempty"`
 	// 微信扫码登录（F21.2）：开放平台 OpenID/UnionID 绑定
 	WeChatOpenID  string `gorm:"size:64;index;default:''" json:"-"`
 	WeChatUnionID string `gorm:"size:64;default:''" json:"-"`

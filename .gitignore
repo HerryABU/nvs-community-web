@@ -18,6 +18,7 @@ server/dist/
 # 构建时 mv 备份的旧产物目录（如 dist_old/、server/dist_old/）
 dist_old*/
 dist_prev*/
+dist_bak*/
 server/dist_old*/
 server/dist_prev*/
 nvs-server.exe

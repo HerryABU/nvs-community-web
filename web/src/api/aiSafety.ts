@@ -64,6 +64,13 @@ export interface SafetyConfig {
   judge_max_turns: number;
   judge_prompt: string;
 
+  // ── 未成年人心理危机防护（「赛博守护神」方案）──
+  minor_crisis_enabled: boolean;
+  minor_crisis_hotline: string;
+  minor_crisis_comfort: string;
+  minor_observation_hours: number;
+  minor_crisis_prompt: string;
+
   schema_version: number;
   updated_at: string;
 }
@@ -131,6 +138,16 @@ export interface SafetyStats {
   active_cooldown: number;
 }
 
+/** 高危观察期用户（总览入口） */
+export interface CrisisUser {
+  user_id: number;
+  username: string;
+  nickname: string;
+  event_count: number;
+  observe_until: string;
+  is_minor: boolean;
+}
+
 export const aiSafetyApi = {
   getConfig() {
     return api.get<{ code: number; data: { config: SafetyConfig } }>('/admin/ai/safety/config');
@@ -176,5 +193,17 @@ export const aiSafetyApi = {
   },
   stats() {
     return api.get<{ code: number; data: SafetyStats }>('/admin/ai/safety/stats');
+  },
+
+  // 心理危机：高危观察期用户总览（不传 user_id）
+  crisisUsers() {
+    return api.get<{ code: number; data: { users: CrisisUser[] } }>('/admin/crisis-report');
+  },
+  // 心理危机：《高危用户心理干预报告》（传 user_id）
+  crisisReport(userId: number) {
+    return api.get<{ code: number; data: { user_id: number; report: string } }>(
+      '/admin/crisis-report',
+      { params: { user_id: userId } },
+    );
   },
 };

@@ -51,6 +51,13 @@ type Comment struct {
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
+	// 未成年人心理危机标记（「赛博守护神」方案）：命中自残/抑郁黑话或 AI 判危时置位，
+	// 作为先审后发（pending）/ 自动折叠（folded）的依据。空串=正常公开。
+	FlaggedMinor     bool   `gorm:"default:false;index" json:"flagged_minor"`
+	ModerationStatus string `gorm:"size:16;default:''" json:"moderation_status"` // 空=正常 / pending=先审后发 / folded=自动折叠
+	// Crisis 仅在「评论创建成功」响应中携带：触发了心理危机防护时回传柔和卡片信息（不持久化）。
+	Crisis *CommentCrisis `gorm:"-" json:"crisis,omitempty"`
+
 	// 关联
 	User   *User    `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	Novel  *Novel   `gorm:"foreignKey:NovelID" json:"novel,omitempty"`
@@ -59,6 +66,16 @@ type Comment struct {
 
 func (Comment) TableName() string {
 	return "comments"
+}
+
+// CommentCrisis 评论创建响应里携带的危机防护信息（不落库，gorm:"-"）。
+// 触发未成年人心理危机防护时由后端填好，前端据此展示「柔和卡片」而非冷冰冰的「内容违规」。
+type CommentCrisis struct {
+	Triggered bool   `json:"triggered"`        // 是否触发了危机防护
+	Action    string `json:"action"`           // intercept（自动折叠）/ review（先审后发）
+	Hotline   string `json:"hotline"`          // 危机干预热线（展示给用户）
+	Comfort   string `json:"comfort"`          // 心理干预智能体抚慰文案
+	Reason    string `json:"reason,omitempty"` // AI 判危说明（可选）
 }
 
 // AfterFind 查询后计算 is_deleted（警方/管理员取证视图据此在前端以红字标注已删除内容）。
@@ -257,18 +274,29 @@ func loadCommentsPage(scope func(*gorm.DB) *gorm.DB, page, pageSize int, include
 		pageSize = 20
 	}
 
-	base := DB
-	if includeDeleted {
-		base = DB.Unscoped()
+	// 查询基底：每次都从根 DB 重新起一条链。
+	//
+	// 为什么不能复用一个带条件的 base：DB.Where(...) 返回的是 clone=0 的实例，
+	// 后续 .Model()/.Scopes() 会直接改它自己的 Statement —— 所有链共用一份条件。
+	// 实测后果：楼层查询里的 `parent_id IS NULL` 会漏进统计查询，
+	// 评论总数变成「楼层数」（3 楼 + 3 回复被数成 3 条）。
+	// 附带好处：取证视图（includeDeleted）原本也踩同一个坑，一并修掉。
+	newBase := func() *gorm.DB {
+		if includeDeleted {
+			return DB.Unscoped()
+		}
+		// 危机防护：被自动折叠（folded）/ 先审后发（pending）的评论不对普通读者展示。
+		// 管理员与警方走取证视图（includeDeleted），仍能看到全文。
+		return DB.Where("COALESCE(moderation_status, '') = ''")
 	}
 
-	floorQuery := base.Model(&Comment{}).Scopes(scope).Where("parent_id IS NULL")
+	floorQuery := newBase().Model(&Comment{}).Scopes(scope).Where("parent_id IS NULL")
 	floorQuery.Count(&out.FloorTotal)
 	// 评论总数（含楼内回复）
-	base.Model(&Comment{}).Scopes(scope).Count(&out.Total)
+	newBase().Model(&Comment{}).Scopes(scope).Count(&out.Total)
 
 	var floors []Comment
-	if err := base.Scopes(scope).Where("comments.parent_id IS NULL").
+	if err := newBase().Scopes(scope).Where("comments.parent_id IS NULL").
 		Preload("User").
 		Order(floorOrderClause(sortKey)).
 		Offset((page - 1) * pageSize).Limit(pageSize).
@@ -284,7 +312,7 @@ func loadCommentsPage(scope func(*gorm.DB) *gorm.DB, page, pageSize int, include
 		rootIDs = append(rootIDs, f.ID)
 	}
 	var replies []Comment
-	if err := base.Where("root_id IN ?", rootIDs).
+	if err := newBase().Where("root_id IN ?", rootIDs).
 		Preload("User").
 		Order("created_at ASC").
 		Find(&replies).Error; err != nil {
@@ -420,6 +448,12 @@ func CreateComment(comment *Comment) error {
 	comment.resolveFloor()
 	if err := DB.Create(comment).Error; err != nil {
 		return err
+	}
+	// 危机防护：被自动折叠（folded）/ 先审后发（pending）的评论不产生对外通知。
+	// 理由很实在：绝对保护模式折叠的是「冲着高危用户来的攻击」，
+	// 若照常通知被回复者，等于把那句恶毒的话又推到受害者眼前——保护就白做了。
+	if comment.ModerationStatus != "" {
+		return nil
 	}
 	// 站内通知（best-effort，失败不影响评论本身）
 	content := comment.Content

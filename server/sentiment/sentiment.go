@@ -17,6 +17,9 @@ import (
 // ActionBlock 暴露给接入层做分支判断（避免各处硬编码字符串）。
 const ActionBlock = guard.ActionBlock
 
+// ActionFlag 标注但未拦截（「绝对保护模式」把这类也当作需要折叠的敌意信号）。
+const ActionFlag = guard.ActionFlag
+
 // Reassess 把本次文本的升档信号并回内容话题评估。
 //
 // 内容的话题组来自 AI 标注（稳定），但「这次是不是在组织化出征」只能看文本。

@@ -313,8 +313,11 @@ func AiHubChatStream(c *gin.Context) {
 	// 之前这条链路完全没有审核，真实站点上模型答过 TATP 合成条件与冰毒合成路线。
 	safetyCfg, _ := aisafety.GetConfig()
 	safetyUser := ""
+	safetyMinor := false
 	if u, e := models.GetUserByID(userID); e == nil && u != nil {
 		safetyUser = u.Username
+		// 未成年用户：后续要叠加「未成年人保护」系统提示词
+		safetyMinor = isMinorUser(u)
 	}
 	if safetyCfg != nil && safetyCfg.Enabled && safetyCfg.GuardInput {
 		dec := aisafety.CheckInput(aisafety.InputRequest{
@@ -350,6 +353,14 @@ func AiHubChatStream(c *gin.Context) {
 	if safetyCfg != nil {
 		if gp := aisafety.SystemPrompt(safetyCfg); gp != "" {
 			systemPrompt = gp + "\n\n" + systemPrompt
+		}
+		// 未成年人保护：叠加专属提示词 ——
+		// 对正在求救的年轻用户，守底线的同时要学会共情与引导求助，
+		// 而不是甩一句冷冰冰的「这个请求我不能提供」。
+		if safetyMinor {
+			if mp := aisafety.MinorGuardPrompt(safetyCfg); mp != "" {
+				systemPrompt = mp + "\n\n" + systemPrompt
+			}
 		}
 		// 中档模式：这个会话之前被拦截过，上下文里有不可信内容。
 		// 每轮都注入提醒 —— 只在拦截当轮提示没有用，用户换个说法问就绕过去了。

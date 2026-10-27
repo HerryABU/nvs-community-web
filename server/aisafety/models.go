@@ -137,6 +137,19 @@ type SafetyConfig struct {
 	// ModerateBlockedText 中档模式下给用户看的提示（不锁会话，语气比 strict 轻）
 	ModerateBlockedText string `gorm:"type:text" json:"moderate_blocked_text"`
 
+	// ── 未成年人心理危机防护（「赛博守护神」方案）──
+	// 把「冷冰冰的拦截」变成「有温度的救赎」：识别自残/抑郁黑话与绝望语义，
+	// 向本人弹出危机干预热线、发送抚慰私信、进入观察期并触发「绝对保护模式」，
+	// 同时把高危信号报给站长（由活人做最后的生死决策）。
+	MinorCrisisEnabled    bool   `json:"minor_crisis_enabled"`                  // 总开关：黑话识别 + AI 判危 + 绝对保护
+	MinorCrisisHotline    string `gorm:"type:text" json:"minor_crisis_hotline"` // 危机干预热线（展示给用户 + 写入报告）
+	MinorCrisisComfort    string `gorm:"type:text" json:"minor_crisis_comfort"` // 心理干预智能体私信文案（柔和、不冷冰）
+	MinorObservationHours int    `json:"minor_observation_hours"`               // 观察期时长（小时）
+	// MinorCrisisPrompt 心理危机专用判定提示词（AI 获取与 AI 分析）。
+	// 单独一份、不与越狱判定提示词混用：两个任务的判定原理完全不同，
+	// 混在一份提示词里会互相稀释注意力（模型更容易漏掉「语义绝望」那一层）。
+	MinorCrisisPrompt string `gorm:"type:text" json:"minor_crisis_prompt"`
+
 	// SchemaVersion 配置结构版本。
 	// 作用：新版本加了列之后，老行里这些列是零值（bool=false / int=0），
 	// 站长打开后台看着「已保存」，实际新功能从未启用过——这种静默失效必须靠版本号回填解决。

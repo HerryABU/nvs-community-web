@@ -91,6 +91,8 @@ func AllModels() []interface{} {
 		&NavMenu{}, &Carousel{}, &CheckInRecord{},
 		// API Key 审计告警（多 IP / 解密失败 / 封禁后仍使用）
 		&ApiKeyAlarm{},
+		// 未成年人心理危机事件留痕（供《高危用户心理干预报告》）
+		&CrisisEvent{},
 	}
 }
 

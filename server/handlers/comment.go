@@ -118,8 +118,13 @@ func CreateComment(c *gin.Context) {
 
 	// 楼加密门禁：回复目标是加密楼内的评论时，未解锁用户不可回复
 	// （防止借回复入口试探加密楼内容）。豁免：楼作者、警方/管理员、带对密码。
+	// 同时记下被回复者 id：绝对保护模式要据此判断「这条评论是不是冲着高危用户来的」。
+	parentAuthorID := uint(0)
 	if req.ParentID != nil && *req.ParentID != 0 {
 		parent, perr := models.GetCommentByID(*req.ParentID)
+		if perr == nil {
+			parentAuthorID = parent.UserID
+		}
 		if perr == nil && parent.HasPassword {
 			// 找到所属「楼」：父即顶层时取父，否则取父的 RootID
 			floor := parent
@@ -167,6 +172,12 @@ func CreateComment(c *gin.Context) {
 		comment.ParentID = req.ParentID
 	}
 
+	// ── 绝对保护模式（落库前判定）──
+	// 抑郁倾向者几乎总是伴随着网暴。对处于高危观察期的用户，
+	// 指向他的攻击性言论（哪怕只是「你太矫情了」）一律先折叠，不让它出现在受害者屏幕上。
+	// 必须落库前判定：折叠的内容不该产生对外通知，更不该被推进公共频道。
+	shielded := shieldHighRiskTargets(comment, parentAuthorID, mentions)
+
 	if err := models.CreateComment(comment); err != nil {
 		utils.InternalError(c, "发表评论失败")
 		return
@@ -174,6 +185,18 @@ func CreateComment(c *gin.Context) {
 
 	// 违禁词 mark 动作命中 → 写入待审标记记录
 	flagBadWords(badHits, "comment", comment.ID, userID, raw, "")
+
+	// 绝对保护模式命中：柔和地告诉被保护的人（不指责攻击者，也不复述攻击内容）
+	if len(shielded) > 0 {
+		notifyShieldedUser(shielded, userID)
+	}
+
+	// ── 未成年人心理危机防护 ──
+	// 黑话命中 → 立即折叠 + 进入高危观察期 + 报给站长 + 向本人推送抚慰私信与危机热线。
+	// 语义绝望信号（无黑话的求救）由 AI 异步分析，命中后同样走这套处置。
+	if crisis := handleMinorCrisis(c, comment, raw); crisis != nil {
+		comment.Crisis = crisis
+	}
 
 	if user, err := models.GetUserByID(userID); err == nil {
 		comment.Username = user.Username
@@ -198,14 +221,19 @@ func CreateComment(c *gin.Context) {
 
 	// 狂暴模式（F19）：向评论所在频道广播新评论（hub 内部按 Enabled/批量/带宽控制，
 	// 慢客户端自动断开；关闭时为零开销直返）
-	if req.NovelID > 0 {
-		realtime.PublishCommentEvent("novel", req.NovelID, comment)
-	} else if req.BlogID > 0 {
-		realtime.PublishCommentEvent("blog", req.BlogID, comment)
-	}
+	//
+	// 被危机防护折叠 / 先审后发的评论不广播、不触发 AI 机器人：
+	// 折叠的内容不该出现在公共频道里，机器人和它对话也没有意义。
+	if comment.ModerationStatus == "" {
+		if req.NovelID > 0 {
+			realtime.PublishCommentEvent("novel", req.NovelID, comment)
+		} else if req.BlogID > 0 {
+			realtime.PublishCommentEvent("blog", req.BlogID, comment)
+		}
 
-	// @ai 评论区机器人（§5.6）：检测召唤标记，异步生成 AI 回复（默认关闭）
-	maybeTriggerAiBot(c, comment)
+		// @ai 评论区机器人（§5.6）：检测召唤标记，异步生成 AI 回复（默认关闭）
+		maybeTriggerAiBot(c, comment)
+	}
 
 	utils.Success(c, comment)
 }

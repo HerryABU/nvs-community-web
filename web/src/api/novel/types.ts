@@ -81,7 +81,25 @@ export interface Comment {
   // 微秒级时间戳（Unix 微秒）与 @ 提及（渲染为可点击链接）
   created_micro?: number;
   mentions?: { name: string; user_id: number }[];
+  // 未成年人心理危机保护：命中自残/抑郁黑话或 AI 判危后置位
+  flagged_minor?: boolean;
+  // 空=正常公开 / pending=先审后发（等待复核）/ folded=自动折叠
+  moderation_status?: string;
+  // 触发危机防护时，评论创建响应会带回柔和卡片信息（求助通道，不是处罚通知）
+  crisis?: CommentCrisis;
   created_at: string;
+}
+
+// 评论创建响应里携带的危机防护信息（后端仅在触发时回传）
+export interface CommentCrisis {
+  triggered: boolean;
+  // intercept=自动折叠 / review=先审后发
+  action: string;
+  // 危机干预热线（多行文本）
+  hotline: string;
+  // 心理干预智能体抚慰文案
+  comfort: string;
+  reason?: string;
 }
 
 // 评论网（社交图谱）分析返回结构
