@@ -96,6 +96,12 @@ func main() {
 		}
 	}
 
+	// CLI 只读命令（--version / --help）：不依赖配置与数据库，打印完直接退出。
+	// 放在 config.Init() 之前，这样「问个版本」不会被环境问题绊倒。
+	if handled, code := runReadOnlyCLI(os.Args[1:]); handled {
+		os.Exit(code)
+	}
+
 	config.Init()
 
 	// CLI 子命令（不启动 HTTP 服务）：gm-audit / credential-age
@@ -117,6 +123,12 @@ func main() {
 	os.MkdirAll(config.UploadDir, 0755)
 	os.MkdirAll(config.UserFrameDir, 0755)
 	os.MkdirAll(config.UserHTMLDir, 0755)
+
+	// CLI 维护命令（--pwd）：需要连库改密码，改完直接退出，**不启动 HTTP 服务**。
+	// 放在数据目录创建之后 —— initDatabase() 要往 DB_PATH 所在目录写库文件。
+	if handled, code := runMaintenanceCLI(os.Args[1:]); handled {
+		os.Exit(code)
+	}
 
 	// 未完成建站向导 → 进入安装模式（不连接数据库，门禁中间件拦截业务 API）
 	// 已完成安装 → 连接数据库 + 迁移 + 初始化默认数据
