@@ -4,6 +4,13 @@
 # 运行时数据
 data/
 
+# ⚠️ 例外：ip2region 离线库必须入库。
+# //go:embed 是编译期读文件，CI / 新克隆拿不到它就无法构建
+# （报 pattern data/ip2region_v4.xdb: no matching files found）。
+# 注意顺序：先把被 data/ 排除的目录本身放回来，git 才会进去；只写文件级 ! 是无效的。
+!server/ipgeo/data/
+!server/ipgeo/data/*.xdb
+
 # Go
 server/tmp/
 server/*.exe

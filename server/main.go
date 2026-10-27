@@ -780,6 +780,7 @@ func main() {
 		admin.GET("/zone-access/stats", handlers.GetZoneAccessStats)     // 隔离墙进入记录统计（仪表盘卡片）
 		admin.GET("/web-access", handlers.ListWebAccessLogs)             // 网络诊断 / 用户分布 / 攻击流量（分页+多维筛选）
 		admin.GET("/web-access/stats", handlers.GetWebAccessStats)       // Web 访问日志聚合统计（诊断面板）
+		admin.GET("/web-access/geo", handlers.GetWebAccessGeo)           // 访问来源地域分布（ip2region 离线解析，供地图/排行）
 		admin.POST("/web-access/cleanup", handlers.CleanupWebAccessLogs) // 清空 Web 访问日志（合规证据由文件日志承担）
 		admin.PUT("/users/:id", handlers.UpdateUser)
 		admin.DELETE("/users/:id", handlers.DeleteUser)

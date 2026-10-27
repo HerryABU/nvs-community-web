@@ -432,6 +432,10 @@ export const adminApi = {
   getWebAccessStats() {
     return api.get('/admin/web-access/stats');
   },
+  // 访问来源地域分布（服务端用内嵌的 ip2region 离线库解析，不发外部请求）
+  getWebAccessGeo(params: { days?: number; limit?: number } = {}) {
+    return api.get<{ code: number; data: WebAccessGeo }>('/admin/web-access/geo', { params });
+  },
   cleanupWebAccessLogs() {
     return api.post('/admin/web-access/cleanup');
   },
@@ -602,3 +606,27 @@ export const publicApi = {
     return api.get(`/author/forum/${id}`);
   },
 };
+// ── 访问来源地域分布（网络诊断用）──
+// 服务端用内嵌的 ip2region 离线库解析，不对任何在线接口发请求。
+export interface GeoBucket {
+  name: string;
+  value: number;
+  code?: string;
+}
+
+export interface WebAccessGeo {
+  available: boolean;
+  message?: string;
+  days: number;
+  provinces: GeoBucket[]; // 仅中国省级（name 与地图 GeoJSON 全称一致）
+  countries: GeoBucket[]; // 国家维度（含 code）
+  isp: GeoBucket[];
+  summary: {
+    distinct_ips: number;
+    domestic: number;
+    overseas: number;
+    reserved: number; // 内网/保留地址
+    unresolved: number;
+  };
+  source: string;
+}

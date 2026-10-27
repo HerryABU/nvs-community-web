@@ -99,6 +99,72 @@
         </div>
       </div>
 
+      <!-- 地域分布（离线 IP 归属地 + 中国地图） -->
+      <div class="admin-panel">
+        <SectionHeader
+          title="访问来源地域"
+          subtitle="离线解析 IP 归属地 · 境内按省聚合 · 境外按国家聚合"
+          :icon="'🗺️'"
+          gradient="amber"
+        />
+        <div class="geo-toolbar">
+          <el-radio-group v-model="geoDays" size="small" @change="loadGeo">
+            <el-radio-button :value="1">近 24 小时</el-radio-button>
+            <el-radio-button :value="7">近 7 天</el-radio-button>
+            <el-radio-button :value="30">近 30 天</el-radio-button>
+          </el-radio-group>
+          <span v-if="geo.summary" class="muted small">
+            独立 IP {{ geo.summary.distinct_ips }} ·
+            境内 {{ geo.summary.domestic }} 次 · 境外 {{ geo.summary.overseas }} 次 ·
+            内网 {{ geo.summary.reserved }} 次
+          </span>
+        </div>
+
+        <StateBlock
+          v-if="geoLoading"
+          state="loading"
+          title="正在解析访问来源"
+          description="按 IP 聚合后离线查询归属地。"
+        />
+        <StateBlock
+          v-else-if="!geo.available"
+          state="empty"
+          title="IP 归属地数据不可用"
+          :description="geo.message || '构建时缺少 ipip 数据库'"
+        />
+        <div v-else-if="!geo.provinces || geo.provinces.length === 0" class="geo-empty">
+          <StateBlock
+            state="empty"
+            title="该时间范围内还没有可归类的访问"
+            description="多为内网/保留地址（本地调试流量），或日志还不够多。"
+          />
+        </div>
+        <div v-else class="geo-grid">
+          <div class="geo-map-box">
+            <ChinaGeoMap :data="geo.provinces" />
+          </div>
+          <div class="geo-side">
+            <div class="dist-box">
+              <div class="dist-title">省份排行（访问次数）</div>
+              <el-table :data="geo.provinces" size="small" max-height="260" border>
+                <el-table-column type="index" width="50" />
+                <el-table-column prop="name" label="省份" min-width="120" />
+                <el-table-column prop="value" label="次数" width="90" />
+              </el-table>
+            </div>
+            <div class="dist-box" v-if="geo.countries && geo.countries.length > 0">
+              <div class="dist-title">国家/地区</div>
+              <el-table :data="geo.countries" size="small" max-height="200" border>
+                <el-table-column prop="name" label="国家/地区" min-width="130" />
+                <el-table-column prop="code" label="代码" width="70" />
+                <el-table-column prop="value" label="次数" width="80" />
+              </el-table>
+            </div>
+          </div>
+        </div>
+        <p v-if="geo.source" class="geo-source">{{ geo.source }}</p>
+      </div>
+
       <!-- 访问明细 -->
       <div class="admin-panel">
         <SectionHeader title="访问明细" subtitle="按条件检索 Web 访问日志" :icon="'🗂️'" gradient="primary" />
@@ -225,6 +291,8 @@ import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import StateBlock from '@/components/common/StateBlock.vue';
 import AdminFilterBar from '@/components/admin/AdminFilterBar.vue';
+import ChinaGeoMap from '@/components/ChinaGeoMap.vue';
+import type { WebAccessGeo } from '@/api/admin';
 
 interface WebRow {
   id: number; user_id: number; identity_type: string; ua_family: string;
@@ -251,6 +319,34 @@ const filters = reactive({
   ip: '', ua: '', ua_family: '', identity: '', is_bot: '', status: '',
   from: '', to: '', attack: false, page: 1, page_size: 30,
 });
+
+// ── 地域分布（离线 IP 归属地）──
+const geoDays = ref(7);
+const geoLoading = ref(false);
+const geo = ref<WebAccessGeo>({
+  available: true,
+  days: 7,
+  provinces: [],
+  countries: [],
+  isp: [],
+  summary: { distinct_ips: 0, domestic: 0, overseas: 0, reserved: 0, unresolved: 0 },
+  source: '',
+});
+
+async function loadGeo() {
+  geoLoading.value = true;
+  try {
+    const res = await adminApi.getWebAccessGeo({ days: geoDays.value, limit: 3000 });
+    const d = res.data?.data;
+    if (d) geo.value = d;
+  } catch (e: any) {
+    // 静默失败会让「地图空白」看起来像功能坏了，所以给一条可见的降级说明
+    ElMessage.warning(e?.response?.data?.message || '访问来源地域解析失败');
+    geo.value = { ...geo.value, available: false, message: '请求失败，请稍后重试' };
+  } finally {
+    geoLoading.value = false;
+  }
+}
 
 function familyTag(f: string): any {
   return ({ browser: 'primary', mobile: 'success', bot: 'danger', tool: 'warning', unknown: 'info' } as any)[f] || 'info';
@@ -320,7 +416,7 @@ async function cleanup() {
   }
 }
 
-onMounted(() => { loadStats(); reload(); });
+onMounted(() => { loadStats(); reload(); loadGeo(); });
 </script>
 
 <style scoped>
@@ -331,6 +427,17 @@ onMounted(() => { loadStats(); reload(); });
 .dist-box { background: var(--bg-card, #fff); border: 1px solid var(--border-color, #e5e7eb); border-radius: var(--radius-md, 10px); padding: 12px; }
 .dist-title { font-size: 0.82rem; font-weight: 600; color: var(--text-color, #333); margin-bottom: 8px; }
 .dist-paths { margin-bottom: 16px; }
+
+/* ====== 地域分布 ====== */
+.geo-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.geo-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 12px; }
+.geo-map-box { background: var(--bg-card, #fff); border: 1px solid var(--border-color, #e5e7eb); border-radius: var(--radius-md, 10px); padding: 10px; }
+.geo-side { display: flex; flex-direction: column; gap: 12px; }
+.geo-source { margin: 10px 0 0; font-size: 0.74rem; color: var(--text-light, #9aa3b5); line-height: 1.6; }
+.geo-empty { padding: 4px 0; }
+@media (max-width: 1100px) {
+  .geo-grid { grid-template-columns: 1fr; }
+}
 .hops { margin-left: 4px; font-size: 0.72rem; color: var(--el-text-color-secondary); }
 .path-text { font-size: 0.8rem; color: var(--text-light, #555); }
 .pager { display: flex; justify-content: flex-end; margin-top: 14px; }

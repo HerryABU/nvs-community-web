@@ -36,6 +36,7 @@ declare module 'vue' {
     ChapterVersionPanel: typeof import('./src/components/collab/ChapterVersionPanel.vue')['default']
     ChapterWorkflowBar: typeof import('./src/components/collab/ChapterWorkflowBar.vue')['default']
     CharacterManager: typeof import('./src/components/editor/script/CharacterManager.vue')['default']
+    ChinaGeoMap: typeof import('./src/components/ChinaGeoMap.vue')['default']
     CollaboratorsPanel: typeof import('./src/components/collab/CollaboratorsPanel.vue')['default']
     CommentItem: typeof import('./src/components/CommentItem.vue')['default']
     CommentNetworkView: typeof import('./src/components/CommentNetworkView.vue')['default']
