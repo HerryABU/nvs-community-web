@@ -10,6 +10,7 @@ import (
 
 	"nvs-server/aiclient"
 	"nvs-server/aisafety"
+	"nvs-server/crisis"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -317,7 +318,7 @@ func AiHubChatStream(c *gin.Context) {
 	if u, e := models.GetUserByID(userID); e == nil && u != nil {
 		safetyUser = u.Username
 		// 未成年用户：后续要叠加「未成年人保护」系统提示词
-		safetyMinor = isMinorUser(u)
+		safetyMinor = crisis.IsMinorUser(u)
 	}
 	if safetyCfg != nil && safetyCfg.Enabled && safetyCfg.GuardInput {
 		dec := aisafety.CheckInput(aisafety.InputRequest{

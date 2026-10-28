@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"nvs-server/aisafety"
+	"nvs-server/crisis"
 	"nvs-server/models"
 	"nvs-server/security"
 	sentimentstore "nvs-server/sentiment/store"
@@ -56,8 +57,7 @@ func TestMinorCrisisSelfHarmSlang(t *testing.T) {
 		t.Fatalf("创建评论失败: %v", err)
 	}
 
-	c, _ := asUser("reader", 1)
-	card := handleMinorCrisis(c, cm, raw)
+	card := crisis.HandleMinorCrisis(cm, raw)
 	if card == nil || !card.Triggered {
 		t.Fatal("自残黑话应触发危机防护")
 	}
@@ -136,8 +136,7 @@ func TestMinorCrisisNormalCommentNotTriggered(t *testing.T) {
 		t.Fatalf("创建评论失败: %v", err)
 	}
 
-	c, _ := asUser("reader", 1)
-	if card := handleMinorCrisis(c, cm, raw); card != nil {
+	if card := crisis.HandleMinorCrisis(cm, raw); card != nil {
 		t.Fatalf("普通评论不应触发危机防护，实际 %+v", card)
 	}
 
@@ -161,10 +160,9 @@ func TestMinorCrisisReport(t *testing.T) {
 	raw := "轻生"
 	cm := &models.Comment{UserID: 1, NovelID: 100, Content: raw}
 	models.DB.Create(cm)
-	c, _ := asUser("reader", 1)
-	handleMinorCrisis(c, cm, raw)
+	crisis.HandleMinorCrisis(cm, raw)
 
-	report, err := BuildCrisisReport(1)
+	report, err := crisis.BuildCrisisReport(1)
 	if err != nil {
 		t.Fatalf("生成报告失败: %v", err)
 	}
@@ -192,7 +190,7 @@ func TestShieldHighRiskTargets(t *testing.T) {
 
 	// 刷屏/出征行为（@ 5 人以上）会被舆情守卫判为 block → 绝对保护模式应折叠
 	hostile := &models.Comment{UserID: 3, NovelID: 100, Content: "@a1 @a2 @a3 @a4 @a5 你太矫情了"}
-	shielded := shieldHighRiskTargets(hostile, 1, nil)
+	shielded := crisis.ShieldHighRiskTargets(hostile, 1, nil)
 	if len(shielded) == 0 {
 		t.Fatal("指向高危观察期用户的敌意评论应被绝对保护模式拦下")
 	}
@@ -206,7 +204,7 @@ func TestShieldHighRiskTargets(t *testing.T) {
 	// 非高危用户不受此保护
 	seedTestUser(t, 5, "safe", "reader")
 	other := &models.Comment{UserID: 3, NovelID: 100, Content: "@a1 @a2 @a3 @a4 @a5 你太矫情了"}
-	if got := shieldHighRiskTargets(other, 5, nil); len(got) != 0 {
+	if got := crisis.ShieldHighRiskTargets(other, 5, nil); len(got) != 0 {
 		t.Error("非高危观察期用户不应触发绝对保护模式")
 	}
 }

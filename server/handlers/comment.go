@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"time"
 
+	"nvs-server/crisis"
 	"nvs-server/models"
 	"nvs-server/realtime"
 	"nvs-server/security"
@@ -176,7 +177,7 @@ func CreateComment(c *gin.Context) {
 	// 抑郁倾向者几乎总是伴随着网暴。对处于高危观察期的用户，
 	// 指向他的攻击性言论（哪怕只是「你太矫情了」）一律先折叠，不让它出现在受害者屏幕上。
 	// 必须落库前判定：折叠的内容不该产生对外通知，更不该被推进公共频道。
-	shielded := shieldHighRiskTargets(comment, parentAuthorID, mentions)
+	shielded := crisis.ShieldHighRiskTargets(comment, parentAuthorID, mentions)
 
 	if err := models.CreateComment(comment); err != nil {
 		utils.InternalError(c, "发表评论失败")
@@ -188,13 +189,13 @@ func CreateComment(c *gin.Context) {
 
 	// 绝对保护模式命中：柔和地告诉被保护的人（不指责攻击者，也不复述攻击内容）
 	if len(shielded) > 0 {
-		notifyShieldedUser(shielded, userID)
+		crisis.NotifyShieldedUser(shielded, userID)
 	}
 
 	// ── 未成年人心理危机防护 ──
 	// 黑话命中 → 立即折叠 + 进入高危观察期 + 报给站长 + 向本人推送抚慰私信与危机热线。
 	// 语义绝望信号（无黑话的求救）由 AI 异步分析，命中后同样走这套处置。
-	if crisis := handleMinorCrisis(c, comment, raw); crisis != nil {
+	if crisis := crisis.HandleMinorCrisis(comment, raw); crisis != nil {
 		comment.Crisis = crisis
 	}
 
