@@ -227,6 +227,16 @@ export const aiApi = {
     return api.delete(`/admin/ai/models/${id}`);
   },
 
+  // ---------- 从渠道一键拉取模型（L5：输入渠道地址 + key 拉出模型清单） ----------
+  /** POST /api/admin/ai/models/pull —— 把渠道返回的原始模型清单 + 服务端推断分类返回 */
+  pullModels(data: { base_url: string; api_key?: string }) {
+    return api.post<{ code: number; data: { items: ProviderModelSuggestion[] } }>('/admin/ai/models/pull', data);
+  },
+  /** POST /api/admin/ai/models/import —— 批量导入勾选的模型（默认对用户隐藏，由站长按需开放） */
+  importModels(data: { base_url: string; api_key?: string; channel: string; items: ProviderModelImportItem[] }) {
+    return api.post<{ code: number; data: { created: number } }>('/admin/ai/models/import', data);
+  },
+
   // 管理端：免费 AI 额度（平台默认 + 按人覆盖）
   getFreeQuotaConfig() {
     return api.get<{ code: number; data: { enabled: boolean; config: { calls_per_day: number; max_tokens_per_day: number } } }>('/admin/ai/free-quota/config');
@@ -400,4 +410,25 @@ export interface AiStyle {
 export interface AiCozeDefault {
   base_url: string;
   timeout_seconds: number;
+}
+
+/** 从渠道拉取的模型条目（服务端已做厂商/渠道/类别推断与后缀剥离） */
+export interface ProviderModelSuggestion {
+  raw_id: string;
+  alias: string;
+  vendor: string;
+  channel: string;
+  category: string;
+  prefix: string;
+  version: string;
+  sub_version: string;
+}
+
+/** 导入时每个模型的可覆盖字段 */
+export interface ProviderModelImportItem {
+  raw_id: string;
+  alias: string;
+  vendor: string;
+  category: string;
+  user_visible: boolean;
 }

@@ -64,6 +64,7 @@
         <SectionHeader title="模型列表" subtitle="可配置多个上游，按优先级取用" :icon="'🤖'" gradient="purple" />
         <div class="table-toolbar">
           <span class="muted small">共 {{ models.length }} 个模型（启用 {{ enabledCount }} 个）</span>
+          <el-button :icon="'🔌'" @click="openPull">从渠道拉取</el-button>
           <el-button type="primary" :icon="Plus" @click="openCreate">添加模型</el-button>
         </div>
 
@@ -230,6 +231,56 @@
         </div>
       </div>
     </div>
+
+    <!-- ============ 从渠道拉取模型对话框（L5：输入渠道地址 + key 拉出模型清单） ============ -->
+    <el-dialog v-model="pullDialogVisible" title="从渠道拉取模型" width="820px" :close-on-click-modal="false">
+      <div class="pull-step">
+        <el-alert type="info" :closable="false" show-icon
+          style="margin-bottom:12px"
+          title="输入上游渠道地址与密钥，一键拉出该渠道全部模型；勾选需要导入的，导入后默认对用户隐藏，到密钥池补密钥并手动开放可见性即可。"
+        />
+        <el-form label-width="110px" inline>
+          <el-form-item label="上游地址" required style="width:420px">
+            <el-input v-model="pullForm.base_url" placeholder="如 https://api.openai.com/v1（不含 /chat/completions）" />
+          </el-form-item>
+          <el-form-item label="API Key">
+            <el-input v-model="pullForm.api_key" placeholder="可留空（部分渠道无需密钥）" style="width:240px" type="password" show-password />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" :loading="pulling" @click="doPull">拉取模型</el-button>
+          </el-form-item>
+        </el-form>
+
+        <div v-if="pullError" class="pull-error">{{ pullError }}</div>
+
+        <div v-if="pullList.length" class="pull-result">
+          <div class="pull-result-head">
+            <span class="muted small">共 {{ pullList.length }} 个模型，已选 {{ pullSelected.length }} 个</span>
+            <span>
+              <el-button size="small" @click="toggleAllPull(true)">全选</el-button>
+              <el-button size="small" @click="toggleAllPull(false)">取消全选</el-button>
+            </span>
+          </div>
+          <el-table ref="pullTableRef" :data="pullList" max-height="360" @selection-change="onPullSelection">
+            <el-table-column type="selection" width="46" />
+            <el-table-column prop="alias" label="展示别名" min-width="150" show-overflow-tooltip />
+            <el-table-column prop="raw_id" label="上游模型 ID" min-width="180" show-overflow-tooltip />
+            <el-table-column prop="vendor" label="厂商" width="100" />
+            <el-table-column prop="channel" label="渠道" width="100" />
+            <el-table-column label="类别" width="100">
+              <template #default="{ row }"><el-tag size="small" :type="kindTag(row.category)">{{ kindLabel(row.category) }}</el-tag></template>
+            </el-table-column>
+            <el-table-column label="导入后对用户可见" width="140">
+              <template #default="{ row }"><el-switch v-model="row.user_visible" size="small" /></template>
+            </el-table-column>
+          </el-table>
+          <div class="pull-import-bar">
+            <el-input v-model="pullChannel" placeholder="渠道分组名（如 openai / 我的中转），留空按推断分组" style="width:260px" />
+            <el-button type="success" :loading="importing" :disabled="!pullSelected.length" @click="doImport">导入选中（{{ pullSelected.length }}）</el-button>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
 
     <!-- ============ 创建 / 编辑对话框 ============ -->
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑模型' : '添加模型'" width="560px">
@@ -426,7 +477,7 @@ import { MagicStick, Plus } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import SectionHeader from '@/components/common/SectionHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
-import { aiApi, type AdminAiModel, type AiModelPreset, type AiVendor, type AiCategoryPrice, type AiVendorMatrixEntry } from '@/api/ai';
+import { aiApi, type AdminAiModel, type AiModelPreset, type AiVendor, type AiCategoryPrice, type AiVendorMatrixEntry, type ProviderModelSuggestion } from '@/api/ai';
 import { adminApi } from '@/api/admin';
 import StateBlock from '@/components/common/StateBlock.vue';
 
@@ -771,6 +822,92 @@ async function removeModel(row: AdminAiModel) {
   }
 }
 
+// ---------- 从渠道拉取模型（L5） ----------
+const pullDialogVisible = ref(false);
+const pullForm = reactive({ base_url: '', api_key: '' });
+const pullList = ref<ProviderModelSuggestion[]>([]);
+const pullSelected = ref<ProviderModelSuggestion[]>([]);
+const pulling = ref(false);
+const importing = ref(false);
+const pullError = ref('');
+const pullChannel = ref('');
+const pullTableRef = ref<any>(null);
+
+function openPull() {
+  pullForm.base_url = '';
+  pullForm.api_key = '';
+  pullList.value = [];
+  pullSelected.value = [];
+  pullError.value = '';
+  pullChannel.value = '';
+  pullDialogVisible.value = true;
+}
+
+async function doPull() {
+  if (!pullForm.base_url.trim()) {
+    ElMessage.warning('请填写上游地址');
+    return;
+  }
+  pulling.value = true;
+  pullError.value = '';
+  pullList.value = [];
+  pullSelected.value = [];
+  try {
+    const res = await aiApi.pullModels({ base_url: pullForm.base_url.trim(), api_key: pullForm.api_key.trim() });
+    if (res.data.code === 0) {
+      pullList.value = (res.data.data.items || []).map((it) => ({ ...it, user_visible: false }));
+      if (!pullList.value.length) {
+        pullError.value = '该渠道未返回任何模型（可能是地址错误、密钥无效，或上游不支持 /models 端点）';
+      }
+    }
+  } catch (e: any) {
+    pullError.value = e?.response?.data?.message || '拉取失败';
+  }
+  pulling.value = false;
+}
+
+function onPullSelection(rows: any[]) {
+  pullSelected.value = rows as ProviderModelSuggestion[];
+}
+
+function toggleAllPull(v: boolean) {
+  // Element Plus 表格多选由内部维护，这里通过 ref 触发：
+  const tbl = pullTableRef.value;
+  if (!tbl) return;
+  if (v) pullList.value.forEach((r) => tbl.toggleRowSelection(r, true));
+  else tbl.clearSelection();
+}
+
+async function doImport() {
+  if (!pullSelected.value.length) {
+    ElMessage.warning('请先勾选要导入的模型');
+    return;
+  }
+  importing.value = true;
+  try {
+    const res = await aiApi.importModels({
+      base_url: pullForm.base_url.trim(),
+      api_key: pullForm.api_key.trim(),
+      channel: pullChannel.value.trim(),
+      items: pullSelected.value.map((it) => ({
+        raw_id: it.raw_id,
+        alias: it.alias,
+        vendor: it.vendor,
+        category: it.category,
+        user_visible: it.user_visible,
+      })),
+    });
+    if (res.data.code === 0) {
+      ElMessage.success(`已导入 ${res.data.data.created} 个模型（默认对用户隐藏，到密钥池补密钥并开放可见性）`);
+      pullDialogVisible.value = false;
+      await loadModels();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '导入失败');
+  }
+  importing.value = false;
+}
+
 const route = reactive({
   strategy: 'manual',
   scene_strategy: {} as Record<string, string>,
@@ -954,6 +1091,11 @@ async function saveCategoryPrice(p: AiCategoryPrice & { _saving?: boolean }) {
 .small { font-size: 0.78rem; margin-left: 6px; }
 .mono { font-family: Consolas, 'Courier New', monospace; }
 .kind-hint { font-size: 0.75rem; color: var(--text-light, #999); margin-top: 2px; }
+.pull-step { padding: 2px 4px; }
+.pull-error { color: #f56c6c; font-size: 0.82rem; margin: 8px 0; }
+.pull-result { margin-top: 12px; border-top: 1px solid var(--border-color, #ebeef5); padding-top: 12px; }
+.pull-result-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.pull-import-bar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 12px; }
 [data-theme="dark"] .admin-page { background: #0f172a; }
 
 /* 厂商版本矩阵 */
