@@ -137,6 +137,9 @@ export const aiCostApi = {
   audioModels() {
     return api.get<{ code: number; data: any }>('/admin/ai/audio-models');
   },
+  agentUsage(days: number) {
+    return api.get<{ code: number; data: { rows: any[]; total: any; days: number } }>('/admin/ai/agent-usage', { params: { days } });
+  },
   /** 语音合成 / 音乐：返回站内音频 URL */
   speech(payload: { text: string; voice?: string; kind?: 'tts' | 'music'; model_id?: number }) {
     return api.post<{ code: number; data: { url: string; mime: string; model: string } }>('/ai/speech', payload);

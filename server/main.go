@@ -913,6 +913,7 @@ func main() {
 		admin.PUT("/ai/budget", handlers.SaveAiBudget)
 		admin.GET("/ai/throttle", handlers.GetAiThrottle)
 		admin.PUT("/ai/throttle", handlers.SaveAiThrottle)
+		admin.GET("/ai/agent-usage", handlers.GetAiAgentUsage)
 		// ===== 蜜罐：SQLi 命中与 TLS 采集率 =====
 		admin.GET("/honeypot/sqli", honeypothandler.SQLiStats)
 		admin.GET("/honeypot/tls", honeypothandler.TLSStats)

@@ -140,13 +140,46 @@
         </el-table>
         <p class="hint mt">在「AI 模型池」新增模型时把 kind 设为 audio 即可；单次文本上限 {{ 2000 }} 字。</p>
       </el-tab-pane>
+
+      <!-- 按智能体(Agent)维度使用量 -->
+      <el-tab-pane label="按智能体使用量" name="agent">
+        <div class="toolbar">
+          <el-input-number v-model="agentDays" :min="1" :max="365" @change="loadAgentUsage" />
+          <span class="hint">天</span>
+          <span class="hint" style="margin-left: 12px">按智能体(Agent)维度聚合最近 {{ agentDays }} 天的调用 / Token / 消耗（agent_id=0 表示未绑定智能体的直接对话）</span>
+        </div>
+        <div ref="chartRef" class="agent-chart" />
+        <el-table :data="agentRows" size="small" class="panel" :max-height="360">
+          <template #empty>
+            <StateBlock state="empty" skeleton="table" :rows="4" compact title="暂无数据"
+              description="该时间窗口内没有智能体相关的 AI 调用记录。" />
+          </template>
+          <el-table-column label="智能体" min-width="170">
+            <template #default="{ row }">
+              <span v-if="row.agent_id === 0" class="muted">未绑定（直接对话）</span>
+              <span v-else>{{ row.agent_name || ('#') + row.agent_id }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="sessions" label="会话数" width="100" />
+          <el-table-column prop="calls" label="调用次数" width="110" />
+          <el-table-column prop="tokens_in" label="输入Token" width="120" />
+          <el-table-column prop="tokens_out" label="输出Token" width="120" />
+          <el-table-column prop="cost" label="消耗（代币）" width="130" />
+        </el-table>
+        <div class="agent-total">
+          合计：{{ agentTotal.calls || 0 }} 次调用 ·
+          {{ agentTotal.tokens_in || 0 }} / {{ agentTotal.tokens_out || 0 }} Token ·
+          {{ agentTotal.cost || 0 }} 代币
+        </div>
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from 'vue';
 import { ElMessage } from 'element-plus';
+import * as echarts from 'echarts';
 import { aiCostApi, type BudgetConfig } from '@/api/costrisk';
 import StateBlock from '@/components/common/StateBlock.vue';
 import AdminApiAlert from '@/components/admin/AdminApiAlert.vue';
@@ -229,11 +262,67 @@ async function loadAudio() {
   audioCount.value = res.data.data.count || 0;
 }
 
+// ===== 按智能体(Agent)维度使用量 =====
+const agentDays = ref(30);
+const agentRows = ref<any[]>([]);
+const agentTotal = ref<any>({});
+const chartRef = ref<HTMLElement | null>(null);
+let chartInst: echarts.ECharts | null = null;
+
+async function loadAgentUsage() {
+  try {
+    const res = await aiCostApi.agentUsage(agentDays.value);
+    agentRows.value = res.data.data.rows || [];
+    agentTotal.value = res.data.data.total || {};
+    renderAgentChart();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '加载智能体用量失败');
+  }
+}
+function renderAgentChart() {
+  if (!chartRef.value) return;
+  if (!chartInst) chartInst = echarts.init(chartRef.value);
+  // tab 在激活前处于 display:none，宽高可能为 0，需 resize 后再渲染
+  chartInst.resize();
+  const rows = [...agentRows.value].reverse();
+  const labels = rows.map((r) => (r.agent_id === 0 ? '未绑定' : (r.agent_name || ('#' + r.agent_id))));
+  const costs = rows.map((r) => r.cost || 0);
+  chartInst.setOption({
+    grid: { left: 12, right: 24, top: 16, bottom: 8, containLabel: true },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    xAxis: { type: 'value', name: '消耗（代币）' },
+    yAxis: { type: 'category', data: labels, inverse: true },
+    series: [
+      {
+        type: 'bar',
+        data: costs,
+        itemStyle: { color: 'var(--el-color-primary)', borderRadius: [0, 4, 4, 0] },
+        label: { show: true, position: 'right' },
+      },
+    ],
+  });
+}
+function onResize() {
+  chartInst?.resize();
+}
+
+watch(tab, (v) => {
+  if (v === 'agent') {
+    nextTick(() => loadAgentUsage());
+  }
+});
+
 onMounted(async () => {
   await loadBudget();
   await loadThrottle();
   await loadFunnel();
   await loadAudio();
+  window.addEventListener('resize', onResize);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', onResize);
+  chartInst?.dispose();
+  chartInst = null;
 });
 </script>
 
@@ -258,4 +347,7 @@ onMounted(async () => {
 .funnel-bar { height: 100%; background: linear-gradient(90deg, var(--el-color-primary), var(--el-color-primary-light-3)); }
 .funnel-num { font-weight: 700; text-align: right; }
 .funnel-rate { display: flex; flex-direction: column; font-size: 0.76rem; }
+.agent-chart { width: 100%; height: 320px; margin: 12px 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; }
+.agent-total { margin-top: 10px; color: var(--text-muted); font-size: 0.82rem; }
+.muted { color: var(--text-muted); }
 </style>
