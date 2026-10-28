@@ -6,6 +6,8 @@ import (
 	"math"
 	"strings"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // ==================== AI 调用计费（§5.3 / §13.3） ====================
@@ -121,58 +123,99 @@ func CreateAiCallLog(userID uint, m *AiModel, action, refType string, refID uint
 }
 
 // SettleAiCallLog 按上游真实 usage 结算扣款（consume 流水 + settled 状态）。
-// 若结算时余额不足（预检后被其他并发调用耗尽），返回错误、保留 failed 状态不扣款。
+// 若结算时余额不足（预检后被其他并发调用耗尽），返回错误、记录落 failed 且不扣款。
+//
+// 状态机：重复结算一律被拒绝（已 settled / 非 pending 直接报错），调用方据此返回
+// 「结算失败（未扣款）」，不会误退款。
+//
+// 并发安全：采用「原子 claim + 条件更新」保证不重复扣款——
+// 同一条 pending 记录在并发 settle 下只会被一个事务成功 claim
+// （UPDATE ... WHERE status=pending 的 RowsAffected=1），其余事务 RowsAffected=0
+// 直接报错退出、绝不入账；入账（AppendTokenLedger）发生在 claim 之后且在同一事务内，
+// 余额不足会随事务回滚 claim（余额未扣、无消费流水），再在事务外把记录落 failed。
 func SettleAiCallLog(logID uint, tokensIn, tokensOut int) (int64, error) {
-	var log AiCallLog
-	if err := DB.Where("id = ?", logID).First(&log).Error; err != nil {
-		return 0, err
-	}
-	if log.Status != AiCallPending {
-		return 0, fmt.Errorf("调用记录状态异常：%s", log.Status)
-	}
-	var m AiModel
-	if err := DB.Where("id = ?", log.ModelID).First(&m).Error; err != nil {
-		return 0, err
-	}
-	cost := EstimateAiCost(&m, tokensIn, tokensOut)
-	if log.FreeQuota {
-		cost = 0 // 免费额度调用：不扣代币（用量由调用方记入免费额度流水）
-	}
-	snap := AiPriceSnapshot{
-		ModelID: m.ID, ModelName: m.Name, PriceIn: m.PriceIn, PriceOut: m.PriceOut,
-		TokensIn: tokensIn, TokensOut: tokensOut, Cost: cost,
-	}
-	snapJSON, _ := json.Marshal(snap)
-	now := time.Now()
-
-	if cost <= 0 {
-		// 免费模型：不碰代币账本，直接结算
-		if err := DB.Model(&AiCallLog{}).Where("id = ?", logID).Updates(map[string]interface{}{
-			"status": AiCallSettled, "tokens_in": tokensIn, "tokens_out": tokensOut,
-			"cost": 0, "price_snapshot": string(snapJSON), "settled_at": now,
-		}).Error; err != nil {
-			return 0, err
+	var costOut int64
+	// 扣款失败信息：事务回滚后在事务外落 failed 状态
+	var ledgerErr error
+	var failTokensIn, failTokensOut int
+	var failCost int64
+	var failSnap string
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var log AiCallLog
+		if e := tx.Where("id = ?", logID).First(&log).Error; e != nil {
+			return e
 		}
-		return 0, nil
-	}
+		if log.Status != AiCallPending {
+			return fmt.Errorf("调用记录状态异常：%s", log.Status)
+		}
+		var m AiModel
+		if e := tx.Where("id = ?", log.ModelID).First(&m).Error; e != nil {
+			return e
+		}
+		cost := EstimateAiCost(&m, tokensIn, tokensOut)
+		if log.FreeQuota {
+			cost = 0 // 免费额度调用：不扣代币（用量由调用方记入免费额度流水）
+		}
+		snap := AiPriceSnapshot{
+			ModelID: m.ID, ModelName: m.Name, PriceIn: m.PriceIn, PriceOut: m.PriceOut,
+			TokensIn: tokensIn, TokensOut: tokensOut, Cost: cost,
+		}
+		snapJSON, _ := json.Marshal(snap)
+		now := time.Now()
 
-	nb, err := AppendTokenLedger(log.UserID, TokenTypeConsume, -cost, "ai", log.ID,
-		fmt.Sprintf("AI 调用：%s（%s）", aiActionLabel(log.Action), m.Name), string(snapJSON))
+		// 原子 claim：仅当仍处于 pending 才推进到 settled（含费用快照），
+		// RowsAffected==0 表示并发事务已先行结算，本事务幂等退出、不入账。
+		claim := tx.Model(&AiCallLog{}).Where("id = ? AND status = ?", logID, AiCallPending).
+			Updates(map[string]interface{}{
+				"status":         AiCallSettled,
+				"tokens_in":      tokensIn,
+				"tokens_out":     tokensOut,
+				"cost":           cost,
+				"price_snapshot": string(snapJSON),
+				"settled_at":     now,
+			})
+		if claim.Error != nil {
+			return claim.Error
+		}
+		if claim.RowsAffected == 0 {
+			// 并发事务已先行结算：本事务不重复入账，按状态机拒绝重复结算
+			return fmt.Errorf("调用记录已被并发结算（重复结算被拒绝）")
+		}
+		if cost <= 0 {
+			return nil // 免费额度 / 零费用：claim 即完成
+		}
+		nb, e := appendTokenLedgerTx(tx, log.UserID, TokenTypeConsume, -cost, "ai", log.ID,
+			fmt.Sprintf("AI 调用：%s（%s）", aiActionLabel(log.Action), m.Name), string(snapJSON))
+		if e != nil {
+			// 余额不足等：返回错误让事务整体回滚（claim 撤销、余额未扣、不留消费流水）。
+			// failed 状态在事务外落（见函数末尾），因为事务内的写入会被回滚。
+			ledgerErr = e
+			failTokensIn, failTokensOut = tokensIn, tokensOut
+			failCost, failSnap = cost, string(snapJSON)
+			return e
+		}
+		costOut = nb
+		return nil
+	})
+	if ledgerErr != nil {
+		// 事务已回滚：把记录落为 failed 以便排查与重试。
+		// 条件更新 status=pending —— 若并发事务已结算则不覆盖其结果。
+		DB.Model(&AiCallLog{}).Where("id = ? AND status = ?", logID, AiCallPending).
+			Updates(map[string]interface{}{
+				"status":         AiCallFailed,
+				"error":          ledgerErr.Error(),
+				"tokens_in":      failTokensIn,
+				"tokens_out":     failTokensOut,
+				"cost":           failCost,
+				"price_snapshot": failSnap,
+				"settled_at":     time.Now(),
+			})
+		return 0, fmt.Errorf("扣款失败：%w", ledgerErr)
+	}
 	if err != nil {
-		// 余额不足等：标记失败，不回滚（未扣款）
-		_ = DB.Model(&AiCallLog{}).Where("id = ?", logID).Updates(map[string]interface{}{
-			"status": AiCallFailed, "error": err.Error(), "tokens_in": tokensIn,
-			"tokens_out": tokensOut, "cost": cost, "price_snapshot": string(snapJSON), "settled_at": now,
-		}).Error
 		return 0, err
 	}
-	if err := DB.Model(&AiCallLog{}).Where("id = ?", logID).Updates(map[string]interface{}{
-		"status": AiCallSettled, "tokens_in": tokensIn, "tokens_out": tokensOut,
-		"cost": cost, "price_snapshot": string(snapJSON), "settled_at": now,
-	}).Error; err != nil {
-		return 0, err
-	}
-	return nb, nil
+	return costOut, nil
 }
 
 // FailAiCallLog 上游失败：记 failed，不扣款

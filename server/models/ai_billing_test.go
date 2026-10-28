@@ -1,6 +1,8 @@
 package models
 
 import (
+	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/glebarez/sqlite"
@@ -196,6 +198,52 @@ func TestAiSettleFreeModel(t *testing.T) {
 	}
 }
 
+// TestSettleAiCallLogConcurrent 并发结算幂等：同一条 pending 记录被多次并发结算，
+// 只能成功 claim 一次、只扣一次代币，杜绝重复扣费竞态。
+func TestSettleAiCallLogConcurrent(t *testing.T) {
+	setupAiTestDB(t)
+	m := seedAiModel(t, 2, 4, 1024)
+	// 充足余额（远大于单次费用 6），排除「余额不足」路径干扰
+	if _, e := AppendTokenLedger(77, TokenTypeGrant, 10000, "admin", 1, "", ""); e != nil {
+		t.Fatalf("增发失败: %v", e)
+	}
+	log, err := CreateAiCallLog(77, m, "polish", "chapter", 3, 1200, 600, false)
+	if err != nil {
+		t.Fatalf("创建 pending 流水失败: %v", err)
+	}
+
+	const workers = 12
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = SettleAiCallLog(log.ID, 1200, 600)
+		}()
+	}
+	wg.Wait()
+
+	// 只应有一笔 -6 的消费流水（费用 6 = ceil(1.2×2)+ceil(0.6×4)）
+	var entries []TokenLedger
+	DB.Where("user_id = ? AND type = ?", 77, TokenTypeConsume).Find(&entries)
+	if len(entries) != 1 {
+		t.Fatalf("并发结算应只产生 1 笔消费流水，实际 %d 笔（重复扣费！）", len(entries))
+	}
+	if entries[0].Amount != -6 {
+		t.Errorf("消费金额应为 -6，实际 %d", entries[0].Amount)
+	}
+	// 余额只应减少 6（从 10000 → 9994）
+	if b := GetTokenBalance(77); b != 9994 {
+		t.Errorf("并发结算后余额应为 9994，实际 %d（重复扣费！）", b)
+	}
+	// 记录状态最终为 settled（被某一条 worker 成功 claim）
+	var got AiCallLog
+	DB.Where("id = ?", log.ID).First(&got)
+	if got.Status != AiCallSettled {
+		t.Errorf("最终状态应为 settled，实际 %s", got.Status)
+	}
+}
+
 func TestAiModelKeyEncryption(t *testing.T) {
 	setupAiTestDB(t)
 	m := &AiModel{Name: "密钥测试", ModelID: "k", BaseURL: "http://x", Enabled: true}
@@ -274,5 +322,103 @@ func TestAiConfigAndQueries(t *testing.T) {
 	list, total, err := ListAiCallLogs(5, 1, 20)
 	if err != nil || total != 1 || len(list) != 1 {
 		t.Errorf("调用历史异常: total=%d len=%d err=%v", total, len(list), err)
+	}
+}
+
+// setupAiFileTestDB 用文件型 SQLite（WAL + busy_timeout）建库，支持真正并发的写事务。
+// 内存共享库（cache=shared）在并发写时会因表级锁直接返回 SQLITE_LOCKED，无法验证竞态。
+func setupAiFileTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "ai_settle_conc.db")
+	dsn := path + "?_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)"
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("打开文件测试库失败: %v", err)
+	}
+	if err := AutoMigrateAll(db); err != nil {
+		t.Fatalf("迁移失败: %v", err)
+	}
+	sqlDB, e := db.DB()
+	if e != nil {
+		t.Fatalf("取连接池失败: %v", e)
+	}
+	sqlDB.SetMaxOpenConns(8)
+	DB = db
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	return db
+}
+
+// TestAiSettleConcurrentIdempotent 验证并发结算不会重复扣款。
+// 场景：同一条 pending 流水被 N 个 goroutine 同时结算（上游回调重试 / 结算与对账并发），
+// 期望：只产生 1 笔消费流水、只扣一次余额、记录终态为 settled。
+// 这是原子 claim（UPDATE ... WHERE status=pending + RowsAffected 判定）修掉的重复扣费竞态。
+func TestAiSettleConcurrentIdempotent(t *testing.T) {
+	setupAiFileTestDB(t)
+	m := seedAiModel(t, 2, 4, 1024)
+	const grant = 100
+	const uid = 77
+	if _, e := AppendTokenLedger(uid, TokenTypeGrant, grant, "admin", 1, "", ""); e != nil {
+		t.Fatalf("增发失败: %v", e)
+	}
+	log, err := CreateAiCallLog(uid, m, "continue", "", 0, 1000, 500, false)
+	if err != nil {
+		t.Fatalf("创建 pending 流水失败: %v", err)
+	}
+	cost := EstimateAiCost(m, 1000, 500) // ceil(1*2) + ceil(0.5*4) = 2 + 2 = 4
+	if cost <= 0 {
+		t.Fatalf("测试模型应有费用，实际 %d", cost)
+	}
+
+	const n = 8
+	// 第一波：闸门同时起跑，制造真实并发
+	start := make(chan struct{})
+	errs := make([]error, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			<-start
+			_, errs[idx] = SettleAiCallLog(log.ID, 1000, 500)
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+
+	okCount := 0
+	for _, e := range errs {
+		if e == nil {
+			okCount++
+		}
+	}
+	if okCount == 0 {
+		t.Fatalf("并发结算至少应有一次成功，实际全部失败：%v", errs)
+	}
+
+	// 核心不变量：只扣一次
+	var ledgerCount int64
+	DB.Model(&TokenLedger{}).Where("user_id = ? AND type = ?", uid, TokenTypeConsume).Count(&ledgerCount)
+	if ledgerCount != 1 {
+		t.Errorf("并发结算应只产生 1 笔消费流水，实际 %d 笔", ledgerCount)
+	}
+	if bal := GetTokenBalance(uid); bal != grant-cost {
+		t.Errorf("并发结算后余额应为 %d（只扣一次），实际 %d", grant-cost, bal)
+	}
+	var got AiCallLog
+	DB.Where("id = ?", log.ID).First(&got)
+	if got.Status != AiCallSettled {
+		t.Errorf("记录状态应为 settled，实际 %s", got.Status)
+	}
+
+	// 第二波：记录已 settled 后的重复结算按状态机应被拒绝，且不得再扣款
+	if _, e := SettleAiCallLog(log.ID, 1000, 500); e == nil {
+		t.Errorf("已结算记录重复结算应被拒绝（状态机保护）")
+	}
+	DB.Model(&TokenLedger{}).Where("user_id = ? AND type = ?", uid, TokenTypeConsume).Count(&ledgerCount)
+	if ledgerCount != 1 {
+		t.Errorf("重复结算后消费流水仍应为 1 笔，实际 %d 笔", ledgerCount)
+	}
+	if bal := GetTokenBalance(uid); bal != grant-cost {
+		t.Errorf("重复结算后余额仍应为 %d，实际 %d", grant-cost, bal)
 	}
 }
