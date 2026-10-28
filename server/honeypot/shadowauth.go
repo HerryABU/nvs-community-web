@@ -18,11 +18,12 @@ import (
 
 // 事件类型
 const (
-	EventJWTForged  = "jwt_forged"    // 伪造/复用 token
-	EventPrivilege  = "privilege_ops" // 越权/写入/提权尝试
-	EventBlocked    = "blocked_action"
-	EventVerifyPage = "verify_page"
-	EventVerifyTry  = "verify_attempt"
+	EventJWTForged   = "jwt_forged"    // 伪造/复用 token
+	EventPrivilege   = "privilege_ops" // 越权/写入/提权尝试
+	EventBlocked     = "blocked_action"
+	EventVerifyPage  = "verify_page"
+	EventVerifyTry   = "verify_attempt"
+	EventFingerprint = "fingerprint" // 指纹上报（来源：验证页 / HTML 诱饵页，见 Referer）
 )
 
 // ShadowRoute 影子路由注册

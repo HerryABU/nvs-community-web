@@ -65,7 +65,7 @@ func collectFingerprint(c *gin.Context) {
 		_ = SaveFingerprint(sess.ID, in)
 		_ = updateSessionStats(sess, 55, now)
 		ev := &Event{
-			SessionID: sess.ID, Kind: EventVerifyPage, Decoy: "fingerprint",
+			SessionID: sess.ID, Kind: EventFingerprint, Decoy: "fingerprint",
 			Method: "POST", Path: "/hp/fp",
 			Query: fields.Query, UA: fields.UA, Referer: fields.Referer, XFF: fields.XFF,
 			BodySnippet: truncate("指纹上报 canvas="+in.Canvas+" webgl="+in.WebGL+" headless="+in.Headless+
@@ -164,82 +164,6 @@ button{width:100%;margin-top:16px;padding:11px;border:0;border-radius:8px;backgr
 <script>
 (function(){
   var next = "` + next + `";
-  function fnv(s){var h=0x811c9dc5;for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=(h*0x01000193)>>>0;}return h.toString(16);}
-  function canvasHash(){
-    try{
-      var c=document.createElement('canvas');c.width=200;c.height=40;
-      var x=c.getContext('2d');x.textBaseline='top';x.font='14px Arial';
-      x.fillStyle='#f60';x.fillRect(0,0,100,20);x.fillStyle='#069';x.fillText('nvs\u9a8c\u8bc1',2,2);
-      return fnv(c.toDataURL());
-    }catch(e){return 'na';}
-  }
-  function webglHash(){
-    try{
-      var c=document.createElement('canvas');var g=c.getContext('webgl')||c.getContext('experimental-webgl');
-      if(!g) return 'na';
-      var d=g.getExtension('WEBGL_debug_renderer_info');
-      return fnv(String(g.getParameter(d?d.UNMASKED_RENDERER_WEBGL:g.RENDERER))+'|'+g.getParameter(g.VENDOR));
-    }catch(e){return 'na';}
-  }
-  function fontsHash(){
-    try{
-      var list=['Arial','Courier New','Georgia','Times New Roman','Verdana','Microsoft YaHei','SimSun','PingFang SC'];
-      var s='';for(var i=0;i<list.length;i++){s+=document.fonts&&document.fonts.check?document.fonts.check('12px "'+list[i]+'"')?'1':'0':'0';}
-      return fnv(s);
-    }catch(e){return 'na';}
-  }
-  // WebRTC 内网 IP：ICE host 候选里可能带内网地址（现代浏览器多为 mDNS .local）
-  var webrtcIPs=[];
-  function grabWebRTC(){
-    return new Promise(function(resolve){
-      try{
-        var PC=window.RTCPeerConnection||window.webkitRTCPeerConnection||window.mozRTCPeerConnection;
-        if(!PC){return resolve();}
-        var pc=new PC({iceServers:[]});
-        var done=false;
-        function finish(){if(done)return;done=true;try{pc.close();}catch(e){}resolve();}
-        pc.onicecandidate=function(e){
-          if(!e||!e.candidate){return finish();}
-          var m=/([0-9]{1,3}(?:\.[0-9]{1,3}){3}|[a-f0-9]{4}:[a-f0-9:]+|[a-z0-9-]+\.local)/i.exec(e.candidate.candidate||'');
-          if(m&&webrtcIPs.indexOf(m[1])<0&&webrtcIPs.length<4){webrtcIPs.push(m[1]);}
-        };
-        pc.createDataChannel('x');
-        pc.createOffer().then(function(o){return pc.setLocalDescription(o);}).catch(function(){finish();});
-        setTimeout(finish,1200);
-      }catch(e){resolve();}
-    });
-  }
-  function collect(){
-    var hd=[];
-    if(navigator.webdriver) hd.push('webdriver');
-    if(!navigator.languages||navigator.languages.length===0) hd.push('no_languages');
-    if(!window.chrome) hd.push('no_chrome_obj');
-    if(navigator.plugins&&navigator.plugins.length===0) hd.push('no_plugins');
-    var data={
-      canvas:canvasHash(),webgl:webglHash(),fonts:fontsHash(),
-      tz:(Intl.DateTimeFormat().resolvedOptions().timeZone||''),
-      lang:navigator.language||'',
-      screen:(screen.width+'x'+screen.height),
-      dpr:String(window.devicePixelRatio||1),
-      cores:String(navigator.hardwareConcurrency||0),
-      memory:String(navigator.deviceMemory||0),
-      hints:(navigator.userAgentData&&navigator.userAgentData.platform?navigator.userAgentData.platform:''),
-      headless:hd.join(','),
-      raw:JSON.stringify({ua:navigator.userAgent,platform:navigator.platform,vendor:navigator.vendor,
-        webglVendor:webglHash(),langs:navigator.languages,tzOffset:new Date().getTimezoneOffset()})
-    };
-    function send(){
-      data.webrtc=webrtcIPs.join(',');
-      try{
-        var body=JSON.stringify(data);
-        if(navigator.sendBeacon){navigator.sendBeacon('/hp/fp',new Blob([body],{type:'application/json'}));}
-        else{fetch('/hp/fp',{method:'POST',headers:{'Content-Type':'application/json'},body:body,keepalive:true});}
-      }catch(e){}
-    }
-    grabWebRTC().then(send,send);
-  }
-  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',collect);}else{collect();}
-
   var dragging=false,startX=0;
   var slider=document.getElementById('slider'),fill=document.getElementById('fill'),label=document.getElementById('label');
   slider.addEventListener('mousedown',function(e){dragging=true;startX=e.clientX;});
@@ -260,7 +184,8 @@ button{width:100%;margin-top:16px;padding:11px;border:0;border-radius:8px;backgr
       }).catch(function(){err.textContent='网络异常，请重试';});
   });
 })();
-</script></body></html>`
+</script>
+` + fingerprintScriptTag() + `</body></html>`
 }
 
 // VerifyPageHTMLForTest 供单测断言（页面必须不含任何 success 分支）

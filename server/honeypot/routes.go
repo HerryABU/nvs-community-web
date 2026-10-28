@@ -101,6 +101,10 @@ func serveDecoy(c *gin.Context, d Decoy) {
 		}
 	}
 
+	// HTML 类诱饵注入指纹采集脚本：覆盖「浏览型攻击者」（直接访问诱饵页的扫描器/人工），
+	// 此前指纹只在验证页采集，这类攻击者完全留不下浏览器指纹。
+	d = withFingerprintInjection(d)
+
 	for k, v := range d.Headers {
 		c.Header(k, v)
 	}
@@ -136,6 +140,7 @@ func serveBaitFile(c *gin.Context, path string) {
 		d.Risk = 60
 	}
 	_, _ = Record(set, c, d)
+	d = withFingerprintInjection(d)
 	c.Header("X-Robots-Tag", "noindex")
 	for k, v := range d.Headers {
 		c.Header(k, v)
