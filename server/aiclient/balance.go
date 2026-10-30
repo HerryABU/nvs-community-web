@@ -2,6 +2,7 @@ package aiclient
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -106,6 +107,51 @@ func QueryChannelBalanceWithUser(baseURL, apiKey, providerHint, tokenUserID stri
 		// Azure OpenAI 的用量需走 Azure 门户 / 订阅 API，资源密钥无法直接查
 		res.Supported = false
 		res.Error = "Azure OpenAI 余额需通过 Azure 订阅查询，渠道密钥无法拉取"
+		return res
+	}
+
+	// DeepSeek 官方：提供专用余额接口 GET /user/balance（用模型 Key 即可，不需要账户令牌）
+	// 返回 total_balance / is_available；币种随返回的 balance_infos。
+	if isDeepSeekOfficial(baseURL) {
+		body, status, err := httpGetJSON(baseURL+"/user/balance", apiKey, 10*time.Second)
+		if err != nil {
+			res.Error = "请求失败：" + err.Error()
+			return res
+		}
+		if status == 401 || status == 403 {
+			res.Error = "密钥无效或无权限：上游返回 " + itoa(status)
+			return res
+		}
+		if status >= 200 && status < 300 {
+			// 优先用 balance_infos 里的明细（可能有赠金/充值两笔）
+			if infos, ok := body["balance_infos"].([]any); ok && len(infos) > 0 {
+				total := 0.0
+				cur := ""
+				for _, it := range infos {
+					m, ok := it.(map[string]any)
+					if !ok {
+						continue
+					}
+					total += numOf(m["total_balance"])
+					if cur == "" {
+						if c, ok := m["currency"].(string); ok {
+							cur = c
+						}
+					}
+				}
+				res.Supported = true
+				res.TotalRemaining = round2(total)
+				res.Currency = strings.ToUpper(cur)
+				return res
+			}
+			if v, ok := body["total_balance"]; ok {
+				res.Supported = true
+				res.TotalRemaining = round2(numOf(v))
+				res.Currency = "CNY"
+				return res
+			}
+		}
+		res.Error = "DeepSeek 余额接口返回异常"
 		return res
 	}
 
@@ -252,4 +298,30 @@ func httpGetJSONWithUser(url, apiKey, tokenUserID string, timeout time.Duration)
 func rawOf(m map[string]any) []byte {
 	b, _ := json.Marshal(m)
 	return b
+}
+
+// isDeepSeekOfficial 判断是否 DeepSeek 官方（中转站域名不含 deepseek.com，会走通用分支）
+func isDeepSeekOfficial(baseURL string) bool {
+	b := strings.ToLower(baseURL)
+	return strings.Contains(b, "api.deepseek.com")
+}
+
+// numOf 从 JSON 任意值取数字（string / float64 都兼容）
+func numOf(v any) float64 {
+	switch t := v.(type) {
+	case float64:
+		return t
+	case int:
+		return float64(t)
+	case string:
+		var f float64
+		_, _ = fmt.Sscanf(strings.TrimSpace(t), "%f", &f)
+		return f
+	}
+	return 0
+}
+
+// round2 金额保留两位（余额展示到分即可）
+func round2(v float64) float64 {
+	return float64(int64(v*100+0.5)) / 100
 }
