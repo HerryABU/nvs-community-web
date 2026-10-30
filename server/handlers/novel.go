@@ -10,6 +10,7 @@ import (
 
 	"nvs-server/config"
 	"nvs-server/models"
+	"nvs-server/moderation"
 	"nvs-server/security"
 	"nvs-server/utils"
 
@@ -137,6 +138,9 @@ func CreateNovel(c *gin.Context) {
 	indexBytes, _ := json.MarshalIndent(indexData, "", "  ")
 	os.WriteFile(indexPath, indexBytes, 0644)
 
+	// AI 内容审核（作品简介/标题也属于公开内容，与章节发布同等对待）
+	go moderation.ReviewOnWrite(moderation.ScopeNovel, novel.ID)
+
 	utils.SuccessMessage(c, "创建成功", novel)
 }
 
@@ -226,6 +230,9 @@ func UpdateNovel(c *gin.Context) {
 		// 加载已有分类
 		novel.CategoryNames = loadCategoryNames(novel.ID)
 	}
+
+	// 简介/标题改动后重新送检（否则改标题即可绕过首次审核）
+	go moderation.ReviewOnWrite(moderation.ScopeNovel, novel.ID)
 
 	utils.SuccessMessage(c, "更新成功", novel)
 }

@@ -21,10 +21,17 @@ func Init() {
 }
 
 // ReviewOnWrite 发布/提交时送检（小说/博客）。
-// 由 chapter / blog 发布 handler 在内容落库后调用。开关来自配置 NovelBlogOnWrite。
+// 由 chapter / blog / novel(简介) / forum(版块) 的写入 handler 在落库后调用；
+// 具体闸门见 onWriteEnabled。
 func ReviewOnWrite(scope string, targetID uint) {
 	cfg, err := GetConfig()
-	if err != nil || !cfg.Enabled || !cfg.NovelBlogOnWrite {
+	if err != nil || !cfg.Enabled {
+		return
+	}
+	// 按 scope 选对应的开关：小说/博客/章节走「发布即送检」，
+	// 版块走「论坛 AI 审核」那个开关（版块名/简介与论坛内容同属论坛维度）。
+	// 早先只有 NovelBlogOnWrite 一个闸门，导致版块创建永远不可能送检。
+	if !onWriteEnabled(cfg, scope) {
 		return
 	}
 	content, ok := ResolveContent(scope, targetID)
@@ -48,8 +55,20 @@ func ReviewOnWrite(scope string, targetID uint) {
 	}
 }
 
-// ── 违规自动处置回调 ────────────────────────────────────────────────
-// 本包不依赖 handlers（避免反向 import），由 main 启动时用 SetOnFailHook 注入
+// onWriteEnabled 该 scope 的「写入即送检」是否开启。
+func onWriteEnabled(cfg *ModerationConfig, scope string) bool {
+	switch scope {
+	case ScopeForum:
+		// 版块属于论坛维度：沿用「论坛/评论区 AI 审核」开关
+		return cfg.ForumCommentBatch
+	case ScopeNovel, ScopeBlog, ScopeChapter:
+		return cfg.NovelBlogOnWrite
+	default:
+		return cfg.NovelBlogOnWrite
+	}
+}
+
+// ── 违规自动处置回调 ────────────────────────────────────────────────// 本包不依赖 handlers（避免反向 import），由 main 启动时用 SetOnFailHook 注入
 // 「软删 + 留证」的实现。未注入时自动处置静默跳过（只记录，不处置）。
 var failHook func(scope string, targetID uint, reason string)
 

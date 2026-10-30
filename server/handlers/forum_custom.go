@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"nvs-server/models"
+	"nvs-server/moderation"
 	"nvs-server/security"
 	"nvs-server/utils"
 
@@ -99,6 +100,9 @@ func CreateUserForum(c *gin.Context) {
 		utils.InternalError(c, "创建论坛失败")
 		return
 	}
+
+	// AI 内容审核：版块名与简介是公开内容，创建时送检（此前只有版块内帖子会被审）
+	go moderation.ReviewOnWrite(moderation.ScopeForum, forum.ID)
 
 	utils.Success(c, forum)
 }
