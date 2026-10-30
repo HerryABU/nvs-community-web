@@ -616,7 +616,14 @@ func AiHubChatStream(c *gin.Context) {
 			lease.Fail()
 		}
 		models.FailAiCallLog(callLog.ID, streamErr)
-		sseEvent(c, gin.H{"error": "AI 调用失败：" + streamErr})
+		errMsg := "AI 调用失败：" + streamErr
+		// 文档抽不出正文时会回退成「原样发文件」（file content part），
+		// 而只有少数上游（如 Claude）支持该形态。此时补一句人话，指明怎么解。
+		if len(attFiles) > 0 {
+			errMsg += "（该文档未能抽取正文，可能是扫描件或加密文档；" +
+				"当前模型不支持文档输入，请改用支持文档输入的模型，如 Claude）"
+		}
+		sseEvent(c, gin.H{"error": errMsg})
 		return
 	}
 	// 兜底：思考型模型可能把整段回答放在 reasoning 里，content 一直为空。
