@@ -119,13 +119,22 @@
         </div>
 
         <!-- 执行 -->
-        <el-button
-          type="primary"
-          class="awl-run"
-          :loading="streaming"
-          :disabled="!canRun"
-          @click="run"
-        >{{ streaming ? '生成中…' : '生成（流式写入编辑器）' }}</el-button>
+        <div class="awl-run-row">
+          <el-button
+            v-if="streaming"
+            type="warning"
+            class="awl-run"
+            @click="stop"
+          >停止生成</el-button>
+          <el-button
+            v-else
+            type="primary"
+            class="awl-run"
+            :disabled="!canRun"
+            @click="run"
+          >生成（流式写入编辑器）</el-button>
+          <el-button class="awl-cancel" @click="close">取消</el-button>
+        </div>
 
         <!-- 实时流式预览 -->
         <div v-if="liveText || result" class="awl-live">
@@ -262,6 +271,11 @@ function close() {
   // 仅 X / 取消 可关闭；ESC 被头部的 @keydown.esc.prevent.stop 拦截
   if (streaming.value) abortCtl?.abort();
   emit('update:visible', false);
+}
+
+// 停止生成：只掐断上游与写入，不关闭浮层（便于改提示词后重试）
+function stop() {
+  abortCtl?.abort();
 }
 
 // ESC 防护：即便焦点在层内输入框，也不允许 ESC 关闭（只认 X / 取消）
@@ -597,7 +611,9 @@ onBeforeUnmount(() => {
   display: flex; align-items: center; justify-content: space-between;
   font-size: 0.85rem; font-weight: 600; margin-top: 2px;
 }
-.awl-run { width: 100%; }
+.awl-run-row { display: flex; gap: 8px; }
+.awl-run-row .awl-run { flex: 1; }
+.awl-cancel { flex: none; }
 
 .awl-live {
   border-top: 1px solid var(--border-color, #e5e7eb);
