@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -80,7 +81,12 @@ func SearchAugmentBadWords(c *gin.Context) {
 
 	items, perr := parseBadWordJSON(content)
 	if perr != nil {
-		utils.BadRequest(c, "AI 返回无法解析为违禁词清单："+perr.Error())
+		// 模型偶尔不按 JSON 数组返回（加前言、换成对象、只吐了半截）。
+		// 把原始返回记进服务端日志，便于定位；响应里只给可操作提示，不回显模型原文。
+		log.Printf("[badword-search] 模型返回无法解析为清单：err=%v raw=%s",
+			perr, truncateForLog(content, 800))
+		utils.BadRequest(c, "AI 返回无法解析为违禁词清单："+perr.Error()+
+			"（模型原始返回已记入服务端日志，可换个侧重方向后重试）")
 		return
 	}
 	if len(items) == 0 {
@@ -148,28 +154,151 @@ func buildSearchAugmentSystemPrompt(focus string) string {
 	return b.String()
 }
 
-// parseBadWordJSON 从模型返回中稳健提取 JSON 数组（容忍代码围栏与前后多余的文字）
+// parseBadWordJSON 从模型返回中稳健提取 JSON 数组。
+//
+// 模型不总是听话，常见跑偏方式都覆盖：
+//  1. 前后带说明文字（「以下是清单：」）；
+//  2. 带 Markdown 代码围栏；
+//  3. 说明文字里本身带 [ ]（如「见下表[1]」）⇒ 不能用「首个 [ 到末个 ]」切；
+//  4. 包成对象 {"words": [...]};
+//  5. 一行一个对象的 JSONL。
 func parseBadWordJSON(content string) ([]models.BadWordImportItem, error) {
-	s := strings.TrimSpace(content)
-	// 去掉 ```json ... ``` 围栏
-	if strings.HasPrefix(s, "```") {
-		if i := strings.Index(s, "\n"); i >= 0 {
-			s = s[i+1:]
-		}
-		if j := strings.LastIndex(s, "```"); j >= 0 {
-			s = s[:j]
+	s := stripCodeFence(strings.TrimSpace(content))
+	if s == "" {
+		return nil, fmt.Errorf("模型返回为空")
+	}
+	// 1) 括号配对取出最外层数组
+	if arr, ok := matchBracket(s, '[', ']'); ok {
+		if items, ok2 := unmarshalItems(arr); ok2 {
+			return items, nil
 		}
 	}
-	s = strings.TrimSpace(s)
-	start := strings.Index(s, "[")
-	end := strings.LastIndex(s, "]")
-	if start < 0 || end < 0 || end < start {
-		return nil, fmt.Errorf("未找到 JSON 数组")
+	// 2) 对象里包着数组
+	if obj, ok := matchBracket(s, '{', '}'); ok {
+		if arr, ok2 := findArrayField(obj); ok2 {
+			if items, ok3 := unmarshalItems(arr); ok3 {
+				return items, nil
+			}
+		}
 	}
-	s = s[start : end+1]
+	// 3) 逐个花括号片段兜底（模型只吐了部分、或前后混了散文）
+	if items, ok := salvageBraces(s); ok {
+		return items, nil
+	}
+	return nil, fmt.Errorf("未找到 JSON 数组")
+}
+
+// stripCodeFence 去掉 Markdown 代码围栏（```json ... ```）。
+func stripCodeFence(s string) string {
+	if !strings.HasPrefix(s, "```") {
+		return strings.TrimSpace(s)
+	}
+	if i := strings.Index(s, "\n"); i >= 0 {
+		s = s[i+1:]
+	} else {
+		s = strings.TrimPrefix(s, "```")
+	}
+	if j := strings.LastIndex(s, "```"); j >= 0 {
+		s = s[:j]
+	}
+	return strings.TrimSpace(s)
+}
+
+// matchBracket 从第一个 open 位置起做括号配对（正确跳过字符串字面量与转义），
+// 返回配对区间内的原文。比「首个[到末个]」稳，不会被正文里的方括号带偏。
+func matchBracket(s string, open, close byte) (string, bool) {
+	start := strings.IndexByte(s, open)
+	if start < 0 {
+		return "", false
+	}
+	depth := 0
+	inStr := false
+	escaped := false
+	for i := start; i < len(s); i++ {
+		c := s[i]
+		if inStr {
+			switch {
+			case escaped:
+				escaped = false
+			case c == '\\':
+				escaped = true
+			case c == '"':
+				inStr = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			inStr = true
+		case open:
+			depth++
+		case close:
+			depth--
+			if depth == 0 {
+				return s[start : i+1], true
+			}
+		}
+	}
+	return "", false
+}
+
+// findArrayField 在 JSON 对象里找第一个数组值。
+func findArrayField(obj string) (string, bool) {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(obj), &m); err != nil {
+		return "", false
+	}
+	for _, v := range m {
+		trimmed := strings.TrimSpace(string(v))
+		if strings.HasPrefix(trimmed, "[") {
+			return trimmed, true
+		}
+	}
+	return "", false
+}
+
+// unmarshalItems 尝试把一段 JSON 解析成违禁词清单。
+func unmarshalItems(arr string) ([]models.BadWordImportItem, bool) {
 	var items []models.BadWordImportItem
-	if err := json.Unmarshal([]byte(s), &items); err != nil {
-		return nil, err
+	if err := json.Unmarshal([]byte(arr), &items); err == nil {
+		return items, true
 	}
-	return items, nil
+	// 单个对象（不是数组）
+	var one models.BadWordImportItem
+	if err := json.Unmarshal([]byte(arr), &one); err == nil && one.Pattern != "" {
+		return []models.BadWordImportItem{one}, true
+	}
+	return nil, false
+}
+
+// salvageBraces 逐个抓 {…} 片段尝试解析（覆盖 JSONL 与「只吐了前几条」）。
+func salvageBraces(s string) ([]models.BadWordImportItem, bool) {
+	var out []models.BadWordImportItem
+	rest := s
+	for {
+		seg, ok := matchBracket(rest, '{', '}')
+		if !ok {
+			break
+		}
+		var one models.BadWordImportItem
+		if err := json.Unmarshal([]byte(seg), &one); err == nil && one.Pattern != "" {
+			out = append(out, one)
+		}
+		idx := strings.Index(rest, seg)
+		if idx < 0 {
+			break
+		}
+		rest = rest[idx+len(seg):]
+	}
+	return out, len(out) > 0
+}
+
+// truncateForLog 截断日志内容。
+func truncateForLog(s string, n int) string {
+	s = strings.ReplaceAll(strings.TrimSpace(s), "\n", "\\n")
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…(截断)"
 }
