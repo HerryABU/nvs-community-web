@@ -54,13 +54,13 @@
         </el-col>
       </el-row>
 
-      <!-- 第二行：趋势图（多指标切换） -->
+      <!-- 第二行：趋势图（左=用户增长，右=访问趋势，两张图数据不同） -->
       <el-row :gutter="20" class="chart-row">
         <el-col :xs="24" :md="12">
-          <DashboardCharts :metrics="adminTrendMetrics" />
+          <DashboardCharts :metrics="userOnlyMetrics" />
         </el-col>
         <el-col :xs="24" :md="12">
-          <DashboardCharts :metrics="adminTrendMetrics" />
+          <DashboardCharts :metrics="visitorMetrics" />
         </el-col>
       </el-row>
 
@@ -115,6 +115,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue';
 import { adminApi } from '@/api/admin';
+import { opsApi } from '@/api/ops';
 import {
   User, Document, ChatLineRound, Connection,
   Refresh
@@ -198,19 +199,52 @@ function barPct(items: any[], cnt: number) {
   return Math.round((Number(cnt) / max) * 100) + '%';
 }
 
-const adminTrendMetrics = computed(() => {
+// 左上图：只看「用户增长」。此前左右两列渲染的是同一个 adminTrendMetrics，
+// 两张折线图数据与形状完全一致（复制粘贴留下的缺陷）。
+const userOnlyMetrics = computed(() => [
+  { label: '用户增长趋势（近7天）', data: userTrend.value },
+]);
+
+// 右上图：访问趋势（PV/UV，来自访客统计）+ 章节/评论增长，
+// 与左上「用户增长」数据来源完全不同，两张图不会再撞脸。
+const visitorTrend = ref<any>({ title: '访问趋势（近7天）', dates: [], values: [], seriesName: 'PV' });
+const visitorMetricKey = ref<'pv' | 'uv'>('pv');
+
+const visitorMetrics = computed(() => {
   const opts: any[] = [
-    { label: '用户增长趋势', data: userTrend.value },
-    { label: '章节增长趋势', data: chapterTrend.value },
+    {
+      label: visitorMetricKey.value === 'pv' ? '访问趋势·PV（近7天）' : '访问趋势·UV（近7天）',
+      data: visitorTrend.value,
+    },
   ];
-  if (wordCountTrend.value?.dates?.length) {
-    opts.push({ label: '字数增长趋势', data: wordCountTrend.value });
+  if (chapterTrend.value?.dates?.length) {
+    opts.push({ label: '章节增长趋势（近7天）', data: chapterTrend.value });
   }
   if (commentTrend.value?.dates?.length) {
-    opts.push({ label: '评论增长趋势', data: commentTrend.value });
+    opts.push({ label: '评论增长趋势（近7天）', data: commentTrend.value });
+  }
+  if (wordCountTrend.value?.dates?.length) {
+    opts.push({ label: '字数增长趋势（近7天）', data: wordCountTrend.value });
   }
   return opts;
 });
+
+async function loadVisitorTrend() {
+  try {
+    const res = await opsApi.adminVisit();
+    const stats = res.data?.data?.stats || [];
+    const dates = stats.map((s: any) => s.date);
+    const values = stats.map((s: any) => Number(s[visitorMetricKey.value]) || 0);
+    visitorTrend.value = {
+      title: visitorMetricKey.value === 'pv' ? '访问趋势·PV（近7天）' : '访问趋势·UV（近7天）',
+      dates,
+      values,
+      seriesName: visitorMetricKey.value.toUpperCase(),
+    };
+  } catch {
+    // 访客统计拿不到就保持空图，不影响其它卡片
+  }
+}
 
 const commentTrend = ref<any>({
   title: '评论增长趋势（近7天）',
@@ -275,7 +309,7 @@ async function refreshAll() {
   refreshing.value = false;
 }
 
-onMounted(() => { loadDashboard(); checkFiling(); });
+onMounted(() => { loadDashboard(); checkFiling(); loadVisitorTrend(); });
 </script>
 
 <style scoped>
