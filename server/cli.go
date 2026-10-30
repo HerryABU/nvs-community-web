@@ -225,7 +225,10 @@ func printCLIUsage() {
   nvs-server.exe --pwd                             新密码从标准输入读取（不进进程列表）
 
 选项：
-  --scope <all|admin|emergency>   改哪些，默认 all
+  --scope <all|admin|emergency|token>   改哪些，默认 all
+                                  · admin     管理员登录密码
+                                  · emergency 双重验证密码（内容抢救台二级密码）
+                                  · token     令牌加密密码（上游 API Key 落库加密，独立于 JWT）
   --user <id|邮箱|用户名>         指定管理员（默认改全部管理员账号）
 
 说明：
