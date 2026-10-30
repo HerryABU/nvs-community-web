@@ -95,6 +95,10 @@ func AdminChannelBalanceOverview(c *gin.Context) {
 		key := decryptKeyByBaseURL(g.BaseURL)
 
 		b := aiclient.QueryChannelBalance(g.BaseURL, key, g.Hint)
+		// 顺手留一个样本：站长多点几次「渠道余额」就能攒出估算窗口
+		if b.Supported {
+			models.SaveChannelSample(g.BaseURL, b)
+		}
 		item["provider"] = b.Provider
 		item["supported"] = b.Supported
 		item["total_granted"] = b.TotalGranted
@@ -105,6 +109,9 @@ func AdminChannelBalanceOverview(c *gin.Context) {
 		if b.Error != "" {
 			item["error"] = b.Error
 		}
+		// 窗口消耗 + 单次估算（估算值，前端必须标注）
+		w := models.ResolveChannelWindowCost(g.BaseURL)
+		item["window"] = w
 		out = append(out, item)
 	}
 

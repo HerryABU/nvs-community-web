@@ -56,6 +56,8 @@ func AllModels() []interface{} {
 		&UserForumQuota{},
 		// HTML/WASM 托管额度：按人覆盖（管理员可单独放宽/收紧某人的项目数与空间）
 		&HTMLQuotaOverride{},
+		// 渠道余额采样（估算「单次请求消耗多少货币单位」的依据）
+		&ChannelBalanceSample{},
 		// 全量 Web 访问日志（功能二：前台网络诊断 / 用户分布 / 攻击流量面板）
 		&WebAccessLog{},
 		// 用户黑名单（F13：拉黑禁言/屏蔽内容，站长/警方/管理员不可被拉黑）

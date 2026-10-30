@@ -303,6 +303,11 @@
       <div class="ch-overview-tip">
         按上游渠道（base_url）聚合，每条渠道查一次账户余额 —— 回答「这条渠道还剩多少钱」。
         同一渠道下的多个模型共用一份余额，所以不逐模型重复查询。
+        <br />
+        <b>估算单次</b> = 最近两次采样的余额消耗 ÷ 窗口内该渠道的请求数；<b>单次 token</b> 与
+        <b>每千 token 单价</b> 用来区分「单价贵」和「用得多」。上游不按请求返回金额，
+        所以金额是估算值（并发与重试会摊进去）；多点几次「渠道余额」或等后台每 10 分钟自动采样即可攒出窗口。
+        token 数取自本站调用日志，是真实值。
       </div>
       <el-table v-if="chRows.length" :data="chRows" size="small" stripe max-height="420">
         <el-table-column prop="base_url" label="渠道" min-width="220" show-overflow-tooltip />
@@ -318,7 +323,49 @@
         <el-table-column label="币种" width="70">
           <template #default="{ row }">{{ row.currency || '—' }}</template>
         </el-table-column>
-        <el-table-column label="状态" min-width="180">
+        <el-table-column label="期间消耗" width="120">
+          <template #default="{ row }">
+            <span v-if="row.window?.has_data">{{ fmtMoney(row.window.cost_used) }} <em class="unit">{{ row.window.currency || '' }}</em></span>
+            <span v-else class="muted small">需≥2次采样</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="期间请求" width="90">
+          <template #default="{ row }">
+            <span v-if="row.window?.has_data">{{ row.window.requests }}</span>
+            <span v-else class="muted small">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="估算单次" width="130">
+          <template #default="{ row }">
+            <span v-if="row.window?.per_request" class="ch-est">
+              ≈{{ fmtMoney(row.window.per_request) }} <em class="unit">{{ row.window.currency || '' }}</em>
+            </span>
+            <span v-else class="muted small">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="期间 token" width="150">
+          <template #default="{ row }">
+            <span v-if="row.window?.has_data" class="ch-tok">
+              {{ fmtTok(row.window.tokens_in) }} / {{ fmtTok(row.window.tokens_out) }}
+            </span>
+            <span v-else class="muted small">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="单次 token" width="100">
+          <template #default="{ row }">
+            <span v-if="row.window?.per_request_tok">{{ fmtTok(row.window.per_request_tok) }}</span>
+            <span v-else class="muted small">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="每千 token 单价" width="140">
+          <template #default="{ row }">
+            <span v-if="row.window?.cost_per_1k_tok" class="ch-est">
+              ≈{{ fmtMoney(row.window.cost_per_1k_tok) }} <em class="unit">{{ row.window.currency || '' }}</em>
+            </span>
+            <span v-else class="muted small">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" min-width="150">
           <template #default="{ row }">
             <el-tag v-if="row.supported" size="small" type="success">可查</el-tag>
             <span v-else class="muted small">{{ row.error || '该渠道无余额端点' }}</span>
@@ -724,6 +771,14 @@ async function openChannel(row: AdminAiModel) {
 // 重新查询（弹窗内按钮，复用已选中的模型，不必再传参）
 function refreshChannel() {
   if (channelTarget.value) openChannel(channelTarget.value);
+}
+
+// token 展示：千进位，避免一长串数字
+function fmtTok(n?: number) {
+  if (!n) return '0';
+  if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+  return String(n);
 }
 
 // 金额展示：整数不带小数位，避免 10.0000 这种噪声
@@ -1299,6 +1354,9 @@ async function saveCategoryPrice(p: AiCategoryPrice & { _saving?: boolean }) {
 .pull-col-tip { margin-top: 6px; font-size: 0.72rem; line-height: 1.5; color: var(--text-light, #999); }
 
 /* 渠道余额一览 */
+.unit { font-style: normal; font-size: 0.72rem; color: var(--text-light, #999); }
+.ch-est { font-weight: 600; color: var(--el-color-warning, #e6a23c); font-variant-numeric: tabular-nums; }
+.ch-tok { font-variant-numeric: tabular-nums; font-size: 0.78rem; color: var(--text-main, #475569); }
 .ch-overview-tip { margin-bottom: 10px; font-size: 0.78rem; line-height: 1.6; color: var(--text-light, #888); }
 .ch-bal { font-weight: 700; color: var(--el-color-primary, #409eff); font-variant-numeric: tabular-nums; }
 .ch-bal.zero { color: var(--text-light, #bbb); }
