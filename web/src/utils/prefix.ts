@@ -15,15 +15,22 @@ export function getAppPrefix(): string {
   if (typeof injected === 'string' && injected) {
     return injected;
   }
-  // 兜底来源：自建反向代理改写的 <base href> → document.baseURI 推导。
-  // 如 base href="/go-nvs/" → pathname "/go-nvs/" → 前缀 "/go-nvs"；
-  // base href="/"（根挂载）→ 前缀 ""。
+  // 兜底来源：自建反向代理改写的 <base href> → 取其 href 推导前缀。
+  // 关键：必须读 <base> 元素本身，不能读 document.baseURI —— 后者等于「当前页面 URL」，
+  // 含路由路径（如 /comment-network），深链接到子路由时会把前缀错算成路由路径，
+  // 导致所有 /api 请求前缀错位、整站 API 失效。
+  // 如 base href="/go-nvs/" → pathname "/go-nvs" → 前缀 "/go-nvs"；
+  // 无 <base> 标签（根挂载且未注入前缀）→ 前缀 ""（而非路由路径）。
   try {
-    const p = new URL(document.baseURI).pathname.replace(/\/+$/, '');
-    return p && p !== '/' ? p : '';
+    const baseEl = document.querySelector('base');
+    if (baseEl && baseEl.href) {
+      const p = new URL(baseEl.href).pathname.replace(/\/+$/, '');
+      return p && p !== '/' ? p : '';
+    }
   } catch {
-    return '';
+    /* 忽略解析异常 */
   }
+  return '';
 }
 
 // 模块加载即解析一次（脚本位于 base 标签之后执行，document.baseURI 已就绪）

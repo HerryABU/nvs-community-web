@@ -1,0 +1,44 @@
+{
+  "base": "http://127.0.0.1:5212",
+  "at": "2026-10-29T14:30:19.663Z",
+  "total": 6,
+  "failed": 2,
+  "results": [
+    {
+      "flow": "auth",
+      "name": "取得登录态供后续闭环使用",
+      "ok": true,
+      "detail": "cookie 数=2"
+    },
+    {
+      "flow": "graph",
+      "name": "图谱容器渲染",
+      "ok": true,
+      "detail": ".cn-graph-wrap=1"
+    },
+    {
+      "flow": "graph",
+      "name": "图谱画布已绘制且有尺寸",
+      "ok": false,
+      "detail": "未找到 canvas"
+    },
+    {
+      "flow": "graph",
+      "name": "评论关系边可渲染",
+      "ok": true,
+      "detail": ".cn-edge=0"
+    },
+    {
+      "flow": "graph",
+      "name": "图谱页无横向溢出",
+      "ok": true,
+      "detail": "overflowX=0px"
+    },
+    {
+      "flow": "graph",
+      "name": "无 JS 运行时错误",
+      "ok": false,
+      "detail": "[console] TypeError: v.edges is not iterable\n    at U3.fn (http://127.0.0.1:5212/assets/CommentNetworkView-BxbzQkUj.js:13:139)\n    at BE (http://127.0.0.1:5212/assets/vendor-echarts-DNHBA6yy.js:9:3535)\n    at get value (http://127.0.0.1:5212/assets/v"
+    }
+  ]
+}

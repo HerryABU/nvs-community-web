@@ -183,8 +183,9 @@ watch(isTree2D, async (on) => {
     disposeTree();
   }
 });
-// 树状图数据 / 内容开关变化时刷新
-watch(treeOption, () => { if (isTree2D.value && treeInst) renderTree(); });
+// ⚠️ 注意：watch(treeOption, ...) 必须放在 treeOption 声明之后。
+// watch 的第一个参数会在调用处立即求值，若 treeOption 尚未声明（const 的暂时性死区），
+// setup 阶段直接抛 ReferenceError，整个子组件不渲染 → 页面只剩外壳、白屏。
 onMounted(() => { if (isTree2D.value) renderTree(); });
 onBeforeUnmount(() => disposeTree());
 
@@ -219,7 +220,17 @@ async function load() {
       target_id: props.targetID,
       user_id: filterUserID.value || undefined,
     });
-    net.value = res.data?.data || null;
+    const d = res.data?.data;
+    // 防御性归一化：后端个别字段（如 edges）在无数据时可能为 null，
+    // 统一兜底为空数组，避免下游 for...of / .filter 抛 "is not iterable"。
+    net.value = d
+      ? {
+          ...d,
+          edges: Array.isArray(d.edges) ? d.edges : [],
+          nodes: Array.isArray(d.nodes) ? d.nodes : [],
+          top_pairs: Array.isArray(d.top_pairs) ? d.top_pairs : [],
+        }
+      : null;
   } catch {
     net.value = null;
   } finally {
@@ -698,6 +709,9 @@ const treeOption = computed(() => {
     default: return treeOptionTB.value;
   }
 });
+// 树状图数据 / 内容开关变化时刷新
+// （必须置于 treeOption 声明之后：watch 首参立即求值，提前引用会触发 TDZ 致命错误）
+watch(treeOption, () => { if (isTree2D.value && treeInst) renderTree(); });
 
 const graphHint = computed(() => {
   switch (viewMode.value) {

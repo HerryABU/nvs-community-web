@@ -65,39 +65,39 @@ func GetMentionCandidates(targetType string, targetID uint, scope, q string, lim
 
 // CommentNetwork 评论网分析结果
 type CommentNetwork struct {
-	TargetType       string         `json:"target_type"`
-	TargetID         uint           `json:"target_id"`
-	TotalComments    int            `json:"total_comments"`
-	CommenterCount   int            `json:"commenter_count"`
-	InteractionCount int            `json:"interaction_count"` // 有效互动边数量（A 回复 B，A≠B）
-	Nodes            []NetworkNode  `json:"nodes"`
-	Edges            []NetworkEdge  `json:"edges"`   // 详细边（谁对哪条评论回复了谁，含时间估计），按时间倒序
-	TopPairs         []NetworkPair  `json:"top_pairs"` // 按互动频次聚合的(A→B)对，用于关系图边与榜单
+	TargetType       string        `json:"target_type"`
+	TargetID         uint          `json:"target_id"`
+	TotalComments    int           `json:"total_comments"`
+	CommenterCount   int           `json:"commenter_count"`
+	InteractionCount int           `json:"interaction_count"` // 有效互动边数量（A 回复 B，A≠B）
+	Nodes            []NetworkNode `json:"nodes"`
+	Edges            []NetworkEdge `json:"edges"`     // 详细边（谁对哪条评论回复了谁，含时间估计），按时间倒序
+	TopPairs         []NetworkPair `json:"top_pairs"` // 按互动频次聚合的(A→B)对，用于关系图边与榜单
 }
 
 type NetworkNode struct {
-	UserID      uint   `json:"user_id"`
-	Username    string `json:"username"`
-	Nickname    string `json:"nickname"`
-	CommentCount int   `json:"comment_count"`
-	InDegree    int    `json:"in_degree"`  // 收到的回复数
-	OutDegree   int    `json:"out_degree"` // 发出的回复数
+	UserID       uint   `json:"user_id"`
+	Username     string `json:"username"`
+	Nickname     string `json:"nickname"`
+	CommentCount int    `json:"comment_count"`
+	InDegree     int    `json:"in_degree"`  // 收到的回复数
+	OutDegree    int    `json:"out_degree"` // 发出的回复数
 }
 
 type NetworkEdge struct {
-	FromUserID   uint   `json:"from_user_id"`
-	FromName     string `json:"from_name"`
-	ToUserID     uint   `json:"to_user_id"`
-	ToName       string `json:"to_name"`
-	CommentID    uint   `json:"comment_id"`    // 本条回复评论 id
-	ParentCommentID uint `json:"parent_comment_id"` // 显式父评论 id
-	CommentExcerpt string `json:"comment_excerpt"` // 本条回复评论正文（A 说的话）
-	ParentExcerpt string `json:"parent_excerpt"`
-	CreatedMicro int64  `json:"created_micro"`
+	FromUserID      uint   `json:"from_user_id"`
+	FromName        string `json:"from_name"`
+	ToUserID        uint   `json:"to_user_id"`
+	ToName          string `json:"to_name"`
+	CommentID       uint   `json:"comment_id"`        // 本条回复评论 id
+	ParentCommentID uint   `json:"parent_comment_id"` // 显式父评论 id
+	CommentExcerpt  string `json:"comment_excerpt"`   // 本条回复评论正文（A 说的话）
+	ParentExcerpt   string `json:"parent_excerpt"`
+	CreatedMicro    int64  `json:"created_micro"`
 	// 时间估计：若回复者显式父评论不是被回复者「最新的一条」，则估计其实际想回复的是被回复者更早前的最新评论
-	EstimatedTargetID       uint   `json:"estimated_target_id"`
-	EstimatedTargetExcerpt  string `json:"estimated_target_excerpt"`
-	IsEstimated             bool   `json:"is_estimated"`
+	EstimatedTargetID      uint   `json:"estimated_target_id"`
+	EstimatedTargetExcerpt string `json:"estimated_target_excerpt"`
+	IsEstimated            bool   `json:"is_estimated"`
 }
 
 type NetworkPair struct {
@@ -209,7 +209,9 @@ func GetCommentNetwork(targetType string, targetID, filterUserID uint) (*Comment
 		return nodeStat[uid]
 	}
 
-	var edges []NetworkEdge
+	// 用 make 初始化（非 nil），否则没有社交边时 JSON 会序列化为 null，
+	// 前端 for...of / .filter 直接抛 "is not iterable"（详见 web CommentNetworkView）。
+	edges := make([]NetworkEdge, 0)
 	pairCount := map[string]int{} // "from->to" -> count
 	for _, c := range comments {
 		if c.ParentID == nil || *c.ParentID == 0 {
