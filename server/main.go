@@ -421,6 +421,8 @@ func main() {
 
 		// 用户自备 API Key（§5.5 BYOK）：CRUD + 默认（:id 通配与既有 /ai/video/:id 不同前缀段，无冲突）
 		protected.GET("/ai/my-keys", handlers.AiMyKeys)
+		// 「我的」筛选：最近用过的模型（模型广场的第四个筛选维度）
+		protected.GET("/ai/my-models", handlers.AiMyModels)
 		protected.POST("/ai/my-keys", handlers.AiMyKeyCreate)
 		protected.DELETE("/ai/my-keys/:id", handlers.AiMyKeyDelete)
 		protected.POST("/ai/my-keys/:id/default", handlers.AiMyKeySetDefault)

@@ -24,6 +24,7 @@
         <el-radio-button value="chat">对话 {{ status.chat_models.length }}</el-radio-button>
         <el-radio-button value="image">绘画 {{ status.image_models.length }}</el-radio-button>
         <el-radio-button value="video">视频 {{ status.video_models.length }}</el-radio-button>
+        <el-radio-button v-if="myModelIds.length" value="mine">我的 {{ myModelIds.length }}</el-radio-button>
       </el-radio-group>
 
       <el-select v-model="vendorFilter" size="small" class="ms-vendor" placeholder="全部厂商" clearable>
@@ -69,7 +70,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import api from '@/api';
 import { Search } from '@element-plus/icons-vue';
 import { useRouter } from 'vue-router';
 import StateBlock from '@/components/common/StateBlock.vue';
@@ -95,8 +97,23 @@ const emit = defineEmits<{ (e: 'use', payload: { kind: Kind; modelId: number }):
 const router = useRouter();
 
 const keyword = ref('');
-const kindFilter = ref<'all' | Kind>('all');
+const kindFilter = ref<'all' | Kind | 'mine'>('all');
 const vendorFilter = ref('');
+
+// 「我的」= 我最近 30 天实际调用过的模型（来自调用日志，不需要用户手动维护）
+const myModelIds = ref<number[]>([]);
+
+onMounted(loadMyModels);
+
+async function loadMyModels() {
+  try {
+    const res = await api.get<{ code: number; data: { model_ids: number[] } }>('/ai/my-models');
+    myModelIds.value = res.data?.data?.model_ids || [];
+  } catch {
+    // 未登录或接口不可用时不显示该筛选项，不影响其它筛选
+    myModelIds.value = [];
+  }
+}
 
 const all = computed<Row[]>(() => [
   ...props.status.chat_models.map((m: any) => ({ ...m, kind: 'chat' as Kind })),
@@ -116,7 +133,9 @@ const vendors = computed(() => {
 const filtered = computed(() => {
   const kw = keyword.value.trim().toLowerCase();
   return all.value.filter((m) => {
-    if (kindFilter.value !== 'all' && m.kind !== kindFilter.value) return false;
+    if (kindFilter.value === 'mine') {
+      if (!myModelIds.value.includes(m.id)) return false;
+    } else if (kindFilter.value !== 'all' && m.kind !== kindFilter.value) return false;
     if (vendorFilter.value && (m.vendor || '').trim() !== vendorFilter.value) return false;
     if (!kw) return true;
     return (
