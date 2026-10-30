@@ -20,6 +20,7 @@
             <el-button size="small" @click="loadWords" :loading="loading"><el-icon><Refresh /></el-icon> 刷新</el-button>
             <el-button size="small" type="success" plain @click="doExport"><el-icon><Download /></el-icon> 导出 JSON</el-button>
             <el-button size="small" type="success" plain @click="showImport = true"><el-icon><Upload /></el-icon> 导入 JSON</el-button>
+            <el-button size="small" type="primary" plain @click="openSearchAugment"><el-icon><MagicStick /></el-icon> 联网搜索补充</el-button>
             <el-button size="small" type="warning" plain @click="switchToFlags"><el-icon><Warning /></el-icon> 待审列表（{{ pendingCount }}）</el-button>
           </div>
 
@@ -293,12 +294,47 @@
         <el-button type="primary" :loading="importing" @click="doImport">开始导入</el-button>
       </template>
     </el-dialog>
+
+    <!-- 联网搜索补充 弹窗 -->
+    <el-dialog v-model="showSearchAugment" title="联网搜索补充违禁词" width="640px">
+      <el-alert type="info" :closable="false" show-icon style="margin-bottom: 14px"
+        title="AI 联网检索补充"
+        description="用 AI（带联网检索能力的上游模型）检索当下高风险、新出现或常见规避写法的违禁词与变体，解析后批量导入。新增规则一律「标记」动作（仅标记待审、不自动删改），由管理员在待审列表复核确认；按 名称+方式+词 去重，已存在的自动跳过。" />
+      <el-form label-width="90px">
+        <el-form-item label="侧重方向">
+          <el-select v-model="searchForm.focus" size="default" style="width: 100%">
+            <el-option v-for="f in searchFocusOptions" :key="f" :label="f" :value="f" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="统一归类">
+          <el-select v-model="searchForm.category" size="default" filterable allow-create default-first-option placeholder="选择或输入分类（留空则由 AI 推断）" style="width: 100%">
+            <el-option v-for="c in presetCategories" :key="c" :label="c" :value="c" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showSearchAugment = false">取消</el-button>
+        <el-button type="primary" :loading="searching" @click="doSearchAugment">开始检索并导入</el-button>
+      </template>
+
+      <el-divider v-if="searchResult" content-position="left">检索结果</el-divider>
+      <div v-if="searchResult" class="search-result">
+        <el-alert :type="searchResult.created > 0 ? 'success' : 'info'" :closable="false" :title="searchResult.message" />
+        <div v-if="searchResult.items && searchResult.items.length" class="search-items">
+          <div v-for="(it, i) in searchResult.items" :key="i" class="search-item">
+            <code class="rule-pattern">{{ it.pattern }}</code>
+            <el-tag size="small" effect="plain">{{ it.category || '其他' }}</el-tag>
+            <span class="muted">{{ it.name }}</span>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
-import { Plus, Search, Refresh, Warning, Download, Upload } from '@element-plus/icons-vue';
+import { Plus, Search, Refresh, Warning, Download, Upload, MagicStick } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -321,6 +357,13 @@ const form = reactive({ name: '', category: '', tags: '', match_type: 'literal',
 const showImport = ref(false);
 const importing = ref(false);
 const importText = ref('');
+
+// ═══════════ 联网检索补充 ═══════════
+const showSearchAugment = ref(false);
+const searching = ref(false);
+const searchResult = ref<any>(null);
+const searchFocusOptions = ['全部', '政治', '色情', '暴力', '毒品', '诈骗', '赌博', '广告', '辱骂', '违禁品'];
+const searchForm = reactive({ focus: '全部', category: '' });
 
 // ═══════════ 标记待审 ═══════════
 const flags = ref<any[]>([]);
@@ -589,6 +632,37 @@ async function doImport() {
   importing.value = false;
 }
 
+// ═══════════ 联网检索补充 ═══════════
+function openSearchAugment() {
+  searchForm.focus = '全部';
+  searchForm.category = '';
+  searchResult.value = null;
+  showSearchAugment.value = true;
+}
+
+async function doSearchAugment() {
+  searching.value = true;
+  searchResult.value = null;
+  try {
+    const res = await adminApi.searchAugmentBadWords({
+      focus: searchForm.focus,
+      category: searchForm.category || undefined,
+    });
+    const d = res.data?.data || {};
+    searchResult.value = d;
+    if (d.created > 0) {
+      ElMessage.success(d.message || `新建 ${d.created} 条`);
+      await loadWords();
+      await loadPendingCount();
+    } else {
+      ElMessage.info(d.message || '未新增违禁词');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '检索失败');
+  }
+  searching.value = false;
+}
+
 onMounted(() => {
   loadWords();
   loadPendingCount();
@@ -613,6 +687,9 @@ onMounted(() => {
 .test-label { font-weight: 600; color: var(--text-color, #333); flex-shrink: 0; }
 .test-matches { display: flex; flex-wrap: wrap; gap: 6px; }
 .test-output { flex: 1; margin: 0; padding: 10px 12px; background: var(--bg-soft); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; white-space: pre-wrap; word-break: break-all; font-family: 'Consolas', 'Monaco', monospace; }
+.search-result { padding: 0 12px; }
+.search-items { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.search-item { display: flex; align-items: center; gap: 6px; background: var(--bg-soft); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 8px; font-size: 0.82rem; }
 [data-theme="dark"] .admin-page { background: #0f172a; }
 [data-theme="dark"] .admin-page-header h2 { color: #e2e8f0; }
 [data-theme="dark"] .test-label { color: #e2e8f0; }

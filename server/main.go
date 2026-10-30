@@ -1124,6 +1124,7 @@ func main() {
 		admin.POST("/bad-words/test", handlers.TestBadWord)
 		admin.GET("/bad-words/export", handlers.ExportBadWords)
 		admin.POST("/bad-words/import", handlers.ImportBadWords)
+		admin.POST("/bad-words/search-augment", handlers.SearchAugmentBadWords)
 		// 违禁词标记待审（mark 动作命中记录，管理员确认/放行）
 		admin.GET("/bad-word-flags", handlers.ListBadWordFlags)
 		admin.PUT("/bad-word-flags/:id", handlers.HandleBadWordFlag)

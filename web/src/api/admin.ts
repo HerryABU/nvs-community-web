@@ -330,6 +330,10 @@ export const adminApi = {
   importBadWords(data: any[]) {
     return api.post('/admin/bad-words/import', data);
   },
+  // 联网检索补充违禁词（AI 检索当下高风险/新出现的违禁词与变体，解析后导入待审）
+  searchAugmentBadWords(data?: { model_id?: number; category?: string; scope?: string; focus?: string }) {
+    return api.post('/admin/bad-words/search-augment', data || {});
+  },
   // 违禁词标记待审
   getBadWordFlags(params: { status?: string; page?: number; page_size?: number }) {
     return api.get('/admin/bad-word-flags', { params });
