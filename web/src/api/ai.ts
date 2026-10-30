@@ -457,9 +457,11 @@ export interface ProviderModelSuggestion {
   vendor: string;
   channel: string;
   category: string;
-  prefix: string;
-  version: string;
-  sub_version: string;
+  prefix: string;     // 模型大名 / 家族（deepseek）
+  version: string;    // 版本号（v4.1）
+  variant: string;    // 类型名称（flash / pro / thinking）
+  build: string;      // 子号（1017 / 2024-08-06）
+  sub_version: string; // 兼容字段：版本之后的原始尾段
 }
 
 /** 导入时每个模型的可覆盖字段 */

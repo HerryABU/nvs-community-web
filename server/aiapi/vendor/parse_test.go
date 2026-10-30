@@ -7,10 +7,10 @@ func TestParseModelID(t *testing.T) {
 		raw, prefix, version, sub string
 	}{
 		{"deepseek-v3.1-turbo", "deepseek", "v3.1", "turbo"},
-		{"DeepSeek_V3-1/Turbo", "DeepSeek", "V3", "1-Turbo"}, // _ 与 / 归一为 -，保留原始大小写
+		{"DeepSeek_V3-1/Turbo", "DeepSeek", "V3-1", "Turbo"}, // 四段式：V3-1 视为一个版本号（此前拆成 V3 + 1-Turbo）
 		{"gpt-4o", "gpt", "4o", ""},
-		{"claude", "claude", "", ""}, // 单段整串作前缀
-		{"qwen2.5-7b-instruct", "qwen2.5", "7b", "instruct"},
+		{"claude", "claude", "", ""},                          // 单段整串作前缀
+		{"qwen2.5-7b-instruct", "qwen", "2.5", "7b-instruct"}, // 家族内嵌版本被拆出
 	}
 	for _, c := range cases {
 		p := ParseModelID(c.raw)

@@ -20,10 +20,12 @@ type ProviderModelSuggestion struct {
 	Vendor   string `json:"vendor"`   // 推断厂商（OpenAI/DeepSeek/阿里通义…）
 	Channel  string `json:"channel"`  // 推断渠道分组（openai/anthropic/alibaba…）
 	Category string `json:"category"` // 推断类别 chat/image/video/audio/embedding/reasoning
-	// 版本解析（厂商管理：前缀-版本-亚版本）
-	Prefix     string `json:"prefix"`      // 前缀（如 deepseek）
-	Version    string `json:"version"`     // 版本（如 v3.1）
-	SubVersion string `json:"sub_version"` // 亚版本（如 turbo）
+	// 版本解析（四段式：家族 - 版本 - 类型 - 子号）
+	Prefix     string `json:"prefix"`      // 模型大名/家族（如 deepseek）
+	Version    string `json:"version"`     // 版本号（如 v4.1）
+	Variant    string `json:"variant"`     // 类型名称（如 flash / pro / thinking）
+	Build      string `json:"build"`       // 子号（如 1017 / 2024-08-06）
+	SubVersion string `json:"sub_version"` // 兼容旧字段：variant + build 的合并形态
 }
 
 // PullProviderModels 从 OpenAI 兼容渠道拉取模型清单（GET {base}/models），
@@ -79,7 +81,9 @@ func ClassifyModel(raw string) ProviderModelSuggestion {
 	parsed := vparse.ParseModelID(s)
 	return ProviderModelSuggestion{
 		RawID: s, Alias: alias, Vendor: vendor, Channel: channel, Category: category,
-		Prefix: parsed.Prefix, Version: parsed.Version, SubVersion: parsed.SubVersion,
+		Prefix: parsed.Prefix, Version: parsed.Version,
+		Variant: parsed.Variant, Build: parsed.Build,
+		SubVersion: parsed.SubVersion,
 	}
 }
 

@@ -257,7 +257,17 @@
         <div v-if="pullList.length" class="pull-result">
           <div class="pull-result-head">
             <span class="muted small">共 {{ pullList.length }} 个模型，已选 {{ pullSelected.length }} 个</span>
-            <span>
+            <span class="pull-result-ops">
+              <el-popover placement="bottom-end" :width="230" trigger="click">
+                <template #reference>
+                  <el-button size="small">列显示</el-button>
+                </template>
+                <div class="pull-col-toggles">
+                  <div class="pull-col-title">按需显示拆解字段</div>
+                  <el-checkbox v-for="c in PULL_COLS" :key="c.key" v-model="pullCols[c.key]">{{ c.label }}</el-checkbox>
+                  <div class="pull-col-tip">模型名会被拆成「家族 / 版本 / 类型 / 子号」四段，便于按档位与快照筛选</div>
+                </div>
+              </el-popover>
               <el-button size="small" @click="toggleAllPull(true)">全选</el-button>
               <el-button size="small" @click="toggleAllPull(false)">取消全选</el-button>
             </span>
@@ -266,8 +276,12 @@
             <el-table-column type="selection" width="46" />
             <el-table-column prop="alias" label="展示别名" min-width="150" show-overflow-tooltip />
             <el-table-column prop="raw_id" label="上游模型 ID" min-width="180" show-overflow-tooltip />
-            <el-table-column prop="vendor" label="厂商" width="100" />
-            <el-table-column prop="channel" label="渠道" width="100" />
+            <el-table-column v-if="pullCols.family" prop="prefix" label="模型大名" width="110" show-overflow-tooltip />
+            <el-table-column v-if="pullCols.version" prop="version" label="版本" width="80" />
+            <el-table-column v-if="pullCols.variant" prop="variant" label="类型" width="120" show-overflow-tooltip />
+            <el-table-column v-if="pullCols.build" prop="build" label="子号" width="110" show-overflow-tooltip />
+            <el-table-column v-if="pullCols.vendor" prop="vendor" label="厂商" width="100" />
+            <el-table-column v-if="pullCols.channel" prop="channel" label="渠道" width="100" />
             <el-table-column label="类别" width="100">
               <template #default="{ row }"><el-tag size="small" :type="kindTag(row.category)">{{ kindLabel(row.category) }}</el-tag></template>
             </el-table-column>
@@ -616,6 +630,21 @@ function kindHint(kind: string) {
   };
   return map[kind] || '';
 }
+
+// ---------- 拉取结果：按需显示的列 ----------
+// 模型名会被拆成「模型大名 / 版本 / 类型 / 子号」四段（后端 aiapi/vendor.ParseModelID），
+// 站长可按需勾选显示哪几列，避免默认表格过宽。
+const PULL_COLS = [
+  { key: 'family', label: '模型大名（如 deepseek）' },
+  { key: 'version', label: '版本（如 v4.1）' },
+  { key: 'variant', label: '类型（如 flash / pro）' },
+  { key: 'build', label: '子号（如 1017）' },
+  { key: 'vendor', label: '厂商' },
+  { key: 'channel', label: '渠道' },
+] as const;
+const pullCols = reactive<Record<string, boolean>>({
+  family: true, version: true, variant: true, build: true, vendor: false, channel: true,
+});
 
 // ---------- L5 渠道对账 ----------
 const channelDialog = ref(false);
@@ -1208,6 +1237,12 @@ async function saveCategoryPrice(p: AiCategoryPrice & { _saving?: boolean }) {
 .price-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .price-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .price-label { width: 56px; font-size: 0.82rem; color: var(--text-light, #666); }
+
+/* 拉取结果的列显示开关 */
+.pull-result-ops { display: inline-flex; align-items: center; gap: 6px; }
+.pull-col-toggles { display: flex; flex-direction: column; gap: 4px; }
+.pull-col-title { font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; color: var(--text-main, #1f2937); }
+.pull-col-tip { margin-top: 6px; font-size: 0.72rem; line-height: 1.5; color: var(--text-light, #999); }
 
 /* L5 渠道对账 */
 .ch-loading { padding: 28px 0; text-align: center; color: var(--text-light, #888); font-size: 0.88rem; }
