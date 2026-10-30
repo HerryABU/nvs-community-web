@@ -156,23 +156,31 @@ func AccessLog() gin.HandlerFunc {
 			if !hpSet.RecordQuery {
 				query = ""
 			}
+			// 结构化客户端画像（OS / 浏览器 / 设备型号），与 UAFamily 粗分类互补
+			uaInfo := utils.ParseUserAgent(ua)
 			models.EnqueueWebAccess(&models.WebAccessLog{
-				UserID:        userID,
-				IdentityType:  identityType,
-				UAFamily:      uaFamily,
-				Method:        c.Request.Method,
-				Path:          p,
-				Query:         query,
-				IP:            ip,
-				XForwardedFor: xff,
-				ProxyHops:     proxyHops,
-				UA:            ua,
-				StatusCode:    status,
-				Size:          size,
-				LatencyMs:     int(time.Since(start).Milliseconds()),
-				IsBot:         isBot,
-				BotReason:     botReason,
-				CreatedAt:     time.Now(),
+				UserID:         userID,
+				IdentityType:   identityType,
+				UAFamily:       uaFamily,
+				OSName:         uaInfo.OSName,
+				OSVersion:      uaInfo.OSVersion,
+				BrowserName:    uaInfo.BrowserName,
+				BrowserVersion: uaInfo.BrowserVersion,
+				DeviceType:     uaInfo.DeviceType,
+				DeviceModel:    uaInfo.DeviceModel,
+				Method:         c.Request.Method,
+				Path:           p,
+				Query:          query,
+				IP:             ip,
+				XForwardedFor:  xff,
+				ProxyHops:      proxyHops,
+				UA:             ua,
+				StatusCode:     status,
+				Size:           size,
+				LatencyMs:      int(time.Since(start).Milliseconds()),
+				IsBot:          isBot,
+				BotReason:      botReason,
+				CreatedAt:      time.Now(),
 			})
 		}
 	}

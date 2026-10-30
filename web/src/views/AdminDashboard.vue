@@ -91,6 +91,23 @@
           </div>
         </el-col>
       </el-row>
+
+      <!-- 第五行：客户端画像（设备/OS/浏览器分布，结构化 UA 解析） -->
+      <el-row :gutter="20" class="chart-row">
+        <el-col :xs="24" :lg="8" v-for="(grp, gi) in clientGroups" :key="gi">
+          <div class="hm-card">
+            <h4 class="chart-title">{{ grp.title }}</h4>
+            <div v-if="!grp.items || grp.items.length === 0" class="client-empty">近 30 天暂无数据</div>
+            <div v-for="(it, i) in grp.items" :key="i" class="client-bar-row">
+              <span class="client-bar-label">{{ grp.key === 'device' ? deviceName(it.name) : it.name }}</span>
+              <div class="client-bar-track">
+                <div class="client-bar-fill" :style="{ width: barPct(grp.items, it.cnt) }"></div>
+              </div>
+              <span class="client-bar-count">{{ it.cnt }}</span>
+            </div>
+          </div>
+        </el-col>
+      </el-row>
     </div>
   </div>
 </template>
@@ -166,6 +183,21 @@ const categoryPieData = ref<any>({
 const provinceHeat = ref<any[]>([]); // [{name:'广东省', value: N}] → ChinaGeoMap 省级着色
 const activeHours = ref<number[][]>([]); // 7×24 星期×小时 互动矩阵
 
+// 客户端画像（结构化 UA 解析：OS / 浏览器 / 设备类型）
+const clientData = ref<{ os: any[]; browser: any[]; device: any[] }>({ os: [], browser: [], device: [] });
+const clientGroups = computed(() => [
+  { key: 'os', title: '操作系统分布（近30天）', items: clientData.value.os || [] },
+  { key: 'browser', title: '浏览器分布（近30天）', items: clientData.value.browser || [] },
+  { key: 'device', title: '设备类型分布（近30天）', items: clientData.value.device || [] },
+]);
+function deviceName(n: string) {
+  return ({ desktop: '桌面端', phone: '手机端', tablet: '平板', unknown: '未知' } as Record<string, string>)[n] || n;
+}
+function barPct(items: any[], cnt: number) {
+  const max = Math.max(1, ...items.map((x: any) => Number(x.cnt) || 0));
+  return Math.round((Number(cnt) / max) * 100) + '%';
+}
+
 const adminTrendMetrics = computed(() => {
   const opts: any[] = [
     { label: '用户增长趋势', data: userTrend.value },
@@ -233,6 +265,7 @@ async function loadDashboard() {
     if (Array.isArray(ph)) provinceHeat.value = ph;
     const ah = d?.active_hours;
     if (Array.isArray(ah)) activeHours.value = ah;
+    if (d?.client) clientData.value = d.client;
   } catch { /* ignore */ }
 }
 
@@ -433,6 +466,14 @@ onMounted(() => { loadDashboard(); checkFiling(); });
   border-color: rgba(71,85,105,0.3);
 }
 .hm-card .chart-title { margin-bottom: 6px; }
+
+/* ===== 客户端分布条形 ===== */
+.client-empty { color: var(--text-light, #94a3b8); font-size: 0.82rem; padding: 8px 0; }
+.client-bar-row { display: flex; align-items: center; gap: 8px; margin: 7px 0; font-size: 0.82rem; }
+.client-bar-label { width: 56px; flex-shrink: 0; color: var(--text-color, #1e293b); text-align: right; }
+.client-bar-track { flex: 1; height: 10px; background: rgba(99,102,241,0.12); border-radius: 6px; overflow: hidden; }
+.client-bar-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6); border-radius: 6px; transition: width 0.4s ease; }
+.client-bar-count { width: 48px; flex-shrink: 0; color: var(--text-light, #94a3b8); text-align: left; }
 
 /* ====== 移动端管理员仪表盘适配 ====== */
 @media (max-width: 768px) {

@@ -300,6 +300,8 @@ func GetDashboardStats(c *gin.Context) {
 		// 热力图数据（前端渲染）：省级访问热力 + 星期×小时 活跃热力
 		"province_heat": computeProvinceHeat(30),
 		"active_hours":  computeActiveHours(30),
+		// 客户端画像（设备/OS/浏览器分布，结构化 UA 解析）
+		"client": computeClientBreakdown(30),
 	})
 }
 
@@ -368,6 +370,30 @@ func computeActiveHours(days int) [][]int64 {
 		}
 	}
 	return matrix
+}
+
+// computeClientBreakdown 近 days 天「客户端画像」分布（结构化 UA 解析结果）。
+// 返回 {os:[{name,count}], browser:[...], device:[...]}，供前端「客户端分布」卡片渲染。
+func computeClientBreakdown(days int) gin.H {
+	since := time.Now().AddDate(0, 0, -days).Format("2006-01-02 15:04:05")
+	var osDist, browserDist, deviceDist []map[string]any
+	models.DB.Model(&models.WebAccessLog{}).
+		Where("created_at >= ? AND os_name <> '' AND os_name <> 'unknown'", since).
+		Select("os_name as name, COUNT(*) as cnt").Group("os_name").Order("cnt desc").Limit(8).
+		Scan(&osDist)
+	models.DB.Model(&models.WebAccessLog{}).
+		Where("created_at >= ? AND browser_name <> '' AND browser_name <> 'unknown'", since).
+		Select("browser_name as name, COUNT(*) as cnt").Group("browser_name").Order("cnt desc").Limit(8).
+		Scan(&browserDist)
+	models.DB.Model(&models.WebAccessLog{}).
+		Where("created_at >= ? AND device_type <> '' AND device_type <> 'unknown'", since).
+		Select("device_type as name, COUNT(*) as cnt").Group("device_type").Order("cnt desc").
+		Scan(&deviceDist)
+	return gin.H{
+		"os":      osDist,
+		"browser": browserDist,
+		"device":  deviceDist,
+	}
 }
 
 // ============ 财务 ============

@@ -17,23 +17,29 @@ import (
 // ⚠️ TTL 说明：HTTP 应用层拿不到 IP 层 TTL（那是 IP 协议字段），故本表不存 ttl，
 // 改用 XForwardedFor 链路长度（ProxyHops）近似「代理跳数」以辅助判断真实客户端位置。
 type WebAccessLog struct {
-	ID            uint      `gorm:"primaryKey" json:"id"`
-	UserID        uint      `json:"user_id"`
-	IdentityType  string    `gorm:"size:16;index" json:"identity_type"` // key / user / anonymous / bot
-	UAFamily      string    `gorm:"size:16;index" json:"ua_family"`     // browser / mobile / bot / tool / unknown
-	Method        string    `gorm:"size:8" json:"method"`
-	Path          string    `gorm:"size:512;index" json:"path"`
-	Query         string    `gorm:"size:512" json:"query"`
-	IP            string    `gorm:"size:64;index" json:"ip"`
-	XForwardedFor string    `gorm:"size:256" json:"x_forwarded_for"`
-	ProxyHops     int       `json:"proxy_hops"` // X-Forwarded-For 逗号分隔跳数（近似代理深度）
-	UA            string    `gorm:"size:512" json:"user_agent"`
-	StatusCode    int       `gorm:"index" json:"status_code"`
-	Size          int       `json:"size"`
-	LatencyMs     int       `json:"latency_ms"`
-	IsBot         bool      `gorm:"index" json:"is_bot"`
-	BotReason     string    `gorm:"size:64" json:"bot_reason"`
-	CreatedAt     time.Time `gorm:"index" json:"created_at"`
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	UserID         uint      `json:"user_id"`
+	IdentityType   string    `gorm:"size:16;index" json:"identity_type"` // key / user / anonymous / bot
+	UAFamily       string    `gorm:"size:16;index" json:"ua_family"`     // browser / mobile / bot / tool / unknown
+	OSName         string    `gorm:"size:24;index" json:"os_name"`       // Windows / iOS / Android / macOS / Linux / unknown
+	OSVersion      string    `gorm:"size:24" json:"os_version"`          // 如 10/11、16.0、13.5
+	BrowserName    string    `gorm:"size:24;index" json:"browser_name"`  // Chrome / Edge / Firefox / Safari / Opera / unknown
+	BrowserVersion string    `gorm:"size:24" json:"browser_version"`     // 如 120.0.0.0
+	DeviceType     string    `gorm:"size:16;index" json:"device_type"`   // desktop / phone / tablet / unknown
+	DeviceModel    string    `gorm:"size:64" json:"device_model"`        // iPhone / iPad / Android 机型（未知为空）
+	Method         string    `gorm:"size:8" json:"method"`
+	Path           string    `gorm:"size:512;index" json:"path"`
+	Query          string    `gorm:"size:512" json:"query"`
+	IP             string    `gorm:"size:64;index" json:"ip"`
+	XForwardedFor  string    `gorm:"size:256" json:"x_forwarded_for"`
+	ProxyHops      int       `json:"proxy_hops"` // X-Forwarded-For 逗号分隔跳数（近似代理深度）
+	UA             string    `gorm:"size:512" json:"user_agent"`
+	StatusCode     int       `gorm:"index" json:"status_code"`
+	Size           int       `json:"size"`
+	LatencyMs      int       `json:"latency_ms"`
+	IsBot          bool      `gorm:"index" json:"is_bot"`
+	BotReason      string    `gorm:"size:64" json:"bot_reason"`
+	CreatedAt      time.Time `gorm:"index" json:"created_at"`
 }
 
 func (WebAccessLog) TableName() string { return "web_access_logs" }
@@ -106,15 +112,18 @@ func ListWebAccess(q WebAccessQuery) (items []WebAccessLog, total int64, err err
 
 // WebAccessStats 聚合统计（用于诊断面板）
 type WebAccessStats struct {
-	Total         int64            `json:"total"`
-	Today         int64            `json:"today"`
-	BotTotal      int64            `json:"bot_total"`
-	AttackTotal   int64            `json:"attack_total"` // 近 24h：is_bot 或 status>=400
-	TopIPs        []map[string]any `json:"top_ips"`
-	TopPaths      []map[string]any `json:"top_paths"`
-	StatusDist    []map[string]any `json:"status_dist"`
-	UAFamilyDist  []map[string]any `json:"ua_family_dist"`
-	BotReasonDist []map[string]any `json:"bot_reason_dist"`
+	Total           int64            `json:"total"`
+	Today           int64            `json:"today"`
+	BotTotal        int64            `json:"bot_total"`
+	AttackTotal     int64            `json:"attack_total"` // 近 24h：is_bot 或 status>=400
+	TopIPs          []map[string]any `json:"top_ips"`
+	TopPaths        []map[string]any `json:"top_paths"`
+	StatusDist      []map[string]any `json:"status_dist"`
+	UAFamilyDist    []map[string]any `json:"ua_family_dist"`
+	OSNameDist      []map[string]any `json:"os_name_dist"`
+	BrowserNameDist []map[string]any `json:"browser_name_dist"`
+	DeviceTypeDist  []map[string]any `json:"device_type_dist"`
+	BotReasonDist   []map[string]any `json:"bot_reason_dist"`
 }
 
 // GetWebAccessStats 计算诊断面板所需的各类聚合
@@ -146,6 +155,15 @@ func GetWebAccessStats() (*WebAccessStats, error) {
 		Scan(&s.StatusDist)
 	DB.Model(&WebAccessLog{}).Select("ua_family as family, COUNT(*) as cnt").Group("ua_family").Order("cnt desc").
 		Scan(&s.UAFamilyDist)
+	DB.Model(&WebAccessLog{}).Where("os_name <> '' AND os_name <> 'unknown'").
+		Select("os_name as name, COUNT(*) as cnt").Group("os_name").Order("cnt desc").Limit(10).
+		Scan(&s.OSNameDist)
+	DB.Model(&WebAccessLog{}).Where("browser_name <> '' AND browser_name <> 'unknown'").
+		Select("browser_name as name, COUNT(*) as cnt").Group("browser_name").Order("cnt desc").Limit(10).
+		Scan(&s.BrowserNameDist)
+	DB.Model(&WebAccessLog{}).Where("device_type <> '' AND device_type <> 'unknown'").
+		Select("device_type as name, COUNT(*) as cnt").Group("device_type").Order("cnt desc").
+		Scan(&s.DeviceTypeDist)
 	DB.Model(&WebAccessLog{}).Where("is_bot = ? AND bot_reason <> ''", true).
 		Select("bot_reason as reason, COUNT(*) as cnt").Group("bot_reason").Order("cnt desc").Limit(10).
 		Scan(&s.BotReasonDist)
