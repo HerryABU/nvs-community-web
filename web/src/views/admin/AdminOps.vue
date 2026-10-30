@@ -202,6 +202,28 @@
             </el-radio-group>
             <span class="hint">决定访问站点根路径时展示哪套内容（选择后立即保存）</span>
           </el-form-item>
+          <el-form-item label="地图服务">
+            <el-radio-group v-model="mapSetting.provider">
+              <el-radio-button value="offline">离线示意（仅国内）</el-radio-button>
+              <el-radio-button value="tianditu">天地图（标准地图）</el-radio-button>
+            </el-radio-group>
+            <span class="hint">对外展示请选天地图：自然资源部官方平台，支持国内/全球</span>
+          </el-form-item>
+          <template v-if="mapSetting.provider === 'tianditu'">
+            <el-form-item label="地图范围">
+              <el-radio-group v-model="mapSetting.scope">
+                <el-radio-button value="china">中国</el-radio-button>
+                <el-radio-button value="world">全球</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item label="天地图 tk">
+              <el-input v-model="mapSetting.tianditu_key" placeholder="到 tianditu.gov.cn 申请后填入（平台不预置密钥）" show-password />
+              <span class="hint">请同时在该平台配置本站域名的 Referer 白名单，防止密钥被盗用</span>
+            </el-form-item>
+            <el-form-item label="审图号">
+              <el-input v-model="mapSetting.review_no" placeholder="如 GS(2024)0650号；对外展示必须标注" />
+            </el-form-item>
+          </template>
           <el-form-item>
             <el-button type="primary" :loading="savingVisit" @click="saveVisit">保存</el-button>
           </el-form-item>
@@ -398,6 +420,8 @@ async function saveVisit() {
     await opsApi.saveVisit({ ...visit });
     // 首页形态是独立配置（不属于 VisitSetting），单独保存
     await api.put('/admin/home-view', { view: homeView.value });
+    // 地图服务配置（标准地图合规）
+    await api.put('/admin/map-setting', mapSetting);
     ElMessage.success('已保存');
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '保存失败');
@@ -408,6 +432,29 @@ async function saveVisit() {
 
 // ---- 首页形态（作品 / 博客 / 论坛 / 混合流）----
 const homeView = ref<'novels' | 'blogs' | 'forum' | 'feed'>('novels');
+
+// ---- 地图服务（标准地图合规：离线示意 / 天地图，国内+全球）----
+const mapSetting = reactive({
+  provider: 'offline' as 'offline' | 'tianditu',
+  scope: 'china' as 'china' | 'world',
+  tianditu_key: '',
+  review_no: '',
+});
+
+async function loadMapSetting() {
+  try {
+    const res = await api.get<{ code: number; data: any }>('/admin/map-setting');
+    const d = res.data?.data;
+    if (d) {
+      mapSetting.provider = d.provider || 'offline';
+      mapSetting.scope = d.scope || 'china';
+      mapSetting.tianditu_key = d.tianditu_key || '';
+      mapSetting.review_no = d.review_no || '';
+    }
+  } catch {
+    /* 读不到保持默认 */
+  }
+}
 
 async function loadHomeView() {
   try {
@@ -425,6 +472,7 @@ onMounted(async () => {
   await loadCheckin();
   await loadVisit();
   await loadHomeView();
+  await loadMapSetting();
   await loadLive();
 });
 </script>

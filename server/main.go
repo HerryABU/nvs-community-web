@@ -354,6 +354,8 @@ func main() {
 		public.GET("/site-iframe", handlers.GetSiteIframe)
 		// 首页形态（novels/blogs/forum/feed）：前端据此决定首页渲染哪套视图
 		public.GET("/home-view", handlers.GetHomeView)
+		// 地图服务配置（标准地图合规：offline 示意 / 天地图 国内+全球）
+		public.GET("/map-setting", handlers.GetMapSetting)
 		// F12b 作者主题（访客可见，仅 CSS，服务端消毒）
 		public.GET("/author/:id/theme", handlers.GetAuthorTheme)
 		// 自定义主页（作者公开页，访客可见已审核片段）
@@ -875,6 +877,9 @@ func main() {
 		// 首页形态配置（管理员可把博客/论坛/混合流设为首页）
 		admin.GET("/home-view", handlers.AdminGetHomeView)
 		admin.PUT("/home-view", handlers.AdminSaveHomeView)
+		// 地图服务（标准地图合规配置）
+		admin.GET("/map-setting", handlers.AdminGetMapSetting)
+		admin.PUT("/map-setting", handlers.AdminSaveMapSetting)
 		// web 项目额度与超额审核（F17）
 		admin.GET("/web-quota/requests", handlers.AdminListWebQuotaRequests)
 		admin.POST("/web-quota/requests/:id/approve", handlers.AdminApproveWebQuotaRequest)

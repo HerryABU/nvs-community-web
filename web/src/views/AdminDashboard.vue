@@ -79,7 +79,7 @@
         <el-col :xs="24" :lg="12">
           <div class="hm-card">
             <h4 class="chart-title">访问来源地域热力（近 30 天）</h4>
-            <ChinaGeoMap
+            <StdMap
               :data="provinceHeat"
               note="基于 ip2region 离线库按省级着色；仅统计境内访问，内网/保留地址与境外不计入省份排名。"
             />
@@ -122,7 +122,7 @@ import {
 } from '@element-plus/icons-vue';
 import AnimatedNumber from '@/components/AnimatedNumber.vue';
 import DashboardCharts from '@/components/DashboardCharts.vue';
-import ChinaGeoMap from '@/components/ChinaGeoMap.vue';
+import StdMap from '@/components/maps/StdMap.vue';
 import AdminActiveHoursHeatmap from '@/components/admin/AdminActiveHoursHeatmap.vue';
 
 const refreshing = ref(false);
