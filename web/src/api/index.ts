@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { appPrefix } from '@/utils/prefix';
 import { reportAdminApiError, clearAdminApiError } from '@/utils/adminHealth';
+import { collectFingerprint } from '@/utils/fingerprint';
 
 // 为 AxiosRequestConfig 扩展内部标记字段（仅本拦截器使用，不影响外部类型）
 declare module 'axios' {
@@ -27,12 +28,20 @@ const api = axios.create({
   timeout: 15000,
 });
 
-// 请求拦截器：统一附加 CSRF 防护头（安全审计：配合后端 CSRFGuard 校验，
-// 登录态写操作必须携带 X-Requested-With，跨站表单/脚本无法伪造）
+// 请求拦截器：统一附加 CSRF 防护头 + 设备指纹头（令牌绑定用）
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
     config.headers = config.headers || {};
+    // CSRF 防护（配合后端 CSRFGuard）
     config.headers['X-Requested-With'] = 'XMLHttpRequest';
+    // 设备指纹：随每个请求上报，后端将其与登录地（省级）一起加密进访问令牌，
+    // 异设备 / 异省份使用时绑定校验失败 → 401，防 JWT 窃取与异地登录。
+    try {
+      const fp = await collectFingerprint();
+      if (fp) config.headers['X-Device-Fingerprint'] = fp;
+    } catch {
+      /* 采集失败降级：不附加头，令牌绑定退化为仅地域因子 */
+    }
     return config;
   },
   (error) => Promise.reject(error)
