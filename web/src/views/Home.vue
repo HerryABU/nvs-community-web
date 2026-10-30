@@ -116,8 +116,10 @@ watch(
 
 <style scoped>
 /* ====== Page Layout ====== */
+/* 与全局 .page-container 基准（1280）对齐：此前这里是 1200，
+   导致首页比其它页面「窄了一圈」，视觉上像整体缩小了。 */
 .page-container {
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 24px 20px 60px;
 }
