@@ -74,8 +74,23 @@
         </el-col>
       </el-row>
 
-      <!-- 管理功能入口（F8：分类折叠 + ?category=/?item= 深链定位） -->
-      <AdminMenuPanel />
+      <!-- 第四行：热力图（中国省级访问热力 + 星期×小时 活跃热力） -->
+      <el-row :gutter="20" class="chart-row">
+        <el-col :xs="24" :lg="12">
+          <div class="hm-card">
+            <h4 class="chart-title">访问来源地域热力（近 30 天）</h4>
+            <ChinaGeoMap
+              :data="provinceHeat"
+              note="基于 ip2region 离线库按省级着色；仅统计境内访问，内网/保留地址与境外不计入省份排名。"
+            />
+          </div>
+        </el-col>
+        <el-col :xs="24" :lg="12">
+          <div class="hm-card">
+            <AdminActiveHoursHeatmap :matrix="activeHours" />
+          </div>
+        </el-col>
+      </el-row>
     </div>
   </div>
 </template>
@@ -89,7 +104,8 @@ import {
 } from '@element-plus/icons-vue';
 import AnimatedNumber from '@/components/AnimatedNumber.vue';
 import DashboardCharts from '@/components/DashboardCharts.vue';
-import AdminMenuPanel from '@/components/admin/AdminMenuPanel.vue';
+import ChinaGeoMap from '@/components/ChinaGeoMap.vue';
+import AdminActiveHoursHeatmap from '@/components/admin/AdminActiveHoursHeatmap.vue';
 
 const refreshing = ref(false);
 
@@ -145,6 +161,10 @@ const categoryPieData = ref<any>({
   title: '分类分布',
   data: [],
 });
+
+// 热力图数据
+const provinceHeat = ref<any[]>([]); // [{name:'广东省', value: N}] → ChinaGeoMap 省级着色
+const activeHours = ref<number[][]>([]); // 7×24 星期×小时 互动矩阵
 
 const adminTrendMetrics = computed(() => {
   const opts: any[] = [
@@ -209,6 +229,10 @@ async function loadDashboard() {
     if (cd) {
       categoryPieData.value = { title: '分类分布', data: cd.map((c: any) => ({ name: c.name, value: c.count })) };
     }
+    const ph = d?.province_heat;
+    if (Array.isArray(ph)) provinceHeat.value = ph;
+    const ah = d?.active_hours;
+    if (Array.isArray(ah)) activeHours.value = ah;
   } catch { /* ignore */ }
 }
 
@@ -395,131 +419,20 @@ onMounted(() => { loadDashboard(); checkFiling(); });
   margin-bottom: 24px;
 }
 
-/* ===== 管理功能入口 ===== */
-.menu-section {
-  margin-top: 8px;
+/* ===== 热力图卡片 ===== */
+.hm-card {
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-color, rgba(0,0,0,0.06));
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+  height: 100%;
 }
-
-.menu-section-title {
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: #e2e8f0;
-  margin: 0 0 16px;
-  text-align: center; /* 与下方居中排布的卡片网格保持同一视觉中轴 */
+[data-theme="dark"] .hm-card {
+  background: rgba(30,41,59,0.8);
+  border-color: rgba(71,85,105,0.3);
 }
-
-[data-theme="light"] .menu-section-title {
-  color: var(--text-color);
-}
-
-.admin-menu-grid {
-  /* flex 弹性换行 + 居中：菜单数量任意（如 21 项）时，末行不足一列也整体居中，
-     避免左侧堆叠的视觉失衡（早期为左对齐，现按需求改为居中） */
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 16px;
-}
-
-@media (max-width: 1000px) {
-  .admin-menu-grid { gap: 14px; }
-}
-@media (max-width: 760px) {
-  .admin-menu-grid { gap: 12px; }
-}
-@media (max-width: 480px) {
-  .admin-menu-grid { gap: 10px; }
-}
-
-.admin-menu-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: calc(25% - 12px); /* 4 列（gap 16×3=48，(100%-48)/4=25%-12px） */
-  box-sizing: border-box;
-  padding: 18px 16px;
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  cursor: pointer;
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-}
-
-@media (max-width: 1000px) {
-  .admin-menu-card { width: calc(33.333% - 10px); } /* 3 列 */
-}
-@media (max-width: 760px) {
-  .admin-menu-card { width: calc(50% - 6px); } /* 2 列 */
-}
-@media (max-width: 480px) {
-  .admin-menu-card { width: 100%; } /* 1 列 */
-}
-
-[data-theme="light"] .admin-menu-card {
-  background: #fff;
-  border-color: var(--border-color);
-  box-shadow: var(--shadow-card);
-}
-
-.admin-menu-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-[data-theme="light"] .admin-menu-card:hover {
-  box-shadow: var(--shadow-lg);
-  border-color: var(--border-color);
-}
-
-.amc-icon {
-  width: 46px;
-  height: 46px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  flex-shrink: 0;
-}
-
-.amc-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.amc-title {
-  font-weight: 600;
-  font-size: 0.98rem;
-  color: #e2e8f0;
-}
-
-[data-theme="light"] .amc-title {
-  color: var(--text-color);
-}
-
-.amc-desc {
-  font-size: 0.78rem;
-  color: rgba(255, 255, 255, 0.45);
-  margin-top: 3px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-[data-theme="light"] .amc-desc {
-  color: var(--text-light);
-}
-
-.amc-arrow {
-  color: rgba(255, 255, 255, 0.35);
-  flex-shrink: 0;
-}
-
-[data-theme="light"] .amc-arrow {
-  color: var(--text-light);
-}
+.hm-card .chart-title { margin-bottom: 6px; }
 
 /* ====== 移动端管理员仪表盘适配 ====== */
 @media (max-width: 768px) {

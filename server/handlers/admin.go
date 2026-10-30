@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"time"
 
+	"nvs-server/ipgeo"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -296,7 +297,77 @@ func GetDashboardStats(c *gin.Context) {
 		},
 		"top_novels":            topNovels,
 		"category_distribution": categoryDistribution,
+		// 热力图数据（前端渲染）：省级访问热力 + 星期×小时 活跃热力
+		"province_heat": computeProvinceHeat(30),
+		"active_hours":  computeActiveHours(30),
 	})
+}
+
+// computeProvinceHeat 站点访问的「省级热力」（复用 ip2region 离线解析，与 GetWebAccessGeo 同口径）。
+// 先按 IP 聚合再查表，解析成本与 IP 数成正比而非日志条数；内网/保留地址与境外不计入省份排名。
+// 返回 [{name: 省全称(如"广东省"), value: 访问次数}]，直接喂给前端 ChinaGeoMap.vue 的 visualMap 着色。
+func computeProvinceHeat(days int) []gin.H {
+	if !ipgeo.Available() {
+		return []gin.H{}
+	}
+	type ipRow struct {
+		IP  string
+		Cnt int64
+	}
+	var rows []ipRow
+	since := time.Now().AddDate(0, 0, -days).Format("2006-01-02 15:04:05")
+	if err := models.DB.Model(&models.WebAccessLog{}).
+		Where("created_at >= ?", since).
+		Select("ip, COUNT(*) as cnt").
+		Group("ip").Order("cnt desc").Limit(5000).
+		Scan(&rows).Error; err != nil {
+		return []gin.H{}
+	}
+	provinces := map[string]int64{}
+	for _, r := range rows {
+		reg := ipgeo.Lookup(r.IP)
+		if reg.IsReserved() || reg.Country == "" {
+			continue
+		}
+		if reg.Country == "中国" {
+			if prov := ipgeo.NormalizeProvince(reg.Province); prov != "" {
+				provinces[prov] += r.Cnt
+			}
+		}
+	}
+	out := make([]gin.H, 0, len(provinces))
+	for k, v := range provinces {
+		out = append(out, gin.H{"name": k, "value": v})
+	}
+	return out
+}
+
+// computeActiveHours 近 days 天「星期×小时」用户互动活跃热力（0=周日..6=周六，0..23 时）。
+// 数据来源：评论创建时间（用户互动的强代理）。返回 7×24 矩阵，前端 ECharts heatmap 直接消费。
+func computeActiveHours(days int) [][]int64 {
+	matrix := make([][]int64, 7)
+	for i := range matrix {
+		matrix[i] = make([]int64, 24)
+	}
+	since := time.Now().AddDate(0, 0, -days).Format("2006-01-02 15:04:05")
+	type ahRow struct {
+		Wd  int
+		Hr  int
+		Cnt int64
+	}
+	var rows []ahRow
+	models.DB.Raw(
+		"SELECT CAST(strftime('%w', created_at) AS INTEGER) AS wd, "+
+			"CAST(strftime('%H', created_at) AS INTEGER) AS hr, COUNT(*) AS cnt "+
+			"FROM comments WHERE deleted_at IS NULL AND created_at >= ? GROUP BY wd, hr",
+		since,
+	).Scan(&rows)
+	for _, r := range rows {
+		if r.Wd >= 0 && r.Wd < 7 && r.Hr >= 0 && r.Hr < 24 {
+			matrix[r.Wd][r.Hr] = r.Cnt
+		}
+	}
+	return matrix
 }
 
 // ============ 财务 ============
