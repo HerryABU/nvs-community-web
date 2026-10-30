@@ -207,9 +207,11 @@
               <el-option label="全部厂商" value="" />
               <el-option v-for="v in vendors" :key="v" :label="v" :value="v" />
             </el-select>
-            <el-select v-model="modelId" size="small" style="width:168px" :disabled="generating || useByok">
-              <el-option v-for="m in filteredModels" :key="m.id" :label="modelLabel(m)" :value="m.id" />
-            </el-select>
+            <AiModelPicker
+              v-model="modelId"
+              :models="filteredModels"
+              :disabled="generating || useByok"
+            />
             <el-tag v-if="selectedThinking" size="small" type="warning" effect="plain" title="先输出推理过程，再给正文；思考过程可折叠">
               思考型
             </el-tag>
@@ -287,6 +289,7 @@ import {
 } from '@element-plus/icons-vue';
 import { renderAiMarkdown } from '@/markdown/renderer';
 import AiPromptLibrary from '@/components/ai/AiPromptLibrary.vue';
+import AiModelPicker from '@/components/ai/AiModelPicker.vue';
 import { aiHubApi, streamChat, uploadChatAttachment, type AiHubStatus, type AiAgent, type AiChatMessage, type AiChatSession, type ChatAttachment } from '@/api/aiHub';
 
 const props = defineProps<{
@@ -450,10 +453,6 @@ const selectedThinking = computed(
   () => !useByok.value && !!filteredModels.value.find((m) => m.id === modelId.value)?.thinking,
 );
 
-function modelLabel(m: { name: string; price_in: number; price_out: number }) {
-  const price = m.price_in === 0 && m.price_out === 0 ? '免费' : `${m.price_in}/${m.price_out}`;
-  return `${m.name}（${price}）`;
-}
 
 function renderMd(md: string) {
   // AI 生成内容按不可信输入处理：严格白名单 + 全量转义兜底
