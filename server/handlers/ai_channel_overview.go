@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"sort"
+	"strings"
+	"time"
 
 	"nvs-server/aiclient"
 	"nvs-server/models"
@@ -111,6 +113,22 @@ func AdminChannelBalanceOverview(c *gin.Context) {
 		if b.Error != "" {
 			item["error"] = b.Error
 		}
+		// 精确单次费用：New API 的 /api/log/self 每条日志的 quota 就是该次扣费，
+		// 比「余额差值」精确得多（且不受"无限额度令牌"影响）。
+		acct, _ := decryptAccountTokenByBaseURL(g.BaseURL)
+		if strings.TrimSpace(acct) != "" && g.TokenUserID != "" {
+			logs, lerr := aiclient.QueryNewAPIRecentLogs(g.BaseURL, acct, g.TokenUserID, 5, 15*time.Second)
+			if lerr != "" {
+				item["logs_error"] = lerr
+			} else {
+				item["recent_logs"] = logs
+				if len(logs) > 0 {
+					item["last_cost"] = logs[0].Quota
+					item["last_model"] = logs[0].ModelName
+				}
+			}
+		}
+
 		// 窗口消耗 + 单次估算（估算值，前端必须标注）
 		w := models.ResolveChannelWindowCost(g.BaseURL)
 		item["window"] = w
@@ -122,6 +140,16 @@ func AdminChannelBalanceOverview(c *gin.Context) {
 		"probed":   probed,
 		"total":    len(out),
 	})
+}
+
+// decryptAccountTokenByBaseURL 找该渠道下第一个已配置的系统访问令牌并解密。
+func decryptAccountTokenByBaseURL(baseURL string) (string, error) {
+	var m models.AiModel
+	if err := models.DB.Where("base_url = ? AND account_token_enc != ''", baseURL).
+		Order("id").First(&m).Error; err != nil {
+		return "", err
+	}
+	return m.DecryptAccountToken()
 }
 
 // decryptKeyByBaseURL 找该渠道下第一个可用密钥并解密。

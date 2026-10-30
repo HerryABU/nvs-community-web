@@ -304,6 +304,7 @@
         按上游渠道（base_url）聚合，每条渠道查一次账户余额 —— 回答「这条渠道还剩多少钱」。
         同一渠道下的多个模型共用一份余额，所以不逐模型重复查询。
         <br />
+        <b>最近一次</b> = 中转站使用日志里最新一条的实际扣费（精确，需系统访问令牌含「查看日志」权限）；
         <b>估算单次</b> = 最近两次采样的余额消耗 ÷ 窗口内该渠道的请求数；<b>单次 token</b> 与
         <b>每千 token 单价</b> 用来区分「单价贵」和「用得多」。上游不按请求返回金额，
         所以金额是估算值（并发与重试会摊进去）；多点几次「渠道余额」或等后台每 10 分钟自动采样即可攒出窗口。
@@ -340,6 +341,15 @@
             <span v-if="row.window?.per_request" class="ch-est">
               ≈{{ fmtMoney(row.window.per_request) }} <em class="unit">{{ row.window.currency || '' }}</em>
             </span>
+            <span v-else class="muted small">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="最近一次" width="140">
+          <template #default="{ row }">
+            <span v-if="row.last_cost !== undefined && row.last_cost !== null" class="ch-est">
+              {{ fmtMoney(row.last_cost) }} <em class="unit">{{ row.currency || 'USD' }}</em>
+            </span>
+            <span v-else-if="row.logs_error" class="muted small" :title="row.logs_error">无日志权限</span>
             <span v-else class="muted small">—</span>
           </template>
         </el-table-column>
