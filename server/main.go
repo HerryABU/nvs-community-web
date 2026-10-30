@@ -882,6 +882,10 @@ func main() {
 		// 地图服务（标准地图合规配置）
 		admin.GET("/map-setting", handlers.AdminGetMapSetting)
 		admin.PUT("/map-setting", handlers.AdminSaveMapSetting)
+		// 虚拟记账单位 → 真实货币的换算比例（中转站的「美元」只是站内代币）
+		admin.GET("/cost-rate", handlers.AdminGetCostRate)
+		admin.PUT("/cost-rate", handlers.AdminSaveCostRate)
+		admin.POST("/cost-rate/preview", handlers.AdminCostRatePreview)
 		// web 项目额度与超额审核（F17）
 		admin.GET("/web-quota/requests", handlers.AdminListWebQuotaRequests)
 		admin.POST("/web-quota/requests/:id/approve", handlers.AdminApproveWebQuotaRequest)

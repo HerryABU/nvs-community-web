@@ -139,6 +139,42 @@ func AdminChannelBalanceOverview(c *gin.Context) {
 		// 窗口消耗 + 单次估算（估算值，前端必须标注）
 		w := models.ResolveChannelWindowCost(g.BaseURL)
 		item["window"] = w
+
+		// ── 真实成本换算 ──
+		// 上游给的「美元」在中转站里只是站内代币，必须按站长声明的充值比例
+		// 才能折算成真金白银。未配置比例时**不给任何 real_* 字段**，
+		// 前端据此显示「未设置比例」，而不是把虚拟金额当真实成本展示。
+		rate, rateSrc := models.ResolveCostRate(g.BaseURL)
+		item["rate_source"] = rateSrc
+		if rate.Valid() {
+			item["rate"] = gin.H{
+				"real_amount":      rate.RealAmount,
+				"virtual_amount":   rate.VirtualAmount,
+				"real_currency":    rate.RealCurrency,
+				"virtual_currency": rate.VirtualCurrency,
+				"ratio":            rate.Ratio(),
+				"describe":         rate.Describe(),
+			}
+			if v, ok := rate.ToReal(b.TotalRemaining); ok {
+				item["real_remaining"] = v
+			}
+			if v, ok := rate.ToReal(b.TotalUsed); ok {
+				item["real_used"] = v
+			}
+			if lc, ok := item["last_cost"].(float64); ok {
+				if v, ok2 := rate.ToReal(lc); ok2 {
+					item["real_last_cost"] = v
+				}
+			}
+			if v, ok := rate.ToReal(w.CostUsed); ok {
+				item["real_window_cost"] = v
+				if w.PerRequest > 0 {
+					if pv, ok3 := rate.ToReal(w.PerRequest); ok3 {
+						item["real_per_request"] = pv
+					}
+				}
+			}
+		}
 		out = append(out, item)
 	}
 

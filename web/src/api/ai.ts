@@ -258,6 +258,28 @@ export const aiApi = {
     );
   },
 
+  // ---------- 真实成本换算（虚拟记账单位 ≠ 真金白银） ----------
+  // 中转站「quota÷500000 = 美元」只是站内代币；站长必须声明充值比例，
+  // 才能把「还剩 5274」折算成真金白银的成本。
+  getCostRate() {
+    return api.get<{
+      code: number;
+      data: { rate: CostRateSetting; valid: boolean; ratio: number; describe: string; real_currencies: string[] };
+    }>('/admin/cost-rate');
+  },
+  saveCostRate(data: CostRateSetting) {
+    return api.put<{ code: number; data: { rate: CostRateSetting; valid: boolean; ratio: number; describe: string } }>(
+      '/admin/cost-rate',
+      data,
+    );
+  },
+  previewCostRate(data: { virtual: number } & Partial<CostRateSetting>) {
+    return api.post<{
+      code: number;
+      data: { virtual: number; real: number; ok: boolean; real_currency: string; describe: string };
+    }>('/admin/cost-rate/preview', data);
+  },
+
   // ---------- L5 渠道对账：拉取上游余额 / 已消费 / 剩余 + 真实连通性探针 ----------
   /** GET /api/admin/ai/models/:id/channel —— 余额（对账）与连通性 */
   modelChannel(id: number) {
@@ -300,6 +322,48 @@ export interface AdminChannelRow {
   currency?: string;
   fetched_at?: string;
   error?: string;
+  // 单次费用（虚拟单位）
+  last_cost?: number;
+  last_model?: string;
+  logs_error?: string;
+  // 窗口统计
+  window?: {
+    has_data: boolean;
+    cost_used: number;
+    currency?: string;
+    requests: number;
+    per_request: number;
+    minutes: number;
+    tokens_in?: number;
+    tokens_out?: number;
+    tokens_total?: number;
+    per_request_tok?: number;
+    cost_per_1k_tok?: number;
+  };
+  // 真实成本换算（比例未配置时后端不下发这些字段）
+  rate_source?: 'channel' | 'global' | 'none';
+  rate?: {
+    real_amount: number;
+    virtual_amount: number;
+    real_currency: string;
+    virtual_currency: string;
+    ratio: number;
+    describe: string;
+  };
+  real_remaining?: number;
+  real_used?: number;
+  real_last_cost?: number;
+  real_window_cost?: number;
+  real_per_request?: number;
+}
+
+// 虚拟记账单位 → 真实货币的换算比例
+// 语义：real_amount 单位真实货币 ⇔ virtual_amount 单位虚拟代币
+export interface CostRateSetting {
+  real_amount: number;
+  virtual_amount: number;
+  real_currency: string;
+  virtual_currency: string;
 }
 
 export interface AdminChannelReport {

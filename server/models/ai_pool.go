@@ -51,6 +51,14 @@ type AiModel struct {
 	BalanceDivisor    float64 `gorm:"not null;default:0" json:"balance_divisor"`           // custom：除数（0=1）
 	BalanceMultiplier float64 `gorm:"not null;default:0" json:"balance_multiplier"`        // custom：乘数（0=1）
 	BalanceCurrency   string  `gorm:"size:16;not null;default:''" json:"balance_currency"` // custom：单位
+
+	// ── 渠道级真实成本换算（虚拟记账单位 ≠ 真金白银）──
+	// 中转站「quota÷500000 = 美元」只是站内代币；充 100 元到账 1000 虚拟美元是常态。
+	// 同一渠道的充值比例是固定的，所以按渠道配；两个数都填 0 = 跟随站点全局比例。
+	RateRealAmount    float64 `gorm:"not null;default:0" json:"rate_real_amount"`            // 真实货币数额
+	RateVirtualAmount float64 `gorm:"not null;default:0" json:"rate_virtual_amount"`         // 对应虚拟单位数额
+	RateRealCurrency  string  `gorm:"size:16;not null;default:''" json:"rate_real_currency"` // 真实货币代码
+
 	// Vendor 厂商（OpenAI/Anthropic/Google/DeepSeek/阿里/字节/Midjourney…）→ 前端「全部厂商」筛选
 	Vendor string `gorm:"size:32;not null;default:'';index" json:"vendor"`
 	// Thinking 思考型模型（DeepSeek-R1 / GLM / Qwen thinking 等）：

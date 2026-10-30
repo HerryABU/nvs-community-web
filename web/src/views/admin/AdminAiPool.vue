@@ -299,10 +299,30 @@
     </el-dialog>
 
     <!-- ============ 渠道余额一览（按渠道聚合） ============ -->
-    <el-dialog v-model="chDialog" title="渠道余额一览" width="860px">
+    <el-dialog v-model="chDialog" title="渠道余额一览" width="980px">
+      <!-- 换算比例条：中转站的「美元」只是站内代币，不说清比例就没有成本含义 -->
+      <div class="ch-rate-bar" :class="{ unset: !rateValid }">
+        <span class="ch-rate-icon">{{ rateValid ? '💱' : '⚠️' }}</span>
+        <div class="ch-rate-text">
+          <template v-if="rateValid">
+            <b>换算比例</b> {{ rateDescribe }}
+            <span class="muted small">（虚拟金额 × {{ rateRatio }} = 真实金额）</span>
+          </template>
+          <template v-else>
+            <b>未设置换算比例</b>
+            <span class="muted small">
+              中转站的「美元」只是站内代币：充 100 元可能到账 1000 虚拟美元。
+              不填比例，下面的金额只能算「游戏厅代币数」，代表不了你真花了多少钱。
+            </span>
+          </template>
+        </div>
+        <el-button size="small" type="primary" plain @click="openRateEdit">设置比例</el-button>
+      </div>
+
       <div class="ch-overview-tip">
         按上游渠道（base_url）聚合，每条渠道查一次账户余额 —— 回答「这条渠道还剩多少钱」。
         同一渠道下的多个模型共用一份余额，所以不逐模型重复查询。
+        带「实」的小字是按上述比例折算出的**真实成本**。
         <br />
         <b>最近一次</b> = 中转站使用日志里最新一条的实际扣费（精确，需系统访问令牌含「查看日志」权限）；
         <b>估算单次</b> = 最近两次采样的余额消耗 ÷ 窗口内该渠道的请求数；<b>单次 token</b> 与
@@ -313,42 +333,67 @@
       <el-table v-if="chRows.length" :data="chRows" size="small" stripe max-height="420">
         <el-table-column prop="base_url" label="渠道" min-width="220" show-overflow-tooltip />
         <el-table-column prop="models" label="模型数" width="80" />
-        <el-table-column label="剩余" width="110">
+        <el-table-column label="剩余" width="132">
           <template #default="{ row }">
-            <span :class="['ch-bal', { zero: !row.supported }]">{{ fmtMoney(row.total_remaining) }}</span>
+            <div class="ch-dual">
+              <span :class="['ch-bal', { zero: !row.supported }]">{{ fmtMoney(row.total_remaining) }}</span>
+              <span v-if="row.real_remaining !== undefined" class="ch-real">
+                实 {{ fmtMoney(row.real_remaining) }} <em class="unit">{{ row.rate?.real_currency }}</em>
+              </span>
+              <span v-else class="ch-noreal">未设比例</span>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="已消费" width="110">
-          <template #default="{ row }">{{ fmtMoney(row.total_used) }}</template>
+        <el-table-column label="已消费" width="132">
+          <template #default="{ row }">
+            <div class="ch-dual">
+              <span>{{ fmtMoney(row.total_used) }}</span>
+              <span v-if="row.real_used !== undefined" class="ch-real">
+                实 {{ fmtMoney(row.real_used) }} <em class="unit">{{ row.rate?.real_currency }}</em>
+              </span>
+              <span v-else class="ch-noreal">—</span>
+            </div>
+          </template>
         </el-table-column>
-        <el-table-column label="币种" width="70">
+        <el-table-column label="币种" width="66">
           <template #default="{ row }">{{ row.currency || '—' }}</template>
         </el-table-column>
-        <el-table-column label="期间消耗" width="120">
+        <el-table-column label="期间消耗" width="126">
           <template #default="{ row }">
-            <span v-if="row.window?.has_data">{{ fmtMoney(row.window.cost_used) }} <em class="unit">{{ row.window.currency || '' }}</em></span>
+            <div v-if="row.window?.has_data" class="ch-dual">
+              <span>{{ fmtMoney(row.window.cost_used) }} <em class="unit">{{ row.window.currency || '' }}</em></span>
+              <span v-if="row.real_window_cost !== undefined" class="ch-real">
+                实 {{ fmtMoney(row.real_window_cost) }} <em class="unit">{{ row.rate?.real_currency }}</em>
+              </span>
+            </div>
             <span v-else class="muted small">需≥2次采样</span>
           </template>
         </el-table-column>
-        <el-table-column label="期间请求" width="90">
+        <el-table-column label="期间请求" width="84">
           <template #default="{ row }">
             <span v-if="row.window?.has_data">{{ row.window.requests }}</span>
             <span v-else class="muted small">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="估算单次" width="130">
+        <el-table-column label="估算单次" width="126">
           <template #default="{ row }">
-            <span v-if="row.window?.per_request" class="ch-est">
-              ≈{{ fmtMoney(row.window.per_request) }} <em class="unit">{{ row.window.currency || '' }}</em>
-            </span>
+            <div v-if="row.window?.per_request" class="ch-dual">
+              <span class="ch-est">≈{{ fmtMoney(row.window.per_request) }} <em class="unit">{{ row.window.currency || '' }}</em></span>
+              <span v-if="row.real_per_request !== undefined" class="ch-real">
+                实≈{{ fmtMoney(row.real_per_request) }} <em class="unit">{{ row.rate?.real_currency }}</em>
+              </span>
+            </div>
             <span v-else class="muted small">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="最近一次" width="140">
+        <el-table-column label="最近一次" width="136">
           <template #default="{ row }">
-            <span v-if="row.last_cost !== undefined && row.last_cost !== null" class="ch-est">
-              {{ fmtMoney(row.last_cost) }} <em class="unit">{{ row.currency || 'USD' }}</em>
-            </span>
+            <div v-if="row.last_cost !== undefined && row.last_cost !== null" class="ch-dual">
+              <span class="ch-est">{{ fmtMoney(row.last_cost) }} <em class="unit">{{ row.currency || 'USD' }}</em></span>
+              <span v-if="row.real_last_cost !== undefined" class="ch-real">
+                实 {{ fmtMoney(row.real_last_cost) }} <em class="unit">{{ row.rate?.real_currency }}</em>
+              </span>
+            </div>
             <span v-else-if="row.logs_error" class="muted small" :title="row.logs_error">无日志权限</span>
             <span v-else class="muted small">—</span>
           </template>
@@ -386,6 +431,43 @@
       <template #footer>
         <el-button :loading="chLoading" @click="openChannels">重新查询</el-button>
         <el-button type="primary" @click="chDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- ============ 真实成本换算比例 ============ -->
+    <el-dialog v-model="rateDialog" title="真实成本换算比例" width="560px" append-to-body>
+      <div class="ch-rate-help">
+        中转站后台显示的「美元」只是<b>站内代币</b>，和你实际充的钱不是一回事。
+        请按你的真实充值单填写，例如：<b>充 100 元人民币 → 到账 1000 虚拟美元</b>，
+        就填 <code>100 CNY = 1000 虚拟美元</code>。官方渠道（按真实美元计费）填 1 = 1 即可。
+      </div>
+      <el-form label-width="118px" class="ch-rate-form">
+        <el-form-item label="换算比例">
+          <el-input-number v-model="rateForm.real_amount" :min="0" :step="1" :precision="4" :controls="false" style="width:130px" />
+          <el-select v-model="rateForm.real_currency" style="width:96px;margin:0 6px">
+            <el-option v-for="c in realCurrencies" :key="c" :label="c" :value="c" />
+          </el-select>
+          <span class="ch-rate-eq">=</span>
+          <el-input-number v-model="rateForm.virtual_amount" :min="0" :step="1" :precision="4" :controls="false" style="width:130px" />
+          <el-input v-model="rateForm.virtual_currency" placeholder="虚拟美元" style="width:120px;margin-left:6px" />
+        </el-form-item>
+        <el-form-item label="试算">
+          <el-input-number v-model="ratePreviewIn" :min="0" :step="100" :controls="false" style="width:130px" />
+          <span class="muted small" style="margin:0 8px">虚拟单位 →</span>
+          <span v-if="ratePreviewOut !== null" class="ch-real" style="font-size:0.9rem">
+            {{ fmtMoney(ratePreviewOut) }} <em class="unit">{{ rateForm.real_currency }}</em>
+          </span>
+          <span v-else class="ch-noreal">比例不完整，无法换算</span>
+        </el-form-item>
+        <el-form-item label=" ">
+          <span class="muted small">
+            留空 / 两个都填 0 = 不换算，界面上就不会出现「实」字金额（宁可不显示，也不给你一个假成本）。
+          </span>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="rateDialog = false">取消</el-button>
+        <el-button type="primary" :loading="rateSaving" @click="saveRate">保存</el-button>
       </template>
     </el-dialog>
 
@@ -534,6 +616,18 @@
           <el-input v-model="form.token_user_id" placeholder="中转站（one-api/new-api）的用户 ID，如 56347；官方渠道留空" />
           <span class="muted small">中转站查额度要用「访问令牌 + 用户 ID」成对认证（New-Api-User 头）</span>
         </el-form-item>
+        <el-form-item label="本渠道成本比例">
+          <el-input-number v-model="form.rate_real_amount" :min="0" :precision="4" :controls="false" style="width:120px" />
+          <el-select v-model="form.rate_real_currency" style="width:92px;margin:0 6px">
+            <el-option v-for="c in realCurrencies" :key="c" :label="c" :value="c" />
+          </el-select>
+          <span class="ch-rate-eq">=</span>
+          <el-input-number v-model="form.rate_virtual_amount" :min="0" :precision="4" :controls="false" style="width:120px" />
+          <span class="muted small" style="margin-left:6px">虚拟单位</span>
+          <span class="muted small">
+            两数都填 0 = 跟随站点全局比例。例：充 100 元得 1000 虚拟美元 → 100 = 1000
+          </span>
+        </el-form-item>
         <template v-if="form.kind === 'chat'">
           <el-form-item label="输入价格">
             <el-input-number v-model="form.price_in" :min="0" :max="1000000" :step="1" controls-position="right" />
@@ -676,7 +770,7 @@ import { MagicStick, Plus } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import SectionHeader from '@/components/common/SectionHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
-import { aiApi, type AdminAiModel, type AiModelPreset, type AiVendor, type AiCategoryPrice, type AiVendorMatrixEntry, type ProviderModelSuggestion, type AdminChannelReport } from '@/api/ai';
+import { aiApi, type AdminAiModel, type AiModelPreset, type AiVendor, type AiCategoryPrice, type AiVendorMatrixEntry, type ProviderModelSuggestion, type AdminChannelReport, type CostRateSetting } from '@/api/ai';
 import { adminApi } from '@/api/admin';
 import StateBlock from '@/components/common/StateBlock.vue';
 
@@ -738,6 +832,7 @@ function blankForm() {
     api_kind: 'openai', provider_hint: '', vendor: '', thinking: false, token_user_id: '', account_token: '',
     balance_provider: '', balance_url: '', balance_field: '',
     balance_divisor: 0, balance_multiplier: 0, balance_currency: '',
+    rate_real_amount: 0, rate_virtual_amount: 0, rate_real_currency: 'CNY',
   };
 }
 const form = reactive(blankForm());
@@ -790,6 +885,68 @@ async function openChannels() {
     ElMessage.error(e?.response?.data?.message || '查询失败');
   } finally {
     chLoading.value = false;
+  }
+}
+
+// ---------- 真实成本换算比例 ----------
+// 中转站的「美元」只是站内代币，必须由站长声明「多少真实货币 = 多少虚拟单位」，
+// 平台才能把「还剩 5274」折算成真金白银。
+const rateDialog = ref(false);
+const rateSaving = ref(false);
+const rateValid = ref(false);
+const rateRatio = ref(0);
+const rateDescribe = ref('');
+const realCurrencies = ref<string[]>(['CNY', 'USD', 'EUR', 'JPY', 'HKD']);
+const rateForm = reactive<CostRateSetting>({
+  real_amount: 0, virtual_amount: 0, real_currency: 'CNY', virtual_currency: '虚拟美元',
+});
+const ratePreviewIn = ref(1000);
+
+// 试算完全按本地同一套算法（虚拟 × 真实数额 ÷ 虚拟数额），不额外打接口
+const ratePreviewOut = computed(() => {
+  const { real_amount: a, virtual_amount: b } = rateForm;
+  if (!(a > 0) || !(b > 0)) return null;
+  return Math.round((ratePreviewIn.value * a / b) * 10000) / 10000;
+});
+
+async function loadRate() {
+  try {
+    const res = await aiApi.getCostRate();
+    if (res.data.code !== 0) return;
+    const d = res.data.data;
+    rateValid.value = d.valid;
+    rateRatio.value = d.ratio;
+    rateDescribe.value = d.describe;
+    if (d.rate) Object.assign(rateForm, d.rate);
+    if (Array.isArray(d.real_currencies) && d.real_currencies.length) realCurrencies.value = d.real_currencies;
+  } catch {
+    /* 读不到就不显示比例，不打断运营操作 */
+  }
+}
+
+function openRateEdit() {
+  rateDialog.value = true;
+}
+
+async function saveRate() {
+  rateSaving.value = true;
+  try {
+    const res = await aiApi.saveCostRate({ ...rateForm });
+    if (res.data.code !== 0) {
+      ElMessage.error(res.data.message || '保存失败');
+      return;
+    }
+    rateValid.value = res.data.data.valid;
+    rateRatio.value = res.data.data.ratio;
+    rateDescribe.value = res.data.data.describe;
+    ElMessage.success('已保存，重新查询余额即可看到真实成本');
+    rateDialog.value = false;
+    // 换算在前端展示，重新拉一次让「实」字金额立刻出现
+    if (chDialog.value) await openChannels();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  } finally {
+    rateSaving.value = false;
   }
 }
 
@@ -1039,6 +1196,8 @@ function openEdit(row: AdminAiModel) {
     balance_provider: row.balance_provider || '', balance_url: row.balance_url || '',
     balance_field: row.balance_field || '', balance_divisor: row.balance_divisor || 0,
     balance_multiplier: row.balance_multiplier || 0, balance_currency: row.balance_currency || '',
+    rate_real_amount: row.rate_real_amount || 0, rate_virtual_amount: row.rate_virtual_amount || 0,
+    rate_real_currency: row.rate_real_currency || 'CNY',
     vendor: row.vendor || '', thinking: !!row.thinking,
   });
   dialogVisible.value = true;
@@ -1068,8 +1227,22 @@ async function saveModel() {
       vendor: form.vendor,
       thinking: !!form.thinking,
       note: form.note.trim(),
+      // 中转站用户 ID（非机密，允许清空）
+      token_user_id: form.token_user_id.trim(),
+      // 余额查询方式：官方 / 中转站 / 自定义规则 / 不查
+      balance_provider: form.balance_provider,
+      balance_url: form.balance_url.trim(),
+      balance_field: form.balance_field.trim(),
+      balance_divisor: form.balance_divisor || 0,
+      balance_multiplier: form.balance_multiplier || 0,
+      balance_currency: form.balance_currency.trim(),
+      // 渠道级真实成本比例（两数都 0 = 跟随站点全局）
+      rate_real_amount: form.rate_real_amount || 0,
+      rate_virtual_amount: form.rate_virtual_amount || 0,
+      rate_real_currency: form.rate_real_currency,
     };
     if (form.api_key.trim()) payload.api_key = form.api_key.trim();
+    if (form.account_token.trim()) payload.account_token = form.account_token.trim();
     const res = editing.value
       ? await aiApi.updateModel(editing.value.id, payload)
       : await aiApi.createModel(payload);
@@ -1224,7 +1397,7 @@ async function saveRoute() {
   }
 }
 
-onMounted(() => { loadConfig(); loadModels(); loadPresets(); loadRoute(); loadVendors(); loadMatrix(); loadCategoryPrices(); });
+onMounted(() => { loadConfig(); loadModels(); loadPresets(); loadRoute(); loadVendors(); loadMatrix(); loadCategoryPrices(); loadRate(); });
 
 // ---------- 厂商管理 ----------
 const vendors = ref<AiVendor[]>([]);
@@ -1409,6 +1582,38 @@ async function saveCategoryPrice(p: AiCategoryPrice & { _saving?: boolean }) {
 .ch-overview-tip { margin-bottom: 10px; font-size: 0.78rem; line-height: 1.6; color: var(--text-light, #888); }
 .ch-bal { font-weight: 700; color: var(--el-color-primary, #409eff); font-variant-numeric: tabular-nums; }
 .ch-bal.zero { color: var(--text-light, #bbb); }
+
+/* 换算比例条：未设置时用暖色警示，避免站长把「虚拟美元」当真实成本看 */
+.ch-rate-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; margin-bottom: 10px; border-radius: 8px;
+  background: var(--el-color-primary-light-9, #ecf5ff);
+  border: 1px solid var(--el-color-primary-light-7, #b3d8ff);
+}
+.ch-rate-bar.unset {
+  background: var(--el-color-warning-light-9, #fdf6ec);
+  border-color: var(--el-color-warning-light-7, #f5dab1);
+}
+.ch-rate-icon { font-size: 1.1rem; line-height: 1; }
+.ch-rate-text { flex: 1; font-size: 0.8rem; line-height: 1.6; color: var(--text-main, #475569); }
+.ch-rate-text .muted { display: block; }
+
+/* 虚拟值 + 真实值双行（不额外加列，避免表过宽） */
+.ch-dual { display: flex; flex-direction: column; gap: 1px; font-variant-numeric: tabular-nums; }
+.ch-real { font-size: 0.72rem; font-weight: 600; color: var(--el-color-danger, #f56c6c); }
+.ch-noreal { font-size: 0.7rem; color: var(--text-light, #c0c4cc); }
+
+.ch-rate-help {
+  margin-bottom: 14px; padding: 10px 12px; border-radius: 8px;
+  background: var(--bg-subtle, #f8fafc); font-size: 0.78rem; line-height: 1.7;
+  color: var(--text-main, #475569);
+}
+.ch-rate-help code {
+  padding: 1px 5px; border-radius: 4px; background: var(--bg-page, #eef2f7);
+  font-size: 0.76rem;
+}
+.ch-rate-eq { margin: 0 8px; color: var(--text-light, #999); }
+.ch-rate-form :deep(.el-input-number) { width: 100%; }
 
 /* L5 渠道对账 */
 .ch-loading { padding: 28px 0; text-align: center; color: var(--text-light, #888); font-size: 0.88rem; }

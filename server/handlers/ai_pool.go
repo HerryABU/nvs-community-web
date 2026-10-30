@@ -108,6 +108,38 @@ type aiModelInput struct {
 	Vendor       string   `json:"vendor"`
 	Thinking     *bool    `json:"thinking"`
 	Note         string   `json:"note"`
+
+	// ── 余额查询方式（官方 / 中转站 / 陌生渠道分开）──
+	// 这几个字段之前在表单里能填、但结构体没接收 ⇒ 提交后被静默丢弃，
+	// 站长以为设了「自定义规则」，实际永远走自动推断。属真空转，必须接收。
+	BalanceProvider   string   `json:"balance_provider"`
+	BalanceURL        string   `json:"balance_url"`
+	BalanceField      string   `json:"balance_field"`
+	BalanceDivisor    *float64 `json:"balance_divisor"`
+	BalanceMultiplier *float64 `json:"balance_multiplier"`
+	BalanceCurrency   string   `json:"balance_currency"`
+
+	// ── 渠道级真实成本换算（留空 = 跟随站点全局比例）──
+	RateRealAmount    *float64 `json:"rate_real_amount"`
+	RateVirtualAmount *float64 `json:"rate_virtual_amount"`
+	RateRealCurrency  string   `json:"rate_real_currency"`
+}
+
+// normalizeBalanceProvider 归一「余额查询方式」。
+// 空 = 自动推断（按域名/是否配了账户令牌判断），非法值也回退空，
+// 避免前端传个拼错的字符串就让余额查询彻底失效。
+func normalizeBalanceProvider(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "deepseek":
+		return "deepseek"
+	case "newapi":
+		return "newapi"
+	case "custom":
+		return "custom"
+	case "none":
+		return "none"
+	}
+	return ""
 }
 
 // AdminCreateAiModel POST /api/admin/ai/models
@@ -134,6 +166,26 @@ func AdminCreateAiModel(c *gin.Context) {
 		ProviderHint: models.NormalizeProviderHint(req.ProviderHint),
 		Vendor:       strings.TrimSpace(req.Vendor),
 		Note:         strings.TrimSpace(req.Note),
+
+		// 余额查询方式（官方 / 中转站 / 自定义规则）
+		BalanceProvider: normalizeBalanceProvider(req.BalanceProvider),
+		BalanceURL:      strings.TrimSpace(req.BalanceURL),
+		BalanceField:    strings.TrimSpace(req.BalanceField),
+		BalanceCurrency: strings.TrimSpace(req.BalanceCurrency),
+		// 渠道级换算比例（两个都为 0 = 跟随全局）
+		RateRealCurrency: strings.ToUpper(strings.TrimSpace(req.RateRealCurrency)),
+	}
+	if req.BalanceDivisor != nil {
+		m.BalanceDivisor = *req.BalanceDivisor
+	}
+	if req.BalanceMultiplier != nil {
+		m.BalanceMultiplier = *req.BalanceMultiplier
+	}
+	if req.RateRealAmount != nil {
+		m.RateRealAmount = *req.RateRealAmount
+	}
+	if req.RateVirtualAmount != nil {
+		m.RateVirtualAmount = *req.RateVirtualAmount
 	}
 	if req.Thinking != nil {
 		m.Thinking = *req.Thinking
@@ -227,6 +279,28 @@ func AdminUpdateAiModel(c *gin.Context) {
 	}
 	fields["vendor"] = strings.TrimSpace(req.Vendor)
 	fields["note"] = strings.TrimSpace(req.Note)
+
+	// 余额查询方式：允许清空回「自动推断」，所以不判空直接写
+	fields["balance_provider"] = normalizeBalanceProvider(req.BalanceProvider)
+	fields["balance_url"] = strings.TrimSpace(req.BalanceURL)
+	fields["balance_field"] = strings.TrimSpace(req.BalanceField)
+	fields["balance_currency"] = strings.TrimSpace(req.BalanceCurrency)
+	if req.BalanceDivisor != nil {
+		fields["balance_divisor"] = *req.BalanceDivisor
+	}
+	if req.BalanceMultiplier != nil {
+		fields["balance_multiplier"] = *req.BalanceMultiplier
+	}
+	// 渠道级换算比例：允许改回 0（跟随全局）
+	if req.RateRealAmount != nil {
+		fields["rate_real_amount"] = *req.RateRealAmount
+	}
+	if req.RateVirtualAmount != nil {
+		fields["rate_virtual_amount"] = *req.RateVirtualAmount
+	}
+	if s := strings.ToUpper(strings.TrimSpace(req.RateRealCurrency)); s != "" {
+		fields["rate_real_currency"] = s
+	}
 	if req.Thinking != nil {
 		fields["thinking"] = *req.Thinking
 	}
