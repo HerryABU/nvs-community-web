@@ -11,6 +11,7 @@
         :default-active="activeIndex"
         :collapse="collapsed"
         :collapse-transition="false"
+        unique-opened
         router
         class="as-menu"
       >
@@ -20,19 +21,23 @@
           <template #title>{{ homeLabel }}</template>
         </el-menu-item>
 
-        <!-- 分类分组 -->
+        <!-- 分类分组：主分类用「渐变胶囊图标 + 加粗标题」，与下方子条目形成层级差异 -->
         <el-sub-menu v-for="cat in visibleCats" :key="cat.key" :index="'cat-' + cat.key">
           <template #title>
-            <el-icon><component :is="cat.icon" /></el-icon>
-            <span>{{ cat.title }}</span>
+            <span class="cat-chip" :class="{ mini: collapsed }" :style="{ background: cat.color }">
+              <el-icon><component :is="cat.icon" /></el-icon>
+            </span>
+            <span class="cat-title">{{ cat.title }}</span>
           </template>
+          <!-- 子分类：图标统一次级灰，激活时用该条目自己的渐变色做左侧标记 -->
           <el-menu-item
             v-for="m in cat.items"
             :key="m.path"
             :index="m.path"
             :id="'sidem-' + m.path.replace(/\//g, '-')"
+            :style="{ '--item-grad': m.color }"
           >
-            <el-icon><component :is="m.icon" /></el-icon>
+            <el-icon class="item-ico"><component :is="m.icon" /></el-icon>
             <template #title>{{ m.title }}</template>
           </el-menu-item>
         </el-sub-menu>
@@ -127,11 +132,57 @@ const activeIndex = computed(() => {
 .as-menu :deep(.el-sub-menu__title:hover) {
   background: var(--bg-subtle, #f1f5f9);
 }
+
+/* ── 主分类 vs 子分类：用「颜色形态」区分层级 ──
+   主分类：渐变胶囊图标 + 加粗深色标题（彩色、块状）
+   子分类：图标统一灰、文字次级；激活时用该条目自己的渐变做左侧标记
+   这样一眼能看出「这是分组」还是「这是可点的功能」。 */
+.cat-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 9px;
+  border-radius: 7px;
+  color: #fff;
+  flex: none;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.16);
+}
+.cat-chip .el-icon { font-size: 13px; }
+.cat-chip.mini { margin-right: 0; }
+.cat-title {
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: var(--text-main, #1e293b);
+  font-size: 0.9rem;
+}
+/* 子条目图标：比主分类弱一档，形成层级 */
+.as-menu :deep(.el-menu-item) .item-ico {
+  color: var(--text-light, #94a3b8);
+  transition: color .15s;
+}
+.as-menu :deep(.el-menu-item:hover) .item-ico { color: var(--text-color, #475569); }
+
 .as-menu :deep(.el-menu-item.is-active) {
   background: var(--gradient-primary, linear-gradient(135deg, #6366f1, #8b5cf6));
   color: #fff;
   font-weight: 600;
 }
+/* 激活项左侧色条：用该功能自己的主题色（--item-grad 由模板按条目注入） */
+.as-menu :deep(.el-menu-item.is-active)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 18px;
+  border-radius: 0 3px 3px 0;
+  background: var(--item-grad, #fff);
+}
+.as-menu :deep(.el-menu-item) { position: relative; }
+.as-menu :deep(.el-menu-item.is-active) .item-ico { color: #fff; }
 .as-menu :deep(.el-sub-menu .el-menu-item) { margin-left: 4px; }
 
 [data-theme="dark"] .as-brand { border-color: rgba(71,85,105,0.35); }
