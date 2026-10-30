@@ -805,6 +805,11 @@ func main() {
 		admin.GET("/html-reviews", handlers.ListHTMLReviews)
 		admin.GET("/html-reviews/:type/:id", handlers.GetHTMLReview)
 		admin.POST("/html-reviews/:type/:id/review", handlers.ReviewHTML)
+		// HTML/WASM 托管额度（每人项目数 + 累计空间；支持按人覆盖）
+		admin.GET("/html-quota", handlers.AdminGetHTMLQuota)
+		admin.PUT("/html-quota", handlers.AdminSaveHTMLQuota)
+		admin.POST("/html-quota/overrides", handlers.AdminSetHTMLQuotaOverride)
+		admin.GET("/html-quota/usage", handlers.AdminHTMLQuotaUsage)
 		admin.GET("/finance", handlers.GetFinanceOverview)
 		// 站长配置
 		admin.GET("/config", handlers.GetPlatformConfigs)

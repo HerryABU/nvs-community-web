@@ -254,6 +254,17 @@ export const adminApi = {
     return api.post(`/admin/html-reviews/${type}/${id}/review`, data);
   },
 
+  // HTML/WASM 托管额度（每人项目数 + 累计空间；支持按人覆盖）
+  getHtmlQuota() {
+    return api.get<{ code: number; data: { config: HtmlQuotaConfig; overrides: HtmlQuotaOverride[] } }>('/admin/html-quota');
+  },
+  saveHtmlQuota(data: HtmlQuotaConfig) {
+    return api.put('/admin/html-quota', data);
+  },
+  setHtmlQuotaOverride(data: { action: 'set' | 'remove'; user_id: number; max_projects?: number; max_total_size_mb?: number; note?: string }) {
+    return api.post('/admin/html-quota/overrides', data);
+  },
+
   // 财务
   getFinance() {
     return api.get('/admin/finance');
@@ -634,4 +645,21 @@ export interface WebAccessGeo {
     unresolved: number;
   };
   source: string;
+}
+
+// ── HTML/WASM 托管额度 ──
+export interface HtmlQuotaConfig {
+  enabled: boolean;
+  max_projects: number;
+  max_total_size_mb: number;
+  require_apply: boolean;
+}
+
+export interface HtmlQuotaOverride {
+  id: number;
+  user_id: number;
+  max_projects: number;
+  max_total_size_mb: number;
+  note: string;
+  updated_at?: string;
 }

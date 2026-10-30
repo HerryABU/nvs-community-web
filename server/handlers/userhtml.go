@@ -3,8 +3,10 @@ package handlers
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -155,6 +157,19 @@ func UploadZipHTML(c *gin.Context) {
 	// ====== 第二步：解压前安全预检（纯内存） ======
 	// 预检未通过 → 原样封存 ZIP，不解压、不落盘任何扩展文件，等管理员处置。
 	pre := precheckZip(zipReader)
+
+	// ====== 额度校验（项目数 / 累计空间） ======
+	// 放在预检之后：先确认包本身安全，再判断"该用户还有没有空间"，
+	// 避免用额度错误掩盖"这个包有问题"。解压后总大小用预检统计值。
+	if qerr := models.CheckHTMLQuota(userID, pre.TotalSize); qerr != nil {
+		var qe *models.HTMLQuotaError
+		if errors.As(qerr, &qe) {
+			c.JSON(http.StatusForbidden, gin.H{"code": 7, "message": qe.Reason, "data": models.HTMLQuotaSnapshot(userID)})
+			return
+		}
+		utils.InternalError(c, "额度校验失败")
+		return
+	}
 
 	// 构建novelID指针
 	var novelID *uint

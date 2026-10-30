@@ -54,6 +54,8 @@ func AllModels() []interface{} {
 		&APIKey{}, &FederatedPeerKey{}, &ApiAccessLog{}, &UserAPIPolicy{},
 		// 自建论坛额度：按人覆盖（管理员可削减/放开某人的建版数）
 		&UserForumQuota{},
+		// HTML/WASM 托管额度：按人覆盖（管理员可单独放宽/收紧某人的项目数与空间）
+		&HTMLQuotaOverride{},
 		// 全量 Web 访问日志（功能二：前台网络诊断 / 用户分布 / 攻击流量面板）
 		&WebAccessLog{},
 		// 用户黑名单（F13：拉黑禁言/屏蔽内容，站长/警方/管理员不可被拉黑）
