@@ -41,6 +41,16 @@ type AiModel struct {
 	//   sk_ 只能查「该令牌自身」的用量，查不到账户余额；
 	//   nap_ 才能调 /api/user/self 拿到账户 quota。同样加密落库、不下发前端。
 	AccountTokenEnc string `gorm:"type:text" json:"-"`
+
+	// ── 余额查询方式（官方 / 中转站 / 陌生渠道分开配置）──
+	// BalanceProvider: ""|auto=按域名推断；deepseek=官方 /user/balance；
+	// newapi=nap_ 令牌 + /api/user/self；custom=站长自定义规则；none=不查余额
+	BalanceProvider   string  `gorm:"size:16;not null;default:''" json:"balance_provider"`
+	BalanceURL        string  `gorm:"size:255;not null;default:''" json:"balance_url"`     // custom：余额接口地址
+	BalanceField      string  `gorm:"size:128;not null;default:''" json:"balance_field"`   // custom：字段路径 data.quota
+	BalanceDivisor    float64 `gorm:"not null;default:0" json:"balance_divisor"`           // custom：除数（0=1）
+	BalanceMultiplier float64 `gorm:"not null;default:0" json:"balance_multiplier"`        // custom：乘数（0=1）
+	BalanceCurrency   string  `gorm:"size:16;not null;default:''" json:"balance_currency"` // custom：单位
 	// Vendor 厂商（OpenAI/Anthropic/Google/DeepSeek/阿里/字节/Midjourney…）→ 前端「全部厂商」筛选
 	Vendor string `gorm:"size:32;not null;default:'';index" json:"vendor"`
 	// Thinking 思考型模型（DeepSeek-R1 / GLM / Qwen thinking 等）：

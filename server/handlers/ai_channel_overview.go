@@ -98,7 +98,14 @@ func AdminChannelBalanceOverview(c *gin.Context) {
 		// 取该渠道下第一个可用密钥（解密失败仍尝试，部分渠道无需密钥）
 		key := decryptKeyByBaseURL(g.BaseURL)
 
-		b := aiclient.QueryChannelBalanceWithUser(g.BaseURL, key, g.Hint, g.TokenUserID)
+		var rep models.AiModel
+		b := aiclient.ChannelBalance{}
+		if err := models.DB.Where("base_url = ?", g.BaseURL).Order("id").First(&rep).Error; err == nil {
+			// 按该渠道代表模型配置的「余额查询方式」（官方/中转站/自定义）
+			b = resolveModelBalance(&rep, key)
+		} else {
+			b = aiclient.QueryChannelBalanceWithUser(g.BaseURL, key, g.Hint, g.TokenUserID)
+		}
 		// 顺手留一个样本：站长多点几次「渠道余额」就能攒出估算窗口
 		if b.Supported {
 			models.SaveChannelSample(g.BaseURL, b)

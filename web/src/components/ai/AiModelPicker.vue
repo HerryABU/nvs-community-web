@@ -1,28 +1,20 @@
 <template>
-  <el-popover
-    v-model:visible="visible"
-    placement="top-start"
-    :width="368"
-    trigger="click"
-    :disabled="disabled || !models.length"
-    popper-class="ai-mp-popper"
-  >
-    <template #reference>
-      <button type="button" class="ai-mp-trigger" :disabled="disabled || !models.length">
-        <span class="ai-mp-dot" :class="{ on: !!modelValue }" />
-        <span class="ai-mp-cur">{{ currentLabel }}</span>
-        <span class="ai-mp-caret" :class="{ open: visible }">▾</span>
-      </button>
-    </template>
+  <button type="button" class="ai-mp-trigger" :disabled="disabled || !models.length" @click="visible = true">
+    <span class="ai-mp-dot" :class="{ on: !!modelValue }" />
+    <span class="ai-mp-cur">{{ currentLabel }}</span>
+    <span class="ai-mp-caret">▾</span>
+  </button>
 
+  <!-- 模型选择用**弹窗**而不是下方浮层：模型多时浮层会把人埋掉，弹窗更稳 -->
+  <el-dialog v-model="visible" title="选择模型" width="720px" append-to-body class="ai-mp-dialog">
     <div class="ai-mp-head">
-      <span class="ai-mp-title">选择模型</span>
-      <span class="ai-mp-count">{{ models.length }} 个可用</span>
+      <span class="ai-mp-title">共 {{ models.length }} 个可用模型</span>
+      <el-input v-model="kw" size="small" placeholder="搜索模型名 / 厂商" clearable style="width:200px" />
     </div>
 
     <div class="ai-mp-grid">
       <button
-        v-for="m in models"
+        v-for="m in shown"
         :key="m.id"
         type="button"
         class="ai-mp-card"
@@ -37,8 +29,11 @@
         <span v-if="m.thinking" class="ai-mp-flag">思考型</span>
       </button>
     </div>
-    <div v-if="!models.length" class="ai-mp-empty">当前筛选下没有可用模型</div>
-  </el-popover>
+    <div v-if="!shown.length" class="ai-mp-empty">没有匹配的模型</div>
+    <template #footer>
+      <el-button @click="visible = false">取消</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -65,6 +60,16 @@ const props = withDefaults(
 const emit = defineEmits<{ (e: 'update:modelValue', v: number): void }>();
 
 const visible = ref(false);
+const kw = ref('');
+
+// 弹窗内搜索：模型名 / 厂商 命中即可
+const shown = computed(() => {
+  const q = kw.value.trim().toLowerCase();
+  if (!q) return props.models;
+  return props.models.filter(
+    (m) => m.name.toLowerCase().includes(q) || (m.vendor || '').toLowerCase().includes(q),
+  );
+});
 
 const current = computed(() => props.models.find((m) => m.id === props.modelValue));
 const currentLabel = computed(() => {
@@ -113,17 +118,17 @@ function pick(m: PickableModel) {
 .ai-mp-caret { font-size: 0.7rem; color: var(--text-light, #909399); flex: none; }
 
 .ai-mp-head {
-  display: flex; align-items: baseline; justify-content: space-between;
-  padding: 2px 2px 8px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 2px 12px;
 }
 .ai-mp-title { font-size: 0.82rem; font-weight: 600; color: var(--text-main, #303133); }
 .ai-mp-count { font-size: 0.72rem; color: var(--text-light, #909399); }
 
 .ai-mp-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  max-height: 292px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  max-height: 440px;
   overflow-y: auto;
   padding: 2px;
 }

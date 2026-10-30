@@ -500,6 +500,31 @@
             :placeholder="editing ? '留空表示不更换（当前已加密存储）' : '上游密钥，加密后存储'"
           />
         </el-form-item>
+        <el-form-item label="余额查询方式">
+          <el-select v-model="form.balance_provider" style="width:220px">
+            <el-option label="自动（按域名推断）" value="" />
+            <el-option label="DeepSeek 官方（/user/balance）" value="deepseek" />
+            <el-option label="New API 中转站（nap_ + 用户ID）" value="newapi" />
+            <el-option label="自定义规则（自己填 URL 与字段）" value="custom" />
+            <el-option label="不查询余额" value="none" />
+          </el-select>
+          <span class="muted small">官方与中转站逻辑完全不同，建议显式选择，别依赖猜</span>
+        </el-form-item>
+        <template v-if="form.balance_provider === 'custom'">
+          <el-form-item label="余额接口 URL">
+            <el-input v-model="form.balance_url" placeholder="如 https://api.example.com/stat/credit" />
+          </el-form-item>
+          <el-form-item label="取哪个字段">
+            <el-input v-model="form.balance_field" placeholder="如 data.credit.available；用点号逐层，支持数组下标" />
+            <span class="muted small">最终金额 =（原始值 ÷ 除数）× 乘数</span>
+          </el-form-item>
+          <el-form-item label="除数 / 乘数">
+            <el-input-number v-model="form.balance_divisor" :min="0" :controls="false" placeholder="除数，如 500000" style="width:150px" />
+            <span class="muted small" style="margin:0 6px">×</span>
+            <el-input-number v-model="form.balance_multiplier" :min="0" :controls="false" placeholder="乘数，通常 1" style="width:150px" />
+            <el-input v-model="form.balance_currency" placeholder="单位，如 USD" style="width:110px;margin-left:8px" />
+          </el-form-item>
+        </template>
         <el-form-item label="系统访问令牌">
           <el-input v-model="form.account_token" type="password" show-password
             :placeholder="editing ? '留空表示不更换（nap_ 开头，查账户余额用）' : 'nap_ 开头的系统访问令牌；sk_ 查不到账户余额'" />
@@ -711,6 +736,8 @@ function blankForm() {
     price_in: 0, price_out: 0, price_call: 0, max_tokens: 2048,
     temperature: 0.7, priority: 0, enabled: true, note: '',
     api_kind: 'openai', provider_hint: '', vendor: '', thinking: false, token_user_id: '', account_token: '',
+    balance_provider: '', balance_url: '', balance_field: '',
+    balance_divisor: 0, balance_multiplier: 0, balance_currency: '',
   };
 }
 const form = reactive(blankForm());
@@ -1009,6 +1036,9 @@ function openEdit(row: AdminAiModel) {
     max_tokens: row.max_tokens,
     temperature: row.temperature, priority: row.priority, enabled: row.enabled, note: row.note,
     api_kind: row.api_kind || 'openai', provider_hint: row.provider_hint || '', token_user_id: row.token_user_id || '',
+    balance_provider: row.balance_provider || '', balance_url: row.balance_url || '',
+    balance_field: row.balance_field || '', balance_divisor: row.balance_divisor || 0,
+    balance_multiplier: row.balance_multiplier || 0, balance_currency: row.balance_currency || '',
     vendor: row.vendor || '', thinking: !!row.thinking,
   });
   dialogVisible.value = true;
