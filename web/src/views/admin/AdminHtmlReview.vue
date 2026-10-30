@@ -255,16 +255,76 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- ============ 托管额度（每人项目数 + 累计空间） ============ -->
+    <div class="admin-panel" style="margin-top:16px">
+      <SectionHeader
+        title="托管额度"
+        subtitle="限制每人能放多少个项目、占多少空间；超额时用户会收到提示并可向站长申请。按人覆盖优先于全局默认。"
+        :icon="'📦'"
+        gradient="teal"
+      />
+      <StateBlock v-if="quotaLoading" state="loading" title="正在读取额度配置" description="加载中…" />
+      <template v-else-if="quota">
+        <el-form :model="quota" label-width="150px" style="max-width:720px">
+          <el-form-item label="启用额度限制">
+            <el-switch v-model="quota.enabled" />
+            <span class="hint-text" style="margin-left:10px">关闭后所有人不限量（谨慎）</span>
+          </el-form-item>
+          <el-form-item label="每人最多项目数">
+            <el-input-number v-model="quota.max_projects" :min="0" :max="9999" />
+            <span class="hint-text" style="margin-left:10px">0 = 不限</span>
+          </el-form-item>
+          <el-form-item label="每人累计空间 (MB)">
+            <el-input-number v-model="quota.max_total_size_mb" :min="0" :max="1024 * 100" />
+            <span class="hint-text" style="margin-left:10px">0 = 不限；按解压后总大小计算</span>
+          </el-form-item>
+          <el-form-item label="超额提示申请">
+            <el-switch v-model="quota.require_apply" />
+            <span class="hint-text" style="margin-left:10px">开启后超额报错文案会引导用户向你申请空间</span>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" :loading="quotaSaving" @click="saveQuota">保存额度</el-button>
+          </el-form-item>
+        </el-form>
+
+        <el-divider content-position="left">按人覆盖（{{ quotaOverrides.length }}）</el-divider>
+        <div class="quota-ov-row">
+          <el-input v-model.number="ovForm.user_id" placeholder="用户 ID" style="width:120px" />
+          <el-input v-model.number="ovForm.max_projects" placeholder="项目数（0跟随/-1不限）" style="width:190px" />
+          <el-input v-model.number="ovForm.max_total_size_mb" placeholder="空间 MB（0跟随/-1不限）" style="width:200px" />
+          <el-input v-model="ovForm.note" placeholder="备注 / 申请理由" style="width:220px" />
+          <el-button type="primary" :loading="ovSaving" @click="saveOverride">保存覆盖</el-button>
+        </div>
+        <el-table v-if="quotaOverrides.length" :data="quotaOverrides" size="small" stripe style="margin-top:10px">
+          <el-table-column prop="user_id" label="用户 ID" width="100" />
+          <el-table-column label="项目数" width="110">
+            <template #default="{ row }">{{ quotaText(row.max_projects) }}</template>
+          </el-table-column>
+          <el-table-column label="空间" width="130">
+            <template #default="{ row }">{{ quotaText(row.max_total_size_mb, 'MB') }}</template>
+          </el-table-column>
+          <el-table-column prop="note" label="备注" min-width="180" show-overflow-tooltip />
+          <el-table-column label="操作" width="110" fixed="right">
+            <template #default="{ row }">
+              <el-button size="small" text type="danger" @click="removeOverride(row)">移除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <EmptyState v-else icon="📦" text="暂无按人覆盖" description="所有人都在使用上面的全局额度" />
+      </template>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { Refresh, Lock } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
-import { adminApi } from '@/api/admin';
-import { ElMessage } from 'element-plus';
+import SectionHeader from '@/components/common/SectionHeader.vue';
+import { adminApi, type HtmlQuotaConfig, type HtmlQuotaOverride } from '@/api/admin';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import StateBlock from '@/components/common/StateBlock.vue';
 
 interface ReviewItem {
@@ -427,7 +487,102 @@ async function submitReview(action: 'approve' | 'reject') {
   reviewing.value = false;
 }
 
-onMounted(load);
+// ==================== 托管额度 ====================
+const quota = ref<HtmlQuotaConfig | null>(null);
+const quotaOverrides = ref<HtmlQuotaOverride[]>([]);
+const quotaLoading = ref(false);
+const quotaSaving = ref(false);
+const ovSaving = ref(false);
+const ovForm = reactive({ user_id: 0, max_projects: 0, max_total_size_mb: 0, note: '' });
+
+async function loadQuota() {
+  quotaLoading.value = true;
+  try {
+    const res = await adminApi.getHtmlQuota();
+    if (res.data.code === 0) {
+      quota.value = res.data.data.config;
+      quotaOverrides.value = res.data.data.overrides || [];
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '读取额度配置失败');
+  } finally {
+    quotaLoading.value = false;
+  }
+}
+
+async function saveQuota() {
+  if (!quota.value) return;
+  quotaSaving.value = true;
+  try {
+    const res = await adminApi.saveHtmlQuota(quota.value);
+    if (res.data.code === 0) ElMessage.success('额度已保存，立即生效');
+    else ElMessage.error(res.data.message || '保存失败');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  } finally {
+    quotaSaving.value = false;
+  }
+}
+
+async function saveOverride() {
+  if (!ovForm.user_id) {
+    ElMessage.warning('请填写用户 ID');
+    return;
+  }
+  ovSaving.value = true;
+  try {
+    const res = await adminApi.setHtmlQuotaOverride({
+      action: 'set',
+      user_id: ovForm.user_id,
+      max_projects: ovForm.max_projects,
+      max_total_size_mb: ovForm.max_total_size_mb,
+      note: ovForm.note,
+    });
+    if (res.data.code === 0) {
+      ElMessage.success('已保存覆盖');
+      ovForm.user_id = 0;
+      ovForm.max_projects = 0;
+      ovForm.max_total_size_mb = 0;
+      ovForm.note = '';
+      await loadQuota();
+    } else ElMessage.error(res.data.message || '保存失败');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  } finally {
+    ovSaving.value = false;
+  }
+}
+
+async function removeOverride(row: HtmlQuotaOverride) {
+  try {
+    await ElMessageBox.confirm(`移除用户 #${row.user_id} 的额度覆盖？将恢复为全局额度。`, '确认移除', {
+      type: 'warning',
+    });
+  } catch {
+    return; // 用户取消
+  }
+  try {
+    const res = await adminApi.setHtmlQuotaOverride({ action: 'remove', user_id: row.user_id });
+    if (res.data.code === 0) {
+      ElMessage.success('已移除');
+      await loadQuota();
+    } else ElMessage.error(res.data.message || '移除失败');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '移除失败');
+  }
+}
+
+// 覆盖值语义：0=跟随全局，-1=不限
+function quotaText(v: number, unit = '个') {
+  if (v === undefined || v === null || v === 0) return '跟随全局';
+  if (v < 0) return '不限';
+  return `${v} ${unit}`;
+}
+
+onMounted(() => {
+  load();
+  loadQuota();
+});
 </script>
 
 <style scoped>
@@ -454,4 +609,7 @@ onMounted(load);
 }
 .tab-badge-danger { background: var(--el-color-danger); }
 .tab-badge-info { background: var(--el-color-info); }
+
+/* 托管额度：按人覆盖的一行式录入 */
+.quota-ov-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 </style>
