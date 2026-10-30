@@ -1015,6 +1015,8 @@ func main() {
 		admin.GET("/ai/presets", handlers.AdminAiModelPresets)
 		// L5 渠道对账：拉取上游余额/消费 + 真实连通性探针
 		admin.GET("/ai/models/:id/channel", handlers.AdminAiModelChannel)
+		// 按渠道聚合的余额一览（每条渠道还剩多少钱）
+		admin.GET("/ai/channels/balance", handlers.AdminChannelBalanceOverview)
 
 		// API 卡池（多密钥轮询）
 		admin.GET("/ai/models/:id/keys", handlers.AdminListAiModelKeys)

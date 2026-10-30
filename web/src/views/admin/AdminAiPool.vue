@@ -65,6 +65,7 @@
         <div class="table-toolbar">
           <span class="muted small">共 {{ models.length }} 个模型（启用 {{ enabledCount }} 个）</span>
           <el-button :icon="'🔌'" @click="openPull">从渠道拉取</el-button>
+          <el-button :loading="chLoading" @click="openChannels">渠道余额</el-button>
           <el-button type="primary" :icon="Plus" @click="openCreate">添加模型</el-button>
         </div>
 
@@ -295,6 +296,40 @@
           </div>
         </div>
       </div>
+    </el-dialog>
+
+    <!-- ============ 渠道余额一览（按渠道聚合） ============ -->
+    <el-dialog v-model="chDialog" title="渠道余额一览" width="860px">
+      <div class="ch-overview-tip">
+        按上游渠道（base_url）聚合，每条渠道查一次账户余额 —— 回答「这条渠道还剩多少钱」。
+        同一渠道下的多个模型共用一份余额，所以不逐模型重复查询。
+      </div>
+      <el-table v-if="chRows.length" :data="chRows" size="small" stripe max-height="420">
+        <el-table-column prop="base_url" label="渠道" min-width="220" show-overflow-tooltip />
+        <el-table-column prop="models" label="模型数" width="80" />
+        <el-table-column label="剩余" width="110">
+          <template #default="{ row }">
+            <span :class="['ch-bal', { zero: !row.supported }]">{{ fmtMoney(row.total_remaining) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="已消费" width="110">
+          <template #default="{ row }">{{ fmtMoney(row.total_used) }}</template>
+        </el-table-column>
+        <el-table-column label="币种" width="70">
+          <template #default="{ row }">{{ row.currency || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="状态" min-width="180">
+          <template #default="{ row }">
+            <el-tag v-if="row.supported" size="small" type="success">可查</el-tag>
+            <span v-else class="muted small">{{ row.error || '该渠道无余额端点' }}</span>
+          </template>
+        </el-table-column>
+      </el-table>
+      <StateBlock v-else-if="!chLoading" state="empty" title="没有可查询的渠道" description="先在模型里配置上游地址与密钥" />
+      <template #footer>
+        <el-button :loading="chLoading" @click="openChannels">重新查询</el-button>
+        <el-button type="primary" @click="chDialog = false">关闭</el-button>
+      </template>
     </el-dialog>
 
     <!-- ============ L5 渠道对账：余额 / 已消费 / 剩余 + 连通性 ============ -->
@@ -645,6 +680,25 @@ const PULL_COLS = [
 const pullCols = reactive<Record<string, boolean>>({
   family: true, version: true, variant: true, build: true, vendor: false, channel: true,
 });
+
+// ---------- 渠道余额一览 ----------
+const chDialog = ref(false);
+const chLoading = ref(false);
+const chRows = ref<any[]>([]);
+
+async function openChannels() {
+  chDialog.value = true;
+  chLoading.value = true;
+  try {
+    const res = await aiApi.channelsBalance();
+    if (res.data.code === 0) chRows.value = res.data.data.channels || [];
+    else ElMessage.error(res.data.message || '查询失败');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '查询失败');
+  } finally {
+    chLoading.value = false;
+  }
+}
 
 // ---------- L5 渠道对账 ----------
 const channelDialog = ref(false);
@@ -1243,6 +1297,11 @@ async function saveCategoryPrice(p: AiCategoryPrice & { _saving?: boolean }) {
 .pull-col-toggles { display: flex; flex-direction: column; gap: 4px; }
 .pull-col-title { font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; color: var(--text-main, #1f2937); }
 .pull-col-tip { margin-top: 6px; font-size: 0.72rem; line-height: 1.5; color: var(--text-light, #999); }
+
+/* 渠道余额一览 */
+.ch-overview-tip { margin-bottom: 10px; font-size: 0.78rem; line-height: 1.6; color: var(--text-light, #888); }
+.ch-bal { font-weight: 700; color: var(--el-color-primary, #409eff); font-variant-numeric: tabular-nums; }
+.ch-bal.zero { color: var(--text-light, #bbb); }
 
 /* L5 渠道对账 */
 .ch-loading { padding: 28px 0; text-align: center; color: var(--text-light, #888); font-size: 0.88rem; }

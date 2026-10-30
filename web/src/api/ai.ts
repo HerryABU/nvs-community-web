@@ -251,6 +251,13 @@ export const aiApi = {
     return api.post('/admin/ai/free-quota/overrides', data);
   },
 
+  // ---------- 渠道余额一览（按 base_url 聚合，回答「每条渠道还剩多少钱」） ----------
+  channelsBalance() {
+    return api.get<{ code: number; data: { channels: AdminChannelRow[]; probed: number; total: number } }>(
+      '/admin/ai/channels/balance',
+    );
+  },
+
   // ---------- L5 渠道对账：拉取上游余额 / 已消费 / 剩余 + 真实连通性探针 ----------
   /** GET /api/admin/ai/models/:id/channel —— 余额（对账）与连通性 */
   modelChannel(id: number) {
@@ -277,6 +284,21 @@ export interface AdminChannelProbe {
   latency_ms: number;
   status_code: number;
   models?: number;
+  error?: string;
+}
+
+export interface AdminChannelRow {
+  base_url: string;
+  models: number;
+  model_name: string;
+  model_id_str: string;
+  provider?: string;
+  supported?: boolean;
+  total_granted?: number;
+  total_used?: number;
+  total_remaining?: number;
+  currency?: string;
+  fetched_at?: string;
   error?: string;
 }
 
