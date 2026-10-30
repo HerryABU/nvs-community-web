@@ -18,6 +18,8 @@ server/*.exe
 # Node
 web/node_modules/
 web/dist/
+# QA 构建产物目录（本地验证用，不入库）
+web/dist_qa/
 
 # Build artifacts
 dist/

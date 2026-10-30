@@ -212,11 +212,12 @@ export const adminApi = {
   policeListForums() {
     return api.get<{ code: number; message: string; data: { forums: any[]; total: number } }>('/police/forums');
   },
+  // 取证凭证详情 / 下载：后端按查询串取参（?type=&id=），与 AdminPoliceConsole 的调用方式保持一致
   policeGetEvidence(type: string, id: number) {
-    return api.get(`/police/evidence/${type}/${id}`);
+    return api.get('/police/evidence', { params: { type, id } });
   },
   policeDownloadEvidence(type: string, id: number) {
-    return api.get(`/police/evidence/${type}/${id}/download`, { responseType: 'blob' });
+    return api.get('/police/download', { params: { type, id }, responseType: 'blob' });
   },
   policeExportPackage() {
     return api.get('/police/export', { responseType: 'blob' });
