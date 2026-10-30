@@ -352,6 +352,8 @@ func main() {
 		public.GET("/theme/site", handlers.GetSiteTheme)
 		// F12a 全站 opt-in iframe（管理员配置允许列表 URL，访客可读启用状态）
 		public.GET("/site-iframe", handlers.GetSiteIframe)
+		// 首页形态（novels/blogs/forum/feed）：前端据此决定首页渲染哪套视图
+		public.GET("/home-view", handlers.GetHomeView)
 		// F12b 作者主题（访客可见，仅 CSS，服务端消毒）
 		public.GET("/author/:id/theme", handlers.GetAuthorTheme)
 		// 自定义主页（作者公开页，访客可见已审核片段）
@@ -870,6 +872,9 @@ func main() {
 		admin.PUT("/theme/site", handlers.UpdateSiteTheme)
 		// F12a 全站 opt-in iframe 仅管理员可写
 		admin.PUT("/site-iframe", handlers.UpdateSiteIframe)
+		// 首页形态配置（管理员可把博客/论坛/混合流设为首页）
+		admin.GET("/home-view", handlers.AdminGetHomeView)
+		admin.PUT("/home-view", handlers.AdminSaveHomeView)
 		// web 项目额度与超额审核（F17）
 		admin.GET("/web-quota/requests", handlers.AdminListWebQuotaRequests)
 		admin.POST("/web-quota/requests/:id/approve", handlers.AdminApproveWebQuotaRequest)

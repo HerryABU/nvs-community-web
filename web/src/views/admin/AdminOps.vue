@@ -193,6 +193,15 @@
           <el-form-item label="访客提示文案">
             <el-input v-model="visit.notice_text" />
           </el-form-item>
+          <el-form-item label="首页内容">
+            <el-radio-group v-model="homeView">
+              <el-radio-button value="novels">作品</el-radio-button>
+              <el-radio-button value="blogs">博客</el-radio-button>
+              <el-radio-button value="forum">论坛</el-radio-button>
+              <el-radio-button value="feed">混合流</el-radio-button>
+            </el-radio-group>
+            <span class="hint">决定访问站点根路径时展示哪套内容（选择后立即保存）</span>
+          </el-form-item>
           <el-form-item>
             <el-button type="primary" :loading="savingVisit" @click="saveVisit">保存</el-button>
           </el-form-item>
@@ -387,6 +396,8 @@ async function saveVisit() {
   savingVisit.value = true;
   try {
     await opsApi.saveVisit({ ...visit });
+    // 首页形态是独立配置（不属于 VisitSetting），单独保存
+    await api.put('/admin/home-view', { view: homeView.value });
     ElMessage.success('已保存');
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '保存失败');
@@ -395,11 +406,25 @@ async function saveVisit() {
   }
 }
 
+// ---- 首页形态（作品 / 博客 / 论坛 / 混合流）----
+const homeView = ref<'novels' | 'blogs' | 'forum' | 'feed'>('novels');
+
+async function loadHomeView() {
+  try {
+    const res = await api.get<{ code: number; data: { view: string } }>('/admin/home-view');
+    const v = res.data?.data?.view;
+    if (v) homeView.value = v as any;
+  } catch {
+    /* 读不到就保持默认，不弹错打断运营操作 */
+  }
+}
+
 onMounted(async () => {
   await loadMenus();
   await loadSlides();
   await loadCheckin();
   await loadVisit();
+  await loadHomeView();
   await loadLive();
 });
 </script>

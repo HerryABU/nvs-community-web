@@ -1,5 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import Home from '@/views/Home.vue';
 import { useAuthStore } from '@/stores/auth';
 import { canAccessPath, POLICE_ALLOWED_PATHS } from '@/constants/policeAccess';
 import api from '@/api';
@@ -15,7 +14,9 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      component: Home,
+      // 首页形态由后台配置决定（作品 / 博客 / 论坛 / 混合流），
+      // 由 HomeSwitch 按 /api/home-view 分发，默认作品首页（历史行为）
+      component: () => import('@/views/HomeSwitch.vue'),
     },
     {
       path: '/login',
