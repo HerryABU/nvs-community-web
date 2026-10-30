@@ -59,6 +59,30 @@ func (r Region) String() string {
 	return strings.Join([]string{r.Country, r.Province, r.City, r.ISP, r.CountryCD}, "|")
 }
 
+// DisplayName 返回适合公开展示的「IP 属地」文案（与主流社区口径一致）：
+//   - 国内：只到省份，去掉「省/市/自治区」后缀（广东省→广东、北京市→北京）
+//   - 境外：只到国家（United States→美国不译，直接用库里的国名）
+//   - 内网 / 保留 / 解析失败：空串（调用方不展示，避免暴露"这是本机"）
+func DisplayName(ip string) string {
+	r := Lookup(ip)
+	if r.IsReserved() {
+		return ""
+	}
+	if r.CountryCD == "CN" || r.Country == "中国" {
+		p := strings.TrimSpace(r.Province)
+		for _, suffix := range []string{"省", "市", "壮族自治区", "回族自治区", "维吾尔自治区", "自治区", "特别行政区"} {
+			p = strings.TrimSuffix(p, suffix)
+		}
+		if p != "" && p != "0" {
+			return p
+		}
+	}
+	if r.Country != "" && r.Country != "0" {
+		return r.Country
+	}
+	return ""
+}
+
 var (
 	loadOnce sync.Once
 	loadErr  error

@@ -77,6 +77,8 @@ export interface Comment {
   has_password?: boolean; // 楼加密（入口限制）：该楼是否设有访问密码
   locked?: boolean;       // 运行时脱敏标记：当前请求未解锁（前端渲染 🔒 占位）
   username?: string;
+  /** IP 属地（公开展示）：国内到省份、境外到国家；旧评论无此字段则不展示 */
+  region?: string;
   user?: { id: number; username?: string; nickname?: string; avatar_url?: string };
   // 微秒级时间戳（Unix 微秒）与 @ 提及（渲染为可点击链接）
   created_micro?: number;

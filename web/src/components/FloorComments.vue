@@ -28,6 +28,7 @@
           <el-tooltip :content="absTime(floor)" placement="top">
             <span class="floor-time">{{ relTime(floor) }}</span>
           </el-tooltip>
+          <span v-if="regionOf(floor)" class="floor-region">IP 属地：{{ regionOf(floor) }}</span>
           <span class="floor-actions">
             <slot name="actions" :item="floor" />
             <el-button v-if="replyable" size="small" text @click="toggleReply(floor.id)">
@@ -110,6 +111,7 @@
               <el-tooltip :content="absTime(r)" placement="top">
                 <span class="reply-time">{{ relTime(r) }}</span>
               </el-tooltip>
+              <span v-if="regionOf(r)" class="reply-region">IP 属地：{{ regionOf(r) }}</span>
               <el-button v-if="replyable" size="small" text @click="toggleReply(r.id)">回复</el-button>
               <ReportButton
                 v-if="targetType && authStore.isLoggedIn && authStore.user?.id !== r.user_id"
@@ -415,6 +417,11 @@ function absTime(item: any) {
   return formatAbsoluteMicro(item?.created_at, item?.created_micro);
 }
 
+// IP 属地（服务端只下发省/国家展示名；旧评论无此字段则不展示）
+function regionOf(item: any) {
+  return item?.region || '';
+}
+
 // ====== 楼加密（入口限制）：🔒 占位解锁 + 作者/警方/管理员密码管理 ======
 const pwdInput = reactive<Record<number, string>>({});
 const unlocking = reactive<Record<number, boolean>>({});
@@ -541,6 +548,18 @@ async function removeManage() {
   font-size: 0.78rem;
   color: var(--text-light, #999);
 }
+
+/* IP 属地：弱化处理，只作为可信度参考，不抢楼层的视觉重心 */
+.floor-region,
+.reply-region {
+  font-size: 0.72rem;
+  color: var(--text-light, #aaa);
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--bg-soft, rgba(0, 0, 0, 0.04));
+  white-space: nowrap;
+}
+.reply-region { margin-right: 4px; }
 
 .floor-actions {
   margin-left: auto;

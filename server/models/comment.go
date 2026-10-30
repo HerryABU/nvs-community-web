@@ -44,6 +44,9 @@ type Comment struct {
 	IsDeleted    bool   `gorm:"-" json:"is_deleted"`                            // 运行时计算：是否已软删除（警方/管理员取证视图用）
 	// 微秒级时间戳（Unix 微秒）：用于评论网分析的时间估计与精确排序；旧数据回填为 0
 	CreatedMicro int64 `gorm:"default:0;index" json:"created_micro"`
+	// IP 属地（公开展示，与主流社区口径一致）：国内只到省份、境外只到国家。
+	// 存的是「展示名」而不是原始 IP，避免把精确位置落库与下发；旧数据为空串不展示。
+	Region string `gorm:"size:32;default:''" json:"region,omitempty"`
 	// @ 提及：存储 JSON 数组 [{"name":"foo","user_id":5}]；运行时由 AfterFind/MentionsRefs 解析到 Mentions
 	MentionsRaw string         `gorm:"type:text;default:''" json:"-"`
 	Mentions    []MentionRef   `gorm:"-" json:"mentions,omitempty"` // 解析后的提及列表（展示/跳转用）

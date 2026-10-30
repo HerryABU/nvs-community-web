@@ -3,6 +3,7 @@
     <div class="comment-header">
       <span class="comment-user">{{ comment.username || '匿名用户' }}</span>
       <span class="comment-time">{{ formatTime(comment.created_at) }}</span>
+      <span v-if="comment.region" class="comment-region" title="按 IP 归属地展示，国内到省、境外到国家">IP 属地：{{ comment.region }}</span>
       <span v-if="comment.chapter_number > 0" class="comment-chapter">
         第{{ comment.chapter_number }}章
       </span>
@@ -136,6 +137,17 @@ function doReply() {
 .comment-time {
   font-size: 0.8rem;
   color: var(--text-light);
+}
+
+/* IP 属地：弱化处理（国内到省、境外到国家），旧评论无此字段则不渲染 */
+.comment-region {
+  font-size: 0.72rem;
+  color: var(--text-light);
+  opacity: 0.85;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.04);
+  white-space: nowrap;
 }
 
 .comment-chapter {

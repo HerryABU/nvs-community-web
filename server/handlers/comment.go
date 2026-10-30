@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"nvs-server/crisis"
+	"nvs-server/ipgeo"
 	"nvs-server/models"
 	"nvs-server/realtime"
 	"nvs-server/security"
@@ -166,6 +167,8 @@ func CreateComment(c *gin.Context) {
 		IsMarkdown:    true,
 		// 微秒级时间戳：精确排序与评论网分析的时间估计；旧数据回填为 0
 		CreatedMicro: time.Now().UnixMicro(),
+		// IP 属地：只存展示名（省 / 国家），不落原始 IP；内网与解析失败留空不展示
+		Region: ipgeo.DisplayName(c.ClientIP()),
 		// @ 提及存储（JSON）；解析失败/用户不存在已在上游过滤
 		MentionsRaw: models.MentionsToRaw(mentions),
 	}
