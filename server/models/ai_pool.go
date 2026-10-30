@@ -33,6 +33,14 @@ type AiModel struct {
 	ApiKind string `gorm:"size:16;not null;default:''" json:"api_kind"`
 	// ProviderHint 上游归属：domestic（境内）/ overseas（境外）/ 空（未标注）→ 用于合规提示
 	ProviderHint string `gorm:"size:16;not null;default:''" json:"provider_hint"`
+	// TokenUserID 中转站（one-api/new-api）的用户 ID：查额度时要与访问令牌配对
+	// （请求头 New-Api-User）。官方渠道留空。非机密，明文存。
+	TokenUserID string `gorm:"size:32;not null;default:''" json:"token_user_id"`
+	// AccountTokenEnc 中转站的**系统访问令牌**（nap_ 开头）密文。
+	// 与 ApiKeyEnc（sk_ 模型调用密钥）是两回事：
+	//   sk_ 只能查「该令牌自身」的用量，查不到账户余额；
+	//   nap_ 才能调 /api/user/self 拿到账户 quota。同样加密落库、不下发前端。
+	AccountTokenEnc string `gorm:"type:text" json:"-"`
 	// Vendor 厂商（OpenAI/Anthropic/Google/DeepSeek/阿里/字节/Midjourney…）→ 前端「全部厂商」筛选
 	Vendor string `gorm:"size:32;not null;default:'';index" json:"vendor"`
 	// Thinking 思考型模型（DeepSeek-R1 / GLM / Qwen thinking 等）：
@@ -223,6 +231,12 @@ func CreateAiModel(m *AiModel, apiKeyPlain string) error {
 		return err
 	}
 	m.ApiKeyEnc = enc
+	if m.AccountTokenEnc != "" {
+		// 调用方传入的可能是明文：统一在这里加密
+		if aenc, e := utils.EncryptField(strings.TrimSpace(m.AccountTokenEnc)); e == nil {
+			m.AccountTokenEnc = aenc
+		}
+	}
 	now := time.Now()
 	m.CreatedAt = now
 	m.UpdatedAt = now
@@ -256,6 +270,15 @@ func (m *AiModel) DecryptApiKey() (string, error) {
 		return "", nil
 	}
 	return utils.DecryptField(m.ApiKeyEnc)
+}
+
+// DecryptAccountToken 解密中转站**系统访问令牌**（nap_ 开头，未配置返回空串）。
+// 与 DecryptApiKey 分开：sk_ 查不到账户余额，nap_ 才能。
+func (m *AiModel) DecryptAccountToken() (string, error) {
+	if m.AccountTokenEnc == "" {
+		return "", nil
+	}
+	return utils.DecryptField(m.AccountTokenEnc)
 }
 
 // CountEnabledAiModels 启用模型数量（status 页展示）

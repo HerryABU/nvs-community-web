@@ -93,7 +93,9 @@ type aiModelInput struct {
 	Kind         string   `json:"kind"`
 	ModelID      string   `json:"model_id"`
 	BaseURL      string   `json:"base_url"`
-	ApiKey       string   `json:"api_key"` // 留空=不轮换
+	ApiKey       string   `json:"api_key"`       // 留空=不轮换（sk_ 模型调用密钥）
+	AccountToken string   `json:"account_token"` // 系统访问令牌（nap_，查账户余额用）；留空=不轮换
+	TokenUserID  string   `json:"token_user_id"` // 中转站用户 ID（New-Api-User）
 	PriceIn      *int64   `json:"price_in"`
 	PriceOut     *int64   `json:"price_out"`
 	PriceCall    *int64   `json:"price_call"`
@@ -156,6 +158,10 @@ func AdminCreateAiModel(c *gin.Context) {
 	}
 	if req.Priority != nil {
 		m.Priority = *req.Priority
+	}
+	m.TokenUserID = strings.TrimSpace(req.TokenUserID)
+	if strings.TrimSpace(req.AccountToken) != "" {
+		m.AccountTokenEnc = strings.TrimSpace(req.AccountToken) // CreateAiModel 内部加密
 	}
 	if err := models.CreateAiModel(m, req.ApiKey); err != nil {
 		utils.InternalError(c, "创建失败")
@@ -223,6 +229,14 @@ func AdminUpdateAiModel(c *gin.Context) {
 	fields["note"] = strings.TrimSpace(req.Note)
 	if req.Thinking != nil {
 		fields["thinking"] = *req.Thinking
+	}
+	if strings.TrimSpace(req.TokenUserID) != "" {
+		fields["token_user_id"] = strings.TrimSpace(req.TokenUserID)
+	}
+	if at := strings.TrimSpace(req.AccountToken); at != "" {
+		if enc, e := utils.EncryptField(at); e == nil {
+			fields["account_token_enc"] = enc
+		}
 	}
 	if err := models.UpdateAiModelFields(uint(id), fields, req.ApiKey); err != nil {
 		utils.InternalError(c, "保存失败")

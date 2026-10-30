@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"strconv"
+	"strings"
+	"time"
 
 	"nvs-server/aiclient"
 	"nvs-server/models"
@@ -29,7 +31,20 @@ func AdminAiModelChannel(c *gin.Context) {
 	if kerr != nil {
 		key = "" // 解密失败仍尝试（部分渠道可能无需密钥）
 	}
-	balance := aiclient.QueryChannelBalance(m.BaseURL, key, m.ProviderHint)
+	// 优先「账户级」额度：需要系统访问令牌(nap_) + 用户 ID，能拿到真正的账户余额；
+	// 没配账户令牌时退回「令牌级」查询（sk_ 只能看到该令牌自身用量）。
+	acct, _ := m.DecryptAccountToken()
+	var balance aiclient.ChannelBalance
+	if strings.TrimSpace(acct) != "" {
+		na := aiclient.QueryNewAPIAccount(m.BaseURL, acct, m.TokenUserID, 15*time.Second)
+		balance = aiclient.ChannelBalance{
+			Provider: m.ProviderHint, TotalRemaining: na.Quota, TotalUsed: na.UsedQuota,
+			Currency: na.Currency, Supported: na.OK, FetchedAt: time.Now().Format(time.RFC3339),
+			Error: na.Error,
+		}
+	} else {
+		balance = aiclient.QueryChannelBalanceWithUser(m.BaseURL, key, m.ProviderHint, m.TokenUserID)
+	}
 	probe := aiclient.ProbeChannel(m.BaseURL, key, m.ModelID)
 	utils.Success(c, gin.H{
 		"model_id":     m.ID,

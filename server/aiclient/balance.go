@@ -77,6 +77,15 @@ func detectProvider(baseURL, hint string) string {
 // QueryChannelBalance 查询上游渠道余额 / 消费。
 // baseURL 为上游地址（不含 /chat/completions），apiKey 为上游密钥，providerHint 可选。
 func QueryChannelBalance(baseURL, apiKey, providerHint string) ChannelBalance {
+	return QueryChannelBalanceWithUser(baseURL, apiKey, providerHint, "")
+}
+
+// QueryChannelBalanceWithUser 同 QueryChannelBalance，但额外带上中转站的「用户 ID」。
+//
+// 为什么要用户 ID：one-api / new-api 这类中转站，查额度要用**用户访问令牌 + 用户 ID**
+// 成对认证（请求头 New-Api-User），只给令牌会被判 401。
+// 官方渠道（OpenAI/DeepSeek 等）不需要该字段，传空即可。
+func QueryChannelBalanceWithUser(baseURL, apiKey, providerHint, tokenUserID string) ChannelBalance {
 	res := ChannelBalance{
 		Provider:  detectProvider(baseURL, providerHint),
 		FetchedAt: time.Now().Format(time.RFC3339),
@@ -102,7 +111,7 @@ func QueryChannelBalance(baseURL, apiKey, providerHint string) ChannelBalance {
 
 	// OpenAI 兼容：尝试 /dashboard/billing/credit_grants
 	url := baseURL + "/dashboard/billing/credit_grants"
-	body, status, err := httpGetJSON(url, apiKey, 10*time.Second)
+	body, status, err := httpGetJSONWithUser(url, apiKey, tokenUserID, 10*time.Second)
 	if err != nil {
 		res.Error = "请求失败：" + err.Error()
 		return res
@@ -211,6 +220,11 @@ func ProbeChannel(baseURL, apiKey, modelID string) ChannelProbe {
 
 // httpGetJSON 发起带 Bearer 的 GET，返回解析后的 JSON map、状态码、错误
 func httpGetJSON(url, apiKey string, timeout time.Duration) (map[string]any, int, error) {
+	return httpGetJSONWithUser(url, apiKey, "", timeout)
+}
+
+// httpGetJSONWithUser 带中转站用户 ID 头的 GET
+func httpGetJSONWithUser(url, apiKey, tokenUserID string, timeout time.Duration) (map[string]any, int, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, 0, err
@@ -218,6 +232,10 @@ func httpGetJSON(url, apiKey string, timeout time.Duration) (map[string]any, int
 	req.Header.Set("Content-Type", "application/json")
 	if apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+	if tokenUserID != "" {
+		// one-api / new-api：用户 ID 与访问令牌成对使用
+		req.Header.Set("New-Api-User", tokenUserID)
 	}
 	client := &http.Client{Timeout: timeout}
 	resp, derr := client.Do(req)

@@ -36,11 +36,12 @@ func AdminChannelBalanceOverview(c *gin.Context) {
 
 	// 按 base_url 去重，取该渠道下的第一个「有密钥」模型作为代表
 	type chGroup struct {
-		BaseURL    string
-		ModelName  string
-		ModelIDStr string
-		Hint       string
-		Count      int
+		BaseURL     string
+		ModelName   string
+		ModelIDStr  string
+		Hint        string
+		TokenUserID string
+		Count       int
 	}
 	groups := map[string]*chGroup{}
 	for i := range ms {
@@ -59,6 +60,7 @@ func AdminChannelBalanceOverview(c *gin.Context) {
 			g.ModelName = m.Name
 			g.ModelIDStr = m.ModelID
 			g.Hint = m.ProviderHint
+			g.TokenUserID = m.TokenUserID
 		}
 	}
 
@@ -94,7 +96,7 @@ func AdminChannelBalanceOverview(c *gin.Context) {
 		// 取该渠道下第一个可用密钥（解密失败仍尝试，部分渠道无需密钥）
 		key := decryptKeyByBaseURL(g.BaseURL)
 
-		b := aiclient.QueryChannelBalance(g.BaseURL, key, g.Hint)
+		b := aiclient.QueryChannelBalanceWithUser(g.BaseURL, key, g.Hint, g.TokenUserID)
 		// 顺手留一个样本：站长多点几次「渠道余额」就能攒出估算窗口
 		if b.Supported {
 			models.SaveChannelSample(g.BaseURL, b)

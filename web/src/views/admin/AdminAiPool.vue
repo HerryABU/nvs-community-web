@@ -490,6 +490,15 @@
             :placeholder="editing ? '留空表示不更换（当前已加密存储）' : '上游密钥，加密后存储'"
           />
         </el-form-item>
+        <el-form-item label="系统访问令牌">
+          <el-input v-model="form.account_token" type="password" show-password
+            :placeholder="editing ? '留空表示不更换（nap_ 开头，查账户余额用）' : 'nap_ 开头的系统访问令牌；sk_ 查不到账户余额'" />
+          <span class="muted small">New API 体系里 sk_ 只能查该令牌自身用量；账户剩余需 nap_ 令牌 + 用户 ID 调 /api/user/self</span>
+        </el-form-item>
+        <el-form-item label="令牌用户 ID">
+          <el-input v-model="form.token_user_id" placeholder="中转站（one-api/new-api）的用户 ID，如 56347；官方渠道留空" />
+          <span class="muted small">中转站查额度要用「访问令牌 + 用户 ID」成对认证（New-Api-User 头）</span>
+        </el-form-item>
         <template v-if="form.kind === 'chat'">
           <el-form-item label="输入价格">
             <el-input-number v-model="form.price_in" :min="0" :max="1000000" :step="1" controls-position="right" />
@@ -691,7 +700,7 @@ function blankForm() {
     name: '', kind: 'chat', model_id: '', base_url: '', api_key: '',
     price_in: 0, price_out: 0, price_call: 0, max_tokens: 2048,
     temperature: 0.7, priority: 0, enabled: true, note: '',
-    api_kind: 'openai', provider_hint: '', vendor: '', thinking: false,
+    api_kind: 'openai', provider_hint: '', vendor: '', thinking: false, token_user_id: '', account_token: '',
   };
 }
 const form = reactive(blankForm());
@@ -989,7 +998,7 @@ function openEdit(row: AdminAiModel) {
     price_in: row.price_in, price_out: row.price_out, price_call: row.price_call || 0,
     max_tokens: row.max_tokens,
     temperature: row.temperature, priority: row.priority, enabled: row.enabled, note: row.note,
-    api_kind: row.api_kind || 'openai', provider_hint: row.provider_hint || '',
+    api_kind: row.api_kind || 'openai', provider_hint: row.provider_hint || '', token_user_id: row.token_user_id || '',
     vendor: row.vendor || '', thinking: !!row.thinking,
   });
   dialogVisible.value = true;

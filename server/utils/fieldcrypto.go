@@ -52,15 +52,32 @@ func getFieldCryptoKey() ([]byte, error) {
 	return key, nil
 }
 
+// fieldCryptoCandidates 返回可用的加密密钥候选（按优先级）。
+//
+// 第一位是**令牌加密密码**派生的密钥（见 tokenvault.go）—— 站长自己设的密码，
+// 与 JWT 完全无关；未设置时回退到旧密钥（config.RealNameEncKey 或 JWT 派生）。
+// 解密时按顺序尝试，因此历史密文不会因为启用保险箱而读不出来。
+func fieldCryptoCandidates() [][]byte {
+	var keys [][]byte
+	if k := loadTokenVaultKey(); len(k) == 32 {
+		keys = append(keys, k)
+	}
+	if k, err := getFieldCryptoKey(); err == nil && len(k) == 32 {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 // EncryptField 加密明文字段，返回 base64(nonce|ciphertext) （含 GCM tag）。
 func EncryptField(plaintext string) (string, error) {
 	if plaintext == "" {
 		return "", nil
 	}
-	key, err := getFieldCryptoKey()
-	if err != nil {
-		return "", err
+	cands := fieldCryptoCandidates()
+	if len(cands) == 0 {
+		return "", ErrFieldCryptoNoKey
 	}
+	key := cands[0]
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", fmt.Errorf("创建加密器失败: %w", err)
@@ -83,14 +100,27 @@ func DecryptField(ciphertext string) (string, error) {
 	if ciphertext == "" {
 		return "", nil
 	}
-	key, err := getFieldCryptoKey()
-	if err != nil {
-		return "", err
-	}
 	raw, err := base64.StdEncoding.DecodeString(ciphertext)
 	if err != nil {
 		return "", ErrFieldCryptoFormat
 	}
+	cands := fieldCryptoCandidates()
+	if len(cands) == 0 {
+		return "", ErrFieldCryptoNoKey
+	}
+	var lastErr error
+	for _, key := range cands {
+		if plain, e := decryptWithKey(key, raw); e == nil {
+			return plain, nil
+		} else {
+			lastErr = e
+		}
+	}
+	return "", lastErr
+}
+
+// decryptWithKey 用指定密钥解一段 nonce|ciphertext（GCM）。
+func decryptWithKey(key, raw []byte) (string, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", fmt.Errorf("创建解密器失败: %w", err)
@@ -112,3 +142,39 @@ func DecryptField(ciphertext string) (string, error) {
 
 // ResetFieldCryptoKeyForTest 仅测试用：清空密钥缓存。
 func ResetFieldCryptoKeyForTest() { fieldCryptoKey = nil }
+
+// EncryptFieldWithKey 用**指定密钥**加密（密钥轮换/迁移专用：换令牌加密密码时使用）。
+func EncryptFieldWithKey(key []byte, plaintext string) (string, error) {
+	if plaintext == "" {
+		return "", nil
+	}
+	if len(key) != 32 {
+		return "", ErrFieldCryptoNoKey
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", fmt.Errorf("创建加密器失败: %w", err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", fmt.Errorf("创建 GCM 失败: %w", err)
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(gcm.Seal(nonce, nonce, []byte(plaintext), nil)), nil
+}
+
+// DecryptFieldWithKey 用**指定密钥**解密（密钥轮换/迁移专用）。
+func DecryptFieldWithKey(key []byte, ciphertext string) (string, error) {
+	ciphertext = strings.TrimSpace(ciphertext)
+	if ciphertext == "" {
+		return "", nil
+	}
+	raw, err := base64.StdEncoding.DecodeString(ciphertext)
+	if err != nil {
+		return "", ErrFieldCryptoFormat
+	}
+	return decryptWithKey(key, raw)
+}

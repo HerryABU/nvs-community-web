@@ -29,7 +29,8 @@ import (
 const (
 	cliScopeAll       = "all"       // 管理员密码 + 二级密码
 	cliScopeAdmin     = "admin"     // 仅管理员登录密码
-	cliScopeEmergency = "emergency" // 仅内容抢救台二级密码
+	cliScopeEmergency = "emergency" // 仅内容抢救台二级密码（= 双重验证密码）
+	cliScopeToken     = "token"     // 仅令牌加密密码（上游 API Key 落库加密用，与 JWT 无关）
 )
 
 // emergencyPasswordKey 二级密码在 platform_configs 里的键（与后台设置接口同键）
@@ -85,9 +86,9 @@ func runMaintenanceCLI(args []string) (handled bool, exitCode int) {
 	}
 
 	switch scope {
-	case cliScopeAll, cliScopeAdmin, cliScopeEmergency:
+	case cliScopeAll, cliScopeAdmin, cliScopeEmergency, cliScopeToken:
 	default:
-		fmt.Fprintln(os.Stderr, "✗ --scope 只能是 all / admin / emergency")
+		fmt.Fprintln(os.Stderr, "✗ --scope 只能是 all / admin / emergency(second) / token")
 		return true, 2
 	}
 
@@ -150,6 +151,18 @@ func runMaintenanceCLI(args []string) (handled bool, exitCode int) {
 			return true, 9
 		}
 		fmt.Println("✓ 二级密码（内容抢救台）已重置")
+	}
+
+	if scope == cliScopeAll || scope == cliScopeToken {
+		// 令牌加密密码：派生独立 AES 密钥（PBKDF2），不依赖 JWT，
+		// 并把现有上游 API Key 用旧钥匙解开、用新钥匙重新加密。
+		moved, err := utils.SetTokenVaultPassphrase(pwd, models.ReencryptAiModelKeys)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "✗ 设置令牌加密密码失败: %v\n", err)
+			return true, 10
+		}
+		fmt.Printf("✓ 令牌加密密码已设置（独立于 JWT），已迁移模型密钥 %d 条\n", moved)
+		detail += "，令牌加密密码"
 	}
 
 	// 留痕：高危操作必须有审计，operator 记 cli 以便与真人操作区分
