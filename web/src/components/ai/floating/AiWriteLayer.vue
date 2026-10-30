@@ -62,9 +62,21 @@
         <!-- 输入：基于的原文 -->
         <div class="awl-input-label">
           写作依据
-          <el-button text size="small" type="primary" @click="resetFromContext">恢复为当前内容</el-button>
+          <span class="awl-input-tools">
+            <button
+              v-for="b in MD_BUTTONS"
+              :key="b.label"
+              type="button"
+              class="awl-md-btn"
+              :title="b.hint"
+              :disabled="streaming"
+              @click="insertMd(b.snippet)"
+            >{{ b.label }}</button>
+            <el-button text size="small" type="primary" @click="resetFromContext">恢复为当前内容</el-button>
+          </span>
         </div>
         <el-input
+          ref="textInputRef"
           v-model="form.text"
           type="textarea"
           :rows="6"
@@ -72,6 +84,39 @@
           :disabled="streaming"
           :placeholder="inputPlaceholder"
         />
+
+        <!-- 附件（图片 / 文档）：随请求原样发给上游，图片走多模态、文档作参考注入 -->
+        <div class="awl-attach">
+          <input
+            ref="fileInputRef"
+            type="file"
+            multiple
+            :accept="ATTACH_ACCEPT"
+            style="display:none"
+            :disabled="streaming"
+            @change="onFilesPicked"
+          />
+          <el-button
+            size="small"
+            :icon="Paperclip"
+            :disabled="streaming || uploading"
+            :loading="uploading"
+            title="上传图片（多模态）或文档（参考文本注入）"
+            @click="pickFiles"
+          >上传附件</el-button>
+          <span class="awl-attach-tip">图片走多模态，文档作参考原文注入</span>
+          <div v-if="attachments.length" class="awl-attach-list">
+            <div v-for="(a, i) in attachments" :key="a.url" class="awl-attach-item" :title="a.name">
+              <img v-if="a.kind === 'image'" :src="a.url" class="awl-attach-thumb" :alt="a.name" />
+              <span v-else class="awl-attach-file">
+                <span class="awl-attach-ext">{{ (a.name.split('.').pop() || 'file').toUpperCase() }}</span>
+                <span class="awl-attach-name">{{ a.name }}</span>
+              </span>
+              <span class="awl-attach-size">{{ fmtSize(a.size) }}</span>
+              <button type="button" class="awl-attach-del" title="移除" :disabled="streaming" @click="removeAttachment(i)">✕</button>
+            </div>
+          </div>
+        </div>
 
         <!-- 执行 -->
         <el-button
@@ -104,11 +149,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onBeforeUnmount } from 'vue';
+import { ref, reactive, computed, watch, onBeforeUnmount, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
+import { Paperclip } from '@element-plus/icons-vue';
 import { aiApi } from '@/api/ai';
-import { streamChat } from '@/api/aiHub';
+import { streamChat, uploadChatAttachment, type ChatAttachment } from '@/api/aiHub';
 import { useDraggable } from './useDraggable';
 import type { StreamTarget } from '@/utils/editorStream';
 
@@ -165,6 +211,25 @@ const form = reactive<{ model_id: number; action: string; max_tokens: number; te
   text: '',
 });
 
+// ── 附件（图片 / 文档）：随请求原样发给上游，图片走多模态、文档作参考文本注入 ──
+const attachments = ref<ChatAttachment[]>([]);
+const uploading = ref(false);
+const fileInputRef = ref<HTMLInputElement>();
+const textInputRef = ref<any>();
+const ATTACH_ACCEPT = '.png,.jpg,.jpeg,.webp,.gif,.pdf,.docx,.doc,.txt,.md,.csv,.json,.xlsx,.pptx';
+const IMAGE_MAX = 10 * 1024 * 1024;
+const FILE_MAX = 20 * 1024 * 1024;
+
+// ── 数学 / LaTeX 语法插入按钮（覆盖行内、块级、LaTeX 原生定界符与编号公式）──
+// 注：用户提到的 `[/]` 实为 LaTeX `\[...\]` / `\(...\)` 的视觉混淆，此处给出标准写法。
+const MD_BUTTONS: Array<{ label: string; hint: string; snippet: string }> = [
+  { label: '行内 $…$', hint: 'Markdown 行内公式（兼容性最佳）', snippet: '$公式$  ' },
+  { label: '块级 $$…$$', hint: 'Markdown 块级公式（兼容性最佳）', snippet: '\n$$\n公式\n$$\n' },
+  { label: '行内 \\(…\\)', hint: 'LaTeX 行内公式定界符', snippet: '\\( 公式 \\)  ' },
+  { label: '显示 \\[…\\]', hint: 'LaTeX 块级 / 显示公式定界符', snippet: '\n\\[\n公式\n\\]\n' },
+  { label: '编号公式', hint: 'LaTeX 自动编号的 equation 环境', snippet: '\n\\begin{equation}\n公式\n\\end{equation}\n' },
+];
+
 const streaming = ref(false);
 const liveText = ref('');
 const error = ref('');
@@ -172,7 +237,9 @@ const result = ref<{ content: string; tokens_in: number; tokens_out: number; cos
 const usedModelName = ref('');
 let abortCtl: AbortController | null = null;
 
-const canRun = computed(() => !!form.text.trim() && !!form.model_id && !streaming.value && status.ai_enabled);
+const canRun = computed(
+  () => (!!form.text.trim() || attachments.value.length > 0) && !!form.model_id && !streaming.value && status.ai_enabled,
+);
 
 const inputPlaceholder = computed(() => {
   const a = ACTIONS.find((x) => x.value === form.action);
@@ -243,23 +310,118 @@ function currentSource(): string {
   return sel || ctx;
 }
 
+// ── 数学 / LaTeX 语法：在文本框光标处插入，有选区则替换选区 ──
+function getTextarea(): HTMLTextAreaElement | null {
+  const inst = textInputRef.value as any;
+  if (!inst) return null;
+  if (inst.textarea) return inst.textarea as HTMLTextAreaElement;
+  const el = inst.$el as HTMLElement | undefined;
+  return (el?.querySelector?.('textarea') as HTMLTextAreaElement) || null;
+}
+
+function insertMd(snippet: string) {
+  const ta = getTextarea();
+  if (!ta) {
+    form.text += snippet;
+    return;
+  }
+  const start = ta.selectionStart ?? form.text.length;
+  const end = ta.selectionEnd ?? form.text.length;
+  const before = form.text.slice(0, start);
+  const after = form.text.slice(end);
+  form.text = before + snippet + after;
+  nextTick(() => {
+    const pos = start + snippet.length;
+    ta.focus();
+    try {
+      ta.setSelectionRange(pos, pos);
+    } catch {
+      /* ignore */
+    }
+  });
+}
+
+// ── 附件上传 / 预览 / 移除（镜像 AiChatPanel 的成熟路径）──
+function pickFiles() {
+  fileInputRef.value?.click();
+}
+
+async function onFilesPicked(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const files = Array.from(input.files || []);
+  input.value = ''; // 允许重复选择同一文件
+  if (!files.length) return;
+  for (const f of files) {
+    if (attachments.value.length >= 10) {
+      ElMessage.warning('单次最多带 10 个附件');
+      break;
+    }
+    const isImg = /^image\//.test(f.type) || /\.(png|jpe?g|webp|gif)$/i.test(f.name);
+    const limit = isImg ? IMAGE_MAX : FILE_MAX;
+    if (f.size > limit) {
+      ElMessage.warning(`${f.name} 超过 ${limit >> 20}MB，已跳过`);
+      continue;
+    }
+    uploading.value = true;
+    try {
+      const res = await uploadChatAttachment(f);
+      if (res.data.code === 0 && res.data.data) {
+        attachments.value.push(res.data.data);
+      } else {
+        ElMessage.error(`${f.name} 上传失败`);
+      }
+    } catch (err: any) {
+      ElMessage.error(err?.response?.data?.message || `${f.name} 上传失败`);
+    } finally {
+      uploading.value = false;
+    }
+  }
+}
+
+function removeAttachment(i: number) {
+  attachments.value.splice(i, 1);
+}
+
+function fmtSize(n?: number) {
+  if (!n) return '';
+  return n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`;
+}
+
+// 附件提示：让模型知道随请求附带了哪些参考内容（无需在正文复述附件内容）
+function attachmentNote(): string {
+  if (!attachments.value.length) return '';
+  const img = attachments.value.filter((a) => a.kind === 'image').length;
+  const doc = attachments.value.length - img;
+  const parts: string[] = [];
+  if (img) parts.push(`${img} 张图片`);
+  if (doc) parts.push(`${doc} 个文档`);
+  return `\n\n（已随请求附带 ${parts.join('、')}，可直接读取其中内容作为参考 / 依据，无需在正文里复述附件内容。）`;
+}
+
 // 按动作拼提示词
 function buildPrompt(): string {
   const t = currentSource();
+  let body: string;
   switch (form.action) {
     case 'continue':
-      return `请基于以下正文继续往下写，保持人物、风格与上下文连贯。只输出续写内容本身，不要任何解释、前缀或引号包裹。\n\n${t}`;
+      body = `请基于以下正文继续往下写，保持人物、风格与上下文连贯。只输出续写内容本身，不要任何解释、前缀或引号包裹。\n\n${t}`;
+      break;
     case 'expand':
-      return `请对下面这段内容做合理扩写，补充细节、动作与氛围，保持原意与风格。只输出扩写后的文本，不要解释。\n\n${t}`;
+      body = `请对下面这段内容做合理扩写，补充细节、动作与氛围，保持原意与风格。只输出扩写后的文本，不要解释。\n\n${t}`;
+      break;
     case 'polish':
-      return `请润色下面这段内容，使文笔更流畅自然、用词更准确，但不改变原意与情节。只输出润色后的文本，不要解释。\n\n${t}`;
+      body = `请润色下面这段内容，使文笔更流畅自然、用词更准确，但不改变原意与情节。只输出润色后的文本，不要解释。\n\n${t}`;
+      break;
     case 'rewrite-selected':
-      return `请改写下面这段内容，换一种表达但保留原意与风格。只输出改写后的文本，不要解释。\n\n${t}`;
+      body = `请改写下面这段内容，换一种表达但保留原意与风格。只输出改写后的文本，不要解释。\n\n${t}`;
+      break;
     case 'rewrite-all':
-      return `请基于以下全文重写，保持核心设定、人物与主线，优化结构与表达。只输出重写后的完整文本，不要任何解释或前缀。\n\n${t}`;
+      body = `请基于以下全文重写，保持核心设定、人物与主线，优化结构与表达。只输出重写后的完整文本，不要任何解释或前缀。\n\n${t}`;
+      break;
     default:
-      return t;
+      body = t;
   }
+  return body + attachmentNote();
 }
 
 function resolveTarget(): StreamTarget {
@@ -272,13 +434,13 @@ function resolveTarget(): StreamTarget {
 async function run() {
   if (!canRun.value) {
     if (!status.ai_enabled) ElMessage.warning('站长暂未开启 AI 功能');
-    else if (!form.text.trim()) ElMessage.warning('请先填入写作依据');
+    else if (!form.text.trim() && !attachments.value.length) ElMessage.warning('请先填入写作依据或上传附件');
     else if (!form.model_id) ElMessage.warning('请选择模型');
     return;
   }
   // 同步最新依据
   form.text = currentSource();
-  if (!form.text.trim()) {
+  if (!form.text.trim() && attachments.value.length === 0) {
     ElMessage.warning('写作依据为空，无法生成');
     return;
   }
@@ -302,6 +464,7 @@ async function run() {
         model_id: form.model_id,
         message: buildPrompt(),
         max_tokens: form.max_tokens,
+        attachments: attachments.value,
       },
       (chunk: string) => {
         liveText.value += chunk;
@@ -452,4 +615,42 @@ onBeforeUnmount(() => {
 }
 .awl-live-actions { margin-top: 8px; }
 .awl-error { color: #ef4444; font-size: 0.82rem; }
+
+/* 数学 / LaTeX 语法插入工具栏 */
+.awl-input-tools { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.awl-md-btn {
+  border: 1px solid var(--border-color, #e5e7eb);
+  background: var(--bg-card, #fff);
+  border-radius: 6px; padding: 2px 7px; font-size: 0.72rem; cursor: pointer;
+  color: var(--text-color, #1f2937); line-height: 1.6;
+}
+.awl-md-btn:hover { border-color: var(--el-color-primary, #409eff); color: var(--el-color-primary, #409eff); }
+.awl-md-btn:disabled { opacity: 0.5; pointer-events: none; }
+
+/* 附件区 */
+.awl-attach { display: flex; flex-direction: column; gap: 6px; }
+.awl-attach-tip { font-size: 0.72rem; color: var(--text-muted, #6b7280); }
+.awl-attach-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.awl-attach-item {
+  display: flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border-color, #e5e7eb); border-radius: 8px;
+  padding: 4px 6px; background: var(--bg-soft, #f5f7fa); max-width: 100%;
+}
+.awl-attach-thumb { width: 34px; height: 34px; object-fit: cover; border-radius: 4px; }
+.awl-attach-file { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.awl-attach-ext {
+  font-size: 0.62rem; font-weight: 700; color: var(--el-color-primary, #409eff);
+  text-transform: uppercase;
+}
+.awl-attach-name {
+  font-size: 0.72rem; color: var(--text-color, #1f2937);
+  max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.awl-attach-size { font-size: 0.68rem; color: var(--text-muted, #6b7280); }
+.awl-attach-del {
+  border: none; background: transparent; cursor: pointer; color: var(--text-muted, #6b7280);
+  font-size: 0.8rem; padding: 2px 4px; border-radius: 4px; flex-shrink: 0;
+}
+.awl-attach-del:hover { background: rgba(0,0,0,0.06); color: #ef4444; }
+.awl-attach-del:disabled { opacity: 0.4; cursor: default; }
 </style>
