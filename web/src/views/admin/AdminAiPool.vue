@@ -132,9 +132,10 @@
             </template>
           </el-table-column>
           <el-table-column prop="priority" label="优先级" width="80" />
-          <el-table-column label="操作" width="200" fixed="right">
+          <el-table-column label="操作" width="268" fixed="right">
             <template #default="{ row }">
               <el-button size="small" text type="primary" @click="openKeys(row)">密钥池</el-button>
+              <el-button size="small" text type="warning" @click="openChannel(row)">对账</el-button>
               <el-button size="small" text type="primary" @click="openEdit(row)">编辑</el-button>
               <el-button size="small" text type="danger" @click="removeModel(row)">删除</el-button>
             </template>
@@ -280,6 +281,64 @@
           </div>
         </div>
       </div>
+    </el-dialog>
+
+    <!-- ============ L5 渠道对账：余额 / 已消费 / 剩余 + 连通性 ============ -->
+    <el-dialog v-model="channelDialog" title="渠道对账（余额 · 消费 · 连通性）" width="640px">
+      <div v-if="channelLoading" class="ch-loading">正在向该渠道发起真实请求…</div>
+      <template v-else-if="channelReport">
+        <div class="ch-head">
+          <div>
+            <div class="ch-name">{{ channelReport.model_name }}</div>
+            <div class="ch-meta">{{ channelReport.base_url }}</div>
+          </div>
+          <el-tag :type="channelReport.balance.supported ? 'success' : 'info'" size="small">
+            {{ channelReport.balance.supported ? '支持余额查询' : '该渠道无余额端点' }}
+          </el-tag>
+        </div>
+
+        <div class="ch-cards">
+          <div class="ch-card">
+            <div class="ch-card-k">剩余</div>
+            <div class="ch-card-v">{{ fmtMoney(channelReport.balance.total_remaining) }}</div>
+            <div class="ch-card-u">{{ channelReport.balance.currency || '—' }}</div>
+          </div>
+          <div class="ch-card">
+            <div class="ch-card-k">已消费</div>
+            <div class="ch-card-v used">{{ fmtMoney(channelReport.balance.total_used) }}</div>
+            <div class="ch-card-u">{{ channelReport.balance.currency || '—' }}</div>
+          </div>
+          <div class="ch-card">
+            <div class="ch-card-k">累计充值 / 授予</div>
+            <div class="ch-card-v">{{ fmtMoney(channelReport.balance.total_granted) }}</div>
+            <div class="ch-card-u">{{ channelReport.balance.currency || '—' }}</div>
+          </div>
+        </div>
+
+        <el-descriptions :column="2" size="small" border style="margin-top:12px">
+          <el-descriptions-item label="渠道类型">{{ channelReport.provider || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="查询时间">{{ channelReport.balance.fetched_at || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="连通性">
+            <el-tag :type="channelReport.probe.reachable ? 'success' : 'danger'" size="small">
+              {{ channelReport.probe.reachable ? '可达' : '不可达' }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="延迟">{{ channelReport.probe.latency_ms }} ms</el-descriptions-item>
+          <el-descriptions-item label="HTTP 状态">{{ channelReport.probe.status_code || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="可用模型数">{{ channelReport.probe.models ?? '—' }}</el-descriptions-item>
+        </el-descriptions>
+
+        <el-alert
+          v-if="channelReport.balance.error || channelReport.probe.error"
+          type="warning" :closable="false" show-icon style="margin-top:10px"
+          :title="channelReport.balance.error || channelReport.probe.error"
+        />
+        <div class="ch-tip">余额查询仅对 OpenAI 兼容渠道有效；部分中转渠道不提供该端点属正常现象，连通性仍可验证。</div>
+      </template>
+      <template #footer>
+        <el-button :loading="channelLoading" @click="refreshChannel">重新查询</el-button>
+        <el-button type="primary" @click="channelDialog = false">关闭</el-button>
+      </template>
     </el-dialog>
 
     <!-- ============ 创建 / 编辑对话框 ============ -->
@@ -477,7 +536,7 @@ import { MagicStick, Plus } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import SectionHeader from '@/components/common/SectionHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
-import { aiApi, type AdminAiModel, type AiModelPreset, type AiVendor, type AiCategoryPrice, type AiVendorMatrixEntry, type ProviderModelSuggestion } from '@/api/ai';
+import { aiApi, type AdminAiModel, type AiModelPreset, type AiVendor, type AiCategoryPrice, type AiVendorMatrixEntry, type ProviderModelSuggestion, type AdminChannelReport } from '@/api/ai';
 import { adminApi } from '@/api/admin';
 import StateBlock from '@/components/common/StateBlock.vue';
 
@@ -556,6 +615,37 @@ function kindHint(kind: string) {
     video: '按次计费：异步任务（/videos 提交 + 查询），提交即扣款、失败退款',
   };
   return map[kind] || '';
+}
+
+// ---------- L5 渠道对账 ----------
+const channelDialog = ref(false);
+const channelLoading = ref(false);
+const channelReport = ref<AdminChannelReport | null>(null);
+const channelTarget = ref<AdminAiModel | null>(null);
+
+async function openChannel(row: AdminAiModel) {
+  channelTarget.value = row;
+  channelDialog.value = true;
+  channelLoading.value = true;
+  channelReport.value = null;
+  try {
+    const res = await aiApi.modelChannel(row.id);
+    if (res.data.code === 0) channelReport.value = res.data.data;
+    else ElMessage.error(res.data.message || '对账查询失败');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '对账查询失败');
+  }
+  channelLoading.value = false;
+}
+
+// 重新查询（弹窗内按钮，复用已选中的模型，不必再传参）
+function refreshChannel() {
+  if (channelTarget.value) openChannel(channelTarget.value);
+}
+
+// 金额展示：整数不带小数位，避免 10.0000 这种噪声
+function fmtMoney(n?: number) {  if (n === undefined || n === null) return '—';
+  return Number.isInteger(n) ? String(n) : n.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
 }
 
 // ---------- API 卡池 ----------
@@ -1118,4 +1208,20 @@ async function saveCategoryPrice(p: AiCategoryPrice & { _saving?: boolean }) {
 .price-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .price-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .price-label { width: 56px; font-size: 0.82rem; color: var(--text-light, #666); }
+
+/* L5 渠道对账 */
+.ch-loading { padding: 28px 0; text-align: center; color: var(--text-light, #888); font-size: 0.88rem; }
+.ch-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.ch-name { font-weight: 600; font-size: 0.98rem; color: var(--text-main, #1f2937); }
+.ch-meta { font-size: 0.76rem; color: var(--text-light, #888); word-break: break-all; margin-top: 2px; }
+.ch-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.ch-card {
+  border: 1px solid var(--border-color, #ebeef5); border-radius: 10px;
+  padding: 12px 14px; background: var(--bg-soft, #fafbfc);
+}
+.ch-card-k { font-size: 0.75rem; color: var(--text-light, #888); margin-bottom: 6px; }
+.ch-card-v { font-size: 1.4rem; font-weight: 700; color: var(--el-color-primary, #409eff); line-height: 1.15; font-variant-numeric: tabular-nums; }
+.ch-card-v.used { color: var(--el-color-warning, #e6a23c); }
+.ch-card-u { font-size: 0.72rem; color: var(--text-light, #aaa); margin-top: 2px; }
+.ch-tip { margin-top: 10px; font-size: 0.76rem; color: var(--text-light, #999); }
 </style>

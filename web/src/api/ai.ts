@@ -250,7 +250,45 @@ export const aiApi = {
   manageFreeQuotaOverride(data: { action: 'set' | 'remove'; user_id: number; daily_calls?: number; daily_tokens?: number; note?: string }) {
     return api.post('/admin/ai/free-quota/overrides', data);
   },
+
+  // ---------- L5 渠道对账：拉取上游余额 / 已消费 / 剩余 + 真实连通性探针 ----------
+  /** GET /api/admin/ai/models/:id/channel —— 余额（对账）与连通性 */
+  modelChannel(id: number) {
+    return api.get<{ code: number; data: AdminChannelReport }>(`/admin/ai/models/${id}/channel`);
+  },
 };
+
+/** 上游渠道余额快照（仅 OpenAI 兼容渠道支持；其余 supported=false） */
+export interface AdminChannelBalance {
+  provider: string;
+  total_granted: number;
+  total_used: number;
+  total_remaining: number;
+  currency: string;
+  period?: string;
+  fetched_at: string;
+  supported: boolean;
+  error?: string;
+}
+
+/** 真实连通性探针（GET /models 或一次 1-token 补全） */
+export interface AdminChannelProbe {
+  reachable: boolean;
+  latency_ms: number;
+  status_code: number;
+  models?: number;
+  error?: string;
+}
+
+export interface AdminChannelReport {
+  model_id: number;
+  model_name: string;
+  model_id_str: string;
+  base_url: string;
+  provider: string;
+  balance: AdminChannelBalance;
+  probe: AdminChannelProbe;
+}
 
 export interface AdminAiFreeQuotaOverride {
   id: number;
