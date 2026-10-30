@@ -1,7 +1,7 @@
 <template>
   <div class="admin-sidebar">
     <!-- 品牌区：点击回数据概览 -->
-    <div class="as-brand" :class="{ collapsed }" @click="$router.push('/admin')">
+    <div class="as-brand" :class="{ collapsed }" @click="$router.push(homePath)">
       <div class="as-logo">N</div>
       <span v-show="!collapsed" class="as-brand-text">NVS 管理后台</span>
     </div>
@@ -14,10 +14,10 @@
         router
         class="as-menu"
       >
-        <!-- 数据概览（仪表盘主页） -->
-        <el-menu-item index="/admin">
+        <!-- 数据概览（管理员）/ 警方取管台（警方） -->
+        <el-menu-item :index="homePath">
           <el-icon><DataAnalysis /></el-icon>
-          <template #title>数据概览</template>
+          <template #title>{{ homeLabel }}</template>
         </el-menu-item>
 
         <!-- 分类分组 -->
@@ -46,6 +46,7 @@ import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { DataAnalysis } from '@element-plus/icons-vue';
 import { adminMenuCategories } from '@/views/admin/adminMenuData';
+import { POLICE_ALLOWED_PATHS } from '@/constants/policeAccess';
 import { useAuthStore } from '@/stores/auth';
 
 defineProps<{ collapsed: boolean }>();
@@ -54,24 +55,17 @@ const authStore = useAuthStore();
 
 // 警方仅能看到「内容治理子集」：合规与安全、AI 配置、站点配置等对警方不可见。
 // 后端已按路由逐项 403，此处只做前端收敛（避免展示不可达入口）。
-const policePaths = new Set<string>([
-  '/police',
-  '/admin/moderation',
-  '/admin/reports',
-  '/admin/ban',
-  '/admin/ai-moderation',
-  '/admin/badwords',
-  '/admin/softdel',
-  '/admin/sentiment',
-  '/admin/hotwords',
-]);
-
+// 白名单与路由守卫共用 constants/policeAccess.ts，避免两处各写一份而漂移。
 const visibleCats = computed(() => {
   if (authStore.user?.role !== 'police') return adminMenuCategories;
   return adminMenuCategories
-    .map((c) => ({ ...c, items: c.items.filter((it) => policePaths.has(it.path)) }))
+    .map((c) => ({ ...c, items: c.items.filter((it) => POLICE_ALLOWED_PATHS.has(it.path)) }))
     .filter((c) => c.items.length > 0);
 });
+
+// 首页项：管理员进仪表盘，警方进警方台（/admin 对警方是禁入的）
+const homePath = computed(() => (authStore.user?.role === 'police' ? '/police' : '/admin'));
+const homeLabel = computed(() => (authStore.user?.role === 'police' ? '警方取管台' : '数据概览'));
 
 // 深链 ?item=<path> 时高亮对应条目（即使当前显示的是仪表盘主页）
 const activeIndex = computed(() => {

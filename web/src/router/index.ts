@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import Home from '@/views/Home.vue';
 import { useAuthStore } from '@/stores/auth';
+import { canAccessPath } from '@/constants/policeAccess';
 import api from '@/api';
 import { appPrefix } from '@/utils/prefix';
 
@@ -838,6 +839,19 @@ router.beforeEach(async (to, _from, next) => {
       return;
     }
     if (to.meta.requiresPolice && role !== 'admin' && role !== 'police') {
+      next('/');
+      return;
+    }
+  }
+
+  // 🔒 前缀兜底（防漏写 meta）：所有后台路由历史上都是「平铺 + 只写 requiresAuth」，
+  // 90 个 /admin/* 里只有 5 个真正声明了 requiresAdmin —— 于是任何已登录普通用户
+  // 都能直接打开 /admin/settings 之类页面（接口会 403，但模板与菜单全渲染出来了）。
+  // 这里按路径前缀统一收紧，白名单与后台侧栏共用（constants/policeAccess.ts），
+  // 新增路由即使忘了写 meta 也不会漏放行。
+  {
+    const role = useAuthStore().user?.role;
+    if (!canAccessPath(role, to.path)) {
       next('/');
       return;
     }
