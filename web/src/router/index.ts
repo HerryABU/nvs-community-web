@@ -461,6 +461,13 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      // 心理危机干预：独立模块页（原为 AI 防越狱里的一个 tab，运营侧要求独立入口）
+      path: '/admin/crisis',
+      name: 'admin-crisis',
+      component: () => import('@/views/admin/AdminCrisis.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/sentiment',
       name: 'admin-sentiment',
       component: () => import('@/views/admin/AdminSentiment.vue'),

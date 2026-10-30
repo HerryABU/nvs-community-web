@@ -36,7 +36,7 @@
         </div>
       </div>
 
-      <el-tabs v-model="tab" class="safety-tabs" @tab-change="onTabChange">
+      <el-tabs v-model="tab" class="safety-tabs">
         <!-- ========== 策略配置 ========== -->
         <el-tab-pane label="策略配置" name="config">
           <div class="admin-panel">
@@ -294,78 +294,8 @@
           </div>
         </el-tab-pane>
 
-        <!-- ========== 心理危机干预 ========== -->
-        <el-tab-pane label="心理危机干预" name="crisis">
-          <div class="admin-panel">
-            <SectionHeader
-              title="高危观察期用户"
-              subtitle="AI 负责识别、留痕、汇总；最后「要不要报警 / 要不要发关怀邮件」由你按"
-              :icon="'🫶'"
-              gradient="blue"
-            />
-            <div class="safety-actions" style="margin-bottom:12px">
-              <el-button size="small" :loading="crisisLoading" @click="loadCrisisUsers">刷新</el-button>
-            </div>
+        <!-- 心理危机干预已独立为 /admin/crisis（运营侧要求独立入口，避免与 AI 防越狱混在一起） -->
 
-            <StateBlock
-              v-if="crisisLoading"
-              state="loading"
-              title="正在读取观察期用户"
-              description="加载中…"
-            />
-            <StateBlock
-              v-else-if="crisisError"
-              state="error"
-              title="读取失败"
-              :description="crisisError"
-              @retry="loadCrisisUsers"
-            />
-            <StateBlock
-              v-else-if="crisisUsers.length === 0"
-              state="empty"
-              title="当前没有处于高危观察期的用户"
-              description="出现自残/抑郁黑话或 AI 判危时，用户会自动进入观察期并出现在这里"
-            />
-            <el-table v-else :data="crisisUsers" size="small" stripe>
-              <el-table-column prop="user_id" label="ID" width="70" />
-              <el-table-column label="用户" min-width="140">
-                <template #default="{ row }">
-                  {{ row.nickname || row.username }}
-                  <span class="muted small">@{{ row.username }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column label="未成年" width="80">
-                <template #default="{ row }">
-                  <el-tag v-if="row.is_minor" size="small" type="warning" effect="plain">未成年</el-tag>
-                  <span v-else class="muted small">—</span>
-                </template>
-              </el-table-column>
-              <el-table-column prop="event_count" label="危机事件" width="90" />
-              <el-table-column label="观察期至" min-width="150">
-                <template #default="{ row }">
-                  <span class="muted small">{{ row.observe_until || '—' }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column label="操作" width="120" fixed="right">
-                <template #default="{ row }">
-                  <el-button size="small" text type="primary" @click="openCrisisReport(row)">
-                    查看报告
-                  </el-button>
-                </template>
-              </el-table-column>
-            </el-table>
-          </div>
-
-          <div v-if="crisisReportText" class="admin-panel">
-            <SectionHeader
-              title="高危用户心理干预报告"
-              subtitle="AI 已完成识别、留痕与汇总；最后的处置动作必须由人工决定"
-              :icon="'📋'"
-              gradient="amber"
-            />
-            <pre class="crisis-report">{{ crisisReportText }}</pre>
-          </div>
-        </el-tab-pane>
 
         <!-- ========== 拦截记录 ========== -->
         <el-tab-pane label="拦截记录" name="events">
@@ -596,7 +526,6 @@ import StateBlock from '@/components/common/StateBlock.vue';
 import { aiApi } from '@/api/ai';
 import {
   aiSafetyApi,
-  type CrisisUser,
   type JudgeLog,
   type SafetyConfig,
   type SafetyEvent,
@@ -822,44 +751,9 @@ async function loadAll() {
   if (tab.value === 'judge') loadJudge(judgePage.value);
   if (tab.value === 'profiles') loadProfiles(profPage.value);
   if (tab.value === 'locked') loadLocked(lockedPage.value);
-  if (tab.value === 'crisis') loadCrisisUsers();
 }
 
-// ---------- 心理危机干预 ----------
-
-// 高危观察期用户 + 干预报告
-const crisisUsers = ref<CrisisUser[]>([]);
-const crisisLoading = ref(false);
-const crisisError = ref('');
-const crisisReportText = ref('');
-
-async function loadCrisisUsers() {
-  crisisLoading.value = true;
-  crisisError.value = '';
-  try {
-    const res = await aiSafetyApi.crisisUsers();
-    crisisUsers.value = res.data?.data?.users || [];
-  } catch (e: any) {
-    // 统计类失败要落到可见 hint ref（catch 里啥都不做 = 静默失败）
-    crisisError.value = e?.response?.data?.message || '读取观察期用户失败，请稍后重试';
-  } finally {
-    crisisLoading.value = false;
-  }
-}
-
-// 切到心理危机页时才拉数据：这一页是低频操作，不该跟首屏一起抢请求
-function onTabChange(name: string | number) {
-  if (name === 'crisis') loadCrisisUsers();
-}
-
-async function openCrisisReport(row: CrisisUser) {
-  try {
-    const res = await aiSafetyApi.crisisReport(row.user_id);
-    crisisReportText.value = res.data?.data?.report || '（报告为空）';
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.message || '生成报告失败');
-  }
-}
+// 心理危机干预已抽为独立页面 /admin/crisis（AdminCrisis.vue），本页不再重复实现。
 
 async function onSave() {
   saving.value = true;
