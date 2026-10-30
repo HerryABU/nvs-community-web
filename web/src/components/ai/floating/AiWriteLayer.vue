@@ -85,7 +85,7 @@
           :placeholder="inputPlaceholder"
         />
 
-        <!-- 附件（图片 / 文档）：随请求原样发给上游，图片走多模态、文档作参考注入 -->
+        <!-- 附件（图片 / 文档）：图片走多模态；文档由后端抽取正文后作为参考文本注入 -->
         <div class="awl-attach">
           <input
             ref="fileInputRef"
@@ -104,7 +104,7 @@
             title="上传图片（多模态）或文档（参考文本注入）"
             @click="pickFiles"
           >上传附件</el-button>
-          <span class="awl-attach-tip">图片走多模态，文档作参考原文注入</span>
+          <span class="awl-attach-tip">图片走多模态；文档自动抽取正文作为参考注入</span>
           <div v-if="attachments.length" class="awl-attach-list">
             <div v-for="(a, i) in attachments" :key="a.url" class="awl-attach-item" :title="a.name">
               <img v-if="a.kind === 'image'" :src="a.url" class="awl-attach-thumb" :alt="a.name" />
@@ -211,7 +211,7 @@ const form = reactive<{ model_id: number; action: string; max_tokens: number; te
   text: '',
 });
 
-// ── 附件（图片 / 文档）：随请求原样发给上游，图片走多模态、文档作参考文本注入 ──
+// ── 附件（图片 / 文档）：图片走多模态；文档由后端抽取正文后作为参考文本注入 ──
 const attachments = ref<ChatAttachment[]>([]);
 const uploading = ref(false);
 const fileInputRef = ref<HTMLInputElement>();

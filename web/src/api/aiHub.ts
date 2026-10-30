@@ -268,7 +268,7 @@ export async function streamChat(
     byok?: boolean;
     byok_model?: string;
     confirm?: boolean;
-    /** 附件引用（图片/文档原样发给上游） */
+    /** 附件引用（图片走多模态；文档由后端抽正文后作为参考文本注入） */
     attachments?: ChatAttachment[];
     /** 编辑某条用户消息并重发 → 新建 user 兄弟分支 */
     edit_msg_id?: number;

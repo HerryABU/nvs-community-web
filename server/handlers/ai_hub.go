@@ -169,10 +169,16 @@ func AiHubChatStream(c *gin.Context) {
 		return
 	}
 	// 附件读取（读文件 + base64）。放在前置校验里：失败就别建会话、别记账。
-	attImages, attFiles, attErr := buildAttachmentParts(req.Attachments)
+	attImages, attFiles, attDocTexts, attErr := buildAttachmentParts(req.Attachments)
 	if attErr != nil {
 		utils.BadRequest(c, attErr.Error())
 		return
+	}
+	// 文档正文（平台侧抽取出来的）拼到本轮消息里，作为参考文本注入。
+	// 只发附件不打字时，effMsg 就是文档正文本身。
+	effMsg := msg
+	if len(attDocTexts) > 0 {
+		effMsg = msg + "\n\n" + strings.Join(attDocTexts, "\n\n")
 	}
 	// 落库/展示用的文本：打字内容 + 附件名摘要（历史里能看出这轮带了什么）
 	storeMsg := msg
@@ -389,12 +395,12 @@ func AiHubChatStream(c *gin.Context) {
 	if regenUser == nil {
 		messages = append(messages, aiclient.Message{
 			Role:    "user",
-			Content: aiclient.MultimodalContent(msg, attImages, attFiles),
+			Content: aiclient.MultimodalContent(effMsg, attImages, attFiles),
 		})
 	}
 
 	// ── 预检（不足直接 429，不开流） ──
-	tokensIn := models.EstimateTokens(msg)
+	tokensIn := models.EstimateTokens(effMsg)
 	for _, h := range history[start:] {
 		tokensIn += models.EstimateTokens(h.Content)
 	}

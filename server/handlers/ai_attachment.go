@@ -13,6 +13,7 @@ import (
 
 	"nvs-server/aiclient"
 	"nvs-server/config"
+	"nvs-server/doctext"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -23,11 +24,13 @@ import (
 // AI 工作台附件（图片 / 文档）
 // POST /api/ai/attachment   multipart field: file
 //
-// 设计要点：**平台不做本地解析**。图片与文档原样保存，
-// 发送对话时由后端读回并转成上游 API 的 content part：
-//   - 图片 → image_url（data:image/...;base64）
-//   - 文档 → file（data:application/pdf;base64，filename 原样带上）
-// 由模型侧读取 PDF/docx，平台只负责搬运。
+// 设计要点：**图片原样发，文档优先抽正文**。
+// 图片与文档先存到 uploads/ai/ 下，发送对话时由后端读回：
+//   - 图片 → image_url（data:image/...;base64），多模态直送
+//   - 文档 → 优先在平台侧抽取正文，作为「参考文本」注入提示词
+//     （任何上游都能用；原样发 file part 只有 Claude 读得懂，
+//     DeepSeek/Qwen/GLM 等 OpenAI 兼容上游会 400）
+//     抽不出正文时（扫描件 PDF / 旧版 .doc）才回退为原样 file part。
 //
 // 返回：{ kind: "image"|"file", name, url, mime, size }
 // ─────────────────────────────────────────────────────────────
@@ -139,27 +142,51 @@ type AiChatAttachment struct {
 	Kind string `json:"kind"` // image / file
 }
 
-// buildAttachmentParts 把附件引用转成上游 content parts（读文件 → base64 data URL）。
-// 返回图片与文档两组：图片走 image_url，文档走 file（原样让模型读）。
-func buildAttachmentParts(items []AiChatAttachment) ([]aiclient.ImageURLPart, []aiclient.FilePart, error) {
+// buildAttachmentParts 把附件引用转成上游 content parts。
+//
+// 图片 → image_url（data:image/...;base64），多模态直送。
+// 文档 → **优先在平台侧抽取正文**，作为「参考文本」注入提示词：
+//
+//	只有 Anthropic（Claude document block）读得懂 OpenAI 的 file content part，
+//	DeepSeek / Qwen / GLM / Moonshot 等 OpenAI 兼容上游会因不认识的 content
+//	type 直接 400。所以文档先在平台侧解析成文本，任何上游都能用。
+//	抽不出正文（扫描件 PDF / 旧版 .doc / 加密文档）才回退为原样 file part，
+//	保留 Claude 那条路。
+func buildAttachmentParts(items []AiChatAttachment) ([]aiclient.ImageURLPart, []aiclient.FilePart, []string, error) {
 	images := make([]aiclient.ImageURLPart, 0, len(items))
 	files := make([]aiclient.FilePart, 0, len(items))
+	docTexts := make([]string, 0, len(items))
 	for _, it := range items {
-		dataURL, err := aiAttachmentDataURL(it.URL)
+		data, mime, err := aiAttachmentBytes(it.URL)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if it.Kind == "image" {
-			images = append(images, aiclient.ImageURLPart{URL: dataURL})
+			images = append(images, aiclient.ImageURLPart{URL: dataURLFrom(mime, data)})
 			continue
 		}
 		name := strings.TrimSpace(it.Name)
 		if name == "" {
 			name = filepath.Base(it.URL)
 		}
-		files = append(files, aiclient.FilePart{Filename: name, FileData: dataURL})
+		// 文档：先试着抽正文，抽不出来才原样发文件
+		if res, xerr := doctext.Extract(data, filepath.Ext(name)); xerr == nil && strings.TrimSpace(res.Text) != "" {
+			docTexts = append(docTexts, formatDocText(name, res))
+			continue
+		}
+		files = append(files, aiclient.FilePart{Filename: name, FileData: dataURLFrom(mime, data)})
 	}
-	return images, files, nil
+	return images, files, docTexts, nil
+}
+
+// formatDocText 把抽取出的正文包成明确的「参考文本」区块，
+// 让模型知道这是参考资料而不是要续写的正文。
+func formatDocText(name string, res doctext.Result) string {
+	var sb strings.Builder
+	sb.WriteString("【附件正文：" + name + "】\n")
+	sb.WriteString(res.Text)
+	sb.WriteString("\n【附件正文结束：" + name + "】")
+	return sb.String()
 }
 
 // attachmentNames 附件名列表（给落库的可见文本用）
@@ -175,12 +202,12 @@ func attachmentNames(items []AiChatAttachment) []string {
 	return out
 }
 
-// aiAttachmentDataURL 把已上传的附件读回来转成 data URL（供上游 content part 内联）。
+// aiAttachmentBytes 把已上传的附件读回来（原始字节 + MIME）。
 // 只允许读 /uploads/ai/ 下的文件，避免被构造路径读到别的东西。
-func aiAttachmentDataURL(url string) (string, error) {
+func aiAttachmentBytes(url string) ([]byte, string, error) {
 	const prefix = "/uploads/ai/"
 	if !strings.HasPrefix(url, prefix) {
-		return "", fmt.Errorf("非法的附件地址")
+		return nil, "", fmt.Errorf("非法的附件地址")
 	}
 	// 用 Clean("/"+rel) 把任何 ../ 抹平（锚定在 / 下，出不去），同时保留 yyyy/mm 子目录
 	rel := filepath.Clean("/" + strings.TrimPrefix(url, prefix))
@@ -189,14 +216,19 @@ func aiAttachmentDataURL(url string) (string, error) {
 	ext := strings.ToLower(filepath.Ext(abs))
 	mimeType, ok := aiAttachmentMIME[ext]
 	if !ok {
-		return "", fmt.Errorf("不支持的附件类型")
+		return nil, "", fmt.Errorf("不支持的附件类型")
 	}
 	data, err := os.ReadFile(abs)
 	if err != nil {
-		return "", fmt.Errorf("附件已失效，请重新上传")
+		return nil, "", fmt.Errorf("附件已失效，请重新上传")
 	}
 	if len(data) > aiFileMaxSize {
-		return "", fmt.Errorf("附件过大")
+		return nil, "", fmt.Errorf("附件过大")
 	}
-	return "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(data), nil
+	return data, mimeType, nil
+}
+
+// dataURLFrom 字节 + MIME → data URL（供上游 content part 内联）。
+func dataURLFrom(mime string, data []byte) string {
+	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data)
 }
