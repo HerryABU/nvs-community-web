@@ -146,7 +146,7 @@ onMounted(() => {
 <style scoped>
 .blog-list-wrap { min-height: 100vh; background: var(--bg-color); }
 .bl-layout {
-  max-width: 1080px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 24px 16px;
   display: flex;

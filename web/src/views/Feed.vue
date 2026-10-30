@@ -117,7 +117,8 @@ onMounted(() => { loadData(); });
 </script>
 
 <style scoped>
-.page-container { max-width: 760px; margin: 0 auto; padding: 24px; }
+/* 与全站基准对齐（原 760 在宽屏上像一条窄缝；960 兼顾阅读舒适与版面利用率） */
+.page-container { max-width: 960px; margin: 0 auto; padding: 24px; }
 .feed-header { margin-bottom: 16px; }
 .feed-header h2 { margin: 0 0 12px 0; }
 .filter-bar { display: flex; justify-content: flex-start; }
