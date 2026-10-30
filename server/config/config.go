@@ -177,7 +177,11 @@ var (
 
 	// JWT
 	JWTSecret      string
-	JWTExpireHours string
+	JWTExpireHours string // 遗留字段（仍可被部分旧逻辑引用）；访问令牌实际有效期改由 JWTAccessExpireMinutes 控制
+	// JWTAccessExpireMinutes 访问令牌（token Cookie）有效期（分钟），默认 15。
+	// 短期有效是防盗用第一道防线：即便访问令牌被 XSS/劫持窃取，也仅 15 分钟内可用，
+	// 之后由 HttpOnly 刷新令牌无感续期（详见 middleware/auth.go 绑定校验）。
+	JWTAccessExpireMinutes string
 	// JWTRefreshExpireHours 刷新令牌有效期（小时），默认 720（30 天），用于无感续期会话
 	JWTRefreshExpireHours string
 
@@ -270,6 +274,9 @@ func Init() {
 
 	JWTSecret = getEnv("JWT_SECRET", "change-me-in-production")
 	JWTExpireHours = getEnv("JWT_EXPIRE_HOURS", "72")
+	// 🔒 访问令牌短期有效（默认 15 分钟）：配合 HttpOnly 刷新令牌无感续期，
+	// 即使访问令牌被窃取也仅在极短窗口内可用，大幅压缩盗用窗口。
+	JWTAccessExpireMinutes = getEnv("JWT_ACCESS_EXPIRE_MINUTES", "15")
 	JWTRefreshExpireHours = getEnv("JWT_REFRESH_EXPIRE_HOURS", "720")
 	// 🔒 安全审计 S1：默认 JWT_SECRET 为公开值，可被伪造任意管理员 Token。
 	// 使用默认值时自动替换为随机密钥并持久化（data/.jwt_secret，0600），自定义值保持不变。

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"log"
 	"strings"
 
 	"nvs-server/gate"
@@ -135,15 +136,22 @@ func Register(c *gin.Context) {
 	recordUserAudit(c, user.ID, models.AuditRegister, "新用户注册，邮箱 "+user.Email, "success")
 
 	// 生成访问令牌 + 刷新令牌，均写入 HttpOnly Cookie
-	accessToken, err := utils.GenerateToken(user.ID, user.Email, user.Role)
+	// 🔒 令牌绑定 + 刷新令牌 JTI 轮换（同登录流程，防 JWT/刷新令牌窃取盗用）
+	fp := c.GetHeader(middleware.DeviceFingerprintHeader)
+	region := utils.RegionForBinding(c.ClientIP())
+	accessToken, err := utils.GenerateToken(user.ID, user.Email, user.Role, fp, region)
 	if err != nil {
 		utils.InternalError(c, "Token 生成失败")
 		return
 	}
-	refreshToken, err := utils.GenerateRefreshToken(user.ID, user.Email, user.Role)
+	jti := utils.RandomJTI()
+	refreshToken, err := utils.GenerateRefreshToken(user.ID, user.Email, user.Role, jti)
 	if err != nil {
 		utils.InternalError(c, "Refresh Token 生成失败")
 		return
+	}
+	if err := models.SetRefreshState(user.ID, jti); err != nil {
+		log.Printf("[auth] 写入刷新状态失败（用户 %d）：%v", user.ID, err)
 	}
 	middleware.SetTokenCookie(c, accessToken)
 	middleware.SetRefreshCookie(c, refreshToken)

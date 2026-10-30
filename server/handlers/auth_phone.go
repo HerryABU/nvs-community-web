@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"log"
 	"math/big"
 	"strings"
 	"time"
@@ -246,13 +247,20 @@ func issueSession(c *gin.Context, user *models.User, auditDesc string) {
 	})
 	recordUserAudit(c, user.ID, models.AuditLoginSuccess, auditDesc, "success")
 
-	accessToken, err := utils.GenerateToken(user.ID, user.Email, user.Role)
+	// 🔒 令牌绑定 + 刷新令牌 JTI 轮换（同邮箱登录流程，防 JWT/刷新令牌窃取盗用）
+	fp := c.GetHeader(middleware.DeviceFingerprintHeader)
+	region := utils.RegionForBinding(c.ClientIP())
+	accessToken, err := utils.GenerateToken(user.ID, user.Email, user.Role, fp, region)
 	if err != nil {
 		return
 	}
-	refreshToken, err := utils.GenerateRefreshToken(user.ID, user.Email, user.Role)
+	jti := utils.RandomJTI()
+	refreshToken, err := utils.GenerateRefreshToken(user.ID, user.Email, user.Role, jti)
 	if err != nil {
 		return
+	}
+	if err := models.SetRefreshState(user.ID, jti); err != nil {
+		log.Printf("[auth] 写入刷新状态失败（用户 %d）：%v", user.ID, err)
 	}
 	middleware.SetTokenCookie(c, accessToken)
 	middleware.SetRefreshCookie(c, refreshToken)

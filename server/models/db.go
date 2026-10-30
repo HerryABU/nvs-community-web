@@ -93,6 +93,8 @@ func AllModels() []interface{} {
 		&ApiKeyAlarm{},
 		// 未成年人心理危机事件留痕（供《高危用户心理干预报告》）
 		&CrisisEvent{},
+		// 刷新令牌轮换状态（JTI）：防止刷新令牌窃取后长期可用
+		&RefreshState{},
 	}
 }
 

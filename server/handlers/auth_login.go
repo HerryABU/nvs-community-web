@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -98,15 +99,24 @@ func Login(c *gin.Context) {
 	})
 
 	// 生成访问令牌 + 刷新令牌，均写入 HttpOnly Cookie
-	accessToken, err := utils.GenerateToken(user.ID, user.Email, user.Role)
+	// 🔒 令牌绑定：把「设备指纹 + 登录地（省级）」加密进访问令牌，防 JWT 窃取后异地/异设备盗用；
+	//    刷新令牌带 JTI 族 ID，用于刷新轮换（旧刷新令牌在受害者另设备刷新后立即失效）。
+	fp := c.GetHeader(middleware.DeviceFingerprintHeader)
+	region := utils.RegionForBinding(c.ClientIP())
+	accessToken, err := utils.GenerateToken(user.ID, user.Email, user.Role, fp, region)
 	if err != nil {
 		utils.InternalError(c, "Token 生成失败")
 		return
 	}
-	refreshToken, err := utils.GenerateRefreshToken(user.ID, user.Email, user.Role)
+	jti := utils.RandomJTI()
+	refreshToken, err := utils.GenerateRefreshToken(user.ID, user.Email, user.Role, jti)
 	if err != nil {
 		utils.InternalError(c, "Refresh Token 生成失败")
 		return
+	}
+	// 登记刷新令牌族 ID（刷新轮换/失效的基础；写入失败不阻断登录，仅降级为无轮换保护）
+	if err := models.SetRefreshState(user.ID, jti); err != nil {
+		log.Printf("[auth] 写入刷新状态失败（用户 %d）：%v", user.ID, err)
 	}
 	middleware.SetTokenCookie(c, accessToken)
 	middleware.SetRefreshCookie(c, refreshToken)
@@ -143,6 +153,10 @@ func Logout(c *gin.Context) {
 	if token, err := c.Cookie("token"); err == nil && token != "" {
 		if claims, e := utils.ParseToken(token); e == nil {
 			recordUserAudit(c, claims.UserID, models.AuditLogout, "用户登出", "success")
+			// 清除刷新状态：使仍在有效期内的刷新令牌立即失效（防登出后令牌被续用）
+			if derr := models.DeleteRefreshState(claims.UserID); derr != nil {
+				log.Printf("[auth] 清除刷新状态失败（用户 %d）：%v", claims.UserID, derr)
+			}
 		}
 	}
 	middleware.ClearTokenCookie(c)
@@ -178,15 +192,39 @@ func Refresh(c *gin.Context) {
 		return
 	}
 
-	accessToken, err := utils.GenerateToken(claims.UserID, claims.Email, claims.Role)
+	// 🔒 刷新令牌轮换 / 失效：校验刷新令牌族 ID 是否仍为当前有效值。
+	// 旧刷新令牌（被窃取或已在别处刷新）因 JTI 不匹配而立即失效，防止刷新令牌被盗用后长期可用。
+	// 升级前签发的旧刷新令牌无 JTI（claims.JTI==""），首刷时直接认作有效并初始化状态（过渡兼容）。
+	if claims.JTI != "" {
+		if state, serr := models.GetRefreshState(claims.UserID); serr == nil {
+			if state.ActiveJTI != claims.JTI {
+				middleware.ClearTokenCookie(c)
+				middleware.ClearRefreshCookie(c)
+				utils.Unauthorized(c, "会话已在其他设备刷新，请重新登录")
+				return
+			}
+		} else if !errors.Is(serr, gorm.ErrRecordNotFound) {
+			// DB 异常：降级放行（避免误锁在线用户），仅记录告警
+			log.Printf("[auth] 查询刷新状态失败（用户 %d），降级放行：%v", claims.UserID, serr)
+		}
+	}
+
+	// 轮换出新 JTI 并登记，使本次使用的刷新令牌作废（下次刷新必须携带新 JTI）
+	fp := c.GetHeader(middleware.DeviceFingerprintHeader)
+	region := utils.RegionForBinding(c.ClientIP())
+	accessToken, err := utils.GenerateToken(claims.UserID, claims.Email, claims.Role, fp, region)
 	if err != nil {
 		utils.InternalError(c, "Token 生成失败")
 		return
 	}
-	newRefresh, err := utils.GenerateRefreshToken(claims.UserID, claims.Email, claims.Role)
+	newJTI := utils.RandomJTI()
+	newRefresh, err := utils.GenerateRefreshToken(claims.UserID, claims.Email, claims.Role, newJTI)
 	if err != nil {
 		utils.InternalError(c, "Refresh Token 生成失败")
 		return
+	}
+	if err := models.SetRefreshState(claims.UserID, newJTI); err != nil {
+		log.Printf("[auth] 写入刷新状态失败（用户 %d）：%v", claims.UserID, err)
 	}
 	middleware.SetTokenCookie(c, accessToken)
 	middleware.SetRefreshCookie(c, newRefresh)

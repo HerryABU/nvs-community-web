@@ -10,6 +10,31 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// DeviceFingerprintHeader 前端采集的设备指纹通过该请求头上报（不参与签名密钥，
+// 仅用于把访问令牌与设备绑定，防 JWT 窃取后异地/异设备盗用）。
+const DeviceFingerprintHeader = "X-Device-Fingerprint"
+
+// tokenBindingMatches 校验访问令牌的绑定签名是否与「当前请求的设备指纹 + 登录地」一致。
+// 返回 true 表示放行：
+//   - 令牌无绑定（升级前遗留令牌）一律放行（向后兼容）；
+//   - 当前设备指纹 + 登录地与令牌签发时一致 → 放行；
+//   - 登录地解析失败（geo 抖动）时，放宽到「仅比对设备指纹」以降低误伤。
+func tokenBindingMatches(claims *utils.Claims, c *gin.Context) bool {
+	if claims.Binding == "" {
+		return true // 遗留令牌：未绑定，向后兼容放行
+	}
+	fp := c.GetHeader(DeviceFingerprintHeader)
+	region := utils.RegionForBinding(c.ClientIP())
+	if utils.ComputeBinding(fp, region) == claims.Binding {
+		return true
+	}
+	// geo 抖动兜底：本次 IP 归属地解析失败（region 为空），放宽到仅比对指纹，避免误踢在线用户。
+	if region == "" && utils.ComputeBinding(fp, "") == claims.Binding {
+		return true
+	}
+	return false
+}
+
 func AuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString, err := c.Cookie("token")
@@ -26,6 +51,14 @@ func AuthRequired() gin.HandlerFunc {
 			return
 		}
 
+		// 🔒 令牌绑定校验：访问令牌与「设备指纹 + 登录地」强绑定，
+		// 窃取到的令牌在异设备 / 异省份使用会被 401 拒绝（防 JWT 盗用）。
+		if !tokenBindingMatches(claims, c) {
+			utils.Unauthorized(c, "登录环境已变更（设备/地区），请重新登录")
+			c.Abort()
+			return
+		}
+
 		c.Set(CtxUserID, claims.UserID)
 		c.Set(CtxUserEmail, claims.Email)
 		c.Set(CtxUserRole, claims.Role)
@@ -36,13 +69,16 @@ func AuthRequired() gin.HandlerFunc {
 // OptionalAuth 可选登录中间件：解析 token 并设置用户上下文（user id/email/role），
 // 解析失败不拦截请求。用于公开路由（如论坛详情）识别登录态，
 // 使管理员/创建者等权限判断在公开接口中也能生效（如管理员进论坛免密码，176号令合规）。
+// 绑定校验失败时当作匿名（不设置上下文、不拦截），公开页不应因绑定不匹配而整页报错。
 func OptionalAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if tokenString, err := c.Cookie("token"); err == nil && tokenString != "" {
 			if claims, perr := utils.ParseToken(tokenString); perr == nil {
-				c.Set(CtxUserID, claims.UserID)
-				c.Set(CtxUserEmail, claims.Email)
-				c.Set(CtxUserRole, claims.Role)
+				if tokenBindingMatches(claims, c) {
+					c.Set(CtxUserID, claims.UserID)
+					c.Set(CtxUserEmail, claims.Email)
+					c.Set(CtxUserRole, claims.Role)
+				}
 			}
 		}
 		c.Next()
@@ -99,11 +135,17 @@ func PoliceRequired() gin.HandlerFunc {
 
 // SetTokenCookie 设置 JWT Cookie
 func SetTokenCookie(c *gin.Context, token string) {
+	// 访问令牌短期有效（默认 15 分钟，见 JWTAccessExpireMinutes），Cookie 生命周期与令牌保持一致，
+	// 过期后由 HttpOnly 刷新令牌无感续期；即便令牌被窃取也仅在极短窗口内可用。
+	expireMin, err := strconv.Atoi(config.JWTAccessExpireMinutes)
+	if err != nil || expireMin <= 0 {
+		expireMin = 15
+	}
 	// 安全审计 L3：Secure 由 .env 的 COOKIE_SECURE 控制（生产 HTTPS 下应开启，防明文截获）
 	c.SetCookie(
 		"token",
 		token,
-		72*3600, // 72 hours
+		expireMin*60, // 分钟 → 秒
 		"/",
 		"",
 		config.ForceCookieSecure, // Secure: 生产 HTTPS 下由 COOKIE_SECURE=true 开启
