@@ -1,42 +1,55 @@
 <template>
   <div id="app-container">
-    <NavBar />
-    <!-- 未成年保护横幅（soft 模式 + 已识别为未成年人，可关闭） -->
-    <div v-if="showMinorBanner" class="minor-banner">
-      <span>🛡️ 青少年模式：合理安排上网时间，适度消费内容</span>
-      <el-button text size="small" @click="showMinorBanner = false">知道了</el-button>
-    </div>
-    <main class="main-content">
-      <router-view />
-    </main>
-    <!-- F12a 全站 opt-in iframe：仅启用且有合法 URL 时渲染，强制 sandbox -->
-    <iframe
-      v-if="themeStore.globalIframe.enabled"
-      :src="themeStore.globalIframe.url"
-      sandbox="allow-scripts allow-same-origin"
-      class="global-embed-band"
-      title="site-embed"
-    />
-    <SiteFooter />
+    <!-- 管理台 / 警方台：独立企业级布局（折叠侧栏 + 顶栏），不挂公开站导航 -->
+    <template v-if="isAdminRoute">
+      <AdminLayout />
+    </template>
 
-    <!-- 未成年检测引导（F21.1）：平台开启保护且未填报出生日期时询问 -->
-    <MinorGateDialog v-model:visible="minorGateVisible" :mode="minorMode" @saved="onMinorSaved" @dismiss="onMinorDismiss" />
+    <template v-else>
+      <NavBar />
+      <!-- 未成年保护横幅（soft 模式 + 已识别为未成年人，可关闭） -->
+      <div v-if="showMinorBanner" class="minor-banner">
+        <span>🛡️ 青少年模式：合理安排上网时间，适度消费内容</span>
+        <el-button text size="small" @click="showMinorBanner = false">知道了</el-button>
+      </div>
+      <main class="main-content">
+        <router-view />
+      </main>
+      <!-- F12a 全站 opt-in iframe：仅启用且有合法 URL 时渲染，强制 sandbox -->
+      <iframe
+        v-if="themeStore.globalIframe.enabled"
+        :src="themeStore.globalIframe.url"
+        sandbox="allow-scripts allow-same-origin"
+        class="global-embed-band"
+        title="site-embed"
+      />
+      <SiteFooter />
+
+      <!-- 未成年检测引导（F21.1）：平台开启保护且未填报出生日期时询问 -->
+      <MinorGateDialog v-model:visible="minorGateVisible" :mode="minorMode" @saved="onMinorSaved" @dismiss="onMinorDismiss" />
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import NavBar from '@/components/NavBar.vue';
 import SiteFooter from '@/components/SiteFooter.vue';
 import MinorGateDialog from '@/components/auth/MinorGateDialog.vue';
+import AdminLayout from '@/components/admin/AdminLayout.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useThemeStore } from '@/stores/theme';
 import { useAppStore } from '@/stores/app';
 import { authApi } from '@/api/auth';
 
+const route = useRoute();
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
 const appStore = useAppStore();
+
+// 管理台 / 警方台走独立企业级布局（折叠侧栏 + 顶栏），与公开站导航解耦
+const isAdminRoute = computed(() => route.path.startsWith('/admin') || route.path.startsWith('/police'));
 
 // 在 setup 阶段同步启动：首屏落地页时首页内容并入同一批 → 严格 1 次 /api/batch；
 // 子组件（NavBar/Home）挂载后通过 ensure* 等待同一 promise，无竞态。
