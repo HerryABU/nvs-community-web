@@ -27,16 +27,25 @@ type NovelAccess struct {
 //
 //	已登录用户：全部可见（含完整爬取）。
 //	匿名用户：
+//	  · 访客设置 allow_guest_browse=false                → 必须登录（站长总闸）；
 //	  · 全局 novel_visitor_mode=login_required            → 必须登录；
 //	  · 作者隔离开关 novel.wall_enabled=true              → 必须登录（3.2 作者自决）；
-//	  · 全局 novel_visitor_mode=trial（且作者未单独上锁） → 仅试读前 min(5, 30%) 章；
+//	  · 全局 novel_visitor_mode=trial（且作者未单独上锁） → 仅试读前 N 章；
 //	  · 全局 open（且作者未单独上锁）                     → 完全开放，可正常爬取。
 //
-// 结论（对应 3.3）：仅当「管理员放开(open) 且 作者放开(wall_enabled=false)」时才允许匿名爬取；
-// 任一环节要求登录，匿名爬虫即被 401 拦截，无法抓取全文。
+// ⚠️ 历史上这里只读 novel_visitor_mode，后台「访客设置」里的
+// allow_guest_browse / guest_max_chapters 是**空转**的（只有管理端读写、无人校验），
+// 站长以为关掉了游客浏览其实没关。现在两者取「更严」的一侧，让开关真正生效。
+//
+// 结论（对应 3.3）：仅当「管理员放开(open 且允许访客浏览) 且 作者放开(wall_enabled=false)」时
+// 才允许匿名爬取；任一环节要求登录，匿名爬虫即被 401 拦截，无法抓取全文。
 func ResolveNovelAccess(novel *models.Novel, isLogin bool, _ string) NovelAccess {
 	if isLogin {
 		return NovelAccess{RequiresLogin: false, IsTrial: false}
+	}
+	visit := models.LoadVisitSetting()
+	if !visit.AllowGuestBrowse {
+		return NovelAccess{RequiresLogin: true, IsTrial: false}
 	}
 	mode := models.GetNovelVisitorMode()
 	walled := novel != nil && novel.WallEnabled
@@ -44,7 +53,12 @@ func ResolveNovelAccess(novel *models.Novel, isLogin bool, _ string) NovelAccess
 		return NovelAccess{RequiresLogin: true, IsTrial: false}
 	}
 	if mode == "trial" {
-		return NovelAccess{RequiresLogin: false, IsTrial: true, TrialLimit: ComputeTrialLimit(0)}
+		// 站长可自定义试读章数（0 或负数 → 退回按比例计算的保守值）
+		limit := ComputeTrialLimit(0)
+		if visit.GuestMaxChapters > 0 {
+			limit = visit.GuestMaxChapters
+		}
+		return NovelAccess{RequiresLogin: false, IsTrial: true, TrialLimit: limit}
 	}
 	return NovelAccess{RequiresLogin: false, IsTrial: false}
 }

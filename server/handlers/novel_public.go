@@ -50,6 +50,11 @@ var htmlSanitizer = bluemonday.UGCPolicy()
 
 // GET /api/novels
 func ListNovels(c *gin.Context) {
+	// 站级开关：关闭「允许未登录浏览」后，作品列表也不再对匿名开放
+	// （否则虽读不到正文，仍可整站枚举书目）
+	if !requireGuestRead(c) {
+		return
+	}
 	// 联邦同步会携带 source_name/source_url 自报身份，此时记录入站连接（谁连了我）
 	if c.Query("source_name") != "" || c.Query("source_url") != "" {
 		recordInbound(c, "novels")
@@ -92,6 +97,9 @@ func ListNovels(c *gin.Context) {
 
 // GET /api/search/authors — 搜索作者（公开）
 func SearchAuthors(c *gin.Context) {
+	if !requireGuestSearch(c) {
+		return
+	}
 	search := c.Query("search")
 	if search == "" {
 		utils.Success(c, gin.H{"list": []models.User{}, "total": 0})
@@ -119,6 +127,10 @@ func SearchAuthors(c *gin.Context) {
 
 // GET /api/search — 统一搜索（公开）：作品 / 作者 / 博客 / HTML 扩展 / 专栏 / 话题 / 论坛
 func UnifiedSearch(c *gin.Context) {
+	// 站级开关：关闭「允许未登录搜索」后匿名用户不能调搜索
+	if !requireGuestSearch(c) {
+		return
+	}
 	q := strings.TrimSpace(c.Query("q"))
 	if q == "" {
 		utils.Success(c, gin.H{"q": "", "novels": []models.Novel{}, "authors": []models.User{}, "blogs": []models.AuthorBlog{}, "htmls": []models.UserHTML{}})

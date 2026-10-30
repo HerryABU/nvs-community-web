@@ -179,13 +179,15 @@
         <el-form label-width="170px" class="panel" style="max-width: 700px">
           <el-form-item label="允许未登录浏览">
             <el-switch v-model="visit.allow_guest_browse" />
+            <span class="hint">关闭后作品列表、详情、正文一律要求登录（该开关优先于「站点设置」里的作品访问策略）</span>
           </el-form-item>
           <el-form-item label="允许未登录搜索">
             <el-switch v-model="visit.allow_guest_search" />
+            <span class="hint">关闭后统一搜索与作者搜索对匿名返回 401</span>
           </el-form-item>
           <el-form-item label="未登录最多看几章">
             <el-input-number v-model="visit.guest_max_chapters" :min="0" :max="500" />
-            <span class="hint">0 = 不限</span>
+            <span class="hint">0 = 不限；仅当「站点设置 → 访客查看小说」为「试读」时生效</span>
           </el-form-item>
           <el-form-item label="展示访问量">
             <el-switch v-model="visit.show_visit_count" />
