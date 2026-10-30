@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import Home from '@/views/Home.vue';
 import { useAuthStore } from '@/stores/auth';
-import { canAccessPath } from '@/constants/policeAccess';
+import { canAccessPath, POLICE_ALLOWED_PATHS } from '@/constants/policeAccess';
 import api from '@/api';
 import { appPrefix } from '@/utils/prefix';
 
@@ -770,11 +770,18 @@ const router = createRouter({
   ],
 });
 
-// 🔒 组级角色守卫：所有 /admin/* 路由强制 requiresAdmin，/police/* 强制 requiresPolice。
-// 此前仅在 NavBar 用 v-if 隐藏入口，路由层未拦截，普通用户手输 URL 即可直达后台模板。
+// 🔒 组级角色守卫：/admin/* 默认强制 admin，/police/* 强制 police。
+// 但「内容治理子集」必须对警方开放（侧栏也确实给警方链到 /admin/moderation 等），
+// 与后端 AdminOrPoliceGovernance 同口径 —— 白名单见 constants/policeAccess.ts。
+// 早先这里一律 requiresAdmin，结果警方点侧栏治理入口被守卫踢回首页。
 router.getRoutes().forEach((r) => {
   if (r.path.startsWith('/admin')) {
-    r.meta = { ...(r.meta || {}), requiresAdmin: true };
+    const policeOK = POLICE_ALLOWED_PATHS.has(r.path);
+    r.meta = {
+      ...(r.meta || {}),
+      requiresAdmin: !policeOK,
+      ...(policeOK ? { requiresPolice: true } : {}),
+    };
   }
   // 警方台独立成 /police/*：整段都要 requiresPolice，
   // 只守入口页的话，将来加子页面（/police/xxx）会漏掉权限
