@@ -44,8 +44,8 @@
 ## ✨ 特性
 
 ### 部署与运维
-- 🌍 **全平台全CPU支持** — Windows / Linux / macOS × x86 / x64 / ARM / ARM64 / MIPS64 / RISC-V（10 个预编译目标；`windows/386`、`windows/arm`、`linux/mips64` 受限于底层 SQLite CGo 库暂不支持）
-- 🚀 **下载即用** — 选择对应平台二进制文件，直接运行，零依赖安装（31.6 MB）
+- 🌍 **全平台全CPU支持** — Windows / Linux / macOS × x64 / ARM64 / ARM32(v6/v7) / RISC-V（10 个预编译目标；`windows/386`、`windows/arm`、`linux/mips64` 因依赖的纯 Go SQLite 实现没有对应架构的转译代码而不可用，这是依赖选型的固有限制，不是配置问题）
+- 🚀 **下载即用** — 选择对应平台二进制文件，直接运行，零依赖安装（约 59–67 MB，含内嵌前端与 ip2region 离线库）
 - ⚙️ **自动创建 .env** — 首次启动自动生成配置文件，自动检测本机 IPv4/IPv6 地址填入
 - 🔌 **配置化绑定** — 支持配置 `BIND_IPV4` / `BIND_IPV6` / `ENABLE_IPV6`，灵活控制监听网卡
 - 🌐 **启动时列出所有访问地址** — 扫描所有网卡，输出 `localhost` + 局域网 IP 的完整 URL 列表
@@ -319,7 +319,7 @@ Markdown/富文本编辑器支持 `[expand title="标题"]...[/expand]` 语法�
 | macOS | `nvs-mac-x64` | Intel Mac |
 | macOS | `nvs-mac-arm64` | Apple Silicon Mac (M1/M2/M3) |
 
-> 注：`windows/386`、`windows/arm`、`linux/mips64` 三个目标因 `modernc.org/sqlite` CGo 库暂不支持对应架构而不可用。
+> 注：`windows/386`、`windows/arm`、`linux/mips64` 三个目标不可用 —— 前两者受 Go 工具链与 `modernc.org/sqlite` 架构支持限制，后者因 `modernc.org/libc` 无 mips64 实现。改 cgo 也解决不了（该 SQLite 是纯 Go 转译实现，不经过 cgo）。
 
 下载后运行即可：
 
