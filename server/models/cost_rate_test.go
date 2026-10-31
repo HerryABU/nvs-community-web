@@ -149,3 +149,26 @@ func TestResolveCostRate_ChannelOverridesGlobal(t *testing.T) {
 		t.Errorf("未知渠道应回退全局，实际 %s", src)
 	}
 }
+
+// Describe 的整数不能被剥尾零：100 元 = 1000 虚拟 曾显示成 10 元 = 100 虚拟
+func TestCostRate_DescribeKeepsTrailingZeros(t *testing.T) {
+	cases := []struct {
+		rate CostRate
+		want string
+	}{
+		{CostRate{RealAmount: 100, VirtualAmount: 1000, RealCurrency: "CNY", VirtualCurrency: "虚拟美元"}, "100 CNY = 1000 虚拟美元"},
+		{CostRate{RealAmount: 10, VirtualAmount: 1, RealCurrency: "CNY"}, "10 CNY = 1 虚拟单位"},
+		{CostRate{RealAmount: 1, VirtualAmount: 10, RealCurrency: "CNY"}, "1 CNY = 10 虚拟单位"},
+		{CostRate{RealAmount: 7.2, VirtualAmount: 1, RealCurrency: "CNY"}, "7.2 CNY = 1 虚拟单位"},
+		{CostRate{RealAmount: 1.5, VirtualAmount: 2.5, RealCurrency: "USD"}, "1.5 USD = 2.5 虚拟单位"},
+	}
+	for _, c := range cases {
+		if got := c.rate.Describe(); got != c.want {
+			t.Errorf("Describe() = %q，期望 %q", got, c.want)
+		}
+	}
+	// 未配置时明确说明，不能编一个 0 的值
+	if got := (CostRate{}).Describe(); got != "未设置换算比例：金额仅为上游记账单位" {
+		t.Errorf("未配置的描述不对: %q", got)
+	}
+}

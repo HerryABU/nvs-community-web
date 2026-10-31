@@ -117,12 +117,19 @@ func AdminChannelBalanceOverview(c *gin.Context) {
 		item["total_remaining"] = b.TotalRemaining
 		item["currency"] = b.Currency
 		item["fetched_at"] = b.FetchedAt
+		acct, _ := decryptAccountTokenByBaseURL(g.BaseURL)
 		if b.Error != "" {
-			item["error"] = b.Error
+			msg := b.Error
+			// 中转站常见误配：只填了 sk_ 模型密钥就去查余额，接口返回 404/401。
+			// 这里补一句可执行的引导，而不是把上游的 404 直接丢给站长。
+			if strings.TrimSpace(acct) == "" &&
+				(strings.Contains(msg, "404") || strings.Contains(msg, "余额")) {
+				msg += "；若这是 New API / One API 中转站，需在模型里补「系统访问令牌(nap_)」与「令牌用户 ID」才能查账户余额"
+			}
+			item["error"] = msg
 		}
 		// 精确单次费用：New API 的 /api/log/self 每条日志的 quota 就是该次扣费，
 		// 比「余额差值」精确得多（且不受"无限额度令牌"影响）。
-		acct, _ := decryptAccountTokenByBaseURL(g.BaseURL)
 		if strings.TrimSpace(acct) != "" && g.TokenUserID != "" {
 			logs, lerr := aiclient.QueryNewAPIRecentLogs(g.BaseURL, acct, g.TokenUserID, 5, 15*time.Second)
 			if lerr != "" {
@@ -155,19 +162,27 @@ func AdminChannelBalanceOverview(c *gin.Context) {
 				"ratio":            rate.Ratio(),
 				"describe":         rate.Describe(),
 			}
-			if v, ok := rate.ToReal(b.TotalRemaining); ok {
-				item["real_remaining"] = v
-			}
-			if v, ok := rate.ToReal(b.TotalUsed); ok {
-				item["real_used"] = v
+			// ⚠️ 余额类字段只在「真的查到了」时换算：
+			// 查不到余额却下发 real_remaining=0，界面会显示「真实 0 元」，
+			// 让站长以为钱花光了 —— 比不显示更糟。
+			if b.Supported {
+				if v, ok := rate.ToReal(b.TotalRemaining); ok {
+					item["real_remaining"] = v
+				}
+				if v, ok := rate.ToReal(b.TotalUsed); ok {
+					item["real_used"] = v
+				}
 			}
 			if lc, ok := item["last_cost"].(float64); ok {
 				if v, ok2 := rate.ToReal(lc); ok2 {
 					item["real_last_cost"] = v
 				}
 			}
-			if v, ok := rate.ToReal(w.CostUsed); ok {
-				item["real_window_cost"] = v
+			// 窗口统计本身带 HasData 标记，没有采样时不要编造 0 成本
+			if w.HasData {
+				if v, ok := rate.ToReal(w.CostUsed); ok {
+					item["real_window_cost"] = v
+				}
 				if w.PerRequest > 0 {
 					if pv, ok3 := rate.ToReal(w.PerRequest); ok3 {
 						item["real_per_request"] = pv

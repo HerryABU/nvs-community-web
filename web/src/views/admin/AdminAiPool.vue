@@ -336,22 +336,23 @@
         <el-table-column label="剩余" width="132">
           <template #default="{ row }">
             <div class="ch-dual">
-              <span :class="['ch-bal', { zero: !row.supported }]">{{ fmtMoney(row.total_remaining) }}</span>
+              <span v-if="row.supported" :class="['ch-bal', { zero: !row.total_remaining }]">{{ fmtMoney(row.total_remaining) }}</span>
+              <span v-else class="muted small">查不到</span>
               <span v-if="row.real_remaining !== undefined" class="ch-real">
                 实 {{ fmtMoney(row.real_remaining) }} <em class="unit">{{ row.rate?.real_currency }}</em>
               </span>
-              <span v-else class="ch-noreal">未设比例</span>
+              <span v-else-if="!row.rate" class="ch-noreal">未设比例</span>
             </div>
           </template>
         </el-table-column>
         <el-table-column label="已消费" width="132">
           <template #default="{ row }">
             <div class="ch-dual">
-              <span>{{ fmtMoney(row.total_used) }}</span>
+              <span v-if="row.supported">{{ fmtMoney(row.total_used) }}</span>
+              <span v-else class="muted small">—</span>
               <span v-if="row.real_used !== undefined" class="ch-real">
                 实 {{ fmtMoney(row.real_used) }} <em class="unit">{{ row.rate?.real_currency }}</em>
               </span>
-              <span v-else class="ch-noreal">—</span>
             </div>
           </template>
         </el-table-column>

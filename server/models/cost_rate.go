@@ -152,10 +152,18 @@ func curOr(v, def string) string {
 	return v
 }
 
-// trimNum 去掉多余小数位（1.0000 → 1，7.20 → 7.2）
+// trimNum 去掉多余小数位（1.0000 → 1，7.20 → 7.2）。
+// ⚠️ 只在**有小数点**时才剥尾零：100 的末尾那个 0 是数值的一部分，
+// 剥掉会把「100 元 = 1000 虚拟」显示成「10 元 = 100 虚拟」——
+// 站长据此填表会被误导（这个坑是实机验收时发现并锁进单测的）。
 func trimNum(v float64) string {
 	s := strconvFormat(v)
-	return strings.TrimSuffix(strings.TrimSuffix(s, "0"), ".")
+	if !strings.Contains(s, ".") {
+		return s
+	}
+	s = strings.TrimRight(s, "0")
+	s = strings.TrimSuffix(s, ".")
+	return s
 }
 
 func strconvFormat(v float64) string {
