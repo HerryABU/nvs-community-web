@@ -17,11 +17,11 @@ VERSION := $(shell grep -E '^var AppVersion' server/version/version.go | grep -o
 .PHONY: build build-gitvcs build-gm build-gm-cgo test test-embed test-gitvcs test-gm dist dist-check hooks check check-all gm-audit credential-age scan-secrets tidy-gm clean version
 
 build:
-	cd server && CGO_ENABLED=0 $(GO) build -trimpath -ldflags "-s -w" -o ../nvs-server.exe .
+	cd server && CGO_ENABLED=0 $(GO) build -trimpath -buildvcs=false -ldflags "-s -w" -o ../nvs-server.exe .
 
 # 章节版本控制走真实 git 仓库（go-git）：构建带 gitvcs 标签，运行时设 NVS_VCS_BACKEND=git
 build-gitvcs:
-	cd server && CGO_ENABLED=0 $(GO) build -tags gitvcs -trimpath -ldflags "-s -w" -o ../nvs-server-gitvcs.exe .
+	cd server && CGO_ENABLED=0 $(GO) build -tags gitvcs -trimpath -buildvcs=false -ldflags "-s -w" -o ../nvs-server-gitvcs.exe .
 
 test-gitvcs:
 	cd server && $(GO) test -tags gitvcs ./... -count=1
@@ -29,13 +29,13 @@ test-gitvcs:
 build-gm:
 	@test -f go.gm.mod || (echo "缺少 go.gm.mod"; exit 1)
 	make tidy-gm
-	cd server && $(GO) build -modfile=../go.gm.mod -tags gm -trimpath -o ../nvs-server-gm.exe .
+	cd server && $(GO) build -modfile=../go.gm.mod -tags gm -trimpath -buildvcs=false -ldflags "-s -w" -o ../nvs-server-gm.exe .
 
 build-gm-cgo:
 	@test -f go.gm.mod || (echo "缺少 go.gm.mod"; exit 1)
 	@echo "需要 TONGSUO_HOME 指向已编译（--enable-ntls）的 Tongsuo"
 	make tidy-gm
-	cd server && CGO_ENABLED=1 $(GO) build -modfile=../go.gm.mod -tags "gm tongsuo" -trimpath -o ../nvs-server-gm-cgo.exe .
+	cd server && CGO_ENABLED=1 $(GO) build -modfile=../go.gm.mod -tags "gm tongsuo" -trimpath -buildvcs=false -ldflags "-s -w" -o ../nvs-server-gm-cgo.exe .
 
 test:
 	cd server && $(GO) test -tags nodist ./... -count=1

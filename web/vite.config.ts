@@ -6,6 +6,17 @@ import Components from 'unplugin-vue-components/vite';
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers';
 import { compression } from 'vite-plugin-compression2';
 
+// 预压缩产物（.gz / .br）默认**关闭**。
+//
+// 原因：本项目的部署形态是「前端产物 embed 进单文件 exe，由 gin-contrib/gzip
+// 在响应时实时压缩」。这种形态下 dist 里的 .gz/.br **永远不会被读到**，
+// 但它们会被 go:embed 原样塞进二进制 —— 实测 642 个文件、8.5 MB，
+// 直接让每个平台的可执行文件白胖一圈，同时拖慢每次构建（要压 642 次）。
+//
+// 只有在「用 nginx/CDN 直服 dist 静态目录」的部署方式下，预压缩才划算。
+// 那种场景显式开启：NVS_PRECOMPRESS=1 npm run build
+const PRE_COMPRESS = process.env.NVS_PRECOMPRESS === '1';
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -13,9 +24,12 @@ export default defineConfig({
     // 注：auto-imports.d.ts / components.d.ts 为插件自动生成的类型声明文件
     AutoImport({ resolvers: [ElementPlusResolver()] }),
     Components({ resolvers: [ElementPlusResolver()] }),
-    // 产物压缩：gzip + brotli，显著降低传输体积（不影响功能）
-    compression({ algorithm: 'gzip', threshold: 1024 }),
-    compression({ algorithm: 'brotliCompress', threshold: 1024 }),
+    ...(PRE_COMPRESS
+      ? [
+          compression({ algorithm: 'gzip', threshold: 1024 }),
+          compression({ algorithm: 'brotliCompress', threshold: 1024 }),
+        ]
+      : []),
   ],
   resolve: {
     alias: {
@@ -34,6 +48,13 @@ export default defineConfig({
     // （实测曾出现两份 vendor-mermaid 同时存在，dist 39M、内嵌 exe 从 52M 涨到 60M）。
     // 若某些受限环境拦截删除，构建前先 `mv dist dist_old_$(date +%s)` 再跑。
     emptyOutDir: true,
+    // 显式关掉 sourcemap：产物要 embed 进二进制发布，.map 一来会把体积
+    // 翻近一倍，二来会把完整源码摊给任何下载到安装包的人。默认值就是 false，
+    // 这里写死是为了防止将来有人手抖打开。
+    sourcemap: false,
+    // 关掉「产出每个文件的 gzip 体积」统计：它会在构建时对每个 chunk 压一遍，
+    // 只为在控制台多打印一列，对发布产物没有任何影响。
+    reportCompressedSize: false,
     // 体积告警阈值放宽（重型库本就独立分包）
     chunkSizeWarningLimit: 4000,
     rollupOptions: {

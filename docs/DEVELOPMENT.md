@@ -197,3 +197,31 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 ```
 
 > **关于 `embed.go`**：`//go:embed all:dist` 将 `server/dist/` 全部嵌入二进制。**前端必须先 `npm run build`，否则编译失败。**
+
+### 发布产物体积
+
+发布包体积主要由三块决定，前两块纯属浪费：
+
+1. **预压缩副本（.gz / .br）** —— 已默认关闭。
+   `vite-plugin-compression2` 会给每个 js/css 再生成一份压缩版，但本项目是单 exe 部署，
+   压缩由 `gin-contrib/gzip` 在响应时实时完成，这些副本**永远不会被读到**；
+   而 `go:embed` 会照单全收。实测 642 个文件、8.5 MB。
+   只有在「nginx / CDN 直服 dist 静态目录」时才需要，那种场景显式开启：
+   `NVS_PRECOMPRESS=1 npm run build`（CI 里另有 `find -delete` 兜底）。
+2. **符号表与调试信息** —— 发布构建统一加 `-ldflags "-s -w"`（去符号表 + DWARF），
+   配合 `-trimpath` 去掉本机绝对路径；`-buildvcs=false` 不把 VCS 信息写进二进制。
+3. **sourcemap** —— `build.sourcemap` 显式 `false`。产物要 embed 发布，
+   `.map` 既让体积近乎翻倍，也等于把完整源码随安装包发给任何人。
+
+实测（Windows amd64，含内嵌前端）：
+
+| 构建配置 | 可执行文件 |
+|---|---|
+| 嵌入 .gz/.br 副本 | 73.6 MB |
+| 排除 .gz/.br（当前默认） | **65.1 MB** |
+
+顺带：`reportCompressedSize: false` 让 vite 不再为每个 chunk 压一遍只为打印一列，
+构建时间从 1m41s 降到 1m14s。
+
+**没有启用 UPX**：它能再压掉一半左右，但会拖慢冷启动，且极易触发 Windows SmartScreen
+与杀软误报 —— 对「下载即用」的单文件分发，体验损失大于收益。需要极限体积时自行 UPX 后签名。

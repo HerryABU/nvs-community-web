@@ -98,7 +98,13 @@ jobs:
           set -euo pipefail
           rm -rf server/dist
           cp -a dist server/dist
+          # 预压缩副本（.gz/.br）一律不参与 embed：单 exe 部署由 gin-contrib/gzip
+          # 在响应时实时压缩，这些文件永远不会被读到；但 go:embed 会照单全收，
+          # 实测 642 个文件 / 8.5MB —— 每个平台的可执行文件都白胖一圈。
+          # vite.config 已默认不再生成它们，这里再删一遍兜住手动 dist / 预压缩构建的情况。
+          find server/dist \( -name '*.gz' -o -name '*.br' \) -delete
           test -f server/dist/index.html
+          echo "embed 源体积：$(du -sh server/dist | cut -f1)"
 
       - name: 交叉编译
         env:
@@ -109,7 +115,10 @@ jobs:
         run: |
           set -euo pipefail
           BIN="nvs-server${{ matrix.ext }}"
-          (cd server && go build -trimpath -ldflags "-s -w" -o "../out/${BIN}" .)
+          # -s -w：去符号表与 DWARF 调试信息（发布包不需要，可省 25%~30%）
+          # -trimpath：去掉本机绝对路径，构建可复现且不泄漏目录结构
+          # -buildvcs=false：不把 VCS 信息写进二进制（CI 里是浅克隆，意义不大还占体积）
+          (cd server && go build -trimpath -buildvcs=false -ldflags "-s -w" -o "../out/${BIN}" .)
           ls -lh "out/${BIN}"
 
       - name: 打包
@@ -129,6 +138,8 @@ jobs:
           fi
           rm -f nvs-server nvs-server.exe README.md LICENSE SECURITY.md
           ls -lh
+          echo "---- 发布包体积 ----"
+          du -h "${BASE}".* | sort -h
 
       - uses: actions/upload-artifact@v4
         with:
@@ -196,7 +207,7 @@ jobs:
             首次启动会进入建站向导；反代前缀部署见 `docs/deploy-prefix.md`。
 
             > 二进制未做代码签名（Windows SmartScreen 可能提示）。介意的话请自行用源码构建：
-            > `cd web && npm ci && npm run build && cd ../server && go build -o nvs-server .`
+            > `cd web && npm ci && npm run build && cd ../server && go build -trimpath -ldflags "-s -w" -o nvs-server .`
           files: |
             dist/*.zip
             dist/*.tar.gz
