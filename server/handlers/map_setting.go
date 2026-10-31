@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"nvs-server/ipgeo"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -15,8 +16,20 @@ import (
 )
 
 // GetMapSetting GET /api/map-setting —— 公开：前端据此决定用哪套地图
+//
+// 额外带上「看的人在哪」：中国省级明细只对境内访客展示，
+// 境外访客只给全球视野（省份/城市粒度的境内读者分布不对外）。
 func GetMapSetting(c *gin.Context) {
-	utils.Success(c, models.PublicMapSetting())
+	data := models.PublicMapSetting()
+	reg := ipgeo.Lookup(c.ClientIP())
+	// 内网 / 保留地址（本机调试、内网反代）按境内处理，否则站长自测会看不到中国视野
+	cn := reg.CountryCD == "CN" || reg.IsReserved()
+	data["viewer"] = gin.H{
+		"cn":      cn,
+		"country": reg.Country,
+		"code":    reg.CountryCD,
+	}
+	utils.Success(c, data)
 }
 
 // AdminGetMapSetting GET /api/admin/map-setting —— 含完整配置（key 明文给站长自己核对）

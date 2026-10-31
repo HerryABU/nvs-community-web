@@ -34,8 +34,12 @@ func aiModelVO(m *models.AiModel) gin.H {
 		"provider_hint": m.ProviderHint,
 		"vendor":        m.Vendor,
 		"note":          m.Note,
-		"created_at":    m.CreatedAt,
-		"updated_at":    m.UpdatedAt,
+		// 前台可见（*bool：null=遗留模型默认可见，false=拉取导入默认隐藏）
+		// 不给前端这个字段，后台就没有任何地方能看出「用户为什么看不到这个模型」。
+		"user_visible": m.UserVisible,
+		"thinking":     m.Thinking,
+		"created_at":   m.CreatedAt,
+		"updated_at":   m.UpdatedAt,
 	}
 }
 
@@ -105,19 +109,22 @@ type aiModelInput struct {
 	Priority     *int     `json:"priority"`
 	ApiKind      string   `json:"api_kind"`
 	ProviderHint string   `json:"provider_hint"`
-	Vendor       string   `json:"vendor"`
-	Thinking     *bool    `json:"thinking"`
-	Note         string   `json:"note"`
+	UserVisible  *bool    `json:"user_visible"` // 是否对用户开放（前台模型选择/价目表）
+	// Vendor / Note 用指针：模型收费页保存单模型价格时只传价格三件套，
+	// 若这里无条件写，会把厂商与备注清空（实测会让模型在选择器里全掉进「其它」分组）。
+	Vendor   *string `json:"vendor"`
+	Thinking *bool   `json:"thinking"`
+	Note     *string `json:"note"`
 
 	// ── 余额查询方式（官方 / 中转站 / 陌生渠道分开）──
 	// 这几个字段之前在表单里能填、但结构体没接收 ⇒ 提交后被静默丢弃，
 	// 站长以为设了「自定义规则」，实际永远走自动推断。属真空转，必须接收。
-	BalanceProvider   string   `json:"balance_provider"`
-	BalanceURL        string   `json:"balance_url"`
-	BalanceField      string   `json:"balance_field"`
+	BalanceProvider   *string  `json:"balance_provider"`
+	BalanceURL        *string  `json:"balance_url"`
+	BalanceField      *string  `json:"balance_field"`
 	BalanceDivisor    *float64 `json:"balance_divisor"`
 	BalanceMultiplier *float64 `json:"balance_multiplier"`
-	BalanceCurrency   string   `json:"balance_currency"`
+	BalanceCurrency   *string  `json:"balance_currency"`
 
 	// ── 渠道级真实成本换算（留空 = 跟随站点全局比例）──
 	RateRealAmount    *float64 `json:"rate_real_amount"`
@@ -128,6 +135,14 @@ type aiModelInput struct {
 // normalizeBalanceProvider 归一「余额查询方式」。
 // 空 = 自动推断（按域名/是否配了账户令牌判断），非法值也回退空，
 // 避免前端传个拼错的字符串就让余额查询彻底失效。
+// strVal 取指针字符串的值（nil 视为空），用于「不传就别写」的可选字段
+func strVal(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
 func normalizeBalanceProvider(v string) string {
 	switch strings.ToLower(strings.TrimSpace(v)) {
 	case "deepseek":
@@ -164,16 +179,19 @@ func AdminCreateAiModel(c *gin.Context) {
 		Name: name, Kind: kind, ModelID: modelID, BaseURL: baseURL,
 		ApiKind:      models.NormalizeAiApiKind(req.ApiKind),
 		ProviderHint: models.NormalizeProviderHint(req.ProviderHint),
-		Vendor:       strings.TrimSpace(req.Vendor),
-		Note:         strings.TrimSpace(req.Note),
+		Vendor:       strings.TrimSpace(strVal(req.Vendor)),
+		Note:         strings.TrimSpace(strVal(req.Note)),
 
 		// 余额查询方式（官方 / 中转站 / 自定义规则）
-		BalanceProvider: normalizeBalanceProvider(req.BalanceProvider),
-		BalanceURL:      strings.TrimSpace(req.BalanceURL),
-		BalanceField:    strings.TrimSpace(req.BalanceField),
-		BalanceCurrency: strings.TrimSpace(req.BalanceCurrency),
+		BalanceProvider: normalizeBalanceProvider(strVal(req.BalanceProvider)),
+		BalanceURL:      strings.TrimSpace(strVal(req.BalanceURL)),
+		BalanceField:    strings.TrimSpace(strVal(req.BalanceField)),
+		BalanceCurrency: strings.TrimSpace(strVal(req.BalanceCurrency)),
 		// 渠道级换算比例（两个都为 0 = 跟随全局）
 		RateRealCurrency: strings.ToUpper(strings.TrimSpace(req.RateRealCurrency)),
+	}
+	if req.UserVisible != nil {
+		m.UserVisible = req.UserVisible
 	}
 	if req.BalanceDivisor != nil {
 		m.BalanceDivisor = *req.BalanceDivisor
@@ -277,14 +295,28 @@ func AdminUpdateAiModel(c *gin.Context) {
 	if s := strings.TrimSpace(req.ProviderHint); s != "" {
 		fields["provider_hint"] = models.NormalizeProviderHint(s)
 	}
-	fields["vendor"] = strings.TrimSpace(req.Vendor)
-	fields["note"] = strings.TrimSpace(req.Note)
-
-	// 余额查询方式：允许清空回「自动推断」，所以不判空直接写
-	fields["balance_provider"] = normalizeBalanceProvider(req.BalanceProvider)
-	fields["balance_url"] = strings.TrimSpace(req.BalanceURL)
-	fields["balance_field"] = strings.TrimSpace(req.BalanceField)
-	fields["balance_currency"] = strings.TrimSpace(req.BalanceCurrency)
+	if req.UserVisible != nil {
+		fields["user_visible"] = *req.UserVisible
+	}
+	// 以下字段只在请求里显式出现过才写：模型收费页只改价格时不能把厂商/备注刷空
+	if req.Vendor != nil {
+		fields["vendor"] = strings.TrimSpace(*req.Vendor)
+	}
+	if req.Note != nil {
+		fields["note"] = strings.TrimSpace(*req.Note)
+	}
+	if req.BalanceProvider != nil {
+		fields["balance_provider"] = normalizeBalanceProvider(*req.BalanceProvider)
+	}
+	if req.BalanceURL != nil {
+		fields["balance_url"] = strings.TrimSpace(*req.BalanceURL)
+	}
+	if req.BalanceField != nil {
+		fields["balance_field"] = strings.TrimSpace(*req.BalanceField)
+	}
+	if req.BalanceCurrency != nil {
+		fields["balance_currency"] = strings.TrimSpace(*req.BalanceCurrency)
+	}
 	if req.BalanceDivisor != nil {
 		fields["balance_divisor"] = *req.BalanceDivisor
 	}

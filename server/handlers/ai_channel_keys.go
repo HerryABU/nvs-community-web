@@ -241,7 +241,11 @@ func splitKeyLines(s string) []string {
 //   - 附三类默认价（chat/image/video），模型未单独定价时用户看到的就是这个默认价。
 func AiPublicPricing(c *gin.Context) {
 	var list []models.AiModel
-	models.DB.Where("enabled = ?", true).Order("kind ASC, priority DESC, id ASC").Find(&list)
+	// 与 AI 对话页保持同一口径：启用 + 对用户可见（user_visible 为 NULL 的遗留模型视为可见）。
+	// 少判一半会出现「价目表里有、选择器里没有」的错位。
+	models.DB.Where("enabled = ?", true).
+		Where("user_visible IS NULL OR user_visible = ?", true).
+		Order("kind ASC, priority DESC, id ASC").Find(&list)
 
 	items := make([]gin.H, 0, len(list))
 	for i := range list {

@@ -211,6 +211,9 @@
           <span class="muted small">共 {{ models.length }} 个模型（启用 {{ enabledCount }} 个）</span>
           <el-button @click="openPull"><span class="btn-emoji">🔌</span>从渠道拉取</el-button>
           <el-button :loading="chLoading" @click="openChannels">渠道余额</el-button>
+          <el-button v-if="hiddenCount > 0" type="warning" plain @click="revealAll">
+            开放 {{ hiddenCount }} 个隐藏模型
+          </el-button>
           <el-button type="primary" :icon="Plus" @click="openCreate">添加模型</el-button>
         </div>
 
@@ -275,6 +278,16 @@
           <el-table-column label="启用" width="80">
             <template #default="{ row }">
               <el-switch v-model="row.enabled" size="small" @change="toggleEnabled(row)" />
+            </template>
+          </el-table-column>
+          <!-- 前台可见：不管这个开关，用户在模型选择里就看不到 —— 拉取导入默认是隐藏的 -->
+          <el-table-column label="前台可见" width="96">
+            <template #default="{ row }">
+              <el-switch
+                :model-value="row.user_visible !== false"
+                size="small"
+                @change="(v: any) => toggleUserVisible(row, v)"
+              />
             </template>
           </el-table-column>
           <el-table-column prop="priority" label="优先级" width="80" />
@@ -1244,6 +1257,58 @@ async function loadModels() {
     if (res.data.code === 0) models.value = res.data.data.list || [];
   } catch { /* ignore */ }
   loading.value = false;
+}
+
+// 前台可见（user_visible）：拉取导入的模型默认 false，用户在选择器里看不到
+const hiddenCount = computed(() => models.value.filter((m: any) => m.user_visible === false).length);
+
+async function toggleUserVisible(row: any, v: any) {
+  const want = !!v;
+  const prev = row.user_visible;
+  row.user_visible = want;
+  try {
+    const res = await aiApi.updateModel(row.id, { user_visible: want } as any);
+    if (res.data?.code !== 0) {
+      row.user_visible = prev;
+      ElMessage.error('保存失败');
+      return;
+    }
+    ElMessage.success(want ? `「${row.name}」已对用户开放` : `「${row.name}」已从前台隐藏`);
+  } catch (e: any) {
+    row.user_visible = prev;
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  }
+}
+
+/** 一次性把所有隐藏模型开放给用户（拉取渠道后最常见的一步） */
+async function revealAll() {
+  const hidden = models.value.filter((m: any) => m.user_visible === false);
+  if (!hidden.length) {
+    ElMessage.info('所有模型都已对用户可见');
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(
+      `这会把 ${hidden.length} 个模型设为「对用户可见」，用户随即能在模型选择与价目表里看到它们。继续？`,
+      '开放给用户',
+      { type: 'warning', confirmButtonText: '全部开放' },
+    );
+  } catch {
+    return;
+  }
+  let ok = 0;
+  for (const m of hidden) {
+    try {
+      const res = await aiApi.updateModel(m.id, { user_visible: true } as any);
+      if (res.data?.code === 0) {
+        m.user_visible = true;
+        ok++;
+      }
+    } catch {
+      /* 单个失败不影响其它 */
+    }
+  }
+  ElMessage.success(`已开放 ${ok} / ${hidden.length} 个模型`);
 }
 
 async function toggleEnabled(row: AdminAiModel) {

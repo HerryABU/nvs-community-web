@@ -10,7 +10,9 @@
         这里只管「向用户收多少」。<b>上游渠道与卡密池在「AI 模型池 → 按渠道」</b>，
         两件事不要混：渠道决定成本，这里决定售价。
         用户在前台 <code>/ai/pricing</code> 看到的就是本页配置 ——
-        只有<b>启用中</b>的模型才会出现在用户价目表里（未启用的这里也会列出，标「未启用」）。
+        只有<b>启用中且「前台可见」</b>的模型才会出现在用户价目表里。
+        从渠道批量拉取的模型默认是<b>隐藏</b>的，需要到「AI 模型池 → 按模型」逐个打开，
+        或点那里的「开放隐藏模型」一次全开。
       </el-alert>
 
       <!-- 分类默认价 -->
@@ -57,10 +59,13 @@
             <StateBlock state="empty" title="还没有模型" description="先到「AI 模型池」添加或从渠道拉取。" />
           </template>
           <el-table-column prop="name" label="模型" min-width="160" show-overflow-tooltip />
-          <el-table-column label="前台可见" width="96">
+          <!-- 前台可见 = 启用 且 对用户开放（两个开关都要开，用户才看得到） -->
+          <el-table-column label="前台可见" width="110">
             <template #default="{ row }">
-              <el-tag v-if="row.enabled" size="small" type="success">可见</el-tag>
-              <el-tag v-else size="small" type="info">未启用</el-tag>
+              <el-tag v-if="row.enabled && row.user_visible !== false" size="small" type="success">可见</el-tag>
+              <el-tooltip v-else :content="row.enabled ? '未对用户开放：到「AI 模型池 → 按模型」打开「前台可见」' : '模型已停用'" placement="top">
+                <el-tag size="small" type="info">{{ row.enabled ? '未开放' : '已停用' }}</el-tag>
+              </el-tooltip>
             </template>
           </el-table-column>
           <el-table-column label="类型" width="90">

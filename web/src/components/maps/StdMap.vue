@@ -13,6 +13,7 @@
         {{ s.label }}
       </button>
       <span class="sm-hint">
+        <template v-if="!isCnViewer">境外访问：仅展示全球视野（中国省级明细不对境外开放）　</template>
         {{ setting.provider === 'tianditu' && setting.key_ready ? '标准地图底图（天地图）' : '本地数据（未配置地图密钥）' }}
       </span>
     </div>
@@ -137,6 +138,8 @@ interface MapSetting {
   key: string;
   review_no: string;
   key_ready: boolean;
+  /** 看的人在哪儿：中国省级明细只对境内展示 */
+  viewer?: { cn: boolean; country?: string; code?: string };
 }
 
 interface CountryRow {
@@ -165,10 +168,16 @@ const mapLoading = ref(false);
 let renderTimer: any = null;
 let tileTimer: any = null;
 
-const scopes = [
-  { label: '中国', value: 'china' as const },
-  { label: '全球', value: 'world' as const },
-];
+// 境外访客只给「全球」：省份/城市粒度的境内读者分布不对外。
+const isCnViewer = computed(() => setting.value.viewer?.cn !== false);
+const scopes = computed(() =>
+  isCnViewer.value
+    ? [
+        { label: '中国', value: 'china' as const },
+        { label: '全球', value: 'world' as const },
+      ]
+    : [{ label: '全球', value: 'world' as const }],
+);
 // 初始视野跟随站长配置，用户可以临时切（切了不改后台配置）
 const viewScope = ref<'china' | 'world'>('china');
 
@@ -287,7 +296,9 @@ async function loadSetting() {
     const res = await api.get<{ code: number; data: MapSetting }>('/map-setting');
     if (res.data?.data) {
       setting.value = res.data.data;
-      viewScope.value = res.data.data.scope === 'world' ? 'world' : 'china';
+      // 境外访客即便站长默认设置是中国，也只给全球视野
+      const cnViewer = res.data.data.viewer?.cn !== false;
+      viewScope.value = !cnViewer ? 'world' : res.data.data.scope === 'world' ? 'world' : 'china';
     }
   } catch {
     /* 读不到就保持离线示意 */
