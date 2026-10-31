@@ -265,12 +265,24 @@
             <a class="mg-btn" href="https://lbs.tianditu.gov.cn/" target="_blank" rel="noopener">
               天地图开发资源（许可 / 配额 / 文档）↗
             </a>
+            <a class="mg-btn" href="http://bzdt.ch.mnr.gov.cn/download.html?superclassName=%25E4%25B8%25AD%25E5%259B%25BD%25E5%2585%25A8%25E5%259B%25BE" target="_blank" rel="noopener">
+              标准地图服务 · 中国全图（现成成图 / 带审图号）↗
+            </a>
           </div>
           <p class="mg-note">
             天地图改过域名：旧的 <code>console.tianditu.gov.cn</code> / <code>uums.tianditu.gov.cn</code>
             已经打不开（DNS 解析失败）。如果上面按钮失效，请从
             <a href="https://www.tianditu.gov.cn/" target="_blank" rel="noopener">www.tianditu.gov.cn</a>
             →「开发资源」进入控制台。
+          </p>
+          <p class="mg-note">
+            <b>只要一张「只有中国、不带别国」的现成地图？</b>
+            自然资源部标准地图服务系统（上面第四个按钮）里有 <b>中国地图 275 幅</b>，
+            JPG / EPS 免费下载、自带审图号。进入后在「高级选项」里勾
+            <code>邻国 → 无邻国</code> + <code>分省设色</code>，
+            最常用那幅是 <code>中国地图 1:740万 对开 分省设色 无邻国 线划一</code>。
+            <b>直接使用只需标注审图号</b>；一旦放大 / 缩小 / 裁切就属于编辑，公开使用前要送自然资源主管部门审核。
+            <span class="mg-warn">该站 https 证书链有问题，浏览器会先拦一次 —— 点「继续前往」即可，或直接用 http 打开。</span>
           </p>
           <p class="mg-note">
             不填也能用：系统会用内置 ip2region 数据按省份画气泡（本地示意边界，<b>非审图件</b>，
@@ -764,6 +776,8 @@ onMounted(async () => {
 }
 .mg-btn.primary:hover { opacity: 0.9; color: #fff; }
 .mg-note { margin: 8px 0 0; font-size: 0.75rem; line-height: 1.7; color: var(--text-muted, #6b7280); }
+.mg-note code { padding: 0 4px; border-radius: 3px; background: var(--bg-page, #eef2f7); font-size: 0.72rem; }
+.mg-warn { color: var(--el-color-warning, #e6a23c); }
 
 .tk-row { display: flex; gap: 8px; width: 100%; }
 .mt-box {

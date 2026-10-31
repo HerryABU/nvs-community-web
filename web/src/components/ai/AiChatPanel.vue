@@ -197,67 +197,22 @@
         />
         <div class="ai-composer-tools">
           <div class="ai-composer-left">
-            <el-select
-              v-if="vendors.length > 1"
-              v-model="vendor"
-              size="small"
-              style="width:104px"
-              :disabled="generating || useByok"
+            <!-- 模型 / 回复长度 / 上下文 全收进一个中间弹窗：输入区只留一个入口，
+                 不再把一排 Select 堆在输入框下面（参考站的做法） -->
+            <button
+              type="button"
+              class="ai-cfg-btn"
+              :disabled="generating"
+              title="模型、回复长度与上下文设置"
+              @click="openSettings"
             >
-              <el-option label="全部厂商" value="" />
-              <el-option v-for="v in vendors" :key="v" :label="v" :value="v" />
-            </el-select>
-            <AiModelPicker
-              v-model="modelId"
-              :models="filteredModels"
-              :disabled="generating || useByok"
-            />
-            <el-tag v-if="selectedThinking" size="small" type="warning" effect="plain" title="先输出推理过程，再给正文；思考过程可折叠">
-              思考型
-            </el-tag>
-            <el-select v-model="maxTokens" size="small" style="width:100px" :disabled="generating">
-              <el-option :value="1024" label="短回复" />
-              <el-option :value="2048" label="中回复" />
-              <el-option :value="4096" label="长回复" />
-            </el-select>
-            <!-- 上下文：开关 + 滑块（参考主流 AI 站的做法，参数一眼看得懂） -->
-            <el-popover placement="top" :width="272" trigger="click" popper-class="ai-ctx-popper">
-              <template #reference>
-                <button
-                  type="button"
-                  class="ai-ctx-btn"
-                  :class="{ off: !memoryOn }"
-                  :title="memoryOn ? `会带上最近 ${contextLimit} 条对话` : '不记忆历史，每次都是独立对话'"
-                >
-                  上下文 {{ memoryOn ? contextLimit : '关' }}
-                </button>
-              </template>
-              <div class="ai-ctx-pop">
-                <div class="ai-ctx-row">
-                  <span class="ai-ctx-label">记忆对话历史</span>
-                  <el-switch v-model="memoryOn" size="small" />
-                </div>
-                <p class="ai-ctx-tip">开启后 AI 会接着上文聊；关闭则每次都是独立对话。</p>
-
-                <div class="ai-ctx-row" :class="{ dim: !memoryOn }">
-                  <span class="ai-ctx-label">上下文数量限制</span>
-                  <span class="ai-ctx-val">{{ memoryOn ? contextLimit + ' 条' : '—' }}</span>
-                </div>
-                <el-slider
-                  v-model="contextLimit"
-                  :min="2"
-                  :max="CTX_MAX"
-                  :step="2"
-                  :disabled="!memoryOn"
-                  :show-tooltip="false"
-                  size="small"
-                />
-                <p class="ai-ctx-tip">
-                  带上文越多越连贯，但每条都会计入输入 token，<b>消耗更多额度</b>。
-                  上限由站长在「AI 功能配置」里定。
-                </p>
-              </div>
-            </el-popover>
+              <span class="ai-cfg-model">{{ currentModelName }}</span>
+              <span class="ai-cfg-dot">·</span>
+              <span class="ai-cfg-meta">{{ replyLabel }}</span>
+              <span class="ai-cfg-dot">·</span>
+              <span class="ai-cfg-meta" :class="{ off: !memoryOn }">上下文 {{ memoryOn ? contextLimit : '关' }}</span>
+              <span class="ai-cfg-caret">▾</span>
+            </button>
           </div>
           <div class="ai-composer-right">
             <input
@@ -301,6 +256,86 @@
       </p>
     </div>
 
+    <!-- 对话设置：居中窗口（模型 / 回复长度 / 记忆 / 上下文数量） -->
+    <el-dialog
+      v-model="cfgOpen"
+      title="对话设置"
+      width="520px"
+      align-center
+      append-to-body
+      class="ai-cfg-dialog"
+    >
+      <div class="ai-cfg-form">
+        <div class="ai-cfg-field">
+          <label class="ai-cfg-label">选择模型</label>
+          <el-select
+            v-model="draft.modelId"
+            filterable
+            placeholder="搜索模型或厂商"
+            style="width: 100%"
+            :disabled="useByok"
+          >
+            <el-option-group v-for="g in modelGroups" :key="g.vendor" :label="g.vendor">
+              <el-option v-for="m in g.items" :key="m.id" :label="m.name" :value="m.id">
+                <span class="ai-cfg-opt">
+                  <span class="ai-cfg-opt-name">{{ m.name }}</span>
+                  <span class="ai-cfg-opt-tags">
+                    <em v-if="m.thinking" class="ai-cfg-chip think">思考型</em>
+                    <em class="ai-cfg-chip">{{ priceText(m) }}</em>
+                  </span>
+                </span>
+              </el-option>
+            </el-option-group>
+          </el-select>
+          <p class="ai-cfg-hint">
+            <template v-if="useByok">当前用你自己的密钥，模型由密钥决定。</template>
+            <template v-else>共 {{ modelCount }} 个可用模型，按厂商分组。</template>
+          </p>
+        </div>
+
+        <div class="ai-cfg-field">
+          <label class="ai-cfg-label">回复长度</label>
+          <el-radio-group v-model="draft.maxTokens" size="small">
+            <el-radio-button :value="1024">短回复</el-radio-button>
+            <el-radio-button :value="2048">中回复</el-radio-button>
+            <el-radio-button :value="4096">长回复</el-radio-button>
+          </el-radio-group>
+          <p class="ai-cfg-hint">只影响单次回答的上限，不影响按 token 计费的输入部分。</p>
+        </div>
+
+        <div class="ai-cfg-field">
+          <div class="ai-cfg-row">
+            <span class="ai-cfg-label">记忆对话历史</span>
+            <el-switch v-model="draft.memory" />
+          </div>
+          <p class="ai-cfg-hint">开启后 AI 会接着上文聊；关闭则每次都是独立对话。</p>
+        </div>
+
+        <div class="ai-cfg-field" :class="{ dim: !draft.memory }">
+          <div class="ai-cfg-row">
+            <span class="ai-cfg-label">上下文数量限制</span>
+            <span class="ai-cfg-val">{{ draft.memory ? draft.contextLimit + ' 条' : '—' }}</span>
+          </div>
+          <el-slider
+            v-model="draft.contextLimit"
+            :min="2"
+            :max="CTX_MAX"
+            :step="2"
+            :disabled="!draft.memory"
+            :show-tooltip="false"
+          />
+          <p class="ai-cfg-hint">
+            带上文越多越连贯，但每条都会计入输入 token，<b>消耗更多额度</b>；
+            上限由站长在「AI 功能配置」里定。
+          </p>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="cfgOpen = false">取消</el-button>
+        <el-button type="primary" @click="applySettings">保存</el-button>
+      </template>
+    </el-dialog>
+
     <AiPromptLibrary
       v-model="promptOpen"
       kind="chat"
@@ -311,7 +346,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue';
+import { ref, reactive, computed, watch, nextTick } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   CopyDocument,
@@ -327,7 +362,6 @@ import {
 } from '@element-plus/icons-vue';
 import { renderAiMarkdown } from '@/markdown/renderer';
 import AiPromptLibrary from '@/components/ai/AiPromptLibrary.vue';
-import AiModelPicker from '@/components/ai/AiModelPicker.vue';
 import { aiHubApi, streamChat, uploadChatAttachment, type AiHubStatus, type AiAgent, type AiChatMessage, type AiChatSession, type ChatAttachment } from '@/api/aiHub';
 
 const props = defineProps<{
@@ -426,26 +460,62 @@ let abortCtrl: AbortController | null = null;
 let loadingSession = 0;
 
 const modelId = ref(0);
-const vendor = ref(''); // 厂商筛选（空=全部）
-// 厂商维度：只列出现过的厂商，避免空选项
-const vendors = computed(() => {
-  const set = new Set<string>();
+
+/** 按厂商分组（弹窗里的模型下拉用；组内保持后端给的优先级顺序） */
+const modelGroups = computed(() => {
+  const out: { vendor: string; items: typeof props.status.chat_models }[] = [];
+  const idx = new Map<string, number>();
   for (const m of props.status.chat_models) {
-    const v = (m.vendor || '').trim();
-    if (v) set.add(v);
+    const v = (m.vendor || '').trim() || '其它';
+    let i = idx.get(v);
+    if (i === undefined) {
+      i = out.length;
+      idx.set(v, i);
+      out.push({ vendor: v, items: [] });
+    }
+    out[i].items.push(m);
   }
-  return Array.from(set);
+  return out;
 });
-const filteredModels = computed(() => {
-  if (!vendor.value) return props.status.chat_models;
-  return props.status.chat_models.filter((m) => (m.vendor || '').trim() === vendor.value);
+
+// ---------- 对话设置弹窗（模型 / 回复长度 / 记忆 / 上下文）----------
+// 用草稿态：点「保存」才写回，点「取消」或关窗都不改当前设置。
+const cfgOpen = ref(false);
+const draft = reactive({ modelId: 0, maxTokens: 2048, memory: true, contextLimit: 10 });
+
+function openSettings() {
+  draft.modelId = modelId.value;
+  draft.maxTokens = maxTokens.value;
+  draft.memory = memoryOn.value;
+  draft.contextLimit = contextLimit.value;
+  cfgOpen.value = true;
+}
+
+function applySettings() {
+  if (draft.modelId) modelId.value = draft.modelId;
+  maxTokens.value = draft.maxTokens;
+  memoryOn.value = draft.memory;
+  if (draft.memory) contextLimit.value = clampCtx(draft.contextLimit);
+  cfgOpen.value = false;
+}
+
+const modelCount = computed(() => props.status.chat_models.length);
+const currentModel = computed(() => props.status.chat_models.find((m) => m.id === modelId.value));
+const currentModelName = computed(() => {
+  if (useByok.value) return byokModel.value || '自带密钥';
+  return currentModel.value?.name || '选择模型';
 });
-// 切换厂商后若当前模型不在结果里，自动选第一个
-watch([vendor, filteredModels], () => {
-  const list = filteredModels.value;
-  if (!list.length) return;
-  if (!list.some((m) => m.id === modelId.value)) modelId.value = list[0].id;
-}, { immediate: true });
+const replyLabel = computed(() =>
+  maxTokens.value >= 4096 ? '长回复' : maxTokens.value >= 2048 ? '中回复' : '短回复',
+);
+
+/** 模型下拉右侧的价格小标签（免费则标「免费」） */
+function priceText(m: { price_in?: number; price_out?: number }) {
+  const i = m.price_in ?? 0;
+  const o = m.price_out ?? 0;
+  if (!i && !o) return '免费';
+  return o ? `${i}/${o}` : `${i}`;
+}
 const useByok = ref(false);
 const byokModel = ref('');
 // 提示词库
@@ -462,7 +532,7 @@ watch(
       if (modelId.value !== props.presetModelId) modelId.value = props.presetModelId;
       return;
     }
-    if (!modelId.value) modelId.value = (filteredModels.value[0] || list[0]).id;
+    if (!modelId.value || !list.some((m) => m.id === modelId.value)) modelId.value = list[0].id;
   },
   { immediate: true },
 );
@@ -501,7 +571,7 @@ const currentAgentGreeting = computed(() => currentAgent.value?.greeting || '');
 
 /** 当前选中的模型是否为「思考型」（先出推理再出正文） */
 const selectedThinking = computed(
-  () => !useByok.value && !!filteredModels.value.find((m) => m.id === modelId.value)?.thinking,
+  () => !useByok.value && !!props.status.chat_models.find((m) => m.id === modelId.value)?.thinking,
 );
 
 
@@ -1188,22 +1258,40 @@ function stop() {
   gap: var(--space-2, 8px);
   padding: 4px var(--space-2, 8px) var(--space-2, 8px);
 }
-/* 上下文按钮 + 弹层（开关 / 滑块） */
-.ai-ctx-btn {
-  height: 24px; padding: 0 8px; border-radius: 6px; cursor: pointer;
+/* 输入区唯一入口：当前模型 · 回复长度 · 上下文 */
+.ai-cfg-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 26px; max-width: 100%; padding: 0 9px; border-radius: 7px; cursor: pointer;
   border: 1px solid var(--border-color, #e5e7eb);
   background: var(--bg-card, #fff);
-  font-size: 0.73rem; color: var(--text-light, #6b7280);
-  white-space: nowrap; transition: all 0.15s ease;
+  font-size: 0.75rem; color: var(--text-main, #374151);
+  white-space: nowrap; transition: border-color 0.15s, box-shadow 0.15s;
 }
-.ai-ctx-btn:hover { border-color: var(--el-color-primary, #409eff); color: var(--el-color-primary, #409eff); }
-.ai-ctx-btn.off { color: var(--text-light, #9ca3af); border-style: dashed; }
-.ai-ctx-pop { display: flex; flex-direction: column; gap: 6px; }
-.ai-ctx-row { display: flex; align-items: center; justify-content: space-between; }
-.ai-ctx-row.dim { opacity: 0.55; }
-.ai-ctx-label { font-size: 0.8rem; color: var(--text-main, #1f2937); }
-.ai-ctx-val { font-size: 0.76rem; color: var(--el-color-primary, #409eff); font-variant-numeric: tabular-nums; }
-.ai-ctx-tip { margin: 0; font-size: 0.72rem; line-height: 1.65; color: var(--text-light, #9ca3af); }
+.ai-cfg-btn:hover:not(:disabled) { border-color: var(--el-color-primary, #409eff); }
+.ai-cfg-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.ai-cfg-model { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+.ai-cfg-dot { color: var(--text-light, #c0c4cc); }
+.ai-cfg-meta { color: var(--text-light, #6b7280); }
+.ai-cfg-meta.off { color: var(--el-color-warning, #e6a23c); }
+.ai-cfg-caret { font-size: 0.66rem; color: var(--text-light, #9ca3af); }
+
+/* 弹窗内的表单 */
+.ai-cfg-form { display: flex; flex-direction: column; gap: 18px; }
+.ai-cfg-field { display: flex; flex-direction: column; gap: 6px; }
+.ai-cfg-field.dim { opacity: 0.55; }
+.ai-cfg-row { display: flex; align-items: center; justify-content: space-between; }
+.ai-cfg-label { font-size: 0.82rem; font-weight: 500; color: var(--text-main, #1f2937); }
+.ai-cfg-val { font-size: 0.78rem; color: var(--el-color-primary, #409eff); font-variant-numeric: tabular-nums; }
+.ai-cfg-hint { margin: 0; font-size: 0.72rem; line-height: 1.65; color: var(--text-light, #9ca3af); }
+.ai-cfg-opt { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ai-cfg-opt-name { overflow: hidden; text-overflow: ellipsis; }
+.ai-cfg-opt-tags { display: flex; align-items: center; gap: 4px; flex: none; }
+.ai-cfg-chip {
+  font-style: normal; font-size: 0.66rem; line-height: 1.5; padding: 0 5px; border-radius: 4px;
+  background: var(--bg-page, #eef2f7); color: var(--text-light, #6b7280);
+  font-variant-numeric: tabular-nums;
+}
+.ai-cfg-chip.think { background: rgba(230, 162, 60, 0.16); color: var(--el-color-warning, #e6a23c); }
 .ai-composer-left { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .ai-composer-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .ai-send-btn {
