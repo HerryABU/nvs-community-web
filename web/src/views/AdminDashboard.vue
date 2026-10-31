@@ -237,8 +237,8 @@
           <el-col :xs="24" :lg="12">
             <div class="hm-card">
               <h4 class="chart-title">模型选择热度（近 30 天）</h4>
-              <p class="chart-sub">用户实际点了哪个模型 —— 谁在承担主要流量</p>
-              <v-chart v-if="aiTopModels.length" :option="aiBarOption(aiTopModels)" autoresize class="ai-bar" />
+              <p class="chart-sub">按模型主名分组、支链堆叠 —— 谁在承担主要流量，是哪个版本在扛</p>
+              <v-chart v-if="aiModelFamily.length" :option="aiStackOption(aiModelFamily)" autoresize class="ai-bar" />
               <StateBlock v-else state="empty" title="近 30 天没有 AI 调用" description="AI 工作台有实际对话后，这里会显示模型热度。" />
             </div>
           </el-col>
@@ -335,6 +335,8 @@ const activeHours = ref<number[][]>([]); // 7×24 星期×小时 互动矩阵
 
 // AI 使用画像：模型热度 / 渠道路由频次（来自 AiCallLog 聚合，与「模型统计」同口径）
 const aiTopModels = ref<any[]>([]);
+// 主名 → 支链堆叠（family / total / variants[{name,requests}]）
+const aiModelFamily = ref<any[]>([]);
 const aiTopChannels = ref<any[]>([]);
 
 // 客户端画像（结构化 UA 解析：OS / 浏览器 / 设备类型）
@@ -438,6 +440,42 @@ function wcStyle(w: { word: string; count: number }) {
     color: palette[idx],
     fontWeight: ratio > 0.6 ? '700' : '500',
     opacity: String(0.55 + ratio * 0.45),
+  };
+}
+
+// 模型热度：主名分组 + 支链堆叠。
+// 为什么不是「每个完整模型一根柱」：deepseek-v4.1-flash / -pro 会各占一列，
+// 十几列之后完全看不出「主力是哪个家族」；堆叠后一眼看到家族总量，再看支链占比。
+// 支链少的（1~2 个）看起来仍是普通柱，不会因为堆叠而变乱。
+function aiStackOption(list: { family: string; total: number; variants: { name: string; requests: number }[] }[]) {
+  const isDark = document.documentElement.classList.contains('dark');
+  const axis = isDark ? '#94a3b8' : '#64748b';
+  const split = isDark ? 'rgba(148,163,184,0.18)' : 'rgba(148,163,184,0.22)';
+  // 支链颜色：按出现顺序取调色板，同一支链在不同家族里颜色一致
+  const palette = ['#6366f1', '#14b8a6', '#f59e0b', '#ef4444', '#8b5cf6', '#0ea5e9', '#84cc16'];
+  const variantNames: string[] = [];
+  list.forEach((f) => f.variants.forEach((v) => { if (!variantNames.includes(v.name)) variantNames.push(v.name); }));
+
+  return {
+    grid: { left: 8, right: 16, top: 28, bottom: 8, containLabel: true },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    legend: { top: 0, textStyle: { color: axis, fontSize: 10 }, itemHeight: 8, itemWidth: 10 },
+    xAxis: {
+      type: 'category',
+      data: list.map((f) => f.family),
+      axisLabel: { color: axis, fontSize: 10, interval: 0, rotate: list.length > 4 ? 20 : 0 },
+      axisLine: { lineStyle: { color: split } },
+      axisTick: { show: false },
+    },
+    yAxis: { type: 'value', axisLabel: { color: axis, fontSize: 10 }, splitLine: { lineStyle: { color: split } } },
+    series: variantNames.map((vn, i) => ({
+      name: vn,
+      type: 'bar',
+      stack: 'ai-model',
+      barMaxWidth: 34,
+      itemStyle: { color: palette[i % palette.length], borderRadius: i === variantNames.length - 1 ? [4, 4, 0, 0] : 0 },
+      data: list.map((f) => f.variants.find((v) => v.name === vn)?.requests || 0),
+    })),
   };
 }
 
@@ -592,6 +630,7 @@ async function loadDashboard() {
     if (Array.isArray(ah)) activeHours.value = ah;
     if (d?.client) clientData.value = d.client;
     if (Array.isArray(d?.ai_top_models)) aiTopModels.value = d.ai_top_models;
+    if (Array.isArray(d?.ai_model_family)) aiModelFamily.value = d.ai_model_family;
     if (Array.isArray(d?.ai_top_channels)) aiTopChannels.value = d.ai_top_channels;
 
     // 幕 2：违禁词命中与词云 + 三类热词（后端同一次响应带回，避免三个额外请求）

@@ -194,6 +194,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      // 模型价目表：公开可看，价格数据来自后台「模型收费」页的配置
+      path: '/ai/pricing',
+      name: 'ai-pricing',
+      component: () => import('@/views/AiPricing.vue'),
+    },
+    {
       // 灵感广场独立页（作品流公开可浏览）
       path: '/ai/gallery',
       name: 'ai-gallery',
@@ -533,6 +539,12 @@ const router = createRouter({
       path: '/admin/agent-review',
       name: 'admin-agent-review',
       component: () => import('@/views/admin/AdminAgentReview.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/ai-pricing',
+      name: 'admin-ai-pricing',
+      component: () => import('@/views/admin/AdminAiPricing.vue'),
       meta: { requiresAuth: true },
     },
     {

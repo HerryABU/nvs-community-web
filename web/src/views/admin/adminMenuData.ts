@@ -121,6 +121,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: 'AI 智能体', desc: '对话人设预设 · 系统提示词 · 工作台卡片', path: '/admin/ai-agents', icon: ChatLineRound, color: 'var(--gradient-indigo)' },
       { title: '智能体投稿', desc: '用户提交特殊提示词 · 站长审核开关 · 通过即上架广场', path: '/admin/agent-review', icon: ChatDotSquare, color: 'var(--gradient-indigo)' },
       { title: 'AI 工作台菜单', desc: '左栏自定义应用 · 站内面板或外链 · 站长统一配置', path: '/admin/ai-menu', icon: Grid, color: 'var(--gradient-blue)' },
+      { title: '模型收费', desc: '分类默认价 + 单模型覆盖价 · 用户侧价目表的数据源', path: '/admin/ai-pricing', icon: Coin, color: 'var(--gradient-amber)' },
       { title: '免费 AI 额度', desc: '每日免费调用额度（次数/tokens）· 用尽才扣代币 · 按人覆盖', path: '/admin/ai-free-quota', icon: Present, color: 'var(--gradient-teal)' },
       { title: 'AI 数据审计', desc: '会话/作品/调用流水只读查询 · 排查与对账', path: '/admin/ai-logs', icon: DataAnalysis, color: 'var(--gradient-blue)' },
       { title: 'AI 功能配置', desc: '能力开关（BYOK/混图/换脸）· 上下文条数 · 每日限额 · 厂商字典', path: '/admin/ai-features', icon: Operation, color: 'var(--gradient-teal)' },

@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"nvs-server/aiapi/vendor"
 	"nvs-server/ipgeo"
 	"nvs-server/models"
 	"nvs-server/utils"
@@ -313,6 +314,8 @@ func GetDashboardStats(c *gin.Context) {
 		// 数据源是 AiCallLog，与「模型统计」同一个口径，避免两处数字打架。
 		"ai_top_models":   computeAiTop("model", 30, 8),
 		"ai_top_channels": computeAiTop("channel", 30, 8),
+		// 按模型主名分组、支链堆叠（前端画堆叠柱），family → [{variant, requests}]
+		"ai_model_family": computeAiModelFamilyStack(30, 8),
 	})
 }
 
@@ -681,6 +684,114 @@ func computeAiTop(dim string, days, limit int) []gin.H {
 			"requests": r.Requests,
 			"tokens":   r.TokensIn + r.TokensOut,
 		})
+	}
+	return out
+}
+
+// computeAiModelFamilyStack 首页大屏「按模型主名分组、支链堆叠」的数据。
+//
+// 为什么单独做一层聚合，而不是让前端拆名字：
+// 模型 ID 的家族/支链解析规则（qwen2.5 → qwen + 2.5、claude-3-5-sonnet → claude / 3-5 / sonnet）
+// 已经在 aiapi/vendor.ParseModelID 里维护了一份，前端再写一套必然逐渐跑偏。
+// 这里一次算好：family → [{variant, requests}]，前端只负责画堆叠柱。
+//
+// 口径：先按 model_id 聚合调用次数（行数=用过的模型数），再按「展示名」解析。
+// 用展示名而不是 model_id 字段，是因为站长常把展示名写成 "DeepSeek-V4-Flash" 这种可读形式，
+// 解析效果更稳定；解析不出支链时归到 "其他"。
+func computeAiModelFamilyStack(days, limit int) []gin.H {
+	rows, err := models.AggregateAiUsage("model", days)
+	if err != nil || len(rows) == 0 {
+		return []gin.H{}
+	}
+	ids := make([]uint, 0, len(rows))
+	for _, r := range rows {
+		if id, e := strconv.ParseUint(r.Key, 10, 64); e == nil {
+			ids = append(ids, uint(id))
+		}
+	}
+	nameByID := map[uint]string{}
+	if len(ids) > 0 {
+		var list []models.AiModel
+		models.DB.Select("id, name, model_id").Where("id IN ?", ids).Find(&list)
+		for _, m := range list {
+			label := m.Name
+			if label == "" {
+				label = m.ModelID
+			}
+			nameByID[m.ID] = label
+		}
+	}
+
+	// family → variant → requests
+	agg := map[string]map[string]int64{}
+	for _, r := range rows {
+		id, _ := strconv.ParseUint(r.Key, 10, 64)
+		label := nameByID[uint(id)]
+		if label == "" {
+			label = r.Name
+		}
+		if label == "" {
+			label = "未命名"
+		}
+		p := vendor.ParseModelID(label)
+		family := p.Prefix
+		if family == "" {
+			family = "其他"
+		}
+		variant := p.Variant
+		if variant == "" {
+			// 没有支链就用版本号区分（如 v4.1），再没有就归"标准"
+			variant = p.Version
+		}
+		if variant == "" {
+			variant = "标准"
+		}
+		if agg[family] == nil {
+			agg[family] = map[string]int64{}
+		}
+		agg[family][variant] += r.Requests
+	}
+
+	// 按总量降序取前 limit 个家族
+	type famTotal struct {
+		name  string
+		total int64
+	}
+	totals := make([]famTotal, 0, len(agg))
+	for f, vs := range agg {
+		var t int64
+		for _, v := range vs {
+			t += v
+		}
+		totals = append(totals, famTotal{name: f, total: t})
+	}
+	sort.Slice(totals, func(i, j int) bool {
+		if totals[i].total != totals[j].total {
+			return totals[i].total > totals[j].total
+		}
+		return totals[i].name < totals[j].name
+	})
+	if limit > 0 && len(totals) > limit {
+		totals = totals[:limit]
+	}
+
+	out := make([]gin.H, 0, len(totals))
+	for _, t := range totals {
+		type vp struct {
+			Name     string `json:"name"`
+			Requests int64  `json:"requests"`
+		}
+		vs := make([]vp, 0, len(agg[t.name]))
+		for v, c := range agg[t.name] {
+			vs = append(vs, vp{Name: v, Requests: c})
+		}
+		sort.Slice(vs, func(i, j int) bool {
+			if vs[i].Requests != vs[j].Requests {
+				return vs[i].Requests > vs[j].Requests
+			}
+			return vs[i].Name < vs[j].Name
+		})
+		out = append(out, gin.H{"family": t.name, "total": t.total, "variants": vs})
 	}
 	return out
 }
