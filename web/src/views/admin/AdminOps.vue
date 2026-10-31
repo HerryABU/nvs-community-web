@@ -255,6 +255,17 @@
             <li><b>取 tk</b>：应用详情里复制 tk，粘到下面，点「检测密钥」确认能取到瓦片，再保存。</li>
             <li><b>标来源</b>：按天地图要求填写审图号，前台地图下方会自动标注来源。</li>
           </ol>
+          <div class="mg-actions">
+            <a class="mg-btn primary" href="https://console.tianditu.gov.cn/api/key" target="_blank" rel="noopener">
+              打开天地图控制台（创建应用 / 取 tk）↗
+            </a>
+            <a class="mg-btn" href="https://lbs.tianditu.gov.cn/authorization/authorization.html" target="_blank" rel="noopener">
+              天地图许可与配额说明 ↗
+            </a>
+            <a class="mg-btn" href="https://uums.tianditu.gov.cn/register" target="_blank" rel="noopener">
+              还没账号？先注册 ↗
+            </a>
+          </div>
           <p class="mg-note">
             不填也能用：系统会用内置 ip2region 数据按省份画气泡（本地示意边界，<b>非审图件</b>，
             仅供站内参考，只覆盖国内）。但只要有对外展示需求，就应该配置标准地图。
@@ -728,6 +739,21 @@ onMounted(async () => {
   background: var(--bg-page, #eef2f7); color: var(--text-main, #1f2937);
 }
 .mg-tip { display: block; font-size: 0.74rem; color: var(--text-muted, #9ca3af); word-break: break-all; }
+.mg-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.mg-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px 12px; border-radius: 6px; font-size: 0.76rem;
+  border: 1px solid var(--border-color, #dcdfe6);
+  background: var(--bg-card, #fff);
+  color: var(--text-main, #374151); text-decoration: none;
+  transition: all 0.15s ease;
+}
+.mg-btn:hover { border-color: var(--el-color-primary, #409eff); color: var(--el-color-primary, #409eff); }
+.mg-btn.primary {
+  border-color: var(--el-color-primary, #409eff);
+  background: var(--el-color-primary, #409eff); color: #fff;
+}
+.mg-btn.primary:hover { opacity: 0.9; color: #fff; }
 .mg-note { margin: 8px 0 0; font-size: 0.75rem; line-height: 1.7; color: var(--text-muted, #6b7280); }
 
 .tk-row { display: flex; gap: 8px; width: 100%; }
