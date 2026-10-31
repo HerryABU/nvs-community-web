@@ -1,6 +1,43 @@
 <template>
   <div class="admin-page">
     <AdminHeader title="AI 模型池" subtitle="OpenAI 兼容上游配置：密钥加密存储、按量计费，编辑区 AI 助手的数据来源" :icon="MagicStick" />
+
+    <!-- 两级导航：一级「模型配置 / 模型统计 / 路由与定价」，二级再按渠道·模型·厂商分视图。
+         本页信息量太大（原先 5 块全摊一屏），一级切主题、二级切视角，
+         当前两级都写进 URL hash（#config/channel），刷新停在原处、可直接分享。 -->
+    <div class="pool-nav">
+      <div class="pool-tabs pool-tabs-l1" role="tablist">
+        <button
+          v-for="t in level1Tabs"
+          :key="t.key"
+          type="button"
+          role="tab"
+          class="pool-tab"
+          :class="{ active: level1 === t.key }"
+          :aria-selected="level1 === t.key"
+          @click="switchLevel1(t.key)"
+        >
+          <span class="pool-tab-ico">{{ t.icon }}</span>
+          <span class="pool-tab-label">{{ t.label }}</span>
+        </button>
+      </div>
+      <div class="pool-tabs pool-tabs-l2" role="tablist">
+        <button
+          v-for="t in level2Tabs"
+          :key="t.key"
+          type="button"
+          role="tab"
+          class="pool-tab pool-tab-sm"
+          :class="{ active: level2 === t.key }"
+          :aria-selected="level2 === t.key"
+          @click="switchLevel2(t.key)"
+        >
+          <span class="pool-tab-label">{{ t.label }}</span>
+          <span v-if="t.count !== null" class="pool-tab-count">{{ t.count }}</span>
+        </button>
+      </div>
+    </div>
+
     <div class="admin-page-body">
       <p class="hint-text">
         AI 为<b>默认关闭</b>的增值能力：开启后用户可在 AI 工作台使用对话 / 绘画 / 视频，作者还能在章节编辑器调用「续写 / 润色 / 扩写 / 摘要」。
@@ -19,7 +56,7 @@
       </div>
 
       <!-- ============ 路由策略 ============ -->
-      <div class="admin-panel" style="margin-top:16px">
+      <div v-show="at('policy', 'route')" class="admin-panel" style="margin-top:16px">
         <SectionHeader title="路由策略" subtitle="自动选模型：最便宜 / 最快 / 按场景；失败自动降级并在输出里明确提示" :icon="'🧭'" gradient="blue" />
         <el-form label-width="120px" style="max-width:760px;margin-top:10px">
           <el-form-item label="全局策略">
@@ -59,12 +96,111 @@
         </el-form>
       </div>
 
+      <!-- ============ 自由添加（手工逐个建，不受渠道约束） ============ -->
+      <div v-show="at('config', 'free')" class="admin-panel" style="margin-top:16px">
+        <SectionHeader title="自由添加" subtitle="手工填上游地址与模型 ID，一个也行——不依赖渠道能否列出模型" :icon="'✍️'" gradient="indigo" />
+        <div class="free-grid">
+          <div class="free-card">
+            <div class="free-step">1</div>
+            <h5 class="free-title">填上游与模型 ID</h5>
+            <p class="free-desc">
+              适合上游不支持 <code>/models</code> 列表、或只想接某几个特定模型的情况。
+              填完即用，密钥 AES-256-GCM 加密落库。
+            </p>
+            <el-button type="primary" :icon="Plus" @click="openCreate">手动添加模型</el-button>
+          </div>
+          <div class="free-card">
+            <div class="free-step">2</div>
+            <h5 class="free-title">也可以从渠道批量拉</h5>
+            <p class="free-desc">
+              上游是 OpenAI 兼容且开放 <code>/models</code> 时，填一次地址与密钥就能把可用模型全列出来勾选导入，
+              免去逐个手填。
+            </p>
+            <el-button @click="openPull"><span class="btn-emoji">🔌</span>从渠道拉取</el-button>
+          </div>
+          <div class="free-card">
+            <div class="free-step">3</div>
+            <h5 class="free-title">调价与可见性</h5>
+            <p class="free-desc">
+              添加后在「按模型」里设价格与「导入后对用户可见」；
+              对话按 1K tokens 计价，绘画/视频按次计价，0 = 免费。
+            </p>
+            <el-button @click="switchLevel1('config'); switchLevel2('model')">去按模型查看</el-button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ 按渠道（渠道视角：地址 → 模型数 → 拉取/查余额） ============ -->
+      <div v-show="at('config', 'channel')" class="admin-panel" style="margin-top:16px">
+        <SectionHeader title="按渠道" subtitle="同一个上游地址下的模型共用一份密钥与余额；先看渠道，再决定拉什么" :icon="'🏢'" gradient="teal" />
+        <div class="table-toolbar">
+          <span class="muted small">共 {{ channelGroups.length }} 条渠道 · {{ models.length }} 个模型</span>
+          <span>
+            <el-button :loading="chLoading" @click="openChannels">渠道余额</el-button>
+            <el-button type="primary" @click="openPull"><span class="btn-emoji">🔌</span>新增渠道并拉取</el-button>
+          </span>
+        </div>
+        <el-table v-if="channelGroups.length" :data="channelGroups" style="width:100%" size="small">
+          <el-table-column prop="base_url" label="上游地址" min-width="280" show-overflow-tooltip />
+          <el-table-column prop="models" label="模型数" width="90" />
+          <el-table-column label="密钥" width="100">
+            <template #default="{ row }">
+              <el-tag size="small" :type="row.hasKey ? 'success' : 'info'">{{ row.hasKey ? '已配置' : '未配置' }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="120">
+            <template #default="{ row }">
+              <el-button link size="small" @click="switchLevel2('model')">查看模型</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <StateBlock v-else state="empty" title="还没有渠道" description="点「新增渠道并拉取」填上游地址与密钥，即可批量导入模型" />
+      </div>
+
+      <!-- ============ 模型统计（三个维度共用一张表，按二级切换） ============ -->
+      <div v-show="level1 === 'stats'" class="admin-panel" style="margin-top:16px">
+        <SectionHeader
+          :title="`用量统计 · 按${statsDim === 'channel' ? '渠道' : statsDim === 'vendor' ? '厂商' : '模型'}`"
+          subtitle="近 30 天调用日志聚合：调用量 / tokens / 实扣代币 / 成功率 / 平均延迟"
+          :icon="'📊'"
+          gradient="blue"
+        />
+        <div class="stats-sum">
+          <span>调用 <b>{{ usageTotals.req }}</b> 次</span>
+          <span>tokens <b>{{ usageTotals.tok }}</b></span>
+          <span>实扣代币 <b>{{ usageTotals.cost }}</b></span>
+        </div>
+        <el-table v-if="usageRows.length" :data="usageRows" v-loading="usageLoading" style="width:100%" size="small">
+          <el-table-column prop="name" :label="statsDim === 'channel' ? '上游地址' : statsDim === 'vendor' ? '厂商' : '模型'" min-width="200" show-overflow-tooltip />
+          <el-table-column v-if="statsDim !== 'model'" prop="model_count" label="模型数" width="80" />
+          <el-table-column prop="requests" label="调用" width="80" sortable />
+          <el-table-column label="成功率" width="90">
+            <template #default="{ row }">
+              <span :class="{ 'stat-bad': row.success_pct < 90 }">{{ row.success_pct }}%</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="tokens 入/出" width="150">
+            <template #default="{ row }">{{ row.tokens_in }} / {{ row.tokens_out }}</template>
+          </el-table-column>
+          <el-table-column prop="cost" label="实扣代币" width="100" sortable />
+          <el-table-column label="平均延迟" width="100">
+            <template #default="{ row }">{{ row.avg_latency ? row.avg_latency + ' ms' : '—' }}</template>
+          </el-table-column>
+        </el-table>
+        <StateBlock
+          v-else-if="!usageLoading"
+          state="empty"
+          title="近 30 天没有调用记录"
+          description="模型被实际调用后这里才会有数据；试算与失败重试不计入。"
+        />
+      </div>
+
       <!-- ============ 模型列表 ============ -->
-      <div class="admin-panel" style="margin-top:16px">
+      <div v-show="at('config', 'model')" class="admin-panel" style="margin-top:16px">
         <SectionHeader title="模型列表" subtitle="可配置多个上游，按优先级取用" :icon="'🤖'" gradient="purple" />
         <div class="table-toolbar">
           <span class="muted small">共 {{ models.length }} 个模型（启用 {{ enabledCount }} 个）</span>
-          <el-button :icon="'🔌'" @click="openPull">从渠道拉取</el-button>
+          <el-button @click="openPull"><span class="btn-emoji">🔌</span>从渠道拉取</el-button>
           <el-button :loading="chLoading" @click="openChannels">渠道余额</el-button>
           <el-button type="primary" :icon="Plus" @click="openCreate">添加模型</el-button>
         </div>
@@ -147,7 +283,7 @@
     </div>
 
     <!-- ============ 厂商管理 ============ -->
-    <div class="admin-panel" style="margin-top:16px">
+    <div v-show="at('config', 'vendor')" class="admin-panel" style="margin-top:16px">
       <SectionHeader title="厂商管理" subtitle="厂商 = 模型 ID 前缀（如 deepseek），按厂商聚合与筛选；导入时按前缀归类" :icon="'🏷️'" gradient="teal" />
       <div class="table-toolbar">
         <span class="muted small">共 {{ vendors.length }} 个厂商（启用 {{ enabledVendorCount }} 个）</span>
@@ -173,7 +309,7 @@
     </div>
 
     <!-- ============ 厂商版本矩阵（管理端专用） ============ -->
-    <div class="admin-panel" style="margin-top:16px">
+    <div v-show="at('config', 'vendor')" class="admin-panel" style="margin-top:16px">
       <SectionHeader title="厂商版本矩阵" subtitle="按 厂商→版本→亚版本 聚合；同一版本下高亮最新亚版本（仅管理端可见，用户侧只看主名字）" :icon="'🧬'" gradient="indigo" />
       <div class="matrix-wrap" v-loading="matrixLoading">
         <div v-for="v in matrix" :key="v.id" class="matrix-vendor">
@@ -204,7 +340,7 @@
     </div>
 
     <!-- ============ 聚合分类定价 ============ -->
-    <div class="admin-panel" style="margin-top:16px">
+    <div v-show="at('policy', 'pricing')" class="admin-panel" style="margin-top:16px">
       <SectionHeader title="聚合分类定价" subtitle="按 chat / image / video 三类设默认单价；导入模型未显式给价时自动套用" :icon="'💰'" gradient="amber" />
       <div class="price-grid">
         <div v-for="p in categoryPrices" :key="p.kind" class="price-card">
@@ -765,7 +901,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { MagicStick, Plus } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
@@ -774,6 +911,152 @@ import EmptyState from '@/components/common/EmptyState.vue';
 import { aiApi, type AdminAiModel, type AiModelPreset, type AiVendor, type AiCategoryPrice, type AiVendorMatrixEntry, type ProviderModelSuggestion, type AdminChannelReport, type CostRateSetting } from '@/api/ai';
 import { adminApi } from '@/api/admin';
 import StateBlock from '@/components/common/StateBlock.vue';
+
+// ==================== 两级导航（URL query 参数） ====================
+// 一级决定"做什么"，二级决定"从哪个角度看"。两层都用 query 参数表达：
+//   /admin/ai-pool?tab=config&view=channel   —— 模型配置 · 按渠道
+//   /admin/ai-pool?tab=stats&view=model      —— 模型统计 · 按模型
+// 用 query 而不是 #hash：参数能随路由一起被 vue-router 管理，
+// 浏览器前进/后退、直接粘贴链接、外部跳转都能正确复位；
+// 也与后台已有的 ?item= 深链约定一致，不会出现两套地址风格。
+type L1 = 'config' | 'stats' | 'policy';
+type L2 = 'free' | 'channel' | 'model' | 'vendor' | 'route' | 'pricing';
+
+// 一级 → 可用二级（顺序即按钮顺序）
+const LEVEL2_MAP: Record<L1, { key: L2; label: string }[]> = {
+  config: [
+    { key: 'free', label: '自由添加' },
+    { key: 'channel', label: '按渠道' },
+    { key: 'model', label: '按模型' },
+    { key: 'vendor', label: '按厂商' },
+  ],
+  stats: [
+    { key: 'channel', label: '按渠道' },
+    { key: 'model', label: '按模型' },
+    { key: 'vendor', label: '按厂商' },
+  ],
+  policy: [
+    { key: 'route', label: '路由策略' },
+    { key: 'pricing', label: '分类定价' },
+  ],
+};
+
+// 注意：本页另有一个 route = reactive({...}) 表示「模型路由策略」，
+// 所以路由对象改名为 navRoute/navRouter，避免标识符冲突（构建期直接报重复声明）。
+const navRoute = useRoute();
+const navRouter = useRouter();
+
+function parseQuery(): { l1: L1; l2: L2 } {
+  const a = String(navRoute.query.tab || '');
+  const b = String(navRoute.query.view || '');
+  if (a === 'config' || a === 'stats' || a === 'policy') {
+    const list = LEVEL2_MAP[a as L1];
+    const hit = list.find((x) => x.key === b);
+    // 二级缺失或不匹配时取该项的第一个，避免"一级选中但下面空白"
+    return { l1: a as L1, l2: (hit ? hit.key : list[0].key) };
+  }
+  return { l1: 'config', l2: 'model' };
+}
+
+const initialRoute = parseQuery();
+const level1 = ref<L1>(initialRoute.l1);
+const level2 = ref<L2>(initialRoute.l2);
+
+const level1Tabs = [
+  { key: 'config' as L1, label: '模型配置', icon: '⚙️' },
+  { key: 'stats' as L1, label: '模型统计', icon: '📊' },
+  { key: 'policy' as L1, label: '路由与定价', icon: '🧭' },
+];
+
+// 二级按钮带计数，省得逐个点开确认
+const level2Tabs = computed(() => {
+  const base = LEVEL2_MAP[level1.value];
+  const counts: Partial<Record<L2, number | null>> = {
+    free: null,
+    channel: channelGroups.value.length,
+    model: models.value.length,
+    vendor: vendors.value.length,
+    route: null,
+    pricing: categoryPrices.value.length,
+  };
+  return base.map((t) => ({ ...t, count: counts[t.key] ?? null }));
+});
+
+/** 当前显示的是否为「一级/二级」这一格 */
+function at(l1: L1, l2: L2) {
+  return level1.value === l1 && level2.value === l2;
+}
+
+function syncQuery() {
+  // 保留其它 query（如侧栏深链用的 ?item=），只覆盖本页这两个参数；
+  // replace 而非 push：切 tab 不该在浏览历史里堆一串中间态
+  navRouter.replace({ query: { ...navRoute.query, tab: level1.value, view: level2.value } });
+}
+
+function switchLevel1(k: L1) {
+  level1.value = k;
+  // 切一级时回到它的第一个二级，避免停留在上一级的二级项上（比如 policy/route）
+  const list = LEVEL2_MAP[k];
+  if (!list.some((x) => x.key === level2.value)) level2.value = list[0].key;
+  syncQuery();
+  if (k === 'stats') loadUsageStats();
+}
+
+function switchLevel2(k: L2) {
+  level2.value = k;
+  syncQuery();
+  if (level1.value === 'stats') loadUsageStats();
+}
+
+// 地址栏被外部改动（粘贴链接、前进/后退）时同步视图
+watch(
+  () => [navRoute.query.tab, navRoute.query.view],
+  () => {
+    const { l1, l2 } = parseQuery();
+    if (l1 === level1.value && l2 === level2.value) return;
+    level1.value = l1;
+    level2.value = l2;
+    if (l1 === 'stats') loadUsageStats();
+  },
+);
+
+// ---------- 按渠道视图（从已有模型聚合出渠道列表，不额外请求） ----------
+const channelGroups = computed(() => {
+  const map = new Map<string, { base_url: string; models: number; hasKey: boolean }>();
+  for (const m of models.value) {
+    const k = (m.base_url || '').trim() || '(未配置上游)';
+    if (!map.has(k)) map.set(k, { base_url: k, models: 0, hasKey: false });
+    const g = map.get(k)!;
+    g.models += 1;
+    if ((m as any).has_api_key) g.hasKey = true;
+  }
+  return [...map.values()].sort((a, b) => b.models - a.models);
+});
+
+// ---------- 模型统计 ----------
+const statsDim = computed<L2>(() => (level2.value === 'model' || level2.value === 'vendor' ? level2.value : 'channel'));
+const usageLoading = ref(false);
+const usageRows = ref<any[]>([]);
+const usageTotals = reactive({ req: 0, tok: 0, cost: 0 });
+
+async function loadUsageStats() {
+  if (level1.value !== 'stats') return;
+  usageLoading.value = true;
+  try {
+    const res = await aiApi.usageStats(statsDim.value, 30);
+    if (res.data.code === 0) {
+      const d = res.data.data;
+      usageRows.value = d.rows || [];
+      usageTotals.req = d.total_req || 0;
+      usageTotals.tok = d.total_tok || 0;
+      usageTotals.cost = d.total_cost || 0;
+    }
+  } catch {
+    ElMessage.error('统计加载失败');
+  } finally {
+    usageLoading.value = false;
+  }
+}
 
 // ---------- 总开关 ----------
 const config = reactive<{ enabled: boolean }>({ enabled: false });
@@ -1398,7 +1681,19 @@ async function saveRoute() {
   }
 }
 
-onMounted(() => { loadConfig(); loadModels(); loadPresets(); loadRoute(); loadVendors(); loadMatrix(); loadCategoryPrices(); loadRate(); });
+onMounted(() => {
+  loadConfig();
+  loadModels();
+  loadPresets();
+  loadRoute();
+  loadVendors();
+  loadMatrix();
+  loadCategoryPrices();
+  loadRate();
+  // 直接落在 ?tab=stats 时先把统计拉回来，否则会看到空表
+  if (level1.value === 'stats') loadUsageStats();
+});
+
 
 // ---------- 厂商管理 ----------
 const vendors = ref<AiVendor[]>([]);
@@ -1530,9 +1825,99 @@ async function saveCategoryPrice(p: AiCategoryPrice & { _saving?: boolean }) {
 
 <style scoped>
 .admin-page { --admin-content-max: 1100px; min-height: 100vh; padding: 24px; background: var(--bg-page, #f5f7fa); }
+
+/* 分块切换条：与 AdminHeader / body 共用同一条居中列，否则会通栏贴左错位 */
+.admin-page > .pool-nav {
+  max-width: var(--admin-content-max, 1100px);
+  margin-left: auto;
+  margin-right: auto;
+}
+.pool-tabs {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  margin-bottom: 14px; padding: 5px;
+  border-radius: 12px;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-color, #e8eaf0);
+}
+.pool-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 9px;
+  border: none; background: transparent; cursor: pointer;
+  font-size: 0.86rem; color: var(--text-light, #64748b);
+  transition: background 0.15s, color 0.15s;
+}
+.pool-tab:hover { background: var(--bg-subtle, #f1f5f9); }
+.pool-tab.active {
+  background: var(--gradient-primary, linear-gradient(135deg, #6366f1, #8b5cf6));
+  color: #fff; font-weight: 600;
+}
+.pool-tab-ico { font-size: 0.95rem; line-height: 1; }
+.pool-tab-count {
+  font-size: 0.72rem; padding: 0 6px; border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08); color: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.pool-tab.active .pool-tab-count { background: rgba(255, 255, 255, 0.24); }
+
+/* 两级导航：一级是主色胶囊，二级是浅底小胶囊，视觉上区分层级 */
+.pool-nav { display: flex; flex-direction: column; gap: 8px; }
+.pool-tabs-l1 { background: transparent; border: none; padding: 0; }
+.pool-tabs-l1 .pool-tab {
+  padding: 8px 18px; border-radius: 10px;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-color, #e8eaf0);
+  font-weight: 600; color: var(--text-color, #334155);
+}
+.pool-tabs-l1 .pool-tab.active {
+  background: var(--gradient-primary, linear-gradient(135deg, #6366f1, #8b5cf6));
+  border-color: transparent; color: #fff;
+}
+.pool-tabs-l2 {
+  background: var(--bg-subtle, #f8fafc);
+  border: 1px solid var(--border-color, #e8eaf0);
+  padding: 4px;
+  width: fit-content;
+}
+.pool-tab-sm {
+  padding: 5px 12px; font-size: 0.82rem; border-radius: 8px;
+  color: var(--text-light, #64748b);
+}
+.pool-tab-sm.active {
+  background: var(--bg-card, #fff); color: var(--el-color-primary, #6366f1);
+  font-weight: 600; box-shadow: var(--shadow-xs, 0 1px 3px rgba(0, 0, 0, 0.08));
+}
+
+/* 自由添加：三张步骤卡 */
+.free-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 12px; }
+.free-card {
+  padding: 16px; border-radius: 12px;
+  border: 1px solid var(--border-color, #e8eaf0);
+  background: var(--bg-subtle, #f8fafc);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.free-step {
+  width: 24px; height: 24px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.76rem; font-weight: 700; color: #fff;
+  background: var(--gradient-primary, linear-gradient(135deg, #6366f1, #8b5cf6));
+}
+.free-title { margin: 0; font-size: 0.92rem; font-weight: 700; color: var(--text-main, #1e293b); }
+.free-desc { margin: 0; font-size: 0.8rem; line-height: 1.7; color: var(--text-light, #64748b); flex: 1; }
+.free-desc code { padding: 1px 4px; border-radius: 4px; background: rgba(15, 23, 42, 0.06); }
+
+/* 统计顶部汇总 */
+.stats-sum {
+  display: flex; flex-wrap: wrap; gap: 18px;
+  margin: 4px 0 12px; font-size: 0.82rem; color: var(--text-light, #64748b);
+}
+.stats-sum b { color: var(--text-main, #1e293b); font-variant-numeric: tabular-nums; font-size: 0.95rem; }
+.stat-bad { color: var(--el-color-danger, #f56c6c); font-weight: 600; }
+
 .hint-text { color: var(--text-light, #666); font-size: 0.85rem; margin-bottom: 12px; line-height: 1.6; }
 .enable-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px; font-weight: 600; }
 .table-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+/* 按钮内的 emoji 前缀：不能走 :icon（Element Plus 会把字符串当组件名 createElement） */
+.btn-emoji { margin-right: 4px; }
 .kp-tip {
   font-size: 0.78rem; color: var(--text-light, #777); line-height: 1.6;
   background: var(--el-fill-color-light, #f8f9fa); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px;

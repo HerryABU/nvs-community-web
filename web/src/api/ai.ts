@@ -251,6 +251,14 @@ export const aiApi = {
     return api.post('/admin/ai/free-quota/overrides', data);
   },
 
+  // ---------- 模型统计（按渠道 / 模型 / 厂商聚合调用量，回答「谁在花钱、谁在失败」） ----------
+  usageStats(dim: 'channel' | 'model' | 'vendor', days = 30) {
+    return api.get<{
+      code: number;
+      data: { dim: string; days: number; rows: AiUsageRow[]; total_req: number; total_tok: number; total_cost: number };
+    }>('/admin/ai/usage-stats', { params: { dim, days } });
+  },
+
   // ---------- 渠道余额一览（按 base_url 聚合，回答「每条渠道还剩多少钱」） ----------
   channelsBalance() {
     return api.get<{ code: number; data: { channels: AdminChannelRow[]; probed: number; total: number } }>(
@@ -557,4 +565,19 @@ export interface ProviderModelImportItem {
   vendor: string;
   category: string;
   user_visible: boolean;
+}
+
+// AI 用量统计行（按维度聚合）
+export interface AiUsageRow {
+  key: string;
+  name: string;
+  requests: number;
+  success: number;
+  fail: number;
+  tokens_in: number;
+  tokens_out: number;
+  cost: number;
+  avg_latency: number;
+  model_count: number;
+  success_pct: number;
 }

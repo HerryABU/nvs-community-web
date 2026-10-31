@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -223,4 +224,36 @@ func decryptKeyByBaseURL(baseURL string) string {
 		return ""
 	}
 	return key
+}
+
+// AdminAiUsageStats GET /api/admin/ai/usage-stats?dim=channel|model|vendor&days=30
+//
+// 模型池「模型统计」二级页的数据：同一份调用日志按三个维度聚合，
+// 让站长能回答「这条渠道一共花了多少」「这个模型跑得稳不稳」「哪个厂商最贵」。
+func AdminAiUsageStats(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	dim := c.DefaultQuery("dim", "model")
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
+	rows, err := models.AggregateAiUsage(dim, days)
+	if err != nil {
+		utils.InternalError(c, "统计失败")
+		return
+	}
+	// 汇总行：前端顶部直接显示合计，不必自己把数组再加一遍
+	var totalReq, totalTok, totalCost int64
+	for _, r := range rows {
+		totalReq += r.Requests
+		totalTok += r.TokensIn + r.TokensOut
+		totalCost += r.Cost
+	}
+	utils.Success(c, gin.H{
+		"dim":        dim,
+		"days":       days,
+		"rows":       rows,
+		"total_req":  totalReq,
+		"total_tok":  totalTok,
+		"total_cost": totalCost,
+	})
 }
