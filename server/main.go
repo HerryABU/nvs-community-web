@@ -1032,6 +1032,8 @@ func main() {
 		admin.GET("/ai/channels/balance", handlers.AdminChannelBalanceOverview)
 		// 模型统计：按渠道 / 模型 / 厂商聚合调用量、tokens、代扣与成功率
 		admin.GET("/ai/usage-stats", handlers.AdminAiUsageStats)
+		// 渠道监控：临时输入令牌 + 用户 ID 探一次余额/连通性/最近扣费（不落库）
+		admin.POST("/ai/channel-monitor", handlers.AdminAiChannelMonitor)
 
 		// API 卡池（多密钥轮询）
 		admin.GET("/ai/models/:id/keys", handlers.AdminListAiModelKeys)

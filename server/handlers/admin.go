@@ -309,6 +309,10 @@ func GetDashboardStats(c *gin.Context) {
 		// 内容治理与热词（概览第二幕）：违禁词命中 + 词云 + 三类热词
 		"badword":  computeBadWordOverview(30),
 		"hotwords": computeHotWordOverview(7, 16),
+		// AI 使用画像（概览第三幕）：用户最爱点哪个模型、请求实际打到哪条渠道。
+		// 数据源是 AiCallLog，与「模型统计」同一个口径，避免两处数字打架。
+		"ai_top_models":   computeAiTop("model", 30, 8),
+		"ai_top_channels": computeAiTop("channel", 30, 8),
 	})
 }
 
@@ -649,4 +653,34 @@ func isPoliceOrAdminUser(c *gin.Context) bool {
 	}
 	user, _ := models.GetUserByID(userID)
 	return user != nil && models.IsAdminOrPolice(user.Role)
+}
+
+// computeAiTop 首页大屏用的 AI 使用排行（模型 / 渠道两个维度）。
+//
+// 为什么单独包一层而不直接返回 AggregateAiUsage 的全量行：
+// 大屏只放得下前几名，且前端不需要成功率/延迟等细节 —— 传全量既浪费带宽也容易
+// 让人误以为表格数据不全。这里只保留「名字 + 次数 + tokens」，其余由「模型统计」页承担。
+func computeAiTop(dim string, days, limit int) []gin.H {
+	rows, err := models.AggregateAiUsage(dim, days)
+	if err != nil || len(rows) == 0 {
+		return []gin.H{}
+	}
+	if limit <= 0 || limit > len(rows) {
+		limit = len(rows)
+	}
+	out := make([]gin.H, 0, limit)
+	for i := 0; i < limit; i++ {
+		r := rows[i]
+		name := r.Name
+		if name == "" {
+			name = r.Key
+		}
+		out = append(out, gin.H{
+			"name":     name,
+			"key":      r.Key,
+			"requests": r.Requests,
+			"tokens":   r.TokensIn + r.TokensOut,
+		})
+	}
+	return out
 }

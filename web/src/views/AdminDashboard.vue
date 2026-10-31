@@ -231,6 +231,40 @@
             </div>
           </el-col>
         </el-row>
+
+        <!-- AI 使用画像：用户在点什么模型 / 请求实际打到哪条渠道 -->
+        <el-row :gutter="20" class="chart-row">
+          <el-col :xs="24" :lg="12">
+            <div class="hm-card">
+              <h4 class="chart-title">模型选择热度（近 30 天）</h4>
+              <p class="chart-sub">用户实际点了哪个模型 —— 谁在承担主要流量</p>
+              <div v-if="aiTopModels.length" class="hot-list">
+                <div v-for="(m, i) in aiTopModels" :key="m.key" class="hot-row">
+                  <span class="hot-rank" :class="{ top: i < 3 }">{{ i + 1 }}</span>
+                  <span class="hot-word" :title="m.name">{{ m.name }}</span>
+                  <div class="hot-track"><div class="hot-fill" :style="{ width: reqPct(aiTopModels, m.requests) }"></div></div>
+                  <span class="hot-count">{{ m.requests }}</span>
+                </div>
+              </div>
+              <StateBlock v-else state="empty" title="近 30 天没有 AI 调用" description="AI 工作台有实际对话后，这里会显示模型热度。" />
+            </div>
+          </el-col>
+          <el-col :xs="24" :lg="12">
+            <div class="hm-card">
+              <h4 class="chart-title">渠道路由频次（近 30 天）</h4>
+              <p class="chart-sub">路由把请求实际打到了哪条上游 —— 哪条渠道在扛量</p>
+              <div v-if="aiTopChannels.length" class="hot-list">
+                <div v-for="(c, i) in aiTopChannels" :key="c.key" class="hot-row">
+                  <span class="hot-rank" :class="{ top: i < 3 }">{{ i + 1 }}</span>
+                  <span class="hot-word host-text" :title="c.key">{{ c.name }}</span>
+                  <div class="hot-track"><div class="hot-fill" :style="{ width: reqPct(aiTopChannels, c.requests) }"></div></div>
+                  <span class="hot-count">{{ c.requests }}</span>
+                </div>
+              </div>
+              <StateBlock v-else state="empty" title="没有渠道调用记录" description="路由命中后会按上游地址聚合到这里。" />
+            </div>
+          </el-col>
+        </el-row>
       </template>
     </div>
   </div>
@@ -312,6 +346,10 @@ const provinceHeat = ref<any[]>([]); // [{name:'广东省', value: N}] → China
 const countryHeat = ref<any[]>([]); // [{code:'US', name:'United States', value:N, cn:false}]
 const geoSummary = ref<any>(null);  // {cn, overseas, reserved, cn_pct, os_pct}
 const activeHours = ref<number[][]>([]); // 7×24 星期×小时 互动矩阵
+
+// AI 使用画像：模型热度 / 渠道路由频次（来自 AiCallLog 聚合，与「模型统计」同口径）
+const aiTopModels = ref<any[]>([]);
+const aiTopChannels = ref<any[]>([]);
 
 // 客户端画像（结构化 UA 解析：OS / 浏览器 / 设备类型）
 const clientData = ref<{ os: any[]; browser: any[]; device: any[] }>({ os: [], browser: [], device: [] });
@@ -415,6 +453,12 @@ function wcStyle(w: { word: string; count: number }) {
     fontWeight: ratio > 0.6 ? '700' : '500',
     opacity: String(0.55 + ratio * 0.45),
   };
+}
+
+// AI 排行用 requests 字段，与热词的 count 不是同一个 key，单列一支避免互相牵连
+function reqPct(list: { requests: number }[], v: number) {
+  const max = Math.max(1, ...list.map((x) => x.requests));
+  return Math.max(4, Math.round((v / max) * 100)) + '%';
 }
 
 function hotPct(list: { count: number }[], count: number) {
@@ -526,6 +570,8 @@ async function loadDashboard() {
     const ah = d?.active_hours;
     if (Array.isArray(ah)) activeHours.value = ah;
     if (d?.client) clientData.value = d.client;
+    if (Array.isArray(d?.ai_top_models)) aiTopModels.value = d.ai_top_models;
+    if (Array.isArray(d?.ai_top_channels)) aiTopChannels.value = d.ai_top_channels;
 
     // 幕 2：违禁词命中与词云 + 三类热词（后端同一次响应带回，避免三个额外请求）
     const bw = d?.badword;
@@ -662,6 +708,9 @@ onMounted(() => { loadDashboard(); checkFiling(); loadVisitorTrend(); });
   width: 46px; text-align: right; flex: none;
   color: var(--text-light, #64748b); font-variant-numeric: tabular-nums;
 }
+
+/* 渠道地址较长：等宽 + 省略，避免把进度条挤没 */
+.hot-word.host-text { font-family: var(--font-mono, ui-monospace, Menlo, monospace); font-size: 0.74rem; }
 
 /* 客户端分布环形图容器 */
 .client-pie { width: 100%; height: 232px; }

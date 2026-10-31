@@ -259,6 +259,11 @@ export const aiApi = {
     }>('/admin/ai/usage-stats', { params: { dim, days } });
   },
 
+  // ---------- 渠道监控：临时输入令牌 + 用户 ID 探一次（后端不落库） ----------
+  channelMonitor(data: { base_url: string; token: string; user_id?: string; kind?: string }) {
+    return api.post<{ code: number; data: ChannelMonitorResult }>('/admin/ai/channel-monitor', data);
+  },
+
   // ---------- 渠道余额一览（按 base_url 聚合，回答「每条渠道还剩多少钱」） ----------
   channelsBalance() {
     return api.get<{ code: number; data: { channels: AdminChannelRow[]; probed: number; total: number } }>(
@@ -580,4 +585,20 @@ export interface AiUsageRow {
   avg_latency: number;
   model_count: number;
   success_pct: number;
+}
+
+// 渠道监控返回（一次请求回答：通不通 / 剩多少 / 最近花了多少）
+export interface ChannelMonitorResult {
+  kind: string;
+  base_url: string;
+  probe_ok: boolean;
+  probe_error?: string;
+  model_count?: number;
+  balance_ok: boolean;
+  balance_error?: string;
+  remaining?: number;
+  used?: number;
+  currency?: string;
+  logs_error?: string;
+  recent_logs?: { model_name: string; quota: number; tokens_in: number; tokens_out: number; created_at: number }[];
 }

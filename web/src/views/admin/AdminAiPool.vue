@@ -136,6 +136,7 @@
         <div class="table-toolbar">
           <span class="muted small">共 {{ channelGroups.length }} 条渠道 · {{ models.length }} 个模型</span>
           <span>
+            <el-button @click="openMonitor">渠道监控</el-button>
             <el-button :loading="chLoading" @click="openChannels">渠道余额</el-button>
             <el-button type="primary" @click="openPull"><span class="btn-emoji">🔌</span>新增渠道并拉取</el-button>
           </span>
@@ -432,6 +433,73 @@
           </div>
         </div>
       </div>
+    </el-dialog>
+
+    <!-- ============ 渠道监控（临时令牌，不落库） ============ -->
+    <el-dialog v-model="monDialog" title="渠道监控" width="680px">
+      <div class="ch-overview-tip">
+        想先看看一条渠道「通不通 / 还剩多少 / 最近花了多少」，又不想把它存进模型池时用这里。
+        <b>令牌只在本次查询里用，不写库、不写日志。</b>
+      </div>
+      <el-form label-width="96px" class="mon-form">
+        <el-form-item label="渠道地址">
+          <el-input v-model="mon.base_url" placeholder="如 https://api.example.com/v1" />
+        </el-form-item>
+        <el-form-item label="令牌">
+          <el-input v-model="mon.token" type="password" show-password
+            placeholder="模型密钥 sk_ 或中转站系统访问令牌 nap_" />
+          <span class="muted small">sk_ 只能查该密钥自身用量；账户余额要 nap_ 令牌 + 用户 ID</span>
+        </el-form-item>
+        <el-form-item label="用户 ID">
+          <el-input v-model="mon.user_id" placeholder="中转站的数字用户 ID（New-Api-User），官方渠道留空" />
+        </el-form-item>
+        <el-form-item label="查询方式">
+          <el-select v-model="mon.kind" style="width:220px">
+            <el-option label="自动判断" value="" />
+            <el-option label="New API 中转站" value="newapi" />
+            <el-option label="DeepSeek 官方" value="deepseek" />
+            <el-option label="通用 / 自建" value="generic" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+
+      <div v-if="monResult" class="mon-result">
+        <div class="mon-row">
+          <span class="mon-k">连通性</span>
+          <el-tag :type="monResult.probe_ok ? 'success' : 'danger'" size="small">
+            {{ monResult.probe_ok ? '正常' : '失败' }}
+          </el-tag>
+          <span class="muted small" v-if="monResult.probe_ok">可用模型 {{ monResult.model_count }} 个</span>
+          <span class="mon-bad small" v-else>{{ monResult.probe_error }}</span>
+        </div>
+        <div class="mon-row">
+          <span class="mon-k">账户余额</span>
+          <template v-if="monResult.balance_ok">
+            <b class="ch-est">{{ fmtMoney(monResult.remaining) }} <em class="unit">{{ monResult.currency || '' }}</em></b>
+            <span class="muted small">已消费 {{ fmtMoney(monResult.used) }}</span>
+          </template>
+          <span v-else class="mon-bad small">{{ monResult.balance_error }}</span>
+        </div>
+        <div class="mon-row" v-if="monResult.recent_logs && monResult.recent_logs.length">
+          <span class="mon-k">最近调用</span>
+          <div class="mon-logs">
+            <div v-for="(l, i) in monResult.recent_logs.slice(0, 3)" :key="i" class="mon-log">
+              <span class="mon-model">{{ l.model_name || '—' }}</span>
+              <span class="ch-est">≈{{ fmtMoney(l.quota) }} <em class="unit">{{ monResult.currency || 'USD' }}</em></span>
+              <span class="muted small">{{ fmtTok(l.tokens_in) }} / {{ fmtTok(l.tokens_out) }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="mon-row" v-else-if="monResult.logs_error">
+          <span class="mon-k">最近调用</span>
+          <span class="muted small">{{ monResult.logs_error }}</span>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="monDialog = false">关闭</el-button>
+        <el-button type="primary" :loading="monLoading" @click="runMonitor">查询</el-button>
+      </template>
     </el-dialog>
 
     <!-- ============ 渠道余额一览（按渠道聚合） ============ -->
@@ -1152,6 +1220,40 @@ const PULL_COLS = [
 const pullCols = reactive<Record<string, boolean>>({
   family: true, version: true, variant: true, build: true, vendor: false, channel: true,
 });
+
+// ---------- 渠道监控（临时令牌，不落库） ----------
+const monDialog = ref(false);
+const monLoading = ref(false);
+const mon = reactive({ base_url: '', token: '', user_id: '', kind: '' });
+const monResult = ref<any>(null);
+
+function openMonitor() {
+  monResult.value = null;
+  monDialog.value = true;
+}
+
+async function runMonitor() {
+  if (!mon.base_url.trim() || !mon.token.trim()) {
+    ElMessage.warning('请填写渠道地址与令牌');
+    return;
+  }
+  monLoading.value = true;
+  monResult.value = null;
+  try {
+    const res = await aiApi.channelMonitor({
+      base_url: mon.base_url.trim(),
+      token: mon.token.trim(),
+      user_id: mon.user_id.trim(),
+      kind: mon.kind,
+    });
+    if (res.data.code === 0) monResult.value = res.data.data;
+    else ElMessage.error(res.data.message || '查询失败');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '查询失败');
+  } finally {
+    monLoading.value = false;
+  }
+}
 
 // ---------- 渠道余额一览 ----------
 const chDialog = ref(false);
@@ -1960,6 +2062,16 @@ async function saveCategoryPrice(p: AiCategoryPrice & { _saving?: boolean }) {
 .pull-col-toggles { display: flex; flex-direction: column; gap: 4px; }
 .pull-col-title { font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; color: var(--text-main, #1f2937); }
 .pull-col-tip { margin-top: 6px; font-size: 0.72rem; line-height: 1.5; color: var(--text-light, #999); }
+
+/* 渠道监控 */
+.mon-form { margin-top: 4px; }
+.mon-result { border-top: 1px dashed var(--border-color, #e8eaf0); padding-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.mon-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 0.82rem; }
+.mon-k { width: 72px; flex: none; color: var(--text-light, #94a3b8); }
+.mon-bad { color: var(--el-color-danger, #f56c6c); line-height: 1.6; }
+.mon-logs { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.mon-log { display: flex; align-items: center; gap: 12px; font-size: 0.78rem; }
+.mon-model { min-width: 150px; color: var(--text-main, #334155); }
 
 /* 渠道余额一览 */
 .unit { font-style: normal; font-size: 0.72rem; color: var(--text-light, #999); }

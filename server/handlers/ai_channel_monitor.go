@@ -1,0 +1,198 @@
+package handlers
+
+import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"nvs-server/aiclient"
+	"nvs-server/utils"
+
+	"github.com/gin-gonic/gin"
+)
+
+// ==================== 渠道监控（临时凭据探测） ====================
+//
+// 场景：站长拿到一条新渠道，只想先看看「还剩多少 / 能用哪些模型 / 最近花了多少」，
+// 不想为了试一下就在模型池里建一条记录再把密钥存进去。
+//
+// 与「渠道余额」的区别：
+//   - 渠道余额：基于**已保存**的模型配置，按渠道聚合，可长期采样、可估算单次成本；
+//   - 渠道监控：**不落库**，当场输令牌 + 用户 ID 探一次，用完即弃。
+//
+// 安全约束（写死，不给开关）：
+//   - 令牌只在本次请求内存里用，**绝不写库、不写日志**（日志里出现也被脱敏层盖掉）；
+//   - 不返回上游原始响应体（可能含账户信息），只返回解析后的几个数字；
+//   - 单次只允许查一条渠道，避免被当成批量扫描工具。
+
+type channelMonitorReq struct {
+	BaseURL string `json:"base_url"`
+	Token   string `json:"token"`
+	UserID  string `json:"user_id"` // New API 体系需要与访问令牌配对
+	Kind    string `json:"kind"`    // 留空=自动判断：nap_/用户ID→newapi，sk_+deepseek域名→deepseek，否则通用
+}
+
+// AdminAiChannelMonitor POST /api/admin/ai/channel-monitor
+//
+// 一次请求同时回答三件事：
+//  1. 这条渠道通不通（GET /models，不烧额度）；
+//  2. 账户还剩多少（能拿到就返回，拿不到明确说原因）；
+//  3. 最近几笔实际扣费（仅 New API 系，需令牌含「查看日志」权限）。
+func AdminAiChannelMonitor(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	var req channelMonitorReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	base := strings.TrimRight(strings.TrimSpace(req.BaseURL), "/")
+	token := strings.TrimSpace(req.Token)
+	uid := strings.TrimSpace(req.UserID)
+	if base == "" {
+		utils.BadRequest(c, "请填写渠道地址")
+		return
+	}
+	if token == "" {
+		utils.BadRequest(c, "请填写令牌（模型密钥 sk_ 或系统访问令牌 nap_）")
+		return
+	}
+	if !strings.HasPrefix(base, "http://") && !strings.HasPrefix(base, "https://") {
+		utils.BadRequest(c, "渠道地址需以 http:// 或 https:// 开头")
+		return
+	}
+
+	kind := resolveMonitorKind(strings.ToLower(strings.TrimSpace(req.Kind)), token, base, uid)
+
+	out := gin.H{
+		"kind":     kind,
+		"base_url": base,
+	}
+
+	// ── 1. 连通性 + 可用模型数（最便宜的一步，先给个确定结论）──
+	modelsN, probeErr := probeUpstreamModels(base, token, uid)
+	if probeErr != "" {
+		out["probe_ok"] = false
+		out["probe_error"] = probeErr
+	} else {
+		out["probe_ok"] = true
+		out["model_count"] = modelsN
+	}
+
+	// ── 2. 余额 ──
+	switch kind {
+	case "newapi":
+		acct := aiclient.QueryNewAPIAccount(base, token, uid, 15*time.Second)
+		out["balance_ok"] = acct.OK
+		if acct.OK {
+			out["remaining"] = acct.Quota
+			out["used"] = acct.UsedQuota
+			out["currency"] = acct.Currency
+		} else {
+			out["balance_error"] = acct.Error
+		}
+		// ── 3. 最近使用日志（精确单次扣费）──
+		if logs, lerr := aiclient.QueryNewAPIRecentLogs(base, token, uid, 5, 15*time.Second); lerr != "" {
+			out["logs_error"] = lerr
+		} else {
+			out["recent_logs"] = logs
+		}
+	case "deepseek":
+		b := aiclient.QueryChannelBalanceWithUser(base, token, "", uid)
+		out["balance_ok"] = b.Supported
+		if b.Supported {
+			out["remaining"] = b.TotalRemaining
+			out["used"] = b.TotalUsed
+			out["currency"] = b.Currency
+		} else {
+			out["balance_error"] = b.Error
+		}
+	default:
+		// 通用/自建：走一次 OpenAI 兼容的 credit_grants 探测，拿不到就明说
+		b := aiclient.QueryChannelBalanceWithUser(base, token, "", uid)
+		out["balance_ok"] = b.Supported
+		if b.Supported {
+			out["remaining"] = b.TotalRemaining
+			out["used"] = b.TotalUsed
+			out["currency"] = b.Currency
+		} else {
+			out["balance_error"] = firstNonEmpty(b.Error,
+				"该渠道未提供标准余额接口；可改用「自定义规则」方式长期配置")
+		}
+	}
+
+	utils.Success(c, out)
+}
+
+// resolveMonitorKind 推断用哪种查法：
+//   - 明确指定则照办；
+//   - nap_ 前缀，或填了用户 ID → New API 中转站；
+//   - deepseek 官方域名 → 官方 /user/balance；
+//   - 其余按通用处理（sk_ 密钥本身查不到账户余额，这是上游规则，不是本程序限制）。
+func resolveMonitorKind(kind, token, base, uid string) string {
+	switch kind {
+	case "newapi", "deepseek", "generic":
+		return kind
+	}
+	if strings.HasPrefix(token, "nap_") || uid != "" {
+		return "newapi"
+	}
+	if strings.Contains(base, "api.deepseek.com") {
+		return "deepseek"
+	}
+	return "generic"
+}
+
+// probeUpstreamModels 拉一次 /models 看通不通，返回可用模型数。
+// 只取数量，不留存任何模型清单——监控弹窗不需要，也避免把上游目录抄下来。
+func probeUpstreamModels(base, token, uid string) (int, string) {
+	url := base
+	if !strings.HasSuffix(url, "/v1") {
+		url += "/v1"
+	}
+	url += "/models"
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return 0, "请求构造失败"
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	if uid != "" {
+		req.Header.Set("New-Api-User", uid)
+	}
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, "连接失败：" + err.Error()
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return 0, "令牌无效或无权限（HTTP " + strconv.Itoa(resp.StatusCode) + "）"
+	}
+	if resp.StatusCode >= 400 {
+		return 0, "上游返回 HTTP " + strconv.Itoa(resp.StatusCode)
+	}
+
+	var parsed struct {
+		Data []json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return 0, "响应不是 OpenAI 兼容格式（可能不是模型接口）"
+	}
+	return len(parsed.Data), ""
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}
