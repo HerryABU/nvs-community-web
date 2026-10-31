@@ -837,6 +837,8 @@ func main() {
 		// 日志脱敏配置（176号令合规：生产环境日志敏感信息脱敏）
 		admin.GET("/log-redact", handlers.GetLogRedactConfig)
 		admin.PUT("/log-redact", handlers.UpdateLogRedactConfig)
+		// 密码轨道状态（国际轨 / 国密轨 / 双轨）：只读，配置项在 .env，改了要重启
+		admin.GET("/crypto/status", handlers.AdminCryptoStatus)
 		// 蜜罐等级 + 日志记录字段勾选（docs/honeypot-design.md）
 		admin.GET("/honeypot/config", honeypothandler.GetConfig)
 		admin.PUT("/honeypot/config", honeypothandler.SaveConfig)
