@@ -11,9 +11,13 @@
           <template v-if="!agents.length">站长还没有创建智能体。</template>
         </p>
       </div>
-      <el-input v-model="keyword" class="ag-search" placeholder="搜索智能体" clearable>
-        <template #prefix><el-icon><Search /></el-icon></template>
-      </el-input>
+      <div class="ag-tools">
+        <el-input v-model="keyword" class="ag-search" placeholder="搜索智能体" clearable>
+          <template #prefix><el-icon><Search /></el-icon></template>
+        </el-input>
+        <el-button v-if="submitCfg.enabled" @click="openSubmit">投稿智能体</el-button>
+        <el-button v-if="mySubs.length" @click="myDialog = true">我的投稿</el-button>
+      </div>
     </div>
 
     <div v-if="filtered.length" class="ag-grid">
@@ -49,18 +53,84 @@
       :action-text="!agents.length && isAdmin ? '去创建' : agents.length ? '清空搜索' : ''"
       @action="onEmptyAction"
     />
+
+    <!-- ===== 投稿弹窗 =====
+         用户可以把自己的特殊提示词提交成智能体；是否要站长审核由站长决定。 -->
+    <el-dialog v-model="submitDialog" title="投稿智能体" width="620px" append-to-body class="ag-submit-dlg">
+      <div class="ag-submit-tip">
+        智能体的本质就是一段<b>特殊提示词</b>。写清「它是什么角色、遵守什么规则、输出什么格式」，就能成为一个可被大家使用的智能体。
+        <template v-if="submitCfg.need_review">提交后需要站长审核，通过后才会出现在广场。</template>
+        <template v-else>本站已关闭审核，提交后立即上架。</template>
+      </div>
+      <el-form label-width="86px" class="ag-submit-form">
+        <el-form-item label="名称" required>
+          <el-input v-model="subForm.name" maxlength="32" show-word-limit placeholder="如：严谨校对员" />
+        </el-form-item>
+        <el-form-item label="图标">
+          <el-input v-model="subForm.emoji" maxlength="4" placeholder="一个 emoji，如 🔍" style="width:120px" />
+          <el-input v-model="subForm.category" maxlength="16" placeholder="分类，如 写作" style="width:140px;margin-left:10px" />
+        </el-form-item>
+        <el-form-item label="简介">
+          <el-input v-model="subForm.description" maxlength="200" show-word-limit placeholder="一句话说清它擅长什么" />
+        </el-form-item>
+        <el-form-item label="开场白">
+          <el-input v-model="subForm.greeting" maxlength="200" placeholder="用户进入对话时它的第一句话（可留空）" />
+        </el-form-item>
+        <el-form-item label="提示词" required>
+          <el-input
+            v-model="subForm.system_prompt"
+            type="textarea"
+            :rows="9"
+            maxlength="8000"
+            show-word-limit
+            placeholder="你是……。规则：1) …… 2) …… 输出格式：……"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="submitDialog = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="doSubmit">提交</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- ===== 我的投稿 ===== -->
+    <el-dialog v-model="myDialog" title="我的投稿" width="640px" append-to-body>
+      <el-table :data="mySubs" size="small">
+        <el-table-column label="智能体" min-width="150">
+          <template #default="{ row }">
+            <span class="ag-mini-emoji">{{ row.emoji || '🤖' }}</span>
+            <span>{{ row.name }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag size="small" :type="statusTag(row.status)">{{ statusLabel(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="站长备注" min-width="180">
+          <template #default="{ row }">
+            <span v-if="row.review_note">{{ row.review_note }}</span>
+            <span v-else class="muted small">—</span>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button type="primary" @click="myDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, reactive, onMounted } from 'vue';
 import { Search } from '@element-plus/icons-vue';
 import { useRouter } from 'vue-router';
+import { ElMessage } from 'element-plus';
 import StateBlock from '@/components/common/StateBlock.vue';
-import type { AiAgent } from '@/api/aiHub';
+import { aiHubApi, type AiAgent, type AgentSubmission } from '@/api/aiHub';
 
 const props = defineProps<{ agents: AiAgent[]; isAdmin: boolean }>();
-defineEmits<{ (e: 'start', a: AiAgent): void }>();
+const emit = defineEmits<{ (e: 'start', a: AiAgent): void; (e: 'refresh'): void }>();
 const router = useRouter();
 
 const keyword = ref('');
@@ -73,6 +143,80 @@ const filtered = computed(() => {
       (a.category || '').toLowerCase().includes(kw) ||
       (a.description || '').toLowerCase().includes(kw),
   );
+});
+
+// ---------- 投稿 ----------
+const submitCfg = reactive({ enabled: false, need_review: true, max_pending: 0 });
+const submitDialog = ref(false);
+const submitting = ref(false);
+const myDialog = ref(false);
+const mySubs = ref<AgentSubmission[]>([]);
+const subForm = reactive({
+  name: '', emoji: '', description: '', greeting: '', category: '', system_prompt: '',
+});
+
+function resetSubForm() {
+  Object.assign(subForm, { name: '', emoji: '', description: '', greeting: '', category: '', system_prompt: '' });
+}
+
+async function loadSubmitConfig() {
+  try {
+    const res = await aiHubApi.agentSubmitConfig();
+    if (res.data.code === 0 && res.data.data) Object.assign(submitCfg, res.data.data);
+  } catch {
+    // 未登录 / 接口不可用：不显示投稿入口，不影响浏览广场
+    submitCfg.enabled = false;
+  }
+}
+
+async function loadMySubs() {
+  try {
+    const res = await aiHubApi.myAgentSubmissions();
+    if (res.data.code === 0) mySubs.value = res.data.data.list || [];
+  } catch {
+    mySubs.value = [];
+  }
+}
+
+function openSubmit() {
+  resetSubForm();
+  submitDialog.value = true;
+}
+
+async function doSubmit() {
+  if (!subForm.name.trim() || !subForm.system_prompt.trim()) {
+    ElMessage.warning('名称和提示词是必填的');
+    return;
+  }
+  submitting.value = true;
+  try {
+    const res = await aiHubApi.submitAgent({ ...subForm });
+    if (res.data.code !== 0) {
+      ElMessage.error(res.data.message || '提交失败');
+      return;
+    }
+    ElMessage.success(res.data.data?.message || '已提交');
+    submitDialog.value = false;
+    await loadMySubs();
+    // 免审核直上时要让广场立刻出现新条目
+    if (res.data.data?.status === 'approved') emit('refresh');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '提交失败');
+  } finally {
+    submitting.value = false;
+  }
+}
+
+function statusLabel(s: string) {
+  return s === 'approved' ? '已上架' : s === 'rejected' ? '未通过' : '待审核';
+}
+function statusTag(s: string) {
+  return s === 'approved' ? 'success' : s === 'rejected' ? 'danger' : 'warning';
+}
+
+onMounted(() => {
+  loadSubmitConfig();
+  loadMySubs();
 });
 
 function formatCount(n?: number) {
@@ -109,6 +253,16 @@ function onEmptyAction() {
 .ag-title { margin: 0 0 var(--space-1, 4px); font-size: var(--text-xl, 22px); font-weight: 700; color: var(--text-color, #1f2328); }
 .ag-sub { margin: 0; font-size: var(--text-sm, 13px); color: var(--text-light, #6b7280); }
 .ag-search { max-width: 240px; }
+.ag-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* 投稿弹窗 */
+.ag-submit-tip {
+  margin-bottom: 14px; padding: 10px 12px; border-radius: 8px;
+  background: var(--bg-page, #f5f6f8);
+  font-size: var(--text-sm, 13px); line-height: 1.7; color: var(--text-light, #6b7280);
+}
+.ag-submit-form :deep(.el-form-item) { margin-bottom: 14px; }
+.ag-mini-emoji { margin-right: 6px; }
 
 .ag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--space-4, 16px); }
 .ag-card {

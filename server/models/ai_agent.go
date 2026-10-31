@@ -13,24 +13,26 @@ import (
 
 // AiAgent 智能体预设
 type AiAgent struct {
-	ID           uint      `gorm:"primaryKey" json:"id"`
-	Name         string    `gorm:"size:64;not null" json:"name"`
-	Emoji        string    `gorm:"size:8;default:''" json:"emoji"`
-	Description  string    `gorm:"size:256;default:''" json:"description"`
-	SystemPrompt string    `gorm:"type:text" json:"system_prompt"`
-	Greeting     string    `gorm:"size:256;default:''" json:"greeting"` // 开场白
-	Category     string    `gorm:"size:32;default:'';index" json:"category"` // 分类（写作/编程/绘画/翻译…）
-	UsedCount    int64     `gorm:"not null;default:0" json:"used_count"`      // 使用次数（市场排序用）
+	ID           uint   `gorm:"primaryKey" json:"id"`
+	Name         string `gorm:"size:64;not null" json:"name"`
+	Emoji        string `gorm:"size:8;default:''" json:"emoji"`
+	Description  string `gorm:"size:256;default:''" json:"description"`
+	SystemPrompt string `gorm:"type:text" json:"system_prompt"`
+	Greeting     string `gorm:"size:256;default:''" json:"greeting"`      // 开场白
+	Category     string `gorm:"size:32;default:'';index" json:"category"` // 分类（写作/编程/绘画/翻译…）
+	UsedCount    int64  `gorm:"not null;default:0" json:"used_count"`     // 使用次数（市场排序用）
 	// 上游类型：空/llm = 平台模型池；coze = 扣子（Coze）官方智能体
-	Upstream  string `gorm:"size:16;not null;default:''" json:"upstream"`
-	BotID     string `gorm:"size:64;default:''" json:"bot_id"`       // Coze bot_id
-	CozeBase  string `gorm:"size:128;default:''" json:"coze_base"`   // api.coze.cn / api.coze.com
-	TokenEnc  string `gorm:"type:text" json:"-"`                     // Coze PAT（加密存储，只写不读）
-	Builtin      bool      `gorm:"not null;default:false" json:"builtin"` // 内置种子（禁止删除标识，仅提示）
-	Enabled      bool      `gorm:"not null;default:true" json:"enabled"`
-	SortOrder    int       `gorm:"not null;default:0" json:"sort_order"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	Upstream string `gorm:"size:16;not null;default:''" json:"upstream"`
+	BotID    string `gorm:"size:64;default:''" json:"bot_id"`      // Coze bot_id
+	CozeBase string `gorm:"size:128;default:''" json:"coze_base"`  // api.coze.cn / api.coze.com
+	TokenEnc string `gorm:"type:text" json:"-"`                    // Coze PAT（加密存储，只写不读）
+	Builtin  bool   `gorm:"not null;default:false" json:"builtin"` // 内置种子（禁止删除标识，仅提示）
+	// SubmittedBy 用户投稿上架时的作者 id（0 = 站长/内置创建）
+	SubmittedBy uint      `gorm:"not null;default:0;index" json:"submitted_by"`
+	Enabled     bool      `gorm:"not null;default:true" json:"enabled"`
+	SortOrder   int       `gorm:"not null;default:0" json:"sort_order"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 func (AiAgent) TableName() string { return "ai_agents" }

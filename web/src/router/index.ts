@@ -530,6 +530,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/agent-review',
+      name: 'admin-agent-review',
+      component: () => import('@/views/admin/AdminAgentReview.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/badwords',
       name: 'admin-badwords',
       component: () => import('@/views/admin/AdminBadWords.vue'),

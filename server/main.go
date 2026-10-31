@@ -354,6 +354,8 @@ func main() {
 		public.GET("/site-iframe", handlers.GetSiteIframe)
 		// 首页形态（novels/blogs/forum/feed）：前端据此决定首页渲染哪套视图
 		public.GET("/home-view", handlers.GetHomeView)
+		// 智能体投稿开关（前台据此决定是否显示「投稿」入口；投稿本身需登录）
+		public.GET("/ai/agents/submit-config", handlers.AiAgentSubmitConfig)
 		// 地图服务配置（标准地图合规：offline 示意 / 天地图 国内+全球）
 		public.GET("/map-setting", handlers.GetMapSetting)
 		// F12b 作者主题（访客可见，仅 CSS，服务端消毒）
@@ -423,6 +425,9 @@ func main() {
 		protected.GET("/ai/my-keys", handlers.AiMyKeys)
 		// 「我的」筛选：最近用过的模型（模型广场的第四个筛选维度）
 		protected.GET("/ai/my-models", handlers.AiMyModels)
+		// 智能体投稿：用户提交特殊提示词模板 → 站长审核 → 广场上架
+		protected.POST("/ai/agents/submit", handlers.AiSubmitAgent)
+		protected.GET("/ai/agents/my-submissions", handlers.AiMyAgentSubmissions)
 		protected.POST("/ai/my-keys", handlers.AiMyKeyCreate)
 		protected.DELETE("/ai/my-keys/:id", handlers.AiMyKeyDelete)
 		protected.POST("/ai/my-keys/:id/default", handlers.AiMyKeySetDefault)
@@ -1110,6 +1115,11 @@ func main() {
 		admin.POST("/ai/agents", handlers.AdminCreateAiAgent)
 		admin.PUT("/ai/agents/:id", handlers.AdminUpdateAiAgent)
 		admin.DELETE("/ai/agents/:id", handlers.AdminDeleteAiAgent)
+		// 智能体投稿审核（用户提交 → 站长审 → 广场上架）
+		admin.GET("/agent-submissions", handlers.AdminListAgentSubmissions)
+		admin.POST("/agent-submissions/:id/review", handlers.AdminReviewAgentSubmission)
+		admin.GET("/agent-submit-config", handlers.AdminGetAgentSubmitConfig)
+		admin.PUT("/agent-submit-config", handlers.AdminSaveAgentSubmitConfig)
 
 		// 免费 AI 额度（§5.3）：平台默认 + 按人覆盖（静态子树避让 :id 通配）
 		admin.GET("/ai/free-quota/config", handlers.AdminGetAiFreeQuotaConfig)

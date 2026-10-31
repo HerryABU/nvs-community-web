@@ -54,12 +54,34 @@ export interface AiAgent {
   upstream?: string;
   bot_id?: string;
   coze_base?: string;
+  // 用户投稿上架的智能体：作者 id（0 = 站长/内置创建）
+  submitted_by?: number;
+}
+
+// 智能体投稿单（用户提交的特殊提示词模板，等站长审核）
+export interface AgentSubmissionInput {
+  name: string;
+  emoji?: string;
+  description?: string;
+  greeting?: string;
+  category?: string;
+  system_prompt: string;
+}
+
+export interface AgentSubmission extends AgentSubmissionInput {
+  id: number;
+  user_id: number;
+  user_name?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  review_note?: string;
+  agent_id?: number;
+  created_at?: string;
+  reviewed_at?: string;
 }
 
 export interface AiChatSession {
   id: number;
-  agent_id: number;
-  agent_name: string;
+  agent_id: number;  agent_name: string;
   model_id: number;
   title: string;
   share_token?: string | null;
@@ -96,6 +118,19 @@ export const aiHubApi = {
   },
   agents() {
     return api.get<{ code: number; data: { list: AiAgent[]; categories: string[] } }>('/ai/agents');
+  },
+
+  // ---------- 智能体投稿（用户提交特殊提示词 → 站长审核 → 广场上架） ----------
+  agentSubmitConfig() {
+    return api.get<{ code: number; data: { enabled: boolean; need_review: boolean; max_pending: number } }>(
+      '/ai/agents/submit-config',
+    );
+  },
+  submitAgent(data: AgentSubmissionInput) {
+    return api.post<{ code: number; data: { status: string; message: string } }>('/ai/agents/submit', data);
+  },
+  myAgentSubmissions() {
+    return api.get<{ code: number; data: { list: AgentSubmission[] } }>('/ai/agents/my-submissions');
   },
   sessions() {
     return api.get<{ code: number; data: { list: AiChatSession[] } }>('/ai/sessions');

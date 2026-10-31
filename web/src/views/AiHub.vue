@@ -127,6 +127,7 @@
         :agents="agents"
         :is-admin="isAdmin"
         @start="onStartAgent"
+        @refresh="loadAgents"
       />
       <AiGalleryPanel v-else-if="activeTab === 'gallery'" @remix="onRemix" />
 
@@ -356,8 +357,17 @@ async function loadAll() {
   loading.value = false;
 }
 
-async function loadSessions() {
+// 单独刷新智能体列表：用户免审核投稿直上后，广场要立刻看到他刚提交的那个
+async function loadAgents() {
   try {
+    const res = await aiHubApi.agents();
+    if (res.data.code === 0) agents.value = res.data.data.list || [];
+  } catch {
+    /* 刷新失败保留旧列表，不打断浏览 */
+  }
+}
+
+async function loadSessions() {  try {
     const res = await aiHubApi.sessions();
     if (res.data.code === 0) sessions.value = res.data.data.list || [];
   } catch { /* ignore */ }

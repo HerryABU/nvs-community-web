@@ -1,4 +1,6 @@
 import api from './index';
+// 投稿单结构与前台共用一份定义，避免两个地方各写一遍字段名
+import type { AgentSubmission } from './aiHub';
 
 export const adminApi = {
   // 平台配置
@@ -252,6 +254,23 @@ export const adminApi = {
   // 复核：publish=放行同时上广场；purge_file=驳回时连封存件一起删除
   reviewHtml(type: string, id: number, data: { action: string; note?: string; publish?: boolean; purge_file?: boolean }) {
     return api.post(`/admin/html-reviews/${type}/${id}/review`, data);
+  },
+
+  // ── 智能体投稿审核（用户投稿特殊提示词 → 站长审 → 广场上架）──
+  getAgentSubmitConfig() {
+    return api.get<{ code: number; data: { config: AgentSubmitConfig; pending: number } }>('/admin/agent-submit-config');
+  },
+  saveAgentSubmitConfig(data: AgentSubmitConfig) {
+    return api.put('/admin/agent-submit-config', data);
+  },
+  listAgentSubmissions(params: { status?: string; page?: number; size?: number }) {
+    return api.get<{ code: number; data: { list: AgentSubmission[]; total: number; pending: number } }>(
+      '/admin/agent-submissions',
+      { params },
+    );
+  },
+  reviewAgentSubmission(id: number, data: { action: 'approve' | 'reject'; note?: string }) {
+    return api.post(`/admin/agent-submissions/${id}/review`, data);
   },
 
   // HTML/WASM 托管额度（每人项目数 + 累计空间；支持按人覆盖）
@@ -662,4 +681,11 @@ export interface HtmlQuotaOverride {
   max_total_size_mb: number;
   note: string;
   updated_at?: string;
+}
+
+// ── 智能体投稿审核 ──
+export interface AgentSubmitConfig {
+  enabled: boolean;
+  need_review: boolean;
+  max_pending: number;
 }
