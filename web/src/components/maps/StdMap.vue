@@ -22,6 +22,16 @@
       <!-- 天地图：官方底图 + 省级气泡（不依赖任何第三方边界数据） -->
       <template v-if="setting.provider === 'tianditu' && setting.key_ready">
         <div ref="mapEl" class="sm-canvas" />
+        <div v-if="mapErr" class="sm-err">
+          <b>底图没显示</b>
+          <span class="sm-err-msg">{{ mapErr }}</span>
+          <button type="button" class="sm-retry" @click="scheduleRender">重试</button>
+          <span class="sm-err-tip">
+            逐项核对：tk 是「浏览器端」应用 · Referer 白名单含本站域名 · 网络能访问
+            <code>api.tianditu.gov.cn</code> 与 <code>t0.tianditu.gov.cn</code>
+          </span>
+        </div>
+        <p v-else-if="mapLoading" class="sm-source">底图加载中…</p>
         <p class="sm-source">
           <template v-if="setting.review_no">审图号：{{ setting.review_no }}　</template>
           底图：天地图（国家地理信息公共服务平台）· 中国
@@ -62,6 +72,16 @@
       <!-- 有天地图密钥：官方全球底图 + 国家气泡点 -->
       <template v-if="setting.provider === 'tianditu' && setting.key_ready">
         <div ref="mapEl" class="sm-canvas" />
+        <div v-if="mapErr" class="sm-err">
+          <b>底图没显示</b>
+          <span class="sm-err-msg">{{ mapErr }}</span>
+          <button type="button" class="sm-retry" @click="scheduleRender">重试</button>
+          <span class="sm-err-tip">
+            逐项核对：tk 是「浏览器端」应用 · Referer 白名单含本站域名 · 网络能访问
+            <code>api.tianditu.gov.cn</code> 与 <code>t0.tianditu.gov.cn</code>
+          </span>
+        </div>
+        <p v-else-if="mapLoading" class="sm-source">底图加载中…</p>
         <p class="sm-source">
           <template v-if="setting.review_no">审图号：{{ setting.review_no }}　</template>
           底图：天地图 · 全球
@@ -132,6 +152,12 @@ const setting = ref<MapSetting>({ provider: 'offline', scope: 'china', key: '', 
 const mapEl = ref<HTMLElement>();
 let map: any = null;
 let markers: any[] = [];
+/** 底图加载失败必须说出来：API 4.0 在容器尺寸为 0 或瓦片被拒时会静默留白，
+ *  站长只会看到「底图：天地图」下面一片空，无从判断是 key 还是网络的问题。 */
+const mapErr = ref('');
+const mapLoading = ref(false);
+let renderTimer: any = null;
+let tileTimer: any = null;
 
 const scopes = [
   { label: '中国', value: 'china' as const },
@@ -204,14 +230,24 @@ async function loadSetting() {
   }
 }
 
-/** 动态加载天地图 SDK（key 由站长在后台配置，代码里不内置任何密钥） */
+/** 动态加载天地图 SDK（key 由站长在后台配置，代码里不内置任何密钥）。
+ *  必须带超时：脚本被网络/WAF 拦时 onerror 不一定触发，否则会永远「转圈什么都不显示」。 */
 function loadTianditu(key: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    if ((window as any).T) return resolve();
+    const T = (window as any).T;
+    if (T) return resolve();
     const s = document.createElement('script');
     s.src = `https://api.tianditu.gov.cn/api?v=4.0&tk=${encodeURIComponent(key)}`;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error('天地图 SDK 加载失败'));
+    const timer = setTimeout(() => reject(new Error('天地图 SDK 加载超时（10 秒）：网络可能被拦截')), 10000);
+    s.onload = () => {
+      clearTimeout(timer);
+      if ((window as any).T) resolve();
+      else reject(new Error('SDK 已下载但没有初始化 window.T，tk 可能不被接受'));
+    };
+    s.onerror = () => {
+      clearTimeout(timer);
+      reject(new Error('天地图 SDK 脚本加载失败：可能被网络/WAF 拦截'));
+    };
     document.head.appendChild(s);
   });
 }
@@ -231,17 +267,32 @@ async function renderTianditu() {
   if (setting.value.provider !== 'tianditu' || !setting.value.key_ready) return;
   await nextTick();
   if (!mapEl.value) return;
+  mapErr.value = '';
+  mapLoading.value = true;
   try {
     await loadTianditu(setting.value.key);
-  } catch {
-    return; // SDK 拉不到就静默保持空白，不画假图
+  } catch (e: any) {
+    mapLoading.value = false;
+    mapErr.value = e?.message || '天地图 SDK 加载失败';
+    return;
   }
+  // 注：天地图 4.0 的 SDK 自身会抛一次 "Cannot read properties of undefined (reading 'extend')"
+  // （它内部加载 v4.0 扩展脚本时的 bug），与出图无关 —— 实测底图瓦片正常加载，不要误判成本项目的错。
+  // 注：天地图 4.0 的 SDK 自身会抛一次 "Cannot read properties of undefined (reading 'extend')"
+  // （它内部加载 v4.0 扩展脚本时的 bug），与出图无关 —— 实测底图瓦片正常加载，不要误判成本项目的错。
   const T = (window as any).T;
-  if (!T || !mapEl.value) return;
+  if (!T || !mapEl.value) {
+    mapLoading.value = false;
+    mapErr.value = '天地图 SDK 未就绪（window.T 缺失）';
+    return;
+  }
 
   const world = viewScope.value === 'world';
+  // 重建前先清空：同一容器重复 new T.Map 会叠出多层画布
+  mapEl.value.innerHTML = '';
   map = new T.Map(mapEl.value);
   map.centerAndZoom(new T.LngLat(world ? 20 : 104.2, world ? 15 : 35.8), world ? 2 : 5);
+  mapLoading.value = false;
 
   markers.forEach((m) => map.removeOverLay(m));
   markers = [];
@@ -274,22 +325,63 @@ async function renderTianditu() {
     map.addOverLay(marker);
     markers.push(marker);
   }
+
+  // 最后一道自检：8 秒后容器里一张瓦片都没有 = 只出了灰底，说明请求被拒（tk/白名单）或被拦
+  clearTimeout(tileTimer);
+  tileTimer = window.setTimeout(() => {
+    const n = mapEl.value?.querySelectorAll('img').length || 0;
+    if (n === 0) {
+      mapErr.value =
+        '底图瓦片一张都没加载出来：tk 可能没通过 Referer 白名单，或网络拦截了 t0.tianditu.gov.cn';
+    }
+  }, 8000);
 }
 
 onMounted(async () => {
   await loadSetting();
-  if (setting.value.provider === 'tianditu' && setting.key_ready) renderTianditu();
+  scheduleRender();
 });
 
-watch(viewScope, () => {
-  if (setting.value.provider === 'tianditu' && setting.key_ready) renderTianditu();
-});
+/**
+ * 调度一次渲染：去抖 + 容器缺失时重试。
+ * 为什么需要：StdMap 挂在父页面的 v-if 分幕里，配置又是异步拉回来的，
+ * onMounted 里直接取 mapEl 有可能还没被 patch 上去（拿不到 DOM 就永久留白）。
+ */
+function scheduleRender() {
+  clearTimeout(renderTimer);
+  renderTimer = window.setTimeout(() => {
+    let tries = 0;
+    const step = () => {
+      if (setting.value.provider !== 'tianditu' || !setting.value.key_ready) return;
+      if (mapEl.value) {
+        renderTianditu();
+        return;
+      }
+      if (++tries > 30) {
+        mapErr.value = '地图容器没有渲染出来（页面可能还处于隐藏状态）';
+        return;
+      }
+      renderTimer = window.setTimeout(step, 100);
+    };
+    step();
+  }, 60);
+}
 
-watch(() => [props.data, props.countries], () => {
-  if (setting.value.provider === 'tianditu' && setting.key_ready && map) renderTianditu();
-});
+// 配置变化（含首次从接口拿回）后重建；flush:'post' 保证 DOM 已更新
+watch(setting, () => scheduleRender(), { deep: true, flush: 'post' });
+
+watch(viewScope, () => scheduleRender(), { flush: 'post' });
+
+watch(
+  () => [props.data, props.countries],
+  () => {
+    if (map) renderTianditu();
+  },
+);
 
 onBeforeUnmount(() => {
+  clearTimeout(renderTimer);
+  clearTimeout(tileTimer);
   markers = [];
   map = null;
 });
@@ -313,6 +405,23 @@ onBeforeUnmount(() => {
 .sm-hint { margin-left: auto; font-size: 0.72rem; color: var(--text-light, #9ca3af); }
 
 .sm-canvas { width: 100%; height: 360px; border-radius: 10px; overflow: hidden; }
+/* 底图失败提示：不静默留白，直接说清「没出图」和下一步核对什么 */
+.sm-err {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px;
+  padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--el-color-warning-light-5, #f5dab1);
+  background: var(--el-color-warning-light-9, #fdf6ec);
+  font-size: 0.78rem; color: var(--text-main, #6b4a1b);
+}
+.sm-err-msg { color: var(--el-color-warning, #e6a23c); font-weight: 500; }
+.sm-retry {
+  padding: 2px 10px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--el-color-primary, #409eff);
+  background: transparent; color: var(--el-color-primary, #409eff); font-size: 0.74rem;
+}
+.sm-retry:hover { background: var(--el-color-primary-light-9, #ecf5ff); }
+.sm-err-tip { flex: 1 1 100%; font-size: 0.72rem; color: var(--text-light, #9ca3af); line-height: 1.7; }
+.sm-err-tip code { padding: 0 4px; border-radius: 3px; background: var(--bg-page, #eef2f7); }
 .sm-source { font-size: 0.72rem; color: var(--text-light, #999); line-height: 1.6; margin: 0; }
 .sm-warn { color: var(--el-color-warning, #e6a23c); }
 .sm-dim { opacity: 0.75; }

@@ -35,7 +35,7 @@ type NewAPIAccount struct {
 // accessToken 必须是 nap_ 这类**非模型调用**令牌；userID 为站点用户数字 ID。
 func QueryNewAPIAccount(baseURL, accessToken, userID string, timeout time.Duration) NewAPIAccount {
 	out := NewAPIAccount{Currency: "USD"}
-	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	base := NormalizeBaseURL(baseURL)
 	accessToken = strings.TrimSpace(accessToken)
 	userID = strings.TrimSpace(userID)
 	if base == "" {
@@ -71,6 +71,10 @@ func QueryNewAPIAccount(baseURL, accessToken, userID string, timeout time.Durati
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
 		out.Error = "系统访问令牌无效或无权限（需 nap_ 访问令牌 + 正确用户 ID）"
+		return out
+	}
+	if resp.StatusCode == 404 {
+		out.Error = "接口不存在（HTTP 404）：渠道地址要填站点根地址（如 https://api.x.com），不要填 /api/user/self 这种具体接口"
 		return out
 	}
 	var body struct {
@@ -116,7 +120,7 @@ type NewAPILog struct {
 //
 // 需要系统访问令牌（nap_）+ 用户 ID；且令牌必须勾选「查看」权限（使用日志/统计）。
 func QueryNewAPIRecentLogs(baseURL, accessToken, userID string, pageSize int, timeout time.Duration) ([]NewAPILog, string) {
-	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	base := NormalizeBaseURL(baseURL)
 	accessToken = strings.TrimSpace(accessToken)
 	userID = strings.TrimSpace(userID)
 	if base == "" {
@@ -150,6 +154,9 @@ func QueryNewAPIRecentLogs(baseURL, accessToken, userID string, pageSize int, ti
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
 		return nil, "令牌无「查看日志」权限：请到中转站权限页勾选 Usage/Logs 读取后换新令牌"
+	}
+	if resp.StatusCode == 404 {
+		return nil, "日志接口不存在（HTTP 404）：渠道地址要填站点根地址，不要填具体接口路径"
 	}
 
 	// 两种返回结构都要兼容（真实站点实测差异）：

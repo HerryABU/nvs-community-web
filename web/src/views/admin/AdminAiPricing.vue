@@ -9,7 +9,8 @@
       <el-alert type="info" :closable="false" class="intro">
         这里只管「向用户收多少」。<b>上游渠道与卡密池在「AI 模型池 → 按渠道」</b>，
         两件事不要混：渠道决定成本，这里决定售价。
-        用户在前台 <code>/ai/pricing</code> 看到的就是本页配置。
+        用户在前台 <code>/ai/pricing</code> 看到的就是本页配置 ——
+        只有<b>启用中</b>的模型才会出现在用户价目表里（未启用的这里也会列出，标「未启用」）。
       </el-alert>
 
       <!-- 分类默认价 -->
@@ -56,6 +57,12 @@
             <StateBlock state="empty" title="还没有模型" description="先到「AI 模型池」添加或从渠道拉取。" />
           </template>
           <el-table-column prop="name" label="模型" min-width="160" show-overflow-tooltip />
+          <el-table-column label="前台可见" width="96">
+            <template #default="{ row }">
+              <el-tag v-if="row.enabled" size="small" type="success">可见</el-tag>
+              <el-tag v-else size="small" type="info">未启用</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="类型" width="90">
             <template #default="{ row }">
               <el-tag size="small" :type="kindTag(row.kind)">{{ kindLabel(row.kind) }}</el-tag>
@@ -118,11 +125,14 @@ function kindTag(k: string) {
 async function loadAll() {
   loading.value = true;
   try {
-    const [pm, cp] = await Promise.all([aiApi.models(), aiApi.categoryPrices()]);
-    const list: AdminAiModel[] = (pm.data?.data?.models || pm.data?.data?.list || []) as any;
+    // ⚠️ 方法名以 '@/api/ai' 的 aiApi 为准：listModels / getCategoryPrices。
+    // 之前写成 models() / categoryPrices()（不存在）→ 直接 TypeError 被 catch，
+    // 表现就是「加载失败 + 表格全空」，而接口本身是好的。
+    const [pm, cp] = await Promise.all([aiApi.listModels(), aiApi.getCategoryPrices()]);
+    const list: AdminAiModel[] = (pm.data?.data?.list || []) as any;
     models.value = (list || []).map((m: any) => ({ ...m, _saving: false }));
 
-    const prices: any[] = (cp.data?.data?.prices || cp.data?.data?.list || []) as any;
+    const prices: any[] = (cp.data?.data?.list || []) as any;
     for (const p of prices || []) {
       if (p.kind === 'chat') {
         cat.chat.price_in = p.price_in ?? 0;
@@ -143,11 +153,12 @@ async function loadAll() {
 async function saveCategories() {
   savingCat.value = true;
   try {
-    await aiApi.saveCategoryPrices({
-      chat: { price_in: cat.chat.price_in, price_out: cat.chat.price_out },
-      image: { price_call: cat.image.price_call },
-      video: { price_call: cat.video.price_call },
-    });
+    // 后端按「每次一个 kind」保存，三类并发提交
+    await Promise.all([
+      aiApi.setCategoryPrice({ kind: 'chat', price_in: cat.chat.price_in, price_out: cat.chat.price_out }),
+      aiApi.setCategoryPrice({ kind: 'image', price_call: cat.image.price_call }),
+      aiApi.setCategoryPrice({ kind: 'video', price_call: cat.video.price_call }),
+    ]);
     ElMessage.success('分类价已保存');
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '保存失败');

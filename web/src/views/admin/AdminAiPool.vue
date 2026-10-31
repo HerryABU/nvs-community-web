@@ -136,7 +136,7 @@
         <div class="table-toolbar">
           <span class="muted small">共 {{ channelGroups.length }} 条渠道 · {{ models.length }} 个模型</span>
           <span>
-            <el-button @click="openMonitor">渠道监控</el-button>
+            <el-button @click="openMonitor()">临时监控</el-button>
             <el-button :loading="chLoading" @click="openChannels">渠道余额</el-button>
             <el-button type="primary" @click="openPull"><span class="btn-emoji">🔌</span>新增渠道并拉取</el-button>
           </span>
@@ -154,9 +154,11 @@
               <el-tag v-else size="small" type="danger">未配置</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="170">
+          <el-table-column label="操作" width="250">
             <template #default="{ row }">
               <el-button link size="small" type="primary" @click="openChannelKeys(row.base_url)">卡密池</el-button>
+              <!-- 渠道内直接监控：地址自动带过去，站长只需填令牌与用户 ID -->
+              <el-button link size="small" @click="openMonitor(row.base_url)">监控</el-button>
               <el-button link size="small" @click="switchLevel2('model')">查看模型</el-button>
             </template>
           </el-table-column>
@@ -491,17 +493,28 @@
           </template>
         </el-table-column>
       </el-table>
+      <template #footer>
+        <el-button @click="openMonitor(ckBase)">监控这个渠道（临时令牌，不落库）</el-button>
+        <el-button type="primary" @click="ckDialog = false">关闭</el-button>
+      </template>
     </el-dialog>
 
     <!-- ============ 渠道监控（临时令牌，不落库） ============ -->
-    <el-dialog v-model="monDialog" title="渠道监控" width="680px">
+    <el-dialog v-model="monDialog" :title="monTitle" width="680px">
       <div class="ch-overview-tip">
-        想先看看一条渠道「通不通 / 还剩多少 / 最近花了多少」，又不想把它存进模型池时用这里。
+        <template v-if="mon.locked">
+          从渠道 <b>{{ mon.base_url }}</b> 进入 —— 地址已按该渠道填好，只需填令牌与用户 ID。
+        </template>
+        <template v-else>
+          想先看看一条渠道「通不通 / 还剩多少 / 最近花了多少」，又不想把它存进模型池时用这里。
+          也可以直接在「渠道余额一览」里点某条渠道的「监控」，地址会自动带过来。
+        </template>
         <b>令牌只在本次查询里用，不写库、不写日志。</b>
       </div>
       <el-form label-width="96px" class="mon-form">
         <el-form-item label="渠道地址">
-          <el-input v-model="mon.base_url" placeholder="如 https://api.example.com/v1" />
+          <el-input v-model="mon.base_url" :disabled="mon.locked" placeholder="填站点根地址，如 https://api.example.com" />
+          <span class="muted small">粘成 /api/user/self、/v1/models 这类具体接口也没关系，会自动还原成站点根</span>
         </el-form-item>
         <el-form-item label="令牌">
           <el-input v-model="mon.token" type="password" show-password
@@ -527,6 +540,10 @@
       </el-form>
 
       <div v-if="monResult" class="mon-result">
+        <!-- 自动纠正过什么必须说出来，否则站长不知道自己的填法有问题 -->
+        <div v-if="monResult.warnings && monResult.warnings.length" class="mon-warn-list">
+          <div v-for="(w, i) in monResult.warnings" :key="i" class="mon-warn-item">已自动纠正：{{ w }}</div>
+        </div>
         <div class="mon-row">
           <span class="mon-k">连通性</span>
           <el-tag :type="monResult.probe_ok ? 'success' : (monResult.probe_skipped ? 'info' : 'danger')" size="small">
@@ -692,6 +709,11 @@
           <template #default="{ row }">
             <el-tag v-if="row.supported" size="small" type="success">可查</el-tag>
             <span v-else class="muted small">{{ row.error || '该渠道无余额端点' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="86" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" size="small" @click="openMonitor(row.base_url)">监控</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -1380,13 +1402,24 @@ async function ckTest(row: any) {
 // ---------- 渠道监控（临时令牌，不落库） ----------
 const monDialog = ref(false);
 const monLoading = ref(false);
-const mon = reactive({ base_url: '', token: '', user_id: '', model_key: '', kind: '' });
+const mon = reactive({ base_url: '', token: '', user_id: '', model_key: '', kind: '', locked: false });
 const monResult = ref<any>(null);
 
-function openMonitor() {
+/** 从某个渠道进来：地址预填且锁住（站长只该填令牌和用户 ID，别再让他在地址上出错） */
+function openMonitor(baseUrl?: string) {
   monResult.value = null;
+  mon.base_url = (baseUrl || '').trim();
+  mon.locked = !!(baseUrl && baseUrl.trim());
+  mon.token = '';
+  mon.user_id = '';
+  mon.model_key = '';
+  mon.kind = '';
   monDialog.value = true;
 }
+
+const monTitle = computed(() =>
+  mon.locked ? `渠道监控 · ${mon.base_url.replace(/^https?:\/\//, '')}` : '渠道监控（临时查询，不落库）',
+);
 
 async function runMonitor() {
   if (!mon.base_url.trim() || !mon.token.trim()) {
@@ -2219,6 +2252,15 @@ async function saveCategoryPrice(p: AiCategoryPrice & { _saving?: boolean }) {
 .pull-col-toggles { display: flex; flex-direction: column; gap: 4px; }
 .pull-col-title { font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; color: var(--text-main, #1f2937); }
 .pull-col-tip { margin-top: 6px; font-size: 0.72rem; line-height: 1.5; color: var(--text-light, #999); }
+
+/* 渠道监控：自动纠正提示（不显眼但必须能看见） */
+.mon-warn-list {
+  display: flex; flex-direction: column; gap: 4px;
+  margin-bottom: 8px; padding: 8px 10px; border-radius: 6px;
+  border: 1px solid var(--el-color-warning-light-5, #f5dab1);
+  background: var(--el-color-warning-light-9, #fdf6ec);
+}
+.mon-warn-item { font-size: 0.74rem; color: var(--el-color-warning, #b88230); line-height: 1.6; }
 
 /* 渠道卡密池 */
 .key-add { margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }

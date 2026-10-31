@@ -55,19 +55,18 @@ func AdminAiChannelMonitor(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	base := strings.TrimRight(strings.TrimSpace(req.BaseURL), "/")
-	token := strings.TrimSpace(req.Token)
-	uid := strings.TrimSpace(req.UserID)
+	in := normalizeMonitorInputs(req.BaseURL, req.Token, req.UserID, req.ModelKey)
+	base, token, uid, modelKey, warnings := in.Base, in.Token, in.UserID, in.ModelKey, in.Warnings
 	if base == "" {
 		utils.BadRequest(c, "请填写渠道地址")
 		return
 	}
-	if token == "" {
-		utils.BadRequest(c, "请填写令牌（模型密钥 sk_ 或系统访问令牌 nap_）")
-		return
-	}
 	if !strings.HasPrefix(base, "http://") && !strings.HasPrefix(base, "https://") {
 		utils.BadRequest(c, "渠道地址需以 http:// 或 https:// 开头")
+		return
+	}
+	if token == "" {
+		utils.BadRequest(c, "请填写令牌（模型密钥 sk_ 或系统访问令牌 nap_）")
 		return
 	}
 
@@ -77,10 +76,13 @@ func AdminAiChannelMonitor(c *gin.Context) {
 		"kind":     kind,
 		"base_url": base,
 	}
+	if len(warnings) > 0 {
+		out["warnings"] = warnings
+	}
 
 	// ── 1. 连通性 + 可用模型数（最便宜的一步，先给个确定结论）──
 	// 账户令牌（nap_）不用于调用模型，直接跳过硬探，否则只会拿到一个误导性的 401。
-	probeKey := strings.TrimSpace(req.ModelKey)
+	probeKey := modelKey
 	if probeKey == "" && !strings.HasPrefix(token, "nap_") {
 		probeKey = token
 	}
@@ -199,6 +201,75 @@ func probeUpstreamModels(base, token, uid string) (int, string) {
 		return 0, "响应不是 OpenAI 兼容格式（可能不是模型接口）"
 	}
 	return len(parsed.Data), ""
+}
+
+// monitorInputs 归一化后的监控入参
+type monitorInputs struct {
+	Base     string
+	Token    string
+	UserID   string
+	ModelKey string
+	Warnings []string
+}
+
+// normalizeMonitorInputs 处理两种高频填错：
+//  1. 渠道地址粘成了具体接口（/api/user/self、/v1/models）→ 还原成站点根，
+//     否则会拼成 .../api/user/self/api/user/self 直接 404；
+//  2. 令牌与用户 ID 填反（sk_ 填进「用户 ID」、56347 填进「令牌」）→ 按形态自动纠正。
+//
+// 抽成纯函数是为了能被单测锁住 —— 这两条都是站长实际踩过的坑。
+func normalizeMonitorInputs(rawBase, token, uid, modelKey string) monitorInputs {
+	rawBase = strings.TrimSpace(rawBase)
+	out := monitorInputs{
+		Base:     aiclient.NormalizeBaseURL(rawBase),
+		Token:    strings.TrimSpace(token),
+		UserID:   strings.TrimSpace(uid),
+		ModelKey: strings.TrimSpace(modelKey),
+	}
+	if out.Base != "" && out.Base != strings.TrimRight(rawBase, "/") {
+		out.Warnings = append(out.Warnings, "渠道地址已归一化为站点根："+out.Base)
+	}
+	if looksLikeUserID(out.Token) && out.UserID == "" {
+		out.UserID, out.Token = out.Token, ""
+		out.Warnings = append(out.Warnings, "「令牌」里填的是数字，已按用户 ID 处理")
+	}
+	if looksLikeToken(out.UserID) {
+		if out.Token == "" {
+			out.Token, out.UserID = out.UserID, ""
+			out.Warnings = append(out.Warnings, "「用户 ID」里填的是令牌，已自动搬到「令牌」")
+		} else {
+			out.UserID = ""
+			out.Warnings = append(out.Warnings, "「用户 ID」里填的像令牌，已忽略该值")
+		}
+	}
+	if looksLikeUserID(out.ModelKey) {
+		if out.UserID == "" {
+			out.UserID = out.ModelKey
+			out.Warnings = append(out.Warnings, "「模型密钥」里填的是数字，已按用户 ID 处理")
+		}
+		out.ModelKey = ""
+	}
+	return out
+}
+
+// looksLikeToken 判断是否像上游令牌（ModelKey / 系统访问令牌）
+func looksLikeToken(s string) bool {
+	l := strings.ToLower(strings.TrimSpace(s))
+	return strings.HasPrefix(l, "sk_") || strings.HasPrefix(l, "sk-") || strings.HasPrefix(l, "nap_")
+}
+
+// looksLikeUserID 判断是否像 New API 的数字用户 ID
+func looksLikeUserID(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" || len(s) > 20 {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func firstNonEmpty(vals ...string) string {
