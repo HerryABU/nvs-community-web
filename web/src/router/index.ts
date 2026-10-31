@@ -357,6 +357,13 @@ const router = createRouter({
       component: () => import('@/views/admin/AdminLogRedact.vue'),
       meta: { requiresAuth: true },
     },
+    // 密码轨道：国际轨 / 国密轨 / 双轨（只读状态 + 配置指引）
+    {
+      path: '/admin/crypto',
+      name: 'admin-crypto',
+      component: () => import('@/views/admin/AdminCrypto.vue'),
+      meta: { requiresAuth: true },
+    },
     // 蜜罐等级 + 日志记录字段勾选
     {
       path: '/admin/honeypot',

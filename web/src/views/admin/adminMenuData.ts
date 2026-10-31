@@ -50,6 +50,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: '合规中心', desc: '等保指引 · 检查工具箱 · 自查报告', path: '/admin/compliance', icon: Medal, color: 'var(--gradient-success)' },
       { title: '漏洞管理', desc: '漏洞整改闭环留痕 · 报告导出', path: '/admin/vulnerabilities', icon: Warning, color: 'var(--gradient-danger)' },
       { title: '日志脱敏', desc: '生产环境日志敏感信息脱敏 · 176号令合规', path: '/admin/log-redact', icon: View, color: 'var(--gradient-danger)' },
+      { title: '密码与国密', desc: '国际轨 / 国密轨 / 双轨 · 证书就绪与握手可观测 · 同样支持标准 TLS', path: '/admin/crypto', icon: Key, color: 'var(--gradient-teal)' },
       { title: '蜜罐与日志记录', desc: '蜜罐等级 · 记录字段勾选 · SQLi 诱饵 · JA3 采集率 · 攻击会话取证', path: '/admin/honeypot', icon: Aim, color: 'var(--gradient-danger)' },
       { title: '注册门槛与防刷', desc: '邀请码 · 设备指纹 · 账号年龄 · 新号限额 · API Key 告警', path: '/admin/gate', icon: Lock, color: 'var(--gradient-danger)' },
       { title: '充值风控', desc: '入账前打分 · 打标/拦截待复核 · 蜜罐与设备联动', path: '/admin/risk', icon: CreditCard, color: 'var(--gradient-rose)' },
