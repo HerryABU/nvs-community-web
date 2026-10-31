@@ -5,21 +5,19 @@
     <StateBlock
       v-else-if="!ready"
       state="loading"
-      title="正在准备地图数据"
-      description="首次加载会解析行政区划边界。"
+      :title="official && !ready ? '正在拉取天地图官方边界' : '正在准备地图数据'"
+      :description="official && !ready ? '首次会向天地图行政区划服务请求 34 个省级边界，之后走本地缓存。' : '首次加载会解析行政区划边界。'"
     />
-    <p class="cgm-source">
-      边界数据：DataV.GeoAtlas（基于高德行政区划，含南海诸岛/九段线）。仅供站内访问统计参考；
-      正式对外展示请以自然资源部标准地图为准并标注审图号。
-    </p>
+    <p class="cgm-source">{{ sourceNote }}</p>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { registerMap } from 'echarts/core';
 import StateBlock from '@/components/common/StateBlock.vue';
 import chinaGeo from '@/assets/china.json';
+import { loadOfficialChinaBounds, toFeatureCollection } from '@/components/maps/chinaOfficial';
 
 // 中国地图（省级分区着色）。
 //
@@ -36,17 +34,72 @@ const props = withDefaults(
     data?: { name: string; value: number }[];
     /** 地图上方说明（可选） */
     note?: string;
+    /** 用天地图官方省级边界（需要 tk）；失败自动回退内置边界 */
+    official?: boolean;
+    /** 站长的天地图浏览器端 tk */
+    tk?: string;
   }>(),
-  { data: () => [], note: '' },
+  { data: () => [], note: '', official: false, tk: '' },
 );
 
 // 注册只需一次；registerMap 幂等，重复调用不会报错但没必要
-let registered = false;
-if (!registered && chinaGeo) {
+const BASE_NOTE =
+  '边界数据：DataV.GeoAtlas（基于高德行政区划，含南海诸岛/九段线）。仅供站内访问统计参考；' +
+  '正式对外展示请以自然资源部标准地图为准并标注审图号。';
+
+let baseRegistered = false;
+if (!baseRegistered && chinaGeo) {
   registerMap('china', chinaGeo as any);
-  registered = true;
+  baseRegistered = true;
 }
-const ready = ref(registered);
+
+// mapName 可在内置/官方之间切换；official=true 时先等官方边界再渲染
+const mapName = ref('china');
+const ready = ref(props.official ? false : baseRegistered);
+const sourceNote = ref(BASE_NOTE);
+
+let officialLoading = false;
+let officialDone = false;
+
+/**
+ * 拉官方边界。
+ * 注意不能用 onMounted 一次性判断：本组件在父级地图卡里比「地图配置」先挂载，
+ * 首次渲染时 official 还是 false，等配置回来后必须重新触发。
+ */
+async function tryLoadOfficial() {
+  if (officialDone || officialLoading) return;
+  if (!props.official || !props.tk) {
+    ready.value = baseRegistered;
+    return;
+  }
+  officialLoading = true;
+  const names = ((chinaGeo as any)?.features || [])
+    .map((f: any) => f?.properties?.name)
+    .filter((n: any) => !!n);
+  try {
+    const res = await loadOfficialChinaBounds(props.tk, names, chinaGeo as any);
+    if (!res) {
+      sourceNote.value = BASE_NOTE + '（天地图官方边界拉取失败，已回退内置数据）';
+      ready.value = baseRegistered;
+      return;
+    }
+    registerMap('china-official', toFeatureCollection(res.shapes) as any);
+    mapName.value = 'china-official';
+    sourceNote.value =
+      `边界数据：天地图行政区划服务（自然资源部官方，${res.official} 个省级行政区` +
+      (res.fallback ? `，另 ${res.fallback} 个回退内置` : '') +
+      '）。数据仅用于站内访问统计；对外展示请标注审图号。';
+    ready.value = true;
+    officialDone = true;
+  } catch {
+    sourceNote.value = BASE_NOTE + '（天地图官方边界拉取失败，已回退内置数据）';
+    ready.value = baseRegistered;
+  } finally {
+    officialLoading = false;
+  }
+}
+
+watch([() => props.official, () => props.tk], () => tryLoadOfficial(), { immediate: true });
 
 const maxValue = computed(() => {
   const vals = (props.data || []).map((d) => Number(d.value) || 0);
@@ -74,7 +127,7 @@ const option = computed(() => ({
   series: [
     {
       type: 'map',
-      map: 'china',
+      map: mapName.value,
       roam: false,
       // 南海诸岛（九段线）在数据里是一条独立要素，名称空 —— 不参与着色
       emphasis: {

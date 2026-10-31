@@ -23,7 +23,12 @@
          而这张图的语义就是「中国境内各省占比」，别国不该出现在画面里。 -->
     <template v-if="viewScope === 'china'">
       <!-- 只画中国（ChinaGeoMap 自带边界来源说明，这里不重复贴） -->
-      <ChinaGeoMap :data="data" note="省份按访问次数着色（蓝越深 = 占比越高）" />
+      <ChinaGeoMap
+        :data="data"
+        note="省份按访问次数着色（蓝越深 = 占比越高）"
+        :official="setting.provider === 'tianditu' && setting.key_ready"
+        :tk="setting.key"
+      />
     </template>
 
     <!-- ============ 全球视野 ============ -->
