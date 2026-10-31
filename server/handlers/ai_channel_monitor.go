@@ -32,7 +32,12 @@ type channelMonitorReq struct {
 	BaseURL string `json:"base_url"`
 	Token   string `json:"token"`
 	UserID  string `json:"user_id"` // New API 体系需要与访问令牌配对
-	Kind    string `json:"kind"`    // 留空=自动判断：nap_/用户ID→newapi，sk_+deepseek域名→deepseek，否则通用
+	// ModelKey 可选的模型密钥（sk_）。
+	// 为什么单独一项：New API 体系里账户令牌（nap_）只能查账户数据，
+	// 调 /v1/models 会被 401；要探「能拉多少模型」必须用模型密钥。
+	// 两者分工不同，硬塞进一个字段只会让人以为是「令牌无效」。
+	ModelKey string `json:"model_key"`
+	Kind     string `json:"kind"` // 留空=自动判断：nap_/用户ID→newapi，sk_+deepseek域名→deepseek，否则通用
 }
 
 // AdminAiChannelMonitor POST /api/admin/ai/channel-monitor
@@ -74,8 +79,16 @@ func AdminAiChannelMonitor(c *gin.Context) {
 	}
 
 	// ── 1. 连通性 + 可用模型数（最便宜的一步，先给个确定结论）──
-	modelsN, probeErr := probeUpstreamModels(base, token, uid)
-	if probeErr != "" {
+	// 账户令牌（nap_）不用于调用模型，直接跳过硬探，否则只会拿到一个误导性的 401。
+	probeKey := strings.TrimSpace(req.ModelKey)
+	if probeKey == "" && !strings.HasPrefix(token, "nap_") {
+		probeKey = token
+	}
+	if probeKey == "" {
+		out["probe_ok"] = false
+		out["probe_skipped"] = true
+		out["probe_error"] = "账户令牌（nap_）不能用于调用模型接口，已跳过模型列表探测；如需探测可用模型，请填「模型密钥」（sk_）"
+	} else if modelsN, probeErr := probeUpstreamModels(base, probeKey, uid); probeErr != "" {
 		out["probe_ok"] = false
 		out["probe_error"] = probeErr
 	} else {

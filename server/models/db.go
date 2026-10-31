@@ -58,6 +58,8 @@ func AllModels() []interface{} {
 		&HTMLQuotaOverride{},
 		// 渠道余额采样（估算「单次请求消耗多少货币单位」的依据）
 		&ChannelBalanceSample{},
+		// 渠道卡密池（上游 API Key 按渠道归属，同一 base_url 下的模型共用）
+		&AiChannelKey{},
 		// 用户投稿智能体（提交 → 站长审核 → 广场上架）
 		&AgentSubmission{},
 		// 全量 Web 访问日志（功能二：前台网络诊断 / 用户分布 / 攻击流量面板）

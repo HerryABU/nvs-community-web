@@ -21,7 +21,7 @@ type AiModelKey struct {
 	ID         uint       `gorm:"primaryKey" json:"id"`
 	ModelID    uint       `gorm:"not null;index" json:"model_id"`
 	Label      string     `gorm:"size:64;default:''" json:"label"`
-	KeyEnc     string     `gorm:"type:text" json:"-"`     // 密文，只写不读
+	KeyEnc     string     `gorm:"type:text" json:"-"` // 密文，只写不读
 	Weight     int        `gorm:"not null;default:1" json:"weight"`
 	Enabled    bool       `gorm:"not null;default:true" json:"enabled"`
 	FailCount  int        `gorm:"not null;default:0" json:"fail_count"`
@@ -172,29 +172,57 @@ func ReportAiModelKey(keyID uint, ok bool) {
 
 // ModelKeyLease 一次调用占用的密钥（含来源信息，便于上报与排查）
 type ModelKeyLease struct {
-	Key    string
-	KeyID  uint // 0 表示来自模型自带密钥（非池）
-	Source string
+	Key string
+	// KeyID 模型密钥池的 id（老表，兼容保留）
+	KeyID uint
+	// ChannelKeyID 渠道卡密池的 id —— 现在的首选来源
+	ChannelKeyID uint
+	Source       string // channel_pool / pool / model
 }
 
 // OK 上报成功
 func (l *ModelKeyLease) OK() {
-	if l != nil && l.KeyID > 0 {
+	if l == nil {
+		return
+	}
+	if l.ChannelKeyID > 0 {
+		ReportAiChannelKey(l.ChannelKeyID, true)
+	}
+	if l.KeyID > 0 {
 		ReportAiModelKey(l.KeyID, true)
 	}
 }
 
 // Fail 上报失败
 func (l *ModelKeyLease) Fail() {
-	if l != nil && l.KeyID > 0 {
+	if l == nil {
+		return
+	}
+	if l.ChannelKeyID > 0 {
+		ReportAiChannelKey(l.ChannelKeyID, false)
+	}
+	if l.KeyID > 0 {
 		ReportAiModelKey(l.KeyID, false)
 	}
 }
 
-// AcquireModelKey 取一把可用密钥：优先密钥池，其次模型自带密钥
+// AcquireModelKey 取一把可用密钥。
+//
+// 顺序（改动要点）：**渠道卡密池 → 模型密钥池 → 模型自带密钥**。
+// 为什么渠道优先：同一条 base_url 下的模型共用同一批上游密钥，
+// 按渠道池化才能让「轮询 / 熔断 / 停用」真正生效（按模型各算一套等于没有熔断）；
+// 后两级是升级前的老配置，保留它老站点不用改任何设置也能继续跑。
 func AcquireModelKey(m *AiModel) (*ModelKeyLease, error) {
 	if m == nil {
 		return nil, fmt.Errorf("模型不存在")
+	}
+	if ck := PickAiChannelKey(m.BaseURL); ck != nil {
+		if plain, err := DecryptAiChannelKey(ck); err != nil {
+			// 单张卡密解密失败不阻断整体：计入失败并继续往下找
+			ReportAiChannelKey(ck.ID, false)
+		} else if strings.TrimSpace(plain) != "" {
+			return &ModelKeyLease{Key: plain, ChannelKeyID: ck.ID, Source: "channel_pool"}, nil
+		}
 	}
 	if k := PickAiModelKey(m.ID); k != nil {
 		plain, err := DecryptAiModelKey(k)

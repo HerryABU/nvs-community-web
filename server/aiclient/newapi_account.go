@@ -152,16 +152,21 @@ func QueryNewAPIRecentLogs(baseURL, accessToken, userID string, pageSize int, ti
 		return nil, "令牌无「查看日志」权限：请到中转站权限页勾选 Usage/Logs 读取后换新令牌"
 	}
 
+	// 两种返回结构都要兼容（真实站点实测差异）：
+	//   · 部分站点：{"data": [ ... ]}
+	//   · New API 新版：{"data": {"page":1,"total":131,"items":[ ... ]}}
+	// 只认第一种会表现为「账户明明有 131 条日志，面板却显示解析失败」。
+	type logItem struct {
+		ModelName        string      `json:"model_name"`
+		Quota            json.Number `json:"quota"`
+		CreatedAt        int64       `json:"created_at"`
+		PromptTokens     int64       `json:"prompt_tokens"`
+		CompletionTokens int64       `json:"completion_tokens"`
+	}
 	var body struct {
-		Success bool   `json:"success"`
-		Message string `json:"message"`
-		Data    []struct {
-			ModelName        string      `json:"model_name"`
-			Quota            json.Number `json:"quota"`
-			CreatedAt        int64       `json:"created_at"`
-			PromptTokens     int64       `json:"prompt_tokens"`
-			CompletionTokens int64       `json:"completion_tokens"`
-		} `json:"data"`
+		Success bool            `json:"success"`
+		Message string          `json:"message"`
+		Data    json.RawMessage `json:"data"`
 	}
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return nil, "响应解析失败（可能不是 New API 站点）"
@@ -169,8 +174,22 @@ func QueryNewAPIRecentLogs(baseURL, accessToken, userID string, pageSize int, ti
 	if !body.Success && body.Message != "" {
 		return nil, body.Message
 	}
-	out := make([]NewAPILog, 0, len(body.Data))
-	for _, l := range body.Data {
+
+	var items []logItem
+	if len(body.Data) > 0 {
+		if err := json.Unmarshal(body.Data, &items); err != nil {
+			var paged struct {
+				Items []logItem `json:"items"`
+			}
+			if err2 := json.Unmarshal(body.Data, &paged); err2 != nil {
+				return nil, "日志结构无法识别（既不是数组也不是 items 分页）"
+			}
+			items = paged.Items
+		}
+	}
+
+	out := make([]NewAPILog, 0, len(items))
+	for _, l := range items {
 		q, _ := l.Quota.Float64()
 		out = append(out, NewAPILog{
 			ModelName: l.ModelName,

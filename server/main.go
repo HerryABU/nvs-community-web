@@ -354,6 +354,8 @@ func main() {
 		public.GET("/site-iframe", handlers.GetSiteIframe)
 		// 首页形态（novels/blogs/forum/feed）：前端据此决定首页渲染哪套视图
 		public.GET("/home-view", handlers.GetHomeView)
+		// 给用户看的模型价目表（只含启用中模型与单价，不含上游地址/密钥）
+		public.GET("/ai/pricing", handlers.AiPublicPricing)
 		// 智能体投稿开关（前台据此决定是否显示「投稿」入口；投稿本身需登录）
 		public.GET("/ai/agents/submit-config", handlers.AiAgentSubmitConfig)
 		// AI 工作台左栏自定义菜单（站长设置，前台只取已启用项）
@@ -1034,6 +1036,12 @@ func main() {
 		admin.GET("/ai/usage-stats", handlers.AdminAiUsageStats)
 		// 渠道监控：临时输入令牌 + 用户 ID 探一次余额/连通性/最近扣费（不落库）
 		admin.POST("/ai/channel-monitor", handlers.AdminAiChannelMonitor)
+		// 渠道卡密池：一条渠道一个池，池内多把按权重轮询、连败自动摘除
+		admin.GET("/ai/channel-keys", handlers.AdminListAiChannelKeys)
+		admin.POST("/ai/channel-keys", handlers.AdminCreateAiChannelKey)
+		admin.PATCH("/ai/channel-keys/:id", handlers.AdminUpdateAiChannelKey)
+		admin.DELETE("/ai/channel-keys/:id", handlers.AdminDeleteAiChannelKey)
+		admin.POST("/ai/channel-keys/:id/test", handlers.AdminTestAiChannelKey)
 
 		// API 卡池（多密钥轮询）
 		admin.GET("/ai/models/:id/keys", handlers.AdminListAiModelKeys)
@@ -1776,6 +1784,13 @@ func initDatabase() error {
 	handlers.ReloadXssRules() // 加载管理员配置的 XSS 正则规则
 	handlers.ReloadBadWords() // 加载管理员配置的违禁词库规则
 	initDefaultAdmin()
+	// 老站点升级：把「按模型存的密钥」并入「渠道卡密池」。
+	// 幂等（按 base_url + 密钥指纹判重），只增不改，老配置继续作为兜底。
+	if n, err := models.MigrateModelKeysToChannels(); err != nil {
+		log.Printf("[ai] 渠道卡密池迁移失败（不影响启动）：%v", err)
+	} else if n > 0 {
+		log.Printf("[ai] 渠道卡密池迁移完成：新增 %d 把卡密", n)
+	}
 	log.Println("数据库迁移完成")
 	return nil
 }

@@ -238,14 +238,7 @@
             <div class="hm-card">
               <h4 class="chart-title">模型选择热度（近 30 天）</h4>
               <p class="chart-sub">用户实际点了哪个模型 —— 谁在承担主要流量</p>
-              <div v-if="aiTopModels.length" class="hot-list">
-                <div v-for="(m, i) in aiTopModels" :key="m.key" class="hot-row">
-                  <span class="hot-rank" :class="{ top: i < 3 }">{{ i + 1 }}</span>
-                  <span class="hot-word" :title="m.name">{{ m.name }}</span>
-                  <div class="hot-track"><div class="hot-fill" :style="{ width: reqPct(aiTopModels, m.requests) }"></div></div>
-                  <span class="hot-count">{{ m.requests }}</span>
-                </div>
-              </div>
+              <v-chart v-if="aiTopModels.length" :option="aiBarOption(aiTopModels)" autoresize class="ai-bar" />
               <StateBlock v-else state="empty" title="近 30 天没有 AI 调用" description="AI 工作台有实际对话后，这里会显示模型热度。" />
             </div>
           </el-col>
@@ -253,14 +246,7 @@
             <div class="hm-card">
               <h4 class="chart-title">渠道路由频次（近 30 天）</h4>
               <p class="chart-sub">路由把请求实际打到了哪条上游 —— 哪条渠道在扛量</p>
-              <div v-if="aiTopChannels.length" class="hot-list">
-                <div v-for="(c, i) in aiTopChannels" :key="c.key" class="hot-row">
-                  <span class="hot-rank" :class="{ top: i < 3 }">{{ i + 1 }}</span>
-                  <span class="hot-word host-text" :title="c.key">{{ c.name }}</span>
-                  <div class="hot-track"><div class="hot-fill" :style="{ width: reqPct(aiTopChannels, c.requests) }"></div></div>
-                  <span class="hot-count">{{ c.requests }}</span>
-                </div>
-              </div>
+              <v-chart v-if="aiTopChannels.length" :option="aiBarOption(aiTopChannels)" autoresize class="ai-bar" />
               <StateBlock v-else state="empty" title="没有渠道调用记录" description="路由命中后会按上游地址聚合到这里。" />
             </div>
           </el-col>
@@ -455,10 +441,45 @@ function wcStyle(w: { word: string; count: number }) {
   };
 }
 
-// AI 排行用 requests 字段，与热词的 count 不是同一个 key，单列一支避免互相牵连
-function reqPct(list: { requests: number }[], v: number) {
-  const max = Math.max(1, ...list.map((x) => x.requests));
-  return Math.max(4, Math.round((v / max) * 100)) + '%';
+// AI 排行图：横向柱状 —— 模型名/渠道地址普遍很长，纵向柱子会把标签压成省略号。
+// 倒序传入让「第一名在最上面」，符合排行榜直觉；数值直接标在柱尾，不用悬停才看到。
+function aiBarOption(list: { name: string; requests: number; tokens?: number }[]) {
+  const rows = [...list].sort((a, b) => a.requests - b.requests);
+  const isDark = document.documentElement.classList.contains('dark');
+  const axis = isDark ? '#94a3b8' : '#64748b';
+  const split = isDark ? 'rgba(148,163,184,0.18)' : 'rgba(148,163,184,0.22)';
+  return {
+    grid: { left: 8, right: 56, top: 8, bottom: 8, containLabel: true },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (ps: any[]) => {
+        const p = ps[0];
+        const row = rows[p.dataIndex];
+        const tok = row.tokens ? `<br/>tokens ${row.tokens.toLocaleString()}` : '';
+        return `${p.name}<br/>请求 ${row.requests}${tok}`;
+      },
+    },
+    xAxis: { type: 'value', axisLabel: { color: axis, fontSize: 10 }, splitLine: { lineStyle: { color: split } } },
+    yAxis: {
+      type: 'category',
+      data: rows.map((r) => r.name),
+      axisLabel: { color: axis, fontSize: 10, width: 150, overflow: 'truncate' },
+      axisLine: { lineStyle: { color: split } },
+      axisTick: { show: false },
+    },
+    series: [{
+      type: 'bar',
+      data: rows.map((r) => r.requests),
+      barMaxWidth: 14,
+      itemStyle: {
+        borderRadius: [0, 6, 6, 0],
+        color: { type: 'linear', x: 0, y: 0, x2: 1, y2: 0,
+          colorStops: [{ offset: 0, color: '#6366f1' }, { offset: 1, color: '#14b8a6' }] },
+      },
+      label: { show: true, position: 'right', color: axis, fontSize: 10 },
+    }],
+  };
 }
 
 function hotPct(list: { count: number }[], count: number) {
@@ -708,6 +729,9 @@ onMounted(() => { loadDashboard(); checkFiling(); loadVisitorTrend(); });
   width: 46px; text-align: right; flex: none;
   color: var(--text-light, #64748b); font-variant-numeric: tabular-nums;
 }
+
+/* AI 排行横向柱状图：高度随条目数自适应（最多 8 条） */
+.ai-bar { width: 100%; height: 248px; }
 
 /* 渠道地址较长：等宽 + 省略，避免把进度条挤没 */
 .hot-word.host-text { font-family: var(--font-mono, ui-monospace, Menlo, monospace); font-size: 0.74rem; }

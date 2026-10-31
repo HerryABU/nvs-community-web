@@ -144,13 +144,19 @@
         <el-table v-if="channelGroups.length" :data="channelGroups" style="width:100%" size="small">
           <el-table-column prop="base_url" label="上游地址" min-width="280" show-overflow-tooltip />
           <el-table-column prop="models" label="模型数" width="90" />
-          <el-table-column label="密钥" width="100">
+          <el-table-column label="卡密池" width="130">
             <template #default="{ row }">
-              <el-tag size="small" :type="row.hasKey ? 'success' : 'info'">{{ row.hasKey ? '已配置' : '未配置' }}</el-tag>
+              <el-tag v-if="keyStats[row.base_url]" size="small"
+                :type="keyStats[row.base_url].enabled > 0 ? 'success' : 'warning'">
+                {{ keyStats[row.base_url].enabled }} / {{ keyStats[row.base_url].total }} 可用
+              </el-tag>
+              <el-tag v-else-if="row.hasKey" size="small" type="info">模型自带</el-tag>
+              <el-tag v-else size="small" type="danger">未配置</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="120">
+          <el-table-column label="操作" width="170">
             <template #default="{ row }">
+              <el-button link size="small" type="primary" @click="openChannelKeys(row.base_url)">卡密池</el-button>
               <el-button link size="small" @click="switchLevel2('model')">查看模型</el-button>
             </template>
           </el-table-column>
@@ -272,7 +278,9 @@
           <el-table-column prop="priority" label="优先级" width="80" />
           <el-table-column label="操作" width="268" fixed="right">
             <template #default="{ row }">
-              <el-button size="small" text type="primary" @click="openKeys(row)">密钥池</el-button>
+              <el-tooltip content="按模型的旧密钥池（兼容保留）。新配置请到「按渠道 → 卡密池」，同一渠道下的模型共用。" placement="top">
+                <el-button size="small" text @click="openKeys(row)">旧密钥池</el-button>
+              </el-tooltip>
               <el-button size="small" text type="warning" @click="openChannel(row)">对账</el-button>
               <el-button size="small" text type="primary" @click="openEdit(row)">编辑</el-button>
               <el-button size="small" text type="danger" @click="removeModel(row)">删除</el-button>
@@ -435,6 +443,56 @@
       </div>
     </el-dialog>
 
+    <!-- ============ 渠道卡密池（按渠道，模型共用） ============ -->
+    <el-dialog v-model="ckDialog" title="渠道卡密池" width="780px">
+      <div class="ch-overview-tip">
+        卡密池归属<b>渠道</b>而不是模型：同一条渠道下的所有模型共用这个池，按权重轮询、连续失败自动摘除。
+        模型只记录「走哪条渠道」。
+        <br />当前渠道：<code class="mono">{{ ckBase }}</code>
+      </div>
+
+      <div class="key-add">
+        <el-input v-model="ckForm.keys" type="textarea" :rows="3"
+          placeholder="粘贴卡密，一行一把（也支持逗号分隔）；同渠道重复的会自动跳过" />
+        <div class="key-add-row">
+          <el-input v-model="ckForm.label" placeholder="标签（可选，留空自动编号）" style="width:200px" />
+          <el-input-number v-model="ckForm.weight" :min="1" :max="100" style="width:120px" />
+          <el-button type="primary" :loading="ckSaving" @click="ckAdd">添加</el-button>
+          <span class="muted small">权重越大被选中概率越高</span>
+        </div>
+      </div>
+
+      <el-table :data="ckList" size="small" max-height="300" stripe>
+        <template #empty>
+          <StateBlock state="empty" compact title="这个渠道还没有卡密"
+            description="老站点升级会自动把模型里已存的密钥迁移过来；也可在上方粘贴新增。" />
+        </template>
+        <el-table-column prop="label" label="标签" min-width="130" show-overflow-tooltip />
+        <el-table-column prop="hint" label="卡密" width="110">
+          <template #default="{ row }"><span class="mono">{{ row.hint || '—' }}</span></template>
+        </el-table-column>
+        <el-table-column prop="weight" label="权重" width="70" />
+        <el-table-column label="状态" width="150">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag>
+            <span v-if="row.fail_count > 0" class="key-fail">连败 {{ row.fail_count }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="累计 成功/失败" width="130">
+          <template #default="{ row }">
+            <span class="muted small">{{ row.success_total }} / {{ row.fail_total }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="190">
+          <template #default="{ row }">
+            <el-button link size="small" :loading="row._testing" @click="ckTest(row)">测试</el-button>
+            <el-button link size="small" @click="ckToggle(row)">{{ row.enabled ? '停用' : '启用' }}</el-button>
+            <el-button link size="small" type="danger" @click="ckRemove(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
     <!-- ============ 渠道监控（临时令牌，不落库） ============ -->
     <el-dialog v-model="monDialog" title="渠道监控" width="680px">
       <div class="ch-overview-tip">
@@ -453,6 +511,11 @@
         <el-form-item label="用户 ID">
           <el-input v-model="mon.user_id" placeholder="中转站的数字用户 ID（New-Api-User），官方渠道留空" />
         </el-form-item>
+        <el-form-item label="模型密钥">
+          <el-input v-model="mon.model_key" type="password" show-password
+            placeholder="可选，sk_ 开头；用来探测「这条渠道能拉到多少模型」" />
+          <span class="muted small">账户令牌 nap_ 不能调模型接口，探模型列表要用 sk_</span>
+        </el-form-item>
         <el-form-item label="查询方式">
           <el-select v-model="mon.kind" style="width:220px">
             <el-option label="自动判断" value="" />
@@ -466,8 +529,8 @@
       <div v-if="monResult" class="mon-result">
         <div class="mon-row">
           <span class="mon-k">连通性</span>
-          <el-tag :type="monResult.probe_ok ? 'success' : 'danger'" size="small">
-            {{ monResult.probe_ok ? '正常' : '失败' }}
+          <el-tag :type="monResult.probe_ok ? 'success' : (monResult.probe_skipped ? 'info' : 'danger')" size="small">
+            {{ monResult.probe_ok ? '正常' : (monResult.probe_skipped ? '已跳过' : '失败') }}
           </el-tag>
           <span class="muted small" v-if="monResult.probe_ok">可用模型 {{ monResult.model_count }} 个</span>
           <span class="mon-bad small" v-else>{{ monResult.probe_error }}</span>
@@ -1221,10 +1284,103 @@ const pullCols = reactive<Record<string, boolean>>({
   family: true, version: true, variant: true, build: true, vendor: false, channel: true,
 });
 
+// ---------- 渠道卡密池 ----------
+const ckDialog = ref(false);
+const ckBase = ref('');
+const ckSaving = ref(false);
+const ckList = ref<any[]>([]);
+const ckStats = ref<Record<string, { total: number; enabled: number; disabled: number }>>({});
+const ckForm = reactive({ keys: '', label: '', weight: 1 });
+
+async function ckOpen(baseURL: string) {
+  ckBase.value = baseURL;
+  ckDialog.value = true;
+  ckForm.keys = '';
+  ckForm.label = '';
+  ckForm.weight = 1;
+  await ckReload();
+}
+
+async function ckReload() {
+  if (!ckBase.value) return;
+  try {
+    const res = await aiApi.channelKeys(ckBase.value);
+    if (res.data.code === 0) {
+      ckList.value = res.data.data.list || [];
+      const enabled = ckList.value.filter((k) => k.enabled).length;
+      ckStats.value = { ...ckStats.value, [ckBase.value]: { total: ckList.value.length, enabled, disabled: ckList.value.length - enabled } };
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '读取卡密失败');
+  }
+}
+
+async function ckAdd() {
+  if (!ckForm.keys.trim()) {
+    ElMessage.warning('请粘贴至少一把卡密');
+    return;
+  }
+  ckSaving.value = true;
+  try {
+    const res = await aiApi.addChannelKeys({
+      base_url: ckBase.value, keys: ckForm.keys, label: ckForm.label, weight: ckForm.weight,
+    });
+    if (res.data.code === 0) {
+      ElMessage.success(res.data.data.message);
+      ckForm.keys = '';
+      await ckReload();
+      loadModels();
+    } else {
+      ElMessage.error(res.data.message || '添加失败');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '添加失败');
+  } finally {
+    ckSaving.value = false;
+  }
+}
+
+async function ckToggle(row: any) {
+  try {
+    await aiApi.updateChannelKey(row.id, { base_url: ckBase.value, enabled: !row.enabled });
+    await ckReload();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
+async function ckRemove(row: any) {
+  try {
+    await ElMessageBox.confirm(`删除卡密「${row.label || row.hint}」？此操作不可恢复。`, '确认删除', { type: 'warning' });
+  } catch { return; }
+  try {
+    await aiApi.deleteChannelKey(row.id);
+    ElMessage.success('已删除');
+    await ckReload();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '删除失败');
+  }
+}
+
+async function ckTest(row: any) {
+  row._testing = true;
+  try {
+    const res = await aiApi.testChannelKey(row.id, ckBase.value);
+    const d = res.data?.data;
+    if (d?.ok) ElMessage.success(`连通正常，可用模型 ${d.model_count ?? '?'} 个`);
+    else ElMessage.error(d?.error || '连通失败');
+    await ckReload();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '测试失败');
+  } finally {
+    row._testing = false;
+  }
+}
+
 // ---------- 渠道监控（临时令牌，不落库） ----------
 const monDialog = ref(false);
 const monLoading = ref(false);
-const mon = reactive({ base_url: '', token: '', user_id: '', kind: '' });
+const mon = reactive({ base_url: '', token: '', user_id: '', model_key: '', kind: '' });
 const monResult = ref<any>(null);
 
 function openMonitor() {
@@ -1244,6 +1400,7 @@ async function runMonitor() {
       base_url: mon.base_url.trim(),
       token: mon.token.trim(),
       user_id: mon.user_id.trim(),
+      model_key: mon.model_key.trim(),
       kind: mon.kind,
     });
     if (res.data.code === 0) monResult.value = res.data.data;
@@ -2062,6 +2219,12 @@ async function saveCategoryPrice(p: AiCategoryPrice & { _saving?: boolean }) {
 .pull-col-toggles { display: flex; flex-direction: column; gap: 4px; }
 .pull-col-title { font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; color: var(--text-main, #1f2937); }
 .pull-col-tip { margin-top: 6px; font-size: 0.72rem; line-height: 1.5; color: var(--text-light, #999); }
+
+/* 渠道卡密池 */
+.key-add { margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
+.key-add-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.key-fail { margin-left: 6px; font-size: 0.72rem; color: var(--el-color-warning, #e6a23c); }
+.mono { font-family: var(--font-mono, ui-monospace, Menlo, monospace); font-size: 0.78rem; }
 
 /* 渠道监控 */
 .mon-form { margin-top: 4px; }

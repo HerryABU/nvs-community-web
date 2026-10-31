@@ -259,8 +259,35 @@ export const aiApi = {
     }>('/admin/ai/usage-stats', { params: { dim, days } });
   },
 
+  // ---------- 渠道卡密池（一条渠道一个池，模型共用） ----------
+  channelKeys(base_url: string) {
+    return api.get<{ code: number; data: { list: AiChannelKey[]; total: number; max_fail: number } }>(
+      '/admin/ai/channel-keys',
+      { params: { base_url } },
+    );
+  },
+  addChannelKeys(data: { base_url: string; keys: string; label?: string; note?: string; weight?: number }) {
+    return api.post<{ code: number; data: { message: string; added: number; dups: number; failed: number } }>(
+      '/admin/ai/channel-keys',
+      data,
+    );
+  },
+  updateChannelKey(id: number, data: { base_url: string; label?: string; weight?: number; enabled?: boolean }) {
+    return api.patch(`/admin/ai/channel-keys/${id}`, data);
+  },
+  deleteChannelKey(id: number) {
+    return api.delete(`/admin/ai/channel-keys/${id}`);
+  },
+  testChannelKey(id: number, base_url: string) {
+    return api.post<{ code: number; data: { ok: boolean; model_count?: number; error?: string } }>(
+      `/admin/ai/channel-keys/${id}/test`,
+      {},
+      { params: { base_url } },
+    );
+  },
+
   // ---------- 渠道监控：临时输入令牌 + 用户 ID 探一次（后端不落库） ----------
-  channelMonitor(data: { base_url: string; token: string; user_id?: string; kind?: string }) {
+  channelMonitor(data: { base_url: string; token: string; user_id?: string; model_key?: string; kind?: string }) {
     return api.post<{ code: number; data: ChannelMonitorResult }>('/admin/ai/channel-monitor', data);
   },
 
@@ -592,6 +619,7 @@ export interface ChannelMonitorResult {
   kind: string;
   base_url: string;
   probe_ok: boolean;
+  probe_skipped?: boolean;
   probe_error?: string;
   model_count?: number;
   balance_ok: boolean;
@@ -601,4 +629,20 @@ export interface ChannelMonitorResult {
   currency?: string;
   logs_error?: string;
   recent_logs?: { model_name: string; quota: number; tokens_in: number; tokens_out: number; created_at: number }[];
+}
+
+// 渠道卡密（上游 API Key，按渠道归属；明文永不回传，只有尾 4 位提示）
+export interface AiChannelKey {
+  id: number;
+  base_url: string;
+  label: string;
+  weight: number;
+  enabled: boolean;
+  fail_count: number;
+  success_total: number;
+  fail_total: number;
+  last_fail_at?: string;
+  last_used_at?: string;
+  note: string;
+  hint: string;
 }
