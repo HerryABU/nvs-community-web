@@ -10,6 +10,7 @@ package routes
 
 import (
 	"nvs-server/handlers"
+	"nvs-server/handlers/ai"
 	"nvs-server/middleware"
 	"nvs-server/security"
 
@@ -189,14 +190,14 @@ func registerAdminArea(r *gin.Engine) {
 		admin.GET("/live", handlers.AdminLive)
 		admin.PUT("/live", handlers.SaveLive)
 		// ===== 语音模型 / 转化漏斗 =====
-		admin.GET("/ai/audio-models", handlers.AdminSpeechModels)
-		admin.GET("/ai/funnel", handlers.AiFunnel)
+		admin.GET("/ai/audio-models", ai.AdminSpeechModels)
+		admin.GET("/ai/funnel", ai.AiFunnel)
 		// 全站总预算 + 并发排队 / 三维限流
-		admin.GET("/ai/budget", handlers.GetAiBudget)
-		admin.PUT("/ai/budget", handlers.SaveAiBudget)
-		admin.GET("/ai/throttle", handlers.GetAiThrottle)
-		admin.PUT("/ai/throttle", handlers.SaveAiThrottle)
-		admin.GET("/ai/agent-usage", handlers.GetAiAgentUsage)
+		admin.GET("/ai/budget", ai.GetAiBudget)
+		admin.PUT("/ai/budget", ai.SaveAiBudget)
+		admin.GET("/ai/throttle", ai.GetAiThrottle)
+		admin.PUT("/ai/throttle", ai.SaveAiThrottle)
+		admin.GET("/ai/agent-usage", ai.GetAiAgentUsage)
 		// ===== 蜜罐：SQLi 命中与 TLS 采集率 =====
 		admin.GET("/honeypot/sqli", honeypothandler.SQLiStats)
 		admin.GET("/honeypot/tls", honeypothandler.TLSStats)
@@ -274,39 +275,39 @@ func registerAdminArea(r *gin.Engine) {
 		admin.POST("/token/adjust", handlers.AdminAdjustToken)
 		// AI 模型池（§5.3）：总开关 + 模型 CRUD（api_key 加密存储、只写不读）
 		// 独立子树 /ai：静态段，避让 :id 通配冲突
-		admin.GET("/ai/config", handlers.AdminGetAiConfig)
+		admin.GET("/ai/config", ai.AdminGetAiConfig)
 		// AIGC 内容标识（合规）
-		admin.GET("/aigc/config", handlers.AdminGetAigcConfig)
-		admin.PUT("/aigc/config", handlers.AdminSaveAigcConfig)
-		admin.GET("/aigc/exports", handlers.AdminListAigcExports)
-		admin.GET("/aigc/waivers", handlers.AdminListAigcWaivers)
-		admin.GET("/aigc/verify/:produce_id", handlers.AdminAigcVerify)
-		admin.POST("/aigc/font", handlers.AdminUploadAigcFont)
-		admin.PUT("/ai/config", handlers.AdminSetAiConfig)
-		admin.GET("/ai/models", handlers.AdminListAiModels)
+		admin.GET("/aigc/config", ai.AdminGetAigcConfig)
+		admin.PUT("/aigc/config", ai.AdminSaveAigcConfig)
+		admin.GET("/aigc/exports", ai.AdminListAigcExports)
+		admin.GET("/aigc/waivers", ai.AdminListAigcWaivers)
+		admin.GET("/aigc/verify/:produce_id", ai.AdminAigcVerify)
+		admin.POST("/aigc/font", ai.AdminUploadAigcFont)
+		admin.PUT("/ai/config", ai.AdminSetAiConfig)
+		admin.GET("/ai/models", ai.AdminListAiModels)
 		// AI 路由策略（最便宜/最快/场景）+ 失败降级开关
-		admin.GET("/ai/route", handlers.GetAiRouteConfig)
-		admin.PUT("/ai/route", handlers.UpdateAiRouteConfig)
-		admin.GET("/ai/presets", handlers.AdminAiModelPresets)
+		admin.GET("/ai/route", ai.GetAiRouteConfig)
+		admin.PUT("/ai/route", ai.UpdateAiRouteConfig)
+		admin.GET("/ai/presets", ai.AdminAiModelPresets)
 		// L5 渠道对账：拉取上游余额/消费 + 真实连通性探针
-		admin.GET("/ai/models/:id/channel", handlers.AdminAiModelChannel)
+		admin.GET("/ai/models/:id/channel", ai.AdminAiModelChannel)
 		// 按渠道聚合的余额一览（每条渠道还剩多少钱）
-		admin.GET("/ai/channels/balance", handlers.AdminChannelBalanceOverview)
+		admin.GET("/ai/channels/balance", ai.AdminChannelBalanceOverview)
 		// 模型统计：按渠道 / 模型 / 厂商聚合调用量、tokens、代扣与成功率
-		admin.GET("/ai/usage-stats", handlers.AdminAiUsageStats)
+		admin.GET("/ai/usage-stats", ai.AdminAiUsageStats)
 		// 渠道监控：临时输入令牌 + 用户 ID 探一次余额/连通性/最近扣费（不落库）
-		admin.POST("/ai/channel-monitor", handlers.AdminAiChannelMonitor)
+		admin.POST("/ai/channel-monitor", ai.AdminAiChannelMonitor)
 		// 渠道账户凭据（nap_/sk_ 加密入库）：保存一次，之后监控与「拉取模型」都不用再粘贴
-		admin.GET("/ai/channel-accounts", handlers.AdminListChannelAccounts)
-		admin.GET("/ai/channel-account", handlers.AdminGetChannelAccount)
-		admin.POST("/ai/channel-account", handlers.AdminSaveChannelAccount)
-		admin.DELETE("/ai/channel-account/:id", handlers.AdminDeleteChannelAccount)
+		admin.GET("/ai/channel-accounts", ai.AdminListChannelAccounts)
+		admin.GET("/ai/channel-account", ai.AdminGetChannelAccount)
+		admin.POST("/ai/channel-account", ai.AdminSaveChannelAccount)
+		admin.DELETE("/ai/channel-account/:id", ai.AdminDeleteChannelAccount)
 		// 渠道卡密池：一条渠道一个池，池内多把按权重轮询、连败自动摘除
-		admin.GET("/ai/channel-keys", handlers.AdminListAiChannelKeys)
-		admin.POST("/ai/channel-keys", handlers.AdminCreateAiChannelKey)
-		admin.PATCH("/ai/channel-keys/:id", handlers.AdminUpdateAiChannelKey)
-		admin.DELETE("/ai/channel-keys/:id", handlers.AdminDeleteAiChannelKey)
-		admin.POST("/ai/channel-keys/:id/test", handlers.AdminTestAiChannelKey)
+		admin.GET("/ai/channel-keys", ai.AdminListAiChannelKeys)
+		admin.POST("/ai/channel-keys", ai.AdminCreateAiChannelKey)
+		admin.PATCH("/ai/channel-keys/:id", ai.AdminUpdateAiChannelKey)
+		admin.DELETE("/ai/channel-keys/:id", ai.AdminDeleteAiChannelKey)
+		admin.POST("/ai/channel-keys/:id/test", ai.AdminTestAiChannelKey)
 
 		// API 卡池（多密钥轮询）
 		admin.GET("/ai/models/:id/keys", handlers.AdminListAiModelKeys)
@@ -316,10 +317,10 @@ func registerAdminArea(r *gin.Engine) {
 		admin.POST("/ai/models/:id/keys/test", handlers.AdminTestAiModelKey)
 
 		// 风格字典 / 扣子默认配置
-		admin.GET("/ai/styles", handlers.AdminListAiStyles)
-		admin.POST("/ai/styles", handlers.AdminCreateAiStyle)
-		admin.PUT("/ai/styles/:id", handlers.AdminUpdateAiStyle)
-		admin.DELETE("/ai/styles/:id", handlers.AdminDeleteAiStyle)
+		admin.GET("/ai/styles", ai.AdminListAiStyles)
+		admin.POST("/ai/styles", ai.AdminCreateAiStyle)
+		admin.PUT("/ai/styles/:id", ai.AdminUpdateAiStyle)
+		admin.DELETE("/ai/styles/:id", ai.AdminDeleteAiStyle)
 		admin.GET("/ai/coze-default", handlers.AdminGetAiCozeDefault)
 		admin.PUT("/ai/coze-default", handlers.AdminSetAiCozeDefault)
 
@@ -338,15 +339,15 @@ func registerAdminArea(r *gin.Engine) {
 		admin.PUT("/ai/features", handlers.AdminSetAiFeatures)
 
 		// AI 内容安全闸（提示词 + 用户特征 + 蓝队模型 B）
-		admin.GET("/ai/safety/config", handlers.GetAiSafetyConfig)
-		admin.PUT("/ai/safety/config", handlers.SaveAiSafetyConfig)
-		admin.POST("/ai/safety/config/reset", handlers.ResetAiSafetyConfig)
-		admin.GET("/ai/safety/events", handlers.ListAiSafetyEvents)
-		admin.GET("/ai/safety/profiles", handlers.ListAiSafetyProfiles)
-		admin.POST("/ai/safety/profiles/:uid/clear", handlers.ClearAiSafetyCooldown)
-		admin.POST("/ai/safety/profiles/:uid/reset", handlers.ResetAiSafetyProfile)
-		admin.GET("/ai/safety/judge-logs", handlers.ListJudgeLogs)
-		admin.GET("/ai/safety/stats", handlers.AiSafetyStats)
+		admin.GET("/ai/safety/config", ai.GetAiSafetyConfig)
+		admin.PUT("/ai/safety/config", ai.SaveAiSafetyConfig)
+		admin.POST("/ai/safety/config/reset", ai.ResetAiSafetyConfig)
+		admin.GET("/ai/safety/events", ai.ListAiSafetyEvents)
+		admin.GET("/ai/safety/profiles", ai.ListAiSafetyProfiles)
+		admin.POST("/ai/safety/profiles/:uid/clear", ai.ClearAiSafetyCooldown)
+		admin.POST("/ai/safety/profiles/:uid/reset", ai.ResetAiSafetyProfile)
+		admin.GET("/ai/safety/judge-logs", ai.ListJudgeLogs)
+		admin.GET("/ai/safety/stats", ai.AiSafetyStats)
 
 		// 社区舆情守卫（话题驱动条件拦截 + 词表 + 命中留证）
 		admin.GET("/sentiment/config", handlers.GetSentimentConfig)
@@ -361,8 +362,8 @@ func registerAdminArea(r *gin.Engine) {
 		admin.GET("/sentiment/topics", handlers.GetContentTopic)
 		admin.PUT("/sentiment/topics", handlers.SetContentTopic)
 		admin.POST("/sentiment/run-update", handlers.RunSentimentUpdate)
-		admin.GET("/ai/safety/locked-sessions", handlers.ListLockedSessions)
-		admin.POST("/ai/safety/sessions/:sid/unlock", handlers.UnlockChatSession)
+		admin.GET("/ai/safety/locked-sessions", ai.ListLockedSessions)
+		admin.POST("/ai/safety/sessions/:sid/unlock", ai.UnlockChatSession)
 		admin.GET("/ai/vendors", handlers.AdminListAiVendors)
 		admin.POST("/ai/vendors", handlers.AdminCreateAiVendor)
 		admin.PUT("/ai/vendors/:id", handlers.AdminUpdateAiVendor)
@@ -380,37 +381,37 @@ func registerAdminArea(r *gin.Engine) {
 
 		// 个人信息泄漏提示统计（仅类型计数，无内容）
 		admin.GET("/security/leak-hint/stats", handlers.AdminLeakHintStats)
-		admin.POST("/ai/models", handlers.AdminCreateAiModel)
-		admin.PUT("/ai/models/:id", handlers.AdminUpdateAiModel)
-		admin.DELETE("/ai/models/:id", handlers.AdminDeleteAiModel)
+		admin.POST("/ai/models", ai.AdminCreateAiModel)
+		admin.PUT("/ai/models/:id", ai.AdminUpdateAiModel)
+		admin.DELETE("/ai/models/:id", ai.AdminDeleteAiModel)
 		// AI 模型资产管理：渠道拉取 / 批量导入 / 可见性 / 按渠道合并拆分
-		admin.POST("/ai/models/pull", handlers.AdminPullAiModels)
-		admin.POST("/ai/models/import", handlers.AdminImportAiModels)
-		admin.POST("/ai/models/:id/visibility", handlers.AdminSetModelVisibility)
-		admin.POST("/ai/models/merge", handlers.AdminMergeModels)
-		admin.POST("/ai/models/split", handlers.AdminSplitModels)
+		admin.POST("/ai/models/pull", ai.AdminPullAiModels)
+		admin.POST("/ai/models/import", ai.AdminImportAiModels)
+		admin.POST("/ai/models/:id/visibility", ai.AdminSetModelVisibility)
+		admin.POST("/ai/models/merge", ai.AdminMergeModels)
+		admin.POST("/ai/models/split", ai.AdminSplitModels)
 		// AI 智能体管理（§5.4）：预设增删改
-		admin.GET("/ai/agents", handlers.AdminListAiAgents)
-		admin.POST("/ai/agents", handlers.AdminCreateAiAgent)
-		admin.PUT("/ai/agents/:id", handlers.AdminUpdateAiAgent)
-		admin.DELETE("/ai/agents/:id", handlers.AdminDeleteAiAgent)
+		admin.GET("/ai/agents", ai.AdminListAiAgents)
+		admin.POST("/ai/agents", ai.AdminCreateAiAgent)
+		admin.PUT("/ai/agents/:id", ai.AdminUpdateAiAgent)
+		admin.DELETE("/ai/agents/:id", ai.AdminDeleteAiAgent)
 		// 智能体投稿审核（用户提交 → 站长审 → 广场上架）
-		admin.GET("/agent-submissions", handlers.AdminListAgentSubmissions)
-		admin.POST("/agent-submissions/:id/review", handlers.AdminReviewAgentSubmission)
-		admin.GET("/ai-nav-items", handlers.AdminGetAiNavItems)
-		admin.PUT("/ai-nav-items", handlers.AdminSaveAiNavItems)
-		admin.GET("/agent-submit-config", handlers.AdminGetAgentSubmitConfig)
-		admin.PUT("/agent-submit-config", handlers.AdminSaveAgentSubmitConfig)
+		admin.GET("/agent-submissions", ai.AdminListAgentSubmissions)
+		admin.POST("/agent-submissions/:id/review", ai.AdminReviewAgentSubmission)
+		admin.GET("/ai-nav-items", ai.AdminGetAiNavItems)
+		admin.PUT("/ai-nav-items", ai.AdminSaveAiNavItems)
+		admin.GET("/agent-submit-config", ai.AdminGetAgentSubmitConfig)
+		admin.PUT("/agent-submit-config", ai.AdminSaveAgentSubmitConfig)
 
 		// 免费 AI 额度（§5.3）：平台默认 + 按人覆盖（静态子树避让 :id 通配）
-		admin.GET("/ai/free-quota/config", handlers.AdminGetAiFreeQuotaConfig)
-		admin.PUT("/ai/free-quota/config", handlers.AdminSetAiFreeQuotaConfig)
-		admin.GET("/ai/free-quota/overrides", handlers.AdminListAiFreeQuotaOverrides)
-		admin.POST("/ai/free-quota/overrides", handlers.AdminManageAiFreeQuotaOverride)
+		admin.GET("/ai/free-quota/config", ai.AdminGetAiFreeQuotaConfig)
+		admin.PUT("/ai/free-quota/config", ai.AdminSetAiFreeQuotaConfig)
+		admin.GET("/ai/free-quota/overrides", ai.AdminListAiFreeQuotaOverrides)
+		admin.POST("/ai/free-quota/overrides", ai.AdminManageAiFreeQuotaOverride)
 
 		// @ai 评论机器人配置（§5.6）
-		admin.GET("/ai/bot/config", handlers.AdminGetAiBotConfig)
-		admin.PUT("/ai/bot/config", handlers.AdminSetAiBotConfig)
+		admin.GET("/ai/bot/config", ai.AdminGetAiBotConfig)
+		admin.PUT("/ai/bot/config", ai.AdminSetAiBotConfig)
 		// 在线支付通道（§7.4）：配置（密钥只写不读）/ 档位 / 订单列表 / 手动补单
 		admin.GET("/payment/config", handlers.AdminGetPaymentConfig)
 		admin.PUT("/payment/config", handlers.AdminSetPaymentConfig)

@@ -40,12 +40,12 @@ func GetMentionSource(c *gin.Context) {
 		overrideSet = models.GetSetting(models.MentionSourceWorkKey(targetType, targetID), "") != ""
 	}
 	utils.Success(c, gin.H{
-		"effective":     effective,
-		"site_default":  models.GetMentionSource(),
-		"can_edit":      canEdit,
-		"override_set":  overrideSet,
-		"is_admin":      isAdminUser(c),
-		"is_owner":      isOwnerOfWork(c, targetType, targetID),
+		"effective":    effective,
+		"site_default": models.GetMentionSource(),
+		"can_edit":     canEdit,
+		"override_set": overrideSet,
+		"is_admin":     isAdminUser(c),
+		"is_owner":     isOwnerOfWork(c, targetType, targetID),
 	})
 }
 

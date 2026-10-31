@@ -22,6 +22,7 @@ import (
 	"nvs-server/gmcmd"
 	"nvs-server/groups"
 	"nvs-server/handlers"
+	"nvs-server/handlers/ai"
 	"nvs-server/honeypot"
 	"nvs-server/middleware"
 	"nvs-server/models"
@@ -362,7 +363,7 @@ func initDatabase() error {
 		return err
 	}
 	// AIGC 标识：挂载站长自定义角标字体（没有就用内置 Noto Sans SC 子集）
-	handlers.InitAigcFont()
+	ai.InitAigcFont()
 	// 群组模块（独立功能包）建表：紧随主迁移，避免 models 包反向依赖子包
 	if err := groups.Migrate(models.DB); err != nil {
 		return err
