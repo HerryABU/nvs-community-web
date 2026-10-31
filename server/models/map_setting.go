@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"time"
 )
@@ -44,11 +45,25 @@ func LoadMapSetting() MapSetting {
 			return DefaultMapSetting()
 		}
 	}
+	// env 兜底：容器/裸机部署时可以用 TIANDITU_TK 注入，免得进后台点一遍。
+	// 仅在「数据库里完全没有填过」时生效，不会覆盖站长在后台显式填的值。
+	if strings.TrimSpace(c.TiandituKey) == "" {
+		if v := strings.TrimSpace(os.Getenv("TIANDITU_TK")); v != "" {
+			c.TiandituKey = v
+			if strings.TrimSpace(raw) == "" {
+				c.Provider = "tianditu" // 只注入了 key 就等于表态要用标准地图
+			}
+		}
+	}
 	if c.Provider != "offline" && c.Provider != "tianditu" {
 		c.Provider = "offline"
 	}
 	if c.Scope != "china" && c.Scope != "world" {
 		c.Scope = "china"
+	}
+	// 审图号同样支持 env 兜底（对外展示标准地图必须标注，别让站长漏了）
+	if strings.TrimSpace(c.ReviewNo) == "" {
+		c.ReviewNo = strings.TrimSpace(os.Getenv("MAP_REVIEW_NO"))
 	}
 	return c
 }

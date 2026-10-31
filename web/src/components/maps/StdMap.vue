@@ -28,15 +28,31 @@
           <span class="sm-dim">数据仅用于站内访问统计</span>
         </p>
       </template>
-      <!-- 没有密钥时：用内置省级示意边界（明确标注非审图件），不影响看数据 -->
+      <!-- 没有密钥时：**不画行政边界**（本地/第三方边界不是审图件，省界与国界表示也可能出错），
+           改为按省份排行呈现同一份数据 —— 数据不缺，只是不画不合规的底图。 -->
       <template v-else>
-        <ChinaGeoMap :data="data" :note="note" />
+        <div v-if="cnRows.length" class="sm-ranks">
+          <div class="sm-rank-head">
+            <span>国内访问来源（近 30 天 · 按省级）</span>
+            <span class="sm-dim">共 {{ cnTotal }} 次 · {{ cnRows.length }} 个省级行政区</span>
+          </div>
+          <div v-for="(r, i) in cnRows" :key="r.name" class="sm-rank-row">
+            <span class="sm-rank-no">{{ i + 1 }}</span>
+            <span class="sm-rank-name">{{ r.name }}</span>
+            <span class="sm-rank-bar"><i :style="{ width: barWidth(r.value, maxCn) }" /></span>
+            <span class="sm-rank-val">{{ r.value }}</span>
+          </div>
+        </div>
+        <StateBlock
+          v-else
+          state="empty"
+          title="近 30 天没有境内访问"
+          description="有访问后这里会按省份排行显示；配置天地图密钥后可直接看标准地图底图。"
+        />
         <p class="sm-source sm-warn">
-          本地离线示意边界（非审图件，仅国内）—— 正式对外展示请到后台配置天地图密钥并标注审图号
-        </p>
-        <p v-if="setting.provider === 'tianditu' && !setting.key_ready" class="sm-source">
-          已选择天地图但<span class="sm-warn">未填密钥</span>，因此暂用本地示意：
-          请到 <code>tianditu.gov.cn</code> 申请「浏览器端」tk，填到后台「访客设置 → 地图服务」。
+          未配置天地图密钥，因此<b>不渲染行政边界底图</b>（本地/第三方边界不是审图件，
+          对外展示存在合规风险）。这里用同一份本地 ip2region 数据以省份排行呈现。
+          需要真正的标准地图（中国 + 全球），请到后台「运营 → 地图服务」填天地图 tk。
         </p>
       </template>
     </template>
@@ -64,7 +80,7 @@
             <span class="sm-rank-no">{{ i + 1 }}</span>
             <span class="sm-rank-name">{{ r.name || r.code }}</span>
             <span class="sm-rank-bar">
-              <i :style="{ width: barWidth(r.value) }" />
+              <i :style="{ width: barWidth(r.value, maxOverseas) }" />
             </span>
             <span class="sm-rank-val">{{ r.value }}</span>
           </div>
@@ -78,7 +94,7 @@
         <p class="sm-source sm-warn">
           未配置天地图密钥，因此<b>不渲染世界边界底图</b>（第三方世界边界既不是审图件，
           也容易在国界表示上出错）。这里用同一份本地 ip2region 数据以国家排行呈现。
-          需要真正的全球标准地图，请在后台配置天地图 tk（天地图支持全球视野）。
+          需要真正的全球标准地图，请到后台「运营 → 地图服务」填天地图 tk（天地图支持全球视野）。
         </p>
       </template>
     </template>
@@ -88,7 +104,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import api from '@/api';
-import ChinaGeoMap from '@/components/ChinaGeoMap.vue';
 import StateBlock from '@/components/common/StateBlock.vue';
 
 interface MapSetting {
@@ -132,8 +147,19 @@ const overseasRows = computed(() =>
 const overseasTotal = computed(() => overseasRows.value.reduce((s, r) => s + r.value, 0));
 const maxOverseas = computed(() => Math.max(1, ...overseasRows.value.map((r) => r.value)));
 
-function barWidth(v: number) {
-  return `${Math.max(4, Math.round((v / maxOverseas.value) * 100))}%`;
+// 境内省级排行（未配天地图时的替代呈现：不画边界，但数据一条不少）
+const cnRows = computed(() =>
+  (props.data || [])
+    .filter((d) => d.value > 0)
+    .slice()
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 12),
+);
+const cnTotal = computed(() => (props.data || []).reduce((s, d) => s + d.value, 0));
+const maxCn = computed(() => Math.max(1, ...cnRows.value.map((r) => r.value)));
+
+function barWidth(v: number, max: number) {
+  return `${Math.max(4, Math.round((v / Math.max(1, max)) * 100))}%`;
 }
 
 // 省级中心点（把「省份计数」画到标准底图上，不依赖任何第三方边界数据）
