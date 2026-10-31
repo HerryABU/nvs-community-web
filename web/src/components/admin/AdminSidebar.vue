@@ -8,7 +8,9 @@
 
     <el-scrollbar class="as-scroll">
       <el-menu
+        ref="menuRef"
         :default-active="activeIndex"
+        :default-openeds="defaultOpeneds"
         :collapse="collapsed"
         :collapse-transition="false"
         unique-opened
@@ -24,9 +26,13 @@
         <!-- 分类分组：主分类用「渐变胶囊图标 + 加粗标题」，与下方子条目形成层级差异 -->
         <el-sub-menu v-for="cat in visibleCats" :key="cat.key" :index="'cat-' + cat.key">
           <template #title>
-            <span class="cat-chip" :class="{ mini: collapsed }" :style="{ background: cat.color }">
-              <el-icon><component :is="cat.icon" /></el-icon>
-            </span>
+            <!-- ⚠️ 图标必须是 el-icon（渲染成 <i>），不能用 span 包一层：
+                 Element Plus 折叠态规则 `.el-menu--collapse > .el-sub-menu__title > span
+                 { visibility:hidden; width:0 }` 会把直接子 span 全部藏掉，
+                 用 span 包裹会导致 64px 折叠时分类图标也消失、只剩空白行。 -->
+            <el-icon class="cat-chip" :style="{ '--chip-bg': cat.color }">
+              <component :is="cat.icon" />
+            </el-icon>
             <span class="cat-title">{{ cat.title }}</span>
           </template>
           <!-- 子分类：图标统一次级灰，激活时用该条目自己的渐变色做左侧标记 -->
@@ -47,14 +53,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { DataAnalysis } from '@element-plus/icons-vue';
 import { adminMenuCategories } from '@/views/admin/adminMenuData';
 import { POLICE_ALLOWED_PATHS } from '@/constants/policeAccess';
 import { useAuthStore } from '@/stores/auth';
 
-defineProps<{ collapsed: boolean }>();
+const props = defineProps<{ collapsed: boolean }>();
 const route = useRoute();
 const authStore = useAuthStore();
 
@@ -78,6 +84,42 @@ const activeIndex = computed(() => {
   if (item && typeof item === 'string') return item;
   return route.path;
 });
+
+// 当前页所属分类（用长路径前缀匹配，子路由如 /admin/ai-pool 也算命中）
+const activeCatIndex = computed(() => {
+  const cur = activeIndex.value;
+  const cat = visibleCats.value.find((c) =>
+    c.items.some((it) => cur === it.path || cur.startsWith(it.path + '/')),
+  );
+  return cat ? 'cat-' + cat.key : '';
+});
+
+// 初次渲染就展开当前分组：否则刷新子页面时侧栏是收起的，
+// 高亮项藏在一个关着的分组里，用户会以为"菜单没定位到我"。
+const defaultOpeneds = ref<string[]>(activeCatIndex.value ? [activeCatIndex.value] : []);
+
+// 路由变化时跟着展开（unique-opened 会自动收起其它分组，形成手风琴）
+const menuRef = ref<any>(null);
+watch(
+  () => activeCatIndex.value,
+  (idx) => {
+    if (!idx || !menuRef.value) return;
+    // 已展开就不用管，避免每次跳转都触发一次无谓的收起/展开
+    const opened: string[] = menuRef.value.openedMenus || [];
+    if (opened.includes(idx)) return;
+    menuRef.value.open(idx);
+  },
+);
+
+// 折回去（展开侧栏）时补一次展开当前分组
+watch(
+  () => props.collapsed,
+  (collapsedNow) => {
+    if (!collapsedNow && activeCatIndex.value && menuRef.value) {
+      menuRef.value.open(activeCatIndex.value);
+    }
+  },
+);
 </script>
 
 <style scoped>
@@ -137,6 +179,7 @@ const activeIndex = computed(() => {
    主分类：渐变胶囊图标 + 加粗深色标题（彩色、块状）
    子分类：图标统一灰、文字次级；激活时用该条目自己的渐变做左侧标记
    这样一眼能看出「这是分组」还是「这是可点的功能」。 */
+/* 分类图标本体就是 el-icon（<i>），背景色走 --chip-bg 由模板注入 */
 .cat-chip {
   display: inline-flex;
   align-items: center;
@@ -145,12 +188,12 @@ const activeIndex = computed(() => {
   height: 22px;
   margin-right: 9px;
   border-radius: 7px;
+  background: var(--chip-bg, var(--gradient-primary, linear-gradient(135deg, #6366f1, #8b5cf6)));
   color: #fff;
   flex: none;
+  font-size: 13px;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.16);
 }
-.cat-chip .el-icon { font-size: 13px; }
-.cat-chip.mini { margin-right: 0; }
 .cat-title {
   font-weight: 700;
   letter-spacing: 0.2px;
@@ -183,7 +226,30 @@ const activeIndex = computed(() => {
 }
 .as-menu :deep(.el-menu-item) { position: relative; }
 .as-menu :deep(.el-menu-item.is-active) .item-ico { color: #fff; }
-.as-menu :deep(.el-sub-menu .el-menu-item) { margin-left: 4px; }
+
+/* 子条目比主分类多缩进一档，形成"从属"的视觉关系；
+   只靠颜色区分层级不够，缩进才是最直接的从属信号。 */
+.as-menu :deep(.el-sub-menu .el-menu-item) {
+  margin: 3px 8px 3px 20px;
+  width: calc(100% - 28px);
+  height: 42px;
+  line-height: 42px;
+  font-size: 0.86rem;
+}
+/* 层级引导线：从分组标题下方垂到子项区域，明确"这几个属于上面那组" */
+.as-menu :deep(.el-sub-menu .el-menu) {
+  position: relative;
+  padding-left: 0;
+}
+.as-menu :deep(.el-sub-menu .el-menu)::before {
+  content: '';
+  position: absolute;
+  left: 17px;
+  top: 2px;
+  bottom: 6px;
+  width: 1px;
+  background: var(--border-color, #e8eaf0);
+}
 
 [data-theme="dark"] .as-brand { border-color: rgba(71,85,105,0.35); }
 [data-theme="dark"] .admin-sidebar { background: rgba(20,28,42,0.92); border-color: rgba(71,85,105,0.35); }
