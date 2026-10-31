@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"sort"
 	"strconv"
 	"time"
 
@@ -299,10 +300,130 @@ func GetDashboardStats(c *gin.Context) {
 		"category_distribution": categoryDistribution,
 		// 热力图数据（前端渲染）：省级访问热力 + 星期×小时 活跃热力
 		"province_heat": computeProvinceHeat(30),
-		"active_hours":  computeActiveHours(30),
+		// 境外访问按国家聚合 + 境内/境外/内网占比（中国地图与国际地图共用一个数据源）
+		"country_heat": computeCountryHeat(30),
+		"geo_summary":  computeGeoSummary(30),
+		"active_hours": computeActiveHours(30),
 		// 客户端画像（设备/OS/浏览器分布，结构化 UA 解析）
 		"client": computeClientBreakdown(30),
 	})
+}
+
+// computeCountryHeat 站点访问的「国家/地区热力」。
+//
+// 为什么需要：省级热度只覆盖中国，境外访问此前被 `continue` 直接跳过，
+// 于是「国际」这张图没有数据源。这里按国家聚合（ip2region 境外精度只到国家，
+// 够做国家排行），中国单列（其明细由 province_heat 负责）。
+//
+// 返回 [{code:'US', name:'United States', value:N, cn:false}]，按访问量降序。
+func computeCountryHeat(days int) []gin.H {
+	if !ipgeo.Available() {
+		return []gin.H{}
+	}
+	type ipRow struct {
+		IP  string
+		Cnt int64
+	}
+	var rows []ipRow
+	since := time.Now().AddDate(0, 0, -days).Format("2006-01-02 15:04:05")
+	if err := models.DB.Model(&models.WebAccessLog{}).
+		Where("created_at >= ?", since).
+		Select("ip, COUNT(*) as cnt").
+		Group("ip").Order("cnt desc").Limit(5000).
+		Scan(&rows).Error; err != nil {
+		return []gin.H{}
+	}
+
+	type agg struct {
+		name string
+		cn   bool
+	}
+	counts := map[string]int64{}
+	meta := map[string]agg{}
+	for _, r := range rows {
+		reg := ipgeo.Lookup(r.IP)
+		if reg.IsReserved() {
+			continue
+		}
+		code := reg.CountryCD
+		if code == "" || code == "0" {
+			code = reg.Country // 没有国家码时退化为国名做 key
+		}
+		if code == "" {
+			continue
+		}
+		counts[code] += r.Cnt
+		if _, ok := meta[code]; !ok {
+			meta[code] = agg{name: reg.Country, cn: reg.Country == "中国"}
+		}
+	}
+
+	out := make([]gin.H, 0, len(counts))
+	for code, v := range counts {
+		m := meta[code]
+		out = append(out, gin.H{
+			"code":  code,
+			"name":  m.name,
+			"value": v,
+			"cn":    m.cn,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i]["value"].(int64) > out[j]["value"].(int64)
+	})
+	return out
+}
+
+// computeGeoSummary 境内 / 境外 / 内网（保留地址）的访问占比。
+//
+// 有了这三个数，站长一眼能看出「我的读者主要在哪」——
+// 而不必先看图。内网单独列出是刻意的：本机/内网调试流量不该混进地域统计。
+func computeGeoSummary(days int) gin.H {
+	if !ipgeo.Available() {
+		return gin.H{"available": false}
+	}
+	type ipRow struct {
+		IP  string
+		Cnt int64
+	}
+	var rows []ipRow
+	since := time.Now().AddDate(0, 0, -days).Format("2006-01-02 15:04:05")
+	if err := models.DB.Model(&models.WebAccessLog{}).
+		Where("created_at >= ?", since).
+		Select("ip, COUNT(*) as cnt").
+		Group("ip").Order("cnt desc").Limit(5000).
+		Scan(&rows).Error; err != nil {
+		return gin.H{"available": false}
+	}
+	var cn, overseas, reserved int64
+	for _, r := range rows {
+		reg := ipgeo.Lookup(r.IP)
+		switch {
+		case reg.IsReserved():
+			reserved += r.Cnt
+		case reg.Country == "中国":
+			cn += r.Cnt
+		default:
+			overseas += r.Cnt
+		}
+	}
+	total := cn + overseas + reserved
+	pct := func(v int64) float64 {
+		if total == 0 {
+			return 0
+		}
+		return float64(int64(float64(v)/float64(total)*1000+0.5)) / 10
+	}
+	return gin.H{
+		"available": true,
+		"cn":        cn,
+		"overseas":  overseas,
+		"reserved":  reserved,
+		"total":     total,
+		"cn_pct":    pct(cn),
+		"os_pct":    pct(overseas),
+		"days":      days,
+	}
 }
 
 // computeProvinceHeat 站点访问的「省级热力」（复用 ip2region 离线解析，与 GetWebAccessGeo 同口径）。

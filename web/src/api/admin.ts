@@ -285,6 +285,12 @@ export const adminApi = {
   getHtmlQuota() {
     return api.get<{ code: number; data: { config: HtmlQuotaConfig; overrides: HtmlQuotaOverride[] } }>('/admin/html-quota');
   },
+  // 某用户当前的托管用量（设按人配额前先看，避免限得比现状还低）
+  getHtmlQuotaUsage(userId: number) {
+    return api.get<{ code: number; data: HtmlQuotaUsage }>('/admin/html-quota/usage', {
+      params: { user_id: userId },
+    });
+  },
   saveHtmlQuota(data: HtmlQuotaConfig) {
     return api.put('/admin/html-quota', data);
   },
@@ -696,4 +702,14 @@ export interface AgentSubmitConfig {
   enabled: boolean;
   need_review: boolean;
   max_pending: number;
+}
+
+// HTML/WASM 托管配额：某个用户的当前用量快照
+export interface HtmlQuotaUsage {
+  user_id: number;
+  projects: number;
+  total_size_mb: number;
+  max_projects: number;
+  max_total_size_mb: number;
+  overridden: boolean;
 }

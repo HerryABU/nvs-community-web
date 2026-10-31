@@ -78,10 +78,16 @@
       <el-row :gutter="20" class="chart-row">
         <el-col :xs="24" :lg="12">
           <div class="hm-card">
-            <h4 class="chart-title">访问来源地域热力（近 30 天）</h4>
+            <h4 class="chart-title">访问来源地域（近 30 天）</h4>
+            <div v-if="geoSummary" class="geo-sum">
+              <span>境内 <b>{{ geoSummary.cn_pct }}%</b>（{{ geoSummary.cn }}）</span>
+              <span>境外 <b>{{ geoSummary.os_pct }}%</b>（{{ geoSummary.overseas }}）</span>
+              <span class="muted">内网/保留 {{ geoSummary.reserved }} 不计入</span>
+            </div>
             <StdMap
               :data="provinceHeat"
-              note="基于 ip2region 离线库按省级着色；仅统计境内访问，内网/保留地址与境外不计入省份排名。"
+              :countries="countryHeat"
+              note="基于 ip2region 离线库按省级着色；内网/保留地址与境外不计入省份排名（境外见「全球」视野）。"
             />
           </div>
         </el-col>
@@ -182,6 +188,9 @@ const categoryPieData = ref<any>({
 
 // 热力图数据
 const provinceHeat = ref<any[]>([]); // [{name:'广东省', value: N}] → ChinaGeoMap 省级着色
+// 境外按国家聚合（同一个 ip2region 离线库，本地解析，不调任何外部 API）
+const countryHeat = ref<any[]>([]); // [{code:'US', name:'United States', value:N, cn:false}]
+const geoSummary = ref<any>(null);  // {cn, overseas, reserved, cn_pct, os_pct}
 const activeHours = ref<number[][]>([]); // 7×24 星期×小时 互动矩阵
 
 // 客户端画像（结构化 UA 解析：OS / 浏览器 / 设备类型）
@@ -297,6 +306,9 @@ async function loadDashboard() {
     }
     const ph = d?.province_heat;
     if (Array.isArray(ph)) provinceHeat.value = ph;
+    const ch = d?.country_heat;
+    if (Array.isArray(ch)) countryHeat.value = ch;
+    if (d?.geo_summary?.available) geoSummary.value = d.geo_summary;
     const ah = d?.active_hours;
     if (Array.isArray(ah)) activeHours.value = ah;
     if (d?.client) clientData.value = d.client;
@@ -500,6 +512,13 @@ onMounted(() => { loadDashboard(); checkFiling(); loadVisitorTrend(); });
   border-color: rgba(71,85,105,0.3);
 }
 .hm-card .chart-title { margin-bottom: 6px; }
+
+/* 境内/境外/内网 三口径占比（放在地图上方，先给结论再看图） */
+.geo-sum {
+  display: flex; flex-wrap: wrap; gap: 14px;
+  margin-bottom: 8px; font-size: 0.78rem; color: var(--text-light, #6b7280);
+}
+.geo-sum b { color: var(--text-main, #1f2937); font-variant-numeric: tabular-nums; }
 
 /* ===== 客户端分布条形 ===== */
 .client-empty { color: var(--text-light, #94a3b8); font-size: 0.82rem; padding: 8px 0; }

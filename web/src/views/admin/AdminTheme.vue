@@ -138,7 +138,9 @@ async function loadIframe() {
 async function saveIframe() {
   iframeSaving.value = true;
   try {
-    const r = await api.put('/site-iframe', { url: iframeURL.value, enabled: iframeEnabled.value });
+    // ⚠️ 写入口在 admin 组（后端只给管理员开了 PUT），读接口才是公开的 /site-iframe。
+    // 少了 /admin 前缀会打到 /api/site-iframe，方法不存在 → 保存静默失败。
+    const r = await api.put('/admin/site-iframe', { url: iframeURL.value, enabled: iframeEnabled.value });
     if (r.data?.code === 0) {
       iframeEnabled.value = !!r.data.data?.enabled;
       iframeURL.value = r.data.data?.url || '';

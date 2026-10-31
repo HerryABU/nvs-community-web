@@ -296,6 +296,24 @@
           <el-input v-model="ovForm.note" placeholder="备注 / 申请理由" style="width:220px" />
           <el-button type="primary" :loading="ovSaving" @click="saveOverride">保存覆盖</el-button>
         </div>
+
+        <!-- 当前用量：设额度前先看清这个人已经用了多少，否则容易设成比现状还低 -->
+        <div class="quota-usage-row">
+          <span class="muted small">查某人当前用量：</span>
+          <el-input v-model.number="usageUserId" placeholder="用户 ID" style="width:120px" />
+          <el-button size="small" :loading="usageLoading" @click="loadUsage">查询</el-button>
+          <template v-if="usage">
+            <el-tag size="small" :type="usage.projects >= usage.max_projects && usage.max_projects > 0 ? 'warning' : 'info'">
+              已用 {{ usage.projects }} / {{ usage.max_projects > 0 ? usage.max_projects : '不限' }} 个项目
+            </el-tag>
+            <el-tag size="small" :type="usage.total_size_mb >= usage.max_total_size_mb && usage.max_total_size_mb > 0 ? 'warning' : 'info'">
+              已用 {{ usage.total_size_mb }} / {{ usage.max_total_size_mb > 0 ? usage.max_total_size_mb : '不限' }} MB
+            </el-tag>
+            <span v-if="usage.overridden" class="muted small">（该用户有单独覆盖）</span>
+          </template>
+          <span v-else-if="usageError" class="muted small">{{ usageError }}</span>
+        </div>
+
         <el-table v-if="quotaOverrides.length" :data="quotaOverrides" size="small" stripe style="margin-top:10px">
           <el-table-column prop="user_id" label="用户 ID" width="100" />
           <el-table-column label="项目数" width="110">
@@ -493,6 +511,32 @@ const quotaOverrides = ref<HtmlQuotaOverride[]>([]);
 const quotaLoading = ref(false);
 const quotaSaving = ref(false);
 const ovSaving = ref(false);
+
+// 用量查询（站长设额度前先看清现状）
+const usageUserId = ref<number | undefined>();
+const usageLoading = ref(false);
+const usage = ref<any>(null);
+const usageError = ref('');
+
+async function loadUsage() {
+  const uid = Number(usageUserId.value || 0);
+  if (!uid) {
+    usageError.value = '请填用户 ID';
+    return;
+  }
+  usageLoading.value = true;
+  usageError.value = '';
+  usage.value = null;
+  try {
+    const res = await adminApi.getHtmlQuotaUsage(uid);
+    if (res.data.code === 0) usage.value = res.data.data;
+    else usageError.value = res.data.message || '查询失败';
+  } catch (e: any) {
+    usageError.value = e?.response?.data?.message || '查询失败';
+  } finally {
+    usageLoading.value = false;
+  }
+}
 const ovForm = reactive({ user_id: 0, max_projects: 0, max_total_size_mb: 0, note: '' });
 
 async function loadQuota() {
@@ -612,4 +656,9 @@ onMounted(() => {
 
 /* 托管额度：按人覆盖的一行式录入 */
 .quota-ov-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.quota-usage-row {
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  margin-top: 10px; padding: 8px 10px; border-radius: 8px;
+  background: var(--bg-page, #f8fafc);
+}
 </style>
