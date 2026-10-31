@@ -2,7 +2,7 @@
   <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go" alt="Go">
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?style=flat&logo=vuedotjs" alt="Vue">
   <img src="https://img.shields.io/badge/SQLite-3-003B57?style=flat&logo=sqlite" alt="SQLite">
-  <img src="https://img.shields.io/badge/version-4.5.0-4F46E5?style=flat" alt="Version">
+  <img src="https://img.shields.io/badge/version-4.5.1-4F46E5?style=flat" alt="Version">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue?style=flat" alt="Platform">
   <img src="https://img.shields.io/badge/CPU-x86%20%7C%20ARM%20%7C%20MIPS64%20%7C%20RISC--V-orange?style=flat" alt="CPU">
   <img src="https://img.shields.io/badge/license-AGPL%20v3-blue.svg" alt="License">
@@ -727,6 +727,29 @@ GOOS=linux   GOARCH=riscv64 go build -ldflags="-s -w" -o nvs-linux-riscv64 .
 ---
 
 ## 📝 版本更新记录（文件级改动说明）
+
+### v4.5.1 拒绝后泄漏拦截（2026-10-31）
+
+安全补丁。修的是「模型明明拒了，却仍然把方向指给你」这一类输出，以及一个更隐蔽的问题：
+**后台改一个开关会把整条安全闸关掉**。
+
+- **拒绝后泄漏拦截**（`aisafety/leak.go`）：模型先说「关于 XX 氧化的条件与催化剂种类，我无法提供」，
+  紧接着补「不过可以给你不具操作性的方向性背景：以空气或氧气作氧化剂，常用钯/铂/钌基催化剂或硝酸体系，中温中压」。
+  拒绝语成了免责声明，后面那句已经把方向指到。
+  既有规则只认「物质 + 工艺步骤 + 配比/收率」齐全的组合，这类回答没有分步没有配比，
+  分数到不了阈值，被当成正常科普放行。
+  · 四类要素计权：催化剂/试剂家族、工艺动作（路线步骤名）、温度压力配比、单元操作
+  · 门槛 = 至少两类同时出现；单说「用催化剂」绝不触发
+  · **只在话题涉及管制物质时生效** —— 否则「不锈钢焊接温度」「三元催化器里的铂钯铑」全会被误杀
+  · 命中即整段替换为拒绝文案，**不扣费**、记失败流水可追溯
+  · 后台「AI 安全 → 策略配置」有独立开关，默认开（新增列默认值写死 true，
+    否则老库升级后新列走零值 false，闸门等于没加）
+- **修掉「改一项、关全部」**：`PUT /api/admin/ai/safety/config` 原先把请求体 bind 到零值结构体再整体写库，
+  于是只提交一个字段时，`enabled` / `guard_input` / `guard_output` 全被写成 false ——
+  界面正常、日志无异常，闸门已经不工作。改为「先读现有配置、再合并请求体」的部分更新语义。
+
+验证：单测 13 例（含 3 类误杀防线与合并语义回归）；端到端（隔离站 + 本地 SSE 桩）实测
+泄漏剧本返回 `blocked:true` + 整段替换且 tokens 为 0，科普剧本正常输出。
 
 ### v4.5.0 AI 模型池重构 + 数据概览三幕 + 地域双视野（2026-10-31）
 
