@@ -35,31 +35,60 @@ func PullProviderModels(baseURL, apiKey string) ([]ProviderModelSuggestion, erro
 	if base == "" {
 		return nil, fmt.Errorf("上游地址未配置")
 	}
-	url := base + "/models"
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
+	// 两种地址都要能吃：
+	//   · 站长填的是 API 根（https://api.x.com/v1）→ 直接 + /models；
+	//   · 填的是站点根（https://api.x.com，渠道凭据里存的就是这种归一化地址）→ 先试 /models，
+	//     失败再试 /v1/models。
+	// 本项目的渠道凭据会把 /v1 归一化掉，所以第二种是常态；不补这一步就会「解析模型清单失败」。
+	candidates := []string{base + "/models"}
+	if !strings.Contains(base, "/v1") {
+		candidates = append(candidates, base+"/v1/models")
 	}
-	if strings.TrimSpace(apiKey) != "" {
-		req.Header.Set("Authorization", "Bearer "+apiKey)
-	}
-	client := &http.Client{Timeout: 20 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("连接失败：%v", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("上游返回 %d", resp.StatusCode)
-	}
+
 	var parsed struct {
 		Data []struct {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal(body, &parsed); err != nil {
-		return nil, fmt.Errorf("解析模型清单失败")
+	var lastErr error
+	for _, url := range candidates {
+		req, err := http.NewRequest(http.MethodGet, url, nil)
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(apiKey) != "" {
+			req.Header.Set("Authorization", "Bearer "+apiKey)
+		}
+		client := &http.Client{Timeout: 20 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("连接失败：%v", err)
+			continue
+		}
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+		resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			lastErr = fmt.Errorf("上游返回 %d", resp.StatusCode)
+			continue
+		}
+		// ⚠️ 光看 2xx 不够：不少中转站的站点根 /models 会返回 SPA 首页（200 + text/html），
+		// 实测 https://api.hcnsec.cn/models 就是 HTML。必须「JSON 能解析且真有 data」才算成功，
+		// 否则继续试下一个候选地址。
+		var attempt struct {
+			Data []struct {
+				ID string `json:"id"`
+			} `json:"data"`
+		}
+		if e := json.Unmarshal(b, &attempt); e != nil || attempt.Data == nil {
+			lastErr = fmt.Errorf("解析模型清单失败（该地址返回的不是 OpenAI 兼容的模型列表）")
+			continue
+		}
+		parsed = attempt
+		lastErr = nil
+		break
+	}
+	if lastErr != nil {
+		return nil, lastErr
 	}
 	out := make([]ProviderModelSuggestion, 0, len(parsed.Data))
 	for _, d := range parsed.Data {

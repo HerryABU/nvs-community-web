@@ -105,6 +105,8 @@ func AllModels() []interface{} {
 		&RefreshState{},
 		// AIGC 内容标识（GB 45438—2025）：原图 / 导出（ProduceID→模型名）/ 豁免日志
 		&AigcAsset{}, &AigcExport{}, &AigcWaiverLog{},
+		// 渠道账户凭据（nap_/sk_ 加密入库，供「拉取模型」「渠道监控」复用）
+		&AiChannelAccount{},
 	}
 }
 

@@ -144,13 +144,11 @@
         <el-table v-if="channelGroups.length" :data="channelGroups" style="width:100%" size="small">
           <el-table-column prop="base_url" label="上游地址" min-width="280" show-overflow-tooltip />
           <el-table-column prop="models" label="模型数" width="90" />
-          <el-table-column label="卡密池" width="130">
+          <!-- 只按「有没有配置密钥」显示：卡密池的逐渠道可用数要点开才有，
+               之前这里引用了不存在的 keyStats，导致每行渲染都抛 TypeError（表格静默出错） -->
+          <el-table-column label="密钥来源" width="110">
             <template #default="{ row }">
-              <el-tag v-if="keyStats[row.base_url]" size="small"
-                :type="keyStats[row.base_url].enabled > 0 ? 'success' : 'warning'">
-                {{ keyStats[row.base_url].enabled }} / {{ keyStats[row.base_url].total }} 可用
-              </el-tag>
-              <el-tag v-else-if="row.hasKey" size="small" type="info">模型自带</el-tag>
+              <el-tag v-if="row.hasKey" size="small" type="info">模型自带</el-tag>
               <el-tag v-else size="small" type="danger">未配置</el-tag>
             </template>
           </el-table-column>
@@ -159,6 +157,8 @@
               <el-button link size="small" type="primary" @click="openChannelKeys(row.base_url)">卡密池</el-button>
               <!-- 渠道内直接监控：地址自动带过去，站长只需填令牌与用户 ID -->
               <el-button link size="small" @click="openMonitor(row.base_url)">监控</el-button>
+              <!-- 直接拉取：密钥留空就用该渠道已加密保存的那份 -->
+              <el-button link size="small" @click="openPull(row.base_url)">拉取</el-button>
               <el-button link size="small" @click="switchLevel2('model')">查看模型</el-button>
             </template>
           </el-table-column>
@@ -406,7 +406,16 @@
             <el-input v-model="pullForm.base_url" placeholder="如 https://api.openai.com/v1（不含 /chat/completions）" />
           </el-form-item>
           <el-form-item label="API Key">
-            <el-input v-model="pullForm.api_key" placeholder="可留空（部分渠道无需密钥）" style="width:240px" type="password" show-password />
+            <el-input
+              v-model="pullForm.api_key"
+              placeholder="留空则用该渠道已加密保存的密钥"
+              style="width: 240px"
+              type="password"
+              show-password
+            />
+            <span class="muted small" style="margin-left: 8px">
+              先「监控 → 保存到渠道」后，这里就能留空
+            </span>
           </el-form-item>
           <el-form-item>
             <el-button type="primary" :loading="pulling" @click="doPull">拉取模型</el-button>
@@ -516,13 +525,22 @@
     <el-dialog v-model="monDialog" :title="monTitle" width="680px">
       <div class="ch-overview-tip">
         <template v-if="mon.locked">
-          从渠道 <b>{{ mon.base_url }}</b> 进入 —— 地址已按该渠道填好，只需填令牌与用户 ID。
+          从渠道 <b>{{ mon.base_url }}</b> 进入 —— 地址已按该渠道填好。
         </template>
         <template v-else>
           想先看看一条渠道「通不通 / 还剩多少 / 最近花了多少」，又不想把它存进模型池时用这里。
           也可以直接在「渠道余额一览」里点某条渠道的「监控」，地址会自动带过来。
         </template>
-        <b>令牌只在本次查询里用，不写库、不写日志。</b>
+        <template v-if="monSaved && monSaved.has_token">
+          <br />
+          <b class="mon-saved">该渠道已保存凭据</b>（令牌 …{{ monSaved.token_tail || '****' }}
+          <template v-if="monSaved.user_id">· 用户 {{ monSaved.user_id }}</template>
+          <template v-if="monSaved.has_model_key">· 模型密钥 …{{ monSaved.model_key_tail }}</template>），
+          令牌可留空直接查询。
+        </template>
+        <template v-else>
+          未保存时令牌只在本次查询里用，<b>不写库、不写日志</b>。
+        </template>
       </div>
       <el-form label-width="96px" class="mon-form">
         <el-form-item label="渠道地址">
@@ -531,15 +549,15 @@
         </el-form-item>
         <el-form-item label="令牌">
           <el-input v-model="mon.token" type="password" show-password
-            placeholder="模型密钥 sk_ 或中转站系统访问令牌 nap_" />
+            :placeholder="monSaved && monSaved.has_token ? '留空则用已保存的令牌' : '模型密钥 sk_ 或中转站系统访问令牌 nap_'" />
           <span class="muted small">sk_ 只能查该密钥自身用量；账户余额要 nap_ 令牌 + 用户 ID</span>
         </el-form-item>
         <el-form-item label="用户 ID">
-          <el-input v-model="mon.user_id" placeholder="中转站的数字用户 ID（New-Api-User），官方渠道留空" />
+          <el-input v-model="mon.user_id" :placeholder="monSaved && monSaved.user_id ? `留空则用已保存的用户 ID（${monSaved.user_id}）` : '中转站的数字用户 ID（New-Api-User），官方渠道留空'" />
         </el-form-item>
         <el-form-item label="模型密钥">
           <el-input v-model="mon.model_key" type="password" show-password
-            placeholder="可选，sk_ 开头；用来探测「这条渠道能拉到多少模型」" />
+            :placeholder="monSaved && monSaved.has_model_key ? '留空则用已保存的模型密钥' : '可选，sk_ 开头；用来探测「这条渠道能拉到多少模型」'" />
           <span class="muted small">账户令牌 nap_ 不能调模型接口，探模型列表要用 sk_</span>
         </el-form-item>
         <el-form-item label="查询方式">
@@ -554,6 +572,10 @@
 
       <div v-if="monResult" class="mon-result">
         <!-- 自动纠正过什么必须说出来，否则站长不知道自己的填法有问题 -->
+        <!-- 提示类（不是纠正）：例如「已使用该渠道保存的凭据」 -->
+        <div v-if="monResult.notices && monResult.notices.length" class="mon-notice-list">
+          <div v-for="(n, i) in monResult.notices" :key="i" class="mon-notice-item">{{ n }}</div>
+        </div>
         <div v-if="monResult.warnings && monResult.warnings.length" class="mon-warn-list">
           <div v-for="(w, i) in monResult.warnings" :key="i" class="mon-warn-item">已自动纠正：{{ w }}</div>
         </div>
@@ -591,6 +613,9 @@
 
       <template #footer>
         <el-button @click="monDialog = false">关闭</el-button>
+        <el-button :loading="monSaving" @click="saveMonitorCredentials">
+          保存到渠道（加密）
+        </el-button>
         <el-button type="primary" :loading="monLoading" @click="runMonitor">查询</el-button>
       </template>
     </el-dialog>
@@ -1074,7 +1099,7 @@ import { MagicStick, Plus } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import SectionHeader from '@/components/common/SectionHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
-import { aiApi, type AdminAiModel, type AiModelPreset, type AiVendor, type AiCategoryPrice, type AiVendorMatrixEntry, type ProviderModelSuggestion, type AdminChannelReport, type CostRateSetting } from '@/api/ai';
+import { aiApi, channelAccountApi, type AdminAiModel, type AiModelPreset, type AiVendor, type AiCategoryPrice, type AiVendorMatrixEntry, type ProviderModelSuggestion, type AdminChannelReport, type CostRateSetting, type AiChannelAccount } from '@/api/ai';
 import { adminApi } from '@/api/admin';
 import StateBlock from '@/components/common/StateBlock.vue';
 
@@ -1469,9 +1494,12 @@ const monDialog = ref(false);
 const monLoading = ref(false);
 const mon = reactive({ base_url: '', token: '', user_id: '', model_key: '', kind: '', locked: false });
 const monResult = ref<any>(null);
+// 该渠道已加密保存的凭据（只含「有没有 / 尾号 / 上次结果」，绝无明文）
+const monSaved = ref<AiChannelAccount | null>(null);
+const monSaving = ref(false);
 
 /** 从某个渠道进来：地址预填且锁住（站长只该填令牌和用户 ID，别再让他在地址上出错） */
-function openMonitor(baseUrl?: string) {
+async function openMonitor(baseUrl?: string) {
   monResult.value = null;
   mon.base_url = (baseUrl || '').trim();
   mon.locked = !!(baseUrl && baseUrl.trim());
@@ -1479,7 +1507,53 @@ function openMonitor(baseUrl?: string) {
   mon.user_id = '';
   mon.model_key = '';
   mon.kind = '';
+  monSaved.value = null;
   monDialog.value = true;
+  if (mon.base_url) await loadSavedAccount(mon.base_url);
+}
+
+/** 查该渠道有没有保存过凭据（有就不必再粘贴一遍） */
+async function loadSavedAccount(baseUrl: string) {
+  try {
+    const res = await channelAccountApi.get(baseUrl);
+    monSaved.value = res.data?.data?.exists ? (res.data.data.account as AiChannelAccount) : null;
+  } catch {
+    monSaved.value = null;
+  }
+}
+
+/**
+ * 保存到渠道：nap_ 权限很大，服务端只存 AES-256-GCM 密文，这里传完就清空输入框。
+ * 留空的字段表示「不改」，所以已保存过的渠道可以只改用户 ID。
+ */
+async function saveMonitorCredentials() {
+  const base = mon.base_url.trim();
+  if (!base) {
+    ElMessage.warning('先填渠道地址');
+    return;
+  }
+  const hasNew = !!(mon.token.trim() || mon.model_key.trim());
+  if (!hasNew && !monSaved.value) {
+    ElMessage.warning('至少填一项令牌或模型密钥再保存');
+    return;
+  }
+  monSaving.value = true;
+  try {
+    await channelAccountApi.save({
+      base_url: base,
+      user_id: mon.user_id.trim() || undefined,
+      access_token: mon.token.trim() || undefined,
+      model_key: mon.model_key.trim() || undefined,
+    });
+    mon.token = '';
+    mon.model_key = '';
+    await loadSavedAccount(base);
+    ElMessage.success('已加密保存；之后这个渠道可以直接点查询或「拉取模型」');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  } finally {
+    monSaving.value = false;
+  }
 }
 
 const monTitle = computed(() =>
@@ -1487,8 +1561,8 @@ const monTitle = computed(() =>
 );
 
 async function runMonitor() {
-  if (!mon.base_url.trim() || !mon.token.trim()) {
-    ElMessage.warning('请填写渠道地址与令牌');
+  if (!mon.base_url.trim() || (!mon.token.trim() && !(monSaved.value && monSaved.value.has_token))) {
+    ElMessage.warning(monSaved.value?.has_token ? '渠道地址为空' : '请填写渠道地址与令牌');
     return;
   }
   monLoading.value = true;
@@ -1924,8 +1998,9 @@ const pullError = ref('');
 const pullChannel = ref('');
 const pullTableRef = ref<any>(null);
 
-function openPull() {
-  pullForm.base_url = '';
+/** 打开拉取弹窗；传 baseUrl 时预填该渠道（密钥可留空，后端会用已加密保存的那份） */
+function openPull(baseUrl?: string) {
+  pullForm.base_url = (baseUrl || '').trim();
   pullForm.api_key = '';
   pullList.value = [];
   pullSelected.value = [];
@@ -2317,6 +2392,18 @@ async function saveCategoryPrice(p: AiCategoryPrice & { _saving?: boolean }) {
 .pull-col-toggles { display: flex; flex-direction: column; gap: 4px; }
 .pull-col-title { font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; color: var(--text-main, #1f2937); }
 .pull-col-tip { margin-top: 6px; font-size: 0.72rem; line-height: 1.5; color: var(--text-light, #999); }
+
+/* 渠道监控：提示类（非纠正） */
+.mon-notice-list {
+  display: flex; flex-direction: column; gap: 4px;
+  margin-bottom: 8px; padding: 8px 10px; border-radius: 6px;
+  border: 1px solid var(--el-color-primary-light-7, #b3d8ff);
+  background: var(--el-color-primary-light-9, #ecf5ff);
+}
+.mon-notice-item { font-size: 0.74rem; color: var(--el-color-primary, #409eff); line-height: 1.6; }
+
+/* 渠道监控：已保存凭据提示 */
+.mon-saved { color: var(--el-color-success, #67c23a); }
 
 /* 渠道监控：自动纠正提示（不显眼但必须能看见） */
 .mon-warn-list {

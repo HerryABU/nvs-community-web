@@ -1048,6 +1048,11 @@ func main() {
 		admin.GET("/ai/usage-stats", handlers.AdminAiUsageStats)
 		// 渠道监控：临时输入令牌 + 用户 ID 探一次余额/连通性/最近扣费（不落库）
 		admin.POST("/ai/channel-monitor", handlers.AdminAiChannelMonitor)
+		// 渠道账户凭据（nap_/sk_ 加密入库）：保存一次，之后监控与「拉取模型」都不用再粘贴
+		admin.GET("/ai/channel-accounts", handlers.AdminListChannelAccounts)
+		admin.GET("/ai/channel-account", handlers.AdminGetChannelAccount)
+		admin.POST("/ai/channel-account", handlers.AdminSaveChannelAccount)
+		admin.DELETE("/ai/channel-account/:id", handlers.AdminDeleteChannelAccount)
 		// 渠道卡密池：一条渠道一个池，池内多把按权重轮询、连败自动摘除
 		admin.GET("/ai/channel-keys", handlers.AdminListAiChannelKeys)
 		admin.POST("/ai/channel-keys", handlers.AdminCreateAiChannelKey)

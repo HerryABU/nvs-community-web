@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"strconv"
+	"strings"
 
 	"nvs-server/aiapi"
 	"nvs-server/aiapi/vendor"
@@ -25,6 +26,10 @@ func AdminPullAiModels(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
+	}
+	// 没填密钥 → 用该渠道已加密保存的模型密钥（站长不用每次粘贴一遍）
+	if strings.TrimSpace(req.APIKey) == "" {
+		req.APIKey = savedChannelKeyFor(req.BaseURL)
 	}
 	sugs, err := aiapi.PullProviderModels(req.BaseURL, req.APIKey)
 	if err != nil {
@@ -59,6 +64,9 @@ func AdminImportAiModels(c *gin.Context) {
 	if len(req.Items) == 0 {
 		utils.BadRequest(c, "未选择任何模型")
 		return
+	}
+	if strings.TrimSpace(req.APIKey) == "" {
+		req.APIKey = savedChannelKeyFor(req.BaseURL)
 	}
 	created := 0
 	for _, it := range req.Items {
@@ -187,4 +195,20 @@ func mustJSONStr(s []string) string {
 		return "[]"
 	}
 	return string(b)
+}
+
+// savedChannelKeyFor 取该渠道加密保存的密钥（优先 sk_ 模型密钥，其次 nap_ 账户令牌）。
+// 只用于「拉取/导入模型」这类需要 Bearer 的调用；解出来的明文不落日志、不回传。
+func savedChannelKeyFor(baseURL string) string {
+	acc, err := models.GetAiChannelAccount(baseURL)
+	if err != nil {
+		return ""
+	}
+	if mk, e := acc.DecryptModelKey(); e == nil && mk != "" {
+		return mk
+	}
+	if t, e := acc.DecryptAccessToken(); e == nil {
+		return t
+	}
+	return ""
 }

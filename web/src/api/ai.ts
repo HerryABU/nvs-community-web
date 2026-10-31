@@ -646,3 +646,41 @@ export interface AiChannelKey {
   note: string;
   hint: string;
 }
+
+// ==================== 渠道账户凭据（加密入库） ====================
+// 站长把「渠道地址 + nap_ + 用户 ID + sk_」保存一次，之后监控 / 拉取都不用再粘贴。
+// 密文只在服务端，前端只看得到「有没有配」与尾号。
+
+export interface AiChannelAccount {
+  id: number;
+  base_url: string;
+  label: string;
+  user_id: string;
+  enabled: boolean;
+  has_token: boolean;
+  token_tail: string;
+  has_model_key: boolean;
+  model_key_tail: string;
+  last_checked_at?: string | null;
+  last_ok: boolean;
+  last_models: number;
+  last_balance: number;
+  last_used: number;
+  last_currency: string;
+  last_error: string;
+  updated_at: string;
+}
+
+export const channelAccountApi = {
+  /** 取某条渠道已保存的凭据（不存在时 exists=false） */
+  get: (baseUrl: string) =>
+    api.get<{ code: number; data: { exists: boolean; account?: AiChannelAccount } }>(
+      '/admin/ai/channel-account',
+      { params: { base_url: baseUrl } },
+    ),
+  /** 保存/更新：access_token / model_key 留空=不改，传 "-"=清空 */
+  save: (data: { base_url: string; label?: string; user_id?: string; access_token?: string; model_key?: string }) =>
+    api.post<{ code: number; data: AiChannelAccount }>('/admin/ai/channel-account', data),
+  list: () => api.get<{ code: number; data: { list: AiChannelAccount[] } }>('/admin/ai/channel-accounts'),
+  remove: (id: number) => api.delete(`/admin/ai/channel-account/${id}`),
+};

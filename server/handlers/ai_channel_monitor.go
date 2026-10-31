@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"nvs-server/aiclient"
+	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -65,8 +66,30 @@ func AdminAiChannelMonitor(c *gin.Context) {
 		utils.BadRequest(c, "渠道地址需以 http:// 或 https:// 开头")
 		return
 	}
+	// 没填令牌 → 用该渠道**加密入库**的凭据（解密后当场用、用完即弃，不回显）
+	usedSaved := false
+	var notices []string
 	if token == "" {
-		utils.BadRequest(c, "请填写令牌（模型密钥 sk_ 或系统访问令牌 nap_）")
+		if acc, aerr := models.GetAiChannelAccount(base); aerr == nil && acc.Enabled {
+			if t, derr := acc.DecryptAccessToken(); derr == nil && t != "" {
+				token = t
+				usedSaved = true
+			}
+			if uid == "" {
+				uid = acc.UserID
+			}
+			if modelKey == "" {
+				if mk, derr := acc.DecryptModelKey(); derr == nil && mk != "" {
+					modelKey = mk
+				}
+			}
+			if usedSaved {
+				notices = append(notices, "已使用该渠道保存的凭据（令牌不回显）")
+			}
+		}
+	}
+	if token == "" {
+		utils.BadRequest(c, "请填写令牌（模型密钥 sk_ 或系统访问令牌 nap_），或先在本页「保存到渠道」")
 		return
 	}
 
@@ -78,6 +101,9 @@ func AdminAiChannelMonitor(c *gin.Context) {
 	}
 	if len(warnings) > 0 {
 		out["warnings"] = warnings
+	}
+	if len(notices) > 0 {
+		out["notices"] = notices
 	}
 
 	// ── 1. 连通性 + 可用模型数（最便宜的一步，先给个确定结论）──
@@ -140,7 +166,60 @@ func AdminAiChannelMonitor(c *gin.Context) {
 		}
 	}
 
+	// 有保存凭据的渠道才记快照（监控是「临时看一眼」的主路径，别给所有探测都留痕）
+	if _, aerr := models.GetAiChannelAccount(base); aerr == nil {
+		okFlag, _ := out["balance_ok"].(bool)
+		if v, has := out["probe_ok"].(bool); has && v {
+			okFlag = true
+		}
+		models.RecordAiChannelProbe(base, okFlag,
+			intOf(out["model_count"]),
+			floatOf(out["remaining"]), floatOf(out["used"]),
+			stringOf(out["currency"]), worstError(out))
+	}
+
 	utils.Success(c, out)
+}
+
+// worstError 把各种 *_error 合成一句，供快照里显示
+func worstError(out gin.H) string {
+	for _, k := range []string{"balance_error", "probe_error", "logs_error"} {
+		if s, ok := out[k].(string); ok && s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+func intOf(v interface{}) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case float64:
+		return int(n)
+	}
+	return 0
+}
+
+func floatOf(v interface{}) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case int64:
+		return float64(n)
+	case int:
+		return float64(n)
+	}
+	return 0
+}
+
+func stringOf(v interface{}) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }
 
 // resolveMonitorKind 推断用哪种查法：

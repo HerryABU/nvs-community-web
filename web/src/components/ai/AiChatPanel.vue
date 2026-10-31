@@ -294,6 +294,22 @@
         </div>
 
         <div class="ai-cfg-field">
+          <label class="ai-cfg-label">根提示词（可选）</label>
+          <el-input
+            v-model="draft.systemPrompt"
+            type="textarea"
+            :rows="3"
+            maxlength="1500"
+            show-word-limit
+            placeholder="例如：你是我的长篇小说搭档，用第一人称、半文半白，每段不超过三句。"
+          />
+          <p class="ai-cfg-hint">
+            每轮都会作为「系统设定」发给模型，用来定人设与输出格式。
+            它<b>不能覆盖</b>本站的内容规则——冲突时以站点规则为准。
+          </p>
+        </div>
+
+        <div class="ai-cfg-field">
           <div class="ai-cfg-row">
             <span class="ai-cfg-label">回复长度上限</span>
             <span class="ai-cfg-val">{{ draft.maxTokens }} tokens</span>
@@ -451,6 +467,8 @@ const streamingReasoning = ref('');
 const msgListEl = ref<HTMLElement>();
 // 回复长度上限（tokens）：滑块 256~8192，步进 256
 const TOKENS_MAX = 8192;
+// 用户根提示词：属于个人使用习惯，跟其它参数一起存 localStorage
+const systemPrompt = ref(localStorage.getItem('ai_system_prompt') || '');
 const clampTokens = (n: number) => {
   if (!Number.isFinite(n) || n <= 0) return 2048;
   return Math.min(TOKENS_MAX, Math.max(256, Math.round(n / 256) * 256));
@@ -465,10 +483,11 @@ function clampCtx(n: number) {
   if (!Number.isFinite(n) || n <= 0) return 10;
   return Math.min(CTX_MAX, Math.max(2, n));
 }
-watch([contextLimit, memoryOn, maxTokens], () => {
+watch([contextLimit, memoryOn, maxTokens, systemPrompt], () => {
   localStorage.setItem('ai_ctx_limit', String(contextLimit.value));
   localStorage.setItem('ai_memory', memoryOn.value ? '1' : '0');
   localStorage.setItem('ai_max_tokens', String(maxTokens.value));
+  localStorage.setItem('ai_system_prompt', systemPrompt.value);
 });
 let abortCtrl: AbortController | null = null;
 let loadingSession = 0;
@@ -495,13 +514,14 @@ const modelGroups = computed(() => {
 // ---------- 对话设置弹窗（模型 / 回复长度 / 记忆 / 上下文）----------
 // 用草稿态：点「保存」才写回，点「取消」或关窗都不改当前设置。
 const cfgOpen = ref(false);
-const draft = reactive({ modelId: 0, maxTokens: 2048, memory: true, contextLimit: 10 });
+const draft = reactive({ modelId: 0, maxTokens: 2048, memory: true, contextLimit: 10, systemPrompt: '' });
 
 function openSettings() {
   draft.modelId = modelId.value;
   draft.maxTokens = maxTokens.value;
   draft.memory = memoryOn.value;
   draft.contextLimit = contextLimit.value;
+  draft.systemPrompt = systemPrompt.value;
   cfgOpen.value = true;
 }
 
@@ -510,6 +530,7 @@ function applySettings() {
   maxTokens.value = draft.maxTokens;
   memoryOn.value = draft.memory;
   if (draft.memory) contextLimit.value = clampCtx(draft.contextLimit);
+  systemPrompt.value = draft.systemPrompt.trim().slice(0, 1500);
   cfgOpen.value = false;
 }
 
@@ -826,6 +847,7 @@ async function send(rawText?: string, confirmed = false, skipPush = false, opts:
         max_tokens: maxTokens.value,
         context_limit: contextLimit.value,
         memory: memoryOn.value,
+        system_prompt: systemPrompt.value || undefined,
         byok: useByok.value || undefined,
         byok_model: useByok.value ? byokModel.value.trim() : undefined,
         confirm: confirmed || undefined,

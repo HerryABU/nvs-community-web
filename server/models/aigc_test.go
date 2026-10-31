@@ -18,7 +18,7 @@ func setupAigcTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开内存库失败: %v", err)
 	}
-	if err := db.AutoMigrate(&AigcAsset{}, &AigcExport{}, &AigcWaiverLog{}, &PlatformConfig{}); err != nil {
+	if err := db.AutoMigrate(&AigcAsset{}, &AigcExport{}, &AigcWaiverLog{}, &AiChannelAccount{}, &PlatformConfig{}); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
 	DB = db
