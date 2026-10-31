@@ -85,19 +85,14 @@
 
 - 🧭 **竖列式入口**（184px 左导航 + 56px 顶栏）：AI 对话 / 大模型广场 / 专业绘画 / 视频创作 / 灵感广场 / AI 智能体 / 思维导图 / 会员与额度，**打开即落地对话页**（不做九宫格门户）
 - 💬 **标准对话页**：空态大标题 + 推荐词卡；圆角自适应输入框（聚焦描边）+ 行内「厂商/模型/长度」+ 圆形发送/停止；历史会话、代码块工具条（见下）、**真正的重新生成**（先分支再重发，不会一问多答）
-- 🧑‍💻 **代码块：高亮 + 复制 + HTML 预览 / 一键发布**：
-  · 工具条挂语言标签与「复制」（代码原文从 `pre > code` 现取，不塞 `data-*`，复制内容不会掺进按钮文字）；
-  · 语法高亮用 **highlight.js（common，36 种语言）**，独立 chunk 懒加载、不拖首屏 ——
-    Cherry 引擎内部打包的 Prism 只有 markup/css/clike/javascript，其余语言一律 fallback 成 JS；
-    它的配色选择器还被 `div[data-type=codeBlock]` 限定，而 AI 白名单（`ALLOW_DATA_ATTR: false`）
-    会把 `data-*` 全部剔除，于是 token class 在、颜色却全丢。所以不在那边打补丁，渲染后自己重打一遍；
-  · **预览** = `sandbox="allow-scripts"` 且**刻意不给** `allow-same-origin` 的空源 iframe：
-    读不到本站 Cookie / localStorage，也不能跳转或改写父页面；沙箱内额外注入内存版 Storage，
-    让「刷新即丢」代替 `localStorage` 抛 SecurityError 导致整页白屏；
-  · **发布** = 把这段 HTML 在前端打成 **STORE 模式单文件 ZIP**（自研约 80 行编码器，零依赖），
-    再调广场既有的 `POST /api/userhtmls/upload` —— 预检 / 封存 / 额度 / 审核整条链路原样复用，后端零改动；
-  · **未标语言也能识别**：只看 Cherry 留下的 `data-lang`（空串 = 作者确实没写），
-    不看它 fallback 出来的 `language-javascript`；否则 AI 常写的「裸 HTML 代码块」永远拿不到预览/发布入口；
+- 🧑‍💻 **代码块：高亮 · 复制 · HTML 预览 · 一键发布**（AI 回复与分享页均支持）：
+  · 右上角工具条：语言标签 + 复制 —— 复制出来是纯代码，不会掺进按钮文字；
+  · 语法高亮覆盖 36 种常用语言（JS/TS/Python/Go/Rust/Java/SQL/Bash/YAML/HTML…），按需加载，不影响首屏；
+  · **预览**：HTML 片段与完整页面都能直接运行。沙箱隔离 —— 读不到本站 Cookie / localStorage，
+    也无法跳转或改写本页面；可切「预览 / 源码」、重载、下载 `.html`。沙箱内提供内存版 Storage，
+    AI 生成的小游戏、待办这类会写 localStorage 的页面不会因权限报错而白屏（刷新即重置）；
+  · **发布**：一键发到 HTML 应用广场，走平台既有的安全预检与人工复核流程；
+  · 代码块没写语言标注时，也会判断内容是否像 HTML，照样给出预览 / 发布入口。
 - 🧠 **思考型模型**（DeepSeek-R1 / GLM / Qwen thinking）—— 上游把正文放在 `reasoning` / `reasoning_content` 字段，两种命名都识别；推理过程进「思考过程」折叠块、正文不重复推送，`answer_in_reasoning` 时自动落正文
 - 🎨 **专业绘画**：左 320 参数栏 + 右纵向作品流（每任务一卡：模型/时间/提示词/图片栅格/参考图数），**不自建「本次结果」区块**（结果就是流里最新一项）
 - 🎬 **视频创作**：与绘画页同构；进行中有状态条（排队/生成 + 自动刷新），支持**停止等待（取消 + 原路退款）**与**失败重新提交**；刷新页面自动恢复轮询；终态判定统一走 `IsAiMediaTerminal`（含 `cancelled`）
@@ -2077,8 +2072,8 @@ nvs/
 │       ├── router/index.ts        # 117 条路由 + 角色守卫（requiresAdmin / requiresPolice）+ base 自动感知前缀
 │       ├── stores/                # Pinia：auth（幂等 fetchUser）/ theme / app（站点配置与未读数）
 │       ├── api/                   # 43 个模块：axios 封装（前缀 + CSRF 头）、各业务域
-│       ├── utils/                 # prefix / sensitiveZone / userKey / adminHealth / editorShortcuts / turndown
-│       ├── styles/                # global.css（设计令牌）/ scale.css（间距·字号·容器档位）/ admin.css
+│       ├── utils/                 # prefix / sensitiveZone / userKey / adminHealth / editorShortcuts / turndown / miniZip / clipboard
+│       ├── styles/                # global.css（设计令牌）/ scale.css（间距·字号·容器档位）/ admin.css / ai-code.css（代码块高亮与工具条）
 │       ├── views/                 # 50 个顶层页面 + 5 个子目录
 │       │   ├── Home / Login / Register / SetupWizard
 │       │   ├── NovelDetail / Reader（精读·朗读·划线）/ Editor / ChapterEditor
