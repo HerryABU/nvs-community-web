@@ -61,7 +61,7 @@ func TestCurrentWithoutDB(t *testing.T) {
 	}
 	// 诱饵 handler 也要能安全返回（不 panic）
 	c, _ := newCtx("/.env")
-	if ev, err := Record(set, c, allDecoys()["/.env"]); err != nil || ev != nil {
+	if ev, err := Record(set, c, allDecoys(DefaultDecoyProfile())["/.env"]); err != nil || ev != nil {
 		t.Fatalf("off 态不应记录: %+v err=%v", ev, err)
 	}
 }
@@ -69,16 +69,16 @@ func TestCurrentWithoutDB(t *testing.T) {
 // TestLevelControlsDecoys 等级决定诱饵数量：off 无、low 1 个、medium 4 个、high 全量
 func TestLevelControlsDecoys(t *testing.T) {
 	setupHP(t)
-	if got := len(decoysForLevel(LevelOff)); got != 0 {
+	if got := len(decoysForLevel(LevelOff, DefaultDecoyProfile())); got != 0 {
 		t.Fatalf("off 不应有诱饵: %d", got)
 	}
-	if got := len(decoysForLevel(LevelLow)); got != 1 {
+	if got := len(decoysForLevel(LevelLow, DefaultDecoyProfile())); got != 1 {
 		t.Fatalf("low 应为 1 个: %d", got)
 	}
-	if got := len(decoysForLevel(LevelMedium)); got != 4 {
+	if got := len(decoysForLevel(LevelMedium, DefaultDecoyProfile())); got != 4 {
 		t.Fatalf("medium 应为 4 个: %d", got)
 	}
-	if got := len(decoysForLevel(LevelHigh)); got < 6 {
+	if got := len(decoysForLevel(LevelHigh, DefaultDecoyProfile())); got < 6 {
 		t.Fatalf("high 应全量: %d", got)
 	}
 }
@@ -134,7 +134,7 @@ func TestRecordAndBan(t *testing.T) {
 		t.Fatal(err)
 	}
 	c, _ := newCtx("/.env")
-	d := allDecoys()["/.env"]
+	d := allDecoys(DefaultDecoyProfile())["/.env"]
 	ev, err := Record(*set, c, d)
 	if err != nil || ev == nil {
 		t.Fatalf("记录失败: %+v err=%v", ev, err)
@@ -166,12 +166,29 @@ func TestServeDecoyByLevel(t *testing.T) {
 		t.Fatal(err)
 	}
 	// low 只覆盖 .env
-	if content := envDecoy(); !strings.Contains(content, "JWT_SECRET") || !strings.Contains(content, "CANARY=") {
-		t.Fatalf(".env 诱饵应含金丝雀: %s", content)
+	// 诱饵必须「看起来是真的」：要有正常配置项，且**不得**出现任何自曝标记。
+	// 这是回归保护 —— 早期版本写过 `# jwt（泄漏示例 / 已轮换）` 和 `CANARY=...`，
+	// 攻击者扫到 .env 第一眼就知道是蜜罐，整份诱饵白做。
+	content := envDecoy(DefaultDecoyProfile())
+	for _, must := range []string{"APP_NAME", "APP_ENV=production", "JWT_SECRET=", "DB_HOST=", "DB_PASSWORD=", "REDIS_HOST="} {
+		if !strings.Contains(content, must) {
+			t.Fatalf(".env 诱饵缺少正常配置项 %q://n%s", must, content)
+		}
 	}
-	// 金丝雀唯一（两次生成不同）
-	if canary() == canary() {
+	leakMarkers := []string{"CANARY", "HONEY", "DECOY", "EXAMPLE", "PLACEHOLDER", "蜜罐", "示例", "已轮换", "模拟", "占位"}
+	upper := strings.ToUpper(content)
+	for _, m := range leakMarkers {
+		if strings.Contains(upper, strings.ToUpper(m)) {
+			t.Fatalf(".env 诱饵出现自曝标记 %q，攻击者会立刻识破:\n%s", m, content)
+		}
+	}
+	// 金丝雀取值唯一，且 stealth 风格不得带 CANARY 字样
+	a, bb := newCanary(""), newCanary("")
+	if a == bb {
 		t.Fatal("金丝雀应每次唯一")
+	}
+	if strings.Contains(strings.ToUpper(a), "CANARY") {
+		t.Fatalf("stealth 风格的金丝雀不应带 CANARY 字样: %s", a)
 	}
 	// 探测路径不返回内容（与 404 一致）
 	c, w := newCtx("/wp-admin/")
@@ -188,7 +205,7 @@ func TestExportLogsAction(t *testing.T) {
 		t.Fatal(err)
 	}
 	c, _ := newCtx("/.git/config")
-	if _, err := Record(Current(), c, allDecoys()["/.git/config"]); err != nil {
+	if _, err := Record(Current(), c, allDecoys(DefaultDecoyProfile())["/.git/config"]); err != nil {
 		t.Fatal(err)
 	}
 	var sess Session

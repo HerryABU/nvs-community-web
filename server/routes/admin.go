@@ -90,6 +90,8 @@ func registerAdminArea(r *gin.Engine) {
 		admin.GET("/honeypot/config", honeypothandler.GetConfig)
 		admin.PUT("/honeypot/config", honeypothandler.SaveConfig)
 		admin.POST("/honeypot/regenerate-key", honeypothandler.RegenerateKey)
+		// 诱饵内容独立保存：只改文案，不碰启用/等级（避免全量覆盖把蜜罐顺手关掉）
+		admin.PUT("/honeypot/decoy-profile", honeypothandler.SaveDecoyProfile)
 		admin.GET("/honeypot/sessions", honeypothandler.ListSessions)
 		admin.GET("/honeypot/sessions/:sid", honeypothandler.SessionDetail)
 		admin.GET("/honeypot/export", honeypothandler.Export)

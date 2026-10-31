@@ -29,7 +29,7 @@ func TestShadowSecretIsIsolated(t *testing.T) {
 		t.Fatal("蜜罐密钥未生成")
 	}
 	// .env 诱饵里泄露的正是这把密钥
-	if !strings.Contains(envDecoy(), "JWT_SECRET=") {
+	if !strings.Contains(envDecoy(DefaultDecoyProfile()), "JWT_SECRET=") {
 		t.Fatal("诱饵 .env 缺 JWT_SECRET")
 	}
 	tok, err := SignShadow(ShadowClaims{UserID: 1, Email: "a@b.c", Role: "admin", IsAdmin: true})
@@ -138,7 +138,7 @@ func TestForensicsZip(t *testing.T) {
 	setupHP(t)
 	withLevel(t, LevelMedium)
 	c, _ := newCtx("/.env")
-	if _, err := Record(Current(), c, allDecoys()["/.env"]); err != nil {
+	if _, err := Record(Current(), c, allDecoys(DefaultDecoyProfile())["/.env"]); err != nil {
 		t.Fatal(err)
 	}
 	var sess Session
@@ -165,7 +165,7 @@ func TestSuggestAndApplyRules(t *testing.T) {
 	withLevel(t, LevelHigh)
 	c, _ := newCtx("/.env")
 	c.Request.Header.Set("User-Agent", "sqlmap/1.7 (http://sqlmap.org)")
-	if _, err := Record(Current(), c, allDecoys()["/.env"]); err != nil {
+	if _, err := Record(Current(), c, allDecoys(DefaultDecoyProfile())["/.env"]); err != nil {
 		t.Fatal(err)
 	}
 	list := SuggestRules(10)
@@ -225,7 +225,7 @@ func TestDecoyServingEndToEnd(t *testing.T) {
 	withLevel(t, LevelMedium)
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, httptest.NewRequest("GET", "/.env", nil))
-	if w2.Code != 200 || !strings.Contains(w2.Body.String(), "CANARY=") {
+	if w2.Code != 200 || strings.Contains(w2.Body.String(), "CANARY") {
 		t.Fatalf("medium 态应返回诱饵: %d %s", w2.Code, w2.Body.String()[:min(80, w2.Body.Len())])
 	}
 	// low 不覆盖 .git

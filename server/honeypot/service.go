@@ -85,6 +85,10 @@ func SaveSetting(in Setting) (*Setting, error) {
 			return nil, errors.New("自定义诱饵不是合法 JSON 数组")
 		}
 	}
+	// 诱饵画像归一化：金丝雀必须落定成固定值。
+	// 前端「重新生成」= 传空 canary → 这里生成新的；其余情况沿用库里已有的，
+	// 否则每保存一次就换一串，站长拿去外部比对永远对不上。
+	in.DecoyProfile = normalizeDecoyProfile(in.DecoyProfile)
 	in.UpdatedAt = time.Now()
 
 	var old Setting
@@ -105,6 +109,7 @@ func SaveSetting(in Setting) (*Setting, error) {
 			"retention_days": in.RetentionDays,
 			"annotation":     in.Annotation,
 			"custom_decoys":  in.CustomDecoys,
+			"decoy_profile":  in.DecoyProfile,
 			"updated_at":     in.UpdatedAt,
 		}).Error; err != nil {
 			return nil, err
@@ -404,6 +409,10 @@ type Overview struct {
 	Last24h      int64   `json:"last_24h"`
 	BannedCount  int     `json:"banned_count"`
 	KeyB64       string  `json:"key_b64"` // 蜜罐密钥（base64），即诱饵 .env 应暴露的值；仅供管理员查看
+	// DecoyProfile 解析后的诱饵画像（前端表单直接绑定，不用自己 parse JSON）
+	DecoyProfile DecoyProfile `json:"decoy_profile"`
+	// DecoyEnvPreview 当前配置下 .env 诱饵的真实内容（所见即所得，避免前端猜格式）
+	DecoyEnvPreview string `json:"decoy_env_preview"`
 }
 
 // GetOverview 概览
@@ -416,6 +425,8 @@ func GetOverview() Overview {
 	db().Model(&Event{}).Where("created_at >= ?", time.Now().Add(-24*time.Hour)).Count(&o.Last24h)
 	o.BannedCount = len(BannedList())
 	o.KeyB64 = ShadowSecretB64()
+	o.DecoyProfile = ParseProfile(o.Setting.DecoyProfile)
+	o.DecoyEnvPreview = envDecoy(o.DecoyProfile)
 	return o
 }
 
@@ -463,4 +474,52 @@ func Cleanup() int64 {
 	cutoff := time.Now().AddDate(0, 0, -days)
 	res := db().Where("created_at < ?", cutoff).Delete(&Event{})
 	return res.RowsAffected
+}
+
+// normalizeDecoyProfile 保存前对齐诱饵画像。
+//
+// 规则：
+//   - 没传（空串）= 这次不动诱饵配置，沿用库里的；
+//   - 传了但 canary 为空 = 站长点了「重新生成金丝雀」，生成一个新值；
+//   - 传了且带 canary = 原样保存（前端保存时会把当前值一起带上）。
+func normalizeDecoyProfile(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		// 沿用库里的（Current 有 15s 缓存，直接查一次库更准）
+		if db() != nil {
+			var cur Setting
+			if err := db().Where("id = 1").First(&cur).Error; err == nil {
+				return cur.DecoyProfile
+			}
+		}
+		return mustProfileJSON(DefaultDecoyProfile())
+	}
+	var p DecoyProfile
+	if err := json.Unmarshal([]byte(raw), &p); err != nil {
+		return mustProfileJSON(DefaultDecoyProfile())
+	}
+	if strings.TrimSpace(p.Canary) == "" {
+		p.Canary = newCanary(p.CanaryStyle)
+	}
+	return mustProfileJSON(p)
+}
+
+// SaveDecoyProfile 只更新诱饵画像（独立接口）。
+//
+// 为什么不复用 SaveSetting：那是**全量覆盖**语义 —— 请求体里没带的 bool
+// 会被 bind 成 false，于是「只想改一下假域名」会顺手把蜜罐关掉
+// （v4.5.1 在 AI 安全配置上踩过同一个坑）。诱饵内容与策略开关是两个关注点，
+// 拆成独立接口后，改文案永远不会碰开关。
+func SaveDecoyProfile(raw string) (string, error) {
+	if db() == nil {
+		return "", errors.New("数据库未就绪")
+	}
+	next := normalizeDecoyProfile(raw)
+	if err := db().Model(&Setting{}).Where("id = 1").Update("decoy_profile", next).Error; err != nil {
+		return "", err
+	}
+	setMu.Lock()
+	cacheAt = time.Time{} // 立即失效缓存，让预览/诱饵立刻用新配置
+	setMu.Unlock()
+	return next, nil
 }

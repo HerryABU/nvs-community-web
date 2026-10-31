@@ -33,6 +33,27 @@ func GetConfig(c *gin.Context) {
 	utils.Success(c, honeypot.GetOverview())
 }
 
+// SaveDecoyProfile PUT /api/admin/honeypot/decoy-profile
+// 只更新「诱饵内容」画像，不碰启用/等级等策略开关（独立接口，避免全量覆盖误清空）。
+func SaveDecoyProfile(c *gin.Context) {
+	if !ensureAdmin(c) {
+		return
+	}
+	var in struct {
+		Profile string `json:"decoy_profile"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	next, err := honeypot.SaveDecoyProfile(in.Profile)
+	if err != nil {
+		utils.InternalError(c, "保存失败："+err.Error())
+		return
+	}
+	utils.Success(c, gin.H{"decoy_profile": next, "decoy_env_preview": honeypot.GetOverview().DecoyEnvPreview})
+}
+
 // RegenerateKey POST /api/admin/honeypot/regenerate-key
 // 蜜罐密钥「重新生成」（随机新密钥）或「手动修改」（自带 base64 密钥）。
 // 重新生成后，旧诱饵 .env 暴露值失效、已签发影子 token 全部作废。

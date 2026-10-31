@@ -26,7 +26,7 @@ var probePaths = []string{
 
 // Register 挂载诱饵路由（root 级，不经过 /api 鉴权中间件）
 func Register(r *gin.Engine) {
-	for _, d := range allDecoys() {
+	for _, d := range allDecoys(ParseProfile(Current().DecoyProfile)) {
 		decoy := d // 闭包捕获
 		r.Any(decoy.Path, func(c *gin.Context) {
 			serveDecoy(c, decoy)
@@ -56,7 +56,7 @@ func serveDecoy(c *gin.Context, d Decoy) {
 	}
 	// 等级是否覆盖该诱饵
 	covered := false
-	for _, x := range decoysForLevel(set.Level) {
+	for _, x := range decoysForLevel(set.Level, ParseProfile(set.DecoyProfile)) {
 		if x.ID == d.ID {
 			covered = true
 			break
@@ -132,7 +132,7 @@ func serveBaitFile(c *gin.Context, path string) {
 			ID:      "custom",
 			Path:    path,
 			Risk:    60,
-			Content: defaultBaitContent(path),
+			Content: defaultBaitContent(path, ParseProfile(set.DecoyProfile)),
 			Headers: map[string]string{"Content-Type": "text/plain; charset=utf-8"},
 		}
 	}

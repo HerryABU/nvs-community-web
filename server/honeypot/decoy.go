@@ -32,42 +32,50 @@ func randHex(n int) string {
 	return hex.EncodeToString(b)
 }
 
-// canary 本实例的唯一金丝雀
-func canary() string {
-	return "NVS-CANARY-" + strings.ToUpper(randHex(6))
-}
-
-// envDecoy 仿真 .env：JWT 密钥、DB/Redis 占位、运维备注
-func envDecoy() string {
-	return fmt.Sprintf(`# ==== production ====
-APP_NAME="NVS"
+// envDecoy 仿真 .env：JWT 密钥、DB/Redis 占位、运维备注。
+//
+// ⚠️ 这里**绝不能**出现任何自曝标记：
+// 早期版本写了 `# jwt（泄漏示例 / 已轮换）`，还给金丝雀单独开了 `CANARY=` 一行 ——
+// 攻击者扫到 .env 第一眼就知道是蜜罐，整份诱饵白做。
+// 现在金丝雀伪装成一份普通密钥（默认挂 APP_KEY），
+// 具体取值与文案由管理员在后台「蜜罐 → 诱饵内容」里配置（DecoyProfile）。
+func envDecoy(p DecoyProfile) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, `# ==== production ====
+APP_NAME="%s"
 APP_ENV=production
 APP_DEBUG=false
-APP_URL=https://%s.example.com
+APP_URL=https://%s
 
-# jwt（泄漏示例 / 已轮换）
+%s
 JWT_SECRET=%s
 JWT_EXPIRE_HOURS=72
 
 # database
 DB_CONNECTION=mysql
-DB_HOST=10.0.12.31
-DB_PORT=3306
-DB_DATABASE=nvs_prod
-DB_USERNAME=nvs_ro
+DB_HOST=%s
+DB_PORT=%s
+DB_DATABASE=%s
+DB_USERNAME=%s
 DB_PASSWORD=%s
 
 # redis
-REDIS_HOST=10.0.12.41
-REDIS_PORT=6379
+REDIS_HOST=%s
+REDIS_PORT=%s
 REDIS_PASSWORD=%s
-
-# 运维备注：这台的密钥 3 月轮换过一次，脚本在 /opt/ops/rotate.sh
-# TODO 2026-03-xx：临时开的调试接口记得关掉
-DEBUG_TOKEN=%s
-CANARY=%s
 `,
-		"nvs", randHex(24), randHex(12), randHex(12), randHex(16), canary())
+		p.AppName, p.AppURL,
+		p.canaryLine(), randHex(24),
+		p.DBHost, p.DBPort, p.DBName, p.DBUser, randHex(12),
+		p.RedisHost, p.RedisPort, randHex(12),
+	)
+	if p.OpsNote != "" {
+		fmt.Fprintf(&b, "\n# %s\n", p.OpsNote)
+	}
+	if p.DebugTokenOn {
+		fmt.Fprintf(&b, "DEBUG_TOKEN=%s\n", randHex(16))
+	}
+	return b.String()
 }
 
 // gitConfigDecoy 仿真 .git/config
@@ -138,9 +146,9 @@ Disallow: /api/internal
 }
 
 // allDecoys 全量诱饵（按路径索引）
-func allDecoys() map[string]Decoy {
+func allDecoys(p DecoyProfile) map[string]Decoy {
 	list := []Decoy{
-		{ID: "env", Path: "/.env", Risk: 70, Content: envDecoy(),
+		{ID: "env", Path: "/.env", Risk: 70, Content: envDecoy(p),
 			Headers: map[string]string{"Content-Type": "text/plain; charset=utf-8"}},
 		{ID: "git", Path: "/.git/config", Risk: 65, Content: gitConfigDecoy(),
 			Headers: map[string]string{"Content-Type": "text/plain; charset=utf-8"}},
@@ -165,8 +173,8 @@ func allDecoys() map[string]Decoy {
 }
 
 // decoysForLevel 按等级返回要挂的诱饵：低=1 个，中=4 个，高=全量
-func decoysForLevel(level string) []Decoy {
-	all := allDecoys()
+func decoysForLevel(level string, p DecoyProfile) []Decoy {
+	all := allDecoys(p)
 	pick := func(ids ...string) []Decoy {
 		out := make([]Decoy, 0, len(ids))
 		for _, id := range ids {
@@ -257,7 +265,7 @@ func customByPath(set Setting, path string) *CustomDecoy {
 }
 
 // defaultBaitContent 为未自定义的新诱饵路径生成可信泄露内容（按扩展名挑模板）
-func defaultBaitContent(path string) string {
+func defaultBaitContent(path string, p DecoyProfile) string {
 	lower := strings.ToLower(path)
 	switch {
 	case strings.Contains(lower, "id_rsa") || strings.Contains(lower, "server.key") || strings.Contains(lower, ".pem"):
@@ -272,6 +280,6 @@ func defaultBaitContent(path string) string {
 	case strings.Contains(lower, "yml") || strings.Contains(lower, "yaml") || strings.Contains(lower, "config"):
 		return "APP_ENV=production\nDB_HOST=10.0.12.31\nDB_PASSWORD=" + randHex(12) + "\nJWT_SECRET=" + randHex(24) + "\n"
 	default:
-		return "leaked-config\nCANARY=" + canary() + "\n"
+		return "# 部署参数（临时）\n" + p.canaryLine() + "\nDB_HOST=" + p.DBHost + "\nDB_PASSWORD=" + randHex(12) + "\n"
 	}
 }

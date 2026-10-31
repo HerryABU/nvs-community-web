@@ -25,6 +25,8 @@ export interface HoneypotSetting {
   // 站长可编辑项
   annotation?: string;
   custom_decoys?: string;
+  // 诱饵画像 JSON（品牌名/域名/内网拓扑/运维备注/金丝雀），见 server/honeypot/decoy_profile.go
+  decoy_profile?: string;
   updated_at?: string;
 }
 
@@ -78,6 +80,14 @@ export const honeypotApi = {
     return api.put('/admin/honeypot/config', data);
   },
   /** 重新生成 / 手动修改蜜罐密钥（base64）。留空则随机新密钥；传入 key 则手动指定 */
+  /**
+   * 只保存诱饵内容（独立接口）。
+   * 不走 saveConfig：那是全量覆盖，只提交诱饵字段会把「启用」等开关一并清成 false。
+   */
+  saveDecoyProfile(profile: string) {
+    return api.put("/admin/honeypot/decoy-profile", { decoy_profile: profile });
+  },
+
   regenerateKey(data: { key?: string } = {}) {
     return api.post('/admin/honeypot/regenerate-key', data);
   },
@@ -155,4 +165,24 @@ export interface HoneypotRuleSuggestion {
   reason: string;
   hits: number;
   kind: 'ua' | 'path';
+}
+
+/** 诱饵画像：管理员在「蜜罐 → 诱饵内容」里填，决定 .env 诱饵长什么样 */
+export interface DecoyProfile {
+  app_name: string;
+  app_url: string;
+  db_host: string;
+  db_port: string;
+  db_name: string;
+  db_user: string;
+  redis_host: string;
+  redis_port: string;
+  ops_note: string;
+  debug_token_on: boolean;
+  /** 金丝雀值：持久化，重启不变；清空 = 让后端重新生成 */
+  canary: string;
+  /** stealth（默认，伪装成普通密钥）/ labeled（带 NVS-CANARY- 前缀，便于自查） */
+  canary_style: string;
+  /** 金丝雀挂在哪一行，默认 APP_KEY */
+  canary_key: string;
 }

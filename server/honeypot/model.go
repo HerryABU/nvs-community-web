@@ -8,6 +8,7 @@ package honeypot
 // 铁律：蜜罐凭据全部一次性生成、与真实系统零复用；不碰真实库；不提供任何「放行」分支。
 
 import (
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -53,6 +54,9 @@ type Setting struct {
 	// 站长可编辑项
 	Annotation   string `gorm:"type:text" json:"annotation"`    // 站长备注 / 注释（灵活记录）
 	CustomDecoys string `gorm:"type:text" json:"custom_decoys"` // 自定义诱饵 JSON：[{"id","path","content","risk","headers":{}}]（覆盖默认内容或新增路径）
+	// DecoyProfile 诱饵画像 JSON（品牌名/域名/内网拓扑/运维备注/金丝雀），见 decoy_profile.go。
+	// 金丝雀值持久化在这里 —— 否则每次重启都变，站长拿它去外部比对就永远对不上。
+	DecoyProfile string `gorm:"type:text" json:"decoy_profile"`
 
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -110,8 +114,18 @@ func Migrate(db *gorm.DB) error {
 			ID: 1, Enabled: false, Level: LevelOff,
 			RecordUA: true, RecordReferer: true, RecordQuery: true,
 			BodySnippetLimit: 512, BanMinutes: 60, RetentionDays: 90,
-			UpdatedAt: time.Now(),
+			DecoyProfile: mustProfileJSON(DefaultDecoyProfile()),
+			UpdatedAt:    time.Now(),
 		})
+	} else {
+		// 老库升级：此前没有 DecoyProfile（诱饵内容硬编码），补一份并固定金丝雀值，
+		// 否则每次重启金丝雀都会变，站长拿它去外部比对永远对不上。
+		var s Setting
+		if err := db.Where("id = 1").First(&s).Error; err == nil && strings.TrimSpace(s.DecoyProfile) == "" {
+			p := DefaultDecoyProfile()
+			p.Canary = newCanary(p.CanaryStyle)
+			db.Model(&Setting{}).Where("id = 1").Update("decoy_profile", mustProfileJSON(p))
+		}
 	}
 	return nil
 }

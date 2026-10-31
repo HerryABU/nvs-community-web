@@ -58,8 +58,8 @@ func TestSQLiRiskScoring(t *testing.T) {
 
 // TestFakeResultShape 预生成响应库：金丝雀必须在，且不含真实数据
 func TestFakeResultShape(t *testing.T) {
-	if !strings.HasPrefix(sqliCanary, "NVS-CANARY-SQLI-") {
-		t.Fatalf("金丝雀格式不对: %s", sqliCanary)
+	if len(sqliCanary) != 32 {
+		t.Fatalf("溯源标记应为 32 位十六进制（伪装成普通 token），实得: %s", sqliCanary)
 	}
 	users := fakeUsers(6)
 	if len(users) == 0 {

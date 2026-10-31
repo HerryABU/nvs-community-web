@@ -64,6 +64,199 @@
       </el-form>
     </el-card>
 
+
+    <el-card class="hp-section">
+
+      <template #header>
+
+        <div class="hp-section-head">
+
+          <span>诱饵内容（.env 假数据）</span>
+
+          <span class="hp-tip">攻击者扫到的就是这份「泄露配置」—— 填得越像真实环境越有迷惑性</span>
+
+        </div>
+
+      </template>
+
+
+
+      <el-alert type="warning" :closable="false" show-icon style="margin-bottom:14px">
+
+        <template #title>
+
+          诱饵里<b>不得出现</b>「示例 / 已轮换 / CANARY」这类字样：攻击者看到任一个标记就会识破是蜜罐。
+
+          金丝雀默认伪装成一份普通密钥（默认挂 APP_KEY），站长复制下面的值，日后若在外网看到同一串即可确认泄露来源。
+
+        </template>
+
+      </el-alert>
+
+
+
+      <el-form label-width="150px">
+
+        <el-row :gutter="16">
+
+          <el-col :span="12">
+
+            <el-form-item label="站点名称">
+
+              <el-input v-model="decoy.app_name" placeholder="NVS" />
+
+            </el-form-item>
+
+          </el-col>
+
+          <el-col :span="12">
+
+            <el-form-item label="假装的生产域名">
+
+              <el-input v-model="decoy.app_url" placeholder="app.nvs-prod.cn">
+
+                <template #prepend>https://</template>
+
+              </el-input>
+
+            </el-form-item>
+
+          </el-col>
+
+        </el-row>
+
+
+
+        <el-row :gutter="16">
+
+          <el-col :span="12"><el-form-item label="数据库主机"><el-input v-model="decoy.db_host" /></el-form-item></el-col>
+
+          <el-col :span="12"><el-form-item label="端口"><el-input v-model="decoy.db_port" style="max-width:140px" /></el-form-item></el-col>
+
+        </el-row>
+
+        <el-row :gutter="16">
+
+          <el-col :span="12"><el-form-item label="数据库名"><el-input v-model="decoy.db_name" /></el-form-item></el-col>
+
+          <el-col :span="12"><el-form-item label="数据库用户"><el-input v-model="decoy.db_user" /></el-form-item></el-col>
+
+        </el-row>
+
+        <el-row :gutter="16">
+
+          <el-col :span="12"><el-form-item label="Redis 主机"><el-input v-model="decoy.redis_host" /></el-form-item></el-col>
+
+          <el-col :span="12"><el-form-item label="端口"><el-input v-model="decoy.redis_port" style="max-width:140px" /></el-form-item></el-col>
+
+        </el-row>
+
+
+
+        <el-form-item label="运维备注">
+
+          <el-input v-model="decoy.ops_note" type="textarea" :rows="2"
+
+            placeholder="像真人写的：这台机器换过什么、脚本放哪。不要提测试/蜜罐" />
+
+        </el-form-item>
+
+        <el-form-item label="留临时调试令牌">
+
+          <el-switch v-model="decoy.debug_token_on" />
+
+          <span class="hp-tip">额外塞一个 DEBUG_TOKEN，让「运维疏忽」更真实</span>
+
+        </el-form-item>
+
+
+
+        <el-form-item label="金丝雀溯源值">
+
+          <el-input v-model="decoy.canary" readonly style="max-width:420px">
+
+            <template #append>
+
+              <el-button @click="copyCanary">复制</el-button>
+
+            </template>
+
+          </el-input>
+
+          <el-button size="small" style="margin-left:8px" @click="regenCanary">重新生成</el-button>
+
+          <div class="hp-tip" style="width:100%">
+
+            持久化保存，重启不变（变了就没法拿去做外部比对）。「重新生成」需点保存才生效。
+
+          </div>
+
+        </el-form-item>
+
+        <el-row :gutter="16">
+
+          <el-col :span="12">
+
+            <el-form-item label="挂在哪个变量">
+
+              <el-select v-model="decoy.canary_key" style="width:100%">
+
+                <el-option label="APP_KEY（Laravel 风格）" value="APP_KEY" />
+
+                <el-option label="SECRET_KEY" value="SECRET_KEY" />
+
+                <el-option label="ENCRYPTION_KEY" value="ENCRYPTION_KEY" />
+
+                <el-option label="JWT_SECRET" value="JWT_SECRET" />
+
+              </el-select>
+
+            </el-form-item>
+
+          </el-col>
+
+          <el-col :span="12">
+
+            <el-form-item label="取值风格">
+
+              <el-radio-group v-model="decoy.canary_style">
+
+                <el-radio value="stealth">伪装（推荐）</el-radio>
+
+                <el-radio value="labeled">带 CANARY 前缀</el-radio>
+
+              </el-radio-group>
+
+            </el-form-item>
+
+          </el-col>
+
+        </el-row>
+
+      </el-form>
+
+
+
+      <div style="margin-top:14px">
+        <el-button type="primary" :loading="savingDecoy" @click="saveDecoy">保存诱饵内容</el-button>
+        <span class="hp-tip" style="margin-left:10px">只保存这份假数据，不动上面的启用与等级开关</span>
+      </div>
+
+      <div class="hp-preview">
+
+        <div class="hp-preview-head">
+
+          <span>当前实际返回给扫描器的 .env（保存后更新）</span>
+
+        </div>
+
+        <pre class="hp-preview-body">{{ overview?.decoy_env_preview || "（未加载）" }}</pre>
+
+      </div>
+
+    </el-card>
+
+
     <el-card class="hp-section">
       <template #header>
         <div class="hp-section-head">
@@ -292,6 +485,7 @@ import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import StateBlock from '@/components/common/StateBlock.vue';
 import AdminApiAlert from '@/components/admin/AdminApiAlert.vue';
+import { copyText } from '@/utils/clipboard';
 import {
   honeypotApi,
   type HoneypotSetting,
@@ -300,6 +494,7 @@ import {
   type HoneypotEvent,
   type HoneypotFingerprint,
   type HoneypotRuleSuggestion,
+  type DecoyProfile,
 } from '@/api/admin/honeypot';
 
 const defaultAllow = 'X-Forwarded-For,X-Real-IP,X-Requested-With,Sec-Fetch-Site,CF-Connecting-IP';
@@ -329,6 +524,63 @@ const form = reactive<HoneypotSetting>({
   auto_ban: false, ban_minutes: 60, delay_ms: 0, retention_days: 90,
   annotation: '', custom_decoys: '',
 });
+
+// 诱饵画像：与 form 分开维护（界面按字段编辑、后端存 JSON 串）。
+// 主「保存」也会带上一份，但推荐用卡片里的「保存诱饵内容」—— 那个走独立接口，
+// 只改文案、不碰启用与等级开关。
+// 单独一份的原因是：界面按字段编辑，后端存的是 JSON 字符串。
+const decoy = reactive<DecoyProfile>({
+  app_name: 'NVS',
+  app_url: 'app.nvs-prod.cn',
+  db_host: '10.0.12.31',
+  db_port: '3306',
+  db_name: 'nvs_prod',
+  db_user: 'nvs_ro',
+  redis_host: '10.0.12.41',
+  redis_port: '6379',
+  ops_note: '',
+  debug_token_on: true,
+  canary: '',
+  canary_style: 'stealth',
+  canary_key: 'APP_KEY',
+});
+
+const savingDecoy = ref(false);
+
+/**
+ * 保存诱饵内容 —— 走独立接口。
+ * 不用主 save：主 save 是全量覆盖，只提交诱饵字段会把「启用」开关顺手清成 false，
+ * 站长会以为「改个假域名，蜜罐怎么自己关了」。
+ */
+async function saveDecoy() {
+  savingDecoy.value = true;
+  try {
+    const res: any = await honeypotApi.saveDecoyProfile(JSON.stringify({ ...decoy }));
+    const d = res?.data?.data;
+    if (d?.decoy_profile) Object.assign(decoy, d.decoy_profile);
+    if (overview.value) overview.value.decoy_env_preview = d?.decoy_env_preview || overview.value.decoy_env_preview;
+    ElMessage.success('诱饵内容已保存');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  } finally {
+    savingDecoy.value = false;
+  }
+}
+
+async function copyCanary() {
+  if (!decoy.canary) {
+    ElMessage.warning('还没有金丝雀值，先保存一次生成');
+    return;
+  }
+  const ok = await copyText(decoy.canary);
+  ok ? ElMessage.success('已复制，可用于外部泄露比对') : ElMessage.warning('复制失败，请手动选中');
+}
+
+/** 重新生成：清空值，交给后端在保存时生成新的（保证「一次生成、持久化」的语义） */
+function regenCanary() {
+  decoy.canary = "";
+  ElMessage.info('已标记重新生成，点「保存」后生效');
+}
 
 function maskKey(k?: string) {
   if (!k) return '（无）';
@@ -385,6 +637,7 @@ async function load() {
     overview.value = res.data.data;
     if (res.data.data?.setting) {
       Object.assign(form, res.data.data.setting);
+      if (res.data.data.decoy_profile) Object.assign(decoy, res.data.data.decoy_profile);
       if (!form.header_allowlist) form.header_allowlist = defaultAllow;
     }
     await loadSessions();
@@ -405,6 +658,8 @@ async function loadSessions() {
 async function save() {
   saving.value = true;
   try {
+    // 诱饵画像按 JSON 串提交；canary 为空 = 让后端重新生成
+    form.decoy_profile = JSON.stringify({ ...decoy });
     await honeypotApi.saveConfig({ ...form });
     ElMessage.success('已保存');
     await load();
@@ -522,6 +777,9 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.hp-preview { margin-top: 14px; border: 1px solid var(--el-border-color-lighter, #ebeef5); border-radius: 8px; overflow: hidden; }
+.hp-preview-head { padding: 8px 12px; background: var(--bg-page, #fafbfc); font-size: 0.78rem; color: var(--text-light, #909399); border-bottom: 1px solid var(--el-border-color-lighter, #ebeef5); }
+.hp-preview-body { margin: 0; padding: 12px 14px; background: #1e293b; color: #e2e8f0; font-family: var(--font-mono, Consolas, Monaco, monospace); font-size: 0.76rem; line-height: 1.7; white-space: pre-wrap; word-break: break-all; max-height: 320px; overflow: auto; }
 .hp-page { padding: 16px 20px 48px; max-width: 1180px; margin: 0 auto; }
 .hp-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .hp-head h2 { margin: 0; font-size: 1.3rem; }

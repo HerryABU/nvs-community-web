@@ -130,8 +130,14 @@ func fakeUsers(n int) []fakeUser {
 	return out
 }
 
-// canaryToken 每次进程启动生成一次（同一次攻击会话内一致，便于关联）
-var sqliCanary = fmt.Sprintf("NVS-CANARY-SQLI-%08x", uint32(time.Now().UnixNano()))
+// sqliCanary 本进程的溯源标记（同一次攻击会话内一致，便于关联）。
+//
+// ⚠️ 早期版本把它当成 JSON 字段 "canary" 直接回给攻击者 ——
+// 注入的人看到响应里写着 NVS-CANARY-SQLI-xxxx，立刻就知道踩了蜜罐。
+// 现在改成伪装成业务字段的值：会话 token / 实例 ID / 用户的 api_token。
+// 站长记下这些值，若日后在外网（仓库、论坛、数据交易）看到同一串，
+// 即可确认那份数据来自本蜜罐；攻击者拿到的则是一份「看起来很正常的库」。
+var sqliCanary = randHex(16)
 
 // ServeSQLi 处理一次注入请求，返回仿真结果并记事件。
 func ServeSQLi(c *gin.Context, decoyID string) {
@@ -173,7 +179,7 @@ func writeFakeResult(c *gin.Context, decoyID string, hits []string) {
 			"msg":  "ok",
 			"data": gin.H{
 				"uid": users[0].ID, "username": users[0].Username, "role": "admin",
-				"token": "hp." + sqliCanary, "expire": 7200,
+				"token": "sess_" + sqliCanary, "expire": 7200,
 			},
 		})
 	case "sqli_schema":
@@ -182,15 +188,15 @@ func writeFakeResult(c *gin.Context, decoyID string, hits []string) {
 			cols = append(cols, gin.H{"table": t, "rows": 120 + i*37, "engine": "InnoDB"})
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"code": 0, "canary": sqliCanary,
-			"data": gin.H{"database": "nvs_prod", "tables": cols},
+			"code": 0,
+			"data": gin.H{"database": "nvs_prod", "instance_id": "db-" + sqliCanary[:12], "tables": cols},
 		})
 	case "sqli_dump":
 		rows := make([]gin.H, 0, len(users))
 		for _, u := range users {
 			rows = append(rows, gin.H{
 				"id": u.ID, "username": u.Username, "email": u.Email,
-				"password": u.Hash, "role": u.Role, "canary": sqliCanary,
+				"password": u.Hash, "role": u.Role, "api_token": "ak_" + sqliCanary[:20],
 			})
 		}
 		c.JSON(http.StatusOK, gin.H{"code": 0, "count": len(rows), "rows": rows})
@@ -201,12 +207,12 @@ func writeFakeResult(c *gin.Context, decoyID string, hits []string) {
 				"code": 1064,
 				"msg": fmt.Sprintf("You have an error in your SQL syntax near '%s' at line 1",
 					truncate(strings.Join(hits, ","), 120)),
-				"sqlstate": "42000", "canary": sqliCanary,
+				"sqlstate": "42000",
 			})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"code": 0, "data": gin.H{"affected": 1, "server": "MySQL 5.7.42-log", "canary": sqliCanary},
+			"code": 0, "data": gin.H{"affected": 1, "server": "MySQL 5.7.42-log", "thread_id": 8812},
 		})
 	}
 }
