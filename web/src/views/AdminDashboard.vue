@@ -35,91 +35,210 @@
         </template>
       </el-alert>
 
-      <!-- 第一行：统计卡片 -->
-      <el-row :gutter="20" class="stats-row">
-        <el-col :xs="24" :sm="12" :md="6" v-for="(card, idx) in statCardDefs" :key="idx">
-          <div class="glass-stat-card">
-            <div class="glass-stat-icon" :style="{ background: card.gradient }">
-              <el-icon :size="24"><component :is="card.icon" /></el-icon>
-            </div>
-            <div class="glass-stat-body">
-              <AnimatedNumber
-                :target="card.value"
-                :duration="1400"
-                class="glass-stat-value"
-              />
-              <div class="glass-stat-label">{{ card.label }}</div>
-            </div>
-          </div>
-        </el-col>
-      </el-row>
+      <!-- 三幕切换：总览 / 内容与热词 / 用户与终端。
+           数据量太大，一屏塞不下；分幕后每幕只回答一类问题，并写进 hash 便于收藏。 -->
+      <div class="dash-tabs" role="tablist">
+        <button
+          v-for="s in scenes"
+          :key="s.key"
+          type="button"
+          role="tab"
+          class="dash-tab"
+          :class="{ active: scene === s.key }"
+          :aria-selected="scene === s.key"
+          @click="switchScene(s.key)"
+        >
+          <span class="dash-tab-ico">{{ s.icon }}</span>{{ s.label }}
+        </button>
+      </div>
 
-      <!-- 第二行：趋势图（左=用户增长，右=访问趋势，两张图数据不同） -->
-      <el-row :gutter="20" class="chart-row">
-        <el-col :xs="24" :md="12">
-          <DashboardCharts :metrics="userOnlyMetrics" />
-        </el-col>
-        <el-col :xs="24" :md="12">
-          <DashboardCharts :metrics="visitorMetrics" />
-        </el-col>
-      </el-row>
-
-      <!-- 第三行：柱状图 + 饼图 -->
-      <el-row :gutter="20" class="chart-row">
-        <el-col :xs="24" :md="12">
-          <DashboardCharts :novel-bars="topNovelBars" />
-        </el-col>
-        <el-col :xs="24" :md="12">
-          <DashboardCharts :category-pie="categoryPieData" />
-        </el-col>
-      </el-row>
-
-      <!-- 第四行：热力图（中国省级访问热力 + 星期×小时 活跃热力） -->
-      <el-row :gutter="20" class="chart-row">
-        <el-col :xs="24" :lg="12">
-          <div class="hm-card">
-            <h4 class="chart-title">访问来源地域（近 30 天）</h4>
-            <div v-if="geoSummary" class="geo-sum">
-              <span>境内 <b>{{ geoSummary.cn_pct }}%</b>（{{ geoSummary.cn }}）</span>
-              <span>境外 <b>{{ geoSummary.os_pct }}%</b>（{{ geoSummary.overseas }}）</span>
-              <span class="muted">内网/保留 {{ geoSummary.reserved }} 不计入</span>
-            </div>
-            <StdMap
-              :data="provinceHeat"
-              :countries="countryHeat"
-              note="基于 ip2region 离线库按省级着色；内网/保留地址与境外不计入省份排名（境外见「全球」视野）。"
-            />
-          </div>
-        </el-col>
-        <el-col :xs="24" :lg="12">
-          <div class="hm-card">
-            <AdminActiveHoursHeatmap :matrix="activeHours" />
-          </div>
-        </el-col>
-      </el-row>
-
-      <!-- 第五行：客户端画像（设备/OS/浏览器分布，结构化 UA 解析） -->
-      <el-row :gutter="20" class="chart-row">
-        <el-col :xs="24" :lg="8" v-for="(grp, gi) in clientGroups" :key="gi">
-          <div class="hm-card">
-            <h4 class="chart-title">{{ grp.title }}</h4>
-            <div v-if="!grp.items || grp.items.length === 0" class="client-empty">近 30 天暂无数据</div>
-            <div v-for="(it, i) in grp.items" :key="i" class="client-bar-row">
-              <span class="client-bar-label">{{ grp.key === 'device' ? deviceName(it.name) : it.name }}</span>
-              <div class="client-bar-track">
-                <div class="client-bar-fill" :style="{ width: barPct(grp.items, it.cnt) }"></div>
+      <!-- ===================== 幕 1｜总览 ===================== -->
+      <template v-if="scene === 'overview'">
+        <!-- 统计卡片 -->
+        <el-row :gutter="20" class="stats-row">
+          <el-col :xs="24" :sm="12" :md="6" v-for="(card, idx) in statCardDefs" :key="idx">
+            <div class="glass-stat-card">
+              <div class="glass-stat-icon" :style="{ background: card.gradient }">
+                <el-icon :size="24"><component :is="card.icon" /></el-icon>
               </div>
-              <span class="client-bar-count">{{ it.cnt }}</span>
+              <div class="glass-stat-body">
+                <AnimatedNumber :target="card.value" :duration="1400" class="glass-stat-value" />
+                <div class="glass-stat-label">{{ card.label }}</div>
+              </div>
             </div>
-          </div>
-        </el-col>
-      </el-row>
+          </el-col>
+        </el-row>
+
+        <!-- 趋势：左=用户增长，右=访问趋势（两张图数据不同） -->
+        <el-row :gutter="20" class="chart-row">
+          <el-col :xs="24" :md="12">
+            <DashboardCharts :metrics="userOnlyMetrics" />
+          </el-col>
+          <el-col :xs="24" :md="12">
+            <DashboardCharts :metrics="visitorMetrics" />
+          </el-col>
+        </el-row>
+
+        <!-- 地域 + 活跃时段 -->
+        <el-row :gutter="20" class="chart-row">
+          <el-col :xs="24" :lg="12">
+            <div class="hm-card">
+              <h4 class="chart-title">访问来源地域（近 30 天）</h4>
+              <div v-if="geoSummary" class="geo-sum">
+                <span>境内 <b>{{ geoSummary.cn_pct }}%</b>（{{ geoSummary.cn }}）</span>
+                <span>境外 <b>{{ geoSummary.os_pct }}%</b>（{{ geoSummary.overseas }}）</span>
+                <span class="muted">内网/保留 {{ geoSummary.reserved }} 不计入</span>
+              </div>
+              <StdMap
+                :data="provinceHeat"
+                :countries="countryHeat"
+                note="基于 ip2region 离线库按省级着色；内网/保留地址与境外不计入省份排名（境外见「全球」视野）。"
+              />
+            </div>
+          </el-col>
+          <el-col :xs="24" :lg="12">
+            <div class="hm-card">
+              <AdminActiveHoursHeatmap :matrix="activeHours" />
+            </div>
+          </el-col>
+        </el-row>
+      </template>
+
+      <!-- ===================== 幕 2｜内容与热词 ===================== -->
+      <template v-else-if="scene === 'content'">
+        <!-- 违禁词拦截：三个数先给结论 -->
+        <el-row :gutter="20" class="stats-row">
+          <el-col :xs="24" :sm="8">
+            <div class="glass-stat-card">
+              <div class="glass-stat-icon" style="background: var(--gradient-rose, linear-gradient(135deg,#f43f5e,#e11d48))">🛡️</div>
+              <div class="glass-stat-body">
+                <AnimatedNumber :target="badword.blocked" :duration="1200" class="glass-stat-value" />
+                <div class="glass-stat-label">违禁词命中（近 30 天，已留痕）</div>
+              </div>
+            </div>
+          </el-col>
+          <el-col :xs="24" :sm="8">
+            <div class="glass-stat-card">
+              <div class="glass-stat-icon" style="background: var(--gradient-amber, linear-gradient(135deg,#f59e0b,#d97706))">⏳</div>
+              <div class="glass-stat-body">
+                <AnimatedNumber :target="badword.pending" :duration="1200" class="glass-stat-value" />
+                <div class="glass-stat-label">其中待人工复核</div>
+              </div>
+            </div>
+          </el-col>
+          <el-col :xs="24" :sm="8">
+            <div class="glass-stat-card">
+              <div class="glass-stat-icon" style="background: var(--gradient-blue, linear-gradient(135deg,#3b82f6,#2563eb))">📚</div>
+              <div class="glass-stat-body">
+                <AnimatedNumber :target="badword.library" :duration="1200" class="glass-stat-value" />
+                <div class="glass-stat-label">词库总词数（启用 {{ badword.lib_enabled }}）</div>
+              </div>
+            </div>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="20" class="chart-row">
+          <el-col :xs="24" :lg="12">
+            <div class="hm-card">
+              <h4 class="chart-title">违禁词词云（近 30 天命中频次）</h4>
+              <p class="chart-sub">字号越大命中越多；只统计已留痕的命中，瞬时拒绝不在其内</p>
+              <div v-if="badwordWords.length" class="wc">
+                <span
+                  v-for="(w, i) in badwordWords"
+                  :key="w.word"
+                  class="wc-item"
+                  :style="wcStyle(w)"
+                  :title="`${w.word}：${w.count} 次`"
+                >{{ w.word }}</span>
+              </div>
+              <StateBlock
+                v-else
+                state="empty"
+                title="近 30 天没有命中记录"
+                description="内容命中违禁词并留痕后，这里会按词频生成词云。"
+              />
+            </div>
+          </el-col>
+          <el-col :xs="24" :lg="12">
+            <div class="hm-card">
+              <h4 class="chart-title">搜索热词（近 7 天）</h4>
+              <p class="chart-sub">读者在找什么 —— 需求最直接的信号</p>
+              <div v-if="hotSearch.length" class="hot-list">
+                <div v-for="(w, i) in hotSearch" :key="w.word" class="hot-row">
+                  <span class="hot-rank" :class="{ top: i < 3 }">{{ i + 1 }}</span>
+                  <span class="hot-word">{{ w.word }}</span>
+                  <div class="hot-track"><div class="hot-fill" :style="{ width: hotPct(hotSearch, w.count) }"></div></div>
+                  <span class="hot-count">{{ w.count }}</span>
+                </div>
+              </div>
+              <StateBlock v-else state="empty" title="近 7 天没有搜索记录" description="搜索埋点会记录查询词与分词结果。" />
+            </div>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="20" class="chart-row">
+          <el-col :xs="24" :lg="12">
+            <div class="hm-card">
+              <h4 class="chart-title">评论区热词（近 7 天）</h4>
+              <p class="chart-sub">评论 / 回帖分词后的高频词 —— 读者在聊什么</p>
+              <div v-if="hotContent.length" class="hot-list">
+                <div v-for="(w, i) in hotContent" :key="w.word" class="hot-row">
+                  <span class="hot-rank" :class="{ top: i < 3 }">{{ i + 1 }}</span>
+                  <span class="hot-word">{{ w.word }}</span>
+                  <div class="hot-track"><div class="hot-fill" :style="{ width: hotPct(hotContent, w.count) }"></div></div>
+                  <span class="hot-count">{{ w.count }}</span>
+                </div>
+              </div>
+              <StateBlock v-else state="empty" title="近 7 天没有可分析的评论" description="评论内容分词后按词频排序。" />
+            </div>
+          </el-col>
+          <el-col :xs="24" :lg="12">
+            <div class="hm-card">
+              <h4 class="chart-title">作品标签分布（当前作品库）</h4>
+              <p class="chart-sub">作者在写什么 —— 标签是作品固有属性，不按时间窗筛选</p>
+              <div v-if="hotTag.length" class="hot-list">
+                <div v-for="(w, i) in hotTag" :key="w.word" class="hot-row">
+                  <span class="hot-rank" :class="{ top: i < 3 }">{{ i + 1 }}</span>
+                  <span class="hot-word">{{ w.word }}</span>
+                  <div class="hot-track"><div class="hot-fill" :style="{ width: hotPct(hotTag, w.count) }"></div></div>
+                  <span class="hot-count">{{ w.count }}</span>
+                </div>
+              </div>
+              <StateBlock v-else state="empty" title="近 7 天没有标签数据" description="作品填写标签后会计入这里（按作品库分布，不限时间窗）。" />
+            </div>
+          </el-col>
+        </el-row>
+      </template>
+
+      <!-- ===================== 幕 3｜用户与终端 ===================== -->
+      <template v-else>
+        <el-row :gutter="20" class="chart-row">
+          <el-col :xs="24" :md="12">
+            <DashboardCharts :novel-bars="topNovelBars" />
+          </el-col>
+          <el-col :xs="24" :md="12">
+            <DashboardCharts :category-pie="categoryPieData" />
+          </el-col>
+        </el-row>
+
+        <!-- 客户端画像：条形改环形图，占比一眼可读 -->
+        <el-row :gutter="20" class="chart-row">
+          <el-col :xs="24" :lg="8" v-for="(grp, gi) in clientGroups" :key="gi">
+            <div class="hm-card">
+              <h4 class="chart-title">{{ grp.title }}</h4>
+              <div v-if="!grp.items || grp.items.length === 0" class="client-empty">近 30 天暂无数据</div>
+              <v-chart v-else :option="clientPieOption(grp)" autoresize class="client-pie" />
+            </div>
+          </el-col>
+        </el-row>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, onMounted, computed, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { adminApi } from '@/api/admin';
 import { opsApi } from '@/api/ops';
 import {
@@ -130,6 +249,7 @@ import AnimatedNumber from '@/components/AnimatedNumber.vue';
 import DashboardCharts from '@/components/DashboardCharts.vue';
 import StdMap from '@/components/maps/StdMap.vue';
 import AdminActiveHoursHeatmap from '@/components/admin/AdminActiveHoursHeatmap.vue';
+import StateBlock from '@/components/common/StateBlock.vue';
 
 const refreshing = ref(false);
 
@@ -206,6 +326,100 @@ function deviceName(n: string) {
 function barPct(items: any[], cnt: number) {
   const max = Math.max(1, ...items.map((x: any) => Number(x.cnt) || 0));
   return Math.round((Number(cnt) / max) * 100) + '%';
+}
+
+// ==================== 三幕切换 ====================
+// 数据量大，一屏塞不下：幕 1 总览（趋势与地域）、幕 2 内容与热词、幕 3 用户与终端。
+// 用 v-if 而不是 v-show：ECharts 在 display:none 的容器里挂不上 canvas，
+// 隐藏幕里的图表会变成空白，切回来也不会自己画（真实踩过）。
+type Scene = 'overview' | 'content' | 'clients';
+const SCENE_KEYS: Scene[] = ['overview', 'content', 'clients'];
+const scenes = [
+  { key: 'overview' as Scene, label: '总览', icon: '📊' },
+  { key: 'content' as Scene, label: '内容与热词', icon: '🔥' },
+  { key: 'clients' as Scene, label: '用户与终端', icon: '💻' },
+];
+
+const route = useRoute();
+const router = useRouter();
+
+// 幕用 query 参数（?scene=content）：能随路由前进/后退、可直接分享到某一幕，
+// 与后台其它页的 ?item= 深链风格一致，不用 #hash 另立一套。
+function readScene(): Scene {
+  const q = String(route.query.scene || '');
+  return (SCENE_KEYS as string[]).includes(q) ? (q as Scene) : 'overview';
+}
+const scene = ref<Scene>(readScene());
+
+function switchScene(k: Scene) {
+  scene.value = k;
+  // 保留其它 query，只覆盖 scene；replace 避免切幕堆历史
+  router.replace({ query: { ...route.query, scene: k } });
+}
+
+// 外部改动地址（粘贴链接 / 前进后退）时同步
+watch(
+  () => route.query.scene,
+  () => {
+    const k = readScene();
+    if (k !== scene.value) scene.value = k;
+  },
+);
+
+// 客户端分布：环形图（原先只有进度条，看不出占比关系）
+const PIE_COLORS = ['#6366f1', '#14b8a6', '#f59e0b', '#ef4444', '#8b5cf6', '#0ea5e9', '#84cc16', '#f472b6'];
+function clientPieOption(grp: { key: string; items: any[] }) {
+  const items = (grp.items || []).map((it: any) => ({
+    name: grp.key === 'device' ? deviceName(it.name) : it.name,
+    value: Number(it.cnt) || 0,
+  }));
+  return {
+    tooltip: { trigger: 'item', formatter: '{b}：{c}（{d}%）' },
+    legend: { bottom: 0, type: 'scroll', itemWidth: 9, itemHeight: 9, textStyle: { fontSize: 11 } },
+    color: PIE_COLORS,
+    series: [
+      {
+        type: 'pie',
+        radius: ['46%', '68%'],
+        center: ['50%', '44%'],
+        avoidLabelOverlap: true,
+        itemStyle: { borderColor: 'var(--bg-card, #fff)', borderWidth: 2 },
+        label: { show: false },
+        labelLine: { show: false },
+        emphasis: { label: { show: true, fontSize: 13, fontWeight: 'bold', formatter: '{b}\n{d}%' } },
+        data: items,
+      },
+    ],
+  };
+}
+
+// ==================== 幕 2：违禁词与热词 ====================
+const badword = reactive({ blocked: 0, pending: 0, confirmed: 0, library: 0, lib_enabled: 0 });
+const badwordWords = ref<{ word: string; count: number }[]>([]);
+const hotSearch = ref<{ word: string; count: number }[]>([]);
+const hotContent = ref<{ word: string; count: number }[]>([]);
+const hotTag = ref<{ word: string; count: number }[]>([]);
+
+// 词云不是 ECharts 插件（项目没装 echarts-wordcloud，不为此引入新依赖）：
+// 按词频映射字号 + 分档配色，纯 CSS 排版即可，且不增加打包体积。
+const wcMax = computed(() => Math.max(1, ...badwordWords.value.map((w) => w.count)));
+function wcStyle(w: { word: string; count: number }) {
+  const ratio = w.count / wcMax.value;
+  const size = Math.round(13 + ratio * 21); // 13 ~ 34px
+  // 高频词用暖色高亮，低频词降饱和，视觉上自然分层
+  const palette = ['#dc2626', '#ea580c', '#d97706', '#7c3aed', '#2563eb', '#0f766e', '#475569'];
+  const idx = Math.min(palette.length - 1, Math.floor((1 - ratio) * palette.length));
+  return {
+    fontSize: `${size}px`,
+    color: palette[idx],
+    fontWeight: ratio > 0.6 ? '700' : '500',
+    opacity: String(0.55 + ratio * 0.45),
+  };
+}
+
+function hotPct(list: { count: number }[], count: number) {
+  const max = Math.max(1, ...list.map((x) => x.count));
+  return Math.max(4, Math.round((count / max) * 100)) + '%';
 }
 
 // 左上图：只看「用户增长」。此前左右两列渲染的是同一个 adminTrendMetrics，
@@ -312,6 +526,23 @@ async function loadDashboard() {
     const ah = d?.active_hours;
     if (Array.isArray(ah)) activeHours.value = ah;
     if (d?.client) clientData.value = d.client;
+
+    // 幕 2：违禁词命中与词云 + 三类热词（后端同一次响应带回，避免三个额外请求）
+    const bw = d?.badword;
+    if (bw?.available) {
+      badword.blocked = bw.blocked || 0;
+      badword.pending = bw.pending || 0;
+      badword.confirmed = bw.confirmed || 0;
+      badword.library = bw.library || 0;
+      badword.lib_enabled = bw.lib_enabled || 0;
+      badwordWords.value = Array.isArray(bw.words) ? bw.words : [];
+    }
+    const hw = d?.hotwords;
+    if (hw) {
+      hotSearch.value = Array.isArray(hw.search) ? hw.search : [];
+      hotContent.value = Array.isArray(hw.content) ? hw.content : [];
+      hotTag.value = Array.isArray(hw.tag) ? hw.tag : [];
+    }
   } catch { /* ignore */ }
 }
 
@@ -357,6 +588,83 @@ onMounted(() => { loadDashboard(); checkFiling(); loadVisitorTrend(); });
     radial-gradient(ellipse at 80% 60%, rgba(139, 92, 246, 0.03) 0%, transparent 50%),
     radial-gradient(ellipse at 50% 80%, rgba(52, 211, 153, 0.02) 0%, transparent 50%);
 }
+
+/* ===== 三幕切换（顶部按钮） ===== */
+.dash-tabs {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 18px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--bg-card, rgba(255, 255, 255, 0.72));
+  border: 1px solid var(--border-color, #e8eaf0);
+  backdrop-filter: blur(8px);
+}
+.dash-tab {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 20px; border: none; border-radius: 10px;
+  background: transparent; cursor: pointer;
+  font-size: 0.88rem; font-weight: 600;
+  color: var(--text-light, #64748b);
+  transition: background 0.16s, color 0.16s, box-shadow 0.16s;
+}
+.dash-tab:hover { background: var(--bg-subtle, rgba(15, 23, 42, 0.04)); color: var(--text-main, #334155); }
+.dash-tab.active {
+  background: var(--gradient-primary, linear-gradient(135deg, #6366f1, #8b5cf6));
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.28);
+}
+.dash-tab-ico { font-size: 1rem; line-height: 1; }
+
+/* ===== 图表副标题（热词/词云的说明行） ===== */
+.chart-sub {
+  margin: -2px 0 10px; font-size: 0.74rem; line-height: 1.6;
+  color: var(--text-light, #94a3b8);
+}
+
+/* ===== 违禁词词云 ===== */
+.wc {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  gap: 6px 14px; padding: 16px 8px; min-height: 168px;
+  line-height: 1.4;
+}
+.wc-item {
+  cursor: default;
+  transition: transform 0.14s ease, filter 0.14s ease;
+  font-variant-numeric: tabular-nums;
+}
+.wc-item:hover { transform: scale(1.12); filter: brightness(0.85); }
+
+/* ===== 热词排行（搜索 / 评论 / 标签共用） ===== */
+.hot-list { display: flex; flex-direction: column; gap: 7px; }
+.hot-row { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; }
+.hot-rank {
+  width: 20px; height: 20px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px; font-size: 0.7rem; font-weight: 700;
+  background: var(--bg-subtle, #f1f5f9); color: var(--text-light, #94a3b8);
+}
+.hot-rank.top { background: var(--gradient-primary, linear-gradient(135deg, #6366f1, #8b5cf6)); color: #fff; }
+.hot-word {
+  min-width: 84px; max-width: 150px; flex: none;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text-main, #334155);
+}
+.hot-track {
+  flex: 1; height: 8px; border-radius: 999px;
+  background: var(--bg-page, #eef2f7); overflow: hidden;
+}
+.hot-fill {
+  height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, #6366f1, #14b8a6);
+  transition: width 0.4s ease;
+}
+.hot-count {
+  width: 46px; text-align: right; flex: none;
+  color: var(--text-light, #64748b); font-variant-numeric: tabular-nums;
+}
+
+/* 客户端分布环形图容器 */
+.client-pie { width: 100%; height: 232px; }
 
 .dashboard-container {
   max-width: 1280px;

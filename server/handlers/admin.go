@@ -306,7 +306,59 @@ func GetDashboardStats(c *gin.Context) {
 		"active_hours": computeActiveHours(30),
 		// 客户端画像（设备/OS/浏览器分布，结构化 UA 解析）
 		"client": computeClientBreakdown(30),
+		// 内容治理与热词（概览第二幕）：违禁词命中 + 词云 + 三类热词
+		"badword":  computeBadWordOverview(30),
+		"hotwords": computeHotWordOverview(7, 16),
 	})
+}
+
+// computeBadWordOverview 违禁词命中概览（概览页用）。
+//
+// 口径说明（前端文案会同步）：
+//   - blocked  近 N 天确认留痕的命中条数（BadWordFlag 行数）
+//   - pending  其中待审数
+//   - words    命中词频 top N，喂词云
+//   - library  词库总数 / 启用数
+//
+// 不含"瞬时拒绝"（规则直接 block 且没留 flag 的那部分）：
+// 那部分没有内容快照，统计出来也无法溯源，宁可不报。
+func computeBadWordOverview(days int) gin.H {
+	total, pending, confirmed, words, err := models.BadWordHitStats(days)
+	if err != nil {
+		return gin.H{"available": false}
+	}
+	libTotal, libEnabled := models.BadWordLibraryStats()
+	return gin.H{
+		"available":   true,
+		"blocked":     total,
+		"pending":     pending,
+		"confirmed":   confirmed,
+		"words":       words,
+		"library":     libTotal,
+		"lib_enabled": libEnabled,
+		"days":        days,
+	}
+}
+
+// computeHotWordOverview 三类热词各取 top N（概览第二幕：内容/搜索/标签）。
+//
+// 三类口径不同，分开取而不是混在一起：
+//
+//	内容 —— 评论/回帖分词（读者在聊什么）
+//	搜索 —— 搜索词（读者想找什么，需求最直接）
+//	标签 —— 作品标签（作者在写什么）
+func computeHotWordOverview(days, limit int) gin.H {
+	out := gin.H{"days": days, "limit": limit}
+	if list, err := models.AggregateHotWords(days, limit); err == nil {
+		out["content"] = list
+	}
+	if list, err := models.AggregateSearchWords(days, limit); err == nil {
+		out["search"] = list
+	}
+	if list, err := models.AggregateTagHotWords(days, limit); err == nil {
+		out["tag"] = list
+	}
+	return out
 }
 
 // computeCountryHeat 站点访问的「国家/地区热力」。

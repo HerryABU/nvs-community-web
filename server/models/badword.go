@@ -1,6 +1,8 @@
 package models
 
 import (
+	"encoding/json"
+	"sort"
 	"strings"
 	"time"
 )
@@ -224,4 +226,74 @@ func HasPendingFlag(contentType string, contentID uint) (bool, error) {
 		Where("content_type = ? AND content_id = ? AND status = ?", contentType, contentID, "pending").
 		Count(&count).Error
 	return count > 0, err
+}
+
+// ==================== 违禁词命中统计（仪表盘用） ====================
+
+// BadWordWordCount 词云用的词频项
+type BadWordWordCount struct {
+	Word  string `json:"word"`
+	Count int    `json:"count"`
+}
+
+// BadWordHitStats 近 N 天的违禁词命中概览。
+//
+// 为什么从 BadWordFlag 聚合而不是从"拦截日志"：站点的处置动作分 mark（标记待审）
+// 与 block（直接拒绝），后者不进 flags 表。所以这里的 total 是**确认留痕的命中数**，
+// 与"拦截次数"口径不同 —— 前者精确可溯源，后者含瞬时拒绝。前端文案按这个口径写。
+//
+// topWords 用于词云：解析 MatchedWords（JSON 数组）累加词频。
+// 扫描上限 2000 条：词云只需要"哪些词最常犯"，不需要全量精确。
+func BadWordHitStats(days int) (total, pending, confirmed int64, topWords []BadWordWordCount, err error) {
+	if days <= 0 {
+		days = 30
+	}
+	since := time.Now().AddDate(0, 0, -days)
+
+	DB.Model(&BadWordFlag{}).Where("created_at >= ?", since).Count(&total)
+	DB.Model(&BadWordFlag{}).Where("created_at >= ? AND status = ?", since, "pending").Count(&pending)
+	DB.Model(&BadWordFlag{}).Where("created_at >= ? AND status = ?", since, "confirmed").Count(&confirmed)
+
+	var rows []BadWordFlag
+	if e := DB.Where("created_at >= ? AND matched_words <> ''", since).
+		Order("created_at desc").Limit(2000).Find(&rows).Error; e != nil {
+		err = e
+		return
+	}
+
+	counts := map[string]int{}
+	for i := range rows {
+		var words []string
+		if json.Unmarshal([]byte(rows[i].MatchedWords), &words) != nil {
+			continue
+		}
+		for _, w := range words {
+			w = strings.TrimSpace(w)
+			if w == "" {
+				continue
+			}
+			counts[w]++
+		}
+	}
+	topWords = make([]BadWordWordCount, 0, len(counts))
+	for w, c := range counts {
+		topWords = append(topWords, BadWordWordCount{Word: w, Count: c})
+	}
+	sort.Slice(topWords, func(i, j int) bool {
+		if topWords[i].Count != topWords[j].Count {
+			return topWords[i].Count > topWords[j].Count
+		}
+		return topWords[i].Word < topWords[j].Word
+	})
+	if len(topWords) > 30 {
+		topWords = topWords[:30]
+	}
+	return
+}
+
+// BadWordLibraryStats 词库规模（词云/概览副标题用）
+func BadWordLibraryStats() (total, enabled int64) {
+	DB.Model(&BadWord{}).Count(&total)
+	DB.Model(&BadWord{}).Where("enabled = ?", true).Count(&enabled)
+	return
 }

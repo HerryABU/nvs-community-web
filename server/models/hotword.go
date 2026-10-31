@@ -94,10 +94,16 @@ func AggregateTagHotWords(days, limit int) ([]HotWord, error) {
 	}
 
 	// 2) 作品 JSON 标签（扫描上限同内容热词）
+	//
+	// ⚠️ 这一路**不按创建时间过滤**：标签是作品的固有属性，不是时间事件。
+	// 原先只统计「近 N 天新建作品」的标签，站点没新作品时这张图就是空的，
+	// 而站长的真实问题是「现在大家在写什么题材」——按近期活跃作品取样才对。
+	// blog_tags 那一路保留时间窗（标签关联的是博客创建时间，语义不同）。
 	const scanCap = 5000
 	var novels []Novel
-	DB.Select("tags").Where("created_at >= ?", since).
-		Order("created_at DESC").Limit(scanCap).Find(&novels)
+	DB.Select("tags").
+		Where("tags <> '' AND deleted_at IS NULL").
+		Order("updated_at DESC").Limit(scanCap).Find(&novels)
 	for _, n := range novels {
 		for _, tag := range parseNovelTags(n.Tags) {
 			if tag != "" {
