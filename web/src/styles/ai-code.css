@@ -1,0 +1,176 @@
+/**
+ * AI 代码块样式 —— 工具条 + 语法高亮配色。
+ *
+ * 全局引入（由 @/markdown/codeEnhance 副作用导入），所以所有选择器都收敛在
+ * :where(.ai-msg-md, .sh-md) 之下，不会污染编辑器 / 阅读器 / 后台的既有样式。
+ *
+ * 配色按 One Dark 调，和两块容器里 `pre` 的深色底（#1e293b）是同一套明度关系；
+ * 浅色主题下代码块本身仍是深底（刻意如此：代码在深底上更易读，也和主流 AI 站一致），
+ * 因此这里不需要 light/dark 双套色板。
+ */
+
+/* ═══ 工具条 ═══════════════════════════════════════════════════════ */
+:where(.ai-msg-md, .sh-md) pre {
+  position: relative;
+}
+
+:where(.ai-msg-md, .sh-md) .code-bar {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.5;
+  transition: opacity 0.15s ease;
+  /* 让工具条不挡住代码首行：给它自己的可点区域 */
+  z-index: 2;
+}
+
+:where(.ai-msg-md, .sh-md) pre:hover .code-bar,
+:where(.ai-msg-md, .sh-md) .code-bar:focus-within {
+  opacity: 1;
+}
+
+:where(.ai-msg-md, .sh-md) .code-lang {
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 5px;
+  color: #94a3b8;
+  letter-spacing: 0.03em;
+  user-select: none;
+  font-family: var(--font-mono, Consolas, Monaco, monospace);
+}
+
+:where(.ai-msg-md, .sh-md) .code-act {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+  color: #cbd5e1;
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+:where(.ai-msg-md, .sh-md) .code-act:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+:where(.ai-msg-md, .sh-md) .code-act:active {
+  transform: translateY(0.5px);
+}
+
+:where(.ai-msg-md, .sh-md) .code-act.is-done {
+  border-color: rgba(34, 197, 94, 0.5);
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+}
+
+/* 移动端：代码块横向滚动时工具条容易跑出视野，缩一档并常显 */
+@media (max-width: 640px) {
+  :where(.ai-msg-md, .sh-md) .code-bar {
+    opacity: 0.85;
+    gap: 3px;
+    top: 4px;
+    right: 4px;
+  }
+  :where(.ai-msg-md, .sh-md) .code-lang {
+    display: none;
+  }
+  :where(.ai-msg-md, .sh-md) .code-act {
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+}
+
+/* ═══ 语法高亮（highlight.js 的 class 约定）══════════════════════════
+ * 与 Cherry 内置 Prism 的 token 配色互不干扰：那套选择器被
+ * div[data-type=codeBlock] 限定，而 AI 渲染会剔除 data-*，永远匹配不上。
+ */
+:where(.ai-msg-md, .sh-md) .hljs-comment,
+:where(.ai-msg-md, .sh-md) .hljs-quote {
+  color: #7f848e;
+  font-style: italic;
+}
+
+:where(.ai-msg-md, .sh-md) .hljs-keyword,
+:where(.ai-msg-md, .sh-md) .hljs-selector-tag,
+:where(.ai-msg-md, .sh-md) .hljs-doctag,
+:where(.ai-msg-md, .sh-md) .hljs-formula,
+:where(.ai-msg-md, .sh-md) .hljs-meta .hljs-keyword {
+  color: #c678dd;
+}
+
+:where(.ai-msg-md, .sh-md) .hljs-string,
+:where(.ai-msg-md, .sh-md) .hljs-regexp,
+:where(.ai-msg-md, .sh-md) .hljs-addition,
+:where(.ai-msg-md, .sh-md) .hljs-attribute,
+:where(.ai-msg-md, .sh-md) .hljs-meta .hljs-string {
+  color: #98c379;
+}
+
+:where(.ai-msg-md, .sh-md) .hljs-number,
+:where(.ai-msg-md, .sh-md) .hljs-literal,
+:where(.ai-msg-md, .sh-md) .hljs-variable,
+:where(.ai-msg-md, .sh-md) .hljs-template-variable,
+:where(.ai-msg-md, .sh-md) .hljs-type,
+:where(.ai-msg-md, .sh-md) .hljs-params {
+  color: #d19a66;
+}
+
+:where(.ai-msg-md, .sh-md) .hljs-title,
+:where(.ai-msg-md, .sh-md) .hljs-title.function_,
+:where(.ai-msg-md, .sh-md) .hljs-title.class_,
+:where(.ai-msg-md, .sh-md) .hljs-section,
+:where(.ai-msg-md, .sh-md) .hljs-name {
+  color: #61afef;
+}
+
+:where(.ai-msg-md, .sh-md) .hljs-tag {
+  color: #e06c75;
+}
+
+:where(.ai-msg-md, .sh-md) .hljs-attr,
+:where(.ai-msg-md, .sh-md) .hljs-selector-attr,
+:where(.ai-msg-md, .sh-md) .hljs-selector-class,
+:where(.ai-msg-md, .sh-md) .hljs-selector-id,
+:where(.ai-msg-md, .sh-md) .hljs-property {
+  color: #e5c07b;
+}
+
+:where(.ai-msg-md, .sh-md) .hljs-built_in,
+:where(.ai-msg-md, .sh-md) .hljs-symbol,
+:where(.ai-msg-md, .sh-md) .hljs-bullet,
+:where(.ai-msg-md, .sh-md) .hljs-link {
+  color: #56b6c2;
+}
+
+:where(.ai-msg-md, .sh-md) .hljs-operator,
+:where(.ai-msg-md, .sh-md) .hljs-punctuation {
+  color: #abb2bf;
+}
+
+:where(.ai-msg-md, .sh-md) .hljs-emphasis {
+  font-style: italic;
+}
+
+:where(.ai-msg-md, .sh-md) .hljs-strong {
+  font-weight: 600;
+}
+
+:where(.ai-msg-md, .sh-md) .hljs-deletion {
+  color: #e06c75;
+}
+
+:where(.ai-msg-md, .sh-md) .hljs-meta {
+  color: #7f848e;
+}
+
+:where(.ai-msg-md, .sh-md) .hljs-subst {
+  color: inherit;
+}

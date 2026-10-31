@@ -1,4 +1,5 @@
 import { apiPrefix } from '@/api/index';
+import { collectFingerprint } from '@/utils/fingerprint';
 
 /**
  * 群组实时消息（SSE）
@@ -22,10 +23,23 @@ export interface GroupStreamOptions {
 
 export async function openGroupStream(groupId: number, opts: GroupStreamOptions): Promise<void> {
   const base = apiPrefix ? `${apiPrefix}/api` : '/api';
+  // ⚠️ 原生 fetch 绕过 axios 拦截器，必须自己补 X-Device-Fingerprint：
+  // 访问令牌与「设备指纹 + 登录地」强绑定，缺这个头会被判「登录环境已变更」→ 401，
+  // 表现为「群组实时消息一直连不上」，而其他接口都正常。
+  const headers: Record<string, string> = {
+    Accept: 'text/event-stream',
+    'X-Requested-With': 'XMLHttpRequest',
+  };
+  try {
+    const fp = await collectFingerprint();
+    if (fp) headers['X-Device-Fingerprint'] = fp;
+  } catch {
+    /* 采集失败：不带头，服务端按无指纹处理 */
+  }
   const resp = await fetch(`${base}/groups/${groupId}/stream`, {
     method: 'GET',
     credentials: 'include',
-    headers: { Accept: 'text/event-stream', 'X-Requested-With': 'XMLHttpRequest' },
+    headers,
     signal: opts.signal,
   });
   if (!resp.ok || !resp.body) {

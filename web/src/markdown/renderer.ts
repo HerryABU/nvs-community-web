@@ -377,7 +377,12 @@ const AI_ALLOWED_TAGS = [
 
 const AI_DOMPURIFY_CONFIG = {
   ALLOWED_TAGS: AI_ALLOWED_TAGS,
-  ALLOWED_ATTR: ['href', 'title', 'src', 'alt', 'class', 'colspan', 'rowspan', 'align'],
+  // data-lang 单独放行（ALLOW_DATA_ATTR 仍是 false，其余 data-* 一律剔除）：
+  // Cherry 会在代码块包裹层上写 data-lang = **用户原始标注**（未标注时为空串），
+  // 而 pre 的 class 已经被它自己 fallback 成了 javascript。
+  // 没有这个属性就分不清「作者写了 ```js」和「作者什么都没写」，
+  // 后者里混着大量未标注的 HTML —— 那类块必须能识别出来给预览/发布入口。
+  ALLOWED_ATTR: ['href', 'title', 'src', 'alt', 'class', 'colspan', 'rowspan', 'align', 'data-lang'],
   ALLOWED_URI_REGEXP: /^(?:https?:|mailto:)/i,
   FORBID_TAGS: [
     'style', 'script', 'iframe', 'frame', 'frameset', 'object', 'embed', 'form', 'input',

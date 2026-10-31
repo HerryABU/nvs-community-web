@@ -19,7 +19,7 @@
           :class="['sh-msg', m.role === 'user' ? 'sh-msg-user' : 'sh-msg-assistant']"
         >
           <div class="sh-role">{{ m.role === 'user' ? '提问' : 'AI 回答' }}</div>
-          <div v-if="m.role === 'assistant'" class="sh-md" v-html="render(m.content)" />
+          <div v-if="m.role === 'assistant'" class="sh-md" v-html="render(m.content)" @click="onMdClick" />
           <div v-else class="sh-plain">{{ m.content }}</div>
         </div>
       </div>
@@ -29,14 +29,20 @@
         <el-button text type="primary" size="small" @click="$router.push('/ai')">打开 AI 工作台</el-button>
       </footer>
     </div>
+
+    <!-- 分享页也可能带 AI 生成的 HTML：给访客一个沙箱预览入口 -->
+    <AiHtmlPreview v-model="previewOpen" :code="activeCode" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { aiHubApi } from '@/api/aiHub';
 import { renderAiMarkdown } from '@/markdown/renderer';
+import { enhanceCodeBlocks, highlightCodeBlocks, readCodeOf, isHtmlBlock } from '@/markdown/codeEnhance';
+import { copyText } from '@/utils/clipboard';
+import AiHtmlPreview from '@/components/ai/AiHtmlPreview.vue';
 
 const route = useRoute();
 const loading = ref(true);
@@ -46,11 +52,40 @@ const agentName = ref('');
 const sharedAt = ref<string | null>(null);
 const messages = ref<Array<{ role: 'user' | 'assistant'; content: string; created_at: string }>>([]);
 
+const previewOpen = ref(false);
+const activeCode = ref('');
+
 function render(md: string) {
   try {
-    return renderAiMarkdown(md);
+    return enhanceCodeBlocks(renderAiMarkdown(md));
   } catch {
     return md.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+}
+
+/** 只读页只开放「复制」和「预览」；发布需要登录，不在分享页给入口 */
+async function onMdClick(e: MouseEvent) {
+  const btn = (e.target as HTMLElement)?.closest?.('.code-act') as HTMLElement | null;
+  if (!btn) return;
+  const act = btn.dataset.act;
+  if (act === 'copy') {
+    const code = readCodeOf(btn);
+    if (!code) return;
+    const ok = await copyText(code);
+    const prev = btn.textContent;
+    if (ok) {
+      btn.textContent = '已复制';
+      btn.classList.add('is-done');
+      window.setTimeout(() => {
+        btn.textContent = prev || '复制';
+        btn.classList.remove('is-done');
+      }, 1500);
+    }
+  } else if (act === 'preview' && isHtmlBlock(btn)) {
+    const code = readCodeOf(btn);
+    if (!code.trim()) return;
+    activeCode.value = code;
+    previewOpen.value = true;
   }
 }
 
@@ -85,6 +120,9 @@ onMounted(async () => {
     error.value = e?.response?.data?.message || '分享不存在或已取消';
   } finally {
     loading.value = false;
+    // 消息渲染完再补语法高亮（hljs 是懒加载的独立 chunk，不阻塞首屏）
+    await nextTick();
+    highlightCodeBlocks(document.querySelector('.ai-share-body'));
   }
 });
 </script>
@@ -113,7 +151,10 @@ onMounted(async () => {
 }
 .sh-md :deep(p) { margin: 0 0 8px; }
 .sh-md :deep(pre) {
+  position: relative;
   background: #1e293b; color: #e2e8f0; padding: 10px 12px;
+  /* 让出工具条：语言标签 + 复制 + 预览 */
+  padding-top: 30px;
   border-radius: 8px; overflow-x: auto; font-size: 0.82rem;
 }
 .sh-md :deep(code) { font-family: Consolas, monospace; }

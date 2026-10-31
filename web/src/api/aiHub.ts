@@ -1,4 +1,5 @@
 import api from './index';
+import { collectFingerprint } from '@/utils/fingerprint';
 
 // AI 工作台（§5.4）：流式对话 / 绘画 / 视频 / 智能体
 // 注意：baseURL 已含前缀（apiPrefix+/api），严禁在此硬编码 /go-nvs。
@@ -357,12 +358,24 @@ export async function streamChat(
   // ⚠️ 必须带 X-Requested-With：CSRFGuard 对「已登录 Cookie + 非安全方法」强制校验该头，
   // 而 axios 实例的默认头不会作用于原生 fetch。漏了就是 403 —— 表现为"发出去没反应"，
   // 前端看不到任何错误（流式响应没有 body），极难排查。
+  //
+  // ⚠️ 同理必须带 X-Device-Fingerprint：访问令牌与「设备指纹 + 登录地」强绑定，
+  // 登录走的是 axios（带指纹），这里用原生 fetch 如果不补这个头，
+  // 服务端算出的绑定值与令牌里的不一致 → 直接 401「登录环境已变更」。
+  // 症状是「AI 对话永远发不出去，但其他接口一切正常」，只有开了绑定校验才暴露。
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+  };
+  try {
+    const fp = await collectFingerprint();
+    if (fp) headers['X-Device-Fingerprint'] = fp;
+  } catch {
+    /* 采集失败：不带头，服务端按无指纹处理（绑定退化为仅地域因子） */
+  }
   const resp = await fetch(`${base}/ai/chat/stream`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-    },
+    headers,
     credentials: 'include',
     body: JSON.stringify(payload),
     signal,

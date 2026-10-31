@@ -365,11 +365,20 @@
       :draft="inputText"
       @pick="onPickPrompt"
     />
+
+    <!-- AI 生成的 HTML：沙箱预览 + 一键发布到广场 -->
+    <AiHtmlPreview v-model="previewOpen" :code="activeCode" />
+    <AiHtmlPublish
+      v-model="publishOpen"
+      :code="activeCode"
+      :suggested-name="activeCodeName"
+      @published="onPublished"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, nextTick } from 'vue';
+import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   CopyDocument,
@@ -384,7 +393,16 @@ import {
   WarningFilled,
 } from '@element-plus/icons-vue';
 import { renderAiMarkdown } from '@/markdown/renderer';
+import {
+  enhanceCodeBlocks,
+  highlightCodeBlocks,
+  readCodeOf,
+  isHtmlBlock,
+} from '@/markdown/codeEnhance';
+import { copyText } from '@/utils/clipboard';
 import AiPromptLibrary from '@/components/ai/AiPromptLibrary.vue';
+import AiHtmlPreview from '@/components/ai/AiHtmlPreview.vue';
+import AiHtmlPublish from '@/components/ai/AiHtmlPublish.vue';
 import { aiHubApi, streamChat, uploadChatAttachment, type AiHubStatus, type AiAgent, type AiChatMessage, type AiChatSession, type ChatAttachment } from '@/api/aiHub';
 
 const props = defineProps<{
@@ -616,55 +634,67 @@ function renderMd(md: string) {
   } catch {
     html = md.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
+  // 代码块工具条（语言 / 复制 / HTML 预览 / 发布）
   return enhanceCodeBlocks(html);
 }
 
-/**
- * 给每个代码块挂一个「复制」按钮。
- * 用 DOMParser 后处理而不是改渲染引擎：cherry 的 HTML 结构随版本会变，
- * 而 v-html 出来的是标准 pre/code，按 DOM 处理最稳。
- * 先把原文存到 data-code，再插按钮——否则按钮文字会被当成代码内容复制走。
- */
-function enhanceCodeBlocks(html: string): string {
-  if (!html.includes('<pre')) return html;
-  try {
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    doc.querySelectorAll('pre').forEach((pre) => {
-      if (pre.querySelector('.code-copy')) return;
-      const code = pre.textContent || '';
-      if (!code.trim()) return;
-      const bar = doc.createElement('div');
-      bar.className = 'code-bar';
-      const btn = doc.createElement('button');
-      btn.type = 'button';
-      btn.className = 'code-copy';
-      btn.textContent = '复制';
-      btn.setAttribute('data-code', code);
-      bar.appendChild(btn);
-      pre.appendChild(bar);
-    });
-    return doc.body.innerHTML;
-  } catch {
-    return html;
-  }
+// ===== HTML 预览 / 发布 =====
+const previewOpen = ref(false);
+const publishOpen = ref(false);
+const activeCode = ref('');
+const activeCodeName = ref('');
+
+/** 从 HTML 里猜一个标题，作为发布时名称的默认值 */
+function guessHtmlName(code: string): string {
+  const title = code.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1];
+  if (title && title.trim()) return title.trim().slice(0, 60);
+  const h1 = code.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1];
+  if (h1) return h1.replace(/<[^>]+>/g, '').trim().slice(0, 60);
+  return '';
 }
 
-/** 代码块复制（事件委托：v-html 内部无法直接绑事件） */
+/**
+ * 代码块工具条的事件委托：v-html 内部无法直接绑事件，只能在容器上收口。
+ * 代码原文不存 data-* 属性，统一从 `pre > code` 现取（工具条按钮是 pre 的兄弟节点，
+ * 不在 code 里，因此不会把「复制/预览/发布」这些文字混进复制内容）。
+ */
 async function onMdClick(e: MouseEvent) {
-  const btn = (e.target as HTMLElement)?.closest?.('.code-copy') as HTMLElement | null;
+  const btn = (e.target as HTMLElement)?.closest?.('.code-act') as HTMLElement | null;
   if (!btn) return;
-  const code = btn.getAttribute('data-code') || '';
-  try {
-    await navigator.clipboard.writeText(code);
+  const act = btn.dataset.act || '';
+  const code = readCodeOf(btn);
+
+  if (act === 'copy') {
+    if (!code) return;
+    const ok = await copyText(code);
+    if (!ok) {
+      ElMessage.warning('复制失败，请手动选中代码后复制');
+      return;
+    }
+    const prev = btn.textContent;
     btn.textContent = '已复制';
     btn.classList.add('is-done');
     window.setTimeout(() => {
-      btn.textContent = '复制';
+      btn.textContent = prev || '复制';
       btn.classList.remove('is-done');
     }, 1500);
-  } catch {
-    ElMessage.warning('复制失败，请手动选择');
+    return;
   }
+
+  if (!isHtmlBlock(btn)) return;
+  if (!code.trim()) {
+    ElMessage.warning('这段代码是空的');
+    return;
+  }
+  activeCode.value = code;
+  activeCodeName.value = guessHtmlName(code);
+  if (act === 'preview') previewOpen.value = true;
+  else if (act === 'publish') publishOpen.value = true;
+}
+
+function onPublished(id: number) {
+  // 发布成功后不打断对话，只给一个可点的入口
+  ElMessage.success(`已提交（#${id}），可在「我的 HTML」里查看状态`);
 }
 
 // 流式渲染节流：每 120ms 重算一次 Markdown，避免每个 chunk 全量渲染造成卡顿
@@ -678,24 +708,43 @@ watch(streamingText, () => {
   }, 120);
 });
 
-async function copyMsg(text: string) {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-    } else {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.left = '-9999px';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      ta.remove();
-    }
-    ElMessage.success('已复制');
-  } catch {
-    ElMessage.warning('复制失败，请手动选择文本');
+// ===== 代码高亮调度 =====
+// 用 MutationObserver 而不是在每个「消息变化」的地方手动插桩：
+// 消息列表的重建路径太多（初次加载、流式推入、停止生成、分支切换、重新生成），
+// 逐个挂钩子必漏。这里只认准一件事——DOM 变了就节流补一次高亮。
+// 流式期间跳过：v-html 每 120ms 全量重建，高亮等于白做。
+let mdObserver: MutationObserver | null = null;
+let hlTimer: number | null = null;
+
+function scheduleHighlight(delay = 260) {
+  if (hlTimer) window.clearTimeout(hlTimer);
+  hlTimer = window.setTimeout(() => {
+    hlTimer = null;
+    if (generating.value) return;
+    highlightCodeBlocks(msgListEl.value);
+  }, delay);
+}
+
+onMounted(() => {
+  const host = msgListEl.value;
+  if (host) {
+    mdObserver = new MutationObserver(() => scheduleHighlight());
+    mdObserver.observe(host, { childList: true, subtree: true });
   }
+  scheduleHighlight(0);
+});
+
+onBeforeUnmount(() => {
+  mdObserver?.disconnect();
+  mdObserver = null;
+  if (hlTimer) window.clearTimeout(hlTimer);
+  if (streamTimer) window.clearTimeout(streamTimer);
+});
+
+async function copyMsg(text: string) {
+  const ok = await copyText(text);
+  if (ok) ElMessage.success('已复制');
+  else ElMessage.warning('复制失败，请手动选择文本');
 }
 
 // 重试：找到该助手消息之前最近的一条用户消息，重新发起
@@ -936,6 +985,8 @@ async function send(rawText?: string, confirmed = false, skipPush = false, opts:
     generating.value = false;
     abortCtrl = null;
     scrollBottom();
+    // 流式期间刻意跳过高亮（DOM 一直在重建），收尾补一次
+    scheduleHighlight(60);
   }
 }
 
@@ -1069,26 +1120,12 @@ function stop() {
   position: relative;
   background: #1e293b; color: #e2e8f0; padding: 10px 12px;
   border-radius: 8px; overflow-x: auto; font-size: 0.82rem;
+  /* 首行让出工具条高度，避免「HTML / 预览 / 发布 / 复制」压住第一行代码 */
+  padding-top: 30px;
 }
-/* 代码块右上角复制按钮：默认半透明，hover 代码块才完全显形（避免干扰阅读） */
-.ai-msg-md :deep(.code-bar) {
-  position: absolute; top: 6px; right: 6px;
-  display: flex; gap: 4px; opacity: 0.55; transition: opacity 0.15s ease;
-}
-.ai-msg-md :deep(pre:hover .code-bar) { opacity: 1; }
-.ai-msg-md :deep(.code-copy) {
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.08);
-  color: #cbd5e1; font-size: 11px; line-height: 1;
-  padding: 4px 8px; border-radius: 6px; cursor: pointer;
-  font-family: inherit;
-}
-.ai-msg-md :deep(.code-copy:hover) { background: rgba(255, 255, 255, 0.18); color: #fff; }
-.ai-msg-md :deep(.code-copy.is-done) {
-  border-color: rgba(34, 197, 94, 0.5);
-  background: rgba(34, 197, 94, 0.18);
-  color: #86efac;
-}
+/* 代码块工具条（语言标签 / 复制 / 预览 / 发布）与语法高亮配色
+   统一放在 @/styles/ai-code.css —— 分享页也要用同一套，
+   写在 scoped 里就没法复用了 */
 .ai-msg-md :deep(code) { font-family: Consolas, monospace; }
 .ai-msg-md :deep(ul), .ai-msg-md :deep(ol) { margin: 4px 0 8px; padding-left: 20px; }
 .ai-msg-meta { font-size: 0.72rem; color: var(--text-light, #999); }
