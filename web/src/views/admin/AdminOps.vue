@@ -248,7 +248,7 @@
           <ol class="mg-steps">
             <li><b>注册</b>：打开 tianditu.gov.cn → 注册账号并完成实名认证（个人/单位均可）。</li>
             <li>
-              <b>建应用</b>：控制台 →「应用管理」→ 创建新应用，类型选
+              <b>建应用</b>：登录后进「我的应用」→ 创建新应用，类型选
               <code>浏览器端</code>，把本站域名填进 <code>Referer 白名单</code>。
               <span class="mg-tip">填本站当前访问地址即可：{{ siteOrigin }}</span>
             </li>
@@ -256,16 +256,22 @@
             <li><b>标来源</b>：按天地图要求填写审图号，前台地图下方会自动标注来源。</li>
           </ol>
           <div class="mg-actions">
-            <a class="mg-btn primary" href="https://console.tianditu.gov.cn/api/key" target="_blank" rel="noopener">
-              打开天地图控制台（创建应用 / 取 tk）↗
+            <a class="mg-btn primary" href="https://cloudcenter.tianditu.gov.cn/center/development/myApp" target="_blank" rel="noopener">
+              打开天地图控制台「我的应用」（取 tk）↗
             </a>
-            <a class="mg-btn" href="https://lbs.tianditu.gov.cn/authorization/authorization.html" target="_blank" rel="noopener">
-              天地图许可与配额说明 ↗
+            <a class="mg-btn" href="https://oauth.tianditu.gov.cn/login" target="_blank" rel="noopener">
+              登录 / 注册账号 ↗
             </a>
-            <a class="mg-btn" href="https://uums.tianditu.gov.cn/register" target="_blank" rel="noopener">
-              还没账号？先注册 ↗
+            <a class="mg-btn" href="https://lbs.tianditu.gov.cn/" target="_blank" rel="noopener">
+              天地图开发资源（许可 / 配额 / 文档）↗
             </a>
           </div>
+          <p class="mg-note">
+            天地图改过域名：旧的 <code>console.tianditu.gov.cn</code> / <code>uums.tianditu.gov.cn</code>
+            已经打不开（DNS 解析失败）。如果上面按钮失效，请从
+            <a href="https://www.tianditu.gov.cn/" target="_blank" rel="noopener">www.tianditu.gov.cn</a>
+            →「开发资源」进入控制台。
+          </p>
           <p class="mg-note">
             不填也能用：系统会用内置 ip2region 数据按省份画气泡（本地示意边界，<b>非审图件</b>，
             仅供站内参考，只覆盖国内）。但只要有对外展示需求，就应该配置标准地图。
@@ -733,6 +739,9 @@ onMounted(async () => {
 .mg-lead { margin: 8px 0 0; font-size: 0.8rem; line-height: 1.75; color: var(--text-main, #374151); }
 .mg-lead a { color: var(--el-color-primary, #409eff); text-decoration: none; }
 .mg-lead a:hover { text-decoration: underline; }
+.mg-note a { color: var(--el-color-primary, #409eff); text-decoration: none; }
+.mg-note a:hover { text-decoration: underline; }
+.mg-note code { padding: 0 4px; border-radius: 3px; background: var(--bg-page, #eef2f7); font-size: 0.72rem; }
 .mg-steps { margin: 8px 0 0; padding-left: 20px; font-size: 0.8rem; line-height: 1.85; color: var(--text-main, #374151); }
 .mg-steps code {
   padding: 0 5px; border-radius: 4px; font-size: 0.75rem;
