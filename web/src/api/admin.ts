@@ -1,6 +1,6 @@
 import api from './index';
 // 投稿单结构与前台共用一份定义，避免两个地方各写一遍字段名
-import type { AgentSubmission } from './aiHub';
+import type { AgentSubmission, AiNavItem } from './aiHub';
 
 export const adminApi = {
   // 平台配置
@@ -271,6 +271,14 @@ export const adminApi = {
   },
   reviewAgentSubmission(id: number, data: { action: 'approve' | 'reject'; note?: string }) {
     return api.post(`/admin/agent-submissions/${id}/review`, data);
+  },
+
+  // ── AI 工作台左栏自定义菜单（站长设置）──
+  getAiNavItems() {
+    return api.get<{ code: number; data: { items: AiNavItem[]; kinds: string[] } }>('/admin/ai-nav-items');
+  },
+  saveAiNavItems(items: AiNavItem[]) {
+    return api.put<{ code: number; data: { message: string; items: AiNavItem[] } }>('/admin/ai-nav-items', { items });
   },
 
   // HTML/WASM 托管额度（每人项目数 + 累计空间；支持按人覆盖）

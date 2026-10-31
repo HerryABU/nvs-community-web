@@ -31,6 +31,22 @@
           <span v-if="e.needsAi && !status.ai_enabled" class="ai-nav-dot" title="AI 未开启" />
         </button>
 
+        <!-- 站长自定义菜单（站内面板或任意 URL，由站长在后台配置） -->
+        <template v-for="grp in customNavGroups" :key="grp.name">
+          <div class="ai-nav-group">{{ grp.name }}</div>
+          <button
+            v-for="it in grp.items"
+            :key="it.key"
+            type="button"
+            class="ai-nav-item"
+            :class="{ active: isCustomActive(it) }"
+            @click="onCustomNav(it)"
+          >
+            <span class="ai-nav-emoji">{{ it.emoji }}</span>
+            <span class="ai-nav-label">{{ it.title }}</span>
+          </button>
+        </template>
+
         <!-- 历史会话：只在对话面板出现，避免其它面板被会话列表干扰 -->
         <template v-if="activeTab === 'chat'">
           <div class="ai-nav-group">
@@ -264,7 +280,7 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, Close, Delete, Menu, EditPen, Share, ArrowLeft, FullScreen } from '@element-plus/icons-vue';
-import { aiHubApi, type AiHubStatus, type AiAgent, type AiChatSession } from '@/api/aiHub';
+import { aiHubApi, type AiHubStatus, type AiAgent, type AiChatSession, type AiNavItem } from '@/api/aiHub';
 import { useAuthStore } from '@/stores/auth';
 import { appPrefix } from '@/utils/prefix';
 import { AI_ENTRIES } from '@/components/ai/aiEntries';
@@ -413,6 +429,49 @@ function onNavigate(tab: string) {
     return;
   }
   activeTab.value = tab as HubTab;
+}
+
+// ---------- 站长自定义左栏菜单 ----------
+// 站长可在后台配置「站内面板 / 任意 URL」，条目按 group 分组渲染在导航下方。
+// 站内面板走 onNavigate 切 tab，链接按 NewTab 决定新开还是跳转。
+const customNav = ref<AiNavItem[]>([]);
+
+const customNavGroups = computed(() => {
+  const map = new Map<string, AiNavItem[]>();
+  for (const it of customNav.value) {
+    const g = it.group || '自定义应用';
+    if (!map.has(g)) map.set(g, []);
+    map.get(g)!.push(it);
+  }
+  return [...map.entries()].map(([name, items]) => ({ name, items }));
+});
+
+function isCustomActive(it: AiNavItem) {
+  return it.kind === 'panel' && !it.target.includes('://') && activeTab.value === it.target;
+}
+
+function onCustomNav(it: AiNavItem) {
+  mobileSideOpen.value = false;
+  if (it.kind === 'link' || it.target.includes('://')) {
+    if (it.new_tab) window.open(it.target, '_blank', 'noopener');
+    else window.location.href = it.target;
+    return;
+  }
+  // 站内：tab key（chat/models/...）直接切；绝对路径走路由
+  if (it.target.startsWith('/')) {
+    router.push(it.target);
+    return;
+  }
+  activeTab.value = it.target as HubTab;
+}
+
+async function loadCustomNav() {
+  try {
+    const res = await aiHubApi.navItems();
+    if (res.data.code === 0) customNav.value = res.data.data.items || [];
+  } catch {
+    customNav.value = [];
+  }
 }
 
 /** 未开启态里的「去开启 / 配模型」：直接进后台对应页 */
@@ -577,6 +636,7 @@ function onRemix(payload: { kind: string; prompt: string }) {
 }
 
 onMounted(() => {
+  loadCustomNav();
   applyImmersive(immersive.value);
   window.addEventListener('keydown', onKeydown);
   loadAll();

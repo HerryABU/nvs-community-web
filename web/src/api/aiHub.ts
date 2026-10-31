@@ -58,6 +58,18 @@ export interface AiAgent {
   submitted_by?: number;
 }
 
+// AI 工作台左栏自定义菜单项（站长在后台配置）
+export interface AiNavItem {
+  key: string;
+  title: string;
+  emoji: string;
+  kind: 'panel' | 'link';
+  target: string;
+  group: string;
+  new_tab: boolean;
+  enabled: boolean;
+}
+
 // 智能体投稿单（用户提交的特殊提示词模板，等站长审核）
 export interface AgentSubmissionInput {
   name: string;
@@ -131,6 +143,11 @@ export const aiHubApi = {
   },
   myAgentSubmissions() {
     return api.get<{ code: number; data: { list: AgentSubmission[] } }>('/ai/agents/my-submissions');
+  },
+
+  // ---------- AI 工作台左栏自定义菜单（站长设置） ----------
+  navItems() {
+    return api.get<{ code: number; data: { items: AiNavItem[] } }>('/ai/nav-items');
   },
   sessions() {
     return api.get<{ code: number; data: { list: AiChatSession[] } }>('/ai/sessions');

@@ -356,6 +356,8 @@ func main() {
 		public.GET("/home-view", handlers.GetHomeView)
 		// 智能体投稿开关（前台据此决定是否显示「投稿」入口；投稿本身需登录）
 		public.GET("/ai/agents/submit-config", handlers.AiAgentSubmitConfig)
+		// AI 工作台左栏自定义菜单（站长设置，前台只取已启用项）
+		public.GET("/ai/nav-items", handlers.AiNavItems)
 		// 地图服务配置（标准地图合规：offline 示意 / 天地图 国内+全球）
 		public.GET("/map-setting", handlers.GetMapSetting)
 		// F12b 作者主题（访客可见，仅 CSS，服务端消毒）
@@ -1118,6 +1120,8 @@ func main() {
 		// 智能体投稿审核（用户提交 → 站长审 → 广场上架）
 		admin.GET("/agent-submissions", handlers.AdminListAgentSubmissions)
 		admin.POST("/agent-submissions/:id/review", handlers.AdminReviewAgentSubmission)
+		admin.GET("/ai-nav-items", handlers.AdminGetAiNavItems)
+		admin.PUT("/ai-nav-items", handlers.AdminSaveAiNavItems)
 		admin.GET("/agent-submit-config", handlers.AdminGetAgentSubmitConfig)
 		admin.PUT("/agent-submit-config", handlers.AdminSaveAgentSubmitConfig)
 

@@ -536,6 +536,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/ai-menu',
+      name: 'admin-ai-menu',
+      component: () => import('@/views/admin/AdminAiMenu.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/badwords',
       name: 'admin-badwords',
       component: () => import('@/views/admin/AdminBadWords.vue'),
