@@ -30,7 +30,7 @@
 ```bash
 # 终端 1：启动 Go 后端（监听 :8080）
 cd server
-go run main.go
+go run .
 
 # 终端 2：启动 Vue 前端（监听 :5173，API 自动代理到 8080）
 cd web
@@ -104,7 +104,7 @@ make build-gm     # 国密轨（-tags gm，依赖 go.gm.mod）
 | 脚本 | 查什么 | 何时跑 |
 |---|---|---|
 | `scripts/check-version.sh` | 版本号**四处一致**（`version.go` / `package.json` / `package-lock.json` 两个 root 字段 / README 徽章）；`--tag` 连 tag 一起校验，`--set x.y.z` 一键同步（**不需要 make**，纯 bash + node） | `make check` / 改版本 / 打 tag 前 |
-| `scripts/check-spa-roots.sh` | 前端**路由首段**是否全部登记到 `server/main.go` 的 `knownSPARoots`（漏登记 = 点链接能进、刷新 404） | `make check` / CI |
+| `scripts/check-spa-roots.sh` | 前端**路由首段**是否全部登记到 `server/routes/routes.go` 的 `knownSPARoots`（漏登记 = 点链接能进、刷新 404） | `make check` / CI |
 | `scripts/audit-unresolved-components.mjs` | 模板里用了、`<script setup>` 里没导入的组件（Element Plus 按需导入只解析 `El*`，`<ArrowDown />` 少了 import 会**静默不渲染**） | `make check` / CI |
 | `scripts/audit-admin-pages.mjs` | 后台页四态体检（表格 / StateBlock / `#empty` / 骨架 / 分页 / 筛选 / 错误态），`--strict` 有表格无四态即退出码 1 | 改后台页后 |
 | `scripts/fix-table-empty-slots.mjs` | 清理**列级 `#empty` 死插槽**（`el-table-column` 没有 empty 插槽，写了永远不渲染）；`--write` 才实改 | 需要时手动 |

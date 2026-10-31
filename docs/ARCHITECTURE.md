@@ -25,10 +25,18 @@ nvs/
 │   └── browser-me-center.mjs      # 个人中心与下拉菜单专项
 │
 ├── server/                        # Go 后端
-│   ├── main.go                    # 入口：配置初始化 → 数据库 → 子包 Migrate → 路由 → SPA fallback → 启动
+│   ├── main.go                    # 入口（501 行）：配置初始化 → 数据库 → 子包 Migrate → 组装路由 → 启动
 │   ├── embed.go                   # 发布轨：//go:embed all:dist（需先 make dist）
 │   ├── embed_nodist.go            # 业务轨（-tags nodist）：嵌入提示页，不依赖前端产物即可编译/测试
 │   ├── nodist_placeholder/        # 上面那轨嵌的提示页（告诉你怎么构建真正的发布物）
+│   ├── routes/                    # 路由装配（从 main.go 抽出，按分组分文件，最大 492 行）
+│   │   ├── routes.go              # Register：中间件链 + /health + 建站向导，依次调用下面五个
+│   │   ├── public.go              # /api 公开组
+│   │   ├── protected.go           # /api 登录组
+│   │   ├── admin.go               # /api/admin 后台组
+│   │   ├── police.go              # /api/police 取管台
+│   │   ├── spa.go                 # /sandbox 静态资源 + NoRoute（SPA 回退）
+│   │   └── guards.go              # setupGuard / setupLocalOnlyGuard
 │   ├── Dockerfile
 │   ├── init.sql                   # MySQL 手动建表脚本
 │   ├── go.mod / go.sum
@@ -40,7 +48,7 @@ nvs/
 │   │   ├── envfile.go             # .env 键映射与自动补写
 │   │   └── setup.go               # 建站向导状态 / 一次性安装密钥
 │   │
-│   ├── models/                    # 数据层（80 个文件 / 120+ 结构体）
+│   ├── models/                    # 数据层（133 个文件 / 120+ 结构体）
 │   │   ├── user.go                # User（角色含 police / 会员有效期 / 实名 / 未成年保护 / 禁言）
 │   │   ├── novel.go               # Novel + Chapter + NovelCategory（软删除）
 │   │   ├── comment.go             # Comment：楼层模型（root_id / floor_no）+ 加密楼 + 排序白名单
@@ -62,28 +70,34 @@ nvs/
 │   │   ├── xss_rule.go / badword.go / vulnerability.go / log_archive.go
 │   │   └── db.go                  # AllModels 迁移 + 跨库复制 + 热切换
 │   │
-│   ├── handlers/                  # API 处理器（139 个文件，按功能拆分）
+│   ├── handlers/                  # API 处理器（根 133 个文件 + 11 个子包，按功能拆分）
 │   │   ├── auth_*.go              # 注册 / 登录 / 验证码与改密（含账号锁定与审计）
 │   │   ├── novel*.go / chapter*.go# 作品与章节读写（SHA256 + HMAC 签名、软删除归档）
 │   │   ├── comment.go             # 评论（楼层分页 + sort=new/old/hot + 加密楼 + 取证视图）
-│   │   ├── ai_*.go                # AI 对话（流式）/ 绘画 / 视频 / 智能体 / 模型池 / 路由 / 成本 / 语音
-│   │   ├── admin_*.go             # 后台：用户 / 举报 / 论坛 / 站点 / 合规 / 漏洞 / 额度 / AI
+│   │   ├── admin_*.go             # 后台：用户 / 举报 / 论坛 / 站点 / 合规 / 漏洞 / 额度 / 密码与国密
 │   │   ├── police.go              # 警方取管台：软删除查看 / 凭证下载 / 全量取证包 / 论坛巡查
 │   │   ├── social_*.go            # 关注 / 博客 / 话题 / 私信 / 黑名单 / 特别关注
 │   │   ├── home_customize.go      # 个人主页装扮（双作用域 + 消毒 + 站长审核）
 │   │   ├── emergency.go           # 内容抢救台（二级密码 + 硬删除 + 审计）
 │   │   ├── setup.go / db_admin.go # 建站向导 / 数据库健康·热迁移·备份恢复
-│   │   └── context.go             # 鉴权上下文统一封装（currentUserID / UserRole 等）
+│   │   ├── export.go              # 子包桥接：把 CurrentUserID / EnsureAdmin 等导出给子包用
+│   │   ├── context.go             # 鉴权上下文统一封装（currentUserID / UserRole 等）
+│   │   ├── ai/                    # AI 域（41 个文件：对话流式 / 绘画 / 视频 / 智能体 / 模型池 /
+│   │   │                          #   渠道监控 / 定价 / 成本 / 安全闸 / AIGC 标识导出）
+│   │   ├── group/ honeypot/ oc/   # 群组（11）/ 蜜罐（2）/ OC 模式（2）
+│   │   └── authors/ blogs/ log/   # 〔运行时产物目录〕上传与日志误落此处，非 Go 包，勿当源码改
 │   │
 │   ├── aiclient/  aiapi/  aicall/ # 多厂商模型协议（OpenAI 兼容 / Anthropic / Gemini / MJ / Kling / Coze）
 │   ├── chaptervcs/  collab/       # 章节版本控制后端 / 协作
 │   ├── groups/  oc/  prompttpl/  realtime/   # 群组 / OC 模式 / 提示词模板 / SSE 推送
 │   ├── honeypot/  gate/  risk/    # 蜜罐（诱饵·影子认证·指纹·取证）/ 准入闸门 / 充值风控
+│   ├── aigc/  aisafety/  sentiment/  crisis/ # AIGC 标识（角标 + XMP）/ 三层安全闸 / 舆情 / 心理危机
+│   ├── ipgeo/  doctext/  moderation/         # 离线 IP 归属 / 文档正文抽取 / 审核规则
 │   ├── payment/  police/  audit/  # 支付通道 / 警方取证 / 审计
 │   ├── middleware/                # 鉴权 / CSRF / 访问日志 / 脱敏 / 前缀剥离 / 沙盒头 / 端口代理
 │   ├── security/                  # 限流 / XSS 净化 / 内容签名 / 内容扫描 / 违禁词 / 滑块验证码 / 正则安全
 │   ├── markdown/  scriptmode/     # Markdown 渲染（Mermaid/chemfig）/ 话本气泡体解析
-│   ├── realname/  crypto/  tlsconfig/  utils/  version/
+│   ├── realname/  crypto/  tlsconfig/  cert/  gmcmd/  utils/  version/
 │   │
 │   └── dist/                      # [自动生成] 前端构建产物（Go embed 使用）
 │
@@ -96,19 +110,28 @@ nvs/
 │       ├── api/                   # 43 个模块：axios 封装（前缀 + CSRF 头）、各业务域
 │       ├── utils/                 # prefix / sensitiveZone / userKey / adminHealth / editorShortcuts / turndown / miniZip / clipboard
 │       ├── styles/                # global.css（设计令牌）/ scale.css（间距·字号·容器档位）/ admin.css / ai-code.css（代码块高亮与工具条）
-│       ├── views/                 # 50 个顶层页面 + 5 个子目录
-│       │   ├── Home / Login / Register / SetupWizard
-│       │   ├── NovelDetail / Reader（精读·朗读·划线）/ Editor / ChapterEditor
-│       │   ├── AuthorDashboard / AuthorHome（封面+分栏）/ AuthorBlogs / AuthorTemplateSettings
-│       │   ├── BlogList / BlogDetail / BlogEditor / BlogHome / BlogManager / BlogCategory*
-│       │   ├── Forums / ForumDetail / ThreadDetail / Topics / Feed / Bookshelf / ReadingNotes
-│       │   ├── AiHub（竖列：对话/广场/绘画/视频/灵感/智能体/思维导图）/ Membership / PayMock / PayResult
-│       │   ├── CollabWorks / Live / MessageCenter / Wallet / MyApiKeys / APIKeySpider / DocsPage
-│       │   ├── admin/ — 48 个后台页（AdminAiPool / AdminPoliceConsole / AdminWallAccess / AdminNetDiag …）
-│       │   ├── me/    — MeLayout + 概况/作品/博客/留言/数据/装扮（「我的服务」四组入口）
-│       │   ├── user/  — 私信 / 黑名单 / 特别关注 / 微信绑定 / 网页额度
-│       │   ├── group/ — 群组列表 / 详情 / 发帖
-│       │   └── frame/ — FrameManager / HTMLManager / HtmlRunner / WasmRunner / SandboxPreview
+│       ├── views/                 # 页面（顶层 0 个文件，全部按业务域归入 15 个子目录）
+│       │   ├── ai/                # AiHub（竖列：对话/广场/绘画/视频/灵感/智能体/思维导图）/ AiGallery / AiPricing / AiShared
+│       │   ├── auth/              # Login / Register / SetupWizard
+│       │   ├── novel/             # NovelDetail / Reader（精读·朗读·划线）/ Editor / ChapterEditor / CategoryView
+│       │   ├── blog/              # BlogList / BlogDetail / BlogEditor / BlogHome / BlogManager / BlogCategory*
+│       │   ├── forum/             # Forums / ForumDetail / ThreadDetail / Topics
+│       │   ├── author/            # AuthorDashboard / AuthorHome（封面+分栏）/ AuthorBlogs / AuthorTemplateSettings
+│       │   ├── home/              # Home / HomeSwitch / Feed
+│       │   ├── payment/           # Membership / PayMock / PayResult / Wallet
+│       │   ├── comment/           # CommentNetworkDrawer / CommentNetworkPage（评论关系网）
+│       │   ├── me/                # MeLayout + 概况/作品/博客/留言/数据/装扮（「我的服务」四组入口）
+│       │   ├── site/              # About / DocsPage / Settings / ThemeSettings / Live / HtmlPlaza / APIKeySpider
+│       │   ├── admin/             # 后台：AdminDashboard + adminMenuData + 6 个子目录
+│       │   │   ├── site/          # 站点设置 / 登录方式 / 主页区块 / 主题 / 狂暴模式 / 数据库 / 健康 / 互通 …
+│       │   │   ├── security/      # 合规 / 漏洞 / 日志脱敏 / 密码与国密 / 蜜罐 / 门槛 / 风控 / 隔离墙 / 网络诊断 …
+│       │   │   ├── content/       # 审核队列 / 违禁词 / 封禁 / 留证 / 抢救台 / HTML 审核 / 举报 / 分类 / 舆情 / 危机
+│       │   │   ├── ai/            # 模型池 / 定价 / 成本 / 安全闸 / 审核 / 日志 / 额度 / 智能体 / 算法
+│       │   │   ├── business/      # 支付 / 代币 / 发布额度 / 网页额度 / 用户管理
+│       │   │   └── police/        # 取管台 / 工单 / 论坛巡查
+│       │   ├── user/              # 私信 / 黑名单 / 特别关注 / 微信绑定 / 网页额度
+│       │   ├── group/             # 群组列表 / 详情 / 发帖
+│       │   └── frame/             # FrameManager / HTMLManager / HtmlRunner / WasmRunner / SandboxPreview
 │       └── components/            # 70 个通用组件
 │           ├── NavBar（下拉只剩 5 项）/ CommentSection / FloorComments（楼层模型）
 │           ├── StateBlock（骨架/空/错误三态）/ AdminHeader / AdminFilterBar / AdminApiAlert

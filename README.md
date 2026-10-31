@@ -2,7 +2,7 @@
   <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go" alt="Go">
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?style=flat&logo=vuedotjs" alt="Vue">
   <img src="https://img.shields.io/badge/SQLite-3-003B57?style=flat&logo=sqlite" alt="SQLite">
-  <img src="https://img.shields.io/badge/version-4.6.0-4F46E5?style=flat" alt="Version">
+  <img src="https://img.shields.io/badge/version-4.6.5-4F46E5?style=flat" alt="Version">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue?style=flat" alt="Platform">
   <img src="https://img.shields.io/badge/CPU-x86%20%7C%20ARM%20%7C%20MIPS64%20%7C%20RISC--V-orange?style=flat" alt="CPU">
   <img src="https://img.shields.io/badge/license-AGPL%20v3-blue.svg" alt="License">
@@ -40,7 +40,7 @@
 
 ## ✨ 特性
 
-> 下面按模块列出**全部能力名**（123 项）—— 每条的具体参数、机制与边界条件见 [docs/FEATURES.md](docs/FEATURES.md)。
+> 下面按模块列出**全部能力名**（125 项）—— 每条的具体参数、机制与边界条件见 [docs/FEATURES.md](docs/FEATURES.md)。
 
 ### 部署与运维
 - 🌍 **全平台全CPU支持**
@@ -159,10 +159,12 @@
 - 🛡️ **CSRF 防护**
 - 🔑 **登录账号级锁定**
 - 🔐 **JWT 随机密钥**
+- 🔐 **密码双轨（国际算法 / 国密 SM2·SM3·SM4，可按 ClientHello 同一端口分流）**
 - 🗝 **令牌加密密码（独立于 JWT）**
 - 📢 **公告栏**
 - 🧭 **176号令合规工具箱**
 - 🕵️ **蜜罐体系（四档可调）**
+- 🎭 **蜜罐诱饵内容可配置（假 .env / 假库 / 持久化金丝雀）**
 - 🧱 **隔离墙访问仪表盘**
 - 📡 **网络诊断与攻击流量面板**
 - 🗺️ **访问来源地域（纯本地解析 + 标准地图）**
@@ -345,7 +347,7 @@ make dist && cd server && go build -trimpath -ldflags "-s -w" -o nvs-server.exe 
 
 ```
 nvs/
-├── server/        # Go 后端：main.go 入口 · models 数据层 · handlers 接口 · 各领域子包
+├── server/        # Go 后端：main.go 入口 · routes 路由装配 · models 数据层 · handlers 接口 · 各领域子包
 ├── web/           # Vue 3 前端：views 页面 · components 组件 · api 封装 · markdown 渲染
 ├── dist/          # [构建产物] 前端打包输出，供 server embed
 ├── scripts/       # 质量门禁与真浏览器验收

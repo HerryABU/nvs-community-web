@@ -3,6 +3,131 @@
 > 按版本倒序记录每个版本改了什么、为什么改。README 不再承载更新日志。
 > 返回 [README](../README.md) · [API](API.md) · [配置](CONFIG.md) · [架构](ARCHITECTURE.md) · [开发](DEVELOPMENT.md) · [特性详解](FEATURES.md)
 
+### v4.6.5 目录重构 + 国密双轨落地 + 诱饵不自曝 + 发布瘦身（2026-10-31）
+
+五项互相独立的改动合成一版，共同点是「不新增用户可见功能，但让代码库和产物回到可持续状态」。
+
+**一、后端与前端目录重构（纯搬移，不改逻辑）**
+
+起因：`main.go` 1852 行里近 1300 行是路由注册，改一个接口要在上千行里翻；`handlers/` 平铺
+155 个 `.go`、`views/` 顶层平铺 52 个页面，新增文件要先在几十个里找位置。
+
+- `server/routes/`：原 main.go 第 164–1447 行的路由注册整段搬出，按分组拆成 7 个文件
+  （routes / public / protected / admin / police / spa / guards，最大 492 行）。`main.go` 降到 **501 行**。
+- `server/handlers/ai/`：ai 域 36 个文件先归位（含 5 个测试文件随之迁移），根目录 155 → 133。
+- `web/src/views/`：顶层 52 个页面按 12 个业务域归入子目录；`views/admin/` 再按后台菜单既有分组
+  拆成 site / security / content / ai / business / police 六个子目录。全局 120 处 `@/views/xxx.vue` 引用同步修正。
+- 删掉 3 个只有 `package` 声明的空壳 handler 文件。
+
+两个绕不过去的约束（写进文档与注释）：
+- `//go:embed` 的路径相对**源文件所在目录**且不允许 `..`，所以 `embed.go` 必须留在 `server/` 根
+  （与 `dist` 同级、只能是 `package main`）。routes 包因此拿不到 `getFrontendFS`，
+  改由 main 注入 `routes.FrontendFS` / `routes.NodistBuild`，行为与改造前一致。
+- 移动文件会**打断相对路径**（`AdminPoliceConsole` 移进 `police/` 后 `./police/xxx.vue` 失效），
+  移动后必须跑一次全量相对引用扫描再构建。
+
+**二、国密轨此前编译不过，已修**
+
+`go.gm.mod` 落后于主干：AIGC 模块引入的 `imaging` / `gg` / `freetype` 没同步进去，
+`make build-gm` 直接编译失败 —— 国密轨等于**不可用**。补进 `go.gm.mod`/`go.gm.sum`（只增不减，未动既有版本）。
+顺带补齐两个国密构建目标缺失的 `-s -w`（此前产物白白带着符号表与 DWARF）。
+
+**三、新增密码轨道状态接口与后台页**
+
+- `GET /api/admin/crypto/status`（只读）：当前轨道、编进二进制的国密实现、SM2 证书就绪、
+  三张证书的磁盘状态与到期倒计时、握手统计（按协议/套件）、会话复用、握手日志路径。
+  与 `nvs-server gm-audit` **同源**（都走 `audit.BuildGMAuditReport`），后台数字与 CLI 报告不会打架。
+- 后台「合规与安全 → 密码与国密」：三档轨道（intl / gm / dual）卡片讲清差别与各自需要的证书与构建方式，
+  明确 dual 是「同一端口按 ClientHello 自动分流」—— 国密不是只走国密。
+- **刻意不做写入接口**：TLS 参数必须在监听器创建前就位，运行期改 `.env` 不生效。
+  给一个「点保存但什么都不变」的假表单比不给更糟，所以页面上是键名说明 + 示例。
+
+**四、蜜罐诱饵不再自曝身份（用户指出 2 处，实查 5 处）**
+
+诱饵的唯一目的是「像一台真的、运维有点疏忽的机器」。任何自曝标记都让整份诱饵归零 ——
+识破后攻击者会换 IP 重来，前面所有取证白做。
+
+- 假 `.env` 的注释写着 `# jwt（泄漏示例 / 已轮换）`：直接告诉对方这份配置是假的。删掉。
+- 假 `.env` 单开一行 `CANARY=NVS-CANARY-XXXX`：变量名和值都自曝。改为伪装成一份普通密钥
+  （`APP_KEY=base64:<32 hex>`），变量名与注释都不提它。
+- **SQLi 诱饵响应体字段名就叫 `"canary"`（5 处）**：注入的人拿到 JSON 立刻知道被蜜罐抓了。
+  改为伪装成业务字段（会话 `token` / 库 `instance_id` / 用户 `api_token`），报错回显里直接去掉。
+- 兜底模板 default 分支返回 `leaked-config\nCANARY=...`（双重自曝），改为仿一份正常的部署参数片段。
+- 默认域名 `nvs.example.com` 里的 `example` 本身就是占位符痕迹，改为 `app.nvs-prod.cn`。
+
+另外修掉一个更隐蔽的问题：**金丝雀原来每次进程启动重新随机**，重启后值就变，
+站长拿它去外部比对永远对不上。现在持久化在 `honeypot_settings.decoy_profile`，重启不变。
+
+诱饵内容同时做成后台可配（站点名/假域名/DB/Redis/运维备注/调试令牌/金丝雀挂载点与风格），
+保存走独立接口 `PUT /api/admin/honeypot/decoy-profile`：主 `saveConfig` 是**全量覆盖**，
+只提交诱饵字段会把 `enabled` 顺手清成 false（v4.5.1 在 AI 安全配置上踩过同一个坑）。
+
+测试反转为回归保护：原本断言「诱饵里必须有 `CANARY=`」，现在断言**必须**含正常配置项、
+**不得**出现 `CANARY/HONEY/DECOY/EXAMPLE/蜜罐/示例/已轮换/模拟/占位` 任一标记。
+
+**五、发布产物瘦身**
+
+- **不再把 `.gz`/`.br` 副本嵌进二进制**（最大一块）：`vite-plugin-compression2` 会给每个 js/css 再生成
+  压缩版，但本项目单 exe 部署、压缩由 `gin-contrib/gzip` 响应时实时完成，这些副本永远读不到，
+  而 `go:embed` 照单全收 —— 实测 642 个文件 / 8.5 MB。改为默认关闭，仅「nginx / CDN 直服 dist」
+  时才需要（`NVS_PRECOMPRESS=1 npm run build`），CI 里另加 `find -delete` 兜底。
+- 构建参数统一：所有构建目标补齐 `-trimpath -buildvcs=false -ldflags "-s -w"`；
+  `build.sourcemap` 显式 false，`reportCompressedSize` 关闭。
+
+实测（Windows amd64，含内嵌前端）：
+
+| 项 | 前 | 后 |
+|---|---|---|
+| dist 目录 | 25.6 MB（642 个 .gz/.br） | 19 MB（0 个） |
+| 前端构建耗时 | 1m41s | 1m14s |
+| 默认轨 exe | 73.6 MB | 65.1 MB（-11.6%） |
+| 国密轨 exe | 89.9 MB | 72.0 MB（-20%） |
+
+未启用 UPX（能再压一半，但拖慢冷启动且极易触发 SmartScreen / 杀软误报），理由写进 `docs/DEVELOPMENT.md`。
+
+**六、README 拆分与版权清理**
+
+- README **221 KB → 17 KB**：其中 126 KB（57%）是版本更新记录。拆出 `docs/CHANGELOG.md`、
+  `FEATURES.md`、`API.md`、`CONFIG.md`、`ARCHITECTURE.md`、`DEVELOPMENT.md` 六份，
+  内容一字不丢；README 只留「是什么 / 凭什么 / 怎么跑 / 去哪查」。
+- 仓库里不得出现第三方站点品牌名、真实域名与采集时的本机绝对路径。两份站点 UI 勘察文档改名为
+  `ai-ui-modules-ref.md` / `ai-ui-reference.md`，正文统一改成「同类 AI 站点」，4 处源码注释一并清掉。
+
+验证：`go build` / `go vet` / `go test -tags nodist ./...` 36 个包全过；
+真浏览器多页冒烟 15 页（逐页查文本非空 / `#app` 已挂载 / 无 console 错误 / 未被踢回登录页）、
+AI 代码块 18 项、密码与国密 14 项、蜜罐诱饵 14 项全过；实际请求 `/.env` 两次内容逐字节一致且无自曝标记。
+
+### v4.6.0 AI 代码块高亮 / 复制 / HTML 沙箱预览 / 一键发布广场 · 修原生 fetch 401（2026-10-31）
+
+**代码块工具条**：语言标签 + 复制 +（HTML 专属）预览 / 发布。代码原文从 `pre > code` 现取，
+不塞 `data-*` 属性，复制内容不会掺进按钮文字。
+
+**语法高亮**改用 highlight.js（common，36 种语言），独立 chunk 懒加载、不拖首屏。
+不用 Cherry 自带高亮的原因：它打包的 Prism 只有 markup/css/clike/javascript，python/go 全 fallback 成 JS；
+配色选择器又被 `div[data-type=codeBlock]` 限定，而 AI 渲染走 DOMPurify 白名单（`ALLOW_DATA_ATTR:false`）
+把 `data-*` 全剔除 —— 于是 token class 在、颜色全丢，等于没有高亮。配色集中在 `styles/ai-code.css`。
+
+**HTML 预览**：空源 `sandbox` iframe（`allow-scripts`，**刻意不给** `allow-same-origin`）——
+读不到本站 Cookie / localStorage，也不能跳转或改写父页面。沙箱内注入内存版 Storage：
+否则 AI 生成的待办、小游戏一碰 `localStorage` 就抛 SecurityError 整页白屏（刷新即丢，好过直接崩）。
+
+**发布到广场**：前端把这段 HTML 打成 STORE 模式单文件 ZIP（`utils/miniZip.ts`，约 80 行，
+表驱动 CRC32 + local header / central directory / EOCD，零依赖），调既有的
+`POST /api/userhtmls/upload` —— 预检、封存、额度、审核整条链路原样复用，后端零改动。
+
+**未标语言的代码块也能识别**：只看 Cherry 写在包裹 div 上的 `data-lang`（空串 = 作者确实没写），
+不看它 fallback 出来的 `language-javascript`；判据是「rawLang 为空才允许按内容猜 HTML」。
+为此在 AI 白名单里单独放行 `data-lang`（`ALLOW_DATA_ATTR` 仍为 false）。
+
+**修一个真实 401**：`streamChat`（`/ai/chat/stream`）与 `openGroupStream`（`/groups/:id/stream`）
+为读 SSE 绕过 axios，而 axios 拦截器会给每个请求加设备指纹头，访问令牌又与登录时的指纹强绑定 ——
+漏这个头就 401「登录环境已变更」。症状极具迷惑性：所有 axios 接口都正常，只有 AI 对话发不出去，
+而且只有真开了指纹绑定才暴露。两处统一补 `collectFingerprint()`。
+
+验收：新增 `scripts/browser-ai-code.mjs`，18 项真浏览器量化断言（工具条结构、hljs 计算色、剪贴板内容、
+sandbox 属性、穿透 sandbox 读 iframe DOM 验渲染、点击后 DOM 变化、单文件 ZIP 被后端接受并自动清理）；
+默认注入假 SSE 锁断言，`--real` 打真上游。
+
 ### v4.5.1 拒绝后泄漏拦截（2026-10-31）
 
 安全补丁。修的是「模型明明拒了，却仍然把方向指给你」这一类输出，以及一个更隐蔽的问题：
