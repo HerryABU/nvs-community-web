@@ -54,6 +54,13 @@ type SafetyConfig struct {
 
 	GuardInput  bool `json:"guard_input"`  // 输入侧拦截
 	GuardOutput bool `json:"guard_output"` // 输出侧拦截
+	// GuardLeak 拒绝后泄漏拦截：模型先声明「不能提供」，紧接着又补「方向性背景」，
+	// 而那句背景里带催化剂族 / 温压 / 单元操作 —— 拒绝语变成了免责声明。
+	// 这类输出没有分步、没有配比，按分数往往拦不住，必须单独识别。
+	//
+	// 列默认值写死 true：老库升级时 AutoMigrate 只加列，
+	// 若走零值 false 会让这条闸门在已装站点上默认关闭（等于没加）。
+	GuardLeak bool `gorm:"not null;default:true" json:"guard_leak"`
 
 	// 阈值（分越高越危险）
 	InputBlockScore  int `json:"input_block_score"`  // 输入侧硬拦线

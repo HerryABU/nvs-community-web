@@ -12,6 +12,8 @@ export interface SafetyConfig {
   enabled: boolean;
   guard_input: boolean;
   guard_output: boolean;
+  /** 拒绝后泄漏拦截：先声明「不能提供」再补「方向性背景」（催化剂族/温压/单元操作） */
+  guard_leak: boolean;
 
   input_block_score: number;
   output_block_score: number;

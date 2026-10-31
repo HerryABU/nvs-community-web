@@ -43,13 +43,17 @@ func SystemPrompt(cfg *SafetyConfig) string {
 
 // InputDecision 输入侧结论。
 type InputDecision struct {
-	Block         bool
-	Action        string // pass / review / block / watch / cooldown
-	Score         int
-	Level         string
-	Categories    []string
-	Hits          string
-	Refusal       string
+	Block      bool
+	Action     string // pass / review / block / watch / cooldown
+	Score      int
+	Level      string
+	Categories []string
+	Hits       string
+	Refusal    string
+	// Substance 本轮输入是否命中管制物质/前体。
+	// 输出闸门拿它当上下文：只有话题敏感时才启用「拒绝后泄漏」判定，
+	// 否则「焊接温度」「喷漆催化剂」这类正常问题会被误杀。
+	Substance     bool
 	CooldownUntil *time.Time
 	Judge         *JudgeVerdict
 	Profile       *SafetyProfile
@@ -111,6 +115,7 @@ func CheckInput(in InputRequest) *InputDecision {
 		HistoryMsgs:        in.HistoryUserMsgs,
 	}
 	res := Scan(in.Message, opts)
+	d.Substance = res.Substance
 	d.Score = res.Score
 	d.Level = res.Level
 	d.Categories = res.Categories
@@ -377,6 +382,10 @@ type OutputGuard struct {
 	blocked  bool
 	decision Result
 	reason   string
+
+	// 拒绝后泄漏判定所需上下文（见 leak.go）
+	topicSubstance bool // 本轮话题是否落在管制物质上（由输入侧闸门传入）
+	refusalSeen    bool // 流式输出中是否已出现过拒绝语（拒绝语可能已滚出当前窗口）
 }
 
 // NewOutputGuard 创建输出闸门。
@@ -400,6 +409,26 @@ func NewOutputGuard(cfg *SafetyConfig, userID uint, username string, sessionID, 
 	return g
 }
 
+// SetTopicSubstance 告知输出闸门「本轮话题是管制物质/前体」。
+// 必须在开始输出前调用：拒绝后泄漏判定依赖这个上下文，否则只能靠文本自述判断。
+func (g *OutputGuard) SetTopicSubstance(v bool) { g.topicSubstance = v }
+
+// leakCheck 判断当前累积文本是否构成「拒绝后泄漏」。
+func (g *OutputGuard) leakCheck() (LeakVerdict, bool) {
+	var v LeakVerdict
+	if g.cfg == nil || !g.cfg.Enabled || !g.cfg.GuardOutput || !g.cfg.GuardLeak {
+		return v, false
+	}
+	text := g.sent.String() + g.pending.String()
+	// 只扫尾部 2000 字：拒绝语 + 紧随其后的方向性描述通常挨很近
+	if r := []rune(text); len(r) > 2000 {
+		text = string(r[len(r)-2000:])
+	}
+	v = DetectRefusalLeak(text, g.topicSubstance, g.refusalSeen)
+	g.refusalSeen = v.RefusalSeen
+	return v, v.Leak
+}
+
 // Feed 送入一个增量，返回「现在可以推给前端的文本」。第二个返回值为 true 表示已拦截。
 func (g *OutputGuard) Feed(chunk string) (string, bool) {
 	if g.blocked {
@@ -413,6 +442,18 @@ func (g *OutputGuard) Feed(chunk string) (string, bool) {
 		return "", false
 	}
 	g.pending.WriteString(chunk)
+	// 拒绝后泄漏：与「工艺步骤/配比」不同，这类输出分数往往到不了阈值，
+	// 但危害等价（给出了该往哪个方向试）。所以单独一次判定，且先于放行门槛。
+	if v, bad := g.leakCheck(); bad {
+		g.blocked = true
+		g.reason = "拒绝后仍披露工艺要素：" + strings.Join(v.Reasons, "、")
+		g.decision = Result{
+			Score: 100, Level: LevelHigh, Substance: true,
+			Categories: []string{"管制物质"}, Hits: v.Reasons,
+		}
+		g.record(g.decision)
+		return "", true
+	}
 	pr := []rune(g.pending.String())
 	// 没攒够（缓冲 + 一个放行批次）就继续等
 	if len(pr) < g.prebuffer+g.flush {
@@ -448,6 +489,17 @@ func (g *OutputGuard) Finish() (string, bool) {
 		return out, false
 	}
 	full := g.sent.String() + g.pending.String()
+	// 终检再判一次：流式窗口只留尾部，拒绝语可能已被挤出窗口
+	if v, bad := g.leakCheck(); bad {
+		g.blocked = true
+		g.reason = "拒绝后仍披露工艺要素（终检）：" + strings.Join(v.Reasons, "、")
+		g.decision = Result{
+			Score: 100, Level: LevelHigh, Substance: true,
+			Categories: []string{"管制物质"}, Hits: v.Reasons,
+		}
+		g.record(g.decision)
+		return "", true
+	}
 	if res, bad := g.scan(full); bad {
 		g.blocked = true
 		g.decision = res

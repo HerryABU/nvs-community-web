@@ -1,6 +1,7 @@
 package aisafety
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -12,6 +13,23 @@ import (
 
 // configSchemaVersion 配置结构版本。新增配置列时必须 +1，并在 migrateConfigRow 里回填默认值。
 const configSchemaVersion = 7
+
+// ApplyPartialJSON 把一段**可能不完整**的配置 JSON 合并到 cfg 上：
+// 只覆盖 payload 里出现的字段，缺省字段保持原值。
+//
+// 为什么需要它：后台保存是"整体覆盖"语义，若把请求体直接 bind 到零值结构体，
+// 任何「只改一个开关」的调用都会把其余布尔字段写成 false。实测真的发生过——
+// 只 PUT guard_leak 一次，就把 enabled / guard_input / guard_output 全关掉，
+// 前台看起来一切正常，实际上整条安全闸不工作了（比报错更难发现）。
+func ApplyPartialJSON(cfg *SafetyConfig, raw []byte) error {
+	if cfg == nil {
+		return errors.New("配置为空")
+	}
+	if len(raw) == 0 {
+		return nil
+	}
+	return json.Unmarshal(raw, cfg)
+}
 
 // GetConfig 读取安全闸配置；无配置行则按默认值种子化。
 func GetConfig() (*SafetyConfig, error) {
@@ -33,6 +51,7 @@ func GetConfig() (*SafetyConfig, error) {
 	// Create 会跳过零值/false 字段，必须显式写回一遍（本项目的 GORM 老坑）
 	if e := models.DB.Model(&SafetyConfig{}).Where("id = ?", 1).Updates(map[string]interface{}{
 		"enabled": seed.Enabled, "guard_input": seed.GuardInput, "guard_output": seed.GuardOutput,
+		"guard_leak":    seed.GuardLeak,
 		"judge_enabled": seed.JudgeEnabled, "judge_fail_open": seed.JudgeFailOpen,
 		"judge_on_suspect": seed.JudgeOnSuspect, "judge_review_blocks": seed.JudgeReviewBlocks,
 		"protect_system":       seed.ProtectSystem,
@@ -145,6 +164,7 @@ func defaultConfig() SafetyConfig {
 		Enabled:          true,
 		GuardInput:       true,
 		GuardOutput:      true,
+		GuardLeak:        true,
 		InputBlockScore:  65,
 		OutputBlockScore: 55,
 		ReviewScore:      40,
@@ -208,6 +228,7 @@ func SaveConfig(cfg *SafetyConfig) error {
 		"enabled":                 cfg.Enabled,
 		"guard_input":             cfg.GuardInput,
 		"guard_output":            cfg.GuardOutput,
+		"guard_leak":              cfg.GuardLeak,
 		"input_block_score":       cfg.InputBlockScore,
 		"output_block_score":      cfg.OutputBlockScore,
 		"review_score":            cfg.ReviewScore,
@@ -261,6 +282,7 @@ func ResetConfig() (*SafetyConfig, error) {
 	seed := defaultConfig()
 	fields := map[string]interface{}{
 		"enabled": seed.Enabled, "guard_input": seed.GuardInput, "guard_output": seed.GuardOutput,
+		"guard_leak":        seed.GuardLeak,
 		"input_block_score": seed.InputBlockScore, "output_block_score": seed.OutputBlockScore,
 		"review_score": seed.ReviewScore, "watch_block_score": seed.WatchBlockScore,
 		"watch_review_score": seed.WatchReviewScore, "prebuffer_chars": seed.PrebufferChars,

@@ -326,6 +326,10 @@ func AiHubChatStream(c *gin.Context) {
 		// 未成年用户：后续要叠加「未成年人保护」系统提示词
 		safetyMinor = crisis.IsMinorUser(u)
 	}
+	// 话题敏感性：输入闸门判定本轮是否落在管制物质上。
+	// 输出闸门拿它当上下文做「拒绝后泄漏」判定 —— 只看输出文本会把
+	// 正常科普里的「催化剂/温度」也当泄漏，误杀面太大。
+	inputSubstance := false
 	if safetyCfg != nil && safetyCfg.Enabled && safetyCfg.GuardInput {
 		dec := aisafety.CheckInput(aisafety.InputRequest{
 			UserID: userID, Username: safetyUser,
@@ -336,6 +340,7 @@ func AiHubChatStream(c *gin.Context) {
 			HistoryTurns:    toJudgeTurns(history),
 			FallbackModel:   m,
 		})
+		inputSubstance = dec.Substance
 		if dec.Block {
 			// 按模式处置：strict 锁会话 / moderate 打污染标记 / loose 只拦当轮。
 			// 冷却（cooldown）只是暂停功能，不触发终止 —— 冷却结束还能接着聊这段。
@@ -534,6 +539,8 @@ func AiHubChatStream(c *gin.Context) {
 	var og *aisafety.OutputGuard
 	if safetyCfg != nil && safetyCfg.Enabled && safetyCfg.GuardOutput {
 		og = aisafety.NewOutputGuard(safetyCfg, userID, safetyUser, session.ID, m.ID)
+		// 话题敏感时才启用「拒绝后泄漏」判定
+		og.SetTopicSubstance(inputSubstance)
 	}
 	blockedByGuard := false
 	for chunk := range streamCh {

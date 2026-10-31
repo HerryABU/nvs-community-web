@@ -50,6 +50,14 @@
                 <el-switch v-model="cfg.guard_output" />
                 <span class="muted small">模型回答边生成边扫描，命中即整段替换</span>
               </el-form-item>
+              <el-form-item label="拒绝后泄漏拦截">
+                <el-switch v-model="cfg.guard_leak" />
+                <span class="muted small">
+                  模型先说「不能提供」、紧接着又补「方向性背景」，而那句里带催化剂族 / 温压 / 单元操作
+                  —— 拒绝语变成免责声明。这类输出没有分步与配比，按分数拦不住，需单独识别。
+                  仅在「话题涉及管制物质」时生效，正常科普不受影响。
+                </span>
+              </el-form-item>
               <el-form-item label="输入硬拦分">
                 <el-input-number v-model="cfg.input_block_score" :min="1" :max="200" />
                 <span class="muted small">物质 + 工艺 + 参数齐全约为 120</span>
