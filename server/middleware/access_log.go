@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -158,6 +159,11 @@ func AccessLog() gin.HandlerFunc {
 			}
 			// 结构化客户端画像（OS / 浏览器 / 设备型号），与 UAFamily 粗分类互补
 			uaInfo := utils.ParseUserAgent(ua)
+
+			// 访问域名 + 协议：回答「用户是从哪个地址进来的」。
+			// 经 cpolar / nginx 转发时，Host 头可能被改写成上游地址（127.0.0.1:8000），
+			// 那记录 Host 就毫无意义 —— 所以优先取代理透传的 X-Forwarded-Host / X-Real-Host。
+			host, scheme := effectiveHost(c.Request)
 			models.EnqueueWebAccess(&models.WebAccessLog{
 				UserID:         userID,
 				IdentityType:   identityType,
@@ -171,6 +177,8 @@ func AccessLog() gin.HandlerFunc {
 				Method:         c.Request.Method,
 				Path:           p,
 				Query:          query,
+				Host:           host,
+				Scheme:         scheme,
 				IP:             ip,
 				XForwardedFor:  xff,
 				ProxyHops:      proxyHops,
@@ -213,4 +221,52 @@ func classifyUAFamily(ua string) string {
 		}
 	}
 	return "unknown"
+}
+
+// effectiveHost 取「用户实际访问用的域名 + 协议」。
+//
+// 优先级：X-Forwarded-Host > X-Real-Host > Host。
+// 原因：cpolar / nginx / 各类隧道默认会把 Host 改写成上游地址（常见 127.0.0.1:8000），
+// 只有配置了 proxy_set_header Host $host 或 X-Forwarded-Host 才能还原用户看到的域名。
+// 两者都拿不到时退回 Host —— 至少能看出「是内网 IP 还是 localhost」。
+//
+// ⚠️ 诚实说明：X-Forwarded-Host 是客户端**可以自己伪造**的头。本站没有可信代理白名单，
+// 所以 host 只用于运营参考（看用户从哪个入口进来），不能当作访问控制或审计依据。
+// 需要严格取证时以文件访问日志 + 真实对端 IP 为准。
+func effectiveHost(r *http.Request) (string, string) {
+	if r == nil {
+		return "", "http"
+	}
+	pick := func(h string) string {
+		h = strings.TrimSpace(h)
+		if i := strings.IndexByte(h, ','); i >= 0 { // 多级代理会拼成列表，取第一个
+			h = strings.TrimSpace(h[:i])
+		}
+		return strings.ToLower(strings.TrimSuffix(h, "."))
+	}
+	host := pick(r.Header.Get("X-Forwarded-Host"))
+	if host == "" {
+		host = pick(r.Header.Get("X-Real-Host"))
+	}
+	if host == "" {
+		host = pick(r.Host)
+	}
+	// 去掉 URL 里可能带进来的 scheme（个别反代会写成 https://a.com）
+	if i := strings.Index(host, "://"); i >= 0 {
+		host = host[i+3:]
+	}
+	if len(host) > 128 {
+		host = host[:128]
+	}
+
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	if p := strings.ToLower(pick(r.Header.Get("X-Forwarded-Proto"))); p == "https" || p == "http" {
+		scheme = p
+	} else if r.Header.Get("X-Forwarded-Ssl") == "on" {
+		scheme = "https"
+	}
+	return host, scheme
 }

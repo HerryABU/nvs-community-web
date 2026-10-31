@@ -17,29 +17,35 @@ import (
 // ⚠️ TTL 说明：HTTP 应用层拿不到 IP 层 TTL（那是 IP 协议字段），故本表不存 ttl，
 // 改用 XForwardedFor 链路长度（ProxyHops）近似「代理跳数」以辅助判断真实客户端位置。
 type WebAccessLog struct {
-	ID             uint      `gorm:"primaryKey" json:"id"`
-	UserID         uint      `json:"user_id"`
-	IdentityType   string    `gorm:"size:16;index" json:"identity_type"` // key / user / anonymous / bot
-	UAFamily       string    `gorm:"size:16;index" json:"ua_family"`     // browser / mobile / bot / tool / unknown
-	OSName         string    `gorm:"size:24;index" json:"os_name"`       // Windows / iOS / Android / macOS / Linux / unknown
-	OSVersion      string    `gorm:"size:24" json:"os_version"`          // 如 10/11、16.0、13.5
-	BrowserName    string    `gorm:"size:24;index" json:"browser_name"`  // Chrome / Edge / Firefox / Safari / Opera / unknown
-	BrowserVersion string    `gorm:"size:24" json:"browser_version"`     // 如 120.0.0.0
-	DeviceType     string    `gorm:"size:16;index" json:"device_type"`   // desktop / phone / tablet / unknown
-	DeviceModel    string    `gorm:"size:64" json:"device_model"`        // iPhone / iPad / Android 机型（未知为空）
-	Method         string    `gorm:"size:8" json:"method"`
-	Path           string    `gorm:"size:512;index" json:"path"`
-	Query          string    `gorm:"size:512" json:"query"`
-	IP             string    `gorm:"size:64;index" json:"ip"`
-	XForwardedFor  string    `gorm:"size:256" json:"x_forwarded_for"`
-	ProxyHops      int       `json:"proxy_hops"` // X-Forwarded-For 逗号分隔跳数（近似代理深度）
-	UA             string    `gorm:"size:512" json:"user_agent"`
-	StatusCode     int       `gorm:"index" json:"status_code"`
-	Size           int       `json:"size"`
-	LatencyMs      int       `json:"latency_ms"`
-	IsBot          bool      `gorm:"index" json:"is_bot"`
-	BotReason      string    `gorm:"size:64" json:"bot_reason"`
-	CreatedAt      time.Time `gorm:"index" json:"created_at"`
+	ID             uint   `gorm:"primaryKey" json:"id"`
+	UserID         uint   `json:"user_id"`
+	IdentityType   string `gorm:"size:16;index" json:"identity_type"` // key / user / anonymous / bot
+	UAFamily       string `gorm:"size:16;index" json:"ua_family"`     // browser / mobile / bot / tool / unknown
+	OSName         string `gorm:"size:24;index" json:"os_name"`       // Windows / iOS / Android / macOS / Linux / unknown
+	OSVersion      string `gorm:"size:24" json:"os_version"`          // 如 10/11、16.0、13.5
+	BrowserName    string `gorm:"size:24;index" json:"browser_name"`  // Chrome / Edge / Firefox / Safari / Opera / unknown
+	BrowserVersion string `gorm:"size:24" json:"browser_version"`     // 如 120.0.0.0
+	DeviceType     string `gorm:"size:16;index" json:"device_type"`   // desktop / phone / tablet / unknown
+	DeviceModel    string `gorm:"size:64" json:"device_model"`        // iPhone / iPad / Android 机型（未知为空）
+	Method         string `gorm:"size:8" json:"method"`
+	Path           string `gorm:"size:512;index" json:"path"`
+	Query          string `gorm:"size:512" json:"query"`
+	// Host 用户实际访问用的域名（含端口），例如 cpolar 域名、nginx 反代域名、
+	// 局域网 IP:8000、localhost。取值优先级 X-Forwarded-Host > X-Real-Host > Host，
+	// 因为经 cpolar / nginx 转发时 Host 头未必被原样带过来。
+	Host string `gorm:"size:128;index" json:"host"`
+	// Scheme http / https —— 同一域名可能两种协议都进得来，分开记才知道是不是走了 TLS
+	Scheme        string    `gorm:"size:8" json:"scheme"`
+	IP            string    `gorm:"size:64;index" json:"ip"`
+	XForwardedFor string    `gorm:"size:256" json:"x_forwarded_for"`
+	ProxyHops     int       `json:"proxy_hops"` // X-Forwarded-For 逗号分隔跳数（近似代理深度）
+	UA            string    `gorm:"size:512" json:"user_agent"`
+	StatusCode    int       `gorm:"index" json:"status_code"`
+	Size          int       `json:"size"`
+	LatencyMs     int       `json:"latency_ms"`
+	IsBot         bool      `gorm:"index" json:"is_bot"`
+	BotReason     string    `gorm:"size:64" json:"bot_reason"`
+	CreatedAt     time.Time `gorm:"index" json:"created_at"`
 }
 
 func (WebAccessLog) TableName() string { return "web_access_logs" }
@@ -53,6 +59,7 @@ type WebAccessQuery struct {
 	IsBot      *bool
 	Method     string
 	Path       string
+	Host       string // 访问域名（模糊匹配）
 	Identity   string
 	From       string // 2006-01-02 或 2006-01-02 15:04:05
 	To         string
@@ -91,6 +98,9 @@ func ListWebAccess(q WebAccessQuery) (items []WebAccessLog, total int64, err err
 	if q.Path != "" {
 		db = db.Where("path LIKE ?", "%"+q.Path+"%")
 	}
+	if q.Host != "" {
+		db = db.Where("host LIKE ?", "%"+q.Host+"%")
+	}
 	if q.Identity != "" {
 		db = db.Where("identity_type = ?", q.Identity)
 	}
@@ -112,11 +122,14 @@ func ListWebAccess(q WebAccessQuery) (items []WebAccessLog, total int64, err err
 
 // WebAccessStats 聚合统计（用于诊断面板）
 type WebAccessStats struct {
-	Total           int64            `json:"total"`
-	Today           int64            `json:"today"`
-	BotTotal        int64            `json:"bot_total"`
-	AttackTotal     int64            `json:"attack_total"` // 近 24h：is_bot 或 status>=400
-	TopIPs          []map[string]any `json:"top_ips"`
+	Total       int64            `json:"total"`
+	Today       int64            `json:"today"`
+	BotTotal    int64            `json:"bot_total"`
+	AttackTotal int64            `json:"attack_total"` // 近 24h：is_bot 或 status>=400
+	TopIPs      []map[string]any `json:"top_ips"`
+	// TopHosts 访问域名排行：host / cnt / ips（独立 IP 数）
+	// 用来回答「用户是从哪个地址进来的」——cpolar 域名、反代域名、内网 IP 会各占一行
+	TopHosts        []map[string]any `json:"top_hosts"`
 	TopPaths        []map[string]any `json:"top_paths"`
 	StatusDist      []map[string]any `json:"status_dist"`
 	UAFamilyDist    []map[string]any `json:"ua_family_dist"`
@@ -149,6 +162,11 @@ func GetWebAccessStats() (*WebAccessStats, error) {
 
 	DB.Model(&WebAccessLog{}).Select("ip, COUNT(*) as cnt").Group("ip").Order("cnt desc").Limit(10).
 		Scan(&s.TopIPs)
+	// 访问域名：带独立 IP 数，单看请求量分不清「一个人刷」还是「一批人从移动网络来」
+	DB.Model(&WebAccessLog{}).Where("host <> ''").
+		Select("host, COUNT(*) as cnt, COUNT(DISTINCT ip) as ips").
+		Group("host").Order("cnt desc").Limit(15).
+		Scan(&s.TopHosts)
 	DB.Model(&WebAccessLog{}).Select("path, COUNT(*) as cnt").Group("path").Order("cnt desc").Limit(10).
 		Scan(&s.TopPaths)
 	DB.Model(&WebAccessLog{}).Select("status_code, COUNT(*) as cnt").Group("status_code").Order("cnt desc").

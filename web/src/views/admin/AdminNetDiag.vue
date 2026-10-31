@@ -43,7 +43,16 @@
         <SectionHeader title="分布分析" subtitle="Top IP · 状态码 · UA 家族 · 爬虫原因 · 路径" :icon="'📈'" gradient="purple" />
         <p class="hint-text">
           名义上是「看用户分布、诊断网络」，同时用于识别防爬与攻击流量。<b>关于 TTL：</b>HTTP 应用层无法读取 IP 层 TTL 字段，本面板以
-          <code>X-Forwarded-For</code> 跳数（Proxy Hops）近似代理深度，辅助判断真实客户端位置。
+          <code>X-Forwarded-For</code> 跳数（Proxy Hops）近似代理深度，辅助判断真实客户端位置。<br />
+          <b>关于访问域名：</b>记录顺序为 <code>X-Forwarded-Host</code> → <code>X-Real-Host</code> → <code>Host</code>。
+          经 nginx / cpolar 转发时若看到的是 <code>127.0.0.1:8000</code> 这类上游地址，说明代理没透传 Host：
+          nginx 需 <code>proxy_set_header Host $host;</code> 与 <code>proxy_set_header X-Forwarded-Host $host;</code>；
+          cpolar 隧道默认会带，无需额外配置。手机蜂窝网络访问时，这里应出现你隧道的公网域名（或公网 IP:端口）。<br />
+          <b>关于客户端 IP：</b>若经代理进来的记录 IP 全显示为 <code>127.0.0.1</code> 或网关地址，
+          说明服务端没信任该代理由此不会采用 <code>X-Forwarded-For</code>（默认 <code>TRUSTED_PROXIES</code> 为空，
+          这是防伪造的保守默认）。要让移动网络的真实运营商 IP 进统计，需在 <code>.env</code> 里配置
+          <code>TRUSTED_PROXIES=127.0.0.1</code>（cpolar / ngrok 本机 agent）或你的 nginx 所在地址，
+          然后重启。<b>域名这一项不受该设置影响</b>，始终按 <code>X-Forwarded-Host</code> 记录。
         </p>
         <div class="dist-grid" v-loading="loadingStats">
           <div class="dist-box">
@@ -61,6 +70,21 @@
               </template>
               <el-table-column prop="ip" label="IP" min-width="140" />
               <el-table-column prop="cnt" label="次数" width="80" />
+            </el-table>
+          </div>
+          <div class="dist-box">
+            <div class="dist-title">访问域名（含反代 / cpolar）</div>
+            <el-table :data="stats.top_hosts" size="small" max-height="220" border>
+              <template #empty>
+                <StateBlock state="empty" compact title="暂无数据" description="升级后新产生的访问才会记录域名。" />
+              </template>
+              <el-table-column label="域名 / 地址" min-width="200" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <span class="host-text">{{ row.host }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="cnt" label="请求" width="80" />
+              <el-table-column prop="ips" label="独立IP" width="80" />
             </el-table>
           </div>
           <div class="dist-box">
@@ -184,6 +208,7 @@
           </template>
 
           <template #more>
+            <el-input v-model="filters.host" placeholder="访问域名（含端口）" size="small" style="width:180px" clearable @keyup.enter="reload" />
             <el-input v-model="filters.ua" placeholder="User-Agent 关键词" size="small" style="width:180px" clearable @keyup.enter="reload" />
             <el-select v-model="filters.ua_family" placeholder="UA 家族" clearable size="small" style="width:130px">
               <el-option v-for="f in families" :key="f" :label="f" :value="f" />
@@ -212,6 +237,14 @@
               <el-tooltip v-if="row.proxy_hops > 0" :content="'X-Forwarded-For 跳数: ' + row.proxy_hops" placement="top">
                 <span class="hops">↪{{ row.proxy_hops }}</span>
               </el-tooltip>
+            </template>
+          </el-table-column>
+          <el-table-column label="访问域名" min-width="170" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span class="host-text">{{ row.host || '—' }}</span>
+              <el-tag v-if="row.scheme" size="small" :type="row.scheme === 'https' ? 'success' : 'info'" class="scheme-tag">
+                {{ row.scheme }}
+              </el-tag>
             </template>
           </el-table-column>
           <el-table-column label="UA 家族" width="110">
@@ -275,6 +308,10 @@
           <div class="ua-title">User-Agent</div>
           <pre class="ua-pre">{{ current.user_agent || '—' }}</pre>
         </div>
+        <div class="ua-field">
+          <div class="ua-label">访问域名 / 协议</div>
+          <pre class="ua-pre">{{ (current.host || '—') + '  ·  ' + (current.scheme || '—') }}</pre>
+        </div>
         <el-alert type="warning" :closable="false" class="ttl-note">
           TTL 为 IP 协议层字段，HTTP 应用层（含本中间件）无法读取；代理跳数已作为近似网络特征呈现。
         </el-alert>
@@ -296,6 +333,7 @@ import type { WebAccessGeo } from '@/api/admin';
 
 interface WebRow {
   id: number; user_id: number; identity_type: string; ua_family: string;
+  host: string; scheme: string;
   method: string; path: string; ip: string; x_forwarded_for: string; proxy_hops: number;
   user_agent: string; status_code: number; size: number; latency_ms: number;
   is_bot: boolean; bot_reason: string; created_at: string;
@@ -311,12 +349,12 @@ const drawer = ref(false);
 const families = ['browser', 'mobile', 'bot', 'tool', 'unknown'];
 const stats = reactive({
   total: 0, today: 0, bot_total: 0, attack_total: 0,
-  top_ips: [] as any[], top_paths: [] as any[], status_dist: [] as any[],
+  top_ips: [] as any[], top_hosts: [] as any[], top_paths: [] as any[], status_dist: [] as any[],
   ua_family_dist: [] as any[], bot_reason_dist: [] as any[],
 });
 
 const filters = reactive({
-  ip: '', ua: '', ua_family: '', identity: '', is_bot: '', status: '',
+  ip: '', host: '', ua: '', ua_family: '', identity: '', is_bot: '', status: '',
   from: '', to: '', attack: false, page: 1, page_size: 30,
 });
 
@@ -377,6 +415,7 @@ async function reload() {
   try {
     const params: Record<string, any> = { page: filters.page, page_size: filters.page_size };
     if (filters.ip) params.ip = filters.ip;
+    if (filters.host) params.host = filters.host;
     if (filters.ua) params.ua = filters.ua;
     if (filters.ua_family) params.ua_family = filters.ua_family;
     if (filters.identity) params.identity = filters.identity;
@@ -397,7 +436,7 @@ async function reload() {
 
 function onPage(p: number) { filters.page = p; reload(); }
 function resetFilters() {
-  filters.ip = ''; filters.ua = ''; filters.ua_family = ''; filters.identity = '';
+  filters.ip = ''; filters.host = ''; filters.ua = ''; filters.ua_family = ''; filters.identity = '';
   filters.is_bot = ''; filters.status = ''; filters.from = ''; filters.to = '';
   filters.attack = false; filters.page = 1; reload();
 }
@@ -439,6 +478,9 @@ onMounted(() => { loadStats(); reload(); loadGeo(); });
   .geo-grid { grid-template-columns: 1fr; }
 }
 .hops { margin-left: 4px; font-size: 0.72rem; color: var(--el-text-color-secondary); }
+/* 访问域名：等宽更易比对（ccTLD / 端口对齐），且不与「路径」抢视觉权重 */
+.host-text { font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: 0.78rem; color: var(--text-main, #334155); }
+.scheme-tag { margin-left: 6px; transform: scale(0.86); transform-origin: left center; }
 .path-text { font-size: 0.8rem; color: var(--text-light, #555); }
 .pager { display: flex; justify-content: flex-end; margin-top: 14px; }
 .ua-block { margin-top: 16px; }

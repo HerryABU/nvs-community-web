@@ -21,6 +21,7 @@ func ListWebAccessLogs(c *gin.Context) {
 		UAFamily:   c.Query("ua_family"),
 		Method:     c.Query("method"),
 		Path:       c.Query("path"),
+		Host:       c.Query("host"),
 		Identity:   c.Query("identity"),
 		OnlyAttack: c.Query("attack") == "1",
 		Page:       atoiDefault(c.Query("page"), 1),

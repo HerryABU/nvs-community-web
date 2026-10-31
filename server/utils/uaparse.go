@@ -29,6 +29,24 @@ var (
 	reChrome       = regexp.MustCompile(`(?:chrome|crios)/([0-9.]+)`)
 	reFirefox      = regexp.MustCompile(`(?:firefox|fxios)/([0-9.]+)`)
 	reSafari       = regexp.MustCompile(`version/([0-9.]+)\s+.*safari`)
+
+	// ── 内置浏览器 / 手机厂商浏览器 ──
+	// 这些 UA 里通常同时带 Chrome 或 Safari 字样（微信 X5/WKWebView、UC、夸克等），
+	// 所以必须**先于** Chrome/Safari 判定，否则微信会被统计成 Chrome，
+	// 「多少人从微信里打开」这个关键问题就永远看不到。
+	reWeCom        = regexp.MustCompile(`wxwork/([0-9.]+)`)
+	reWeChat       = regexp.MustCompile(`micromessenger/([0-9.]+)`)
+	reQQBrowser    = regexp.MustCompile(`mqqbrowser/([0-9.]+)`)
+	reQQApp        = regexp.MustCompile(`\bqq/([0-9.]+)`)
+	reUCBrowser    = regexp.MustCompile(`ucbrowser/([0-9.]+)`)
+	reQuark        = regexp.MustCompile(`quark/([0-9.]+)`)
+	reBaiduBrowser = regexp.MustCompile(`(?:baidubrowser|bidubrowser|baiduboxapp)/([0-9.]+)`)
+	reSogou        = regexp.MustCompile(`(?:sogoumobilebrowser|metasr)/([0-9.]+)`)
+	reHuawei       = regexp.MustCompile(`(?:huaweibrowser|hbpc)/([0-9.]+)`)
+	reMIUI         = regexp.MustCompile(`miuibrowser/([0-9.]+)`)
+	reSamsung      = regexp.MustCompile(`samsungbrowser/([0-9.]+)`)
+	reVivo         = regexp.MustCompile(`vivobrowser/([0-9.]+)`)
+	reOppo         = regexp.MustCompile(`(?:heytapbrowser|oppobrowser)/([0-9.]+)`)
 )
 
 // ParseUserAgent 解析 User-Agent 字符串为结构化客户端画像。
@@ -88,7 +106,45 @@ func ParseUserAgent(ua string) UserAgentInfo {
 		info.OSName = "Linux"
 	}
 
-	// ── 浏览器（注意顺序：Opera/Edge 的 UA 也含 Chrome 字样，须先于 Chrome 判定）──
+	// ── 浏览器 ──
+	// 顺序即优先级，三条铁律：
+	//   1. 应用内置浏览器（微信 / 企业微信 / QQ / UC / 夸克 / 百度 / 搜狗 / 手机厂商）
+	//      必须在 Chrome/Safari 之前判 —— 它们的 UA 里都带 Chrome 或 Safari 字样；
+	//   2. Opera / Edge 也带 Chrome 字样，同样先于 Chrome；
+	//   3. 都不命中才落到 Chrome / Firefox / Safari。
+	// 站点运营最关心的「微信打开占比」全靠第 1 条，判错就永远看不到。
+	switch {
+	case reWeCom.MatchString(lower):
+		info.BrowserName, info.BrowserVersion = "WeCom", reWeCom.FindStringSubmatch(lower)[1]
+	case reWeChat.MatchString(lower):
+		info.BrowserName, info.BrowserVersion = "WeChat", reWeChat.FindStringSubmatch(lower)[1]
+	case reQQBrowser.MatchString(lower):
+		info.BrowserName, info.BrowserVersion = "QQBrowser", reQQBrowser.FindStringSubmatch(lower)[1]
+	case reUCBrowser.MatchString(lower):
+		info.BrowserName, info.BrowserVersion = "UC", reUCBrowser.FindStringSubmatch(lower)[1]
+	case reQuark.MatchString(lower):
+		info.BrowserName, info.BrowserVersion = "Quark", reQuark.FindStringSubmatch(lower)[1]
+	case reBaiduBrowser.MatchString(lower):
+		info.BrowserName, info.BrowserVersion = "Baidu", reBaiduBrowser.FindStringSubmatch(lower)[1]
+	case reSogou.MatchString(lower):
+		info.BrowserName, info.BrowserVersion = "Sogou", reSogou.FindStringSubmatch(lower)[1]
+	case reHuawei.MatchString(lower):
+		info.BrowserName, info.BrowserVersion = "Huawei", reHuawei.FindStringSubmatch(lower)[1]
+	case reMIUI.MatchString(lower):
+		info.BrowserName, info.BrowserVersion = "MIUI", reMIUI.FindStringSubmatch(lower)[1]
+	case reVivo.MatchString(lower):
+		info.BrowserName, info.BrowserVersion = "vivo", reVivo.FindStringSubmatch(lower)[1]
+	case reOppo.MatchString(lower):
+		info.BrowserName, info.BrowserVersion = "OPPO", reOppo.FindStringSubmatch(lower)[1]
+	case reSamsung.MatchString(lower):
+		info.BrowserName, info.BrowserVersion = "Samsung", reSamsung.FindStringSubmatch(lower)[1]
+	case reQQApp.MatchString(lower) && info.DeviceType != "desktop":
+		info.BrowserName, info.BrowserVersion = "QQ", reQQApp.FindStringSubmatch(lower)[1]
+	}
+	if info.BrowserName != "unknown" {
+		return info
+	}
+
 	if m := reOpera.FindStringSubmatch(lower); m != nil {
 		info.BrowserName = "Opera"
 		info.BrowserVersion = m[1]
