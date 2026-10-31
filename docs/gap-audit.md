@@ -56,7 +56,7 @@
 | 15 | 三维交叉限流（人 / 模型 / 时间窗） | 同上 | ✅ v3.19.0：`models/ai_throttle.go` 用户×模型 / 用户 / 模型 三窗口 + 快照 | 已做 | — |
 | 16 | 角色设定专用 AI 动作 | 同上「生成大纲 / 角色设定」 | ✅ v3.18.0：`AI_ACTIONS` 新增 `character`（后端 `aiSystemPrompt` + 流水标签），输出结构化角色卡 | 已做 | — |
 | 17 | 附件上传、历史导出（AI 出图） | 同上 | ✅ v3.20.0：`POST /ai/media/attach` 附件落库（`AiMediaTask.Attachments`）+ `GET /ai/export/media.zip`（items.json + files/ + manifest SHA256）+ 单任务导出；参考图同时上传站内副本 | 已做 | — |
-| 18 | TTS / 音乐（音频模型） | `sparkai-reference.md` | ✅ v3.19.0：`aiclient/audio.go` + `POST /api/ai/speech`（kind=audio，2000 字上限，落 uploads）+ 阅读器朗读按钮 | 已做 | — |
+| 18 | TTS / 音乐（音频模型） | `ai-ui-reference.md` | ✅ v3.19.0：`aiclient/audio.go` + `POST /api/ai/speech`（kind=audio，2000 字上限，落 uploads）+ 阅读器朗读按钮 | 已做 | — |
 | 19 | 思维导图 | 同上 | ✅ v3.19.0：AI_ACTIONS 新增 mindmap（约束输出 mermaid mindmap，阅读器已能渲染） | 已做 | — |
 | 20 | 自定义应用菜单（可挂外部） | 同上 | ✅ v3.19.0：`models/nav_menu.go` 两级菜单 + 协议白名单 + 登录/角色可见性 + 导航栏渲染 | 已做 | — |
 
@@ -74,7 +74,7 @@
 | 项 | 文档现在写的 | 实际 |
 |---|---|---|
 | 模型多密钥卡池 | `admin-reference.md`「无（每模型单密钥）」 | `models/ai_model_keys`（Label/Weight/FailCount/Enabled）+ `AcquireModelKey` 加权轮询已支持 |
-| 沉浸模式 | `sparkai-reference.md`「⏳ 未做」 | `AiHub.vue` 的 `immersive` + `global.css .ai-immersive` 已实现 |
+| 沉浸模式 | `ai-ui-reference.md`「⏳ 未做」 | `AiHub.vue` 的 `immersive` + `global.css .ai-immersive` 已实现 |
 | 蜜罐 JWT / 影子认证 / append-only / 导出审批 | `requirements-audit.md` 四行写 ⛔ | v3.15.0 已落地（`honeypot/jwt.go`、`shadowauth.go`、`forensics.go`、`export` 事件留痕） |
 | 生成大纲 | `requirements-audit.md` 写「角色设定未做」（大纲已做） | 大纲：`AiNovelMemory(outline)` 已可用；**只有角色设定动作仍缺** |
 | 算法透明度公开页 | 本报告第一版列为 P0 GAP | 实际已有（首页「推荐说明」弹窗 + 公开接口），属**核对误判** |

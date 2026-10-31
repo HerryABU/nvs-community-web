@@ -1,7 +1,7 @@
-# SparkAI（test.sparkaigc.com）前端功能勘察
+# 同类 AI 站点前端功能勘察（自调研）
 
-> 采集方式：Playwright 驱动本机 Chrome（有头）+ 本机登录态 Cookie；
-> 采集时间：2026-10-23；采集范围：落地页 `https://test.sparkaigc.com/` 与应用首屏 `https://test.sparkaigc.com/chatai`。
+> 采集方式：Playwright 驱动本机浏览器（有头）+ 本机登录态 Cookie；
+> 采集时间：2026-10-23；采集范围：落地页 `https://test.example.com/` 与应用首屏 `https://test.example.com/chatai`。
 > 说明：站内子页面为 SPA 懒加载，以下信息取自首屏真实 DOM 文本与控件枚举（非推测）。
 
 ## 一、信息架构（左侧主导航）
@@ -53,7 +53,7 @@
 
 ## 五、对本项目（NVS 全 AI 台）的取舍
 
-| SparkAI 做法 | NVS 采纳情况 |
+| 参考做法 | NVS 采纳情况 |
 |---|---|
 | 左侧分区导航（对话/绘画/视频/智能体/会员） | ✅ 已用 Tab + 侧栏实现（对话/绘画/视频/智能体） |
 | 模型广场多维度筛选（类型/厂商/搜索） | ✅ 采纳：模型带 `kind` 与厂商，前端按类型 Tab 过滤 + 搜索 |
@@ -68,6 +68,6 @@
 
 ## 六、采集留痕
 
-- 落地页快照：`C:/tmp/sparkai/pages.json`
-- 应用首屏快照：`C:/tmp/sparkai/app_views.json`（含完整模型列表文本与按钮枚举）
+- 落地页快照：（本地，未入库）
+- 应用首屏快照：（本地，未入库；含模型列表文本与按钮枚举）
 - 说明：企业微信文档链接 `doc.weixin.qq.com/doc/w3_AfkAag...` 已废弃（页面提示「文档管理员已将此文档升级为新的智能文档」，正文 `initialAttributedText` 为空、WebSocket 无内容帧），无法取得正文。

@@ -1,7 +1,7 @@
 <template>
   <div class="ai-hub" :class="{ 'ai-hub-immersive': immersive }">
     <!-- ===== 左侧功能导航 184px =====
-         布局参照 testlo（SparkAi）：左侧固定竖向导航 + 56px 顶栏 + 主区。
+         布局：左侧固定竖向导航 + 56px 顶栏 + 主区。
          竖向导航比宫格更像"工作台"：入口常驻，切功能不用回首页。 -->
     <aside class="ai-nav" :class="{ 'ai-nav-open': mobileSideOpen }">
       <div class="ai-nav-head">

@@ -130,7 +130,7 @@ func normalizePaymentConfig(cfg PaymentConfig) PaymentConfig {
 // PaymentTier 会员套餐（面额 + 赠送代币 + 会员时长）
 //
 // 历史背景：它最早只是「充值档位」（面额 + 赠送代币），没有时长概念。
-// 参考 SparkAi 类站点的会员页（天卡/周卡/月卡 + 权益清单）后扩展为套餐：
+// 参考同类 AI 站点的会员页（天卡/周卡/月卡 + 权益清单）后扩展为套餐：
 // Days=0 的档位仍是纯充值（兼容老配置），Days>0 的档位会同时延长会员有效期。
 type PaymentTier struct {
 	Fen      int64    `json:"fen"`                // 面额（分）

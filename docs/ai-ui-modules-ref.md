@@ -1,6 +1,6 @@
-# SparkAI 各功能模块 UI 结构（依据 testlo 保存页解析）
+# 同类 AI 站点各功能模块 UI 结构（依据页面快照自研解析）
 
-> 来源：`C:\Users\QBZ95\Desktop\testlo\*`（10 个整站保存快照：chatai / painting / market / video / agent / app-store / mind / pay / user-center / login）。
+> 来源：`C:\Users\QBZ95\Desktop\页面快照\*`（10 个整站保存快照：chatai / painting / market / video / agent / app-store / mind / pay / user-center / login）。
 > 抽取方式：去 script/style 后按可见文案还原信息架构（非截图推测）。
 > ⚠️ 该目录内附有提醒文件：**「小人眼睛」图标不得引入（许可证冲突）**，本文件与实现均未引用其任何素材。
 
@@ -51,7 +51,7 @@
 ## 6. 思维导图（mind）
 
 - 左：`您的需求？` 输入框（`请输入您想要生成内容的简单描述...`）+ `智能生成思维导图` + `试试示例`
-- 右：Markdown 大纲预览（`# 🚀SparkAi 系统…` → `## 模块` → `- 能力点`），可转导图
+- 右：Markdown 大纲预览（`# 🚀该站点 系统…` → `## 模块` → `- 能力点`），可转导图
 - 本质：**LLM 产出层级大纲 → 前端渲染为导图**，无需独立图数据库
 
 ## 7. 会员中心 / 支付（pay / 页面1）
@@ -79,7 +79,7 @@
 
 ## 10. 与 NVS 现有实现的差距清单（可执行）
 
-| 能力 | SparkAI | NVS 现状 | 建议 |
+| 能力 | 参考做法 | NVS 现状 | 建议 |
 |---|---|---|---|
 | 模型广场筛选 | 类型+厂商+搜索 | 类型 Tab + 搜索 | 补「厂商」维度（`AiModel` 增 vendor 字段或复用 provider_hint） |
 | 绘画模型选卡 | 卡片墙 + 一句定位 | 下拉框 | 改为卡片墙（`note` 作定位语，api_kind 作角标） |
