@@ -18,37 +18,17 @@
       </span>
     </div>
 
-    <!-- ============ 中国视野（只画中国，其他国家不出现） ============ -->
-    <!-- 用 ECharts + 离线省界：天地图底图是世界地图，无论怎么调 zoom 都会露出别国；
-         而这张图的语义就是「中国境内各省占比」，别国不该出现在画面里。 -->
+    <!-- ============ 中国视野（只有中国，画面里没有别国） ============ -->
+    <!-- 天地图只发布全球瓦片（GetCapabilities 里 layer 只有 vec / img / ter / ibo），
+         没有「仅中国」的底图图层；要画面里物理上只有中国，只能用**官方政区边界数据**自绘。
+         配了 tk 就拉天地图行政区划服务的 boundary（34 个省级行政区），没配则用内置省界。 -->
     <template v-if="viewScope === 'china'">
-      <!-- 有 tk：天地图底图 + 遮罩（只留中国）+ 省份色阶 -->
-      <template v-if="setting.provider === 'tianditu' && setting.key_ready">
-        <div ref="mapEl" class="sm-canvas" />
-        <div v-if="mapErr" class="sm-err">
-          <b>底图没显示</b>
-          <span class="sm-err-msg">{{ mapErr }}</span>
-          <button type="button" class="sm-retry" @click="scheduleRender">重试</button>
-          <span class="sm-err-tip">
-            逐项核对：tk 是「浏览器端」应用 · Referer 白名单含本站域名 · 网络能访问
-            <code>api.tianditu.gov.cn</code> 与 <code>t0.tianditu.gov.cn</code>
-          </span>
-        </div>
-        <div v-if="legendReady && !mapErr" class="sm-legend">
-          <span class="sm-legend-cap">少</span>
-          <i class="sm-legend-bar" />
-          <span class="sm-legend-cap">多</span>
-          <span class="sm-legend-note">省份按访问次数着色<br />蓝越深 = 占比越高</span>
-        </div>
-        <p v-else-if="mapLoading" class="sm-source">底图加载中…</p>
-        <p class="sm-source">
-          <template v-if="setting.review_no">审图号：{{ setting.review_no }}　</template>
-          底图：天地图（国家地理信息公共服务平台）· 仅显示中国境域
-          <span class="sm-dim">色块为站内访问占比</span>
-        </p>
-      </template>
-      <!-- 无 tk：离线省界（只有中国，画面上没有别国） -->
-      <ChinaGeoMap v-else :data="data" note="省份按访问次数着色（蓝越深 = 占比越高）" />
+      <ChinaGeoMap
+        :data="data"
+        :note="chinaNote"
+        :official="setting.provider === 'tianditu' && setting.key_ready"
+        :tk="setting.key"
+      />
     </template>
 
     <!-- ============ 全球视野 ============ -->
@@ -110,8 +90,6 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import api from '@/api';
 import ChinaGeoMap from '@/components/ChinaGeoMap.vue';
 import StateBlock from '@/components/common/StateBlock.vue';
-import chinaGeo from '@/assets/china.json';
-import { loadOfficialChinaBounds } from '@/components/maps/chinaOfficial';
 
 interface MapSetting {
   provider: 'offline' | 'tianditu';
@@ -144,7 +122,6 @@ let markers: any[] = [];
 /** 底图加载失败必须说出来：API 4.0 在容器尺寸为 0 或瓦片被拒时会静默留白，
  *  站长只会看到「底图：天地图」下面一片空，无从判断是 key 还是网络的问题。 */
 const mapErr = ref('');
-const legendReady = ref(false);
 const mapLoading = ref(false);
 let renderTimer: any = null;
 let tileTimer: any = null;
@@ -201,150 +178,11 @@ const COUNTRY_CENTROIDS: Record<string, [number, number]> = {
   HU: [19.0, 47.0], QA: [51.2, 25.3], KW: [47.5, 29.5], BH: [50.6, 26.0], OM: [56.0, 21.0],
 };
 
-// ============ 中国视野（天地图底图 + 官方省界 + 蓝色色阶） ============
-//
-// 做法：底图仍用天地图（站长要求「中国地图也要天地图的」），但用一块**遮罩**把中国以外
-// 全盖掉 —— 遮罩 = 世界外框 + 34 个省环作洞（实测 T.Polygon 支持多环，渲染成
-// 单条 path + fill-rule:evenodd，洞是真镂空），于是画面里只剩中国。
-// 省界优先用天地图行政区划服务的官方 boundary，失败才回退内置省界。
-
-const BLUE_SCALE = ['#e8f1ff', '#93b8ff', '#4f6ef7', '#1e3a8a'];
-
-function hexToRgb(h: string) {
-  const n = parseInt(h.replace('#', '').trim() || 'ffffff', 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-
-/** 0~1 → 蓝色色阶（与 ChinaGeoMap 的 visualMap 同色值） */
-function blueAt(t: number) {
-  const v = Math.min(1, Math.max(0, Number.isFinite(t) ? t : 0));
-  const seg = (BLUE_SCALE.length - 1) * v;
-  const i = Math.min(BLUE_SCALE.length - 1, Math.floor(seg));
-  const f = seg - i;
-  const a = hexToRgb(BLUE_SCALE[i]);
-  const b2 = hexToRgb(BLUE_SCALE[Math.min(i + 1, BLUE_SCALE.length - 1)]);
-  const c = a.map((x, k) => Math.round(x + (b2[k] - x) * f));
-  return `rgb(${c[0]},${c[1]},${c[2]})`;
-}
-
-/** 省名 → 环列表（官方优先，失败回退内置）；点数抽样，避免几万个点把地图拖卡 */
-let cnShapes: { name: string; rings: number[][][] }[] | null = null;
-
-function thinRing(ring: number[][], maxPts = 600): number[][] {
-  if (!Array.isArray(ring) || ring.length < 3) return [];
-  const step = Math.max(1, Math.ceil(ring.length / maxPts));
-  const out: number[][] = [];
-  for (let i = 0; i < ring.length; i += step) out.push(ring[i]);
-  const last = ring[ring.length - 1];
-  const tail = out[out.length - 1];
-  if (tail && (tail[0] !== last[0] || tail[1] !== last[1])) out.push(last);
-  return out;
-}
-
-async function getChinaShapes(): Promise<{ name: string; rings: number[][][] }[]> {
-  if (cnShapes) return cnShapes;
-
-  // 内置省界（回退用）
-  const builtin: Record<string, number[][][][]> = {};
-  for (const f of (chinaGeo as any)?.features || []) {
-    const nm = f?.properties?.name;
-    const g = f?.geometry;
-    if (!nm || !g) continue;
-    builtin[nm] =
-      g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
-  }
-  const names = Object.keys(builtin);
-  let shapeMap: Record<string, number[][][][]> = builtin;
-
-  if (setting.value.provider === 'tianditu' && setting.value.key_ready) {
-    const res = await loadOfficialChinaBounds(setting.value.key, names, chinaGeo as any);
-    if (res) shapeMap = res.shapes;
-  }
-
-  const out: { name: string; rings: number[][][] }[] = [];
-  for (const [name, mp] of Object.entries(shapeMap)) {
-    const rings: number[][][] = [];
-    for (const poly of mp) {
-      for (const ring of poly) {
-        const t = thinRing(ring as number[][]);
-        if (t.length >= 3) rings.push(t);
-      }
-    }
-    if (rings.length) out.push({ name, rings });
-  }
-  cnShapes = out;
-  return out;
-}
-
-/** 在中国视野的天地图上：铺遮罩（只留中国）+ 画省份色阶 */
-async function drawChinaOnTianditu(T: any) {
-  if (!map) return;
-  const shapes = await getChinaShapes();
-  if (!map || !shapes.length) return;
-
-  const cssBg = getComputedStyle(document.documentElement).getPropertyValue('--bg-card').trim();
-  const maskColor = cssBg || '#ffffff';
-
-  // 遮罩：世界外框 + 每个省环作洞（evenodd 填充，洞会镂空）
-  const maskRings: any[] = [
-    [
-      new T.LngLat(-180, -85),
-      new T.LngLat(180, -85),
-      new T.LngLat(180, 85),
-      new T.LngLat(-180, 85),
-    ],
-  ];
-  for (const s of shapes) {
-    for (const ring of s.rings) {
-      maskRings.push(ring.map(([lng, lat]) => new T.LngLat(lng, lat)));
-    }
-  }
-  const mask = new T.Polygon(maskRings, {
-    color: maskColor,
-    weight: 0,
-    opacity: 0,
-    fillColor: maskColor,
-    fillOpacity: 1,
-  });
-  map.addOverLay(mask);
-  markers.push(mask);
-
-  // 省份色块
-  const vmap = new Map<string, number>();
-  let total = 0;
-  for (const d of props.data || []) {
-    const v = Number(d.value) || 0;
-    if (v > 0) {
-      vmap.set(d.name, v);
-      total += v;
-    }
-  }
-  const maxV = Math.max(1, ...[...vmap.values()]);
-
-  for (const s of shapes) {
-    const v = vmap.get(s.name) || 0;
-    const fill = v > 0 ? blueAt(v / maxV) : '#eef4fc';
-    for (const ring of s.rings) {
-      const path = ring.map(([lng, lat]) => new T.LngLat(lng, lat));
-      const poly = new T.Polygon(path, {
-        color: 'rgba(255,255,255,0.85)',
-        weight: 1,
-        opacity: 0.9,
-        fillColor: fill,
-        fillOpacity: v > 0 ? 0.72 : 0.3,
-      });
-      if (v > 0) {
-        const pct = total > 0 ? ((v / total) * 100).toFixed(1) : '0';
-        poly.addEventListener('click', () => {
-          poly.openInfoWindow(new T.InfoWindow(`${s.name}：${v} 次（占境内 ${pct}%）`));
-        });
-      }
-      map.addOverLay(poly);
-      markers.push(poly);
-    }
-  }
-  legendReady.value = true;
-}
+// 中国视野的说明文字（审图号由站长在后台填；边界来源由 ChinaGeoMap 自行声明）
+const chinaNote = computed(() => {
+  const base = '省份按访问次数着色（蓝越深 = 占比越高）';
+  return setting.value.review_no ? `${base} · 审图号：${setting.value.review_no}` : base;
+});
 
 async function loadSetting() {
   try {
@@ -395,6 +233,8 @@ function bubbleIcon(T: any, size: number, color: string) {
 
 async function renderTianditu() {
   if (setting.value.provider !== 'tianditu' || !setting.value.key_ready) return;
+  // 中国视野用官方边界自绘（ChinaGeoMap），没有天地图容器，别在这里白跑
+  if (viewScope.value !== 'world') return;
   await nextTick();
   if (!mapEl.value) return;
   mapErr.value = '';
@@ -408,8 +248,6 @@ async function renderTianditu() {
   }
   // 注：天地图 4.0 的 SDK 自身会抛一次 "Cannot read properties of undefined (reading 'extend')"
   // （它内部加载 v4.0 扩展脚本时的 bug），与出图无关 —— 实测底图瓦片正常加载，不要误判成本项目的错。
-  // 注：天地图 4.0 的 SDK 自身会抛一次 "Cannot read properties of undefined (reading 'extend')"
-  // （它内部加载 v4.0 扩展脚本时的 bug），与出图无关 —— 实测底图瓦片正常加载，不要误判成本项目的错。
   const T = (window as any).T;
   if (!T || !mapEl.value) {
     mapLoading.value = false;
@@ -417,38 +255,16 @@ async function renderTianditu() {
     return;
   }
 
-  const world = viewScope.value === 'world';
   // 重建前先清空：同一容器重复 new T.Map 会叠出多层画布
   mapEl.value.innerHTML = '';
   map = new T.Map(mapEl.value);
   // 容器已清空，旧实例的 overlay 随之消失；这里只重置引用。
-  // ⚠️ 不要在后面再 removeOverLay：会把本函数刚画上去的遮罩/色块删掉。
   markers = [];
-
-  if (world) {
-    map.centerAndZoom(new T.LngLat(20, 15), 2);
-  } else {
-    // 中国视野：底图仍是天地图，但用遮罩把中国以外全部盖掉（见 drawChinaOnTianditu），
-    // 同时把视野锁在中国范围，避免拖到一片遮罩色上。
-    const sw = new T.LngLat(73.4, 3.4);
-    const ne = new T.LngLat(135.2, 53.8);
-    map.centerAndZoom(new T.LngLat(104.2, 35.8), 4);
-    try {
-      map.setMaxBounds(new T.LngLatBounds(sw, ne));
-      map.setViewport([sw, ne]);
-      const z = map.getZoom();
-      if (z) {
-        map.setMinZoom(z);
-        map.setMaxZoom(Math.max(z + 3, 9));
-      }
-    } catch {
-      /* 老版本 SDK 不支持就退化为普通视野，别把地图搞挂 */
-    }
-    await drawChinaOnTianditu(T);
-  }
+  // 只有全球视野会走到这里（中国视野在函数开头就返回了）
+  map.centerAndZoom(new T.LngLat(20, 15), 2);
   mapLoading.value = false;
 
-  if (world) {
+  {
     // ── 全球：国家气泡（没有国界数据，气泡最诚实，也不会画错国界）──
     const points: { name: string; value: number; pos: [number, number]; cn?: boolean }[] = [];
     for (const c of props.countries || []) {
@@ -496,6 +312,8 @@ function scheduleRender() {
     let tries = 0;
     const step = () => {
       if (setting.value.provider !== 'tianditu' || !setting.value.key_ready) return;
+      // 中国视野用官方边界自绘，没有天地图容器 —— 不去找 mapEl，否则会误报「容器没渲染出来」
+      if (viewScope.value !== 'world') return;
       if (mapEl.value) {
         renderTianditu();
         return;

@@ -55,7 +55,9 @@ if (!baseRegistered && chinaGeo) {
 
 // mapName 可在内置/官方之间切换；official=true 时先等官方边界再渲染
 const mapName = ref('china');
-const ready = ref(props.official ? false : baseRegistered);
+// 先用内置边界立刻出图；官方边界拉到后无缝替换（见 tryLoadOfficial），
+// 否则要白屏等 8~10 秒。
+const ready = ref(baseRegistered);
 const sourceNote = ref(BASE_NOTE);
 
 let officialLoading = false;

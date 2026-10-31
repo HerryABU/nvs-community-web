@@ -294,13 +294,20 @@
         </div>
 
         <div class="ai-cfg-field">
-          <label class="ai-cfg-label">回复长度</label>
-          <el-radio-group v-model="draft.maxTokens" size="small">
-            <el-radio-button :value="1024">短回复</el-radio-button>
-            <el-radio-button :value="2048">中回复</el-radio-button>
-            <el-radio-button :value="4096">长回复</el-radio-button>
-          </el-radio-group>
-          <p class="ai-cfg-hint">只影响单次回答的上限，不影响按 token 计费的输入部分。</p>
+          <div class="ai-cfg-row">
+            <span class="ai-cfg-label">回复长度上限</span>
+            <span class="ai-cfg-val">{{ draft.maxTokens }} tokens</span>
+          </div>
+          <el-slider
+            v-model="draft.maxTokens"
+            :min="256"
+            :max="TOKENS_MAX"
+            :step="256"
+            :show-tooltip="false"
+          />
+          <p class="ai-cfg-hint">
+            越大越能写长文，但一次生成最多也就这么多；超过模型本身的上限时上游会报错，调小即可。
+          </p>
         </div>
 
         <div class="ai-cfg-field">
@@ -442,7 +449,13 @@ const streamingText = ref('');
 // 思考型模型的推理增量（与正文分开：正文还没来时先给用户看到"它在想"）
 const streamingReasoning = ref('');
 const msgListEl = ref<HTMLElement>();
-const maxTokens = ref(2048);
+// 回复长度上限（tokens）：滑块 256~8192，步进 256
+const TOKENS_MAX = 8192;
+const clampTokens = (n: number) => {
+  if (!Number.isFinite(n) || n <= 0) return 2048;
+  return Math.min(TOKENS_MAX, Math.max(256, Math.round(n / 256) * 256));
+};
+const maxTokens = ref(clampTokens(Number(localStorage.getItem('ai_max_tokens') || 2048)));
 // 上下文控制（参考主流 AI 站：一个「记忆历史」开关 + 一个「上下文数量」滑块）
 // 存 localStorage：这是使用习惯，不该每开一次对话都重设。
 const CTX_MAX = 20;
@@ -452,9 +465,10 @@ function clampCtx(n: number) {
   if (!Number.isFinite(n) || n <= 0) return 10;
   return Math.min(CTX_MAX, Math.max(2, n));
 }
-watch([contextLimit, memoryOn], () => {
+watch([contextLimit, memoryOn, maxTokens], () => {
   localStorage.setItem('ai_ctx_limit', String(contextLimit.value));
   localStorage.setItem('ai_memory', memoryOn.value ? '1' : '0');
+  localStorage.setItem('ai_max_tokens', String(maxTokens.value));
 });
 let abortCtrl: AbortController | null = null;
 let loadingSession = 0;
@@ -505,9 +519,7 @@ const currentModelName = computed(() => {
   if (useByok.value) return byokModel.value || '自带密钥';
   return currentModel.value?.name || '选择模型';
 });
-const replyLabel = computed(() =>
-  maxTokens.value >= 4096 ? '长回复' : maxTokens.value >= 2048 ? '中回复' : '短回复',
-);
+const replyLabel = computed(() => `${maxTokens.value} tokens`);
 
 /** 模型下拉右侧的价格小标签（免费则标「免费」） */
 function priceText(m: { price_in?: number; price_out?: number }) {

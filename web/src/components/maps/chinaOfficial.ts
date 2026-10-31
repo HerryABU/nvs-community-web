@@ -130,16 +130,18 @@ export async function loadOfficialChinaBounds(
 
   // 并发压到 2、每个间隔 200ms：天地图行政区划接口有 QPS 限制，
   // 实测并发 5 会大量 429（34 个省只成功 4 个）。
-  const results = await mapLimit(names, 2, async (name) => {
-    for (let attempt = 0; attempt < 3; attempt++) {
+  // 天地图行政区划接口 QPS 限制很紧：并发 2 仍会大量 429，改串行 + 间隔，
+  // 重试用指数退避（600/1200/1800ms）。首次约 8~10 秒，之后走缓存。
+  const results = await mapLimit(names, 1, async (name) => {
+    for (let attempt = 0; attempt < 4; attempt++) {
       try {
-        if (attempt) await sleep(500 * attempt);
+        if (attempt) await sleep(600 * attempt);
         const wkt = await fetchOne(name);
         if (wkt) return { name, wkt };
       } catch {
         /* 继续重试 */
       }
-      await sleep(200);
+      await sleep(350);
     }
     return { name, wkt: '' };
   });
