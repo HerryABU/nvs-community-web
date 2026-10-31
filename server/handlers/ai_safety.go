@@ -104,11 +104,20 @@ func SaveAiSafetyConfig(c *gin.Context) {
 	if !ensureAdmin(c) {
 		return
 	}
-	var req aisafety.SafetyConfig
-	if err := c.ShouldBindJSON(&req); err != nil {
+	// 就地合并：先取现有配置，再把请求体覆盖上去。
+	// 直接 bind 到零值结构体会让「只改一个开关」的调用把其余字段全写成 false ——
+	// 实测曾因此把 enabled / guard_input / guard_output 一起关掉，闸门静默失效。
+	cur, e := aisafety.GetConfig()
+	if e != nil || cur == nil {
+		utils.InternalError(c, "读取配置失败")
+		return
+	}
+	raw, _ := c.GetRawData()
+	if err := aisafety.ApplyPartialJSON(cur, raw); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
+	req := *cur
 	// 防呆：策略数值为 0/负数在业务上无意义，负值一律纠正
 	if req.InputBlockScore <= 0 {
 		req.InputBlockScore = 65
