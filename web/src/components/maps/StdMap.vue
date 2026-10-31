@@ -18,57 +18,12 @@
       </span>
     </div>
 
-    <!-- ============ 中国视野 ============ -->
+    <!-- ============ 中国视野（只画中国，其他国家不出现） ============ -->
+    <!-- 用 ECharts + 离线省界：天地图底图是世界地图，无论怎么调 zoom 都会露出别国；
+         而这张图的语义就是「中国境内各省占比」，别国不该出现在画面里。 -->
     <template v-if="viewScope === 'china'">
-      <!-- 天地图：官方底图 + 省级气泡（不依赖任何第三方边界数据） -->
-      <template v-if="setting.provider === 'tianditu' && setting.key_ready">
-        <div ref="mapEl" class="sm-canvas" />
-        <div v-if="mapErr" class="sm-err">
-          <b>底图没显示</b>
-          <span class="sm-err-msg">{{ mapErr }}</span>
-          <button type="button" class="sm-retry" @click="scheduleRender">重试</button>
-          <span class="sm-err-tip">
-            逐项核对：tk 是「浏览器端」应用 · Referer 白名单含本站域名 · 网络能访问
-            <code>api.tianditu.gov.cn</code> 与 <code>t0.tianditu.gov.cn</code>
-          </span>
-        </div>
-        <p v-else-if="mapLoading" class="sm-source">底图加载中…</p>
-        <!-- 色阶图例：天地图没有 visualMap，自己叠一条（与填充色同一组色值） -->
-        <div v-if="legendReady && !mapErr" class="sm-legend">
-          <span class="sm-legend-cap">少</span>
-          <i class="sm-legend-bar" />
-          <span class="sm-legend-cap">多</span>
-          <span class="sm-legend-note">省份按访问次数着色<br />蓝越深 = 占比越高</span>
-        </div>
-        <p class="sm-source">
-          <template v-if="setting.review_no">审图号：{{ setting.review_no }}　</template>
-          底图：天地图（国家地理信息公共服务平台）· 中国
-          <span class="sm-dim">色块为站内访问占比，境界线以底图为准</span>
-        </p>
-      </template>
-      <!-- 没有密钥时：**不画行政边界**（本地/第三方边界不是审图件，省界与国界表示也可能出错），
-           改为按省份排行呈现同一份数据 —— 数据不缺，只是不画不合规的底图。 -->
-      <template v-else>
-        <!-- 没有 tk：仍给色阶图（离线省界，只作站内参考），并在下方补一份省份明细 -->
-        <ChinaGeoMap :data="data" note="省份按访问次数着色（蓝越深越多）；未配置天地图密钥时用离线省界绘制" />
-        <div v-if="cnRows.length" class="sm-ranks" style="margin-top:10px">
-          <div class="sm-rank-head">
-            <span>国内访问来源（近 30 天 · 按省级）</span>
-            <span class="sm-dim">共 {{ cnTotal }} 次 · {{ cnRows.length }} 个省级行政区</span>
-          </div>
-          <div v-for="(r, i) in cnRows" :key="r.name" class="sm-rank-row">
-            <span class="sm-rank-no">{{ i + 1 }}</span>
-            <span class="sm-rank-name">{{ r.name }}</span>
-            <span class="sm-rank-bar"><i :style="{ width: barWidth(r.value, maxCn) }" /></span>
-            <span class="sm-rank-val">{{ r.value }}</span>
-          </div>
-        </div>
-        <p class="sm-source sm-warn">
-          这张图用的是<b>离线省界</b>（非审图件，仅供站内参考）。
-          要对外展示标准地图，请到后台「运营 → 地图服务」填天地图 tk —— 底图会换成天地图，
-          省份色块直接叠在官方底图上。
-        </p>
-      </template>
+      <!-- 只画中国（ChinaGeoMap 自带边界来源说明，这里不重复贴） -->
+      <ChinaGeoMap :data="data" note="省份按访问次数着色（蓝越深 = 占比越高）" />
     </template>
 
     <!-- ============ 全球视野 ============ -->
@@ -130,7 +85,6 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import api from '@/api';
 import ChinaGeoMap from '@/components/ChinaGeoMap.vue';
 import StateBlock from '@/components/common/StateBlock.vue';
-import chinaGeo from '@/assets/china.json';
 
 interface MapSetting {
   provider: 'offline' | 'tianditu';
@@ -163,7 +117,6 @@ let markers: any[] = [];
 /** 底图加载失败必须说出来：API 4.0 在容器尺寸为 0 或瓦片被拒时会静默留白，
  *  站长只会看到「底图：天地图」下面一片空，无从判断是 key 还是网络的问题。 */
 const mapErr = ref('');
-const legendReady = ref(false); // 有 tk 的中国视野才有色阶图例
 const mapLoading = ref(false);
 let renderTimer: any = null;
 let tileTimer: any = null;
@@ -203,19 +156,6 @@ function barWidth(v: number, max: number) {
   return `${Math.max(4, Math.round((v / Math.max(1, max)) * 100))}%`;
 }
 
-// 省级中心点（把「省份计数」画到标准底图上，不依赖任何第三方边界数据）
-const CENTROIDS: Record<string, [number, number]> = {
-  北京市: [116.4, 39.9], 天津市: [117.2, 39.1], 河北省: [114.5, 38.0], 山西省: [112.5, 37.9],
-  内蒙古自治区: [111.7, 40.8], 辽宁省: [123.4, 41.8], 吉林省: [125.3, 43.9], 黑龙江省: [126.6, 45.8],
-  上海市: [121.5, 31.2], 江苏省: [118.8, 32.1], 浙江省: [120.2, 30.3], 安徽省: [117.3, 31.9],
-  福建省: [119.3, 26.1], 江西省: [115.9, 28.7], 山东省: [117.0, 36.7], 河南省: [113.7, 34.8],
-  湖北省: [114.3, 30.6], 湖南省: [113.0, 28.2], 广东省: [113.3, 23.1], 广西壮族自治区: [108.3, 22.8],
-  海南省: [110.3, 20.0], 重庆市: [106.5, 29.6], 四川省: [104.1, 30.7], 贵州省: [106.7, 26.6],
-  云南省: [102.7, 25.0], 西藏自治区: [91.1, 29.6], 陕西省: [108.9, 34.3], 甘肃省: [103.8, 36.1],
-  青海省: [101.8, 36.6], 宁夏回族自治区: [106.3, 38.5], 新疆维吾尔自治区: [87.6, 43.8],
-  台湾省: [121.5, 25.0], 香港特别行政区: [114.2, 22.3], 澳门特别行政区: [113.5, 22.2],
-};
-
 // 国家/地区中心点（仅用于在标准底图上打气泡，不含任何边界数据）
 const COUNTRY_CENTROIDS: Record<string, [number, number]> = {
   CN: [104.2, 35.8], US: [-98.5, 39.8], JP: [138.0, 36.2], KR: [127.8, 36.5], KP: [127.0, 40.0],
@@ -232,64 +172,6 @@ const COUNTRY_CENTROIDS: Record<string, [number, number]> = {
   MN: [103.0, 46.0], KZ: [67.0, 48.0], UA: [31.0, 49.0], CZ: [15.0, 50.0], RO: [25.0, 46.0],
   HU: [19.0, 47.0], QA: [51.2, 25.3], KW: [47.5, 29.5], BH: [50.6, 26.0], OM: [56.0, 21.0],
 };
-
-// ============ 省份面着色（蓝色色阶） ============
-//
-// 天地图只提供底图瓦片，不返回省级边界（v2/administrative 只给中心点）。
-// 所以「省份占比高亮」用打包进来的省界多边形**只填色、不描边**：
-// 边界线和注记仍由天地图底图提供，着色层只负责表达量级 —— 视觉上就是标准地图上的色阶图。
-// 无 tk 时退回 ChinaGeoMap（同一份边界自行描边 + 色阶），并在页脚声明非审图件。
-const BLUE_SCALE = ['#e8f1ff', '#93b8ff', '#4f6ef7', '#1e3a8a'];
-
-function hexToRgb(h: string) {
-  const n = parseInt(h.replace('#', ''), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-/** 按 0~1 取蓝色色阶上的颜色（分段线性插值，和 ChinaGeoMap 的 visualMap 一致） */
-function blueAt(t: number) {
-  const v = Math.min(1, Math.max(0, Number.isFinite(t) ? t : 0));
-  const seg = (BLUE_SCALE.length - 1) * v;
-  const i = Math.min(BLUE_SCALE.length - 1, Math.floor(seg));
-  const f = seg - i;
-  const a = hexToRgb(BLUE_SCALE[i]);
-  const b = hexToRgb(BLUE_SCALE[Math.min(i + 1, BLUE_SCALE.length - 1)]);
-  const c = a.map((x, k) => Math.round(x + (b[k] - x) * f));
-  return `rgb(${c[0]},${c[1]},${c[2]})`;
-}
-
-/** GeoJSON 要素 → 多边形环列表（Polygon / MultiPolygon 都吃） */
-function ringsOf(f: any): number[][][] {
-  const g = f?.geometry;
-  if (!g || !Array.isArray(g.coordinates)) return [];
-  if (g.type === 'Polygon') return g.coordinates;
-  if (g.type === 'MultiPolygon') return g.coordinates.flat();
-  return [];
-}
-
-// 预构建一次：省名 → 环列表（点数按需抽样，34 个省几千个点直接画会卡）
-let provinceRings: { name: string; rings: number[][][] }[] | null = null;
-function getProvinceRings() {
-  if (provinceRings) return provinceRings;
-  const feats = (chinaGeo as any)?.features || [];
-  const out: { name: string; rings: number[][][] }[] = [];
-  for (const f of feats) {
-    const name = f?.properties?.name;
-    if (!name) continue; // 南海诸岛那条没有名称，不参与着色
-    const rings = ringsOf(f).map((ring) => {
-      const step = Math.max(1, Math.ceil(ring.length / 500));
-      const thin: number[][] = [];
-      for (let i = 0; i < ring.length; i += step) thin.push(ring[i]);
-      const last = ring[ring.length - 1];
-      if (thin.length && (thin[thin.length - 1][0] !== last[0] || thin[thin.length - 1][1] !== last[1])) {
-        thin.push(last);
-      }
-      return thin;
-    });
-    if (rings.length) out.push({ name, rings });
-  }
-  provinceRings = out;
-  return out;
-}
 
 async function loadSetting() {
   try {
@@ -338,50 +220,10 @@ function bubbleIcon(T: any, size: number, color: string) {
   });
 }
 
-/** 中国视野：按访问次数给省份填蓝色色阶（0 次的省填最浅，保持轮廓完整） */
-function drawProvinceChoropleth(T: any) {
-  if (!map) return;
-  const shapes = getProvinceRings();
-  const vmap = new Map<string, number>();
-  let total = 0;
-  for (const d of props.data || []) {
-    const v = Number(d.value) || 0;
-    if (v > 0) {
-      vmap.set(d.name, v);
-      total += v;
-    }
-  }
-  const maxV = Math.max(1, ...[...vmap.values()]);
-
-  for (const s of shapes) {
-    const v = vmap.get(s.name) || 0;
-    const fill = v > 0 ? blueAt(v / maxV) : '#eef4fc';
-    for (const ring of s.rings) {
-      if (ring.length < 3) continue;
-      const path = ring.map(([lng, lat]) => new T.LngLat(lng, lat));
-      const poly = new T.Polygon(path, {
-        color: '#ffffff',
-        weight: 0,
-        opacity: 0,
-        fillColor: fill,
-        // 有数据的省更实，无数据的省淡淡的只交代轮廓
-        fillOpacity: v > 0 ? 0.66 : 0.26,
-      });
-      if (v > 0) {
-        const pct = total > 0 ? ((v / total) * 100).toFixed(1) : '0';
-        poly.addEventListener('click', () => {
-          poly.openInfoWindow(new T.InfoWindow(`${s.name}：${v} 次（占境内 ${pct}%）`));
-        });
-      }
-      map.addOverLay(poly);
-      markers.push(poly);
-    }
-  }
-  legendReady.value = true;
-}
-
 async function renderTianditu() {
   if (setting.value.provider !== 'tianditu' || !setting.value.key_ready) return;
+  // 中国视野用离线省界「只画中国」，不需要天地图（也没有 mapEl）
+  if (viewScope.value !== 'world') return;
   await nextTick();
   if (!mapEl.value) return;
   mapErr.value = '';
@@ -408,7 +250,30 @@ async function renderTianditu() {
   // 重建前先清空：同一容器重复 new T.Map 会叠出多层画布
   mapEl.value.innerHTML = '';
   map = new T.Map(mapEl.value);
-  map.centerAndZoom(new T.LngLat(world ? 20 : 104.2, world ? 15 : 35.8), world ? 2 : 5);
+
+  if (world) {
+    map.centerAndZoom(new T.LngLat(20, 15), 2);
+  } else {
+    // 中国视野要「只看到中国这一块」：
+    // 1) setViewport 让中国范围刚好铺满容器；
+    // 2) setMaxBounds 把可视区锁在中国境内，拖不出去；
+    // 3) setMinZoom 锁在当前级别，缩小不了（一缩小就会露出周边国家）。
+    // 否则默认 zoom=5 只能看到中国东部一小块，四周全是别国。
+    const sw = new T.LngLat(73.4, 3.4);
+    const ne = new T.LngLat(135.2, 53.8);
+    map.centerAndZoom(new T.LngLat(104.2, 35.8), 4);
+    try {
+      map.setMaxBounds(new T.LngLatBounds(sw, ne));
+      map.setViewport([sw, ne]);
+      const z = map.getZoom();
+      if (z) {
+        map.setMinZoom(z);
+        map.setMaxZoom(Math.max(z + 4, 10));
+      }
+    } catch {
+      /* 老版本 SDK 不支持这些方法就退化为普通视野，别把地图搞挂 */
+    }
+  }
   mapLoading.value = false;
 
   markers.forEach((m) => map.removeOverLay(m));
@@ -433,9 +298,6 @@ async function renderTianditu() {
       map.addOverLay(marker);
       markers.push(marker);
     }
-  } else {
-    // ── 中国：省份面着色（蓝色色阶），只填色不描边，边界由天地图底图提供 ──
-    drawProvinceChoropleth(T);
   }
 
   // 最后一道自检：8 秒后容器里一张瓦片都没有 = 只出了灰底，说明请求被拒（tk/白名单）或被拦
@@ -465,6 +327,7 @@ function scheduleRender() {
     let tries = 0;
     const step = () => {
       if (setting.value.provider !== 'tianditu' || !setting.value.key_ready) return;
+      if (viewScope.value !== 'world') return; // 中国视野不建天地图
       if (mapEl.value) {
         renderTianditu();
         return;
@@ -517,22 +380,7 @@ onBeforeUnmount(() => {
 .sm-hint { margin-left: auto; font-size: 0.72rem; color: var(--text-light, #9ca3af); }
 
 .sm-canvas { width: 100%; height: 360px; border-radius: 10px; overflow: hidden; }
-/* 色阶图例（叠在画布右下角，不挡地图主体） */
-.sm-legend {
-  position: absolute; right: 12px; top: 44px; z-index: 2;
-  display: flex; align-items: center; gap: 6px;
-  padding: 6px 9px; border-radius: 8px;
-  background: color-mix(in srgb, var(--bg-card, #fff) 88%, transparent);
-  border: 1px solid var(--border-color, #e5e7eb);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
-  font-size: 0.68rem; color: var(--text-light, #6b7280);
-}
-.sm-legend-bar {
-  display: block; width: 84px; height: 8px; border-radius: 999px;
-  background: linear-gradient(90deg, #e8f1ff, #93b8ff, #4f6ef7, #1e3a8a);
-}
-.sm-legend-cap { font-variant-numeric: tabular-nums; }
-.sm-legend-note { margin-left: 4px; padding-left: 8px; border-left: 1px solid var(--border-color, #e5e7eb); line-height: 1.45; }
+
 /* 底图失败提示：不静默留白，直接说清「没出图」和下一步核对什么 */
 .sm-err {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px;
