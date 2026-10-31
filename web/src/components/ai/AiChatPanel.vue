@@ -220,6 +220,44 @@
               <el-option :value="2048" label="中回复" />
               <el-option :value="4096" label="长回复" />
             </el-select>
+            <!-- 上下文：开关 + 滑块（参考主流 AI 站的做法，参数一眼看得懂） -->
+            <el-popover placement="top" :width="272" trigger="click" popper-class="ai-ctx-popper">
+              <template #reference>
+                <button
+                  type="button"
+                  class="ai-ctx-btn"
+                  :class="{ off: !memoryOn }"
+                  :title="memoryOn ? `会带上最近 ${contextLimit} 条对话` : '不记忆历史，每次都是独立对话'"
+                >
+                  上下文 {{ memoryOn ? contextLimit : '关' }}
+                </button>
+              </template>
+              <div class="ai-ctx-pop">
+                <div class="ai-ctx-row">
+                  <span class="ai-ctx-label">记忆对话历史</span>
+                  <el-switch v-model="memoryOn" size="small" />
+                </div>
+                <p class="ai-ctx-tip">开启后 AI 会接着上文聊；关闭则每次都是独立对话。</p>
+
+                <div class="ai-ctx-row" :class="{ dim: !memoryOn }">
+                  <span class="ai-ctx-label">上下文数量限制</span>
+                  <span class="ai-ctx-val">{{ memoryOn ? contextLimit + ' 条' : '—' }}</span>
+                </div>
+                <el-slider
+                  v-model="contextLimit"
+                  :min="2"
+                  :max="CTX_MAX"
+                  :step="2"
+                  :disabled="!memoryOn"
+                  :show-tooltip="false"
+                  size="small"
+                />
+                <p class="ai-ctx-tip">
+                  带上文越多越连贯，但每条都会计入输入 token，<b>消耗更多额度</b>。
+                  上限由站长在「AI 功能配置」里定。
+                </p>
+              </div>
+            </el-popover>
           </div>
           <div class="ai-composer-right">
             <input
@@ -371,6 +409,19 @@ const streamingText = ref('');
 const streamingReasoning = ref('');
 const msgListEl = ref<HTMLElement>();
 const maxTokens = ref(2048);
+// 上下文控制（参考主流 AI 站：一个「记忆历史」开关 + 一个「上下文数量」滑块）
+// 存 localStorage：这是使用习惯，不该每开一次对话都重设。
+const CTX_MAX = 20;
+const contextLimit = ref(clampCtx(Number(localStorage.getItem('ai_ctx_limit') || 10)));
+const memoryOn = ref(localStorage.getItem('ai_memory') !== '0');
+function clampCtx(n: number) {
+  if (!Number.isFinite(n) || n <= 0) return 10;
+  return Math.min(CTX_MAX, Math.max(2, n));
+}
+watch([contextLimit, memoryOn], () => {
+  localStorage.setItem('ai_ctx_limit', String(contextLimit.value));
+  localStorage.setItem('ai_memory', memoryOn.value ? '1' : '0');
+});
 let abortCtrl: AbortController | null = null;
 let loadingSession = 0;
 
@@ -691,6 +742,8 @@ async function send(rawText?: string, confirmed = false, skipPush = false, opts:
         agent_id: props.agentId || undefined,
         message: text,
         max_tokens: maxTokens.value,
+        context_limit: contextLimit.value,
+        memory: memoryOn.value,
         byok: useByok.value || undefined,
         byok_model: useByok.value ? byokModel.value.trim() : undefined,
         confirm: confirmed || undefined,
@@ -1135,6 +1188,22 @@ function stop() {
   gap: var(--space-2, 8px);
   padding: 4px var(--space-2, 8px) var(--space-2, 8px);
 }
+/* 上下文按钮 + 弹层（开关 / 滑块） */
+.ai-ctx-btn {
+  height: 24px; padding: 0 8px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--border-color, #e5e7eb);
+  background: var(--bg-card, #fff);
+  font-size: 0.73rem; color: var(--text-light, #6b7280);
+  white-space: nowrap; transition: all 0.15s ease;
+}
+.ai-ctx-btn:hover { border-color: var(--el-color-primary, #409eff); color: var(--el-color-primary, #409eff); }
+.ai-ctx-btn.off { color: var(--text-light, #9ca3af); border-style: dashed; }
+.ai-ctx-pop { display: flex; flex-direction: column; gap: 6px; }
+.ai-ctx-row { display: flex; align-items: center; justify-content: space-between; }
+.ai-ctx-row.dim { opacity: 0.55; }
+.ai-ctx-label { font-size: 0.8rem; color: var(--text-main, #1f2937); }
+.ai-ctx-val { font-size: 0.76rem; color: var(--el-color-primary, #409eff); font-variant-numeric: tabular-nums; }
+.ai-ctx-tip { margin: 0; font-size: 0.72rem; line-height: 1.65; color: var(--text-light, #9ca3af); }
 .ai-composer-left { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .ai-composer-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .ai-send-btn {

@@ -122,6 +122,27 @@ func setupSSE(c *gin.Context) {
 // AiHubChatStream POST /api/ai/chat/stream — 流式对话（SSE）
 // 事件序列：{"content":"..."} × N → {"done":true,"cost":..,"balance_after":..,"session_id":..}
 // 失败：{"error":"..."}（未扣款）
+// resolveContextLimit 决定本轮带多少条历史进上下文。
+//
+//	flagsLimit  站点上限（AI 功能配置 ContextMsgs，默认 20）
+//	userLimit   用户本次设置（滑块），<=0 表示没设
+//	memory      false = 不记忆，直接 0
+//
+// 用户只能「调小」，不能突破站点上限 —— 否则单次请求就能把成本顶爆。
+func resolveContextLimit(flagsLimit, userLimit int, memory *bool) int {
+	if memory != nil && !*memory {
+		return 0
+	}
+	limit := flagsLimit
+	if limit <= 0 {
+		limit = 20
+	}
+	if userLimit > 0 && userLimit < limit {
+		limit = userLimit
+	}
+	return limit
+}
+
 func AiHubChatStream(c *gin.Context) {
 	if !models.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
@@ -134,6 +155,12 @@ func AiHubChatStream(c *gin.Context) {
 		AgentID   uint   `json:"agent_id"`
 		Message   string `json:"message"`
 		MaxTokens int    `json:"max_tokens"`
+		// ContextLimit 本轮带多少条历史进上下文（用户自己调，参考主流 AI 站的「上下文数量」滑块）。
+		// 0/未传 = 用站点默认（AI 功能配置里的 ContextMsgs，默认 20）；永远不会超过站点上限。
+		ContextLimit int `json:"context_limit"`
+		// Memory 是否记忆对话历史。false = 本轮完全不带历史（等价独立对话），
+		// 用指针区分「没传」与「显式关闭」。
+		Memory *bool `json:"memory"`
 		// 自备密钥（§5.5 BYOK）：byok=true 时用用户自带上游，不扣平台代币
 		Byok      bool   `json:"byok"`
 		ByokModel string `json:"byok_model"`
@@ -383,13 +410,13 @@ func AiHubChatStream(c *gin.Context) {
 		}
 	}
 	messages := []aiclient.Message{{Role: "system", Content: systemPrompt}}
-	// 仅带最近 N 条进上下文（N 由「AI 功能配置」控制，默认 20）
-	ctxLimit := flags.ContextMsgs
-	if ctxLimit <= 0 {
-		ctxLimit = 20
-	}
+	// 仅带最近 N 条进上下文：站点上限（AI 功能配置，默认 20）与用户本次设置取小。
+	ctxLimit := resolveContextLimit(flags.ContextMsgs, req.ContextLimit, req.Memory)
 	start := 0
-	if len(history) > ctxLimit {
+	if ctxLimit <= 0 {
+		// 用户关掉「记忆对话历史」：完全不带历史，等价每次都是独立对话
+		start = len(history)
+	} else if len(history) > ctxLimit {
 		start = len(history) - ctxLimit
 	}
 	for _, h := range history[start:] {
