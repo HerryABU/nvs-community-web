@@ -141,7 +141,7 @@ import { Fold, Expand } from '@element-plus/icons-vue';
 import { shouldShowGuard } from '@/utils/sensitiveZone';
 import FloorComments from './FloorComments.vue';
 import MentionTextarea from './MentionTextarea.vue';
-import CommentNetworkDrawer from '@/views/CommentNetworkDrawer.vue';
+import CommentNetworkDrawer from '@/views/comment/CommentNetworkDrawer.vue';
 import type { MentionSourceInfo } from '@/api/novel/types';
 
 const props = defineProps<{

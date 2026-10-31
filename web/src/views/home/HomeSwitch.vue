@@ -13,10 +13,10 @@ import { ref, computed, onMounted, defineAsyncComponent } from 'vue';
 import api from '@/api';
 
 // 懒加载各首页视图：只有被选中的那套才会真正下载对应 chunk
-const NovelHome = defineAsyncComponent(() => import('@/views/Home.vue'));
-const BlogHome = defineAsyncComponent(() => import('@/views/BlogList.vue'));
-const ForumHome = defineAsyncComponent(() => import('@/views/Forums.vue'));
-const FeedHome = defineAsyncComponent(() => import('@/views/Feed.vue'));
+const NovelHome = defineAsyncComponent(() => import('@/views/home/Home.vue'));
+const BlogHome = defineAsyncComponent(() => import('@/views/blog/BlogList.vue'));
+const ForumHome = defineAsyncComponent(() => import('@/views/forum/Forums.vue'));
+const FeedHome = defineAsyncComponent(() => import('@/views/home/Feed.vue'));
 
 const VIEW_MAP: Record<string, any> = {
   novels: NovelHome,

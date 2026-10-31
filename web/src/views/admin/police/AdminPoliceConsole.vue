@@ -239,7 +239,7 @@ import api from '@/api';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
-import PoliceForumPatrol from './police/PoliceForumPatrol.vue';
+import PoliceForumPatrol from './PoliceForumPatrol.vue';
 import { Stamp, Search, Download, Refresh } from '@element-plus/icons-vue';
 import StateBlock from '@/components/common/StateBlock.vue';
 
