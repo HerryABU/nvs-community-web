@@ -176,14 +176,23 @@
         <p v-if="t.status === 'failed' && t.error" class="pd-card-error">{{ t.error }}</p>
 
         <div class="pd-card-images" :class="`cols-${imgCount(t)}`">
-          <img
-            v-for="(img, i) in parseImages(t.result)"
-            :key="i"
-            :src="img"
-            alt="AI 绘画结果"
-            loading="lazy"
-            @click="preview(img)"
-          />
+          <!-- 下载必须走服务端出口管道：前端只发裁剪参数，角标与元数据都由 Go 端写 -->
+          <div v-for="(img, i) in parseImages(t.result)" :key="i" class="pd-img-wrap">
+            <img
+              :src="img"
+              alt="AI 绘画结果"
+              loading="lazy"
+              @click="preview(img)"
+            />
+            <button
+              type="button"
+              class="pd-img-dl"
+              title="导出（服务端加 AI 标识）"
+              @click.stop="openAigcExport(t, img, i)"
+            >
+              下载
+            </button>
+          </div>
         </div>
 
         <footer v-if="attachmentsOf(t).length" class="pd-card-foot">
@@ -197,6 +206,15 @@
       <img :src="previewSrc" alt="预览" @click.stop />
       <button class="pd-preview-close" type="button" title="关闭" @click.stop="previewVisible = false">×</button>
     </div>
+
+    <!-- AIGC 导出：裁剪参数 + 豁免申请 + 提示词，像素与元数据都在服务端处理 -->
+    <AiImageExportDialog
+      v-model="aigcExportOpen"
+      :task-id="aigcExportTarget.taskId"
+      :image-index="aigcExportTarget.index"
+      :image-url="aigcExportTarget.imageUrl"
+      :prompt="aigcExportTarget.prompt"
+    />
 
     <!-- 发布弹窗 -->
     <el-dialog v-model="publishVisible" title="发布到灵感广场" width="460px">
@@ -226,6 +244,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { Collection } from '@element-plus/icons-vue';
 import { aiHubApi, type AiHubModel, type AiHubStatus } from '@/api/aiHub';
 import AiPromptLibrary from '@/components/ai/AiPromptLibrary.vue';
+import AiImageExportDialog from '@/components/ai/AiImageExportDialog.vue';
 import StateBlock from '@/components/common/StateBlock.vue';
 
 const props = defineProps<{ status: AiHubStatus; initialPrompt?: string }>();
@@ -465,6 +484,15 @@ async function exportHistory() {
   } finally {
     exporting.value = false;
   }
+}
+
+// ── AIGC 导出（合规：显式角标 + 隐式字段）──
+const aigcExportOpen = ref(false);
+const aigcExportTarget = ref({ taskId: 0, index: 0, imageUrl: '', prompt: '' });
+
+function openAigcExport(t: any, img: string, index: number) {
+  aigcExportTarget.value = { taskId: t.id, index, imageUrl: img, prompt: t.prompt || '' };
+  aigcExportOpen.value = true;
 }
 
 async function exportOne(t: any) {
@@ -855,6 +883,23 @@ onMounted(loadHistory);
   background: rgba(239, 68, 68, 0.08);
 }
 .pd-card-images { display: grid; gap: 8px; justify-content: center; }
+.pd-img-wrap { position: relative; line-height: 0; }
+.pd-img-dl {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 3px 9px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.62);
+  color: #fff;
+  font-size: 0.72rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.pd-img-wrap:hover .pd-img-dl { opacity: 1; }
+.pd-img-dl:hover { background: var(--el-color-primary, #409eff); }
 .pd-card-images.cols-1 { grid-template-columns: 1fr; }
 .pd-card-images.cols-2 { grid-template-columns: repeat(2, 1fr); }
 .pd-card-images.cols-4 { grid-template-columns: repeat(2, 1fr); }

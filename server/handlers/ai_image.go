@@ -234,6 +234,9 @@ func AiHubImage(c *gin.Context) {
 	lease.OK()
 	rj, _ := json.Marshal(gin.H{"images": urls})
 	models.UpdateAiMediaResult(task.ID, string(rj))
+	// AIGC 合规：原图原封不动落盘（不带任何标识），供用户下载时由服务端统一加标识。
+	// 异步做，失败只影响「能否导出」，不能把已扣费的出图判成失败。
+	SaveAigcOriginalsAsync(userID, task.ID, m.Name, urls)
 	utils.Success(c, gin.H{
 		"task_id":       task.ID,
 		"images":        urls,

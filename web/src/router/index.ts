@@ -236,6 +236,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/aigc',
+      name: 'admin-aigc',
+      component: () => import('@/views/admin/AdminAigc.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/wall',
       name: 'admin-wall',
       component: () => import('@/views/admin/AdminWall.vue'),

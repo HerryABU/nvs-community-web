@@ -103,6 +103,8 @@ func AllModels() []interface{} {
 		&CrisisEvent{},
 		// 刷新令牌轮换状态（JTI）：防止刷新令牌窃取后长期可用
 		&RefreshState{},
+		// AIGC 内容标识（GB 45438—2025）：原图 / 导出（ProduceID→模型名）/ 豁免日志
+		&AigcAsset{}, &AigcExport{}, &AigcWaiverLog{},
 	}
 }
 

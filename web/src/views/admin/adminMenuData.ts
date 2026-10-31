@@ -53,6 +53,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: '蜜罐与日志记录', desc: '蜜罐等级 · 记录字段勾选 · SQLi 诱饵 · JA3 采集率 · 攻击会话取证', path: '/admin/honeypot', icon: Aim, color: 'var(--gradient-danger)' },
       { title: '注册门槛与防刷', desc: '邀请码 · 设备指纹 · 账号年龄 · 新号限额 · API Key 告警', path: '/admin/gate', icon: Lock, color: 'var(--gradient-danger)' },
       { title: '充值风控', desc: '入账前打分 · 打标/拦截待复核 · 蜜罐与设备联动', path: '/admin/risk', icon: CreditCard, color: 'var(--gradient-rose)' },
+      { title: 'AIGC 内容标识', desc: 'GB 45438—2025 · 显式角标 + 隐式元数据 · 豁免留痕 · ProduceID 核验', path: '/admin/aigc', icon: Stamp, color: 'var(--gradient-purple)' },
       { title: '隔离墙配置', desc: '敏感分区列表与确认流程', path: '/admin/wall', icon: Lock, color: 'var(--gradient-accent)' },
       { title: '隔离墙访问记录', desc: '谁/何时进入敏感分区 · 176号令合规', path: '/admin/wall-access', icon: Histogram, color: 'var(--gradient-blue)' },
       { title: '网络诊断与攻击流量', desc: '用户分布 · IP/UA 分类 · 防爬攻击识别', path: '/admin/net-diag', icon: Connection, color: 'var(--gradient-accent)' },

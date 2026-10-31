@@ -469,6 +469,10 @@ func main() {
 		protected.POST("/ai/media/attach", security.RateLimit(30, 60), handlers.AttachMedia)
 		protected.GET("/ai/media/:id/export", handlers.ExportMediaTask)
 		protected.GET("/ai/export/media.zip", handlers.ExportMediaHistory)
+		// AIGC 标识出口管道（GB 45438—2025）：
+		// 用户下载必须走这里 —— 服务端合成、烧显式角标、写隐式 AIGC 字段，前端不碰像素。
+		protected.GET("/ai/aigc/options", handlers.AiAigcOptions)
+		protected.POST("/ai/aigc/export", security.RateLimit(20, 60), handlers.AiAigcExport)
 
 		// AI 提示词库：平台预设（只读）+ 我的自定义（增删改）
 		protected.GET("/ai/prompts", handlers.AiPromptList)
@@ -1023,6 +1027,13 @@ func main() {
 		// AI 模型池（§5.3）：总开关 + 模型 CRUD（api_key 加密存储、只写不读）
 		// 独立子树 /ai：静态段，避让 :id 通配冲突
 		admin.GET("/ai/config", handlers.AdminGetAiConfig)
+		// AIGC 内容标识（合规）
+		admin.GET("/aigc/config", handlers.AdminGetAigcConfig)
+		admin.PUT("/aigc/config", handlers.AdminSaveAigcConfig)
+		admin.GET("/aigc/exports", handlers.AdminListAigcExports)
+		admin.GET("/aigc/waivers", handlers.AdminListAigcWaivers)
+		admin.GET("/aigc/verify/:produce_id", handlers.AdminAigcVerify)
+		admin.POST("/aigc/font", handlers.AdminUploadAigcFont)
 		admin.PUT("/ai/config", handlers.AdminSetAiConfig)
 		admin.GET("/ai/models", handlers.AdminListAiModels)
 		// AI 路由策略（最便宜/最快/场景）+ 失败降级开关
@@ -1695,6 +1706,8 @@ func initDatabase() error {
 	if err := models.AutoMigrateAll(models.DB); err != nil {
 		return err
 	}
+	// AIGC 标识：挂载站长自定义角标字体（没有就用内置 Noto Sans SC 子集）
+	handlers.InitAigcFont()
 	// 群组模块（独立功能包）建表：紧随主迁移，避免 models 包反向依赖子包
 	if err := groups.Migrate(models.DB); err != nil {
 		return err
