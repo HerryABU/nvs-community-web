@@ -1,4 +1,4 @@
-//go:build gm
+//go:build !tongsuo
 
 package cert
 

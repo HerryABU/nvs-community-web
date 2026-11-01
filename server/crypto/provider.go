@@ -2,10 +2,9 @@
 //
 // 双轨设计：
 //   - 国际轨（默认）：intlProvider 直接委托 crypto/tls 标准库，零国密依赖；
-//   - 国密轨（可选）：gm 构建标签下经 GMProvider 选择 Tongsuo（CGO，推荐）
-//     或纯 Go gmtls 实现（无 CGO，可退路）。
+//   - 国密轨（可选）：GMProvider 选择 Tongsuo（CGO，推荐）或纯 Go gmtls 实现（无 CGO）。
 //
-// 默认构建（无 -tags gm）不导入任何国密模块（N-01）。
+// 纯 Go 国密实现（purego）已默认编入主构建；国际轨运行时完全不启用它（零国密代码路径）。
 package crypto
 
 import (
@@ -39,10 +38,10 @@ var (
 
 // 标准编号（文档 / 审计用，需求文档 §12）。
 const (
-	StandardTLCP        = "GB/T 38636-2020"
-	StandardSSLVPN      = "GM/T 0024-2014"
+	StandardTLCP         = "GB/T 38636-2020"
+	StandardSSLVPN       = "GM/T 0024-2014"
 	StandardCryptoModule = "GM/T 0028-2014"
-	StandardMiPing      = "GB/T 39786-2021"
+	StandardMiPing       = "GB/T 39786-2021"
 )
 
 // Provider 国际轨与国密轨的统一抽象（需求文档 §4.2）。

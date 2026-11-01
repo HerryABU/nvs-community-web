@@ -1,8 +1,8 @@
-//go:build gm && tongsuo
+//go:build tongsuo
 
 package crypto
 
-// gm_tongsuo.go Tongsuo CGO 国密轨（-tags gm,tongsuo，官方绑定，推荐路径）。
+// gm_tongsuo.go Tongsuo CGO 国密轨（-tags tongsuo，官方绑定，推荐路径）。
 //
 // 依赖 Tongsuo C 库（编译时需 --enable-ntls），经 github.com/tongsuo-project/tongsuo-go-sdk
 // 绑定。ctx 风格 API：NewCtxWithVersion(NTLS) + 签名/加密双证书四件套。
@@ -37,7 +37,7 @@ func init() {
 
 func newTongsuoProvider(cfg *config.CryptoConfig) (Provider, error) {
 	if cfg.GMProvider != config.GMProviderTongsuo {
-		return nil, fmt.Errorf("此二进制编译的是 tongsuo（CGO）国密实现，但 NVS_CRYPTO_GM_PROVIDER=%q；请改用 tongsuo，或以 -tags gm 重新构建（purego 纯 Go 实现）", cfg.GMProvider)
+		return nil, fmt.Errorf("此二进制编译的是 tongsuo（CGO）国密实现，但 NVS_CRYPTO_GM_PROVIDER=%q；请改用 tongsuo，或本构建已内置 purego 纯 Go 实现（无需重新构建）", cfg.GMProvider)
 	}
 	// TONGSUO_HOME 校验（需求文档 §5.3：路径错误时明确报错，不崩溃）
 	if home := os.Getenv("TONGSUO_HOME"); home != "" {
@@ -232,7 +232,7 @@ func (c *peekedConn) Close() error { return c.Conn.Close() }
 // observedTongsuoConn 握手完成后记录协议/套件（Tongsuo 经 GetVersion/CurrentCipher）。
 type observedTongsuoConn struct {
 	net.Conn // *ts.Conn
-	once sync.Once
+	once     sync.Once
 }
 
 func (c *observedTongsuoConn) Read(b []byte) (int, error) {

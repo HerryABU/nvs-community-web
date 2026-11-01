@@ -1,8 +1,8 @@
-//go:build gm && !tongsuo
+//go:build !tongsuo
 
 package crypto
 
-// gm_purego.go 纯 Go 国密轨（-tags gm，无 CGO，可退路）。
+// gm_purego.go 纯 Go 国密轨（默认编入主构建，无 CGO，可退路）。
 //
 // TLCP 握手由 github.com/aiyang-zh/zhenyi-base/zgmtls 实现（GM/T 0024-2014 风格，
 // 版本标识 VersionGMSSL=0x0101）；SM2 证书解析经 gmsm/smx509（OID 1.2.156.10197.1.301）。
@@ -30,7 +30,7 @@ func init() {
 
 func newPureGoProvider(cfg *config.CryptoConfig) (Provider, error) {
 	if cfg.GMProvider != config.GMProviderPureGo {
-		return nil, fmt.Errorf("此二进制编译的是 purego（纯 Go，无 CGO）国密实现，但 NVS_CRYPTO_GM_PROVIDER=%q；请改用 purego，或以 -tags gm,tongsuo 重新构建（Tongsuo CGO）", cfg.GMProvider)
+		return nil, fmt.Errorf("此二进制编译的是 purego（纯 Go，无 CGO）国密实现，但 NVS_CRYPTO_GM_PROVIDER=%q；请改用 purego，或以 -tags tongsuo 重新构建（Tongsuo CGO）", cfg.GMProvider)
 	}
 	// 启动即验证双证书可加载（fail-fast，避免带病启动）
 	if _, err := cert.LoadDualCertificate(cfg.SMSignCertFile, cfg.SMSignKeyFile, cfg.SMEncCertFile, cfg.SMEncKeyFile); err != nil {

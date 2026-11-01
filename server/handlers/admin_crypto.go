@@ -92,7 +92,7 @@ func AdminCryptoStatus(c *gin.Context) {
 		{
 			Value:    "intl",
 			Label:    "国际轨（默认）",
-			Summary:  "只用标准 TLS（RSA/ECDSA + AES-GCM/ChaCha20）。二进制里不含任何国密模块。",
+			Summary:  "只用标准 TLS（RSA/ECDSA + AES-GCM/ChaCha20）。二进制默认内置纯 Go 国密，但国际轨运行时完全不启用它。",
 			Certs:    []string{"国际证书 + 私钥（或使用内置自签）"},
 			BestFor:  "绝大多数站点。浏览器兼容性最好，零额外依赖。",
 			Requires: "无需额外依赖",
@@ -103,7 +103,7 @@ func AdminCryptoStatus(c *gin.Context) {
 			Summary:  "只接受 TLCP 国密握手（SM2 双证书 + SM4/SM3）。普通浏览器（标准 TLS）无法连接。",
 			Certs:    []string{"SM2 签名证书 + 私钥", "SM2 加密证书 + 私钥"},
 			BestFor:  "纯内网、专网、已全面部署国密客户端的场景。",
-			Requires: "以 -tags gm 构建（纯 Go，无 CGO）",
+			Requires: "本构建已内置纯 Go 国密（无需重新构建），设置 NVS_CRYPTO_GM_PROVIDER=purego 并选 gm 轨道即可启用",
 		},
 		{
 			Value:    "dual",
@@ -111,7 +111,7 @@ func AdminCryptoStatus(c *gin.Context) {
 			Summary:  "按 ClientHello 自动分流：国密客户端走 TLCP，普通浏览器走标准 TLS，两套证书同时加载。",
 			Certs:    []string{"国际证书 + 私钥", "SM2 签名证书 + 私钥", "SM2 加密证书 + 私钥"},
 			BestFor:  "既要过密评、又不能影响普通访客 —— 这是绝大多数站长的落地选择。",
-			Requires: "以 -tags gm 构建（纯 Go）或 -tags \"gm tongsuo\"（CGO）",
+			Requires: "本构建已内置纯 Go 国密；如需 Tongsuo CGO 实现则以 -tags tongsuo 重新构建",
 		},
 	}
 

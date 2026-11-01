@@ -33,11 +33,16 @@
             </div>
             <div class="crypto-tile">
               <div class="tile-label">国密实现</div>
-              <div class="tile-value">
-                {{ data.gm_compiled ? (data.gm_provider || '未指定') : '未编入' }}
+              <div class="tile-value" :class="data.gm_compiled ? 'ok' : 'muted'">
+                {{ data.gm_compiled ? '已编入（纯 Go）' : '未编入' }}
               </div>
               <div class="tile-hint">
-                {{ data.gm_compiled ? '本二进制含：' + (data.compiled_providers || []).join(' / ') : '当前为国际轨构建，不含任何国密模块' }}
+                <template v-if="data.gm_compiled">
+                  本二进制内置：{{ (data.compiled_providers || []).join(' / ') || 'purego' }}
+                  <template v-if="data.gm_provider">· 当前启用：{{ data.gm_provider }}</template>
+                  <template v-else>· 选 gm/dual 轨道并设置 NVS_CRYPTO_GM_PROVIDER 即可启用</template>
+                </template>
+                <template v-else>当前构建不含国密模块，需以 -tags tongsuo 重新构建以加入 Tongsuo</template>
               </div>
             </div>
             <div class="crypto-tile">
@@ -206,9 +211,9 @@
         <SectionHeader title="如何切到国密 / 双轨" subtitle="改 .env 后必须重启 —— TLS 参数在监听器创建前生效" :icon="'🛠'" gradient="accent" />
         <ol class="steps">
           <li>
-            <b>换成带国密能力的二进制</b>：默认发布包是国际轨（<code class="mono">go.mod</code> 零国密依赖）。
-            需自行构建：<code class="mono">make build-gm</code>（纯 Go，无 CGO）或
-            <code class="mono">make build-gm-cgo</code>（Tongsuo，需 <code class="mono">TONGSUO_HOME</code>）。
+            <b>确认二进制含国密实现</b>：当前发布包默认已内置纯 Go 国密（purego，无 CGO），
+            直接设置 <code class="mono">NVS_CRYPTO_TRACK=gm</code> 与 <code class="mono">NVS_CRYPTO_GM_PROVIDER=purego</code> 即可启用，无需重新构建。
+            若需 Tongsuo CGO 实现，则自行构建：<code class="mono">go build -tags tongsuo</code>（需 <code class="mono">TONGSUO_HOME</code>）。
           </li>
           <li>
             <b>准备证书</b>：国密需 <b>签名证书 + 加密证书</b> 两套（TLCP 的双证书要求）；

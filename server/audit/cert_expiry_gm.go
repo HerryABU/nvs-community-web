@@ -1,8 +1,6 @@
-//go:build gm
-
 package audit
 
-// cert_expiry_gm.go 国密构建：经 gmsm/smx509 解析 SM2 证书有效期。
+// cert_expiry_gm.go 经 gmsm/smx509 解析 SM2 证书有效期（默认编入主构建）。
 
 import (
 	"encoding/pem"

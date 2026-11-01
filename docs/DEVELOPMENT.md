@@ -83,7 +83,7 @@ make test         # 后端单测（nodist 轨，**不需要**先构建前端）
 make test-embed   # 带真实 embed 产物的单测（需先 make dist）
 make build        # 单平台（当前系统）产出 nvs-server.exe
 make build-gitvcs # 章节版本控制走真实 git 仓库（-tags gitvcs，运行时 NVS_VCS_BACKEND=git）
-make build-gm     # 国密轨（-tags gm，依赖 go.gm.mod）
+make build-gm     # 兼容别名：纯 Go 国密已默认编入主构建（无需此步）；Tongsuo CGO 走 `go build -tags tongsuo`
 ```
 
 > **构建顺序不能反**：`npm run build`（产出 `dist/`）→ 同步到 `server/dist/` → `go build`。
