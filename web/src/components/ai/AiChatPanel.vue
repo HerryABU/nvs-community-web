@@ -397,7 +397,7 @@ import {
   enhanceCodeBlocks,
   highlightCodeBlocks,
   readCodeOf,
-  isHtmlBlock,
+  isPreviewableBlock,
 } from '@/markdown/codeEnhance';
 import { copyText } from '@/utils/clipboard';
 import AiPromptLibrary from '@/components/ai/AiPromptLibrary.vue';
@@ -681,7 +681,9 @@ async function onMdClick(e: MouseEvent) {
     return;
   }
 
-  if (!isHtmlBlock(btn)) return;
+  // SVG 与 HTML 一样可预览（SVG 是特殊的 HTML），
+  // 但「发布到应用广场」仍然只给 HTML —— 矢量图不是可运行的应用。
+  if (!isPreviewableBlock(btn)) return;
   if (!code.trim()) {
     ElMessage.warning('这段代码是空的');
     return;

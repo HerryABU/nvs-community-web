@@ -21,6 +21,8 @@ nvs/
 │   ├── fix-table-empty-slots.mjs  # 清理列级 #empty 死插槽（--write）
 │   ├── scan-frontend-secrets.sh   # 前端产物密钥扫描
 │   ├── browser-smoke.mjs          # 四档宽度几何回归（375/768/1024/1440）
+│   ├── browser-mobile.mjs         # 移动端专项（触控目标/字号下限/横向溢出/固定层）
+│   ├── live-adro-replay.mjs       # 真站越狱回放（同会话逐轮打，验安全闸）
 │   ├── browser-func.mjs           # 功能级回归（排序参数/密度/朗读/落库）
 │   └── browser-me-center.mjs      # 个人中心与下拉菜单专项
 │
@@ -91,7 +93,7 @@ nvs/
 │   ├── chaptervcs/  collab/       # 章节版本控制后端 / 协作
 │   ├── groups/  oc/  prompttpl/  realtime/   # 群组 / OC 模式 / 提示词模板 / SSE 推送
 │   ├── honeypot/  gate/  risk/    # 蜜罐（诱饵·影子认证·指纹·取证）/ 准入闸门 / 充值风控
-│   ├── aigc/  aisafety/  sentiment/  crisis/ # AIGC 标识（角标 + XMP）/ 三层安全闸 / 舆情 / 心理危机
+│   ├── aigc/  aisafety/  sentiment/  crisis/ # AIGC 标识（角标 + XMP）/ 三层安全闸（+ 跨轮拼装链检测）/ 舆情 / 心理危机
 │   ├── ipgeo/  doctext/  moderation/         # 离线 IP 归属 / 文档正文抽取 / 审核规则
 │   ├── payment/  police/  audit/  # 支付通道 / 警方取证 / 审计
 │   ├── middleware/                # 鉴权 / CSRF / 访问日志 / 脱敏 / 前缀剥离 / 沙盒头 / 端口代理
@@ -109,7 +111,7 @@ nvs/
 │       ├── stores/                # Pinia：auth（幂等 fetchUser）/ theme / app（站点配置与未读数）
 │       ├── api/                   # 43 个模块：axios 封装（前缀 + CSRF 头）、各业务域
 │       ├── utils/                 # prefix / sensitiveZone / userKey / adminHealth / editorShortcuts / turndown / miniZip / clipboard
-│       ├── styles/                # global.css（设计令牌）/ scale.css（间距·字号·容器档位）/ admin.css / ai-code.css（代码块高亮与工具条）
+│       ├── styles/                # global.css（设计令牌）/ scale.css（间距·字号·容器档位）/ admin.css / mobile.css（窄屏统一修补）/ ai-code.css（代码块高亮与工具条）
 │       ├── views/                 # 页面（顶层 0 个文件，全部按业务域归入 15 个子目录）
 │       │   ├── ai/                # AiHub（竖列：对话/广场/绘画/视频/灵感/智能体/思维导图）/ AiGallery / AiPricing / AiShared
 │       │   ├── auth/              # Login / Register / SetupWizard
@@ -148,6 +150,47 @@ nvs/
 └── nginx/
     └── nginx.conf                 # Docker 模式 Nginx 配置
 ```
+
+### AI 安全闸：三层 + 跨轮拼装链
+
+```
+用户输入 ──▶ 规则引擎（scan.go）
+              │  物质（宽口径：含工业前体，权重 25）
+              │  意图 / 工艺 / 参数（依赖物质存在才计分）
+              │  跨轮拼装链（chain.go）
+              └─▶ 蓝队判定模型 B（judge.go，整段对话送审，批次制）
+                        └─▶ 输出闸门（store.go OutputGuard，增量扫）
+                             拒绝后泄漏判定（leak.go）
+```
+
+四道闸门各自的职责与失效边界：
+
+| 闸门 | 判什么 | 失效时 |
+|---|---|---|
+| 规则引擎 | 单轮信号组合 + **跨轮家族拼装** | 确定性，不依赖模型 |
+| 蓝队模型 B | 整段对话的累积意图（ADRO 阶梯） | 上游不可用时按配置 fail-open / fail-closed |
+| 输出闸门 | 模型输出的工艺方向 / 反应方程式 / 同族多物质 | 话题不敏感时不启用（避免误杀科普） |
+| 用户画像 | 该账号索取危险品的累积程度 | 达到阈值进入观察期 → 冷却 |
+
+**跨轮拼装检测（chain.go）** 是这套设计里最关键的一环。ADRO 类越狱（Anchor 锚定 →
+Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆成十几个单看无害的提问，
+点状规则永远判不出来。判定条件：
+
+1. 同一**合成家族**（`ruleGroup.Family`）在对话中出现 ≥2 个成员；
+2. 其中至少一个成员本身是**管制物质**（`leakTopicTerms`）；
+3. 当前轮在问「怎么做」（工艺词 / 追问词 / 制造意图 / 转化句式）。
+
+三者同时成立才判定为拼装攻击并加分。工业前体（丁二醇 / 丁二烯 / 丁烷 / 丁烯 / 顺丁烯二酸酐）
+单独出现**不构成命中**（权重 25），但能参与拼合检测 —— 否则攻击者换一个前体，链就断了。
+
+**泄漏判定（leak.go）** 区分两种形态：
+
+- *拒绝后泄漏*：模型先拒绝、再给方向（试剂 + 工艺 + 参数）—— 需话题敏感 + 拒绝语；
+- *硬信号*：给出**化学反应方程式**，或输出里同族多个管制物质同现 —— 无需拒绝语即定性，
+  因为模型有时根本不拒绝、直接照答。
+
+拒绝语检测除固定短语外还认软性拒绝句式（「不会涉及具体操作参数」「仅供理论认知」这类）——
+只匹配固定短语时这类输出会整段漏判。
 
 ### 外键约束
 - SQLite 连接通过 DSN `_pragma=foreign_keys(1)` **每连接自动启用外键约束**（启动时校验 `PRAGMA foreign_keys = 1` 否则拒绝启动）；MySQL 原生启用。

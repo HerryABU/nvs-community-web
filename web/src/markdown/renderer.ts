@@ -24,6 +24,8 @@ import katex from 'katex';
 import DOMPurify from 'dompurify';
 import 'katex/dist/contrib/mhchem.mjs';
 import { normalizeLatexDelimiters } from './latex';
+import { ElMessage } from 'element-plus';
+import { downloadTextFile, svgNodeToPngBlob, svgNodeToSvgText, triggerDownload, safeFileName } from '@/utils/svgExport';
 
 // ═══ physics 物理宏包 ────────────────────────────────────────────
 // KaTeX 不自带 physics 扩展，通过 macros 注入常用命令。
@@ -455,14 +457,23 @@ export async function renderMermaidBlocks(container: HTMLElement) {
   if (!wrappers.length) return;
 
   // 将每个 wrapper 转为 <div class="mermaid">原始源码</div>，让 mermaid.run() 统一处理
+  //
+  // ⚠️ 先套一层自己的 .mermaid-container（源码存在 data-src 上）：
+  // mermaid.run() 会把 .mermaid 替换/改写成它自己的结构，源码就丢了 ——
+  // 源码丢了就没法做「下载源码」，导出工具条也就只剩 PNG/SVG 两个按钮。
+  // 自己包一层则无论 mermaid 内部怎么改写，源码都跟着容器走。
   for (const w of wrappers) {
     const code = w.querySelector('code');
     const src = code?.textContent?.trim();
     if (!src) continue;
+    const wrap = document.createElement('div');
+    wrap.className = 'mermaid-container';
+    wrap.dataset.src = src;
     const div = document.createElement('div');
     div.className = 'mermaid';
     div.textContent = src;
-    w.replaceWith(div);
+    wrap.appendChild(div);
+    w.replaceWith(wrap);
   }
 
   // 调用 mermaid.run() 自动渲染所有 .mermaid 元素
@@ -478,20 +489,76 @@ export async function renderMermaidBlocks(container: HTMLElement) {
       themeVariables: { fontFamily: 'sans-serif', fontSize: '14px' },
     });
     await mm.run();
-    // run() 后 .mermaid div 被替换为 SVG，包一层 mermaid-container
-    for (const el of container.querySelectorAll<HTMLElement>('svg')) {
-      const parent = el.parentElement;
-      if (parent?.classList.contains('mermaid-container')) continue;
-      if (!parent?.id?.startsWith('mermaid-') && !parent?.classList.contains('mermaid')) continue;
-      const wrap = document.createElement('div');
-      wrap.className = 'mermaid-container';
-      parent.insertBefore(wrap, el);
-      wrap.appendChild(el);
-      el.style.maxWidth = '100%';
-      el.style.height = 'auto';
+    // run() 后 SVG 已在 .mermaid-container 内（mermaid 可能再包一层自己的容器）
+    for (const wrap of container.querySelectorAll<HTMLElement>('.mermaid-container')) {
+      const svg = wrap.querySelector('svg');
+      if (!svg) continue;
+      svg.style.maxWidth = '100%';
+      svg.style.height = 'auto';
+      attachDiagramToolbar(wrap, svg, wrap.dataset.src || '');
     }
-  } catch { /* mermaid not available */ }
+  } catch (e) {
+    // ⚠️ 别再静默吞掉：曾经这里的异常把「导出工具条」整个吞没，
+    // 表现为图渲染出来了但工具条凭空消失，排查成本极高。
+    console.warn('[mermaid] 渲染失败', e);
+  }
 }
+
+/**
+ * 给图表容器挂导出工具条：SVG / PNG / 源码。
+ *
+ * 为什么要导出：图表是用代码画出来的，读者想存图或改代码时只能截图/手抄。
+ * 工具条挂在容器右上角，桌面端 hover 浮现、触屏常驻。
+ */
+function attachDiagramToolbar(wrap: HTMLElement, svg: SVGElement, src: string) {
+  if (wrap.querySelector('.diagram-toolbar')) return;
+  const bar = document.createElement('div');
+  bar.className = 'diagram-toolbar';
+  bar.setAttribute('contenteditable', 'false');
+
+  const mk = (label: string, title: string, act: () => void) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'diagram-toolbar-btn';
+    btn.textContent = label;
+    btn.title = title;
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      act();
+    });
+    return btn;
+  };
+
+  bar.appendChild(
+    mk('SVG', '下载 SVG 矢量图', () => {
+      downloadTextFile(svgNodeToSvgText(svg), `${safeFileName('diagram')}.svg`, 'image/svg+xml;charset=utf-8');
+    }),
+  );
+  bar.appendChild(
+    mk('PNG', '导出 PNG 位图（2 倍分辨率）', async () => {
+      try {
+        const blob = await svgNodeToPngBlob(svg, { scale: 2 });
+        triggerDownload(blob, `${safeFileName('diagram')}.png`);
+      } catch (e: any) {
+        ElMessage.warning(e?.message || 'PNG 导出失败，可先下载 SVG');
+      }
+    }),
+  );
+  if (src) {
+    bar.appendChild(
+      mk('源码', '下载图表源码', () => {
+        downloadTextFile(src, `${safeFileName('diagram')}.mmd`, 'text/plain;charset=utf-8');
+      }),
+    );
+  }
+  // 放在图表**上方**：不覆盖图形（不挡图里的链接/节点），也便于用户发现。
+  // ⚠️ 必须插到「第一个子节点之前」而不是 insertBefore(bar, svg) ——
+  // mermaid.run() 会在 .mermaid 外再包一层自己的容器，svg 不是 wrap 的直接子节点，
+  // 那样写会抛 DOM 异常（而且外层 catch 会把它静默吞掉，表现为「工具条凭空消失」）。
+  wrap.insertBefore(bar, wrap.firstChild);
+}
+
 
 // ═══ Chemfig 化学结构图渲染 ────────────────────────────────────────
 // 使用 smiles-drawer 将 \chemfig{SMILES} 转为 SVG 结构图

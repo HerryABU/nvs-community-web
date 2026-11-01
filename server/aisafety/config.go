@@ -12,7 +12,7 @@ import (
 )
 
 // configSchemaVersion 配置结构版本。新增配置列时必须 +1，并在 migrateConfigRow 里回填默认值。
-const configSchemaVersion = 8
+const configSchemaVersion = 9
 
 // ApplyPartialJSON 把一段**可能不完整**的配置 JSON 合并到 cfg 上：
 // 只覆盖 payload 里出现的字段，缺省字段保持原值。
@@ -197,15 +197,18 @@ func defaultConfig() SafetyConfig {
 		WatchNoticeText:      "（提示：本次请求已被记录，重复尝试会触发功能暂停。）",
 		ExtraTerms:           "",
 
-		JudgeEnabled:          true,
-		JudgeModelID:          0,
-		JudgeEveryTurns:       3,
-		JudgeOnSuspect:        true,
-		JudgeReviewBlocks:     true,
-		JudgeBlockScore:       60,
-		JudgeReleaseScore:     30,
-		JudgeMaxChars:         3000,
-		JudgeTimeoutSec:       10,
+		JudgeEnabled:      true,
+		JudgeModelID:      0,
+		JudgeEveryTurns:   3,
+		JudgeOnSuspect:    true,
+		JudgeReviewBlocks: true,
+		JudgeBlockScore:   60,
+		JudgeReleaseScore: 30,
+		JudgeMaxChars:     3000,
+		// 判定超时：45 秒。原先 10 秒 —— 但判定是一次**完整的 LLM 调用**
+		// （整段对话送审 + JSON 解析），在繁忙网关上 10 秒几乎必然超时失败，
+		// 于是「判定模型不可用（fail-open）」成了常态，第二层防线形同虚设。
+		JudgeTimeoutSec:       45,
 		JudgeFailOpen:         true,
 		JudgeMaxTurns:         6,
 		JudgePrompt:           defaultJudgePrompt,

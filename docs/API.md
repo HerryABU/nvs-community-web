@@ -190,6 +190,7 @@
 | PUT | `/api/admin/bad-words/:id` | 管理员 | 更新违禁词规则 |
 | DELETE | `/api/admin/bad-words/:id` | 管理员 | 删除违禁词规则 |
 | POST | `/api/admin/bad-words/test` | 管理员 | 测试违禁词规则（关键词/正则 × 标记/删除/替换） |
+| POST | `/api/admin/bad-words/search-augment` | 管理员 | 联网检索补充违禁词（`focus` 侧重方向 / `category` 统一归类 / `model_id` 指定模型 / `search_mode`=auto\|endpoint\|native\|prompt；新增规则一律标记动作并按 名称+方式+词 去重） |
 | GET | `/api/admin/bad-word-flags` | 管理员 | 违禁词标记待审列表（status 过滤 + 分页） |
 | PUT | `/api/admin/bad-word-flags/:id` | 管理员 | 处理标记（确认违规[可选删除内容留证] / 放行） |
 | GET | `/api/admin/html-reviews` | 管理员 | HTML 内容审查列表 |

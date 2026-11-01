@@ -212,6 +212,43 @@
   margin: 1.2em 0;
   text-indent: 0;
   overflow-x: auto;
+  /* 工具条绝对定位在右上角，容器需为定位参照 */
+  position: relative;
+}
+
+/* ═══ 图表导出工具条（SVG / PNG / 源码）═══
+   放在图表**上方**的一行小按钮，不覆盖图表本身：
+   - 不覆盖 ⇒ 不会挡住用户点图里的链接/节点；
+   - 不用 pointer-events 藏起来 ⇒ 触屏与自动化都能点，不依赖「鼠标先划过容器」这种脆弱前提；
+   - 常驻可见（默认淡一点）⇒ 用户知道图可以导出，而不是「鼠标碰到才出现」。 */
+.diagram-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin: 0.2em 0 0.4em;
+  text-align: right;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+.mermaid-container:hover .diagram-toolbar,
+.diagram-toolbar:hover,
+.diagram-toolbar:focus-within {
+  opacity: 1;
+}
+.diagram-toolbar-btn {
+  border: 1px solid var(--border-color, #e5e7eb);
+  background: var(--bg-card, #fff);
+  color: var(--text-color, #334155);
+  font-size: 11px;
+  line-height: 1;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.diagram-toolbar-btn:hover {
+  color: var(--el-color-primary, #5b5fe3);
+  border-color: var(--el-color-primary, #5b5fe3);
 }
 /* Mermaid SVG 内文字可读性保障 */
 .mermaid-container svg,

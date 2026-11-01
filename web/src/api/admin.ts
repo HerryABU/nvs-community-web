@@ -377,8 +377,12 @@ export const adminApi = {
   },
   // 联网检索补充违禁词（AI 检索当下高风险/新出现的违禁词与变体，解析后导入待审）
   // search_mode: auto(默认，按可用性自动降级) / endpoint(走 /search 检索) / native(模型原生联网) / prompt(不联网)
+  //
+  // ⚠️ 必须单独放宽超时：这是一次完整的 LLM 调用（检索 + 归纳），
+  // 服务端上游超时 120s（开 /search 路径时检索另加 30s），
+  // 而 axios 默认只有 15s —— 不放宽的话后台点一下必然显示「网络不通」。
   searchAugmentBadWords(data?: { model_id?: number; category?: string; scope?: string; focus?: string; search_mode?: string }) {
-    return api.post('/admin/bad-words/search-augment', data || {});
+    return api.post('/admin/bad-words/search-augment', data || {}, { timeout: 200000 });
   },
   // 违禁词标记待审
   getBadWordFlags(params: { status?: string; page?: number; page_size?: number }) {

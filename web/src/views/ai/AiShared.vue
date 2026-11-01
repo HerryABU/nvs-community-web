@@ -40,7 +40,7 @@ import { ref, onMounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { aiHubApi } from '@/api/aiHub';
 import { renderAiMarkdown } from '@/markdown/renderer';
-import { enhanceCodeBlocks, highlightCodeBlocks, readCodeOf, isHtmlBlock } from '@/markdown/codeEnhance';
+import { enhanceCodeBlocks, highlightCodeBlocks, readCodeOf, isPreviewableBlock } from '@/markdown/codeEnhance';
 import { copyText } from '@/utils/clipboard';
 import AiHtmlPreview from '@/components/ai/AiHtmlPreview.vue';
 
@@ -81,7 +81,7 @@ async function onMdClick(e: MouseEvent) {
         btn.classList.remove('is-done');
       }, 1500);
     }
-  } else if (act === 'preview' && isHtmlBlock(btn)) {
+  } else if (act === 'preview' && isPreviewableBlock(btn)) {
     const code = readCodeOf(btn);
     if (!code.trim()) return;
     activeCode.value = code;

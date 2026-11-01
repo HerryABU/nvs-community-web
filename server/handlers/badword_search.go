@@ -71,7 +71,10 @@ func SearchAugmentBadWords(c *gin.Context) {
 		utils.InternalError(c, "获取模型密钥失败，无法发起检索："+kerr.Error())
 		return
 	}
-	client := aiclient.NewClient(chatModel.BaseURL, apiKey, 120*time.Second)
+	// 上游超时 180 秒：这是「检索 + 归纳出几十条规则」的一次重活，
+	// 实测单次就跑了 100 秒以上（原 120s 已贴着上限，稍微慢一点就整段失败）。
+	// 前端该请求的超时是 200s，与此对齐。
+	client := aiclient.NewClient(chatModel.BaseURL, apiKey, 180*time.Second)
 
 	ctx := c.Request.Context()
 	systemPrompt := buildSearchAugmentSystemPrompt(req.Focus, mode == badwordSearchModeEndpoint)

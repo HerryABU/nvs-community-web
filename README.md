@@ -2,7 +2,7 @@
   <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go" alt="Go">
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?style=flat&logo=vuedotjs" alt="Vue">
   <img src="https://img.shields.io/badge/SQLite-3-003B57?style=flat&logo=sqlite" alt="SQLite">
-  <img src="https://img.shields.io/badge/version-4.6.5-4F46E5?style=flat" alt="Version">
+  <img src="https://img.shields.io/badge/version-4.7.0-4F46E5?style=flat" alt="Version">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue?style=flat" alt="Platform">
   <img src="https://img.shields.io/badge/CPU-x86%20%7C%20ARM%20%7C%20MIPS64%20%7C%20RISC--V-orange?style=flat" alt="CPU">
   <img src="https://img.shields.io/badge/license-AGPL%20v3-blue.svg" alt="License">
@@ -78,10 +78,10 @@
 - 📥 **多格式导入**
 - 📦 **批量导入**
 
-### 🤖 AI 工作台（对话 / 绘画 / 视频 / 智能体）
-- 🧭 **竖列式入口**
+### 🤖 AI 工作台（对话 / 绘画 / 视频 / 智能体）- 🧭 **竖列式入口**
 - 💬 **标准对话页**
-- 🧑‍💻 **代码块：高亮 · 复制 · HTML 预览 · 一键发布**
+- 🧑‍💻 **代码块：高亮 · 复制 · HTML/SVG 预览 · 一键发布**
+- 🖼️ **SVG 可预览 · 可导出 PNG · 可下载源码**（SVG 是特殊的 HTML）
 - 🧠 **思考型模型**
 - 🎨 **专业绘画**
 - 🎬 **视频创作**
@@ -107,6 +107,7 @@
 - 🎚 **评论密度**
 - 🕸 **评论网（社交图谱）**
 - 🔒 **加密楼**
+- 🖼️ **图表导出（SVG / PNG / 源码）**
 
 ### 👥 群组与实时消息
 - 🏘 **群组**
@@ -170,6 +171,11 @@
 - 🗺️ **访问来源地域（纯本地解析 + 标准地图）**
 - 🚨 **警方取管台（police 角色）**
 - 🧯 **AI 内容可追溯**
+- 🛡️ **AI 安全闸三层**（规则引擎 + 蓝队判定模型 + 用户风险画像）
+- 🧬 **跨轮拼装合成链检测**（拦 ADRO 式长周期越狱：零件递进到管制物质即断链）
+- 🧪 **拒绝后泄漏检测**（含反应方程式硬信号：给出方程式即视为已给步骤）
+- 🖼️ **评论图片多模态审核**（违规图不落库，留证三件套：软删 + 审核日志 + 审计日志）
+- 🔎 **违禁词联网补充**（/search 检索 + 模型原生联网双模式，可手工录入兜底）
 
 ### 站点互通
 - 🌐 **联邦站点**
@@ -185,6 +191,10 @@
 - 💬 **弹窗限宽**
 - 📊 **表格横滚**
 - 🧩 **触控友好**
+- 👆 **触控目标统一 ≥36px**（按钮 / 图标 / 链接 / 表格行内操作）
+- 🔍 **iOS 输入不缩放**（输入类元素字号 ≥16px，避免 Safari 聚焦时放大整页）
+- 📱 **刘海屏安全区**（导航栏、正文、阅读器工具条三处偏移同步）
+- 🖥️ **后台窄屏可用**（侧栏自动折叠、顶栏精简、图表下拉命中区放大）
 
 ### 🎨 自定义 HTML-UI 美化
 

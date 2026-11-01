@@ -47,6 +47,8 @@ const LANG_ALIAS: Record<string, string> = {
 
 /** 认为「这是一份可以直接在浏览器里跑的 HTML」的语言 */
 const HTML_LANGS = new Set(['html', 'htm', 'xhtml']);
+/** 明确标注为 SVG 的语言标记 */
+const SVG_LANGS = new Set(['svg']);
 
 /** 超过这个长度就不做高亮了 —— hljs 是大致线性的，但几十万字仍会卡住主线程 */
 const MAX_HIGHLIGHT_CHARS = 120_000;
@@ -66,6 +68,8 @@ export interface CodeMeta {
   label: string;
   /** 是否可按网页预览 */
   isHtml: boolean;
+  /** 是否是一份 SVG 文档（SVG 是特殊的 HTML：可预览、可导出 PNG） */
+  isSvg: boolean;
 }
 
 /**
@@ -103,24 +107,41 @@ function looksLikeHtml(src: string): boolean {
   );
 }
 
+/**
+ * 是不是一份 SVG 文档。
+ *
+ * SVG 是「特殊的 HTML」：能当文档预览、能导出 PNG、能下源码。
+ * AI 生成矢量图时经常不标 ```svg（直接标 xml 或干脆不标），所以除了看语言标注，
+ * 还要看内容本身是不是以 <svg 开头。
+ */
+function looksLikeSvg(src: string): boolean {
+  const head = src.replace(/^\uFEFF/, '').trimStart().slice(0, 400);
+  // 允许 <?xml ...?> / <!DOCTYPE ...> / 注释在前
+  const stripped = head.replace(/^(<\?xml[^>]*\?>|<!--[\s\S]*?-->|<!DOCTYPE[^>]*>|\s)*/i, '');
+  return /^<svg[\s>]/i.test(stripped);
+}
+
 export function detectCodeMeta(pre: Element, code: Element | null): CodeMeta {
   const { lang: rawLang } = readAuthoredLang(pre, code);
   const src = code?.textContent || '';
-  // 判断依据是「作者到底写没写语言」，不是「data-lang 属性在不在」：
+  // 判断依据是「作者到底写没写语言」，不是「data-lang属性在不在」：
   //   未标注（rawLang 为空）→ 允许按内容猜 HTML（AI 常不写 ```html）
   //   明确标了 js/python → 就是那个语言，绝不猜（否则把 JS 认成网页）
   const explicitlyLabelled = !!rawLang;
   const isHtml = HTML_LANGS.has(rawLang) || (!explicitlyLabelled && looksLikeHtml(src));
-  const lang = isHtml ? 'xml' : normalizeLang(rawLang);
+  const isSvg = SVG_LANGS.has(rawLang) || looksLikeSvg(src);
+  const lang = isHtml ? 'xml' : isSvg ? 'xml' : normalizeLang(rawLang);
   return {
     lang,
-    label: (rawLang || (isHtml ? 'html' : '')).toUpperCase(),
+    label: (rawLang || (isHtml ? 'html' : isSvg ? 'svg' : '')).toUpperCase(),
     isHtml,
+    isSvg,
   };
 }
 
-const BUTTON_DEFS: Array<{ act: string; text: string; title: string; htmlOnly?: boolean }> = [
+const BUTTON_DEFS: Array<{ act: string; text: string; title: string; htmlOnly?: boolean; svgOnly?: boolean }> = [
   { act: 'preview', text: '预览', title: '在沙箱里运行这段 HTML', htmlOnly: true },
+  { act: 'preview', text: '预览', title: '预览这份 SVG 矢量图', svgOnly: true },
   { act: 'publish', text: '发布', title: '发布到 HTML 应用广场', htmlOnly: true },
   { act: 'copy', text: '复制', title: '复制代码', htmlOnly: false },
 ];
@@ -154,6 +175,7 @@ export function enhanceCodeBlocks(html: string): string {
       // 高亮阶段要用，挂在自有属性上（不参与 DOMPurify 之前的安全边界）
       if (meta.lang) code.setAttribute('data-lang', meta.lang);
       if (meta.isHtml) pre.setAttribute('data-html', '1');
+      if (meta.isSvg) pre.setAttribute('data-svg', '1');
 
       const bar = doc.createElement('div');
       bar.className = 'code-bar';
@@ -165,6 +187,7 @@ export function enhanceCodeBlocks(html: string): string {
       }
       for (const def of BUTTON_DEFS) {
         if (def.htmlOnly && !meta.isHtml) continue;
+        if (def.svgOnly && !meta.isSvg) continue;
         const btn = doc.createElement('button');
         btn.type = 'button';
         btn.className = 'code-act';
@@ -265,4 +288,19 @@ export function isHtmlBlock(btn: Element): boolean {
   if (!pre) return false;
   if (pre.getAttribute('data-html') === '1') return true;
   return detectCodeMeta(pre, pre.querySelector('code')).isHtml;
+}
+
+/**
+ * 是否是「可预览块」：HTML 或 SVG。
+ *
+ * SVG 是特殊的 HTML —— 同样能在沙箱里预览、同样能导出 PNG。
+ * AI 生成矢量图时经常不标 ```svg，所以判定要同时看标注和内容本身。
+ */
+export function isPreviewableBlock(btn: Element): boolean {
+  const pre = btn.closest('pre');
+  if (!pre) return false;
+  if (pre.getAttribute('data-html') === '1') return true;
+  if (pre.getAttribute('data-svg') === '1') return true;
+  const meta = detectCodeMeta(pre, pre.querySelector('code'));
+  return meta.isHtml || meta.isSvg;
 }

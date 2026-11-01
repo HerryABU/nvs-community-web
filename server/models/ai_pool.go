@@ -221,13 +221,38 @@ func GetEnabledAiModel(id uint) (*AiModel, error) {
 	return m, nil
 }
 
-// GetEnabledAiModelOfKind 取一个指定类型的启用模型（不存在返回 nil, nil）
+// GetEnabledAiModelOfKind 取一个指定类型的启用模型。
+//
+// id=0 表示「自动挑一个」：按优先级（priority DESC）取第一个启用且类型匹配的模型。
+//
+// 为什么要显式支持 0：调用方常把「用户没指定模型」传成 0，而原实现是
+// `DB.First(id=0)` —— 没有 id=0 的行，必然查不到，于是「没指定模型」被当成
+// 「一个模型都没有」，直接报「未配置可用的对话模型」。这个坑让违禁词联网补充
+// 在不传 model_id 时 100% 失败，也让蓝队判定的 judge_model_id=0 永远选不到模型。
 func GetEnabledAiModelOfKind(id uint, kind string) (*AiModel, error) {
+	kind = NormalizeAiKind(kind)
+	if id == 0 {
+		var list []AiModel
+		q := DB.Where("enabled = ?", true)
+		if kind == AiKindChat {
+			// 遗留行的 kind 为空串也算对话模型（与用户侧可见列表口径一致）
+			q = q.Where("kind IN ?", []string{AiKindChat, ""})
+		} else {
+			q = q.Where("kind = ?", kind)
+		}
+		if err := q.Order("priority DESC, id ASC").Limit(1).Find(&list).Error; err != nil {
+			return nil, err
+		}
+		if len(list) == 0 {
+			return nil, nil
+		}
+		return &list[0], nil
+	}
 	m, err := GetEnabledAiModel(id)
 	if err != nil || m == nil {
 		return nil, err
 	}
-	if NormalizeAiKind(m.Kind) != NormalizeAiKind(kind) {
+	if NormalizeAiKind(m.Kind) != kind {
 		return nil, nil
 	}
 	return m, nil

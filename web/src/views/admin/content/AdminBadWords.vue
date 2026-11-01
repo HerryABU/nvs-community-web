@@ -340,6 +340,7 @@
           </el-form>
           <div class="augment-actions">
             <el-button type="primary" :loading="searching" @click="doSearchAugment">开始检索并导入</el-button>
+            <span v-if="searching" class="hint-text">检索 + 归纳需调用上游模型，通常 10~60 秒，请勿关闭页面</span>
           </div>
           <el-divider v-if="searchResult" content-position="left">检索结果</el-divider>
           <div v-if="searchResult" class="search-result">
@@ -850,7 +851,7 @@ onMounted(() => {
 .test-matches { display: flex; flex-wrap: wrap; gap: 6px; }
 .test-output { flex: 1; margin: 0; padding: 10px 12px; background: var(--bg-soft); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; white-space: pre-wrap; word-break: break-all; font-family: 'Consolas', 'Monaco', monospace; }
 .search-result { padding: 0 12px; }
-.augment-actions { display: flex; justify-content: flex-end; margin-top: 4px; }
+.augment-actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 4px; }
 .search-items { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .search-item { display: flex; align-items: center; gap: 6px; background: var(--bg-soft); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 8px; font-size: 0.82rem; }
 [data-theme="dark"] .admin-page { background: #0f172a; }

@@ -13,7 +13,7 @@
       <div class="hp-head">
         <span class="hp-title">
           <span class="hp-dot" />
-          HTML 预览
+          {{ isSvg ? 'SVG 预览' : 'HTML 预览' }}
         </span>
         <span class="hp-meta">{{ sizeText }} · 沙箱隔离运行</span>
         <div class="hp-tabs">
@@ -32,7 +32,8 @@
         </div>
         <div class="hp-actions">
           <el-button size="small" text @click="reload">↻ 重载</el-button>
-          <el-button size="small" text @click="download">下载 .html</el-button>
+          <el-button v-if="isSvg" size="small" text :loading="exporting" @click="exportPng">导出 PNG</el-button>
+          <el-button size="small" text @click="download">{{ isSvg ? '下载 .svg' : '下载 .html' }}</el-button>
           <el-button size="small" text @click="visible = false">关闭</el-button>
         </div>
       </div>
@@ -65,6 +66,8 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount } from 'vue';
+import { ElMessage } from 'element-plus';
+import { downloadTextFile, isSvgSource, svgTextToPngBlob, triggerDownload } from '@/utils/svgExport';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -82,6 +85,24 @@ const visible = computed({
 const tab = ref<'preview' | 'code'>('preview');
 const frameEl = ref<HTMLIFrameElement>();
 const reloadKey = ref(0);
+const exporting = ref(false);
+
+/** 内容是不是一份 SVG 文档（决定标题、下载扩展名与能否导出 PNG） */
+const isSvg = computed(() => isSvgSource(props.code || ''));
+
+/** SVG → PNG 导出（2 倍分辨率，透明背景） */
+async function exportPng() {
+  if (!isSvg.value || exporting.value) return;
+  exporting.value = true;
+  try {
+    const blob = await svgTextToPngBlob(props.code || '', { scale: 2 });
+    triggerDownload(blob, `nvs-ai-${Date.now()}.png`);
+  } catch (e: any) {
+    ElMessage.warning(e?.message || 'PNG 导出失败，可先下载 .svg 再自行转换');
+  } finally {
+    exporting.value = false;
+  }
+}
 
 const dialogWidth = computed(() => (window.innerWidth <= 768 ? '96%' : 'min(1180px, 92vw)'));
 
@@ -138,9 +159,18 @@ function buildDoc(raw: string): string {
   const src = (raw || '').trim();
   if (!src) return '<!doctype html><meta charset="utf-8"><p style="font:14px system-ui;padding:24px;color:#888">没有可预览的内容</p>';
 
-  const isFull = /<html[\s>]/i.test(src) || /^\s*<!doctype/i.test(src);
   const viewport = '<meta name="viewport" content="width=device-width,initial-scale=1">';
   const shim = STORAGE_SHIM;
+
+  // SVG 是「特殊的 HTML」：独立成文档时要按图片居中展示（而不是当片段塞进正文流）
+  if (isSvgSource(src)) {
+    return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">${viewport}${shim}
+<style>html,body{margin:0;height:100%;background:#fff;display:flex;align-items:center;justify-content:center}
+svg{max-width:100%;max-height:100%;width:auto;height:auto}</style>
+</head><body>${src}</body></html>`;
+  }
+
+  const isFull = /<html[\s>]/i.test(src) || /^\s*<!doctype/i.test(src);
 
   if (!isFull) {
     // 片段：套一个中性骨架（不继承站点任何样式，避免「预览效果」失真）
@@ -168,6 +198,11 @@ function reload() {
 }
 
 function download() {
+  // SVG：下载**原始源码**（不是包了骨架的预览文档），否则拿到的 .svg 打不开
+  if (isSvg.value) {
+    downloadTextFile(props.code || '', `nvs-ai-${Date.now()}.svg`, 'image/svg+xml;charset=utf-8');
+    return;
+  }
   try {
     const blob = new Blob([buildDoc(props.code)], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
