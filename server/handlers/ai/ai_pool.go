@@ -39,8 +39,11 @@ func aiModelVO(m *models.AiModel) gin.H {
 		// 不给前端这个字段，后台就没有任何地方能看出「用户为什么看不到这个模型」。
 		"user_visible": m.UserVisible,
 		"thinking":     m.Thinking,
-		"created_at":   m.CreatedAt,
-		"updated_at":   m.UpdatedAt,
+		// 联网检索能力位：不给前端的话，编辑表单保存时会把这两个勾清空
+		"search_endpoint": m.SearchEndpoint,
+		"search_native":   m.SearchNative,
+		"created_at":      m.CreatedAt,
+		"updated_at":      m.UpdatedAt,
 	}
 }
 
@@ -116,6 +119,12 @@ type aiModelInput struct {
 	Vendor   *string `json:"vendor"`
 	Thinking *bool   `json:"thinking"`
 	Note     *string `json:"note"`
+
+	// ── 联网检索能力位（可选，nil = 不改动）──
+	// SearchEndpoint 上游提供 /search 检索接口（平台先检索再归纳）
+	// SearchNative   /chat/completions 自带联网检索（平台只在请求里带上网检索参数）
+	SearchEndpoint *bool `json:"search_endpoint"`
+	SearchNative   *bool `json:"search_native"`
 
 	// ── 余额查询方式（官方 / 中转站 / 陌生渠道分开）──
 	// 这几个字段之前在表单里能填、但结构体没接收 ⇒ 提交后被静默丢弃，
@@ -208,6 +217,12 @@ func AdminCreateAiModel(c *gin.Context) {
 	}
 	if req.Thinking != nil {
 		m.Thinking = *req.Thinking
+	}
+	if req.SearchEndpoint != nil {
+		m.SearchEndpoint = *req.SearchEndpoint
+	}
+	if req.SearchNative != nil {
+		m.SearchNative = *req.SearchNative
 	}
 	if req.PriceIn != nil {
 		m.PriceIn = *req.PriceIn
@@ -336,6 +351,12 @@ func AdminUpdateAiModel(c *gin.Context) {
 	}
 	if req.Thinking != nil {
 		fields["thinking"] = *req.Thinking
+	}
+	if req.SearchEndpoint != nil {
+		fields["search_endpoint"] = *req.SearchEndpoint
+	}
+	if req.SearchNative != nil {
+		fields["search_native"] = *req.SearchNative
 	}
 	if strings.TrimSpace(req.TokenUserID) != "" {
 		fields["token_user_id"] = strings.TrimSpace(req.TokenUserID)

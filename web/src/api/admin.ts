@@ -376,7 +376,8 @@ export const adminApi = {
     return api.post('/admin/bad-words/import', data);
   },
   // 联网检索补充违禁词（AI 检索当下高风险/新出现的违禁词与变体，解析后导入待审）
-  searchAugmentBadWords(data?: { model_id?: number; category?: string; scope?: string; focus?: string }) {
+  // search_mode: auto(默认，按可用性自动降级) / endpoint(走 /search 检索) / native(模型原生联网) / prompt(不联网)
+  searchAugmentBadWords(data?: { model_id?: number; category?: string; scope?: string; focus?: string; search_mode?: string }) {
     return api.post('/admin/bad-words/search-augment', data || {});
   },
   // 违禁词标记待审

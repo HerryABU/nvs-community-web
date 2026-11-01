@@ -67,6 +67,16 @@ type AiModel struct {
 	//（客户端已自动透传 reasoning 并在 content 为空时兜底）。
 	Thinking bool   `gorm:"not null;default:false" json:"thinking"`
 	Note     string `gorm:"size:256;default:''" json:"note"` // 备注
+	// ── 联网检索能力位（违禁词「联网搜索补充」等场景用）──
+	//
+	// SearchEndpoint：该上游额外提供 /search 检索接口（DeepSeek/Kimi 的 /v1/tools/search、
+	// Perplexity 的 /search 等）。平台先调 /search 拿到检索摘要，再交给对话模型归纳成规则（RAG 路径）。
+	// SearchNative：该模型的 /chat/completions 本身就带联网检索（OpenAI 的 *-search-preview 等），
+	// 平台只需在请求里带上 web_search_options / tools，模型自己联网（原生路径）。
+	//
+	// 两者可同时开：优先走 /search（结果可控、可截断），失败再回退原生；都没有则只做提示词降级。
+	SearchEndpoint bool `gorm:"not null;default:false" json:"search_endpoint"`
+	SearchNative   bool `gorm:"not null;default:false" json:"search_native"`
 	// 模型资产管理（§AI 模型渠道/分类）：
 	// Alias 用户展示别名（自动去除尾部后缀，管理员可覆盖）；Channel 渠道分组（合并/开放控制）；
 	// CategoryTags 分类标签 JSON（如 ["chat","reasoning"]）；

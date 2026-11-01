@@ -37,6 +37,16 @@ type ChatRequest struct {
 	Temperature   float64                `json:"temperature,omitempty"`
 	Stream        bool                   `json:"stream,omitempty"`
 	StreamOptions map[string]interface{} `json:"stream_options,omitempty"`
+	// ── 联网检索透传（可选，默认完全不发这两个字段）──
+	//
+	// Tools：OpenAI 兼容的 tools 数组，例如
+	//   [{"type":"web_search"}] / [{"type":"web_search_preview"}]
+	// WebSearchOptions：OpenAI 的 web_search_options，例如
+	//   {"search_context_size":"medium"}
+	//
+	// 只有当模型被标注为「自带联网检索」时才带上；不带则上游行为与从前完全一致。
+	Tools            []map[string]interface{} `json:"tools,omitempty"`
+	WebSearchOptions map[string]interface{}   `json:"web_search_options,omitempty"`
 }
 
 // ChatResponse /chat/completions 响应体（只取需要的字段）

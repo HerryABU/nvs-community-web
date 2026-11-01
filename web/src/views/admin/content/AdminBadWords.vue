@@ -20,7 +20,7 @@
             <el-button size="small" @click="loadWords" :loading="loading"><el-icon><Refresh /></el-icon> 刷新</el-button>
             <el-button size="small" type="success" plain @click="doExport"><el-icon><Download /></el-icon> 导出 JSON</el-button>
             <el-button size="small" type="success" plain @click="showImport = true"><el-icon><Upload /></el-icon> 导入 JSON</el-button>
-            <el-button size="small" type="primary" plain @click="openSearchAugment"><el-icon><MagicStick /></el-icon> 联网搜索补充</el-button>
+            <el-button size="small" type="primary" plain @click="openSearchAugment"><el-icon><MagicStick /></el-icon> 补充违禁词</el-button>
             <el-button size="small" type="warning" plain @click="switchToFlags"><el-icon><Warning /></el-icon> 待审列表（{{ pendingCount }}）</el-button>
           </div>
 
@@ -295,39 +295,107 @@
       </template>
     </el-dialog>
 
-    <!-- 联网搜索补充 弹窗 -->
-    <el-dialog v-model="showSearchAugment" title="联网搜索补充违禁词" width="640px">
+    <!-- 补充违禁词 弹窗（AI 联网检索 / 手动录入向导 双模式） -->
+    <el-dialog v-model="showSearchAugment" title="补充违禁词" width="680px">
       <el-alert type="info" :closable="false" show-icon style="margin-bottom: 14px"
-        title="AI 联网检索补充"
-        description="用 AI（带联网检索能力的上游模型）检索当下高风险、新出现或常见规避写法的违禁词与变体，解析后批量导入。新增规则一律「标记」动作（仅标记待审、不自动删改），由管理员在待审列表复核确认；按 名称+方式+词 去重，已存在的自动跳过。" />
-      <el-form label-width="90px">
-        <el-form-item label="侧重方向">
-          <el-select v-model="searchForm.focus" size="default" style="width: 100%">
-            <el-option v-for="f in searchFocusOptions" :key="f" :label="f" :value="f" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="统一归类">
-          <el-select v-model="searchForm.category" size="default" filterable allow-create default-first-option placeholder="选择或输入分类（留空则由 AI 推断）" style="width: 100%">
-            <el-option v-for="c in presetCategories" :key="c" :label="c" :value="c" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showSearchAugment = false">取消</el-button>
-        <el-button type="primary" :loading="searching" @click="doSearchAugment">开始检索并导入</el-button>
-      </template>
+        title="两种补充方式"
+        description="① AI 联网检索：用具备联网检索能力的上游模型检索新出现/规避写法的违禁词与变体后批量导入（需已配置可用的对话模型）；② 手动录入向导：无模型或离线时使用，批量粘贴、一律「标记」动作、按 名称+方式+词 去重，已存在的自动跳过。" />
+      <el-alert v-if="noModelHint" type="warning" :closable="false" show-icon style="margin-bottom: 12px"
+        title="未检测到可用的联网模型"
+        description="已为你切换到「手动录入向导」。在平台配置可用的对话模型后仍可使用 AI 联网检索。" />
 
-      <el-divider v-if="searchResult" content-position="left">检索结果</el-divider>
-      <div v-if="searchResult" class="search-result">
-        <el-alert :type="searchResult.created > 0 ? 'success' : 'info'" :closable="false" :title="searchResult.message" />
-        <div v-if="searchResult.items && searchResult.items.length" class="search-items">
-          <div v-for="(it, i) in searchResult.items" :key="i" class="search-item">
-            <code class="rule-pattern">{{ it.pattern }}</code>
-            <el-tag size="small" effect="plain">{{ it.category || '其他' }}</el-tag>
-            <span class="muted">{{ it.name }}</span>
+      <el-tabs v-model="augmentMode">
+        <!-- 模式一：AI 联网检索 -->
+        <el-tab-pane label="AI 联网检索" name="ai">
+          <el-form label-width="90px">
+            <el-form-item label="检索模型">
+              <el-select v-model="searchForm.model_id" clearable placeholder="不选 = 平台默认启用的对话模型" style="width: 100%">
+                <el-option v-for="m in searchModels" :key="m.id" :label="m.name" :value="m.id">
+                  <span>{{ m.name }}</span>
+                  <el-tag v-if="m.search_endpoint" size="small" effect="plain" style="margin-left: 6px">/search</el-tag>
+                  <el-tag v-if="m.search_native" size="small" effect="plain" style="margin-left: 6px">原生联网</el-tag>
+                </el-option>
+              </el-select>
+              <div class="hint-text">带「/search」标记的模型提供独立检索接口（平台先检索公开资料再归纳）；带「原生联网」标记的模型由自己联网。都没标记时只做提示词降级。</div>
+            </el-form-item>
+            <el-form-item label="检索方式">
+              <el-radio-group v-model="searchForm.search_mode">
+                <el-radio-button value="auto">自动</el-radio-button>
+                <el-radio-button value="endpoint">/search 检索</el-radio-button>
+                <el-radio-button value="native">模型原生联网</el-radio-button>
+                <el-radio-button value="prompt">不联网</el-radio-button>
+              </el-radio-group>
+              <div class="hint-text">「自动」按可用性降级：/search 检索 → 模型原生联网 → 不联网（只用自己的知识）。</div>
+            </el-form-item>
+            <el-form-item label="侧重方向">
+              <el-select v-model="searchForm.focus" size="default" style="width: 100%">
+                <el-option v-for="f in searchFocusOptions" :key="f" :label="f" :value="f" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="统一归类">
+              <el-select v-model="searchForm.category" size="default" filterable allow-create default-first-option placeholder="选择或输入分类（留空则由 AI 推断）" style="width: 100%">
+                <el-option v-for="c in presetCategories" :key="c" :label="c" :value="c" />
+              </el-select>
+            </el-form-item>
+          </el-form>
+          <div class="augment-actions">
+            <el-button type="primary" :loading="searching" @click="doSearchAugment">开始检索并导入</el-button>
           </div>
-        </div>
-      </div>
+          <el-divider v-if="searchResult" content-position="left">检索结果</el-divider>
+          <div v-if="searchResult" class="search-result">
+            <el-alert :type="searchResult.created > 0 ? 'success' : 'info'" :closable="false" :title="searchResult.message" />
+            <div v-if="searchResult.search_mode" class="hint-text" style="margin-top: 8px">
+              实际检索方式：{{ searchModeLabel(searchResult.search_mode) }}
+              <span v-if="searchResult.search_note"> · {{ searchResult.search_note }}</span>
+            </div>
+            <div v-if="searchResult.items && searchResult.items.length" class="search-items">
+              <div v-for="(it, i) in searchResult.items" :key="i" class="search-item">
+                <code class="rule-pattern">{{ it.pattern }}</code>
+                <el-tag size="small" effect="plain">{{ it.category || '其他' }}</el-tag>
+                <span class="muted">{{ it.name }}</span>
+              </div>
+            </div>
+          </div>
+        </el-tab-pane>
+
+        <!-- 模式二：手动录入向导 -->
+        <el-tab-pane label="手动录入向导" name="manual">
+          <el-alert type="success" :closable="false" show-icon style="margin-bottom: 12px"
+            title="手动批量录入"
+            description="每行一个违禁词（或短语），将一律以「标记」动作导入，按 名称+方式+词 去重，已存在自动跳过。统一归类与侧重方向会作为分类/标签附加到每条规则。" />
+          <el-form label-width="90px">
+            <el-form-item label="违禁词清单" required>
+              <el-input v-model="manualText" type="textarea" :rows="9" placeholder="每行一个违禁词，例如：&#10;博彩推广&#10;代开发票&#10;私彩平台" />
+            </el-form-item>
+            <el-form-item label="统一归类">
+              <el-select v-model="manualCategory" size="default" filterable allow-create default-first-option placeholder="选择或输入分类（留空=其他）" style="width: 100%">
+                <el-option v-for="c in presetCategories" :key="c" :label="c" :value="c" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="侧重方向">
+              <el-select v-model="manualFocus" size="default" style="width: 100%">
+                <el-option v-for="f in searchFocusOptions" :key="f" :label="f" :value="f" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="适用范围">
+              <el-checkbox-group v-model="manualScopeList">
+                <el-checkbox value="chapter">章节</el-checkbox>
+                <el-checkbox value="comment">评论</el-checkbox>
+                <el-checkbox value="forum">论坛</el-checkbox>
+                <el-checkbox value="blog">博客</el-checkbox>
+              </el-checkbox-group>
+              <div class="hint-text">不选或全选 = 全部内容生效。</div>
+            </el-form-item>
+          </el-form>
+          <div class="augment-actions">
+            <el-button type="primary" :loading="manualImporting" @click="doManualImport">解析并导入</el-button>
+          </div>
+          <el-divider v-if="manualResult" content-position="left">导入结果</el-divider>
+          <div v-if="manualResult" class="search-result">
+            <el-alert :type="manualResult.created > 0 ? 'success' : 'info'" :closable="false" :title="manualResult.message" />
+          </div>
+        </el-tab-pane>
+      </el-tabs>
     </el-dialog>
   </div>
 </template>
@@ -337,6 +405,7 @@ import { ref, reactive, onMounted } from 'vue';
 import { Plus, Search, Refresh, Warning, Download, Upload, MagicStick } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
+import { aiApi } from '@/api/ai';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import StateBlock from '@/components/common/StateBlock.vue';
 
@@ -358,12 +427,24 @@ const showImport = ref(false);
 const importing = ref(false);
 const importText = ref('');
 
-// ═══════════ 联网检索补充 ═══════════
+// ═══════════ 补充违禁词（AI 联网检索 / 手动录入向导 双模式） ═══════════
 const showSearchAugment = ref(false);
+const augmentMode = ref<'ai' | 'manual'>('ai');
+const noModelHint = ref(false);
 const searching = ref(false);
 const searchResult = ref<any>(null);
 const searchFocusOptions = ['全部', '政治', '色情', '暴力', '毒品', '诈骗', '赌博', '广告', '辱骂', '违禁品'];
-const searchForm = reactive({ focus: '全部', category: '' });
+const searchForm = reactive({ focus: '全部', category: '', model_id: undefined as number | undefined, search_mode: 'auto' });
+// 候选检索模型（只列启用中的对话模型）
+const searchModels = ref<any[]>([]);
+
+// 手动录入向导状态
+const manualText = ref('');
+const manualCategory = ref('');
+const manualFocus = ref('全部');
+const manualScopeList = ref<string[]>([]);
+const manualImporting = ref(false);
+const manualResult = ref<any>(null);
 
 // ═══════════ 标记待审 ═══════════
 const flags = ref<any[]>([]);
@@ -542,6 +623,15 @@ async function handleFlag(row: any, status: string, deleteContent = false) {
 }
 
 // ═══════════ 展示辅助 ═══════════
+function searchModeLabel(m?: string) {
+  const map: Record<string, string> = {
+    endpoint: '/search 检索（先检索公开资料再归纳）',
+    native: '模型原生联网（请求带联网检索参数）',
+    prompt: '不联网（只用模型自身知识）',
+    auto: '自动',
+  };
+  return map[m || ''] || m || '自动';
+}
 function actionTag(a?: string) {
   const map: Record<string, string> = { mark: 'warning', replace: 'warning', delete: 'danger' };
   return (map[a || 'mark'] as any) || 'info';
@@ -632,12 +722,30 @@ async function doImport() {
   importing.value = false;
 }
 
-// ═══════════ 联网检索补充 ═══════════
+// ═══════════ 补充违禁词（AI 联网检索 / 手动录入向导） ═══════════
+async function loadSearchModels() {
+  try {
+    const res = await aiApi.listModels();
+    const list = res.data?.data?.list || [];
+    searchModels.value = list.filter((m: any) => m.enabled && (m.kind || 'chat') === 'chat');
+  } catch { /* ignore */ }
+}
+
 function openSearchAugment() {
+  augmentMode.value = 'ai';
+  noModelHint.value = false;
   searchForm.focus = '全部';
   searchForm.category = '';
+  searchForm.model_id = undefined;
+  searchForm.search_mode = 'auto';
   searchResult.value = null;
+  manualText.value = '';
+  manualCategory.value = '';
+  manualFocus.value = '全部';
+  manualScopeList.value = [];
+  manualResult.value = null;
   showSearchAugment.value = true;
+  loadSearchModels();
 }
 
 async function doSearchAugment() {
@@ -647,6 +755,8 @@ async function doSearchAugment() {
     const res = await adminApi.searchAugmentBadWords({
       focus: searchForm.focus,
       category: searchForm.category || undefined,
+      model_id: searchForm.model_id,
+      search_mode: searchForm.search_mode,
     });
     const d = res.data?.data || {};
     searchResult.value = d;
@@ -658,9 +768,61 @@ async function doSearchAugment() {
       ElMessage.info(d.message || '未新增违禁词');
     }
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.message || '检索失败');
+    const msg = e?.response?.data?.message || '';
+    // 未配置可用对话模型：自动切换到手动录入向导，给出降级路径
+    if (msg.includes('未配置可用的对话模型') || msg.includes('联网检索')) {
+      noModelHint.value = true;
+      augmentMode.value = 'manual';
+      ElMessage.warning('当前未配置可用的联网模型，已切换到手动录入向导');
+    } else {
+      ElMessage.error(msg || '检索失败');
+    }
   }
   searching.value = false;
+}
+
+// 手动录入向导：批量解析为字面关键词规则，强制 mark 动作，复用导入接口（按 名称+方式+词 去重）
+function manualScopeToScope(list: string[]): string {
+  if (!list.length || list.length === 4) return 'all';
+  return list.join(',');
+}
+
+async function doManualImport() {
+  const lines = (manualText.value || '')
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!lines.length) {
+    ElMessage.warning('请至少填写一个违禁词（每行一个）');
+    return;
+  }
+  const tags = manualFocus.value && manualFocus.value !== '全部' ? manualFocus.value : '';
+  const items = lines.map((w) => ({
+    name: w,
+    pattern: w,
+    match_type: 'literal',
+    action: 'mark',
+    category: manualCategory.value || '其他',
+    tags,
+    scope: manualScopeToScope(manualScopeList.value),
+    enabled: true,
+  }));
+  manualImporting.value = true;
+  try {
+    const res = await adminApi.importBadWords(items);
+    const d = res.data?.data || {};
+    manualResult.value = d;
+    if (d.created > 0) {
+      ElMessage.success(d.message || `新建 ${d.created} 条`);
+      await loadWords();
+      await loadPendingCount();
+    } else {
+      ElMessage.info(d.message || '未新增违禁词');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '导入失败');
+  }
+  manualImporting.value = false;
 }
 
 onMounted(() => {
@@ -688,6 +850,7 @@ onMounted(() => {
 .test-matches { display: flex; flex-wrap: wrap; gap: 6px; }
 .test-output { flex: 1; margin: 0; padding: 10px 12px; background: var(--bg-soft); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; white-space: pre-wrap; word-break: break-all; font-family: 'Consolas', 'Monaco', monospace; }
 .search-result { padding: 0 12px; }
+.augment-actions { display: flex; justify-content: flex-end; margin-top: 4px; }
 .search-items { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .search-item { display: flex; align-items: center; gap: 6px; background: var(--bg-soft); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 8px; font-size: 0.82rem; }
 [data-theme="dark"] .admin-page { background: #0f172a; }

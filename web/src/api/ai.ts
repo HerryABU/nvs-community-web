@@ -469,6 +469,10 @@ export interface AdminAiModel {
   vendor?: string;
   /** 思考型模型：正文可能落在 reasoning 字段里 */
   thinking?: boolean;
+  /** 上游提供 /search 检索接口（违禁词「联网补充」先检索再归纳） */
+  search_endpoint?: boolean;
+  /** 对话接口自带联网检索（请求里带 web_search_options / tools） */
+  search_native?: boolean;
   note: string;
   created_at: string;
   updated_at: string;
@@ -504,6 +508,10 @@ export interface AdminAiModelInput {
   api_kind?: string;
   provider_hint?: string;
   vendor?: string;
+  /** 上游提供 /search 检索接口 */
+  search_endpoint?: boolean;
+  /** 对话接口自带联网检索 */
+  search_native?: boolean;
   note?: string;
 }
 

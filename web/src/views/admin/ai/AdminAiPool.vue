@@ -991,6 +991,21 @@
             勾选后前端会把思考过程折叠展示，不会因为「正文来晚了」被当成卡死
           </span>
         </el-form-item>
+        <el-form-item v-if="form.kind === 'chat'" label="联网检索">
+          <el-switch v-model="form.search_endpoint" />
+          <span class="muted small">
+            上游提供 <code>/search</code> 检索接口（DeepSeek/Kimi 的 <code>/v1/tools/search</code>、Perplexity 的 <code>/search</code> 等）。
+            勾选后「违禁词联网补充」会先调它检索公开资料，再交给模型归纳成规则（结果可控、可截断）
+          </span>
+        </el-form-item>
+        <el-form-item v-if="form.kind === 'chat'" label="原生联网">
+          <el-switch v-model="form.search_native" />
+          <span class="muted small">
+            对话接口自带联网检索（OpenAI 的 <code>*-search-preview</code> 等）。
+            勾选后平台会在请求里带上网检索参数，由模型自己联网。
+            上游不认该参数时会自动去掉参数重试一次，不会直接失败
+          </span>
+        </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.note" placeholder="选填" maxlength="256" />
         </el-form-item>
@@ -1357,6 +1372,7 @@ function blankForm() {
     price_in: 0, price_out: 0, price_call: 0, max_tokens: 2048,
     temperature: 0.7, priority: 0, enabled: true, note: '',
     api_kind: 'openai', provider_hint: '', vendor: '', thinking: false, token_user_id: '', account_token: '',
+    search_endpoint: false, search_native: false,
     balance_provider: '', balance_url: '', balance_field: '',
     balance_divisor: 0, balance_multiplier: 0, balance_currency: '',
     rate_real_amount: 0, rate_virtual_amount: 0, rate_real_currency: 'CNY',
@@ -1914,6 +1930,7 @@ function openEdit(row: AdminAiModel) {
     rate_real_amount: row.rate_real_amount || 0, rate_virtual_amount: row.rate_virtual_amount || 0,
     rate_real_currency: row.rate_real_currency || 'CNY',
     vendor: row.vendor || '', thinking: !!row.thinking,
+    search_endpoint: !!row.search_endpoint, search_native: !!row.search_native,
   });
   dialogVisible.value = true;
 }
@@ -1941,6 +1958,9 @@ async function saveModel() {
       provider_hint: form.provider_hint,
       vendor: form.vendor,
       thinking: !!form.thinking,
+      // 联网检索能力位（违禁词「联网补充」按此决定走 /search 检索还是模型原生联网）
+      search_endpoint: !!form.search_endpoint,
+      search_native: !!form.search_native,
       note: form.note.trim(),
       // 中转站用户 ID（非机密，允许清空）
       token_user_id: form.token_user_id.trim(),
