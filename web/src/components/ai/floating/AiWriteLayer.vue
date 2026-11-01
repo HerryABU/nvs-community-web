@@ -206,6 +206,7 @@ const status = reactive<{
 });
 
 const ACTIONS: Array<{ value: string; label: string; hint: string; target: StreamTarget }> = [
+  { value: 'custom', label: '创作', hint: '把输入当作完整创作指令，从零生成（适合空白开篇）', target: 'all' },
   { value: 'continue', label: '续写', hint: '从当前内容往后接着写', target: 'cursor' },
   { value: 'expand', label: '扩写', hint: '就选中段落补充细节与氛围', target: 'selection' },
   { value: 'polish', label: '润色', hint: '优化文笔，不改原意', target: 'selection' },
@@ -414,7 +415,9 @@ function attachmentNote(): string {
 
 // 按动作拼提示词
 function buildPrompt(): string {
-  const t = currentSource();
+  // 采用用户在「写作依据」框内的实际输入（可能是编辑过的正文或创作指令）；
+  // 不再回退到编辑器正文，否则空白小说写提示词会被清空、用户编辑也会被丢弃。
+  const t = form.text;
   let body: string;
   switch (form.action) {
     case 'continue':
@@ -452,10 +455,9 @@ async function run() {
     else if (!form.model_id) ElMessage.warning('请选择模型');
     return;
   }
-  // 同步最新依据
-  form.text = currentSource();
+  // 直接采用用户在「写作依据」框里的输入（已被 buildPrompt 使用），不再回退到编辑器正文
   if (!form.text.trim() && attachments.value.length === 0) {
-    ElMessage.warning('写作依据为空，无法生成');
+    ElMessage.warning('请先填写写作依据或上传附件');
     return;
   }
 
@@ -523,11 +525,14 @@ async function copyResult() {
   }
 }
 
-// 打开时预填依据
+// 打开时预填依据；空白小说（无正文可依）默认切到「创作」，让用户用提示词从零生成
 watch(
   () => props.visible,
   (v) => {
-    if (v && !form.text.trim()) form.text = currentSource();
+    if (v) {
+      if (!form.text.trim()) form.text = currentSource();
+      if (!(props.contextText || '').trim()) form.action = 'custom';
+    }
   },
 );
 
