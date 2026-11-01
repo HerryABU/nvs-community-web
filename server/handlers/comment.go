@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
+	"nvs-server/aisafety"
 	"nvs-server/crisis"
 	"nvs-server/ipgeo"
 	"nvs-server/models"
@@ -83,12 +86,13 @@ func CreateComment(c *gin.Context) {
 	}
 
 	var req struct {
-		NovelID       uint   `json:"novel_id"`
-		BlogID        uint   `json:"blog_id"`
-		ChapterNumber int    `json:"chapter_number"`
-		Content       string `json:"content" binding:"required"`
-		QuoteText     string `json:"quote_text"`
-		ParentID      *uint  `json:"parent_id"`
+		NovelID       uint     `json:"novel_id"`
+		BlogID        uint     `json:"blog_id"`
+		ChapterNumber int      `json:"chapter_number"`
+		Content       string   `json:"content" binding:"required"`
+		QuoteText     string   `json:"quote_text"`
+		ParentID      *uint    `json:"parent_id"`
+		Images        []string `json:"images"` // 评论图片：仅允许站内上传路径 /uploads/images/...
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请填写评论内容")
@@ -174,6 +178,17 @@ func CreateComment(c *gin.Context) {
 	}
 	if req.ParentID != nil {
 		comment.ParentID = req.ParentID
+	}
+
+	// ── 评论图片 AI 审核（落库前）──
+	// 站内上传的图片也要过审：违规图（涉黄/涉暴/血腥/违禁品/二维码引流）直接拦截并留证，
+	// 不让它出现在公共评论区。复用现有监管模型 B（多模态 image_url 直送）。
+	images := sanitizeCommentImages(req.Images)
+	if len(images) > 0 {
+		comment.ImagesRaw = models.ImagesToRaw(images)
+		if blocked, _ := moderateCommentImages(c, userID, comment, images, cleaned); blocked {
+			return
+		}
 	}
 
 	// ── 绝对保护模式（落库前判定）──
@@ -265,4 +280,95 @@ func DeleteComment(c *gin.Context) {
 	// 标记为「用户自删」（区别于管理员删除：deleted_by='admin'）
 	_ = models.DB.Unscoped().Model(&models.Comment{}).Where("id = ?", commentID).Update("deleted_by", "user")
 	utils.Success(c, gin.H{"message": "评论已删除"})
+}
+
+// sanitizeCommentImages 校验并规整评论图片 URL：
+// 仅允许站内上传路径 /uploads/images/...，禁止外链/数据 URL 借道，限制最多 9 张并去重。
+// 这是防「外链图片 + 数据 URL」绕过 AI 审核的关键闸门——只认后端 /api/author/image 落地的站内图。
+func sanitizeCommentImages(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	const maxCommentImages = 9
+	out := make([]string, 0, len(in))
+	seen := map[string]bool{}
+	for _, u := range in {
+		u = strings.TrimSpace(u)
+		if u == "" {
+			continue
+		}
+		// 只允许站内相对路径：以 /uploads/images/ 开头，且不含协议头与路径穿越
+		if !strings.HasPrefix(u, "/uploads/images/") {
+			continue
+		}
+		if strings.Contains(u, "..") || strings.Contains(u, "://") || strings.Contains(u, "\\") {
+			continue
+		}
+		if seen[u] {
+			continue
+		}
+		seen[u] = true
+		out = append(out, u)
+		if len(out) >= maxCommentImages {
+			break
+		}
+	}
+	return out
+}
+
+// moderateCommentImages 对评论图片做 AI 多模态审核；返回 (是否拦截, 拦截理由)。
+// 拦截时负责留证：软删除保留整条评论（含违规图 URL，供警方/管理员取证视图调取）
+// + 写入判定留痕(ai_judge_logs) + 紧急审计(emergency_audit_logs)，并直接以 Forbidden 结束响应。
+func moderateCommentImages(c *gin.Context, userID uint, comment *models.Comment, images []string, content string) (bool, string) {
+	cfg, err := aisafety.GetConfig()
+	if err != nil || cfg == nil || !cfg.JudgeEnabled {
+		return false, ""
+	}
+	v := aisafety.JudgeImage(images, content)
+	if v == nil {
+		return false, ""
+	}
+	blocked := false
+	if v.Failed {
+		// 尊重 fail-open/fail-closed：B 挂掉时默认放行（fail-open，避免全站评论发不出），
+		// 但站长关掉 fail-open 时（fail-closed）拦截。
+		blocked = !cfg.JudgeFailOpen
+	} else {
+		blocked = v.Jailbroken && v.Score >= cfg.JudgeBlockScore
+	}
+	uname := comment.Username
+	if uname == "" {
+		if u, ue := models.GetUserByID(userID); ue == nil {
+			uname = u.Username
+		}
+	}
+	aisafety.LogImageModeration(cfg, userID, uname, v, blocked)
+	if !blocked {
+		return false, ""
+	}
+	// ── 违规图：拦截 + 留证 ──
+	// 软删除保留（不调用 models.CreateComment，以免触发对外通知/广播），
+	// 折叠的内容不该出现在公共频道或推给被回复者。
+	comment.ResolveFloor()
+	if cerr := models.DB.Create(comment).Error; cerr != nil {
+		// 留证失败也要拦：以系统级失败兜底，不让违规图流出
+	} else {
+		if derr := models.DB.Delete(comment).Error; derr == nil {
+			_ = models.DB.Unscoped().Model(&models.Comment{}).
+				Where("id = ?", comment.ID).Update("deleted_by", "ai_moderation")
+		}
+	}
+	detail := fmt.Sprintf("AI 图片审核拦截 | 类别=%s | 分数=%d | 理由=%s",
+		strings.Join(v.Categories, "、"), v.Score, v.Reason)
+	models.RecordEmergencyAudit(&models.EmergencyAuditLog{
+		OperatorID: userID, Operator: uname, IP: c.ClientIP(),
+		Action: models.AuditContentHide, TargetType: "comment", TargetID: comment.ID,
+		Detail: detail + " | 处置依据=AI 多模态审核 | 是否报告=false",
+	})
+	reason := strings.TrimSpace(v.Reason)
+	if reason == "" {
+		reason = "图片内容疑似违规（" + strings.Join(v.Categories, "、") + "）"
+	}
+	utils.Forbidden(c, "评论中的图片未通过内容安全审核，已被拦截并留存记录（"+reason+"）")
+	return true, reason
 }

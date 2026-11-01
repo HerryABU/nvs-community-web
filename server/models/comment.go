@@ -48,11 +48,15 @@ type Comment struct {
 	// 存的是「展示名」而不是原始 IP，避免把精确位置落库与下发；旧数据为空串不展示。
 	Region string `gorm:"size:32;default:''" json:"region,omitempty"`
 	// @ 提及：存储 JSON 数组 [{"name":"foo","user_id":5}]；运行时由 AfterFind/MentionsRefs 解析到 Mentions
-	MentionsRaw string         `gorm:"type:text;default:''" json:"-"`
-	Mentions    []MentionRef   `gorm:"-" json:"mentions,omitempty"` // 解析后的提及列表（展示/跳转用）
-	CreatedAt   time.Time      `gorm:"index:idx_comments_novel_created,priority:2" json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
+	MentionsRaw string       `gorm:"type:text;default:''" json:"-"`
+	Mentions    []MentionRef `gorm:"-" json:"mentions,omitempty"` // 解析后的提及列表（展示/跳转用）
+	// 评论图片（站内存图，/uploads/images/...）：落库为 JSON 数组（ImagesRaw），运行时解析到 Images。
+	// 图片仅允许站内上传路径，由后端在 CreateComment 处校验，禁止外链/数据 URL 借道。
+	ImagesRaw string         `gorm:"type:text;default:''" json:"-"`
+	Images    []string       `gorm:"-" json:"images,omitempty"` // 解析后的图片 URL 列表（展示用）
+	CreatedAt time.Time      `gorm:"index:idx_comments_novel_created,priority:2" json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
 	// 未成年人心理危机标记（「赛博守护神」方案）：命中自残/抑郁黑话或 AI 判危时置位，
 	// 作为先审后发（pending）/ 自动折叠（folded）的依据。空串=正常公开。
@@ -90,6 +94,12 @@ func (c *Comment) AfterFind(tx *gorm.DB) error {
 		var ms []MentionRef
 		if json.Unmarshal([]byte(c.MentionsRaw), &ms) == nil {
 			c.Mentions = ms
+		}
+	}
+	if c.ImagesRaw != "" {
+		var imgs []string
+		if json.Unmarshal([]byte(c.ImagesRaw), &imgs) == nil {
+			c.Images = imgs
 		}
 	}
 	return nil
@@ -161,14 +171,27 @@ func MentionsToRaw(ms []MentionRef) string {
 	return string(b)
 }
 
+// ImagesToRaw 将图片 URL 列表序列化为 JSON 存储字符串；空列表返回空串。
+func ImagesToRaw(imgs []string) string {
+	if len(imgs) == 0 {
+		return ""
+	}
+	b, err := json.Marshal(imgs)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
 // ==================== 楼层模型 ====================
 
-// resolveFloor 在落库前推导 RootID 与 FloorNo。
+// ResolveFloor 在落库前推导 RootID 与 FloorNo。
 //   - 无父评论（回复主内容）→ 开新楼：RootID=NULL，FloorNo=当前最大楼层+1
 //   - 有父评论（回复楼内某人）→ 挂靠该楼：RootID=父评论的 RootID（父为顶层时取其自身 id），FloorNo=0
 //
 // 注意：必须在 Create 之前调用，否则 RootID 无法回填。
-func (c *Comment) resolveFloor() {
+// 导出：评论落库前的证据留存（handler 直接构造评论并软删除）也需要它。
+func (c *Comment) ResolveFloor() {
 	if c.ParentID == nil || *c.ParentID == 0 {
 		var maxFloor int
 		DB.Model(&Comment{}).
@@ -183,7 +206,7 @@ func (c *Comment) resolveFloor() {
 	if err := DB.Select("id", "root_id", "user_id").First(&parent, *c.ParentID).Error; err != nil {
 		// 父评论已删除/不存在：退化成新楼，避免产生孤儿回复
 		c.ParentID = nil
-		c.resolveFloor()
+		c.ResolveFloor()
 		return
 	}
 	c.RootID = &parent.ID
@@ -448,7 +471,7 @@ func BackfillCommentFloors(db *gorm.DB) {
 
 func CreateComment(comment *Comment) error {
 	// 楼层归属必须在落库前推导（RootID 依赖父评论的 RootID）
-	comment.resolveFloor()
+	comment.ResolveFloor()
 	if err := DB.Create(comment).Error; err != nil {
 		return err
 	}
