@@ -33,9 +33,10 @@ const (
 
 // 监管模型 B 的触发原因
 const (
-	JudgeTriggerSchedule    = "schedule"     // 批次到期
-	JudgeTriggerSuspect     = "suspect"      // 批次内出现规则可疑，提前触发
-	JudgeTriggerReviewBlock = "review_block" // 批次内规则命中，提前触发复核（救误伤）
+	JudgeTriggerSchedule    = "schedule"         // 批次到期
+	JudgeTriggerSuspect     = "suspect"          // 批次内出现规则可疑，提前触发
+	JudgeTriggerReviewBlock = "review_block"     // 批次内规则命中，提前触发复核（救误伤）
+	JudgeTriggerImage       = "image_moderation" // 评论/论坛图片审核（多模态 image_url 直送）
 )
 
 // 风险等级
@@ -156,6 +157,11 @@ type SafetyConfig struct {
 	// 单独一份、不与越狱判定提示词混用：两个任务的判定原理完全不同，
 	// 混在一份提示词里会互相稀释注意力（模型更容易漏掉「语义绝望」那一层）。
 	MinorCrisisPrompt string `gorm:"type:text" json:"minor_crisis_prompt"`
+
+	// ImageModerationPrompt 评论/论坛图片审核专用提示词（多模态 image_url 直送）。
+	// 单独一份：图片审核的判定维度（涉黄/涉暴/血腥/二维码引流等）与越狱/心理危机
+	// 完全不同，混进 judge 提示词会稀释注意力，故独立配置。
+	ImageModerationPrompt string `gorm:"type:text" json:"image_moderation_prompt"`
 
 	// SchemaVersion 配置结构版本。
 	// 作用：新版本加了列之后，老行里这些列是零值（bool=false / int=0），

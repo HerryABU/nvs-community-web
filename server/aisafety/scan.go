@@ -12,6 +12,16 @@ type Result struct {
 	Categories []string `json:"categories"`
 	Hits       []string `json:"hits"`
 
+	// LeakTopic 话题是否落在「本身就是管制物质」的词上（窄口径）。
+	// 与 Substance 的区别：Substance 是宽口径触发面（含工业前体），
+	// LeakTopic 只认管制物质本身 —— 输出侧的「拒绝后泄漏」判定用它，
+	// 避免正常科普（工业上用催化剂氧化丁二醇…）被误杀。
+	LeakTopic bool `json:"leak_topic"`
+
+	// Chain 跨轮拼装合成链（ADRO 形态）
+	Chain     bool     `json:"chain"`
+	ChainTerm []string `json:"chain_terms"`
+
 	Intent       bool `json:"intent"`
 	ProcessCount int  `json:"process_count"`
 	ParamCount   int  `json:"param_count"`
@@ -88,6 +98,20 @@ func Scan(text string, opt ScanOptions) Result {
 		}
 	}
 
+	// 窄口径话题标记：命中词里有「本身就是管制物质」的，才算泄漏判定的话题。
+	// 宽口径 Substance 里混着工业前体（如丁二醇），拿它武装输出闸门会误杀科普。
+	for _, term := range res.Hits {
+		for _, lt := range leakTopicTerms {
+			if term == lt {
+				res.LeakTopic = true
+				break
+			}
+		}
+		if res.LeakTopic {
+			break
+		}
+	}
+
 	score := maxWeight + extra
 	if extra > 10 {
 		score = maxWeight + 10
@@ -107,7 +131,12 @@ func Scan(text string, opt ScanOptions) Result {
 		}
 		if fu > 0 || ladderOK {
 			res.Substance = true
-			maxWeight = 45 // 历史物质按 45 计（略低于直接点名，避免同等定罪）
+			// 历史物质按其真实权重计（工业前体 25 / 管制物质 45+），
+			// 而不是一律 45 —— 否则「问过丁二醇再问结构式」这种正常追问会被误杀。
+			maxWeight = historySubstanceWeight(opt.HistorySubstances)
+			if maxWeight <= 0 {
+				maxWeight = 45
+			}
 			res.Categories = append(res.Categories, "承接追问")
 			res.Hits = append(res.Hits, opt.HistorySubstances...)
 			if fu > 0 {
@@ -225,6 +254,22 @@ func Scan(text string, opt ScanOptions) Result {
 		score += res.LadderScore
 	}
 
+	// ── 跨轮拼装合成链（ADRO 形态）──
+	//
+	// 点状闸门看不见链：把合成链拆成十几轮，每轮都凑不齐组合信号。
+	// 这一项让「同一家族多个成员 + 本轮在问做法」独立顶过拦截线，
+	// 不依赖蓝队模型是否可用。
+	if opt.HistoryMsgs != nil || len(opt.HistorySubstances) > 0 {
+		cv := DetectChain(opt.HistoryMsgs, text)
+		if cv.Chain {
+			res.Chain = true
+			res.ChainTerm = cv.Terms
+			res.Categories = append(res.Categories, "拼装合成链")
+			res.Hits = append(res.Hits, cv.Terms...)
+			score += cv.Score
+		}
+	}
+
 	// ── 减免：只有在「没有可操作细节」时才给 ──
 	// 一旦出现投料比/温度/浓度，任何「科普」「小说」包装都不再减免 ——
 	// 这是真实越狱里最常用的一层壳。
@@ -258,6 +303,28 @@ func Scan(text string, opt ScanOptions) Result {
 		res.Level = LevelLow
 	}
 	return res
+}
+
+// ConversationLeakTopic 整段对话里是否出现过管制物质。
+//
+// 为什么要有「对话级」这一层：ADRO 形态里，用户会把管制物质**只提一次**，
+// 后面几轮都不再点名（改问「用哪种氧化剂」「加什么碱」）。
+// 若只看当前轮，那几轮的话题判定就是 false → 输出闸门不武装 →
+// 模型在那些轮里把路线一点点吐出来。真实事故 transcript 里第 11 轮
+// （高中社团外壳 + 试剂逐项可行性分析）就是这么漏过去的。
+func ConversationLeakTopic(msgs []string) bool {
+	for _, m := range msgs {
+		t := normalize(m)
+		if t == "" {
+			continue
+		}
+		for _, lt := range leakTopicTerms {
+			if containsTerm(t, lt) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ExtractSubstances 从历史用户消息里提取「提到过的管制物质」。
