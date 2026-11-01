@@ -1151,7 +1151,8 @@ onBeforeUnmount(() => {
 
 .reader-toolbar {
   position: sticky;
-  top: 60px;
+  /* 吸顶位置要跟着导航栏走（含刘海屏安全区），否则工具条会钻到导航条底下 */
+  top: calc(60px + env(safe-area-inset-top, 0px));
   z-index: 10;
   display: flex;
   align-items: center;

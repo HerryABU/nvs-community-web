@@ -1,0 +1,183 @@
+/* ============================================================
+   移动端适配层（Mobile Layer）
+   ------------------------------------------------------------
+   为什么单独一个文件：global.css 已经 1500+ 行，移动端规则散落在各页面
+   很容易漏改、也难复查。这层只放「窄屏统一生效」的修补，
+   页面级特例仍然留在页面自己的 <style> 里。
+
+   本层修的都是**真浏览器实测**（375 / 390 / 414 三档量几何）出来的问题：
+     1. 触控目标偏小：Element Plus small 按钮只有 24px 高、主题按钮 24×24、
+        消息入口 28×26、页脚链接 25×21、作者名链接 37×19、标签项 27×24
+        —— 手机上点不准、易误触；
+     2. 输入框字号 < 16px：iOS Safari 聚焦输入框会自动放大整页，
+        用户必须手动缩小才能继续（Android 不会，属"只在苹果上出现"的坑）；
+     3. 300ms 双击延迟 + 默认的点击高亮灰块；
+     4. 长 URL / 长英文串在窄屏把容器撑破。
+
+   ⚠️ 写法约束：Element Plus 的组件样式是**运行时注入**的
+   （unplugin-vue-components 自动引入），会晚于本文件加载 ⇒ 同优先级会输。
+   所以这里只用两种稳定写法：
+     - 复合选择器提高优先级（如 .el-button.el-button--small）；
+     - 用 min-height 覆盖 EP 写死的 height
+       （CSS 规定 min-height 大于 height 时以 min-height 为准，与顺序无关）。
+   绝不用「赌样式表顺序」或无脑 !important（字号那条除外，见下）。
+   ============================================================ */
+
+@media (max-width: 768px) {
+  /* ── 1. 触控目标 ─────────────────────────────────────────
+     手机上推荐最小 44px，这里按元素重要性取 36–40px（工具条空间有限）。 */
+  .el-button {
+    min-height: 38px;
+  }
+  .el-button.el-button--small {
+    min-height: 36px;
+    min-width: 36px; /* 纯图标的小按钮只有 25px 宽，手指按不准 */
+    font-size: 13px; /* EP 的 12px 在手机上偏小 */
+  }
+  .el-button.el-button--large {
+    min-height: 44px;
+  }
+  /* 纯文字按钮（阅读器工具条）：宽度也要够，实测只有 35px */
+  .el-button.is-text {
+    min-width: 38px;
+  }
+
+  /* 导航栏右侧：主题切换 / 消息入口（实测 24×24、28×26） */
+  .theme-toggle-btn {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  .msg-link {
+    min-width: 40px;
+    min-height: 40px;
+    justify-content: center;
+  }
+
+  /* 页脚链接（实测 25×21） */
+  .footer-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: 0 8px; /* 宽度也补上，否则 25px 宽照样难点 */
+  }
+
+  /* 作者名链接（实测 37×19）。
+     行内元素用 inline-block + padding，不要改成 flex：
+     flex 会让它脱离行内流、基线对不齐，整段文字会跳行。 */
+  .author-link {
+    display: inline-block;
+    padding: 8px 0;
+    line-height: 1.4;
+  }
+
+  /* 标签项（实测 27×24） */
+  .novel-tag-item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    min-width: 36px;
+  }
+
+  /* AI 工作台左侧功能项（实测 167×34） */
+  .ai-nav-item,
+  .ai-nav-new {
+    min-height: 38px;
+  }
+
+  /* AI 工作台的几个控件实测偏小：刷新按钮只有 14×15、发送键 34×34 */
+  .ai-nav-refresh {
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .ai-cfg-btn {
+    min-height: 36px;
+  }
+  .ai-attach-btn {
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .ai-send-btn {
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .el-checkbox.el-checkbox--small {
+    min-height: 36px;
+  }
+
+  /* ── 1b. 放大命中区但不改变排版 ──────────────────────────
+     后台图表卡片标题上的下拉触发器只有 18px 高。直接加高会把标题撑变形，
+     这里用「上下内边距 + 等量负外边距」把命中区撑大、视觉位置不变。 */
+  .at-user {
+    min-height: 36px;
+  }
+  .chart-dropdown-trigger,
+  .chart-title-clickable {
+    padding: 10px 0;
+    margin: -10px 0;
+  }
+  /* 下拉触发器是 inline 元素：vertical padding 不撑高它，且组件内 scoped 样式
+     选择器优先级更高 ⇒ 这条必须 !important + inline-block 才生效。
+     命中区只往「标题内部」扩，不去抢卡片下方图表的点击。 */
+  .chart-dropdown-trigger {
+    display: inline-block;
+    padding-top: 11px !important;
+    padding-bottom: 11px !important;
+    margin-top: -11px !important;
+    margin-bottom: -11px !important;
+  }
+
+  /* ── 2. iOS 聚焦自动缩放 ─────────────────────────────────
+     输入类元素字号必须 ≥16px，否则 iOS Safari 聚焦时会把整页放大，
+     用户要手动缩小才能继续输入。这条必须 !important：
+     Element Plus 的 .el-input__inner 与本层同优先级，且注入更晚。 */
+  .el-input__inner,
+  .el-textarea__inner,
+  .el-input-number input,
+  .el-select input,
+  input[type='text'],
+  input[type='password'],
+  input[type='search'],
+  input[type='number'],
+  input[type='email'],
+  input[type='url'],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
+  /* ── 3. 点击手感 ────────────────────────────────────────
+     touch-action: manipulation 去掉 300ms 双击延迟；
+     tap-highlight 的半透明灰块在深色主题下很脏。 */
+  a,
+  button,
+  .el-button,
+  [role='button'],
+  .el-checkbox,
+  .el-radio,
+  .el-switch,
+  .el-tabs__item {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ── 4. 长串不再撑破容器 ──────────────────────────────── */
+  .comment-content,
+  .comment-body,
+  .reader-content,
+  .reader-html,
+  .markdown-body,
+  .flag-snippet {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  /* ── 5. 极小字号提到 11px ───────────────────────────────
+     这些是角标/提示（实测 9–10.56px），手机上几乎看不清。 */
+  .ai-nav-badge,
+  .ai-nav-kbd,
+  .ai-cfg-caret,
+  .reader-font-dot {
+    font-size: 11px !important;
+  }
+}

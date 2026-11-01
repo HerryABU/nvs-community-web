@@ -1,7 +1,7 @@
 <template>
   <el-container class="admin-shell">
-    <el-aside :width="collapsed ? '64px' : '232px'" class="admin-aside">
-      <AdminSidebar :collapsed="collapsed" />
+    <el-aside :width="effectiveCollapsed ? '64px' : '232px'" class="admin-aside">
+      <AdminSidebar :collapsed="effectiveCollapsed" />
     </el-aside>
 
     <el-container class="admin-right">
@@ -18,7 +18,7 @@
 
         <div class="at-right">
           <el-link class="at-health" :underline="false" @click="$router.push('/admin/health')">
-            <el-icon><Monitor /></el-icon><span>系统健康</span>
+            <el-icon><Monitor /></el-icon><span class="at-health-text">系统健康</span>
           </el-link>
           <el-dropdown @command="onUserCommand">
             <span class="at-user">
@@ -58,6 +58,15 @@ const authStore = useAuthStore();
 // 折叠态持久化到 localStorage（企业级：刷新后保持）
 const LS_KEY = 'nvs_admin_sidebar_collapsed';
 const collapsed = ref(localStorage.getItem(LS_KEY) === '1');
+// 窄屏强制折叠：侧栏展开时内容区只剩 ~143px，手机上完全没法用。
+// 用 effectiveCollapsed 而不是直接改 collapsed，避免和用户的手动折叠互相打架。
+const isNarrow = ref(typeof window !== 'undefined' && window.innerWidth < 768);
+if (typeof window !== 'undefined') {
+  window.addEventListener('resize', () => {
+    isNarrow.value = window.innerWidth < 768;
+  });
+}
+const effectiveCollapsed = computed(() => isNarrow.value || collapsed.value);
 function onToggle() {
   collapsed.value = !collapsed.value;
   localStorage.setItem(LS_KEY, collapsed.value ? '1' : '0');
@@ -135,4 +144,15 @@ function onUserCommand(cmd: string) {
 [data-theme="dark"] .admin-shell { background: #0f172a; }
 [data-theme="dark"] .at-user { color: #e2e8f0; }
 [data-theme="dark"] .at-health { color: #94a3b8; }
+
+/* 窄屏：顶栏塞不下会横向溢出（实测 375px 溢出 35px）。
+   处理：只留图标/头像、收紧间距、面包屑截断。 */
+@media (max-width: 768px) {
+  .admin-topbar { padding: 0 10px; }
+  .at-left { flex: 1; min-width: 0; overflow: hidden; }
+  .at-crumb { overflow: hidden; white-space: nowrap; }
+  .at-right { gap: 10px; min-width: 0; }
+  .at-health-text,
+  .at-username { display: none; }
+}
 </style>

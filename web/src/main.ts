@@ -6,6 +6,8 @@ import router from './router';
 import './styles/global.css';
 import './styles/scale.css';
 import './styles/admin.css';
+// 移动端适配层（窄屏统一修补：触控目标 / iOS 聚焦缩放 / 点击手感 / 长串换行）
+import './styles/mobile.css';
 
 // ====== Element Plus 命令式组件样式（按需引入模式下必须显式引入） ======
 // 模板组件（<el-dialog> 等）由 unplugin-vue-components 自动注入样式；

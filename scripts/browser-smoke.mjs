@@ -127,7 +127,8 @@ const PAGES = [
     url: `/author/${AUTHOR_ID}/novel/${NOVEL_ID}/read/${CHAPTER}`,
     ready: '.reader-page, .reader, .page-container',
     sels: {
-      正文区: '.reader-md',
+      // 正文区：`.reader-md` 是旧版结构，现在外层是 .reader-content / .reader-md-wrap
+      正文区: '.reader-content, .reader-md-wrap',
       朗读按钮: 'button:has(.el-icon)',
     },
   },

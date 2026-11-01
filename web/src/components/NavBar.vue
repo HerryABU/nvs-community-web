@@ -522,7 +522,10 @@ onUnmounted(() => {
   top: 0;
   left: 0;
   right: 0;
-  height: 62px;
+  /* 刘海屏：顶部安全区（状态栏）留白，否则导航会被状态栏压住、图标点不到。
+     全局 box-sizing: border-box ⇒ padding 会计入 height，内容区仍是 62px。 */
+  height: calc(62px + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
   background: var(--glass-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);

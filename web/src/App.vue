@@ -115,8 +115,9 @@ watch(() => authStore.isLoggedIn, (logged) => {
 
 .main-content {
   flex: 1;
-  margin-top: 60px;
-  min-height: calc(100vh - 60px);
+  /* 与导航栏高度同步（含刘海屏安全区），否则内容会被导航条压住 */
+  margin-top: calc(60px + env(safe-area-inset-top, 0px));
+  min-height: calc(100vh - 60px - env(safe-area-inset-top, 0px));
 }
 
 .global-embed-band {
@@ -128,7 +129,8 @@ watch(() => authStore.isLoggedIn, (logged) => {
 }
 
 .minor-banner {
-  margin-top: 60px;
+  /* 同 .main-content：让开固定导航栏（含刘海屏安全区） */
+  margin-top: calc(60px + env(safe-area-inset-top, 0px));
   display: flex;
   align-items: center;
   justify-content: center;
