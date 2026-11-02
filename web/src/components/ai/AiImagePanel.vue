@@ -41,9 +41,18 @@
         <div class="pd-block">
           <div class="pd-block-title">
             提示词
-            <button class="pd-link" type="button" @click="promptOpen = true">提示词库</button>
+            <span class="pd-block-actions">
+              <button class="pd-link" type="button" :disabled="optimizing" @click="doOptimizePrompt">
+                {{ optimizing ? '优化中…' : '✨ 优化' }}
+              </button>
+              <button class="pd-link" type="button" @click="promptOpen = true">提示词库</button>
+            </span>
           </div>
           <el-input v-model="prompt" type="textarea" :rows="4" resize="none" :placeholder="promptPlaceholder" />
+          <div v-if="optimizedPrompt && optimizedPrompt !== prompt" class="pd-optimized-hint">
+            已按优化结果填入提示词框
+            <button class="pd-link" type="button" @click="prompt = optimizedPrompt; optimizedPrompt = ''">撤销</button>
+          </div>
         </div>
 
         <div class="pd-block">
@@ -276,6 +285,9 @@ const lastFree = ref(false);
 const lastBalance = ref(0);
 const history = ref<any[]>([]);
 const promptOpen = ref(false);
+// 提示词优化：optimizedPrompt 保存优化结果，prompt 是当前输入框内容（用于判断是否变化）
+const optimizing = ref(false);
+const optimizedPrompt = ref('');
 
 const maxRefs = computed(() => (mode.value === 'faceswap' ? 2 : 3));
 // 参考图同时上传一份到站内（attach_urls），这样历史里能看到「当时用了什么图」，也能随导出带走
@@ -322,6 +334,36 @@ function apiKindTag(m: AiHubModel) {
 
 function onPickPrompt(content: string) {
   prompt.value = prompt.value.trim() ? `${prompt.value}\n\n${content}` : content;
+}
+
+// 优化提示词：把简短描述扩写成信息密度更高的版本。
+// 直接覆盖输入框（用户能立刻看到并改），同时保留原文供「撤销」。
+async function doOptimizePrompt() {
+  const raw = prompt.value.trim();
+  if (!raw) {
+    ElMessage.warning('请先输入提示词');
+    return;
+  }
+  optimizing.value = true;
+  try {
+    const res = await aiHubApi.optimizePrompt({ prompt: raw });
+    const opt = res?.data?.data?.prompt || '';
+    if (!opt) {
+      ElMessage.warning('优化结果为空');
+      return;
+    }
+    if (opt.trim() === raw) {
+      ElMessage.info('提示词已经很完整了，无需优化');
+      return;
+    }
+    prompt.value = opt;
+    optimizedPrompt.value = opt;
+    ElMessage.success('提示词已优化');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '优化失败，请稍后再试');
+  } finally {
+    optimizing.value = false;
+  }
 }
 
 function parseImages(result: string): string[] {
@@ -602,6 +644,12 @@ onMounted(loadHistory);
   letter-spacing: 0.02em;
 }
 .pd-block-sub { font-weight: 400; color: var(--text-light, #9ca3af); }
+/* 提示词标题右侧的操作区（优化 / 提示词库） */
+.pd-block-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
 .pd-link {
   border: none;
   background: none;
@@ -610,6 +658,19 @@ onMounted(loadHistory);
   font-size: var(--text-xs, 12px);
   cursor: pointer;
   font-family: inherit;
+}
+.pd-link:disabled {
+  color: var(--text-light, #9ca3af);
+  cursor: not-allowed;
+}
+/* 优化结果提示（可撤销） */
+.pd-optimized-hint {
+  margin-top: 4px;
+  font-size: var(--text-xs, 12px);
+  color: var(--text-light, #6b7280);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 .pd-empty {
   padding: 10px;

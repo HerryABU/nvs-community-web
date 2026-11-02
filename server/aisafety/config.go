@@ -12,7 +12,7 @@ import (
 )
 
 // configSchemaVersion 配置结构版本。新增配置列时必须 +1，并在 migrateConfigRow 里回填默认值。
-const configSchemaVersion = 9
+const configSchemaVersion = 10
 
 // ApplyPartialJSON 把一段**可能不完整**的配置 JSON 合并到 cfg 上：
 // 只覆盖 payload 里出现的字段，缺省字段保持原值。
@@ -107,6 +107,9 @@ func migrateConfigRow(cfg *SafetyConfig) {
 		"minor_observation_hours": seed.MinorObservationHours,
 		"minor_crisis_prompt":     seed.MinorCrisisPrompt,
 		"image_moderation_prompt": seed.ImageModerationPrompt,
+		"image_gen_guard":         seed.ImageGenGuard,
+		"image_output_guard":      seed.ImageOutputGuard,
+		"image_output_prompt":     seed.ImageOutputPrompt,
 		"updated_at":              time.Now(),
 	}
 	// 空文案补默认（不能留空，否则拒绝时给用户看空白）
@@ -213,6 +216,14 @@ func defaultConfig() SafetyConfig {
 		JudgeMaxTurns:         6,
 		JudgePrompt:           defaultJudgePrompt,
 		ImageModerationPrompt: defaultImageModerationPrompt,
+
+		// AI 绘画审核：
+		// 提示词初审默认开启（生成前拦，最省成本 —— 不调上游、不扣费）。
+		// 出图后审默认关闭：它要额外花一次多模态调用，且出图已生成、上游成本已付，
+		// 由站长按站点风险偏好自行开启。
+		ImageGenGuard:     true,
+		ImageOutputGuard:  false,
+		ImageOutputPrompt: defaultImageOutputPrompt,
 
 		// 未成年人心理危机防护：默认开启。这类闸门关着就等于没有 ——
 		// 真实站点上已经出现过「孩子在评论区求救，系统当成普通辱骂直接删掉」的情况。

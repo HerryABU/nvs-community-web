@@ -108,6 +108,7 @@ func registerProtected(r *gin.Engine) {
 		protected.DELETE("/ai/sessions/:id/share", ai.AiHubUnshareSession)
 		protected.POST("/ai/chat/stream", security.RateLimit(30, 60), ai.AiHubChatStream)
 		protected.POST("/ai/image", security.RateLimit(20, 60), ai.AiHubImage)
+		protected.POST("/ai/image/optimize-prompt", security.RateLimit(20, 60), ai.AiOptimizePrompt)
 		protected.POST("/ai/video", security.RateLimit(10, 60), ai.AiHubVideoSubmit)
 		protected.GET("/ai/video/:id", ai.AiHubVideoStatus)
 		// 取消异步视频任务：置终态停止等待 + 已扣款原路退回

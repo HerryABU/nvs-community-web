@@ -73,6 +73,14 @@ export interface SafetyConfig {
   minor_observation_hours: number;
   minor_crisis_prompt: string;
 
+  // ── AI 绘画审核 ──
+  /** 提示词初审（生成前）：命中高危词直接拒，不调上游、不扣费 */
+  image_gen_guard: boolean;
+  /** 出图后审（生成后，可选）：判定违规则撤回图片并退款 */
+  image_output_guard: boolean;
+  /** 出图后审的判定提示词（留空用内置默认） */
+  image_output_prompt: string;
+
   schema_version: number;
   updated_at: string;
 }

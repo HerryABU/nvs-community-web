@@ -163,6 +163,20 @@ type SafetyConfig struct {
 	// 完全不同，混进 judge 提示词会稀释注意力，故独立配置。
 	ImageModerationPrompt string `gorm:"type:text" json:"image_moderation_prompt"`
 
+	// ── AI 绘画审核（生成前 + 生成后）──
+	//
+	// ImageGenGuard：提示词初审（生成前）。命中高危词直接拒 ——
+	// 不调上游、不扣费、不留图。这是最划算的一层。
+	//
+	// ImageOutputGuard：出图后审（生成后，可选）。把生成的图交多模态模型判，
+	// 防「提示词看不出问题但模型画出了违规内容」。默认关闭 ——
+	// 它要额外花一次多模态调用，且出图已生成、上游成本已付。
+	//
+	// ImageOutputPrompt：出图后审的判定提示词（可改）。
+	ImageGenGuard     bool   `json:"image_gen_guard"`
+	ImageOutputGuard  bool   `json:"image_output_guard"`
+	ImageOutputPrompt string `gorm:"type:text" json:"image_output_prompt"`
+
 	// SchemaVersion 配置结构版本。
 	// 作用：新版本加了列之后，老行里这些列是零值（bool=false / int=0），
 	// 站长打开后台看着「已保存」，实际新功能从未启用过——这种静默失效必须靠版本号回填解决。

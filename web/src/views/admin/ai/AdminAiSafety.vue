@@ -182,6 +182,38 @@
 
           <div class="admin-panel">
             <SectionHeader
+              title="AI 绘画审核"
+              subtitle="提示词初审（生成前，最省钱）+ 出图后审（生成后，可选）"
+              :icon="'🎨'"
+              gradient="teal"
+            />
+            <el-alert type="info" :closable="false" show-icon class="mb-12">
+              <template #title>两层各管什么</template>
+              <b>提示词初审</b>在生成前拦：坏图根本没生成出来，用户不扣费、平台不花钱。
+              <b>出图后审</b>在生成后判：防「提示词看不出问题、但模型画出了违规内容」。
+              后审要额外花一次多模态调用，且出图已生成、上游成本已付，所以默认关闭。
+            </el-alert>
+            <el-form label-width="170px" class="safety-form">
+              <el-form-item label="启用提示词初审">
+                <el-switch v-model="cfg.image_gen_guard" />
+                <span class="muted small">生成前扫描提示词，命中高危词直接拒（不调上游、不扣费）</span>
+              </el-form-item>
+              <el-form-item label="启用出图后审">
+                <el-switch v-model="cfg.image_output_guard" />
+                <span class="muted small">
+                  生成后把图交多模态模型判；判定违规则撤回图片并自动退款。<br />
+                  审核调用失败时按「失败时放行」开关处置
+                </span>
+              </el-form-item>
+              <el-form-item label="出图后审提示词">
+                <el-input v-model="cfg.image_output_prompt" type="textarea" :rows="10" spellcheck="false" />
+                <span class="muted small">留空则用内置默认。默认提示词要求模型「拿不准就不判违规」，避免把生成瑕疵误判成违规</span>
+              </el-form-item>
+            </el-form>
+          </div>
+
+          <div class="admin-panel">
+            <SectionHeader
               title="终止处置"
               subtitle="判定有害后不是回一句「无法回答」——而是掐断流并按模式处置会话"
               :icon="'⛔'"

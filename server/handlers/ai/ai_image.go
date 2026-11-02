@@ -2,12 +2,15 @@ package ai
 
 // ==================== AI 绘画：同步出图（含协议族分发 / 混图换脸） ====================
 import (
+	"encoding/base64"
 	"encoding/json"
-	"nvs-server/handlers"
+	"net/http"
 	"strings"
 	"time"
 
 	"nvs-server/aiclient"
+	"nvs-server/aisafety"
+	"nvs-server/handlers"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -49,6 +52,22 @@ func AiHubImage(c *gin.Context) {
 	if len([]rune(prompt)) > 4000 {
 		utils.BadRequest(c, "提示词过长（上限 4000 字）")
 		return
+	}
+
+	// ── 提示词初审（生成前）──
+	// 放在扣费与调上游之前：坏图根本没生成出来，用户不扣费、平台不花钱。
+	// 出图后审（生成后）防的是「提示词看不出问题但模型画出了违规内容」，
+	// 那是另一层，配置项可单独开启。
+	if safetyCfg := aisafety.GetConfigOrNil(); safetyCfg != nil && safetyCfg.Enabled && safetyCfg.ImageGenGuard {
+		if blocked, reason, hits := aisafety.JudgePromptForDrawing(prompt); blocked {
+			username := ""
+			if u, e := models.GetUserByID(userID); e == nil && u != nil {
+				username = u.Username
+			}
+			aisafety.RecordDrawingPromptBlock(safetyCfg, userID, username, hits, reason)
+			utils.Forbidden(c, reason)
+			return
+		}
 	}
 	// ── 附件（参考图/素材）：只存地址不做下载（导出时才安全抓取），并校验协议 ──
 	attachments := make([]models.MediaAttachment, 0, len(req.AttachURLs))
@@ -233,6 +252,50 @@ func AiHubImage(c *gin.Context) {
 		}
 	}
 	lease.OK()
+
+	// ── 出图后审（可选，默认关闭）──
+	// 防的是「提示词看不出问题，但模型画出了违规内容」（写实血腥、政治人物脸等）。
+	// 这一层已经晚了：上游成本已付、图片已生成。所以：
+	//   判定违规 → 不把图返回给用户 + 退款（用户没拿到东西就不该扣钱）
+	//   审核失败 → 按 JudgeFailOpen 处置：放行（记事件）或拦截
+	// 图片用 data URL 内联送审：上游返回的图床 URL 可能对判定模型不可达
+	// （临时签名过期 / 地域限制），内联最稳。
+	if safetyCfg := aisafety.GetConfigOrNil(); safetyCfg != nil && safetyCfg.Enabled && safetyCfg.ImageOutputGuard {
+		verdict := aisafety.JudgeImageOutput(toDataURLsForReview(urls), prompt)
+		username := ""
+		if u, e := models.GetUserByID(userID); e == nil && u != nil {
+			username = u.Username
+		}
+		if verdict.Failed {
+			// 审核不可用：尊重站长设定的失败策略
+			if !safetyCfg.JudgeFailOpen {
+				aisafety.LogImageOutput(safetyCfg, userID, username, verdict, true)
+				models.FailAiMediaTask(task.ID, "出图审核不可用，已拦截（未扣费）", false)
+				utils.Forbidden(c, "出图审核暂时不可用，请稍后再试（未扣费）")
+				return
+			}
+			aisafety.LogImageOutput(safetyCfg, userID, username, verdict, false)
+		} else if verdict.Violated {
+			aisafety.LogImageOutput(safetyCfg, userID, username, verdict, true)
+			models.FailAiMediaTask(task.ID, "出图审核未通过："+verdict.Reason, false)
+			// 退款：图片不返回给用户，就不该扣用户的钱
+			if !freeOK {
+				if _, rerr := models.RefundAiMediaTask(task.ID, "出图审核未通过，自动退款"); rerr != nil {
+					// 退款失败要留下痕迹，否则等于白扣
+					utils.InternalError(c, "出图审核未通过，但退款失败，请联系管理员（已扣费）")
+					return
+				}
+				nb = models.GetTokenBalance(userID)
+			}
+			utils.Forbidden(c, "生成的图片未通过内容审核，已撤回"+
+				verdictCategorySuffix(verdict.Categories)+"（"+verdict.Reason+"）"+
+				map[bool]string{true: "（已退款）", false: ""}[freeOK])
+			return
+		} else {
+			aisafety.LogImageOutput(safetyCfg, userID, username, verdict, false)
+		}
+	}
+
 	rj, _ := json.Marshal(gin.H{"images": urls})
 	models.UpdateAiMediaResult(task.ID, string(rj))
 	// AIGC 合规：原图原封不动落盘（不带任何标识），供用户下载时由服务端统一加标识。
@@ -245,6 +308,57 @@ func AiHubImage(c *gin.Context) {
 		"free":          freeOK,
 		"balance_after": nb,
 	})
+}
+
+// toDataURLsForReview 把出图 URL 转成 data URL 内联，供多模态审核模型直接看图。
+//
+// 为什么必须内联：上游图床 URL 常常带临时签名或地域限制，判定模型所在网关
+// 未必能取到（实测会返回「图片无法访问」），审核就成了摆设。
+// 内联后模型拿到的是图片本体，不依赖任何外链。
+//
+// 体积控制：单张超过 4MB 就不送了（超了会让审核请求本身失败），
+// 宁可少审一张也不要整次审核崩掉。
+func toDataURLsForReview(urls []string) []string {
+	const maxInlineBytes = 4 * 1024 * 1024
+	out := make([]string, 0, len(urls))
+	for _, u := range urls {
+		u = strings.TrimSpace(u)
+		if u == "" {
+			continue
+		}
+		if strings.HasPrefix(strings.ToLower(u), "data:") {
+			out = append(out, u)
+			continue
+		}
+		_, data, reason := fetchMediaBytes(u)
+		if len(data) == 0 {
+			// 取不到就退回原 URL：让模型自己试一次，总比直接放弃强
+			if reason == "" {
+				continue
+			}
+			out = append(out, u)
+			continue
+		}
+		if len(data) > maxInlineBytes {
+			out = append(out, u)
+			continue
+		}
+		mime := http.DetectContentType(data)
+		if !strings.HasPrefix(mime, "image/") {
+			out = append(out, u)
+			continue
+		}
+		out = append(out, "data:"+mime+";base64,"+base64.StdEncoding.EncodeToString(data))
+	}
+	return out
+}
+
+// verdictCategorySuffix 把审核命中的类别拼成给用户看的一句话。
+func verdictCategorySuffix(cats []string) string {
+	if len(cats) == 0 {
+		return ""
+	}
+	return "（" + strings.Join(cats, "、") + "）"
 }
 
 func aspectRatioOf(size string) string {

@@ -194,6 +194,14 @@ export const aiHubApi = {
   }) {
     return api.post<{ code: number; data: { task_id: number; images: string[]; cost: number; free?: boolean; byok?: boolean; balance_after: number } }>('/ai/image', data);
   },
+  // 优化绘画提示词：把简短描述扩写成信息密度更高的版本（不改变创作意图）
+  optimizePrompt(data: { prompt: string; model_id?: number }) {
+    return api.post<{ code: number; data: { prompt: string; original: string } }>(
+      '/ai/image/optimize-prompt',
+      data,
+      { timeout: 90000 }
+    );
+  },
   videoSubmit(data: { model_id: number; prompt: string; duration?: number; size?: string; byok?: boolean; byok_model?: string; confirm?: boolean }) {
     return api.post<{ code: number; data: { task_id: number; status: string; cost: number; free?: boolean; byok?: boolean; balance_after: number } }>('/ai/video', data);
   },
