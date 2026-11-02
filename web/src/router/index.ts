@@ -433,6 +433,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/comment-policy',
+      name: 'admin-comment-policy',
+      component: () => import('@/views/admin/content/AdminCommentPolicy.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/theme',
       name: 'admin-theme',
       component: () => import('@/views/admin/site/AdminTheme.vue'),

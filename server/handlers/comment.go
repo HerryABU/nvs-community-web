@@ -125,6 +125,9 @@ func CreateComment(c *gin.Context) {
 	// 楼加密门禁：回复目标是加密楼内的评论时，未解锁用户不可回复
 	// （防止借回复入口试探加密楼内容）。豁免：楼作者、警方/管理员、带对密码。
 	// 同时记下被回复者 id：绝对保护模式要据此判断「这条评论是不是冲着高危用户来的」。
+	//
+	// 管理员可选：若站点选了「评论区不随楼加密」（默认），且明确允许对未解锁的楼回复，
+	// 则放行 —— 此时楼内回复本来就对所有人可见，不存在「试探加密内容」的通道。
 	parentAuthorID := uint(0)
 	if req.ParentID != nil && *req.ParentID != 0 {
 		parent, perr := models.GetCommentByID(*req.ParentID)
@@ -140,8 +143,11 @@ func CreateComment(c *gin.Context) {
 				}
 			}
 			if !models.FloorAccessUnlocked(floor, userID, isPoliceOrAdminUser(c), map[uint]string{floor.ID: c.GetHeader("X-Floor-Password")}) {
-				utils.Forbidden(c, "该楼已加密，输入访问密码后才可回复")
-				return
+				policy := models.LoadCommentPolicy()
+				if policy.LockHidesReplies || !policy.LockedFloorCanReply {
+					utils.Forbidden(c, "该楼已加密，输入访问密码后才可回复")
+					return
+				}
 			}
 		}
 	}

@@ -36,6 +36,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: '自定义主页', desc: '编排首页区块：头图/公告/模块/博客/版块/最新帖/自定义HTML/链接', path: '/admin/home-blocks', icon: Grid, color: 'var(--gradient-teal)' },
       { title: '自定义主题', desc: 'alist 式全局主题：CSS 消毒后全站生效', path: '/admin/theme', icon: Brush, color: 'var(--gradient-pink)' },
       { title: '狂暴模式', desc: '评论区实时推送（SSE）开关与带宽参数', path: '/admin/rage', icon: Lightning, color: 'var(--gradient-purple)' },
+      { title: '评论区策略', desc: '楼加密的连带范围：只锁楼正文，还是连楼内回复一起藏', path: '/admin/comment-policy', icon: ChatLineRound, color: 'var(--gradient-indigo)' },
       { title: '数据库管理', desc: 'SQLite↔MySQL 迁移 / 多库备份', path: '/admin/database', icon: DataLine, color: 'var(--gradient-teal)' },
       { title: '健康检查', desc: '服务器 / 数据库 / 网络 / 前端 API', path: '/admin/health', icon: Monitor, color: 'var(--gradient-success)' },
       { title: '远程站点互通', desc: '远程 NVS 站点互联与作品同步', path: '/admin/sites', icon: Connection, color: 'var(--gradient-teal)' },

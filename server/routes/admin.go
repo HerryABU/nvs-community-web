@@ -76,6 +76,9 @@ func registerAdminArea(r *gin.Engine) {
 		admin.PUT("/html-quota", handlers.AdminSaveHTMLQuota)
 		admin.POST("/html-quota/overrides", handlers.AdminSetHTMLQuotaOverride)
 		admin.GET("/html-quota/usage", handlers.AdminHTMLQuotaUsage)
+		// 评论区策略（楼加密是否连带隐藏楼内回复）
+		admin.GET("/comment-policy", handlers.AdminGetCommentPolicy)
+		admin.PUT("/comment-policy", handlers.AdminSaveCommentPolicy)
 		admin.GET("/finance", handlers.GetFinanceOverview)
 		// 站长配置
 		admin.GET("/config", handlers.GetPlatformConfigs)

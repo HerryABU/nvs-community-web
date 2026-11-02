@@ -90,7 +90,13 @@ func TestFloorAccessUnlocked(t *testing.T) {
 	}
 }
 
-// TestRedactLockedComments 脱敏：加密楼 content 置空 + Locked 标记 + 楼内回复剔除
+// TestRedactLockedComments 脱敏：加密楼 content 置空 + Locked 标记
+//
+// 楼内回复是否随楼一起被藏，由管理员开关决定（models/comment_policy.go）：
+//   - 默认（LockHidesReplies=false）：评论区不加密，楼内回复照常返回
+//   - 开启后：整块对话私密，楼内回复一并剔除（保留旧行为）
+//
+// 两种语义这里都覆盖 —— 既有代码保留，只是不再是默认。
 func TestRedactLockedComments(t *testing.T) {
 	setupFloorPasswordTestDB(t)
 	floor, _ := seedFloor(t, 100, true)
@@ -99,7 +105,7 @@ func TestRedactLockedComments(t *testing.T) {
 	var list []Comment
 	DB.Preload("User").Where("novel_id = ?", 1).Find(&list)
 
-	// 陌生人无密码：加密楼脱敏、楼内回复剔除；普通楼原样
+	// ── 默认策略：楼加密只锁楼正文，楼内回复（评论区）照常返回 ──
 	out := RedactLockedComments(list, 200, false, nil)
 	var lockedCnt, plainCnt, replyCnt int
 	for _, c := range out {
@@ -122,9 +128,27 @@ func TestRedactLockedComments(t *testing.T) {
 	if lockedCnt != 1 {
 		t.Errorf("加密楼应保留占位行，got %d", lockedCnt)
 	}
-	if replyCnt != 2 {
-		t.Errorf("只剩普通楼的 2 条回复应保留，实际 %d", replyCnt)
+	// 默认：楼内回复不被剔除（加密楼 2 + 普通楼 2 = 4）
+	if replyCnt != 4 {
+		t.Errorf("默认策略下楼内回复应全部保留（加密楼 2 + 普通楼 2），实际 %d", replyCnt)
 	}
+
+	// ── 管理员开启「连带隐藏」：恢复旧行为，楼内回复整批剔除 ──
+	if err := SaveCommentPolicy(CommentPolicy{LockHidesReplies: true}); err != nil {
+		t.Fatalf("保存策略失败: %v", err)
+	}
+	outHidden := RedactLockedComments(list, 200, false, nil)
+	replyCntHidden := 0
+	for _, c := range outHidden {
+		if c.ParentID != nil {
+			replyCntHidden++
+		}
+	}
+	if replyCntHidden != 2 {
+		t.Errorf("开启连带隐藏后只剩普通楼的 2 条回复应保留，实际 %d", replyCntHidden)
+	}
+	// 复原默认，避免影响同包其它测试
+	_ = SaveCommentPolicy(DefaultCommentPolicy())
 
 	// 带对密码：加密楼完整返回
 	out2 := RedactLockedComments(list, 200, false, map[uint]string{floor.ID: "secret123"})

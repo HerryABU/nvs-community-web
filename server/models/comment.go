@@ -377,8 +377,13 @@ func FloorAccessUnlocked(floor *Comment, viewerID uint, isStaff bool, passwords 
 }
 
 // RedactLockedComments 对平铺评论列表做楼加密脱敏（models 层统一收口）。
-// 未解锁的顶层楼 → content 置空 + Locked=true（前端渲染 🔒 占位）；
-// 该楼名下的全部楼内回复一并从列表剔除（防止楼内内容绕读出）。
+// 未解锁的顶层楼 → content 置空 + Locked=true（前端渲染 🔒 占位）。
+//
+// 「楼加密是否连带隐藏楼内回复」由管理员可选（models/comment_policy.go）：
+//   - LockHidesReplies=false（默认）：只锁楼正文，楼内回复（评论区）照常返回。
+//     加密的是「我这一条说了什么」，不是「大家聊了什么」。
+//   - LockHidesReplies=true：连楼内回复一并剔除，整块对话对外完全不可见。
+//
 // 返回新切片，不修改入参（调用方可能基于同一列表做多次判定）。
 func RedactLockedComments(list []Comment, viewerID uint, isStaff bool, passwords map[uint]string) []Comment {
 	// 整体拷贝：脱敏标记只落在副本上，避免污染调用方切片
@@ -399,6 +404,10 @@ func RedactLockedComments(list []Comment, viewerID uint, isStaff bool, passwords
 		}
 	}
 	if len(lockedRoots) == 0 {
+		return work
+	}
+	// 管理员选择了「评论区不随楼加密」→ 楼内回复照常返回，不做剔除
+	if !LockHidesFloorReplies() {
 		return work
 	}
 	out := make([]Comment, 0, len(work))
