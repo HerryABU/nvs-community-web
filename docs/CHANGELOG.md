@@ -3,7 +3,7 @@
 > 按版本倒序记录每个版本改了什么、为什么改。README 不再承载更新日志。
 > 返回 [README](../README.md) · [API](API.md) · [配置](CONFIG.md) · [架构](ARCHITECTURE.md) · [开发](DEVELOPMENT.md) · [特性详解](FEATURES.md)
 
-### 未发布（v4.7.0 之后）
+### v4.7.2 楼加密解耦 / AI 绘画审核 / 提示词优化 / 评论附图（2026-11-02）
 
 **一、楼加密与评论区解耦（管理员可选连带范围）**
 
