@@ -45,7 +45,7 @@
 | 方法 | 端点 | 认证 | 说明 |
 |------|------|------|------|
 | GET | `/api/comments` | — | 评论列表（支持 `novel_id` / `blog_id`） |
-| POST | `/api/comments` | JWT | 创建评论（限流 20次/60s，支持小说和博客） |
+| POST | `/api/comments` | JWT | 创建评论（限流 20次/60s，支持小说和博客）；可带 `images`（附图，仅接受站内 `/uploads/images/` 前缀，最多 9 张，图片走多模态审核） |
 | DELETE | `/api/comments/:id` | JWT | 删除评论 |
 
 ### 博客
@@ -193,6 +193,8 @@
 | POST | `/api/admin/bad-words/search-augment` | 管理员 | 联网检索补充违禁词（`focus` 侧重方向 / `category` 统一归类 / `model_id` 指定模型 / `search_mode`=auto\|endpoint\|native\|prompt；新增规则一律标记动作并按 名称+方式+词 去重） |
 | GET | `/api/admin/bad-word-flags` | 管理员 | 违禁词标记待审列表（status 过滤 + 分页） |
 | PUT | `/api/admin/bad-word-flags/:id` | 管理员 | 处理标记（确认违规[可选删除内容留证] / 放行） |
+| GET | `/api/admin/comment-policy` | 管理员 | 评论区策略：`lock_hides_replies`（楼加密是否连带隐藏楼内回复，默认 false=评论区不加密）/ `locked_floor_can_reply`（是否允许对未解锁的楼回复，默认 false） |
+| PUT | `/api/admin/comment-policy` | 管理员 | 保存评论区策略（立即生效） |
 | GET | `/api/admin/html-reviews` | 管理员 | HTML 内容审查列表 |
 | GET | `/api/admin/html-reviews/:type/:id` | 管理员 | 审查详情 |
 | POST | `/api/admin/html-reviews/:type/:id/review` | 管理员 | 复核 HTML 内容 |
@@ -278,6 +280,12 @@
 | GET | `/api/announcements` | — | 站点公告列表（仅已发布） |
 | GET | `/api/users/me/preferences` | JWT | 用户偏好设置（个性化推荐开关，关闭权） |
 | PUT | `/api/users/me/preferences` | JWT | 更新偏好设置 |
+
+### 🎨 AI 绘画
+| 方法 | 端点 | 认证 | 说明 |
+|------|------|------|------|
+| POST | `/api/ai/image` | JWT | 生成图片（限流 20次/60s）。`mode`=t2i\|i2i\|faceswap；生成前先做提示词初审，命中违规直接拒绝（不调上游、不扣费）；开启出图后审时，判定违规则不返回图片并自动退款 |
+| POST | `/api/ai/image/optimize-prompt` | JWT | 优化绘画提示词（把简短描述扩写成信息密度更高的版本，不改变创作意图）。入参 `{ prompt, model_id? }`，返回 `{ prompt, original }` |
 
 ### 文件服务
 | 路径 | 说明 |

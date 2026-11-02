@@ -23,6 +23,8 @@ nvs/
 │   ├── browser-smoke.mjs          # 四档宽度几何回归（375/768/1024/1440）
 │   ├── browser-mobile.mjs         # 移动端专项（触控目标/字号下限/横向溢出/固定层）
 │   ├── live-adro-replay.mjs       # 真站越狱回放（同会话逐轮打，验安全闸）
+│   ├── browser-svg-export.mjs     # SVG / mermaid 导出验收（PNG 魔数 + SVG 源文）
+│   ├── browser-comment-image.mjs  # 评论附图 + 楼加密可见性（上传/渲染/脱敏/评论区不连带）
 │   ├── browser-func.mjs           # 功能级回归（排序参数/密度/朗读/落库）
 │   └── browser-me-center.mjs      # 个人中心与下拉菜单专项
 │
@@ -54,6 +56,7 @@ nvs/
 │   │   ├── user.go                # User（角色含 police / 会员有效期 / 实名 / 未成年保护 / 禁言）
 │   │   ├── novel.go               # Novel + Chapter + NovelCategory（软删除）
 │   │   ├── comment.go             # Comment：楼层模型（root_id / floor_no）+ 加密楼 + 排序白名单
+│   │   ├── comment_policy.go      # 评论区策略：楼加密是否连带隐藏楼内回复（平台级开关）
 │   │   ├── forum.go / groups.go   # 论坛（Forum/Thread/Post）与群组（Group/GroupPost/成员/公告）
 │   │   ├── blog*.go               # 作者博客 / 三级分类 / 标签 / 话题
 │   │   ├── bookshelf.go / rating.go / follow.go / reading_note.go  # 书架·评分·关注·书签批注
@@ -75,7 +78,7 @@ nvs/
 │   ├── handlers/                  # API 处理器（根 133 个文件 + 11 个子包，按功能拆分）
 │   │   ├── auth_*.go              # 注册 / 登录 / 验证码与改密（含账号锁定与审计）
 │   │   ├── novel*.go / chapter*.go# 作品与章节读写（SHA256 + HMAC 签名、软删除归档）
-│   │   ├── comment.go             # 评论（楼层分页 + sort=new/old/hot + 加密楼 + 取证视图）
+│   │   ├── comment.go             # 评论（楼层分页 + sort=new/old/hot + 加密楼 + 取证视图 + 附图审核）
 │   │   ├── admin_*.go             # 后台：用户 / 举报 / 论坛 / 站点 / 合规 / 漏洞 / 额度 / 密码与国密
 │   │   ├── police.go              # 警方取管台：软删除查看 / 凭证下载 / 全量取证包 / 论坛巡查
 │   │   ├── social_*.go            # 关注 / 博客 / 话题 / 私信 / 黑名单 / 特别关注
@@ -93,7 +96,7 @@ nvs/
 │   ├── chaptervcs/  collab/       # 章节版本控制后端 / 协作
 │   ├── groups/  oc/  prompttpl/  realtime/   # 群组 / OC 模式 / 提示词模板 / SSE 推送
 │   ├── honeypot/  gate/  risk/    # 蜜罐（诱饵·影子认证·指纹·取证）/ 准入闸门 / 充值风控
-│   ├── aigc/  aisafety/  sentiment/  crisis/ # AIGC 标识（角标 + XMP）/ 三层安全闸（+ 跨轮拼装链检测）/ 舆情 / 心理危机
+│   ├── aigc/  aisafety/  sentiment/  crisis/ # AIGC 标识（角标 + XMP）/ 三层安全闸（+ 跨轮拼装链检测 + 绘画审核）/ 舆情 / 心理危机
 │   ├── ipgeo/  doctext/  moderation/         # 离线 IP 归属 / 文档正文抽取 / 审核规则
 │   ├── payment/  police/  audit/  # 支付通道 / 警方取证 / 审计
 │   ├── middleware/                # 鉴权 / CSRF / 访问日志 / 脱敏 / 前缀剥离 / 沙盒头 / 端口代理
