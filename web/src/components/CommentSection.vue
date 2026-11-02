@@ -39,8 +39,25 @@
         :maxlength="2000"
         @save="submitComment"
       />
+      <!-- 附图：上传后先本地预览，提交时把 /uploads/images/… 路径一并带上 -->
+      <div v-if="pendingImages.length" class="cc-img-list">
+        <div v-for="(u, i) in pendingImages" :key="u" class="cc-img-item">
+          <img :src="u" :alt="`附图 ${i + 1}`" loading="lazy" />
+          <button type="button" class="cc-img-del" aria-label="移除附图" @click="removePendingImage(i)">×</button>
+        </div>
+      </div>
       <div class="form-actions">
         <span class="tip-text">文明评论，理性表达</span>
+        <el-upload
+          class="cc-img-upload"
+          :show-file-list="false"
+          :before-upload="beforeUploadImage"
+          accept="image/jpeg,image/png,image/gif,image/webp"
+        >
+          <el-button size="small" text :loading="uploadingImage">
+            <el-icon><Picture /></el-icon> 附图
+          </el-button>
+        </el-upload>
         <el-button type="primary" size="small" :loading="submitting" @click="submitComment">
           发表评论
         </el-button>
@@ -136,8 +153,9 @@ import { getFloorPasswords, mentionApi, type CommentSort } from '@/api/novel/com
 import type { CommentCrisis } from '@/api/novel/types';
 import { novelCommentChannel, blogCommentChannel, liveApi } from '@/api/live';
 import { useAuthStore } from '@/stores/auth';
+import { authApi } from '@/api/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Fold, Expand } from '@element-plus/icons-vue';
+import { Fold, Expand, Picture } from '@element-plus/icons-vue';
 import { shouldShowGuard } from '@/utils/sensitiveZone';
 import FloorComments from './FloorComments.vue';
 import MentionTextarea from './MentionTextarea.vue';
@@ -210,6 +228,11 @@ async function onChangeMentionSource(val: string) {
 const comments = ref<Comment[]>([]);
 const newComment = ref('');
 const submitting = ref(false);
+// 附图（评论图片）：上传后先本地预览，提交时随 content 一起送；后端只收 /uploads/images/ 前缀
+const pendingImages = ref<string[]>([]);
+const uploadingImage = ref(false);
+const MAX_COMMENT_IMAGES = 9;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const page = ref(1);
 const hasMore = ref(false);
 const loadingMore = ref(false);
@@ -413,8 +436,10 @@ async function submitComment() {
       blog_id: props.blogId || 0,
       chapter_number: props.chapterNumber,
       content: newComment.value.trim(),
+      images: pendingImages.value.length ? pendingImages.value : undefined,
     });
     newComment.value = '';
+    pendingImages.value = [];
     afterCreate(res, false);
     fetchComments(true);
   } catch (e: any) {
@@ -422,6 +447,40 @@ async function submitComment() {
   } finally {
     submitting.value = false;
   }
+}
+
+// 附图上传：先本地校验（大小/数量），再走 /author/image（服务端会解码重编码防图片马）
+async function beforeUploadImage(file: File): Promise<boolean> {
+  if (pendingImages.value.length >= MAX_COMMENT_IMAGES) {
+    ElMessage.warning(`最多只能附 ${MAX_COMMENT_IMAGES} 张图`);
+    return false;
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    ElMessage.error('图片大小不能超过 10MB');
+    return false;
+  }
+  uploadingImage.value = true;
+  try {
+    const fd = new FormData();
+    fd.append('image', file);
+    const res = await authApi.uploadImage(fd);
+    const url = res?.data?.data?.url || '';
+    if (!url) {
+      ElMessage.error('图片上传失败');
+      return false;
+    }
+    pendingImages.value.push(url);
+    return false; // 阻止 el-upload 自动插入 fileList（我们自己管预览）
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '图片上传失败');
+    return false;
+  } finally {
+    uploadingImage.value = false;
+  }
+}
+
+function removePendingImage(i: number) {
+  pendingImages.value.splice(i, 1);
 }
 
 // 发布后的统一反馈：区分「正常公开」「先审后发」「触发危机保护」。
@@ -590,6 +649,48 @@ defineExpose({ setQuote });
   justify-content: space-between;
   align-items: center;
   margin-top: 8px;
+}
+
+/* 附图预览：横向排列的小缩略图，删除按钮悬浮在右上角 */
+.cc-img-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.cc-img-item {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+.cc-img-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.cc-img-del {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  line-height: 18px;
+  text-align: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.72);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+}
+.cc-img-del:hover {
+  background: rgba(208, 48, 80, 0.9);
 }
 
 .tip-text {

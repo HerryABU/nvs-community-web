@@ -62,6 +62,23 @@
           <div v-else-if="floor.is_deleted && !isModerator" class="deleted-placeholder">[ 该内容已删除 ]</div>
           <div v-if="!showHeld(floor) || isModerator" v-html="renderCommentHTML(floor.content, floor.mentions)"></div>
         </div>
+        <!-- 评论附图（站内存图）：与正文同区，图片本身也受内容风控约束（后端已审） -->
+        <div
+          v-if="visibleImages(floor).length"
+          class="comment-images"
+          :class="{ 'is-hidden': showHeld(floor) || showDeleted(floor) }"
+        >
+          <el-image
+            v-for="(u, i) in visibleImages(floor)"
+            :key="u + i"
+            :src="u"
+            :preview-src-list="visibleImages(floor)"
+            :initial-index="i"
+            fit="cover"
+            class="comment-image"
+            preview-teleported
+          />
+        </div>
         <!-- 长文本折叠：阈值来自服务端（sentiments/config.fold_chars），前端不写死 -->
         <div v-if="!floor.Locked && isLongText(floor.content)" class="text-fold">
           <el-button text size="small" @click="toggleTextExpand(floor.id)">
@@ -106,6 +123,19 @@
               <span v-if="showHeld(r) && !isModerator">[ 该内容正在由人工复核，暂时不会公开 ]</span>
               <span v-if="showDeleted(r) === false && r.is_deleted && !isModerator">[ 该内容已删除 ]</span>
               <span v-if="!showHeld(r)" v-html="renderCommentHTML(r.content, r.mentions)"></span>
+            </span>
+            <!-- 楼内回复的附图 -->
+            <span v-if="visibleImages(r).length && !showHeld(r)" class="comment-images reply-images">
+              <el-image
+                v-for="(u, i) in visibleImages(r)"
+                :key="u + i"
+                :src="u"
+                :preview-src-list="visibleImages(r)"
+                :initial-index="i"
+                fit="cover"
+                class="comment-image"
+                preview-teleported
+              />
             </span>
             <span class="reply-meta">
               <el-tooltip :content="absTime(r)" placement="top">
@@ -313,6 +343,13 @@ function showDeleted(item: any) {
 // 保证内容不会因为漏网一条而直接暴露在读者眼前。
 function showHeld(item: any) {
   return !!item && (item.moderation_status === 'folded' || item.moderation_status === 'pending');
+}
+
+// 评论附图：只认站内 /uploads/images/ 前缀（后端已强制校验，这里再挡一道，
+// 避免任何异常数据把外链/数据 URL 渲染进 <img src>）。
+function visibleImages(item: any): string[] {
+  const list = Array.isArray(item?.images) ? item.images : [];
+  return list.filter((u: any) => typeof u === 'string' && u.startsWith('/uploads/images/'));
 }
 
 const floors = computed(() =>
@@ -572,6 +609,34 @@ async function removeManage() {
   font-size: 0.95rem;
   line-height: 1.7;
   white-space: normal;
+}
+
+/* 评论附图：小尺寸缩略图横排，点击放大预览（el-image 内置 preview） */
+.comment-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 2px;
+}
+.comment-images.is-hidden {
+  display: none;
+}
+.comment-image {
+  width: 96px;
+  height: 96px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  cursor: zoom-in;
+}
+.reply-images {
+  display: inline-flex;
+  margin: 4px 0 0 6px;
+  vertical-align: middle;
+}
+.reply-images .comment-image {
+  width: 64px;
+  height: 64px;
 }
 
 /* ====== 长文本折叠 ====== */

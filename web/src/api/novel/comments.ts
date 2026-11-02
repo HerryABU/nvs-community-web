@@ -86,6 +86,8 @@ export const commentApi = {
     content: string;
     quote_text?: string;
     parent_id?: number;
+    /** 附图：仅站内 /uploads/images/… 路径，最多 9 张（后端会再校验一次） */
+    images?: string[];
   }, headers?: Record<string, string>) {
     return api.post('/comments', data, { headers: headers || {} });
   },

@@ -89,6 +89,8 @@ export interface Comment {
   moderation_status?: string;
   // 触发危机防护时，评论创建响应会带回柔和卡片信息（求助通道，不是处罚通知）
   crisis?: CommentCrisis;
+  /** 评论附图（站内存图，/uploads/images/…）：仅站内路径，最多 9 张 */
+  images?: string[];
   created_at: string;
 }
 
