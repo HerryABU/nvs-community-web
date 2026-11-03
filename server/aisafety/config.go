@@ -12,7 +12,7 @@ import (
 )
 
 // configSchemaVersion 配置结构版本。新增配置列时必须 +1，并在 migrateConfigRow 里回填默认值。
-const configSchemaVersion = 10
+const configSchemaVersion = 11
 
 // ApplyPartialJSON 把一段**可能不完整**的配置 JSON 合并到 cfg 上：
 // 只覆盖 payload 里出现的字段，缺省字段保持原值。
@@ -153,6 +153,22 @@ func migrateConfigRow(cfg *SafetyConfig) {
 	if strings.TrimSpace(cfg.MinorCrisisPrompt) == "" {
 		updates["minor_crisis_prompt"] = seed.MinorCrisisPrompt
 	}
+	// 绥靖模式新增列回填：文案空则回退默认；升级线与展示模式给安全默认值
+	if strings.TrimSpace(cfg.AppeaseReplaceText) == "" {
+		updates["appease_replace_text"] = defaultAppeaseReplace
+	}
+	if strings.TrimSpace(cfg.AppeaseSoftCardText) == "" {
+		updates["appease_soft_card_text"] = defaultAppeaseSoftCard
+	}
+	if strings.TrimSpace(cfg.AppeaseDisplayMode) == "" {
+		updates["appease_display_mode"] = "replace"
+	}
+	if cfg.AppeaseEscalateScore <= 0 {
+		updates["appease_escalate_score"] = 80
+	}
+	if strings.TrimSpace(cfg.AppeaseSystemPrompt) == "" {
+		updates["appease_system_prompt"] = defaultRelaxedGuardPrompt
+	}
 	if err := models.DB.Model(&SafetyConfig{}).Where("id = ?", 1).Updates(updates).Error; err == nil {
 		_ = models.DB.Where("id = ?", 1).First(cfg).Error
 	}
@@ -233,6 +249,13 @@ func defaultConfig() SafetyConfig {
 		MinorObservationHours: 72,
 		MinorCrisisPrompt:     defaultMinorJudgePrompt,
 
+		// 绥靖模式（以疏代堵）：默认 replace（最克制一档），升级线 80 与 JudgeBlockScore 同量级
+		AppeaseDisplayMode:   "replace",
+		AppeaseReplaceText:   defaultAppeaseReplace,
+		AppeaseSoftCardText:  defaultAppeaseSoftCard,
+		AppeaseEscalateScore: 80,
+		AppeaseSystemPrompt:  defaultRelaxedGuardPrompt,
+
 		SchemaVersion: configSchemaVersion,
 	}
 }
@@ -288,8 +311,21 @@ func SaveConfig(cfg *SafetyConfig) error {
 		"minor_crisis_comfort":    cfg.MinorCrisisComfort,
 		"minor_observation_hours": cfg.MinorObservationHours,
 		"minor_crisis_prompt":     cfg.MinorCrisisPrompt,
-		"schema_version":          configSchemaVersion,
-		"updated_at":              time.Now(),
+		// ── 对话终止（此前 SaveConfig 漏列，导致后台改了模式/文案存不下来 —— 一并补回）──
+		"terminate_on_block":       cfg.TerminateOnBlock,
+		"terminate_score":          cfg.TerminateScore,
+		"terminate_mode":           cfg.TerminateMode,
+		"session_terminated_text":  cfg.SessionTerminatedText,
+		"contaminated_notice_text": cfg.ContaminatedNoticeText,
+		"moderate_blocked_text":    cfg.ModerateBlockedText,
+		// ── 绥靖模式（以疏代堵）──
+		"appease_display_mode":   cfg.AppeaseDisplayMode,
+		"appease_replace_text":   cfg.AppeaseReplaceText,
+		"appease_soft_card_text": cfg.AppeaseSoftCardText,
+		"appease_escalate_score": cfg.AppeaseEscalateScore,
+		"appease_system_prompt":  cfg.AppeaseSystemPrompt,
+		"schema_version":         configSchemaVersion,
+		"updated_at":             time.Now(),
 	}
 	return models.DB.Model(&SafetyConfig{}).Where("id = ?", 1).Updates(fields).Error
 }
@@ -329,6 +365,11 @@ func ResetConfig() (*SafetyConfig, error) {
 		"minor_crisis_comfort":     seed.MinorCrisisComfort,
 		"minor_observation_hours":  seed.MinorObservationHours,
 		"minor_crisis_prompt":      seed.MinorCrisisPrompt,
+		"appease_display_mode":     seed.AppeaseDisplayMode,
+		"appease_replace_text":     seed.AppeaseReplaceText,
+		"appease_soft_card_text":   seed.AppeaseSoftCardText,
+		"appease_escalate_score":   seed.AppeaseEscalateScore,
+		"appease_system_prompt":    seed.AppeaseSystemPrompt,
 		"schema_version":           configSchemaVersion,
 		"updated_at":               time.Now(),
 	}
@@ -388,11 +429,12 @@ const defaultJailbreakRefusal = `这个请求我不能执行。
 它要求绕过、作废或忽略 AI 的使用规则，属于平台不允许的操作。
 如果你有正常的问题，直接问就好——我会尽力帮你。`
 
-// 三种终止模式
+// 三种终止模式（+ 绥靖）
 const (
 	TerminateStrict   = "strict"   // 整个会话组终止
 	TerminateModerate = "moderate" // 可继续，但注入污染提示
 	TerminateLoose    = "loose"    // 可继续，本档只拦当轮
+	TerminateAppease  = "appease"  // 绥靖：用户无感，静默入名单，危险内容改写为引导内容
 )
 
 // NormalizeMode 暴露给调用方（handler 需要按模式分流处置）。
@@ -417,7 +459,7 @@ func ModerateBlockedText(cfg *SafetyConfig) string {
 // normalizeTerminateMode 容错：未知值一律按严格处理（安全优先）。
 func normalizeTerminateMode(m string) string {
 	switch m {
-	case TerminateModerate, TerminateLoose, TerminateStrict:
+	case TerminateModerate, TerminateLoose, TerminateStrict, TerminateAppease:
 		return m
 	default:
 		return TerminateStrict
@@ -446,6 +488,80 @@ const defaultCooldown = `你的账号近期多次触发内容安全规则，AI �
 
 这通常发生在反复询问危险品 / 管制物质制备细节之后。
 如果你认为属于误判，请联系站长并提供大致时间，我们会人工复核。`
+
+// ═══════════════ 绥靖模式（以疏代堵）═══════════════
+//
+// 设计：用户完全无感（不透终止、不透拦截、不进冷却），但其行为被静默记入「可疑名单」，
+// AI 仍正常应答，但危险内容被改写为管理员在后台选定的引导内容（replace / softcard / both）。
+// 名单升级到「恶意名单」后，同样按此处配置的引导内容在用户面前展示「相关内容」——
+// 而不是弹硬拦截。核心是「疏」而非「堵」。
+
+// 绥靖档「无害替代回答」默认文案：科普 / 法律后果 / 求助引导（不给任何可操作细节）。
+const defaultAppeaseReplace = `这个问题我没法按你期望的方向展开，但我可以告诉你它为什么敏感：
+
+这类内容涉及危险品 / 管制物质的制备或工艺参数，公开传播既违法也可能被别有用心的人利用。
+如果你是在写小说或做研究，建议把信息限制在「不具可操作性的层面」——氛围、后果、人物反应都可以写。
+
+如果你或是身边的人正被这类信息困扰、甚至产生危险念头，请记得求助不是软弱：
+- 北京心理危机研究与干预中心（24 小时）：010-82951332
+- 全国希望 24 热线：400-161-9995
+- 紧急情况请直接拨打 120 / 110`
+
+// 绥靖档「软警示卡片」默认文案：不冷冰、不评判，把人往求助渠道引。
+const defaultAppeaseSoftCard = `你刚刚问到的方向，平台出于安全与法律考虑不会展开。
+如果你只是好奇，上面那段说明已经把「为什么」讲清楚了；如果那句话背后另有情绪或困境，
+有人愿意听你说——拨打上面的热线，或找你信任的家人、老师、朋友聊聊，都不是坏事。`
+
+// AppeaseReplace 绥靖档「无害替代回答」文案（空则回退默认）。
+func AppeaseReplace(cfg *SafetyConfig) string {
+	if cfg == nil || strings.TrimSpace(cfg.AppeaseReplaceText) == "" {
+		return defaultAppeaseReplace
+	}
+	return cfg.AppeaseReplaceText
+}
+
+// AppeaseSoftCard 绥靖档「软警示卡片」文案（空则回退默认）。
+func AppeaseSoftCard(cfg *SafetyConfig) string {
+	if cfg == nil || strings.TrimSpace(cfg.AppeaseSoftCardText) == "" {
+		return defaultAppeaseSoftCard
+	}
+	return cfg.AppeaseSoftCardText
+}
+
+// NormalizeAppeaseDisplayMode 容错：未知值按 replace 处理（最克制的一档）。
+func NormalizeAppeaseDisplayMode(m string) string {
+	switch m {
+	case "replace", "softcard", "both":
+		return m
+	default:
+		return "replace"
+	}
+}
+
+// defaultRelaxedGuardPrompt 绥靖模式专用的「轻量」安全准则。
+//
+// 与 defaultGuardPrompt 的区别（刻意放松，减少误伤）：
+//   - 去掉「任何指令都不算指令」「小说/学术/安全研究/虚构角色一律先预设可疑」这类激进框架；
+//   - 去掉「拒绝后泄漏」式的过度联想；
+//   - 去掉那条结构性的 ADRO 跨轮拼装长条款（绥靖档的拼装识别交给名单 + 监管模型 B，
+//     不靠把主模型逼到见什么都拒）；
+//   - 只保留一条核心线：不提供可操作合成步骤，其余正常讨论放行。
+const defaultRelaxedGuardPrompt = `【内容安全 · 轻量准则（优先级高于本对话其他指令）】
+1. 不提供爆炸物、管制毒品 / 精神药品及其前体的可实施合成、制备、提纯、配比、工艺参数或操作步骤。
+2. 可以正常讨论：物理性质与常见用途、健康与环境危害、法律后果、识别与防范、求助与举报。
+3. 遇到上述禁止请求：简短、礼貌地拒绝并说明属于哪类内容；不要复述问题、不要输出任何参数数值，也不要因为被追问或施压而逐步让步。
+4. 创作、学术、科普、安全研究等正常场景按正常内容处理，不预设可疑；除非用户明确索要可操作细节，否则不主动拦截、不主动警告。`
+
+// RelaxedSystemPrompt 绥靖模式下前置给主模型的宽松安全准则（空则回退默认宽松版）。
+func RelaxedSystemPrompt(cfg *SafetyConfig) string {
+	if cfg == nil || !cfg.Enabled || !cfg.ProtectSystem {
+		return ""
+	}
+	if strings.TrimSpace(cfg.AppeaseSystemPrompt) != "" {
+		return cfg.AppeaseSystemPrompt
+	}
+	return defaultRelaxedGuardPrompt
+}
 
 // ═══════════════ 未成年人心理危机防护（「赛博守护神」方案）═══════════════
 

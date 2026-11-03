@@ -369,6 +369,16 @@ func registerAdminArea(r *gin.Engine) {
 		admin.POST("/sentiment/run-update", handlers.RunSentimentUpdate)
 		admin.GET("/ai/safety/locked-sessions", ai.ListLockedSessions)
 		admin.POST("/ai/safety/sessions/:sid/unlock", ai.UnlockChatSession)
+		// 名单子系统（以疏代堵）：可疑/恶意名单 + 警方取证申请审批
+		admin.GET("/supervise/list", ai.AdminListSupervised)
+		admin.GET("/supervise/:id", ai.AdminGetSupervised)
+		admin.POST("/supervise/:id/set-tier", ai.AdminSetTier)
+		admin.POST("/supervise/:id/clear", ai.AdminClearSupervised)
+		admin.POST("/supervise/:id/note", ai.AdminAddSuperviseNote)
+		admin.GET("/supervise/stats", ai.AdminSuperviseStats)
+		// 警方取证导出申请（站长审批流）
+		admin.GET("/police/evidence-requests", handlers.AdminListEvidenceRequests)
+		admin.POST("/police/evidence-requests/:id/review", handlers.AdminReviewEvidenceRequest)
 		admin.GET("/ai/vendors", handlers.AdminListAiVendors)
 		admin.POST("/ai/vendors", handlers.AdminCreateAiVendor)
 		admin.PUT("/ai/vendors/:id", handlers.AdminUpdateAiVendor)

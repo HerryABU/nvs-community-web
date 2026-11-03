@@ -37,8 +37,39 @@ const (
 const emergencyPasswordKey = "emergency_password_hash"
 
 // runReadOnlyCLI 处理不依赖配置与数据库的命令（--version / --help）。
-// 在 config.Init() 之前调用，因此不会因为环境缺失而失败。
+//
+// ⚠️ 这里额外做一次「近似开关」识别：站长手滑写成 -pwd / --pwd=xxx / --pasword 时，
+// 旧实现会**静默忽略**（hasPwd 仍为 false）→ 直接启动 HTTP 服务 → 终端卡在服务日志里，
+// 看起来就像「命令没反应」。现在遇到这类写法直接给出明确报错 + 用法，不再沉默启动。
 func runReadOnlyCLI(args []string) (handled bool, exitCode int) {
+	// 1) 近似开关检查（不认识的密码类开关直接报错，不静默启动服务）
+	for _, a := range args {
+		if !strings.HasPrefix(a, "-") {
+			continue // 非开关：交给子命令分支（gm-audit 等）
+		}
+		name, _, _ := normalizeFlag(a)
+		switch name {
+		case "--version", "--help", "--pwd", "--scope", "--user":
+			continue // 已知开关，交给后面的解析
+		}
+		// 只对「明显是想做密码维护」的写法报错，避免误伤将来新增的其它开关
+		low := strings.ToLower(name)
+		nearMiss := false
+		for _, kw := range []string{"pwd", "pw", "pass", "pasw", "scope", "user", "version", "help"} {
+			if strings.Contains(low, kw) {
+				nearMiss = true
+				break
+			}
+		}
+		if nearMiss {
+			fmt.Fprintf(os.Stderr, "✗ 无法识别的命令行参数：%s\n", a)
+			fmt.Fprintln(os.Stderr, "  提示：密码重置的写法是 --pwd <新密码>（两个短横线），")
+			fmt.Fprintln(os.Stderr, "        也支持 --pwd=<新密码> 与 -pwd <新密码>。")
+			printCLIUsage()
+			return true, 2
+		}
+	}
+
 	for _, a := range args {
 		switch a {
 		case "--version", "-v", "version":
@@ -52,6 +83,37 @@ func runReadOnlyCLI(args []string) (handled bool, exitCode int) {
 	return false, 0
 }
 
+// normalizeFlag 把各种开关写法归一：
+//
+//	--pwd      → name="--pwd"
+//	--pwd=abc  → name="--pwd", value="abc", hasValue=true
+//	-pwd=abc   → name="--pwd", value="abc", hasValue=true
+//	-pwd       → name="--pwd"
+func normalizeFlag(arg string) (name string, value string, hasValue bool) {
+	s := strings.TrimLeft(arg, "-")
+	if s == "" {
+		return "", "", false
+	}
+	if i := strings.IndexByte(s, '='); i >= 0 {
+		return "--" + s[:i], s[i+1:], true
+	}
+	return "--" + s, "", false
+}
+
+// isKnownFlagToken 判断 token 是「另一个开关」而不是密码值。
+// （--pwd -scope admin 这种写法不能把 -scope 当成密码吞掉）
+func isKnownFlagToken(token string) bool {
+	if strings.HasPrefix(token, "--") {
+		return true
+	}
+	name, _, _ := normalizeFlag(token)
+	switch name {
+	case "--pwd", "--scope", "--user", "--version", "--help":
+		return true
+	}
+	return false
+}
+
 // runMaintenanceCLI 处理需要数据库的维护命令（--pwd）。
 // 在数据目录创建之后、HTTP 服务启动之前调用。
 func runMaintenanceCLI(args []string) (handled bool, exitCode int) {
@@ -61,20 +123,34 @@ func runMaintenanceCLI(args []string) (handled bool, exitCode int) {
 	hasPwd := false
 
 	for i := 0; i < len(args); i++ {
-		switch args[i] {
+		// 归一化：--pwd / -pwd / --pwd=xxx / -pwd=xxx 一视同仁
+		name, val, hasVal := normalizeFlag(args[i])
+		switch name {
 		case "--pwd":
 			hasPwd = true
-			// 下一个 token 若不是另一个开关，就当它是密码值
-			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
+			if hasVal { // --pwd=xxx
+				pwd = val
+				continue
+			}
+			// 下一个 token 若不是开关，就当它是密码值
+			if i+1 < len(args) && !isKnownFlagToken(args[i+1]) {
 				pwd = args[i+1]
 				i++
 			}
 		case "--scope":
+			if hasVal {
+				scope = strings.ToLower(strings.TrimSpace(val))
+				continue
+			}
 			if i+1 < len(args) {
 				scope = strings.ToLower(strings.TrimSpace(args[i+1]))
 				i++
 			}
 		case "--user":
+			if hasVal {
+				userRef = strings.TrimSpace(val)
+				continue
+			}
 			if i+1 < len(args) {
 				userRef = strings.TrimSpace(args[i+1])
 				i++
@@ -220,6 +296,7 @@ func printCLIUsage() {
 用法：
   nvs-server.exe --version                        打印版本信息后退出
   nvs-server.exe --pwd <新密码>                   重置管理员登录密码 + 内容抢救台二级密码
+  nvs-server.exe --pwd=<新密码>                   同上（等号写法）
   nvs-server.exe --pwd <新密码> --scope admin     只重置管理员登录密码
   nvs-server.exe --pwd <新密码> --scope emergency 只重置内容抢救台二级密码
   nvs-server.exe --pwd                             新密码从标准输入读取（不进进程列表）
@@ -236,5 +313,7 @@ func printCLIUsage() {
   · 密码至少 8 位
   · 站点未完成建站向导初始化时无法重置（那时还没有管理员）
   · 每次重置都会写 emergency_audit_logs 留痕（operator=cli）
-  · 管理员密码重置会顺带解锁账号（清零失败次数与锁定时间）`)
+  · 管理员密码重置会顺带解锁账号（清零失败次数与锁定时间）
+  · 开关写法：--pwd / --pwd=值 / -pwd / -pwd=值 都认；
+    写成不认识的开关（如 --pasword）会直接报错提示，不会沉默地启动服务`)
 }

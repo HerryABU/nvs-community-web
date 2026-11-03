@@ -2,7 +2,7 @@
   <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go" alt="Go">
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?style=flat&logo=vuedotjs" alt="Vue">
   <img src="https://img.shields.io/badge/SQLite-3-003B57?style=flat&logo=sqlite" alt="SQLite">
-  <img src="https://img.shields.io/badge/version-4.7.2-4F46E5?style=flat" alt="Version">
+  <img src="https://img.shields.io/badge/version-4.8.0-4F46E5?style=flat" alt="Version">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue?style=flat" alt="Platform">
   <img src="https://img.shields.io/badge/CPU-x86%20%7C%20ARM%20%7C%20MIPS64%20%7C%20RISC--V-orange?style=flat" alt="CPU">
   <img src="https://img.shields.io/badge/license-AGPL%20v3-blue.svg" alt="License">
@@ -179,6 +179,12 @@
 - 🖼️ **评论图片多模态审核**（违规图不落库，留证三件套：软删 + 审核日志 + 审计日志）
 - 🎨 **AI 绘画审核两层**（提示词初审：生成前拦，不扣费不调上游 / 出图后审：可选项，违规则撤回并退款）
 - 🔎 **违禁词联网补充**（/search 检索 + 模型原生联网双模式，可手工录入兜底）
+- 🎛️ **作者工作台独立视图**（顶部切换栏 + `?tab=` 参数：收视率图 / 作品 / 博客 / HTML / API Key / 论坛与回收站，一屏只装一个视图）
+- ⏱️ **自定义主题 JS 延迟加载**（alist 语义：立即 / 空闲时 / 延时 N 秒三种加载方式，不与首屏抢主线程）
+- 🕊️ **绥靖模式（以疏代堵）**（AI 安全闸第四种终止模式：用户完全无感，危险内容改写为引导内容并静默入档）
+- 📛 **名单子系统（可疑 → 恶意两级）**（判定分越线自动升级；人工改档 / 清除 / 加注全程留痕）
+- 🧾 **一键取证包导出**（名单记录 + 会话 + 消息 + 判定日志 + SHA256 完整性清单）
+- 🤝 **警方取证审批流**（警方申请 → 站长批准 → 方可导出指定用户；越权导出拒绝并记审计）
 
 ### 站点互通
 - 🌐 **联邦站点**

@@ -72,6 +72,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: 'AI 审核', desc: 'AI 内容审核功能：开关 · 判定模型 · 送检策略 · 批次间隔 · 处置阈值 · 恶意举报者', path: '/admin/ai-moderation', icon: MagicStick, color: 'var(--gradient-purple)' },
       { title: '审核', desc: 'AI 判定后的待办复核：放行 / 删除留证 / 封禁留证（违规与存疑优先）', path: '/admin/moderation', icon: WarningFilled, color: 'var(--gradient-accent)' },
       { title: 'AI 防越狱', desc: '对话内容安全闸：规则 + 蓝队模型批次判定 + 用户观察期/冷却', path: '/admin/ai-safety', icon: Lock, color: 'var(--gradient-danger)' },
+      { title: '绥靖名单', desc: '以疏代堵：绥靖模式静默入档的可疑/恶意用户，改档/清除/加注', path: '/admin/supervise', icon: View, color: 'var(--gradient-danger)' },
       { title: '心理危机干预', desc: '独立模块：高危观察期用户 · AI 干预报告 · 热线与判定提示词', path: '/admin/crisis', icon: Sunny, color: 'var(--gradient-blue)' },
       { title: '舆情守卫', desc: '评论区话题条件拦截：同一句话在亚文化下只标注、在性别/政治议题下才拦；词表每日自动更新', path: '/admin/sentiment', icon: ChatLineRound, color: 'var(--gradient-purple)' },
       { title: '举报处理', desc: '审核举报、删除违规内容', path: '/admin/reports', icon: Warning, color: 'var(--gradient-accent)' },
@@ -140,6 +141,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
     color: 'var(--gradient-danger)',
     items: [
       { title: '警方取管台', desc: '取证留证 · 软删除查看 · 凭证下载', path: '/police', icon: Stamp, color: 'var(--gradient-danger)' },
+      { title: '取证申请审批', desc: '警方取证包导出申请的审批流（批准 / 驳回）', path: '/admin/police-evidence', icon: Postcard, color: 'var(--gradient-danger)' },
       { title: '联动工单', desc: '建单/派单/进展/结案 · 超期与未派单口径', path: '/admin/tickets', icon: Postcard, color: 'var(--gradient-danger)' },
     ],
   },

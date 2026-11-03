@@ -310,6 +310,13 @@ const router = createRouter({
       meta: { requiresPolice: true },
     },
     {
+      // 警方取证申请台：向站长申请调取指定用户取证包，批准后一键导出
+      path: '/police/evidence',
+      name: 'police-evidence',
+      component: () => import('@/views/admin/police/AdminPoliceEvidence.vue'),
+      meta: { requiresPolice: true },
+    },
+    {
       path: '/admin/sites',
       name: 'admin-sites',
       component: () => import('@/views/admin/site/AdminSites.vue'),
@@ -485,6 +492,20 @@ const router = createRouter({
       path: '/admin/ai-safety',
       name: 'admin-ai-safety',
       component: () => import('@/views/admin/ai/AdminAiSafety.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      // 绥靖名单（以疏代堵）：AI 安全闸绥靖模式下静默入档的可疑/恶意用户，站长可改档/清除/加注
+      path: '/admin/supervise',
+      name: 'admin-supervise',
+      component: () => import('@/views/admin/ai/AdminSupervise.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      // 警方取证申请审批：站长审批警方发起的取证包导出申请
+      path: '/admin/police-evidence',
+      name: 'admin-police-evidence',
+      component: () => import('@/views/admin/police/AdminPoliceEvidenceReview.vue'),
       meta: { requiresAuth: true },
     },
     {

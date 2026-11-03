@@ -25,6 +25,7 @@
       <el-button size="small" @click="$router.push('/police/moderation')">审核待办</el-button>
       <el-button size="small" @click="$router.push('/police/reports')">举报处理</el-button>
       <el-button size="small" @click="$router.push('/police/ban')">内容封禁</el-button>
+      <el-button size="small" type="warning" plain @click="$router.push('/police/evidence')">取证申请</el-button>
       <span class="pc-nav-hint">
         仅开放内容治理子集；合规与安全（脱敏/实名/密钥/取证细节）不对警方开放，越权请求会被拒绝并记审计
       </span>

@@ -1,0 +1,80 @@
+/* 作者工作台 · 统计卡片（玻璃拟态）样式
+ *
+ * 同时被 AuthorDashboard.vue（AuthorCard 的根节点也用这个类）与
+ * parts/AuthorStatsView.vue 引用 —— 子组件根节点会带上父组件的作用域标记，
+ * 所以父组件里声明一份就能作用到 AuthorCard 上。
+ */
+.stats-row {
+  margin-bottom: 24px;
+}
+
+.glass-stat-card {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 24px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+[data-theme="light"] .glass-stat-card {
+  background: #fff;
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-card);
+}
+
+.glass-stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="light"] .glass-stat-card:hover {
+  box-shadow: var(--shadow-lg);
+  border-color: var(--border-color);
+}
+
+.glass-stat-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.glass-stat-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.glass-stat-value :deep(.animated-number-value) {
+  background: linear-gradient(135deg, #e2e8f0, #f1f5f9);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-size: 2rem;
+}
+
+[data-theme="light"] .glass-stat-value :deep(.animated-number-value) {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glass-stat-label {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 2px;
+}
+
+[data-theme="light"] .glass-stat-label {
+  color: var(--text-light);
+}

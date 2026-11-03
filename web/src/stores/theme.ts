@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import { themeApi } from '@/api/theme';
+import { themeApi, type ThemeJSMode } from '@/api/theme';
 import api from '@/api';
 import { useAuthStore } from '@/stores/auth';
 import { useAppStore } from '@/stores/app';
@@ -59,6 +59,11 @@ export const useThemeStore = defineStore('theme', () => {
   const myCss = ref(''); // 个人主题（登录用户配置，覆盖站点主题）
   const siteJs = ref(''); // 站点自定义 JS（管理员配置，全站访客执行）
   const myJs = ref(''); // 个人自定义 JS（仅本人登录态执行）
+  // JS 加载模式（alist「延迟加载」）：immediate 立即 / idle 首屏后空闲时 / delayed 延迟 N 秒
+  const siteJsMode = ref<ThemeJSMode>('immediate');
+  const siteJsDelay = ref(0);
+  const myJsMode = ref<ThemeJSMode>('immediate');
+  const myJsDelay = ref(0);
   // F12a 全站 opt-in iframe（管理员配置允许列表 URL，访客可读启用状态）
   const globalIframe = ref<{ enabled: boolean; url: string }>({ enabled: false, url: '' });
 
@@ -82,11 +87,15 @@ export const useThemeStore = defineStore('theme', () => {
     if (site.status === 'fulfilled' && site.value?.data?.code === 0) {
       siteCss.value = site.value.data.data?.css || '';
       siteJs.value = site.value.data.data?.js || '';
+      siteJsMode.value = normalizeJsMode(site.value.data.data?.js_mode);
+      siteJsDelay.value = site.value.data.data?.js_delay || 0;
     }
     const me = settled[1];
     if (me && me.status === 'fulfilled' && me.value?.data?.code === 0) {
       myCss.value = me.value.data.data?.css || '';
       myJs.value = me.value.data.data?.js || '';
+      myJsMode.value = normalizeJsMode(me.value.data.data?.js_mode);
+      myJsDelay.value = me.value.data.data?.js_delay || 0;
     }
     // 先安装 alist 兼容全局对象，再注入用户 JS（主题可立即监听 bus 事件）
     installNvsGlobal();
@@ -100,8 +109,8 @@ export const useThemeStore = defineStore('theme', () => {
   function applyCustomTheme(): void {
     writeStyleTag('nvs-site-theme', siteCss.value);
     writeStyleTag('nvs-my-theme', myCss.value);
-    writeScriptTag('nvs-site-js', siteJs.value);
-    writeScriptTag('nvs-my-js', myJs.value);
+    scheduleScriptTag('nvs-site-js', siteJs.value, siteJsMode.value, siteJsDelay.value);
+    scheduleScriptTag('nvs-my-js', myJs.value, myJsMode.value, myJsDelay.value);
   }
 
   // 重置个人主题（本地即时生效；持久化删除由页面调用 updateMyTheme('', '') 完成）
@@ -109,6 +118,7 @@ export const useThemeStore = defineStore('theme', () => {
     myCss.value = '';
     writeStyleTag('nvs-my-theme', '');
     myJs.value = '';
+    cancelScheduled('nvs-my-js');
     writeScriptTag('nvs-my-js', '');
   }
 
@@ -138,7 +148,7 @@ export const useThemeStore = defineStore('theme', () => {
     isDark, toggle, applyTheme,
     siteCss, myCss, effectiveCss, loadTheme, applyCustomTheme, resetMyTheme,
     globalIframe, loadGlobalIframe, loadAuthorTheme, clearAuthorTheme,
-    siteJs, myJs,
+    siteJs, myJs, siteJsMode, siteJsDelay, myJsMode, myJsDelay,
   };
 });
 
@@ -166,6 +176,69 @@ function writeScriptTag(id: string, js: string): void {
   el.textContent = js; // 注入后浏览器执行（textContent，非 innerHTML）
   if (existing) existing.remove();
   document.head.appendChild(el);
+}
+
+// ===== 自定义 JS 的延迟加载（对齐 alist 的「延迟加载」）=====
+//
+// immediate：随主题立即注入（既有行为）
+// idle     ：等首屏渲染完成（window load）后，在浏览器空闲时注入
+// delayed  ：延迟 N 秒后注入
+//
+// 为什么要延迟：自定义 JS 往往要遍历 DOM、挂埋点、加载第三方挂件，
+// 跟首屏渲染抢主线程会拖慢开屏；延迟注入则两者互不干扰。
+
+type PendingTimer = { kind: 'timeout'; id: number } | { kind: 'listener'; fn: () => void };
+const pendingScripts = new Map<string, PendingTimer[]>();
+
+function normalizeJsMode(v: unknown): ThemeJSMode {
+  const s = String(v || '');
+  return s === 'idle' || s === 'delayed' ? (s as ThemeJSMode) : 'immediate';
+}
+
+function cancelScheduled(id: string): void {
+  const list = pendingScripts.get(id) || [];
+  for (const t of list) {
+    if (t.kind === 'timeout') window.clearTimeout(t.id);
+    else window.removeEventListener('load', t.fn);
+  }
+  pendingScripts.delete(id);
+}
+
+function scheduleScriptTag(id: string, js: string, mode: ThemeJSMode, delaySec: number): void {
+  cancelScheduled(id);
+  const existing = document.getElementById(id);
+  if (!js || !js.trim()) {
+    if (existing) existing.remove();
+    return;
+  }
+  if (mode === 'immediate') {
+    writeScriptTag(id, js);
+    return;
+  }
+  // 延迟模式：先把旧的移除，等调度点再注入新的
+  if (existing) existing.remove();
+  const pending: PendingTimer[] = [];
+  const inject = () => {
+    writeScriptTag(id, js);
+    pendingScripts.delete(id);
+  };
+  if (mode === 'idle') {
+    const run = () => {
+      const ric = (window as any).requestIdleCallback;
+      if (typeof ric === 'function') ric(() => inject(), { timeout: 2000 });
+      else window.setTimeout(inject, 200);
+    };
+    if (document.readyState === 'complete') {
+      pending.push({ kind: 'timeout', id: window.setTimeout(run, 0) });
+    } else {
+      pending.push({ kind: 'listener', fn: run });
+      window.addEventListener('load', run, { once: true });
+    }
+  } else {
+    const ms = Math.max(1, delaySec > 0 ? delaySec : 3) * 1000;
+    pending.push({ kind: 'timeout', id: window.setTimeout(inject, ms) });
+  }
+  pendingScripts.set(id, pending);
 }
 
 // ===== alist 兼容全局对象（window.NVS / window.alist）=====

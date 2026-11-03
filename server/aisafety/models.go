@@ -145,6 +145,22 @@ type SafetyConfig struct {
 	// ModerateBlockedText 中档模式下给用户看的提示（不锁会话，语气比 strict 轻）
 	ModerateBlockedText string `gorm:"type:text" json:"moderate_blocked_text"`
 
+	// ── 绥靖模式（以疏代堵）──
+	// 用户完全无感：不透终止、不透拦截、不进冷却；行为静默记入「可疑名单」，
+	// AI 仍正常应答，但危险内容被改写为「无害替代 / 软警示卡片 / 两者结合」
+	// （管理员在后台三选一，见 AppeaseDisplayMode）。名单升级到「恶意名单」后，
+	// 在用户面前展示「相关内容」——同样由后台配置的引导内容决定，不弹硬拦截。
+	AppeaseDisplayMode  string `gorm:"size:16;default:replace" json:"appease_display_mode"` // replace / softcard / both
+	AppeaseReplaceText  string `gorm:"type:text" json:"appease_replace_text"`               // 无害替代回答（科普/法律后果/求助引导）
+	AppeaseSoftCardText string `gorm:"type:text" json:"appease_soft_card_text"`             // 软警示卡片文案
+	// AppeaseEscalateScore 监管模型 B 判定分 ≥ 此值时，「可疑名单」升级为「恶意名单」
+	// （同时按模式在用户面前展示相关内容）。默认 80，与 JudgeBlockScore 同量级。
+	AppeaseEscalateScore int `json:"appease_escalate_score"`
+	// AppeaseSystemPrompt 绥靖模式下前置给**主模型**的宽松安全准则（空则回退默认宽松版）。
+	// 绥靖档以「以疏代堵」为底色，主模型提示词刻意放松、去掉激进的「凡事预设可疑」框架，
+	// 避免对正常创作 / 学术 / 科普提问过度拒答（误伤）；真正的拦截改由「名单 + 良性替换」兜底。
+	AppeaseSystemPrompt string `gorm:"type:text" json:"appease_system_prompt"`
+
 	// ── 未成年人心理危机防护（「赛博守护神」方案）──
 	// 把「冷冰冰的拦截」变成「有温度的救赎」：识别自残/抑郁黑话与绝望语义，
 	// 向本人弹出危机干预热线、发送抚慰私信、进入观察期并触发「绝对保护模式」，

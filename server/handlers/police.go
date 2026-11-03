@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"nvs-server/models"
+	"nvs-server/police"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -82,6 +83,12 @@ func PoliceDownloadEvidence(c *gin.Context) {
 // 满足「一系列凭证下载 / 提前 2-3 天通知准备」的取证导出需求。
 func PoliceExportPackage(c *gin.Context) {
 	if !ensurePoliceOrAdmin(c) {
+		return
+	}
+	// 警方导出须先经站长批准（以疏代堵对接警方：不默认授予导出权）。
+	// 管理员（站长）始终可直接导出。
+	if models.IsPolice(currentUserRole(c)) && !police.HasAnyApproved(currentUserID(c)) {
+		utils.Forbidden(c, "须先向站长提交取证申请并经批准")
 		return
 	}
 	pkg := gin.H{

@@ -37,6 +37,7 @@ import (
 	"nvs-server/security/sms"
 	sentimentstore "nvs-server/sentiment/store"
 	"nvs-server/sentiment/updater"
+	"nvs-server/supervise"
 	"nvs-server/tlsconfig"
 	"nvs-server/utils"
 	"nvs-server/version"
@@ -406,6 +407,10 @@ func initDatabase() error {
 	}
 	// AI 对话内容安全闸：配置 / 用户画像 / 事件 / 蓝队判定日志
 	if err := aisafety.Migrate(models.DB); err != nil {
+		return err
+	}
+	// 以疏代堵的「名单」子系统：可疑 / 恶意名单 + 操作日志（绥靖模式对接警方取证）
+	if err := supervise.Migrate(models.DB); err != nil {
 		return err
 	}
 	// 社区舆情守卫（话题驱动条件拦截 + 词表 + 命中记录）

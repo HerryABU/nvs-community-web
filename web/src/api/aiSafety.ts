@@ -81,6 +81,20 @@ export interface SafetyConfig {
   /** 出图后审的判定提示词（留空用内置默认） */
   image_output_prompt: string;
 
+  // ── 绥靖模式（以疏代堵）──
+  /** 终止模式：strict 锁会话 / moderate 污染标记 / loose 只拦当轮 / appease 绥靖（用户无感） */
+  terminate_mode: 'strict' | 'moderate' | 'loose' | 'appease';
+  /** 绥靖展示模式：replace 替代回答 / softcard 软警示卡片 / both 两者 */
+  appease_display_mode: 'replace' | 'softcard' | 'both';
+  /** 绥靖替代回答文案（科普/法律后果/求助引导） */
+  appease_replace_text: string;
+  /** 绥靖软警示卡片文案 */
+  appease_soft_card_text: string;
+  /** 监管模型 B 判定分 ≥ 此值时，可疑名单升级为恶意名单 */
+  appease_escalate_score: number;
+  /** 绥靖模式下前置给主模型的宽松安全准则（空则回退内置默认） */
+  appease_system_prompt: string;
+
   schema_version: number;
   updated_at: string;
 }
@@ -216,4 +230,111 @@ export const aiSafetyApi = {
       { params: { user_id: userId } },
     );
   },
+
+  // ───────────── 名单子系统（以疏代堵）─────────────
+
+  superviseList(params: { page?: number; page_size?: number; tier?: string; status?: string } = {}) {
+    return api.get<{ code: number; data: { items: SupervisedUser[]; total: number; page: number } }>(
+      '/admin/supervise/list',
+      { params },
+    );
+  },
+  superviseGet(id: number) {
+    return api.get<{ code: number; data: { record: SupervisedUser; logs: SuperviseLog[] } }>(
+      `/admin/supervise/${id}`,
+    );
+  },
+  superviseSetTier(id: number, tier: string, note: string) {
+    return api.post(`/admin/supervise/${id}/set-tier`, { tier, note });
+  },
+  superviseClear(id: number, note: string) {
+    return api.post(`/admin/supervise/${id}/clear`, { note });
+  },
+  superviseAddNote(id: number, note: string) {
+    return api.post(`/admin/supervise/${id}/note`, { note });
+  },
+  superviseStats() {
+    return api.get<{ code: number; data: SuperviseStats }>('/admin/supervise/stats');
+  },
+
+  // ───────────── 警方取证申请 / 审批流 ─────────────
+
+  // 警方可提交申请、看自己的申请
+  evidenceRequestCreate(data: { target_user_id: number; reason: string }) {
+    return api.post<{ code: number; data: { request: EvidenceRequest } }>(
+      '/police/evidence-requests',
+      data,
+    );
+  },
+  evidenceRequestMy(params: { page?: number; page_size?: number } = {}) {
+    return api.get<{ code: number; data: { items: EvidenceRequest[]; total: number; page: number } }>(
+      '/police/evidence-requests',
+      { params },
+    );
+  },
+  // 警方导出某入档用户取证包（须先获批）
+  exportUserForensics(userId: number) {
+    return api.get(`/police/export-user`, { params: { user_id: userId }, responseType: 'blob' });
+  },
+  // 站长审批
+  evidenceRequestList(params: { page?: number; page_size?: number; status?: string } = {}) {
+    return api.get<{ code: number; data: { items: EvidenceRequest[]; total: number; page: number } }>(
+      '/admin/police/evidence-requests',
+      { params },
+    );
+  },
+  evidenceRequestReview(id: number, approve: boolean, note: string) {
+    return api.post(`/admin/police/evidence-requests/${id}/review`, { approve, note });
+  },
 };
+
+// 名单记录
+export interface SupervisedUser {
+  id: number;
+  user_id: number;
+  username: string;
+  tier: 'suspect' | 'malicious'; // suspect 可疑 / malicious 恶意
+  score: number;
+  source: string;
+  reasons: string; // JSON 数组
+  evidence_refs: string; // JSON 数组
+  status: 'active' | 'cleared';
+  handled_by: number;
+  note: string;
+  first_seen: string;
+  last_event: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SuperviseLog {
+  id: number;
+  supervised_id: number;
+  user_id: number;
+  actor_id: number;
+  action: string; // upsert / escalate / clear / set_tier / note
+  from_to: string;
+  note: string;
+  created_at: string;
+  actor_name?: string;
+}
+
+export interface SuperviseStats {
+  by_tier: Record<string, number>;
+  cleared: number;
+}
+
+export interface EvidenceRequest {
+  id: number;
+  no: string;
+  requester_id: number;
+  target_user_id: number;
+  target_name: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewer_id: number;
+  review_note: string;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}

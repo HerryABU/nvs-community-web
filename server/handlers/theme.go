@@ -14,7 +14,8 @@ import (
 // GetSiteTheme GET /api/theme/site（公开）
 // 站点默认主题：管理员配置，对所有访客生效（登录用户的个人主题覆盖之）。
 func GetSiteTheme(c *gin.Context) {
-	utils.Success(c, gin.H{"css": models.GetSiteTheme(), "js": models.GetSiteThemeJS()})
+	js, mode, delay := models.GetSiteThemeJSBundle()
+	utils.Success(c, gin.H{"css": models.GetSiteTheme(), "js": js, "js_mode": mode, "js_delay": delay})
 }
 
 // GetMyTheme GET /api/theme/me（需登录）
@@ -25,7 +26,8 @@ func GetMyTheme(c *gin.Context) {
 		utils.Unauthorized(c, "未登录")
 		return
 	}
-	utils.Success(c, gin.H{"css": models.GetUserTheme(userID), "js": models.GetUserThemeJS(userID)})
+	js, mode, delay := models.GetUserThemeJSBundle(userID)
+	utils.Success(c, gin.H{"css": models.GetUserTheme(userID), "js": js, "js_mode": mode, "js_delay": delay})
 }
 
 // UpdateMyTheme PUT /api/theme/me（需登录）
@@ -37,19 +39,22 @@ func UpdateMyTheme(c *gin.Context) {
 		return
 	}
 	var req struct {
-		CSS string `json:"css"`
-		JS  string `json:"js"`
+		CSS     string `json:"css"`
+		JS      string `json:"js"`
+		JSMode  string `json:"js_mode"`  // immediate / idle / delayed（alist「延迟加载」）
+		JSDelay int    `json:"js_delay"` // delayed 模式的延迟秒数
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	removed, err := models.SetUserTheme(userID, req.CSS, req.JS)
+	removed, err := models.SetUserTheme(userID, req.CSS, req.JS, req.JSMode, req.JSDelay)
 	if err != nil {
 		utils.InternalError(c, "保存个人主题失败")
 		return
 	}
-	utils.Success(c, gin.H{"css": models.GetUserTheme(userID), "js": models.GetUserThemeJS(userID), "removed": removed})
+	js, mode, delay := models.GetUserThemeJSBundle(userID)
+	utils.Success(c, gin.H{"css": models.GetUserTheme(userID), "js": js, "js_mode": mode, "js_delay": delay, "removed": removed})
 }
 
 // UpdateSiteTheme PUT /api/theme/site（仅管理员）
@@ -59,17 +64,20 @@ func UpdateSiteTheme(c *gin.Context) {
 		return
 	}
 	var req struct {
-		CSS string `json:"css"`
-		JS  string `json:"js"`
+		CSS     string `json:"css"`
+		JS      string `json:"js"`
+		JSMode  string `json:"js_mode"`  // immediate / idle / delayed（alist「延迟加载」）
+		JSDelay int    `json:"js_delay"` // delayed 模式的延迟秒数
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	removed, err := models.SetSiteTheme(req.CSS, req.JS)
+	removed, err := models.SetSiteTheme(req.CSS, req.JS, req.JSMode, req.JSDelay)
 	if err != nil {
 		utils.InternalError(c, "保存站点主题失败")
 		return
 	}
-	utils.Success(c, gin.H{"css": models.GetSiteTheme(), "js": models.GetSiteThemeJS(), "removed": removed})
+	js, mode, delay := models.GetSiteThemeJSBundle()
+	utils.Success(c, gin.H{"css": models.GetSiteTheme(), "js": js, "js_mode": mode, "js_delay": delay, "removed": removed})
 }

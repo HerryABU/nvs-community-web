@@ -1,0 +1,44 @@
+/* 作者工作台 · 各独立视图共用的「区块标题栏」样式
+ *
+ * 被 parts/*.vue 与 AuthorDashboard.vue 以 `@import './parts/section.css';` 引入；
+ * SFC 的 scoped 变换会把 data-v 作用域标记打到这些规则上，因此各视图互不污染。
+ */
+.novels-section {
+  margin-top: 8px;
+}
+
+.section-title-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="light"] .section-title-bar {
+  border-bottom-color: var(--border-color);
+}
+
+.title-bar-text {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+[data-theme="light"] .title-bar-text {
+  color: var(--text-color);
+}
+
+.title-bar-count {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 10px;
+  border-radius: 12px;
+}
+
+[data-theme="light"] .title-bar-count {
+  color: var(--text-light);
+  background: var(--bg-color);
+}

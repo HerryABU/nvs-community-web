@@ -229,6 +229,7 @@
                   <el-radio-button value="strict">严格 · 整对话终止</el-radio-button>
                   <el-radio-button value="moderate">中档 · 可继续但注入提示</el-radio-button>
                   <el-radio-button value="loose">宽松 · 只拦当轮</el-radio-button>
+                  <el-radio-button value="appease">绥靖 · 无感疏导</el-radio-button>
                 </el-radio-group>
               </el-form-item>
               <el-form-item label="模式说明">
@@ -236,7 +237,16 @@
                   <p><b>严格</b>：整个对话锁死，之后任何提问都不再产生内容，只能新建对话。适合出现真实泄露时。</p>
                   <p><b>中档</b>：对话能继续，但上下文被标记为不可信，之后每一轮都会向模型注入「不得延续/补全/换说法恢复该话题」的提示。</p>
                   <p><b>宽松</b>：对话能继续，也不注入提示，只拦当轮。适合误判率较高的场景。</p>
+                  <p><b>绥靖</b>：以疏代堵。用户<b>完全无感</b>——不透拦截、不透终止、不进冷却，危险内容被改写成引导内容，并静默记入「可疑名单」；监管模型 B 判定分越线升级为「恶意名单」。主模型提示词同步放松以减少误伤。</p>
                 </div>
+              </el-form-item>
+              <el-form-item v-if="cfg.terminate_mode === 'appease'" label="绥靖展示模式">
+                <el-radio-group v-model="cfg.appease_display_mode">
+                  <el-radio-button value="replace">替代回答</el-radio-button>
+                  <el-radio-button value="softcard">软警示卡片</el-radio-button>
+                  <el-radio-button value="both">两者都发</el-radio-button>
+                </el-radio-group>
+                <span class="muted small">被绥靖拦截时，给用户看的内容形态（管理员可控）</span>
               </el-form-item>
               <el-form-item label="触发终止的分数">
                 <el-input-number v-model="cfg.terminate_score" :min="1" :max="200" />
@@ -290,6 +300,41 @@
                 <el-switch v-model="cfg.record_excerpt" />
                 <el-input-number v-model="cfg.excerpt_chars" :min="40" :max="2000" style="margin-left:8px" />
                 <span class="muted small">字符；留证据供人工复核，也涉及用户隐私，按站规取舍</span>
+              </el-form-item>
+            </el-form>
+          </div>
+
+          <div class="admin-panel" v-if="cfg.terminate_mode === 'appease'">
+            <SectionHeader
+              title="绥靖模式 · 以疏代堵"
+              subtitle="用户无感：危险内容改写为引导内容并静默入档；监管模型 B 判定分越线则升级恶意名单"
+              :icon="'🕊️'"
+              gradient="teal"
+            />
+            <el-alert
+              type="info"
+              :closable="false"
+              show-icon
+              style="margin-bottom:14px"
+              title="以疏代堵"
+              description="绥靖模式下，用户不会看到任何拦截 / 终止 / 冷却提示，只会收到下面配置的「引导内容」，好像一切正常。其行为会被静默记入「可疑名单」，站长可在「名单子系统」查看、改档、清除。判定分越线自动升级为「恶意名单」。"
+            />
+            <el-form label-width="170px" class="safety-form">
+              <el-form-item label="替代回答文案">
+                <el-input v-model="cfg.appease_replace_text" type="textarea" :rows="6" spellcheck="false" />
+                <span class="muted small">replace / both 时发给用户（科普 / 法律后果 / 求助引导，不给可操作细节）</span>
+              </el-form-item>
+              <el-form-item label="软警示卡片文案">
+                <el-input v-model="cfg.appease_soft_card_text" type="textarea" :rows="4" spellcheck="false" />
+                <span class="muted small">softcard / both 时发给用户（不冷冰、不评判，把人往求助渠道引）</span>
+              </el-form-item>
+              <el-form-item label="升级为恶意线">
+                <el-input-number v-model="cfg.appease_escalate_score" :min="1" :max="200" />
+                <span class="muted small">监管模型 B 判定分 ≥ 此值时，可疑名单升级为恶意名单（与「判定拦截线」同量级）</span>
+              </el-form-item>
+              <el-form-item label="主模型宽松准则">
+                <el-input v-model="cfg.appease_system_prompt" type="textarea" :rows="8" spellcheck="false" />
+                <span class="muted small">绥靖模式下前置给主模型的宽松安全准则（空则用内置默认：去掉激进的「凡事预设可疑」框架，减少误伤）</span>
               </el-form-item>
             </el-form>
           </div>

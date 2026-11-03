@@ -54,6 +54,23 @@
             />
           </el-form-item>
 
+          <el-form-item label="JS 加载方式">
+            <el-radio-group v-model="jsMode" :disabled="jsSaving">
+              <el-radio-button value="immediate">立即加载</el-radio-button>
+              <el-radio-button value="idle">空闲时加载</el-radio-button>
+              <el-radio-button value="delayed">延时加载</el-radio-button>
+            </el-radio-group>
+            <div class="mode-hint">
+              <template v-if="jsMode === 'immediate'">随主题立即注入执行。</template>
+              <template v-else-if="jsMode === 'idle'">首屏渲染完成后在浏览器空闲时注入，不与首屏抢主线程。</template>
+              <template v-else>延迟指定秒数后注入，适合特效、埋点这类「不急」的脚本。</template>
+            </div>
+          </el-form-item>
+          <el-form-item v-if="jsMode === 'delayed'" label="延迟秒数">
+            <el-input-number v-model="jsDelay" :min="1" :max="600" :disabled="jsSaving" />
+            <span class="mode-hint">默认 3 秒；最大 600 秒。</span>
+          </el-form-item>
+
           <el-form-item v-if="jsRemoved.length" label="被处理项">
             <el-tag v-for="r in jsRemoved" :key="r" type="warning" class="rm-tag" size="small">{{ r }}</el-tag>
           </el-form-item>
@@ -102,7 +119,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
-import { themeApi } from '@/api/theme';
+import { themeApi, type ThemeJSMode } from '@/api/theme';
 import api from '@/api';
 import { useThemeStore } from '@/stores/theme';
 import { useAuthStore } from '@/stores/auth';
@@ -121,6 +138,9 @@ const removed = ref<string[]>([]);
 const jsLoading = ref(false);
 const jsSaving = ref(false);
 const js = ref('');
+// JS 加载方式（alist「延迟加载」）：immediate 立即 / idle 空闲时 / delayed 延时
+const jsMode = ref<ThemeJSMode>('immediate');
+const jsDelay = ref(3);
 const jsRemoved = ref<string[]>([]);
 
 async function reloadJs() {
@@ -128,6 +148,8 @@ async function reloadJs() {
   try {
     const r = await themeApi.getMyTheme();
     js.value = r.data?.data?.js || '';
+    jsMode.value = (r.data?.data?.js_mode as ThemeJSMode) || 'immediate';
+    jsDelay.value = r.data?.data?.js_delay || 3;
   } catch {
     ElMessage.error('加载失败');
   } finally {
@@ -138,7 +160,7 @@ async function reloadJs() {
 async function saveJs() {
   jsSaving.value = true;
   try {
-    const r = await themeApi.updateMyTheme(css.value, js.value);
+    const r = await themeApi.updateMyTheme(css.value, js.value, jsMode.value, jsDelay.value);
     if (r.data?.code === 0) {
       jsRemoved.value = (r.data.data?.removed || []).filter((x: string) => /script|注释/.test(x));
       await themeStore.loadTheme();
@@ -156,9 +178,11 @@ async function saveJs() {
 async function resetJs() {
   jsSaving.value = true;
   try {
-    const r = await themeApi.updateMyTheme(css.value, '');
+    const r = await themeApi.updateMyTheme(css.value, '', 'immediate', 0);
     if (r.data?.code === 0) {
       js.value = '';
+      jsMode.value = 'immediate';
+      jsDelay.value = 3;
       jsRemoved.value = [];
       await themeStore.loadTheme();
       ElMessage.success('已清除个人 JS');
@@ -295,6 +319,7 @@ onMounted(() => {
 .tip { margin-bottom: 20px; }
 .theme-form { margin-top: 8px; }
 .theme-tabs { margin-top: 8px; }
+.mode-hint { font-size: 12px; color: var(--text-muted, #909399); margin-top: 4px; line-height: 1.6; }
 .css-editor :deep(textarea) { font-family: 'Cascadia Code', Consolas, monospace; font-size: 13px; }
 .js-editor :deep(textarea) { font-family: 'Cascadia Code', Consolas, monospace; font-size: 13px; }
 .rm-tag { margin-right: 6px; }

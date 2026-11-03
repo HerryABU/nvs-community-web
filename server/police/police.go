@@ -301,7 +301,10 @@ func Stats() map[string]interface{} {
 
 // Migrate 建表
 func Migrate(db *gorm.DB) error {
-	return db.AutoMigrate(&Ticket{}, &Log{})
+	if err := db.AutoMigrate(&Ticket{}, &Log{}); err != nil {
+		return err
+	}
+	return MigrateEvidenceRequest(db)
 }
 
 func truncate(s string, n int) string {

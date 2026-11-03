@@ -8,13 +8,21 @@ import api from './index';
 export interface ThemeSaveResult {
   css: string;
   js: string;
+  /** JS 加载模式：immediate 立即 / idle 首屏后空闲时 / delayed 延迟 N 秒（alist「延迟加载」） */
+  js_mode: ThemeJSMode;
+  js_delay: number;
   removed: string[];
 }
 
 export interface ThemeData {
   css: string;
   js: string;
+  js_mode: ThemeJSMode;
+  js_delay: number;
 }
+
+/** 主题自定义 JS 的加载模式（对齐 alist 的「延迟加载」） */
+export type ThemeJSMode = 'immediate' | 'idle' | 'delayed';
 
 export const themeApi = {
   // 站点默认主题（公开）：管理员配置，对所有访客生效；
@@ -25,15 +33,15 @@ export const themeApi = {
   // 保存站点默认主题（仅管理员；对全站访客生效）。
   // 注意：必须打 /admin/theme/site——该 PUT 注册在服务端 admin 组（带鉴权中间件），
   // public 组的 /theme/site 只有 GET；漏掉 /admin 前缀会 404（gin httprouter 无此方法路由）。
-  updateSiteTheme(css: string, js: string) {
-    return api.put<{ code: number; data: ThemeSaveResult }>('/admin/theme/site', { css, js });
+  updateSiteTheme(css: string, js: string, js_mode: ThemeJSMode = 'immediate', js_delay = 0) {
+    return api.put<{ code: number; data: ThemeSaveResult }>('/admin/theme/site', { css, js, js_mode, js_delay });
   },
   // 我的个人主题（需登录；未登录返回 401，由 store 静默处理）
   getMyTheme() {
     return api.get<{ code: number; data: ThemeData }>('/theme/me');
   },
   // 保存个人主题（需登录）：返回消毒后的 CSS/JS 与被移除的规则列表
-  updateMyTheme(css: string, js: string) {
-    return api.put<{ code: number; data: ThemeSaveResult }>('/theme/me', { css, js });
+  updateMyTheme(css: string, js: string, js_mode: ThemeJSMode = 'immediate', js_delay = 0) {
+    return api.put<{ code: number; data: ThemeSaveResult }>('/theme/me', { css, js, js_mode, js_delay });
   },
 };

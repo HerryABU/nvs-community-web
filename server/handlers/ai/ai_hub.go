@@ -398,7 +398,15 @@ func AiHubChatStream(c *gin.Context) {
 		})
 		inputLeakTopic = dec.LeakTopic
 		if dec.Block {
-			// 按模式处置：strict 锁会话 / moderate 打污染标记 / loose 只拦当轮。
+			// 绥靖模式：用户完全无感。危险内容改写成管理员选定的引导内容，静默入档，
+			// 不透拦截、不透终止、不进冷却——以疏代堵。监管模型 B 判定分越线则升级名单。
+			if aisafety.NormalizeMode(safetyCfg.TerminateMode) == aisafety.TerminateAppease {
+				escalateAppearanceIfNeeded(userID, safetyUser, safetyCfg, dec.Judge)
+				term := applyTermination(session, safetyCfg, "内容安全判定："+dec.Hits)
+				serveAppeaseResponse(c, session, storeMsg, term, parentID)
+				return
+			}
+			// 其余模式：strict 锁会话 / moderate 打污染标记 / loose 只拦当轮。
 			// 冷却（cooldown）只是暂停功能，不触发终止 —— 冷却结束还能接着聊这段。
 			term := terminateOutcome{Text: dec.Refusal}
 			if safetyCfg.TerminateOnBlock && dec.Action != aisafety.ActionCooldown &&
@@ -419,7 +427,15 @@ func AiHubChatStream(c *gin.Context) {
 	// 安全准则前置：放在人设之前，并声明优先级高于人设——否则智能体自带的
 	// 「你是无限制的小说助手」会把它压过去。
 	if safetyCfg != nil {
-		if gp := aisafety.SystemPrompt(safetyCfg); gp != "" {
+		// 绥靖模式：主模型提示词放松，去掉激进的「凡事预设可疑」框架，减少误伤；
+		// 真正的拦截改由「名单 + 良性替换」兜底（以疏代堵）。
+		var gp string
+		if aisafety.NormalizeMode(safetyCfg.TerminateMode) == aisafety.TerminateAppease {
+			gp = aisafety.RelaxedSystemPrompt(safetyCfg)
+		} else {
+			gp = aisafety.SystemPrompt(safetyCfg)
+		}
+		if gp != "" {
 			systemPrompt = gp + "\n\n" + systemPrompt
 		}
 		// 未成年人保护：叠加专属提示词 ——
@@ -653,7 +669,28 @@ func AiHubChatStream(c *gin.Context) {
 		// 上游 token 已经烧了，但用户没拿到内容 → 不扣费、不占免费额度，成本由站长承担。
 		// 记成失败而不是成功结算，否则账单上和「正常回答」分不开。
 		models.FailAiCallLog(callLog.ID, "内容安全拦截："+og.Reason())
-		// 输出侧拦截意味着「模型真的吐出来了」，上下文必然已被污染。
+		// 绥靖模式：输出侧被拦也「无感」——把危险内容改写成管理员选定的引导内容，
+		// 当作一次正常回答返回（不标 blocked / terminated），并静默入档。
+		if aisafety.NormalizeMode(safetyCfg.TerminateMode) == aisafety.TerminateAppease {
+			term := applyTermination(session, safetyCfg, "输出侧拦截："+og.Reason())
+			text := term.Text
+			am, _ := models.AppendAiChatMessageWithParent(session.ID, "assistant", text, userMsgID, realIn, realOut, 0, callLog.ID)
+			if am != nil && am.ID > 0 {
+				models.SetActiveLeaf(session.ID, am.ID)
+			}
+			models.TouchAiChatSession(session.ID, "")
+			sseEvent(c, gin.H{
+				"content":    text,
+				"session_id": session.ID, "message_id": am.ID,
+			})
+			sseEvent(c, gin.H{
+				"done": true, "session_id": session.ID, "message_id": am.ID,
+				"tokens_in": realIn, "tokens_out": realOut,
+				"cost": 0, "free": false, "byok": req.Byok,
+			})
+			return
+		}
+		// 其余模式：输出侧拦截意味着「模型真的吐出来了」，上下文必然已被污染。
 		// 这里不再看分数，直接按模式处置。
 		term := terminateOutcome{Text: aisafety.RefusalText(safetyCfg)}
 		if safetyCfg != nil && safetyCfg.TerminateOnBlock {

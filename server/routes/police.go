@@ -30,7 +30,11 @@ func registerPolice(r *gin.Engine) {
 		police.GET("/sentiment/stats", handlers.PoliceSentimentStats)
 		police.GET("/sentiment/trend", handlers.PoliceSentimentTrend)
 		police.PUT("/del-color", handlers.PoliceSetDelColor) // 已删除内容高亮色（仅管理员可写）
-		police.GET("/export", handlers.PoliceExportPackage)  // 导出全部取证包
+		police.GET("/export", handlers.PoliceExportPackage)  // 导出全部取证包（警方须先获批）
+		// 取证导出申请 / 审批流（以疏代堵对接警方：警方须先申请、站长批准才能导出）
+		police.POST("/evidence-requests", handlers.PoliceCreateEvidenceRequest) // 警方提交申请
+		police.GET("/evidence-requests", handlers.PoliceListMyEvidenceRequests) // 警方看自己的申请
+		police.GET("/export-user", handlers.PoliceExportUserForensics)          // 导出某入档用户取证包
 		// 警方内容治理镜像（与站长内容治理板块同口径，留证仅含操作者用户名、不含 PII；
 		// Snapshot 等敏感截面在 handler 内已置空，合规与安全敏感信息警方不可见）
 		police.GET("/governance/overview", handlers.PoliceGovernanceOverview)

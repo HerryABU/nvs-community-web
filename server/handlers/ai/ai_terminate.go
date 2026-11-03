@@ -1,8 +1,11 @@
 package ai
 
 import (
+	"strconv"
+
 	"nvs-server/aisafety"
 	"nvs-server/models"
+	"nvs-server/supervise"
 )
 
 // ==================== 终止对话（三档模式） ====================
@@ -47,6 +50,22 @@ func applyTermination(session *models.AiChatSession, cfg *aisafety.SafetyConfig,
 			Terminated: false,
 			Mode:       mode,
 		}
+	case aisafety.TerminateAppease:
+		// 绥靖：用户完全无感。不透拦截、不透终止，把危险内容改写成管理员选定的引导内容，
+		// 并静默记入「可疑名单」。这是「以疏代堵」的核心：不跟用户正面对抗，转而观察 + 疏导。
+		if session != nil && session.UserID != 0 {
+			username := ""
+			if u, e := models.GetUserByID(session.UserID); e == nil && u != nil {
+				username = u.Username
+			}
+			_, _ = supervise.Upsert(session.UserID, username, supervise.TierSuspect,
+				supervise.SrcRule, 10, reason, nil)
+		}
+		return terminateOutcome{
+			Text:       appeaseContent(cfg),
+			Terminated: false,
+			Mode:       mode,
+		}
 	default:
 		_ = models.LockAiChatSession(session.ID, reason, 0)
 		return terminateOutcome{
@@ -54,5 +73,40 @@ func applyTermination(session *models.AiChatSession, cfg *aisafety.SafetyConfig,
 			Terminated: true,
 			Mode:       aisafety.TerminateStrict,
 		}
+	}
+}
+
+// appeaseContent 按管理员选定的展示模式返回「无害引导内容」。
+//
+//	replace  只发替代回答（科普 / 法律后果 / 求助引导，不给任何可操作细节）
+//	softcard 只发软警示卡片（不冷冰、不评判，把人往求助渠道引）
+//	both    两者都发
+func appeaseContent(cfg *aisafety.SafetyConfig) string {
+	if cfg == nil {
+		return aisafety.AppeaseReplace(nil)
+	}
+	switch aisafety.NormalizeAppeaseDisplayMode(cfg.AppeaseDisplayMode) {
+	case "softcard":
+		return aisafety.AppeaseSoftCard(cfg)
+	case "both":
+		return aisafety.AppeaseReplace(cfg) + "\n\n" + aisafety.AppeaseSoftCard(cfg)
+	default:
+		return aisafety.AppeaseReplace(cfg)
+	}
+}
+
+// escalateAppearanceIfNeeded 绥靖模式下的「升级闸」：监管模型 B 判定分越过升级线时，
+// 先入「可疑名单」再升级到「恶意名单」——以疏代堵的第二道闸，明确恶意才升级，
+// 升级后在用户面前展示引导内容（而非硬拦截）。
+func escalateAppearanceIfNeeded(userID uint, username string, cfg *aisafety.SafetyConfig, v *aisafety.JudgeVerdict) {
+	if v == nil || v.Failed || cfg == nil {
+		return
+	}
+	if v.Score < cfg.AppeaseEscalateScore {
+		return
+	}
+	reason := "监管模型B判定分=" + strconv.Itoa(v.Score) + "：" + v.Reason
+	if _, err := supervise.Upsert(userID, username, supervise.TierSuspect, supervise.SrcJudge, 0, reason, nil); err == nil {
+		_, _ = supervise.Escalate(userID, reason)
 	}
 }
