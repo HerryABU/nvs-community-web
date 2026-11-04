@@ -62,7 +62,13 @@ func (a Actor) ActiveMember() bool {
 
 // Can 能力判定（严格按文档矩阵）
 func (a Actor) Can(cap Capability) bool {
-	// 平台角色只做合规处置，不获得创作能力（导出/查看数据除外）
+	// 主笔对自己作品拥有全部能力：即使当前用户同时是平台角色（admin/police），
+	// 也不能被下面的平台分支剥夺其作为作者的创作权限（修复 #63：admin 自建作品无法新建/发布章节）。
+	if a.IsOwner {
+		return true
+	}
+	// 平台角色只做合规处置，不获得创作能力（导出/查看数据/审核除外）；
+	// 仅作用于「平台角色在他人作品上」的场景，自身作品已在上面 IsOwner 放行。
 	if a.IsPlatform {
 		switch cap {
 		case CapExport, CapViewStats, CapReviewChapter:
@@ -70,9 +76,6 @@ func (a Actor) Can(cap Capability) bool {
 		default:
 			return false
 		}
-	}
-	if a.IsOwner {
-		return true
 	}
 	if !a.ActiveMember() {
 		return false
