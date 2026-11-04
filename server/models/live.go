@@ -41,7 +41,7 @@ type LiveSetting struct {
 	StartsAt *time.Time `json:"starts_at"`
 	Notice   string     `json:"notice"`
 	// ChatGroupID 关联群组：直播聊天复用群组（不新造聊天系统）
-	ChatGroupID uint `json:"chat_group_id"`
+	ChatGroupID  uint `json:"chat_group_id"`
 	RequireLogin bool `json:"require_login"`
 
 	UpdatedAt time.Time `json:"updated_at"`

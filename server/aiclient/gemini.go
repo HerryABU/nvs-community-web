@@ -26,8 +26,8 @@ type geminiContent struct {
 }
 
 type geminiPart struct {
-	Text       string          `json:"text,omitempty"`
-	InlineData *geminiInline   `json:"inlineData,omitempty"`
+	Text       string        `json:"text,omitempty"`
+	InlineData *geminiInline `json:"inlineData,omitempty"`
 }
 
 type geminiInline struct {

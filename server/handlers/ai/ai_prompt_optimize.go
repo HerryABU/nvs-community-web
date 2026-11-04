@@ -21,7 +21,7 @@ import (
 
 	"nvs-server/aiclient"
 	"nvs-server/aisafety"
-	"nvs-server/handlers"
+	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -54,7 +54,7 @@ func AiOptimizePrompt(c *gin.Context) {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 
 	var req struct {
 		Prompt  string `json:"prompt"`

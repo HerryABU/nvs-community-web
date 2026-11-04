@@ -1,19 +1,17 @@
 package ai
 
 import (
-	"nvs-server/handlers"
-)
-
-import (
 	"fmt"
-	"strings"
-	"sync"
-	"time"
-
 	"nvs-server/aiclient"
+	"nvs-server/handlers/admin"
+	"nvs-server/handlers/export"
+	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/realtime"
 	"nvs-server/utils"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -32,7 +30,7 @@ const aiBotDedupWindow = 60 * time.Second
 
 // maybeTriggerAiBot 评论创建成功后调用：检测 @ai 召唤并异步触发
 // init 把本实现注册给 handlers 包（反向依赖用回调解耦，避免循环 import）。
-func init() { handlers.MaybeTriggerAiBot = maybeTriggerAiBot }
+func init() { export.MaybeTriggerAiBot = maybeTriggerAiBot }
 
 func maybeTriggerAiBot(c *gin.Context, comment *models.Comment) {
 	if !models.IsAiBotEnabled() || !models.IsAiEnabled() {
@@ -241,7 +239,7 @@ func AiBotStatus(c *gin.Context) {
 		return
 	}
 	cfg := models.GetAiBotConfig()
-	used := models.CountTodayAiBotUsage(handlers.CurrentUserID(c))
+	used := models.CountTodayAiBotUsage(hctx.CurrentUserID(c))
 	left := cfg.DailyLimit
 	if left > 0 {
 		left = left - int(used)
@@ -258,7 +256,7 @@ func AiBotStatus(c *gin.Context) {
 
 // AdminGetAiBotConfig GET /api/admin/ai/bot/config
 func AdminGetAiBotConfig(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, gin.H{
@@ -269,7 +267,7 @@ func AdminGetAiBotConfig(c *gin.Context) {
 
 // AdminSetAiBotConfig PUT /api/admin/ai/bot/config
 func AdminSetAiBotConfig(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

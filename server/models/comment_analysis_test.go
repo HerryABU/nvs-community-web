@@ -9,13 +9,13 @@ import (
 func seedComment(t *testing.T, userID, novelID uint, parentID *uint, created time.Time, micro int64) uint {
 	t.Helper()
 	c := &Comment{
-		UserID:       userID,
-		NovelID:      novelID,
+		UserID:        userID,
+		NovelID:       novelID,
 		ChapterNumber: 0,
-		Content:      "test",
-		ParentID:     parentID,
-		CreatedAt:    created,
-		CreatedMicro: micro,
+		Content:       "test",
+		ParentID:      parentID,
+		CreatedAt:     created,
+		CreatedMicro:  micro,
 	}
 	if err := DB.Create(c).Error; err != nil {
 		t.Fatalf("seed comment failed: %v", err)
@@ -43,7 +43,7 @@ func TestParseMentions(t *testing.T) {
 		{"@alice @luoheimao 你们好", []string{"alice", "luoheimao"}},
 		{"重复 @alice @alice 一次", []string{"alice"}},
 		{"邮箱 a@b.com 不应触发", nil}, // @ 前非空白，不当作提及
-		{"@ghost 不存在的用户", nil},    // 用户不存在 → 忽略
+		{"@ghost 不存在的用户", nil},   // 用户不存在 → 忽略
 		// 用昵称 @罗小黑（luoheimao 的 nickname）匹配；Name 取正文中字面匹配到的文本，
 		// 供前端正则替换 @罗小黑 → 链接；链接目标用 user_id，昵称解析照常生效。
 		{"@罗小黑 中文昵称", []string{"罗小黑"}},

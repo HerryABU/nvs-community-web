@@ -37,8 +37,8 @@ func GetSetting(c *gin.Context) {
 	set := oc.GetGroupSetting(gid)
 	agents, _ := oc.ListAgents(gid)
 	utils.Success(c, gin.H{
-		"setting":   set,
-		"agents":    agents,
+		"setting":    set,
+		"agents":     agents,
 		"can_manage": groupCanManage(c, gid),
 		"daily_used": oc.DailyUsed(gid),
 	})
@@ -208,24 +208,24 @@ func DeleteBook(c *gin.Context) {
 // SaveEntry POST /api/oc/books/:bid/entries
 func SaveEntry(c *gin.Context) {
 	var in struct {
-		ID            uint
-		Kind          string
-		Key           string
-		Content       string
-		SecondaryKeys string
-		Selective     bool
-		Logic         int
-		Constant      bool
-		Enabled       *bool
-		Probability   int
-		CaseSensitive bool
-		WholeWord     bool
+		ID             uint
+		Kind           string
+		Key            string
+		Content        string
+		SecondaryKeys  string
+		Selective      bool
+		Logic          int
+		Constant       bool
+		Enabled        *bool
+		Probability    int
+		CaseSensitive  bool
+		WholeWord      bool
 		InsertionOrder int
-		Priority      int
-		Position      int
-		Depth         int
-		Group         string
-		SortOrder     int
+		Priority       int
+		Position       int
+		Depth          int
+		Group          string
+		SortOrder      int
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -265,9 +265,9 @@ func AddAgent(c *gin.Context) {
 		return
 	}
 	var in struct {
-		CharacterID uint `json:"character_id"`
-		ModelID     uint `json:"model_id"`
-		TemplateID  uint `json:"template_id"`
+		CharacterID uint   `json:"character_id"`
+		ModelID     uint   `json:"model_id"`
+		TemplateID  uint   `json:"template_id"`
 		Strategy    string `json:"strategy"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {

@@ -1,13 +1,13 @@
 package ai
 
 import (
-	"nvs-server/handlers"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"nvs-server/aiclient"
+	"nvs-server/handlers/admin"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -29,7 +29,7 @@ import (
 const maxChannelProbe = 12
 
 func AdminChannelBalanceOverview(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	var ms []models.AiModel
@@ -232,7 +232,7 @@ func decryptKeyByBaseURL(baseURL string) string {
 // 模型池「模型统计」二级页的数据：同一份调用日志按三个维度聚合，
 // 让站长能回答「这条渠道一共花了多少」「这个模型跑得稳不稳」「哪个厂商最贵」。
 func AdminAiUsageStats(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	dim := c.DefaultQuery("dim", "model")

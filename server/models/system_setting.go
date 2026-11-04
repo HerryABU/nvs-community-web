@@ -20,10 +20,10 @@ const (
 	CategoryReviewModePreOpen = "pre_public"  // 先公开，事后封禁
 
 	// @ 提及来源模式
-	MentionSourceKey            = "mention_source"
-	MentionSourceParticipants   = "participants" // 本作品/博客参与者（默认）
-	MentionSourceGlobal         = "global"       // 全站用户搜索
-	MentionSourceManual         = "manual"       // 仅手动输入，不联想
+	MentionSourceKey          = "mention_source"
+	MentionSourceParticipants = "participants" // 本作品/博客参与者（默认）
+	MentionSourceGlobal       = "global"       // 全站用户搜索
+	MentionSourceManual       = "manual"       // 仅手动输入，不联想
 )
 
 // MentionSourceWorkKey 某作品/博客的 @ 提及来源覆盖键（楼主可设）

@@ -1,16 +1,12 @@
 package ai
 
 import (
-	"nvs-server/handlers"
-)
-
-import (
 	"encoding/json"
-	"strconv"
-	"strings"
-
+	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -44,7 +40,7 @@ func galleryItem(t *models.AiMediaTask) gin.H {
 // AiGalleryList GET /api/ai/gallery?kind=image|video&style=&page= — 公开作品流
 func AiGalleryList(c *gin.Context) {
 	// 开关：关闭「公开」后仅登录用户可见
-	if !models.GetAiFeatureFlags().PublicGallery && handlers.CurrentUserID(c) == 0 {
+	if !models.GetAiFeatureFlags().PublicGallery && hctx.CurrentUserID(c) == 0 {
 		utils.BadRequest(c, "灵感广场仅登录可见")
 		return
 	}
@@ -68,7 +64,7 @@ func AiGalleryList(c *gin.Context) {
 
 // AiGalleryPublish POST /api/ai/gallery/:id/publish — 发布/取消发布我的作品
 func AiGalleryPublish(c *gin.Context) {
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var req struct {
 		Public bool   `json:"public"`
@@ -98,7 +94,7 @@ func AiGalleryLike(c *gin.Context) {
 
 // AiMyMediaPublic GET /api/ai/media/:id/public — 查我的作品发布状态（发布弹窗回填）
 func AiMyMediaPublic(c *gin.Context) {
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	t, err := models.GetAiMediaTask(uint(id), userID)
 	if err != nil {

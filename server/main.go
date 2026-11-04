@@ -21,8 +21,9 @@ import (
 	"nvs-server/gate"
 	"nvs-server/gmcmd"
 	"nvs-server/groups"
-	"nvs-server/handlers"
 	"nvs-server/handlers/ai"
+	"nvs-server/handlers/badword"
+	moderationhandler "nvs-server/handlers/moderation"
 	"nvs-server/honeypot"
 	"nvs-server/middleware"
 	"nvs-server/models"
@@ -426,7 +427,7 @@ func initDatabase() error {
 	// 审核调度器（定时批量审核论坛/评论区），失败不阻断启动
 	moderation.Init()
 	// 「AI 判违规自动下架」接到软删留证（moderation 包不依赖 handlers，靠回调注入）
-	handlers.RegisterModerationHooks()
+	moderationhandler.RegisterModerationHooks()
 	if err := oc.MigrateEmote(models.DB); err != nil {
 		return err
 	}
@@ -456,8 +457,8 @@ func initDatabase() error {
 	// 日志脱敏：注入数据库持久化钩子并加载已保存的配置（后台从未保存过则使用 .env 默认）
 	config.RedactMgr.SetPersistence(models.LoadRedactConfig, models.StoreRedactConfig)
 	config.RedactMgr.LoadFromDB()
-	handlers.ReloadXssRules() // 加载管理员配置的 XSS 正则规则
-	handlers.ReloadBadWords() // 加载管理员配置的违禁词库规则
+	moderationhandler.ReloadXssRules() // 加载管理员配置的 XSS 正则规则
+	badword.ReloadBadWords()           // 加载管理员配置的违禁词库规则
 	initDefaultAdmin()
 	// 老站点升级：把「按模型存的密钥」并入「渠道卡密池」。
 	// 幂等（按 base_url + 密钥指纹判重），只增不改，老配置继续作为兜底。

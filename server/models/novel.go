@@ -204,31 +204,31 @@ func DeleteNovel(id uint) error {
 
 // Chapter 章节模型
 type Chapter struct {
-	ID               uint           `gorm:"primaryKey" json:"id"`
-	NovelID          uint           `gorm:"not null;uniqueIndex:uk_novel_chapter;index" json:"novel_id"`
-	ChapterNumber    int            `gorm:"not null;uniqueIndex:uk_novel_chapter" json:"chapter_number"`
-	Title            string         `gorm:"size:256;not null" json:"title"`
-	Content          string         `gorm:"-" json:"content,omitempty"`
-	ContentPath      string         `gorm:"size:512;not null" json:"content_path"`
-	ContentHash      string         `gorm:"size:64;default:''" json:"content_hash"`
-	ContentSignature string         `gorm:"size:64;default:''" json:"content_signature"` // HMAC-SHA256 作者签名
-	WordCount        int            `gorm:"default:0" json:"word_count"`
-	Status           string         `gorm:"size:32;default:published;index" json:"status"`  // draft/pending/published/rejected
+	ID               uint   `gorm:"primaryKey" json:"id"`
+	NovelID          uint   `gorm:"not null;uniqueIndex:uk_novel_chapter;index" json:"novel_id"`
+	ChapterNumber    int    `gorm:"not null;uniqueIndex:uk_novel_chapter" json:"chapter_number"`
+	Title            string `gorm:"size:256;not null" json:"title"`
+	Content          string `gorm:"-" json:"content,omitempty"`
+	ContentPath      string `gorm:"size:512;not null" json:"content_path"`
+	ContentHash      string `gorm:"size:64;default:''" json:"content_hash"`
+	ContentSignature string `gorm:"size:64;default:''" json:"content_signature"` // HMAC-SHA256 作者签名
+	WordCount        int    `gorm:"default:0" json:"word_count"`
+	Status           string `gorm:"size:32;default:published;index" json:"status"` // draft/pending/published/rejected
 	// Mode 本章叙事形态：空=继承作品 / prose 散文体 / script 话本气泡体 / mixed 散文与话本混排
 	Mode string `gorm:"size:8;default:''" json:"mode"`
 	// SourceFlowID 来源追溯：由 OC 群组对话流一键发布而来（0 = 非 OC 来源）
-	SourceFlowID uint `gorm:"not null;default:0;index" json:"source_flow_id"`
-	AuthorID         uint           `gorm:"not null;default:0;index" json:"author_id"`      // 本章作者（多人协作署名）
-	ReviewNote       string         `gorm:"size:256;default:''" json:"review_note"`         // 驳回/审核意见
-	BanReason        string         `gorm:"type:text" json:"ban_reason"`                    // 176号令封禁原因（封禁时写入）
-	DeletedBy        string         `gorm:"size:32;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
-	CreatedAt        time.Time      `json:"created_at"`
-	UpdatedAt        time.Time      `json:"updated_at"`
-	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
+	SourceFlowID uint           `gorm:"not null;default:0;index" json:"source_flow_id"`
+	AuthorID     uint           `gorm:"not null;default:0;index" json:"author_id"`      // 本章作者（多人协作署名）
+	ReviewNote   string         `gorm:"size:256;default:''" json:"review_note"`         // 驳回/审核意见
+	BanReason    string         `gorm:"type:text" json:"ban_reason"`                    // 176号令封禁原因（封禁时写入）
+	DeletedBy    string         `gorm:"size:32;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
 	AuthorName string `gorm:"-" json:"author_name,omitempty"` // 本章作者展示名（运行时填充）
 	// 版本控制（server/chaptervcs）：当前分支上的最新版本号，供前端下次保存时带 base_version
-	Version int `gorm:"-" json:"version,omitempty"`
+	Version int    `gorm:"-" json:"version,omitempty"`
 	Branch  string `gorm:"-" json:"branch,omitempty"`
 }
 

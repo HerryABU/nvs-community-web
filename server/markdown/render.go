@@ -15,17 +15,17 @@ import (
 // goldmark 实例（全局复用）
 var md = goldmark.New(
 	goldmark.WithExtensions(
-		extension.Table,           // GFM 表格
-		extension.Strikethrough,   // ~~删除线~~
-		extension.TaskList,        // - [ ] 任务列表
-		extension.Linkify,         // 自动链接
-		extension.DefinitionList,  // 定义列表
-		extension.Footnote,        // 脚注 [^1]
-		extension.Typographer,     // 智能引号/破折号/省略号
+		extension.Table,          // GFM 表格
+		extension.Strikethrough,  // ~~删除线~~
+		extension.TaskList,       // - [ ] 任务列表
+		extension.Linkify,        // 自动链接
+		extension.DefinitionList, // 定义列表
+		extension.Footnote,       // 脚注 [^1]
+		extension.Typographer,    // 智能引号/破折号/省略号
 	),
 	goldmark.WithRendererOptions(
-		// 不开启 WithUnsafe：内联 HTML 会被转义为文本，防止 XSS。
-		// KaTeX/Mermaid 通过占位符保护，不受影响。
+	// 不开启 WithUnsafe：内联 HTML 会被转义为文本，防止 XSS。
+	// KaTeX/Mermaid 通过占位符保护，不受影响。
 	),
 )
 

@@ -9,8 +9,10 @@ import (
 
 // DailyLogRoot 日志根目录（相对 exe 所在目录，即 /log）。
 // 结构（按小时切分 + 按类分文件夹）：
-//   log/requests/<YYYY-MM-DD>/<HH>.log   —— Web 请求日志（request 一个文件夹）
-//   log/database/<YYYY-MM-DD>/<HH>.log   —— 数据库日志（database 一个文件夹）
+//
+//	log/requests/<YYYY-MM-DD>/<HH>.log   —— Web 请求日志（request 一个文件夹）
+//	log/database/<YYYY-MM-DD>/<HH>.log   —— 数据库日志（database 一个文件夹）
+//
 // 每天内按小时切分（每小时一个文件），跨小时/跨天自动滚动，重启不覆盖（追加写）。
 const DailyLogRoot = "log"
 

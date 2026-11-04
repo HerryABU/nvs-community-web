@@ -9,12 +9,12 @@ func TestClampString(t *testing.T) {
 		want string
 	}{
 		{"", 10, ""},
-		{"abc", 10, "abc"},          // 未超限原样
-		{"abcde", 3, "abc"},         // ASCII 截断
-		{"你好世界", 2, "你好"},        // 中文按字符截断
-		{"你好世界", 0, "你好世界"},     // max<=0 不限制
-		{"ab你好", 3, "ab你"},        // 混合：按 rune 边界截断
-		{"你好", 5, "你好"},          // 未超限
+		{"abc", 10, "abc"},  // 未超限原样
+		{"abcde", 3, "abc"}, // ASCII 截断
+		{"你好世界", 2, "你好"},   // 中文按字符截断
+		{"你好世界", 0, "你好世界"}, // max<=0 不限制
+		{"ab你好", 3, "ab你"},  // 混合：按 rune 边界截断
+		{"你好", 5, "你好"},     // 未超限
 	}
 	for _, c := range cases {
 		if got := ClampString(c.in, c.max); got != c.want {

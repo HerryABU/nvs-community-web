@@ -41,6 +41,7 @@ func StripURLPrefixHandler(prefix string, next http.Handler) http.Handler {
 //  2. <base href="/{prefix}/">（兜底）：覆盖 HTML 中其他相对引用（如 favicon、
 //     CSS 内 url() 等），使相对路径统一解析到前缀下；
 //  3. window.__NVS_PREFIX__：供前端 Vue Router base 与 axios baseURL 自适应。
+//
 // 前缀为空时仅注入 <base href="/">（与默认行为一致），资源引用保持 Vite 产物原样。
 // 前缀为管理员 env 配置，注入前做转义防 HTML/脚本注入。
 func InjectPrefixIntoHTML(html []byte, prefix string) []byte {

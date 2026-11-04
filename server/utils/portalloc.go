@@ -9,10 +9,10 @@ import (
 // PortAllocator 智能端口分配器（高位优先）
 // 使用 49152-65535 动态端口范围，从高位向低位扫描
 type PortAllocator struct {
-	mu       sync.Mutex
-	used     map[int]bool
-	minPort  int
-	maxPort  int
+	mu      sync.Mutex
+	used    map[int]bool
+	minPort int
+	maxPort int
 }
 
 var (

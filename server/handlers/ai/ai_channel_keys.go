@@ -1,11 +1,11 @@
 package ai
 
 import (
-	"nvs-server/handlers"
 	"strconv"
 	"strings"
 	"time"
 
+	"nvs-server/handlers/admin"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -42,7 +42,7 @@ func channelKeyHint(k *models.AiChannelKey) string {
 
 // AdminListAiChannelKeys GET /api/admin/ai/channel-keys?base_url=...
 func AdminListAiChannelKeys(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	base := strings.TrimSpace(c.Query("base_url"))
@@ -68,7 +68,7 @@ func AdminListAiChannelKeys(c *gin.Context) {
 // AdminCreateAiChannelKey POST /api/admin/ai/channel-keys
 // 支持一次粘贴多行（每行一把），方便从中转站后台直接复制。
 func AdminCreateAiChannelKey(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -131,7 +131,7 @@ func AdminCreateAiChannelKey(c *gin.Context) {
 
 // AdminUpdateAiChannelKey PATCH /api/admin/ai/channel-keys/:id
 func AdminUpdateAiChannelKey(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -165,7 +165,7 @@ func AdminUpdateAiChannelKey(c *gin.Context) {
 
 // AdminDeleteAiChannelKey DELETE /api/admin/ai/channel-keys/:id
 func AdminDeleteAiChannelKey(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -183,7 +183,7 @@ func AdminDeleteAiChannelKey(c *gin.Context) {
 // AdminTestAiChannelKey POST /api/admin/ai/channel-keys/:id/test
 // 单把卡密连通性测试：GET /v1/models，不烧额度。
 func AdminTestAiChannelKey(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)

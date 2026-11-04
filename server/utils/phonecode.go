@@ -30,8 +30,8 @@ const (
 	// PhoneCodeMaxPerIPPerDay 同一 IP 每日申请上限（防换号轰炸）
 	PhoneCodeMaxPerIPPerDay = 30
 
-	redisPhoneCodePrefix = "nvs:phonecode:"   // <purpose>:<phone> → 验证码记录 JSON
-	redisPhoneCntPrefix   = "nvs:phonecount:" // <purpose>:<phone> / ip:<purpose>:<ip> → 当日计数
+	redisPhoneCodePrefix = "nvs:phonecode:"  // <purpose>:<phone> → 验证码记录 JSON
+	redisPhoneCntPrefix  = "nvs:phonecount:" // <purpose>:<phone> / ip:<purpose>:<ip> → 当日计数
 )
 
 // 手机验证码用途
@@ -56,12 +56,12 @@ var (
 
 // phoneCodeRecord 手机验证码记录（Redis JSON / 内存结构共用）
 type phoneCodeRecord struct {
-	CodeHash   string    `json:"code_hash"`   // sha256(phone|code|salt)
-	Salt       string    `json:"salt"`        // 每码随机盐
-	Purpose    string    `json:"purpose"`     // login/reset/verify
-	Attempts   int       `json:"attempts"`    // 已尝试次数
-	Consumed   bool      `json:"consumed"`    // 一次性消费标记
-	ExpiresAt  time.Time `json:"expires_at"`  // 过期时间
+	CodeHash   string    `json:"code_hash"`    // sha256(phone|code|salt)
+	Salt       string    `json:"salt"`         // 每码随机盐
+	Purpose    string    `json:"purpose"`      // login/reset/verify
+	Attempts   int       `json:"attempts"`     // 已尝试次数
+	Consumed   bool      `json:"consumed"`     // 一次性消费标记
+	ExpiresAt  time.Time `json:"expires_at"`   // 过期时间
 	LastSentAt time.Time `json:"last_sent_at"` // 上次发送时间（60s 频控）
 }
 

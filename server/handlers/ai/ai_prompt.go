@@ -1,14 +1,10 @@
 package ai
 
 import (
-	"nvs-server/handlers"
-)
-
-import (
-	"strconv"
-
+	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,7 +13,7 @@ import (
 
 // AiPromptList GET /api/ai/prompts?kind=&q= — 我的提示词 + 平台预设
 func AiPromptList(c *gin.Context) {
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	list, err := models.ListAiPrompts(userID, c.Query("kind"), c.Query("q"))
 	if err != nil {
 		utils.InternalError(c, "查询失败")
@@ -39,7 +35,7 @@ type aiPromptReq struct {
 
 // AiPromptCreate POST /api/ai/prompts — 新建自定义提示词
 func AiPromptCreate(c *gin.Context) {
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	var req aiPromptReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -55,7 +51,7 @@ func AiPromptCreate(c *gin.Context) {
 
 // AiPromptUpdate PUT /api/ai/prompts/:id — 修改自定义提示词
 func AiPromptUpdate(c *gin.Context) {
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var req aiPromptReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -71,7 +67,7 @@ func AiPromptUpdate(c *gin.Context) {
 
 // AiPromptDelete DELETE /api/ai/prompts/:id — 删除自定义提示词
 func AiPromptDelete(c *gin.Context) {
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := models.DeleteAiPrompt(uint(id), userID); err != nil {
 		utils.BadRequest(c, err.Error())
@@ -82,7 +78,7 @@ func AiPromptDelete(c *gin.Context) {
 
 // AiPromptUse POST /api/ai/prompts/:id/use — 记录使用（用于常用排序）
 func AiPromptUse(c *gin.Context) {
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	p, err := models.GetAiPrompt(uint(id), userID)
 	if err != nil {

@@ -1,7 +1,13 @@
 package ai
 
 import (
-	"nvs-server/handlers"
+	"fmt"
+	"nvs-server/handlers/admin"
+	"nvs-server/models"
+	"nvs-server/utils"
+	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 // ==================== 转化漏斗（gap-audit #13）====================
@@ -18,19 +24,9 @@ import (
 // 每一步都同时给出「相对上一步的转化率」与「相对触达的累计率」——
 // 只看相邻转化率会误判（前面漏太多，后面再高也没用）。
 
-import (
-	"fmt"
-	"time"
-
-	"nvs-server/models"
-	"nvs-server/utils"
-
-	"github.com/gin-gonic/gin"
-)
-
 // AiFunnel GET /api/admin/ai/funnel?days=30
 func AiFunnel(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	days := 30

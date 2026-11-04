@@ -1,9 +1,9 @@
 package ai
 
 import (
-	"nvs-server/handlers"
 	"strconv"
 
+	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -41,7 +41,7 @@ func chatMessageView(list []models.AiChatMessage) []gin.H {
 //
 // 只改「显示位置」，不删任何消息：切到 A 分支再切回 B，两边内容都还在。
 func AiHubSwitchBranch(c *gin.Context) {
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	s, err := models.GetAiChatSession(uint(id), userID)
 	if err != nil || s == nil {

@@ -44,18 +44,18 @@ func ProtocolName(version uint16) string {
 
 // Stats 握手统计（内存聚合，供 gm-audit / 运维查询）。
 type Stats struct {
-	Total    int64            `json:"total"`
-	Failed   int64            `json:"failed"`
-	ByProto  map[string]int64 `json:"by_proto"`
-	BySuite  map[string]int64 `json:"by_suite"`
+	Total   int64            `json:"total"`
+	Failed  int64            `json:"failed"`
+	ByProto map[string]int64 `json:"by_proto"`
+	BySuite map[string]int64 `json:"by_suite"`
 }
 
 // Observer 全局握手观测器。零值可用（关闭状态）。
 type Observer struct {
-	mu     sync.Mutex
-	file   *os.File
-	path   string
-	stats  Stats
+	mu    sync.Mutex
+	file  *os.File
+	path  string
+	stats Stats
 }
 
 var global = &Observer{stats: Stats{ByProto: map[string]int64{}, BySuite: map[string]int64{}}}

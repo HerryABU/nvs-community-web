@@ -19,17 +19,17 @@ const MaxUserAiKeys = 5
 
 // UserAiKey 用户自备上游密钥
 type UserAiKey struct {
-	ID         uint      `gorm:"primaryKey" json:"id"`
-	UserID     uint      `gorm:"index;not null" json:"user_id"`
-	Label      string    `gorm:"size:64;not null" json:"label"`       // 备注名（如「我的 DeepSeek」）
-	BaseURL    string    `gorm:"size:256;not null" json:"base_url"`   // 上游地址（不含 /chat/completions）
-	KeyEnc     string    `gorm:"type:text" json:"-"`                 // 密钥密文，不回传前端
-	ModelID    string    `gorm:"size:128;default:''" json:"model_id"` // 默认上游模型标识（可空，调用时覆盖）
-	Enabled    bool      `gorm:"not null;default:true" json:"enabled"`
-	IsDefault  bool      `gorm:"not null;default:false" json:"is_default"`
+	ID         uint       `gorm:"primaryKey" json:"id"`
+	UserID     uint       `gorm:"index;not null" json:"user_id"`
+	Label      string     `gorm:"size:64;not null" json:"label"`       // 备注名（如「我的 DeepSeek」）
+	BaseURL    string     `gorm:"size:256;not null" json:"base_url"`   // 上游地址（不含 /chat/completions）
+	KeyEnc     string     `gorm:"type:text" json:"-"`                  // 密钥密文，不回传前端
+	ModelID    string     `gorm:"size:128;default:''" json:"model_id"` // 默认上游模型标识（可空，调用时覆盖）
+	Enabled    bool       `gorm:"not null;default:true" json:"enabled"`
+	IsDefault  bool       `gorm:"not null;default:false" json:"is_default"`
 	LastUsedAt *time.Time `json:"last_used_at"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
 func (UserAiKey) TableName() string { return "user_ai_keys" }

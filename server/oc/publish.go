@@ -402,7 +402,7 @@ func newChapter(novelID uint, num int, title, body string, authorID uint, mode s
 		NovelID: novelID, ChapterNumber: num, Title: title,
 		ContentPath: "", Status: status, AuthorID: authorID, Mode: mode,
 		SourceFlowID: flowID, // 来源追溯：来自哪个 OC 对话流
-		WordCount: len([]rune(body)), CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		WordCount:    len([]rune(body)), CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	return ch
 }

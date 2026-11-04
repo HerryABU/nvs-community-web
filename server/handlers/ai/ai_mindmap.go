@@ -1,28 +1,25 @@
 package ai
 
 import (
-	"nvs-server/handlers"
-)
-
-// ==================== AI 思维导图：需求 → 层级大纲 ====================
-import (
+	"nvs-server/aiclient"
+	"nvs-server/handlers/hctx"
+	"nvs-server/models"
+	"nvs-server/utils"
 	"strconv"
 	"strings"
 	"time"
 
-	"nvs-server/aiclient"
-	"nvs-server/models"
-	"nvs-server/utils"
-
 	"github.com/gin-gonic/gin"
 )
+
+// ==================== AI 思维导图：需求 → 层级大纲 ====================
 
 func AiMindmap(c *gin.Context) {
 	if !models.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	var req struct {
 		Topic   string `json:"topic"`
 		Depth   int    `json:"depth"`

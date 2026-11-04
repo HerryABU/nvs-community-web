@@ -5,8 +5,9 @@ import (
 	"math"
 	"time"
 
-	"gorm.io/gorm"
 	"nvs-server/models"
+
+	"gorm.io/gorm"
 )
 
 // GetProfile 读取用户画像，不存在则建。

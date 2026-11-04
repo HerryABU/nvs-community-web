@@ -14,7 +14,9 @@ import (
 	"io/fs"
 	"net/http"
 	"nvs-server/config"
-	"nvs-server/handlers"
+	"nvs-server/handlers/batch"
+	"nvs-server/handlers/health"
+	"nvs-server/handlers/setup"
 	"nvs-server/honeypot"
 	"nvs-server/middleware"
 	"nvs-server/security"
@@ -119,12 +121,12 @@ func Register(r *gin.Engine) {
 	honeypot.RegisterVerify(r)
 
 	// 注入 gin 引擎供 API 聚合中间层（/api/batch）内存内转发使用
-	handlers.BatchEngine = r
+	batch.BatchEngine = r
 
 	// 健康检查：浏览器 → HTML 页面，API 请求 → 完整 JSON 健康报告
 	r.GET("/health", func(c *gin.Context) {
 		if strings.Contains(c.GetHeader("Accept"), "application/json") {
-			c.JSON(http.StatusOK, handlers.CollectHealth())
+			c.JSON(http.StatusOK, health.CollectHealth())
 			return
 		}
 		healthHTML := fmt.Sprintf(`<!DOCTYPE html>
@@ -153,19 +155,19 @@ func Register(r *gin.Engine) {
 
 	// /api/health：始终返回 JSON 健康报告（供前端/监控调用）
 	r.GET("/api/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, handlers.CollectHealth())
+		c.JSON(http.StatusOK, health.CollectHealth())
 	})
 
 	// 建站向导路由：status 始终可用（供前端判断是否已安装）；
 	// 安装/环境检查/测试连接接口仅在未安装时挂载，安装完成后由 setupGuard 直接 404（路由级注销）。
-	r.GET("/api/setup/status", handlers.SetupStatus)
+	r.GET("/api/setup/status", setup.SetupStatus)
 	if !config.IsInstalled() {
 		setupGroup := r.Group("/api/setup")
 		// 双重防护：安装完成后 404 + 仅本机(localhost)可访问 + 接口级限流
 		setupGroup.Use(setupGuard(), setupLocalOnlyGuard())
-		setupGroup.GET("/env-check", handlers.SetupEnvCheck)
-		setupGroup.POST("/db-test", security.RateLimit(30, 60), handlers.SetupDBTest)
-		setupGroup.POST("/install", security.RateLimit(10, 60), handlers.SetupInstall)
+		setupGroup.GET("/env-check", setup.SetupEnvCheck)
+		setupGroup.POST("/db-test", security.RateLimit(30, 60), setup.SetupDBTest)
+		setupGroup.POST("/install", security.RateLimit(10, 60), setup.SetupInstall)
 	}
 
 	registerPublic(r)

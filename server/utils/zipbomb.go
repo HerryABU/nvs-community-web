@@ -11,17 +11,17 @@ import (
 
 // ZipBombConfig ZIP 炸弹检测配置
 type ZipBombConfig struct {
-	MaxUncompressedSize     int64 // 最大解压后总大小（字节），默认 50MB
-	MaxSingleFileSize       int64 // 单个文件最大解压后大小（字节），默认 20MB
-	MaxCompressionRatio     int64 // 最大压缩比（分母为1），默认 100（即压缩率 > 100:1 视为炸弹）
-	MaxFileCount            int   // 最大文件数，默认 500
+	MaxUncompressedSize int64 // 最大解压后总大小（字节），默认 50MB
+	MaxSingleFileSize   int64 // 单个文件最大解压后大小（字节），默认 20MB
+	MaxCompressionRatio int64 // 最大压缩比（分母为1），默认 100（即压缩率 > 100:1 视为炸弹）
+	MaxFileCount        int   // 最大文件数，默认 500
 }
 
 // DefaultZipBombConfig 默认安全配置
 var DefaultZipBombConfig = ZipBombConfig{
-	MaxUncompressedSize: 50 * 1024 * 1024,  // 50 MB
-	MaxSingleFileSize:   20 * 1024 * 1024,  // 20 MB
-	MaxCompressionRatio: 100,               // 100:1
+	MaxUncompressedSize: 50 * 1024 * 1024, // 50 MB
+	MaxSingleFileSize:   20 * 1024 * 1024, // 20 MB
+	MaxCompressionRatio: 100,              // 100:1
 	MaxFileCount:        500,
 }
 

@@ -1,19 +1,15 @@
 package ai
 
 import (
-	"nvs-server/handlers"
-)
-
-import (
 	"encoding/json"
 	"log"
+	"nvs-server/aiclient"
+	"nvs-server/handlers/hctx"
+	"nvs-server/models"
+	"nvs-server/utils"
 	"strconv"
 	"strings"
 	"time"
-
-	"nvs-server/aiclient"
-	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -27,7 +23,7 @@ func AiHubVideoSubmit(c *gin.Context) {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	var req struct {
 		ModelID  uint   `json:"model_id"`
 		Prompt   string `json:"prompt"`
@@ -181,7 +177,7 @@ func AiHubVideoSubmit(c *gin.Context) {
 
 // AiHubVideoStatus GET /api/ai/video/:id — 视频任务轮询
 func AiHubVideoStatus(c *gin.Context) {
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	task, err := models.GetAiMediaTask(uint(id), userID)
 	if err != nil {
@@ -312,7 +308,7 @@ func AiHubVideoStatus(c *gin.Context) {
 // 上游账单说明：是否真的撤销了上游任务取决于上游是否支持（本实现会尝试一次 best-effort
 // 取消），撤销不了的部分由站长承担——这一点在 UI 的确认文案里如实写明。
 func AiHubVideoCancel(c *gin.Context) {
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if id == 0 {
 		utils.BadRequest(c, "任务 ID 无效")
@@ -380,7 +376,7 @@ func cancelUpstreamVideo(task *models.AiMediaTask, userID uint) {
 
 // AiHubMediaHistory GET /api/ai/media — 我的绘画/视频历史（kind=image/video）
 func AiHubMediaHistory(c *gin.Context) {
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	kind := strings.TrimSpace(c.Query("kind"))
 	if kind != models.AiKindImage && kind != models.AiKindVideo {
 		utils.BadRequest(c, "kind 需为 image 或 video")

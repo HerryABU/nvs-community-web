@@ -11,7 +11,7 @@ import (
 // 语义：UserID（拉黑方）把 BlockedUserID（被拉黑方）加入黑名单。
 //   Mode = block：禁止对方在自己的评论区发言（创建评论时拦截）
 //   Mode = hide ：在评论区/内容流中屏蔽对方的展示与互动
-// 站长/警方/管理员角色不可被拉黑（保障平台治理通道，见 handlers.AddBlacklist）。
+// 站长/警方/管理员角色不可被拉黑（保障平台治理通道，见 blacklist.AddBlacklist）。
 
 const (
 	BlacklistModeBlock = "block" // 禁止在其评论区评论

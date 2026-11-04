@@ -1,8 +1,9 @@
 package moderation
 
 import (
-	"gorm.io/gorm"
 	"nvs-server/models"
+
+	"gorm.io/gorm"
 )
 
 // Migrate 建表（main 里 AutoMigrateAll 之后调用，收 *gorm.DB）。

@@ -65,15 +65,15 @@ func (AggregateProvider) CreateOrder(p CreateParams, cfg models.PaymentConfig) (
 	}
 	money := fmt.Sprintf("%d.%02d", p.AmountFen/100, p.AmountFen%100)
 	params := map[string]string{
-		"pid":        cfg.AppID,
-		"type":       gwType,
+		"pid":          cfg.AppID,
+		"type":         gwType,
 		"out_trade_no": p.OrderNo,
-		"notify_url": cfg.NotifyURL,
-		"return_url": cfg.ReturnURL,
-		"name":       p.Subject,
-		"money":      money,
-		"clientip":   p.ClientIP,
-		"sign_type":  "MD5",
+		"notify_url":   cfg.NotifyURL,
+		"return_url":   cfg.ReturnURL,
+		"name":         p.Subject,
+		"money":        money,
+		"clientip":     p.ClientIP,
+		"sign_type":    "MD5",
 	}
 	params["sign"] = md5Sign(params, cfg.Secret)
 

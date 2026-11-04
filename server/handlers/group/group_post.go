@@ -15,7 +15,7 @@ import (
 )
 
 // ==================== 群内帖子与回复 ====================
-// 审核链路与论坛一致：违禁词库（processBadWords）→ mark 命中写待审标记（flagBadWords）；
+// 审核链路与论坛一致：违禁词库（badword.ProcessBadWords）→ mark 命中写待审标记（badword.FlagBadWords）；
 // 群组自己的「先审后发」由 Group.ReviewFirst 控制（pending → 群管审核）。
 // AI 辅助创作：帖子带 ai_assisted 时落 ai_content_marks（与章节/博客同一套）。
 

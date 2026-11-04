@@ -1,15 +1,11 @@
 package ai
 
 import (
-	"nvs-server/handlers"
-)
-
-import (
-	"strconv"
-	"strings"
-
+	"nvs-server/handlers/admin"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -32,7 +28,7 @@ func AiStyleList(c *gin.Context) {
 
 // AdminListAiStyles GET /api/admin/ai/styles?kind=
 func AdminListAiStyles(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	list, err := models.ListAiStyles(c.Query("kind"), false)
@@ -45,7 +41,7 @@ func AdminListAiStyles(c *gin.Context) {
 
 // AdminCreateAiStyle POST /api/admin/ai/styles
 func AdminCreateAiStyle(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -67,7 +63,7 @@ func AdminCreateAiStyle(c *gin.Context) {
 
 // AdminUpdateAiStyle PUT /api/admin/ai/styles/:id
 func AdminUpdateAiStyle(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -93,7 +89,7 @@ func AdminUpdateAiStyle(c *gin.Context) {
 
 // AdminDeleteAiStyle DELETE /api/admin/ai/styles/:id
 func AdminDeleteAiStyle(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)

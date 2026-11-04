@@ -66,13 +66,13 @@ const (
 type TokenLedger struct {
 	ID            uint      `gorm:"primaryKey" json:"id"`
 	UserID        uint      `gorm:"not null;index:idx_token_ledger_user,priority:1" json:"user_id"`
-	Type          string    `gorm:"size:24;not null;index" json:"type"`  // recharge_card/recharge_pay/consume/grant/deduct/refund
-	Amount        int64     `gorm:"not null" json:"amount"`              // 签名额：充值/增发为正，消费/扣减为负
-	BalanceAfter  int64     `gorm:"not null" json:"balance_after"`       // 本笔后余额快照
-	RefType       string    `gorm:"size:24;default:''" json:"ref_type"`  // 关联类型：card/admin/ai_order...
-	RefID         uint      `gorm:"default:0;index" json:"ref_id"`       // 关联 ID
-	Remark        string    `gorm:"size:256;default:''" json:"remark"`   // 备注
-	PriceSnapshot string    `gorm:"type:text" json:"price_snapshot"`     // 价格/计费快照（JSON，可空）
+	Type          string    `gorm:"size:24;not null;index" json:"type"` // recharge_card/recharge_pay/consume/grant/deduct/refund
+	Amount        int64     `gorm:"not null" json:"amount"`             // 签名额：充值/增发为正，消费/扣减为负
+	BalanceAfter  int64     `gorm:"not null" json:"balance_after"`      // 本笔后余额快照
+	RefType       string    `gorm:"size:24;default:''" json:"ref_type"` // 关联类型：card/admin/ai_order...
+	RefID         uint      `gorm:"default:0;index" json:"ref_id"`      // 关联 ID
+	Remark        string    `gorm:"size:256;default:''" json:"remark"`  // 备注
+	PriceSnapshot string    `gorm:"type:text" json:"price_snapshot"`    // 价格/计费快照（JSON，可空）
 	CreatedAt     time.Time `gorm:"index:idx_token_ledger_user,priority:2" json:"created_at"`
 }
 
@@ -89,18 +89,18 @@ func (UserTokenBalance) TableName() string { return "user_token_balances" }
 
 // CardKey 卡密（哈希存储，不明文）
 type CardKey struct {
-	ID        uint       `gorm:"primaryKey" json:"id"`
-	CodeHash  string     `gorm:"size:64;uniqueIndex;not null" json:"-"`      // sha256(规范化卡密) —— 不明文
-	CodePrefix string    `gorm:"size:8;default:''" json:"code_prefix"`       // 前缀（展示用，如 ABCD）
-	Value     int64      `gorm:"not null" json:"value"`                     // 面值（代币数）
-	Status    string     `gorm:"size:16;not null;default:unused;index" json:"status"` // unused/used/void
-	BatchID   string     `gorm:"size:32;index;default:''" json:"batch_id"`   // 批次号
-	CreatedBy uint       `gorm:"default:0" json:"created_by"`               // 生成管理员 ID
-	UsedBy    *uint      `json:"used_by"`                                  // 使用者 ID
-	UsedAt    *time.Time `json:"used_at"`
-	ExpiresAt *time.Time `json:"expires_at"` // 有效期（null = 永久）
-	Note      string     `gorm:"size:256;default:''" json:"note"`
-	CreatedAt time.Time  `json:"created_at"`
+	ID         uint       `gorm:"primaryKey" json:"id"`
+	CodeHash   string     `gorm:"size:64;uniqueIndex;not null" json:"-"`               // sha256(规范化卡密) —— 不明文
+	CodePrefix string     `gorm:"size:8;default:''" json:"code_prefix"`                // 前缀（展示用，如 ABCD）
+	Value      int64      `gorm:"not null" json:"value"`                               // 面值（代币数）
+	Status     string     `gorm:"size:16;not null;default:unused;index" json:"status"` // unused/used/void
+	BatchID    string     `gorm:"size:32;index;default:''" json:"batch_id"`            // 批次号
+	CreatedBy  uint       `gorm:"default:0" json:"created_by"`                         // 生成管理员 ID
+	UsedBy     *uint      `json:"used_by"`                                             // 使用者 ID
+	UsedAt     *time.Time `json:"used_at"`
+	ExpiresAt  *time.Time `json:"expires_at"` // 有效期（null = 永久）
+	Note       string     `gorm:"size:256;default:''" json:"note"`
+	CreatedAt  time.Time  `json:"created_at"`
 
 	UsedByUsername string `gorm:"-" json:"used_by_username,omitempty"` // 使用者用户名（列表填充）
 }

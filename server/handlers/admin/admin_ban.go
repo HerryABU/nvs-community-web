@@ -1,0 +1,254 @@
+package admin
+
+import (
+	"strconv"
+	"time"
+
+	"nvs-server/handlers/emergency"
+	"nvs-server/models"
+	"nvs-server/utils"
+
+	"github.com/gin-gonic/gin"
+)
+
+// ─────────────────────────────────────────────────────────────
+// 管理员内容封禁管理（小说 / 章节）
+// 提供：管理员视角的小说/章节列表（含软删除/封禁状态）、封禁（复用 softdel）、解封。
+// ─────────────────────────────────────────────────────────────
+
+// AdminListNovels 管理员查小说列表（含已封禁/软删除），支持标题/作者搜索。
+// GET /api/admin/novels?search=&page=&page_size=
+func AdminListNovels(c *gin.Context) {
+	if !EnsureAdmin(c) {
+		return
+	}
+	search := c.Query("search")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 200 {
+		pageSize = 20
+	}
+
+	query := models.DB.Unscoped().Model(&models.Novel{})
+	if search != "" {
+		like := "%" + search + "%"
+		query = query.Joins("LEFT JOIN users ON users.id = novels.author_id").
+			Where("novels.title LIKE ? OR users.nickname LIKE ? OR users.username LIKE ?", like, like, like)
+	}
+	// 可选过滤：deleted_by=user 只看用户自删（回收站视角）；deleted_by=admin 只看管理员封禁
+	if db := c.Query("deleted_by"); db != "" {
+		query = query.Where("novels.deleted_by = ?", db)
+	}
+
+	var total int64
+	query.Count(&total)
+
+	var novels []models.Novel
+	query.Preload("Author").
+		Order("novels.deleted_at ASC, novels.updated_at DESC").
+		Offset((page - 1) * pageSize).Limit(pageSize).
+		Find(&novels)
+
+	type item struct {
+		ID            uint       `json:"id"`
+		Title         string     `json:"title"`
+		AuthorID      uint       `json:"author_id"`
+		AuthorName    string     `json:"author_name"`
+		TotalWords    int        `json:"total_words"`
+		TotalChapters int        `json:"total_chapters"`
+		Status        string     `json:"status"`
+		BanReason     string     `json:"ban_reason"`
+		DeletedBy     string     `json:"deleted_by"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除
+		Banned        bool       `json:"banned"`
+		BannedAt      *time.Time `json:"banned_at"`
+		CreatedAt     time.Time  `json:"created_at"`
+	}
+	list := make([]item, 0, len(novels))
+	for _, n := range novels {
+		authorName := ""
+		if n.Author != nil {
+			authorName = n.Author.Nickname
+			if authorName == "" {
+				authorName = n.Author.Username
+			}
+		}
+		it := item{
+			ID:            n.ID,
+			Title:         n.Title,
+			AuthorID:      n.AuthorID,
+			AuthorName:    authorName,
+			TotalWords:    n.TotalWords,
+			TotalChapters: n.TotalChapters,
+			Status:        n.Status,
+			BanReason:     n.BanReason,
+			DeletedBy:     n.DeletedBy,
+			Banned:        n.DeletedAt.Valid,
+			CreatedAt:     n.CreatedAt,
+		}
+		if n.DeletedAt.Valid {
+			t := n.DeletedAt.Time
+			it.BannedAt = &t
+		}
+		list = append(list, it)
+	}
+
+	utils.Success(c, gin.H{"list": list, "total": total, "page": page, "page_size": pageSize})
+}
+
+// AdminRecomputeNovelStats 批量重算所有作品统计（章节数 / 总字数）。
+// POST /api/admin/recompute-novel-stats
+// 可选 ?id=<novelID> 仅重算单部作品；不带参数则重算全部作品。
+// 用于修复 novels.total_chapters / total_words 与真实章节不一致的脏数据
+// （历史导入、迁移遗留、早期版本未回填等）。
+// 注：路由挂在 /api/admin/recompute-novel-stats 而非 /api/admin/novels/...，
+// 以免与 /novels/:id/chapters 的通配段冲突触发路由 panic。
+func AdminRecomputeNovelStats(c *gin.Context) {
+	if !EnsureAdmin(c) {
+		return
+	}
+	if idStr := c.Query("id"); idStr != "" {
+		id, err := strconv.ParseUint(idStr, 10, 64)
+		if err != nil {
+			utils.BadRequest(c, "无效的小说ID")
+			return
+		}
+		if err := models.UpdateNovelStats(uint(id)); err != nil {
+			utils.InternalError(c, "重算失败: "+err.Error())
+			return
+		}
+		utils.Success(c, gin.H{"message": "已重算单部作品统计", "id": id})
+		return
+	}
+	processed, changed, err := models.RecomputeAllNovelStats()
+	if err != nil {
+		utils.InternalError(c, "重算失败: "+err.Error())
+		return
+	}
+	utils.Success(c, gin.H{
+		"message":   "已重算所有作品统计",
+		"processed": processed,
+		"changed":   changed,
+	})
+}
+
+// AdminListChapters 管理员查某小说的章节列表（含已封禁/软删除）。
+// GET /api/admin/novels/:id/chapters
+func AdminListChapters(c *gin.Context) {
+	if !EnsureAdmin(c) {
+		return
+	}
+	novelID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的小说ID")
+		return
+	}
+
+	var chapters []models.Chapter
+	models.DB.Unscoped().
+		Where("novel_id = ?", novelID).
+		Order("chapter_number ASC").
+		Find(&chapters)
+
+	type item struct {
+		ID            uint       `json:"id"`
+		NovelID       uint       `json:"novel_id"`
+		ChapterNumber int        `json:"chapter_number"`
+		Title         string     `json:"title"`
+		WordCount     int        `json:"word_count"`
+		Status        string     `json:"status"`
+		BanReason     string     `json:"ban_reason"`
+		DeletedBy     string     `json:"deleted_by"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除
+		Banned        bool       `json:"banned"`
+		BannedAt      *time.Time `json:"banned_at"`
+		CreatedAt     time.Time  `json:"created_at"`
+	}
+	list := make([]item, 0, len(chapters))
+	for _, ch := range chapters {
+		it := item{
+			ID:            ch.ID,
+			NovelID:       ch.NovelID,
+			ChapterNumber: ch.ChapterNumber,
+			Title:         ch.Title,
+			WordCount:     ch.WordCount,
+			Status:        ch.Status,
+			BanReason:     ch.BanReason,
+			DeletedBy:     ch.DeletedBy,
+			Banned:        ch.DeletedAt.Valid,
+			CreatedAt:     ch.CreatedAt,
+		}
+		if ch.DeletedAt.Valid {
+			t := ch.DeletedAt.Time
+			it.BannedAt = &t
+		}
+		list = append(list, it)
+	}
+
+	utils.Success(c, list)
+}
+
+// AdminRestoreContent 解封/恢复软删除内容（清除 deleted_at 与 ban_reason）。
+// POST /api/admin/softdel/restore  body: { type, id }
+func AdminRestoreContent(c *gin.Context) {
+	if !EnsureAdmin(c) {
+		return
+	}
+	var req struct {
+		Type string `json:"type" binding:"required"`
+		ID   uint   `json:"id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	clearDeleted := func(table interface{}, id uint) error {
+		return models.DB.Unscoped().Model(table).Where("id = ?", id).
+			Updates(map[string]interface{}{"deleted_at": nil, "ban_reason": "", "deleted_by": ""}).Error
+	}
+
+	switch req.Type {
+	case "novel":
+		// 恢复小说及其全部章节
+		if err := clearDeleted(&models.Novel{}, req.ID); err != nil {
+			utils.InternalError(c, "解封失败")
+			return
+		}
+		_ = models.DB.Unscoped().Model(&models.Chapter{}).Where("novel_id = ?", req.ID).
+			Updates(map[string]interface{}{"deleted_at": nil, "ban_reason": "", "deleted_by": ""}).Error
+	case "chapter":
+		if err := clearDeleted(&models.Chapter{}, req.ID); err != nil {
+			utils.InternalError(c, "解封失败")
+			return
+		}
+	case "comment":
+		_ = models.DB.Unscoped().Model(&models.Comment{}).Where("id = ?", req.ID).
+			Updates(map[string]interface{}{"deleted_at": nil, "deleted_by": ""}).Error
+	case "thread":
+		_ = models.DB.Unscoped().Model(&models.Thread{}).Where("id = ?", req.ID).
+			Updates(map[string]interface{}{"deleted_at": nil, "deleted_by": ""}).Error
+	case "post":
+		// 方案A：posts 无 deleted_at（删除即物理删除，仅 softdel_posts 留证可追溯），
+		// 回帖无法解封恢复；如留证记录存在，则同步清除其封禁原因标记（如适用）。
+		// 保留分支以兼容旧请求，不执行 deleted_at 更新。
+		_ = models.DB.Unscoped().Model(&models.Post{}).Where("id = ?", req.ID).
+			Updates(map[string]interface{}{"ban_reason": ""}).Error
+	case "blog":
+		_ = models.DB.Unscoped().Model(&models.AuthorBlog{}).Where("id = ?", req.ID).
+			Updates(map[string]interface{}{"deleted_at": nil, "deleted_by": ""}).Error
+	case "forum":
+		_ = models.DB.Unscoped().Model(&models.Forum{}).Where("id = ?", req.ID).
+			Updates(map[string]interface{}{"deleted_at": nil, "deleted_by": ""}).Error
+	case "user":
+		_ = models.DB.Unscoped().Model(&models.User{}).Where("id = ?", req.ID).
+			Update("deleted_at", nil).Error
+	default:
+		utils.BadRequest(c, "不支持的类型（支持 novel/chapter/comment/thread/post/blog/forum/user）")
+		return
+	}
+
+	emergency.AuditEmergency(c, models.AuditContentRestore, req.Type, req.ID,
+		"管理员解封/恢复 "+req.Type+" #"+strconv.FormatUint(uint64(req.ID), 10))
+	utils.Success(c, gin.H{"message": "已解封"})
+}

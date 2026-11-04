@@ -115,9 +115,10 @@ func SanitizeScriptTag(content string) string {
 // SanitizeUserContent 全面净化用户输入：白名单放行安全标签（颜色/折叠/跳转/按钮），
 // 阻止任何 XSS。这是所有用户输入（评论、帖子、回复、章节等）都应调用的统一入口。
 // 处理顺序：
-//   1) 应用管理员配置的动态 XSS 正则规则；
-//   2) 转义白名单外标签（script/iframe 等 → &lt;script&gt; 完整显示，不执行不残缺）；
-//   3) 白名单标签属性过滤（移除事件处理器、危险协议、style 危险 CSS）。
+//  1. 应用管理员配置的动态 XSS 正则规则；
+//  2. 转义白名单外标签（script/iframe 等 → &lt;script&gt; 完整显示，不执行不残缺）；
+//  3. 白名单标签属性过滤（移除事件处理器、危险协议、style 危险 CSS）。
+//
 // 注意：不使用 bluemonday 处理整体内容，避免误转义 Markdown 数学符号（$a < b$）。
 func SanitizeUserContent(content string) string {
 	content = ApplyDynamicXssRules(content)

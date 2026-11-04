@@ -7,8 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"gorm.io/gorm"
 	"nvs-server/models"
+
+	"gorm.io/gorm"
 )
 
 // configSchemaVersion 配置结构版本。新增配置列时必须 +1，并在 migrateConfigRow 里回填默认值。

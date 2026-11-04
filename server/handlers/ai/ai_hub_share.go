@@ -1,15 +1,11 @@
 package ai
 
 import (
-	"nvs-server/handlers"
-)
-
-import (
-	"strconv"
-	"strings"
-
+	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,7 +14,7 @@ import (
 
 // AiHubRenameSession PUT /api/ai/sessions/:id — 重命名会话
 func AiHubRenameSession(c *gin.Context) {
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var req struct {
 		Title string `json:"title"`
@@ -36,7 +32,7 @@ func AiHubRenameSession(c *gin.Context) {
 
 // AiHubShareSession POST /api/ai/sessions/:id/share — 生成/读取分享链接
 func AiHubShareSession(c *gin.Context) {
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	token, err := models.ShareAiChatSession(uint(id), userID)
 	if err != nil {
@@ -48,7 +44,7 @@ func AiHubShareSession(c *gin.Context) {
 
 // AiHubUnshareSession DELETE /api/ai/sessions/:id/share — 取消分享
 func AiHubUnshareSession(c *gin.Context) {
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := models.UnshareAiChatSession(uint(id), userID); err != nil {
 		utils.BadRequest(c, err.Error())

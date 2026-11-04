@@ -23,10 +23,10 @@ const (
 
 // MJImagineParams 提交绘画参数
 type MJImagineParams struct {
-	Prompt     string   `json:"prompt"`
+	Prompt     string    `json:"prompt"`
 	BotType    MJBotType `json:"botType,omitempty"`
-	Base64Arr  []string `json:"base64Array,omitempty"`
-	NotifyHook string   `json:"notifyHook,omitempty"`
+	Base64Arr  []string  `json:"base64Array,omitempty"`
+	NotifyHook string    `json:"notifyHook,omitempty"`
 }
 
 // mjSubmitResp /mj/submit/imagine 响应
@@ -38,12 +38,12 @@ type mjSubmitResp struct {
 
 // mjTaskResp /mj/task/{id}/fetch 响应
 type mjTaskResp struct {
-	Status     string `json:"status"`
-	ImageURL   string `json:"imageUrl"`
-	Progress   string `json:"progress"`
-	FailReason string `json:"failReason"`
+	Status      string `json:"status"`
+	ImageURL    string `json:"imageUrl"`
+	Progress    string `json:"progress"`
+	FailReason  string `json:"failReason"`
 	Description string `json:"description"`
-	Code       int    `json:"code"`
+	Code        int    `json:"code"`
 }
 
 func (c *Client) mjHeaders(req *http.Request) {

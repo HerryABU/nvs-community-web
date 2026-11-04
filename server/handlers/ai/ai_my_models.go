@@ -1,9 +1,9 @@
 package ai
 
 import (
-	"nvs-server/handlers"
 	"time"
 
+	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -18,7 +18,7 @@ import (
 //
 // 数据来源是 AiCallLog（已有），不需要新表、也不需要额外埋点。
 func AiMyModels(c *gin.Context) {
-	uid := handlers.CurrentUserID(c)
+	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
 		utils.Unauthorized(c, "未登录")
 		return

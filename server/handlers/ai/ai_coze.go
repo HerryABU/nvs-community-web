@@ -1,14 +1,11 @@
 package ai
 
-import ()
-
 import (
+	"nvs-server/aiclient"
+	"nvs-server/models"
 	"strconv"
 	"strings"
 	"time"
-
-	"nvs-server/aiclient"
-	"nvs-server/models"
 
 	"github.com/gin-gonic/gin"
 )

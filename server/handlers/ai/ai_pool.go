@@ -1,10 +1,10 @@
 package ai
 
 import (
-	"nvs-server/handlers"
 	"strconv"
 	"strings"
 
+	"nvs-server/handlers/admin"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -49,7 +49,7 @@ func aiModelVO(m *models.AiModel) gin.H {
 
 // AdminGetAiConfig GET /api/admin/ai/config
 func AdminGetAiConfig(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, gin.H{"enabled": models.IsAiEnabled()})
@@ -57,7 +57,7 @@ func AdminGetAiConfig(c *gin.Context) {
 
 // AdminSetAiConfig PUT /api/admin/ai/config
 func AdminSetAiConfig(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -80,7 +80,7 @@ func AdminSetAiConfig(c *gin.Context) {
 
 // AdminListAiModels GET /api/admin/ai/models
 func AdminListAiModels(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	list, err := models.ListAiModels(false)
@@ -169,7 +169,7 @@ func normalizeBalanceProvider(v string) string {
 
 // AdminCreateAiModel POST /api/admin/ai/models
 func AdminCreateAiModel(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	var req aiModelInput
@@ -258,7 +258,7 @@ func AdminCreateAiModel(c *gin.Context) {
 
 // AdminUpdateAiModel PUT /api/admin/ai/models/:id
 func AdminUpdateAiModel(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -375,7 +375,7 @@ func AdminUpdateAiModel(c *gin.Context) {
 
 // AdminDeleteAiModel DELETE /api/admin/ai/models/:id
 func AdminDeleteAiModel(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -389,7 +389,7 @@ func AdminDeleteAiModel(c *gin.Context) {
 // AdminAiModelPresets GET /api/admin/ai/presets — 模型预设（绘画/视频/对话）
 // 站长点「预设」即可填充 base_url / model_id / api_kind / 计费默认值，只需补自己的密钥。
 func AdminAiModelPresets(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	kind := strings.TrimSpace(c.Query("kind"))

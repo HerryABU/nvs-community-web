@@ -1,16 +1,12 @@
 package ai
 
 import (
-	"nvs-server/handlers"
-)
-
-import (
-	"strconv"
-	"strings"
-
 	"nvs-server/collab"
+	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -25,7 +21,7 @@ func ensureNovelOwner(c *gin.Context, novelID uint) bool {
 		return false
 	}
 	// 多人协作：主笔 + 生效中的协作者都可维护记忆（否则协作作者无法用 AI 辅助）
-	if !collab.CanUseAiContext(n.ID, handlers.CurrentUserID(c), handlers.CurrentUserRole(c)) {
+	if !collab.CanUseAiContext(n.ID, hctx.CurrentUserID(c), hctx.CurrentUserRole(c)) {
 		utils.Error(c, 403, 40301, "仅主笔或协作成员可管理该作品的 AI 记忆")
 		return false
 	}

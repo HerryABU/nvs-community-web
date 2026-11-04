@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"nvs-server/handlers"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"nvs-server/aiclient"
 	"nvs-server/aisafety"
 	"nvs-server/crisis"
+	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -24,7 +24,7 @@ import (
 func AiHubStatus(c *gin.Context) {
 	aiEnabled := models.IsAiEnabled()
 	tokenEnabled := models.IsTokenEnabled()
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	out := gin.H{
 		"ai_enabled":    aiEnabled,
 		"token_enabled": tokenEnabled,
@@ -66,7 +66,7 @@ func AiHubStatus(c *gin.Context) {
 
 // AiHubSessions GET /api/ai/sessions — 我的会话列表
 func AiHubSessions(c *gin.Context) {
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	list, err := models.ListAiChatSessions(userID, 100)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
@@ -77,7 +77,7 @@ func AiHubSessions(c *gin.Context) {
 
 // AiHubSessionMessages GET /api/ai/sessions/:id/messages — 会话消息
 func AiHubSessionMessages(c *gin.Context) {
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	s, err := models.GetAiChatSession(uint(id), userID)
 	if err != nil {
@@ -95,7 +95,7 @@ func AiHubSessionMessages(c *gin.Context) {
 
 // AiHubDeleteSession DELETE /api/ai/sessions/:id — 删除会话
 func AiHubDeleteSession(c *gin.Context) {
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := models.DeleteAiChatSession(uint(id), userID); err != nil {
 		utils.InternalError(c, "删除失败")
@@ -174,7 +174,7 @@ func AiHubChatStream(c *gin.Context) {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	var req struct {
 		SessionID uint   `json:"session_id"`
 		ModelID   uint   `json:"model_id"`

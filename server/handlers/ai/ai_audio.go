@@ -1,7 +1,22 @@
 package ai
 
 import (
-	"nvs-server/handlers"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"nvs-server/aiclient"
+	"nvs-server/config"
+	"nvs-server/handlers/admin"
+	"nvs-server/handlers/hctx"
+	"nvs-server/models"
+	"nvs-server/security"
+	"nvs-server/utils"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 // ==================== 语音合成 / 音乐（gap-audit #18）====================
@@ -15,29 +30,11 @@ import (
 //      不要偷偷回落到 chat 模型去「假装」生成；
 //   3. 产物不覆盖、不删除他人文件；文件名随机，URL 不可枚举。
 
-import (
-	"crypto/rand"
-	"encoding/hex"
-	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
-
-	"nvs-server/aiclient"
-	"nvs-server/config"
-	"nvs-server/models"
-	"nvs-server/security"
-	"nvs-server/utils"
-
-	"github.com/gin-gonic/gin"
-)
-
 const maxSpeechRunes = 2000
 
 // Speech POST /api/ai/speech
 func Speech(c *gin.Context) {
-	uid := handlers.CurrentUserID(c)
+	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
 		utils.Unauthorized(c, "请先登录")
 		return
@@ -191,7 +188,7 @@ func saveAudioFile(data []byte, ext string) (string, error) {
 
 // AdminSpeechModels GET /api/admin/ai/audio-models —— 供后台提示「有没有可用的语音模型」
 func AdminSpeechModels(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	var list []models.AiModel

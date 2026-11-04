@@ -1,7 +1,11 @@
 package ai
 
 import (
-	"nvs-server/handlers"
+	"nvs-server/handlers/admin"
+	"nvs-server/models"
+	"nvs-server/utils"
+
+	"github.com/gin-gonic/gin"
 )
 
 // AI 路由策略的管理接口（gap-audit #10/#11）
@@ -10,16 +14,9 @@ import (
 //
 // 排序预览很重要：策略是「自动」的，不给预览就没人知道它到底选了什么。
 
-import (
-	"nvs-server/models"
-	"nvs-server/utils"
-
-	"github.com/gin-gonic/gin"
-)
-
 // GetAiRouteConfig GET /api/admin/ai/route
 func GetAiRouteConfig(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	cfg := models.LoadAiRouteConfig()
@@ -38,7 +35,7 @@ func GetAiRouteConfig(c *gin.Context) {
 
 // UpdateAiRouteConfig PUT /api/admin/ai/route
 func UpdateAiRouteConfig(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	var in models.AiRouteConfig

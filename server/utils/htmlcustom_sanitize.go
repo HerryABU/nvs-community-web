@@ -3,11 +3,11 @@
 // 设计取舍（务必先读，再改）：
 //   - 与 security.SanitizeUserContent（正文，会剥离 <style>/div 等布局标签，过于激进）不同，
 //     自定义主页需要用户自由排布版式、写 CSS，故采用「保留结构、剥离脚本」的温和策略：
-//       · 允许 <style> 内联样式 + 布局/排版/颜色等安全标签（div/section/table/img/a ...）；
-//       · 剥离所有可执行/危险标签：script / iframe / object / embed / svg / link / meta /
-//         base / form / input / button / textarea / select / audio / video / canvas ...；
-//       · 剥离事件处理器（on*）、危险协议（javascript:/vbscript:/data:）、危险 CSS；
-//       · <style> 块内 CSS 走 utils.SanitizeCSS 白名单消毒（布局/字体/动画/变换均可，禁 url() 外链）。
+//     · 允许 <style> 内联样式 + 布局/排版/颜色等安全标签（div/section/table/img/a ...）；
+//     · 剥离所有可执行/危险标签：script / iframe / object / embed / svg / link / meta /
+//     base / form / input / button / textarea / select / audio / video / canvas ...；
+//     · 剥离事件处理器（on*）、危险协议（javascript:/vbscript:/data:）、危险 CSS；
+//     · <style> 块内 CSS 走 utils.SanitizeCSS 白名单消毒（布局/字体/动画/变换均可，禁 url() 外链）。
 //   - 「消毒但不能太过」：保留观感（布局、颜色、字体、动画），只去危险执行通道。
 //   - 信任模型：即便经本消毒，作者公开页内容仍可被技术用户构造钓鱼/误导版式，故叠加
 //     站长/管理员审核队列（AuthorHomeCustomize.ReviewStatus），双重保险。

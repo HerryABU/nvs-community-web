@@ -1,17 +1,13 @@
 package ai
 
 import (
-	"nvs-server/handlers"
-)
-
-import (
 	"fmt"
-	"strings"
-	"time"
-
 	"nvs-server/aiclient"
+	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -62,7 +58,7 @@ func aiActionValid(action string) bool {
 func AiStatus(c *gin.Context) {
 	aiEnabled := models.IsAiEnabled()
 	tokenEnabled := models.IsTokenEnabled()
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	var modelList []gin.H
 	if aiEnabled {
 		list, err := models.ListAiModelsByKind(models.AiKindChat, true)
@@ -92,7 +88,7 @@ func AiEstimate(c *gin.Context) {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	var req struct {
 		ModelID   uint   `json:"model_id"`
 		Text      string `json:"text"`
@@ -130,7 +126,7 @@ func AiComplete(c *gin.Context) {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
-	userID := handlers.CurrentUserID(c)
+	userID := hctx.CurrentUserID(c)
 	var req struct {
 		ModelID     uint     `json:"model_id"`
 		Action      string   `json:"action"`

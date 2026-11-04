@@ -43,16 +43,16 @@ func ExceedsLimit(s string, maxRunes int) bool {
 // 常见定长字段的字符上限（与 models gorm:size 对应，前后端共用同一组常量语义）。
 // 前端 maxlength 与后端 ClampString 必须使用同一组数值。
 const (
-	MaxUsername   = 64  // users.username
-	MaxEmail      = 128 // users.email
-	MaxNickname   = 64  // users.nickname
-	MaxSignature  = 256 // users.signature
-	MaxTitle      = 256 // novel/blog/thread/chapter title
-	MaxForumName  = 128 // forums.name
-	MaxReason     = 256 // 举报/禁言/封禁原因
-	MaxTagName    = 32  // blog_tags.name
-	MaxTopicName  = 48  // blog_topics.name
+	MaxUsername   = 64   // users.username
+	MaxEmail      = 128  // users.email
+	MaxNickname   = 64   // users.nickname
+	MaxSignature  = 256  // users.signature
+	MaxTitle      = 256  // novel/blog/thread/chapter title
+	MaxForumName  = 128  // forums.name
+	MaxReason     = 256  // 举报/禁言/封禁原因
+	MaxTagName    = 32   // blog_tags.name
+	MaxTopicName  = 48   // blog_topics.name
 	MaxNoteBody   = 2000 // reading_notes.content
-	MaxAnnTitle   = 255 // announcements.title
-	MaxSoftReason = 512 // softdel_*.reason
+	MaxAnnTitle   = 255  // announcements.title
+	MaxSoftReason = 512  // softdel_*.reason
 )

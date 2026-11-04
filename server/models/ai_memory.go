@@ -153,6 +153,7 @@ func DeleteChapterMemory(novelID, chapterID uint) error {
 //  1. 当前章尾部窗口（固定保留）
 //  2. 最近 K 章摘要（新→旧，预算不足从最旧开始丢）
 //  3. 作品大纲（仍有余量则附加）
+//
 // 返回注入文本与估算 tokens（调用方应计入 tokens_in 预检）。
 func BuildNovelContext(novelID, currentChapterID uint, currentText string, budget int) (string, int) {
 	if budget <= 0 {

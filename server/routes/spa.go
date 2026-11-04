@@ -13,7 +13,8 @@ import (
 	"log"
 	"net/http"
 	"nvs-server/config"
-	"nvs-server/handlers"
+	"nvs-server/handlers/health"
+	"nvs-server/handlers/wasm"
 	"nvs-server/honeypot"
 	"nvs-server/middleware"
 	"nvs-server/models"
@@ -39,7 +40,7 @@ func registerStaticAndSPA(r *gin.Engine) {
 	)
 	sandboxGroup.StaticFS("/userframe", gin.Dir(config.UserFrameDir, false))
 	sandboxGroup.StaticFS("/userhtml", gin.Dir(config.UserHTMLDir, false))
-	sandboxGroup.GET("/frame/:userID/*filepath", handlers.ServeSandboxPreview)
+	sandboxGroup.GET("/frame/:userID/*filepath", wasm.ServeSandboxPreview)
 	// 端口反向代理（/sandbox/proxy/:port/*path） + 严格安全
 	// 命名代理（/sandbox/proxy/{authorId}/{projectName}/*path）— 隐藏端口号防打洞
 	proxyGroup := r.Group("/sandbox/proxy")
@@ -64,7 +65,7 @@ func registerStaticAndSPA(r *gin.Engine) {
 	}
 
 	// 注入前端资源探针（供 /health 检查前端 SPA 是否可服务）
-	handlers.FrontendProbe = func() (string, bool) {
+	health.FrontendProbe = func() (string, bool) {
 		indexBytes, err := fs.ReadFile(frontendFS, "index.html")
 		if err != nil {
 			return "", false

@@ -1,10 +1,10 @@
 package ai
 
 import (
-	"nvs-server/handlers"
 	"strconv"
 	"strings"
 
+	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -21,7 +21,7 @@ import (
 
 // AiSubmitAgent POST /api/ai/agents/submit
 func AiSubmitAgent(c *gin.Context) {
-	uid := handlers.CurrentUserID(c)
+	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
 		utils.Unauthorized(c, "未登录")
 		return
@@ -59,7 +59,7 @@ func AiSubmitAgent(c *gin.Context) {
 
 // AiMyAgentSubmissions GET /api/ai/agents/my-submissions
 func AiMyAgentSubmissions(c *gin.Context) {
-	uid := handlers.CurrentUserID(c)
+	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
 		utils.Unauthorized(c, "未登录")
 		return
@@ -103,7 +103,7 @@ func AdminListAgentSubmissions(c *gin.Context) {
 // AdminReviewAgentSubmission POST /api/admin/agent-submissions/:id/review
 // body: { action: "approve" | "reject", note: "..." }
 func AdminReviewAgentSubmission(c *gin.Context) {
-	uid := handlers.CurrentUserID(c)
+	uid := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var sub models.AgentSubmission
 	if err := models.DB.First(&sub, id).Error; err != nil {

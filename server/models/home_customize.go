@@ -50,11 +50,11 @@ func SetUserHomeCustomize(userID uint, raw string) error {
 // （不依赖硬编码，站长由 role 查询），站长检查原文后通过则 public_html = safe_html 对外可见。
 type AuthorHomeCustomize struct {
 	AuthorID     uint       `gorm:"primaryKey" json:"author_id"`
-	RawHTML      string     `gorm:"type:text" json:"raw_html"`     // 作者提交的原始片段（送审原文，供站长复核）
-	SafeHTML     string     `gorm:"type:text" json:"safe_html"`    // 服务端消毒后片段
-	PublicHTML   string     `gorm:"type:text" json:"public_html"`  // 对外可见（approved 时等于 safe_html）
+	RawHTML      string     `gorm:"type:text" json:"raw_html"`                             // 作者提交的原始片段（送审原文，供站长复核）
+	SafeHTML     string     `gorm:"type:text" json:"safe_html"`                            // 服务端消毒后片段
+	PublicHTML   string     `gorm:"type:text" json:"public_html"`                          // 对外可见（approved 时等于 safe_html）
 	ReviewStatus string     `gorm:"type:varchar(16);default:pending" json:"review_status"` // pending/approved/rejected
-	HadIssues    bool       `gorm:"default:false" json:"had_issues"`                      // 自动化预检是否发现被移除项
+	HadIssues    bool       `gorm:"default:false" json:"had_issues"`                       // 自动化预检是否发现被移除项
 	ReviewNote   string     `gorm:"type:text" json:"review_note"`
 	ReviewedBy   uint       `gorm:"default:0" json:"reviewed_by"`
 	ReviewedAt   *time.Time `json:"reviewed_at"`

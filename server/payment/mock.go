@@ -10,10 +10,10 @@ import (
 
 // MockProvider 模拟支付 provider：不接真实网关。
 //
-// - CreateOrder 返回站内模拟收银台相对路径（前端 SPA 路由 /pay/mock/:orderNo，
-//   knownSPARoots 已放行 "pay" 根段）；
-// - VerifyNotify 不应被调用：mock 到账走受登录保护的 confirm 接口
-//   （handlers.PaymentMockConfirm），与真实回调路径物理隔离。
+//   - CreateOrder 返回站内模拟收银台相对路径（前端 SPA 路由 /pay/mock/:orderNo，
+//     knownSPARoots 已放行 "pay" 根段）；
+//   - VerifyNotify 不应被调用：mock 到账走受登录保护的 confirm 接口
+//     （payment.PaymentMockConfirm），与真实回调路径物理隔离。
 type MockProvider struct{}
 
 // Name 提供者标识

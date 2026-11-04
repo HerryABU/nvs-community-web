@@ -16,7 +16,7 @@ import (
 // NamedProxy 命名代理映射：authorId/projectName → 内部端口
 type NamedProxy struct {
 	mu      sync.RWMutex
-	routes  map[string]int         // "authorId/projectName" → port
+	routes  map[string]int // "authorId/projectName" → port
 	proxies map[string]*httputil.ReverseProxy
 }
 

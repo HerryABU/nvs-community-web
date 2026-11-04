@@ -16,7 +16,7 @@ import (
 
 // Fingerprints GET /api/admin/honeypot/sessions/:sid/fingerprints
 func Fingerprints(c *gin.Context) {
-	if !ensureAdmin(c) {
+	if !EnsureAdmin(c) {
 		return
 	}
 	sid, _ := strconv.ParseUint(c.Param("sid"), 10, 64)
@@ -30,7 +30,7 @@ func Fingerprints(c *gin.Context) {
 
 // ExportZip GET /api/admin/honeypot/export.zip?session_id= —— 取证包（含 SHA256 清单）
 func ExportZip(c *gin.Context) {
-	if !ensureAdmin(c) {
+	if !EnsureAdmin(c) {
 		return
 	}
 	sid, _ := strconv.ParseUint(c.Query("session_id"), 10, 64)
@@ -48,7 +48,7 @@ func ExportZip(c *gin.Context) {
 
 // Rules GET /api/admin/honeypot/rules —— 提炼出的候选规则
 func Rules(c *gin.Context) {
-	if !ensureAdmin(c) {
+	if !EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, gin.H{"list": honeypot.SuggestRules(20)})
@@ -56,7 +56,7 @@ func Rules(c *gin.Context) {
 
 // ApplyRules POST /api/admin/honeypot/rules { keywords: [] }
 func ApplyRules(c *gin.Context) {
-	if !ensureAdmin(c) {
+	if !EnsureAdmin(c) {
 		return
 	}
 	var in struct {

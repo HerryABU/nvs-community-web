@@ -16,7 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func ensureAdmin(c *gin.Context) bool {
+func EnsureAdmin(c *gin.Context) bool {
 	role := middleware.UserRole(c)
 	if role != "admin" {
 		utils.Forbidden(c, "仅管理员可操作")
@@ -27,7 +27,7 @@ func ensureAdmin(c *gin.Context) bool {
 
 // GetConfig GET /api/admin/honeypot/config —— 概览 + 当前策略
 func GetConfig(c *gin.Context) {
-	if !ensureAdmin(c) {
+	if !EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, honeypot.GetOverview())
@@ -36,7 +36,7 @@ func GetConfig(c *gin.Context) {
 // SaveDecoyProfile PUT /api/admin/honeypot/decoy-profile
 // 只更新「诱饵内容」画像，不碰启用/等级等策略开关（独立接口，避免全量覆盖误清空）。
 func SaveDecoyProfile(c *gin.Context) {
-	if !ensureAdmin(c) {
+	if !EnsureAdmin(c) {
 		return
 	}
 	var in struct {
@@ -58,7 +58,7 @@ func SaveDecoyProfile(c *gin.Context) {
 // 蜜罐密钥「重新生成」（随机新密钥）或「手动修改」（自带 base64 密钥）。
 // 重新生成后，旧诱饵 .env 暴露值失效、已签发影子 token 全部作废。
 func RegenerateKey(c *gin.Context) {
-	if !ensureAdmin(c) {
+	if !EnsureAdmin(c) {
 		return
 	}
 	var in struct {
@@ -81,7 +81,7 @@ func RegenerateKey(c *gin.Context) {
 
 // SaveConfig PUT /api/admin/honeypot/config
 func SaveConfig(c *gin.Context) {
-	if !ensureAdmin(c) {
+	if !EnsureAdmin(c) {
 		return
 	}
 	var in honeypot.Setting
@@ -99,7 +99,7 @@ func SaveConfig(c *gin.Context) {
 
 // ListSessions GET /api/admin/honeypot/sessions?page=&page_size=&keyword=&min_risk=
 func ListSessions(c *gin.Context) {
-	if !ensureAdmin(c) {
+	if !EnsureAdmin(c) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -115,7 +115,7 @@ func ListSessions(c *gin.Context) {
 
 // SessionDetail GET /api/admin/honeypot/sessions/:sid
 func SessionDetail(c *gin.Context) {
-	if !ensureAdmin(c) {
+	if !EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("sid"), 10, 64)
@@ -130,7 +130,7 @@ func SessionDetail(c *gin.Context) {
 // Export GET /api/admin/honeypot/export?session_id=
 // 导出取证数据；导出动作本身留痕（记一条 export 事件到该会话）
 func Export(c *gin.Context) {
-	if !ensureAdmin(c) {
+	if !EnsureAdmin(c) {
 		return
 	}
 	sid, _ := strconv.ParseUint(c.Query("session_id"), 10, 64)
@@ -145,7 +145,7 @@ func Export(c *gin.Context) {
 
 // Cleanup POST /api/admin/honeypot/cleanup —— 先冷归档再删除（合规留存）
 func Cleanup(c *gin.Context) {
-	if !ensureAdmin(c) {
+	if !EnsureAdmin(c) {
 		return
 	}
 	res, err := honeypot.ArchiveAndCleanup()
@@ -162,7 +162,7 @@ func Cleanup(c *gin.Context) {
 
 // Archives GET /api/admin/honeypot/archives —— 已归档文件列表
 func Archives(c *gin.Context) {
-	if !ensureAdmin(c) {
+	if !EnsureAdmin(c) {
 		return
 	}
 	list, err := honeypot.ListArchives()
@@ -175,7 +175,7 @@ func Archives(c *gin.Context) {
 
 // DBInfo GET /api/admin/honeypot/db —— 当前是内嵌库还是独立库
 func DBInfo(c *gin.Context) {
-	if !ensureAdmin(c) {
+	if !EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, gin.H{"isolated": honeypot.Isolated(), "path": honeypot.DBPath()})
@@ -183,7 +183,7 @@ func DBInfo(c *gin.Context) {
 
 // Bans GET /api/admin/honeypot/bans
 func Bans(c *gin.Context) {
-	if !ensureAdmin(c) {
+	if !EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, gin.H{"list": honeypot.BannedList()})
@@ -191,7 +191,7 @@ func Bans(c *gin.Context) {
 
 // Unban POST /api/admin/honeypot/unban { ip }
 func Unban(c *gin.Context) {
-	if !ensureAdmin(c) {
+	if !EnsureAdmin(c) {
 		return
 	}
 	var in struct {
@@ -207,7 +207,7 @@ func Unban(c *gin.Context) {
 
 // Ban POST /api/admin/honeypot/ban { ip, minutes }
 func Ban(c *gin.Context) {
-	if !ensureAdmin(c) {
+	if !EnsureAdmin(c) {
 		return
 	}
 	var in struct {
@@ -227,7 +227,7 @@ func Ban(c *gin.Context) {
 
 // SQLiStats GET /api/admin/honeypot/sqli —— 注入蜜罐命中统计（gap-audit #3）
 func SQLiStats(c *gin.Context) {
-	if !ensureAdmin(c) {
+	if !EnsureAdmin(c) {
 		return
 	}
 	type row struct {
@@ -251,7 +251,7 @@ func SQLiStats(c *gin.Context) {
 
 // TLSStats GET /api/admin/honeypot/tls —— JA3/JA4 采集率与配置模板（gap-audit #4）
 func TLSStats(c *gin.Context) {
-	if !ensureAdmin(c) {
+	if !EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, honeypot.TLSStats())

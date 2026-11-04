@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"nvs-server/handlers"
 	"strconv"
 	"strings"
 	"time"
 
 	"nvs-server/aiclient"
+	"nvs-server/handlers/admin"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -49,7 +49,7 @@ type channelMonitorReq struct {
 //  2. 账户还剩多少（能拿到就返回，拿不到明确说原因）；
 //  3. 最近几笔实际扣费（仅 New API 系，需令牌含「查看日志」权限）。
 func AdminAiChannelMonitor(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	var req channelMonitorReq

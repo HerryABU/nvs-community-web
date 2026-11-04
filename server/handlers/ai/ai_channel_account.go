@@ -11,10 +11,10 @@ package ai
 //  3. 收敛 = 对外接口只回「有没有配 / 尾号是什么 / 上次探测结果」，**永不回明文**。
 
 import (
-	"nvs-server/handlers"
 	"strconv"
 	"strings"
 
+	"nvs-server/handlers/admin"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -25,7 +25,7 @@ import (
 //
 // 入参里 access_token / model_key：留空=不改；传 "-"=清空；传值=覆盖。
 func AdminSaveChannelAccount(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -49,7 +49,7 @@ func AdminSaveChannelAccount(c *gin.Context) {
 
 // AdminGetChannelAccount GET /api/admin/ai/channel-account?base_url=
 func AdminGetChannelAccount(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	base := strings.TrimSpace(c.Query("base_url"))
@@ -64,7 +64,7 @@ func AdminGetChannelAccount(c *gin.Context) {
 
 // AdminListChannelAccounts GET /api/admin/ai/channel-accounts
 func AdminListChannelAccounts(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	list := models.ListAiChannelAccounts()
@@ -77,7 +77,7 @@ func AdminListChannelAccounts(c *gin.Context) {
 
 // AdminDeleteChannelAccount DELETE /api/admin/ai/channel-account/:id
 func AdminDeleteChannelAccount(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	id64, _ := strconv.ParseUint(c.Param("id"), 10, 64)

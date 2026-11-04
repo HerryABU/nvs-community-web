@@ -2,8 +2,8 @@
 //
 // 背景：小说上传分解允许用户提交自定义 split_rule。Go 标准库 regexp 基于 RE2（Thompson NFA），
 // 不存在经典「灾难性回溯」ReDoS；但用户提交任意正则仍有两类风险：
-//   1) 未来若改换为 PCRE/NFA 引擎，当前任意正则会立刻变成真正的 ReDoS；
-//   2) 超长/特殊正则配合超大正文，仍可能造成 CPU 长时间占用（资源耗尽型 DoS）。
+//  1. 未来若改换为 PCRE/NFA 引擎，当前任意正则会立刻变成真正的 ReDoS；
+//  2. 超长/特殊正则配合超大正文，仍可能造成 CPU 长时间占用（资源耗尽型 DoS）。
 //
 // 本包通过「字符白名单 + 禁用回溯结构 + 编译超时 + 输入限长」四重约束，从根上消除正则爆炸：
 //   - 用户规则只能由简单、确定性的语法构成（字符类、基础元字符、中文字符）；
@@ -34,18 +34,19 @@ const SplitTimeout = 3 * time.Second
 // 仅允许构建简单、确定性的正则（字符类、基础元字符、 bounded 量词 {n,m}、中文字符、常用标点）。
 // 任何不在此集合内的字符一律拒绝，从语法层面杜绝回溯型构造。
 // 注：{} 为 RE2 有界量词（{n}/{n,}/{n,m}），确定性无回溯，安全放行；
-//     <>(?P<name>) 命名分组未列入白名单（章节拆分无需命名分组）。
+//
+//	<>(?P<name>) 命名分组未列入白名单（章节拆分无需命名分组）。
 var allowedRuleChars = regexp.MustCompile(`^[\[\](){}.*+?^$|\\/\-#:、，。；;,\s\d\w\p{Han}]*$`)
 
 // 反向引用 \1..\9（回溯型，禁止）。
 var backrefRe = regexp.MustCompile(`\\[1-9]`)
 
 var (
-	errRuleEmpty        = errors.New("拆分规则为空")
-	errRuleTooLong      = errors.New("拆分正则过长（上限 200 字符）")
-	errRuleIllegalChar  = errors.New("拆分正则包含非法字符，仅允许基础字符类与中文字符")
-	errRuleLookaround   = errors.New("拆分正则禁止环视/反向引用等回溯型结构")
-	errRuleCompile      = errors.New("拆分正则编译失败")
+	errRuleEmpty       = errors.New("拆分规则为空")
+	errRuleTooLong     = errors.New("拆分正则过长（上限 200 字符）")
+	errRuleIllegalChar = errors.New("拆分正则包含非法字符，仅允许基础字符类与中文字符")
+	errRuleLookaround  = errors.New("拆分正则禁止环视/反向引用等回溯型结构")
+	errRuleCompile     = errors.New("拆分正则编译失败")
 )
 
 // ValidateChapterSplitRule 校验用户提交的章节拆分正则是否安全。

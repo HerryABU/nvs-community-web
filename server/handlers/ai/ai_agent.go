@@ -1,15 +1,11 @@
 package ai
 
 import (
-	"nvs-server/handlers"
-)
-
-import (
-	"strconv"
-	"strings"
-
+	"nvs-server/handlers/admin"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -40,7 +36,7 @@ func aiAgentVO(a *models.AiAgent) gin.H {
 
 // AdminListAiAgents GET /api/admin/ai/agents
 func AdminListAiAgents(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	list, err := models.ListAiAgents(false)
@@ -57,7 +53,7 @@ func AdminListAiAgents(c *gin.Context) {
 
 // AdminCreateAiAgent POST /api/admin/ai/agents
 func AdminCreateAiAgent(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -116,7 +112,7 @@ func AdminCreateAiAgent(c *gin.Context) {
 
 // AdminUpdateAiAgent PUT /api/admin/ai/agents/:id
 func AdminUpdateAiAgent(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -187,7 +183,7 @@ func AdminUpdateAiAgent(c *gin.Context) {
 
 // AdminDeleteAiAgent DELETE /api/admin/ai/agents/:id
 func AdminDeleteAiAgent(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)

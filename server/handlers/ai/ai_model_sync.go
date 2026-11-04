@@ -2,12 +2,12 @@ package ai
 
 import (
 	"encoding/json"
-	"nvs-server/handlers"
 	"strconv"
 	"strings"
 
 	"nvs-server/aiapi"
 	"nvs-server/aiapi/vendor"
+	"nvs-server/handlers/admin"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -17,7 +17,7 @@ import (
 // AdminPullAiModels POST /api/admin/ai/models/pull
 // 从 OpenAI 兼容渠道一次性拉取全部模型，返回服务端推断的分类标签，站长按需勾选导入。
 func AdminPullAiModels(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -43,7 +43,7 @@ func AdminPullAiModels(c *gin.Context) {
 // AdminImportAiModels POST /api/admin/ai/models/import
 // 批量导入从渠道拉取的模型（站长勾选的子集）。默认对用户隐藏，由站长按需开放。
 func AdminImportAiModels(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -126,7 +126,7 @@ func AdminImportAiModels(c *gin.Context) {
 // AdminSetModelVisibility POST /api/admin/ai/models/:id/visibility
 // 开放/收回某模型对用户的可见性（站长按需选择开放哪些渠道/模型，严禁硬编码名单）。
 func AdminSetModelVisibility(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -149,7 +149,7 @@ func AdminSetModelVisibility(c *gin.Context) {
 // AdminMergeModels POST /api/admin/ai/models/merge
 // 按渠道合并：将指定模型归入同一渠道分组（前端按渠道聚合展示给用户）。
 func AdminMergeModels(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -171,7 +171,7 @@ func AdminMergeModels(c *gin.Context) {
 // AdminSplitModels POST /api/admin/ai/models/split
 // 拆分：清除指定模型的渠道分组，各自独立展示。
 func AdminSplitModels(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

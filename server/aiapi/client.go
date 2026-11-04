@@ -36,12 +36,12 @@ const (
 
 // 错误类型（需求文档 §7.3）。
 const (
-	ErrTypeAuth         = "auth"
-	ErrTypeRateLimit    = "rate_limit"
-	ErrTypeTimeout      = "timeout"
+	ErrTypeAuth          = "auth"
+	ErrTypeRateLimit     = "rate_limit"
+	ErrTypeTimeout       = "timeout"
 	ErrTypeContentFilter = "content_filter"
-	ErrTypeNetwork      = "network"
-	ErrTypeUnknown      = "unknown"
+	ErrTypeNetwork       = "network"
+	ErrTypeUnknown       = "unknown"
 )
 
 // Client 框架级 AI 端点客户端（需求文档 §6.2）。

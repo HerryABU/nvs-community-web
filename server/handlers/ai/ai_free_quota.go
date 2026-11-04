@@ -1,10 +1,8 @@
 package ai
 
 import (
-	"nvs-server/handlers"
-)
-
-import (
+	"nvs-server/handlers/admin"
+	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -19,12 +17,12 @@ func AiFreeQuotaStatus(c *gin.Context) {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
-	utils.Success(c, models.SummarizeAiFreeQuota(handlers.CurrentUserID(c)))
+	utils.Success(c, models.SummarizeAiFreeQuota(hctx.CurrentUserID(c)))
 }
 
 // AdminGetAiFreeQuotaConfig GET /api/admin/ai/free-quota/config — 读取配置
 func AdminGetAiFreeQuotaConfig(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, gin.H{
@@ -35,7 +33,7 @@ func AdminGetAiFreeQuotaConfig(c *gin.Context) {
 
 // AdminSetAiFreeQuotaConfig PUT /api/admin/ai/free-quota/config — 保存配置（立即生效）
 func AdminSetAiFreeQuotaConfig(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -62,7 +60,7 @@ func AdminSetAiFreeQuotaConfig(c *gin.Context) {
 
 // AdminListAiFreeQuotaOverrides GET /api/admin/ai/free-quota/overrides — 按人覆盖列表
 func AdminListAiFreeQuotaOverrides(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	list, err := models.ListUserAiFreeQuotas()
@@ -76,7 +74,7 @@ func AdminListAiFreeQuotaOverrides(c *gin.Context) {
 // AdminManageAiFreeQuotaOverride POST /api/admin/ai/free-quota/overrides — 设置/撤销按人覆盖
 // body: { action: "set"|"remove", user_id, daily_calls, daily_tokens, note }
 func AdminManageAiFreeQuotaOverride(c *gin.Context) {
-	if !handlers.EnsureAdmin(c) {
+	if !admin.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

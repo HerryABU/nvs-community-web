@@ -1,7 +1,29 @@
 package ai
 
 import (
-	"nvs-server/handlers"
+	"archive/zip"
+	"bytes"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
+	"nvs-server/config"
+	"nvs-server/handlers/hctx"
+	"nvs-server/models"
+	"nvs-server/utils"
+	"os"
+	"path"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 // ==================== AI 出图：附件上传 + 历史导出（gap-audit #17）====================
@@ -16,32 +38,6 @@ import (
 //     禁止重定向到私网，限 10MB / 15 秒；
 //   - 抓不到就跳过（manifest 记录 skip 原因），不让单张坏图毁掉整包导出。
 
-import (
-	"archive/zip"
-	"bytes"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net"
-	"net/http"
-	"net/url"
-	"os"
-	"path"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
-
-	"nvs-server/config"
-	"nvs-server/models"
-	"nvs-server/utils"
-
-	"github.com/gin-gonic/gin"
-)
-
 const (
 	maxAttachBytes   = 10 << 20  // 单附件 10MB
 	maxExportFiles   = 120       // 单次导出最多下载多少张图
@@ -52,7 +48,7 @@ const (
 // AttachMedia POST /api/ai/media/attach —— 上传参考图/素材（multipart: file）
 // 返回 { url, name, size }；前端再把它作为 attach_urls 提交给出图接口。
 func AttachMedia(c *gin.Context) {
-	uid := handlers.CurrentUserID(c)
+	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
 		utils.Unauthorized(c, "请先登录")
 		return
@@ -108,7 +104,7 @@ func AttachMedia(c *gin.Context) {
 // ExportMediaTask GET /api/ai/media/:id/export?files=1
 // 单任务导出：默认 JSON；files=1 时打 zip（含图片文件）
 func ExportMediaTask(c *gin.Context) {
-	uid := handlers.CurrentUserID(c)
+	uid := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if uid == 0 || id == 0 {
 		utils.BadRequest(c, "参数错误")
@@ -136,7 +132,7 @@ func ExportMediaTask(c *gin.Context) {
 // ExportMediaHistory GET /api/ai/media/export.zip?kind=image&month=YYYY-MM&limit=200
 // 历史导出：items.json（全部任务）+ files/（图片）+ manifest.json（每文件 SHA256）
 func ExportMediaHistory(c *gin.Context) {
-	uid := handlers.CurrentUserID(c)
+	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
 		utils.Unauthorized(c, "请先登录")
 		return

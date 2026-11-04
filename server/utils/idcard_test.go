@@ -64,8 +64,8 @@ func TestMaskIDCard(t *testing.T) {
 func TestAgeAt(t *testing.T) {
 	// 1990-06-15 出生
 	cases := []struct {
-		when  string
-		want  int
+		when string
+		want int
 	}{
 		{"2020-06-14", 29}, // 生日前一天
 		{"2020-06-15", 30}, // 生日当天

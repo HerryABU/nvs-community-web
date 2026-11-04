@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"nvs-server/handlers"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"nvs-server/aiclient"
 	"nvs-server/config"
 	"nvs-server/doctext"
+	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -66,7 +66,7 @@ func isAiImageExt(ext string) bool {
 
 // AiAttachmentUpload 附件上传
 func AiAttachmentUpload(c *gin.Context) {
-	if handlers.CurrentUserID(c) == 0 {
+	if hctx.CurrentUserID(c) == 0 {
 		utils.Unauthorized(c, "请先登录")
 		return
 	}

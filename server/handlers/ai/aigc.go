@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
-	"nvs-server/handlers"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,6 +25,8 @@ import (
 
 	"nvs-server/aigc"
 	"nvs-server/config"
+	"nvs-server/handlers/hctx"
+	"nvs-server/handlers/web"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -180,7 +181,7 @@ func AiAigcOptions(c *gin.Context) {
 // AiAigcExport POST /api/ai/aigc/export
 // 入参只有参数（裁剪/尺寸/格式/豁免/提示词），图片由服务端从原图重新合成。
 func AiAigcExport(c *gin.Context) {
-	uid := handlers.CurrentUserID(c)
+	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
 		utils.Unauthorized(c, "请先登录")
 		return
@@ -447,16 +448,16 @@ func AdminSaveAigcConfig(c *gin.Context) {
 
 // AdminListAigcExports GET /api/admin/aigc/exports?page=&size=
 func AdminListAigcExports(c *gin.Context) {
-	page := handlers.AtoiDefault(c.Query("page"), 1)
-	size := handlers.AtoiDefault(c.Query("size"), 20)
+	page := web.AtoiDefault(c.Query("page"), 1)
+	size := web.AtoiDefault(c.Query("size"), 20)
 	list, total := models.ListAigcExports(page, size)
 	utils.Success(c, gin.H{"list": list, "total": total, "page": page, "size": size})
 }
 
 // AdminListAigcWaivers GET /api/admin/aigc/waivers?page=&size=
 func AdminListAigcWaivers(c *gin.Context) {
-	page := handlers.AtoiDefault(c.Query("page"), 1)
-	size := handlers.AtoiDefault(c.Query("size"), 20)
+	page := web.AtoiDefault(c.Query("page"), 1)
+	size := web.AtoiDefault(c.Query("size"), 20)
 	list, total := models.ListAigcWaiverLogs(page, size)
 	utils.Success(c, gin.H{"list": list, "total": total, "page": page, "size": size})
 }
