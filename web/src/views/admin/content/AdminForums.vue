@@ -141,7 +141,7 @@
           </el-select>
         </el-form-item>
         <el-form-item v-if="forumForm.type === 'sensitive'" label="绑定分区">
-          <el-input v-model="forumForm.zone" placeholder="如：同人区、政治文学区" maxlength="64" />
+          <el-input v-model="forumForm.zone" placeholder="如：二次元区、二次元同人区、政治文学区" maxlength="64" />
           <span class="hint-text">填写隔离墙分区名，进入论坛时将触发确认弹窗</span>
         </el-form-item>
         <el-form-item label="排序权重">

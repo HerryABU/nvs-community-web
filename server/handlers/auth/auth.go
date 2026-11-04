@@ -32,7 +32,7 @@ func RecordUserAudit(c *gin.Context, userID uint, action, detail, result string)
 }
 
 // RecordZoneEnter POST /api/zone/enter — 记录用户进入隔离墙（敏感分区）的确认时间（176号令合规）。
-// 用户在通过同人区/政治文学区等敏感分区的确认弹窗后调用，落库「何时进入」以备审计追溯。
+// 用户在通过二次元同人区/政治文学区等敏感分区的确认弹窗后调用，落库「何时进入」以备审计追溯。
 func RecordZoneEnter(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	var req struct {

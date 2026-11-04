@@ -92,14 +92,14 @@ func GetSiteName() string {
 func GetCategories() []string {
 	val := GetPlatformConfig("categories")
 	if val == "" {
-		return []string{"硬科幻", "奇幻", "推演文学", "架空历史", "现实主义", "悬疑推理", "实验文学", "同人区", "政治区", "讽刺文学", "泛二次元区", "其他"}
+		return []string{"硬科幻", "奇幻", "推演文学", "架空历史", "现实主义", "悬疑推理", "实验文学", "二次元", "二次元同人", "政治区", "讽刺文学", "其他"}
 	}
 	var cats []string
 	if err := json.Unmarshal([]byte(val), &cats); err != nil {
-		return []string{"硬科幻", "奇幻", "推演文学", "架空历史", "现实主义", "悬疑推理", "实验文学", "同人区", "政治区", "讽刺文学", "泛二次元区", "其他"}
+		return []string{"硬科幻", "奇幻", "推演文学", "架空历史", "现实主义", "悬疑推理", "实验文学", "二次元", "二次元同人", "政治区", "讽刺文学", "其他"}
 	}
 	if len(cats) == 0 {
-		return []string{"硬科幻", "奇幻", "推演文学", "架空历史", "现实主义", "悬疑推理", "实验文学", "同人区", "政治区", "讽刺文学", "泛二次元区", "其他"}
+		return []string{"硬科幻", "奇幻", "推演文学", "架空历史", "现实主义", "悬疑推理", "实验文学", "二次元", "二次元同人", "政治区", "讽刺文学", "其他"}
 	}
 	return cats
 }
@@ -126,7 +126,7 @@ func InitPlatformConfigs() {
 		"login_methods":             `{"email":true,"phone":true,"wechat":false}`, // 允许的登录方式
 		"minor_mode":                "off",                                        // 未成年保护模式：off / soft / strict
 		"national_realname_api":     `{"enabled":false,"url":"","token":""}`,      // 国家实名检测 API（不存储姓名/身份证明文）
-		"categories":                `["硬科幻","奇幻","推演文学","架空历史","现实主义","悬疑推理","实验文学","同人区","政治区","讽刺文学","泛二次元区","其他"]`,
+		"categories":                `["硬科幻","奇幻","推演文学","架空历史","现实主义","悬疑推理","实验文学","二次元","二次元同人","政治区","讽刺文学","其他"]`,
 		"robots_txt":                "User-agent: *\nAllow: /\n",
 		"web_publish_quota":         "3", // 每用户默认可公开发布的 web 项目（UserHTML+UserFrame 合计）数量上限
 		"web_publish_quota_size_mb": "0", // 每用户默认可公开发布的 web 项目总大小上限（MB，0 = 不限）

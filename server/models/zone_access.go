@@ -12,7 +12,7 @@ import (
 type ZoneAccessLog struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	UserID    uint      `gorm:"not null;index:idx_zone_access_user_zone,priority:1" json:"user_id"`      // 进入用户
-	Zone      string    `gorm:"size:50;not null;index:idx_zone_access_user_zone,priority:2" json:"zone"` // 隔离墙分区名，如同人区 / 政治文学区
+	Zone      string    `gorm:"size:50;not null;index:idx_zone_access_user_zone,priority:2" json:"zone"` // 隔离墙分区名，如二次元区 / 二次元同人区 / 政治文学区
 	EnteredAt time.Time `gorm:"not null;index" json:"entered_at"`                                        // 进入（确认通过）时间
 	IP        string    `gorm:"size:45" json:"ip"`
 	UserAgent string    `gorm:"type:text" json:"user_agent"`
