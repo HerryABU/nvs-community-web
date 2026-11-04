@@ -51,7 +51,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { Wallet } from '@element-plus/icons-vue';
 import { paymentApi } from '@/api/payment';
-import { tokenApi } from '@/api/token';
+import { tokenApi } from '@/api/auth/token';
 
 const route = useRoute();
 const router = useRouter();

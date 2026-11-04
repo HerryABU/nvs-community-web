@@ -616,7 +616,7 @@ import {
   type SafetyEvent,
   type SafetyProfile,
   type SafetyStats,
-} from '@/api/aiSafety';
+} from '@/api/ai/aiSafety';
 
 const tab = ref('config');
 const loading = ref(false);

@@ -403,7 +403,7 @@ import { onMounted, reactive, ref, computed } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Location, CircleCheck, CircleClose } from '@element-plus/icons-vue';
 import api from '@/api/index';
-import { opsApi, type NavMenuItem, type Carousel, type CheckInConfig, type VisitSetting } from '@/api/ops';
+import { opsApi, type NavMenuItem, type Carousel, type CheckInConfig, type VisitSetting } from '@/api/admin/ops';
 import StateBlock from '@/components/common/StateBlock.vue';
 import AdminApiAlert from '@/components/admin/AdminApiAlert.vue';
 

@@ -181,7 +181,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
-import { ticketApi, type Ticket, type TicketLog } from '@/api/costrisk';
+import { ticketApi, type Ticket, type TicketLog } from '@/api/admin/costrisk';
 import StateBlock from '@/components/common/StateBlock.vue';
 import AdminApiAlert from '@/components/admin/AdminApiAlert.vue';
 

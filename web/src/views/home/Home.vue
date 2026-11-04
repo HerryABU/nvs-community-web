@@ -39,7 +39,7 @@ import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { appPrefix } from '@/utils/prefix';
-import HomeSearchResults from '@/components/HomeSearchResults.vue';
+import HomeSearchResults from '@/components/home/HomeSearchResults.vue';
 import HomeBlocks from '@/components/home/HomeBlocks.vue';
 import { Grid, List, Plus } from '@element-plus/icons-vue';
 

@@ -120,7 +120,7 @@ import { ChatDotSquare } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import StateBlock from '@/components/common/StateBlock.vue';
 import { adminApi } from '@/api/admin';
-import type { AgentSubmission } from '@/api/aiHub';
+import type { AgentSubmission } from '@/api/ai/aiHub';
 
 const list = ref<AgentSubmission[]>([]);
 const loading = ref(false);

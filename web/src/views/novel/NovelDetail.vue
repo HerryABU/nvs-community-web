@@ -156,11 +156,11 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { novelApi, chapterApi, forumApi, type Novel, type Chapter } from '@/api/novel';
-import { bookshelfApi } from '@/api/bookshelf';
-import CommentSection from '@/components/CommentSection.vue';
-import StarRating from '@/components/StarRating.vue';
-import SensitiveZoneGuard from '@/components/SensitiveZoneGuard.vue';
-import ReportButton from '@/components/ReportButton.vue';
+import { bookshelfApi } from '@/api/novel/bookshelf';
+import CommentSection from '@/components/comment/CommentSection.vue';
+import StarRating from '@/components/novel/StarRating.vue';
+import SensitiveZoneGuard from '@/components/common/SensitiveZoneGuard.vue';
+import ReportButton from '@/components/comment/ReportButton.vue';
 import { ArrowDown, ArrowUp, Search } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
 import { shouldShowGuard, markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';

@@ -43,7 +43,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { Refresh } from '@element-plus/icons-vue';
-import { reportApi, type ReportItem } from '@/api/report';
+import { reportApi, type ReportItem } from '@/api/admin/report';
 
 const reports = ref<ReportItem[]>([]);
 const loading = ref(false);

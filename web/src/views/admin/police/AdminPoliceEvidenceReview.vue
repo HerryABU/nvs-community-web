@@ -90,7 +90,7 @@ import { ElMessage } from 'element-plus';
 import { Stamp } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import StateBlock from '@/components/common/StateBlock.vue';
-import { aiSafetyApi, type EvidenceRequest } from '@/api/aiSafety';
+import { aiSafetyApi, type EvidenceRequest } from '@/api/ai/aiSafety';
 
 const loading = ref(false);
 const loadError = ref(false);

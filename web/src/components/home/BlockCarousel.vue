@@ -20,7 +20,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { opsApi, type Carousel } from '@/api/ops';
+import { opsApi, type Carousel } from '@/api/admin/ops';
 
 const props = defineProps<{ config?: string }>();
 const items = ref<Carousel[]>([]);

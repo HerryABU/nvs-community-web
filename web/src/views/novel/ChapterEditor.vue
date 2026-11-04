@@ -184,7 +184,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { novelApi, chapterApi, type Chapter } from '@/api/novel';
 import { ElMessage } from 'element-plus';
 import { ArrowLeft, Plus, Delete, Link, MagicStick, ChatDotRound, Clock } from '@element-plus/icons-vue';
-import RichTextEditor from '@/components/RichTextEditor.vue';
+import RichTextEditor from '@/components/editor/RichTextEditor.vue';
 import ScriptBubbleEditor from '@/components/editor/script/ScriptBubbleEditor.vue';
 import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
 import AiWriteLayer from '@/components/ai/floating/AiWriteLayer.vue';

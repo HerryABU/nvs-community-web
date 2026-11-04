@@ -44,7 +44,7 @@
 <script setup lang="ts">
 import { ref, nextTick } from 'vue';
 import { ElMessage } from 'element-plus';
-import { aiHubApi } from '@/api/aiHub';
+import { aiHubApi } from '@/api/ai/aiHub';
 
 const topic = ref('');
 const depth = ref(3);

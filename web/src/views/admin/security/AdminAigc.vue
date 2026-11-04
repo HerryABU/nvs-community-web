@@ -223,7 +223,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Stamp } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
-import { aigcAdminApi, type AigcConfig } from '@/api/aigc';
+import { aigcAdminApi, type AigcConfig } from '@/api/ai/aigc';
 
 const tab = ref('config');
 const saving = ref(false);

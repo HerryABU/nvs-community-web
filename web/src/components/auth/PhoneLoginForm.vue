@@ -36,7 +36,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useAppStore } from '@/stores/app';
 import { authApi } from '@/api/auth';
-import SlideCaptcha from '@/components/SlideCaptcha.vue';
+import SlideCaptcha from '@/components/auth/SlideCaptcha.vue';
 import { ElMessage } from 'element-plus';
 
 const emit = defineEmits<{ (e: 'success'): void }>();

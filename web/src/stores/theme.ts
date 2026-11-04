@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import { themeApi, type ThemeJSMode } from '@/api/theme';
+import { themeApi, type ThemeJSMode } from '@/api/home/theme';
 import api from '@/api';
 import { useAuthStore } from '@/stores/auth';
 import { useAppStore } from '@/stores/app';

@@ -232,7 +232,7 @@
 import { ref, reactive, onMounted, onUnmounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { InfoFilled, Plus } from '@element-plus/icons-vue';
-import { tokenApi, TOKEN_TYPE_LABELS } from '@/api/token';
+import { tokenApi, TOKEN_TYPE_LABELS } from '@/api/auth/token';
 import { aiApi, type MyAiKey } from '@/api/ai';
 import {
   paymentApi, PAY_STATUS_LABELS, PAY_CHANNEL_LABELS,

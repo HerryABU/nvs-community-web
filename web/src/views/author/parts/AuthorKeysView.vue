@@ -101,7 +101,7 @@
 import { authorDataVersion } from './authorRefresh';
 import { ref, reactive, onMounted, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { apiKeyApi } from '@/api/apikey';
+import { apiKeyApi } from '@/api/auth/apikey';
 
 // API Key 视图：作者工作台内直接创建 / 停用 / 重生成 / 删除 Key。
 const myKeys = ref<any[]>([]);

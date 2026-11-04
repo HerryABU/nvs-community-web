@@ -119,7 +119,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
-import { themeApi, type ThemeJSMode } from '@/api/theme';
+import { themeApi, type ThemeJSMode } from '@/api/home/theme';
 import api from '@/api';
 import { useThemeStore } from '@/stores/theme';
 import { useAuthStore } from '@/stores/auth';

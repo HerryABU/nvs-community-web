@@ -68,7 +68,7 @@
 
 <script setup lang="ts">
 import { computed, inject, ref, onMounted, type Ref } from 'vue';
-import { homeCustomizeApi } from '@/api/homeCustomize';
+import { homeCustomizeApi } from '@/api/home/homeCustomize';
 import { useAuthStore } from '@/stores/auth';
 
 const profile = inject<Ref<any>>('meProfile');

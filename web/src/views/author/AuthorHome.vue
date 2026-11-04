@@ -177,10 +177,10 @@ import { publicApi } from '@/api/admin';
 import { followApi, blogApi } from '@/api/social';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage } from 'element-plus';
-import CommentSection from '@/components/CommentSection.vue';
-import DashboardCharts from '@/components/DashboardCharts.vue';
-import ReportButton from '@/components/ReportButton.vue';
-import { homeCustomizeApi } from '@/api/homeCustomize';
+import CommentSection from '@/components/comment/CommentSection.vue';
+import DashboardCharts from '@/components/admin/DashboardCharts.vue';
+import ReportButton from '@/components/comment/ReportButton.vue';
+import { homeCustomizeApi } from '@/api/home/homeCustomize';
 
 const route = useRoute();
 const router = useRouter();

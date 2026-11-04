@@ -311,16 +311,16 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } 
 import { useAiMark } from '@/composables/useAiMark';
 import { useRoute, useRouter } from 'vue-router';
 import { novelApi, chapterApi, type Chapter } from '@/api/novel';
-import { bookshelfApi } from '@/api/bookshelf';
-import { readingApi, type ReadingNote } from '@/api/reading';
+import { bookshelfApi } from '@/api/novel/bookshelf';
+import { readingApi, type ReadingNote } from '@/api/novel/reading';
 import { useAuthStore } from '@/stores/auth';
 import { renderMarkdown, renderMermaidBlocks, renderChemfigBlocks } from '@/markdown/renderer';
-import CommentSection from '@/components/CommentSection.vue';
-import SensitiveZoneGuard from '@/components/SensitiveZoneGuard.vue';
+import CommentSection from '@/components/comment/CommentSection.vue';
+import SensitiveZoneGuard from '@/components/common/SensitiveZoneGuard.vue';
 import { shouldShowGuard, markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';
-import { frameApi } from '@/api/frame';
+import { frameApi } from '@/api/home/frame';
 import { ElMessage } from 'element-plus';
-import { aiCostApi } from '@/api/costrisk';
+import { aiCostApi } from '@/api/admin/costrisk';
 import { ArrowLeft, List, Star, EditPen, Notebook, Microphone, Collection } from '@element-plus/icons-vue';
 
 const authStore = useAuthStore();

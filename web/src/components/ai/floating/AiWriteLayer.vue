@@ -163,7 +163,7 @@ import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { Paperclip } from '@element-plus/icons-vue';
 import { aiApi } from '@/api/ai';
-import { streamChat, uploadChatAttachment, type ChatAttachment } from '@/api/aiHub';
+import { streamChat, uploadChatAttachment, type ChatAttachment } from '@/api/ai/aiHub';
 import { useDraggable } from './useDraggable';
 import type { StreamTarget } from '@/utils/editorStream';
 

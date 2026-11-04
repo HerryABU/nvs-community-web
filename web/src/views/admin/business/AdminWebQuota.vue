@@ -164,7 +164,7 @@
 import { ref, onMounted } from 'vue';
 import { Refresh, Stamp } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
-import { webQuotaApi } from '@/api/webQuota';
+import { webQuotaApi } from '@/api/admin/webQuota';
 import { ElMessage } from 'element-plus';
 import StateBlock from '@/components/common/StateBlock.vue';
 

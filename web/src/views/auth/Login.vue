@@ -74,7 +74,7 @@ import { ElMessage } from 'element-plus';
 import PhoneLoginForm from '@/components/auth/PhoneLoginForm.vue';
 import ForgotPasswordDialog from '@/components/auth/ForgotPasswordDialog.vue';
 import WeChatQRLogin from '@/components/auth/WeChatQRLogin.vue';
-import SlideCaptcha from '@/components/SlideCaptcha.vue';
+import SlideCaptcha from '@/components/auth/SlideCaptcha.vue';
 
 const router = useRouter();
 const route = useRoute();

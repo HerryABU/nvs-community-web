@@ -136,7 +136,7 @@ import { Sunny } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import SectionHeader from '@/components/common/SectionHeader.vue';
 import StateBlock from '@/components/common/StateBlock.vue';
-import { aiSafetyApi, type CrisisUser, type SafetyConfig } from '@/api/aiSafety';
+import { aiSafetyApi, type CrisisUser, type SafetyConfig } from '@/api/ai/aiSafety';
 
 // ---------- 观察期用户 ----------
 const users = ref<CrisisUser[]>([]);

@@ -85,8 +85,8 @@ import { novelApi, forumApi } from '@/api/novel';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { renderMarkdown } from '@/markdown/renderer';
-import SensitiveZoneGuard from '@/components/SensitiveZoneGuard.vue';
-import FloorComments from '@/components/FloorComments.vue';
+import SensitiveZoneGuard from '@/components/common/SensitiveZoneGuard.vue';
+import FloorComments from '@/components/comment/FloorComments.vue';
 import { markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';
 
 const route = useRoute();

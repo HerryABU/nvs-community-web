@@ -34,7 +34,7 @@
 <script setup lang="ts">
 import { authorDataVersion } from './authorRefresh';
 import { ref, onMounted, watch } from 'vue';
-import { frameApi, htmlApi } from '@/api/frame';
+import { frameApi, htmlApi } from '@/api/home/frame';
 
 // 自定义 HTML 视图：主题模板（frames）与扩展应用（htmls）的入口与统计。
 const htmlStats = ref({ frames: 0, htmls: 0, framePending: 0, htmlPending: 0 });

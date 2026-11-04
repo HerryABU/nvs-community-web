@@ -168,7 +168,7 @@ import AdminHeader from '@/components/admin/AdminHeader.vue';
 import SectionHeader from '@/components/common/SectionHeader.vue';
 import StateBlock from '@/components/common/StateBlock.vue';
 import { aiApi, type AdminAiModel } from '@/api/ai';
-import { moderationApi, type MaliciousReporter, type ModerationConfig, type ModerationStats } from '@/api/moderation';
+import { moderationApi, type MaliciousReporter, type ModerationConfig, type ModerationStats } from '@/api/admin/moderation';
 
 // 选择项由后台给出候选，实际生效值一律来自后端配置（不在前端写死策略）
 const INTERVAL_OPTIONS = [1, 2, 6, 12, 24];

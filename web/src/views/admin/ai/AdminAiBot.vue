@@ -51,7 +51,7 @@ import { ref, reactive, onMounted, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import SectionHeader from '@/components/common/SectionHeader.vue';
 import { aiApi } from '@/api/ai';
-import { aiHubApi } from '@/api/aiHub';
+import { aiHubApi } from '@/api/ai/aiHub';
 import AdminApiAlert from '@/components/admin/AdminApiAlert.vue';
 
 const loading = ref(false);

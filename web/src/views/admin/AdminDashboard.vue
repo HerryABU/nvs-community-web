@@ -260,13 +260,13 @@
 import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { adminApi } from '@/api/admin';
-import { opsApi } from '@/api/ops';
+import { opsApi } from '@/api/admin/ops';
 import {
   User, Document, ChatLineRound, Connection,
   Refresh
 } from '@element-plus/icons-vue';
-import AnimatedNumber from '@/components/AnimatedNumber.vue';
-import DashboardCharts from '@/components/DashboardCharts.vue';
+import AnimatedNumber from '@/components/common/AnimatedNumber.vue';
+import DashboardCharts from '@/components/admin/DashboardCharts.vue';
 import StdMap from '@/components/maps/StdMap.vue';
 import AdminActiveHoursHeatmap from '@/components/admin/AdminActiveHoursHeatmap.vue';
 import StateBlock from '@/components/common/StateBlock.vue';

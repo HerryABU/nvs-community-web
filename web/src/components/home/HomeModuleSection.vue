@@ -68,7 +68,7 @@ import { useRouter } from 'vue-router';
 import { ArrowRight } from '@element-plus/icons-vue';
 import { novelApi } from '@/api/novel';
 import api from '@/api/index';
-import NovelCard from '@/components/NovelCard.vue';
+import NovelCard from '@/components/novel/NovelCard.vue';
 
 type ModuleType = 'novels' | 'blogs' | 'forums';
 

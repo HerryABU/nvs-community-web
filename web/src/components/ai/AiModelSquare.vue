@@ -75,7 +75,7 @@ import api from '@/api';
 import { Search } from '@element-plus/icons-vue';
 import { useRouter } from 'vue-router';
 import StateBlock from '@/components/common/StateBlock.vue';
-import type { AiHubStatus } from '@/api/aiHub';
+import type { AiHubStatus } from '@/api/ai/aiHub';
 
 type Kind = 'chat' | 'image' | 'video';
 interface Row {

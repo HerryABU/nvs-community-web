@@ -280,7 +280,7 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, Close, Delete, Menu, EditPen, Share, ArrowLeft, FullScreen } from '@element-plus/icons-vue';
-import { aiHubApi, type AiHubStatus, type AiAgent, type AiChatSession, type AiNavItem } from '@/api/aiHub';
+import { aiHubApi, type AiHubStatus, type AiAgent, type AiChatSession, type AiNavItem } from '@/api/ai/aiHub';
 import { useAuthStore } from '@/stores/auth';
 import { appPrefix } from '@/utils/prefix';
 import { AI_ENTRIES } from '@/components/ai/aiEntries';

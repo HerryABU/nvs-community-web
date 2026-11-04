@@ -61,7 +61,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { messageApi, MESSAGE_MAX_LENGTH, RECALL_WINDOW_MS, type MessageItem } from '@/api/message';
+import { messageApi, MESSAGE_MAX_LENGTH, RECALL_WINDOW_MS, type MessageItem } from '@/api/social/message';
 import { useAuthStore } from '@/stores/auth';
 
 const props = defineProps<{

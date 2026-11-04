@@ -107,7 +107,7 @@
 import { ref, reactive, onMounted } from 'vue';
 import { Plus } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { blacklistApi, type BlacklistItem, type BlacklistMode } from '@/api/blacklist';
+import { blacklistApi, type BlacklistItem, type BlacklistMode } from '@/api/social/blacklist';
 
 const MAX_REASON = 256; // 与后端 gorm size:256 / utils.MaxReason 一致
 

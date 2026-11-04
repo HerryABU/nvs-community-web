@@ -96,7 +96,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { bookshelfApi, type ShelfItem } from '@/api/bookshelf';
+import { bookshelfApi, type ShelfItem } from '@/api/novel/bookshelf';
 import { followApi } from '@/api/social';
 import { ElMessage } from 'element-plus';
 import { Delete } from '@element-plus/icons-vue';

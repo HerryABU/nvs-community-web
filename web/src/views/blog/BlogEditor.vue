@@ -158,7 +158,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { blogApi, uploadApi } from '@/api/social';
 import { ElMessage } from 'element-plus';
 import { ArrowLeft, MagicStick, UploadFilled, Link } from '@element-plus/icons-vue';
-import RichTextEditor from '@/components/RichTextEditor.vue';
+import RichTextEditor from '@/components/editor/RichTextEditor.vue';
 import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
 // engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
 import { renderMarkdown, editorEngineConfig } from '@/markdown/renderer';

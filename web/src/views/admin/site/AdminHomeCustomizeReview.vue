@@ -125,7 +125,7 @@ import { ref, computed, onMounted } from 'vue';
 import { Refresh, Brush } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
-import { homeCustomizeApi, type HomeCustomizeReviewItem } from '@/api/homeCustomize';
+import { homeCustomizeApi, type HomeCustomizeReviewItem } from '@/api/home/homeCustomize';
 import { ElMessage } from 'element-plus';
 import StateBlock from '@/components/common/StateBlock.vue';
 

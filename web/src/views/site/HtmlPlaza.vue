@@ -42,7 +42,7 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import api, { apiPrefix } from '@/api/index';
-import ReportButton from '@/components/ReportButton.vue';
+import ReportButton from '@/components/comment/ReportButton.vue';
 import { useAuthStore } from '@/stores/auth';
 
 const router = useRouter();

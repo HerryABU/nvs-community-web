@@ -14,7 +14,7 @@
 
 <script setup lang="ts">
 import { computed, inject, type Ref } from 'vue';
-import DashboardCharts from '@/components/DashboardCharts.vue';
+import DashboardCharts from '@/components/admin/DashboardCharts.vue';
 
 const profile = inject<Ref<any>>('meProfile');
 

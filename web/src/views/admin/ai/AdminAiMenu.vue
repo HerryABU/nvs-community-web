@@ -107,7 +107,7 @@ import { Menu } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import StateBlock from '@/components/common/StateBlock.vue';
 import { adminApi } from '@/api/admin';
-import type { AiNavItem } from '@/api/aiHub';
+import type { AiNavItem } from '@/api/ai/aiHub';
 
 // 站内面板预设（allow-create 让站长也能直接输站内路径，如 /forums）
 const PANEL_PRESETS = [

@@ -64,7 +64,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { htmlApi } from '@/api/frame';
+import { htmlApi } from '@/api/home/frame';
 import { createZip } from '@/utils/miniZip';
 import { useAuthStore } from '@/stores/auth';
 

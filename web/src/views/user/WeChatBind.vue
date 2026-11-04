@@ -40,7 +40,7 @@
 import { ref, reactive, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { wechatApi, type WeChatBindStatusResp } from '@/api/wechat';
+import { wechatApi, type WeChatBindStatusResp } from '@/api/auth/wechat';
 
 // sessionStorage key：绑定发起时保存 state（刷新/重进可校验，避免流程中断）
 const BIND_STATE_KEY = 'nvs:wechat:bind:state';

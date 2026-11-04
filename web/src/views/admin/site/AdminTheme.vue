@@ -127,7 +127,7 @@ import { ref, computed, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Brush } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
-import { themeApi, type ThemeJSMode } from '@/api/theme';
+import { themeApi, type ThemeJSMode } from '@/api/home/theme';
 import api from '@/api';
 
 const loading = ref(false);

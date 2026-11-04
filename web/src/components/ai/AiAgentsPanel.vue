@@ -127,7 +127,7 @@ import { Search } from '@element-plus/icons-vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import StateBlock from '@/components/common/StateBlock.vue';
-import { aiHubApi, type AiAgent, type AgentSubmission } from '@/api/aiHub';
+import { aiHubApi, type AiAgent, type AgentSubmission } from '@/api/ai/aiHub';
 
 const props = defineProps<{ agents: AiAgent[]; isAdmin: boolean }>();
 const emit = defineEmits<{ (e: 'start', a: AiAgent): void; (e: 'refresh'): void }>();

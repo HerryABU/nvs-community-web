@@ -205,7 +205,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { aiHubApi, type AiHubStatus } from '@/api/aiHub';
+import { aiHubApi, type AiHubStatus } from '@/api/ai/aiHub';
 import StateBlock from '@/components/common/StateBlock.vue';
 
 const props = defineProps<{ status: AiHubStatus }>();

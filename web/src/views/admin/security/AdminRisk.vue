@@ -118,7 +118,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { riskApi, type RiskConfig, type RiskEvent } from '@/api/costrisk';
+import { riskApi, type RiskConfig, type RiskEvent } from '@/api/admin/costrisk';
 import StateBlock from '@/components/common/StateBlock.vue';
 import AdminApiAlert from '@/components/admin/AdminApiAlert.vue';
 

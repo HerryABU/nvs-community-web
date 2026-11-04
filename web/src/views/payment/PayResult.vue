@@ -46,7 +46,7 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { paymentApi } from '@/api/payment';
-import { tokenApi } from '@/api/token';
+import { tokenApi } from '@/api/auth/token';
 
 const route = useRoute();
 const router = useRouter();

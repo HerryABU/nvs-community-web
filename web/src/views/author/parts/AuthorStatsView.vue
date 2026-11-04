@@ -45,8 +45,8 @@
 import { authorDataVersion } from './authorRefresh';
 import { reactive, ref, computed, onMounted, watch } from 'vue';
 import { Notebook, DataLine, Files, ChatLineRound } from '@element-plus/icons-vue';
-import AnimatedNumber from '@/components/AnimatedNumber.vue';
-import DashboardCharts from '@/components/DashboardCharts.vue';
+import AnimatedNumber from '@/components/common/AnimatedNumber.vue';
+import DashboardCharts from '@/components/admin/DashboardCharts.vue';
 import { adminApi } from '@/api/admin';
 import { novelApi, type Novel } from '@/api/novel';
 

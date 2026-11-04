@@ -6,7 +6,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import CommentNetworkView from '@/components/CommentNetworkView.vue';
+import CommentNetworkView from '@/components/comment/CommentNetworkView.vue';
 
 const props = defineProps<{
   targetType: string;

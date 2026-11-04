@@ -101,7 +101,7 @@
 import { ref, computed, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, EditPen, Delete } from '@element-plus/icons-vue';
-import { aiPromptApi, type AiPrompt, type AiPromptKind } from '@/api/aiPrompt';
+import { aiPromptApi, type AiPrompt, type AiPromptKind } from '@/api/ai/aiPrompt';
 
 const props = defineProps<{
   modelValue: boolean;

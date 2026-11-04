@@ -328,7 +328,7 @@ import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import StateBlock from '@/components/common/StateBlock.vue';
 import AdminFilterBar from '@/components/admin/AdminFilterBar.vue';
-import ChinaGeoMap from '@/components/ChinaGeoMap.vue';
+import ChinaGeoMap from '@/components/maps/ChinaGeoMap.vue';
 import type { WebAccessGeo } from '@/api/admin';
 
 interface WebRow {

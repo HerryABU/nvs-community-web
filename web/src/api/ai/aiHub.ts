@@ -1,0 +1,478 @@
+import api from '@/api/index';
+import { collectFingerprint } from '@/utils/fingerprint';
+
+// AI 工作台（§5.4）：流式对话 / 绘画 / 视频 / 智能体
+// 注意：baseURL 已含前缀（apiPrefix+/api），严禁在此硬编码 /go-nvs。
+// 流式接口不走 axios（需读取 SSE 增量），用 fetch + ReadableStream。
+
+export interface AiHubModel {
+  id: number;
+  name: string;
+  model_id: string;
+  price_in: number;
+  price_out: number;
+  price_call: number;
+  max_tokens: number;
+  /** 上游协议族：openai / mj / gemini */
+  api_kind?: string;
+  provider_hint?: string;
+  vendor?: string;
+  note?: string;
+  /** 思考型模型：正文可能在 reasoning 字段，先出思考过程再出正文 */
+  thinking?: boolean;
+}
+
+export interface AiHubStatus {
+  ai_enabled: boolean;
+  token_enabled: boolean;
+  token_name: string;
+  balance: number;
+  free_quota?: {
+    enabled: boolean;
+    calls_left: number;
+    tokens_left: number;
+    used_calls: number;
+    used_tokens: number;
+    calls_per_day: number;
+    max_tokens_per_day: number;
+  };
+  chat_models: AiHubModel[];
+  image_models: AiHubModel[];
+  video_models: AiHubModel[];
+}
+
+export interface AiAgent {
+  id: number;
+  name: string;
+  emoji: string;
+  description: string;
+  system_prompt: string;
+  greeting: string;
+  enabled: boolean;
+  sort_order: number;
+  category?: string;
+  used_count?: number;
+  upstream?: string;
+  bot_id?: string;
+  coze_base?: string;
+  // 用户投稿上架的智能体：作者 id（0 = 站长/内置创建）
+  submitted_by?: number;
+}
+
+// AI 工作台左栏自定义菜单项（站长在后台配置）
+export interface AiNavItem {
+  key: string;
+  title: string;
+  emoji: string;
+  kind: 'panel' | 'link';
+  target: string;
+  group: string;
+  new_tab: boolean;
+  enabled: boolean;
+}
+
+// 智能体投稿单（用户提交的特殊提示词模板，等站长审核）
+export interface AgentSubmissionInput {
+  name: string;
+  emoji?: string;
+  description?: string;
+  greeting?: string;
+  category?: string;
+  system_prompt: string;
+}
+
+export interface AgentSubmission extends AgentSubmissionInput {
+  id: number;
+  user_id: number;
+  user_name?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  review_note?: string;
+  agent_id?: number;
+  created_at?: string;
+  reviewed_at?: string;
+}
+
+export interface AiChatSession {
+  id: number;
+  agent_id: number;  agent_name: string;
+  model_id: number;
+  title: string;
+  share_token?: string | null;
+  shared_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AiChatMessage {
+  id: number;
+  role: 'user' | 'assistant';
+  content: string;
+  tokens_in: number;
+  tokens_out: number;
+  cost: number;
+  free?: boolean;
+  /** 思考型模型的推理过程：仅本次会话内可见（后端不入库，刷新后消失） */
+  reasoning?: string;
+  /** 分支：父消息 id（0 = 会话根） */
+  parent_id?: number;
+  /** 同一父节点下同角色兄弟中的位置（1 起）与总数；>1 时前端显示「‹ 2/3 ›」 */
+  sibling_index?: number;
+  sibling_count?: number;
+  /** 兄弟消息 id（升序），点击切换时用它 */
+  sibling_ids?: number[];
+  /** 这条助手消息是安全闸拦截后写入的占位内容（不是模型的真实回答） */
+  safety_blocked?: boolean;
+  created_at: string;
+}
+
+export const aiHubApi = {
+  status() {
+    return api.get<{ code: number; data: AiHubStatus }>('/ai/hub/status');
+  },
+  agents() {
+    return api.get<{ code: number; data: { list: AiAgent[]; categories: string[] } }>('/ai/agents');
+  },
+
+  // ---------- 智能体投稿（用户提交特殊提示词 → 站长审核 → 广场上架） ----------
+  agentSubmitConfig() {
+    return api.get<{ code: number; data: { enabled: boolean; need_review: boolean; max_pending: number } }>(
+      '/ai/agents/submit-config',
+    );
+  },
+  submitAgent(data: AgentSubmissionInput) {
+    return api.post<{ code: number; data: { status: string; message: string } }>('/ai/agents/submit', data);
+  },
+  myAgentSubmissions() {
+    return api.get<{ code: number; data: { list: AgentSubmission[] } }>('/ai/agents/my-submissions');
+  },
+
+  // ---------- AI 工作台左栏自定义菜单（站长设置） ----------
+  navItems() {
+    return api.get<{ code: number; data: { items: AiNavItem[] } }>('/ai/nav-items');
+  },
+  sessions() {
+    return api.get<{ code: number; data: { list: AiChatSession[] } }>('/ai/sessions');
+  },
+  sessionMessages(id: number) {
+    return api.get<{ code: number; data: { session: AiChatSession; messages: AiChatMessage[] } }>(`/ai/sessions/${id}/messages`);
+  },
+  /** 切到某条消息所在分支（只改显示位置，不删消息） */
+  switchBranch(id: number, messageId: number) {
+    return api.post<{ code: number; data: { session: AiChatSession; messages: AiChatMessage[] } }>(
+      `/ai/sessions/${id}/switch`,
+      { message_id: messageId },
+    );
+  },
+  deleteSession(id: number) {
+    return api.delete(`/ai/sessions/${id}`);
+  },
+  renameSession(id: number, title: string) {
+    return api.put(`/ai/sessions/${id}`, { title });
+  },
+  shareSession(id: number) {
+    return api.post<{ code: number; data: { share_token: string; path: string } }>(`/ai/sessions/${id}/share`);
+  },
+  unshareSession(id: number) {
+    return api.delete(`/ai/sessions/${id}/share`);
+  },
+  /** 公开只读快照（无需登录） */
+  sharedSession(token: string) {
+    return api.get<{
+      code: number;
+      data: {
+        title: string;
+        agent_name: string;
+        shared_at: string | null;
+        messages: Array<{ role: 'user' | 'assistant'; content: string; created_at: string }>;
+      };
+    }>(`/ai/shared/${token}`);
+  },
+  image(data: {
+    model_id: number; prompt: string; size?: string; ratio?: string; style?: string; n?: number;
+    mode?: 't2i' | 'i2i' | 'faceswap'; ref_images?: string[];
+    byok?: boolean; byok_model?: string; confirm?: boolean;
+  }) {
+    return api.post<{ code: number; data: { task_id: number; images: string[]; cost: number; free?: boolean; byok?: boolean; balance_after: number } }>('/ai/image', data);
+  },
+  // 优化绘画提示词：把简短描述扩写成信息密度更高的版本（不改变创作意图）
+  optimizePrompt(data: { prompt: string; model_id?: number }) {
+    return api.post<{ code: number; data: { prompt: string; original: string } }>(
+      '/ai/image/optimize-prompt',
+      data,
+      { timeout: 90000 }
+    );
+  },
+  videoSubmit(data: { model_id: number; prompt: string; duration?: number; size?: string; byok?: boolean; byok_model?: string; confirm?: boolean }) {
+    return api.post<{ code: number; data: { task_id: number; status: string; cost: number; free?: boolean; byok?: boolean; balance_after: number } }>('/ai/video', data);
+  },
+  videoStatus(id: number) {
+    return api.get<{
+      code: number;
+      data: { task_id: number; status: string; video?: string; result?: string; error?: string; cost: number; refunded?: boolean };
+    }>(`/ai/video/${id}`);
+  },
+  /** 取消异步视频任务：立即停止等待，已扣款原路退回 */
+  videoCancel(id: number) {
+    return api.post<{
+      code: number;
+      data: { task_id: number; status: string; refunded: boolean; refund_amount: number; balance_after: number; message: string };
+    }>(`/ai/video/${id}/cancel`, {});
+  },
+  /** 上传出图附件（参考图/素材），返回站内 URL（gap-audit #17） */
+  attachMedia(file: File) {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post<{ code: number; data: { url: string; name: string; size: number } }>(
+      '/ai/media/attach', fd, { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+  },
+  /** 历史导出 zip（items.json + files/ + manifest 哈希） */
+  exportMedia(kind: 'image' | 'video', month = '') {
+    return api.get('/ai/export/media.zip', {
+      params: { kind, month: month || undefined },
+      responseType: 'blob',
+    });
+  },
+  /** 单任务导出（json；files=1 时 zip 含图） */
+  exportMediaTask(id: number, files = false) {
+    return api.get(`/ai/media/${id}/export`, {
+      params: files ? { files: 1 } : undefined,
+      responseType: 'blob',
+    });
+  },
+
+  mediaHistory(kind: 'image' | 'video', page = 1) {
+    return api.get<{ code: number; data: { list: any[]; total: number } }>('/ai/media', { params: { kind, page } });
+  },
+
+  /** 灵感广场（公开作品流，无需登录） */
+  gallery(params: { kind?: string; style?: string; page?: number } = {}) {
+    return api.get<{
+      code: number;
+      data: {
+        list: Array<{
+          id: number; kind: 'image' | 'video'; title: string; prompt: string;
+          model_name: string; style: string; likes: number;
+          images: string[]; video: string; created_at: string;
+        }>;
+        total: number; page: number; styles: string[];
+      };
+    }>('/ai/gallery', { params });
+  },
+  /** 发布/取消发布我的作品 */
+  publishMedia(id: number, data: { public: boolean; title?: string; style?: string }) {
+    return api.post(`/ai/gallery/${id}/publish`, data);
+  },
+  likeMedia(id: number) {
+    return api.post(`/ai/gallery/${id}/like`);
+  },
+  mediaPublic(id: number) {
+    return api.get<{ code: number; data: { id: number; is_public: boolean; title: string; style: string } }>(`/ai/media/${id}/public`);
+  },
+  /** 思维导图：需求 → Markdown 层级大纲 */
+  mindmap(data: { topic: string; depth?: number; model_id?: number }) {
+    return api.post<{ code: number; data: { outline: string; cost: number; free: boolean; balance_after: number } }>('/ai/mindmap', data);
+  },
+
+  // 管理端智能体
+  adminAgents() {
+    return api.get<{ code: number; data: { list: any[] } }>('/admin/ai/agents');
+  },
+  adminCreateAgent(data: any) {
+    return api.post('/admin/ai/agents', data);
+  },
+  adminUpdateAgent(id: number, data: any) {
+    return api.put(`/admin/ai/agents/${id}`, data);
+  },
+  adminDeleteAgent(id: number) {
+    return api.delete(`/admin/ai/agents/${id}`);
+  },
+};
+
+/** 对话附件（先调 uploadChatAttachment 拿到引用，再随消息回传） */
+/** 分支切换 / 会话终止相关 */
+export interface AiChatSessionLock {
+  locked?: boolean;
+  lock_reason?: string;
+  locked_at?: string;
+}
+
+export interface ChatAttachment {
+  kind: 'image' | 'file';
+  name: string;
+  url: string;
+  mime: string;
+  size?: number;
+}
+
+/** 上传对话附件（图片/文档）。平台不解析文件，发送时由后端原样内联给上游 API。 */
+export function uploadChatAttachment(file: File, onProgress?: (pct: number) => void) {
+  const fd = new FormData();
+  fd.append('file', file);
+  return api.post<{ code: number; data: ChatAttachment }>('/ai/attachment', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 180000,
+    onUploadProgress: (e: { loaded: number; total?: number }) => {
+      if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
+    },
+  });
+}
+
+/** 流式对话：fetch 读取 SSE，onChunk 收增量，返回最终结果 */
+export async function streamChat(
+  payload: {
+    session_id?: number;
+    model_id: number;
+    agent_id?: number;
+    message: string;
+    max_tokens?: number;
+    byok?: boolean;
+    byok_model?: string;
+    confirm?: boolean;
+    /** 附件引用（图片走多模态；文档由后端抽正文后作为参考文本注入） */
+    attachments?: ChatAttachment[];
+    /** 编辑某条用户消息并重发 → 新建 user 兄弟分支 */
+    edit_msg_id?: number;
+    /** 对某条助手回复重新生成 → 新建 assistant 兄弟分支 */
+    regenerate_msg_id?: number;
+  },
+  onChunk: (text: string) => void,
+  signal?: AbortSignal,
+  /** 思考型模型的推理增量（与正文分开推送，前端折叠展示） */
+  onReasoning?: (text: string) => void,
+  /**
+   * 安全闸整段替换。
+   * 输出侧拦截时，已经流出去的内容作废，服务端下发 replace 全文——
+   * 前端必须把当前气泡整体替换，否则用户会看到「危险片段 + 拒绝文案」拼在一起。
+   */
+  onReplace?: (text: string) => void,
+): Promise<{
+  content: string;
+  reasoning: string;
+  /** 本次回答被内容安全闸拦截（整段替换为拒绝文案） */
+  blocked?: boolean;
+  /** 本次拦截导致整段对话被终止（上下文已污染，不能继续） */
+  terminated?: boolean;
+  /** 终止模式：strict 锁会话 / moderate 打污染标记 / loose 仅拦当轮 */
+  terminate_mode?: string;
+  /** 正文为空、整段回答来自 reasoning：前端应把 reasoning 落成正文而不是折叠块 */
+  answerInReasoning: boolean;
+  cost: number;
+  free?: boolean;
+  balance_after: number;
+  session_id: number;
+} | null> {
+  const base = (api.defaults.baseURL || '') as string;
+  // ⚠️ 必须带 X-Requested-With：CSRFGuard 对「已登录 Cookie + 非安全方法」强制校验该头，
+  // 而 axios 实例的默认头不会作用于原生 fetch。漏了就是 403 —— 表现为"发出去没反应"，
+  // 前端看不到任何错误（流式响应没有 body），极难排查。
+  //
+  // ⚠️ 同理必须带 X-Device-Fingerprint：访问令牌与「设备指纹 + 登录地」强绑定，
+  // 登录走的是 axios（带指纹），这里用原生 fetch 如果不补这个头，
+  // 服务端算出的绑定值与令牌里的不一致 → 直接 401「登录环境已变更」。
+  // 症状是「AI 对话永远发不出去，但其他接口一切正常」，只有开了绑定校验才暴露。
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+  };
+  try {
+    const fp = await collectFingerprint();
+    if (fp) headers['X-Device-Fingerprint'] = fp;
+  } catch {
+    /* 采集失败：不带头，服务端按无指纹处理（绑定退化为仅地域因子） */
+  }
+  const resp = await fetch(`${base}/ai/chat/stream`, {
+    method: 'POST',
+    headers,
+    credentials: 'include',
+    body: JSON.stringify(payload),
+    signal,
+  });
+  if (!resp.ok || !resp.body) {
+    let msg = `请求失败（${resp.status}）`;
+    let code = 0;
+    try {
+      const err = await resp.json();
+      if (err?.message) msg = err.message;
+      if (typeof err?.code === 'number') code = err.code;
+    } catch { /* ignore */ }
+    // 携带业务错误码，供上层区分「需二次确认（42801）」等场景
+    const e = new Error(msg) as Error & { code?: number; status?: number };
+    e.code = code;
+    e.status = resp.status;
+    throw e;
+  }
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let content = '';
+  let reasoning = '';
+  let blocked = false;
+  let terminated = false;
+  let terminateMode = '';
+  let final: any = null;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    // SSE 事件以空行分隔
+    let idx: number;
+    while ((idx = buffer.indexOf('\n\n')) >= 0) {
+      const rawEvent = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      for (const line of rawEvent.split('\n')) {
+        const t = line.trim();
+        if (!t.startsWith('data:')) continue;
+        const dataStr = t.slice(5).trim();
+        if (!dataStr) continue;
+        try {
+          const ev = JSON.parse(dataStr);
+          if (ev.error) throw new Error(ev.error);
+          if (ev.replace) {
+            // 服务端拦截：丢弃已累积内容，整段换成拒绝文案。
+            // content 也要跟着换 —— 调用方用 result.content 落消息列表，
+            // 只清空不回填会让气泡变成空白。
+            content = ev.replace;
+            reasoning = '';
+            blocked = true;
+            onReplace?.(ev.replace);
+          }
+          if (ev.blocked && ev.done) blocked = true;
+          if (ev.terminated) terminated = true;
+          if (ev.reasoning) {
+            reasoning += ev.reasoning;
+            onReasoning?.(ev.reasoning);
+          }
+          if (ev.content) {
+            content += ev.content;
+            onChunk(ev.content);
+          }
+          if (ev.done) final = ev;
+          if (ev.terminate_mode) terminateMode = String(ev.terminate_mode);
+        } catch (e: any) {
+          if (e?.message && e.message !== 'Unexpected end of JSON input') throw e;
+        }
+      }
+    }
+  }
+  // 已收到 done：主动取消读取，立刻断开这条 SSE，而不是等连接自然结束。
+  // 「终止」必须是链路层面的掐断，否则前端还会挂着一个半开的流。
+  try {
+    await reader.cancel();
+  } catch {
+    // 已经关闭的流 cancel 会抛，忽略
+  }
+  if (!final) return null;
+  return {
+    content,
+    reasoning,
+    blocked: blocked || !!final.blocked,
+    terminated: terminated || !!final.terminated,
+    terminate_mode: terminateMode || (final.terminate_mode ? String(final.terminate_mode) : ''),
+    answerInReasoning: !!final.answer_in_reasoning,
+    cost: final.cost || 0,
+    free: !!final.free,
+    balance_after: final.balance_after || 0,
+    session_id: final.session_id || 0,
+  };
+}

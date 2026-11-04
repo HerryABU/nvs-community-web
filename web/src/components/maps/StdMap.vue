@@ -88,7 +88,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import api from '@/api';
-import ChinaGeoMap from '@/components/ChinaGeoMap.vue';
+import ChinaGeoMap from '@/components/maps/ChinaGeoMap.vue';
 import StateBlock from '@/components/common/StateBlock.vue';
 
 interface MapSetting {

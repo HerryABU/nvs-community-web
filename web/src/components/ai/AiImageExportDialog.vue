@@ -115,7 +115,7 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
-import { aigcApi, type AigcOptions } from '@/api/aigc';
+import { aigcApi, type AigcOptions } from '@/api/ai/aigc';
 
 const props = defineProps<{
   modelValue: boolean;

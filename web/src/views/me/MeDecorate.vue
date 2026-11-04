@@ -156,7 +156,7 @@ import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { authApi } from '@/api/auth';
-import { homeCustomizeApi, type AuthorSubmitResult } from '@/api/homeCustomize';
+import { homeCustomizeApi, type AuthorSubmitResult } from '@/api/home/homeCustomize';
 import { editorKeydownHandler, HTML_TOKENS } from '@/utils/editorShortcuts';
 import { ElMessage } from 'element-plus';
 

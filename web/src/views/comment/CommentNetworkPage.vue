@@ -15,7 +15,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
-import CommentNetworkView from '@/components/CommentNetworkView.vue';
+import CommentNetworkView from '@/components/comment/CommentNetworkView.vue';
 
 const route = useRoute();
 const targetType = computed(() => (route.query.type as string) || 'novel');

@@ -155,7 +155,7 @@ import { Wallet } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import SectionHeader from '@/components/common/SectionHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
-import { tokenApi } from '@/api/token';
+import { tokenApi } from '@/api/auth/token';
 import StateBlock from '@/components/common/StateBlock.vue';
 
 // ---------- 基础配置 ----------

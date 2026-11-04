@@ -109,7 +109,7 @@ import {
   PUBLISH_ROLE_LABELS,
   limitText,
   type DailyPublishConfig,
-} from '@/api/publishQuota';
+} from '@/api/admin/publishQuota';
 
 const ROLE_ORDER = ['reader', 'author', 'vip_author', 'arbitrator', 'police', 'admin'];
 

@@ -28,7 +28,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 import QRCode from 'qrcode';
-import { wechatApi } from '@/api/wechat';
+import { wechatApi } from '@/api/auth/wechat';
 import { ElMessage } from 'element-plus';
 
 // 二维码倒计时（秒）。服务端 state TTL 为 300s，这里取 60s 提前置灰提示刷新，

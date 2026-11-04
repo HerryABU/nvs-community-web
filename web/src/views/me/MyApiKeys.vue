@@ -118,7 +118,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
-import { apiKeyApi } from '@/api/apikey';
+import { apiKeyApi } from '@/api/auth/apikey';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Key, Connection } from '@element-plus/icons-vue';
 

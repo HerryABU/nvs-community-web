@@ -403,7 +403,7 @@ import { copyText } from '@/utils/clipboard';
 import AiPromptLibrary from '@/components/ai/AiPromptLibrary.vue';
 import AiHtmlPreview from '@/components/ai/AiHtmlPreview.vue';
 import AiHtmlPublish from '@/components/ai/AiHtmlPublish.vue';
-import { aiHubApi, streamChat, uploadChatAttachment, type AiHubStatus, type AiAgent, type AiChatMessage, type AiChatSession, type ChatAttachment } from '@/api/aiHub';
+import { aiHubApi, streamChat, uploadChatAttachment, type AiHubStatus, type AiAgent, type AiChatMessage, type AiChatSession, type ChatAttachment } from '@/api/ai/aiHub';
 
 const props = defineProps<{
   status: AiHubStatus;

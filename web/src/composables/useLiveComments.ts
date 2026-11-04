@@ -1,5 +1,5 @@
 import { ref, getCurrentInstance, onUnmounted, watch, toValue, type MaybeRefOrGetter } from 'vue';
-import { buildLiveStreamURL } from '@/api/live';
+import { buildLiveStreamURL } from '@/api/home/live';
 
 // F19 狂暴模式：评论区实时更新 composable。
 // 底层 EventSource（SSE）订阅 realtime Hub 推送的新评论。

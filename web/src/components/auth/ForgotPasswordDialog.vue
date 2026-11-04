@@ -71,7 +71,7 @@
 import { ref, reactive, computed, watch } from 'vue';
 import { authApi } from '@/api/auth';
 import { useAppStore } from '@/stores/app';
-import SlideCaptcha from '@/components/SlideCaptcha.vue';
+import SlideCaptcha from '@/components/auth/SlideCaptcha.vue';
 import { ElMessage } from 'element-plus';
 
 const props = defineProps<{ visible: boolean }>();

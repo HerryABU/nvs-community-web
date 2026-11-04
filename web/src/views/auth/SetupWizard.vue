@@ -142,7 +142,7 @@
 import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { setupApi } from '@/api/setup';
+import { setupApi } from '@/api/admin/setup';
 
 const router = useRouter();
 const active = ref(0);

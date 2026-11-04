@@ -77,7 +77,7 @@
 import { ref, watch, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { novelApi, type Novel } from '@/api/novel';
-import NovelCard from '@/components/NovelCard.vue';
+import NovelCard from '@/components/novel/NovelCard.vue';
 import { Grid, List } from '@element-plus/icons-vue';
 
 const route = useRoute();

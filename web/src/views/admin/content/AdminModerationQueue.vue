@@ -134,7 +134,7 @@ import {
   MOD_ACTION_LABELS,
   type ModerationRecord,
   type ModerationStats,
-} from '@/api/moderation';
+} from '@/api/admin/moderation';
 
 const PAGE_SIZE = 50;
 

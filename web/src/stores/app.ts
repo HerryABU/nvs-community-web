@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { batchGet } from '@/api/batch';
+import { batchGet } from '@/api/admin/batch';
 import { appPrefix } from '@/utils/prefix';
 
 // 首屏落地页判定：浏览器地址与站点前缀（如 /go-nvs）一致即视为「首页」。

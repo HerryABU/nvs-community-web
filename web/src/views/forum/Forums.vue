@@ -163,7 +163,7 @@ import { useRouter } from 'vue-router';
 import { novelApi, forumApi } from '@/api/novel';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import SensitiveZoneGuard from '@/components/SensitiveZoneGuard.vue';
+import SensitiveZoneGuard from '@/components/common/SensitiveZoneGuard.vue';
 import { shouldShowGuard, markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';
 
 interface Forum {

@@ -91,7 +91,7 @@ import { useAuthStore } from '@/stores/auth';
 import { authApi } from '@/api/auth';
 import { publicApi } from '@/api/admin';
 import { ElMessage } from 'element-plus';
-import SlideCaptcha from '@/components/SlideCaptcha.vue';
+import SlideCaptcha from '@/components/auth/SlideCaptcha.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();

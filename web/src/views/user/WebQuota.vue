@@ -82,7 +82,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { webQuotaApi } from '@/api/webQuota';
+import { webQuotaApi } from '@/api/admin/webQuota';
 import { ElMessage } from 'element-plus';
 
 interface MyQuotaData {

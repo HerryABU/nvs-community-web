@@ -116,8 +116,8 @@
 import { ref, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, View, Edit, Delete } from '@element-plus/icons-vue';
-import { frameApi } from '@/api/frame';
-import { webQuotaApi } from '@/api/webQuota';
+import { frameApi } from '@/api/home/frame';
+import { webQuotaApi } from '@/api/admin/webQuota';
 import SandboxPreview from './SandboxPreview.vue';
 
 interface Frame {

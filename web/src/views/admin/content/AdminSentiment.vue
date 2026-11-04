@@ -283,7 +283,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { Lock } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import StateBlock from '@/components/common/StateBlock.vue';
-import { sentimentApi, type SentimentConfig, type SentimentHit, type SentimentTerm } from '@/api/sentiment';
+import { sentimentApi, type SentimentConfig, type SentimentHit, type SentimentTerm } from '@/api/admin/sentiment';
 
 const tab = ref<'config' | 'terms' | 'hits'>('config');
 const errorHint = ref('');

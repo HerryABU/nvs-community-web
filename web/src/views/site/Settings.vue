@@ -255,7 +255,7 @@ import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { authApi } from '@/api/auth';
-import { apiKeyApi } from '@/api/apikey';
+import { apiKeyApi } from '@/api/auth/apikey';
 import api from '@/api';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import { Lock, User, DataAnalysis, Key, Brush, Box } from '@element-plus/icons-vue';

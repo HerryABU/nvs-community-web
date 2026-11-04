@@ -94,7 +94,7 @@ import { reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { groupApi, type Group } from '@/api/group';
-import { aiHubApi, type AiAgent } from '@/api/aiHub';
+import { aiHubApi, type AiAgent } from '@/api/ai/aiHub';
 import GroupQrCard from '@/components/group/GroupQrCard.vue';
 
 const props = defineProps<{ group: Group; canManage: boolean; isOwner: boolean }>();

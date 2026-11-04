@@ -38,7 +38,7 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
-import { aiHubApi } from '@/api/aiHub';
+import { aiHubApi } from '@/api/ai/aiHub';
 import { renderAiMarkdown } from '@/markdown/renderer';
 import { enhanceCodeBlocks, highlightCodeBlocks, readCodeOf, isPreviewableBlock } from '@/markdown/codeEnhance';
 import { copyText } from '@/utils/clipboard';

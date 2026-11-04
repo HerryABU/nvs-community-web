@@ -46,7 +46,7 @@ import { ref, reactive, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Lightning } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
-import { liveApi, type RageConfig } from '@/api/live';
+import { liveApi, type RageConfig } from '@/api/home/live';
 
 const loading = ref(false);
 const saving = ref(false);

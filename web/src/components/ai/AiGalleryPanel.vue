@@ -54,7 +54,7 @@
 import { ref, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import { MagicStick } from '@element-plus/icons-vue';
-import { aiHubApi } from '@/api/aiHub';
+import { aiHubApi } from '@/api/ai/aiHub';
 
 const emit = defineEmits<{ (e: 'remix', payload: { kind: string; prompt: string }): void }>();
 

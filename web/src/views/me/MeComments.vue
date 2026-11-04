@@ -19,7 +19,7 @@
 
 <script setup lang="ts">
 import { computed, inject, type Ref } from 'vue';
-import CommentSection from '@/components/CommentSection.vue';
+import CommentSection from '@/components/comment/CommentSection.vue';
 
 const profile = inject<Ref<any>>('meProfile');
 const authorId = inject<Ref<number>>('meAuthorId')!;

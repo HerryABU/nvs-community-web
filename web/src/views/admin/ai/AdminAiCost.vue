@@ -180,7 +180,7 @@
 import { onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from 'vue';
 import { ElMessage } from 'element-plus';
 import * as echarts from 'echarts';
-import { aiCostApi, type BudgetConfig } from '@/api/costrisk';
+import { aiCostApi, type BudgetConfig } from '@/api/admin/costrisk';
 import StateBlock from '@/components/common/StateBlock.vue';
 import AdminApiAlert from '@/components/admin/AdminApiAlert.vue';
 

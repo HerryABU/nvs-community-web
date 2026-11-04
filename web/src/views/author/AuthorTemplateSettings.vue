@@ -129,8 +129,8 @@
 import { ref, nextTick, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Link } from '@element-plus/icons-vue';
-import { frameApi } from '@/api/frame';
-import { webQuotaApi } from '@/api/webQuota';
+import { frameApi } from '@/api/home/frame';
+import { webQuotaApi } from '@/api/admin/webQuota';
 import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
 
 const tab = ref('reader');

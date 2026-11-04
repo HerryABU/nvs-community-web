@@ -40,7 +40,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { notificationApi, type NotificationItem } from '@/api/notification';
+import { notificationApi, type NotificationItem } from '@/api/social/notification';
 import { ElMessage } from 'element-plus';
 
 const router = useRouter();

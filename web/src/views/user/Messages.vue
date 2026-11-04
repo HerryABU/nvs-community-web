@@ -73,7 +73,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import MessageChat from '@/components/message/MessageChat.vue';
-import { messageApi, type ConversationItem } from '@/api/message';
+import { messageApi, type ConversationItem } from '@/api/social/message';
 
 const route = useRoute();
 const convs = ref<ConversationItem[]>([]);

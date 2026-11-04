@@ -41,7 +41,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { readingApi, type ReadingNote } from '@/api/reading';
+import { readingApi, type ReadingNote } from '@/api/novel/reading';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
 const router = useRouter();

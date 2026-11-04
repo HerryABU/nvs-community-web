@@ -34,8 +34,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import NavBar from '@/components/NavBar.vue';
-import SiteFooter from '@/components/SiteFooter.vue';
+import NavBar from '@/components/layout/NavBar.vue';
+import SiteFooter from '@/components/layout/SiteFooter.vue';
 import MinorGateDialog from '@/components/auth/MinorGateDialog.vue';
 import AdminLayout from '@/components/admin/AdminLayout.vue';
 import { useAuthStore } from '@/stores/auth';

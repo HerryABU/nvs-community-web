@@ -251,7 +251,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Collection } from '@element-plus/icons-vue';
-import { aiHubApi, type AiHubModel, type AiHubStatus } from '@/api/aiHub';
+import { aiHubApi, type AiHubModel, type AiHubStatus } from '@/api/ai/aiHub';
 import AiPromptLibrary from '@/components/ai/AiPromptLibrary.vue';
 import AiImageExportDialog from '@/components/ai/AiImageExportDialog.vue';
 import StateBlock from '@/components/common/StateBlock.vue';

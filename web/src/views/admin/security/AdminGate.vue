@@ -164,7 +164,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { gateApi, type GateConfig, type Invite, type DeviceRow, type KeyAlarm } from '@/api/gate';
+import { gateApi, type GateConfig, type Invite, type DeviceRow, type KeyAlarm } from '@/api/admin/gate';
 import StateBlock from '@/components/common/StateBlock.vue';
 import AdminApiAlert from '@/components/admin/AdminApiAlert.vue';
 
