@@ -10,10 +10,10 @@ import (
 
 	"nvs-server/handlers/admin"
 	"nvs-server/ipgeo"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	theme "nvs-server/models/theme"
 )
 
 // GetMapSetting GET /api/map-setting —— 公开：前端据此决定用哪套地图
@@ -21,7 +21,7 @@ import (
 // 额外带上「看的人在哪」：中国省级明细只对境内访客展示，
 // 境外访客只给全球视野（省份/城市粒度的境内读者分布不对外）。
 func GetMapSetting(c *gin.Context) {
-	data := models.PublicMapSetting()
+	data := theme.PublicMapSetting()
 	reg := ipgeo.Lookup(c.ClientIP())
 	// 内网 / 保留地址（本机调试、内网反代）按境内处理，否则站长自测会看不到中国视野
 	cn := reg.CountryCD == "CN" || reg.IsReserved()
@@ -38,7 +38,7 @@ func AdminGetMapSetting(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, models.LoadMapSetting())
+	utils.Success(c, theme.LoadMapSetting())
 }
 
 // AdminSaveMapSetting PUT /api/admin/map-setting
@@ -46,16 +46,16 @@ func AdminSaveMapSetting(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	var in models.MapSetting
+	var in theme.MapSetting
 	if err := c.ShouldBindJSON(&in); err != nil {
 		utils.BadRequest(c, "参数不合法")
 		return
 	}
-	if err := models.SaveMapSetting(in); err != nil {
+	if err := theme.SaveMapSetting(in); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "已保存", models.LoadMapSetting())
+	utils.SuccessMessage(c, "已保存", theme.LoadMapSetting())
 }
 
 // AdminTestMapSetting POST /api/admin/map-setting/test
@@ -76,7 +76,7 @@ func AdminTestMapSetting(c *gin.Context) {
 	_ = c.ShouldBindJSON(&in)
 	tk := strings.TrimSpace(in.Tk)
 	if tk == "" {
-		tk = strings.TrimSpace(models.LoadMapSetting().TiandituKey)
+		tk = strings.TrimSpace(theme.LoadMapSetting().TiandituKey)
 	}
 	if tk == "" {
 		utils.BadRequest(c, "还没有填 tk：请先到 tianditu.gov.cn 申请「浏览器端」密钥")

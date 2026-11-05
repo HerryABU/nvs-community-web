@@ -5,10 +5,10 @@ import (
 
 	"nvs-server/handlers/admin"
 	"nvs-server/handlers/hctx"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	theme "nvs-server/models/theme"
 )
 
 // author_theme.go — G4 作者公开主题（访客在作者页可见，区别于作者个人登录主题）。
@@ -23,7 +23,7 @@ func GetAuthorTheme(c *gin.Context) {
 	if !ok {
 		return
 	}
-	utils.Success(c, gin.H{"css": models.GetAuthorTheme(id)})
+	utils.Success(c, gin.H{"css": theme.GetAuthorTheme(id)})
 }
 
 // UpdateAuthorTheme PUT /api/author/:id/theme（作者本人或管理员覆盖）
@@ -50,12 +50,12 @@ func UpdateAuthorTheme(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	removed, err := models.SetAuthorTheme(id, req.CSS)
+	removed, err := theme.SetAuthorTheme(id, req.CSS)
 	if err != nil {
 		utils.InternalError(c, "保存作者主题失败")
 		return
 	}
-	utils.Success(c, gin.H{"css": models.GetAuthorTheme(id), "removed": removed})
+	utils.Success(c, gin.H{"css": theme.GetAuthorTheme(id), "removed": removed})
 }
 
 // ParseAuthorID 解析路由中的作者 ID（uint），非法时直接响应 400。

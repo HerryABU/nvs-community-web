@@ -21,6 +21,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	theme "nvs-server/models/theme"
 )
 
 // GetMyHomeCustomize GET /api/me/home-customize（需登录）
@@ -31,10 +32,10 @@ func GetMyHomeCustomize(c *gin.Context) {
 		utils.Unauthorized(c, "未登录")
 		return
 	}
-	var pub models.AuthorHomeCustomize
+	var pub theme.AuthorHomeCustomize
 	models.DB.Where("author_id = ?", uid).First(&pub)
 	utils.Success(c, gin.H{
-		"my_raw_html": models.GetUserHomeCustomize(uid),
+		"my_raw_html": theme.GetUserHomeCustomize(uid),
 		"author": gin.H{
 			"raw_html":      pub.RawHTML,
 			"safe_html":     pub.SafeHTML,
@@ -61,7 +62,7 @@ func UpdateMyHomeCustomize(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.SetUserHomeCustomize(uid, req.RawHTML); err != nil {
+	if err := theme.SetUserHomeCustomize(uid, req.RawHTML); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
@@ -75,7 +76,7 @@ func GetAuthorHomeCustomize(c *gin.Context) {
 	if !ok {
 		return
 	}
-	utils.Success(c, gin.H{"public_html": models.GetApprovedAuthorHomeCustomize(id)})
+	utils.Success(c, gin.H{"public_html": theme.GetApprovedAuthorHomeCustomize(id)})
 }
 
 // UpdateAuthorHomeCustomize PUT /api/author/:id/home-customize（作者本人或管理员）
@@ -101,7 +102,7 @@ func UpdateAuthorHomeCustomize(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	safe, removed, hadIssues, err := models.SubmitAuthorHomeCustomize(id, req.RawHTML)
+	safe, removed, hadIssues, err := theme.SubmitAuthorHomeCustomize(id, req.RawHTML)
 	if err != nil {
 		utils.InternalError(c, "提交失败")
 		return
@@ -129,7 +130,7 @@ func ListHomeCustomizeReviews(c *gin.Context) {
 	if status != "" {
 		q = q.Where("review_status = ?", status)
 	}
-	var list []models.AuthorHomeCustomize
+	var list []theme.AuthorHomeCustomize
 	if err := q.Find(&list).Error; err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -148,7 +149,7 @@ func ListHomeCustomizeReviews(c *gin.Context) {
 		}
 	}
 	type row struct {
-		models.AuthorHomeCustomize
+		theme.AuthorHomeCustomize
 		Username string `json:"username"`
 	}
 	rows := make([]row, 0, len(list))
@@ -184,9 +185,9 @@ func ReviewHomeCustomize(c *gin.Context) {
 	note := security.SanitizePlainText(req.Note)
 	var err error
 	if req.Action == "approve" {
-		err = models.ApproveAuthorHomeCustomize(id, adminID, note)
+		err = theme.ApproveAuthorHomeCustomize(id, adminID, note)
 	} else {
-		err = models.RejectAuthorHomeCustomize(id, adminID, note)
+		err = theme.RejectAuthorHomeCustomize(id, adminID, note)
 	}
 	if err != nil {
 		utils.InternalError(c, "操作失败")

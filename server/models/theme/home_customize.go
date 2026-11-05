@@ -1,8 +1,9 @@
-package models
+package theme
 
 import (
 	"time"
 
+	"nvs-server/models"
 	"nvs-server/utils"
 )
 
@@ -23,7 +24,7 @@ func GetUserHomeCustomize(userID uint) string {
 		return ""
 	}
 	var t UserHomeCustomize
-	if err := DB.Where("user_id = ?", userID).First(&t).Error; err != nil {
+	if err := models.DB.Where("user_id = ?", userID).First(&t).Error; err != nil {
 		return ""
 	}
 	return t.RawHTML
@@ -36,12 +37,12 @@ func SetUserHomeCustomize(userID uint, raw string) error {
 	}
 	now := time.Now()
 	var t UserHomeCustomize
-	if err := DB.Where("user_id = ?", userID).First(&t).Error; err == nil {
+	if err := models.DB.Where("user_id = ?", userID).First(&t).Error; err == nil {
 		t.RawHTML = raw
 		t.UpdatedAt = now
-		return DB.Save(&t).Error
+		return models.DB.Save(&t).Error
 	}
-	return DB.Create(&UserHomeCustomize{UserID: userID, RawHTML: raw, UpdatedAt: now}).Error
+	return models.DB.Create(&UserHomeCustomize{UserID: userID, RawHTML: raw, UpdatedAt: now}).Error
 }
 
 // AuthorHomeCustomize 作者公开主页自定义（他人可见，需消毒 + 站长/管理员审核）。
@@ -69,7 +70,7 @@ func GetApprovedAuthorHomeCustomize(authorID uint) string {
 		return ""
 	}
 	var t AuthorHomeCustomize
-	if err := DB.Where("author_id = ? AND review_status = ?", authorID, "approved").First(&t).Error; err != nil {
+	if err := models.DB.Where("author_id = ? AND review_status = ?", authorID, "approved").First(&t).Error; err != nil {
 		return ""
 	}
 	return t.PublicHTML
@@ -85,7 +86,7 @@ func SubmitAuthorHomeCustomize(authorID uint, raw string) (safe string, removed 
 	had := len(removed) > 0
 	now := time.Now()
 	var t AuthorHomeCustomize
-	if e := DB.Where("author_id = ?", authorID).First(&t).Error; e == nil {
+	if e := models.DB.Where("author_id = ?", authorID).First(&t).Error; e == nil {
 		t.RawHTML = raw
 		t.SafeHTML = safe
 		t.PublicHTML = ""
@@ -95,9 +96,9 @@ func SubmitAuthorHomeCustomize(authorID uint, raw string) (safe string, removed 
 		t.ReviewedBy = 0
 		t.ReviewedAt = nil
 		t.UpdatedAt = now
-		err = DB.Save(&t).Error
+		err = models.DB.Save(&t).Error
 	} else {
-		err = DB.Create(&AuthorHomeCustomize{
+		err = models.DB.Create(&AuthorHomeCustomize{
 			AuthorID: authorID, RawHTML: raw, SafeHTML: safe, PublicHTML: "",
 			ReviewStatus: "pending", HadIssues: had, UpdatedAt: now,
 		}).Error
@@ -108,7 +109,7 @@ func SubmitAuthorHomeCustomize(authorID uint, raw string) (safe string, removed 
 // ApproveAuthorHomeCustomize 站长/管理员审核通过：public_html = safe_html（绝不发布原文脚本）。
 func ApproveAuthorHomeCustomize(authorID, adminID uint, note string) error {
 	var t AuthorHomeCustomize
-	if err := DB.Where("author_id = ?", authorID).First(&t).Error; err != nil {
+	if err := models.DB.Where("author_id = ?", authorID).First(&t).Error; err != nil {
 		return err
 	}
 	updates := map[string]interface{}{
@@ -118,7 +119,7 @@ func ApproveAuthorHomeCustomize(authorID, adminID uint, note string) error {
 		"reviewed_by":   adminID,
 		"reviewed_at":   time.Now(),
 	}
-	return DB.Model(&t).Where("author_id = ?", authorID).Updates(updates).Error
+	return models.DB.Model(&t).Where("author_id = ?", authorID).Updates(updates).Error
 }
 
 // RejectAuthorHomeCustomize 驳回。
@@ -130,5 +131,5 @@ func RejectAuthorHomeCustomize(authorID, adminID uint, note string) error {
 		"reviewed_by":   adminID,
 		"reviewed_at":   time.Now(),
 	}
-	return DB.Model(&AuthorHomeCustomize{}).Where("author_id = ?", authorID).Updates(updates).Error
+	return models.DB.Model(&AuthorHomeCustomize{}).Where("author_id = ?", authorID).Updates(updates).Error
 }

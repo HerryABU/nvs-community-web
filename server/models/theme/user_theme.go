@@ -1,8 +1,9 @@
-package models
+package theme
 
 import (
 	"time"
 
+	"nvs-server/models"
 	"nvs-server/utils"
 )
 
@@ -28,7 +29,7 @@ func GetUserTheme(userID uint) string {
 		return ""
 	}
 	var t UserTheme
-	if err := DB.Where("user_id = ?", userID).First(&t).Error; err != nil {
+	if err := models.DB.Where("user_id = ?", userID).First(&t).Error; err != nil {
 		return ""
 	}
 	return t.CSS
@@ -40,7 +41,7 @@ func GetUserThemeJS(userID uint) string {
 		return ""
 	}
 	var t UserTheme
-	if err := DB.Where("user_id = ?", userID).First(&t).Error; err != nil {
+	if err := models.DB.Where("user_id = ?", userID).First(&t).Error; err != nil {
 		return ""
 	}
 	return t.CustomJS
@@ -52,7 +53,7 @@ func GetUserThemeJSBundle(userID uint) (js string, mode string, delay int) {
 		return "", ThemeJSModeImmediate, 0
 	}
 	var t UserTheme
-	if err := DB.Where("user_id = ?", userID).First(&t).Error; err != nil {
+	if err := models.DB.Where("user_id = ?", userID).First(&t).Error; err != nil {
 		return "", ThemeJSModeImmediate, 0
 	}
 	return t.CustomJS, NormalizeThemeJSMode(t.CustomJSMode), t.CustomJSDelay
@@ -73,15 +74,15 @@ func SetUserTheme(userID uint, css string, customJS string, jsMode string, jsDel
 	if mode == ThemeJSModeDelayed {
 		delay = NormalizeThemeJSDelay(jsDelay)
 	}
-	if err := DB.Where("user_id = ?", userID).First(&t).Error; err == nil {
+	if err := models.DB.Where("user_id = ?", userID).First(&t).Error; err == nil {
 		t.CSS = sanitized
 		t.CustomJS = sanitizedJS
 		t.CustomJSMode = mode
 		t.CustomJSDelay = delay
 		t.UpdatedAt = time.Now()
-		return removed, DB.Save(&t).Error
+		return removed, models.DB.Save(&t).Error
 	}
 	now := time.Now()
-	return removed, DB.Create(&UserTheme{UserID: userID, CSS: sanitized, CustomJS: sanitizedJS,
+	return removed, models.DB.Create(&UserTheme{UserID: userID, CSS: sanitized, CustomJS: sanitizedJS,
 		CustomJSMode: mode, CustomJSDelay: delay, UpdatedAt: now}).Error
 }

@@ -15,13 +15,14 @@
 //	threads  {limit}                      最新帖（自动排除加密/待审论坛）
 //	custom   {html}                       自定义 HTML（服务端消毒后落库）
 //	links    {items: [{title, url}]}
-package models
+package theme
 
 import (
 	"encoding/json"
 	"time"
 
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // HomeBlock 首页区块
@@ -68,21 +69,21 @@ func IsValidHomeBlockType(t string) bool { return validHomeBlockTypes[t] }
 // ListHomeBlocks 全部区块（含禁用），按 sort_order 升序
 func ListHomeBlocks() ([]HomeBlock, error) {
 	var list []HomeBlock
-	err := DB.Order("sort_order ASC, id ASC").Find(&list).Error
+	err := models.DB.Order("sort_order ASC, id ASC").Find(&list).Error
 	return list, err
 }
 
 // ListEnabledHomeBlocks 仅启用区块，按 sort_order 升序
 func ListEnabledHomeBlocks() ([]HomeBlock, error) {
 	var list []HomeBlock
-	err := DB.Where("enabled = ?", true).Order("sort_order ASC, id ASC").Find(&list).Error
+	err := models.DB.Where("enabled = ?", true).Order("sort_order ASC, id ASC").Find(&list).Error
 	return list, err
 }
 
 // GetHomeBlock 按 ID 取区块
 func GetHomeBlock(id uint) (*HomeBlock, error) {
 	var b HomeBlock
-	if err := DB.First(&b, id).Error; err != nil {
+	if err := models.DB.First(&b, id).Error; err != nil {
 		return nil, err
 	}
 	return &b, nil
@@ -91,28 +92,28 @@ func GetHomeBlock(id uint) (*HomeBlock, error) {
 // CountHomeBlocks 区块数量（判断是否需播种默认布局）
 func CountHomeBlocks() int64 {
 	var n int64
-	DB.Model(&HomeBlock{}).Count(&n)
+	models.DB.Model(&HomeBlock{}).Count(&n)
 	return n
 }
 
 // CreateHomeBlock 新建区块
 func CreateHomeBlock(b *HomeBlock) error {
-	return DB.Create(b).Error
+	return models.DB.Create(b).Error
 }
 
 // UpdateHomeBlock 更新区块（map 精确写列，规避 GORM 零值坑）
 func UpdateHomeBlock(id uint, updates map[string]interface{}) error {
-	return DB.Model(&HomeBlock{}).Where("id = ?", id).Updates(updates).Error
+	return models.DB.Model(&HomeBlock{}).Where("id = ?", id).Updates(updates).Error
 }
 
 // DeleteHomeBlock 删除区块（软删除，合规留存）
 func DeleteHomeBlock(id uint) error {
-	return DB.Delete(&HomeBlock{}, id).Error
+	return models.DB.Delete(&HomeBlock{}, id).Error
 }
 
 // ReorderHomeBlocks 按 ids 顺序重排 sort_order（事务内完成）
 func ReorderHomeBlocks(ids []uint) error {
-	return DB.Transaction(func(tx *gorm.DB) error {
+	return models.DB.Transaction(func(tx *gorm.DB) error {
 		for i, id := range ids {
 			if err := tx.Model(&HomeBlock{}).Where("id = ?", id).
 				Update("sort_order", i*10).Error; err != nil {
@@ -200,7 +201,7 @@ func SeedDefaultHomeBlocks() error {
 	if preset == nil {
 		return nil
 	}
-	return DB.Transaction(func(tx *gorm.DB) error {
+	return models.DB.Transaction(func(tx *gorm.DB) error {
 		for i := range preset.Blocks {
 			b := preset.Blocks[i]
 			b.SortOrder = i * 10
@@ -218,7 +219,7 @@ func ApplyHomeBlockPreset(key string) error {
 	if preset == nil {
 		return gorm.ErrInvalidData
 	}
-	return DB.Transaction(func(tx *gorm.DB) error {
+	return models.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("1 = 1").Delete(&HomeBlock{}).Error; err != nil {
 			return err
 		}

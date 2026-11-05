@@ -7,24 +7,24 @@ import (
 	"strconv"
 
 	"nvs-server/handlers/admin"
-	"nvs-server/models"
 	"nvs-server/security"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	theme "nvs-server/models/theme"
 )
 
 // ListPublicHomeBlocks GET /api/home-blocks — 首页区块（仅启用，按排序）
 func ListPublicHomeBlocks(c *gin.Context) {
-	blocks, err := models.ListEnabledHomeBlocks()
+	blocks, err := theme.ListEnabledHomeBlocks()
 	if err != nil {
 		utils.InternalError(c, "获取首页区块失败")
 		return
 	}
 	// 空库时播种默认布局（混合一条龙），保证老部署升级后首页不空
-	if len(blocks) == 0 && models.CountHomeBlocks() == 0 {
-		if err := models.SeedDefaultHomeBlocks(); err == nil {
-			blocks, _ = models.ListEnabledHomeBlocks()
+	if len(blocks) == 0 && theme.CountHomeBlocks() == 0 {
+		if err := theme.SeedDefaultHomeBlocks(); err == nil {
+			blocks, _ = theme.ListEnabledHomeBlocks()
 		}
 	}
 	utils.Success(c, gin.H{"items": blocks})
@@ -35,7 +35,7 @@ func AdminListHomeBlocks(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	blocks, err := models.ListHomeBlocks()
+	blocks, err := theme.ListHomeBlocks()
 	if err != nil {
 		utils.InternalError(c, "获取区块失败")
 		return
@@ -48,7 +48,7 @@ func AdminListHomeBlockPresets(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	presets := models.HomeBlockPresets()
+	presets := theme.HomeBlockPresets()
 	out := make([]gin.H, 0, len(presets))
 	for _, p := range presets {
 		out = append(out, gin.H{"key": p.Key, "name": p.Name, "desc": p.Desc})
@@ -72,27 +72,27 @@ func AdminCreateHomeBlock(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if !models.IsValidHomeBlockType(req.Type) {
+	if !theme.IsValidHomeBlockType(req.Type) {
 		utils.BadRequest(c, "无效的区块类型")
 		return
 	}
-	cfg, err := models.HomeBlockConfigJSON(req.Config)
+	cfg, err := theme.HomeBlockConfigJSON(req.Config)
 	if err != nil {
 		utils.BadRequest(c, "config 必须是合法 JSON")
 		return
 	}
 	// 自定义 HTML：管理员输入也过一遍消毒（纵深防御）
-	if req.Type == models.HomeBlockCustom {
+	if req.Type == theme.HomeBlockCustom {
 		cfg = security.SanitizeUserContent(cfg)
 	}
-	block := &models.HomeBlock{
+	block := &theme.HomeBlock{
 		Type:      req.Type,
 		Title:     utils.ClampString(req.Title, 128),
 		Config:    cfg,
 		Enabled:   req.Enabled,
 		SortOrder: req.SortOrder,
 	}
-	if err := models.CreateHomeBlock(block); err != nil {
+	if err := theme.CreateHomeBlock(block); err != nil {
 		utils.InternalError(c, "创建区块失败")
 		return
 	}
@@ -122,7 +122,7 @@ func AdminUpdateHomeBlock(c *gin.Context) {
 	}
 	updates := map[string]interface{}{}
 	if req.Type != nil {
-		if !models.IsValidHomeBlockType(*req.Type) {
+		if !theme.IsValidHomeBlockType(*req.Type) {
 			utils.BadRequest(c, "无效的区块类型")
 			return
 		}
@@ -138,7 +138,7 @@ func AdminUpdateHomeBlock(c *gin.Context) {
 		updates["sort_order"] = *req.SortOrder
 	}
 	if req.Config != nil {
-		cfg, cerr := models.HomeBlockConfigJSON(*req.Config)
+		cfg, cerr := theme.HomeBlockConfigJSON(*req.Config)
 		if cerr != nil {
 			utils.BadRequest(c, "config 必须是合法 JSON")
 			return
@@ -146,10 +146,10 @@ func AdminUpdateHomeBlock(c *gin.Context) {
 		blockType := ""
 		if req.Type != nil {
 			blockType = *req.Type
-		} else if existing, gerr := models.GetHomeBlock(uint(id)); gerr == nil {
+		} else if existing, gerr := theme.GetHomeBlock(uint(id)); gerr == nil {
 			blockType = existing.Type
 		}
-		if blockType == models.HomeBlockCustom {
+		if blockType == theme.HomeBlockCustom {
 			cfg = security.SanitizeUserContent(cfg)
 		}
 		updates["config"] = cfg
@@ -158,11 +158,11 @@ func AdminUpdateHomeBlock(c *gin.Context) {
 		utils.BadRequest(c, "没有需要更新的字段")
 		return
 	}
-	if err := models.UpdateHomeBlock(uint(id), updates); err != nil {
+	if err := theme.UpdateHomeBlock(uint(id), updates); err != nil {
 		utils.InternalError(c, "更新区块失败")
 		return
 	}
-	block, _ := models.GetHomeBlock(uint(id))
+	block, _ := theme.GetHomeBlock(uint(id))
 	utils.Success(c, block)
 }
 
@@ -176,7 +176,7 @@ func AdminDeleteHomeBlock(c *gin.Context) {
 		utils.BadRequest(c, "无效的区块 ID")
 		return
 	}
-	if err := models.DeleteHomeBlock(uint(id)); err != nil {
+	if err := theme.DeleteHomeBlock(uint(id)); err != nil {
 		utils.InternalError(c, "删除区块失败")
 		return
 	}
@@ -195,7 +195,7 @@ func AdminReorderHomeBlocks(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.ReorderHomeBlocks(req.IDs); err != nil {
+	if err := theme.ReorderHomeBlocks(req.IDs); err != nil {
 		utils.InternalError(c, "排序失败")
 		return
 	}
@@ -208,14 +208,14 @@ func AdminApplyHomeBlockPreset(c *gin.Context) {
 		return
 	}
 	key := c.Param("key")
-	if models.FindHomeBlockPreset(key) == nil {
+	if theme.FindHomeBlockPreset(key) == nil {
 		utils.BadRequest(c, "无效的布局预设")
 		return
 	}
-	if err := models.ApplyHomeBlockPreset(key); err != nil {
+	if err := theme.ApplyHomeBlockPreset(key); err != nil {
 		utils.InternalError(c, "套用预设失败")
 		return
 	}
-	blocks, _ := models.ListHomeBlocks()
+	blocks, _ := theme.ListHomeBlocks()
 	utils.SuccessMessage(c, "已套用布局预设", gin.H{"items": blocks})
 }

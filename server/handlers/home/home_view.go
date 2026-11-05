@@ -2,17 +2,17 @@ package home
 
 import (
 	"nvs-server/handlers/admin"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	theme "nvs-server/models/theme"
 )
 
 // GetHomeView GET /api/home-view —— 公开：当前首页形态（前端据此决定渲染哪套视图）
 func GetHomeView(c *gin.Context) {
 	utils.Success(c, gin.H{
-		"view":  models.GetHomeView(),
-		"views": models.HomeViews,
+		"view":  theme.GetHomeView(),
+		"views": theme.HomeViews,
 	})
 }
 
@@ -22,8 +22,8 @@ func AdminGetHomeView(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{
-		"view":  models.GetHomeView(),
-		"views": models.HomeViews,
+		"view":  theme.GetHomeView(),
+		"views": theme.HomeViews,
 	})
 }
 
@@ -39,9 +39,9 @@ func AdminSaveHomeView(c *gin.Context) {
 		utils.BadRequest(c, "参数不合法")
 		return
 	}
-	if err := models.SetHomeView(req.View); err != nil {
+	if err := theme.SetHomeView(req.View); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已保存，刷新首页生效", models.GetHomeView())
+	utils.SuccessMessage(c, "已保存，刷新首页生效", theme.GetHomeView())
 }

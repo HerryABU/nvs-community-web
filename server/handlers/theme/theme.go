@@ -3,10 +3,10 @@ package theme
 import (
 	"nvs-server/handlers/admin"
 	"nvs-server/handlers/hctx"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	themem "nvs-server/models/theme"
 )
 
 // theme.go — F12 用户自定义网站主题（alist 式）API。
@@ -16,8 +16,8 @@ import (
 // GetSiteTheme GET /api/theme/site（公开）
 // 站点默认主题：管理员配置，对所有访客生效（登录用户的个人主题覆盖之）。
 func GetSiteTheme(c *gin.Context) {
-	js, mode, delay := models.GetSiteThemeJSBundle()
-	utils.Success(c, gin.H{"css": models.GetSiteTheme(), "js": js, "js_mode": mode, "js_delay": delay})
+	js, mode, delay := themem.GetSiteThemeJSBundle()
+	utils.Success(c, gin.H{"css": themem.GetSiteTheme(), "js": js, "js_mode": mode, "js_delay": delay})
 }
 
 // GetMyTheme GET /api/theme/me（需登录）
@@ -28,8 +28,8 @@ func GetMyTheme(c *gin.Context) {
 		utils.Unauthorized(c, "未登录")
 		return
 	}
-	js, mode, delay := models.GetUserThemeJSBundle(userID)
-	utils.Success(c, gin.H{"css": models.GetUserTheme(userID), "js": js, "js_mode": mode, "js_delay": delay})
+	js, mode, delay := themem.GetUserThemeJSBundle(userID)
+	utils.Success(c, gin.H{"css": themem.GetUserTheme(userID), "js": js, "js_mode": mode, "js_delay": delay})
 }
 
 // UpdateMyTheme PUT /api/theme/me（需登录）
@@ -50,13 +50,13 @@ func UpdateMyTheme(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	removed, err := models.SetUserTheme(userID, req.CSS, req.JS, req.JSMode, req.JSDelay)
+	removed, err := themem.SetUserTheme(userID, req.CSS, req.JS, req.JSMode, req.JSDelay)
 	if err != nil {
 		utils.InternalError(c, "保存个人主题失败")
 		return
 	}
-	js, mode, delay := models.GetUserThemeJSBundle(userID)
-	utils.Success(c, gin.H{"css": models.GetUserTheme(userID), "js": js, "js_mode": mode, "js_delay": delay, "removed": removed})
+	js, mode, delay := themem.GetUserThemeJSBundle(userID)
+	utils.Success(c, gin.H{"css": themem.GetUserTheme(userID), "js": js, "js_mode": mode, "js_delay": delay, "removed": removed})
 }
 
 // UpdateSiteTheme PUT /api/theme/site（仅管理员）
@@ -75,11 +75,11 @@ func UpdateSiteTheme(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	removed, err := models.SetSiteTheme(req.CSS, req.JS, req.JSMode, req.JSDelay)
+	removed, err := themem.SetSiteTheme(req.CSS, req.JS, req.JSMode, req.JSDelay)
 	if err != nil {
 		utils.InternalError(c, "保存站点主题失败")
 		return
 	}
-	js, mode, delay := models.GetSiteThemeJSBundle()
-	utils.Success(c, gin.H{"css": models.GetSiteTheme(), "js": js, "js_mode": mode, "js_delay": delay, "removed": removed})
+	js, mode, delay := themem.GetSiteThemeJSBundle()
+	utils.Success(c, gin.H{"css": themem.GetSiteTheme(), "js": js, "js_mode": mode, "js_delay": delay, "removed": removed})
 }

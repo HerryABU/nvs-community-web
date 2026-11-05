@@ -1,7 +1,8 @@
-package models
+package theme
 
 import (
 	"errors"
+	"nvs-server/models"
 	"strings"
 	"time"
 )
@@ -41,7 +42,7 @@ func validHomeView(v string) bool {
 
 // GetHomeView 读取首页形态
 func GetHomeView() string {
-	v := strings.ToLower(strings.TrimSpace(GetPlatformConfig(homeViewKey)))
+	v := strings.ToLower(strings.TrimSpace(models.GetPlatformConfig(homeViewKey)))
 	if validHomeView(v) {
 		return v
 	}
@@ -54,5 +55,5 @@ func SetHomeView(v string) error {
 	if !validHomeView(v) {
 		return errors.New("首页形态只能是 novels / blogs / forum / feed")
 	}
-	return SetPlatformConfig(homeViewKey, v)
+	return models.SetPlatformConfig(homeViewKey, v)
 }

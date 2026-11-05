@@ -1,4 +1,4 @@
-package models
+package theme
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // newMapTestDB 独立的唯一内存库：`file::memory:?cache=shared` 是全局同名库，
@@ -18,10 +19,10 @@ func newMapTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开内存测试库失败: %v", err)
 	}
-	if err := AutoMigrateAll(db); err != nil {
+	if err := models.AutoMigrateAll(db); err != nil {
 		t.Fatalf("迁移测试库失败: %v", err)
 	}
-	DB = db
+	models.DB = db
 	t.Cleanup(func() {
 		if sqlDB, e := db.DB(); e == nil {
 			_ = sqlDB.Close()
@@ -84,7 +85,7 @@ func TestMapSettingDBWinsOverEnv(t *testing.T) {
 // TestMapSettingSanitize 坏值回退（provider 乱写 → offline；scope 乱写 → china）
 func TestMapSettingSanitize(t *testing.T) {
 	newMapTestDB(t)
-	if err := SetPlatformConfig(mapSettingKey, `{"provider":"baidu","scope":"mars","tianditu_key":"k"}`); err != nil {
+	if err := models.SetPlatformConfig(mapSettingKey, `{"provider":"baidu","scope":"mars","tianditu_key":"k"}`); err != nil {
 		t.Fatalf("写入坏配置失败: %v", err)
 	}
 	c := LoadMapSetting()

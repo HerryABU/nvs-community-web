@@ -1,7 +1,8 @@
-package models
+package theme
 
 import (
 	"encoding/json"
+	"nvs-server/models"
 	"os"
 	"strings"
 	"time"
@@ -39,7 +40,7 @@ func DefaultMapSetting() MapSetting {
 // LoadMapSetting 读取配置（坏值回退默认）
 func LoadMapSetting() MapSetting {
 	c := DefaultMapSetting()
-	raw := GetPlatformConfig(mapSettingKey)
+	raw := models.GetPlatformConfig(mapSettingKey)
 	if strings.TrimSpace(raw) != "" {
 		if err := json.Unmarshal([]byte(raw), &c); err != nil {
 			return DefaultMapSetting()
@@ -81,7 +82,7 @@ func SaveMapSetting(c MapSetting) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(mapSettingKey, string(b))
+	return models.SetPlatformConfig(mapSettingKey, string(b))
 }
 
 // PublicMapSetting 公开给前端的部分（天地图 key 本来就必须在前端加载 SDK 使用，

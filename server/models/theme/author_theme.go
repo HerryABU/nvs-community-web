@@ -1,8 +1,9 @@
-package models
+package theme
 
 import (
 	"time"
 
+	"nvs-server/models"
 	"nvs-server/utils"
 )
 
@@ -24,7 +25,7 @@ func GetAuthorTheme(authorID uint) string {
 		return ""
 	}
 	var t AuthorTheme
-	if err := DB.Where("author_id = ?", authorID).First(&t).Error; err != nil {
+	if err := models.DB.Where("author_id = ?", authorID).First(&t).Error; err != nil {
 		return ""
 	}
 	return t.CSS
@@ -38,11 +39,11 @@ func SetAuthorTheme(authorID uint, css string) (removed []string, err error) {
 	}
 	sanitized, removed := utils.SanitizeCSS(css)
 	var t AuthorTheme
-	if err := DB.Where("author_id = ?", authorID).First(&t).Error; err == nil {
+	if err := models.DB.Where("author_id = ?", authorID).First(&t).Error; err == nil {
 		t.CSS = sanitized
 		t.UpdatedAt = time.Now()
-		return removed, DB.Save(&t).Error
+		return removed, models.DB.Save(&t).Error
 	}
 	now := time.Now()
-	return removed, DB.Create(&AuthorTheme{AuthorID: authorID, CSS: sanitized, UpdatedAt: now}).Error
+	return removed, models.DB.Create(&AuthorTheme{AuthorID: authorID, CSS: sanitized, UpdatedAt: now}).Error
 }

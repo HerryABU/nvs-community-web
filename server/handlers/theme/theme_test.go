@@ -12,6 +12,7 @@ import (
 	"nvs-server/models"
 
 	"github.com/gin-gonic/gin"
+	themem "nvs-server/models/theme"
 )
 
 // setThemeJSONBody 为 context 设置 PUT JSON 请求体（主题保存均为 PUT 语义）
@@ -27,7 +28,7 @@ func setThemeJSONBody(c *gin.Context, payload map[string]interface{}) {
 func setupThemeTestDB(t *testing.T) {
 	t.Helper()
 	testutil.SetupHandlerTestDB(t)
-	if err := models.DB.AutoMigrate(&models.SiteTheme{}, &models.UserTheme{}); err != nil {
+	if err := models.DB.AutoMigrate(&themem.SiteTheme{}, &themem.UserTheme{}); err != nil {
 		t.Fatalf("迁移主题表失败: %v", err)
 	}
 }
@@ -97,7 +98,7 @@ func TestUpdateSiteThemeForbiddenForNonAdmin(t *testing.T) {
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("非管理员应返回 403，实际 %d: %s", w.Code, w.Body.String())
 	}
-	var st models.SiteTheme
+	var st themem.SiteTheme
 	if err := models.DB.First(&st, 1).Error; err == nil {
 		t.Fatal("越权写入不应产生站点主题记录")
 	}

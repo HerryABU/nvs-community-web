@@ -1,4 +1,4 @@
-package models
+package theme
 
 import (
 	"errors"
@@ -7,6 +7,7 @@ import (
 	"nvs-server/utils"
 
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // SiteTheme 站点默认主题（F12 用户自定义网站主题，alist 式）。
@@ -27,7 +28,7 @@ func (SiteTheme) TableName() string { return "site_themes" }
 // GetSiteTheme 读取站点默认主题 CSS；无记录返回空串（未配置）。
 func GetSiteTheme() string {
 	var t SiteTheme
-	if err := DB.First(&t, 1).Error; err != nil {
+	if err := models.DB.First(&t, 1).Error; err != nil {
 		return ""
 	}
 	return t.CSS
@@ -36,7 +37,7 @@ func GetSiteTheme() string {
 // GetSiteThemeJS 读取站点默认主题 JS；无记录返回空串。
 func GetSiteThemeJS() string {
 	var t SiteTheme
-	if err := DB.First(&t, 1).Error; err != nil {
+	if err := models.DB.First(&t, 1).Error; err != nil {
 		return ""
 	}
 	return t.CustomJS
@@ -45,7 +46,7 @@ func GetSiteThemeJS() string {
 // GetSiteThemeJSBundle 一次性取站点主题的 JS 及其加载模式。
 func GetSiteThemeJSBundle() (js string, mode string, delay int) {
 	var t SiteTheme
-	if err := DB.First(&t, 1).Error; err != nil {
+	if err := models.DB.First(&t, 1).Error; err != nil {
 		return "", ThemeJSModeImmediate, 0
 	}
 	return t.CustomJS, NormalizeThemeJSMode(t.CustomJSMode), t.CustomJSDelay
@@ -58,12 +59,12 @@ func SetSiteTheme(css string, customJS string, jsMode string, jsDelay int) (remo
 	sanitizedJS, jsRemoved := utils.SanitizeJS(customJS)
 	removed = append(removed, jsRemoved...)
 	var t SiteTheme
-	if ferr := DB.First(&t, 1).Error; ferr != nil {
+	if ferr := models.DB.First(&t, 1).Error; ferr != nil {
 		if !errors.Is(ferr, gorm.ErrRecordNotFound) {
 			return removed, ferr
 		}
 		t = SiteTheme{ID: 1}
-		if cerr := DB.Create(&t).Error; cerr != nil {
+		if cerr := models.DB.Create(&t).Error; cerr != nil {
 			return removed, cerr
 		}
 	}
@@ -76,5 +77,5 @@ func SetSiteTheme(css string, customJS string, jsMode string, jsDelay int) (remo
 		t.CustomJSDelay = 0
 	}
 	t.UpdatedAt = time.Now()
-	return removed, DB.Save(&t).Error
+	return removed, models.DB.Save(&t).Error
 }
