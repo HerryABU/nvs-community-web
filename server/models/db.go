@@ -50,6 +50,7 @@ var BlogFeedProvider func(ids []uint, window int) ([]FeedItem, int64, error)
 //	models/theme     —— SiteTheme / UserTheme / AuthorTheme / HomeBlock / HomeCustomize 系列
 //	models/siteops   —— Announcement / SystemSetting / EmergencyAuditLog / NavMenu /
 //	                    Carousel / CheckInRecord / RageConfig / RefreshState
+//	models/search    —— SearchLog（热词聚合 / 标签热词）
 func AllModels() []interface{} {
 	list := []interface{}{
 		&User{}, &Novel{}, &NovelCategory{}, &Chapter{}, &Comment{}, &Rating{},
@@ -98,8 +99,6 @@ func AllModels() []interface{} {
 		&AiNovelMemory{},
 		&AiBotUsage{},
 		&AiPrompt{}, &AiVendor{}, &AiModelKey{}, &AiStyle{}, &AiContentMark{},
-		// 搜索热词埋点（F9：站内搜索 query 记录，聚合出搜索热词）
-		&SearchLog{},
 		// API Key 审计告警（多 IP / 解密失败 / 封禁后仍使用）
 		&ApiKeyAlarm{},
 		// AIGC 内容标识（GB 45438—2025）：原图 / 导出（ProduceID→模型名）/ 豁免日志

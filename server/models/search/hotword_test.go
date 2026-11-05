@@ -1,4 +1,4 @@
-package models
+package search
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 func TestCountHotWords(t *testing.T) {
@@ -48,10 +49,10 @@ func TestAggregateHotWords(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开测试库失败: %v", err)
 	}
-	if err := AutoMigrateAll(db); err != nil {
+	if err := models.AutoMigrateAll(db); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
-	DB = db
+	models.DB = db
 	t.Cleanup(func() {
 		if sqlDB, e := db.DB(); e == nil {
 			_ = sqlDB.Close()
@@ -60,10 +61,10 @@ func TestAggregateHotWords(t *testing.T) {
 
 	// 造数据：多条评论/回帖/帖题，令「测试」「热点」成为高频二元组
 	for i := 0; i < 3; i++ {
-		db.Create(&Comment{UserID: 1, NovelID: 1, Content: "测试热点测试热点", CreatedAt: time.Now()})
+		db.Create(&models.Comment{UserID: 1, NovelID: 1, Content: "测试热点测试热点", CreatedAt: time.Now()})
 	}
-	db.Create(&Post{ThreadID: 1, UserID: 1, Content: "测试热点内容", CreatedAt: time.Now()})
-	db.Create(&Thread{ForumID: 1, UserID: 1, Title: "热点讨论测试", Content: "x", CreatedAt: time.Now()})
+	db.Create(&models.Post{ThreadID: 1, UserID: 1, Content: "测试热点内容", CreatedAt: time.Now()})
+	db.Create(&models.Thread{ForumID: 1, UserID: 1, Title: "热点讨论测试", Content: "x", CreatedAt: time.Now()})
 
 	words, err := AggregateHotWords(7, 50)
 	if err != nil {

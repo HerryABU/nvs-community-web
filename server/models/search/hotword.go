@@ -1,7 +1,8 @@
-package models
+package search
 
 import (
 	"encoding/json"
+	"nvs-server/models"
 	"strings"
 	"time"
 )
@@ -32,22 +33,22 @@ func AggregateHotWords(days, limit int) ([]HotWord, error) {
 	// 单表扫描上限，防止超大库一次拉全表
 	const scanCap = 5000
 
-	var comments []Comment
-	DB.Select("content").Where("created_at >= ?", since).
+	var comments []models.Comment
+	models.DB.Select("content").Where("created_at >= ?", since).
 		Order("created_at DESC").Limit(scanCap).Find(&comments)
 	for _, c := range comments {
 		countHotWords(c.Content, counts)
 	}
 
-	var posts []Post
-	DB.Select("content").Where("created_at >= ?", since).
+	var posts []models.Post
+	models.DB.Select("content").Where("created_at >= ?", since).
 		Order("created_at DESC").Limit(scanCap).Find(&posts)
 	for _, p := range posts {
 		countHotWords(p.Content, counts)
 	}
 
-	var threads []Thread
-	DB.Select("title").Where("created_at >= ?", since).
+	var threads []models.Thread
+	models.DB.Select("title").Where("created_at >= ?", since).
 		Order("created_at DESC").Limit(scanCap).Find(&threads)
 	for _, t := range threads {
 		countHotWords(t.Title, counts)
@@ -79,7 +80,7 @@ func AggregateTagHotWords(days, limit int) ([]HotWord, error) {
 		Count int64
 	}
 	var rows []tagRow
-	DB.Table("blog_tags").
+	models.DB.Table("blog_tags").
 		Select("blog_tags.name AS name, COUNT(blog_tag_links.blog_id) AS count").
 		Joins("JOIN blog_tag_links ON blog_tag_links.tag_id = blog_tags.id").
 		Joins("JOIN author_blogs ON author_blogs.id = blog_tag_links.blog_id").
@@ -100,8 +101,8 @@ func AggregateTagHotWords(days, limit int) ([]HotWord, error) {
 	// 而站长的真实问题是「现在大家在写什么题材」——按近期活跃作品取样才对。
 	// blog_tags 那一路保留时间窗（标签关联的是博客创建时间，语义不同）。
 	const scanCap = 5000
-	var novels []Novel
-	DB.Select("tags").
+	var novels []models.Novel
+	models.DB.Select("tags").
 		Where("tags <> '' AND deleted_at IS NULL").
 		Order("updated_at DESC").Limit(scanCap).Find(&novels)
 	for _, n := range novels {

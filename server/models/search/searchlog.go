@@ -1,4 +1,4 @@
-package models
+package search
 
 import (
 	"sort"
@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // ==================== 搜索热词埋点（站内搜索 query 记录） ====================
@@ -56,7 +57,7 @@ func init() {
 	go searchLogWorker()
 }
 
-// searchLogWorker 后台批量刷盘 worker（DB 未就绪时静默丢弃，不 panic）
+// searchLogWorker 后台批量刷盘 worker（models.DB 未就绪时静默丢弃，不 panic）
 func searchLogWorker() {
 	const batchSize = 100
 	batch := make([]*SearchLog, 0, batchSize)
@@ -65,11 +66,11 @@ func searchLogWorker() {
 		if len(batch) == 0 {
 			return
 		}
-		if DB == nil {
+		if models.DB == nil {
 			batch = batch[:0]
 			return
 		}
-		if err := DB.CreateInBatches(batch, batchSize).Error; err == nil {
+		if err := models.DB.CreateInBatches(batch, batchSize).Error; err == nil {
 			batch = batch[:0]
 		}
 	}
@@ -122,7 +123,7 @@ func AggregateSearchQueries(days, limit int) ([]HotWord, error) {
 	days, limit = clampHotWordWindow(days, limit)
 	since := time.Now().AddDate(0, 0, -days)
 	var logs []SearchLog
-	DB.Select("query").Where("created_at >= ?", since).
+	models.DB.Select("query").Where("created_at >= ?", since).
 		Order("created_at DESC").Limit(searchScanCap).Find(&logs)
 	counts := map[string]int{}
 	for _, l := range logs {
@@ -141,7 +142,7 @@ func AggregateSearchWords(days, limit int) ([]HotWord, error) {
 	days, limit = clampHotWordWindow(days, limit)
 	since := time.Now().AddDate(0, 0, -days)
 	var logs []SearchLog
-	DB.Select("query").Where("created_at >= ?", since).
+	models.DB.Select("query").Where("created_at >= ?", since).
 		Order("created_at DESC").Limit(searchScanCap).Find(&logs)
 	counts := map[string]int{}
 	for _, l := range logs {
@@ -162,7 +163,7 @@ func CountSearchLogs(days int) (int64, error) {
 	}
 	since := time.Now().AddDate(0, 0, -days)
 	var n int64
-	err := DB.Model(&SearchLog{}).Where("created_at >= ?", since).Count(&n).Error
+	err := models.DB.Model(&SearchLog{}).Where("created_at >= ?", since).Count(&n).Error
 	return n, err
 }
 
@@ -196,7 +197,7 @@ func topHotWords(counts map[string]int, threshold, limit int) []HotWord {
 
 // SearchLogCleanup 清空全部搜索日志
 func SearchLogCleanup() error {
-	return DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Where("1 = 1").Delete(&SearchLog{}).Error
+	return models.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Where("1 = 1").Delete(&SearchLog{}).Error
 }
 
 // SearchLogRetentionCleanup 清理 N 天前的搜索日志（防表无限增长），返回删除行数。
@@ -206,6 +207,6 @@ func SearchLogRetentionCleanup(days int) (int64, error) {
 		days = 90
 	}
 	cutoff := time.Now().AddDate(0, 0, -days)
-	res := DB.Where("created_at < ?", cutoff).Delete(&SearchLog{})
+	res := models.DB.Where("created_at < ?", cutoff).Delete(&SearchLog{})
 	return res.RowsAffected, res.Error
 }

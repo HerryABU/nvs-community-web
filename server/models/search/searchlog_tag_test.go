@@ -1,4 +1,4 @@
-package models_test
+package search_test
 
 import (
 	"testing"
@@ -9,12 +9,12 @@ import (
 
 	"nvs-server/models"
 	"nvs-server/models/blog"
+	"nvs-server/models/search"
 )
 
 // TestAggregateTagHotWords 验证标签热词聚合（博客结构化标签 + 作品 JSON 标签）。
-// 放在外部测试包 models_test：根包（models）不可反向 import 拆出的 blog 子包，
-// 而本测试需要直接造博客数据。zz_domain_import_test.go 已 blank-import blog 触发其
-// init() 注册，使 AutoMigrateAll 一并迁移博客表。
+// 放在外部测试包 search_test：本测试需要直接造博客数据，并 import 自身包 search 与
+// blog 子包，二者 init() 会把各自模型注册进 AutoMigrateAll，确保表被迁移。
 func TestAggregateTagHotWords(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:taghot?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
@@ -52,7 +52,7 @@ func TestAggregateTagHotWords(t *testing.T) {
 	models.DB.Create(&oldBlog)
 	models.DB.Create(&blog.BlogTagLink{BlogID: oldBlog.ID, TagID: tagB.ID})
 
-	words, err := models.AggregateTagHotWords(7, 50)
+	words, err := search.AggregateTagHotWords(7, 50)
 	if err != nil {
 		t.Fatalf("标签热词聚合失败: %v", err)
 	}

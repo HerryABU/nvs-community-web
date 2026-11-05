@@ -3,15 +3,15 @@ package admin
 import (
 	"strconv"
 
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	search "nvs-server/models/search"
 )
 
 // GET /api/admin/hotwords?type=content|search|tag — 热词统计（内容治理/舆情观测）。
 //
-//	type=content（默认）：评论/回帖/帖题高频词（models.AggregateHotWords）
+//	type=content（默认）：评论/回帖/帖题高频词（search.AggregateHotWords）
 //	type=search          ：搜索热词——原始搜索短语 queries + 分词 words + 搜索总次数
 //	type=tag             ：标签热词（博客结构化标签 + 作品 JSON 标签）
 //
@@ -26,17 +26,17 @@ func AdminHotWords(c *gin.Context) {
 
 	switch typ {
 	case "search":
-		words, err := models.AggregateSearchWords(days, limit)
+		words, err := search.AggregateSearchWords(days, limit)
 		if err != nil {
 			utils.InternalError(c, "搜索热词统计失败")
 			return
 		}
-		queries, err := models.AggregateSearchQueries(days, limit)
+		queries, err := search.AggregateSearchQueries(days, limit)
 		if err != nil {
 			utils.InternalError(c, "搜索热词统计失败")
 			return
 		}
-		total, _ := models.CountSearchLogs(days)
+		total, _ := search.CountSearchLogs(days)
 		utils.Success(c, gin.H{
 			"type":         "search",
 			"words":        words,
@@ -46,7 +46,7 @@ func AdminHotWords(c *gin.Context) {
 			"total":        len(words),
 		})
 	case "tag":
-		words, err := models.AggregateTagHotWords(days, limit)
+		words, err := search.AggregateTagHotWords(days, limit)
 		if err != nil {
 			utils.InternalError(c, "标签热词统计失败")
 			return
@@ -58,7 +58,7 @@ func AdminHotWords(c *gin.Context) {
 			"total": len(words),
 		})
 	default: // content
-		words, err := models.AggregateHotWords(days, limit)
+		words, err := search.AggregateHotWords(days, limit)
 		if err != nil {
 			utils.InternalError(c, "热词统计失败")
 			return
@@ -82,7 +82,7 @@ func AdminSearchLogCleanup(c *gin.Context) {
 	}
 	days, _ := strconv.Atoi(c.DefaultQuery("days", "0"))
 	if days > 0 {
-		removed, err := models.SearchLogRetentionCleanup(days)
+		removed, err := search.SearchLogRetentionCleanup(days)
 		if err != nil {
 			utils.InternalError(c, "清理搜索日志失败")
 			return
@@ -90,7 +90,7 @@ func AdminSearchLogCleanup(c *gin.Context) {
 		utils.Success(c, gin.H{"removed": removed})
 		return
 	}
-	if err := models.SearchLogCleanup(); err != nil {
+	if err := search.SearchLogCleanup(); err != nil {
 		utils.InternalError(c, "清空搜索日志失败")
 		return
 	}

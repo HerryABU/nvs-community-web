@@ -12,6 +12,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	search "nvs-server/models/search"
 	"nvs-server/models/security"
 )
 
@@ -358,13 +359,13 @@ func computeBadWordOverview(days int) gin.H {
 //	标签 —— 作品标签（作者在写什么）
 func computeHotWordOverview(days, limit int) gin.H {
 	out := gin.H{"days": days, "limit": limit}
-	if list, err := models.AggregateHotWords(days, limit); err == nil {
+	if list, err := search.AggregateHotWords(days, limit); err == nil {
 		out["content"] = list
 	}
-	if list, err := models.AggregateSearchWords(days, limit); err == nil {
+	if list, err := search.AggregateSearchWords(days, limit); err == nil {
 		out["search"] = list
 	}
-	if list, err := models.AggregateTagHotWords(days, limit); err == nil {
+	if list, err := search.AggregateTagHotWords(days, limit); err == nil {
 		out["tag"] = list
 	}
 	return out

@@ -1,4 +1,4 @@
-package models
+package search
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // setupSearchLogTestDB 独立命名内存库，避免与其它测试共享 file::memory: 互相污染
@@ -15,10 +16,10 @@ func setupSearchLogTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("打开测试库失败: %v", err)
 	}
-	if err := AutoMigrateAll(db); err != nil {
+	if err := models.AutoMigrateAll(db); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
-	DB = db
+	models.DB = db
 	t.Cleanup(func() {
 		if sqlDB, e := db.DB(); e == nil {
 			_ = sqlDB.Close()
@@ -95,7 +96,7 @@ func TestRecordSearchQueryTruncate(t *testing.T) {
 	var count int64
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		DB.Model(&SearchLog{}).Count(&count)
+		models.DB.Model(&SearchLog{}).Count(&count)
 		if count >= 1 {
 			break
 		}
@@ -105,7 +106,7 @@ func TestRecordSearchQueryTruncate(t *testing.T) {
 		t.Fatalf("搜索埋点未落库（count=%d）", count)
 	}
 	var log SearchLog
-	if err := DB.Order("id DESC").First(&log).Error; err != nil {
+	if err := models.DB.Order("id DESC").First(&log).Error; err != nil {
 		t.Fatalf("读取搜索日志失败: %v", err)
 	}
 	if len([]rune(log.Query)) != MaxSearchQueryLen {

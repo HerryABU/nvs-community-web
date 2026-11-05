@@ -16,6 +16,7 @@ import (
 	"github.com/microcosm-cc/bluemonday"
 	"gorm.io/gorm"
 	"nvs-server/models/blog"
+	searchm "nvs-server/models/search"
 )
 
 // 分类列表（从数据库动态读取，不再硬编码）
@@ -88,7 +89,7 @@ func ListNovels(c *gin.Context) {
 
 	// 搜索埋点（F9：搜索热词来源之一）
 	if search != "" {
-		models.RecordSearchQuery(search, hctx.CurrentUserID(c), "novels", int(total))
+		searchm.RecordSearchQuery(search, hctx.CurrentUserID(c), "novels", int(total))
 	}
 
 	utils.Success(c, gin.H{
@@ -125,7 +126,7 @@ func SearchAuthors(c *gin.Context) {
 	// 脱敏
 	models.SanitizeUserEmails(users)
 	// 搜索埋点（F9：搜索热词来源之一）
-	models.RecordSearchQuery(search, hctx.CurrentUserID(c), "authors", int(total))
+	searchm.RecordSearchQuery(search, hctx.CurrentUserID(c), "authors", int(total))
 	utils.Success(c, gin.H{"list": users, "total": total})
 }
 
@@ -221,7 +222,7 @@ func UnifiedSearch(c *gin.Context) {
 	// 搜索埋点（F9：搜索热词主入口；粗略命中数 = 各分区结果条数之和）
 	hitCount := len(novels) + len(authors) + len(blogs) + len(htmls) +
 		len(categories) + len(topics) + len(forums)
-	models.RecordSearchQuery(q, hctx.CurrentUserID(c), "unified", hitCount)
+	searchm.RecordSearchQuery(q, hctx.CurrentUserID(c), "unified", hitCount)
 
 	utils.Success(c, gin.H{
 		"q": q, "novels": novels, "authors": authors, "blogs": blogs, "htmls": htmls,
