@@ -1,7 +1,7 @@
 package aiplatform
 
 import (
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -17,7 +17,7 @@ import (
 
 // GetAiRouteConfig GET /api/admin/ai/route
 func GetAiRouteConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	cfg := aiops.LoadAiRouteConfig()
@@ -36,7 +36,7 @@ func GetAiRouteConfig(c *gin.Context) {
 
 // UpdateAiRouteConfig PUT /api/admin/ai/route
 func UpdateAiRouteConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var in aiops.AiRouteConfig

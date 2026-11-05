@@ -1,8 +1,9 @@
-package admin
+package admingov
 
 import (
 	"fmt"
 	"html"
+	"nvs-server/handlers/admincommon"
 	"strconv"
 	"time"
 
@@ -156,7 +157,7 @@ func targetPreview(targetType string, targetID uint) string {
 
 // ListReports GET /api/admin/reports — 举报列表（支持按状态、目标类型筛选，附内容预览）
 func ListReports(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	status := c.Query("status")
@@ -184,7 +185,7 @@ func ListReports(c *gin.Context) {
 
 // HandleReport POST /api/admin/reports/:id/handle — 处理举报（人工判定 + 可选删除目标）
 func HandleReport(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	userID := hctx.CurrentUserID(c)

@@ -9,7 +9,8 @@ package routes
 // 依赖方向是单向的：main → routes → handlers/models/middleware，不存在回环。
 
 import (
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admingov"
+	"nvs-server/handlers/adminsite"
 	"nvs-server/handlers/aiadmin"
 	"nvs-server/handlers/aimedia"
 	"nvs-server/handlers/aiplatform"
@@ -57,35 +58,35 @@ func registerAdminArea(r *gin.Engine) {
 	// 白名单见 middleware/governance.go，非白名单路径对 police 一律 403 并记审计。
 	adminGrp.Use(middleware.AuthRequired(), middleware.AdminOrPoliceGovernance())
 	{
-		adminGrp.GET("/stats", admin.GetAdminStats)
-		adminGrp.GET("/dashboard", admin.GetDashboardStats)
+		adminGrp.GET("/stats", adminsite.GetAdminStats)
+		adminGrp.GET("/dashboard", adminsite.GetDashboardStats)
 		adminGrp.GET("/community", community.GetCommunityDashboard)
 		// 实名记录查询（F10：姓名解密仅在本响应返回，身份证仅脱敏展示）
-		adminGrp.GET("/realname", admin.AdminListRealName)
+		adminGrp.GET("/realname", admingov.AdminListRealName)
 		// 实名核验提供商配置（国家代理/腾讯/阿里/华为/网易）
-		adminGrp.GET("/realname-provider", admin.AdminGetRealNameProvider)
-		adminGrp.PUT("/realname-provider", admin.AdminSetRealNameProvider)
-		adminGrp.POST("/realname-provider/test", admin.AdminTestRealNameProvider)
-		adminGrp.GET("/hotwords", admin.AdminHotWords)                     // 热词统计（内容治理/舆情观测）
-		adminGrp.POST("/search-logs/cleanup", admin.AdminSearchLogCleanup) // 维护搜索埋点日志（清空/保留期清理）
-		adminGrp.GET("/users", admin.ListUsers)
-		adminGrp.GET("/users/audit", admin.ListUserAuditLogs)
+		adminGrp.GET("/realname-provider", admingov.AdminGetRealNameProvider)
+		adminGrp.PUT("/realname-provider", admingov.AdminSetRealNameProvider)
+		adminGrp.POST("/realname-provider/test", admingov.AdminTestRealNameProvider)
+		adminGrp.GET("/hotwords", adminsite.AdminHotWords)                     // 热词统计（内容治理/舆情观测）
+		adminGrp.POST("/search-logs/cleanup", adminsite.AdminSearchLogCleanup) // 维护搜索埋点日志（清空/保留期清理）
+		adminGrp.GET("/users", adminsite.ListUsers)
+		adminGrp.GET("/users/audit", adminsite.ListUserAuditLogs)
 		adminGrp.GET("/zone-access", auth.ListZoneAccessLogs)          // 隔离墙进入记录（176号令专项，分页+筛选）
 		adminGrp.GET("/zone-access/stats", auth.GetZoneAccessStats)    // 隔离墙进入记录统计（仪表盘卡片）
 		adminGrp.GET("/web-access", web.ListWebAccessLogs)             // 网络诊断 / 用户分布 / 攻击流量（分页+多维筛选）
 		adminGrp.GET("/web-access/stats", web.GetWebAccessStats)       // Web 访问日志聚合统计（诊断面板）
 		adminGrp.GET("/web-access/geo", web.GetWebAccessGeo)           // 访问来源地域分布（ip2region 离线解析，供地图/排行）
 		adminGrp.POST("/web-access/cleanup", web.CleanupWebAccessLogs) // 清空 Web 访问日志（合规证据由文件日志承担）
-		adminGrp.PUT("/users/:id", admin.UpdateUser)
-		adminGrp.DELETE("/users/:id", admin.DeleteUser)
-		adminGrp.POST("/users/:id/mute", admin.MuteUser)
-		adminGrp.POST("/users/:id/unmute", admin.UnmuteUser)
-		adminGrp.POST("/users/:id/promote-police", admin.AdminPromoteToPolice) // 提权为警方（准管理员，仅 admin 可操作，留审计）
-		adminGrp.POST("/users/:id/revoke-police", admin.AdminRevokePolice)     // 撤销警方权限（回退 reader）
-		adminGrp.GET("/vip-applications", admin.ListVipApplications)
-		adminGrp.POST("/vip-applications/:id/approve", admin.ApproveVip)
-		adminGrp.GET("/reports", admin.ListReports)
-		adminGrp.POST("/reports/:id/handle", admin.HandleReport)
+		adminGrp.PUT("/users/:id", adminsite.UpdateUser)
+		adminGrp.DELETE("/users/:id", adminsite.DeleteUser)
+		adminGrp.POST("/users/:id/mute", adminsite.MuteUser)
+		adminGrp.POST("/users/:id/unmute", adminsite.UnmuteUser)
+		adminGrp.POST("/users/:id/promote-police", adminsite.AdminPromoteToPolice) // 提权为警方（准管理员，仅 admin 可操作，留审计）
+		adminGrp.POST("/users/:id/revoke-police", adminsite.AdminRevokePolice)     // 撤销警方权限（回退 reader）
+		adminGrp.GET("/vip-applications", adminsite.ListVipApplications)
+		adminGrp.POST("/vip-applications/:id/approve", adminsite.ApproveVip)
+		adminGrp.GET("/reports", admingov.ListReports)
+		adminGrp.POST("/reports/:id/handle", admingov.HandleReport)
 		// AI 内容审核中枢
 		adminGrp.GET("/moderation/config", moderation.GetModerationConfig)
 		adminGrp.PUT("/moderation/config", moderation.SaveModerationConfig)
@@ -100,23 +101,23 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.GET("/html-reviews/:type/:id", web.GetHTMLReview)
 		adminGrp.POST("/html-reviews/:type/:id/review", web.ReviewHTML)
 		// HTML/WASM 托管额度（每人项目数 + 累计空间；支持按人覆盖）
-		adminGrp.GET("/html-quota", admin.AdminGetHTMLQuota)
-		adminGrp.PUT("/html-quota", admin.AdminSaveHTMLQuota)
-		adminGrp.POST("/html-quota/overrides", admin.AdminSetHTMLQuotaOverride)
-		adminGrp.GET("/html-quota/usage", admin.AdminHTMLQuotaUsage)
+		adminGrp.GET("/html-quota", adminsite.AdminGetHTMLQuota)
+		adminGrp.PUT("/html-quota", adminsite.AdminSaveHTMLQuota)
+		adminGrp.POST("/html-quota/overrides", adminsite.AdminSetHTMLQuotaOverride)
+		adminGrp.GET("/html-quota/usage", adminsite.AdminHTMLQuotaUsage)
 		// 评论区策略（楼加密是否连带隐藏楼内回复）
-		adminGrp.GET("/comment-policy", admin.AdminGetCommentPolicy)
-		adminGrp.PUT("/comment-policy", admin.AdminSaveCommentPolicy)
-		adminGrp.GET("/finance", admin.GetFinanceOverview)
+		adminGrp.GET("/comment-policy", adminsite.AdminGetCommentPolicy)
+		adminGrp.PUT("/comment-policy", adminsite.AdminSaveCommentPolicy)
+		adminGrp.GET("/finance", adminsite.GetFinanceOverview)
 		// 站长配置
-		adminGrp.GET("/config", admin.GetPlatformConfigs)
-		adminGrp.POST("/smtp/test", admin.TestSMTP) // SMTP 测试与逐阶段诊断
-		adminGrp.PUT("/config", admin.UpdatePlatformConfig)
+		adminGrp.GET("/config", adminsite.GetPlatformConfigs)
+		adminGrp.POST("/smtp/test", adminsite.TestSMTP) // SMTP 测试与逐阶段诊断
+		adminGrp.PUT("/config", adminsite.UpdatePlatformConfig)
 		// 日志脱敏配置（176号令合规：生产环境日志敏感信息脱敏）
-		adminGrp.GET("/log-redact", admin.GetLogRedactConfig)
-		adminGrp.PUT("/log-redact", admin.UpdateLogRedactConfig)
+		adminGrp.GET("/log-redact", admingov.GetLogRedactConfig)
+		adminGrp.PUT("/log-redact", admingov.UpdateLogRedactConfig)
 		// 密码轨道状态（国际轨 / 国密轨 / 双轨）：只读，配置项在 .env，改了要重启
-		adminGrp.GET("/crypto/status", admin.AdminCryptoStatus)
+		adminGrp.GET("/crypto/status", adminsite.AdminCryptoStatus)
 		// 蜜罐等级 + 日志记录字段勾选（docs/honeypot-design.md）
 		adminGrp.GET("/honeypot/config", honeypothandler.GetConfig)
 		adminGrp.PUT("/honeypot/config", honeypothandler.SaveConfig)
@@ -136,24 +137,24 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.GET("/honeypot/export.zip", honeypothandler.ExportZip)
 		adminGrp.GET("/honeypot/rules", honeypothandler.Rules)
 		adminGrp.POST("/honeypot/rules", honeypothandler.ApplyRules)
-		adminGrp.POST("/log-redact/preview", admin.PreviewLogRedact)
+		adminGrp.POST("/log-redact/preview", admingov.PreviewLogRedact)
 		// 176号令合规补全：算法推荐管理（第七条第九项）
-		adminGrp.GET("/algorithms", admin.GetAlgoConfig)
-		adminGrp.PUT("/algorithms", admin.UpdateAlgoConfig)
+		adminGrp.GET("/algorithms", admingov.GetAlgoConfig)
+		adminGrp.PUT("/algorithms", admingov.UpdateAlgoConfig)
 		// 等保/关基识别记录（第七条第四/五项）
-		adminGrp.GET("/security-grade", admin.GetSecurityGrade)
-		adminGrp.PUT("/security-grade", admin.UpdateSecurityGrade)
+		adminGrp.GET("/security-grade", admingov.GetSecurityGrade)
+		adminGrp.PUT("/security-grade", admingov.UpdateSecurityGrade)
 		// 漏洞整改管理（第七条第六项）
-		adminGrp.GET("/vulnerabilities", admin.ListVulnerabilities)
-		adminGrp.POST("/vulnerabilities", admin.CreateVulnerability)
-		adminGrp.PUT("/vulnerabilities/:id", admin.UpdateVulnerability)
-		adminGrp.DELETE("/vulnerabilities/:id", admin.DeleteVulnerability)
-		adminGrp.GET("/vulnerabilities/export", admin.ExportVulnerabilities)
+		adminGrp.GET("/vulnerabilities", admingov.ListVulnerabilities)
+		adminGrp.POST("/vulnerabilities", admingov.CreateVulnerability)
+		adminGrp.PUT("/vulnerabilities/:id", admingov.UpdateVulnerability)
+		adminGrp.DELETE("/vulnerabilities/:id", admingov.DeleteVulnerability)
+		adminGrp.GET("/vulnerabilities/export", admingov.ExportVulnerabilities)
 		// 公告栏（管理端）
-		adminGrp.GET("/announcements", admin.AdminListAnnouncements)
-		adminGrp.POST("/announcements", admin.AdminCreateAnnouncement)
-		adminGrp.PUT("/announcements/:id", admin.AdminUpdateAnnouncement)
-		adminGrp.DELETE("/announcements/:id", admin.AdminDeleteAnnouncement)
+		adminGrp.GET("/announcements", adminsite.AdminListAnnouncements)
+		adminGrp.POST("/announcements", adminsite.AdminCreateAnnouncement)
+		adminGrp.PUT("/announcements/:id", adminsite.AdminUpdateAnnouncement)
+		adminGrp.DELETE("/announcements/:id", adminsite.AdminDeleteAnnouncement)
 		// 自定义主页区块（F15）
 		// ⚠️ gin httprouter 铁律：静态段不能与同级通配段共存，
 		// 故 reorder/presets 用独立前缀，避免与 /home-blocks/:id 冲突 panic
@@ -189,11 +190,11 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.GET("/web-quota/config", web.AdminGetWebQuotaConfig)
 		adminGrp.PUT("/web-quota/config", web.AdminSetWebQuotaConfig)
 		// 检查应对工具箱（176号令 5.2 检查材料清单）
-		adminGrp.GET("/compliance/report", admin.GetComplianceReport)
-		adminGrp.GET("/compliance/export-logs", admin.ExportComplianceLogs)
-		adminGrp.GET("/compliance/export-users", admin.ExportComplianceUsers)
+		adminGrp.GET("/compliance/report", admingov.GetComplianceReport)
+		adminGrp.GET("/compliance/export-logs", admingov.ExportComplianceLogs)
+		adminGrp.GET("/compliance/export-users", admingov.ExportComplianceUsers)
 		// 一键导出检查应对材料包（zip + SHA256 清单，导出留痕）
-		adminGrp.GET("/compliance/bundle.zip", admin.ExportComplianceBundle)
+		adminGrp.GET("/compliance/bundle.zip", admingov.ExportComplianceBundle)
 		// ===== 注册门槛 / 邀请码 / 设备指纹（gap-audit #14）=====
 		adminGrp.GET("/gate", gate.AdminGateConfig)
 		adminGrp.PUT("/gate", gate.SaveGateConfig)
@@ -235,21 +236,21 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.GET("/honeypot/sqli", honeypothandler.SQLiStats)
 		adminGrp.GET("/honeypot/tls", honeypothandler.TLSStats)
 		// 隔离墙配置
-		adminGrp.GET("/wall-config", admin.GetWallConfig)
-		adminGrp.PUT("/wall-config", admin.UpdateWallConfig)
+		adminGrp.GET("/wall-config", adminsite.GetWallConfig)
+		adminGrp.PUT("/wall-config", adminsite.UpdateWallConfig)
 		// 远程站点互通
-		adminGrp.GET("/sites", admin.ListFederatedSites)
-		adminGrp.GET("/sites/inbound", admin.ListInboundSites)
-		adminGrp.POST("/sites", admin.CreateFederatedSite)
-		adminGrp.PUT("/sites/:id", admin.UpdateFederatedSite)
-		adminGrp.DELETE("/sites/:id", admin.DeleteFederatedSite)
-		adminGrp.POST("/sites/:id/sync", admin.SyncFederatedSite)
+		adminGrp.GET("/sites", adminsite.ListFederatedSites)
+		adminGrp.GET("/sites/inbound", adminsite.ListInboundSites)
+		adminGrp.POST("/sites", adminsite.CreateFederatedSite)
+		adminGrp.PUT("/sites/:id", adminsite.UpdateFederatedSite)
+		adminGrp.DELETE("/sites/:id", adminsite.DeleteFederatedSite)
+		adminGrp.POST("/sites/:id/sync", adminsite.SyncFederatedSite)
 		// 联邦站点 API Key（双向可见：本站签发给对方 / 对方签发给本站）
-		adminGrp.GET("/sites/:id/keys", admin.ListFederatedSiteKeys)
-		adminGrp.POST("/sites/:id/keys/inbound", admin.CreateFederatedInboundKey)
-		adminGrp.POST("/sites/:id/keys/outbound", admin.SaveFederatedOutboundKey)
-		adminGrp.POST("/sites/:id/keys/:kid/toggle", admin.ToggleFederatedKey)
-		adminGrp.DELETE("/sites/:id/keys/:kid", admin.DeleteFederatedKey)
+		adminGrp.GET("/sites/:id/keys", adminsite.ListFederatedSiteKeys)
+		adminGrp.POST("/sites/:id/keys/inbound", adminsite.CreateFederatedInboundKey)
+		adminGrp.POST("/sites/:id/keys/outbound", adminsite.SaveFederatedOutboundKey)
+		adminGrp.POST("/sites/:id/keys/:kid/toggle", adminsite.ToggleFederatedKey)
+		adminGrp.DELETE("/sites/:id/keys/:kid", adminsite.DeleteFederatedKey)
 		// 限流与 API Key 管理（全局配额 / 爬虫规则 / 日志统计 / 全站 Key）
 		adminGrp.GET("/ratelimit/config", apikey.GetRateLimitConfig)
 		adminGrp.PUT("/ratelimit/config", apikey.UpdateRateLimitConfig)
@@ -261,16 +262,16 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.PATCH("/ratelimit/keys/:id", apikey.AdminUpdateAPIKey)
 		adminGrp.DELETE("/ratelimit/keys/:id", apikey.AdminDeleteAPIKey)
 		// 按把封禁 / 解封
-		adminGrp.POST("/ratelimit/keys/:id/ban", admin.AdminBanAPIKey)
-		adminGrp.POST("/ratelimit/keys/:id/unban", admin.AdminUnbanAPIKey)
+		adminGrp.POST("/ratelimit/keys/:id/ban", adminsite.AdminBanAPIKey)
+		adminGrp.POST("/ratelimit/keys/:id/unban", adminsite.AdminUnbanAPIKey)
 		adminGrp.POST("/ratelimit/keys/:id/test", apikey.AdminTestAPIKey) // 平台 Key 连通性/有效性体检
 		// 按人管控：封禁该用户全部 Key + 专属限流配额
-		adminGrp.GET("/ratelimit/users", admin.AdminListUserAPIPolicies)
-		adminGrp.GET("/ratelimit/users/:id/quota", admin.AdminGetUserAPIQuota)
-		adminGrp.PUT("/ratelimit/users/:id/quota", admin.AdminSetUserAPIQuota)
-		adminGrp.DELETE("/ratelimit/users/:id/quota", admin.AdminDeleteUserAPIPolicy)
-		adminGrp.POST("/ratelimit/users/:id/keys/ban", admin.AdminBanUserAPIKeys)
-		adminGrp.POST("/ratelimit/users/:id/keys/unban", admin.AdminUnbanUserAPIKeys)
+		adminGrp.GET("/ratelimit/users", adminsite.AdminListUserAPIPolicies)
+		adminGrp.GET("/ratelimit/users/:id/quota", adminsite.AdminGetUserAPIQuota)
+		adminGrp.PUT("/ratelimit/users/:id/quota", adminsite.AdminSetUserAPIQuota)
+		adminGrp.DELETE("/ratelimit/users/:id/quota", adminsite.AdminDeleteUserAPIPolicy)
+		adminGrp.POST("/ratelimit/users/:id/keys/ban", adminsite.AdminBanUserAPIKeys)
+		adminGrp.POST("/ratelimit/users/:id/keys/unban", adminsite.AdminUnbanUserAPIKeys)
 		// 群组管理
 		adminGrp.GET("/groups", grouphandler.AdminListGroups)
 		adminGrp.POST("/groups/:id/ban", grouphandler.AdminBanGroup)
@@ -280,18 +281,18 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.PUT("/group-quota", grouphandler.AdminSetGroupQuota)
 		adminGrp.PUT("/group-quota/users/:id", grouphandler.AdminSetUserGroupQuota)
 		// 论坛管理
-		adminGrp.GET("/forums", admin.AdminListForums)
-		adminGrp.POST("/forums", admin.AdminCreateForum)
-		adminGrp.PUT("/forums/:id", admin.AdminUpdateForum)
-		adminGrp.DELETE("/forums/:id", admin.AdminDeleteForum)
-		adminGrp.POST("/forums/:id/review", admin.AdminReviewForum)
+		adminGrp.GET("/forums", adminsite.AdminListForums)
+		adminGrp.POST("/forums", adminsite.AdminCreateForum)
+		adminGrp.PUT("/forums/:id", adminsite.AdminUpdateForum)
+		adminGrp.DELETE("/forums/:id", adminsite.AdminDeleteForum)
+		adminGrp.POST("/forums/:id/review", adminsite.AdminReviewForum)
 		// 自建论坛额度：全局默认 + 按人覆盖（削减/放开某人的建版数）
 		// 独立子树 /forum-quota：避免与 /forums/:id 通配段冲突导致路由注册 panic
-		adminGrp.GET("/forum-quota", admin.GetForumQuotaConfig)
-		adminGrp.PUT("/forum-quota", admin.UpdateForumQuotaConfig)
-		adminGrp.GET("/forum-quota/users", admin.ListUserForumQuotas)
-		adminGrp.PUT("/forum-quota/users/:id", admin.SetUserForumQuota)
-		adminGrp.DELETE("/forum-quota/users/:id", admin.DeleteUserForumQuota)
+		adminGrp.GET("/forum-quota", adminsite.GetForumQuotaConfig)
+		adminGrp.PUT("/forum-quota", adminsite.UpdateForumQuotaConfig)
+		adminGrp.GET("/forum-quota/users", adminsite.ListUserForumQuotas)
+		adminGrp.PUT("/forum-quota/users/:id", adminsite.SetUserForumQuota)
+		adminGrp.DELETE("/forum-quota/users/:id", adminsite.DeleteUserForumQuota)
 		// 每日发文限额 / 用户配额体系（§13.4）：等级×每日数量/字数 + 按人覆盖
 		// 独立子树 /daily-publish：静态段，规避与既有 :id 通配段冲突
 		adminGrp.GET("/daily-publish/config", publish.AdminGetDailyPublishConfig)
@@ -343,19 +344,19 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.POST("/ai/channel-keys/:id/test", aiadmin.AdminTestAiChannelKey)
 
 		// API 卡池（多密钥轮询）
-		adminGrp.GET("/ai/models/:id/keys", admin.AdminListAiModelKeys)
-		adminGrp.POST("/ai/models/:id/keys", admin.AdminCreateAiModelKey)
-		adminGrp.PUT("/ai/models/:id/keys/:keyId", admin.AdminUpdateAiModelKey)
-		adminGrp.DELETE("/ai/models/:id/keys/:keyId", admin.AdminDeleteAiModelKey)
-		adminGrp.POST("/ai/models/:id/keys/test", admin.AdminTestAiModelKey)
+		adminGrp.GET("/ai/models/:id/keys", adminsite.AdminListAiModelKeys)
+		adminGrp.POST("/ai/models/:id/keys", adminsite.AdminCreateAiModelKey)
+		adminGrp.PUT("/ai/models/:id/keys/:keyId", adminsite.AdminUpdateAiModelKey)
+		adminGrp.DELETE("/ai/models/:id/keys/:keyId", adminsite.AdminDeleteAiModelKey)
+		adminGrp.POST("/ai/models/:id/keys/test", adminsite.AdminTestAiModelKey)
 
 		// 风格字典 / 扣子默认配置
 		adminGrp.GET("/ai/styles", aimedia.AdminListAiStyles)
 		adminGrp.POST("/ai/styles", aimedia.AdminCreateAiStyle)
 		adminGrp.PUT("/ai/styles/:id", aimedia.AdminUpdateAiStyle)
 		adminGrp.DELETE("/ai/styles/:id", aimedia.AdminDeleteAiStyle)
-		adminGrp.GET("/ai/coze-default", admin.AdminGetAiCozeDefault)
-		adminGrp.PUT("/ai/coze-default", admin.AdminSetAiCozeDefault)
+		adminGrp.GET("/ai/coze-default", adminsite.AdminGetAiCozeDefault)
+		adminGrp.PUT("/ai/coze-default", adminsite.AdminSetAiCozeDefault)
 
 		// AI 功能开关 / 厂商字典 / 数据审计
 		// 提示词模板引擎（CRUD / 版本 / 回滚 / 预览）
@@ -368,8 +369,8 @@ func registerAdminArea(r *gin.Engine) {
 		// 预览用独立路径：/ai/templates/preview 会与 /ai/templates/:id 的通配段冲突（gin httprouter 限制）
 		adminGrp.POST("/ai/template-preview", prompthandler.AdminPreview)
 
-		adminGrp.GET("/ai/features", admin.AdminGetAiFeatures)
-		adminGrp.PUT("/ai/features", admin.AdminSetAiFeatures)
+		adminGrp.GET("/ai/features", admingov.AdminGetAiFeatures)
+		adminGrp.PUT("/ai/features", admingov.AdminSetAiFeatures)
 
 		// AI 内容安全闸（提示词 + 用户特征 + 蓝队模型 B）
 		adminGrp.GET("/ai/safety/config", aiworkbench.GetAiSafetyConfig)
@@ -405,22 +406,22 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.POST("/supervise/:id/note", aiadmin.AdminAddSuperviseNote)
 		adminGrp.GET("/supervise/stats", aiadmin.AdminSuperviseStats)
 		// 警方取证导出申请（站长审批流）
-		adminGrp.GET("/police/evidence-requests", admin.AdminListEvidenceRequests)
-		adminGrp.POST("/police/evidence-requests/:id/review", admin.AdminReviewEvidenceRequest)
-		adminGrp.GET("/ai/vendors", admin.AdminListAiVendors)
-		adminGrp.POST("/ai/vendors", admin.AdminCreateAiVendor)
-		adminGrp.PUT("/ai/vendors/:id", admin.AdminUpdateAiVendor)
-		adminGrp.DELETE("/ai/vendors/:id", admin.AdminDeleteAiVendor)
+		adminGrp.GET("/police/evidence-requests", admingov.AdminListEvidenceRequests)
+		adminGrp.POST("/police/evidence-requests/:id/review", admingov.AdminReviewEvidenceRequest)
+		adminGrp.GET("/ai/vendors", admingov.AdminListAiVendors)
+		adminGrp.POST("/ai/vendors", admingov.AdminCreateAiVendor)
+		adminGrp.PUT("/ai/vendors/:id", admingov.AdminUpdateAiVendor)
+		adminGrp.DELETE("/ai/vendors/:id", admingov.AdminDeleteAiVendor)
 		// 聚合分类定价（chat/image/video 默认单价，导入时未显式给价则套用）
-		adminGrp.GET("/ai/category-prices", admin.AdminGetCategoryPrices)
-		adminGrp.PUT("/ai/category-prices", admin.AdminSetCategoryPrice)
+		adminGrp.GET("/ai/category-prices", admingov.AdminGetCategoryPrices)
+		adminGrp.PUT("/ai/category-prices", admingov.AdminSetCategoryPrice)
 		// 厂商→版本→亚版本矩阵（管理端专用，含 newest 标记，用户侧不可见）
-		adminGrp.GET("/ai/vendors/matrix", admin.AdminAiVendorMatrix)
-		adminGrp.GET("/ai/audit/stats", admin.AdminAiAuditStats)
-		adminGrp.GET("/ai/audit/sessions", admin.AdminAiAuditSessions)
-		adminGrp.GET("/ai/audit/sessions/:id/messages", admin.AdminAiAuditSessionMessages)
-		adminGrp.GET("/ai/audit/media", admin.AdminAiAuditMedia)
-		adminGrp.GET("/ai/audit/calls", admin.AdminAiAuditCalls)
+		adminGrp.GET("/ai/vendors/matrix", admingov.AdminAiVendorMatrix)
+		adminGrp.GET("/ai/audit/stats", admingov.AdminAiAuditStats)
+		adminGrp.GET("/ai/audit/sessions", admingov.AdminAiAuditSessions)
+		adminGrp.GET("/ai/audit/sessions/:id/messages", admingov.AdminAiAuditSessionMessages)
+		adminGrp.GET("/ai/audit/media", admingov.AdminAiAuditMedia)
+		adminGrp.GET("/ai/audit/calls", admingov.AdminAiAuditCalls)
 
 		// 个人信息泄漏提示统计（仅类型计数，无内容）
 		adminGrp.GET("/security/leak-hint/stats", securityhandler.AdminLeakHintStats)
@@ -456,15 +457,15 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.GET("/ai/bot/config", aiadmin.AdminGetAiBotConfig)
 		adminGrp.PUT("/ai/bot/config", aiadmin.AdminSetAiBotConfig)
 		// 在线支付通道（§7.4）：配置（密钥只写不读）/ 档位 / 订单列表 / 手动补单
-		adminGrp.GET("/payment/config", admin.AdminGetPaymentConfig)
-		adminGrp.PUT("/payment/config", admin.AdminSetPaymentConfig)
-		adminGrp.PUT("/payment/tiers", admin.AdminSetPaymentTiers)
-		adminGrp.GET("/payment/orders", admin.AdminListPaymentOrders)
-		adminGrp.POST("/payment/orders/mark-paid", admin.AdminMarkOrderPaid)
+		adminGrp.GET("/payment/config", adminsite.AdminGetPaymentConfig)
+		adminGrp.PUT("/payment/config", adminsite.AdminSetPaymentConfig)
+		adminGrp.PUT("/payment/tiers", adminsite.AdminSetPaymentTiers)
+		adminGrp.GET("/payment/orders", adminsite.AdminListPaymentOrders)
+		adminGrp.POST("/payment/orders/mark-paid", adminsite.AdminMarkOrderPaid)
 		// 应用扩展安全审核：预检未通过的 ZIP 原样封存（不解压），管理员放行/驳回
-		adminGrp.GET("/userhtmls", admin.AdminListHTMLs)
-		adminGrp.GET("/userhtmls/:id/scan", admin.AdminGetHTMLScan)
-		adminGrp.POST("/userhtmls/:id/review", admin.AdminReviewHTML)
+		adminGrp.GET("/userhtmls", adminsite.AdminListHTMLs)
+		adminGrp.GET("/userhtmls/:id/scan", adminsite.AdminGetHTMLScan)
+		adminGrp.POST("/userhtmls/:id/review", adminsite.AdminReviewHTML)
 		// 自定义主页审核（作者公开页提交 → 站长/管理员复核原文）
 		adminGrp.GET("/home-customize/reviews", home.ListHomeCustomizeReviews)
 		adminGrp.POST("/home-customize/reviews/:id/review", home.ReviewHomeCustomize)
@@ -495,9 +496,9 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.POST("/emergency/content", emergency.DeleteEmergencyContent)
 		adminGrp.GET("/emergency/audit", emergency.ListEmergencyAudit)
 		// 内容治理：删除/封禁任意内容（软删除 + softdel_ 留证）
-		adminGrp.GET("/softdel", admin.AdminListSoftDel)
-		adminGrp.POST("/softdel", admin.AdminModerateContent)
-		adminGrp.POST("/softdel/restore", admin.AdminRestoreContent)
+		adminGrp.GET("/softdel", admingov.AdminListSoftDel)
+		adminGrp.POST("/softdel", admingov.AdminModerateContent)
+		adminGrp.POST("/softdel/restore", admingov.AdminRestoreContent)
 		// 回收站监管：管理员查看全站用户自删内容
 		adminGrp.GET("/recycle", recycle.AdminListRecycle)
 		// 博客分类管理（一/二/三级；管理员审核视图 + 事后审核 + 创建/编辑/删除）
@@ -509,11 +510,11 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.DELETE("/blog-categories/:id", blog.DeleteBlogCategory)
 		adminGrp.POST("/blog-categories/:id/review", blog.AdminReviewBlogCategory)
 		// 小说/章节封禁管理（管理员视角列表 + 封禁 + 解封）
-		adminGrp.GET("/novels", admin.AdminListNovels)
-		adminGrp.GET("/novels/:id/chapters", admin.AdminListChapters)
+		adminGrp.GET("/novels", admingov.AdminListNovels)
+		adminGrp.GET("/novels/:id/chapters", admingov.AdminListChapters)
 		// 批量重算所有作品统计（修复 total_chapters / total_words 脏数据）
 		// 注意：不可注册在 /novels 下，否则与 /novels/:id/chapters 的通配段冲突导致路由 panic。
-		adminGrp.POST("/recompute-novel-stats", admin.AdminRecomputeNovelStats)
+		adminGrp.POST("/recompute-novel-stats", admingov.AdminRecomputeNovelStats)
 		// 数据库管理（健康检查 / 迁移 / 备份 / 恢复 / 定时备份）
 		adminGrp.GET("/db/health", dbadmin.AdminDBHealth)
 		adminGrp.GET("/db/current", dbadmin.AdminDBCurrent)

@@ -2,20 +2,20 @@ package moderation
 
 import (
 	"errors"
-	"strconv"
-	"strings"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
+	"nvs-server/handlers/admingov"
 	"nvs-server/handlers/hctx"
 	"nvs-server/moderation"
 	"nvs-server/utils"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
 // GetModerationConfig GET /api/admin/moderation/config
 func GetModerationConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	cfg, err := moderation.GetConfig()
@@ -28,7 +28,7 @@ func GetModerationConfig(c *gin.Context) {
 
 // SaveModerationConfig PUT /api/admin/moderation/config
 func SaveModerationConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var cfg moderation.ModerationConfig
@@ -57,7 +57,7 @@ func SaveModerationConfig(c *gin.Context) {
 
 // ListModerationRecords GET /api/admin/moderation/records
 func ListModerationRecords(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -97,7 +97,7 @@ func moderationSoftDelType(scope string) (string, bool) {
 //   - delete 删除并 softdel 留证
 //   - ban    封禁并 softdel 留证（写 176 封禁原因，作者端可查）
 func DecideModerationRecord(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -127,8 +127,8 @@ func DecideModerationRecord(c *gin.Context) {
 		if reason == "" {
 			reason = "AI 内容审核判定违规（人工确认处置）"
 		}
-		if err := admin.SoftDeleteContent(c, ctype, rec.TargetID, reason, "moderation", req.Action); err != nil {
-			if errors.Is(err, admin.ErrContentNotFound) {
+		if err := admingov.SoftDeleteContent(c, ctype, rec.TargetID, reason, "moderation", req.Action); err != nil {
+			if errors.Is(err, admingov.ErrContentNotFound) {
 				utils.NotFound(c, "目标内容不存在（可能已被删除或封禁）")
 				return
 			}
@@ -157,13 +157,13 @@ func RegisterModerationHooks() {
 		if strings.TrimSpace(reason) == "" {
 			reason = "AI 审核判定违规（自动下架）"
 		}
-		_ = admin.SoftDeleteContentSystem(ctype, targetID, reason, "moderation", "delete")
+		_ = admingov.SoftDeleteContentSystem(ctype, targetID, reason, "moderation", "delete")
 	})
 }
 
 // RunModerationBatch POST /api/admin/moderation/batch
 func RunModerationBatch(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	n, err := moderation.RunBatchOnce()
@@ -176,7 +176,7 @@ func RunModerationBatch(c *gin.Context) {
 
 // GetModerationStats GET /api/admin/moderation/stats
 func GetModerationStats(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	s, err := moderation.GetStats()
@@ -189,7 +189,7 @@ func GetModerationStats(c *gin.Context) {
 
 // ListMaliciousReporters GET /api/admin/moderation/malicious
 func ListMaliciousReporters(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	list, err := moderation.ListMaliciousReporters()
@@ -202,7 +202,7 @@ func ListMaliciousReporters(c *gin.Context) {
 
 // UnbanReporter POST /api/admin/moderation/malicious/:id/unban
 func UnbanReporter(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)

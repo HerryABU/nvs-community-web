@@ -2,11 +2,11 @@ package novel
 
 import (
 	"fmt"
+	"nvs-server/handlers/adminsite"
 	"strconv"
 	"strings"
 
 	"nvs-server/collab"
-	"nvs-server/handlers/admin"
 	"nvs-server/handlers/gate"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
@@ -63,7 +63,7 @@ func ListNovels(c *gin.Context) {
 	}
 	// 联邦同步会携带 source_name/source_url 自报身份，此时记录入站连接（谁连了我）
 	if c.Query("source_name") != "" || c.Query("source_url") != "" {
-		admin.RecordInbound(c, "novels")
+		adminsite.RecordInbound(c, "novels")
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))

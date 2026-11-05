@@ -4,11 +4,10 @@
 package home
 
 import (
-	"strconv"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/security"
 	"nvs-server/utils"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	theme "nvs-server/models/theme"
@@ -32,7 +31,7 @@ func ListPublicHomeBlocks(c *gin.Context) {
 
 // AdminListHomeBlocks GET /api/admin/home-blocks — 全部区块（含禁用）
 func AdminListHomeBlocks(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	blocks, err := theme.ListHomeBlocks()
@@ -45,7 +44,7 @@ func AdminListHomeBlocks(c *gin.Context) {
 
 // AdminListHomeBlockPresets GET /api/admin/home-blocks/presets — 布局预设列表
 func AdminListHomeBlockPresets(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	presets := theme.HomeBlockPresets()
@@ -58,7 +57,7 @@ func AdminListHomeBlockPresets(c *gin.Context) {
 
 // AdminCreateHomeBlock POST /api/admin/home-blocks
 func AdminCreateHomeBlock(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -101,7 +100,7 @@ func AdminCreateHomeBlock(c *gin.Context) {
 
 // AdminUpdateHomeBlock PUT /api/admin/home-blocks/:id
 func AdminUpdateHomeBlock(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -168,7 +167,7 @@ func AdminUpdateHomeBlock(c *gin.Context) {
 
 // AdminDeleteHomeBlock DELETE /api/admin/home-blocks/:id
 func AdminDeleteHomeBlock(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -185,7 +184,7 @@ func AdminDeleteHomeBlock(c *gin.Context) {
 
 // AdminReorderHomeBlocks POST /api/admin/home-blocks/reorder — body: {ids: [3,1,2]}
 func AdminReorderHomeBlocks(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -204,7 +203,7 @@ func AdminReorderHomeBlocks(c *gin.Context) {
 
 // AdminApplyHomeBlockPreset POST /api/admin/home-blocks/presets/:key/apply
 func AdminApplyHomeBlockPreset(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	key := c.Param("key")

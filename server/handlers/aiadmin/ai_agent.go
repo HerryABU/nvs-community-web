@@ -1,7 +1,7 @@
 package aiadmin
 
 import (
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/utils"
 	"strconv"
 	"strings"
@@ -36,7 +36,7 @@ func aiAgentVO(a *aim.AiAgent) gin.H {
 
 // AdminListAiAgents GET /api/admin/ai/agents
 func AdminListAiAgents(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	list, err := aim.ListAiAgents(false)
@@ -53,7 +53,7 @@ func AdminListAiAgents(c *gin.Context) {
 
 // AdminCreateAiAgent POST /api/admin/ai/agents
 func AdminCreateAiAgent(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -112,7 +112,7 @@ func AdminCreateAiAgent(c *gin.Context) {
 
 // AdminUpdateAiAgent PUT /api/admin/ai/agents/:id
 func AdminUpdateAiAgent(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -183,7 +183,7 @@ func AdminUpdateAiAgent(c *gin.Context) {
 
 // AdminDeleteAiAgent DELETE /api/admin/ai/agents/:id
 func AdminDeleteAiAgent(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)

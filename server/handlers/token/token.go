@@ -1,14 +1,13 @@
 package token
 
 import (
-	"strconv"
-	"strings"
-	"time"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	wallet "nvs-server/models/wallet"
@@ -66,7 +65,7 @@ func RedeemCard(c *gin.Context) {
 
 // AdminGetTokenConfig GET /api/admin/token/config
 func AdminGetTokenConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, gin.H{
@@ -77,7 +76,7 @@ func AdminGetTokenConfig(c *gin.Context) {
 
 // AdminSetTokenConfig PUT /api/admin/token/config
 func AdminSetTokenConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -105,7 +104,7 @@ func AdminSetTokenConfig(c *gin.Context) {
 
 // AdminGenerateCards POST /api/admin/token/cards — 批量生成卡密（明文仅此一次返回）
 func AdminGenerateCards(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	adminID := hctx.CurrentUserID(c)
@@ -138,7 +137,7 @@ func AdminGenerateCards(c *gin.Context) {
 
 // AdminListCards GET /api/admin/token/cards — 卡密列表（status/batch 筛选）
 func AdminListCards(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	list, err := wallet.ListCardKeys(c.Query("status"), c.Query("batch"), 200)
@@ -151,7 +150,7 @@ func AdminListCards(c *gin.Context) {
 
 // AdminVoidCard POST /api/admin/token/cards/:id/void — 作废卡密
 func AdminVoidCard(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -164,7 +163,7 @@ func AdminVoidCard(c *gin.Context) {
 
 // AdminAdjustToken POST /api/admin/token/adjust — 管理员增发/扣减（授信）
 func AdminAdjustToken(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	adminID := hctx.CurrentUserID(c)

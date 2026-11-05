@@ -12,13 +12,12 @@
 package forum
 
 import (
-	"strconv"
-	"strings"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/adminsite"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -29,7 +28,7 @@ const floorPasswordMinLen = 4
 // ResolveFloorPasswordViewer 统一解析查看者身份与请求携带的解锁密码（单楼端点）。
 func ResolveFloorPasswordViewer(c *gin.Context) (viewerID uint, isStaff bool, password string) {
 	viewerID = hctx.CurrentUserID(c)
-	isStaff = admin.IsPoliceOrAdminUser(c)
+	isStaff = adminsite.IsPoliceOrAdminUser(c)
 	password = c.GetHeader("X-Floor-Password")
 	if password == "" {
 		password = strings.TrimSpace(c.Query("password"))
@@ -120,7 +119,7 @@ func SetFloorPassword(c *gin.Context) {
 		return
 	}
 	// 作者本人或警方/管理员
-	if floor.UserID != userID && !admin.IsPoliceOrAdminUser(c) {
+	if floor.UserID != userID && !adminsite.IsPoliceOrAdminUser(c) {
 		utils.Forbidden(c, "无权修改此楼的访问密码")
 		return
 	}

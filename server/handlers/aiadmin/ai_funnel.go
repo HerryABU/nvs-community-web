@@ -2,7 +2,7 @@ package aiadmin
 
 import (
 	"fmt"
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/models"
 	"nvs-server/utils"
 	"time"
@@ -27,7 +27,7 @@ import (
 
 // AiFunnel GET /api/admin/ai/funnel?days=30
 func AiFunnel(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	days := 30

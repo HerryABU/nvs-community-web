@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nvs-server/handlers/adminsite"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,7 +15,6 @@ import (
 	"time"
 
 	"nvs-server/config"
-	"nvs-server/handlers/admin"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/security"
@@ -234,7 +234,7 @@ func UploadZipHTML(c *gin.Context) {
 		item.IsPublic = false
 		item.IsDownloadable = false
 		// 通知全部管理员：有待处置的封存件
-		admin.NotifyAdminsHTMLQuarantine(item)
+		adminsite.NotifyAdminsHTMLQuarantine(item)
 		utils.Success(c, gin.H{
 			"html":        item,
 			"quarantined": true,

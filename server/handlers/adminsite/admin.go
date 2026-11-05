@@ -1,6 +1,7 @@
-package admin
+package adminsite
 
 import (
+	"nvs-server/handlers/admincommon"
 	"sort"
 	"strconv"
 	"time"
@@ -52,7 +53,7 @@ func ApplyVip(c *gin.Context) {
 
 // GET /api/admin/vip-applications — 查看 VIP 申请列表
 func ListVipApplications(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var apps []platform.VipApplication
@@ -62,7 +63,7 @@ func ListVipApplications(c *gin.Context) {
 
 // POST /api/admin/vip-applications/:id/approve
 func ApproveVip(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -86,7 +87,7 @@ func ApproveVip(c *gin.Context) {
 
 // GET /api/admin/stats — 平台统计
 func GetAdminStats(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var userCount, novelCount, commentCount, forumCount int64
@@ -104,7 +105,7 @@ func GetAdminStats(c *gin.Context) {
 
 // GET /api/admin/dashboard — 管理端数据大屏
 func GetDashboardStats(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 
@@ -614,7 +615,7 @@ func GetEarnings(c *gin.Context) {
 
 // GET /api/admin/finance — 财务总览
 func GetFinanceOverview(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var totalTips float64
@@ -631,17 +632,6 @@ func GetFinanceOverview(c *gin.Context) {
 }
 
 // ============ 辅助 ============
-
-func EnsureAdmin(c *gin.Context) bool {
-	userID := hctx.CurrentUserID(c)
-	user, _ := models.GetUserByID(userID)
-	if user == nil || user.Role != "admin" {
-		utils.Forbidden(c, "需要管理员权限")
-		c.Abort()
-		return false
-	}
-	return true
-}
 
 // IsAdminUser 非阻断式判断当前用户是否为管理员
 func IsAdminUser(c *gin.Context) bool {

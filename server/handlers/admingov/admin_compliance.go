@@ -1,4 +1,4 @@
-package admin
+package admingov
 
 // 此文件包含 176 号令合规补全的管理后台 API：
 //   - 算法推荐管理（第七条第九项）：GET/PUT /api/admin/algorithms
@@ -6,6 +6,7 @@ package admin
 //   - 备案信息（第七条第一项）已并入 /api/admin/config 与公开 /api/site-info
 
 import (
+	"nvs-server/handlers/admincommon"
 	"strings"
 
 	"nvs-server/models"
@@ -17,7 +18,7 @@ import (
 // GetAlgoConfig 获取算法推荐配置（管理后台）
 // GET /api/admin/algorithms
 func GetAlgoConfig(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	sortRule, rankPeriod, personalized, description := models.GetAlgoConfig()
@@ -32,7 +33,7 @@ func GetAlgoConfig(c *gin.Context) {
 // UpdateAlgoConfig 更新算法推荐配置（即时生效）
 // PUT /api/admin/algorithms
 func UpdateAlgoConfig(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -92,7 +93,7 @@ func UpdateAlgoConfig(c *gin.Context) {
 // GetSecurityGrade 获取等保/关基识别记录（管理后台）
 // GET /api/admin/security-grade
 func GetSecurityGrade(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	grade, note := models.GetSecurityGrade()
@@ -102,7 +103,7 @@ func GetSecurityGrade(c *gin.Context) {
 // UpdateSecurityGrade 保存等保/关基识别记录
 // PUT /api/admin/security-grade
 func UpdateSecurityGrade(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

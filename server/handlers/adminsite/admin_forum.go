@@ -1,6 +1,8 @@
-package admin
+package adminsite
 
 import (
+	"nvs-server/handlers/admincommon"
+	"nvs-server/handlers/admingov"
 	"strconv"
 
 	"nvs-server/models"
@@ -12,7 +14,7 @@ import (
 
 // GET /api/admin/forums — 列出所有论坛（管理员）
 func AdminListForums(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	forums, err := models.ListAllForums("")
@@ -25,7 +27,7 @@ func AdminListForums(c *gin.Context) {
 
 // POST /api/admin/forums — 创建论坛（管理员）
 func AdminCreateForum(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 
@@ -62,7 +64,7 @@ func AdminCreateForum(c *gin.Context) {
 
 // PUT /api/admin/forums/:id — 更新论坛（管理员）
 func AdminUpdateForum(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 
@@ -119,7 +121,7 @@ func AdminUpdateForum(c *gin.Context) {
 
 // DELETE /api/admin/forums/:id — 删除论坛（软删除 + 留证）
 func AdminDeleteForum(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 
@@ -129,8 +131,8 @@ func AdminDeleteForum(c *gin.Context) {
 		return
 	}
 
-	if err := SoftDeleteContent(c, "forum", uint(id), "管理员删除论坛", "admin", "delete"); err != nil {
-		if err == ErrContentNotFound {
+	if err := admingov.SoftDeleteContent(c, "forum", uint(id), "管理员删除论坛", "admin", "delete"); err != nil {
+		if err == admingov.ErrContentNotFound {
 			utils.NotFound(c, "论坛不存在")
 		} else {
 			utils.InternalError(c, err.Error())
@@ -142,7 +144,7 @@ func AdminDeleteForum(c *gin.Context) {
 
 // POST /api/admin/forums/:id/review — 审查自建论坛（通过/驳回）
 func AdminReviewForum(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 

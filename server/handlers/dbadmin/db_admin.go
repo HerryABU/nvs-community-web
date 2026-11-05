@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"io"
+	"nvs-server/handlers/admincommon"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,7 +15,6 @@ import (
 	"time"
 
 	"nvs-server/config"
-	"nvs-server/handlers/admin"
 	"nvs-server/models"
 	"nvs-server/utils"
 	"nvs-server/version"
@@ -99,7 +99,7 @@ func writeDBEnv(cfg models.DBConfig) error {
 
 // GET /api/admin/db/health — 详细健康检查
 func AdminDBHealth(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 
@@ -153,7 +153,7 @@ func backupCount() int {
 
 // GET /api/admin/db/current — 当前数据库配置摘要（密码脱敏）
 func AdminDBCurrent(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	driver := config.DBDriver
@@ -177,7 +177,7 @@ func AdminDBCurrent(c *gin.Context) {
 
 // POST /api/admin/db/migrate — 启动异步迁移任务，返回 job id
 func AdminDBMigrate(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req models.DBConfig
@@ -260,7 +260,7 @@ func runMigrationJob(job *dbJob, cfg models.DBConfig) {
 
 // POST /api/admin/db/backup — 立即备份（异步）
 func AdminDBBackup(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	job := newJob("backup")
@@ -278,7 +278,7 @@ func AdminDBBackup(c *gin.Context) {
 
 // GET /api/admin/db/job/:id — 查询后台任务进度
 func AdminDBJob(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	job := getJob(c.Param("id"))
@@ -291,7 +291,7 @@ func AdminDBJob(c *gin.Context) {
 
 // GET /api/admin/db/backups — 备份列表
 func AdminDBListBackups(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	files, err := siteops.ListBackups()
@@ -304,7 +304,7 @@ func AdminDBListBackups(c *gin.Context) {
 
 // DELETE /api/admin/db/backups/:name — 删除备份
 func AdminDBDeleteBackup(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	name := c.Param("name")
@@ -317,7 +317,7 @@ func AdminDBDeleteBackup(c *gin.Context) {
 
 // GET /api/admin/db/backups/:name/download — 下载备份
 func AdminDBDownloadBackup(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	p, err := siteops.BackupPath(c.Param("name"))
@@ -334,7 +334,7 @@ func AdminDBDownloadBackup(c *gin.Context) {
 
 // POST /api/admin/db/restore — 恢复 SQLite 备份（仅 sqlite 驱动，替换 .db 后重连）
 func AdminDBRestore(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -403,7 +403,7 @@ func CopyFile(src, dst string) error {
 
 // GET /api/admin/db/backup-config
 func AdminDBBackupConfigGet(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	enabled := models.GetPlatformConfig("backup_enabled") == "true"
@@ -422,7 +422,7 @@ func AdminDBBackupConfigGet(c *gin.Context) {
 
 // PUT /api/admin/db/backup-config
 func AdminDBBackupConfigPut(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

@@ -1,6 +1,7 @@
-package admin
+package adminsite
 
 import (
+	"nvs-server/handlers/admincommon"
 	"strconv"
 	"strings"
 
@@ -16,7 +17,7 @@ import (
 
 // AdminGetPaymentConfig GET /api/admin/payment/config — 读取配置（密钥掩码）
 func AdminGetPaymentConfig(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	cfg := wallet.GetPaymentConfig()
@@ -39,7 +40,7 @@ func AdminGetPaymentConfig(c *gin.Context) {
 
 // AdminSetPaymentConfig PUT /api/admin/payment/config — 保存配置（立即生效）
 func AdminSetPaymentConfig(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -95,7 +96,7 @@ func AdminSetPaymentConfig(c *gin.Context) {
 
 // AdminSetPaymentTiers PUT /api/admin/payment/tiers — 保存充值档位
 func AdminSetPaymentTiers(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -114,7 +115,7 @@ func AdminSetPaymentTiers(c *gin.Context) {
 
 // AdminListPaymentOrders GET /api/admin/payment/orders — 订单列表（status/user_id 筛选）
 func AdminListPaymentOrders(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	userID64, _ := strconv.ParseUint(strings.TrimSpace(c.Query("user_id")), 10, 64)
@@ -130,7 +131,7 @@ func AdminListPaymentOrders(c *gin.Context) {
 
 // AdminMarkOrderPaid POST /api/admin/payment/orders/mark-paid — 手动补单（留痕）
 func AdminMarkOrderPaid(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

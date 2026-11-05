@@ -6,12 +6,11 @@ package aiplatform
 // 两个接口都顺带返回「现在用了多少 / 现在谁在刷」，避免管理员只能看配置不能看现状。
 
 import (
-	"strconv"
-	"time"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	aim "nvs-server/models/ai"
@@ -20,7 +19,7 @@ import (
 
 // GetAiBudget GET /api/admin/ai/budget
 func GetAiBudget(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	cfg := aim.LoadAiBudgetConfig()
@@ -37,7 +36,7 @@ func GetAiBudget(c *gin.Context) {
 
 // SaveAiBudget PUT /api/admin/ai/budget
 func SaveAiBudget(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var in aim.AiBudgetConfig
@@ -54,7 +53,7 @@ func SaveAiBudget(c *gin.Context) {
 
 // GetAiThrottle GET /api/admin/ai/throttle
 func GetAiThrottle(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, gin.H{
@@ -66,7 +65,7 @@ func GetAiThrottle(c *gin.Context) {
 
 // SaveAiThrottle PUT /api/admin/ai/throttle
 func SaveAiThrottle(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var in aiops.AiThrottleConfig
@@ -86,7 +85,7 @@ func SaveAiThrottle(c *gin.Context) {
 // 维度取自 AiChatSession(agent_id/agent_name)，用量取自其消息(AiChatMessage: tokens/cost)，
 // 因此无需给 AiCallLog 加冗余字段即可完成「按智能体」的统计。
 func GetAiAgentUsage(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	d, err := strconv.Atoi(c.DefaultQuery("days", "30"))

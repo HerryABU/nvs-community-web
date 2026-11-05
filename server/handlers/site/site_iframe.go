@@ -2,11 +2,10 @@ package site
 
 import (
 	"net/url"
-	"strings"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -41,7 +40,7 @@ func GetSiteIframe(c *gin.Context) {
 // UpdateSiteIframe PUT /api/site-iframe（仅管理员）
 // 配置单一 allowlist 嵌入 URL 与启用开关，服务端强制校验 URL 协议白名单。
 func UpdateSiteIframe(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

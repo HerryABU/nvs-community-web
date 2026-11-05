@@ -5,11 +5,11 @@ package gate
 // 后台：配置、邀请码管理、设备绑定列表（同一设备多少账号一眼看清）
 
 import (
+	"nvs-server/handlers/admincommon"
 	"strconv"
 	"strings"
 
 	"nvs-server/gate"
-	"nvs-server/handlers/admin"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
@@ -48,7 +48,7 @@ func RegisterGateCheck(c *gin.Context) {
 
 // AdminGateConfig GET /api/admin/gate
 func AdminGateConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, gin.H{
@@ -59,7 +59,7 @@ func AdminGateConfig(c *gin.Context) {
 
 // SaveGateConfig PUT /api/admin/gate
 func SaveGateConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var in gate.Config
@@ -76,7 +76,7 @@ func SaveGateConfig(c *gin.Context) {
 
 // AdminInvites GET /api/admin/gate/invites
 func AdminInvites(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -91,7 +91,7 @@ func AdminInvites(c *gin.Context) {
 
 // CreateInvites POST /api/admin/gate/invites
 func CreateInvites(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var in struct {
@@ -127,7 +127,7 @@ func CreateInvites(c *gin.Context) {
 
 // RevokeInvite POST /api/admin/gate/invites/:id/revoke
 func RevokeInvite(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -140,7 +140,7 @@ func RevokeInvite(c *gin.Context) {
 
 // AdminDeviceBindings GET /api/admin/gate/devices —— 按设备聚合，看「谁在开小号」
 func AdminDeviceBindings(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	keyword := strings.TrimSpace(c.Query("keyword"))

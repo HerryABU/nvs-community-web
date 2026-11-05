@@ -1,11 +1,7 @@
 package recycle
 
 import (
-	"os"
-	"path/filepath"
-	"strconv"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/blog"
 	"nvs-server/handlers/dbadmin"
 	"nvs-server/handlers/docx"
@@ -13,6 +9,9 @@ import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"os"
+	"path/filepath"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	blogm "nvs-server/models/blog"
@@ -174,7 +173,7 @@ func RestoreAuthorRecycle(c *gin.Context) {
 
 // GET /api/admin/recycle — 管理员查看全站用户自删内容（novel/blog/chapter/comment）
 func AdminListRecycle(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	ctype := c.Query("type") // novel / blog / chapter / comment，空=全部

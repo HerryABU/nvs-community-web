@@ -1,7 +1,7 @@
 package forum
 
 import (
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/adminsite"
 	"nvs-server/handlers/badword"
 	"nvs-server/handlers/blacklist"
 	"nvs-server/handlers/hctx"
@@ -101,7 +101,7 @@ func GetForum(c *gin.Context) {
 	// 房间号门禁：非公开（不可见）自建论坛，非创建者/管理员/警方须凭房间号进入。
 	// 有密码的论坛还需同时提供正确密码（room + password）。
 	// 🔒 警方取证豁免：警方（police）与管理员可越过门禁直接查看封锁/加密/隐藏论坛。
-	if !forum.IsPublic && forum.CreatorID != userID && !admin.IsPoliceOrAdminUser(c) {
+	if !forum.IsPublic && forum.CreatorID != userID && !adminsite.IsPoliceOrAdminUser(c) {
 		room := c.Query("room")
 		pass := c.Query("password")
 		// 兼容请求头传递（🔒 安全审计：密码不进 URL——前端已改为 header + sessionStorage）
@@ -132,7 +132,7 @@ func GetForum(c *gin.Context) {
 	}
 
 	// 密码门禁：有密码且非创建者/管理员/警方时，需提供正确密码才能读取帖子
-	if forum.HasPassword && forum.CreatorID != userID && !admin.IsPoliceOrAdminUser(c) {
+	if forum.HasPassword && forum.CreatorID != userID && !adminsite.IsPoliceOrAdminUser(c) {
 		password := c.Query("password")
 		if password == "" {
 			password = c.GetHeader("X-Forum-Password")

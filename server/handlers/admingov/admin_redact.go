@@ -1,4 +1,4 @@
-package admin
+package admingov
 
 // 此文件包含日志脱敏配置的管理后台 API（公安部令第176号合规）。
 // 路由（main.go 注册，均需管理员权限）：
@@ -8,6 +8,7 @@ package admin
 
 import (
 	"log"
+	"nvs-server/handlers/admincommon"
 	"strconv"
 	"strings"
 
@@ -21,7 +22,7 @@ import (
 // GetLogRedactConfig 获取当前日志脱敏配置
 // GET /api/admin/log-redact
 func GetLogRedactConfig(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	rc := config.RedactMgr.GetConfig()
@@ -37,7 +38,7 @@ func GetLogRedactConfig(c *gin.Context) {
 // PUT /api/admin/log-redact
 // 入参（均可选，缺省保留当前值）：enabled bool / mask string / sensitive_keys []string
 func UpdateLogRedactConfig(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -87,7 +88,7 @@ func UpdateLogRedactConfig(c *gin.Context) {
 //	sample string   原始内容
 //	enabled / mask / sensitive_keys 可选，用于预览未保存的表单配置
 func PreviewLogRedact(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

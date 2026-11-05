@@ -1,13 +1,12 @@
 package web
 
 import (
-	"sort"
-	"time"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/ipgeo"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"sort"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	quota "nvs-server/models/quota"
@@ -32,7 +31,7 @@ type GeoBucket struct {
 
 // GetWebAccessGeo GET /api/admin/web-access/geo?days=7&limit=3000
 func GetWebAccessGeo(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	days := AtoiDefault(c.Query("days"), 7)

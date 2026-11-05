@@ -1,16 +1,16 @@
 package blog
 
 import (
-	"sort"
-	"strconv"
-	"strings"
-	"time"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
+	"nvs-server/handlers/adminsite"
 	"nvs-server/handlers/emergency"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	apikey "nvs-server/models/apikey"
@@ -112,7 +112,7 @@ func canManageCategory(c *gin.Context, cat *blogm.BlogCategory) bool {
 	if uid == 0 {
 		return false
 	}
-	if admin.IsAdminUser(c) {
+	if adminsite.IsAdminUser(c) {
 		return true
 	}
 	return cat.CreatedBy == uid
@@ -190,7 +190,7 @@ func CreateBlogCategory(c *gin.Context) {
 	//   事后审核(post_review，默认) → pending，管理员通过后公开
 	//   先公开(pre_public)         → approved 直接公开，管理员事后可封禁(拒绝)
 	status := blogm.CategoryStatusApproved
-	if !admin.IsAdminUser(c) && siteops.GetCategoryReviewMode() == siteops.CategoryReviewModePost {
+	if !adminsite.IsAdminUser(c) && siteops.GetCategoryReviewMode() == siteops.CategoryReviewModePost {
 		status = blogm.CategoryStatusPending
 	}
 	cat := &blogm.BlogCategory{
@@ -333,7 +333,7 @@ func DeleteBlogCategory(c *gin.Context) {
 
 // GET /api/admin/blog-categories — 管理员全量分类视图（含状态与创建者，平铺）
 func AdminListBlogCategories(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	type item struct {
@@ -427,7 +427,7 @@ func AdminListBlogCategories(c *gin.Context) {
 
 // POST /api/admin/blog-categories/:id/review — 审核分类 { action: approve|reject, reason? }
 func AdminReviewBlogCategory(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -474,7 +474,7 @@ func AdminReviewBlogCategory(c *gin.Context) {
 //	post_review：事后审核（默认），普通作者创建需审核通过后才公开
 //	pre_public：先公开，事后封禁，普通作者创建直接公开，管理员可随时下架
 func AdminGetCategoryReviewMode(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	mode := siteops.GetCategoryReviewMode()
@@ -487,7 +487,7 @@ func AdminGetCategoryReviewMode(c *gin.Context) {
 
 // PUT /api/admin/blog-categories/mode — 设置博客分类审核模式 { mode: post_review | pre_public }
 func AdminSetCategoryReviewMode(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

@@ -1,7 +1,7 @@
 package security
 
 import (
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -32,7 +32,7 @@ func RecordLeakHint(c *gin.Context) {
 // AdminLeakHintStats GET /api/admin/security/leak-hint/stats
 // 给站长看趋势（只有类型计数，没有内容，无法反查用户）
 func AdminLeakHintStats(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, securitym.GetLeakHintStats())

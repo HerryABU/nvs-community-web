@@ -9,7 +9,7 @@ package routes
 // 依赖方向是单向的：main → routes → handlers/models/middleware，不存在回环。
 
 import (
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/adminsite"
 	"nvs-server/handlers/blog"
 	"nvs-server/handlers/novel"
 	"nvs-server/handlers/police"
@@ -49,9 +49,9 @@ func registerPolice(r *gin.Engine) {
 
 	// 远程站点公开接口
 	{
-		r.GET("/api/federated/novels", admin.ListFederatedNovels)
-		r.GET("/api/federated/sites", admin.ListPublicSites)
-		r.GET("/api/site-info", admin.GetSiteInfo)
+		r.GET("/api/federated/novels", adminsite.ListFederatedNovels)
+		r.GET("/api/federated/sites", adminsite.ListPublicSites)
+		r.GET("/api/site-info", adminsite.GetSiteInfo)
 		// 精读：公开笔记（游客可看公开批注）
 		r.GET("/api/reading/notes/public", reading.ListPublicNotes)
 		// 统一搜索：作品 / 作者 / 博客 / HTML 扩展

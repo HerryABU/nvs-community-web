@@ -1,11 +1,11 @@
 package comment
 
 import (
+	"nvs-server/handlers/admincommon"
 	"strconv"
 	"strings"
 
 	"nvs-server/crisis"
-	"nvs-server/handlers/admin"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -22,7 +22,7 @@ import (
 //	?user_id=N  → 生成该用户的干预报告（Markdown）
 //	不传        → 返回当前处于高危观察期的用户清单（总览入口）
 func GetCrisisReport(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	raw := strings.TrimSpace(c.Query("user_id"))

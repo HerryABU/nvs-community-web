@@ -1,6 +1,7 @@
-package admin
+package adminsite
 
 import (
+	"nvs-server/handlers/admincommon"
 	"strconv"
 
 	"nvs-server/models"
@@ -15,7 +16,7 @@ import (
 // AdminGetHTMLQuota GET /api/admin/html-quota
 // 返回全局额度配置 + 按人覆盖列表。
 func AdminGetHTMLQuota(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var overrides []quota.HTMLQuotaOverride
@@ -28,7 +29,7 @@ func AdminGetHTMLQuota(c *gin.Context) {
 
 // AdminSaveHTMLQuota PUT /api/admin/html-quota
 func AdminSaveHTMLQuota(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var in quota.HTMLQuotaSetting
@@ -52,7 +53,7 @@ func AdminSaveHTMLQuota(c *gin.Context) {
 // AdminSetHTMLQuotaOverride POST /api/admin/html-quota/overrides
 // action=set：按人设定（0=跟随全局，-1=不限）；action=remove：删除覆盖。
 func AdminSetHTMLQuotaOverride(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -96,7 +97,7 @@ func AdminSetHTMLQuotaOverride(c *gin.Context) {
 // AdminHTMLQuotaUsage GET /api/admin/html-quota/usage?user_id=X
 // 查某人的实际额度与已用量（站长在审核页核对「他到底还能放多少」）。
 func AdminHTMLQuotaUsage(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	uid, _ := strconv.ParseUint(c.Query("user_id"), 10, 64)

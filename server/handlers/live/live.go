@@ -10,12 +10,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
-	"regexp"
-	"time"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/realtime"
 	"nvs-server/utils"
+	"regexp"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	siteops "nvs-server/models/siteops"
@@ -132,7 +131,7 @@ func LiveConfig(c *gin.Context) {
 
 // GetRageConfigAdmin GET /api/admin/rage-config —— 读取狂暴模式配置
 func GetRageConfigAdmin(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, siteops.GetRageConfig())
@@ -140,7 +139,7 @@ func GetRageConfigAdmin(c *gin.Context) {
 
 // UpdateRageConfigAdmin PUT /api/admin/rage-config —— 保存狂暴模式配置（立即生效）
 func UpdateRageConfigAdmin(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

@@ -1,6 +1,7 @@
-package admin
+package adminsite
 
 import (
+	"nvs-server/handlers/admincommon"
 	"strconv"
 	"strings"
 
@@ -35,7 +36,7 @@ func keyHint(k *aihub.AiModelKey) string {
 
 // AdminListAiModelKeys GET /api/admin/ai/models/:id/keys
 func AdminListAiModelKeys(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	modelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -60,7 +61,7 @@ func AdminListAiModelKeys(c *gin.Context) {
 
 // AdminCreateAiModelKey POST /api/admin/ai/models/:id/keys — 支持一次多行批量导入
 func AdminCreateAiModelKey(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	modelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -112,7 +113,7 @@ func AdminCreateAiModelKey(c *gin.Context) {
 
 // AdminUpdateAiModelKey PUT /api/admin/ai/models/:id/keys/:keyId — 权重/启停/重置失败
 func AdminUpdateAiModelKey(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	modelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -156,7 +157,7 @@ func AdminUpdateAiModelKey(c *gin.Context) {
 
 // AdminDeleteAiModelKey DELETE /api/admin/ai/models/:id/keys/:keyId
 func AdminDeleteAiModelKey(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	modelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -171,7 +172,7 @@ func AdminDeleteAiModelKey(c *gin.Context) {
 // AdminTestAiModelKey POST /api/admin/ai/models/:id/keys/test — 连通性测试
 // key_id 传池内密钥 ID；不传则测试请求体里的明文（用于"保存前先测"）
 func AdminTestAiModelKey(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	modelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -220,7 +221,7 @@ func AdminTestAiModelKey(c *gin.Context) {
 
 // AdminGetAiCozeDefault GET /api/admin/ai/coze-default
 func AdminGetAiCozeDefault(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, aihub.GetAiCozeDefault())
@@ -228,7 +229,7 @@ func AdminGetAiCozeDefault(c *gin.Context) {
 
 // AdminSetAiCozeDefault PUT /api/admin/ai/coze-default
 func AdminSetAiCozeDefault(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req aihub.AiCozeDefault

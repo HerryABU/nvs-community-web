@@ -3,13 +3,12 @@ package recycle
 import (
 	"bytes"
 	"net/http/httptest"
-	"testing"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admingov"
 	"nvs-server/handlers/blog"
 	novelh "nvs-server/handlers/novel"
 	"nvs-server/handlers/testutil"
 	"nvs-server/models"
+	"testing"
 
 	"github.com/gin-gonic/gin"
 	apikey "nvs-server/models/apikey"
@@ -48,7 +47,7 @@ func TestDeletedByDistinction(t *testing.T) {
 		t.Fatalf("用户自删后 deleted_by 应为 user，实际 %q", afterUser.DeletedBy)
 	}
 
-	// 2) 管理员封禁另一本书（admin.SoftDeleteContent 全链路：留证 + 软删 + deleted_by=admin + 级联章节）
+	// 2) 管理员封禁另一本书（admingov.SoftDeleteContent 全链路：留证 + 软删 + deleted_by=admin + 级联章节）
 	c2, _ := testutil.AsUser("author", 1)
 	testutil.SetJSONBody(c2, map[string]interface{}{"title": "测试书2"})
 	novelh.CreateNovel(c2)
@@ -58,7 +57,7 @@ func TestDeletedByDistinction(t *testing.T) {
 
 	banCtx, _ := testutil.AsUser("admin", 2)
 	banCtx.Request = httptest.NewRequest("POST", "/", nil)
-	if err := admin.SoftDeleteContent(banCtx, "novel", novel2.ID, "涉黄违规", "admin", "ban"); err != nil {
+	if err := admingov.SoftDeleteContent(banCtx, "novel", novel2.ID, "涉黄违规", "admin", "ban"); err != nil {
 		t.Fatalf("管理员封禁失败: %v", err)
 	}
 	var afterBan models.Novel

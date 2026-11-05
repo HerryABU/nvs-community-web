@@ -1,11 +1,10 @@
 package police
 
 import (
-	"regexp"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"regexp"
 
 	"github.com/gin-gonic/gin"
 )
@@ -35,7 +34,7 @@ func PoliceGetDelColor(c *gin.Context) {
 // PUT /api/police/del-color — 设置已删除内容高亮色（仅管理员可写）
 // 入参 { color: "#ff4d4f" }。警方/其他角色无写权限。
 func PoliceSetDelColor(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

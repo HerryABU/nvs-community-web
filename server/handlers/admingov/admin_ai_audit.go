@@ -1,6 +1,7 @@
-package admin
+package admingov
 
 import (
+	"nvs-server/handlers/admincommon"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,7 +20,7 @@ import (
 
 // AdminAiAuditStats GET /api/admin/ai/audit/stats — 概览
 func AdminAiAuditStats(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, ai.AiAuditStats())
@@ -27,7 +28,7 @@ func AdminAiAuditStats(c *gin.Context) {
 
 // AdminAiAuditSessions GET /api/admin/ai/audit/sessions?user_id=&page=
 func AdminAiAuditSessions(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	uid, _ := strconv.ParseUint(c.Query("user_id"), 10, 64)
@@ -54,7 +55,7 @@ func AdminAiAuditSessions(c *gin.Context) {
 
 // AdminAiAuditSessionMessages GET /api/admin/ai/audit/sessions/:id/messages
 func AdminAiAuditSessionMessages(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -73,7 +74,7 @@ func AdminAiAuditSessionMessages(c *gin.Context) {
 
 // AdminAiAuditMedia GET /api/admin/ai/audit/media?kind=&status=&page=
 func AdminAiAuditMedia(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -97,7 +98,7 @@ func AdminAiAuditMedia(c *gin.Context) {
 
 // AdminAiAuditCalls GET /api/admin/ai/audit/calls?status=&page=
 func AdminAiAuditCalls(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -111,7 +112,7 @@ func AdminAiAuditCalls(c *gin.Context) {
 
 // AdminGetAiFeatures GET /api/admin/ai/features — AI 功能开关
 func AdminGetAiFeatures(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, aihub.GetAiFeatureFlags())
@@ -119,7 +120,7 @@ func AdminGetAiFeatures(c *gin.Context) {
 
 // AdminSetAiFeatures PUT /api/admin/ai/features
 func AdminSetAiFeatures(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req aihub.AiFeatureFlags
@@ -138,7 +139,7 @@ func AdminSetAiFeatures(c *gin.Context) {
 
 // AdminListAiVendors GET /api/admin/ai/vendors
 func AdminListAiVendors(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	list, err := aiops.ListAiVendors(false)
@@ -162,7 +163,7 @@ func AdminListAiVendors(c *gin.Context) {
 
 // AdminCreateAiVendor POST /api/admin/ai/vendors
 func AdminCreateAiVendor(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -184,7 +185,7 @@ func AdminCreateAiVendor(c *gin.Context) {
 
 // AdminUpdateAiVendor PUT /api/admin/ai/vendors/:id
 func AdminUpdateAiVendor(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -211,7 +212,7 @@ func AdminUpdateAiVendor(c *gin.Context) {
 
 // AdminDeleteAiVendor DELETE /api/admin/ai/vendors/:id
 func AdminDeleteAiVendor(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -226,7 +227,7 @@ func AdminDeleteAiVendor(c *gin.Context) {
 
 // AdminGetCategoryPrices GET /api/admin/ai/category-prices — 3 种聚合分类的默认单价
 func AdminGetCategoryPrices(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	list, err := ai.AllCategoryPrices()
@@ -239,7 +240,7 @@ func AdminGetCategoryPrices(c *gin.Context) {
 
 // AdminSetCategoryPrice PUT /api/admin/ai/category-prices — 保存某分类默认价
 func AdminSetCategoryPrice(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -357,7 +358,7 @@ func buildVendorGroup(group []matrixModel) []gin.H {
 // 把模型按「厂商→版本→亚版本」三级聚合，并在同一版本下标出最新亚版本（newest）。
 // 该「谁最新」比较仅管理端可见，用户侧只看厂商主名字（不暴露亚版本噪声）。
 func AdminAiVendorMatrix(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	vendors, err := aiops.ListAiVendors(false)

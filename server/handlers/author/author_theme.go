@@ -1,11 +1,10 @@
 package author
 
 import (
-	"strconv"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/adminsite"
 	"nvs-server/handlers/hctx"
 	"nvs-server/utils"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	theme "nvs-server/models/theme"
@@ -39,7 +38,7 @@ func UpdateAuthorTheme(c *gin.Context) {
 		return
 	}
 	// 作者本人可改自己的；管理员可覆盖任意作者（override）
-	if uid != id && !admin.IsAdminUser(c) {
+	if uid != id && !adminsite.IsAdminUser(c) {
 		utils.Forbidden(c, "只能修改自己的作者主题")
 		return
 	}

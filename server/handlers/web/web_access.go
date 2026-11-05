@@ -1,11 +1,10 @@
 package web
 
 import (
-	"strconv"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/auth"
 	"nvs-server/utils"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	quota "nvs-server/models/quota"
@@ -14,7 +13,7 @@ import (
 // ListWebAccessLogs GET /api/admin/web-access
 // 网络诊断 / 用户分布 / 攻击流量面板数据源：IP、UA、状态码、是否 bot 等多维筛选 + 分页。
 func ListWebAccessLogs(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	q := quota.WebAccessQuery{
@@ -53,7 +52,7 @@ func ListWebAccessLogs(c *gin.Context) {
 // GetWebAccessStats GET /api/admin/web-access/stats
 // 聚合统计：累计/今日/爬虫总数/近24h攻击流量、Top IP、Top 路径、状态码分布、UA 家族分布、爬虫原因分布。
 func GetWebAccessStats(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	s, err := quota.GetWebAccessStats()
@@ -67,7 +66,7 @@ func GetWebAccessStats(c *gin.Context) {
 // CleanupWebAccessLogs POST /api/admin/web-access/cleanup
 // 清空 Web 访问日志（合规归档证据由文件日志承担，本表仅为前台诊断用途）。
 func CleanupWebAccessLogs(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	if err := quota.WebAccessLogCleanup(); err != nil {

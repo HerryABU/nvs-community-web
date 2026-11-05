@@ -1,7 +1,7 @@
 package aimedia
 
 import (
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/utils"
 	"strconv"
 	"strings"
@@ -28,7 +28,7 @@ func AiStyleList(c *gin.Context) {
 
 // AdminListAiStyles GET /api/admin/ai/styles?kind=
 func AdminListAiStyles(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	list, err := aihub.ListAiStyles(c.Query("kind"), false)
@@ -41,7 +41,7 @@ func AdminListAiStyles(c *gin.Context) {
 
 // AdminCreateAiStyle POST /api/admin/ai/styles
 func AdminCreateAiStyle(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -63,7 +63,7 @@ func AdminCreateAiStyle(c *gin.Context) {
 
 // AdminUpdateAiStyle PUT /api/admin/ai/styles/:id
 func AdminUpdateAiStyle(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -89,7 +89,7 @@ func AdminUpdateAiStyle(c *gin.Context) {
 
 // AdminDeleteAiStyle DELETE /api/admin/ai/styles/:id
 func AdminDeleteAiStyle(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)

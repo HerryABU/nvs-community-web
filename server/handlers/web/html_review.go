@@ -2,15 +2,15 @@ package web
 
 import (
 	"fmt"
+	"nvs-server/handlers/admincommon"
+	"nvs-server/handlers/adminsite"
+	"nvs-server/models"
+	"nvs-server/security"
+	"nvs-server/utils"
 	"os"
 	"path/filepath"
 	"strconv"
 	"time"
-
-	"nvs-server/handlers/admin"
-	"nvs-server/models"
-	"nvs-server/security"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	softdel "nvs-server/models/softdel"
@@ -43,7 +43,7 @@ type HTMLReviewItem struct {
 
 // ListHTMLReviews GET /api/admin/html-reviews — 列出所有自定义 HTML 内容（含审查状态）
 func ListHTMLReviews(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	status := c.Query("status")
@@ -98,7 +98,7 @@ func ListHTMLReviews(c *gin.Context) {
 
 // GetHTMLReview GET /api/admin/html-reviews/:type/:id — 获取待审查内容全文
 func GetHTMLReview(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	kind := c.Param("type")
@@ -178,7 +178,7 @@ func GetHTMLReview(c *gin.Context) {
 
 // ReviewHTML POST /api/admin/html-reviews/:type/:id/review — 人工复核（通过/驳回）
 func ReviewHTML(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	kind := c.Param("type")
@@ -186,11 +186,11 @@ func ReviewHTML(c *gin.Context) {
 
 	// 封存件（html，预检未通过、未解压）直接委托专用流程。
 	// ⚠️ 必须在下方 ShouldBindJSON 之前判断并委托：请求体只能被消费一次，
-	// 若先在此解析再调用 admin.AdminReviewHTML，后者再读 body 只会拿到空内容 → 报「参数错误」。
+	// 若先在此解析再调用 adminsite.AdminReviewHTML，后者再读 body 只会拿到空内容 → 报「参数错误」。
 	if kind == "html" {
 		var h softdel.UserHTML
 		if err := models.DB.First(&h, id).Error; err == nil && !h.IsExtracted {
-			admin.AdminReviewHTML(c)
+			adminsite.AdminReviewHTML(c)
 			return
 		}
 	}

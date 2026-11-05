@@ -1,8 +1,9 @@
 // admin_realname.go — 管理端实名记录查询 + 实名核验提供商配置（F10 / F21.1 / 第三方接口）。
 // 姓名解密后仅在管理员响应中返回；列表默认脱敏，详情可查看明文（取证需要）。
-package admin
+package admingov
 
 import (
+	"nvs-server/handlers/admincommon"
 	"strconv"
 	"strings"
 	"time"
@@ -17,7 +18,7 @@ import (
 // GET /api/admin/realname — 实名用户列表（分页 + 关键词 + minor_only 未成年筛选）
 // query: page, page_size, keyword(匹配用户名/昵称/身份证脱敏串), minor_only=true
 func AdminListRealName(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -117,7 +118,7 @@ func maskRealNameSecrets(c realname.Config) (realname.Config, map[string]bool) {
 
 // GET /api/admin/realname-provider — 当前提供商配置（敏感字段脱敏）
 func AdminGetRealNameProvider(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	cfg := models.GetRealNameProviderConfig()
@@ -132,7 +133,7 @@ func AdminGetRealNameProvider(c *gin.Context) {
 // PUT /api/admin/realname-provider — 保存提供商配置
 // 敏感字段留空 = 沿用已保存值（避免回显明文又被空白覆盖）
 func AdminSetRealNameProvider(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req realname.Config
@@ -176,7 +177,7 @@ func AdminSetRealNameProvider(c *gin.Context) {
 // 能区分「链路/签名故障」与「核验不一致」两种状态。
 // body: { real_name?, id_card? } 均可选，缺省用内置测试值
 func AdminTestRealNameProvider(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

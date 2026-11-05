@@ -11,14 +11,14 @@ package home
 
 import (
 	"fmt"
-	"strings"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
+	"nvs-server/handlers/adminsite"
 	"nvs-server/handlers/author"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/security"
 	"nvs-server/utils"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	theme "nvs-server/models/theme"
@@ -91,7 +91,7 @@ func UpdateAuthorHomeCustomize(c *gin.Context) {
 		utils.Unauthorized(c, "未登录")
 		return
 	}
-	if uid != id && !admin.IsAdminUser(c) {
+	if uid != id && !adminsite.IsAdminUser(c) {
 		utils.Forbidden(c, "只能修改自己的作者主页")
 		return
 	}
@@ -122,7 +122,7 @@ func UpdateAuthorHomeCustomize(c *gin.Context) {
 // ListHomeCustomizeReviews GET /api/admin/home-customize/reviews（仅管理员）
 // 列出全部作者公开主页提交（可按 review_status 过滤）；含原文 raw_html 供站长复核。
 func ListHomeCustomizeReviews(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	status := c.Query("status")
@@ -164,7 +164,7 @@ func ListHomeCustomizeReviews(c *gin.Context) {
 //   - approve：public_html = safe_html（消毒版）对外可见；
 //   - reject：拒绝，public_html 置空。
 func ReviewHomeCustomize(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := author.ParseAuthorID(c)

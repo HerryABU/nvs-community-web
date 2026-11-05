@@ -1,4 +1,4 @@
-package admin
+package adminsite
 
 // admin_crypto.go 密码轨道（国际轨 / 国密轨 / 双轨）状态查询。
 //

@@ -1,7 +1,7 @@
 package home
 
 import (
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -18,7 +18,7 @@ func GetHomeView(c *gin.Context) {
 
 // AdminGetHomeView GET /api/admin/home-view
 func AdminGetHomeView(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, gin.H{
@@ -29,7 +29,7 @@ func AdminGetHomeView(c *gin.Context) {
 
 // AdminSaveHomeView PUT /api/admin/home-view
 func AdminSaveHomeView(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

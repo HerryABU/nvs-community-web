@@ -1,7 +1,7 @@
 package community
 
 import (
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -10,7 +10,7 @@ import (
 
 // GET /api/admin/community — 社区动态仪表盘
 func GetCommunityDashboard(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 

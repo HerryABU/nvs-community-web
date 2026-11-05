@@ -3,13 +3,13 @@ package badword
 import (
 	"encoding/json"
 	"fmt"
+	"nvs-server/handlers/admincommon"
+	"nvs-server/handlers/admingov"
+	"nvs-server/security"
+	"nvs-server/utils"
 	"regexp"
 	"strconv"
 	"strings"
-
-	"nvs-server/handlers/admin"
-	"nvs-server/security"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	securitym "nvs-server/models/security"
@@ -118,7 +118,7 @@ func validateBadWordPattern(matchType, pattern string) (error, string) {
 
 // GET /api/admin/bad-words — 列出所有违禁词规则
 func ListBadWords(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	words, err := securitym.ListBadWords()
@@ -131,7 +131,7 @@ func ListBadWords(c *gin.Context) {
 
 // POST /api/admin/bad-words — 新增违禁词规则
 func CreateBadWord(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -193,7 +193,7 @@ func CreateBadWord(c *gin.Context) {
 
 // PUT /api/admin/bad-words/:id — 更新违禁词规则
 func UpdateBadWord(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -265,7 +265,7 @@ func UpdateBadWord(c *gin.Context) {
 
 // DELETE /api/admin/bad-words/:id — 删除违禁词规则
 func DeleteBadWord(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -279,7 +279,7 @@ func DeleteBadWord(c *gin.Context) {
 
 // GET /api/admin/bad-words/export — 导出全部规则为 JSON 数组（含分类/标签）
 func ExportBadWords(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	words, err := securitym.ExportBadWords()
@@ -294,7 +294,7 @@ func ExportBadWords(c *gin.Context) {
 
 // POST /api/admin/bad-words/import — 从 JSON 数组批量导入（按 name+match_type+pattern 去重，已存在则跳过）
 func ImportBadWords(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var items []securitym.BadWordImportItem
@@ -327,7 +327,7 @@ func ImportBadWords(c *gin.Context) {
 
 // POST /api/admin/bad-words/test — 测试违禁词规则（不落库，返回匹配与处理结果）
 func TestBadWord(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -426,7 +426,7 @@ func snippetOf(s string) string {
 
 // GET /api/admin/bad-word-flags — 标记待审列表（status 可选过滤，分页）
 func ListBadWordFlags(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	status := c.Query("status")
@@ -473,7 +473,7 @@ func ListBadWordFlags(c *gin.Context) {
 //   - confirmed：确认违规（可选 delete_content=true 同时软删除内容并留证）
 //   - dismissed：误报放行
 func HandleBadWordFlag(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -495,8 +495,8 @@ func HandleBadWordFlag(c *gin.Context) {
 	case "confirmed":
 		// 可选：同时软删除对应内容并留证
 		if req.DeleteContent {
-			if err := admin.SoftDeleteContent(c, flag.ContentType, flag.ContentID, req.Note, "badword", "delete"); err != nil {
-				if err == admin.ErrContentNotFound {
+			if err := admingov.SoftDeleteContent(c, flag.ContentType, flag.ContentID, req.Note, "badword", "delete"); err != nil {
+				if err == admingov.ErrContentNotFound {
 					utils.NotFound(c, "对应内容不存在或已被删除")
 					return
 				}

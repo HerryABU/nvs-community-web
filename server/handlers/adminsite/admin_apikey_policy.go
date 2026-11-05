@@ -1,4 +1,4 @@
-package admin
+package adminsite
 
 // 管理员对 API Key 的「按把 / 按人」管控：
 //   - 按把：封禁 / 解封某一个人名下的某一把 Key（api_keys.is_banned）
@@ -9,6 +9,7 @@ package admin
 //   - 本文件的「按人配额」是叠加在角色上限之上的收紧层，取 min(角色上限, 按人配额)；
 
 import (
+	"nvs-server/handlers/admincommon"
 	"strconv"
 	"strings"
 	"time"
@@ -25,7 +26,7 @@ import (
 
 // AdminBanAPIKey POST /api/admin/ratelimit/keys/:id/ban —— 封禁指定 Key
 func AdminBanAPIKey(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -54,7 +55,7 @@ func AdminBanAPIKey(c *gin.Context) {
 
 // AdminUnbanAPIKey POST /api/admin/ratelimit/keys/:id/unban —— 解封指定 Key
 func AdminUnbanAPIKey(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -77,7 +78,7 @@ func AdminUnbanAPIKey(c *gin.Context) {
 // AdminBanUserAPIKeys POST /api/admin/ratelimit/users/:id/keys/ban —— 封禁某用户的全部 API Key
 // duration_hours：封禁时长（小时），0 或留空 = 永久封禁
 func AdminBanUserAPIKeys(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	uid, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -120,7 +121,7 @@ func AdminBanUserAPIKeys(c *gin.Context) {
 // AdminUnbanUserAPIKeys POST /api/admin/ratelimit/users/:id/keys/unban —— 解除该用户的整体封禁
 // 注意：仅清除「用户级封禁」，单把 Key 的独立封禁需单独解封。
 func AdminUnbanUserAPIKeys(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	uid, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -143,7 +144,7 @@ func AdminUnbanUserAPIKeys(c *gin.Context) {
 
 // AdminGetUserAPIQuota GET /api/admin/ratelimit/users/:id/quota —— 查询某用户的 API 策略
 func AdminGetUserAPIQuota(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	uid, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -158,7 +159,7 @@ func AdminGetUserAPIQuota(c *gin.Context) {
 // AdminSetUserAPIQuota PUT /api/admin/ratelimit/users/:id/quota —— 设置某用户的专属配额 / Key 数上限
 // 传 0 表示「跟随全局/不限制」；quota_per_min 只能比角色上限更严格（服务端按 min 生效）。
 func AdminSetUserAPIQuota(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	uid, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -211,7 +212,7 @@ func AdminSetUserAPIQuota(c *gin.Context) {
 
 // AdminListUserAPIPolicies GET /api/admin/ratelimit/users —— 所有被单独设置/封禁过的用户
 func AdminListUserAPIPolicies(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	list, err := apikey.ListUserAPIPolicies()
@@ -224,7 +225,7 @@ func AdminListUserAPIPolicies(c *gin.Context) {
 
 // AdminDeleteUserAPIPolicy DELETE /api/admin/ratelimit/users/:id/quota —— 撤销按人设置（恢复跟随全局）
 func AdminDeleteUserAPIPolicy(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	uid, _ := strconv.ParseUint(c.Param("id"), 10, 64)

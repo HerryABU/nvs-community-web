@@ -9,7 +9,8 @@ package routes
 // 依赖方向是单向的：main → routes → handlers/models/middleware，不存在回环。
 
 import (
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admingov"
+	"nvs-server/handlers/adminsite"
 	"nvs-server/handlers/aiadmin"
 	"nvs-server/handlers/aimedia"
 	"nvs-server/handlers/auth"
@@ -79,7 +80,7 @@ func registerPublic(r *gin.Engine) {
 		public.GET("/auth/wechat/callback", auth.WeChatCallback)
 		public.GET("/categories", novel.ListCategories)
 		public.GET("/categories/stats", novel.ListCategoryStats)
-		public.GET("/wall-zone/:zone", admin.GetPublicZoneDetail)
+		public.GET("/wall-zone/:zone", adminsite.GetPublicZoneDetail)
 		public.GET("/novels", security.RateLimit(100, 60), novel.ListNovels)
 		public.GET("/novels/:id", novel.GetNovel)
 		public.GET("/novels/:id/chapters", novel.GetChapters)
@@ -88,7 +89,7 @@ func registerPublic(r *gin.Engine) {
 		public.GET("/comments", comment.GetComments)
 		// 楼加密（入口限制）：单楼整读（公开，楼内校验密码）；验证/设密需登录态
 		public.GET("/comments/:id/detail", forum.GetFloorDetail)
-		public.GET("/reports/reasons", admin.GetReportReasons)
+		public.GET("/reports/reasons", admingov.GetReportReasons)
 		// API 聚合中间层（一次请求批量获取多个接口数据，向后兼容原有独立调用）
 		public.POST("/batch", security.RateLimit(30, 60), batch.BatchHandler)
 		public.GET("/novels/:id/rating", rating.GetNovelRating)
@@ -115,7 +116,7 @@ func registerPublic(r *gin.Engine) {
 		public.GET("/blogs/:id/htmls", web.GetBlogHTMLs)
 		// 176号令合规：公开算法说明（第七条第九项 算法透明度）+ 站点公告栏
 		public.GET("/algorithms/description", compliance.GetAlgoDescription)
-		public.GET("/announcements", admin.ListAnnouncements)
+		public.GET("/announcements", adminsite.ListAnnouncements)
 		// 自定义主页（F15）：公开区块列表 + 全站最新帖（论坛首页风格区块）
 		public.GET("/home-blocks", home.ListPublicHomeBlocks)
 		public.GET("/threads/latest", home.ListLatestThreads)

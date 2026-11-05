@@ -10,7 +10,8 @@ package routes
 
 import (
 	"nvs-server/handlers/account"
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admingov"
+	"nvs-server/handlers/adminsite"
 	"nvs-server/handlers/aiadmin"
 	"nvs-server/handlers/aimedia"
 	"nvs-server/handlers/aiplatform"
@@ -353,7 +354,7 @@ func registerProtected(r *gin.Engine) {
 		protected.POST("/forums/:id/unmute", forum.ForumUnmuteUser)
 		protected.GET("/forums/:id/mutes", forum.ListForumMutes) // 论坛禁言列表（创建者/管理员）
 		// VIP & 导入导出
-		protected.POST("/author/apply-vip", admin.ApplyVip)
+		protected.POST("/author/apply-vip", adminsite.ApplyVip)
 		protected.POST("/novels/import/preview", data.ImportPreview)
 		protected.POST("/novels/import", data.ImportNovel)
 		protected.POST("/novels/import/batch", data.ImportBatch)
@@ -362,11 +363,11 @@ func registerProtected(r *gin.Engine) {
 		protected.POST("/novels/:id/export/txt", export.ExportTXT)
 		protected.POST("/novels/:id/export/docx", export.ExportDOCX)
 		// 举报
-		protected.POST("/reports", admin.CreateReport)
-		protected.GET("/reports/mine", admin.ListMyReports)
+		protected.POST("/reports", admingov.CreateReport)
+		protected.GET("/reports/mine", admingov.ListMyReports)
 		// 收益
-		protected.GET("/author/earnings", admin.GetEarnings)
-		protected.POST("/author/withdraw", admin.RequestWithdraw)
+		protected.GET("/author/earnings", adminsite.GetEarnings)
+		protected.POST("/author/withdraw", adminsite.RequestWithdraw)
 		// 作者头像上传
 		protected.POST("/author/avatar", author.UploadAvatar)
 		// 作者签名状态

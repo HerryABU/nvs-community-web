@@ -1,10 +1,11 @@
-package admin
+package adminsite
 
 // 站点公告栏 API：
 //   - 管理端：GET/POST /api/admin/announcements，PUT/DELETE /api/admin/announcements/:id
 //   - 公开：GET /api/announcements（仅已发布，置顶优先）
 
 import (
+	"nvs-server/handlers/admincommon"
 	"strconv"
 
 	"nvs-server/middleware"
@@ -18,7 +19,7 @@ import (
 // AdminListAnnouncements 公告列表（管理端，含草稿）
 // GET /api/admin/announcements
 func AdminListAnnouncements(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var list []siteops.Announcement
@@ -29,7 +30,7 @@ func AdminListAnnouncements(c *gin.Context) {
 // AdminCreateAnnouncement 发布公告
 // POST /api/admin/announcements
 func AdminCreateAnnouncement(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -59,7 +60,7 @@ func AdminCreateAnnouncement(c *gin.Context) {
 // AdminUpdateAnnouncement 更新公告
 // PUT /api/admin/announcements/:id
 func AdminUpdateAnnouncement(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -101,7 +102,7 @@ func AdminUpdateAnnouncement(c *gin.Context) {
 // AdminDeleteAnnouncement 删除公告（软删除）
 // DELETE /api/admin/announcements/:id
 func AdminDeleteAnnouncement(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)

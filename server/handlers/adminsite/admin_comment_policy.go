@@ -1,7 +1,8 @@
-package admin
+package adminsite
 
 import (
 	"github.com/gin-gonic/gin"
+	"nvs-server/handlers/admincommon"
 
 	"nvs-server/models"
 	"nvs-server/utils"
@@ -15,7 +16,7 @@ import (
 
 // AdminGetCommentPolicy GET /api/admin/comment-policy
 func AdminGetCommentPolicy(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, gin.H{"config": models.LoadCommentPolicy()})
@@ -23,7 +24,7 @@ func AdminGetCommentPolicy(c *gin.Context) {
 
 // AdminSaveCommentPolicy PUT /api/admin/comment-policy
 func AdminSaveCommentPolicy(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var in models.CommentPolicy

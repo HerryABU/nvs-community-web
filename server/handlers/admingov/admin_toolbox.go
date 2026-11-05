@@ -1,4 +1,4 @@
-package admin
+package admingov
 
 // 检查应对工具箱（176号令 5.2 检查材料清单）：
 //   GET /api/admin/compliance/export-logs   按时间范围导出访问日志（ZIP）
@@ -8,6 +8,7 @@ package admin
 import (
 	"archive/zip"
 	"fmt"
+	"nvs-server/handlers/admincommon"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,7 +42,7 @@ type ComplianceReport struct {
 // GetComplianceReport 一键生成合规自查报告（管理后台）
 // GET /api/admin/compliance/report
 func GetComplianceReport(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, buildComplianceReport())
@@ -86,7 +87,7 @@ func buildComplianceReport() ComplianceReport {
 // ExportComplianceLogs 按时间范围导出访问日志 ZIP（管理后台）
 // GET /api/admin/compliance/export-logs?from=2026-08-01&to=2026-08-24
 func ExportComplianceLogs(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	from := c.DefaultQuery("from", time.Now().AddDate(0, 0, -30).Format("2006-01-02"))
@@ -140,7 +141,7 @@ func ExportComplianceLogs(c *gin.Context) {
 // ExportComplianceUsers 导出用户注册信息清单 CSV（管理后台）
 // GET /api/admin/compliance/export-users
 func ExportComplianceUsers(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var users []models.User

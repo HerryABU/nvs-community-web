@@ -1,4 +1,4 @@
-package admin
+package admingov
 
 // 合规材料一键打包（等保/176 号令检查应对材料）
 //
@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"nvs-server/handlers/admincommon"
 	"os"
 	"path/filepath"
 	"sort"
@@ -38,7 +39,7 @@ type complianceFile struct {
 // ExportComplianceBundle GET /api/admin/compliance/bundle.zip
 // 一键导出检查应对材料包（含 manifest.json 的 SHA256 清单）
 func ExportComplianceBundle(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	files := make([]complianceFile, 0, 8)

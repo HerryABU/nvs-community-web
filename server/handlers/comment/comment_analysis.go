@@ -1,13 +1,12 @@
 package comment
 
 import (
-	"strconv"
-	"strings"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/adminsite"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/blog"
@@ -39,7 +38,7 @@ func GetMentionSource(c *gin.Context) {
 	targetType := strings.TrimSpace(c.Query("target_type"))
 	targetID := uint(mustUint(c.Query("target_id")))
 	effective := siteops.GetEffectiveMentionSource(targetType, targetID)
-	canEdit := admin.IsAdminUser(c) || isOwnerOfWork(c, targetType, targetID)
+	canEdit := adminsite.IsAdminUser(c) || isOwnerOfWork(c, targetType, targetID)
 	overrideSet := false
 	if targetType != "" && targetID > 0 {
 		overrideSet = siteops.GetSetting(siteops.MentionSourceWorkKey(targetType, targetID), "") != ""
@@ -49,7 +48,7 @@ func GetMentionSource(c *gin.Context) {
 		"site_default": siteops.GetMentionSource(),
 		"can_edit":     canEdit,
 		"override_set": overrideSet,
-		"is_admin":     admin.IsAdminUser(c),
+		"is_admin":     adminsite.IsAdminUser(c),
 		"is_owner":     isOwnerOfWork(c, targetType, targetID),
 	})
 }
@@ -84,7 +83,7 @@ func SetMentionSource(c *gin.Context) {
 
 	// 站点默认：仅站长
 	if req.TargetID == 0 {
-		if !admin.IsAdminUser(c) {
+		if !adminsite.IsAdminUser(c) {
 			utils.Forbidden(c, "只有站长可设置站点默认提及来源")
 			return
 		}
@@ -97,7 +96,7 @@ func SetMentionSource(c *gin.Context) {
 	}
 
 	// 作品覆盖：站长或楼主
-	if !admin.IsAdminUser(c) && !isOwnerOfWork(c, req.TargetType, req.TargetID) {
+	if !adminsite.IsAdminUser(c) && !isOwnerOfWork(c, req.TargetType, req.TargetID) {
 		utils.Forbidden(c, "只有站长或本作品作者可设置提及来源")
 		return
 	}

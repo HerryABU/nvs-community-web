@@ -1,4 +1,4 @@
-package admin
+package adminsite
 
 // 此文件包含 admin.go 中关于网站配置、隔离墙、远程站点、联邦作品的功能
 // 从 admin.go 拆分出来，方便维护
@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"nvs-server/handlers/admincommon"
 	"strconv"
 	"strings"
 	"time"
@@ -34,7 +35,7 @@ func configEncryptSecret(plain string) (string, error) {
 // ============ 站长配置 ============
 
 func GetPlatformConfigs(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	all := models.GetAllPlatformConfigs()
@@ -52,7 +53,7 @@ func GetPlatformConfigs(c *gin.Context) {
 }
 
 func UpdatePlatformConfig(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req map[string]string
@@ -137,7 +138,7 @@ func UpdatePlatformConfig(c *gin.Context) {
 // 入参：to 必填（测试收件邮箱）；host/port/user/password/from 可选，
 // 为空时使用已保存的平台配置（password 为空时沿用已保存的授权码，不回显）。
 func TestSMTP(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -190,14 +191,14 @@ func TestSMTP(c *gin.Context) {
 // ============ 隔离墙配置 ============
 
 func GetWallConfig(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, platform.GetWallConfig())
 }
 
 func UpdateWallConfig(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req platform.WallConfig
@@ -215,7 +216,7 @@ func UpdateWallConfig(c *gin.Context) {
 // ============ 远程站点互通 ============
 
 func ListFederatedSites(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var sites []platform.FederatedSite
@@ -224,7 +225,7 @@ func ListFederatedSites(c *gin.Context) {
 }
 
 func CreateFederatedSite(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -247,7 +248,7 @@ func CreateFederatedSite(c *gin.Context) {
 }
 
 func UpdateFederatedSite(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -282,7 +283,7 @@ func UpdateFederatedSite(c *gin.Context) {
 }
 
 func DeleteFederatedSite(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -368,7 +369,7 @@ func RecordInbound(c *gin.Context, endpoint string) {
 }
 
 func SyncFederatedSite(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -533,7 +534,7 @@ func GetSiteInfo(c *gin.Context) {
 
 // ListInboundSites 列出「谁连接了我」的入站记录（管理员）
 func ListInboundSites(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	list, err := platform.ListFederatedInbound(200)
@@ -560,7 +561,7 @@ func getFederatedSiteOr404(c *gin.Context) (*platform.FederatedSite, bool) {
 // ListFederatedSiteKeys GET /api/admin/sites/:id/keys
 // inbound 只回前缀（明文仅生成时展示一次）；outbound 回前缀+签发方+状态（明文不回显）。
 func ListFederatedSiteKeys(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	site, ok := getFederatedSiteOr404(c)
@@ -595,7 +596,7 @@ func ListFederatedSiteKeys(c *gin.Context) {
 // 本站签发给对方站的 Key：对方访问本站时携带 → 本站识别身份并给高配额。
 // 完整 Key 仅此一次返回，需管理员手动转交给对方站点。
 func CreateFederatedInboundKey(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	site, ok := getFederatedSiteOr404(c)
@@ -643,7 +644,7 @@ func CreateFederatedInboundKey(c *gin.Context) {
 // SaveFederatedOutboundKey POST /api/admin/sites/:id/keys/outbound
 // 保存对方站签发给本站的 Key（本站访问对方站时携带，AES 加密落库）。
 func SaveFederatedOutboundKey(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	site, ok := getFederatedSiteOr404(c)
@@ -691,7 +692,7 @@ func SaveFederatedOutboundKey(c *gin.Context) {
 
 // ToggleFederatedKey POST /api/admin/sites/:id/keys/:kid/toggle —— 启用/停用
 func ToggleFederatedKey(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	site, ok := getFederatedSiteOr404(c)
@@ -710,7 +711,7 @@ func ToggleFederatedKey(c *gin.Context) {
 
 // DeleteFederatedKey DELETE /api/admin/sites/:id/keys/:kid —— 吊销（立即失效）
 func DeleteFederatedKey(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	site, ok := getFederatedSiteOr404(c)

@@ -5,12 +5,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
-	"time"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/ipgeo"
 	"nvs-server/utils"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	theme "nvs-server/models/theme"
@@ -35,7 +34,7 @@ func GetMapSetting(c *gin.Context) {
 
 // AdminGetMapSetting GET /api/admin/map-setting —— 含完整配置（key 明文给站长自己核对）
 func AdminGetMapSetting(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, theme.LoadMapSetting())
@@ -43,7 +42,7 @@ func AdminGetMapSetting(c *gin.Context) {
 
 // AdminSaveMapSetting PUT /api/admin/map-setting
 func AdminSaveMapSetting(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var in theme.MapSetting
@@ -66,7 +65,7 @@ func AdminSaveMapSetting(c *gin.Context) {
 //
 // 只请求固定的天地图瓦片地址（不接受任意 URL），因此没有 SSRF 面。
 func AdminTestMapSetting(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var in struct {

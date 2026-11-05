@@ -1,6 +1,7 @@
-package admin
+package adminsite
 
 import (
+	"nvs-server/handlers/admincommon"
 	"strconv"
 
 	"nvs-server/utils"
@@ -17,7 +18,7 @@ import (
 //
 // days 默认 7（可 7/30/90，>365 收敛 365）；limit 默认 50（>200 收敛 200）。
 func AdminHotWords(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	days, _ := strconv.Atoi(c.DefaultQuery("days", "7"))
@@ -77,7 +78,7 @@ func AdminHotWords(c *gin.Context) {
 //	days>0：仅清理 N 天前的记录（保留近期数据，返回删除行数）
 //	days=0：清空全部搜索日志
 func AdminSearchLogCleanup(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	days, _ := strconv.Atoi(c.DefaultQuery("days", "0"))

@@ -1,12 +1,12 @@
 package aiworkbench
 
 import (
+	"nvs-server/handlers/admincommon"
 	"strconv"
 	"strings"
 	"time"
 
 	"nvs-server/aisafety"
-	"nvs-server/handlers/admin"
 	"nvs-server/models"
 	"nvs-server/utils"
 
@@ -116,7 +116,7 @@ func serveAppeaseResponse(c *gin.Context, session *aim.AiChatSession, storeMsg s
 
 // GetAiSafetyConfig GET /api/admin/ai/safety/config
 func GetAiSafetyConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	cfg, err := aisafety.GetConfig()
@@ -129,7 +129,7 @@ func GetAiSafetyConfig(c *gin.Context) {
 
 // SaveAiSafetyConfig PUT /api/admin/ai/safety/config
 func SaveAiSafetyConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	// 就地合并：先取现有配置，再把请求体覆盖上去。
@@ -199,7 +199,7 @@ func SaveAiSafetyConfig(c *gin.Context) {
 
 // ResetAiSafetyConfig POST /api/admin/ai/safety/config/reset
 func ResetAiSafetyConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	cfg, err := aisafety.ResetConfig()
@@ -214,7 +214,7 @@ func ResetAiSafetyConfig(c *gin.Context) {
 
 // ListAiSafetyEvents GET /api/admin/ai/safety/events
 func ListAiSafetyEvents(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -244,7 +244,7 @@ func ListAiSafetyEvents(c *gin.Context) {
 
 // ListAiSafetyProfiles GET /api/admin/ai/safety/profiles
 func ListAiSafetyProfiles(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -270,7 +270,7 @@ func ListAiSafetyProfiles(c *gin.Context) {
 // ClearAiSafetyCooldown POST /api/admin/ai/safety/profiles/:uid/clear
 // 解除冷却 + 观察期（误判申诉时用）。风险分保留，便于仍能看出历史。
 func ClearAiSafetyCooldown(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	uid, _ := strconv.ParseUint(c.Param("uid"), 10, 64)
@@ -287,7 +287,7 @@ func ClearAiSafetyCooldown(c *gin.Context) {
 
 // ResetAiSafetyProfile POST /api/admin/ai/safety/profiles/:uid/reset
 func ResetAiSafetyProfile(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	uid, _ := strconv.ParseUint(c.Param("uid"), 10, 64)
@@ -304,7 +304,7 @@ func ResetAiSafetyProfile(c *gin.Context) {
 
 // ListJudgeLogs GET /api/admin/ai/safety/judge-logs
 func ListJudgeLogs(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -328,7 +328,7 @@ func ListJudgeLogs(c *gin.Context) {
 
 // AiSafetyStats GET /api/admin/ai/safety/stats
 func AiSafetyStats(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var (
@@ -367,7 +367,7 @@ func AiSafetyStats(c *gin.Context) {
 // ListLockedSessions GET /api/admin/ai/safety/locked-sessions
 // 被内容安全终止的会话（供站长复审）。
 func ListLockedSessions(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -392,7 +392,7 @@ func ListLockedSessions(c *gin.Context) {
 // 故意只开给管理端：用户侧没有自助解锁入口 —— 否则被判定有害后
 // 自己点一下「恢复」就能接着问，闸门等于摆设。
 func UnlockChatSession(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	sid, _ := strconv.ParseUint(c.Param("sid"), 10, 64)

@@ -8,11 +8,10 @@ package ops
 // 所以用「唯一索引 + 先落记录后发币」保证并发安全（见 siteops.DoCheckIn）。
 
 import (
-	"strconv"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/hctx"
 	"nvs-server/utils"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	siteops "nvs-server/models/siteops"
@@ -39,7 +38,7 @@ func PublicNavMenus(c *gin.Context) {
 
 // AdminNavMenus GET /api/admin/nav-menus
 func AdminNavMenus(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	list, err := siteops.AllNavMenus()
@@ -52,7 +51,7 @@ func AdminNavMenus(c *gin.Context) {
 
 // SaveNavMenu POST /api/admin/nav-menus
 func SaveNavMenu(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var in siteops.NavMenu
@@ -70,7 +69,7 @@ func SaveNavMenu(c *gin.Context) {
 
 // DeleteNavMenu DELETE /api/admin/nav-menus/:id
 func DeleteNavMenu(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -99,7 +98,7 @@ func PublicCarousels(c *gin.Context) {
 
 // AdminCarousels GET /api/admin/carousels
 func AdminCarousels(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	list, err := siteops.AdminCarousels()
@@ -112,7 +111,7 @@ func AdminCarousels(c *gin.Context) {
 
 // SaveCarousel POST /api/admin/carousels
 func SaveCarousel(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var in siteops.Carousel
@@ -130,7 +129,7 @@ func SaveCarousel(c *gin.Context) {
 
 // DeleteCarousel DELETE /api/admin/carousels/:id
 func DeleteCarousel(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -169,7 +168,7 @@ func DoCheckIn(c *gin.Context) {
 
 // AdminCheckIn GET /api/admin/checkin —— 配置 + 近 7 天统计
 func AdminCheckIn(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, gin.H{
@@ -180,7 +179,7 @@ func AdminCheckIn(c *gin.Context) {
 
 // SaveCheckIn PUT /api/admin/checkin
 func SaveCheckIn(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var in siteops.CheckInConfig
@@ -211,7 +210,7 @@ func PublicVisitSetting(c *gin.Context) {
 
 // AdminVisitSetting GET /api/admin/visit-setting
 func AdminVisitSetting(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, gin.H{
@@ -222,7 +221,7 @@ func AdminVisitSetting(c *gin.Context) {
 
 // SaveVisitSetting PUT /api/admin/visit-setting
 func SaveVisitSetting(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var in siteops.VisitSetting
@@ -266,7 +265,7 @@ func PublicLive(c *gin.Context) {
 
 // AdminLive GET /api/admin/live
 func AdminLive(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, gin.H{
@@ -277,7 +276,7 @@ func AdminLive(c *gin.Context) {
 
 // SaveLive PUT /api/admin/live
 func SaveLive(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var in siteops.LiveSetting

@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"nvs-server/handlers/admincommon"
 	"strings"
 	"time"
 
 	"nvs-server/aiclient"
-	"nvs-server/handlers/admin"
 	"nvs-server/sentiment/store"
 	"nvs-server/sentiment/updater"
 	"nvs-server/utils"
@@ -45,7 +45,7 @@ const (
 //   - 默认动作一律 mark（仅标记待审，不自动删改内容），由管理员在待审列表复核确认；
 //   - 按 name+match_type+pattern 去重，已存在的规则自动跳过，不会重复创建。
 func SearchAugmentBadWords(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

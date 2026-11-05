@@ -11,14 +11,13 @@ package web
 // UpdateFrame 的 is_public 逻辑不动（前端公开开关改调新接口即可）。
 
 import (
-	"strconv"
-	"strings"
-	"time"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	quotam "nvs-server/models/quota"
@@ -186,7 +185,7 @@ func SetFramePublic(c *gin.Context) {
 
 // AdminListWebQuotaRequests GET /api/admin/web-quota/requests?status=pending —— 超额待审列表（支持状态筛选）
 func AdminListWebQuotaRequests(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	status := strings.TrimSpace(c.Query("status"))
@@ -200,7 +199,7 @@ func AdminListWebQuotaRequests(c *gin.Context) {
 
 // AdminApproveWebQuotaRequest POST /api/admin/web-quota/requests/:id/approve —— 批准超额公开
 func AdminApproveWebQuotaRequest(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -217,7 +216,7 @@ func AdminApproveWebQuotaRequest(c *gin.Context) {
 
 // AdminRejectWebQuotaRequest POST /api/admin/web-quota/requests/:id/reject —— 驳回超额公开
 func AdminRejectWebQuotaRequest(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -236,7 +235,7 @@ func AdminRejectWebQuotaRequest(c *gin.Context) {
 
 // AdminGetWebQuotaConfig GET /api/admin/web-quota/config —— 全局默认额度 + 按人覆盖列表
 func AdminGetWebQuotaConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	overrides, err := quotam.ListUserWebQuotas()
@@ -258,7 +257,7 @@ func AdminGetWebQuotaConfig(c *gin.Context) {
 //	                  quota_size_mb=-1 跟随全局 / 0 不限 / >0 专属大小上限 MB）
 //	"remove_user" —— 撤销某用户的额度覆盖（恢复跟随全局）
 func AdminSetWebQuotaConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

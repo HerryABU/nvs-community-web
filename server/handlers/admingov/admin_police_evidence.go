@@ -1,6 +1,7 @@
-package admin
+package admingov
 
 import (
+	"nvs-server/handlers/admincommon"
 	"strconv"
 	"strings"
 
@@ -14,7 +15,7 @@ import (
 // AdminListEvidenceRequests GET /api/admin/police/evidence-requests
 // 站长查看警方提交的取证导出申请（按状态筛，待审在前）。
 func AdminListEvidenceRequests(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -31,7 +32,7 @@ func AdminListEvidenceRequests(c *gin.Context) {
 // AdminReviewEvidenceRequest POST /api/admin/police/evidence-requests/:id/review
 // 站长审批：approve=true 批准 / approve=false 驳回。
 func AdminReviewEvidenceRequest(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)

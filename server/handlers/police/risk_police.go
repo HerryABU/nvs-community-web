@@ -3,15 +3,14 @@ package police
 // ==================== 充值风控（gap-audit #9）与警方工单（gap-audit #6）的接口层 ====================
 
 import (
-	"strconv"
-	"strings"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/hctx"
 	"nvs-server/police"
 	"nvs-server/risk"
 	"nvs-server/security"
 	"nvs-server/utils"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	social "nvs-server/models/social"
@@ -21,7 +20,7 @@ import (
 
 // AdminRiskConfig GET /api/admin/risk
 func AdminRiskConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, gin.H{
@@ -32,7 +31,7 @@ func AdminRiskConfig(c *gin.Context) {
 
 // SaveRiskConfig PUT /api/admin/risk
 func SaveRiskConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var in risk.Config
@@ -49,7 +48,7 @@ func SaveRiskConfig(c *gin.Context) {
 
 // AdminRiskEvents GET /api/admin/risk/events
 func AdminRiskEvents(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -64,7 +63,7 @@ func AdminRiskEvents(c *gin.Context) {
 
 // HandleRiskEvent POST /api/admin/risk/events/:id/handle { status, note }
 func HandleRiskEvent(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -212,7 +211,7 @@ func AddTicketNote(c *gin.Context) {
 
 // AdminKeyAlarms GET /api/admin/api-key-alarms
 func AdminKeyAlarms(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -236,7 +235,7 @@ func AdminKeyAlarms(c *gin.Context) {
 
 // AckKeyAlarm POST /api/admin/api-key-alarms/:id/ack { note }
 func AckKeyAlarm(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)

@@ -3,8 +3,7 @@ package publish
 import (
 	"fmt"
 	"net/http"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/utils"
@@ -56,7 +55,7 @@ func GetMyPublishQuota(c *gin.Context) {
 
 // AdminGetDailyPublishConfig GET /api/admin/daily-publish/config — 读取每日发文限额配置
 func AdminGetDailyPublishConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, quota.GetDailyPublishConfig())
@@ -64,7 +63,7 @@ func AdminGetDailyPublishConfig(c *gin.Context) {
 
 // AdminSetDailyPublishConfig PUT /api/admin/daily-publish/config — 保存配置（立即生效）
 func AdminSetDailyPublishConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var cfg quota.DailyPublishConfig
@@ -81,7 +80,7 @@ func AdminSetDailyPublishConfig(c *gin.Context) {
 
 // AdminListPublishOverrides GET /api/admin/daily-publish/overrides — 按人覆盖列表
 func AdminListPublishOverrides(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	list, err := quota.ListUserPublishQuotas()
@@ -95,7 +94,7 @@ func AdminListPublishOverrides(c *gin.Context) {
 // AdminManagePublishOverride POST /api/admin/daily-publish/overrides — 设置/撤销按人覆盖
 // body: { action: "set"|"remove", user_id, count, word_cap, note }
 func AdminManagePublishOverride(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

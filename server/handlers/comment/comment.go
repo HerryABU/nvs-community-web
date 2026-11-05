@@ -2,13 +2,13 @@ package comment
 
 import (
 	"fmt"
+	"nvs-server/handlers/adminsite"
 	"strconv"
 	"strings"
 	"time"
 
 	"nvs-server/aisafety"
 	"nvs-server/crisis"
-	"nvs-server/handlers/admin"
 	"nvs-server/handlers/badword"
 	"nvs-server/handlers/blacklist"
 	"nvs-server/handlers/export"
@@ -40,7 +40,7 @@ func GetComments(c *gin.Context) {
 
 	// 楼层模型：List = 本页楼层 + 这些楼层下的全部回复（平铺，前端按 root_id 分组成「楼」）
 	// 🔒 警方/管理员取证视图：includeDeleted=true 一并返回已删除评论，前端以红字标注
-	includeDeleted := admin.IsPoliceOrAdminUser(c)
+	includeDeleted := adminsite.IsPoliceOrAdminUser(c)
 	var pg models.CommentsPage
 	var err error
 	if blogID > 0 {
@@ -153,7 +153,7 @@ func CreateComment(c *gin.Context) {
 					floor = root
 				}
 			}
-			if !models.FloorAccessUnlocked(floor, userID, admin.IsPoliceOrAdminUser(c), map[uint]string{floor.ID: c.GetHeader("X-Floor-Password")}) {
+			if !models.FloorAccessUnlocked(floor, userID, adminsite.IsPoliceOrAdminUser(c), map[uint]string{floor.ID: c.GetHeader("X-Floor-Password")}) {
 				policy := models.LoadCommentPolicy()
 				if policy.LockHidesReplies || !policy.LockedFloorCanReply {
 					utils.Forbidden(c, "该楼已加密，输入访问密码后才可回复")

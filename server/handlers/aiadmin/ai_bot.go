@@ -3,7 +3,7 @@ package aiadmin
 import (
 	"fmt"
 	"nvs-server/aiclient"
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/export"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
@@ -259,7 +259,7 @@ func AiBotStatus(c *gin.Context) {
 
 // AdminGetAiBotConfig GET /api/admin/ai/bot/config
 func AdminGetAiBotConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, gin.H{
@@ -270,7 +270,7 @@ func AdminGetAiBotConfig(c *gin.Context) {
 
 // AdminSetAiBotConfig PUT /api/admin/ai/bot/config
 func AdminSetAiBotConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

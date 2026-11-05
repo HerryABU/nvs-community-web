@@ -6,13 +6,12 @@
 package auth
 
 import (
+	"nvs-server/handlers/admincommon"
+	"nvs-server/handlers/hctx"
+	"nvs-server/utils"
 	"strconv"
 	"strings"
 	"time"
-
-	"nvs-server/handlers/admin"
-	"nvs-server/handlers/hctx"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	apikey "nvs-server/models/apikey"
@@ -53,7 +52,7 @@ func RecordZoneEnter(c *gin.Context) {
 // ListZoneAccessLogs GET /api/admin/zone-access — 查询隔离墙（敏感分区）进入记录（176号令专项）。
 // 支持 user_id、zone、from、to 筛选与分页，返回「谁、何时、进入哪个分区」及用户名。
 func ListZoneAccessLogs(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	userID, _ := strconv.ParseUint(c.Query("user_id"), 10, 64)
@@ -79,7 +78,7 @@ func ListZoneAccessLogs(c *gin.Context) {
 
 // GetZoneAccessStats GET /api/admin/zone-access/stats — 隔离墙进入记录聚合统计（仪表盘卡片）。
 func GetZoneAccessStats(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	stats, err := platform.GetZoneAccessStats()

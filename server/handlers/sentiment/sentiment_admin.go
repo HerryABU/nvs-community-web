@@ -1,17 +1,16 @@
 package sentiment
 
 import (
-	"strconv"
-	"strings"
-	"time"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/sentiment/store"
 	"nvs-server/sentiment/topic"
 	"nvs-server/sentiment/updater"
 	"nvs-server/utils"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -23,7 +22,7 @@ import (
 
 // GetSentimentConfig GET /api/admin/sentiment/config
 func GetSentimentConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	cfg, err := store.GetConfig()
@@ -36,7 +35,7 @@ func GetSentimentConfig(c *gin.Context) {
 
 // SaveSentimentConfig PUT /api/admin/sentiment/config
 func SaveSentimentConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req store.Config
@@ -63,7 +62,7 @@ func SaveSentimentConfig(c *gin.Context) {
 
 // ListSentimentTerms GET /api/admin/sentiment/terms?status=
 func ListSentimentTerms(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	status := c.Query("status")
@@ -104,7 +103,7 @@ type SentimentTermReq struct {
 
 // CreateSentimentTerm POST /api/admin/sentiment/terms
 func CreateSentimentTerm(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req SentimentTermReq
@@ -145,7 +144,7 @@ func CreateSentimentTerm(c *gin.Context) {
 
 // UpdateSentimentTerm PUT /api/admin/sentiment/terms/:id
 func UpdateSentimentTerm(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -183,7 +182,7 @@ func UpdateSentimentTerm(c *gin.Context) {
 // body: {"action":"approve|reject"}
 // AI 学来的词必须过人这一关：approve → active，reject → rejected（保留记录不删）。
 func ReviewSentimentTerm(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -216,7 +215,7 @@ func ReviewSentimentTerm(c *gin.Context) {
 
 // DeleteSentimentTerm DELETE /api/admin/sentiment/terms/:id
 func DeleteSentimentTerm(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -236,7 +235,7 @@ func DeleteSentimentTerm(c *gin.Context) {
 // ListSentimentHits GET /api/admin/sentiment/hits
 // 只返回判定摘要，不返回评论正文——正文在评论表里，权限与脱敏走评论自己的口径。
 func ListSentimentHits(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	q := store.DB.Model(&store.Hit{})
@@ -267,7 +266,7 @@ func ListSentimentHits(c *gin.Context) {
 // GetContentTopic GET /api/admin/sentiment/topics?content_type=&content_id=
 // 读某内容的话题标注（供人工修正入口预填）。
 func GetContentTopic(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	ct, err := store.TopicOf(c.Query("content_type"), parseUint(c.Query("content_id")))
@@ -284,7 +283,7 @@ func GetContentTopic(c *gin.Context) {
 // 人工改过的标注 source 记为 manual、confidence 置 100、复核状态置 confirmed，
 // 后续不会再被 AI 自动覆盖（AI 写标注时应跳过 manual）。
 func SetContentTopic(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -325,7 +324,7 @@ func SetContentTopic(c *gin.Context) {
 // RunSentimentUpdate POST /api/admin/sentiment/run-update
 // 手动触发一次词表更新（站长不想等到凌晨时用）。
 func RunSentimentUpdate(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	res, err := updater.RunOnce("manual")
@@ -338,7 +337,7 @@ func RunSentimentUpdate(c *gin.Context) {
 
 // ListTermAudits GET /api/admin/sentiment/audits?term_id=
 func ListTermAudits(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	q := store.DB.Model(&store.TermAudit{})

@@ -1,7 +1,9 @@
-package admin
+package adminsite
 
 import (
 	"fmt"
+	"nvs-server/handlers/admincommon"
+	"nvs-server/handlers/admingov"
 	"strconv"
 	"strings"
 	"time"
@@ -22,7 +24,7 @@ import (
 // GET /api/admin/users — 用户列表（支持关键词搜索 + 角色分类 + 状态筛选）
 // query: page, search(用户名/昵称/邮箱), role(角色分类), status(active/muted/banned)
 func ListUsers(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -65,7 +67,7 @@ func ListUsers(c *gin.Context) {
 
 // GET /api/admin/users/audit — 用户行为审计日志（176号令合规查询，可按 user_id/action 筛选）
 func ListUserAuditLogs(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	userID, _ := strconv.ParseUint(c.Query("user_id"), 10, 64)
@@ -80,7 +82,7 @@ func ListUserAuditLogs(c *gin.Context) {
 
 // PUT /api/admin/users/:id — 修改用户（支持 role、nickname、email）
 func UpdateUser(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -118,7 +120,7 @@ func UpdateUser(c *gin.Context) {
 
 // DELETE /api/admin/users/:id — 删除/封禁用户（软删除 + 留证）
 func DeleteUser(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -130,8 +132,8 @@ func DeleteUser(c *gin.Context) {
 		return
 	}
 
-	if err := SoftDeleteContent(c, "user", uint(id), "管理员封禁/删除用户", "admin", "ban"); err != nil {
-		if err == ErrContentNotFound {
+	if err := admingov.SoftDeleteContent(c, "user", uint(id), "管理员封禁/删除用户", "admin", "ban"); err != nil {
+		if err == admingov.ErrContentNotFound {
 			utils.NotFound(c, "用户不存在")
 		} else {
 			utils.InternalError(c, err.Error())
@@ -143,7 +145,7 @@ func DeleteUser(c *gin.Context) {
 
 // POST /api/admin/users/:id/mute — 全局禁言用户
 func MuteUser(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -177,7 +179,7 @@ func MuteUser(c *gin.Context) {
 
 // POST /api/admin/users/:id/unmute — 解除全局禁言
 func UnmuteUser(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -195,7 +197,7 @@ func UnmuteUser(c *gin.Context) {
 // POST /api/admin/users/:id/promote-police — 管理员提权为警方取管台账号
 // 警方角色不可自注册，只能由管理员在此显式提权（留审计痕迹），防止越权/漏洞提权。
 func AdminPromoteToPolice(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -237,7 +239,7 @@ func AdminPromoteToPolice(c *gin.Context) {
 
 // POST /api/admin/users/:id/revoke-police — 撤销警方取管台权限（回退为读者）
 func AdminRevokePolice(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)

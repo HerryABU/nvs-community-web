@@ -1,10 +1,10 @@
 package aiadmin
 
 import (
+	"nvs-server/handlers/admincommon"
 	"strconv"
 
 	"nvs-server/aiclient"
-	"nvs-server/handlers/admin"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
@@ -17,7 +17,7 @@ import (
 // 返回该上游渠道的余额 / 消费快照（对账用）与真实连通性探针。
 // 余额查询仅对 OpenAI 兼容渠道有效；Anthropic / Azure 等无公开端点时明确标记 unsupported。
 func AdminAiModelChannel(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)

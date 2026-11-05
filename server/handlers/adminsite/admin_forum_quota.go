@@ -1,4 +1,4 @@
-package admin
+package adminsite
 
 // 自建论坛额度管控（管理员）：
 //   - 全局默认：每人最多可创建几个自建论坛（0 = 不限制）
@@ -9,6 +9,7 @@ package admin
 // 故单独开一棵子树，避免注册时 panic。
 
 import (
+	"nvs-server/handlers/admincommon"
 	"strconv"
 	"strings"
 
@@ -20,7 +21,7 @@ import (
 
 // GetForumQuotaConfig GET /api/admin/forum-quota —— 全局默认额度
 func GetForumQuotaConfig(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	cfg := models.LoadForumQuotaConfig()
@@ -33,7 +34,7 @@ func GetForumQuotaConfig(c *gin.Context) {
 
 // UpdateForumQuotaConfig PUT /api/admin/forum-quota —— 保存全局默认额度（立即生效）
 func UpdateForumQuotaConfig(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -57,7 +58,7 @@ func UpdateForumQuotaConfig(c *gin.Context) {
 // SetUserForumQuota PUT /api/admin/forum-quota/users/:id —— 为特定用户单独设置建版额度
 // max_forums：-1 = 跟随全局；0 = 禁止创建；>0 = 该用户专属上限
 func SetUserForumQuota(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	uid, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -100,7 +101,7 @@ func SetUserForumQuota(c *gin.Context) {
 
 // DeleteUserForumQuota DELETE /api/admin/forum-quota/users/:id —— 撤销按人设置（恢复跟随全局）
 func DeleteUserForumQuota(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	uid, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -110,7 +111,7 @@ func DeleteUserForumQuota(c *gin.Context) {
 
 // ListUserForumQuotas GET /api/admin/forum-quota/users —— 所有被单独设置过的用户
 func ListUserForumQuotas(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	list, err := models.ListUserForumQuotas()

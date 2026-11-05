@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"nvs-server/aiclient"
 	"nvs-server/config"
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/security"
@@ -191,7 +191,7 @@ func saveAudioFile(data []byte, ext string) (string, error) {
 
 // AdminSpeechModels GET /api/admin/ai/audio-models —— 供后台提示「有没有可用的语音模型」
 func AdminSpeechModels(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var list []aim.AiModel

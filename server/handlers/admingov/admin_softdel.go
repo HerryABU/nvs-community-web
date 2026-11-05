@@ -1,7 +1,8 @@
-package admin
+package admingov
 
 import (
 	"fmt"
+	"nvs-server/handlers/admincommon"
 	"strconv"
 	"strings"
 
@@ -25,7 +26,7 @@ var ErrContentNotFound = fmt.Errorf("content not found")
 
 // GET /api/admin/softdel — 软删除留证记录列表（type 可选过滤）
 func AdminListSoftDel(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	ctype := c.Query("type")
@@ -50,7 +51,7 @@ func AdminListSoftDel(c *gin.Context) {
 // POST /api/admin/softdel — 管理员删除/封禁内容（软删除 + 留证）
 // body: { type, id, reason?, action? }  action 可为 "delete"(默认) / "ban"
 func AdminModerateContent(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

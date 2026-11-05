@@ -1,12 +1,11 @@
 package aiadmin
 
 import (
-	"strconv"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/hctx"
 	"nvs-server/supervise"
 	"nvs-server/utils"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,7 +16,7 @@ import (
 
 // AdminListSupervised GET /api/admin/supervise/list
 func AdminListSupervised(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -34,7 +33,7 @@ func AdminListSupervised(c *gin.Context) {
 
 // AdminGetSupervised GET /api/admin/supervise/:id
 func AdminGetSupervised(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -53,7 +52,7 @@ func AdminGetSupervised(c *gin.Context) {
 // AdminSetTier POST /api/admin/supervise/:id/set-tier
 // 管理员手动改档（含降级，必须留痕）。
 func AdminSetTier(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -79,7 +78,7 @@ func AdminSetTier(c *gin.Context) {
 // AdminClearSupervised POST /api/admin/supervise/:id/clear
 // 管理员清除（不在档，但保留历史原因与日志）。
 func AdminClearSupervised(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -100,7 +99,7 @@ func AdminClearSupervised(c *gin.Context) {
 
 // AdminAddSuperviseNote POST /api/admin/supervise/:id/note
 func AdminAddSuperviseNote(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -124,7 +123,7 @@ func AdminAddSuperviseNote(c *gin.Context) {
 
 // AdminSuperviseStats GET /api/admin/supervise/stats
 func AdminSuperviseStats(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, supervise.Stats())

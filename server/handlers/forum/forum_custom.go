@@ -2,17 +2,17 @@ package forum
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
-	"time"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
+	"nvs-server/handlers/adminsite"
 	"nvs-server/handlers/emergency"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/moderation"
 	"nvs-server/security"
 	"nvs-server/utils"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -207,7 +207,7 @@ func EnterForumByRoomCode(c *gin.Context) {
 
 // isForumModerator 是否论坛管理者（管理员 或 论坛创建者）
 func isForumModerator(c *gin.Context, forum *models.Forum) bool {
-	if admin.EnsureAdmin(c) {
+	if admincommon.EnsureAdmin(c) {
 		return true
 	}
 	return forum.CreatorID != 0 && forum.CreatorID == hctx.CurrentUserID(c)
@@ -243,7 +243,7 @@ func ForumMuteUser(c *gin.Context) {
 	}
 
 	// 管理员封禁标记：管理员执行的禁言，论坛创建者无权解除
-	isAdmin := admin.IsAdminUser(c)
+	isAdmin := adminsite.IsAdminUser(c)
 
 	// upsert：已存在则更新
 	var existing models.ForumMute
@@ -290,7 +290,7 @@ func ForumUnmuteUser(c *gin.Context) {
 	}
 
 	// 创建者解禁时：管理员封禁的记录不可解
-	if !admin.IsAdminUser(c) {
+	if !adminsite.IsAdminUser(c) {
 		var m models.ForumMute
 		if err := models.DB.Where("forum_id = ? AND user_id = ?", uint(forumID), req.UserID).First(&m).Error; err == nil && m.AdminBan {
 			utils.Forbidden(c, "该禁言由管理员执行，仅管理员可解除")

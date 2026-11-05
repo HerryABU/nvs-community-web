@@ -4,15 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strings"
-	"time"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/adminsite"
 	"nvs-server/handlers/hctx"
 	"nvs-server/middleware"
 	"nvs-server/models"
 	"nvs-server/security/slidecaptcha"
 	"nvs-server/utils"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -172,7 +171,7 @@ func Logout(c *gin.Context) {
 // 无感续期：校验 HttpOnly 刷新令牌 Cookie，签发新的访问令牌（并轮换刷新令牌），
 // 失败（令牌缺失/过期/非法）则清除全部会话 Cookie 并返回 401，由前端引导重新登录。
 func Refresh(c *gin.Context) {
-	admin.RecordInbound(c, "auth-refresh")
+	adminsite.RecordInbound(c, "auth-refresh")
 	rt, err := c.Cookie("refresh_token")
 	if err != nil || rt == "" {
 		middleware.ClearTokenCookie(c)

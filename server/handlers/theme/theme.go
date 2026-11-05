@@ -1,7 +1,7 @@
 package theme
 
 import (
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/hctx"
 	"nvs-server/utils"
 
@@ -62,7 +62,7 @@ func UpdateMyTheme(c *gin.Context) {
 // UpdateSiteTheme PUT /api/theme/site（仅管理员）
 // 保存站点默认主题：对全部访客生效，需二次确认的醒目提示由前端负责。
 func UpdateSiteTheme(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

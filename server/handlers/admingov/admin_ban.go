@@ -1,6 +1,7 @@
-package admin
+package admingov
 
 import (
+	"nvs-server/handlers/admincommon"
 	"strconv"
 	"time"
 
@@ -21,7 +22,7 @@ import (
 // AdminListNovels 管理员查小说列表（含已封禁/软删除），支持标题/作者搜索。
 // GET /api/admin/novels?search=&page=&page_size=
 func AdminListNovels(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	search := c.Query("search")
@@ -108,7 +109,7 @@ func AdminListNovels(c *gin.Context) {
 // 注：路由挂在 /api/admin/recompute-novel-stats 而非 /api/admin/novels/...，
 // 以免与 /novels/:id/chapters 的通配段冲突触发路由 panic。
 func AdminRecomputeNovelStats(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	if idStr := c.Query("id"); idStr != "" {
@@ -139,7 +140,7 @@ func AdminRecomputeNovelStats(c *gin.Context) {
 // AdminListChapters 管理员查某小说的章节列表（含已封禁/软删除）。
 // GET /api/admin/novels/:id/chapters
 func AdminListChapters(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	novelID, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -194,7 +195,7 @@ func AdminListChapters(c *gin.Context) {
 // AdminRestoreContent 解封/恢复软删除内容（清除 deleted_at 与 ban_reason）。
 // POST /api/admin/softdel/restore  body: { type, id }
 func AdminRestoreContent(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {

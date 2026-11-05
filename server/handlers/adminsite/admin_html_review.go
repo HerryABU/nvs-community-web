@@ -1,4 +1,4 @@
-package admin
+package adminsite
 
 // 应用扩展（UserHTML）安全预检与管理员审核：
 //   - 解压前预检命中高危 → 原样封存 ZIP（不解压），状态 quarantine
@@ -11,6 +11,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"fmt"
+	"nvs-server/handlers/admincommon"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -49,7 +50,7 @@ func NotifyAdminsHTMLQuarantine(item *softdel.UserHTML) {
 
 // AdminListHTMLs GET /api/admin/userhtmls?status= — 全站扩展列表（可按审核状态过滤）
 func AdminListHTMLs(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	status := strings.TrimSpace(c.Query("status"))
@@ -134,7 +135,7 @@ func extractQuarantined(item *softdel.UserHTML) (string, []utils.ZipEntry, error
 //     quarantine → 先补解压再 approved（未解压过的必须解压成功才能放行）
 //   - reject：→ rejected；purge_file=true 时连封存的原始 ZIP 一并删除
 func AdminReviewHTML(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -245,7 +246,7 @@ func AdminReviewHTML(c *gin.Context) {
 
 // AdminGetHTMLScan GET /api/admin/userhtmls/:id/scan — 查看某扩展的预检扫描结果
 func AdminGetHTMLScan(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)

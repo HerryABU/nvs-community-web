@@ -8,15 +8,14 @@ package apikey
 import (
 	"fmt"
 	"net"
-	"strconv"
-	"strings"
-	"time"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/security"
 	"nvs-server/utils"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
@@ -303,7 +302,7 @@ func DeleteAPIKey(c *gin.Context) {
 
 // GetRateLimitConfig GET /api/admin/ratelimit/config
 func GetRateLimitConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	cfg := apikeym.LoadAPIRateLimitConfig()
@@ -316,7 +315,7 @@ func GetRateLimitConfig(c *gin.Context) {
 
 // UpdateRateLimitConfig PUT /api/admin/ratelimit/config —— 保存后立即热生效
 func UpdateRateLimitConfig(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var cfg apikeym.APIRateLimitConfig
@@ -334,7 +333,7 @@ func UpdateRateLimitConfig(c *gin.Context) {
 
 // ListRateLimitLogs GET /api/admin/ratelimit/logs?type=&page=&page_size=
 func ListRateLimitLogs(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -350,7 +349,7 @@ func ListRateLimitLogs(c *gin.Context) {
 
 // GetRateLimitStats GET /api/admin/ratelimit/stats
 func GetRateLimitStats(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	utils.Success(c, security.RateLimitStats())
@@ -358,7 +357,7 @@ func GetRateLimitStats(c *gin.Context) {
 
 // ClearRateLimits POST /api/admin/ratelimit/clear —— 清空内存限流计数（误判解封）
 func ClearRateLimits(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	security.ClearRateLimits()
@@ -367,7 +366,7 @@ func ClearRateLimits(c *gin.Context) {
 
 // AdminListAPIKeys GET /api/admin/ratelimit/keys —— 全站用户 Key 一览（附用户名）
 func AdminListAPIKeys(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var keys []apikeym.APIKey
@@ -418,7 +417,7 @@ func AdminListAPIKeys(c *gin.Context) {
 
 // AdminRegenerateAPIKey POST /api/admin/ratelimit/keys/:id/regenerate —— 管理员重生成任意 Key（旧 Key 立即失效）
 func AdminRegenerateAPIKey(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -440,7 +439,7 @@ func AdminRegenerateAPIKey(c *gin.Context) {
 
 // AdminUpdateAPIKey PATCH /api/admin/ratelimit/keys/:id —— 管理员修改任意 Key（启停 / 备注）
 func AdminUpdateAPIKey(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -472,7 +471,7 @@ func AdminUpdateAPIKey(c *gin.Context) {
 
 // AdminDeleteAPIKey DELETE /api/admin/ratelimit/keys/:id —— 管理员删除（吊销）任意 Key
 func AdminDeleteAPIKey(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -490,7 +489,7 @@ func AdminDeleteAPIKey(c *gin.Context) {
 // 故此处校验「该 Key 当前是否可正常用于鉴权」：活跃、未封禁、未过期、
 // 归属账号存在且未被按人策略禁用、配额 > 0。任一项异常即标记不通。
 func AdminTestAPIKey(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)

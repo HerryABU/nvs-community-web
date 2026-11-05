@@ -1,4 +1,4 @@
-package admin
+package admingov
 
 // 漏洞整改管理 API（公安部令第176号 第七条第六项：漏洞隐患整改闭环留痕）：
 //   GET    /api/admin/vulnerabilities          漏洞列表（支持 status/severity 筛选 + 统计）
@@ -9,6 +9,7 @@ package admin
 
 import (
 	"fmt"
+	"nvs-server/handlers/admincommon"
 	"strconv"
 	"strings"
 	"time"
@@ -23,7 +24,7 @@ import (
 // ListVulnerabilities 漏洞列表 + 统计
 // GET /api/admin/vulnerabilities?status=pending&severity=high
 func ListVulnerabilities(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	status := c.Query("status")
@@ -43,7 +44,7 @@ func ListVulnerabilities(c *gin.Context) {
 // CreateVulnerability 新建漏洞记录
 // POST /api/admin/vulnerabilities
 func CreateVulnerability(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -82,7 +83,7 @@ func CreateVulnerability(c *gin.Context) {
 // UpdateVulnerability 更新漏洞记录（状态流转：pending → fixing → fixed/ignored）
 // PUT /api/admin/vulnerabilities/:id
 func UpdateVulnerability(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -155,7 +156,7 @@ func UpdateVulnerability(c *gin.Context) {
 // DeleteVulnerability 删除漏洞记录
 // DELETE /api/admin/vulnerabilities/:id
 func DeleteVulnerability(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -166,7 +167,7 @@ func DeleteVulnerability(c *gin.Context) {
 // ExportVulnerabilities 导出漏洞报告 CSV（供配合公安检查）
 // GET /api/admin/vulnerabilities/export
 func ExportVulnerabilities(c *gin.Context) {
-	if !EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var list []security.Vulnerability

@@ -1,12 +1,11 @@
 package moderation
 
 import (
-	"regexp"
-	"strconv"
-
-	"nvs-server/handlers/admin"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/security"
 	"nvs-server/utils"
+	"regexp"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	securitym "nvs-server/models/security"
@@ -42,7 +41,7 @@ func normalizeXssAction(action string) string {
 
 // GET /api/admin/xss-rules — 列出所有 XSS 规则
 func ListXssRules(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	rules, err := securitym.ListXssRules()
@@ -55,7 +54,7 @@ func ListXssRules(c *gin.Context) {
 
 // POST /api/admin/xss-rules — 新增 XSS 规则
 func CreateXssRule(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
@@ -104,7 +103,7 @@ func CreateXssRule(c *gin.Context) {
 
 // PUT /api/admin/xss-rules/:id — 更新 XSS 规则
 func UpdateXssRule(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -161,7 +160,7 @@ func UpdateXssRule(c *gin.Context) {
 
 // DELETE /api/admin/xss-rules/:id — 删除 XSS 规则
 func DeleteXssRule(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -175,7 +174,7 @@ func DeleteXssRule(c *gin.Context) {
 
 // POST /api/admin/xss-rules/test — 测试正则规则（不落库，返回匹配结果）
 func TestXssRule(c *gin.Context) {
-	if !admin.EnsureAdmin(c) {
+	if !admincommon.EnsureAdmin(c) {
 		return
 	}
 	var req struct {
