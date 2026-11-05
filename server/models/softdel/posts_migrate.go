@@ -1,10 +1,11 @@
-package models
+package softdel
 
 import (
 	"fmt"
 	"strings"
 
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -22,7 +23,7 @@ import (
 //     重建方案，重建后由调用方触发 AutoMigrate 补回索引；
 //   - MySQL：直接 ALTER TABLE DROP COLUMN。
 func DropPostDeletedAt(db *gorm.DB) error {
-	if !db.Migrator().HasColumn(&Post{}, "deleted_at") {
+	if !db.Migrator().HasColumn(&models.Post{}, "deleted_at") {
 		return nil // 已是目标结构，无需迁移
 	}
 	if db.Dialector.Name() == "sqlite" {
@@ -59,7 +60,7 @@ func rebuildPostsSQLite(db *gorm.DB) error {
 	// 修复 AUTOINCREMENT 序列，避免新插入主键冲突
 	_ = db.Exec("UPDATE sqlite_sequence SET seq = (SELECT COALESCE(MAX(id),0) FROM posts) WHERE name = 'posts'").Error
 	// 重建索引（posts 的复合/单列索引在重建后随旧表消失）
-	// 注意：此处不用 db.AutoMigrate(&Post{})——重建表已带与模型一致的外键约束，
+	// 注意：此处不用 db.AutoMigrate(&models.Post{})——重建表已带与模型一致的外键约束，
 	// 直接显式建索引即可；若 AutoMigrate 检测到任何差异会触发 SQLite 12-step 表重建，
 	// 其数据拷贝只复制差异列（GORM 已知行为），有数据丢失风险。
 	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_posts_thread_created ON posts(thread_id, created_at)").Error; err != nil {
@@ -95,16 +96,16 @@ func DropLegacyIndexes(db *gorm.DB) error {
 		model interface{}
 		name  string
 	}{
-		{&Thread{}, "idx_threads_forum_id"},
-		{&Comment{}, "idx_comments_novel_id"},
-		{&Comment{}, "idx_comments_parent_id"}, // 旧匿名索引（ParentID 原为 index），被具名 idx_comments_parent 替代
-		{&Notification{}, "idx_notif_user_read"},
-		{&UserAuditLog{}, "idx_user_audit_logs_user_id"},
-		{&ZoneAccessLog{}, "idx_zone_access_logs_user_id"},
-		{&ZoneAccessLog{}, "idx_zone_access_logs_zone"},
-		{&ForumMute{}, "idx_forum_mutes_forum_id"},
-		{&ForumMute{}, "idx_forum_mutes_user_id"},
-		{&Novel{}, "idx_novels_author_id"},
+		{&models.Thread{}, "idx_threads_forum_id"},
+		{&models.Comment{}, "idx_comments_novel_id"},
+		{&models.Comment{}, "idx_comments_parent_id"}, // 旧匿名索引（ParentID 原为 index），被具名 idx_comments_parent 替代
+		{&models.Notification{}, "idx_notif_user_read"},
+		{&models.UserAuditLog{}, "idx_user_audit_logs_user_id"},
+		{&models.ZoneAccessLog{}, "idx_zone_access_logs_user_id"},
+		{&models.ZoneAccessLog{}, "idx_zone_access_logs_zone"},
+		{&models.ForumMute{}, "idx_forum_mutes_forum_id"},
+		{&models.ForumMute{}, "idx_forum_mutes_user_id"},
+		{&models.Novel{}, "idx_novels_author_id"},
 	}
 	for _, l := range legacy {
 		if db.Migrator().HasIndex(l.model, l.name) {
@@ -118,7 +119,7 @@ func DropLegacyIndexes(db *gorm.DB) error {
 // 供「删帖级联删回帖」场景在物理删除前批量留证（方案A必需，否则回帖数据消失且不可追溯）。
 // 返回归档条数；单条失败不阻断（best-effort，但会统计失败数）。
 func ArchivePostsByThread(db *gorm.DB, threadID, deletedBy uint, operator, reason, source string) (int, error) {
-	var posts []Post
+	var posts []models.Post
 	if err := db.Unscoped().Where("thread_id = ?", threadID).Find(&posts).Error; err != nil {
 		return 0, err
 	}
@@ -130,7 +131,7 @@ func ArchivePostsByThread(db *gorm.DB, threadID, deletedBy uint, operator, reaso
 		if runes := []rune(summary); len(runes) > 200 {
 			summary = string(runes[:200])
 		}
-		if err := ArchiveSoftDeleteHook(source, "post", p.ID, deletedBy, operator, reason, summary, p); err != nil {
+		if err := models.ArchiveSoftDeleteHook(source, "post", p.ID, deletedBy, operator, reason, summary, p); err != nil {
 			if firstErr == nil {
 				firstErr = err
 			}

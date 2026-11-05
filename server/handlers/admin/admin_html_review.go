@@ -24,10 +24,11 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	softdel "nvs-server/models/softdel"
 )
 
 // notifyAdminsHTMLReview 给全部管理员推送站内通知（best-effort）
-func notifyAdminsHTMLReview(item *models.UserHTML, title, content string) {
+func notifyAdminsHTMLReview(item *softdel.UserHTML, title, content string) {
 	var admins []models.User
 	models.DB.Where("role = ?", "admin").Find(&admins)
 	for _, a := range admins {
@@ -37,7 +38,7 @@ func notifyAdminsHTMLReview(item *models.UserHTML, title, content string) {
 }
 
 // NotifyAdminsHTMLQuarantine 预检未通过 → 通知管理员有待处置封存件
-func NotifyAdminsHTMLQuarantine(item *models.UserHTML) {
+func NotifyAdminsHTMLQuarantine(item *softdel.UserHTML) {
 	reason := item.ScanBlockReason
 	if reason == "" {
 		reason = "安全预检命中高危代码"
@@ -56,7 +57,7 @@ func AdminListHTMLs(c *gin.Context) {
 	if status != "" {
 		q = q.Where("review_status = ?", status)
 	}
-	var list []models.UserHTML
+	var list []softdel.UserHTML
 	if err := q.Find(&list).Error; err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -75,7 +76,7 @@ func AdminListHTMLs(c *gin.Context) {
 		}
 	}
 	type row struct {
-		models.UserHTML
+		softdel.UserHTML
 		Username string `json:"username"`
 	}
 	rows := make([]row, 0, len(list))
@@ -86,7 +87,7 @@ func AdminListHTMLs(c *gin.Context) {
 }
 
 // extractQuarantined 把封存的 ZIP 解压到正式目录，返回 (extractDir, entries, error)
-func extractQuarantined(item *models.UserHTML) (string, []utils.ZipEntry, error) {
+func extractQuarantined(item *softdel.UserHTML) (string, []utils.ZipEntry, error) {
 	data, err := os.ReadFile(item.QuarantinePath)
 	if err != nil {
 		return "", nil, fmt.Errorf("读取封存件失败: %w", err)
@@ -137,7 +138,7 @@ func AdminReviewHTML(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var item models.UserHTML
+	var item softdel.UserHTML
 	if err := models.DB.First(&item, id).Error; err != nil {
 		utils.NotFound(c, "扩展不存在")
 		return
@@ -248,7 +249,7 @@ func AdminGetHTMLScan(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var item models.UserHTML
+	var item softdel.UserHTML
 	if err := models.DB.First(&item, id).Error; err != nil {
 		utils.NotFound(c, "扩展不存在")
 		return

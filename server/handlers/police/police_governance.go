@@ -8,6 +8,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	softdel "nvs-server/models/softdel"
 )
 
 // PoliceGovernanceOverview GET /api/police/governance/overview
@@ -20,7 +21,7 @@ func PoliceGovernanceOverview(c *gin.Context) {
 	}
 	counts := map[string]int64{}
 	var total int64
-	for ctype, table := range models.SoftDelTables {
+	for ctype, table := range softdel.SoftDelTables {
 		var n int64
 		models.DB.Table(table).Count(&n)
 		counts[ctype] = n
@@ -44,7 +45,7 @@ func PoliceGovernanceList(c *gin.Context) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	items, err := models.ListSoftDel(ctype, limit)
+	items, err := softdel.ListSoftDel(ctype, limit)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return

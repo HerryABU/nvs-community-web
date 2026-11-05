@@ -18,6 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/blog"
 	quota "nvs-server/models/quota"
+	softdel "nvs-server/models/softdel"
 )
 
 // ==================== UserFrame 模板管理 ====================
@@ -113,7 +114,7 @@ func CreateFrame(c *gin.Context) {
 		return
 	}
 
-	frame := &models.UserFrame{
+	frame := &softdel.UserFrame{
 		UserID:       userID,
 		NovelID:      req.NovelID,
 		BlogID:       req.BlogID,
@@ -172,7 +173,7 @@ func CreateFrame(c *gin.Context) {
 // ListFrames GET /api/userframes
 func ListFrames(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
-	var frames []models.UserFrame
+	var frames []softdel.UserFrame
 	models.DB.Where("user_id = ?", userID).Order("updated_at DESC").Find(&frames)
 	utils.Success(c, frames)
 }
@@ -182,7 +183,7 @@ func GetFrame(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	frameID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
-	var frame models.UserFrame
+	var frame softdel.UserFrame
 	if err := models.DB.Where("id = ? AND user_id = ?", frameID, userID).First(&frame).Error; err != nil {
 		utils.NotFound(c, "模板不存在")
 		return
@@ -205,7 +206,7 @@ func UpdateFrame(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	frameID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
-	var frame models.UserFrame
+	var frame softdel.UserFrame
 	if err := models.DB.Where("id = ? AND user_id = ?", frameID, userID).First(&frame).Error; err != nil {
 		utils.NotFound(c, "模板不存在")
 		return
@@ -340,7 +341,7 @@ func DeleteFrame(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	frameID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
-	var frame models.UserFrame
+	var frame softdel.UserFrame
 	if err := models.DB.Where("id = ? AND user_id = ?", frameID, userID).First(&frame).Error; err != nil {
 		utils.NotFound(c, "模板不存在")
 		return
@@ -353,7 +354,7 @@ func DeleteFrame(c *gin.Context) {
 
 // ListPublicFrames GET /api/userframes/public
 func ListPublicFrames(c *gin.Context) {
-	var frames []models.UserFrame
+	var frames []softdel.UserFrame
 	models.DB.Where("is_public = ? AND is_active = ?", true, true).
 		Order("updated_at DESC").Limit(50).Find(&frames)
 	utils.Success(c, frames)
@@ -366,10 +367,10 @@ func GetNovelFrames(c *gin.Context) {
 	// 先查作者
 	novel, err := models.GetNovelByID(uint(novelID))
 	if err != nil {
-		utils.Success(c, []models.UserFrame{})
+		utils.Success(c, []softdel.UserFrame{})
 		return
 	}
-	var frames []models.UserFrame
+	var frames []softdel.UserFrame
 	models.DB.Where("user_id = ? AND novel_id = ? AND frame_type = ? AND is_active = ?",
 		novel.AuthorID, uint(novelID), "reader", true).
 		Order("updated_at DESC").Find(&frames)
@@ -383,10 +384,10 @@ func GetBlogFrames(c *gin.Context) {
 	// 先查作者
 	blog, err := blog.GetBlogByID(uint(blogID))
 	if err != nil {
-		utils.Success(c, []models.UserFrame{})
+		utils.Success(c, []softdel.UserFrame{})
 		return
 	}
-	var frames []models.UserFrame
+	var frames []softdel.UserFrame
 	models.DB.Where("user_id = ? AND blog_id = ? AND frame_type = ? AND is_active = ?",
 		blog.AuthorID, uint(blogID), "reader", true).
 		Order("updated_at DESC").Find(&frames)
@@ -401,7 +402,7 @@ func GetAuthorFrames(c *gin.Context) {
 		utils.NotFound(c, "作者不存在")
 		return
 	}
-	var frames []models.UserFrame
+	var frames []softdel.UserFrame
 	models.DB.Where("user_id = ? AND frame_type = ? AND is_active = ?",
 		user.ID, "author", true).
 		Order("updated_at DESC").Find(&frames)

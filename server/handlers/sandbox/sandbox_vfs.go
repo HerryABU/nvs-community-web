@@ -9,6 +9,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	softdel "nvs-server/models/softdel"
 )
 
 // ==================== 沙盒虚拟文件系统 (VFS) ====================
@@ -167,7 +168,7 @@ func requireOwnedHTML(c *gin.Context, htmlID uint) bool {
 		utils.Unauthorized(c, "请先登录")
 		return false
 	}
-	var htmlItem models.UserHTML
+	var htmlItem softdel.UserHTML
 	if err := models.DB.Where("id = ? AND user_id = ?", htmlID, uid).First(&htmlItem).Error; err != nil {
 		utils.Forbidden(c, "无权操作该沙盒")
 		return false

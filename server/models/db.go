@@ -57,6 +57,7 @@ var BlogFeedProvider func(ids []uint, window int) ([]FeedItem, int64, error)
 //	models/ai        —— AiModel / AiCallLog / AiAgent / AiMediaTask / AgentSubmission 等核心模型
 //	models/quota     —— UserWebQuota / WebAccessLog / UserPublishLog / HTMLQuotaOverride 等额度模型
 //	models/wallet    —— TokenLedger / UserTokenBalance / CardKey / RechargeOrder 等代币与支付模型
+//	models/softdel   —— SoftDel* 留证表 / UserFrame / UserHTML（并注册迁移辅助钩子）
 func AllModels() []interface{} {
 	list := []interface{}{
 		&User{}, &Novel{}, &NovelCategory{}, &Chapter{}, &Comment{}, &Rating{},
@@ -65,13 +66,10 @@ func AllModels() []interface{} {
 		&Forum{}, &Thread{}, &Post{}, &ForumMute{}, &VipApplication{}, &Report{},
 		&WithdrawalRequest{}, &EarningsRecord{}, &BlacklistIP{}, &PlatformConfig{},
 		&FederatedSite{}, &FederatedNovel{}, &FederatedInbound{}, &BookShelf{}, &Follow{},
-		&UserFrame{}, &UserHTML{}, &UserAuditLog{},
+		&UserAuditLog{},
 		&ZoneAccessLog{}, // 隔离墙（敏感分区）进入记录，176号令合规
 		&Notification{},  // 站内消息通知
 		&ReadingNote{},   // 精读：书签 + 批注（含公开/私密）
-		// 软删除留证表（softdel_*，合规证据留存）
-		&SoftDelComment{}, &SoftDelNovel{}, &SoftDelChapter{}, &SoftDelUser{},
-		&SoftDelThread{}, &SoftDelPost{}, &SoftDelBlog{}, &SoftDelForum{},
 		// API Key 体系：用户级 Key / 联邦双向 Key / 按身份访问日志 / 按人 API 策略
 		&APIKey{}, &FederatedPeerKey{}, &ApiAccessLog{}, &UserAPIPolicy{},
 		// 自建论坛额度：按人覆盖（管理员可削减/放开某人的建版数）
@@ -180,19 +178,31 @@ func AutoMigrateAll(db *gorm.DB) error {
 	}
 	// 方案A：移除 posts.deleted_at 列（统一走 softdel_posts 留证，幂等）
 	// 注意顺序：先 AutoMigrate（建表），再移除历史遗留列
-	if err := DropPostDeletedAtHook(db); err != nil {
-		return err
+	// 这些辅助实现已下沉到 models/softdel，由该子包 init() 注册；未加载时为 nil，
+	// 跳过即可（main.go / 测试入口均已 blank import 保证生产与测试行为不变）。
+	if DropPostDeletedAtHook != nil {
+		if err := DropPostDeletedAtHook(db); err != nil {
+			return err
+		}
 	}
 	// 清理被新复合索引替代的旧单列索引（冗余索引会造成写放大）
-	if err := DropLegacyIndexesHook(db); err != nil {
-		return err
+	if DropLegacyIndexesHook != nil {
+		if err := DropLegacyIndexesHook(db); err != nil {
+			return err
+		}
 	}
 	// 楼层模型：存量评论/回帖补 root_id 与 floor_no（幂等，仅缺失时回填）
 	// 注意：回填必须用传入的 db，AutoMigrateAll 阶段全局 DB 可能尚未就绪（测试场景）
-	BackfillCommentFloorsHook(db)
-	BackfillPostFloorsHook(db)
+	if BackfillCommentFloorsHook != nil {
+		BackfillCommentFloorsHook(db)
+	}
+	if BackfillPostFloorsHook != nil {
+		BackfillPostFloorsHook(db)
+	}
 	// 应用扩展：存量已解压扩展补 is_extracted（新列默认 false，需按 extract_dir 回填）
-	BackfillUserHTMLExtractedHook(db)
+	if BackfillUserHTMLExtractedHook != nil {
+		BackfillUserHTMLExtractedHook(db)
+	}
 	return nil
 }
 

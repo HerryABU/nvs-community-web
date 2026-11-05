@@ -8,6 +8,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"nvs-server/models"
+	softdel "nvs-server/models/softdel"
 )
 
 // setupQuotaTestDB 独立内存库（唯一名，避免与其它包的共享内存库互相污染）
@@ -18,7 +19,7 @@ func setupQuotaTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开内存测试库失败: %v", err)
 	}
-	if err := db.AutoMigrate(&models.UserHTML{}, &HTMLQuotaOverride{}, &models.PlatformConfig{}); err != nil {
+	if err := db.AutoMigrate(&softdel.UserHTML{}, &HTMLQuotaOverride{}, &models.PlatformConfig{}); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
 	old := models.DB
@@ -28,7 +29,7 @@ func setupQuotaTestDB(t *testing.T) {
 
 func seedHTML(t *testing.T, userID uint, size int64) {
 	t.Helper()
-	h := &models.UserHTML{
+	h := &softdel.UserHTML{
 		UserID: userID, Name: "p", ExtractDir: "/tmp/p", EntryFile: "index.html", TotalSize: size,
 	}
 	if err := models.DB.Create(h).Error; err != nil {

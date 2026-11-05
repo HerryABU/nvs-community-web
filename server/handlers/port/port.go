@@ -9,6 +9,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	softdel "nvs-server/models/softdel"
 )
 
 // AllocatePort POST /api/port/allocate
@@ -32,14 +33,14 @@ func AllocatePort(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 
 	// 检查同一用户下项目名唯一
-	var existing models.UserHTML
+	var existing softdel.UserHTML
 	if err := models.DB.Where("user_id = ? AND project_name = ? AND port > 0 AND is_active = ?", userID, req.ProjectName, true).First(&existing).Error; err == nil {
 		utils.BadRequest(c, "项目名 \""+req.ProjectName+"\" 已被使用，请换一个")
 		return
 	}
 
 	// 🔒 安全审计 L4：端口绑定前校验 html 归属（防 IDOR 改写他人扩展）
-	var htmlItem models.UserHTML
+	var htmlItem softdel.UserHTML
 	if err := models.DB.Where("id = ? AND user_id = ?", req.HTMLID, userID).First(&htmlItem).Error; err != nil {
 		utils.Forbidden(c, "无权操作该扩展")
 		return
@@ -57,7 +58,7 @@ func AllocatePort(c *gin.Context) {
 	middleware.GlobalNamedProxy.Register(userID, req.ProjectName, port, proxyURL)
 
 	// 保存端口+项目名到数据库（已校验归属）
-	models.DB.Model(&models.UserHTML{}).Where("id = ? AND user_id = ?", req.HTMLID, userID).Updates(map[string]interface{}{
+	models.DB.Model(&softdel.UserHTML{}).Where("id = ? AND user_id = ?", req.HTMLID, userID).Updates(map[string]interface{}{
 		"port":         port,
 		"project_name": req.ProjectName,
 	})
@@ -100,7 +101,7 @@ func ReleasePort(c *gin.Context) {
 	}
 
 	// 清除数据库（🔒 安全审计 L4：仅清除归属本人的 html 记录）
-	models.DB.Model(&models.UserHTML{}).Where("id = ? AND user_id = ?", req.HTMLID, userID).Updates(map[string]interface{}{
+	models.DB.Model(&softdel.UserHTML{}).Where("id = ? AND user_id = ?", req.HTMLID, userID).Updates(map[string]interface{}{
 		"port":         0,
 		"project_name": "",
 	})
@@ -112,7 +113,7 @@ func ReleasePort(c *gin.Context) {
 func ListPorts(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 
-	var htmls []models.UserHTML
+	var htmls []softdel.UserHTML
 	models.DB.Where("user_id = ? AND port > 0 AND is_active = ?", userID, true).Find(&htmls)
 
 	var result []gin.H

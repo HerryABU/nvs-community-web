@@ -13,6 +13,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	softdel "nvs-server/models/softdel"
 )
 
 // HTMLReviewItem 统一的管理员审查条目（UserFrame + UserHTML）
@@ -51,7 +52,7 @@ func ListHTMLReviews(c *gin.Context) {
 	var items []HTMLReviewItem
 
 	if kind == "" || kind == "frame" {
-		var frames []models.UserFrame
+		var frames []softdel.UserFrame
 		q := models.DB.Preload("User").Order("updated_at DESC")
 		if status != "" {
 			q = q.Where("review_status = ?", status)
@@ -71,7 +72,7 @@ func ListHTMLReviews(c *gin.Context) {
 	}
 
 	if kind == "" || kind == "html" {
-		var htmls []models.UserHTML
+		var htmls []softdel.UserHTML
 		q := models.DB.Preload("User").Order("updated_at DESC")
 		if status != "" {
 			q = q.Where("review_status = ?", status)
@@ -108,7 +109,7 @@ func GetHTMLReview(c *gin.Context) {
 
 	switch kind {
 	case "frame":
-		var f models.UserFrame
+		var f softdel.UserFrame
 		if err := models.DB.First(&f, id).Error; err != nil {
 			utils.NotFound(c, "模板不存在")
 			return
@@ -126,7 +127,7 @@ func GetHTMLReview(c *gin.Context) {
 			"warnings": security.ThreatsFromJSON(f.ScanWarnings),
 		}
 	case "html":
-		var h models.UserHTML
+		var h softdel.UserHTML
 		if err := models.DB.First(&h, id).Error; err != nil {
 			utils.NotFound(c, "扩展不存在")
 			return
@@ -187,7 +188,7 @@ func ReviewHTML(c *gin.Context) {
 	// ⚠️ 必须在下方 ShouldBindJSON 之前判断并委托：请求体只能被消费一次，
 	// 若先在此解析再调用 admin.AdminReviewHTML，后者再读 body 只会拿到空内容 → 报「参数错误」。
 	if kind == "html" {
-		var h models.UserHTML
+		var h softdel.UserHTML
 		if err := models.DB.First(&h, id).Error; err == nil && !h.IsExtracted {
 			admin.AdminReviewHTML(c)
 			return
@@ -225,7 +226,7 @@ func ReviewHTML(c *gin.Context) {
 		if req.Action == "reject" {
 			updates["is_active"] = false
 		}
-		if err := models.DB.Model(&models.UserFrame{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+		if err := models.DB.Model(&softdel.UserFrame{}).Where("id = ?", id).Updates(updates).Error; err != nil {
 			utils.InternalError(c, "更新失败")
 			return
 		}
@@ -237,7 +238,7 @@ func ReviewHTML(c *gin.Context) {
 		if req.Action == "reject" {
 			updates["is_active"] = false
 		}
-		if err := models.DB.Model(&models.UserHTML{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+		if err := models.DB.Model(&softdel.UserHTML{}).Where("id = ?", id).Updates(updates).Error; err != nil {
 			utils.InternalError(c, "更新失败")
 			return
 		}

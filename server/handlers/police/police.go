@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	quota "nvs-server/models/quota"
+	softdel "nvs-server/models/softdel"
 )
 
 // ensurePoliceOrAdmin 警方取管台鉴权：仅 admin 或 police 可访问。
@@ -34,7 +35,7 @@ func PoliceListSoftDel(c *gin.Context) {
 	}
 	ctype := c.Query("type")
 	if ctype != "" {
-		if _, ok := models.SoftDelTables[ctype]; !ok {
+		if _, ok := softdel.SoftDelTables[ctype]; !ok {
 			utils.BadRequest(c, "无效的内容类型: "+ctype)
 			return
 		}
@@ -43,7 +44,7 @@ func PoliceListSoftDel(c *gin.Context) {
 	if n, err := strconv.Atoi(c.Query("limit")); err == nil && n > 0 && n <= 2000 {
 		limit = n
 	}
-	items, err := models.ListSoftDel(ctype, limit)
+	items, err := softdel.ListSoftDel(ctype, limit)
 	if err != nil {
 		utils.InternalError(c, err.Error())
 		return
@@ -58,7 +59,7 @@ func PoliceGetEvidence(c *gin.Context) {
 	}
 	ctype := c.Query("type")
 	id, _ := strconv.ParseUint(c.Query("id"), 10, 64)
-	item, err := models.GetSoftDelByID(ctype, uint(id))
+	item, err := softdel.GetSoftDelByID(ctype, uint(id))
 	if err != nil {
 		utils.NotFound(c, "取证记录不存在")
 		return
@@ -73,7 +74,7 @@ func PoliceDownloadEvidence(c *gin.Context) {
 	}
 	ctype := c.Query("type")
 	id, _ := strconv.ParseUint(c.Query("id"), 10, 64)
-	item, err := models.GetSoftDelByID(ctype, uint(id))
+	item, err := softdel.GetSoftDelByID(ctype, uint(id))
 	if err != nil {
 		utils.NotFound(c, "取证记录不存在")
 		return
@@ -97,7 +98,7 @@ func PoliceExportPackage(c *gin.Context) {
 		"exported_at": time.Now().Format("2006-01-02 15:04:05"),
 		"exported_by": hctx.CurrentUserRole(c),
 	}
-	if soft, err := models.ListSoftDel("", 2000); err == nil {
+	if soft, err := softdel.ListSoftDel("", 2000); err == nil {
 		pkg["soft_deleted"] = soft
 	}
 	if za, _, err := models.ListZoneAccessPage(models.ZoneAccessFilter{Page: 1, PageSize: 500}); err == nil {

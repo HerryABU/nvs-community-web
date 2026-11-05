@@ -8,6 +8,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"nvs-server/models"
+	softdel "nvs-server/models/softdel"
 )
 
 // setupWebQuotaTestDB 独立内存库（唯一名，避免与同包其他测试共享污染）
@@ -121,11 +122,11 @@ func TestPathSizeBytes(t *testing.T) {
 func TestCheckAndApplyWebPublishSizeQuota(t *testing.T) {
 	db := setupWebQuotaTestDB(t)
 
-	// 造一个用户 + 一个已公开 models.UserHTML（5MB）+ 一个待公开 models.UserHTML（5MB）
+	// 造一个用户 + 一个已公开 softdel.UserHTML（5MB）+ 一个待公开 softdel.UserHTML（5MB）
 	db.Create(&models.User{Username: "u1", Email: "u1@test.com", PasswordHash: "x"})
-	h1 := models.UserHTML{UserID: 1, Name: "h1", ExtractDir: "x", EntryFile: "index.html", IsPublic: true, TotalSize: 5 * 1024 * 1024}
+	h1 := softdel.UserHTML{UserID: 1, Name: "h1", ExtractDir: "x", EntryFile: "index.html", IsPublic: true, TotalSize: 5 * 1024 * 1024}
 	db.Create(&h1)
-	h2 := models.UserHTML{UserID: 1, Name: "h2", ExtractDir: "y", EntryFile: "index.html", TotalSize: 5 * 1024 * 1024}
+	h2 := softdel.UserHTML{UserID: 1, Name: "h2", ExtractDir: "y", EntryFile: "index.html", TotalSize: 5 * 1024 * 1024}
 	db.Create(&h2)
 
 	// 场景 1：数量够、大小不限 → 直接公开
@@ -139,7 +140,7 @@ func TestCheckAndApplyWebPublishSizeQuota(t *testing.T) {
 	// 场景 2：大小额度 6MB，已用 5MB + 新项目 5MB = 10MB > 6MB → 超额审核
 	_ = SetWebPublishQuotaSizeConfig(6)
 	// 先把 h2 改回私有
-	db.Model(&models.UserHTML{}).Where("id = ?", h2.ID).Updates(map[string]interface{}{"is_public": false, "review_status": "approved"})
+	db.Model(&softdel.UserHTML{}).Where("id = ?", h2.ID).Updates(map[string]interface{}{"is_public": false, "review_status": "approved"})
 	allowed, needReview, reason, err := CheckAndApplyWebPublish(1, WebQuotaTargetHTML, h2.ID)
 	if err != nil {
 		t.Fatalf("不应出错: %v", err)
@@ -151,7 +152,7 @@ func TestCheckAndApplyWebPublishSizeQuota(t *testing.T) {
 		t.Errorf("应返回超额原因")
 	}
 	// 目标应进入 quota_review 且不公开
-	var h2After models.UserHTML
+	var h2After softdel.UserHTML
 	db.First(&h2After, h2.ID)
 	if h2After.IsPublic || h2After.ReviewStatus != ReviewStatusQuotaReview {
 		t.Errorf("目标应 quota_review 且不公开，实际 public=%v status=%s", h2After.IsPublic, h2After.ReviewStatus)
@@ -178,8 +179,8 @@ func TestCheckAndApplyWebPublishCountQuotaStillWorks(t *testing.T) {
 	// 数量额度 1，已公开 1 个 → 新的转审核（回归：数量维度不能坏）
 	_ = SetWebPublishQuotaConfig(1)
 	_ = SetWebPublishQuotaSizeConfig(0)
-	db.Create(&models.UserHTML{UserID: 1, Name: "pub", ExtractDir: "x", EntryFile: "index.html", IsPublic: true, TotalSize: 1024})
-	h2 := models.UserHTML{UserID: 1, Name: "new", ExtractDir: "y", EntryFile: "index.html", TotalSize: 1024}
+	db.Create(&softdel.UserHTML{UserID: 1, Name: "pub", ExtractDir: "x", EntryFile: "index.html", IsPublic: true, TotalSize: 1024})
+	h2 := softdel.UserHTML{UserID: 1, Name: "new", ExtractDir: "y", EntryFile: "index.html", TotalSize: 1024}
 	db.Create(&h2)
 	allowed, needReview, reason, err := CheckAndApplyWebPublish(1, WebQuotaTargetHTML, h2.ID)
 	if err != nil || allowed || !needReview {

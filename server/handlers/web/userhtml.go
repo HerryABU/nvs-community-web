@@ -22,6 +22,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	quota "nvs-server/models/quota"
+	softdel "nvs-server/models/softdel"
 )
 
 // ==================== UserHTML 扩展HTML（ZIP上传） ====================
@@ -193,7 +194,7 @@ func UploadZipHTML(c *gin.Context) {
 		if blockReason == "" {
 			blockReason = "内容安全预检命中高危代码"
 		}
-		item := &models.UserHTML{
+		item := &softdel.UserHTML{
 			UserID:          userID,
 			NovelID:         novelID,
 			Name:            name,
@@ -222,7 +223,7 @@ func UploadZipHTML(c *gin.Context) {
 		// 由数据库填默认值——哪怕用 map 显式传 false 也一样。这会导致封存件被误标成
 		// 「已解压 + 已启用」，放行时跳过补解压、详情页也走错分支。
 		// 因此建记录后再用 Updates(map) 强制写回（Updates 不受默认值影响，按列精确写）。
-		models.DB.Model(&models.UserHTML{}).Where("id = ?", item.ID).Updates(map[string]interface{}{
+		models.DB.Model(&softdel.UserHTML{}).Where("id = ?", item.ID).Updates(map[string]interface{}{
 			"is_extracted":    false,
 			"is_active":       false,
 			"is_public":       false,
@@ -312,7 +313,7 @@ func UploadZipHTML(c *gin.Context) {
 		isDownloadable = false
 	}
 
-	htmlItem := &models.UserHTML{
+	htmlItem := &softdel.UserHTML{
 		UserID:         userID,
 		NovelID:        novelID,
 		Name:           name,
@@ -365,7 +366,7 @@ func UploadZipHTML(c *gin.Context) {
 // ListHTMLs GET /api/userhtmls
 func ListHTMLs(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
-	var htmls []models.UserHTML
+	var htmls []softdel.UserHTML
 	models.DB.Where("user_id = ?", userID).Order("updated_at DESC").Find(&htmls)
 	utils.Success(c, htmls)
 }
@@ -375,7 +376,7 @@ func GetHTML(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	htmlID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
-	var htmlItem models.UserHTML
+	var htmlItem softdel.UserHTML
 	if err := models.DB.Where("id = ? AND user_id = ?", htmlID, userID).First(&htmlItem).Error; err != nil {
 		utils.NotFound(c, "扩展不存在")
 		return
@@ -395,7 +396,7 @@ func UpdateHTML(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	htmlID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
-	var htmlItem models.UserHTML
+	var htmlItem softdel.UserHTML
 	if err := models.DB.Where("id = ? AND user_id = ?", htmlID, userID).First(&htmlItem).Error; err != nil {
 		utils.NotFound(c, "扩展不存在")
 		return
@@ -481,7 +482,7 @@ func DeleteHTML(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	htmlID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
-	var htmlItem models.UserHTML
+	var htmlItem softdel.UserHTML
 	if err := models.DB.Where("id = ? AND user_id = ?", htmlID, userID).First(&htmlItem).Error; err != nil {
 		utils.NotFound(c, "扩展不存在")
 		return
@@ -495,7 +496,7 @@ func DeleteHTML(c *gin.Context) {
 // GetNovelHTMLs GET /api/novels/:id/htmls
 func GetNovelHTMLs(c *gin.Context) {
 	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var htmls []models.UserHTML
+	var htmls []softdel.UserHTML
 	models.DB.Where("novel_id = ? AND is_active = ?", uint(novelID), true).
 		Order("updated_at DESC").Find(&htmls)
 	utils.Success(c, htmls)
@@ -505,7 +506,7 @@ func GetNovelHTMLs(c *gin.Context) {
 // 获取博客关联的扩展应用（与 GetNovelHTMLs 对称，博客侧 16.1 绑定能力）
 func GetBlogHTMLs(c *gin.Context) {
 	blogID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var htmls []models.UserHTML
+	var htmls []softdel.UserHTML
 	models.DB.Where("blog_id = ? AND is_active = ?", uint(blogID), true).
 		Order("updated_at DESC").Find(&htmls)
 	utils.Success(c, htmls)

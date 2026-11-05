@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/blog"
 	siteops "nvs-server/models/siteops"
+	softdel "nvs-server/models/softdel"
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -29,7 +30,7 @@ func AdminListSoftDel(c *gin.Context) {
 	}
 	ctype := c.Query("type")
 	if ctype != "" {
-		if _, ok := models.SoftDelTables[ctype]; !ok {
+		if _, ok := softdel.SoftDelTables[ctype]; !ok {
 			utils.BadRequest(c, "无效的内容类型: "+ctype)
 			return
 		}
@@ -38,7 +39,7 @@ func AdminListSoftDel(c *gin.Context) {
 	if n, err := strconv.Atoi(c.Query("limit")); err == nil && n > 0 {
 		limit = n
 	}
-	items, err := models.ListSoftDel(ctype, limit)
+	items, err := softdel.ListSoftDel(ctype, limit)
 	if err != nil {
 		utils.InternalError(c, err.Error())
 		return
@@ -122,7 +123,7 @@ func doSoftDelete(ctype string, id uint, reason, source, action string, operator
 			return ErrContentNotFound
 		}
 		summary := utils.TruncateRunes(emergency.ToPlainText(cm.Content), 200)
-		if err := models.ArchiveSoftDelete(source, "comment", id, operatorID, operator, reason, summary, cm); err != nil {
+		if err := softdel.ArchiveSoftDelete(source, "comment", id, operatorID, operator, reason, summary, cm); err != nil {
 			return err
 		}
 		if err := models.DeleteComment(id); err != nil {
@@ -135,7 +136,7 @@ func doSoftDelete(ctype string, id uint, reason, source, action string, operator
 		if err != nil {
 			return ErrContentNotFound
 		}
-		if err := models.ArchiveSoftDelete(source, "user", id, operatorID, operator, reason, u.Username, userSnapshot(u)); err != nil {
+		if err := softdel.ArchiveSoftDelete(source, "user", id, operatorID, operator, reason, u.Username, userSnapshot(u)); err != nil {
 			return err
 		}
 		if err := models.DB.Delete(&models.User{}, id).Error; err != nil {
@@ -148,7 +149,7 @@ func doSoftDelete(ctype string, id uint, reason, source, action string, operator
 		if err != nil {
 			return ErrContentNotFound
 		}
-		if err := models.ArchiveSoftDelete(source, "novel", id, operatorID, operator, reason, n.Title, n); err != nil {
+		if err := softdel.ArchiveSoftDelete(source, "novel", id, operatorID, operator, reason, n.Title, n); err != nil {
 			return err
 		}
 		// 写入 176 封禁原因（软删除前写入，作者端可查）
@@ -168,7 +169,7 @@ func doSoftDelete(ctype string, id uint, reason, source, action string, operator
 		if err != nil {
 			return ErrContentNotFound
 		}
-		if err := models.ArchiveSoftDelete(source, "chapter", id, operatorID, operator, reason, ch.Title, ch); err != nil {
+		if err := softdel.ArchiveSoftDelete(source, "chapter", id, operatorID, operator, reason, ch.Title, ch); err != nil {
 			return err
 		}
 		// 写入 176 封禁原因（软删除前写入，作者端可查）
@@ -183,11 +184,11 @@ func doSoftDelete(ctype string, id uint, reason, source, action string, operator
 		if err != nil {
 			return ErrContentNotFound
 		}
-		if err := models.ArchiveSoftDelete(source, "thread", id, operatorID, operator, reason, t.Title, t); err != nil {
+		if err := softdel.ArchiveSoftDelete(source, "thread", id, operatorID, operator, reason, t.Title, t); err != nil {
 			return err
 		}
 		// 方案A：posts 无 deleted_at，级联删回帖前先批量归档留证，再物理删除
-		if _, aerr := models.ArchivePostsByThread(models.DB, id, operatorID, operator, reason, source); aerr != nil {
+		if _, aerr := softdel.ArchivePostsByThread(models.DB, id, operatorID, operator, reason, source); aerr != nil {
 			return aerr
 		}
 		models.DB.Where("thread_id = ?", id).Delete(&models.Post{})
@@ -205,7 +206,7 @@ func doSoftDelete(ctype string, id uint, reason, source, action string, operator
 		if err := models.DB.First(&p, id).Error; err != nil {
 			return ErrContentNotFound
 		}
-		if err := models.ArchiveSoftDelete(source, "post", id, operatorID, operator, reason, utils.TruncateRunes(emergency.ToPlainText(p.Content), 200), p); err != nil {
+		if err := softdel.ArchiveSoftDelete(source, "post", id, operatorID, operator, reason, utils.TruncateRunes(emergency.ToPlainText(p.Content), 200), p); err != nil {
 			return err
 		}
 		if err := models.DB.Delete(&models.Post{}, id).Error; err != nil {
@@ -222,7 +223,7 @@ func doSoftDelete(ctype string, id uint, reason, source, action string, operator
 		if err != nil {
 			return ErrContentNotFound
 		}
-		if err := models.ArchiveSoftDelete(source, "blog", id, operatorID, operator, reason, b.Title, b); err != nil {
+		if err := softdel.ArchiveSoftDelete(source, "blog", id, operatorID, operator, reason, b.Title, b); err != nil {
 			return err
 		}
 		models.DB.Where("blog_id = ?", id).Delete(&models.Comment{})
@@ -236,7 +237,7 @@ func doSoftDelete(ctype string, id uint, reason, source, action string, operator
 		if err != nil {
 			return ErrContentNotFound
 		}
-		if err := models.ArchiveSoftDelete(source, "forum", id, operatorID, operator, reason, f.Name, f); err != nil {
+		if err := softdel.ArchiveSoftDelete(source, "forum", id, operatorID, operator, reason, f.Name, f); err != nil {
 			return err
 		}
 		if err := models.DeleteForum(id); err != nil {

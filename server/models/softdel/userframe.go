@@ -1,9 +1,10 @@
-package models
+package softdel
 
 import (
 	"time"
 
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // UserFrame 用户自定义UI模板（用于美化小说渲染页面）
@@ -40,8 +41,8 @@ type UserFrame struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
-	User  *User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Novel *Novel `gorm:"foreignKey:NovelID" json:"novel,omitempty"`
+	User  *models.User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Novel *models.Novel `gorm:"foreignKey:NovelID" json:"novel,omitempty"`
 }
 
 func (UserFrame) TableName() string { return "user_frames" }
@@ -95,8 +96,8 @@ type UserHTML struct {
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
-	User  *User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Novel *Novel `gorm:"foreignKey:NovelID" json:"novel,omitempty"`
+	User  *models.User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Novel *models.Novel `gorm:"foreignKey:NovelID" json:"novel,omitempty"`
 }
 
 func (UserHTML) TableName() string { return "user_htmls" }

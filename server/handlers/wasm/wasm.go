@@ -13,6 +13,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	softdel "nvs-server/models/softdel"
 )
 
 // ==================== 沙盒预览 + WASM静态服务 ====================
@@ -111,7 +112,7 @@ func GetSandboxInfo(c *gin.Context) {
 func GetFramePreview(c *gin.Context) {
 	frameID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
-	var frame models.UserFrame
+	var frame softdel.UserFrame
 	if err := models.DB.Where("id = ? AND is_active = ?", frameID, true).First(&frame).Error; err != nil {
 		utils.NotFound(c, "模板不存在或已禁用")
 		return
@@ -139,7 +140,7 @@ func GetFramePreview(c *gin.Context) {
 func GetHTMLPreview(c *gin.Context) {
 	htmlID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
-	var htmlItem models.UserHTML
+	var htmlItem softdel.UserHTML
 	if err := models.DB.Where("id = ? AND is_active = ?", htmlID, true).First(&htmlItem).Error; err != nil {
 		utils.NotFound(c, "扩展不存在或已禁用")
 		return
@@ -174,7 +175,7 @@ func GetHTMLPreview(c *gin.Context) {
 // 虚拟沙盒入口——隐藏真实存储路径
 func ServeAppHTML(c *gin.Context) {
 	htmlID, _ := strconv.ParseUint(c.Param("htmlId"), 10, 64)
-	var htmlItem models.UserHTML
+	var htmlItem softdel.UserHTML
 	if err := models.DB.Where("id = ? AND is_active = ?", htmlID, true).First(&htmlItem).Error; err != nil {
 		c.String(http.StatusNotFound, "应用不存在")
 		return
@@ -202,7 +203,7 @@ func ServeAppResource(c *gin.Context) {
 	resourcePath := c.Param("filepath")
 	resourcePath = strings.TrimPrefix(resourcePath, "/")
 
-	var htmlItem models.UserHTML
+	var htmlItem softdel.UserHTML
 	if err := models.DB.Where("id = ? AND is_active = ?", htmlID, true).First(&htmlItem).Error; err != nil {
 		c.String(http.StatusNotFound, "资源不存在")
 		return

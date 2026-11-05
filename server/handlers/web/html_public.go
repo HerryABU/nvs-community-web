@@ -10,6 +10,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	softdel "nvs-server/models/softdel"
 )
 
 // ListPublicHTMLs GET /api/htmls/public
@@ -25,8 +26,8 @@ func ListPublicHTMLs(c *gin.Context) {
 	}
 
 	var total int64
-	var htmls []models.UserHTML
-	models.DB.Model(&models.UserHTML{}).Where("is_public = ? AND is_active = ?", true, true).Count(&total)
+	var htmls []softdel.UserHTML
+	models.DB.Model(&softdel.UserHTML{}).Where("is_public = ? AND is_active = ?", true, true).Count(&total)
 	models.DB.Where("is_public = ? AND is_active = ?", true, true).
 		Preload("User").Order("updated_at DESC").
 		Offset((page - 1) * size).Limit(size).Find(&htmls)
@@ -43,7 +44,7 @@ func ListPublicHTMLs(c *gin.Context) {
 // 作者专区：某作者的公开HTML项目
 func GetAuthorPublicHTMLs(c *gin.Context) {
 	authorID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var htmls []models.UserHTML
+	var htmls []softdel.UserHTML
 	models.DB.Where("user_id = ? AND is_public = ? AND is_active = ?", uint(authorID), true, true).
 		Preload("User").Order("updated_at DESC").Find(&htmls)
 	utils.Success(c, htmls)
@@ -53,7 +54,7 @@ func GetAuthorPublicHTMLs(c *gin.Context) {
 // 下载原始ZIP（需作者允许）
 func DownloadHTMLZip(c *gin.Context) {
 	htmlID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var html models.UserHTML
+	var html softdel.UserHTML
 	if err := models.DB.First(&html, htmlID).Error; err != nil {
 		utils.NotFound(c, "项目不存在")
 		return

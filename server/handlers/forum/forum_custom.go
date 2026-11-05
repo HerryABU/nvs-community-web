@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	siteops "nvs-server/models/siteops"
+	softdel "nvs-server/models/softdel"
 )
 
 // ==================== 用户自建论坛 ====================
@@ -360,11 +361,11 @@ func DeleteThreadByModerator(c *gin.Context) {
 	if u, e := models.GetUserByID(userID); e == nil && u != nil {
 		operator = u.Username
 	}
-	_, _ = models.ArchivePostsByThread(models.DB, uint(threadID), userID, operator,
+	_, _ = softdel.ArchivePostsByThread(models.DB, uint(threadID), userID, operator,
 		"删除帖子（级联删除回帖）", "moderator")
 	models.DB.Where("thread_id = ?", uint(threadID)).Delete(&models.Post{})
 	// 帖子本身：先归档留证，再软删除（threads 保留 deleted_at）
-	if err := models.ArchiveSoftDelete("moderator", "thread", uint(threadID), userID, operator,
+	if err := softdel.ArchiveSoftDelete("moderator", "thread", uint(threadID), userID, operator,
 		"删除帖子", security.SanitizePlainText(thread.Title), thread); err == nil {
 		models.DB.Delete(&models.Thread{}, uint(threadID))
 	} else {
@@ -426,11 +427,11 @@ func DeletePostByModerator(c *gin.Context) {
 		if runes := []rune(cs); len(runes) > 200 {
 			cs = string(runes[:200])
 		}
-		_ = models.ArchiveSoftDelete("moderator", "post", children[i].ID, userID, operator,
+		_ = softdel.ArchiveSoftDelete("moderator", "post", children[i].ID, userID, operator,
 			"删除回帖（级联删除楼内回复）", cs, children[i])
 	}
 
-	if err := models.ArchiveSoftDelete("moderator", "post", uint(postID), userID, operator,
+	if err := softdel.ArchiveSoftDelete("moderator", "post", uint(postID), userID, operator,
 		"删除回帖", summary, post); err != nil {
 		utils.InternalError(c, "留证归档失败，删除已中止")
 		return

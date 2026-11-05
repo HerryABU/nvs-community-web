@@ -17,6 +17,7 @@ import (
 	"gorm.io/gorm"
 	"nvs-server/models/blog"
 	searchm "nvs-server/models/search"
+	softdel "nvs-server/models/softdel"
 )
 
 // 分类列表（从数据库动态读取，不再硬编码）
@@ -138,7 +139,7 @@ func UnifiedSearch(c *gin.Context) {
 	}
 	q := strings.TrimSpace(c.Query("q"))
 	if q == "" {
-		utils.Success(c, gin.H{"q": "", "novels": []models.Novel{}, "authors": []models.User{}, "blogs": []blog.AuthorBlog{}, "htmls": []models.UserHTML{}})
+		utils.Success(c, gin.H{"q": "", "novels": []models.Novel{}, "authors": []models.User{}, "blogs": []blog.AuthorBlog{}, "htmls": []softdel.UserHTML{}})
 		return
 	}
 	like := "%" + q + "%"
@@ -171,8 +172,8 @@ func UnifiedSearch(c *gin.Context) {
 	}
 
 	// 4) HTML 扩展应用：名称 / 描述 / 项目名（仅公开且已审查）
-	var htmls []models.UserHTML
-	models.DB.Model(&models.UserHTML{}).
+	var htmls []softdel.UserHTML
+	models.DB.Model(&softdel.UserHTML{}).
 		Where("(name LIKE ? OR description LIKE ? OR project_name LIKE ?) AND is_public = ? AND review_status = ?",
 			like, like, like, true, "approved").
 		Preload("User").Order("created_at DESC").Limit(limit).Find(&htmls)

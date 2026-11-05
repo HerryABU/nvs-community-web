@@ -18,6 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/blog"
 	siteops "nvs-server/models/siteops"
+	softdel "nvs-server/models/softdel"
 )
 
 // ═══ 内容抢救台：隔离的应急窗口 ═══
@@ -594,7 +595,7 @@ func DeleteEmergencyContent(c *gin.Context) {
 		}
 	}
 	archive := func(t string, originalID uint, reason, summary string, snapshot interface{}) error {
-		return models.ArchiveSoftDelete("emergency", t, originalID, operatorID, operator, reason, summary, snapshot)
+		return softdel.ArchiveSoftDelete("emergency", t, originalID, operatorID, operator, reason, summary, snapshot)
 	}
 
 	switch ctype {
@@ -624,7 +625,7 @@ func DeleteEmergencyContent(c *gin.Context) {
 			return
 		}
 		// 方案A：posts 无 deleted_at，级联删回帖前先批量归档留证，再物理删除
-		if _, aerr := models.ArchivePostsByThread(models.DB, uint(id), operatorID, operator, "", "emergency"); aerr != nil {
+		if _, aerr := softdel.ArchivePostsByThread(models.DB, uint(id), operatorID, operator, "", "emergency"); aerr != nil {
 			utils.InternalError(c, "回帖留证归档失败")
 			return
 		}

@@ -27,6 +27,7 @@ import (
 	"nvs-server/honeypot"
 	"nvs-server/middleware"
 	"nvs-server/models"
+	_ "nvs-server/models/softdel" // 触发迁移辅助 / 留证钩子注册
 	"nvs-server/moderation"
 	"nvs-server/oc"
 	"nvs-server/police"

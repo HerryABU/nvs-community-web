@@ -1,8 +1,9 @@
-package models
+package softdel
 
 import (
 	"encoding/json"
 	"fmt"
+	"nvs-server/models"
 	"sort"
 	"time"
 )
@@ -108,7 +109,7 @@ func GetSoftDelByID(ctype string, id uint) (*SoftDelItem, error) {
 		return nil, fmt.Errorf("未知留证类型: %s", ctype)
 	}
 	var row softDelRow
-	if err := DB.Table(table).Where("id = ?", id).First(&row).Error; err != nil {
+	if err := models.DB.Table(table).Where("id = ?", id).First(&row).Error; err != nil {
 		return nil, err
 	}
 	return &SoftDelItem{
@@ -151,21 +152,21 @@ func ArchiveSoftDelete(source, ctype string, originalID, deletedBy uint, operato
 	}
 	switch ctype {
 	case "comment":
-		return DB.Create(&SoftDelComment{SoftDelMeta: meta}).Error
+		return models.DB.Create(&SoftDelComment{SoftDelMeta: meta}).Error
 	case "novel":
-		return DB.Create(&SoftDelNovel{SoftDelMeta: meta}).Error
+		return models.DB.Create(&SoftDelNovel{SoftDelMeta: meta}).Error
 	case "chapter":
-		return DB.Create(&SoftDelChapter{SoftDelMeta: meta}).Error
+		return models.DB.Create(&SoftDelChapter{SoftDelMeta: meta}).Error
 	case "user":
-		return DB.Create(&SoftDelUser{SoftDelMeta: meta}).Error
+		return models.DB.Create(&SoftDelUser{SoftDelMeta: meta}).Error
 	case "thread":
-		return DB.Create(&SoftDelThread{SoftDelMeta: meta}).Error
+		return models.DB.Create(&SoftDelThread{SoftDelMeta: meta}).Error
 	case "post":
-		return DB.Create(&SoftDelPost{SoftDelMeta: meta}).Error
+		return models.DB.Create(&SoftDelPost{SoftDelMeta: meta}).Error
 	case "blog":
-		return DB.Create(&SoftDelBlog{SoftDelMeta: meta}).Error
+		return models.DB.Create(&SoftDelBlog{SoftDelMeta: meta}).Error
 	case "forum":
-		return DB.Create(&SoftDelForum{SoftDelMeta: meta}).Error
+		return models.DB.Create(&SoftDelForum{SoftDelMeta: meta}).Error
 	default:
 		return fmt.Errorf("未知留证类型: %s", ctype)
 	}
@@ -192,7 +193,7 @@ func ListSoftDel(ctype string, limit int) ([]SoftDelItem, error) {
 	var items []SoftDelItem
 	for _, t := range tables {
 		var rows []softDelRow
-		if err := DB.Table(t).Order("deleted_at DESC").Limit(limit).Find(&rows).Error; err != nil {
+		if err := models.DB.Table(t).Order("deleted_at DESC").Limit(limit).Find(&rows).Error; err != nil {
 			continue // 单表查询失败不阻断整体
 		}
 		for _, r := range rows {

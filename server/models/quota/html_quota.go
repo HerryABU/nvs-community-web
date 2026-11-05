@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"nvs-server/models"
+	softdel "nvs-server/models/softdel"
 	"strings"
 	"time"
 )
@@ -109,9 +110,9 @@ func EffectiveHTMLQuota(userID uint) (maxProjects, maxTotalMB int, enabled bool)
 // HTMLUsage 统计某用户已用额度（项目数 + 累计字节）
 func HTMLUsage(userID uint) (count int, totalBytes int64) {
 	var n int64
-	_ = models.DB.Model(&models.UserHTML{}).Where("user_id = ?", userID).Count(&n).Error
+	_ = models.DB.Model(&softdel.UserHTML{}).Where("user_id = ?", userID).Count(&n).Error
 	var sum int64
-	_ = models.DB.Model(&models.UserHTML{}).Where("user_id = ?", userID).
+	_ = models.DB.Model(&softdel.UserHTML{}).Where("user_id = ?", userID).
 		Select("COALESCE(SUM(total_size),0)").Scan(&sum).Error
 	return int(n), sum
 }

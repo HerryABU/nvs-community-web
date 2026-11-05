@@ -22,6 +22,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	quotam "nvs-server/models/quota"
+	softdel "nvs-server/models/softdel"
 )
 
 // ==================== 用户侧：额度查询 + 公开开关 ====================
@@ -98,7 +99,7 @@ func SetHTMLPublic(c *gin.Context) {
 		return
 	}
 
-	var html models.UserHTML
+	var html softdel.UserHTML
 	if err := models.DB.Where("id = ? AND user_id = ?", req.ID, userID).First(&html).Error; err != nil {
 		utils.NotFound(c, "项目不存在或不属于你")
 		return
@@ -146,7 +147,7 @@ func SetFramePublic(c *gin.Context) {
 		return
 	}
 
-	var frame models.UserFrame
+	var frame softdel.UserFrame
 	if err := models.DB.Where("id = ? AND user_id = ?", req.ID, userID).First(&frame).Error; err != nil {
 		utils.NotFound(c, "模板不存在或不属于你")
 		return

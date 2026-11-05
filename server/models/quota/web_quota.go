@@ -2,12 +2,12 @@ package quota
 
 // ==================== Web 项目发布额度 + 超额审核 ====================
 //
-// 平台对「用户自定义 HTML 扩展（models.UserHTML）」与「用户自定义模板（models.UserFrame）」
+// 平台对「用户自定义 HTML 扩展（softdel.UserHTML）」与「用户自定义模板（softdel.UserFrame）」
 // 的公开发布做双重额度管控（数量 + 总大小，可同时开启）：
 //
-//   - 数量额度：models.UserHTML + models.UserFrame 中 is_public=true 的合计；
-//   - 大小额度：上述已公开项目的磁盘占用合计（models.UserHTML 取 TotalSize 列，
-//     models.UserFrame 按 FilePath 实际 stat，单文件/目录均可）；
+//   - 数量额度：softdel.UserHTML + softdel.UserFrame 中 is_public=true 的合计；
+//   - 大小额度：上述已公开项目的磁盘占用合计（softdel.UserHTML 取 TotalSize 列，
+//     softdel.UserFrame 按 FilePath 实际 stat，单文件/目录均可）；
 //   - 全局默认：platform_configs.web_publish_quota（数量，默认 3）与
 //     web_publish_quota_size_mb（大小 MB，默认 0 = 不限）；
 //   - 按人覆盖：user_web_quotas（quota=-1 跟随全局数量；quota_size_mb=-1 跟随全局大小，
@@ -25,6 +25,7 @@ package quota
 import (
 	"fmt"
 	"nvs-server/models"
+	softdel "nvs-server/models/softdel"
 	"os"
 	"strconv"
 	"time"
@@ -266,26 +267,26 @@ func GetWebPublishQuotaSizeMB(userID uint) int {
 // ---------- 已公开数与已用大小统计 ----------
 
 // CountPublicWeb 统计某用户已公开（is_public=true）的 web 项目数
-// （models.UserHTML + models.UserFrame 合计，与广场展示口径一致）
+// （softdel.UserHTML + softdel.UserFrame 合计，与广场展示口径一致）
 func CountPublicWeb(userID uint) int64 {
 	var htmlN, frameN int64
-	models.DB.Model(&models.UserHTML{}).Where("user_id = ? AND is_public = ?", userID, true).Count(&htmlN)
-	models.DB.Model(&models.UserFrame{}).Where("user_id = ? AND is_public = ?", userID, true).Count(&frameN)
+	models.DB.Model(&softdel.UserHTML{}).Where("user_id = ? AND is_public = ?", userID, true).Count(&htmlN)
+	models.DB.Model(&softdel.UserFrame{}).Where("user_id = ? AND is_public = ?", userID, true).Count(&frameN)
 	return htmlN + frameN
 }
 
 // CountPublicWebSize 统计某用户已公开 web 项目的磁盘占用合计（字节）。
-// models.UserHTML 取 TotalSize 列（上传解压时已统计）；models.UserFrame 为单文件模板，
+// softdel.UserHTML 取 TotalSize 列（上传解压时已统计）；softdel.UserFrame 为单文件模板，
 // 按 FilePath 实时 stat（文件被外部改动也能反映真实占用）。
 func CountPublicWebSize(userID uint) int64 {
 	var total int64
-	var htmls []models.UserHTML
-	models.DB.Model(&models.UserHTML{}).Where("user_id = ? AND is_public = ?", userID, true).Find(&htmls)
+	var htmls []softdel.UserHTML
+	models.DB.Model(&softdel.UserHTML{}).Where("user_id = ? AND is_public = ?", userID, true).Find(&htmls)
 	for _, h := range htmls {
 		total += h.TotalSize
 	}
-	var frames []models.UserFrame
-	models.DB.Model(&models.UserFrame{}).Where("user_id = ? AND is_public = ?", userID, true).Find(&frames)
+	var frames []softdel.UserFrame
+	models.DB.Model(&softdel.UserFrame{}).Where("user_id = ? AND is_public = ?", userID, true).Find(&frames)
 	for _, f := range frames {
 		total += pathSizeBytes(f.FilePath)
 	}
@@ -332,12 +333,12 @@ func filepathWalkSize(root string, total *int64) error {
 func WebTargetSize(targetType string, targetID uint) int64 {
 	switch targetType {
 	case WebQuotaTargetHTML:
-		var h models.UserHTML
+		var h softdel.UserHTML
 		if models.DB.First(&h, targetID).Error == nil {
 			return h.TotalSize
 		}
 	case WebQuotaTargetFrame:
-		var f models.UserFrame
+		var f softdel.UserFrame
 		if models.DB.First(&f, targetID).Error == nil {
 			return pathSizeBytes(f.FilePath)
 		}
@@ -356,9 +357,9 @@ func applyTargetVisibility(targetType string, targetID uint, isPublic bool, revi
 	}
 	switch targetType {
 	case WebQuotaTargetHTML:
-		return models.DB.Model(&models.UserHTML{}).Where("id = ?", targetID).Updates(updates).Error
+		return models.DB.Model(&softdel.UserHTML{}).Where("id = ?", targetID).Updates(updates).Error
 	case WebQuotaTargetFrame:
-		return models.DB.Model(&models.UserFrame{}).Where("id = ?", targetID).Updates(updates).Error
+		return models.DB.Model(&softdel.UserFrame{}).Where("id = ?", targetID).Updates(updates).Error
 	default:
 		return fmt.Errorf("未知的目标类型: %s", targetType)
 	}
@@ -380,13 +381,13 @@ func CheckAndApplyWebPublish(userID uint, targetType string, targetID uint) (all
 	var isPublic bool
 	switch targetType {
 	case WebQuotaTargetHTML:
-		var h models.UserHTML
+		var h softdel.UserHTML
 		if e := models.DB.First(&h, targetID).Error; e != nil {
 			return false, false, "", e
 		}
 		isPublic = h.IsPublic
 	case WebQuotaTargetFrame:
-		var f models.UserFrame
+		var f softdel.UserFrame
 		if e := models.DB.First(&f, targetID).Error; e != nil {
 			return false, false, "", e
 		}
@@ -497,12 +498,12 @@ func ListWebQuotaRequests(status string) ([]WebQuotaRequest, error) {
 func GetWebQuotaTargetName(targetType string, targetID uint) string {
 	switch targetType {
 	case WebQuotaTargetHTML:
-		var h models.UserHTML
+		var h softdel.UserHTML
 		if models.DB.First(&h, targetID).Error == nil {
 			return h.Name
 		}
 	case WebQuotaTargetFrame:
-		var f models.UserFrame
+		var f softdel.UserFrame
 		if models.DB.First(&f, targetID).Error == nil {
 			return f.Name
 		}
