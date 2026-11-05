@@ -14,6 +14,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aiops "nvs-server/models/aiops"
 )
 
 // GetAiBudget GET /api/admin/ai/budget
@@ -56,8 +57,8 @@ func GetAiThrottle(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{
-		"config": models.LoadAiThrottleConfig(),
-		"top":    models.AiThrottleSnapshot(15),
+		"config": aiops.LoadAiThrottleConfig(),
+		"top":    aiops.AiThrottleSnapshot(15),
 		"note":   "三维：用户×模型 / 用户 / 模型，窗口 1 分钟。单实例内存计数，多实例部署时每实例各限一份（近似限流）。",
 	})
 }
@@ -67,16 +68,16 @@ func SaveAiThrottle(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	var in models.AiThrottleConfig
+	var in aiops.AiThrottleConfig
 	if err := c.ShouldBindJSON(&in); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.SaveAiThrottleConfig(in); err != nil {
+	if err := aiops.SaveAiThrottleConfig(in); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "已保存并即时生效", models.LoadAiThrottleConfig())
+	utils.SuccessMessage(c, "已保存并即时生效", aiops.LoadAiThrottleConfig())
 }
 
 // GetAiAgentUsage GET /api/admin/ai/agent-usage?days=30

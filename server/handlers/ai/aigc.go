@@ -31,6 +31,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aiops "nvs-server/models/aiops"
 )
 
 // aigcRoot 资源根目录：与 uploads 同级（默认 ./data/aigc）
@@ -41,7 +42,7 @@ func aigcRoot() string {
 func aigcOriginalsDir() string { return filepath.Join(aigcRoot(), "originals") }
 
 // toPipelineConfig models 配置 → 管道配置
-func toPipelineConfig(m models.AigcConfig) aigc.Config {
+func toPipelineConfig(m aiops.AigcConfig) aigc.Config {
 	return aigc.Config{
 		Enabled:              m.Enabled,
 		LabelText:            m.LabelText,
@@ -127,11 +128,11 @@ func SaveAigcOriginalsAsync(userID, taskID uint, modelName string, urls []string
 					continue
 				}
 			}
-			_ = models.CreateAigcAsset(&models.AigcAsset{
+			_ = aiops.CreateAigcAsset(&aiops.AigcAsset{
 				UserID:    userID,
 				TaskID:    taskID,
 				Index:     idx,
-				Source:    models.AigcSourceAI,
+				Source:    aiops.AigcSourceAI,
 				ModelName: modelName,
 				FilePath:  full,
 				Mime:      "image/" + ext,
@@ -164,7 +165,7 @@ func extForImageFormat(f string) string {
 //
 // 只放"该不该显示开关"这类信息，不放 ContentProducer 等后台配置内容。
 func AiAigcOptions(c *gin.Context) {
-	cfg := models.LoadAigcConfig()
+	cfg := aiops.LoadAigcConfig()
 	utils.Success(c, gin.H{
 		"enabled":               cfg.Enabled,
 		"waiver_enabled":        cfg.WaiverEnabled,
@@ -223,7 +224,7 @@ func AiAigcExport(c *gin.Context) {
 		return
 	}
 
-	cfg := models.LoadAigcConfig()
+	cfg := aiops.LoadAigcConfig()
 	if cfg.Enabled && strings.TrimSpace(cfg.ContentProducer) == "" {
 		utils.BadRequest(c, "站长还没填「生成合成服务提供者」，隐式标识无法合规写入")
 		return
@@ -259,7 +260,7 @@ func AiAigcExport(c *gin.Context) {
 	res, eerr := aigc.Export(aigc.ExportRequest{
 		Source:     data,
 		Mime:       asset.Mime,
-		SourceIsAI: asset.Source == models.AigcSourceAI,
+		SourceIsAI: asset.Source == aiops.AigcSourceAI,
 		CropX:      req.CropX, CropY: req.CropY, CropW: req.CropW, CropH: req.CropH,
 		TargetW: req.TargetW, TargetH: req.TargetH,
 		Format:     req.Format,
@@ -278,7 +279,7 @@ func AiAigcExport(c *gin.Context) {
 
 	// 落导出记录：ProduceID → 模型名 的映射就在这里（模型名绝不进法定字段）
 	fieldsJSON, _ := json.Marshal(res.Fields)
-	_ = models.CreateAigcExport(&models.AigcExport{
+	_ = aiops.CreateAigcExport(&aiops.AigcExport{
 		ProduceID:       produceID,
 		AssetID:         asset.ID,
 		UserID:          uid,
@@ -328,13 +329,13 @@ func aigcExportErrText(err error) string {
 }
 
 // resolveAigcAsset 按 asset_id 或 task_id 取原图，并校验归属
-func resolveAigcAsset(uid, assetID, taskID uint, index int) (*models.AigcAsset, error) {
-	var a *models.AigcAsset
+func resolveAigcAsset(uid, assetID, taskID uint, index int) (*aiops.AigcAsset, error) {
+	var a *aiops.AigcAsset
 	var err error
 	if assetID > 0 {
-		a, err = models.GetAigcAsset(assetID)
+		a, err = aiops.GetAigcAsset(assetID)
 	} else if taskID > 0 {
-		a, err = models.GetAigcAssetByTaskIndex(taskID, index)
+		a, err = aiops.GetAigcAssetByTaskIndex(taskID, index)
 	} else {
 		return nil, fmt.Errorf("缺少 asset_id 或 task_id")
 	}
@@ -367,14 +368,14 @@ func sameConfirmText(got, want string) bool {
 	return norm(got) == w
 }
 
-func logAigcWaiver(c *gin.Context, uid uint, produceID string, cfg models.AigcConfig, input, result, reason string) {
+func logAigcWaiver(c *gin.Context, uid uint, produceID string, cfg aiops.AigcConfig, input, result, reason string) {
 	sum := sha256.Sum256([]byte(input))
 	ver := sha256.Sum256([]byte(cfg.WaiverAgreement))
 	name := ""
 	if u, err := models.GetUserByID(uid); err == nil && u != nil {
 		name = u.Username
 	}
-	_ = models.CreateAigcWaiverLog(&models.AigcWaiverLog{
+	_ = aiops.CreateAigcWaiverLog(&aiops.AigcWaiverLog{
 		UserID:           uid,
 		UserName:         name,
 		ProduceID:        produceID,
@@ -414,9 +415,9 @@ func newProduceID() string {
 // AdminGetAigcConfig GET /api/admin/aigc/config
 func AdminGetAigcConfig(c *gin.Context) {
 	utils.Success(c, gin.H{
-		"config": models.LoadAigcConfig(),
+		"config": aiops.LoadAigcConfig(),
 		"font": gin.H{
-			"custom": models.LoadAigcConfig() != models.DefaultAigcConfig() &&
+			"custom": aiops.LoadAigcConfig() != aiops.DefaultAigcConfig() &&
 				fileExists(filepath.Join(aigcRoot(), "label.ttf")),
 			"builtin_note": "内置 Noto Sans SC 子集（SIL OFL 1.1），仅含角标常用字",
 		},
@@ -430,7 +431,7 @@ func fileExists(p string) bool {
 
 // AdminSaveAigcConfig PUT /api/admin/aigc/config
 func AdminSaveAigcConfig(c *gin.Context) {
-	var cfg models.AigcConfig
+	var cfg aiops.AigcConfig
 	if err := c.ShouldBindJSON(&cfg); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
@@ -439,18 +440,18 @@ func AdminSaveAigcConfig(c *gin.Context) {
 		utils.BadRequest(c, "「生成合成服务提供者」必填：这是国标要求的主体信息")
 		return
 	}
-	if err := models.SaveAigcConfig(cfg); err != nil {
+	if err := aiops.SaveAigcConfig(cfg); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "已保存", models.LoadAigcConfig())
+	utils.SuccessMessage(c, "已保存", aiops.LoadAigcConfig())
 }
 
 // AdminListAigcExports GET /api/admin/aigc/exports?page=&size=
 func AdminListAigcExports(c *gin.Context) {
 	page := web.AtoiDefault(c.Query("page"), 1)
 	size := web.AtoiDefault(c.Query("size"), 20)
-	list, total := models.ListAigcExports(page, size)
+	list, total := aiops.ListAigcExports(page, size)
 	utils.Success(c, gin.H{"list": list, "total": total, "page": page, "size": size})
 }
 
@@ -458,7 +459,7 @@ func AdminListAigcExports(c *gin.Context) {
 func AdminListAigcWaivers(c *gin.Context) {
 	page := web.AtoiDefault(c.Query("page"), 1)
 	size := web.AtoiDefault(c.Query("size"), 20)
-	list, total := models.ListAigcWaiverLogs(page, size)
+	list, total := aiops.ListAigcWaiverLogs(page, size)
 	utils.Success(c, gin.H{"list": list, "total": total, "page": page, "size": size})
 }
 
@@ -469,7 +470,7 @@ func AdminAigcVerify(c *gin.Context) {
 		utils.BadRequest(c, "缺少 ProduceID")
 		return
 	}
-	e, err := models.GetAigcExportByProduceID(pid)
+	e, err := aiops.GetAigcExportByProduceID(pid)
 	if err != nil {
 		utils.NotFound(c, "没有这条导出记录")
 		return

@@ -1,7 +1,8 @@
-package models
+package aiops
 
 import (
 	"fmt"
+	"nvs-server/models"
 	"testing"
 	"time"
 
@@ -12,21 +13,21 @@ import (
 // setupAigcTestDB 独立内存库（不用 setupTestDB 的共享库：同名 cache=shared 会串数据）
 func setupAigcTestDB(t *testing.T) {
 	t.Helper()
-	prev := DB
+	prev := models.DB
 	dsn := fmt.Sprintf("file:aigc_test_%d?mode=memory&cache=shared", time.Now().UnixNano())
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("打开内存库失败: %v", err)
 	}
-	if err := db.AutoMigrate(&AigcAsset{}, &AigcExport{}, &AigcWaiverLog{}, &AiChannelAccount{}, &PlatformConfig{}); err != nil {
+	if err := db.AutoMigrate(&AigcAsset{}, &AigcExport{}, &AigcWaiverLog{}, &models.AiChannelAccount{}, &models.PlatformConfig{}); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
-	DB = db
+	models.DB = db
 	t.Cleanup(func() {
 		if sqlDB, e := db.DB(); e == nil {
 			_ = sqlDB.Close()
 		}
-		DB = prev
+		models.DB = prev
 	})
 }
 

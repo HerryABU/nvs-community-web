@@ -52,6 +52,7 @@ var BlogFeedProvider func(ids []uint, window int) ([]FeedItem, int64, error)
 //	                    Carousel / CheckInRecord / RageConfig / RefreshState
 //	models/search    —— SearchLog（热词聚合 / 标签热词）
 //	models/aicost    —— ChannelBalanceSample / UserAiKey / CostRate 等成本与用户密钥
+//	models/aiops     —— AiPrompt / AiVendor / AiNovelMemory / AigcAsset 等 AI 运营模型
 func AllModels() []interface{} {
 	list := []interface{}{
 		&User{}, &Novel{}, &NovelCategory{}, &Chapter{}, &Comment{}, &Rating{},
@@ -94,13 +95,10 @@ func AllModels() []interface{} {
 		// AI 工作台（§5.4）：会话/消息、智能体预设、绘画视频任务
 		&AiChatSession{}, &AiChatMessage{}, &AiAgent{}, &AiMediaTask{},
 		&UserAiFreeQuota{}, &UserAiFreeUsage{},
-		&AiNovelMemory{},
 		&AiBotUsage{},
-		&AiPrompt{}, &AiVendor{}, &AiModelKey{}, &AiStyle{}, &AiContentMark{},
+		&AiModelKey{}, &AiStyle{}, &AiContentMark{},
 		// API Key 审计告警（多 IP / 解密失败 / 封禁后仍使用）
 		&ApiKeyAlarm{},
-		// AIGC 内容标识（GB 45438—2025）：原图 / 导出（ProduceID→模型名）/ 豁免日志
-		&AigcAsset{}, &AigcExport{}, &AigcWaiverLog{},
 		// 渠道账户凭据（nap_/sk_ 加密入库，供「拉取模型」「渠道监控」复用）
 		&AiChannelAccount{},
 	}

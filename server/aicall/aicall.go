@@ -14,6 +14,7 @@ import (
 
 	"nvs-server/aiclient"
 	"nvs-server/models"
+	aiops "nvs-server/models/aiops"
 )
 
 // FallbackNote 一次降级的事实（给前端/正文提示用）
@@ -39,7 +40,7 @@ type Result struct {
 }
 
 // ErrNoModel 没有可用模型
-var ErrNoModel = models.ErrNoChatModel
+var ErrNoModel = aiops.ErrNoChatModel
 
 // Request 调用入参
 type Request struct {
@@ -64,7 +65,7 @@ func Complete(req Request) (*Result, error) {
 	if strings.TrimSpace(req.User) == "" {
 		return nil, errors.New("内容为空")
 	}
-	first, err := models.PickChatModel(req.PreferModel, req.Scene)
+	first, err := aiops.PickChatModel(req.PreferModel, req.Scene)
 	if err != nil {
 		return nil, err
 	}
@@ -83,14 +84,14 @@ func Complete(req Request) (*Result, error) {
 		}
 		defer release()
 	}
-	cfg := models.LoadAiRouteConfig()
-	strategy := models.EffectiveStrategy(cfg, req.Scene)
+	cfg := aiops.LoadAiRouteConfig()
+	strategy := aiops.EffectiveStrategy(cfg, req.Scene)
 
 	tried := make([]uint, 0, 2)
 	candidates := make([]*models.AiModel, 0, 2)
 	candidates = append(candidates, first)
 	if cfg.Fallback {
-		for _, m := range models.FallbackChatModels([]uint{first.ID}, req.Scene, cfg.MaxFallback) {
+		for _, m := range aiops.FallbackChatModels([]uint{first.ID}, req.Scene, cfg.MaxFallback) {
 			mm := m
 			candidates = append(candidates, &mm)
 		}
@@ -147,7 +148,7 @@ func attempt(req Request, m *models.AiModel, res *Result) (*Result, error) {
 		return nil, berr
 	}
 	// 三维交叉限流：人×模型 / 人 / 模型
-	if terr := models.CheckAiThrottle(req.PayerID, m.ID); terr != nil {
+	if terr := aiops.CheckAiThrottle(req.PayerID, m.ID); terr != nil {
 		return nil, terr
 	}
 

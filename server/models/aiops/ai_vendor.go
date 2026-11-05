@@ -1,7 +1,8 @@
-package models
+package aiops
 
 import (
 	"fmt"
+	"nvs-server/models"
 	"strings"
 	"time"
 )
@@ -27,7 +28,7 @@ func (AiVendor) TableName() string { return "ai_vendors" }
 // ListAiVendors 厂商列表（onlyEnabled=true 时仅启用的）
 func ListAiVendors(onlyEnabled bool) ([]AiVendor, error) {
 	var list []AiVendor
-	q := DB.Order("sort_order ASC, id ASC")
+	q := models.DB.Order("sort_order ASC, id ASC")
 	if onlyEnabled {
 		q = q.Where("enabled = ?", true)
 	}
@@ -45,7 +46,7 @@ func CreateAiVendor(name string, sortOrder int, prefix ...string) (*AiVendor, er
 		name = string([]rune(name)[:32])
 	}
 	var n int64
-	DB.Model(&AiVendor{}).Where("name = ?", name).Count(&n)
+	models.DB.Model(&AiVendor{}).Where("name = ?", name).Count(&n)
 	if n > 0 {
 		return nil, fmt.Errorf("厂商「%s」已存在", name)
 	}
@@ -58,7 +59,7 @@ func CreateAiVendor(name string, sortOrder int, prefix ...string) (*AiVendor, er
 		pfx = derivePrefix(name)
 	}
 	v := &AiVendor{Name: name, Prefix: pfx, SortOrder: sortOrder, Enabled: true, CreatedAt: time.Now(), UpdatedAt: time.Now()}
-	if err := DB.Create(v).Error; err != nil {
+	if err := models.DB.Create(v).Error; err != nil {
 		return nil, err
 	}
 	return v, nil
@@ -67,7 +68,7 @@ func CreateAiVendor(name string, sortOrder int, prefix ...string) (*AiVendor, er
 // UpdateAiVendor 更新（改名时同步刷新模型里旧厂商名）。prefix 可空：不传则不改动前缀。
 func UpdateAiVendor(id uint, name string, sortOrder int, enabled bool, prefix ...string) error {
 	var v AiVendor
-	if err := DB.Where("id = ?", id).First(&v).Error; err != nil {
+	if err := models.DB.Where("id = ?", id).First(&v).Error; err != nil {
 		return fmt.Errorf("厂商不存在")
 	}
 	name = strings.TrimSpace(name)
@@ -80,13 +81,13 @@ func UpdateAiVendor(id uint, name string, sortOrder int, enabled bool, prefix ..
 	if len(prefix) > 0 {
 		fields["prefix"] = strings.TrimSpace(prefix[0])
 	}
-	err := DB.Model(&AiVendor{}).Where("id = ?", id).Updates(fields).Error
+	err := models.DB.Model(&AiVendor{}).Where("id = ?", id).Updates(fields).Error
 	if err != nil {
 		return err
 	}
 	if name != v.Name {
 		// 级联：模型表里的厂商名跟着改（map 更新，零值安全）
-		DB.Model(&AiModel{}).Where("vendor = ?", v.Name).UpdateColumn("vendor", name)
+		models.DB.Model(&models.AiModel{}).Where("vendor = ?", v.Name).UpdateColumn("vendor", name)
 	}
 	return nil
 }
@@ -94,15 +95,15 @@ func UpdateAiVendor(id uint, name string, sortOrder int, enabled bool, prefix ..
 // DeleteAiVendor 删除厂商（仍有模型引用时拒绝，避免悬空筛选）
 func DeleteAiVendor(id uint) error {
 	var v AiVendor
-	if err := DB.Where("id = ?", id).First(&v).Error; err != nil {
+	if err := models.DB.Where("id = ?", id).First(&v).Error; err != nil {
 		return fmt.Errorf("厂商不存在")
 	}
 	var n int64
-	DB.Model(&AiModel{}).Where("vendor = ?", v.Name).Count(&n)
+	models.DB.Model(&models.AiModel{}).Where("vendor = ?", v.Name).Count(&n)
 	if n > 0 {
 		return fmt.Errorf("仍有 %d 个模型属于「%s」，请先改为其他厂商", n, v.Name)
 	}
-	return DB.Where("id = ?", id).Delete(&AiVendor{}).Error
+	return models.DB.Where("id = ?", id).Delete(&AiVendor{}).Error
 }
 
 // derivePrefix 由厂商名推导前缀（小写、去非字母数字）。
@@ -144,25 +145,25 @@ func SeedAiVendors() {
 			pfx = derivePrefix(s.name)
 		}
 		var v AiVendor
-		if err := DB.Where("name = ?", s.name).First(&v).Error; err == nil {
+		if err := models.DB.Where("name = ?", s.name).First(&v).Error; err == nil {
 			// 已存在：仅当前缀为空时回填，不覆盖管理员手工改过的值
 			if strings.TrimSpace(v.Prefix) == "" && pfx != "" {
-				DB.Model(&AiVendor{}).Where("id = ?", v.ID).
+				models.DB.Model(&AiVendor{}).Where("id = ?", v.ID).
 					Updates(map[string]interface{}{"prefix": pfx, "updated_at": now})
 			}
 			continue
 		}
-		DB.Create(&AiVendor{Name: s.name, Prefix: pfx, SortOrder: i + 1, Enabled: true, CreatedAt: now, UpdatedAt: now})
+		models.DB.Create(&AiVendor{Name: s.name, Prefix: pfx, SortOrder: i + 1, Enabled: true, CreatedAt: now, UpdatedAt: now})
 	}
 	// 非预置厂商（管理员自建 / 老数据）：同样按名字推导回填空前缀
 	var blank []AiVendor
-	DB.Where("prefix IS NULL OR prefix = ''").Find(&blank)
+	models.DB.Where("prefix IS NULL OR prefix = ''").Find(&blank)
 	for _, v := range blank {
 		p := derivePrefix(v.Name)
 		if p == "" {
 			continue
 		}
-		DB.Model(&AiVendor{}).Where("id = ?", v.ID).
+		models.DB.Model(&AiVendor{}).Where("id = ?", v.ID).
 			Updates(map[string]interface{}{"prefix": p, "updated_at": now})
 	}
 }
@@ -176,7 +177,7 @@ func MatchVendorByPrefix(prefix string) *AiVendor {
 		return nil
 	}
 	var list []AiVendor
-	if err := DB.Find(&list).Error; err != nil || len(list) == 0 {
+	if err := models.DB.Find(&list).Error; err != nil || len(list) == 0 {
 		return nil
 	}
 	for i := range list {
@@ -199,7 +200,7 @@ func MatchVendorName(name string) *AiVendor {
 		return nil
 	}
 	var v AiVendor
-	if err := DB.Where("name = ?", n).First(&v).Error; err != nil {
+	if err := models.DB.Where("name = ?", n).First(&v).Error; err != nil {
 		return nil
 	}
 	return &v

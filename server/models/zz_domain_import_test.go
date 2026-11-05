@@ -5,6 +5,7 @@ package models_test
 // 域子包会与「域→models」的引用形成 import cycle。
 import (
 	_ "nvs-server/models/aicost"
+	_ "nvs-server/models/aiops"
 	_ "nvs-server/models/blog"
 	_ "nvs-server/models/search"
 	_ "nvs-server/models/security"

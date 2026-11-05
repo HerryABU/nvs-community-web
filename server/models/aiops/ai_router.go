@@ -1,4 +1,4 @@
-package models
+package aiops
 
 // ==================== AI 路由策略（gap-audit #10） ====================
 // 解决「永远只用列表第一个模型」的问题：
@@ -12,6 +12,7 @@ package models
 import (
 	"encoding/json"
 	"errors"
+	"nvs-server/models"
 	"sort"
 	"strings"
 	"time"
@@ -86,7 +87,7 @@ func NormalizeAiRouteConfig(in AiRouteConfig) AiRouteConfig {
 
 // LoadAiRouteConfig 读取配置
 func LoadAiRouteConfig() AiRouteConfig {
-	raw := GetPlatformConfig(aiRouteConfigKey)
+	raw := models.GetPlatformConfig(aiRouteConfigKey)
 	cfg := DefaultAiRouteConfig()
 	if strings.TrimSpace(raw) == "" {
 		return cfg
@@ -104,7 +105,7 @@ func SaveAiRouteConfig(cfg AiRouteConfig) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(aiRouteConfigKey, string(b))
+	return models.SetPlatformConfig(aiRouteConfigKey, string(b))
 }
 
 // EffectiveStrategy 场景实际生效的策略
@@ -125,7 +126,7 @@ func avgLatency7d(modelID uint) int {
 		N   int
 	}
 	var r row
-	DB.Model(&AiCallLog{}).
+	models.DB.Model(&models.AiCallLog{}).
 		Select("COALESCE(AVG(latency_ms),0) as avg, COUNT(*) as n").
 		Where("model_id = ? AND latency_ms > 0 AND created_at >= ?", modelID, time.Now().AddDate(0, 0, -7)).
 		Scan(&r)
@@ -136,14 +137,14 @@ func avgLatency7d(modelID uint) int {
 }
 
 // rankChatModels 按策略排序候选（已启用、chat 类型）
-func rankChatModels(strategy string, preferDomestic bool) []AiModel {
-	list, err := ListAiModelsByKind(AiKindChat, true)
+func rankChatModels(strategy string, preferDomestic bool) []models.AiModel {
+	list, err := models.ListAiModelsByKind(models.AiKindChat, true)
 	if err != nil || len(list) == 0 {
 		return nil
 	}
-	out := make([]AiModel, 0, len(list))
+	out := make([]models.AiModel, 0, len(list))
 	for _, m := range list {
-		if m.Enabled && m.Kind == AiKindChat {
+		if m.Enabled && m.Kind == models.AiKindChat {
 			out = append(out, m)
 		}
 	}
@@ -198,9 +199,9 @@ func rankChatModels(strategy string, preferDomestic bool) []AiModel {
 var ErrNoChatModel = errors.New("没有可用的对话模型")
 
 // PickChatModel 选模型：用户/角色指定优先，否则按策略排序取第一个
-func PickChatModel(userChoice uint, scene string) (*AiModel, error) {
+func PickChatModel(userChoice uint, scene string) (*models.AiModel, error) {
 	if userChoice > 0 {
-		if m, err := GetAiModel(userChoice); err == nil && m != nil && m.Enabled && m.Kind == AiKindChat {
+		if m, err := models.GetAiModel(userChoice); err == nil && m != nil && m.Enabled && m.Kind == models.AiKindChat {
 			return m, nil
 		}
 	}
@@ -214,7 +215,7 @@ func PickChatModel(userChoice uint, scene string) (*AiModel, error) {
 }
 
 // FallbackChatModels 降级候选（排除已试过的模型），上限由配置决定
-func FallbackChatModels(tried []uint, scene string, limit int) []AiModel {
+func FallbackChatModels(tried []uint, scene string, limit int) []models.AiModel {
 	if limit <= 0 {
 		limit = 1
 	}
@@ -231,7 +232,7 @@ func FallbackChatModels(tried []uint, scene string, limit int) []AiModel {
 	for _, id := range tried {
 		skip[id] = true
 	}
-	out := make([]AiModel, 0, limit)
+	out := make([]models.AiModel, 0, limit)
 	for _, m := range all {
 		if skip[m.ID] {
 			continue

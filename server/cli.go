@@ -10,6 +10,7 @@ import (
 
 	"nvs-server/config"
 	"nvs-server/models"
+	aiops "nvs-server/models/aiops"
 	siteops "nvs-server/models/siteops"
 	"nvs-server/utils"
 	"nvs-server/version"
@@ -233,7 +234,7 @@ func runMaintenanceCLI(args []string) (handled bool, exitCode int) {
 	if scope == cliScopeAll || scope == cliScopeToken {
 		// 令牌加密密码：派生独立 AES 密钥（PBKDF2），不依赖 JWT，
 		// 并把现有上游 API Key 用旧钥匙解开、用新钥匙重新加密。
-		moved, err := utils.SetTokenVaultPassphrase(pwd, models.ReencryptAiModelKeys)
+		moved, err := utils.SetTokenVaultPassphrase(pwd, aiops.ReencryptAiModelKeys)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "✗ 设置令牌加密密码失败: %v\n", err)
 			return true, 10

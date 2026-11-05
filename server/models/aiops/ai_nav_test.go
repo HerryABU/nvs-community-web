@@ -1,7 +1,8 @@
-package models
+package aiops
 
 import (
 	"fmt"
+	"nvs-server/models"
 	"testing"
 	"time"
 
@@ -16,12 +17,12 @@ func setupAiNavTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开内存测试库失败: %v", err)
 	}
-	if err := db.AutoMigrate(&PlatformConfig{}); err != nil {
+	if err := db.AutoMigrate(&models.PlatformConfig{}); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
-	old := DB
-	DB = db
-	t.Cleanup(func() { DB = old })
+	old := models.DB
+	models.DB = db
+	t.Cleanup(func() { models.DB = old })
 }
 
 // 站内面板与外部链接都能存；前台只拿到已启用项，且顺序保持

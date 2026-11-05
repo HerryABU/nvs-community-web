@@ -1,7 +1,8 @@
-package models
+package aiops
 
 import (
 	"fmt"
+	"nvs-server/models"
 	"strings"
 	"time"
 )
@@ -51,7 +52,7 @@ func NormalizePromptKind(kind string) string {
 
 // ListAiPrompts 我的提示词 + 平台预设（kind 为空则全部）
 func ListAiPrompts(userID uint, kind, keyword string) ([]AiPrompt, error) {
-	q := DB.Model(&AiPrompt{}).Where("user_id = ? OR user_id = 0", userID)
+	q := models.DB.Model(&AiPrompt{}).Where("user_id = ? OR user_id = 0", userID)
 	if k := strings.TrimSpace(kind); k != "" {
 		q = q.Where("kind = ?", NormalizePromptKind(k))
 	}
@@ -68,7 +69,7 @@ func ListAiPrompts(userID uint, kind, keyword string) ([]AiPrompt, error) {
 // GetAiPrompt 取提示词（本人或平台预设）
 func GetAiPrompt(id, userID uint) (*AiPrompt, error) {
 	var p AiPrompt
-	if err := DB.Where("id = ? AND (user_id = ? OR user_id = 0)", id, userID).First(&p).Error; err != nil {
+	if err := models.DB.Where("id = ? AND (user_id = ? OR user_id = 0)", id, userID).First(&p).Error; err != nil {
 		return nil, err
 	}
 	return &p, nil
@@ -77,7 +78,7 @@ func GetAiPrompt(id, userID uint) (*AiPrompt, error) {
 // ListAiPromptCategories 提示词库分类（去重、非空）
 func ListAiPromptCategories(userID uint) []string {
 	var cats []string
-	DB.Model(&AiPrompt{}).
+	models.DB.Model(&AiPrompt{}).
 		Where("(user_id = ? OR user_id = 0) AND category <> ''", userID).
 		Distinct().Order("category ASC").Pluck("category", &cats)
 	return cats
@@ -102,7 +103,7 @@ func CreateAiPrompt(userID uint, kind, category, title, content string) (*AiProm
 		return nil, fmt.Errorf("提示词过长（上限 8000 字）")
 	}
 	var n int64
-	DB.Model(&AiPrompt{}).Where("user_id = ?", userID).Count(&n)
+	models.DB.Model(&AiPrompt{}).Where("user_id = ?", userID).Count(&n)
 	if n >= MaxUserPrompts {
 		return nil, fmt.Errorf("自定义提示词数量已达上限（%d 条）", MaxUserPrompts)
 	}
@@ -111,7 +112,7 @@ func CreateAiPrompt(userID uint, kind, category, title, content string) (*AiProm
 		Category: strings.TrimSpace(category), Title: title, Content: content,
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
-	if err := DB.Create(p).Error; err != nil {
+	if err := models.DB.Create(p).Error; err != nil {
 		return nil, err
 	}
 	return p, nil
@@ -137,7 +138,7 @@ func UpdateAiPrompt(id, userID uint, kind, category, title, content string) erro
 	if len([]rune(content)) > 8000 {
 		return fmt.Errorf("提示词过长（上限 8000 字）")
 	}
-	return DB.Model(&AiPrompt{}).Where("id = ? AND user_id = ?", id, userID).Updates(map[string]interface{}{
+	return models.DB.Model(&AiPrompt{}).Where("id = ? AND user_id = ?", id, userID).Updates(map[string]interface{}{
 		"kind": NormalizePromptKind(kind), "category": strings.TrimSpace(category),
 		"title": title, "content": content, "updated_at": time.Now(),
 	}).Error
@@ -152,12 +153,12 @@ func DeleteAiPrompt(id, userID uint) error {
 	if p.UserID == 0 {
 		return fmt.Errorf("平台预设提示词不可删除")
 	}
-	return DB.Where("id = ? AND user_id = ?", id, userID).Delete(&AiPrompt{}).Error
+	return models.DB.Where("id = ? AND user_id = ?", id, userID).Delete(&AiPrompt{}).Error
 }
 
 // TouchAiPrompt 记录使用次数（用于「常用提示词」排序）
 func TouchAiPrompt(id uint) {
-	DB.Model(&AiPrompt{}).Where("id = ?", id).UpdateColumn("used_count", DB.Raw("used_count + 1"))
+	models.DB.Model(&AiPrompt{}).Where("id = ?", id).UpdateColumn("used_count", models.DB.Raw("used_count + 1"))
 }
 
 // ---------- 平台预设种子 ----------
@@ -209,7 +210,7 @@ func InitAiPrompts() {
 	for i := range seeds {
 		s := seeds[i]
 		var n int64
-		DB.Model(&AiPrompt{}).Where("user_id = 0 AND title = ? AND kind = ?", s.Title, s.Kind).Count(&n)
+		models.DB.Model(&AiPrompt{}).Where("user_id = 0 AND title = ? AND kind = ?", s.Title, s.Kind).Count(&n)
 		if n > 0 {
 			continue
 		}
@@ -218,6 +219,6 @@ func InitAiPrompts() {
 		s.SortOrder = 100 - i
 		s.CreatedAt = now
 		s.UpdatedAt = now
-		DB.Create(&s)
+		models.DB.Create(&s)
 	}
 }

@@ -2,11 +2,11 @@ package ai
 
 import (
 	"nvs-server/handlers/hctx"
-	"nvs-server/models"
 	"nvs-server/utils"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	aiops "nvs-server/models/aiops"
 )
 
 // ==================== AI 提示词库（§5.4） ====================
@@ -14,7 +14,7 @@ import (
 // AiPromptList GET /api/ai/prompts?kind=&q= — 我的提示词 + 平台预设
 func AiPromptList(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
-	list, err := models.ListAiPrompts(userID, c.Query("kind"), c.Query("q"))
+	list, err := aiops.ListAiPrompts(userID, c.Query("kind"), c.Query("q"))
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -22,7 +22,7 @@ func AiPromptList(c *gin.Context) {
 	// 去掉 content 之外的无用字段无必要；这里原样返回，前端按需展示
 	utils.Success(c, gin.H{
 		"list":       list,
-		"categories": models.ListAiPromptCategories(userID),
+		"categories": aiops.ListAiPromptCategories(userID),
 	})
 }
 
@@ -41,7 +41,7 @@ func AiPromptCreate(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	p, err := models.CreateAiPrompt(userID, req.Kind, req.Category, req.Title, req.Content)
+	p, err := aiops.CreateAiPrompt(userID, req.Kind, req.Category, req.Title, req.Content)
 	if err != nil {
 		utils.BadRequest(c, err.Error())
 		return
@@ -58,7 +58,7 @@ func AiPromptUpdate(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.UpdateAiPrompt(uint(id), userID, req.Kind, req.Category, req.Title, req.Content); err != nil {
+	if err := aiops.UpdateAiPrompt(uint(id), userID, req.Kind, req.Category, req.Title, req.Content); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
@@ -69,7 +69,7 @@ func AiPromptUpdate(c *gin.Context) {
 func AiPromptDelete(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := models.DeleteAiPrompt(uint(id), userID); err != nil {
+	if err := aiops.DeleteAiPrompt(uint(id), userID); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
@@ -80,11 +80,11 @@ func AiPromptDelete(c *gin.Context) {
 func AiPromptUse(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	p, err := models.GetAiPrompt(uint(id), userID)
+	p, err := aiops.GetAiPrompt(uint(id), userID)
 	if err != nil {
 		utils.NotFound(c, "提示词不存在")
 		return
 	}
-	models.TouchAiPrompt(p.ID)
+	aiops.TouchAiPrompt(p.ID)
 	utils.Success(c, gin.H{"message": "ok"})
 }

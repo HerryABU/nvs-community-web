@@ -9,6 +9,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aiops "nvs-server/models/aiops"
 )
 
 // ==================== AI 模型池管理端（§5.3） ====================
@@ -393,12 +394,12 @@ func AdminAiModelPresets(c *gin.Context) {
 		return
 	}
 	kind := strings.TrimSpace(c.Query("kind"))
-	all := models.ListAiModelPresets()
+	all := aiops.ListAiModelPresets()
 	if kind == "" {
 		utils.Success(c, gin.H{"list": all})
 		return
 	}
-	out := make([]models.AiModelPreset, 0, len(all))
+	out := make([]aiops.AiModelPreset, 0, len(all))
 	for _, p := range all {
 		if p.Kind == models.NormalizeAiKind(kind) {
 			out = append(out, p)

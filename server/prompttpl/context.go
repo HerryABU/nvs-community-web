@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"nvs-server/models"
+	aiops "nvs-server/models/aiops"
 	"nvs-server/utils"
 )
 
@@ -71,11 +72,11 @@ func BuildNovelVars(novelID, chapterID uint, provided map[string]string, tailRun
 	set(novel.Title, "novel.title", "作品名", "作品", "书名")
 	set(novel.Category, "novel.category", "类型", "题材", "分类")
 	set(novel.Summary, "novel.summary", "作品简介", "简介")
-	set(models.GetNovelOutline(novel.ID), "memory.outline", "大纲", "作品大纲")
-	set(models.GetNovelCharacters(novel.ID), "memory.characters", "角色信息", "角色", "人物", "角色库", "人物设定")
+	set(aiops.GetNovelOutline(novel.ID), "memory.outline", "大纲", "作品大纲")
+	set(aiops.GetNovelCharacters(novel.ID), "memory.characters", "角色信息", "角色", "人物", "角色库", "人物设定")
 
 	// 前文摘要：最近 5 章（不含当前章）
-	if summaries, serr := models.ListRecentChapterSummaries(novel.ID, chapterID, 5); serr == nil && len(summaries) > 0 {
+	if summaries, serr := aiops.ListRecentChapterSummaries(novel.ID, chapterID, 5); serr == nil && len(summaries) > 0 {
 		var lines []string
 		for i := len(summaries) - 1; i >= 0; i-- { // 转成时间正序
 			lines = append(lines, "- "+strings.TrimSpace(summaries[i].Content))

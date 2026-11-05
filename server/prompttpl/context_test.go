@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"nvs-server/models"
+	aiops "nvs-server/models/aiops"
 )
 
 // TestBuildNovelVars 上下文自动注入：作品信息 / 大纲 / 角色 / 摘要 / 前文 / 作者样本，
@@ -22,8 +23,8 @@ func TestBuildNovelVars(t *testing.T) {
 	if err := models.DB.Create(novel).Error; err != nil {
 		t.Fatalf("建作品失败: %v", err)
 	}
-	_ = models.UpsertNovelOutline(novel.ID, "三幕：启程 / 迷失 / 归来")
-	_ = models.UpsertNovelCharacters(novel.ID, "顾昭：主角，记忆修复师；林夏：搭档，理性")
+	_ = aiops.UpsertNovelOutline(novel.ID, "三幕：启程 / 迷失 / 归来")
+	_ = aiops.UpsertNovelCharacters(novel.ID, "顾昭：主角，记忆修复师；林夏：搭档，理性")
 
 	dir := t.TempDir()
 	write := func(name, content string) string {
@@ -41,7 +42,7 @@ func TestBuildNovelVars(t *testing.T) {
 	if err := models.DB.Create(ch2).Error; err != nil {
 		t.Fatalf("建章节失败: %v", err)
 	}
-	_ = models.UpsertChapterSummary(novel.ID, ch1.ID, "主角抵达观测站，发现异常信号")
+	_ = aiops.UpsertChapterSummary(novel.ID, ch1.ID, "主角抵达观测站，发现异常信号")
 
 	res, err := BuildNovelVars(novel.ID, ch2.ID, map[string]string{"原文": "编辑器里正在写的新段落"}, 0)
 	if err != nil {

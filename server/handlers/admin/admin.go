@@ -12,6 +12,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aiops "nvs-server/models/aiops"
 	search "nvs-server/models/search"
 	"nvs-server/models/security"
 )
@@ -667,7 +668,7 @@ func IsPoliceOrAdminUser(c *gin.Context) bool {
 // 大屏只放得下前几名，且前端不需要成功率/延迟等细节 —— 传全量既浪费带宽也容易
 // 让人误以为表格数据不全。这里只保留「名字 + 次数 + tokens」，其余由「模型统计」页承担。
 func computeAiTop(dim string, days, limit int) []gin.H {
-	rows, err := models.AggregateAiUsage(dim, days)
+	rows, err := aiops.AggregateAiUsage(dim, days)
 	if err != nil || len(rows) == 0 {
 		return []gin.H{}
 	}
@@ -702,7 +703,7 @@ func computeAiTop(dim string, days, limit int) []gin.H {
 // 用展示名而不是 model_id 字段，是因为站长常把展示名写成 "DeepSeek-V4-Flash" 这种可读形式，
 // 解析效果更稳定；解析不出支链时归到 "其他"。
 func computeAiModelFamilyStack(days, limit int) []gin.H {
-	rows, err := models.AggregateAiUsage("model", days)
+	rows, err := aiops.AggregateAiUsage("model", days)
 	if err != nil || len(rows) == 0 {
 		return []gin.H{}
 	}

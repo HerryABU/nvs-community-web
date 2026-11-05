@@ -1,6 +1,7 @@
-package models
+package aiops
 
 import (
+	"nvs-server/models"
 	"sort"
 	"strings"
 	"time"
@@ -8,7 +9,7 @@ import (
 
 // ==================== AI 用量统计（按渠道 / 模型 / 厂商聚合） ====================
 //
-// 数据源是 AiCallLog（每次调用一行，含 tokens / 实扣代币 / 状态 / 延迟）。
+// 数据源是 models.AiCallLog（每次调用一行，含 tokens / 实扣代币 / 状态 / 延迟）。
 // 三个维度共用同一份聚合，只是最后的分组键不同：
 //
 //	model   —— 按 model_id（看单个模型跑得怎么样）
@@ -16,7 +17,7 @@ import (
 //	vendor  —— 按厂商（看 DeepSeek / OpenAI 各花了多少）
 //
 // 先按 model_id 做一次 group by（模型数是常量级），再在内存里按维度归并 ——
-// 避免对大表做多列 group by，也避免 join（channel/vendor 存在 AiModel 表里）。
+// 避免对大表做多列 group by，也避免 join（channel/vendor 存在 models.AiModel 表里）。
 
 // AiUsageRow 一个分组的用量
 type AiUsageRow struct {
@@ -61,7 +62,7 @@ func AggregateAiUsage(dim string, days int) ([]AiUsageRow, error) {
 		LatencyCnt int64
 	}
 	var aggs []modelAgg
-	err := DB.Model(&AiCallLog{}).
+	err := models.DB.Model(&models.AiCallLog{}).
 		Select(`model_id,
 		        COUNT(*) as requests,
 		        SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success,
@@ -79,11 +80,11 @@ func AggregateAiUsage(dim string, days int) ([]AiUsageRow, error) {
 	}
 
 	// 模型元信息（名称/渠道/厂商）——模型数少，一次全读进内存
-	var models []AiModel
-	DB.Select("id, name, base_url, vendor").Find(&models)
-	meta := make(map[uint]AiModel, len(models))
-	for i := range models {
-		meta[models[i].ID] = models[i]
+	var modelRows []models.AiModel
+	models.DB.Select("id, name, base_url, vendor").Find(&modelRows)
+	meta := make(map[uint]models.AiModel, len(modelRows))
+	for i := range modelRows {
+		meta[modelRows[i].ID] = modelRows[i]
 	}
 
 	out := map[string]*AiUsageRow{}

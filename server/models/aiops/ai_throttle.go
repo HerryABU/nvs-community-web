@@ -1,4 +1,4 @@
-package models
+package aiops
 
 // ==================== 三维交叉限流（gap-audit #15）====================
 // 已有的限流维度：用户级速率（api_key_quota）+ 每日调用/代币限额 + 单模型密钥轮询。
@@ -16,6 +16,7 @@ package models
 import (
 	"encoding/json"
 	"fmt"
+	"nvs-server/models"
 	"strings"
 	"sync"
 	"time"
@@ -48,7 +49,7 @@ func DefaultAiThrottleConfig() AiThrottleConfig {
 
 // LoadAiThrottleConfig 读取配置
 func LoadAiThrottleConfig() AiThrottleConfig {
-	raw := GetPlatformConfig(aiThrottleKey)
+	raw := models.GetPlatformConfig(aiThrottleKey)
 	c := DefaultAiThrottleConfig()
 	if strings.TrimSpace(raw) != "" {
 		if err := json.Unmarshal([]byte(raw), &c); err != nil {
@@ -80,7 +81,7 @@ func SaveAiThrottleConfig(c AiThrottleConfig) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(aiThrottleKey, string(b))
+	return models.SetPlatformConfig(aiThrottleKey, string(b))
 }
 
 // ─────────────── 滑动窗口 ───────────────

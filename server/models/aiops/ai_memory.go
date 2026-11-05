@@ -1,6 +1,7 @@
-package models
+package aiops
 
 import (
+	"nvs-server/models"
 	"strings"
 	"time"
 )
@@ -43,7 +44,7 @@ func (AiNovelMemory) TableName() string { return "ai_novel_memories" }
 func UpsertNovelOutline(novelID uint, content string) error {
 	content = strings.TrimSpace(content)
 	if content == "" {
-		return DB.Where("novel_id = ? AND kind = ?", novelID, AiMemoryOutline).
+		return models.DB.Where("novel_id = ? AND kind = ?", novelID, AiMemoryOutline).
 			Delete(&AiNovelMemory{}).Error
 	}
 	return upsertAiMemory(novelID, AiMemoryOutline, 0, content)
@@ -52,7 +53,7 @@ func UpsertNovelOutline(novelID uint, content string) error {
 // GetNovelOutline 读取作品大纲（无则空串）
 func GetNovelOutline(novelID uint) string {
 	var m AiNovelMemory
-	if err := DB.Where("novel_id = ? AND kind = ?", novelID, AiMemoryOutline).First(&m).Error; err != nil {
+	if err := models.DB.Where("novel_id = ? AND kind = ?", novelID, AiMemoryOutline).First(&m).Error; err != nil {
 		return ""
 	}
 	return m.Content
@@ -62,7 +63,7 @@ func GetNovelOutline(novelID uint) string {
 func UpsertNovelCharacters(novelID uint, content string) error {
 	content = strings.TrimSpace(content)
 	if content == "" {
-		return DB.Where("novel_id = ? AND kind = ?", novelID, AiMemoryCharacters).
+		return models.DB.Where("novel_id = ? AND kind = ?", novelID, AiMemoryCharacters).
 			Delete(&AiNovelMemory{}).Error
 	}
 	return upsertAiMemory(novelID, AiMemoryCharacters, 0, content)
@@ -71,7 +72,7 @@ func UpsertNovelCharacters(novelID uint, content string) error {
 // GetNovelCharacters 读取角色设定（无则空串）
 func GetNovelCharacters(novelID uint) string {
 	var m AiNovelMemory
-	if err := DB.Where("novel_id = ? AND kind = ?", novelID, AiMemoryCharacters).First(&m).Error; err != nil {
+	if err := models.DB.Where("novel_id = ? AND kind = ?", novelID, AiMemoryCharacters).First(&m).Error; err != nil {
 		return ""
 	}
 	return m.Content
@@ -92,7 +93,7 @@ func GetChapterSummary(novelID, chapterID uint) string {
 		return ""
 	}
 	var m AiNovelMemory
-	if err := DB.Where("novel_id = ? AND kind = ? AND chapter_id = ?", novelID, AiMemoryChapterSummary, chapterID).
+	if err := models.DB.Where("novel_id = ? AND kind = ? AND chapter_id = ?", novelID, AiMemoryChapterSummary, chapterID).
 		First(&m).Error; err != nil {
 		return ""
 	}
@@ -101,8 +102,8 @@ func GetChapterSummary(novelID, chapterID uint) string {
 
 func upsertAiMemory(novelID uint, kind string, chapterID uint, content string) error {
 	now := time.Now()
-	tokens := EstimateTokens(content)
-	return DB.Exec(
+	tokens := models.EstimateTokens(content)
+	return models.DB.Exec(
 		"INSERT INTO ai_novel_memories (novel_id, kind, chapter_id, content, tokens, created_at, updated_at) "+
 			"VALUES (?, ?, ?, ?, ?, ?, ?) "+
 			"ON CONFLICT(novel_id, kind, chapter_id) DO UPDATE SET content=excluded.content, "+
@@ -116,7 +117,7 @@ func ListRecentChapterSummaries(novelID, excludeChapter uint, limit int) ([]AiNo
 		limit = AiContextRecentChapters
 	}
 	var list []AiNovelMemory
-	q := DB.Where("novel_id = ? AND kind = ?", novelID, AiMemoryChapterSummary)
+	q := models.DB.Where("novel_id = ? AND kind = ?", novelID, AiMemoryChapterSummary)
 	if excludeChapter > 0 {
 		q = q.Where("chapter_id <> ?", excludeChapter)
 	}
@@ -127,7 +128,7 @@ func ListRecentChapterSummaries(novelID, excludeChapter uint, limit int) ([]AiNo
 // ListNovelMemories 作品全部记忆（管理预览：大纲 + 摘要列表）
 func ListNovelMemories(novelID uint) ([]AiNovelMemory, error) {
 	var list []AiNovelMemory
-	err := DB.Where("novel_id = ?", novelID).
+	err := models.DB.Where("novel_id = ?", novelID).
 		Order("kind ASC, chapter_id ASC").Find(&list).Error
 	return list, err
 }
@@ -135,7 +136,7 @@ func ListNovelMemories(novelID uint) ([]AiNovelMemory, error) {
 // CountNovelMemories 作品记忆数量（status 展示）
 func CountNovelMemories(novelID uint) (outline bool, summaries int64) {
 	outline = GetNovelOutline(novelID) != ""
-	DB.Model(&AiNovelMemory{}).
+	models.DB.Model(&AiNovelMemory{}).
 		Where("novel_id = ? AND kind = ?", novelID, AiMemoryChapterSummary).
 		Count(&summaries)
 	return
@@ -143,7 +144,7 @@ func CountNovelMemories(novelID uint) (outline bool, summaries int64) {
 
 // DeleteChapterMemory 删除某章记忆（章节删除时清理）
 func DeleteChapterMemory(novelID, chapterID uint) error {
-	return DB.Where("novel_id = ? AND kind = ? AND chapter_id = ?", novelID, AiMemoryChapterSummary, chapterID).
+	return models.DB.Where("novel_id = ? AND kind = ? AND chapter_id = ?", novelID, AiMemoryChapterSummary, chapterID).
 		Delete(&AiNovelMemory{}).Error
 }
 
@@ -169,7 +170,7 @@ func BuildNovelContext(novelID, currentChapterID uint, currentText string, budge
 	tailTokens := 0
 	if len(runes) > 0 {
 		tailPart = "【当前章节结尾】\n" + string(runes)
-		tailTokens = EstimateTokens(tailPart)
+		tailTokens = models.EstimateTokens(tailPart)
 	}
 
 	// 2. 最近 K 章摘要（新→旧遍历，放不下的更旧的直接跳过）
@@ -178,7 +179,7 @@ func BuildNovelContext(novelID, currentChapterID uint, currentText string, budge
 	sumUsed := 0
 	for _, s := range summaries {
 		line := "【前文摘要】" + s.Content
-		t := EstimateTokens(line)
+		t := models.EstimateTokens(line)
 		if tailTokens+sumUsed+t > budget {
 			continue
 		}
@@ -195,7 +196,7 @@ func BuildNovelContext(novelID, currentChapterID uint, currentText string, budge
 	used := tailTokens + sumUsed
 	if outline := GetNovelOutline(novelID); outline != "" {
 		part := "【作品大纲】\n" + outline
-		if t := EstimateTokens(part); used+t <= budget {
+		if t := models.EstimateTokens(part); used+t <= budget {
 			outlinePart = part
 			used += t
 		}

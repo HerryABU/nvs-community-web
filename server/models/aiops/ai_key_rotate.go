@@ -1,6 +1,9 @@
-package models
+package aiops
 
-import "nvs-server/utils"
+import (
+	"nvs-server/models"
+	"nvs-server/utils"
+)
 
 // ReencryptAiModelKeys 把全部上游 API Key 从旧密钥迁移到新密钥（换令牌加密密码时调用）。
 //
@@ -10,8 +13,8 @@ func ReencryptAiModelKeys(oldKey, newKey []byte) (int, error) {
 	if len(oldKey) != 32 || len(newKey) != 32 {
 		return 0, utils.ErrFieldCryptoNoKey
 	}
-	var list []AiModel
-	if err := DB.Where("api_key_enc != ''").Find(&list).Error; err != nil {
+	var list []models.AiModel
+	if err := models.DB.Where("api_key_enc != ''").Find(&list).Error; err != nil {
 		return 0, err
 	}
 	// 第一阶段：全部解密 + 重新加密（只写内存）
@@ -34,7 +37,7 @@ func ReencryptAiModelKeys(oldKey, newKey []byte) (int, error) {
 	// 第二阶段：统一落库
 	n := 0
 	for _, t := range todo {
-		if err := DB.Model(&AiModel{}).Where("id = ?", t.id).
+		if err := models.DB.Model(&models.AiModel{}).Where("id = ?", t.id).
 			Update("api_key_enc", t.enc).Error; err != nil {
 			return n, err
 		}

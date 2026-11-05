@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	aicost "nvs-server/models/aicost"
+	aiops "nvs-server/models/aiops"
 )
 
 // AdminChannelBalanceOverview GET /api/admin/ai/channels/balance
@@ -238,7 +239,7 @@ func AdminAiUsageStats(c *gin.Context) {
 	}
 	dim := c.DefaultQuery("dim", "model")
 	days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
-	rows, err := models.AggregateAiUsage(dim, days)
+	rows, err := aiops.AggregateAiUsage(dim, days)
 	if err != nil {
 		utils.InternalError(c, "统计失败")
 		return

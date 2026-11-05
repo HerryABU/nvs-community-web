@@ -47,6 +47,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	aiops "nvs-server/models/aiops"
 	siteops "nvs-server/models/siteops"
 )
 
@@ -441,8 +442,8 @@ func initDatabase() error {
 	models.InitDefaultForums()
 	models.InitPlatformConfigs()
 	models.SeedDefaultAiAgents() // AI 智能体内置种子（表为空时写入）
-	models.InitAiPrompts()       // AI 提示词库平台预设（幂等）
-	models.SeedAiVendors()       // AI 厂商字典（幂等）
+	aiops.InitAiPrompts()        // AI 提示词库平台预设（幂等）
+	aiops.SeedAiVendors()        // AI 厂商字典（幂等）
 	models.SeedAiStyles()        // 作品风格字典（幂等）
 	// 管理端配置（DB）覆盖 .env 初始值：微信扫码凭据热更新进 config 包级变量
 	// （sms 网关由 resolveGateway 每次发送前读 DB，无需在此处理）

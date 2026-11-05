@@ -10,6 +10,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aiops "nvs-server/models/aiops"
 )
 
 // ==================== AI 管理后台：审计 / 功能开关 / 厂商字典 ====================
@@ -138,14 +139,14 @@ func AdminListAiVendors(c *gin.Context) {
 	if !EnsureAdmin(c) {
 		return
 	}
-	list, err := models.ListAiVendors(false)
+	list, err := aiops.ListAiVendors(false)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
 	}
 	// 附带每个厂商下的模型数，便于判断能否删除
 	type row struct {
-		models.AiVendor
+		aiops.AiVendor
 		Models int64 `json:"models"`
 	}
 	out := make([]row, 0, len(list))
@@ -171,7 +172,7 @@ func AdminCreateAiVendor(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	v, err := models.CreateAiVendor(req.Name, req.SortOrder, req.Prefix)
+	v, err := aiops.CreateAiVendor(req.Name, req.SortOrder, req.Prefix)
 	if err != nil {
 		utils.BadRequest(c, err.Error())
 		return
@@ -199,7 +200,7 @@ func AdminUpdateAiVendor(c *gin.Context) {
 	if req.Enabled != nil {
 		enabled = *req.Enabled
 	}
-	if err := models.UpdateAiVendor(uint(id), strings.TrimSpace(req.Name), req.SortOrder, enabled, req.Prefix); err != nil {
+	if err := aiops.UpdateAiVendor(uint(id), strings.TrimSpace(req.Name), req.SortOrder, enabled, req.Prefix); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
@@ -212,7 +213,7 @@ func AdminDeleteAiVendor(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := models.DeleteAiVendor(uint(id)); err != nil {
+	if err := aiops.DeleteAiVendor(uint(id)); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
@@ -282,7 +283,7 @@ func normalizeMatrixModel(m models.AiModel) matrixModel {
 	name := m.Vendor
 	if name == "" {
 		// 前缀 → 厂商（如 DeepSeek-V4-Flash 的 DeepSeek → deepseek 前缀命中 DeepSeek）
-		if v := models.MatchVendorByPrefix(p.Prefix); v != nil {
+		if v := aiops.MatchVendorByPrefix(p.Prefix); v != nil {
 			name = v.Name
 		}
 	}
@@ -357,7 +358,7 @@ func AdminAiVendorMatrix(c *gin.Context) {
 	if !EnsureAdmin(c) {
 		return
 	}
-	vendors, err := models.ListAiVendors(false)
+	vendors, err := aiops.ListAiVendors(false)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return

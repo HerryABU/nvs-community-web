@@ -1,8 +1,9 @@
-package models
+package aiops
 
 import (
 	"encoding/json"
 	"errors"
+	"nvs-server/models"
 	"strings"
 )
 
@@ -41,7 +42,7 @@ type AiNavItem struct {
 
 // GetAiNavItems 读取自定义菜单（坏配置返回空列表，不让左栏整体挂掉）
 func GetAiNavItems() []AiNavItem {
-	raw := strings.TrimSpace(GetPlatformConfig(aiNavItemsKey))
+	raw := strings.TrimSpace(models.GetPlatformConfig(aiNavItemsKey))
 	if raw == "" {
 		return nil
 	}
@@ -61,7 +62,7 @@ func GetAiNavItems() []AiNavItem {
 
 // GetAllAiNavItems 管理端读取（含未启用项，方便站长编辑）
 func GetAllAiNavItems() []AiNavItem {
-	raw := strings.TrimSpace(GetPlatformConfig(aiNavItemsKey))
+	raw := strings.TrimSpace(models.GetPlatformConfig(aiNavItemsKey))
 	if raw == "" {
 		return nil
 	}
@@ -89,13 +90,13 @@ func SetAiNavItems(list []AiNavItem) error {
 		seen[list[i].Key] = true
 	}
 	if len(list) == 0 {
-		return SetPlatformConfig(aiNavItemsKey, "[]")
+		return models.SetPlatformConfig(aiNavItemsKey, "[]")
 	}
 	b, err := json.Marshal(list)
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(aiNavItemsKey, string(b))
+	return models.SetPlatformConfig(aiNavItemsKey, string(b))
 }
 
 // validateAiNavItem 逐条校验并就地补默认值（Key/Group/Enabled）

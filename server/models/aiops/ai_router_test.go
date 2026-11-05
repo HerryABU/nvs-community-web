@@ -1,10 +1,11 @@
-package models
+package aiops
 
 import (
 	"testing"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 func setupRouterDB(t *testing.T) *gorm.DB {
@@ -13,13 +14,13 @@ func setupRouterDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("打开测试库失败: %v", err)
 	}
-	if err := db.AutoMigrate(&AiModel{}, &AiCallLog{}, &PlatformConfig{}); err != nil {
+	if err := db.AutoMigrate(&models.AiModel{}, &models.AiCallLog{}, &models.PlatformConfig{}); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
-	old := DB
-	DB = db
+	old := models.DB
+	models.DB = db
 	t.Cleanup(func() {
-		DB = old
+		models.DB = old
 		if sqlDB, e := db.DB(); e == nil {
 			_ = sqlDB.Close()
 		}
@@ -27,14 +28,14 @@ func setupRouterDB(t *testing.T) *gorm.DB {
 	return db
 }
 
-func mkModel(t *testing.T, name string, priceIn, priceOut int64, priority int, provider string) *AiModel {
+func mkModel(t *testing.T, name string, priceIn, priceOut int64, priority int, provider string) *models.AiModel {
 	t.Helper()
-	m := &AiModel{
-		Name: name, Kind: AiKindChat, ModelID: name, BaseURL: "http://localhost",
+	m := &models.AiModel{
+		Name: name, Kind: models.AiKindChat, ModelID: name, BaseURL: "http://localhost",
 		PriceIn: priceIn, PriceOut: priceOut, Priority: priority,
 		ProviderHint: provider, Enabled: true, MaxTokens: 1024,
 	}
-	if err := DB.Create(m).Error; err != nil {
+	if err := models.DB.Create(m).Error; err != nil {
 		t.Fatal(err)
 	}
 	return m
@@ -83,8 +84,8 @@ func TestPickFastestUsesLatency(t *testing.T) {
 
 	// 造延迟样本：slow=3000ms，fast=200ms
 	for i := 0; i < 3; i++ {
-		DB.Create(&AiCallLog{UserID: 1, ModelID: slow.ID, TokensIn: 1, TokensOut: 1, LatencyMs: 3000})
-		DB.Create(&AiCallLog{UserID: 1, ModelID: fast.ID, TokensIn: 1, TokensOut: 1, LatencyMs: 200})
+		models.DB.Create(&models.AiCallLog{UserID: 1, ModelID: slow.ID, TokensIn: 1, TokensOut: 1, LatencyMs: 3000})
+		models.DB.Create(&models.AiCallLog{UserID: 1, ModelID: fast.ID, TokensIn: 1, TokensOut: 1, LatencyMs: 200})
 	}
 	if err := SaveAiRouteConfig(AiRouteConfig{Strategy: RouteFastest}); err != nil {
 		t.Fatal(err)

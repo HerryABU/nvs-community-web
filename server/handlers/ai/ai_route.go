@@ -6,6 +6,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aiops "nvs-server/models/aiops"
 )
 
 // AI 路由策略的管理接口（gap-audit #10/#11）
@@ -19,14 +20,14 @@ func GetAiRouteConfig(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	cfg := models.LoadAiRouteConfig()
+	cfg := aiops.LoadAiRouteConfig()
 	utils.Success(c, gin.H{
 		"config": cfg,
 		"preview": gin.H{
 			// 各场景当前会选中谁（按当前策略实时算）
-			"cheapest": previewPick(models.RouteCheapest),
-			"fastest":  previewPick(models.RouteFastest),
-			"manual":   previewPick(models.RouteManual),
+			"cheapest": previewPick(aiops.RouteCheapest),
+			"fastest":  previewPick(aiops.RouteFastest),
+			"manual":   previewPick(aiops.RouteManual),
 			"scenes":   previewScenes(cfg),
 		},
 		"note": "降级发生时会在输出里明确标注「模型已降级：A → B（原因）」，不会静默换模型",
@@ -38,16 +39,16 @@ func UpdateAiRouteConfig(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	var in models.AiRouteConfig
+	var in aiops.AiRouteConfig
 	if err := c.ShouldBindJSON(&in); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.SaveAiRouteConfig(in); err != nil {
+	if err := aiops.SaveAiRouteConfig(in); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "已保存并即时生效", models.LoadAiRouteConfig())
+	utils.SuccessMessage(c, "已保存并即时生效", aiops.LoadAiRouteConfig())
 }
 
 // previewPick 按策略预览会选中的模型（含价格，便于核对「最便宜」到底多便宜）
@@ -71,10 +72,10 @@ func previewPick(strategy string) []gin.H {
 }
 
 // previewScenes 各场景实际会用的策略
-func previewScenes(cfg models.AiRouteConfig) map[string]string {
+func previewScenes(cfg aiops.AiRouteConfig) map[string]string {
 	out := map[string]string{}
 	for _, scene := range []string{"ai_hub", "oc_turn", "oc_publish", "group_bot", "chapter"} {
-		out[scene] = models.EffectiveStrategy(cfg, scene)
+		out[scene] = aiops.EffectiveStrategy(cfg, scene)
 	}
 	return out
 }

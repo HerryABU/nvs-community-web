@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	aicost "nvs-server/models/aicost"
+	aiops "nvs-server/models/aiops"
 )
 
 // ==================== AI 调用（用户端，§5.3 / §13.3） ====================
@@ -168,7 +169,7 @@ func AiComplete(c *gin.Context) {
 	memoryCtx := ""
 	memoryTokens := 0
 	if req.UseMemory && req.NovelID > 0 {
-		memoryCtx, memoryTokens = models.BuildNovelContext(req.NovelID, req.ChapterID, text, models.AiContextBudget)
+		memoryCtx, memoryTokens = aiops.BuildNovelContext(req.NovelID, req.ChapterID, text, aiops.AiContextBudget)
 	}
 	systemPrefix := aiContextBlock(memoryCtx)
 

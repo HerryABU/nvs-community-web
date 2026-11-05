@@ -1,7 +1,8 @@
-package models
+package aiops
 
 import (
 	"encoding/json"
+	"nvs-server/models"
 	"strings"
 	"time"
 )
@@ -52,7 +53,7 @@ type AigcConfig struct {
 
 // DefaultAigcConfig 默认配置：默认就具备合规能力（角标 + 隐式字段），豁免默认关闭
 func DefaultAigcConfig() AigcConfig {
-	producer := strings.TrimSpace(GetSiteName())
+	producer := strings.TrimSpace(models.GetSiteName())
 	if producer == "" {
 		producer = "本站"
 	}
@@ -78,7 +79,7 @@ func DefaultAigcConfig() AigcConfig {
 // LoadAigcConfig 读取配置（坏值回退默认）
 func LoadAigcConfig() AigcConfig {
 	c := DefaultAigcConfig()
-	if raw := strings.TrimSpace(GetPlatformConfig(aigcConfigKey)); raw != "" {
+	if raw := strings.TrimSpace(models.GetPlatformConfig(aigcConfigKey)); raw != "" {
 		var got AigcConfig
 		if err := json.Unmarshal([]byte(raw), &got); err == nil {
 			c = got
@@ -95,7 +96,7 @@ func SaveAigcConfig(c AigcConfig) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(aigcConfigKey, string(b))
+	return models.SetPlatformConfig(aigcConfigKey, string(b))
 }
 
 // normalize 把越界值拉回安全区间：角标字号低于 5% 就不合规了，直接抬上来
@@ -255,13 +256,13 @@ func CreateAigcAsset(a *AigcAsset) error {
 	if a.CreatedAt.IsZero() {
 		a.CreatedAt = time.Now()
 	}
-	return DB.Create(a).Error
+	return models.DB.Create(a).Error
 }
 
 // GetAigcAsset 取原图（校验归属由调用方负责）
 func GetAigcAsset(id uint) (*AigcAsset, error) {
 	var a AigcAsset
-	if err := DB.Where("id = ?", id).First(&a).Error; err != nil {
+	if err := models.DB.Where("id = ?", id).First(&a).Error; err != nil {
 		return nil, err
 	}
 	return &a, nil
@@ -271,10 +272,10 @@ func GetAigcAsset(id uint) (*AigcAsset, error) {
 // 所以取不到就回落到该任务下 id 最小的那条，别让用户点了第二张却导不出。
 func GetAigcAssetByTaskIndex(taskID uint, index int) (*AigcAsset, error) {
 	var a AigcAsset
-	if err := DB.Where("task_id = ? AND `index` = ?", taskID, index).First(&a).Error; err == nil {
+	if err := models.DB.Where("task_id = ? AND `index` = ?", taskID, index).First(&a).Error; err == nil {
 		return &a, nil
 	}
-	if err := DB.Where("task_id = ?", taskID).Order("id ASC").First(&a).Error; err != nil {
+	if err := models.DB.Where("task_id = ?", taskID).Order("id ASC").First(&a).Error; err != nil {
 		return nil, err
 	}
 	return &a, nil
@@ -289,10 +290,10 @@ func CreateAigcExport(e *AigcExport) error {
 	if e.CreatedAt.IsZero() {
 		e.CreatedAt = time.Now()
 	}
-	if err := DB.Create(e).Error; err != nil {
+	if err := models.DB.Create(e).Error; err != nil {
 		return err
 	}
-	return DB.Model(&AigcExport{}).Where("id = ?", e.ID).Updates(map[string]interface{}{
+	return models.DB.Model(&AigcExport{}).Where("id = ?", e.ID).Updates(map[string]interface{}{
 		"labeled":         e.Labeled,
 		"waived":          e.Waived,
 		"prompt_attached": e.PromptAttached,
@@ -302,7 +303,7 @@ func CreateAigcExport(e *AigcExport) error {
 // GetAigcExportByProduceID 用 ProduceID 回查（验收 #11）
 func GetAigcExportByProduceID(pid string) (*AigcExport, error) {
 	var e AigcExport
-	if err := DB.Where("produce_id = ?", pid).First(&e).Error; err != nil {
+	if err := models.DB.Where("produce_id = ?", pid).First(&e).Error; err != nil {
 		return nil, err
 	}
 	return &e, nil
@@ -317,9 +318,9 @@ func ListAigcExports(page, size int) ([]AigcExport, int64) {
 		size = 20
 	}
 	var total int64
-	DB.Model(&AigcExport{}).Count(&total)
+	models.DB.Model(&AigcExport{}).Count(&total)
 	var list []AigcExport
-	DB.Order("id DESC").Offset((page - 1) * size).Limit(size).Find(&list)
+	models.DB.Order("id DESC").Offset((page - 1) * size).Limit(size).Find(&list)
 	return list, total
 }
 
@@ -331,7 +332,7 @@ func CreateAigcWaiverLog(l *AigcWaiverLog) error {
 	if l.RequestTime.IsZero() {
 		l.RequestTime = l.CreatedAt
 	}
-	return DB.Create(l).Error
+	return models.DB.Create(l).Error
 }
 
 // ListAigcWaiverLogs 后台豁免日志列表
@@ -343,8 +344,8 @@ func ListAigcWaiverLogs(page, size int) ([]AigcWaiverLog, int64) {
 		size = 20
 	}
 	var total int64
-	DB.Model(&AigcWaiverLog{}).Count(&total)
+	models.DB.Model(&AigcWaiverLog{}).Count(&total)
 	var list []AigcWaiverLog
-	DB.Order("id DESC").Offset((page - 1) * size).Limit(size).Find(&list)
+	models.DB.Order("id DESC").Offset((page - 1) * size).Limit(size).Find(&list)
 	return list, total
 }

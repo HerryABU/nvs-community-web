@@ -1,4 +1,4 @@
-package models
+package aiops
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 func setupCostDB(t *testing.T) {
@@ -14,35 +15,35 @@ func setupCostDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	DB = db
-	if err := db.AutoMigrate(&PlatformConfig{}, &AiCallLog{}); err != nil {
+	models.DB = db
+	if err := db.AutoMigrate(&models.PlatformConfig{}, &models.AiCallLog{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	_ = db.Exec("DELETE FROM ai_call_logs").Error
-	_ = SetPlatformConfig(aiBudgetKey, "")
-	_ = SetPlatformConfig(aiThrottleKey, "")
-	ResetAiSlots()
+	_ = models.SetPlatformConfig(aiBudgetKey, "")
+	_ = models.SetPlatformConfig(aiThrottleKey, "")
+	models.ResetAiSlots()
 	ResetAiThrottle()
 }
 
 // TestGlobalBudgetHardStop 到线即拒（HardStop），未到线放行
 func TestGlobalBudgetHardStop(t *testing.T) {
 	setupCostDB(t)
-	cfg := DefaultAiBudgetConfig()
+	cfg := models.DefaultAiBudgetConfig()
 	cfg.DailyCap = 100
 	cfg.HardStop = true
-	if err := SaveAiBudgetConfig(cfg); err != nil {
+	if err := models.SaveAiBudgetConfig(cfg); err != nil {
 		t.Fatal(err)
 	}
 	// 已用 90
-	_ = DB.Create(&AiCallLog{UserID: 1, Action: "x", Cost: 90, Status: "settled", CreatedAt: time.Now()}).Error
-	if err := CheckGlobalBudget(5); err != nil {
+	_ = models.DB.Create(&models.AiCallLog{UserID: 1, Action: "x", Cost: 90, Status: "settled", CreatedAt: time.Now()}).Error
+	if err := models.CheckGlobalBudget(5); err != nil {
 		t.Fatalf("90+5 未超 100，应放行: %v", err)
 	}
-	if err := CheckGlobalBudget(20); err == nil {
+	if err := models.CheckGlobalBudget(20); err == nil {
 		t.Fatal("90+20 超过 100，应拒绝")
 	}
-	u := GetAiUsage()
+	u := models.GetAiUsage()
 	if u.Exceeded {
 		t.Fatalf("90/100 未达上限不应标记超限: %+v", u)
 	}
@@ -50,8 +51,8 @@ func TestGlobalBudgetHardStop(t *testing.T) {
 		t.Fatalf("90%% 应触发告警: %+v", u)
 	}
 	// 再花 20 → 110 超过 100
-	_ = DB.Create(&AiCallLog{UserID: 1, Action: "x", Cost: 20, Status: "settled", CreatedAt: time.Now()}).Error
-	if u2 := GetAiUsage(); !u2.Exceeded {
+	_ = models.DB.Create(&models.AiCallLog{UserID: 1, Action: "x", Cost: 20, Status: "settled", CreatedAt: time.Now()}).Error
+	if u2 := models.GetAiUsage(); !u2.Exceeded {
 		t.Fatalf("超线后应标记超限: %+v", u2)
 	}
 }
@@ -59,45 +60,45 @@ func TestGlobalBudgetHardStop(t *testing.T) {
 // TestGlobalBudgetSoftMode 不硬拦时只观测，不阻断业务
 func TestGlobalBudgetSoftMode(t *testing.T) {
 	setupCostDB(t)
-	cfg := DefaultAiBudgetConfig()
+	cfg := models.DefaultAiBudgetConfig()
 	cfg.DailyCap = 10
 	cfg.HardStop = false
-	_ = SaveAiBudgetConfig(cfg)
-	_ = DB.Create(&AiCallLog{UserID: 1, Action: "x", Cost: 999, Status: "settled", CreatedAt: time.Now()}).Error
-	if err := CheckGlobalBudget(1); err != nil {
+	_ = models.SaveAiBudgetConfig(cfg)
+	_ = models.DB.Create(&models.AiCallLog{UserID: 1, Action: "x", Cost: 999, Status: "settled", CreatedAt: time.Now()}).Error
+	if err := models.CheckGlobalBudget(1); err != nil {
 		t.Fatalf("软模式不应阻断: %v", err)
 	}
-	if u := GetAiUsage(); !u.Warn {
+	if u := models.GetAiUsage(); !u.Warn {
 		t.Fatalf("应给出告警标记: %+v", u)
 	}
 }
 
 // TestAcquireSlot 并发名额：满了就超时失败，释放后可再拿
 func TestAcquireSlot(t *testing.T) {
-	ResetAiSlots()
-	rel1, _, err := AcquireSlot(1, 100*time.Millisecond)
+	models.ResetAiSlots()
+	rel1, _, err := models.AcquireSlot(1, 100*time.Millisecond)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := AcquireSlot(1, 100*time.Millisecond); err == nil {
+	if _, _, err := models.AcquireSlot(1, 100*time.Millisecond); err == nil {
 		t.Fatal("只有一个名额时应排队超时")
 	}
 	rel1()
-	rel2, _, err := AcquireSlot(1, 100*time.Millisecond)
+	rel2, _, err := models.AcquireSlot(1, 100*time.Millisecond)
 	if err != nil {
 		t.Fatalf("释放后应能拿到: %v", err)
 	}
 	rel2()
 	// 幂等释放不应把计数打成负数
 	rel2()
-	if AiConcurrencyInUse() != 0 {
-		t.Fatalf("计数应归零: %d", AiConcurrencyInUse())
+	if models.AiConcurrencyInUse() != 0 {
+		t.Fatalf("计数应归零: %d", models.AiConcurrencyInUse())
 	}
 }
 
 // TestEffectiveConcurrency 峰时上限不能超过全站上限
 func TestEffectiveConcurrency(t *testing.T) {
-	cfg := DefaultAiBudgetConfig()
+	cfg := models.DefaultAiBudgetConfig()
 	cfg.QueueEnabled = true
 	cfg.MaxConcurrent = 10
 	cfg.PeakConcurrent = 99 // 非法：高于全站
@@ -105,7 +106,7 @@ func TestEffectiveConcurrency(t *testing.T) {
 	if cfg.PeakConcurrent != 10 {
 		t.Fatalf("峰时应被钳到全站上限: %d", cfg.PeakConcurrent)
 	}
-	if EffectiveConcurrency(AiBudgetConfig{QueueEnabled: false, MaxConcurrent: 5}) != 0 {
+	if models.EffectiveConcurrency(models.AiBudgetConfig{QueueEnabled: false, MaxConcurrent: 5}) != 0 {
 		t.Fatal("关闭排队应返回 0（不限）")
 	}
 }

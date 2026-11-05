@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	aiops "nvs-server/models/aiops"
 )
 
 // ==================== 长篇 AI 记忆（§13.5：大纲 + 章节摘要 + 上下文组装） ====================
@@ -42,19 +43,19 @@ func AiMemoryList(c *gin.Context) {
 	if !ensureNovelOwner(c, uint(novelID)) {
 		return
 	}
-	list, err := models.ListNovelMemories(uint(novelID))
+	list, err := aiops.ListNovelMemories(uint(novelID))
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
 	}
-	outline, summaries := models.CountNovelMemories(uint(novelID))
+	outline, summaries := aiops.CountNovelMemories(uint(novelID))
 	utils.Success(c, gin.H{
 		"list":       list,
 		"outline":    outline,
-		"characters": models.GetNovelCharacters(uint(novelID)),
+		"characters": aiops.GetNovelCharacters(uint(novelID)),
 		"summaries":  int(summaries),
-		"budget":     models.AiContextBudget,
-		"recent":     models.AiContextRecentChapters,
+		"budget":     aiops.AiContextBudget,
+		"recent":     aiops.AiContextRecentChapters,
 	})
 }
 
@@ -83,7 +84,7 @@ func AiMemorySaveOutline(c *gin.Context) {
 		utils.BadRequest(c, "大纲过长（上限 8000 字）")
 		return
 	}
-	if err := models.UpsertNovelOutline(req.NovelID, req.Content); err != nil {
+	if err := aiops.UpsertNovelOutline(req.NovelID, req.Content); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
@@ -116,7 +117,7 @@ func AiMemorySaveCharacters(c *gin.Context) {
 		utils.BadRequest(c, "角色设定过长（上限 8000 字）")
 		return
 	}
-	if err := models.UpsertNovelCharacters(req.NovelID, req.Content); err != nil {
+	if err := aiops.UpsertNovelCharacters(req.NovelID, req.Content); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
@@ -149,7 +150,7 @@ func AiMemorySaveSummary(c *gin.Context) {
 		utils.BadRequest(c, "摘要过长（上限 4000 字）")
 		return
 	}
-	if err := models.UpsertChapterSummary(req.NovelID, req.ChapterID, req.Content); err != nil {
+	if err := aiops.UpsertChapterSummary(req.NovelID, req.ChapterID, req.Content); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
@@ -177,7 +178,7 @@ func AiMemoryDeleteSummary(c *gin.Context) {
 	if !ensureNovelOwner(c, req.NovelID) {
 		return
 	}
-	if err := models.DeleteChapterMemory(req.NovelID, req.ChapterID); err != nil {
+	if err := aiops.DeleteChapterMemory(req.NovelID, req.ChapterID); err != nil {
 		utils.InternalError(c, "删除失败")
 		return
 	}
@@ -207,7 +208,7 @@ func AiMemoryContext(c *gin.Context) {
 	if !ensureNovelOwner(c, req.NovelID) {
 		return
 	}
-	ctx, tokens := models.BuildNovelContext(req.NovelID, req.ChapterID, req.Text, req.Budget)
+	ctx, tokens := aiops.BuildNovelContext(req.NovelID, req.ChapterID, req.Text, req.Budget)
 	utils.Success(c, gin.H{"context": ctx, "tokens": tokens})
 }
 
