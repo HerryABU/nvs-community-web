@@ -1,16 +1,20 @@
 package honeypot
 
 import (
-	"net/http/httptest"
-	"strings"
-	"testing"
-
-	"nvs-server/models"
-
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"net/http"
+	"net/http/httptest"
+	"nvs-server/models"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
 )
+
+// ===== (原 honeypot_test.go) =====
 
 func setupHP(t *testing.T) *gorm.DB {
 	t.Helper()
@@ -221,5 +225,190 @@ func TestExportLogsAction(t *testing.T) {
 	models.DB.Model(&Event{}).Where("kind = ?", EventExport).Count(&n)
 	if n != 1 {
 		t.Fatalf("导出未留痕: %d", n)
+	}
+}
+
+// ===== 合并自 archive_test.go =====
+
+// TestArchiveBeforeDelete 超期事件必须先落 gzip 归档再删库
+func TestArchiveBeforeDelete(t *testing.T) {
+	setupHP(t)
+	if _, err := SaveSetting(Setting{Enabled: true, Level: LevelMedium, RetentionDays: 30}); err != nil {
+		t.Fatal(err)
+	}
+	ResetCache()
+
+	// 一条超期 + 一条未超期
+	old := &Event{Kind: EventDecoyHit, Decoy: "env", Path: "/.env", Risk: 70,
+		CreatedAt: time.Now().AddDate(0, 0, -60)}
+	recent := &Event{Kind: EventDecoyHit, Decoy: "env", Path: "/.env", Risk: 70, CreatedAt: time.Now()}
+	models.DB.Create(old)
+	models.DB.Create(recent)
+
+	res, err := ArchiveAndCleanup()
+	if err != nil {
+		t.Fatalf("归档失败: %v", err)
+	}
+	if res.Skipped || res.Archived != 1 {
+		t.Fatalf("应归档 1 条: %+v", res)
+	}
+	if res.File == "" || res.Bytes == 0 {
+		t.Fatalf("归档文件缺失: %+v", res)
+	}
+	if _, err := os.Stat(res.File); err != nil {
+		t.Fatalf("归档文件不存在: %v", err)
+	}
+	// 超期被删、未超期保留
+	var oldCnt, recentCnt int64
+	models.DB.Model(&Event{}).Where("path = ? AND created_at < ?", "/.env", time.Now().AddDate(0, 0, -10)).Count(&oldCnt)
+	models.DB.Model(&Event{}).Count(&recentCnt)
+	if oldCnt != 0 || recentCnt != 1 {
+		t.Fatalf("清理结果错误 old=%d recent=%d", oldCnt, recentCnt)
+	}
+	// 归档列表可见
+	list, err := ListArchives()
+	if err != nil || len(list) == 0 {
+		t.Fatalf("归档列表为空: %v", err)
+	}
+	_ = os.RemoveAll(archiveDir())
+}
+
+// TestIsolatedDBSwitch 独立库切换后读写都落在独立库，且拒绝与主库同路径
+func TestIsolatedDBSwitch(t *testing.T) {
+	setupHP(t)
+	dir := t.TempDir()
+	p := filepath.Join(dir, "honeypot.db")
+
+	if err := OpenIsolated(p); err != nil {
+		t.Fatalf("打开独立库失败: %v", err)
+	}
+	defer func() {
+		ResetDB() // 复位到主库，避免污染其它测试
+		_ = os.RemoveAll(dir)
+	}()
+	if !Isolated() || DBPath() != p {
+		t.Fatalf("未切到独立库: isolated=%v path=%s", Isolated(), DBPath())
+	}
+	// 写配置进独立库
+	if _, err := SaveSetting(Setting{Enabled: true, Level: LevelHigh, RetentionDays: 60}); err != nil {
+		t.Fatal(err)
+	}
+	got := Current()
+	if got.Level != LevelHigh || got.RetentionDays != 60 {
+		t.Fatalf("独立库读写异常: %+v", got)
+	}
+	// 同路径应被拒（把主库路径指向同一文件）
+	t.Setenv("DB_PATH", p)
+	if err := SetDB(models.DB, p); err == nil {
+		t.Fatal("同路径应被拒绝")
+	}
+	t.Setenv("DB_PATH", "")
+	// 主库不应被写入这条配置
+	var cnt int64
+	models.DB.Model(&Setting{}).Where("level = ?", LevelHigh).Count(&cnt)
+	if cnt != 0 {
+		t.Fatalf("独立库配置泄漏到主库: %d", cnt)
+	}
+}
+
+// ===== 合并自 sqli_test.go =====
+
+func mustRequest(t *testing.T) *http.Request {
+	t.Helper()
+	return httptest.NewRequest("GET", "/api/v1/query?sql=1", nil)
+}
+
+// TestDetectSQLi 注入特征识别（正例/反例都要有，避免「正常长文本也判成注入」）
+func TestDetectSQLi(t *testing.T) {
+	positives := []string{
+		"id=1 UNION SELECT username,password FROM nvs_users",
+		"id=1' AND SLEEP(5)--",
+		"id=1; DROP TABLE users",
+		"q=1' or '1'='1",
+		"id=1 AND extractvalue(1,concat(0x7e,version()))",
+		"file=../../etc/passwd' UNION/**/SELECT load_file('/etc/passwd')",
+		"id=1' AND (SELECT 1 FROM information_schema.tables)",
+	}
+	for _, p := range positives {
+		if hits := DetectSQLi(p); len(hits) == 0 {
+			t.Fatalf("应识别为注入: %s", p)
+		}
+	}
+	negatives := []string{
+		"keyword=小说",
+		"page=2&size=20",
+		"title=The Union of Two Cities",
+		"",
+	}
+	for _, n := range negatives {
+		if hits := DetectSQLi(n); len(hits) > 0 {
+			t.Fatalf("不应识别为注入: %q -> %v", n, hits)
+		}
+	}
+}
+
+// TestSQLiRiskScoring 风险分：无命中=40 探路；命中越高分越高；多特征叠加加分
+func TestSQLiRiskScoring(t *testing.T) {
+	if got := SQLiRisk(nil); got != 40 {
+		t.Fatalf("无命中应为探路分 40，实际 %d", got)
+	}
+	one := SQLiRisk(DetectSQLi("id=1 or 1=1"))
+	multi := SQLiRisk(DetectSQLi("id=1 UNION SELECT 1 FROM information_schema.tables--"))
+	if multi < one {
+		t.Fatalf("多特征风险应不低于单特征：one=%d multi=%d", one, multi)
+	}
+	if multi > 100 {
+		t.Fatalf("风险分不应超过 100：%d", multi)
+	}
+}
+
+// TestFakeResultShape 预生成响应库：金丝雀必须在，且不含真实数据
+func TestFakeResultShape(t *testing.T) {
+	if len(sqliCanary) != 32 {
+		t.Fatalf("溯源标记应为 32 位十六进制（伪装成普通 token），实得: %s", sqliCanary)
+	}
+	users := fakeUsers(6)
+	if len(users) == 0 {
+		t.Fatal("假用户库不应为空")
+	}
+	for _, u := range users {
+		if !strings.HasSuffix(u.Email, "@example.internal") {
+			t.Fatalf("假邮箱应使用 example.internal 域: %s", u.Email)
+		}
+	}
+	// 固定种子：两次生成一致（更像同一个「库」）
+	a, b := fakeUsers(6), fakeUsers(6)
+	for i := range a {
+		if a[i].Hash != b[i].Hash {
+			t.Fatal("假数据应可复现（同一部署内一致）")
+		}
+	}
+}
+
+// TestCaptureTLSProxyHeader 反代透传时采集 JA3/JA4；缺失时标 missing 而不是伪造
+func TestCaptureTLSProxyHeader(t *testing.T) {
+	req := mustRequest(t)
+	req.Header.Set("X-JA3-Hash", "cd08e31494f9531f560d64c695473da9")
+	info := CaptureTLS(req)
+	if info.Source != "proxy_header" || info.JA3 == "" || !info.ViaProxy {
+		t.Fatalf("应采信反代头: %+v", info)
+	}
+
+	plain := mustRequest(t)
+	info2 := CaptureTLS(plain)
+	if info2.Source != "missing" || info2.JA3 != "" {
+		t.Fatalf("缺失时必须标 missing 且不伪造: %+v", info2)
+	}
+}
+
+func TestTLSStatsDiagnosis(t *testing.T) {
+	if got := diagnoseJA3(0, 0); !strings.Contains(got, "还没有指纹") {
+		t.Fatalf("空数据诊断不对: %s", got)
+	}
+	if got := diagnoseJA3(10, 0); !strings.Contains(got, "未透传") {
+		t.Fatalf("零采集诊断不对: %s", got)
+	}
+	if got := diagnoseJA3(10, 10); !strings.Contains(got, "正常") {
+		t.Fatalf("满采集诊断不对: %s", got)
 	}
 }

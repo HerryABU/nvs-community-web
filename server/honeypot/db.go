@@ -1,5 +1,18 @@
 package honeypot
 
+import (
+	"errors"
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
+	"nvs-server/models"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+)
+
+// ===== (原 db.go) =====
+
 // ==================== 数据连接（蜜罐内嵌主程序，数据可选独立库） ====================
 // 蜜罐**只在主进程内运行**（诱饵/影子认证/验证页/SQLi 诱饵都挂在主 gin 引擎上），
 // 不产出第二个二进制——站长只需要部署一个 exe。
@@ -11,17 +24,6 @@ package honeypot
 //      即使诱饵被写脏/被批量灌数据，也不会污染业务表。
 //
 // 铁律：独立库路径不得与主库路径相同（启动断言），否则「隔离」只是心理安慰。
-
-import (
-	"errors"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync"
-
-	"github.com/glebarez/sqlite"
-	"gorm.io/gorm"
-)
 
 var (
 	dbMu    sync.RWMutex
@@ -138,4 +140,11 @@ func ResetDB() {
 	ownDB, ownPath = nil, ""
 	dbMu.Unlock()
 	ResetCache()
+}
+
+// ===== 合并自 db_models.go =====
+
+// modelsDB 取主库连接（保持 models 依赖集中在这一个文件，便于独立进程替换）
+func modelsDB() *gorm.DB {
+	return models.DB
 }
