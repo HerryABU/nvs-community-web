@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/sanitize"
 	"strings"
 	"time"
 
 	"nvs-server/config"
 	"nvs-server/honeypot"
 	"nvs-server/security"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	quota "nvs-server/models/quota"
@@ -105,7 +106,7 @@ func AccessLog() gin.HandlerFunc {
 		}
 
 		if raw, err := json.Marshal(entry); err == nil {
-			_ = utils.WriteDailyLog("requests", string(raw))
+			_ = infra.WriteDailyLog("requests", string(raw))
 		}
 
 		// —— 异步写入数据库 Web 访问日志（功能二：前台网络诊断 / 用户分布 / 攻击流量面板）——
@@ -158,7 +159,7 @@ func AccessLog() gin.HandlerFunc {
 				query = ""
 			}
 			// 结构化客户端画像（OS / 浏览器 / 设备型号），与 UAFamily 粗分类互补
-			uaInfo := utils.ParseUserAgent(ua)
+			uaInfo := sanitize.ParseUserAgent(ua)
 
 			// 访问域名 + 协议：回答「用户是从哪个地址进来的」。
 			// 经 cpolar / nginx 转发时，Host 头可能被改写成上游地址（127.0.0.1:8000），

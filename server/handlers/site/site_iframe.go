@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"nvs-server/handlers/admincommon"
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -34,7 +34,7 @@ func GetSiteIframe(c *gin.Context) {
 	if enabled && isValidIframeURL(raw) {
 		safe = raw
 	}
-	utils.Success(c, gin.H{"enabled": safe != "", "url": safe})
+	infra.Success(c, gin.H{"enabled": safe != "", "url": safe})
 }
 
 // UpdateSiteIframe PUT /api/site-iframe（仅管理员）
@@ -48,33 +48,33 @@ func UpdateSiteIframe(c *gin.Context) {
 		Enabled bool   `json:"enabled"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	req.URL = strings.TrimSpace(req.URL)
 	if req.Enabled {
 		if req.URL == "" {
-			utils.BadRequest(c, "启用 iframe 时必须填写嵌入地址")
+			infra.BadRequest(c, "启用 iframe 时必须填写嵌入地址")
 			return
 		}
 		if !isValidIframeURL(req.URL) {
-			utils.BadRequest(c, "嵌入地址必须为 http/https 链接，且不可为 javascript:/data:/file: 等危险协议")
+			infra.BadRequest(c, "嵌入地址必须为 http/https 链接，且不可为 javascript:/data:/file: 等危险协议")
 			return
 		}
 	}
 	if err := models.SetPlatformConfig(SiteGlobalIframeEnabledKey, boolToStr(req.Enabled)); err != nil {
-		utils.InternalError(c, "保存启用状态失败")
+		infra.InternalError(c, "保存启用状态失败")
 		return
 	}
 	if err := models.SetPlatformConfig(SiteGlobalIframeURLKey, req.URL); err != nil {
-		utils.InternalError(c, "保存嵌入地址失败")
+		infra.InternalError(c, "保存嵌入地址失败")
 		return
 	}
 	safe := ""
 	if req.Enabled && isValidIframeURL(req.URL) {
 		safe = req.URL
 	}
-	utils.Success(c, gin.H{"enabled": safe != "", "url": safe})
+	infra.Success(c, gin.H{"enabled": safe != "", "url": safe})
 }
 
 // isValidIframeURL 仅放行 http/https 绝对地址（含主机名），拒绝一切危险协议与裸协议。

@@ -6,7 +6,7 @@ import (
 	"nvs-server/handlers/adminsite"
 	"nvs-server/models"
 	"nvs-server/security"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -93,7 +93,7 @@ func ListHTMLReviews(c *gin.Context) {
 		}
 	}
 
-	utils.Success(c, items)
+	infra.Success(c, items)
 }
 
 // GetHTMLReview GET /api/admin/html-reviews/:type/:id — 获取待审查内容全文
@@ -111,12 +111,12 @@ func GetHTMLReview(c *gin.Context) {
 	case "frame":
 		var f softdel.UserFrame
 		if err := models.DB.First(&f, id).Error; err != nil {
-			utils.NotFound(c, "模板不存在")
+			infra.NotFound(c, "模板不存在")
 			return
 		}
 		b, err := os.ReadFile(f.FilePath)
 		if err != nil {
-			utils.InternalError(c, "读取内容失败")
+			infra.InternalError(c, "读取内容失败")
 			return
 		}
 		content = string(b)
@@ -129,7 +129,7 @@ func GetHTMLReview(c *gin.Context) {
 	case "html":
 		var h softdel.UserHTML
 		if err := models.DB.First(&h, id).Error; err != nil {
-			utils.NotFound(c, "扩展不存在")
+			infra.NotFound(c, "扩展不存在")
 			return
 		}
 		// 封存件（预检未通过、未解压）：不读入口文件，改为回显阻断原因，
@@ -149,12 +149,12 @@ func GetHTMLReview(c *gin.Context) {
 				"scan_block_reason": h.ScanBlockReason,
 				"quarantine_path":   h.QuarantinePath,
 			}
-			utils.Success(c, gin.H{"meta": meta, "content": content})
+			infra.Success(c, gin.H{"meta": meta, "content": content})
 			return
 		}
 		b, err := os.ReadFile(filepath.Join(h.ExtractDir, h.EntryFile))
 		if err != nil {
-			utils.InternalError(c, "读取入口文件失败")
+			infra.InternalError(c, "读取入口文件失败")
 			return
 		}
 		content = string(b)
@@ -169,11 +169,11 @@ func GetHTMLReview(c *gin.Context) {
 			"scan_block_reason": h.ScanBlockReason,
 		}
 	default:
-		utils.BadRequest(c, "无效的内容类型")
+		infra.BadRequest(c, "无效的内容类型")
 		return
 	}
 
-	utils.Success(c, gin.H{"meta": meta, "content": content})
+	infra.Success(c, gin.H{"meta": meta, "content": content})
 }
 
 // ReviewHTML POST /api/admin/html-reviews/:type/:id/review — 人工复核（通过/驳回）
@@ -202,11 +202,11 @@ func ReviewHTML(c *gin.Context) {
 		PurgeFile bool   `json:"purge_file"` // 驳回时是否连封存件一起删除
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.Action != "approve" && req.Action != "reject" {
-		utils.BadRequest(c, "无效的操作")
+		infra.BadRequest(c, "无效的操作")
 		return
 	}
 
@@ -227,7 +227,7 @@ func ReviewHTML(c *gin.Context) {
 			updates["is_active"] = false
 		}
 		if err := models.DB.Model(&softdel.UserFrame{}).Where("id = ?", id).Updates(updates).Error; err != nil {
-			utils.InternalError(c, "更新失败")
+			infra.InternalError(c, "更新失败")
 			return
 		}
 	case "html":
@@ -239,15 +239,15 @@ func ReviewHTML(c *gin.Context) {
 			updates["is_active"] = false
 		}
 		if err := models.DB.Model(&softdel.UserHTML{}).Where("id = ?", id).Updates(updates).Error; err != nil {
-			utils.InternalError(c, "更新失败")
+			infra.InternalError(c, "更新失败")
 			return
 		}
 	default:
-		utils.BadRequest(c, "无效的内容类型")
+		infra.BadRequest(c, "无效的内容类型")
 		return
 	}
 
-	utils.Success(c, gin.H{"message": "已复核"})
+	infra.Success(c, gin.H{"message": "已复核"})
 }
 
 // ownerName 获取用户显示名

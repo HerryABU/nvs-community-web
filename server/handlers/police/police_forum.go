@@ -2,7 +2,7 @@ package police
 
 import (
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
 )
@@ -27,7 +27,7 @@ func PoliceListForums(c *gin.Context) {
 	if err := models.DB.Unscoped().
 		Order("sort_order ASC, id ASC").
 		Find(&forums).Error; err != nil {
-		utils.InternalError(c, "获取论坛列表失败")
+		infra.InternalError(c, "获取论坛列表失败")
 		return
 	}
 
@@ -63,7 +63,7 @@ func PoliceListForums(c *gin.Context) {
 		rows = append(rows, row)
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"forums": rows,
 		"total":  len(rows),
 	})

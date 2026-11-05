@@ -1,11 +1,11 @@
 package ai
 
 import (
+	"nvs-server/utils/secure"
 	"strings"
 	"time"
 
 	"nvs-server/models"
-	"nvs-server/utils"
 )
 
 // ==================== AI 智能体预设（§5.4） ====================
@@ -153,7 +153,7 @@ func (a *AiAgent) SetCozeToken(plain string) error {
 	if plain == "" {
 		return nil
 	}
-	enc, err := utils.EncryptField(plain)
+	enc, err := secure.EncryptField(plain)
 	if err != nil {
 		return err
 	}
@@ -165,5 +165,5 @@ func (a *AiAgent) DecryptCozeToken() (string, error) {
 	if strings.TrimSpace(a.TokenEnc) == "" {
 		return "", nil
 	}
-	return utils.DecryptField(a.TokenEnc)
+	return secure.DecryptField(a.TokenEnc)
 }

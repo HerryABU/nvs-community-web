@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"nvs-server/utils/infra"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,7 +16,6 @@ import (
 	"nvs-server/config"
 	"nvs-server/doctext"
 	"nvs-server/handlers/hctx"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	aim "nvs-server/models/ai"
@@ -67,16 +67,16 @@ func isAiImageExt(ext string) bool {
 // AiAttachmentUpload 附件上传
 func AiAttachmentUpload(c *gin.Context) {
 	if hctx.CurrentUserID(c) == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	if !aim.IsAiEnabled() {
-		utils.BadRequest(c, "AI 功能未开启")
+		infra.BadRequest(c, "AI 功能未开启")
 		return
 	}
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
-		utils.BadRequest(c, "请选择要上传的文件")
+		infra.BadRequest(c, "请选择要上传的文件")
 		return
 	}
 	defer file.Close()
@@ -84,7 +84,7 @@ func AiAttachmentUpload(c *gin.Context) {
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	mimeType, ok := aiAttachmentMIME[ext]
 	if !ok {
-		utils.BadRequest(c, "暂不支持该文件类型（支持：图片 png/jpg/webp/gif；文档 pdf/docx/doc/txt/md/csv/json/xlsx/pptx）")
+		infra.BadRequest(c, "暂不支持该文件类型（支持：图片 png/jpg/webp/gif；文档 pdf/docx/doc/txt/md/csv/json/xlsx/pptx）")
 		return
 	}
 	sizeLimit := int64(aiFileMaxSize)
@@ -92,32 +92,32 @@ func AiAttachmentUpload(c *gin.Context) {
 		sizeLimit = aiImageMaxSize
 	}
 	if header.Size > sizeLimit {
-		utils.BadRequest(c, fmt.Sprintf("文件过大（上限 %d MB）", sizeLimit>>20))
+		infra.BadRequest(c, fmt.Sprintf("文件过大（上限 %d MB）", sizeLimit>>20))
 		return
 	}
 
 	randBytes := make([]byte, 8)
 	if _, err := rand.Read(randBytes); err != nil {
-		utils.InternalError(c, "生成文件名失败")
+		infra.InternalError(c, "生成文件名失败")
 		return
 	}
 	relDir := filepath.ToSlash(filepath.Join("ai", time.Now().Format("2006/01")))
 	absDir := filepath.Join(config.UploadDir, relDir)
 	if err := os.MkdirAll(absDir, 0o755); err != nil {
-		utils.InternalError(c, "创建上传目录失败")
+		infra.InternalError(c, "创建上传目录失败")
 		return
 	}
 	name := hex.EncodeToString(randBytes) + ext
 	absPath := filepath.Join(absDir, name)
 	dst, err := os.Create(absPath)
 	if err != nil {
-		utils.InternalError(c, "保存文件失败")
+		infra.InternalError(c, "保存文件失败")
 		return
 	}
 	defer dst.Close()
 	if _, err := io.Copy(dst, file); err != nil {
 		_ = os.Remove(absPath)
-		utils.InternalError(c, "写入文件失败")
+		infra.InternalError(c, "写入文件失败")
 		return
 	}
 
@@ -125,7 +125,7 @@ func AiAttachmentUpload(c *gin.Context) {
 	if isAiImageExt(ext) {
 		kind = "image"
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"kind": kind,
 		"name": header.Filename,
 		"url":  "/uploads/" + relDir + "/" + name,

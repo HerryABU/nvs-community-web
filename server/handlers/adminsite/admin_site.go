@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"time"
@@ -18,7 +19,6 @@ import (
 	"nvs-server/config"
 	"nvs-server/models"
 	"nvs-server/security"
-	"nvs-server/utils"
 	"nvs-server/version"
 
 	"github.com/gin-gonic/gin"
@@ -49,7 +49,7 @@ func GetPlatformConfigs(c *gin.Context) {
 	all["sms_gateway"] = smsGateway
 	all["sms_http_configured"] = strconv.FormatBool(smsGateway == "http" && smsURL != "")
 	all["env_file_path"] = config.GetEnvFilePath()
-	utils.Success(c, all)
+	infra.Success(c, all)
 }
 
 func UpdatePlatformConfig(c *gin.Context) {
@@ -58,7 +58,7 @@ func UpdatePlatformConfig(c *gin.Context) {
 	}
 	var req map[string]string
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	allowed := map[string]bool{
@@ -106,11 +106,11 @@ func UpdatePlatformConfig(c *gin.Context) {
 			v = policy.Sanitize(v)
 		}
 		if err := models.SetPlatformConfig(k, v); err != nil {
-			utils.InternalError(c, "保存配置失败: "+k)
+			infra.InternalError(c, "保存配置失败: "+k)
 			return
 		}
 	}
-	// 热更新微信扫码凭据：utils.WeChatAuthURL/ExchangeCode 直接读 config 包级变量
+	// 热更新微信扫码凭据：infra.WeChatAuthURL/ExchangeCode 直接读 config 包级变量
 	// （models 已依赖 utils，不可反向依赖，故保存后把 DB 值覆盖进 config 变量实现即时生效；
 	//   重启时由 main.go 启动段从 DB 恢复，双保险）
 	if _, ok := req["wechat_app_id"]; ok {
@@ -128,7 +128,7 @@ func UpdatePlatformConfig(c *gin.Context) {
 		resp["env_synced"] = envSynced
 		resp["env_note"] = "已同步写入 .env（" + strings.Join(envSynced, ", ") + "），重启后依然生效"
 	}
-	utils.Success(c, resp)
+	infra.Success(c, resp)
 }
 
 // ============ SMTP 测试与诊断 ============
@@ -150,7 +150,7 @@ func TestSMTP(c *gin.Context) {
 		From     string `json:"from"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请提供有效的测试收件邮箱")
+		infra.BadRequest(c, "请提供有效的测试收件邮箱")
 		return
 	}
 
@@ -175,17 +175,17 @@ func TestSMTP(c *gin.Context) {
 	if p, err := strconv.Atoi(port); err == nil {
 		portInt = p
 	}
-	cfg := utils.SMTPConfig{
+	cfg := infra.SMTPConfig{
 		Host: host, Port: fmt.Sprintf("%d", portInt), User: user, Password: pass, From: from,
 		InsecureSkipVerify: models.GetPlatformConfig("smtp_insecure_skip_verify") == "true",
 	}
 
-	steps, ok := utils.DiagnoseSMTP(cfg, strings.TrimSpace(strings.ToLower(req.To)))
+	steps, ok := infra.DiagnoseSMTP(cfg, strings.TrimSpace(strings.ToLower(req.To)))
 	msg := "SMTP 测试通过，邮件已发送"
 	if !ok {
 		msg = "SMTP 测试未通过，请根据下方诊断定位问题"
 	}
-	utils.Success(c, gin.H{"ok": ok, "steps": steps, "message": msg})
+	infra.Success(c, gin.H{"ok": ok, "steps": steps, "message": msg})
 }
 
 // ============ 隔离墙配置 ============
@@ -194,7 +194,7 @@ func GetWallConfig(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, platform.GetWallConfig())
+	infra.Success(c, platform.GetWallConfig())
 }
 
 func UpdateWallConfig(c *gin.Context) {
@@ -203,14 +203,14 @@ func UpdateWallConfig(c *gin.Context) {
 	}
 	var req platform.WallConfig
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := platform.SetWallConfig(req); err != nil {
-		utils.InternalError(c, "保存配置失败")
+		infra.InternalError(c, "保存配置失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "隔离墙配置已更新"})
+	infra.Success(c, gin.H{"message": "隔离墙配置已更新"})
 }
 
 // ============ 远程站点互通 ============
@@ -221,7 +221,7 @@ func ListFederatedSites(c *gin.Context) {
 	}
 	var sites []platform.FederatedSite
 	models.DB.Order("id ASC").Find(&sites)
-	utils.Success(c, sites)
+	infra.Success(c, sites)
 }
 
 func CreateFederatedSite(c *gin.Context) {
@@ -235,16 +235,16 @@ func CreateFederatedSite(c *gin.Context) {
 		Description string `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请填写完整信息")
+		infra.BadRequest(c, "请填写完整信息")
 		return
 	}
 	policy := bluemonday.StrictPolicy()
 	site := &platform.FederatedSite{Name: policy.Sanitize(req.Name), URL: policy.Sanitize(req.URL), APIURL: policy.Sanitize(req.APIURL), Description: policy.Sanitize(req.Description), Status: "active"}
 	if err := models.DB.Create(site).Error; err != nil {
-		utils.InternalError(c, "添加失败")
+		infra.InternalError(c, "添加失败")
 		return
 	}
-	utils.Success(c, site)
+	infra.Success(c, site)
 }
 
 func UpdateFederatedSite(c *gin.Context) {
@@ -254,7 +254,7 @@ func UpdateFederatedSite(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var site platform.FederatedSite
 	if err := models.DB.First(&site, id).Error; err != nil {
-		utils.NotFound(c, "站点不存在")
+		infra.NotFound(c, "站点不存在")
 		return
 	}
 	var req struct{ Name, URL, APIURL, Description, Status *string }
@@ -279,7 +279,7 @@ func UpdateFederatedSite(c *gin.Context) {
 	if len(updates) > 0 {
 		models.DB.Model(&site).Updates(updates)
 	}
-	utils.Success(c, gin.H{"message": "更新成功"})
+	infra.Success(c, gin.H{"message": "更新成功"})
 }
 
 func DeleteFederatedSite(c *gin.Context) {
@@ -289,7 +289,7 @@ func DeleteFederatedSite(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	models.DB.Where("site_id = ?", id).Delete(&platform.FederatedNovel{})
 	models.DB.Delete(&platform.FederatedSite{}, id)
-	utils.Success(c, gin.H{"message": "已删除"})
+	infra.Success(c, gin.H{"message": "已删除"})
 }
 
 // isSafeFederatedURL 🔒 SSRF 防护（安全审计 M5）：
@@ -375,7 +375,7 @@ func SyncFederatedSite(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var site platform.FederatedSite
 	if err := models.DB.First(&site, id).Error; err != nil {
-		utils.NotFound(c, "站点不存在")
+		infra.NotFound(c, "站点不存在")
 		return
 	}
 	// 向对方自报身份，让被连的站能看到是谁在连它
@@ -388,13 +388,13 @@ func SyncFederatedSite(c *gin.Context) {
 	// 仅允许 http/https；禁止内网/回环/链路本地地址（防探测内网服务）；短超时防挂起。
 	target := strings.TrimRight(site.APIURL, "/") + "/novels?" + query.Encode()
 	if !isSafeFederatedURL(target) {
-		utils.BadRequest(c, "远程站点地址非法：仅允许 http/https，且不得指向内网/回环地址")
+		infra.BadRequest(c, "远程站点地址非法：仅允许 http/https，且不得指向内网/回环地址")
 		return
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest(http.MethodGet, target, nil)
 	if err != nil {
-		utils.InternalError(c, "构造请求失败")
+		infra.InternalError(c, "构造请求失败")
 		return
 	}
 	// 携带本站的联邦出站 Key（对方站签发给本站的 Key）：对方据此识别本站身份并给高配额。
@@ -413,12 +413,12 @@ func SyncFederatedSite(c *gin.Context) {
 	req.Header.Set("User-Agent", "NVS-Federated/"+version.AppVersion)
 	resp, err := client.Do(req)
 	if err != nil {
-		utils.InternalError(c, "连接远程站点失败: "+err.Error())
+		infra.InternalError(c, "连接远程站点失败: "+err.Error())
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		utils.InternalError(c, fmt.Sprintf("远程站点返回异常状态码 %d（请确认 API 地址填到对方站 /api 根地址）", resp.StatusCode))
+		infra.InternalError(c, fmt.Sprintf("远程站点返回异常状态码 %d（请确认 API 地址填到对方站 /api 根地址）", resp.StatusCode))
 		return
 	}
 	var result struct {
@@ -439,7 +439,7 @@ func SyncFederatedSite(c *gin.Context) {
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		utils.InternalError(c, "解析远程数据失败: "+err.Error())
+		infra.InternalError(c, "解析远程数据失败: "+err.Error())
 		return
 	}
 	if result.Code != 0 {
@@ -447,7 +447,7 @@ func SyncFederatedSite(c *gin.Context) {
 		if msg == "" {
 			msg = "远程站点返回错误"
 		}
-		utils.InternalError(c, msg)
+		infra.InternalError(c, msg)
 		return
 	}
 	synced := 0
@@ -470,14 +470,14 @@ func SyncFederatedSite(c *gin.Context) {
 	count := int64(0)
 	models.DB.Model(&platform.FederatedNovel{}).Where("site_id = ?", id).Count(&count)
 	models.DB.Model(&site).Updates(map[string]interface{}{"last_sync_at": now, "novel_count": count})
-	utils.Success(c, gin.H{"message": "同步完成", "synced": synced, "total": count})
+	infra.Success(c, gin.H{"message": "同步完成", "synced": synced, "total": count})
 }
 
 func ListPublicSites(c *gin.Context) {
 	RecordInbound(c, "federated/sites")
 	var sites []platform.FederatedSite
 	models.DB.Where("status = ?", "active").Order("id ASC").Find(&sites)
-	utils.Success(c, sites)
+	infra.Success(c, sites)
 }
 
 func ListFederatedNovels(c *gin.Context) {
@@ -493,7 +493,7 @@ func ListFederatedNovels(c *gin.Context) {
 	query.Count(&total)
 	var list []platform.FederatedNovel
 	query.Order("cached_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list)
-	utils.Success(c, gin.H{"list": list, "total": total})
+	infra.Success(c, gin.H{"list": list, "total": total})
 }
 
 // ============ 公共 API ============
@@ -516,7 +516,7 @@ func GetSiteInfo(c *gin.Context) {
 		}
 	}
 	loginMethods := models.GetLoginMethods()
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"site_name": models.GetSiteName(), "wall_zones": wallCfg.Zones, "wall_enabled": wallCfg.Enabled,
 		"email_verify": models.IsEmailVerifyEnabled(), "captcha_enabled": models.IsCaptchaEnabled(),
 		"home_module": models.GetHomeModule(),
@@ -539,10 +539,10 @@ func ListInboundSites(c *gin.Context) {
 	}
 	list, err := platform.ListFederatedInbound(200)
 	if err != nil {
-		utils.InternalError(c, "获取入站连接记录失败")
+		infra.InternalError(c, "获取入站连接记录失败")
 		return
 	}
-	utils.Success(c, list)
+	infra.Success(c, list)
 }
 
 // ============ 联邦站点 API Key（双向可见） ============
@@ -552,7 +552,7 @@ func getFederatedSiteOr404(c *gin.Context) (*platform.FederatedSite, bool) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var site platform.FederatedSite
 	if err := models.DB.First(&site, id).Error; err != nil {
-		utils.NotFound(c, "站点不存在")
+		infra.NotFound(c, "站点不存在")
 		return nil, false
 	}
 	return &site, true
@@ -589,7 +589,7 @@ func ListFederatedSiteKeys(c *gin.Context) {
 			IsActive: k.IsActive, LastUsedAt: k.LastUsedAt, CreatedAt: k.CreatedAt,
 		})
 	}
-	utils.Success(c, gin.H{"site": site, "keys": views})
+	infra.Success(c, gin.H{"site": site, "keys": views})
 }
 
 // CreateFederatedInboundKey POST /api/admin/sites/:id/keys/inbound
@@ -615,7 +615,7 @@ func CreateFederatedInboundKey(c *gin.Context) {
 	}
 	full, prefix, hash, err := apikey.GenerateFederatedKey()
 	if err != nil {
-		utils.InternalError(c, "生成 Key 失败")
+		infra.InternalError(c, "生成 Key 失败")
 		return
 	}
 	rec := &apikey.FederatedPeerKey{
@@ -631,10 +631,10 @@ func CreateFederatedInboundKey(c *gin.Context) {
 		IsActive:    true,
 	}
 	if err := models.DB.Create(rec).Error; err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"message": "已生成本站签发给对方站的联邦 Key（完整 Key 仅此一次展示，请转交对方站并填入其「对方给本站的 Key」）",
 		"key":     full, "key_prefix": prefix, "id": rec.ID,
 		"issuer_name": rec.IssuerName, "quota_per_min": quota,
@@ -655,17 +655,17 @@ func SaveFederatedOutboundKey(c *gin.Context) {
 		Key string `json:"key" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请提供对方站签发给本站的 Key")
+		infra.BadRequest(c, "请提供对方站签发给本站的 Key")
 		return
 	}
 	plain := strings.TrimSpace(req.Key)
 	if len(plain) < 16 || len(plain) > 256 {
-		utils.BadRequest(c, "Key 长度非法")
+		infra.BadRequest(c, "Key 长度非法")
 		return
 	}
 	cipher, err := configEncryptSecret(plain)
 	if err != nil {
-		utils.InternalError(c, "加密失败")
+		infra.InternalError(c, "加密失败")
 		return
 	}
 	prefix := plain
@@ -684,10 +684,10 @@ func SaveFederatedOutboundKey(c *gin.Context) {
 		IsActive:    true,
 	}
 	if err := models.DB.Create(rec).Error; err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已保存对方站签发给本站的 Key（同步时自动携带）", "id": rec.ID})
+	infra.Success(c, gin.H{"message": "已保存对方站签发给本站的 Key（同步时自动携带）", "id": rec.ID})
 }
 
 // ToggleFederatedKey POST /api/admin/sites/:id/keys/:kid/toggle —— 启用/停用
@@ -702,11 +702,11 @@ func ToggleFederatedKey(c *gin.Context) {
 	kid, _ := strconv.ParseUint(c.Param("kid"), 10, 64)
 	var key apikey.FederatedPeerKey
 	if err := models.DB.Where("id = ? AND site_id = ?", kid, site.ID).First(&key).Error; err != nil {
-		utils.NotFound(c, "Key 不存在")
+		infra.NotFound(c, "Key 不存在")
 		return
 	}
 	models.DB.Model(&key).Update("is_active", !key.IsActive)
-	utils.Success(c, gin.H{"message": "已更新状态", "is_active": !key.IsActive})
+	infra.Success(c, gin.H{"message": "已更新状态", "is_active": !key.IsActive})
 }
 
 // DeleteFederatedKey DELETE /api/admin/sites/:id/keys/:kid —— 吊销（立即失效）
@@ -721,14 +721,14 @@ func DeleteFederatedKey(c *gin.Context) {
 	kid, _ := strconv.ParseUint(c.Param("kid"), 10, 64)
 	res := models.DB.Where("id = ? AND site_id = ?", kid, site.ID).Delete(&apikey.FederatedPeerKey{})
 	if res.RowsAffected == 0 {
-		utils.NotFound(c, "Key 不存在")
+		infra.NotFound(c, "Key 不存在")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已吊销"})
+	infra.Success(c, gin.H{"message": "已吊销"})
 }
 
 func GetPublicZoneDetail(c *gin.Context) {
 	zoneName := c.Param("zone")
 	cfg := platform.GetWallConfig()
-	utils.Success(c, cfg.GetZoneDetail(zoneName))
+	infra.Success(c, cfg.GetZoneDetail(zoneName))
 }

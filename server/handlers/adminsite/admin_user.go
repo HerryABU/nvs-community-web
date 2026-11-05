@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/admingov"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"time"
@@ -12,7 +13,6 @@ import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/security"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
@@ -62,7 +62,7 @@ func ListUsers(c *gin.Context) {
 
 	var users []models.User
 	db.Offset((page - 1) * 20).Limit(20).Order("id DESC").Find(&users)
-	utils.Success(c, gin.H{"list": users, "total": total})
+	infra.Success(c, gin.H{"list": users, "total": total})
 }
 
 // GET /api/admin/users/audit — 用户行为审计日志（176号令合规查询，可按 user_id/action 筛选）
@@ -74,10 +74,10 @@ func ListUserAuditLogs(c *gin.Context) {
 	action := c.Query("action")
 	logs, err := apikey.ListUserAuditLogs(uint(userID), action, 500)
 	if err != nil {
-		utils.InternalError(c, "获取审计日志失败")
+		infra.InternalError(c, "获取审计日志失败")
 		return
 	}
-	utils.Success(c, logs)
+	infra.Success(c, logs)
 }
 
 // PUT /api/admin/users/:id — 修改用户（支持 role、nickname、email）
@@ -97,11 +97,11 @@ func UpdateUser(c *gin.Context) {
 	if req.Role != nil {
 		// police 角色必须通过专用提权接口设置（留审计），不允许通用编辑直接改
 		if *req.Role == social.RolePolice {
-			utils.BadRequest(c, "警方角色需通过「提权为警方」专用接口设置")
+			infra.BadRequest(c, "警方角色需通过「提权为警方」专用接口设置")
 			return
 		}
 		if !social.ValidPromotableRoles()[*req.Role] {
-			utils.BadRequest(c, "无效的角色: "+*req.Role)
+			infra.BadRequest(c, "无效的角色: "+*req.Role)
 			return
 		}
 		updates["role"] = *req.Role
@@ -115,7 +115,7 @@ func UpdateUser(c *gin.Context) {
 	if len(updates) > 0 {
 		models.DB.Model(&models.User{}).Where("id = ?", id).Updates(updates)
 	}
-	utils.Success(c, gin.H{"message": "更新成功"})
+	infra.Success(c, gin.H{"message": "更新成功"})
 }
 
 // DELETE /api/admin/users/:id — 删除/封禁用户（软删除 + 留证）
@@ -128,19 +128,19 @@ func DeleteUser(c *gin.Context) {
 	// 不能删除自己
 	adminID := hctx.CurrentUserID(c)
 	if uint(id) == adminID {
-		utils.BadRequest(c, "不能删除自己的账户")
+		infra.BadRequest(c, "不能删除自己的账户")
 		return
 	}
 
 	if err := admingov.SoftDeleteContent(c, "user", uint(id), "管理员封禁/删除用户", "admin", "ban"); err != nil {
 		if err == admingov.ErrContentNotFound {
-			utils.NotFound(c, "用户不存在")
+			infra.NotFound(c, "用户不存在")
 		} else {
-			utils.InternalError(c, err.Error())
+			infra.InternalError(c, err.Error())
 		}
 		return
 	}
-	utils.Success(c, gin.H{"message": "用户已封禁（软删除并留证）"})
+	infra.Success(c, gin.H{"message": "用户已封禁（软删除并留证）"})
 }
 
 // POST /api/admin/users/:id/mute — 全局禁言用户
@@ -174,7 +174,7 @@ func MuteUser(c *gin.Context) {
 	emergency.AuditEmergency(c, siteops.AuditUserMute, "user", uint(id),
 		fmt.Sprintf("管理员禁言用户ID %d，时长 %s，原因：%s",
 			id, duration, security.SanitizePlainText(req.Reason)))
-	utils.Success(c, gin.H{"message": "已禁言"})
+	infra.Success(c, gin.H{"message": "已禁言"})
 }
 
 // POST /api/admin/users/:id/unmute — 解除全局禁言
@@ -191,7 +191,7 @@ func UnmuteUser(c *gin.Context) {
 	// 合规审计：解除禁言
 	emergency.AuditEmergency(c, siteops.AuditUserUnmute, "user", uint(id),
 		fmt.Sprintf("管理员解除禁言用户ID %d", id))
-	utils.Success(c, gin.H{"message": "已解除禁言"})
+	infra.Success(c, gin.H{"message": "已解除禁言"})
 }
 
 // POST /api/admin/users/:id/promote-police — 管理员提权为警方取管台账号
@@ -202,16 +202,16 @@ func AdminPromoteToPolice(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if uint(id) == hctx.CurrentUserID(c) {
-		utils.BadRequest(c, "不能对自己提权")
+		infra.BadRequest(c, "不能对自己提权")
 		return
 	}
 	u, err := models.GetUserByID(uint(id))
 	if err != nil {
-		utils.NotFound(c, "用户不存在")
+		infra.NotFound(c, "用户不存在")
 		return
 	}
 	if u.Role == social.RoleAdmin {
-		utils.BadRequest(c, "管理员无需提权为警方")
+		infra.BadRequest(c, "管理员无需提权为警方")
 		return
 	}
 	operator := ""
@@ -224,12 +224,12 @@ func AdminPromoteToPolice(c *gin.Context) {
 		"police_granted_by": operator,
 		"police_granted_at": &now,
 	}).Error; err != nil {
-		utils.InternalError(c, "提权失败")
+		infra.InternalError(c, "提权失败")
 		return
 	}
 	emergency.AuditEmergency(c, siteops.AuditUserPromotePolice, "user", uint(id),
 		fmt.Sprintf("管理员 %s 将用户 %s(ID %d) 提权为警方取管台账号", operator, u.Username, id))
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"message":           "已提权为警方取管台账号",
 		"role":              social.RolePolice,
 		"police_granted_by": operator,
@@ -245,11 +245,11 @@ func AdminRevokePolice(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	u, err := models.GetUserByID(uint(id))
 	if err != nil {
-		utils.NotFound(c, "用户不存在")
+		infra.NotFound(c, "用户不存在")
 		return
 	}
 	if u.Role != social.RolePolice {
-		utils.BadRequest(c, "该用户不是警方账号")
+		infra.BadRequest(c, "该用户不是警方账号")
 		return
 	}
 	operator := ""
@@ -261,10 +261,10 @@ func AdminRevokePolice(c *gin.Context) {
 		"police_granted_by": "",
 		"police_granted_at": nil,
 	}).Error; err != nil {
-		utils.InternalError(c, "撤销失败")
+		infra.InternalError(c, "撤销失败")
 		return
 	}
 	emergency.AuditEmergency(c, siteops.AuditUserRevokePolice, "user", uint(id),
 		fmt.Sprintf("管理员 %s 撤销用户 %s(ID %d) 的警方取管台权限", operator, u.Username, id))
-	utils.Success(c, gin.H{"message": "已撤销警方权限", "role": social.RoleReader})
+	infra.Success(c, gin.H{"message": "已撤销警方权限", "role": social.RoleReader})
 }

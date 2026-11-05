@@ -2,11 +2,11 @@ package sandbox
 
 import (
 	"fmt"
+	"nvs-server/utils/infra"
 	"sync"
 
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	softdel "nvs-server/models/softdel"
@@ -41,12 +41,12 @@ func (v *VFSStore) getBucket(htmlID uint) map[string]string {
 func VFSRead(c *gin.Context) {
 	htmlID := parseHtmlID(c)
 	if htmlID == 0 {
-		utils.BadRequest(c, "无效的沙盒ID")
+		infra.BadRequest(c, "无效的沙盒ID")
 		return
 	}
 	key := c.Query("key")
 	if key == "" {
-		utils.BadRequest(c, "key不能为空")
+		infra.BadRequest(c, "key不能为空")
 		return
 	}
 
@@ -55,17 +55,17 @@ func VFSRead(c *gin.Context) {
 	GlobalVFS.mu.RUnlock()
 
 	if bucket == nil {
-		utils.NotFound(c, "存储桶不存在")
+		infra.NotFound(c, "存储桶不存在")
 		return
 	}
 
 	val, exists := bucket[key]
 	if !exists {
-		utils.NotFound(c, "键不存在")
+		infra.NotFound(c, "键不存在")
 		return
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"html_id": htmlID,
 		"key":     key,
 		"value":   val,
@@ -77,7 +77,7 @@ func VFSRead(c *gin.Context) {
 func VFSWrite(c *gin.Context) {
 	htmlID := parseHtmlID(c)
 	if htmlID == 0 {
-		utils.BadRequest(c, "无效的沙盒ID")
+		infra.BadRequest(c, "无效的沙盒ID")
 		return
 	}
 	if !requireOwnedHTML(c, htmlID) {
@@ -89,19 +89,19 @@ func VFSWrite(c *gin.Context) {
 		Value string `json:"value" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误: key和value为必填")
+		infra.BadRequest(c, "参数错误: key和value为必填")
 		return
 	}
 
 	// 安全检查：禁止脚本类键名
 	if isBlockedVFSKey(req.Key) {
-		utils.BadRequest(c, "禁止使用脚本类键名: "+req.Key)
+		infra.BadRequest(c, "禁止使用脚本类键名: "+req.Key)
 		return
 	}
 
 	// 大小限制：单值最大 1MB
 	if len(req.Value) > 1024*1024 {
-		utils.BadRequest(c, "单值不能超过 1MB")
+		infra.BadRequest(c, "单值不能超过 1MB")
 		return
 	}
 
@@ -116,17 +116,17 @@ func VFSWrite(c *gin.Context) {
 	GlobalVFS.mu.RUnlock()
 
 	if len(bucket) >= 100 && bucket[req.Key] == "" {
-		utils.BadRequest(c, "存储容量已达上限（100个键）")
+		infra.BadRequest(c, "存储容量已达上限（100个键）")
 		return
 	}
 	if totalSize+len(req.Value) > 10*1024*1024 {
-		utils.BadRequest(c, "存储总大小已达上限（10MB）")
+		infra.BadRequest(c, "存储总大小已达上限（10MB）")
 		return
 	}
 
 	bucket[req.Key] = req.Value
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"html_id": htmlID,
 		"key":     req.Key,
 		"written": len(req.Value),
@@ -138,7 +138,7 @@ func VFSWrite(c *gin.Context) {
 func VFSDelete(c *gin.Context) {
 	htmlID := parseHtmlID(c)
 	if htmlID == 0 {
-		utils.BadRequest(c, "无效的沙盒ID")
+		infra.BadRequest(c, "无效的沙盒ID")
 		return
 	}
 	if !requireOwnedHTML(c, htmlID) {
@@ -146,7 +146,7 @@ func VFSDelete(c *gin.Context) {
 	}
 	key := c.Query("key")
 	if key == "" {
-		utils.BadRequest(c, "key不能为空")
+		infra.BadRequest(c, "key不能为空")
 		return
 	}
 
@@ -157,7 +157,7 @@ func VFSDelete(c *gin.Context) {
 	}
 	GlobalVFS.mu.Unlock()
 
-	utils.Success(c, gin.H{"message": "已删除", "key": key})
+	infra.Success(c, gin.H{"message": "已删除", "key": key})
 }
 
 // requireOwnedHTML 校验当前登录用户是否为指定 UserHTML 的归属者。
@@ -165,12 +165,12 @@ func VFSDelete(c *gin.Context) {
 func requireOwnedHTML(c *gin.Context, htmlID uint) bool {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return false
 	}
 	var htmlItem softdel.UserHTML
 	if err := models.DB.Where("id = ? AND user_id = ?", htmlID, uid).First(&htmlItem).Error; err != nil {
-		utils.Forbidden(c, "无权操作该沙盒")
+		infra.Forbidden(c, "无权操作该沙盒")
 		return false
 	}
 	return true
@@ -181,7 +181,7 @@ func requireOwnedHTML(c *gin.Context, htmlID uint) bool {
 func VFSList(c *gin.Context) {
 	htmlID := parseHtmlID(c)
 	if htmlID == 0 {
-		utils.BadRequest(c, "无效的沙盒ID")
+		infra.BadRequest(c, "无效的沙盒ID")
 		return
 	}
 
@@ -201,7 +201,7 @@ func VFSList(c *gin.Context) {
 		keys = []gin.H{}
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"html_id":    htmlID,
 		"keys":       keys,
 		"key_count":  len(keys),

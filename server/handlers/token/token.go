@@ -4,7 +4,7 @@ import (
 	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"time"
@@ -19,7 +19,7 @@ import (
 // TokenStatus GET /api/token/status — 当前用户代币状态（钱包页用）
 func TokenStatus(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"enabled": wallet.IsTokenEnabled(),
 		"name":    wallet.GetTokenName(),
 		"balance": wallet.GetTokenBalance(userID),
@@ -33,16 +33,16 @@ func TokenLedgerList(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	list, total, err := wallet.ListTokenLedger(userID, page, pageSize)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list, "total": total, "page": page, "page_size": pageSize})
+	infra.Success(c, gin.H{"list": list, "total": total, "page": page, "page_size": pageSize})
 }
 
 // RedeemCard POST /api/token/redeem — 兑换卡密
 func RedeemCard(c *gin.Context) {
 	if !wallet.IsTokenEnabled() {
-		utils.BadRequest(c, "代币系统未开启")
+		infra.BadRequest(c, "代币系统未开启")
 		return
 	}
 	userID := hctx.CurrentUserID(c)
@@ -50,15 +50,15 @@ func RedeemCard(c *gin.Context) {
 		Code string `json:"code" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请输入卡密")
+		infra.BadRequest(c, "请输入卡密")
 		return
 	}
 	nb, err := wallet.RedeemCardKey(userID, req.Code)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "兑换成功", "balance": nb})
+	infra.Success(c, gin.H{"message": "兑换成功", "balance": nb})
 }
 
 // ---------- 管理端 ----------
@@ -68,7 +68,7 @@ func AdminGetTokenConfig(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"enabled": wallet.IsTokenEnabled(),
 		"name":    wallet.GetTokenName(),
 	})
@@ -84,22 +84,22 @@ func AdminSetTokenConfig(c *gin.Context) {
 		Name    string `json:"name"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.Enabled != nil {
 		if err := wallet.SetTokenEnabled(*req.Enabled); err != nil {
-			utils.InternalError(c, "保存失败")
+			infra.InternalError(c, "保存失败")
 			return
 		}
 	}
 	if strings.TrimSpace(req.Name) != "" {
 		if err := wallet.SetTokenName(req.Name); err != nil {
-			utils.InternalError(c, "保存失败")
+			infra.InternalError(c, "保存失败")
 			return
 		}
 	}
-	utils.Success(c, gin.H{"message": "已保存（立即生效）"})
+	infra.Success(c, gin.H{"message": "已保存（立即生效）"})
 }
 
 // AdminGenerateCards POST /api/admin/token/cards — 批量生成卡密（明文仅此一次返回）
@@ -115,7 +115,7 @@ func AdminGenerateCards(c *gin.Context) {
 		Note      string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	var expiresAt *time.Time
@@ -125,10 +125,10 @@ func AdminGenerateCards(c *gin.Context) {
 	}
 	codes, err := wallet.GenerateCardKeys(adminID, req.Count, req.Value, expiresAt, strings.TrimSpace(req.Note))
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"message": "已生成，请立即保存以下卡密（仅本次可见，刷新后无法再次查看）",
 		"codes":   codes,
 		"count":   len(codes),
@@ -142,10 +142,10 @@ func AdminListCards(c *gin.Context) {
 	}
 	list, err := wallet.ListCardKeys(c.Query("status"), c.Query("batch"), 200)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, list)
+	infra.Success(c, list)
 }
 
 // AdminVoidCard POST /api/admin/token/cards/:id/void — 作废卡密
@@ -155,10 +155,10 @@ func AdminVoidCard(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := wallet.VoidCardKey(uint(id)); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已作废"})
+	infra.Success(c, gin.H{"message": "已作废"})
 }
 
 // AdminAdjustToken POST /api/admin/token/adjust — 管理员增发/扣减（授信）
@@ -173,21 +173,21 @@ func AdminAdjustToken(c *gin.Context) {
 		Remark string `json:"remark"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.UserID == 0 || req.Amount == 0 {
-		utils.BadRequest(c, "用户 ID 与金额不能为空/0")
+		infra.BadRequest(c, "用户 ID 与金额不能为空/0")
 		return
 	}
 	if _, err := models.GetUserByID(req.UserID); err != nil {
-		utils.NotFound(c, "用户不存在")
+		infra.NotFound(c, "用户不存在")
 		return
 	}
 	nb, err := wallet.AdminAdjustToken(adminID, req.UserID, req.Amount, strings.TrimSpace(req.Remark))
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已调整", "balance": nb})
+	infra.Success(c, gin.H{"message": "已调整", "balance": nb})
 }

@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"nvs-server/utils/infra"
 	"strconv"
 	"time"
 
 	"nvs-server/handlers/hctx"
 	"nvs-server/police"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	apikey "nvs-server/models/apikey"
@@ -23,7 +23,7 @@ import (
 // police 角色是「准管理员」，只能进取管台，看不到普通 /api/admin 管理功能。
 func ensurePoliceOrAdmin(c *gin.Context) bool {
 	if !social.IsAdminOrPolice(hctx.CurrentUserRole(c)) {
-		utils.Forbidden(c, "需要警方取管台或管理员权限")
+		infra.Forbidden(c, "需要警方取管台或管理员权限")
 		c.Abort()
 		return false
 	}
@@ -38,7 +38,7 @@ func PoliceListSoftDel(c *gin.Context) {
 	ctype := c.Query("type")
 	if ctype != "" {
 		if _, ok := softdel.SoftDelTables[ctype]; !ok {
-			utils.BadRequest(c, "无效的内容类型: "+ctype)
+			infra.BadRequest(c, "无效的内容类型: "+ctype)
 			return
 		}
 	}
@@ -48,10 +48,10 @@ func PoliceListSoftDel(c *gin.Context) {
 	}
 	items, err := softdel.ListSoftDel(ctype, limit)
 	if err != nil {
-		utils.InternalError(c, err.Error())
+		infra.InternalError(c, err.Error())
 		return
 	}
-	utils.Success(c, items)
+	infra.Success(c, items)
 }
 
 // GET /api/police/evidence?type=comment&id=123 — 单条取证凭证详情（完整快照）
@@ -63,10 +63,10 @@ func PoliceGetEvidence(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Query("id"), 10, 64)
 	item, err := softdel.GetSoftDelByID(ctype, uint(id))
 	if err != nil {
-		utils.NotFound(c, "取证记录不存在")
+		infra.NotFound(c, "取证记录不存在")
 		return
 	}
-	utils.Success(c, item)
+	infra.Success(c, item)
 }
 
 // GET /api/police/download?type=comment&id=123 — 下载单条取证凭证（JSON 文件，取证留证）
@@ -78,7 +78,7 @@ func PoliceDownloadEvidence(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Query("id"), 10, 64)
 	item, err := softdel.GetSoftDelByID(ctype, uint(id))
 	if err != nil {
-		utils.NotFound(c, "取证记录不存在")
+		infra.NotFound(c, "取证记录不存在")
 		return
 	}
 	serveEvidenceDownload(c, fmt.Sprintf("evidence_%s_%d.json", ctype, id), item)
@@ -93,7 +93,7 @@ func PoliceExportPackage(c *gin.Context) {
 	// 警方导出须先经站长批准（以疏代堵对接警方：不默认授予导出权）。
 	// 管理员（站长）始终可直接导出。
 	if social.IsPolice(hctx.CurrentUserRole(c)) && !police.HasAnyApproved(hctx.CurrentUserID(c)) {
-		utils.Forbidden(c, "须先向站长提交取证申请并经批准")
+		infra.Forbidden(c, "须先向站长提交取证申请并经批准")
 		return
 	}
 	pkg := gin.H{
@@ -119,7 +119,7 @@ func PoliceExportPackage(c *gin.Context) {
 func serveEvidenceDownload(c *gin.Context, filename string, data interface{}) {
 	raw, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		utils.InternalError(c, "序列化失败")
+		infra.InternalError(c, "序列化失败")
 		return
 	}
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))

@@ -1,10 +1,10 @@
 package follow
 
 import (
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"nvs-server/handlers/hctx"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	apikey "nvs-server/models/apikey"
@@ -19,20 +19,20 @@ func FollowAuthor(c *gin.Context) {
 	authorID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	if uint(authorID) == userID {
-		utils.BadRequest(c, "不能关注自己")
+		infra.BadRequest(c, "不能关注自己")
 		return
 	}
 
 	if social.IsFollowing(userID, uint(authorID)) {
-		utils.BadRequest(c, "已关注该作者")
+		infra.BadRequest(c, "已关注该作者")
 		return
 	}
 
 	if err := social.CreateFollow(userID, uint(authorID)); err != nil {
-		utils.InternalError(c, "关注失败")
+		infra.InternalError(c, "关注失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "关注成功"})
+	infra.Success(c, gin.H{"message": "关注成功"})
 }
 
 // DELETE /api/follow/:id — 取消关注
@@ -41,10 +41,10 @@ func UnfollowAuthor(c *gin.Context) {
 	authorID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	if err := social.DeleteFollow(userID, uint(authorID)); err != nil {
-		utils.InternalError(c, "取消失败")
+		infra.InternalError(c, "取消失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已取消关注"})
+	infra.Success(c, gin.H{"message": "已取消关注"})
 }
 
 // GET /api/following — 我关注的人列表
@@ -54,13 +54,13 @@ func ListFollowing(c *gin.Context) {
 
 	users, total, err := social.GetFollowingList(userID, page, 20)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	for i := range users {
 		users[i].Email = ""
 	}
-	utils.Success(c, gin.H{"list": users, "total": total})
+	infra.Success(c, gin.H{"list": users, "total": total})
 }
 
 // GET /api/followers — 关注我的人列表
@@ -70,13 +70,13 @@ func ListFollowers(c *gin.Context) {
 
 	users, total, err := social.GetFollowerList(userID, page, 20)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	for i := range users {
 		users[i].Email = ""
 	}
-	utils.Success(c, gin.H{"list": users, "total": total})
+	infra.Success(c, gin.H{"list": users, "total": total})
 }
 
 // GET /api/follow/check/:id — 检查是否已关注某人
@@ -84,7 +84,7 @@ func CheckFollow(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	authorID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	isFollow := social.IsFollowing(userID, uint(authorID))
-	utils.Success(c, gin.H{"is_following": isFollow})
+	infra.Success(c, gin.H{"is_following": isFollow})
 }
 
 // GET /api/follow/stats — 关注统计（当前登录用户自己的）
@@ -92,7 +92,7 @@ func GetFollowStats(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	following := social.GetFollowingCount(userID)
 	followers := social.GetFollowersCount(userID)
-	utils.Success(c, gin.H{"following": following, "followers": followers})
+	infra.Success(c, gin.H{"following": following, "followers": followers})
 }
 
 // GetAuthorFollowStats GET /api/author/:id/follow-stats — 公开的「某人的粉丝/关注数」。
@@ -102,10 +102,10 @@ func GetFollowStats(c *gin.Context) {
 func GetAuthorFollowStats(c *gin.Context) {
 	u, err := apikey.ResolveUserKey(c.Param("id"))
 	if err != nil || u == nil {
-		utils.NotFound(c, "用户不存在")
+		infra.NotFound(c, "用户不存在")
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"author_id": u.ID,
 		"following": social.GetFollowingCount(u.ID),
 		"followers": social.GetFollowersCount(u.ID),

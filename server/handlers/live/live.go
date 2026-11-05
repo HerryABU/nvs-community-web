@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"nvs-server/handlers/admincommon"
 	"nvs-server/realtime"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"regexp"
 	"time"
 
@@ -28,7 +28,7 @@ var liveChannelRe = regexp.MustCompile(`^comment:(novel|blog):\d+$`)
 func LiveStream(c *gin.Context) {
 	channel := c.Query("channel")
 	if !liveChannelRe.MatchString(channel) {
-		utils.BadRequest(c, "频道参数非法")
+		infra.BadRequest(c, "频道参数非法")
 		return
 	}
 
@@ -55,7 +55,7 @@ func LiveStream(c *gin.Context) {
 	client, err := realtime.DefaultHub.Subscribe(channel)
 	if err != nil {
 		// 全局连接数上限：拒绝新连接，前端指数退避后自动重试
-		utils.Error(c, http.StatusServiceUnavailable, utils.CodeInternalError, "实时连接数已达上限，请稍后重试")
+		infra.Error(c, http.StatusServiceUnavailable, infra.CodeInternalError, "实时连接数已达上限，请稍后重试")
 		return
 	}
 	defer realtime.DefaultHub.Unsubscribe(channel, client)
@@ -126,7 +126,7 @@ func writeSSEFrame(buf *bytes.Buffer, name string, data any) {
 // 前端评论区挂载时先查一次，关闭则根本不建 SSE 连接（避免 403 后退避空转）；
 // 仅暴露一个布尔开关，不泄露任何带宽参数。
 func LiveConfig(c *gin.Context) {
-	utils.Success(c, gin.H{"enabled": siteops.GetRageConfig().Enabled})
+	infra.Success(c, gin.H{"enabled": siteops.GetRageConfig().Enabled})
 }
 
 // GetRageConfigAdmin GET /api/admin/rage-config —— 读取狂暴模式配置
@@ -134,7 +134,7 @@ func GetRageConfigAdmin(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, siteops.GetRageConfig())
+	infra.Success(c, siteops.GetRageConfig())
 }
 
 // UpdateRageConfigAdmin PUT /api/admin/rage-config —— 保存狂暴模式配置（立即生效）
@@ -149,19 +149,19 @@ func UpdateRageConfigAdmin(c *gin.Context) {
 		MaxConns         int  `json:"max_conns"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.BatchIntervalSec < 1 || req.BatchIntervalSec > 60 {
-		utils.BadRequest(c, "批量周期需在 1 ~ 60 秒之间")
+		infra.BadRequest(c, "批量周期需在 1 ~ 60 秒之间")
 		return
 	}
 	if req.BatchSize < 1 || req.BatchSize > 100 {
-		utils.BadRequest(c, "批量条数需在 1 ~ 100 之间")
+		infra.BadRequest(c, "批量条数需在 1 ~ 100 之间")
 		return
 	}
 	if req.MaxConns < 100 || req.MaxConns > 10000 {
-		utils.BadRequest(c, "连接数上限需在 100 ~ 10000 之间")
+		infra.BadRequest(c, "连接数上限需在 100 ~ 10000 之间")
 		return
 	}
 
@@ -172,12 +172,12 @@ func UpdateRageConfigAdmin(c *gin.Context) {
 		MaxConns:         req.MaxConns,
 	}
 	if err := siteops.UpdateRageConfig(cfg); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
 	// 即时生效：推送层开关 + Hub 限额
 	realtime.DefaultHub.SetEnabled(cfg.Enabled)
 	realtime.DefaultHub.SetLimits(cfg.MaxConns,
 		time.Duration(cfg.BatchIntervalSec)*time.Second, cfg.BatchSize)
-	utils.Success(c, gin.H{"message": "已保存（立即生效）", "config": siteops.GetRageConfig()})
+	infra.Success(c, gin.H{"message": "已保存（立即生效）", "config": siteops.GetRageConfig()})
 }

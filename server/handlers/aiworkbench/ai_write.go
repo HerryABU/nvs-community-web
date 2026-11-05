@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"nvs-server/aiclient"
 	"nvs-server/handlers/hctx"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strings"
 	"time"
 
@@ -76,7 +76,7 @@ func AiStatus(c *gin.Context) {
 			}
 		}
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"ai_enabled":    aiEnabled,
 		"token_enabled": tokenEnabled,
 		"token_name":    wallet.GetTokenName(),
@@ -89,7 +89,7 @@ func AiStatus(c *gin.Context) {
 // AiEstimate POST /api/ai/estimate — 预估费用（不扣款）
 func AiEstimate(c *gin.Context) {
 	if !aim.IsAiEnabled() {
-		utils.BadRequest(c, "AI 功能未开启")
+		infra.BadRequest(c, "AI 功能未开启")
 		return
 	}
 	userID := hctx.CurrentUserID(c)
@@ -99,12 +99,12 @@ func AiEstimate(c *gin.Context) {
 		MaxTokens int    `json:"max_tokens"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	m, err := aim.GetEnabledAiModel(req.ModelID)
 	if err != nil || m == nil {
-		utils.BadRequest(c, "模型不可用")
+		infra.BadRequest(c, "模型不可用")
 		return
 	}
 	tokensIn := aim.EstimateTokens(req.Text)
@@ -114,7 +114,7 @@ func AiEstimate(c *gin.Context) {
 	}
 	cost := aim.EstimateAiCost(m, tokensIn, tokensOut)
 	freeOK, _, _ := aihub.CheckAiFreeQuota(userID, tokensIn+tokensOut)
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"tokens_in":     tokensIn,
 		"tokens_out":    tokensOut,
 		"cost":          cost,
@@ -127,7 +127,7 @@ func AiEstimate(c *gin.Context) {
 // AiComplete POST /api/ai/complete — 调用上游并按 usage 计费
 func AiComplete(c *gin.Context) {
 	if !aim.IsAiEnabled() {
-		utils.BadRequest(c, "AI 功能未开启")
+		infra.BadRequest(c, "AI 功能未开启")
 		return
 	}
 	userID := hctx.CurrentUserID(c)
@@ -149,21 +149,21 @@ func AiComplete(c *gin.Context) {
 		UseMemory bool `json:"use_memory"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	action := strings.TrimSpace(req.Action)
 	if !aiActionValid(action) {
-		utils.BadRequest(c, "不支持的动作")
+		infra.BadRequest(c, "不支持的动作")
 		return
 	}
 	text := strings.TrimSpace(req.Text)
 	if text == "" {
-		utils.BadRequest(c, "请输入内容")
+		infra.BadRequest(c, "请输入内容")
 		return
 	}
 	if len([]rune(text)) > 20000 {
-		utils.BadRequest(c, "内容过长（上限 20000 字）")
+		infra.BadRequest(c, "内容过长（上限 20000 字）")
 		return
 	}
 
@@ -179,7 +179,7 @@ func AiComplete(c *gin.Context) {
 	if req.Byok {
 		byokModel := strings.TrimSpace(req.ByokModel)
 		if byokModel == "" {
-			utils.BadRequest(c, "使用自备密钥时需填写上游模型标识")
+			infra.BadRequest(c, "使用自备密钥时需填写上游模型标识")
 			return
 		}
 		tokensIn := aim.EstimateTokens(text) + memoryTokens
@@ -192,22 +192,22 @@ func AiComplete(c *gin.Context) {
 		}
 		uk, uerr := aicost.ResolveUserAiKey(userID, req.ByokKeyID)
 		if uerr != nil {
-			utils.InternalError(c, "读取自备密钥失败")
+			infra.InternalError(c, "读取自备密钥失败")
 			return
 		}
 		if uk == nil {
-			utils.BadRequest(c, "自备密钥不可用：请先在「我的钱包 → 上游密钥」中添加")
+			infra.BadRequest(c, "自备密钥不可用：请先在「我的钱包 → 上游密钥」中添加")
 			return
 		}
 		apiKey, kerr := uk.DecryptApiKey()
 		if kerr != nil {
-			utils.InternalError(c, "自备密钥解密失败，请删除后重新添加")
+			infra.InternalError(c, "自备密钥解密失败，请删除后重新添加")
 			return
 		}
 		pseudo := &aim.AiModel{ID: 0, Name: "自备密钥 · " + uk.Label}
 		callLog, lerr := aim.CreateAiCallLog(userID, pseudo, action, req.RefType, req.RefID, tokensIn, tokensOut, true)
 		if lerr != nil {
-			utils.InternalError(c, "记录调用失败")
+			infra.InternalError(c, "记录调用失败")
 			return
 		}
 		temp := 0.7
@@ -226,7 +226,7 @@ func AiComplete(c *gin.Context) {
 		})
 		if cerr != nil {
 			aim.FailAiCallLog(callLog.ID, cerr.Error())
-			utils.BadRequest(c, "AI 调用失败："+cerr.Error())
+			infra.BadRequest(c, "AI 调用失败："+cerr.Error())
 			return
 		}
 		if realIn <= 0 {
@@ -236,11 +236,11 @@ func AiComplete(c *gin.Context) {
 			realOut = aim.EstimateTokens(content)
 		}
 		if _, serr := aim.SettleAiCallLog(callLog.ID, realIn, realOut); serr != nil {
-			utils.Error(c, 429, 42902, fmt.Sprintf("结算失败：%v", serr))
+			infra.Error(c, 429, 42902, fmt.Sprintf("结算失败：%v", serr))
 			return
 		}
 		aicost.TouchUserAiKey(uk.ID)
-		utils.Success(c, gin.H{
+		infra.Success(c, gin.H{
 			"content":       content,
 			"tokens_in":     realIn,
 			"tokens_out":    realOut,
@@ -254,7 +254,7 @@ func AiComplete(c *gin.Context) {
 
 	m, err := aim.GetEnabledAiModel(req.ModelID)
 	if err != nil || m == nil {
-		utils.BadRequest(c, "模型不可用")
+		infra.BadRequest(c, "模型不可用")
 		return
 	}
 	tokensIn := aim.EstimateTokens(text) + memoryTokens
@@ -270,12 +270,12 @@ func AiComplete(c *gin.Context) {
 	// 非免费路径：代币系统未开启或余额不足均拒绝（不发起上游）
 	if !freeOK {
 		if !wallet.IsTokenEnabled() {
-			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
+			infra.BadRequest(c, "代币系统未开启，无法使用付费 AI")
 			return
 		}
 		if _, ok := aim.PrecheckAiBalance(userID, m, tokensIn, tokensOut); !ok {
 			cost := aim.EstimateAiCost(m, tokensIn, tokensOut)
-			utils.Error(c, 429, 42902, fmt.Sprintf("%s不足：本次约需 %d，当前余额 %d，请先充值",
+			infra.Error(c, 429, 42902, fmt.Sprintf("%s不足：本次约需 %d，当前余额 %d，请先充值",
 				wallet.GetTokenName(), cost, wallet.GetTokenBalance(userID)))
 			return
 		}
@@ -283,13 +283,13 @@ func AiComplete(c *gin.Context) {
 
 	apiKey, kerr := m.DecryptApiKey()
 	if kerr != nil {
-		utils.InternalError(c, "模型密钥解密失败，请联系站长")
+		infra.InternalError(c, "模型密钥解密失败，请联系站长")
 		return
 	}
 	// pending 流水（失败也不扣款的凭据）
 	callLog, lerr := aim.CreateAiCallLog(userID, m, action, req.RefType, req.RefID, tokensIn, tokensOut, freeOK)
 	if lerr != nil {
-		utils.InternalError(c, "记录调用失败")
+		infra.InternalError(c, "记录调用失败")
 		return
 	}
 
@@ -313,7 +313,7 @@ func AiComplete(c *gin.Context) {
 	})
 	if cerr != nil {
 		aim.FailAiCallLog(callLog.ID, cerr.Error())
-		utils.BadRequest(c, "AI 调用失败："+cerr.Error())
+		infra.BadRequest(c, "AI 调用失败："+cerr.Error())
 		return
 	}
 	if realIn <= 0 {
@@ -324,7 +324,7 @@ func AiComplete(c *gin.Context) {
 	}
 	nb, serr := aim.SettleAiCallLog(callLog.ID, realIn, realOut)
 	if serr != nil {
-		utils.Error(c, 429, 42902, fmt.Sprintf("结算失败：%v（未扣款）", serr))
+		infra.Error(c, 429, 42902, fmt.Sprintf("结算失败：%v（未扣款）", serr))
 		return
 	}
 	cost := aim.EstimateAiCost(m, realIn, realOut)
@@ -333,7 +333,7 @@ func AiComplete(c *gin.Context) {
 		_ = aihub.RecordAiFreeUsage(userID, 1, realIn+realOut)
 		cost = 0
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"content":       content,
 		"tokens_in":     realIn,
 		"tokens_out":    realOut,

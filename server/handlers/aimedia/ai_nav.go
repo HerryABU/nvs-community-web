@@ -1,7 +1,7 @@
 package aimedia
 
 import (
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
 	aiops "nvs-server/models/aiops"
@@ -12,13 +12,13 @@ import (
 // AI 工作台左栏的自定义菜单（站长设置）。只下发**已启用**的条目；
 // 前台拿到就渲染，不需要再判一遍启用状态。
 func AiNavItems(c *gin.Context) {
-	utils.Success(c, gin.H{"items": aiops.GetAiNavItems()})
+	infra.Success(c, gin.H{"items": aiops.GetAiNavItems()})
 }
 
 // AdminGetAiNavItems GET /api/admin/ai-nav-items
 // 管理端读全部（含未启用），站长要能编辑被隐藏的条目。
 func AdminGetAiNavItems(c *gin.Context) {
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"items": aiops.GetAllAiNavItems(),
 		"kinds": aiops.AiNavKinds,
 	})
@@ -31,12 +31,12 @@ func AdminSaveAiNavItems(c *gin.Context) {
 		Items []aiops.AiNavItem `json:"items"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := aiops.SetAiNavItems(req.Items); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已保存，AI 工作台左栏立即生效", "items": aiops.GetAllAiNavItems()})
+	infra.Success(c, gin.H{"message": "已保存，AI 工作台左栏立即生效", "items": aiops.GetAllAiNavItems()})
 }

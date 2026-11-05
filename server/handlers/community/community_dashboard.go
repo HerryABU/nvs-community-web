@@ -3,7 +3,7 @@ package community
 import (
 	"nvs-server/handlers/admincommon"
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
 )
@@ -60,7 +60,7 @@ func GetCommunityDashboard(c *gin.Context) {
 			"ORDER BY t.created_at DESC LIMIT 5",
 	).Scan(&recentThreads)
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"recent_users":    recentUsers,
 		"recent_novels":   recentNovels,
 		"recent_comments": recentComments,

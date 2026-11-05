@@ -4,6 +4,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"html"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/sanitize"
+	"nvs-server/utils/secure"
 	"os"
 	"regexp"
 	"strconv"
@@ -13,7 +16,6 @@ import (
 
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/blog"
@@ -37,7 +39,7 @@ func ensureAdmin(c *gin.Context) bool {
 	userID := hctx.CurrentUserID(c)
 	user, _ := models.GetUserByID(userID)
 	if user == nil || user.Role != "admin" {
-		utils.Forbidden(c, "需要管理员权限")
+		infra.Forbidden(c, "需要管理员权限")
 		c.Abort()
 		return false
 	}
@@ -146,22 +148,22 @@ func SetEmergencyPassword(c *gin.Context) {
 		NewPassword string `json:"new_password"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || len(req.NewPassword) < 6 {
-		utils.BadRequest(c, "新密码至少 6 位")
+		infra.BadRequest(c, "新密码至少 6 位")
 		return
 	}
 	oldHash := models.GetPlatformConfig("emergency_password_hash")
 	// 若已设置过，需验证旧密码
-	if oldHash != "" && !utils.CheckPassword(req.OldPassword, oldHash) {
-		utils.Forbidden(c, "旧密码错误")
+	if oldHash != "" && !secure.CheckPassword(req.OldPassword, oldHash) {
+		infra.Forbidden(c, "旧密码错误")
 		return
 	}
-	hash, err := utils.HashPassword(req.NewPassword)
+	hash, err := secure.HashPassword(req.NewPassword)
 	if err != nil {
-		utils.InternalError(c, "设置密码失败")
+		infra.InternalError(c, "设置密码失败")
 		return
 	}
 	if err := models.SetPlatformConfig("emergency_password_hash", hash); err != nil {
-		utils.InternalError(c, "保存密码失败")
+		infra.InternalError(c, "保存密码失败")
 		return
 	}
 	// 修改密码后清空所有已签发 token，强制重新解锁
@@ -169,7 +171,7 @@ func SetEmergencyPassword(c *gin.Context) {
 	emergencyTokens = map[string]time.Time{}
 	emergencyTokensMu.Unlock()
 	AuditEmergency(c, "set_password", "", 0, "二级密码已设置/修改")
-	utils.Success(c, gin.H{"message": "二级密码已设置"})
+	infra.Success(c, gin.H{"message": "二级密码已设置"})
 }
 
 // POST /api/admin/emergency/unlock — 验证二级密码，签发短时 token（防爆破锁死）
@@ -179,31 +181,31 @@ func UnlockEmergency(c *gin.Context) {
 	}
 	ip := c.ClientIP()
 	if isEmergencyLocked(ip) {
-		utils.Forbidden(c, "尝试次数过多，已锁定 15 分钟")
+		infra.Forbidden(c, "尝试次数过多，已锁定 15 分钟")
 		return
 	}
 	var req struct {
 		Password string `json:"password"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	hash := models.GetPlatformConfig("emergency_password_hash")
 	if hash == "" {
-		utils.BadRequest(c, "尚未设置二级密码，请先设置")
+		infra.BadRequest(c, "尚未设置二级密码，请先设置")
 		return
 	}
-	if !utils.CheckPassword(req.Password, hash) {
+	if !secure.CheckPassword(req.Password, hash) {
 		recordEmergencyFailure(ip)
 		AuditEmergency(c, "unlock_fail", "", 0, "二级密码错误")
-		utils.Forbidden(c, "二级密码错误")
+		infra.Forbidden(c, "二级密码错误")
 		return
 	}
 	clearEmergencyFailures(ip)
 	AuditEmergency(c, "unlock", "", 0, "二级密码解锁成功")
 	token := issueEmergencyToken()
-	utils.Success(c, gin.H{"token": token, "expires_in": int(emergencyTokenTTL.Seconds())})
+	infra.Success(c, gin.H{"token": token, "expires_in": int(emergencyTokenTTL.Seconds())})
 }
 
 // stripTagRe 去除 HTML 标签（用于纯文本预览）
@@ -353,7 +355,7 @@ func loadFileContent(path string) string {
 	if path == "" {
 		return ""
 	}
-	b, err := os.ReadFile(utils.ResolveContentPath(path))
+	b, err := os.ReadFile(sanitize.ResolveContentPath(path))
 	if err != nil {
 		return ""
 	}
@@ -377,11 +379,11 @@ func PreviewEmergencyContent(c *gin.Context) {
 		ID    uint64 `json:"id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if !verifyEmergencyToken(req.Token) {
-		utils.Forbidden(c, "二级密码未验证或已过期")
+		infra.Forbidden(c, "二级密码未验证或已过期")
 		return
 	}
 	ctype, id := "", uint64(0)
@@ -389,13 +391,13 @@ func PreviewEmergencyContent(c *gin.Context) {
 		var ok bool
 		ctype, id, ok = resolveContentPath(req.Path)
 		if !ok {
-			utils.BadRequest(c, "请输入站内 URL 路径（如 /thread/123 或 /blog/5）")
+			infra.BadRequest(c, "请输入站内 URL 路径（如 /thread/123 或 /blog/5）")
 			return
 		}
 	} else if req.Type != "" && req.ID > 0 {
 		ctype, id = req.Type, req.ID
 	} else {
-		utils.BadRequest(c, "请输入站内 URL 路径（如 /thread/123 或 /blog/5），或提供 type+id")
+		infra.BadRequest(c, "请输入站内 URL 路径（如 /thread/123 或 /blog/5），或提供 type+id")
 		return
 	}
 
@@ -404,7 +406,7 @@ func PreviewEmergencyContent(c *gin.Context) {
 	case "comment":
 		cm, err := models.GetCommentByID(uint(id))
 		if err != nil {
-			utils.NotFound(c, "评论不存在")
+			infra.NotFound(c, "评论不存在")
 			return
 		}
 		author := ""
@@ -418,7 +420,7 @@ func PreviewEmergencyContent(c *gin.Context) {
 	case "thread":
 		t, err := models.GetThreadByID(uint(id))
 		if err != nil {
-			utils.NotFound(c, "帖子不存在")
+			infra.NotFound(c, "帖子不存在")
 			return
 		}
 		author := ""
@@ -437,7 +439,7 @@ func PreviewEmergencyContent(c *gin.Context) {
 	case "post":
 		var p models.Post
 		if err := models.DB.Preload("User").First(&p, id).Error; err != nil {
-			utils.NotFound(c, "回复不存在")
+			infra.NotFound(c, "回复不存在")
 			return
 		}
 		author := ""
@@ -451,7 +453,7 @@ func PreviewEmergencyContent(c *gin.Context) {
 	case "blog":
 		b, err := blog.GetBlogByID(uint(id))
 		if err != nil {
-			utils.NotFound(c, "博客不存在")
+			infra.NotFound(c, "博客不存在")
 			return
 		}
 		author := ""
@@ -470,7 +472,7 @@ func PreviewEmergencyContent(c *gin.Context) {
 	case "novel":
 		n, err := models.GetNovelByID(uint(id))
 		if err != nil {
-			utils.NotFound(c, "作品不存在")
+			infra.NotFound(c, "作品不存在")
 			return
 		}
 		author := ""
@@ -489,7 +491,7 @@ func PreviewEmergencyContent(c *gin.Context) {
 	case "chapter":
 		ch, err := models.GetChapterByID(uint(id))
 		if err != nil {
-			utils.NotFound(c, "章节不存在")
+			infra.NotFound(c, "章节不存在")
 			return
 		}
 		author := ""
@@ -511,7 +513,7 @@ func PreviewEmergencyContent(c *gin.Context) {
 	case "forum":
 		var f models.Forum
 		if err := models.DB.First(&f, id).Error; err != nil {
-			utils.NotFound(c, "论坛板块不存在")
+			infra.NotFound(c, "论坛板块不存在")
 			return
 		}
 		preview["author"] = ""
@@ -520,11 +522,11 @@ func PreviewEmergencyContent(c *gin.Context) {
 		preview["content_plain"] = f.Description
 		preview["created_at"] = f.CreatedAt
 	default:
-		utils.BadRequest(c, "无法识别的类型（支持 comment/thread/post/blog/novel/chapter/forum）")
+		infra.BadRequest(c, "无法识别的类型（支持 comment/thread/post/blog/novel/chapter/forum）")
 		return
 	}
 	AuditEmergency(c, "preview", ctype, uint(id), buildContentPath(ctype, id))
-	utils.Success(c, preview)
+	infra.Success(c, preview)
 }
 
 // buildContentPath 构造类型对应的站内 URL 路径（用于展示与审计）
@@ -566,11 +568,11 @@ func DeleteEmergencyContent(c *gin.Context) {
 		ID    uint64 `json:"id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if !verifyEmergencyToken(req.Token) {
-		utils.Forbidden(c, "二级密码未验证或已过期")
+		infra.Forbidden(c, "二级密码未验证或已过期")
 		return
 	}
 	ctype, id := "", uint64(0)
@@ -578,13 +580,13 @@ func DeleteEmergencyContent(c *gin.Context) {
 		var ok bool
 		ctype, id, ok = resolveContentPath(req.Path)
 		if !ok {
-			utils.BadRequest(c, "请输入站内 URL 路径（如 /thread/123 或 /blog/5）")
+			infra.BadRequest(c, "请输入站内 URL 路径（如 /thread/123 或 /blog/5）")
 			return
 		}
 	} else if req.Type != "" && req.ID > 0 {
 		ctype, id = req.Type, req.ID
 	} else {
-		utils.BadRequest(c, "请输入站内 URL 路径，或提供 type+id")
+		infra.BadRequest(c, "请输入站内 URL 路径，或提供 type+id")
 		return
 	}
 
@@ -603,31 +605,31 @@ func DeleteEmergencyContent(c *gin.Context) {
 	case "comment":
 		cm, err := models.GetCommentByID(uint(id))
 		if err != nil {
-			utils.NotFound(c, "评论不存在")
+			infra.NotFound(c, "评论不存在")
 			return
 		}
-		if err := archive("comment", uint(id), "", utils.TruncateRunes(ToPlainText(cm.Content), 200), cm); err != nil {
-			utils.InternalError(c, "留证归档失败")
+		if err := archive("comment", uint(id), "", sanitize.TruncateRunes(ToPlainText(cm.Content), 200), cm); err != nil {
+			infra.InternalError(c, "留证归档失败")
 			return
 		}
 		if err := models.DeleteComment(uint(id)); err != nil {
-			utils.InternalError(c, "删除失败")
+			infra.InternalError(c, "删除失败")
 			return
 		}
 		AuditEmergency(c, "delete", ctype, uint(id), "删除评论（作者 "+UserOf(cm.UserID)+"）")
 	case "thread":
 		t, err := models.GetThreadByID(uint(id))
 		if err != nil {
-			utils.NotFound(c, "帖子不存在")
+			infra.NotFound(c, "帖子不存在")
 			return
 		}
 		if err := archive("thread", uint(id), "", t.Title, t); err != nil {
-			utils.InternalError(c, "留证归档失败")
+			infra.InternalError(c, "留证归档失败")
 			return
 		}
 		// 方案A：posts 无 deleted_at，级联删回帖前先批量归档留证，再物理删除
 		if _, aerr := softdel.ArchivePostsByThread(models.DB, uint(id), operatorID, operator, "", "emergency"); aerr != nil {
-			utils.InternalError(c, "回帖留证归档失败")
+			infra.InternalError(c, "回帖留证归档失败")
 			return
 		}
 		if t.ForumID > 0 {
@@ -640,11 +642,11 @@ func DeleteEmergencyContent(c *gin.Context) {
 	case "post":
 		var p models.Post
 		if err := models.DB.First(&p, id).Error; err != nil {
-			utils.NotFound(c, "回复不存在")
+			infra.NotFound(c, "回复不存在")
 			return
 		}
-		if err := archive("post", uint(id), "", utils.TruncateRunes(ToPlainText(p.Content), 200), p); err != nil {
-			utils.InternalError(c, "留证归档失败")
+		if err := archive("post", uint(id), "", sanitize.TruncateRunes(ToPlainText(p.Content), 200), p); err != nil {
+			infra.InternalError(c, "留证归档失败")
 			return
 		}
 		models.DB.Delete(&models.Post{}, id)
@@ -656,11 +658,11 @@ func DeleteEmergencyContent(c *gin.Context) {
 	case "blog":
 		b, err := blog.GetBlogByID(uint(id))
 		if err != nil {
-			utils.NotFound(c, "博客不存在")
+			infra.NotFound(c, "博客不存在")
 			return
 		}
 		if err := archive("blog", uint(id), "", b.Title, b); err != nil {
-			utils.InternalError(c, "留证归档失败")
+			infra.InternalError(c, "留证归档失败")
 			return
 		}
 		models.DB.Delete(&blog.AuthorBlog{}, id)
@@ -669,11 +671,11 @@ func DeleteEmergencyContent(c *gin.Context) {
 	case "novel":
 		n, err := models.GetNovelByID(uint(id))
 		if err != nil {
-			utils.NotFound(c, "作品不存在")
+			infra.NotFound(c, "作品不存在")
 			return
 		}
 		if err := archive("novel", uint(id), "", n.Title, n); err != nil {
-			utils.InternalError(c, "留证归档失败")
+			infra.InternalError(c, "留证归档失败")
 			return
 		}
 		models.DB.Where("novel_id = ?", id).Delete(&models.Chapter{})
@@ -686,7 +688,7 @@ func DeleteEmergencyContent(c *gin.Context) {
 	case "chapter":
 		ch, err := models.GetChapterByID(uint(id))
 		if err != nil {
-			utils.NotFound(c, "章节不存在")
+			infra.NotFound(c, "章节不存在")
 			return
 		}
 		novelTitle := ""
@@ -694,32 +696,32 @@ func DeleteEmergencyContent(c *gin.Context) {
 			novelTitle = n.Title
 		}
 		if err := archive("chapter", uint(id), "", "《"+novelTitle+"》"+ch.Title, ch); err != nil {
-			utils.InternalError(c, "留证归档失败")
+			infra.InternalError(c, "留证归档失败")
 			return
 		}
 		if err := models.DeleteChapter(uint(id)); err != nil {
-			utils.InternalError(c, "删除失败")
+			infra.InternalError(c, "删除失败")
 			return
 		}
 		AuditEmergency(c, "delete", ctype, uint(id), "删除章节《"+ch.Title+"》（第 "+strconv.Itoa(ch.ChapterNumber)+" 章）")
 	case "forum":
 		var f models.Forum
 		if err := models.DB.First(&f, id).Error; err != nil {
-			utils.NotFound(c, "论坛板块不存在")
+			infra.NotFound(c, "论坛板块不存在")
 			return
 		}
 		if err := archive("forum", uint(id), "", f.Name, f); err != nil {
-			utils.InternalError(c, "留证归档失败")
+			infra.InternalError(c, "留证归档失败")
 			return
 		}
 		models.DB.Where("forum_id = ?", id).Delete(&models.Thread{})
 		models.DB.Delete(&models.Forum{}, id)
 		AuditEmergency(c, "delete", ctype, uint(id), "删除论坛板块「"+f.Name+"」及其下帖子/回复")
 	default:
-		utils.BadRequest(c, "无法识别的类型（支持 comment/thread/post/blog/novel/chapter/forum）")
+		infra.BadRequest(c, "无法识别的类型（支持 comment/thread/post/blog/novel/chapter/forum）")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已软删除并留证"})
+	infra.Success(c, gin.H{"message": "已软删除并留证"})
 }
 
 func UserOf(userID uint) string {
@@ -736,8 +738,8 @@ func ListEmergencyAudit(c *gin.Context) {
 	}
 	logs, err := siteops.ListEmergencyAuditLogs(200)
 	if err != nil {
-		utils.InternalError(c, "获取审计日志失败")
+		infra.InternalError(c, "获取审计日志失败")
 		return
 	}
-	utils.Success(c, logs)
+	infra.Success(c, logs)
 }

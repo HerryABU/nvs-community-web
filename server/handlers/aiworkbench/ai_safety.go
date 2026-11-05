@@ -2,13 +2,13 @@ package aiworkbench
 
 import (
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"time"
 
 	"nvs-server/aisafety"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	aim "nvs-server/models/ai"
@@ -121,10 +121,10 @@ func GetAiSafetyConfig(c *gin.Context) {
 	}
 	cfg, err := aisafety.GetConfig()
 	if err != nil {
-		utils.InternalError(c, "读取配置失败")
+		infra.InternalError(c, "读取配置失败")
 		return
 	}
-	utils.Success(c, gin.H{"config": cfg})
+	infra.Success(c, gin.H{"config": cfg})
 }
 
 // SaveAiSafetyConfig PUT /api/admin/ai/safety/config
@@ -137,12 +137,12 @@ func SaveAiSafetyConfig(c *gin.Context) {
 	// 实测曾因此把 enabled / guard_input / guard_output 一起关掉，闸门静默失效。
 	cur, e := aisafety.GetConfig()
 	if e != nil || cur == nil {
-		utils.InternalError(c, "读取配置失败")
+		infra.InternalError(c, "读取配置失败")
 		return
 	}
 	raw, _ := c.GetRawData()
 	if err := aisafety.ApplyPartialJSON(cur, raw); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	req := *cur
@@ -190,11 +190,11 @@ func SaveAiSafetyConfig(c *gin.Context) {
 		req.AppeaseEscalateScore = 80
 	}
 	if err := aisafety.SaveConfig(&req); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
 	cfg, _ := aisafety.GetConfig()
-	utils.Success(c, gin.H{"message": "已保存", "config": cfg})
+	infra.Success(c, gin.H{"message": "已保存", "config": cfg})
 }
 
 // ResetAiSafetyConfig POST /api/admin/ai/safety/config/reset
@@ -204,10 +204,10 @@ func ResetAiSafetyConfig(c *gin.Context) {
 	}
 	cfg, err := aisafety.ResetConfig()
 	if err != nil {
-		utils.InternalError(c, "恢复失败")
+		infra.InternalError(c, "恢复失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已恢复默认", "config": cfg})
+	infra.Success(c, gin.H{"message": "已恢复默认", "config": cfg})
 }
 
 // ---------- 事件 / 画像 / 判定日志 ----------
@@ -239,7 +239,7 @@ func ListAiSafetyEvents(c *gin.Context) {
 	q.Count(&total)
 	var list []aisafety.SafetyEvent
 	q.Order("id DESC").Offset((page - 1) * size).Limit(size).Find(&list)
-	utils.Success(c, gin.H{"items": list, "total": total, "page": page})
+	infra.Success(c, gin.H{"items": list, "total": total, "page": page})
 }
 
 // ListAiSafetyProfiles GET /api/admin/ai/safety/profiles
@@ -264,7 +264,7 @@ func ListAiSafetyProfiles(c *gin.Context) {
 	q.Count(&total)
 	var list []aisafety.SafetyProfile
 	q.Order("risk_score DESC, updated_at DESC").Offset((page - 1) * size).Limit(size).Find(&list)
-	utils.Success(c, gin.H{"items": list, "total": total, "page": page})
+	infra.Success(c, gin.H{"items": list, "total": total, "page": page})
 }
 
 // ClearAiSafetyCooldown POST /api/admin/ai/safety/profiles/:uid/clear
@@ -275,14 +275,14 @@ func ClearAiSafetyCooldown(c *gin.Context) {
 	}
 	uid, _ := strconv.ParseUint(c.Param("uid"), 10, 64)
 	if uid == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := aisafety.ClearCooldown(uint(uid)); err != nil {
-		utils.InternalError(c, "操作失败")
+		infra.InternalError(c, "操作失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已解除"})
+	infra.Success(c, gin.H{"message": "已解除"})
 }
 
 // ResetAiSafetyProfile POST /api/admin/ai/safety/profiles/:uid/reset
@@ -292,14 +292,14 @@ func ResetAiSafetyProfile(c *gin.Context) {
 	}
 	uid, _ := strconv.ParseUint(c.Param("uid"), 10, 64)
 	if uid == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := aisafety.ResetProfile(uint(uid)); err != nil {
-		utils.InternalError(c, "操作失败")
+		infra.InternalError(c, "操作失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已重置"})
+	infra.Success(c, gin.H{"message": "已重置"})
 }
 
 // ListJudgeLogs GET /api/admin/ai/safety/judge-logs
@@ -323,7 +323,7 @@ func ListJudgeLogs(c *gin.Context) {
 	q.Count(&total)
 	var list []aisafety.JudgeLog
 	q.Order("id DESC").Offset((page - 1) * size).Limit(size).Find(&list)
-	utils.Success(c, gin.H{"items": list, "total": total, "page": page})
+	infra.Success(c, gin.H{"items": list, "total": total, "page": page})
 }
 
 // AiSafetyStats GET /api/admin/ai/safety/stats
@@ -353,7 +353,7 @@ func AiSafetyStats(c *gin.Context) {
 	models.DB.Model(&aisafety.SafetyProfile{}).
 		Where("cooldown_until IS NOT NULL AND cooldown_until > ?", now).Count(&activeCooldown)
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"events": events, "blocks": blocks, "reviews": reviews,
 		"cooldowns": cooldowns, "output_blocks": released,
 		"judged": judged, "jailbroken": jailbroken,
@@ -383,7 +383,7 @@ func ListLockedSessions(c *gin.Context) {
 	q.Count(&total)
 	var list []aim.AiChatSession
 	q.Order("locked_at DESC, id DESC").Offset((page - 1) * size).Limit(size).Find(&list)
-	utils.Success(c, gin.H{"items": list, "total": total, "page": page})
+	infra.Success(c, gin.H{"items": list, "total": total, "page": page})
 }
 
 // UnlockChatSession POST /api/admin/ai/safety/sessions/:sid/unlock
@@ -397,12 +397,12 @@ func UnlockChatSession(c *gin.Context) {
 	}
 	sid, _ := strconv.ParseUint(c.Param("sid"), 10, 64)
 	if sid == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := aihub.UnlockAiChatSession(uint(sid)); err != nil {
-		utils.InternalError(c, "操作失败")
+		infra.InternalError(c, "操作失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已恢复该会话"})
+	infra.Success(c, gin.H{"message": "已恢复该会话"})
 }

@@ -1,11 +1,11 @@
 package author
 
 import (
+	"nvs-server/utils/infra"
 	"time"
 
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	social "nvs-server/models/social"
@@ -115,7 +115,7 @@ func GetAuthorDashboard(c *gin.Context) {
 		cumulativeWordsCounts[i] = cumSum
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"stats":          gin.H{"novels": totalNovels, "total_words": totalWords, "total_chapters": totalChapters, "total_comments": totalComments},
 		"trend_chapters": trendChapters, "trend_comments": trendComments,
 		"bookshelf_count": bookshelfCount, "total_views": totalViews,

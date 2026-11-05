@@ -8,7 +8,7 @@ package aiplatform
 import (
 	"nvs-server/handlers/admincommon"
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 	"time"
 
@@ -24,7 +24,7 @@ func GetAiBudget(c *gin.Context) {
 	}
 	cfg := aim.LoadAiBudgetConfig()
 	usage := aim.GetAiUsage()
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"config": cfg, "usage": usage,
 		"inflight":      aim.AiConcurrencyInUse(),
 		"is_peak":       aim.IsPeakHour(cfg),
@@ -41,14 +41,14 @@ func SaveAiBudget(c *gin.Context) {
 	}
 	var in aim.AiBudgetConfig
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := aim.SaveAiBudgetConfig(in); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "已保存并即时生效", aim.LoadAiBudgetConfig())
+	infra.SuccessMessage(c, "已保存并即时生效", aim.LoadAiBudgetConfig())
 }
 
 // GetAiThrottle GET /api/admin/ai/throttle
@@ -56,7 +56,7 @@ func GetAiThrottle(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"config": aiops.LoadAiThrottleConfig(),
 		"top":    aiops.AiThrottleSnapshot(15),
 		"note":   "三维：用户×模型 / 用户 / 模型，窗口 1 分钟。单实例内存计数，多实例部署时每实例各限一份（近似限流）。",
@@ -70,14 +70,14 @@ func SaveAiThrottle(c *gin.Context) {
 	}
 	var in aiops.AiThrottleConfig
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := aiops.SaveAiThrottleConfig(in); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "已保存并即时生效", aiops.LoadAiThrottleConfig())
+	infra.SuccessMessage(c, "已保存并即时生效", aiops.LoadAiThrottleConfig())
 }
 
 // GetAiAgentUsage GET /api/admin/ai/agent-usage?days=30
@@ -116,7 +116,7 @@ func GetAiAgentUsage(c *gin.Context) {
 		WHERE m.created_at >= ?
 		GROUP BY s.agent_id, s.agent_name
 		ORDER BY cost DESC`, since).Scan(&rows).Error; err != nil {
-		utils.InternalError(c, "统计失败")
+		infra.InternalError(c, "统计失败")
 		return
 	}
 
@@ -127,5 +127,5 @@ func GetAiAgentUsage(c *gin.Context) {
 		total.TokensOut += r.TokensOut
 		total.Cost += r.Cost
 	}
-	utils.Success(c, gin.H{"rows": rows, "total": total, "days": d})
+	infra.Success(c, gin.H{"rows": rows, "total": total, "days": d})
 }

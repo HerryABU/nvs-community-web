@@ -14,12 +14,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nvs-server/utils/infra"
 	"strings"
 	"sync"
 	"time"
 
 	"nvs-server/crypto"
-	"nvs-server/utils"
 )
 
 // ProviderHint AI 端点归属标注（需求文档 §7.1）。
@@ -214,12 +214,12 @@ func noticeOnce(hint string) {
 	noticedSet[ProviderHint(hint)] = true
 	level, msg := NoticeForHint(ProviderHint(hint))
 	line := fmt.Sprintf("[ai-hint] provider_hint=%q level=%s %s", hint, level, msg)
-	_ = utils.WriteDailyLog("ai_meta", line)
+	_ = infra.WriteDailyLog("ai_meta", line)
 }
 
 // logCallMeta 记录调用元数据（不含用户输入正文，需求文档 §7.3）。
 func logCallMeta(hint ProviderHint, status int, errType string) {
 	line := fmt.Sprintf(`{"ts":%d,"provider_hint":%q,"status":%d,"error_type":%q}`,
 		time.Now().Unix(), string(hint), status, errType)
-	_ = utils.WriteDailyLog("ai_meta", line)
+	_ = infra.WriteDailyLog("ai_meta", line)
 }

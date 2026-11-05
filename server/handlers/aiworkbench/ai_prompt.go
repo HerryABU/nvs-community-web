@@ -2,7 +2,7 @@ package aiworkbench
 
 import (
 	"nvs-server/handlers/hctx"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -16,11 +16,11 @@ func AiPromptList(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	list, err := aiops.ListAiPrompts(userID, c.Query("kind"), c.Query("q"))
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	// 去掉 content 之外的无用字段无必要；这里原样返回，前端按需展示
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"list":       list,
 		"categories": aiops.ListAiPromptCategories(userID),
 	})
@@ -38,15 +38,15 @@ func AiPromptCreate(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	var req aiPromptReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	p, err := aiops.CreateAiPrompt(userID, req.Kind, req.Category, req.Title, req.Content)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, p)
+	infra.Success(c, p)
 }
 
 // AiPromptUpdate PUT /api/ai/prompts/:id — 修改自定义提示词
@@ -55,14 +55,14 @@ func AiPromptUpdate(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var req aiPromptReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := aiops.UpdateAiPrompt(uint(id), userID, req.Kind, req.Category, req.Title, req.Content); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已保存"})
+	infra.Success(c, gin.H{"message": "已保存"})
 }
 
 // AiPromptDelete DELETE /api/ai/prompts/:id — 删除自定义提示词
@@ -70,10 +70,10 @@ func AiPromptDelete(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := aiops.DeleteAiPrompt(uint(id), userID); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已删除"})
+	infra.Success(c, gin.H{"message": "已删除"})
 }
 
 // AiPromptUse POST /api/ai/prompts/:id/use — 记录使用（用于常用排序）
@@ -82,9 +82,9 @@ func AiPromptUse(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	p, err := aiops.GetAiPrompt(uint(id), userID)
 	if err != nil {
-		utils.NotFound(c, "提示词不存在")
+		infra.NotFound(c, "提示词不存在")
 		return
 	}
 	aiops.TouchAiPrompt(p.ID)
-	utils.Success(c, gin.H{"message": "ok"})
+	infra.Success(c, gin.H{"message": "ok"})
 }

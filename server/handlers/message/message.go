@@ -1,6 +1,7 @@
 package message
 
 import (
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"time"
@@ -10,7 +11,6 @@ import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/security"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	securitym "nvs-server/models/security"
@@ -37,7 +37,7 @@ const (
 func SendMessage(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 
@@ -51,46 +51,46 @@ func SendMessage(c *gin.Context) {
 		Content    string `json:"content"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.ReceiverID == 0 {
-		utils.BadRequest(c, "请指定接收方")
+		infra.BadRequest(c, "请指定接收方")
 		return
 	}
 	if req.ReceiverID == userID {
-		utils.BadRequest(c, "不能给自己发送消息")
+		infra.BadRequest(c, "不能给自己发送消息")
 		return
 	}
 
 	// 净化 HTML + 按字符数截断（前端同步 maxlength=2000）
-	content := utils.ClampString(security.SanitizePlainText(strings.TrimSpace(req.Content)), maxMessageContent)
+	content := infra.ClampString(security.SanitizePlainText(strings.TrimSpace(req.Content)), maxMessageContent)
 	if content == "" {
-		utils.BadRequest(c, "请填写消息内容")
+		infra.BadRequest(c, "请填写消息内容")
 		return
 	}
 
 	receiver, err := models.GetUserByID(req.ReceiverID)
 	if err != nil {
-		utils.NotFound(c, "对方不存在")
+		infra.NotFound(c, "对方不存在")
 		return
 	}
 
 	// 黑名单门禁（F13）：被接收方拉黑（block 模式）者无法发送私信
 	if securitym.IsBlacklisted(req.ReceiverID, userID) {
-		utils.Forbidden(c, "你已被对方拉黑，无法发送私信")
+		infra.Forbidden(c, "你已被对方拉黑，无法发送私信")
 		return
 	}
 
 	// 第 3 条消息起（已有 >=2 条），若对方要求互相关注，则校验双向关注
 	count, err := social.CountBetween(userID, req.ReceiverID)
 	if err != nil {
-		utils.InternalError(c, "发送失败")
+		infra.InternalError(c, "发送失败")
 		return
 	}
 	if count >= 2 && receiver.RequireFollowToMessage {
 		if !social.IsFollowing(userID, req.ReceiverID) || !social.IsFollowing(req.ReceiverID, userID) {
-			utils.Forbidden(c, "对方设置了互相关注才能继续发送")
+			infra.Forbidden(c, "对方设置了互相关注才能继续发送")
 			return
 		}
 	}
@@ -101,7 +101,7 @@ func SendMessage(c *gin.Context) {
 		Content:    content,
 	}
 	if err := social.CreateMessage(msg); err != nil {
-		utils.InternalError(c, "发送失败")
+		infra.InternalError(c, "发送失败")
 		return
 	}
 
@@ -117,9 +117,9 @@ func SendMessage(c *gin.Context) {
 		}
 	}
 	_ = models.PushNotification(userID, req.ReceiverID, "message",
-		senderName+" 给你发来一条私信", utils.ClampString(content, 50), "/user/messages")
+		senderName+" 给你发来一条私信", infra.ClampString(content, 50), "/user/messages")
 
-	utils.Success(c, msg)
+	infra.Success(c, msg)
 }
 
 // RecallMessage POST /api/messages/recall
@@ -127,39 +127,39 @@ func SendMessage(c *gin.Context) {
 func RecallMessage(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	var req struct {
 		ID uint `json:"id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.ID == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	msg, err := social.GetMessageByID(req.ID)
 	if err != nil {
-		utils.NotFound(c, "消息不存在")
+		infra.NotFound(c, "消息不存在")
 		return
 	}
 	if msg.SenderID != userID {
-		utils.Forbidden(c, "只能撤回自己发送的消息")
+		infra.Forbidden(c, "只能撤回自己发送的消息")
 		return
 	}
 	if msg.Recalled {
-		utils.BadRequest(c, "消息已撤回")
+		infra.BadRequest(c, "消息已撤回")
 		return
 	}
 	if time.Since(msg.CreatedAt) > 2*time.Minute {
-		utils.BadRequest(c, "超过 2 分钟的消息无法撤回")
+		infra.BadRequest(c, "超过 2 分钟的消息无法撤回")
 		return
 	}
 	if _, err := social.RecallMessage(msg.ID, userID); err != nil {
-		utils.InternalError(c, "撤回失败")
+		infra.InternalError(c, "撤回失败")
 		return
 	}
 	auth.RecordUserAudit(c, userID, auditMsgRecall, "撤回私信 "+strconv.FormatUint(uint64(msg.ID), 10), "success")
-	utils.SuccessMessage(c, "已撤回", nil)
+	infra.SuccessMessage(c, "已撤回", nil)
 }
 
 // DeleteConversation POST /api/messages/conversation/delete
@@ -167,37 +167,37 @@ func RecallMessage(c *gin.Context) {
 func DeleteConversation(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	var req struct {
 		PeerID uint `json:"peer_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.PeerID == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := social.DeleteConversationBetween(userID, req.PeerID); err != nil {
-		utils.InternalError(c, "删除会话失败")
+		infra.InternalError(c, "删除会话失败")
 		return
 	}
 	auth.RecordUserAudit(c, userID, auditMsgDelConv, "删除与用户 "+strconv.FormatUint(uint64(req.PeerID), 10)+" 的会话", "success")
-	utils.SuccessMessage(c, "会话已删除", nil)
+	infra.SuccessMessage(c, "会话已删除", nil)
 }
 
 // ListConversations GET /api/messages/conversations
 func ListConversations(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	convs, err := social.ListConversations(userID)
 	if err != nil {
-		utils.InternalError(c, "获取会话列表失败")
+		infra.InternalError(c, "获取会话列表失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": convs, "total": len(convs)})
+	infra.Success(c, gin.H{"list": convs, "total": len(convs)})
 }
 
 // ListMessages GET /api/messages/with/:userId?page=&page_size=
@@ -205,12 +205,12 @@ func ListConversations(c *gin.Context) {
 func ListMessages(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	peerID, err := strconv.ParseUint(c.Param("userId"), 10, 64)
 	if err != nil || peerID == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -224,10 +224,10 @@ func ListMessages(c *gin.Context) {
 
 	list, total, err := social.ListMessagesBetween(userID, uint(peerID), page, pageSize)
 	if err != nil {
-		utils.InternalError(c, "获取聊天记录失败")
+		infra.InternalError(c, "获取聊天记录失败")
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"list":     list,
 		"total":    total,
 		"page":     page,
@@ -240,51 +240,51 @@ func ListMessages(c *gin.Context) {
 func MarkMessageRead(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	var req struct {
 		PeerID uint `json:"peer_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.PeerID == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if _, err := social.MarkReadBetween(userID, req.PeerID); err != nil {
-		utils.InternalError(c, "操作失败")
+		infra.InternalError(c, "操作失败")
 		return
 	}
-	utils.SuccessMessage(c, "已标记为已读", nil)
+	infra.SuccessMessage(c, "已标记为已读", nil)
 }
 
 // UnreadMessageCount GET /api/messages/unread-count
 func UnreadMessageCount(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	count, err := social.UnreadCount(userID)
 	if err != nil {
-		utils.InternalError(c, "获取未读数失败")
+		infra.InternalError(c, "获取未读数失败")
 		return
 	}
-	utils.Success(c, gin.H{"unread": count})
+	infra.Success(c, gin.H{"unread": count})
 }
 
 // GetMessageSettings GET /api/messages/settings
 func GetMessageSettings(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	user, err := models.GetUserByID(userID)
 	if err != nil {
-		utils.NotFound(c, "用户不存在")
+		infra.NotFound(c, "用户不存在")
 		return
 	}
-	utils.Success(c, gin.H{"require_follow_to_message": user.RequireFollowToMessage})
+	infra.Success(c, gin.H{"require_follow_to_message": user.RequireFollowToMessage})
 }
 
 // UpdateMessageSettings PUT /api/messages/settings
@@ -292,21 +292,21 @@ func GetMessageSettings(c *gin.Context) {
 func UpdateMessageSettings(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	var req struct {
 		RequireFollowToMessage *bool `json:"require_follow_to_message"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.RequireFollowToMessage == nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := models.DB.Model(&models.User{}).Where("id = ?", userID).
 		Update("require_follow_to_message", *req.RequireFollowToMessage).Error; err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
 	auth.RecordUserAudit(c, userID, auditMsgSettings, "修改私信设置：互相关注才能发消息", "success")
-	utils.Success(c, gin.H{"require_follow_to_message": *req.RequireFollowToMessage})
+	infra.Success(c, gin.H{"require_follow_to_message": *req.RequireFollowToMessage})
 }

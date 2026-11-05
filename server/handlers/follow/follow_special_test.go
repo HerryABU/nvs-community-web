@@ -3,6 +3,7 @@ package follow
 import (
 	"net/http"
 	"net/http/httptest"
+	"nvs-server/utils/infra"
 	"strconv"
 	"testing"
 	"time"
@@ -10,7 +11,6 @@ import (
 	"nvs-server/handlers/testutil"
 	"nvs-server/middleware"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
@@ -25,7 +25,7 @@ import (
 
 func setupSpecialTestDB(t *testing.T) {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open("file:follow_special_test?mode=memory&cache=shared"), &gorm.Config{Logger: utils.NewDBLogger()})
+	db, err := gorm.Open(sqlite.Open("file:follow_special_test?mode=memory&cache=shared"), &gorm.Config{Logger: infra.NewDBLogger()})
 	if err != nil {
 		t.Fatalf("打开内存测试库失败: %v", err)
 	}

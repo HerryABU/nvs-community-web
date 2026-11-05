@@ -1,6 +1,8 @@
 package novel
 
 import (
+	"nvs-server/utils/infra"
+	"nvs-server/utils/sanitize"
 	"os"
 	"strconv"
 
@@ -10,7 +12,6 @@ import (
 	"nvs-server/models"
 	"nvs-server/scriptmode"
 	"nvs-server/security"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,24 +19,24 @@ import (
 func GetChapters(c *gin.Context) {
 	novelID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		utils.BadRequest(c, "无效的作品ID")
+		infra.BadRequest(c, "无效的作品ID")
 		return
 	}
 	novel, err := models.GetNovelByID(uint(novelID))
 	if err != nil {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return
 	}
 	// 🔒 访客门禁：匿名且需登录/作者上锁时拒绝（对应 3.3 爬虫亦被拦截）
 	isLogin := hctx.CurrentUserID(c) != 0
 	access := ResolveNovelAccess(novel, isLogin, hctx.CurrentUserRole(c))
 	if access.RequiresLogin && !isLogin {
-		utils.Unauthorized(c, "该作品需登录后查看")
+		infra.Unauthorized(c, "该作品需登录后查看")
 		return
 	}
 	chapters, err := models.GetChaptersByNovel(uint(novelID))
 	if err != nil {
-		utils.InternalError(c, "获取章节列表失败")
+		infra.InternalError(c, "获取章节列表失败")
 		return
 	}
 	// 多人协作：非创作成员只能看到已发布章节（draft/pending/rejected 属于创作过程）
@@ -60,7 +61,7 @@ func GetChapters(c *gin.Context) {
 	for i := range chapters {
 		chapters[i].Mode = effectiveChapterMode(&chapters[i], novel)
 	}
-	utils.Success(c, chapters)
+	infra.Success(c, chapters)
 }
 
 func GetChapterContent(c *gin.Context) {
@@ -69,32 +70,32 @@ func GetChapterContent(c *gin.Context) {
 
 	novel, err := models.GetNovelByID(uint(novelID))
 	if err != nil {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return
 	}
 	// 🔒 访客门禁：匿名且需登录/作者上锁时拒绝
 	isLogin := hctx.CurrentUserID(c) != 0
 	access := ResolveNovelAccess(novel, isLogin, hctx.CurrentUserRole(c))
 	if access.RequiresLogin && !isLogin {
-		utils.Unauthorized(c, "该章节需登录后查看")
+		infra.Unauthorized(c, "该章节需登录后查看")
 		return
 	}
 	// 试读模式：匿名访问超出试读范围的章节一律拒绝
 	if access.IsTrial && chapterNum > access.TrialLimit {
-		utils.Unauthorized(c, "试读已结束，登录后可阅读全文")
+		infra.Unauthorized(c, "试读已结束，登录后可阅读全文")
 		return
 	}
 
 	chapter, err := models.GetChapterByNovelAndNumber(uint(novelID), chapterNum)
 	if err != nil {
-		utils.NotFound(c, "章节不存在")
+		infra.NotFound(c, "章节不存在")
 		return
 	}
 
-	contentPath := utils.ResolveContentPath(chapter.ContentPath)
+	contentPath := sanitize.ResolveContentPath(chapter.ContentPath)
 	content, err := os.ReadFile(contentPath)
 	if err != nil {
-		utils.InternalError(c, "读取章节内容失败")
+		infra.InternalError(c, "读取章节内容失败")
 		return
 	}
 
@@ -121,7 +122,7 @@ func GetChapterContent(c *gin.Context) {
 	if chapter.Status != "" && chapter.Status != models.ChapterStatusPublished {
 		actor := collab.ActorOf(novel.ID, hctx.CurrentUserID(c), hctx.CurrentUserRole(c))
 		if !actor.IsPlatform && !actor.CanEditChapter(chapter) {
-			utils.NotFound(c, "章节不存在")
+			infra.NotFound(c, "章节不存在")
 			return
 		}
 	}
@@ -153,7 +154,7 @@ func GetChapterContent(c *gin.Context) {
 	}
 	chapter.AuthorName = authorName
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"chapter":            chapter,
 		"novel_mode":         novelMode(novel),
 		"chapter_mode":       mode,
@@ -174,36 +175,36 @@ func VerifyChapter(c *gin.Context) {
 
 	novel, err := models.GetNovelByID(uint(novelID))
 	if err != nil {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return
 	}
 	isLogin := hctx.CurrentUserID(c) != 0
 	access := ResolveNovelAccess(novel, isLogin, hctx.CurrentUserRole(c))
 	if access.RequiresLogin && !isLogin {
-		utils.Unauthorized(c, "该章节需登录后查看")
+		infra.Unauthorized(c, "该章节需登录后查看")
 		return
 	}
 	if access.IsTrial && chapterNum > access.TrialLimit {
-		utils.Unauthorized(c, "试读已结束，登录后可阅读全文")
+		infra.Unauthorized(c, "试读已结束，登录后可阅读全文")
 		return
 	}
 
 	chapter, err := models.GetChapterByNovelAndNumber(uint(novelID), chapterNum)
 	if err != nil {
-		utils.NotFound(c, "章节不存在")
+		infra.NotFound(c, "章节不存在")
 		return
 	}
 
-	contentPath := utils.ResolveContentPath(chapter.ContentPath)
+	contentPath := sanitize.ResolveContentPath(chapter.ContentPath)
 	content, err := os.ReadFile(contentPath)
 	if err != nil {
-		utils.InternalError(c, "读取文件失败")
+		infra.InternalError(c, "读取文件失败")
 		return
 	}
 
 	fileInfo, err := os.Stat(contentPath)
 	if err != nil {
-		utils.InternalError(c, "获取文件信息失败")
+		infra.InternalError(c, "获取文件信息失败")
 		return
 	}
 
@@ -227,7 +228,7 @@ func VerifyChapter(c *gin.Context) {
 		msg = "警告：哈希匹配但作者签名无效，内容可能被站长替换！"
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"novel_id":           chapter.NovelID,
 		"chapter_number":     chapter.ChapterNumber,
 		"title":              chapter.Title,

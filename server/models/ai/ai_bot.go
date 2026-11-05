@@ -5,10 +5,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"nvs-server/models"
+	"nvs-server/utils/secure"
 	"strings"
 	"time"
-
-	"nvs-server/utils"
 )
 
 // ==================== @ai 评论区机器人（§5.6） ====================
@@ -100,7 +99,7 @@ func EnsureAiBotUser() (uint, error) {
 	if _, err := rand.Read(randBytes); err != nil {
 		return 0, err
 	}
-	hash, err := utils.HashPassword("bot!" + hex.EncodeToString(randBytes))
+	hash, err := secure.HashPassword("bot!" + hex.EncodeToString(randBytes))
 	if err != nil {
 		return 0, err
 	}

@@ -1,10 +1,10 @@
 package rating
 
 import (
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"nvs-server/handlers/hctx"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	social "nvs-server/models/social"
@@ -23,7 +23,7 @@ func UpsertRating(c *gin.Context) {
 		UpdateStability     int  `json:"update_stability"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 
@@ -49,10 +49,10 @@ func UpsertRating(c *gin.Context) {
 	}
 
 	if err := social.UpsertRating(rating); err != nil {
-		utils.InternalError(c, "评分失败")
+		infra.InternalError(c, "评分失败")
 		return
 	}
-	utils.Success(c, rating)
+	infra.Success(c, rating)
 }
 
 // GET /api/ratings — 获取某用户对某作品的评分
@@ -62,10 +62,10 @@ func GetUserRating(c *gin.Context) {
 
 	rating, err := social.GetRatingByUserNovel(userID, uint(novelID))
 	if err != nil {
-		utils.Success(c, nil)
+		infra.Success(c, nil)
 		return
 	}
-	utils.Success(c, rating)
+	infra.Success(c, rating)
 }
 
 // GET /api/novels/:id/rating — 获取作品评分统计
@@ -74,7 +74,7 @@ func GetNovelRating(c *gin.Context) {
 
 	stats, count, err := social.GetRatingStats(uint(novelID))
 	if err != nil {
-		utils.InternalError(c, "获取评分失败")
+		infra.InternalError(c, "获取评分失败")
 		return
 	}
 
@@ -85,7 +85,7 @@ func GetNovelRating(c *gin.Context) {
 			stats["update_stability"]) / 5.0
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"dimensions": stats,
 		"overall":    overall,
 		"count":      count,

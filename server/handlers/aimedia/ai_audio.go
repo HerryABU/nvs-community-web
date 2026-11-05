@@ -10,7 +10,7 @@ import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/security"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,7 +39,7 @@ const maxSpeechRunes = 2000
 func Speech(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	var req struct {
@@ -49,16 +49,16 @@ func Speech(c *gin.Context) {
 		ModelID uint   `json:"model_id"` // 0=自动选一个可用的 audio 模型
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	text := strings.TrimSpace(req.Text)
 	if text == "" {
-		utils.BadRequest(c, "内容不能为空")
+		infra.BadRequest(c, "内容不能为空")
 		return
 	}
 	if n := len([]rune(text)); n > maxSpeechRunes {
-		utils.BadRequest(c, fmt.Sprintf("内容过长（%d 字，上限 %d 字）", n, maxSpeechRunes))
+		infra.BadRequest(c, fmt.Sprintf("内容过长（%d 字，上限 %d 字）", n, maxSpeechRunes))
 		return
 	}
 	kind := "tts"
@@ -68,25 +68,25 @@ func Speech(c *gin.Context) {
 
 	m := pickAudioModel(req.ModelID)
 	if m == nil {
-		utils.BadRequest(c, "未配置语音/音乐模型，请管理员在「AI 模型池」新增 kind=audio 的模型")
+		infra.BadRequest(c, "未配置语音/音乐模型，请管理员在「AI 模型池」新增 kind=audio 的模型")
 		return
 	}
 	// 内容审核：语音念出来的违规内容和文字一样违规
 	clean, hits := security.ApplyBadWords(text, "ai")
 	if len(hits) > 0 && clean == "" {
-		utils.Forbidden(c, "内容不合规")
+		infra.Forbidden(c, "内容不合规")
 		return
 	}
 
 	// 计费：audio 按次（PriceCall）；免费额度覆盖时扣免费次数
 	if err := chargeAudioCall(uid, m); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 
 	lease, kerr := aihub.AcquireModelKey(m)
 	if kerr != nil {
-		utils.BadRequest(c, "模型密钥不可用")
+		infra.BadRequest(c, "模型密钥不可用")
 		return
 	}
 	apiKey := ""
@@ -106,9 +106,9 @@ func Speech(c *gin.Context) {
 			lease.Fail()
 		}
 		if kind == "music" {
-			utils.InternalError(c, "音乐生成失败："+err.Error())
+			infra.InternalError(c, "音乐生成失败："+err.Error())
 		} else {
-			utils.InternalError(c, "语音合成失败："+err.Error())
+			infra.InternalError(c, "语音合成失败："+err.Error())
 		}
 		return
 	}
@@ -116,10 +116,10 @@ func Speech(c *gin.Context) {
 
 	url, werr := saveAudioFile(data, aiclient.SpeechExt(mime))
 	if werr != nil {
-		utils.InternalError(c, "保存音频失败")
+		infra.InternalError(c, "保存音频失败")
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"url": url, "mime": mime, "size": len(data),
 		"model": m.Name, "kind": kind, "voice": voice,
 	})
@@ -196,7 +196,7 @@ func AdminSpeechModels(c *gin.Context) {
 	}
 	var list []aim.AiModel
 	_ = models.DB.Where("kind = ?", "audio").Order("priority DESC, id ASC").Find(&list).Error
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"list": list, "count": len(list),
 		"hint":      "kind=audio 的模型用于语音合成/音乐；未配置时 /api/ai/speech 会返回「未配置」而不是假装生成",
 		"max_runes": maxSpeechRunes,

@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"os"
 	"path/filepath"
 	"sort"
@@ -22,7 +23,6 @@ import (
 	"nvs-server/honeypot"
 	"nvs-server/middleware"
 	"nvs-server/models"
-	"nvs-server/utils"
 	"nvs-server/version"
 
 	"github.com/gin-gonic/gin"
@@ -54,7 +54,7 @@ func ExportComplianceBundle(c *gin.Context) {
 
 	// 1) 自查报告（与 /compliance/report 同口径）
 	if err := addJSON("01-report.json", buildComplianceReport()); err != nil {
-		utils.InternalError(c, "生成报告失败")
+		infra.InternalError(c, "生成报告失败")
 		return
 	}
 	// 2) 算法推荐配置（算法透明度）
@@ -64,23 +64,23 @@ func ExportComplianceBundle(c *gin.Context) {
 		"personalized": personalized, "description": desc,
 		"public_page": "首页「推荐说明」弹窗 + /api/algorithms/description",
 	}); err != nil {
-		utils.InternalError(c, "生成算法说明失败")
+		infra.InternalError(c, "生成算法说明失败")
 		return
 	}
 	// 3) 等保定级
 	grade, note := models.GetSecurityGrade()
 	if err := addJSON("03-security-grade.json", gin.H{"grade": grade, "note": note}); err != nil {
-		utils.InternalError(c, "生成定级材料失败")
+		infra.InternalError(c, "生成定级材料失败")
 		return
 	}
 	// 4) 漏洞整改统计
 	if err := addJSON("04-vulnerabilities.json", security.GetVulnStats()); err != nil {
-		utils.InternalError(c, "生成漏洞统计失败")
+		infra.InternalError(c, "生成漏洞统计失败")
 		return
 	}
 	// 5) 用户规模汇总（不含 PII）
 	if err := addJSON("05-users-summary.json", userSummary()); err != nil {
-		utils.InternalError(c, "生成用户汇总失败")
+		infra.InternalError(c, "生成用户汇总失败")
 		return
 	}
 	// 6) 蜜罐与日志策略摘要（等级/记录字段/命中规模）
@@ -98,12 +98,12 @@ func ExportComplianceBundle(c *gin.Context) {
 		"sessions": sessions, "events": events, "high_risk_sessions": highRisk,
 		"retention_days": hset.RetentionDays,
 	}); err != nil {
-		utils.InternalError(c, "生成蜜罐摘要失败")
+		infra.InternalError(c, "生成蜜罐摘要失败")
 		return
 	}
 	// 7) 日志留存清单（最近 30 天，附哈希；不打包日志本体避免体积失控）
 	if err := addJSON("07-logs-manifest.json", logsManifest(30)); err != nil {
-		utils.InternalError(c, "生成日志清单失败")
+		infra.InternalError(c, "生成日志清单失败")
 		return
 	}
 
@@ -129,7 +129,7 @@ func ExportComplianceBundle(c *gin.Context) {
 	p := filepath.Join(dir, fmt.Sprintf("compliance-bundle-%s.zip", time.Now().Format("20060102-150405")))
 	f, err := os.Create(p)
 	if err != nil {
-		utils.InternalError(c, "创建材料包失败")
+		infra.InternalError(c, "创建材料包失败")
 		return
 	}
 	zw := zip.NewWriter(f)
@@ -138,14 +138,14 @@ func ExportComplianceBundle(c *gin.Context) {
 		if werr != nil {
 			_ = zw.Close()
 			_ = f.Close()
-			utils.InternalError(c, "写入材料包失败")
+			infra.InternalError(c, "写入材料包失败")
 			return
 		}
 		_, _ = w.Write(cf.Data)
 	}
 	if err := zw.Close(); err != nil {
 		_ = f.Close()
-		utils.InternalError(c, "关闭材料包失败")
+		infra.InternalError(c, "关闭材料包失败")
 		return
 	}
 	_ = f.Close()
@@ -180,7 +180,7 @@ func userSummary() gin.H {
 
 // logsManifest 日志文件清单（路径 + 大小 + SHA256 前 16 位）
 func logsManifest(days int) gin.H {
-	root := filepath.Join(utils.DailyLogRoot, "requests")
+	root := filepath.Join(infra.DailyLogRoot, "requests")
 	type fileInfo struct {
 		Path   string `json:"path"`
 		Bytes  int64  `json:"bytes"`

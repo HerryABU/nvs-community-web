@@ -12,7 +12,7 @@ package aiadmin
 
 import (
 	"nvs-server/handlers/admincommon"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
@@ -35,15 +35,15 @@ func AdminSaveChannelAccount(c *gin.Context) {
 		ModelKey    string `json:"model_key"`    // sk_
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	acc, err := aihub.SaveAiChannelAccount(req.BaseURL, req.Label, req.UserID, req.AccessToken, req.ModelKey)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已加密保存", redactAccount(acc))
+	infra.SuccessMessage(c, "已加密保存", redactAccount(acc))
 }
 
 // AdminGetChannelAccount GET /api/admin/ai/channel-account?base_url=
@@ -55,10 +55,10 @@ func AdminGetChannelAccount(c *gin.Context) {
 	acc, err := aihub.GetAiChannelAccount(base)
 	if err != nil {
 		// 没保存过不是错误：前端据此显示「未保存」表单
-		utils.Success(c, gin.H{"exists": false})
+		infra.Success(c, gin.H{"exists": false})
 		return
 	}
-	utils.Success(c, gin.H{"exists": true, "account": redactAccount(acc)})
+	infra.Success(c, gin.H{"exists": true, "account": redactAccount(acc)})
 }
 
 // AdminListChannelAccounts GET /api/admin/ai/channel-accounts
@@ -71,7 +71,7 @@ func AdminListChannelAccounts(c *gin.Context) {
 	for i := range list {
 		out = append(out, redactAccount(&list[i]))
 	}
-	utils.Success(c, gin.H{"list": out})
+	infra.Success(c, gin.H{"list": out})
 }
 
 // AdminDeleteChannelAccount DELETE /api/admin/ai/channel-account/:id
@@ -82,14 +82,14 @@ func AdminDeleteChannelAccount(c *gin.Context) {
 	id64, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	id := uint(id64)
 	if id == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := aihub.DeleteAiChannelAccount(id); err != nil {
-		utils.InternalError(c, "删除失败")
+		infra.InternalError(c, "删除失败")
 		return
 	}
-	utils.SuccessMessage(c, "已删除", nil)
+	infra.SuccessMessage(c, "已删除", nil)
 }
 
 // redactAccount 脱敏：密文一律不出现在响应里，只给「有没有 / 尾号 / 上次结果」

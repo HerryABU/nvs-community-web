@@ -10,7 +10,7 @@ package ops
 import (
 	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/hctx"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -30,10 +30,10 @@ func PublicNavMenus(c *gin.Context) {
 	}
 	list, err := siteops.PublicNavMenus(isLogin, isAdmin)
 	if err != nil {
-		utils.InternalError(c, "读取菜单失败")
+		infra.InternalError(c, "读取菜单失败")
 		return
 	}
-	utils.Success(c, gin.H{"items": list})
+	infra.Success(c, gin.H{"items": list})
 }
 
 // AdminNavMenus GET /api/admin/nav-menus
@@ -43,10 +43,10 @@ func AdminNavMenus(c *gin.Context) {
 	}
 	list, err := siteops.AllNavMenus()
 	if err != nil {
-		utils.InternalError(c, "读取菜单失败")
+		infra.InternalError(c, "读取菜单失败")
 		return
 	}
-	utils.Success(c, gin.H{"items": list})
+	infra.Success(c, gin.H{"items": list})
 }
 
 // SaveNavMenu POST /api/admin/nav-menus
@@ -56,15 +56,15 @@ func SaveNavMenu(c *gin.Context) {
 	}
 	var in siteops.NavMenu
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	item, err := siteops.SaveNavMenu(in)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, item)
+	infra.Success(c, item)
 }
 
 // DeleteNavMenu DELETE /api/admin/nav-menus/:id
@@ -74,14 +74,14 @@ func DeleteNavMenu(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if id == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := siteops.DeleteNavMenu(uint(id)); err != nil {
-		utils.InternalError(c, "删除失败")
+		infra.InternalError(c, "删除失败")
 		return
 	}
-	utils.SuccessMessage(c, "已删除", nil)
+	infra.SuccessMessage(c, "已删除", nil)
 }
 
 // ─────────────── 轮播 ───────────────
@@ -90,10 +90,10 @@ func DeleteNavMenu(c *gin.Context) {
 func PublicCarousels(c *gin.Context) {
 	list, err := siteops.ActiveCarousels()
 	if err != nil {
-		utils.InternalError(c, "读取轮播失败")
+		infra.InternalError(c, "读取轮播失败")
 		return
 	}
-	utils.Success(c, gin.H{"items": list})
+	infra.Success(c, gin.H{"items": list})
 }
 
 // AdminCarousels GET /api/admin/carousels
@@ -103,10 +103,10 @@ func AdminCarousels(c *gin.Context) {
 	}
 	list, err := siteops.AdminCarousels()
 	if err != nil {
-		utils.InternalError(c, "读取轮播失败")
+		infra.InternalError(c, "读取轮播失败")
 		return
 	}
-	utils.Success(c, gin.H{"items": list})
+	infra.Success(c, gin.H{"items": list})
 }
 
 // SaveCarousel POST /api/admin/carousels
@@ -116,15 +116,15 @@ func SaveCarousel(c *gin.Context) {
 	}
 	var in siteops.Carousel
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	item, err := siteops.SaveCarousel(in)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, item)
+	infra.Success(c, item)
 }
 
 // DeleteCarousel DELETE /api/admin/carousels/:id
@@ -134,36 +134,36 @@ func DeleteCarousel(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := siteops.DeleteCarousel(uint(id)); err != nil {
-		utils.InternalError(c, "删除失败")
+		infra.InternalError(c, "删除失败")
 		return
 	}
-	utils.SuccessMessage(c, "已删除", nil)
+	infra.SuccessMessage(c, "已删除", nil)
 }
 
 // ─────────────── 签到 ───────────────
 
 // CheckInStatus GET /api/checkin/status
 func CheckInStatus(c *gin.Context) {
-	utils.Success(c, siteops.CheckInStatus(hctx.CurrentUserID(c)))
+	infra.Success(c, siteops.CheckInStatus(hctx.CurrentUserID(c)))
 }
 
 // DoCheckIn POST /api/checkin
 func DoCheckIn(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	res, err := siteops.DoCheckIn(uid)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	if res.Already {
-		utils.SuccessMessage(c, "今天已经签到过了", res)
+		infra.SuccessMessage(c, "今天已经签到过了", res)
 		return
 	}
-	utils.SuccessMessage(c, "签到成功", res)
+	infra.SuccessMessage(c, "签到成功", res)
 }
 
 // AdminCheckIn GET /api/admin/checkin —— 配置 + 近 7 天统计
@@ -171,7 +171,7 @@ func AdminCheckIn(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"config": siteops.LoadCheckInConfig(),
 		"stats":  siteops.CheckInStats(),
 	})
@@ -184,14 +184,14 @@ func SaveCheckIn(c *gin.Context) {
 	}
 	var in siteops.CheckInConfig
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := siteops.SaveCheckInConfig(in); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "已保存", siteops.LoadCheckInConfig())
+	infra.SuccessMessage(c, "已保存", siteops.LoadCheckInConfig())
 }
 
 // ─────────────── 访客设置 ───────────────
@@ -199,7 +199,7 @@ func SaveCheckIn(c *gin.Context) {
 // PublicVisitSetting GET /api/visit-setting —— 前台用于决定「要不要拦」
 func PublicVisitSetting(c *gin.Context) {
 	s := siteops.LoadVisitSetting()
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"allow_guest_browse": s.AllowGuestBrowse,
 		"allow_guest_search": s.AllowGuestSearch,
 		"guest_max_chapters": s.GuestMaxChapters,
@@ -213,7 +213,7 @@ func AdminVisitSetting(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"config": siteops.LoadVisitSetting(),
 		"stats":  siteops.VisitStats(14),
 	})
@@ -226,14 +226,14 @@ func SaveVisitSetting(c *gin.Context) {
 	}
 	var in siteops.VisitSetting
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := siteops.SaveVisitSetting(in); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "已保存", siteops.LoadVisitSetting())
+	infra.SuccessMessage(c, "已保存", siteops.LoadVisitSetting())
 }
 
 // ─────────────── 直播入口（gap-audit #23）───────────────
@@ -242,7 +242,7 @@ func SaveVisitSetting(c *gin.Context) {
 func PublicLive(c *gin.Context) {
 	s := siteops.LoadLiveSetting()
 	if !s.Enabled {
-		utils.Success(c, gin.H{"enabled": false})
+		infra.Success(c, gin.H{"enabled": false})
 		return
 	}
 	// 需要登录才看内容时，未登录只回「有直播 + 要不要登录」
@@ -254,13 +254,13 @@ func PublicLive(c *gin.Context) {
 	}
 	if s.RequireLogin && !login {
 		pay["need_login"] = true
-		utils.Success(c, pay)
+		infra.Success(c, pay)
 		return
 	}
 	pay["embed_url"] = s.EmbedURL
 	pay["video_url"] = s.VideoURL
 	pay["poster_url"] = s.PosterURL
-	utils.Success(c, pay)
+	infra.Success(c, pay)
 }
 
 // AdminLive GET /api/admin/live
@@ -268,7 +268,7 @@ func AdminLive(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"config": siteops.LoadLiveSetting(),
 		"note":   "本站不提供推流/转码/HLS：这里只做入口与嵌入。外部直播间填 embed_url（必须 https），录播可填 video_url 直链。",
 	})
@@ -281,12 +281,12 @@ func SaveLive(c *gin.Context) {
 	}
 	var in siteops.LiveSetting
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := siteops.SaveLiveSetting(in); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已保存", siteops.LoadLiveSetting())
+	infra.SuccessMessage(c, "已保存", siteops.LoadLiveSetting())
 }

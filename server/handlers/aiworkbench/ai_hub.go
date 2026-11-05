@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"time"
@@ -13,7 +14,6 @@ import (
 	"nvs-server/crisis"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	aim "nvs-server/models/ai"
@@ -65,7 +65,7 @@ func AiHubStatus(c *gin.Context) {
 		out["image_models"] = collect(aim.AiKindImage)
 		out["video_models"] = collect(aim.AiKindVideo)
 	}
-	utils.Success(c, out)
+	infra.Success(c, out)
 }
 
 // AiHubSessions GET /api/ai/sessions — 我的会话列表
@@ -73,10 +73,10 @@ func AiHubSessions(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	list, err := aim.ListAiChatSessions(userID, 100)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list})
+	infra.Success(c, gin.H{"list": list})
 }
 
 // AiHubSessionMessages GET /api/ai/sessions/:id/messages — 会话消息
@@ -85,16 +85,16 @@ func AiHubSessionMessages(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	s, err := aim.GetAiChatSession(uint(id), userID)
 	if err != nil {
-		utils.NotFound(c, "会话不存在")
+		infra.NotFound(c, "会话不存在")
 		return
 	}
 	// 按活跃叶子回溯当前分支，并附上兄弟信息（前端渲染「‹ 2/3 ›」）
 	list, err := aihub.ListAiChatThread(s.ID, s.ActiveLeafID)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"session": s, "messages": chatMessageView(list)})
+	infra.Success(c, gin.H{"session": s, "messages": chatMessageView(list)})
 }
 
 // AiHubDeleteSession DELETE /api/ai/sessions/:id — 删除会话
@@ -102,10 +102,10 @@ func AiHubDeleteSession(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := aim.DeleteAiChatSession(uint(id), userID); err != nil {
-		utils.InternalError(c, "删除失败")
+		infra.InternalError(c, "删除失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已删除"})
+	infra.Success(c, gin.H{"message": "已删除"})
 }
 
 // sseEvent 写一条 SSE 事件
@@ -175,7 +175,7 @@ func resolveContextLimit(flagsLimit, userLimit int, memory *bool) int {
 
 func AiHubChatStream(c *gin.Context) {
 	if !aim.IsAiEnabled() {
-		utils.BadRequest(c, "AI 功能未开启")
+		infra.BadRequest(c, "AI 功能未开启")
 		return
 	}
 	userID := hctx.CurrentUserID(c)
@@ -211,27 +211,27 @@ func AiHubChatStream(c *gin.Context) {
 		RegenerateMsgID uint `json:"regenerate_msg_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	msg := strings.TrimSpace(req.Message)
 	// 允许「只发附件不打字」：这时用附件名兜底成一句可见文本
 	if msg == "" && len(req.Attachments) == 0 {
-		utils.BadRequest(c, "请输入内容")
+		infra.BadRequest(c, "请输入内容")
 		return
 	}
 	if len([]rune(msg)) > 20000 {
-		utils.BadRequest(c, "内容过长（上限 20000 字）")
+		infra.BadRequest(c, "内容过长（上限 20000 字）")
 		return
 	}
 	if len(req.Attachments) > 10 {
-		utils.BadRequest(c, "单次最多带 10 个附件")
+		infra.BadRequest(c, "单次最多带 10 个附件")
 		return
 	}
 	// 附件读取（读文件 + base64）。放在前置校验里：失败就别建会话、别记账。
 	attImages, attFiles, attDocTexts, attErr := buildAttachmentParts(req.Attachments)
 	if attErr != nil {
-		utils.BadRequest(c, attErr.Error())
+		infra.BadRequest(c, attErr.Error())
 		return
 	}
 	// 文档正文（平台侧抽取出来的）拼到本轮消息里，作为参考文本注入。
@@ -253,11 +253,11 @@ func AiHubChatStream(c *gin.Context) {
 	// ── 平台开关：每日对话上限 + 是否允许自备密钥 ──
 	flags := aihub.GetAiFeatureFlags()
 	if ok, reason := aihub.CheckAiChatDailyLimit(userID); !ok {
-		utils.Error(c, 429, 42903, reason)
+		infra.Error(c, 429, 42903, reason)
 		return
 	}
 	if req.Byok && !flags.AllowByok {
-		utils.BadRequest(c, "站长已关闭「自备密钥」功能")
+		infra.BadRequest(c, "站长已关闭「自备密钥」功能")
 		return
 	}
 
@@ -267,24 +267,24 @@ func AiHubChatStream(c *gin.Context) {
 	byokModel := strings.TrimSpace(req.ByokModel)
 	if req.Byok {
 		if byokModel == "" {
-			utils.BadRequest(c, "使用自备密钥时需填写上游模型标识")
+			infra.BadRequest(c, "使用自备密钥时需填写上游模型标识")
 			return
 		}
 		var uerr error
 		uk, uerr = aicost.ResolveUserAiKey(userID, req.ByokKeyID)
 		if uerr != nil {
-			utils.InternalError(c, "读取自备密钥失败")
+			infra.InternalError(c, "读取自备密钥失败")
 			return
 		}
 		if uk == nil {
-			utils.BadRequest(c, "自备密钥不可用：请先在「我的钱包 → 上游密钥」中添加")
+			infra.BadRequest(c, "自备密钥不可用：请先在「我的钱包 → 上游密钥」中添加")
 			return
 		}
 		m = &aim.AiModel{ID: 0, Name: "自备密钥 · " + uk.Label, MaxTokens: 2048, Temperature: 0.7}
 	} else {
 		mm, err := aim.GetEnabledAiModelOfKind(req.ModelID, aim.AiKindChat)
 		if err != nil || mm == nil {
-			utils.BadRequest(c, "模型不可用")
+			infra.BadRequest(c, "模型不可用")
 			return
 		}
 		m = mm
@@ -295,7 +295,7 @@ func AiHubChatStream(c *gin.Context) {
 	if req.SessionID > 0 {
 		s, e := aim.GetAiChatSession(req.SessionID, userID)
 		if e != nil {
-			utils.NotFound(c, "会话不存在")
+			infra.NotFound(c, "会话不存在")
 			return
 		}
 		session = s
@@ -308,7 +308,7 @@ func AiHubChatStream(c *gin.Context) {
 		}
 		s, e := aim.CreateAiChatSession(userID, req.AgentID, agentName, m.ID)
 		if e != nil {
-			utils.InternalError(c, "创建会话失败")
+			infra.InternalError(c, "创建会话失败")
 			return
 		}
 		session = s
@@ -341,22 +341,22 @@ func AiHubChatStream(c *gin.Context) {
 	if req.EditMsgID > 0 {
 		old, e := aihub.GetAiChatMessage(req.EditMsgID, session.ID)
 		if e != nil || old == nil {
-			utils.NotFound(c, "被编辑的消息不存在")
+			infra.NotFound(c, "被编辑的消息不存在")
 			return
 		}
 		if old.Role != "user" {
-			utils.BadRequest(c, "只能编辑用户消息")
+			infra.BadRequest(c, "只能编辑用户消息")
 			return
 		}
 		parentID = old.ParentID
 	} else if req.RegenerateMsgID > 0 {
 		old, e := aihub.GetAiChatMessage(req.RegenerateMsgID, session.ID)
 		if e != nil || old == nil {
-			utils.NotFound(c, "被重新生成的消息不存在")
+			infra.NotFound(c, "被重新生成的消息不存在")
 			return
 		}
 		if old.Role != "assistant" {
-			utils.BadRequest(c, "只能重新生成助手回复")
+			infra.BadRequest(c, "只能重新生成助手回复")
 			return
 		}
 		parentID = old.ParentID
@@ -365,7 +365,7 @@ func AiHubChatStream(c *gin.Context) {
 			regenUser = u
 			msg = u.Content
 		} else {
-			utils.BadRequest(c, "原提问已不存在，无法重新生成")
+			infra.BadRequest(c, "原提问已不存在，无法重新生成")
 			return
 		}
 	}
@@ -508,12 +508,12 @@ func AiHubChatStream(c *gin.Context) {
 	freeOK, _, _ := aihub.CheckAiFreeQuota(userID, tokensIn+tokensOut)
 	if !freeOK && !req.Byok {
 		if !wallet.IsTokenEnabled() {
-			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
+			infra.BadRequest(c, "代币系统未开启，无法使用付费 AI")
 			return
 		}
 		if _, ok := aim.PrecheckAiBalance(userID, m, tokensIn, tokensOut); !ok {
 			cost := aim.EstimateAiCost(m, tokensIn, tokensOut)
-			utils.Error(c, 429, 42902, fmt.Sprintf("%s不足：本次约需 %d，当前余额 %d，请先充值",
+			infra.Error(c, 429, 42902, fmt.Sprintf("%s不足：本次约需 %d，当前余额 %d，请先充值",
 				wallet.GetTokenName(), cost, wallet.GetTokenBalance(userID)))
 			return
 		}
@@ -524,11 +524,11 @@ func AiHubChatStream(c *gin.Context) {
 		estCost := aim.EstimateAiCost(m, tokensIn, tokensOut)
 		allowed, needConfirm, reason := aihub.CallGuard(estCost, req.Confirm)
 		if !allowed {
-			utils.BadRequest(c, reason+"（未扣款）")
+			infra.BadRequest(c, reason+"（未扣款）")
 			return
 		}
 		if needConfirm {
-			utils.Error(c, 428, 42801, reason+"，请确认后重试")
+			infra.Error(c, 428, 42801, reason+"，请确认后重试")
 			return
 		}
 	}
@@ -542,7 +542,7 @@ func AiHubChatStream(c *gin.Context) {
 	} else {
 		um, uerr := aihub.AppendAiChatMessageWithParent(session.ID, "user", storeMsg, parentID, 0, 0, 0, 0)
 		if uerr != nil {
-			utils.InternalError(c, "记录消息失败")
+			infra.InternalError(c, "记录消息失败")
 			return
 		}
 		userMsgID = um.ID
@@ -550,7 +550,7 @@ func AiHubChatStream(c *gin.Context) {
 	}
 	callLog, lerr := aim.CreateAiCallLog(userID, m, "chat", "session", session.ID, tokensIn, tokensOut, freeOK || req.Byok)
 	if lerr != nil {
-		utils.InternalError(c, "记录调用失败")
+		infra.InternalError(c, "记录调用失败")
 		return
 	}
 

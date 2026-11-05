@@ -4,13 +4,14 @@ package admingov
 
 import (
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/secure"
 	"strconv"
 	"strings"
 	"time"
 
 	"nvs-server/models"
 	"nvs-server/realname"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -50,7 +51,7 @@ func AdminListRealName(c *gin.Context) {
 
 	var users []models.User
 	if err := q.Order("real_name_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&users).Error; err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 
@@ -58,12 +59,12 @@ func AdminListRealName(c *gin.Context) {
 	for i := range users {
 		u := &users[i]
 		name := ""
-		if dec, err := utils.DecryptField(u.RealName); err == nil {
+		if dec, err := secure.DecryptField(u.RealName); err == nil {
 			name = dec
 		}
 		age := 0
 		if u.BirthDate != nil {
-			age = utils.AgeAt(*u.BirthDate, time.Now())
+			age = secure.AgeAt(*u.BirthDate, time.Now())
 		}
 		rows = append(rows, gin.H{
 			"user_id":         u.ID,
@@ -79,7 +80,7 @@ func AdminListRealName(c *gin.Context) {
 		})
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"list":        rows,
 		"total":       total,
 		"minor_total": minorTotal,
@@ -123,7 +124,7 @@ func AdminGetRealNameProvider(c *gin.Context) {
 	}
 	cfg := models.GetRealNameProviderConfig()
 	masked, has := maskRealNameSecrets(cfg)
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"config":     masked,
 		"has_secret": has,
 		"providers":  realname.Providers(),
@@ -138,13 +139,13 @@ func AdminSetRealNameProvider(c *gin.Context) {
 	}
 	var req realname.Config
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	req.Provider = strings.TrimSpace(strings.ToLower(req.Provider))
 	if req.Provider != "" {
 		if _, ok := realname.Get(req.Provider); !ok {
-			utils.BadRequest(c, "未知的提供商: "+req.Provider)
+			infra.BadRequest(c, "未知的提供商: "+req.Provider)
 			return
 		}
 	}
@@ -166,10 +167,10 @@ func AdminSetRealNameProvider(c *gin.Context) {
 		req.Netease.SecretKey = old.Netease.SecretKey
 	}
 	if err := models.SetRealNameProviderConfig(req); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "提供商配置已保存", nil)
+	infra.SuccessMessage(c, "提供商配置已保存", nil)
 }
 
 // POST /api/admin/realname-provider/test — 提供商连通性测试
@@ -195,19 +196,19 @@ func AdminTestRealNameProvider(c *gin.Context) {
 	}
 	cfg := models.GetRealNameProviderConfig()
 	if cfg.Provider == "" {
-		utils.BadRequest(c, "尚未选择提供商")
+		infra.BadRequest(c, "尚未选择提供商")
 		return
 	}
 	res, err := realname.Verify(c.Request.Context(), cfg, name, idCard)
 	if err != nil {
-		utils.Success(c, gin.H{
+		infra.Success(c, gin.H{
 			"ok":      false,
 			"message": "链路测试失败：" + err.Error(),
 			"hint":    "请检查凭据是否正确、服务是否开通、网络是否可达",
 		})
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"ok":      true,
 		"matched": res.Matched,
 		"code":    res.Code,

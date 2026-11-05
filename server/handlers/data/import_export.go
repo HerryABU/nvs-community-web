@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"nvs-server/utils/infra"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -17,7 +18,6 @@ import (
 	"nvs-server/models"
 	"nvs-server/security"
 	"nvs-server/security/regexsafe"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -56,14 +56,14 @@ func ReadImportContent(data []byte, filename string) (string, error) {
 func ImportPreview(c *gin.Context) {
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
-		utils.BadRequest(c, "请上传文件")
+		infra.BadRequest(c, "请上传文件")
 		return
 	}
 	defer file.Close()
 
 	data, err := readLimited(file)
 	if err != nil {
-		utils.InternalError(c, "读取文件失败: "+err.Error())
+		infra.InternalError(c, "读取文件失败: "+err.Error())
 		return
 	}
 
@@ -73,7 +73,7 @@ func ImportPreview(c *gin.Context) {
 	}
 	content, err := ReadImportContent(data, filename)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 
@@ -101,7 +101,7 @@ func ImportPreview(c *gin.Context) {
 		})
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"total":    len(chapters),
 		"chapters": preview,
 	})
@@ -126,14 +126,14 @@ func ImportNovel(c *gin.Context) {
 
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
-		utils.BadRequest(c, "请上传文件")
+		infra.BadRequest(c, "请上传文件")
 		return
 	}
 	defer file.Close()
 
 	data, err := readLimited(file)
 	if err != nil {
-		utils.InternalError(c, "读取文件失败: "+err.Error())
+		infra.InternalError(c, "读取文件失败: "+err.Error())
 		return
 	}
 
@@ -143,7 +143,7 @@ func ImportNovel(c *gin.Context) {
 	}
 	content, err := ReadImportContent(data, filename)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 
@@ -188,7 +188,7 @@ func ImportNovel(c *gin.Context) {
 			Status: "draft",
 		}
 		if err := models.CreateNovel(novel); err != nil {
-			utils.InternalError(c, "创建作品失败")
+			infra.InternalError(c, "创建作品失败")
 			return
 		}
 
@@ -210,7 +210,7 @@ func ImportNovel(c *gin.Context) {
 
 	createdChapters := writeParsedChapters(novel, chapters, startNum, userID)
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"novel_id":       novel.ID,
 		"title":          title,
 		"chapters_count": len(createdChapters),
@@ -294,12 +294,12 @@ func ImportBatch(c *gin.Context) {
 
 	form, err := c.MultipartForm()
 	if err != nil {
-		utils.BadRequest(c, "请上传文件")
+		infra.BadRequest(c, "请上传文件")
 		return
 	}
 	files := form.File["files"]
 	if len(files) == 0 {
-		utils.BadRequest(c, "请至少上传一个文件")
+		infra.BadRequest(c, "请至少上传一个文件")
 		return
 	}
 
@@ -341,7 +341,7 @@ func ImportBatch(c *gin.Context) {
 	}
 
 	if len(allChapters) == 0 {
-		utils.BadRequest(c, "未能从上传文件中解析出任何章节")
+		infra.BadRequest(c, "未能从上传文件中解析出任何章节")
 		return
 	}
 
@@ -383,7 +383,7 @@ func ImportBatch(c *gin.Context) {
 			Status: "draft",
 		}
 		if err := models.CreateNovel(novel); err != nil {
-			utils.InternalError(c, "创建作品失败")
+			infra.InternalError(c, "创建作品失败")
 			return
 		}
 	}
@@ -398,7 +398,7 @@ func ImportBatch(c *gin.Context) {
 
 	createdChapters := writeParsedChapters(novel, allChapters, startNum, userID)
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"novel_id":       novel.ID,
 		"title":          novel.Title,
 		"mode":           mode,

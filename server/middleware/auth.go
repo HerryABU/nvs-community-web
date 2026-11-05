@@ -2,10 +2,11 @@ package middleware
 
 import (
 	"net/http"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/secure"
 	"strconv"
 
 	"nvs-server/config"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,17 +20,17 @@ const DeviceFingerprintHeader = "X-Device-Fingerprint"
 //   - 令牌无绑定（升级前遗留令牌）一律放行（向后兼容）；
 //   - 当前设备指纹 + 登录地与令牌签发时一致 → 放行；
 //   - 登录地解析失败（geo 抖动）时，放宽到「仅比对设备指纹」以降低误伤。
-func tokenBindingMatches(claims *utils.Claims, c *gin.Context) bool {
+func tokenBindingMatches(claims *secure.Claims, c *gin.Context) bool {
 	if claims.Binding == "" {
 		return true // 遗留令牌：未绑定，向后兼容放行
 	}
 	fp := c.GetHeader(DeviceFingerprintHeader)
-	region := utils.RegionForBinding(c.ClientIP())
-	if utils.ComputeBinding(fp, region) == claims.Binding {
+	region := secure.RegionForBinding(c.ClientIP())
+	if secure.ComputeBinding(fp, region) == claims.Binding {
 		return true
 	}
 	// geo 抖动兜底：本次 IP 归属地解析失败（region 为空），放宽到仅比对指纹，避免误踢在线用户。
-	if region == "" && utils.ComputeBinding(fp, "") == claims.Binding {
+	if region == "" && secure.ComputeBinding(fp, "") == claims.Binding {
 		return true
 	}
 	return false
@@ -39,14 +40,14 @@ func AuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString, err := c.Cookie("token")
 		if err != nil {
-			utils.Unauthorized(c, "未登录")
+			infra.Unauthorized(c, "未登录")
 			c.Abort()
 			return
 		}
 
-		claims, err := utils.ParseToken(tokenString)
+		claims, err := secure.ParseToken(tokenString)
 		if err != nil {
-			utils.Unauthorized(c, "Token 无效或已过期")
+			infra.Unauthorized(c, "Token 无效或已过期")
 			c.Abort()
 			return
 		}
@@ -54,7 +55,7 @@ func AuthRequired() gin.HandlerFunc {
 		// 🔒 令牌绑定校验：访问令牌与「设备指纹 + 登录地」强绑定，
 		// 窃取到的令牌在异设备 / 异省份使用会被 401 拒绝（防 JWT 盗用）。
 		if !tokenBindingMatches(claims, c) {
-			utils.Unauthorized(c, "登录环境已变更（设备/地区），请重新登录")
+			infra.Unauthorized(c, "登录环境已变更（设备/地区），请重新登录")
 			c.Abort()
 			return
 		}
@@ -73,7 +74,7 @@ func AuthRequired() gin.HandlerFunc {
 func OptionalAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if tokenString, err := c.Cookie("token"); err == nil && tokenString != "" {
-			if claims, perr := utils.ParseToken(tokenString); perr == nil {
+			if claims, perr := secure.ParseToken(tokenString); perr == nil {
 				if tokenBindingMatches(claims, c) {
 					c.Set(CtxUserID, claims.UserID)
 					c.Set(CtxUserEmail, claims.Email)
@@ -90,13 +91,13 @@ func AuthorRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roleStr := UserRole(c)
 		if roleStr == "" {
-			utils.Forbidden(c, "需要作者权限")
+			infra.Forbidden(c, "需要作者权限")
 			c.Abort()
 			return
 		}
 
 		if roleStr != "author" && roleStr != "vip_author" && roleStr != "admin" {
-			utils.Forbidden(c, "需要作者权限")
+			infra.Forbidden(c, "需要作者权限")
 			c.Abort()
 			return
 		}
@@ -111,7 +112,7 @@ func AdminRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role := UserRole(c)
 		if role != "admin" {
-			utils.Forbidden(c, "需要管理员权限")
+			infra.Forbidden(c, "需要管理员权限")
 			c.Abort()
 			return
 		}
@@ -125,7 +126,7 @@ func PoliceRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role := UserRole(c)
 		if role != "admin" && role != "police" {
-			utils.Forbidden(c, "需要警方或管理员权限")
+			infra.Forbidden(c, "需要警方或管理员权限")
 			c.Abort()
 			return
 		}

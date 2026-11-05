@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"testing"
@@ -20,7 +21,6 @@ import (
 	"nvs-server/handlers/testutil"
 	"nvs-server/models"
 	"nvs-server/realtime"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
@@ -31,7 +31,7 @@ import (
 func setupLiveTestDB(t *testing.T) {
 	t.Helper()
 	old := models.DB
-	db, err := gorm.Open(sqlite.Open("file:rage_live_test?mode=memory&cache=shared"), &gorm.Config{Logger: utils.NewDBLogger()})
+	db, err := gorm.Open(sqlite.Open("file:rage_live_test?mode=memory&cache=shared"), &gorm.Config{Logger: infra.NewDBLogger()})
 	if err != nil {
 		t.Fatalf("打开内存测试库失败: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestLiveStreamMaxConnsRejected(t *testing.T) {
 func setupLiveAdminTestDB(t *testing.T) {
 	t.Helper()
 	old := models.DB
-	db, err := gorm.Open(sqlite.Open("file:rage_admin_test?mode=memory&cache=shared"), &gorm.Config{Logger: utils.NewDBLogger()})
+	db, err := gorm.Open(sqlite.Open("file:rage_admin_test?mode=memory&cache=shared"), &gorm.Config{Logger: infra.NewDBLogger()})
 	if err != nil {
 		t.Fatalf("打开内存测试库失败: %v", err)
 	}

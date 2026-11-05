@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"nvs-server/groups"
 	"nvs-server/security"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"sync"
@@ -11,7 +12,6 @@ import (
 
 	"nvs-server/aicall"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	ai "nvs-server/models/ai"
@@ -129,12 +129,12 @@ func AiStatus(c *gin.Context) {
 	id64, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	id := uint(id64)
 	if id == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	g, err := groups.GetGroup(id)
 	if err != nil {
-		utils.NotFound(c, "群组不存在")
+		infra.NotFound(c, "群组不存在")
 		return
 	}
 	agentName := ""
@@ -143,7 +143,7 @@ func AiStatus(c *gin.Context) {
 			agentName = a.Name
 		}
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"enabled":    g.AiEnabled && ai.IsAiEnabled() && ai.IsAiBotEnabled(),
 		"agent_id":   g.AiAgentID,
 		"agent_name": agentName,

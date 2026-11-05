@@ -6,7 +6,7 @@ package home
 import (
 	"nvs-server/handlers/admincommon"
 	"nvs-server/security"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -17,7 +17,7 @@ import (
 func ListPublicHomeBlocks(c *gin.Context) {
 	blocks, err := theme.ListEnabledHomeBlocks()
 	if err != nil {
-		utils.InternalError(c, "获取首页区块失败")
+		infra.InternalError(c, "获取首页区块失败")
 		return
 	}
 	// 空库时播种默认布局（混合一条龙），保证老部署升级后首页不空
@@ -26,7 +26,7 @@ func ListPublicHomeBlocks(c *gin.Context) {
 			blocks, _ = theme.ListEnabledHomeBlocks()
 		}
 	}
-	utils.Success(c, gin.H{"items": blocks})
+	infra.Success(c, gin.H{"items": blocks})
 }
 
 // AdminListHomeBlocks GET /api/admin/home-blocks — 全部区块（含禁用）
@@ -36,10 +36,10 @@ func AdminListHomeBlocks(c *gin.Context) {
 	}
 	blocks, err := theme.ListHomeBlocks()
 	if err != nil {
-		utils.InternalError(c, "获取区块失败")
+		infra.InternalError(c, "获取区块失败")
 		return
 	}
-	utils.Success(c, gin.H{"items": blocks})
+	infra.Success(c, gin.H{"items": blocks})
 }
 
 // AdminListHomeBlockPresets GET /api/admin/home-blocks/presets — 布局预设列表
@@ -52,7 +52,7 @@ func AdminListHomeBlockPresets(c *gin.Context) {
 	for _, p := range presets {
 		out = append(out, gin.H{"key": p.Key, "name": p.Name, "desc": p.Desc})
 	}
-	utils.Success(c, gin.H{"items": out})
+	infra.Success(c, gin.H{"items": out})
 }
 
 // AdminCreateHomeBlock POST /api/admin/home-blocks
@@ -68,16 +68,16 @@ func AdminCreateHomeBlock(c *gin.Context) {
 		SortOrder int    `json:"sort_order"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if !theme.IsValidHomeBlockType(req.Type) {
-		utils.BadRequest(c, "无效的区块类型")
+		infra.BadRequest(c, "无效的区块类型")
 		return
 	}
 	cfg, err := theme.HomeBlockConfigJSON(req.Config)
 	if err != nil {
-		utils.BadRequest(c, "config 必须是合法 JSON")
+		infra.BadRequest(c, "config 必须是合法 JSON")
 		return
 	}
 	// 自定义 HTML：管理员输入也过一遍消毒（纵深防御）
@@ -86,16 +86,16 @@ func AdminCreateHomeBlock(c *gin.Context) {
 	}
 	block := &theme.HomeBlock{
 		Type:      req.Type,
-		Title:     utils.ClampString(req.Title, 128),
+		Title:     infra.ClampString(req.Title, 128),
 		Config:    cfg,
 		Enabled:   req.Enabled,
 		SortOrder: req.SortOrder,
 	}
 	if err := theme.CreateHomeBlock(block); err != nil {
-		utils.InternalError(c, "创建区块失败")
+		infra.InternalError(c, "创建区块失败")
 		return
 	}
-	utils.Success(c, block)
+	infra.Success(c, block)
 }
 
 // AdminUpdateHomeBlock PUT /api/admin/home-blocks/:id
@@ -105,7 +105,7 @@ func AdminUpdateHomeBlock(c *gin.Context) {
 	}
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || id == 0 {
-		utils.BadRequest(c, "无效的区块 ID")
+		infra.BadRequest(c, "无效的区块 ID")
 		return
 	}
 	var req struct {
@@ -116,19 +116,19 @@ func AdminUpdateHomeBlock(c *gin.Context) {
 		Type      *string `json:"type"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	updates := map[string]interface{}{}
 	if req.Type != nil {
 		if !theme.IsValidHomeBlockType(*req.Type) {
-			utils.BadRequest(c, "无效的区块类型")
+			infra.BadRequest(c, "无效的区块类型")
 			return
 		}
 		updates["type"] = *req.Type
 	}
 	if req.Title != nil {
-		updates["title"] = utils.ClampString(*req.Title, 128)
+		updates["title"] = infra.ClampString(*req.Title, 128)
 	}
 	if req.Enabled != nil {
 		updates["enabled"] = *req.Enabled
@@ -139,7 +139,7 @@ func AdminUpdateHomeBlock(c *gin.Context) {
 	if req.Config != nil {
 		cfg, cerr := theme.HomeBlockConfigJSON(*req.Config)
 		if cerr != nil {
-			utils.BadRequest(c, "config 必须是合法 JSON")
+			infra.BadRequest(c, "config 必须是合法 JSON")
 			return
 		}
 		blockType := ""
@@ -154,15 +154,15 @@ func AdminUpdateHomeBlock(c *gin.Context) {
 		updates["config"] = cfg
 	}
 	if len(updates) == 0 {
-		utils.BadRequest(c, "没有需要更新的字段")
+		infra.BadRequest(c, "没有需要更新的字段")
 		return
 	}
 	if err := theme.UpdateHomeBlock(uint(id), updates); err != nil {
-		utils.InternalError(c, "更新区块失败")
+		infra.InternalError(c, "更新区块失败")
 		return
 	}
 	block, _ := theme.GetHomeBlock(uint(id))
-	utils.Success(c, block)
+	infra.Success(c, block)
 }
 
 // AdminDeleteHomeBlock DELETE /api/admin/home-blocks/:id
@@ -172,14 +172,14 @@ func AdminDeleteHomeBlock(c *gin.Context) {
 	}
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || id == 0 {
-		utils.BadRequest(c, "无效的区块 ID")
+		infra.BadRequest(c, "无效的区块 ID")
 		return
 	}
 	if err := theme.DeleteHomeBlock(uint(id)); err != nil {
-		utils.InternalError(c, "删除区块失败")
+		infra.InternalError(c, "删除区块失败")
 		return
 	}
-	utils.SuccessMessage(c, "已删除", nil)
+	infra.SuccessMessage(c, "已删除", nil)
 }
 
 // AdminReorderHomeBlocks POST /api/admin/home-blocks/reorder — body: {ids: [3,1,2]}
@@ -191,14 +191,14 @@ func AdminReorderHomeBlocks(c *gin.Context) {
 		IDs []uint `json:"ids" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || len(req.IDs) == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := theme.ReorderHomeBlocks(req.IDs); err != nil {
-		utils.InternalError(c, "排序失败")
+		infra.InternalError(c, "排序失败")
 		return
 	}
-	utils.SuccessMessage(c, "已排序", nil)
+	infra.SuccessMessage(c, "已排序", nil)
 }
 
 // AdminApplyHomeBlockPreset POST /api/admin/home-blocks/presets/:key/apply
@@ -208,13 +208,13 @@ func AdminApplyHomeBlockPreset(c *gin.Context) {
 	}
 	key := c.Param("key")
 	if theme.FindHomeBlockPreset(key) == nil {
-		utils.BadRequest(c, "无效的布局预设")
+		infra.BadRequest(c, "无效的布局预设")
 		return
 	}
 	if err := theme.ApplyHomeBlockPreset(key); err != nil {
-		utils.InternalError(c, "套用预设失败")
+		infra.InternalError(c, "套用预设失败")
 		return
 	}
 	blocks, _ := theme.ListHomeBlocks()
-	utils.SuccessMessage(c, "已套用布局预设", gin.H{"items": blocks})
+	infra.SuccessMessage(c, "已套用布局预设", gin.H{"items": blocks})
 }

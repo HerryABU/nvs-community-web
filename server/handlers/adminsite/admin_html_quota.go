@@ -2,10 +2,10 @@ package adminsite
 
 import (
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	quota "nvs-server/models/quota"
@@ -21,7 +21,7 @@ func AdminGetHTMLQuota(c *gin.Context) {
 	}
 	var overrides []quota.HTMLQuotaOverride
 	models.DB.Order("updated_at DESC").Limit(500).Find(&overrides)
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"config":    quota.LoadHTMLQuotaSetting(),
 		"overrides": overrides,
 	})
@@ -34,7 +34,7 @@ func AdminSaveHTMLQuota(c *gin.Context) {
 	}
 	var in quota.HTMLQuotaSetting
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数不合法")
+		infra.BadRequest(c, "参数不合法")
 		return
 	}
 	if in.MaxProjects < 0 {
@@ -44,10 +44,10 @@ func AdminSaveHTMLQuota(c *gin.Context) {
 		in.MaxTotalSizeMB = 0
 	}
 	if err := quota.SaveHTMLQuotaSetting(in); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "已保存", quota.LoadHTMLQuotaSetting())
+	infra.SuccessMessage(c, "已保存", quota.LoadHTMLQuotaSetting())
 }
 
 // AdminSetHTMLQuotaOverride POST /api/admin/html-quota/overrides
@@ -64,17 +64,17 @@ func AdminSetHTMLQuotaOverride(c *gin.Context) {
 		Note           string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.UserID == 0 {
-		utils.BadRequest(c, "参数不合法")
+		infra.BadRequest(c, "参数不合法")
 		return
 	}
 	switch req.Action {
 	case "remove":
 		if err := models.DB.Where("user_id = ?", req.UserID).
 			Delete(&quota.HTMLQuotaOverride{}).Error; err != nil {
-			utils.InternalError(c, "删除失败")
+			infra.InternalError(c, "删除失败")
 			return
 		}
-		utils.SuccessMessage(c, "已恢复为全局额度", nil)
+		infra.SuccessMessage(c, "已恢复为全局额度", nil)
 	case "set":
 		var ov quota.HTMLQuotaOverride
 		err := models.DB.Where("user_id = ?", req.UserID).First(&ov).Error
@@ -85,12 +85,12 @@ func AdminSetHTMLQuotaOverride(c *gin.Context) {
 		ov.MaxTotalSizeMB = req.MaxTotalSizeMB
 		ov.Note = req.Note
 		if err := models.DB.Save(&ov).Error; err != nil {
-			utils.InternalError(c, "保存失败")
+			infra.InternalError(c, "保存失败")
 			return
 		}
-		utils.SuccessMessage(c, "已保存", ov)
+		infra.SuccessMessage(c, "已保存", ov)
 	default:
-		utils.BadRequest(c, "action 只能是 set / remove")
+		infra.BadRequest(c, "action 只能是 set / remove")
 	}
 }
 
@@ -102,8 +102,8 @@ func AdminHTMLQuotaUsage(c *gin.Context) {
 	}
 	uid, _ := strconv.ParseUint(c.Query("user_id"), 10, 64)
 	if uid == 0 {
-		utils.BadRequest(c, "缺少 user_id")
+		infra.BadRequest(c, "缺少 user_id")
 		return
 	}
-	utils.Success(c, quota.HTMLQuotaSnapshot(uint(uid)))
+	infra.Success(c, quota.HTMLQuotaSnapshot(uint(uid)))
 }

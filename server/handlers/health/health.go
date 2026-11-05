@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"net"
+	"nvs-server/utils/infra"
 	"runtime"
 	"sync"
 	"time"
@@ -11,7 +12,6 @@ import (
 	"nvs-server/config"
 	"nvs-server/handlers/dbadmin"
 	"nvs-server/models"
-	"nvs-server/utils"
 	"nvs-server/version"
 
 	"github.com/gin-gonic/gin"
@@ -68,8 +68,8 @@ func CollectHealth() gin.H {
 
 	// 3. Redis
 	redis := gin.H{"ok": false, "status": "disabled"}
-	if utils.RedisClient != nil {
-		if _, err := utils.RedisClient.Ping(context.Background()).Result(); err == nil {
+	if infra.RedisClient != nil {
+		if _, err := infra.RedisClient.Ping(context.Background()).Result(); err == nil {
 			redis["ok"] = true
 			redis["status"] = "ok"
 		} else {

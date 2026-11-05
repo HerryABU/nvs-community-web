@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
+	"nvs-server/utils/infra"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,7 +29,6 @@ import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/handlers/web"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	aiops "nvs-server/models/aiops"
@@ -166,7 +166,7 @@ func extForImageFormat(f string) string {
 // 只放"该不该显示开关"这类信息，不放 ContentProducer 等后台配置内容。
 func AiAigcOptions(c *gin.Context) {
 	cfg := aiops.LoadAigcConfig()
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"enabled":               cfg.Enabled,
 		"waiver_enabled":        cfg.WaiverEnabled,
 		"waiver_agreement":      cfg.WaiverAgreement,
@@ -184,7 +184,7 @@ func AiAigcOptions(c *gin.Context) {
 func AiAigcExport(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	var req struct {
@@ -209,24 +209,24 @@ func AiAigcExport(c *gin.Context) {
 		Prompt        string `json:"prompt"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 
 	asset, err := resolveAigcAsset(uid, req.AssetID, req.TaskID, req.ImageIndex)
 	if err != nil {
-		utils.NotFound(c, "原图不存在或无权访问")
+		infra.NotFound(c, "原图不存在或无权访问")
 		return
 	}
 	data, rerr := os.ReadFile(asset.FilePath)
 	if rerr != nil {
-		utils.BadRequest(c, "原图已不在磁盘上，请重新生成")
+		infra.BadRequest(c, "原图已不在磁盘上，请重新生成")
 		return
 	}
 
 	cfg := aiops.LoadAigcConfig()
 	if cfg.Enabled && strings.TrimSpace(cfg.ContentProducer) == "" {
-		utils.BadRequest(c, "站长还没填「生成合成服务提供者」，隐式标识无法合规写入")
+		infra.BadRequest(c, "站长还没填「生成合成服务提供者」，隐式标识无法合规写入")
 		return
 	}
 
@@ -244,7 +244,7 @@ func AiAigcExport(c *gin.Context) {
 		}
 		if reason != "" {
 			logAigcWaiver(c, uid, produceID, cfg, req.WaiverText, "denied", reason)
-			utils.BadRequest(c, reason)
+			infra.BadRequest(c, reason)
 			return
 		}
 	}
@@ -273,7 +273,7 @@ func AiAigcExport(c *gin.Context) {
 		if req.Waive {
 			logAigcWaiver(c, uid, produceID, cfg, req.WaiverText, "denied", "导出失败："+eerr.Error())
 		}
-		utils.BadRequest(c, aigcExportErrText(eerr))
+		infra.BadRequest(c, aigcExportErrText(eerr))
 		return
 	}
 
@@ -414,7 +414,7 @@ func newProduceID() string {
 
 // AdminGetAigcConfig GET /api/admin/aigc/config
 func AdminGetAigcConfig(c *gin.Context) {
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"config": aiops.LoadAigcConfig(),
 		"font": gin.H{
 			"custom": aiops.LoadAigcConfig() != aiops.DefaultAigcConfig() &&
@@ -433,18 +433,18 @@ func fileExists(p string) bool {
 func AdminSaveAigcConfig(c *gin.Context) {
 	var cfg aiops.AigcConfig
 	if err := c.ShouldBindJSON(&cfg); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if cfg.Enabled && strings.TrimSpace(cfg.ContentProducer) == "" {
-		utils.BadRequest(c, "「生成合成服务提供者」必填：这是国标要求的主体信息")
+		infra.BadRequest(c, "「生成合成服务提供者」必填：这是国标要求的主体信息")
 		return
 	}
 	if err := aiops.SaveAigcConfig(cfg); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "已保存", aiops.LoadAigcConfig())
+	infra.SuccessMessage(c, "已保存", aiops.LoadAigcConfig())
 }
 
 // AdminListAigcExports GET /api/admin/aigc/exports?page=&size=
@@ -452,7 +452,7 @@ func AdminListAigcExports(c *gin.Context) {
 	page := web.AtoiDefault(c.Query("page"), 1)
 	size := web.AtoiDefault(c.Query("size"), 20)
 	list, total := aiops.ListAigcExports(page, size)
-	utils.Success(c, gin.H{"list": list, "total": total, "page": page, "size": size})
+	infra.Success(c, gin.H{"list": list, "total": total, "page": page, "size": size})
 }
 
 // AdminListAigcWaivers GET /api/admin/aigc/waivers?page=&size=
@@ -460,22 +460,22 @@ func AdminListAigcWaivers(c *gin.Context) {
 	page := web.AtoiDefault(c.Query("page"), 1)
 	size := web.AtoiDefault(c.Query("size"), 20)
 	list, total := aiops.ListAigcWaiverLogs(page, size)
-	utils.Success(c, gin.H{"list": list, "total": total, "page": page, "size": size})
+	infra.Success(c, gin.H{"list": list, "total": total, "page": page, "size": size})
 }
 
 // AdminAigcVerify GET /api/admin/aigc/verify/:produce_id —— 用 ProduceID 回查模型名
 func AdminAigcVerify(c *gin.Context) {
 	pid := strings.TrimSpace(c.Param("produce_id"))
 	if pid == "" {
-		utils.BadRequest(c, "缺少 ProduceID")
+		infra.BadRequest(c, "缺少 ProduceID")
 		return
 	}
 	e, err := aiops.GetAigcExportByProduceID(pid)
 	if err != nil {
-		utils.NotFound(c, "没有这条导出记录")
+		infra.NotFound(c, "没有这条导出记录")
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"produce_id": e.ProduceID,
 		"model_name": e.ModelName,
 		"asset_id":   e.AssetID,
@@ -494,26 +494,26 @@ func AdminAigcVerify(c *gin.Context) {
 func AdminUploadAigcFont(c *gin.Context) {
 	fh, err := c.FormFile("file")
 	if err != nil {
-		utils.BadRequest(c, "请选择字体文件（.ttf）")
+		infra.BadRequest(c, "请选择字体文件（.ttf）")
 		return
 	}
 	if fh.Size > 20<<20 {
-		utils.BadRequest(c, "字体文件过大（上限 20MB）")
+		infra.BadRequest(c, "字体文件过大（上限 20MB）")
 		return
 	}
 	name := strings.ToLower(filepath.Base(fh.Filename))
 	if !strings.HasSuffix(name, ".ttf") {
-		utils.BadRequest(c, "只支持 .ttf 字体")
+		infra.BadRequest(c, "只支持 .ttf 字体")
 		return
 	}
 	dir := aigcRoot()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		utils.InternalError(c, "无法创建目录")
+		infra.InternalError(c, "无法创建目录")
 		return
 	}
 	dst := filepath.Join(dir, "label.ttf")
 	if err := c.SaveUploadedFile(fh, dst); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
 	// 立刻生效：重新加载字体缓存，并做一次渲染自检（坏字体当场拒掉）
@@ -521,8 +521,8 @@ func AdminUploadAigcFont(c *gin.Context) {
 	if _, err := aigc.FaceForSize(24); err != nil {
 		_ = os.Remove(dst)
 		aigc.SetCustomFontPath("")
-		utils.BadRequest(c, "字体解析失败，已回退内置字体")
+		infra.BadRequest(c, "字体解析失败，已回退内置字体")
 		return
 	}
-	utils.SuccessMessage(c, "字体已更新", gin.H{"path": dst})
+	infra.SuccessMessage(c, "字体已更新", gin.H{"path": dst})
 }

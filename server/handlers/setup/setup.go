@@ -3,6 +3,8 @@ package setup
 import (
 	"log"
 	"net"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/secure"
 	"os"
 	"runtime"
 	"strings"
@@ -11,7 +13,6 @@ import (
 	"nvs-server/config"
 	"nvs-server/handlers/moderation"
 	"nvs-server/models"
-	"nvs-server/utils"
 	"nvs-server/version"
 
 	"github.com/gin-gonic/gin"
@@ -32,7 +33,7 @@ var installMu sync.Mutex
 
 // GET /api/setup/status — 查询安装状态（公开，不泄露密钥）
 func SetupStatus(c *gin.Context) {
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"installed":  config.IsInstalled(),
 		"db_driver":  config.DBDriver,
 		"server_ver": version.AppVersion,
@@ -47,7 +48,7 @@ func SetupEnvCheck(c *gin.Context) {
 	// 端口占用：检测服务端口是否已被监听（本服务自身）
 	portFree := checkPortFree(config.ServerPort)
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"os":               runtime.GOOS,
 		"arch":             runtime.GOARCH,
 		"data_writable":    dataWritable,
@@ -63,26 +64,26 @@ func SetupDBTest(c *gin.Context) {
 		Database models.DBConfig `json:"database"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请求参数错误")
+		infra.BadRequest(c, "请求参数错误")
 		return
 	}
 	req.Database.Driver = strings.ToLower(strings.TrimSpace(req.Database.Driver))
 
 	db, err := models.OpenDB(req.Database)
 	if err != nil {
-		utils.Success(c, gin.H{"ok": false, "error": err.Error()})
+		infra.Success(c, gin.H{"ok": false, "error": err.Error()})
 		return
 	}
 	sqlDB, err := db.DB()
 	if err != nil {
-		utils.Success(c, gin.H{"ok": false, "error": err.Error()})
+		infra.Success(c, gin.H{"ok": false, "error": err.Error()})
 		return
 	}
 	if err := sqlDB.Ping(); err != nil {
-		utils.Success(c, gin.H{"ok": false, "error": err.Error()})
+		infra.Success(c, gin.H{"ok": false, "error": err.Error()})
 		return
 	}
-	utils.Success(c, gin.H{"ok": true})
+	infra.Success(c, gin.H{"ok": true})
 }
 
 // POST /api/setup/install — 执行安装（一次性，需安装密钥）
@@ -91,7 +92,7 @@ func SetupInstall(c *gin.Context) {
 	defer installMu.Unlock()
 
 	if config.IsInstalled() {
-		utils.Forbidden(c, "系统已完成安装，建站向导已永久关闭")
+		infra.Forbidden(c, "系统已完成安装，建站向导已永久关闭")
 		return
 	}
 
@@ -106,52 +107,52 @@ func SetupInstall(c *gin.Context) {
 		} `json:"admin"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请求参数错误")
+		infra.BadRequest(c, "请求参数错误")
 		return
 	}
 
 	// 1. 校验一次性安装密钥（严防死守）
 	if !config.VerifySetupKey(req.SetupKey) {
-		utils.Forbidden(c, "安装密钥错误，请查看服务器控制台输出的安装密钥")
+		infra.Forbidden(c, "安装密钥错误，请查看服务器控制台输出的安装密钥")
 		return
 	}
 
 	// 2. 校验数据库配置
 	req.Database.Driver = strings.ToLower(strings.TrimSpace(req.Database.Driver))
 	if req.Database.Driver != "sqlite" && req.Database.Driver != "mysql" {
-		utils.BadRequest(c, "数据库驱动仅支持 sqlite 或 mysql")
+		infra.BadRequest(c, "数据库驱动仅支持 sqlite 或 mysql")
 		return
 	}
 	if req.Database.Driver == "mysql" && req.Database.Name == "" {
-		utils.BadRequest(c, "MySQL 数据库名不能为空")
+		infra.BadRequest(c, "MySQL 数据库名不能为空")
 		return
 	}
 
 	// 3. 校验站点与管理员
 	req.SiteName = strings.TrimSpace(req.SiteName)
 	if req.SiteName == "" {
-		utils.BadRequest(c, "站点名称不能为空")
+		infra.BadRequest(c, "站点名称不能为空")
 		return
 	}
 	req.Admin.Username = strings.TrimSpace(req.Admin.Username)
 	req.Admin.Email = strings.TrimSpace(req.Admin.Email)
 	if req.Admin.Username == "" || req.Admin.Email == "" || req.Admin.Password == "" {
-		utils.BadRequest(c, "管理员账号、邮箱、密码均不能为空")
+		infra.BadRequest(c, "管理员账号、邮箱、密码均不能为空")
 		return
 	}
 	if !isStrongPassword(req.Admin.Password) {
-		utils.BadRequest(c, "管理员密码强度不足：至少 8 位，且需同时包含字母和数字")
+		infra.BadRequest(c, "管理员密码强度不足：至少 8 位，且需同时包含字母和数字")
 		return
 	}
 
 	// 4. 连接目标数据库并建表
 	target, err := models.OpenDB(req.Database)
 	if err != nil {
-		utils.BadRequest(c, "数据库连接失败: "+err.Error())
+		infra.BadRequest(c, "数据库连接失败: "+err.Error())
 		return
 	}
 	if err := models.AutoMigrateAll(target); err != nil {
-		utils.InternalError(c, "数据库建表失败: "+err.Error())
+		infra.InternalError(c, "数据库建表失败: "+err.Error())
 		return
 	}
 
@@ -168,9 +169,9 @@ func SetupInstall(c *gin.Context) {
 	moderation.ReloadXssRules()
 
 	// 6. 创建管理员账号（记录，不记录明文密码）
-	hash, err := utils.HashPassword(req.Admin.Password)
+	hash, err := secure.HashPassword(req.Admin.Password)
 	if err != nil {
-		utils.InternalError(c, "密码加密失败")
+		infra.InternalError(c, "密码加密失败")
 		return
 	}
 	admin := &models.User{
@@ -181,7 +182,7 @@ func SetupInstall(c *gin.Context) {
 		Role:         "admin",
 	}
 	if err := models.DB.Create(admin).Error; err != nil {
-		utils.InternalError(c, "创建管理员失败: "+err.Error())
+		infra.InternalError(c, "创建管理员失败: "+err.Error())
 		return
 	}
 	log.Printf("[setup] 已创建管理员账号 %s (%s)", req.Admin.Username, req.Admin.Email)
@@ -200,23 +201,23 @@ func SetupInstall(c *gin.Context) {
 		sc.Path = "data/nvs.db"
 	}
 	if err := config.PersistSecureConfig(sc); err != nil {
-		utils.InternalError(c, "写入加密配置失败: "+err.Error())
+		infra.InternalError(c, "写入加密配置失败: "+err.Error())
 		return
 	}
 
 	// MySQL 模式重连 Redis
 	if sc.Driver == "mysql" {
-		utils.ConnectRedis(config.RedisHost, config.RedisPort, config.RedisPassword, config.RedisDB)
+		infra.ConnectRedis(config.RedisHost, config.RedisPort, config.RedisPassword, config.RedisDB)
 	}
 
 	// 8. 锁死：删除一次性密钥 + 置位安装状态（此后安装路由由守卫返回 404）
 	if err := config.MarkInstalled(); err != nil {
-		utils.InternalError(c, "写入安装标记失败: "+err.Error())
+		infra.InternalError(c, "写入安装标记失败: "+err.Error())
 		return
 	}
 
 	log.Printf("[setup] 安装完成：driver=%s site=%s", sc.Driver, req.SiteName)
-	utils.SuccessMessage(c, "安装成功，请使用管理员账号登录", gin.H{
+	infra.SuccessMessage(c, "安装成功，请使用管理员账号登录", gin.H{
 		"driver":    sc.Driver,
 		"site_name": req.SiteName,
 	})

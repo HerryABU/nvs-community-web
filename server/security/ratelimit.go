@@ -4,12 +4,13 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/secure"
 	"strings"
 	"sync"
 	"time"
 
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -106,7 +107,7 @@ func RateLimit(maxRequests int, windowSecs int) gin.HandlerFunc {
 		rateLimitMu.Unlock()
 
 		if currentCount > maxRequests {
-			utils.Error(c, 429, utils.CodeBadRequest, "请求过于频繁，请稍后再试")
+			infra.Error(c, 429, infra.CodeBadRequest, "请求过于频繁，请稍后再试")
 			c.Abort()
 			return
 		}
@@ -144,7 +145,7 @@ func isLoggedInBrowser(c *gin.Context) bool {
 	if err != nil || token == "" {
 		return false
 	}
-	if _, perr := utils.ParseToken(token); perr != nil {
+	if _, perr := secure.ParseToken(token); perr != nil {
 		return false
 	}
 	return true
@@ -319,19 +320,19 @@ func APIKeyGuard() gin.HandlerFunc {
 				if ident.Banned {
 					recordAccessLog(ident, method, path, ip, ua, http.StatusForbidden, "key_banned")
 					c.Header("X-NVS-Key-Banned", "1")
-					utils.Error(c, http.StatusForbidden, utils.CodeForbidden, ident.BanReason)
+					infra.Error(c, http.StatusForbidden, infra.CodeForbidden, ident.BanReason)
 					c.Abort()
 					return
 				}
 				if !apikey.MatchAllowedIP(ident.AllowedIPs, ip) {
 					recordAccessLog(ident, method, path, ip, ua, http.StatusForbidden, "ip_not_allowed")
-					utils.Error(c, http.StatusForbidden, utils.CodeForbidden, "该 API Key 不允许从当前 IP 访问")
+					infra.Error(c, http.StatusForbidden, infra.CodeForbidden, "该 API Key 不允许从当前 IP 访问")
 					c.Abort()
 					return
 				}
 				if !KeyRateLimit("key:"+ident.KeyHash, ident.QuotaPerMin, ident.WindowSecs) {
 					recordAccessLog(ident, method, path, ip, ua, http.StatusTooManyRequests, "quota_exceeded")
-					utils.Error(c, http.StatusTooManyRequests, utils.CodeBadRequest, "API Key 请求超限，请稍后再试")
+					infra.Error(c, http.StatusTooManyRequests, infra.CodeBadRequest, "API Key 请求超限，请稍后再试")
 					c.Abort()
 					return
 				}
@@ -361,7 +362,7 @@ func APIKeyGuard() gin.HandlerFunc {
 				})
 			}
 			c.Header("X-NVS-Blocked", blockReason)
-			utils.Error(c, http.StatusForbidden, utils.CodeForbidden, "已识别为已知名头爬虫，访问被拒绝")
+			infra.Error(c, http.StatusForbidden, infra.CodeForbidden, "已识别为已知名头爬虫，访问被拒绝")
 			c.Abort()
 			return
 		}
@@ -388,7 +389,7 @@ func APIKeyGuard() gin.HandlerFunc {
 
 		if !KeyRateLimit(limitKey, quota.Req, quota.Window) {
 			recordAccessLog(identity, method, path, ip, ua, http.StatusTooManyRequests, botReason)
-			utils.Error(c, http.StatusTooManyRequests, utils.CodeBadRequest, "请求过于频繁，请稍后再试")
+			infra.Error(c, http.StatusTooManyRequests, infra.CodeBadRequest, "请求过于频繁，请稍后再试")
 			c.Abort()
 			return
 		}

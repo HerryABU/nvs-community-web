@@ -5,7 +5,7 @@ package aihub
 // 渠道监控里那套「渠道地址 + 系统访问令牌 nap_ + 用户 ID + 模型密钥 sk_」以前只能每次手输。
 // 站长要求存下来，之后直接点「拉取」。但 nap_ 权限很大（能查账户、部分站点还能改配置），
 // 所以：
-//   · 只存**密文**（AES-256-GCM，utils.EncryptField），**不存明文、不回传前端**；
+//   · 只存**密文**（AES-256-GCM，secure.EncryptField），**不存明文、不回传前端**；
 //   · 前端只看得到尾号（…a1b2）与是否已配置；
 //   · **不用 JWT 包装**：JWT 是「签名」不是「加密」，payload 人人可解；而且它天然带过期，
 //     存这种长期凭据只会逼人把有效期设成几年，反而更危险。要可逆就用对称加密。
@@ -17,11 +17,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"nvs-server/utils/secure"
 	"strings"
 	"time"
 
 	"nvs-server/models"
-	"nvs-server/utils"
 )
 
 // ErrNoChannelAccount 该渠道还没有保存过凭据
@@ -93,7 +93,7 @@ func SaveAiChannelAccount(baseURL, label, userID, accessToken, modelKey string) 
 	if accessToken == "-" {
 		acc.AccessTokenEnc, acc.AccessTokenFP, acc.AccessTokenTail = "", "", ""
 	} else if accessToken != "" {
-		enc, e := utils.EncryptField(accessToken)
+		enc, e := secure.EncryptField(accessToken)
 		if e != nil {
 			return nil, fmt.Errorf("令牌加密失败：%w", e)
 		}
@@ -104,7 +104,7 @@ func SaveAiChannelAccount(baseURL, label, userID, accessToken, modelKey string) 
 	if modelKey == "-" {
 		acc.ModelKeyEnc, acc.ModelKeyFP, acc.ModelKeyTail = "", "", ""
 	} else if modelKey != "" {
-		enc, e := utils.EncryptField(modelKey)
+		enc, e := secure.EncryptField(modelKey)
 		if e != nil {
 			return nil, fmt.Errorf("模型密钥加密失败：%w", e)
 		}
@@ -180,7 +180,7 @@ func (a *AiChannelAccount) DecryptAccessToken() (string, error) {
 	if a == nil || a.AccessTokenEnc == "" {
 		return "", fmt.Errorf("该渠道没有保存系统访问令牌")
 	}
-	return utils.DecryptField(a.AccessTokenEnc)
+	return secure.DecryptField(a.AccessTokenEnc)
 }
 
 // DecryptModelKey 解出 sk_ 明文（同上：不落日志）
@@ -188,7 +188,7 @@ func (a *AiChannelAccount) DecryptModelKey() (string, error) {
 	if a == nil || a.ModelKeyEnc == "" {
 		return "", fmt.Errorf("该渠道没有保存模型密钥")
 	}
-	return utils.DecryptField(a.ModelKeyEnc)
+	return secure.DecryptField(a.ModelKeyEnc)
 }
 
 // HasAccessToken / HasModelKey 前端据此显示「已保存 / 未保存」

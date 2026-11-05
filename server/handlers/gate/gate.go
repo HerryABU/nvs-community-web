@@ -6,13 +6,13 @@ package gate
 
 import (
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
 	"nvs-server/gate"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -20,7 +20,7 @@ import (
 // RegisterGateHint GET /api/auth/register-hint —— 注册前提示（是否需要邀请码/限制）
 func RegisterGateHint(c *gin.Context) {
 	cfg := gate.Load()
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"enabled":           cfg.Enabled,
 		"require_invite":    cfg.RequireInvite,
 		"post_min_hours":    cfg.PostMinAgeHours,
@@ -40,10 +40,10 @@ func RegisterGateCheck(c *gin.Context) {
 	if err := gate.CanRegister(gate.RegisterInput{
 		IP: c.ClientIP(), DeviceID: deviceID, Email: in.Email, Invite: in.Invite,
 	}); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "可以注册", gin.H{"device_id": deviceID})
+	infra.SuccessMessage(c, "可以注册", gin.H{"device_id": deviceID})
 }
 
 // AdminGateConfig GET /api/admin/gate
@@ -51,7 +51,7 @@ func AdminGateConfig(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"config": gate.Load(),
 		"note":   "门槛默认全关；开启后：邀请码挡批量注册、设备指纹挡同机小号、账号年龄挡注册即刷。设备指纹可被伪造，属提高成本而非绝对防御。",
 	})
@@ -64,14 +64,14 @@ func SaveGateConfig(c *gin.Context) {
 	}
 	var in gate.Config
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := gate.Save(in); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "已保存", gate.Load())
+	infra.SuccessMessage(c, "已保存", gate.Load())
 }
 
 // AdminInvites GET /api/admin/gate/invites
@@ -83,10 +83,10 @@ func AdminInvites(c *gin.Context) {
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
 	list, total, err := gate.ListInvites(page, size)
 	if err != nil {
-		utils.InternalError(c, "读取失败")
+		infra.InternalError(c, "读取失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list, "total": total, "page": page, "size": size})
+	infra.Success(c, gin.H{"list": list, "total": total, "page": page, "size": size})
 }
 
 // CreateInvites POST /api/admin/gate/invites
@@ -101,7 +101,7 @@ func CreateInvites(c *gin.Context) {
 		TTLHours int    `json:"ttl_hours"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if in.Count <= 0 {
@@ -117,12 +117,12 @@ func CreateInvites(c *gin.Context) {
 	for i := 0; i < in.Count; i++ {
 		inv, err := gate.CreateInvite(hctx.CurrentUserID(c), in.MaxUses, in.Note, in.TTLHours)
 		if err != nil {
-			utils.InternalError(c, "生成失败")
+			infra.InternalError(c, "生成失败")
 			return
 		}
 		out = append(out, inv.Code)
 	}
-	utils.SuccessMessage(c, "已生成", gin.H{"codes": out})
+	infra.SuccessMessage(c, "已生成", gin.H{"codes": out})
 }
 
 // RevokeInvite POST /api/admin/gate/invites/:id/revoke
@@ -132,10 +132,10 @@ func RevokeInvite(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := gate.RevokeInvite(uint(id)); err != nil {
-		utils.InternalError(c, "作废失败")
+		infra.InternalError(c, "作废失败")
 		return
 	}
-	utils.SuccessMessage(c, "已作废（保留已用次数）", nil)
+	infra.SuccessMessage(c, "已作废（保留已用次数）", nil)
 }
 
 // AdminDeviceBindings GET /api/admin/gate/devices —— 按设备聚合，看「谁在开小号」
@@ -160,11 +160,11 @@ func AdminDeviceBindings(c *gin.Context) {
 		q = q.Where("device_id LIKE ? OR ip LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 	}
 	if err := q.Scan(&rows).Error; err != nil {
-		utils.InternalError(c, "读取失败")
+		infra.InternalError(c, "读取失败")
 		return
 	}
 	cfg := gate.Load()
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"list": rows, "max_accounts_per_device": cfg.MaxAccountsPerDevice,
 		"note": "accounts≥3 的条目是「同设备多账号」的重点关注对象；但如果站点在校园网/公司网后面，会因服务端兜底指纹（ip+ua）撞车而误判，判断时以 X-Device-Id 上报的为准。",
 	})

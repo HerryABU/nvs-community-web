@@ -1,7 +1,7 @@
 package aimedia
 
 import (
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
@@ -14,7 +14,7 @@ import (
 func AiMarks(c *gin.Context) {
 	raw := strings.TrimSpace(c.Query("items"))
 	if raw == "" {
-		utils.Success(c, gin.H{"marks": map[string]string{}})
+		infra.Success(c, gin.H{"marks": map[string]string{}})
 		return
 	}
 	parts := strings.Split(raw, ",")
@@ -33,5 +33,5 @@ func AiMarks(c *gin.Context) {
 		}
 		items = append(items, aihub.AiMarkItem{Type: kv[0], ID: uint(id)})
 	}
-	utils.Success(c, gin.H{"marks": aihub.GetAiContentMarks(items)})
+	infra.Success(c, gin.H{"marks": aihub.GetAiContentMarks(items)})
 }

@@ -9,7 +9,8 @@ import (
 	"nvs-server/models"
 	"nvs-server/moderation"
 	"nvs-server/security"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/secure"
 	"strconv"
 	"strings"
 	"time"
@@ -34,33 +35,33 @@ func CreateUserForum(c *gin.Context) {
 		RoomCode    string `json:"room_code"` // 房间号（可选，自定义；留空自动生成）
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请填写论坛名称")
+		infra.BadRequest(c, "请填写论坛名称")
 		return
 	}
 
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		utils.BadRequest(c, "请填写论坛名称")
+		infra.BadRequest(c, "请填写论坛名称")
 		return
 	}
 
 	// 建版额度校验：全局默认（管理员配置） + 按人覆盖（管理员可单独削减到 0）
 	quota := models.ForumQuotaFor(userID)
 	if quota.Limit == 0 {
-		utils.Forbidden(c, "管理员已限制你创建自建论坛，如有疑问请联系管理员")
+		infra.Forbidden(c, "管理员已限制你创建自建论坛，如有疑问请联系管理员")
 		return
 	}
 	if quota.Limit > 0 && quota.Used >= int64(quota.Limit) {
-		utils.Forbidden(c, fmt.Sprintf("每人最多创建 %d 个自建论坛（当前 %d 个），如需更多请联系管理员", quota.Limit, quota.Used))
+		infra.Forbidden(c, fmt.Sprintf("每人最多创建 %d 个自建论坛（当前 %d 个），如需更多请联系管理员", quota.Limit, quota.Used))
 		return
 	}
 
 	// 进入密码（可选）加密存储
 	passwordHash := ""
 	if req.Password != "" {
-		h, err := utils.HashPassword(req.Password)
+		h, err := secure.HashPassword(req.Password)
 		if err != nil {
-			utils.InternalError(c, "密码处理失败")
+			infra.InternalError(c, "密码处理失败")
 			return
 		}
 		passwordHash = h
@@ -80,11 +81,11 @@ func CreateUserForum(c *gin.Context) {
 			}
 		}
 		if !valid {
-			utils.BadRequest(c, "房间号须为 4-16 位数字或英文字母（不含符号）")
+			infra.BadRequest(c, "房间号须为 4-16 位数字或英文字母（不含符号）")
 			return
 		}
 		if models.RoomCodeExists(roomCode) {
-			utils.BadRequest(c, "该房间号已被占用，请换一个或留空自动生成")
+			infra.BadRequest(c, "该房间号已被占用，请换一个或留空自动生成")
 			return
 		}
 	} else {
@@ -102,14 +103,14 @@ func CreateUserForum(c *gin.Context) {
 		ReviewStatus: "pending", // 自建论坛先创建直接可用，待管理员审查
 	}
 	if err := models.CreateForum(forum); err != nil {
-		utils.InternalError(c, "创建论坛失败")
+		infra.InternalError(c, "创建论坛失败")
 		return
 	}
 
 	// AI 内容审核：版块名与简介是公开内容，创建时送检（此前只有版块内帖子会被审）
 	go moderation.ReviewOnWrite(moderation.ScopeForum, forum.ID)
 
-	utils.Success(c, forum)
+	infra.Success(c, forum)
 }
 
 // ListMyForums GET /api/forums/mine — 我创建的自建论坛（附建版额度状态）
@@ -118,7 +119,7 @@ func ListMyForums(c *gin.Context) {
 	var forums []models.Forum
 	models.DB.Where("creator_id = ? AND type = ?", userID, "custom").
 		Order("id DESC").Find(&forums)
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"list":  forums,
 		"quota": models.ForumQuotaFor(userID),
 	})
@@ -131,25 +132,25 @@ func VerifyForumPassword(c *gin.Context) {
 		Password string `json:"password" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请输入进入密码")
+		infra.BadRequest(c, "请输入进入密码")
 		return
 	}
 
 	forum, err := models.GetForumByID(uint(forumID))
 	if err != nil {
-		utils.NotFound(c, "论坛不存在")
+		infra.NotFound(c, "论坛不存在")
 		return
 	}
 
 	if !forum.HasPassword {
-		utils.Success(c, gin.H{"ok": true})
+		infra.Success(c, gin.H{"ok": true})
 		return
 	}
-	if !utils.CheckPassword(req.Password, forum.PasswordHash) {
-		utils.Forbidden(c, "密码错误")
+	if !secure.CheckPassword(req.Password, forum.PasswordHash) {
+		infra.Forbidden(c, "密码错误")
 		return
 	}
-	utils.Success(c, gin.H{"ok": true})
+	infra.Success(c, gin.H{"ok": true})
 }
 
 // EnterForumByRoomCode POST /api/forums/enter-by-code — 凭房间号进入（不可见论坛的唯一入口凭证）。
@@ -162,23 +163,23 @@ func EnterForumByRoomCode(c *gin.Context) {
 		Password string `json:"password"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请输入房间号")
+		infra.BadRequest(c, "请输入房间号")
 		return
 	}
 
 	forum, err := models.GetForumByRoomCode(req.RoomCode)
 	if err != nil {
-		utils.NotFound(c, "房间号不存在或论坛已删除")
+		infra.NotFound(c, "房间号不存在或论坛已删除")
 		return
 	}
 	if forum.Type != "custom" {
-		utils.NotFound(c, "房间号不存在")
+		infra.NotFound(c, "房间号不存在")
 		return
 	}
 
 	// 未提供密码：返回论坛信息与是否需密码（进入密码墙由前端二次提交）
 	if req.Password == "" {
-		utils.Success(c, gin.H{
+		infra.Success(c, gin.H{
 			"forum_id":      forum.ID,
 			"name":          forum.Name,
 			"has_password":  forum.HasPassword,
@@ -189,12 +190,12 @@ func EnterForumByRoomCode(c *gin.Context) {
 	}
 
 	// 提供密码：校验
-	if forum.HasPassword && !utils.CheckPassword(req.Password, forum.PasswordHash) {
-		utils.Forbidden(c, "密码错误")
+	if forum.HasPassword && !secure.CheckPassword(req.Password, forum.PasswordHash) {
+		infra.Forbidden(c, "密码错误")
 		return
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"forum_id":      forum.ID,
 		"name":          forum.Name,
 		"has_password":  forum.HasPassword,
@@ -218,11 +219,11 @@ func ForumMuteUser(c *gin.Context) {
 	forumID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	forum, err := models.GetForumByID(uint(forumID))
 	if err != nil {
-		utils.NotFound(c, "论坛不存在")
+		infra.NotFound(c, "论坛不存在")
 		return
 	}
 	if forum.Type != "custom" || !isForumModerator(c, forum) {
-		utils.Forbidden(c, "无权操作")
+		infra.Forbidden(c, "无权操作")
 		return
 	}
 
@@ -232,7 +233,7 @@ func ForumMuteUser(c *gin.Context) {
 		Reason        string `json:"reason"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 
@@ -263,7 +264,7 @@ func ForumMuteUser(c *gin.Context) {
 		})
 	}
 
-	utils.Success(c, gin.H{"message": "已禁言"})
+	infra.Success(c, gin.H{"message": "已禁言"})
 }
 
 // ForumUnmuteUser POST /api/forums/:id/unmute — 解除禁言。
@@ -273,11 +274,11 @@ func ForumUnmuteUser(c *gin.Context) {
 	forumID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	forum, err := models.GetForumByID(uint(forumID))
 	if err != nil {
-		utils.NotFound(c, "论坛不存在")
+		infra.NotFound(c, "论坛不存在")
 		return
 	}
 	if forum.Type != "custom" || !isForumModerator(c, forum) {
-		utils.Forbidden(c, "无权操作")
+		infra.Forbidden(c, "无权操作")
 		return
 	}
 
@@ -285,7 +286,7 @@ func ForumUnmuteUser(c *gin.Context) {
 		UserID uint `json:"user_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 
@@ -293,13 +294,13 @@ func ForumUnmuteUser(c *gin.Context) {
 	if !adminsite.IsAdminUser(c) {
 		var m models.ForumMute
 		if err := models.DB.Where("forum_id = ? AND user_id = ?", uint(forumID), req.UserID).First(&m).Error; err == nil && m.AdminBan {
-			utils.Forbidden(c, "该禁言由管理员执行，仅管理员可解除")
+			infra.Forbidden(c, "该禁言由管理员执行，仅管理员可解除")
 			return
 		}
 	}
 
 	models.DB.Where("forum_id = ? AND user_id = ?", uint(forumID), req.UserID).Delete(&models.ForumMute{})
-	utils.Success(c, gin.H{"message": "已解除禁言"})
+	infra.Success(c, gin.H{"message": "已解除禁言"})
 }
 
 // ListForumMutes GET /api/forums/:id/mutes — 论坛禁言列表（创建者/管理员）
@@ -307,11 +308,11 @@ func ListForumMutes(c *gin.Context) {
 	forumID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	forum, err := models.GetForumByID(uint(forumID))
 	if err != nil {
-		utils.NotFound(c, "论坛不存在")
+		infra.NotFound(c, "论坛不存在")
 		return
 	}
 	if forum.Type != "custom" || !isForumModerator(c, forum) {
-		utils.Forbidden(c, "无权查看")
+		infra.Forbidden(c, "无权查看")
 		return
 	}
 
@@ -333,7 +334,7 @@ func ListForumMutes(c *gin.Context) {
 			mutes[i].BannedBy = "论坛创建者"
 		}
 	}
-	utils.Success(c, mutes)
+	infra.Success(c, mutes)
 }
 
 // DeleteThreadByModerator DELETE /api/threads/:id — 删除帖子（作者/论坛创建者/管理员）
@@ -343,7 +344,7 @@ func DeleteThreadByModerator(c *gin.Context) {
 
 	thread, err := models.GetThreadByID(uint(threadID))
 	if err != nil {
-		utils.NotFound(c, "帖子不存在")
+		infra.NotFound(c, "帖子不存在")
 		return
 	}
 
@@ -351,7 +352,7 @@ func DeleteThreadByModerator(c *gin.Context) {
 	if thread.UserID != userID {
 		forum, ferr := models.GetForumByID(thread.ForumID)
 		if ferr != nil || (forum.Type != "custom" || !isForumModerator(c, forum)) {
-			utils.Forbidden(c, "无权删除此帖子")
+			infra.Forbidden(c, "无权删除此帖子")
 			return
 		}
 	}
@@ -370,7 +371,7 @@ func DeleteThreadByModerator(c *gin.Context) {
 		models.DB.Delete(&models.Thread{}, uint(threadID))
 	} else {
 		// 留证失败则中止删除（数据完整性优先）
-		utils.InternalError(c, "留证归档失败，删除已中止")
+		infra.InternalError(c, "留证归档失败，删除已中止")
 		return
 	}
 	// 更新论坛帖子计数
@@ -382,7 +383,7 @@ func DeleteThreadByModerator(c *gin.Context) {
 	emergency.AuditEmergency(c, siteops.AuditContentDelete, "thread", uint(threadID),
 		fmt.Sprintf("管理员删除帖子：%s（作者ID：%d，ForumID：%d）",
 			security.SanitizePlainText(thread.Title), thread.UserID, thread.ForumID))
-	utils.Success(c, gin.H{"message": "帖子已删除"})
+	infra.Success(c, gin.H{"message": "帖子已删除"})
 }
 
 // DeletePostByModerator DELETE /api/posts/:id — 删除回帖（作者/论坛创建者/管理员）
@@ -392,19 +393,19 @@ func DeletePostByModerator(c *gin.Context) {
 
 	var post models.Post
 	if err := models.DB.First(&post, postID).Error; err != nil {
-		utils.NotFound(c, "回帖不存在")
+		infra.NotFound(c, "回帖不存在")
 		return
 	}
 
 	if post.UserID != userID {
 		thread, terr := models.GetThreadByID(post.ThreadID)
 		if terr != nil {
-			utils.Forbidden(c, "无权删除")
+			infra.Forbidden(c, "无权删除")
 			return
 		}
 		forum, ferr := models.GetForumByID(thread.ForumID)
 		if ferr != nil || (forum.Type != "custom" || !isForumModerator(c, forum)) {
-			utils.Forbidden(c, "无权删除此回帖")
+			infra.Forbidden(c, "无权删除此回帖")
 			return
 		}
 	}
@@ -433,7 +434,7 @@ func DeletePostByModerator(c *gin.Context) {
 
 	if err := softdel.ArchiveSoftDelete("moderator", "post", uint(postID), userID, operator,
 		"删除回帖", summary, post); err != nil {
-		utils.InternalError(c, "留证归档失败，删除已中止")
+		infra.InternalError(c, "留证归档失败，删除已中止")
 		return
 	}
 	models.DB.Delete(&models.Post{}, uint(postID))
@@ -450,7 +451,7 @@ func DeletePostByModerator(c *gin.Context) {
 	// 合规审计：内容删除处置（含作者/所属帖子）
 	emergency.AuditEmergency(c, siteops.AuditContentDelete, "post", uint(postID),
 		fmt.Sprintf("管理员删除回帖（作者ID：%d，ThreadID：%d）", post.UserID, post.ThreadID))
-	utils.Success(c, gin.H{"message": "回帖已删除"})
+	infra.Success(c, gin.H{"message": "回帖已删除"})
 }
 
 // CheckUserMuted 全局禁言检查（评论/发帖/回帖前调用），返回 true 表示已拦截
@@ -467,7 +468,7 @@ func CheckUserMuted(c *gin.Context) bool {
 		} else {
 			reason = "您已被禁言：" + reason
 		}
-		utils.Forbidden(c, reason)
+		infra.Forbidden(c, reason)
 		return true
 	}
 	return false

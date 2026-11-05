@@ -2,6 +2,7 @@ package adminsite
 
 import (
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"sort"
 	"strconv"
 	"time"
@@ -10,7 +11,6 @@ import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/ipgeo"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	ai "nvs-server/models/ai"
@@ -28,7 +28,7 @@ import (
 func ApplyVip(c *gin.Context) {
 	// 检查 VIP 功能是否被站长关闭
 	if !models.IsVipEnabled() {
-		utils.Forbidden(c, "VIP 付费功能暂未开放")
+		infra.Forbidden(c, "VIP 付费功能暂未开放")
 		return
 	}
 
@@ -36,7 +36,7 @@ func ApplyVip(c *gin.Context) {
 
 	user, err := models.GetUserByID(userID)
 	if err != nil || (user.Role != "author" && user.Role != "vip_author") {
-		utils.Forbidden(c, "需要先成为认证作者")
+		infra.Forbidden(c, "需要先成为认证作者")
 		return
 	}
 
@@ -48,7 +48,7 @@ func ApplyVip(c *gin.Context) {
 	app := &platform.VipApplication{UserID: userID, Reason: req.Reason}
 	models.DB.Where("user_id = ? AND status = ?", userID, "pending").FirstOrCreate(app)
 
-	utils.Success(c, app)
+	infra.Success(c, app)
 }
 
 // GET /api/admin/vip-applications — 查看 VIP 申请列表
@@ -58,7 +58,7 @@ func ListVipApplications(c *gin.Context) {
 	}
 	var apps []platform.VipApplication
 	models.DB.Preload("User").Order("created_at DESC").Find(&apps)
-	utils.Success(c, apps)
+	infra.Success(c, apps)
 }
 
 // POST /api/admin/vip-applications/:id/approve
@@ -72,7 +72,7 @@ func ApproveVip(c *gin.Context) {
 	if err := models.DB.Model(&platform.VipApplication{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status": "approved", "reviewed_at": now,
 	}).Error; err != nil {
-		utils.InternalError(c, "操作失败")
+		infra.InternalError(c, "操作失败")
 		return
 	}
 
@@ -80,7 +80,7 @@ func ApproveVip(c *gin.Context) {
 	models.DB.First(&app, id)
 	models.DB.Model(&models.User{}).Where("id = ?", app.UserID).Update("role", "vip_author")
 
-	utils.Success(c, gin.H{"message": "已批准"})
+	infra.Success(c, gin.H{"message": "已批准"})
 }
 
 // ============ 站长面板 ============
@@ -96,7 +96,7 @@ func GetAdminStats(c *gin.Context) {
 	models.DB.Model(&models.Comment{}).Count(&commentCount)
 	models.DB.Model(&models.Forum{}).Count(&forumCount)
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"users": userCount, "novels": novelCount, "comments": commentCount, "forums": forumCount,
 	})
 }
@@ -284,7 +284,7 @@ func GetDashboardStats(c *gin.Context) {
 		cumulativeWordsCounts[i] = cumSum
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"stats": gin.H{
 			"users":    userCount,
 			"novels":   novelCount,
@@ -596,13 +596,13 @@ func RequestWithdraw(c *gin.Context) {
 		Account string  `json:"account"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.Amount <= 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 
 	wr := &platform.WithdrawalRequest{UserID: userID, Amount: req.Amount, Method: req.Method, Account: req.Account}
 	models.DB.Create(wr)
-	utils.Success(c, wr)
+	infra.Success(c, wr)
 }
 
 // GET /api/author/earnings — 我的收益
@@ -610,7 +610,7 @@ func GetEarnings(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	var total float64
 	models.DB.Model(&platform.EarningsRecord{}).Where("user_id = ?", userID).Select("COALESCE(SUM(amount),0)").Scan(&total)
-	utils.Success(c, gin.H{"total_earnings": total})
+	infra.Success(c, gin.H{"total_earnings": total})
 }
 
 // GET /api/admin/finance — 财务总览
@@ -624,7 +624,7 @@ func GetFinanceOverview(c *gin.Context) {
 	var userCount int64
 	models.DB.Model(&models.User{}).Count(&userCount)
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"total_earnings": totalTips,
 		"platform_fee":   totalTips * 0.10,
 		"user_count":     userCount,

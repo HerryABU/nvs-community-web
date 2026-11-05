@@ -8,12 +8,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"nvs-server/utils/infra"
 	"strings"
 	"sync"
 	"time"
 
 	"nvs-server/security"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -97,15 +97,15 @@ func BatchHandler(c *gin.Context) {
 		TimeoutMs int            `json:"timeout_ms"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误：缺少 requests 数组")
+		infra.BadRequest(c, "参数错误：缺少 requests 数组")
 		return
 	}
 	if len(req.Requests) == 0 {
-		utils.BadRequest(c, "requests 不能为空")
+		infra.BadRequest(c, "requests 不能为空")
 		return
 	}
 	if len(req.Requests) > batchMaxRequests {
-		utils.BadRequest(c, fmt.Sprintf("单次最多聚合 %d 个请求", batchMaxRequests))
+		infra.BadRequest(c, fmt.Sprintf("单次最多聚合 %d 个请求", batchMaxRequests))
 		return
 	}
 
@@ -122,7 +122,7 @@ func BatchHandler(c *gin.Context) {
 
 	engine := BatchEngine
 	if engine == nil {
-		utils.InternalError(c, "聚合服务未初始化")
+		infra.InternalError(c, "聚合服务未初始化")
 		return
 	}
 
@@ -148,7 +148,7 @@ func BatchHandler(c *gin.Context) {
 		}
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"results":   results,
 		"total":     len(results),
 		"succeeded": succeeded,
@@ -282,7 +282,7 @@ func executeSubRequest(ctx context.Context, engine *gin.Engine, parent *gin.Cont
 		result.Data = json.RawMessage("null")
 	}
 	// 成功判定：HTTP 2xx 且业务 code == 0
-	result.Success = result.Status >= 200 && result.Status < 300 && jsonResp.Code == utils.CodeSuccess
+	result.Success = result.Status >= 200 && result.Status < 300 && jsonResp.Code == infra.CodeSuccess
 	if !result.Success {
 		result.Error = jsonResp.Message
 		if result.Error == "" {

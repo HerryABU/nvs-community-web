@@ -5,7 +5,7 @@ import (
 	"log"
 	"nvs-server/aiclient"
 	"nvs-server/handlers/hctx"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"time"
@@ -23,7 +23,7 @@ import (
 // AiHubVideoSubmit POST /api/ai/video — 视频生成（异步：提交即扣款，失败退款）
 func AiHubVideoSubmit(c *gin.Context) {
 	if !aim.IsAiEnabled() {
-		utils.BadRequest(c, "AI 功能未开启")
+		infra.BadRequest(c, "AI 功能未开启")
 		return
 	}
 	userID := hctx.CurrentUserID(c)
@@ -39,16 +39,16 @@ func AiHubVideoSubmit(c *gin.Context) {
 		Confirm   bool   `json:"confirm"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	prompt := strings.TrimSpace(req.Prompt)
 	if prompt == "" {
-		utils.BadRequest(c, "请输入视频提示词")
+		infra.BadRequest(c, "请输入视频提示词")
 		return
 	}
 	if len([]rune(prompt)) > 4000 {
-		utils.BadRequest(c, "提示词过长（上限 4000 字）")
+		infra.BadRequest(c, "提示词过长（上限 4000 字）")
 		return
 	}
 	// 模型解析：BYOK 用伪模型（0 费、不进平台池）
@@ -58,7 +58,7 @@ func AiHubVideoSubmit(c *gin.Context) {
 	} else {
 		mm, merr := aim.GetEnabledAiModelOfKind(req.ModelID, aim.AiKindVideo)
 		if merr != nil || mm == nil {
-			utils.BadRequest(c, "视频模型不可用")
+			infra.BadRequest(c, "视频模型不可用")
 			return
 		}
 		m = mm
@@ -69,22 +69,22 @@ func AiHubVideoSubmit(c *gin.Context) {
 	if !freeOK && !req.Byok && m.PriceCall > 0 {
 		allowed, needConfirm, reason := aihub.CallGuard(m.PriceCall, req.Confirm)
 		if !allowed {
-			utils.BadRequest(c, reason+"（未扣款）")
+			infra.BadRequest(c, reason+"（未扣款）")
 			return
 		}
 		if needConfirm {
-			utils.Error(c, 428, 42801, reason+"，请确认后重试")
+			infra.Error(c, 428, 42801, reason+"，请确认后重试")
 			return
 		}
 	}
 	// 非免费预检：余额 ≥ 单次价（BYOK 不扣平台代币）
 	if !freeOK && !req.Byok {
 		if !wallet.IsTokenEnabled() {
-			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
+			infra.BadRequest(c, "代币系统未开启，无法使用付费 AI")
 			return
 		}
 		if m.PriceCall > 0 && wallet.GetTokenBalance(userID) < m.PriceCall {
-			utils.Error(c, 429, 42902, "余额不足：本次需 "+strconv.FormatInt(m.PriceCall, 10)+
+			infra.Error(c, 429, 42902, "余额不足：本次需 "+strconv.FormatInt(m.PriceCall, 10)+
 				"，当前余额 "+strconv.FormatInt(wallet.GetTokenBalance(userID), 10)+"，请先充值")
 			return
 		}
@@ -93,7 +93,7 @@ func AiHubVideoSubmit(c *gin.Context) {
 		Duration: req.Duration, Size: strings.TrimSpace(req.Size),
 	})
 	if terr != nil {
-		utils.InternalError(c, "创建任务失败")
+		infra.InternalError(c, "创建任务失败")
 		return
 	}
 	lease, kerr := aihub.AcquireModelKey(m)
@@ -103,7 +103,7 @@ func AiHubVideoSubmit(c *gin.Context) {
 	}
 	if kerr != nil {
 		aim.FailAiMediaTask(task.ID, "密钥不可用", false)
-		utils.InternalError(c, "模型密钥不可用，请联系站长")
+		infra.InternalError(c, "模型密钥不可用，请联系站长")
 		return
 	}
 	// BYOK 视频：用用户自备密钥提交，任务记 0 费、不扣平台代币
@@ -115,20 +115,20 @@ func AiHubVideoSubmit(c *gin.Context) {
 		uk, uerr = aicost.ResolveUserAiKey(userID, req.ByokKeyID)
 		if uerr != nil || uk == nil {
 			aim.FailAiMediaTask(task.ID, "自备密钥不可用", false)
-			utils.BadRequest(c, "自备密钥不可用：请先在「我的钱包 → 上游密钥」中添加")
+			infra.BadRequest(c, "自备密钥不可用：请先在「我的钱包 → 上游密钥」中添加")
 			return
 		}
 		ukKey, derr := uk.DecryptApiKey()
 		if derr != nil {
 			aim.FailAiMediaTask(task.ID, "自备密钥解密失败", false)
-			utils.InternalError(c, "自备密钥解密失败，请删除后重新添加")
+			infra.InternalError(c, "自备密钥解密失败，请删除后重新添加")
 			return
 		}
 		baseURL, apiKey = uk.BaseURL, ukKey
 		upModel = strings.TrimSpace(req.ByokModel)
 		if upModel == "" {
 			aim.FailAiMediaTask(task.ID, "缺少上游模型标识", false)
-			utils.BadRequest(c, "使用自备密钥时需填写上游模型标识")
+			infra.BadRequest(c, "使用自备密钥时需填写上游模型标识")
 			return
 		}
 	}
@@ -142,7 +142,7 @@ func AiHubVideoSubmit(c *gin.Context) {
 			lease.Fail()
 		}
 		aim.FailAiMediaTask(task.ID, verr.Error(), false)
-		utils.BadRequest(c, "视频提交失败："+verr.Error()+"（未扣款）")
+		infra.BadRequest(c, "视频提交失败："+verr.Error()+"（未扣款）")
 		return
 	}
 	// 提交成功：免费额度/BYOK 记零费；否则先扣款再转 running（扣款失败则任务失败）
@@ -160,7 +160,7 @@ func AiHubVideoSubmit(c *gin.Context) {
 		nb, cerr = aim.ChargeAiMediaTask(task.ID)
 		if cerr != nil {
 			aim.FailAiMediaTask(task.ID, cerr.Error(), false)
-			utils.Error(c, 429, 42902, cerr.Error()+"（未扣款，请充值后重试）")
+			infra.Error(c, 429, 42902, cerr.Error()+"（未扣款，请充值后重试）")
 			return
 		}
 	}
@@ -168,7 +168,7 @@ func AiHubVideoSubmit(c *gin.Context) {
 		aicost.TouchUserAiKey(uk.ID)
 	}
 	aim.MarkAiMediaSubmitted(task.ID, remoteID)
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"task_id":       task.ID,
 		"status":        status,
 		"cost":          map[bool]int64{true: 0, false: m.PriceCall}[freeOK || byok],
@@ -184,13 +184,13 @@ func AiHubVideoStatus(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	task, err := aim.GetAiMediaTask(uint(id), userID)
 	if err != nil {
-		utils.NotFound(c, "任务不存在")
+		infra.NotFound(c, "任务不存在")
 		return
 	}
 	// 终态直接返回，不再打上游：已取消的任务若漏在这里，会被继续轮询到成功，
 	// 已退的款又变回「已扣款」——既多花钱又对不上账。
 	if aim.IsAiMediaTerminal(task.Status) {
-		utils.Success(c, gin.H{
+		infra.Success(c, gin.H{
 			"task_id": task.ID, "status": task.Status,
 			"result": task.Result, "error": task.Error, "cost": task.Cost,
 			"refunded": task.Refunded,
@@ -198,36 +198,36 @@ func AiHubVideoStatus(c *gin.Context) {
 		return
 	}
 	if task.RemoteID == "" {
-		utils.Success(c, gin.H{"task_id": task.ID, "status": task.Status, "error": task.Error, "cost": task.Cost})
+		infra.Success(c, gin.H{"task_id": task.ID, "status": task.Status, "error": task.Error, "cost": task.Cost})
 		return
 	}
 	// BYOK 任务（ModelID=0）：用用户默认自备密钥轮询上游
 	if task.ModelID == 0 {
 		uk, uerr := aicost.ResolveUserAiKey(userID, 0)
 		if uerr != nil || uk == nil {
-			utils.BadRequest(c, "自备密钥不可用，无法查询任务状态")
+			infra.BadRequest(c, "自备密钥不可用，无法查询任务状态")
 			return
 		}
 		ukKey, derr := uk.DecryptApiKey()
 		if derr != nil {
-			utils.InternalError(c, "自备密钥解密失败")
+			infra.InternalError(c, "自备密钥解密失败")
 			return
 		}
 		client := aiclient.NewClient(uk.BaseURL, ukKey, 30*time.Second)
 		status, videoURL, upErr, qerr := client.QueryVideo(task.RemoteID)
 		if qerr != nil {
-			utils.Success(c, gin.H{"task_id": task.ID, "status": task.Status, "error": qerr.Error(), "cost": task.Cost})
+			infra.Success(c, gin.H{"task_id": task.ID, "status": task.Status, "error": qerr.Error(), "cost": task.Cost})
 			return
 		}
 		switch status {
 		case "succeeded", "success", "completed":
 			if videoURL == "" {
-				utils.Success(c, gin.H{"task_id": task.ID, "status": aim.AiMediaRunning, "cost": task.Cost})
+				infra.Success(c, gin.H{"task_id": task.ID, "status": aim.AiMediaRunning, "cost": task.Cost})
 				return
 			}
 			rj, _ := json.Marshal(gin.H{"video": videoURL})
 			aim.UpdateAiMediaResult(task.ID, string(rj))
-			utils.Success(c, gin.H{
+			infra.Success(c, gin.H{
 				"task_id": task.ID, "status": aim.AiMediaSucceeded,
 				"result": task.Result, "video": videoURL, "cost": task.Cost,
 			})
@@ -237,15 +237,15 @@ func AiHubVideoStatus(c *gin.Context) {
 				msg = "上游任务失败"
 			}
 			aim.FailAiMediaTask(task.ID, msg, false)
-			utils.Success(c, gin.H{"task_id": task.ID, "status": aim.AiMediaFailed, "error": msg, "cost": task.Cost})
+			infra.Success(c, gin.H{"task_id": task.ID, "status": aim.AiMediaFailed, "error": msg, "cost": task.Cost})
 		default:
-			utils.Success(c, gin.H{"task_id": task.ID, "status": aim.AiMediaRunning, "cost": task.Cost})
+			infra.Success(c, gin.H{"task_id": task.ID, "status": aim.AiMediaRunning, "cost": task.Cost})
 		}
 		return
 	}
 	m, merr := aim.GetAiModel(task.ModelID)
 	if merr != nil {
-		utils.BadRequest(c, "模型已删除，无法继续查询")
+		infra.BadRequest(c, "模型已删除，无法继续查询")
 		return
 	}
 	lease, kerr := aihub.AcquireModelKey(m)
@@ -254,25 +254,25 @@ func AiHubVideoStatus(c *gin.Context) {
 		apiKey = lease.Key
 	}
 	if kerr != nil {
-		utils.InternalError(c, "模型密钥不可用")
+		infra.InternalError(c, "模型密钥不可用")
 		return
 	}
 	client := aiclient.NewClient(m.BaseURL, apiKey, 30*time.Second)
 	status, videoURL, upErr, qerr := client.QueryVideo(task.RemoteID)
 	if qerr != nil {
 		// 查询本身失败：保持原状态，前端继续轮询
-		utils.Success(c, gin.H{"task_id": task.ID, "status": task.Status, "error": qerr.Error(), "cost": task.Cost})
+		infra.Success(c, gin.H{"task_id": task.ID, "status": task.Status, "error": qerr.Error(), "cost": task.Cost})
 		return
 	}
 	switch status {
 	case "succeeded", "success", "completed":
 		if videoURL == "" {
-			utils.Success(c, gin.H{"task_id": task.ID, "status": aim.AiMediaRunning, "cost": task.Cost})
+			infra.Success(c, gin.H{"task_id": task.ID, "status": aim.AiMediaRunning, "cost": task.Cost})
 			return
 		}
 		rj, _ := json.Marshal(gin.H{"video": videoURL})
 		aim.UpdateAiMediaResult(task.ID, string(rj))
-		utils.Success(c, gin.H{
+		infra.Success(c, gin.H{
 			"task_id": task.ID, "status": aim.AiMediaSucceeded,
 			"result": task.Result, "video": videoURL, "cost": task.Cost,
 		})
@@ -293,12 +293,12 @@ func AiHubVideoStatus(c *gin.Context) {
 		} else {
 			aim.FailAiMediaTask(task.ID, msg, false)
 		}
-		utils.Success(c, gin.H{
+		infra.Success(c, gin.H{
 			"task_id": task.ID, "status": aim.AiMediaFailed,
 			"error": msg, "cost": task.Cost, "refunded": refunded,
 		})
 	default:
-		utils.Success(c, gin.H{"task_id": task.ID, "status": aim.AiMediaRunning, "cost": task.Cost})
+		infra.Success(c, gin.H{"task_id": task.ID, "status": aim.AiMediaRunning, "cost": task.Cost})
 	}
 }
 
@@ -314,16 +314,16 @@ func AiHubVideoCancel(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if id == 0 {
-		utils.BadRequest(c, "任务 ID 无效")
+		infra.BadRequest(c, "任务 ID 无效")
 		return
 	}
 	task, err := aim.GetAiMediaTask(uint(id), userID)
 	if err != nil {
-		utils.NotFound(c, "任务不存在")
+		infra.NotFound(c, "任务不存在")
 		return
 	}
 	if task.Kind != aim.AiKindVideo {
-		utils.BadRequest(c, "只有异步任务支持取消")
+		infra.BadRequest(c, "只有异步任务支持取消")
 		return
 	}
 	// best-effort：上游若支持撤销就撤销，失败不影响本地退款
@@ -332,10 +332,10 @@ func AiHubVideoCancel(c *gin.Context) {
 	}
 	refunded, cerr := aim.CancelAiMediaTask(uint(id), userID)
 	if cerr != nil {
-		utils.BadRequest(c, cerr.Error())
+		infra.BadRequest(c, cerr.Error())
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"task_id":       task.ID,
 		"status":        aim.AiMediaCancelled,
 		"refunded":      refunded > 0,
@@ -382,16 +382,16 @@ func AiHubMediaHistory(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	kind := strings.TrimSpace(c.Query("kind"))
 	if kind != aim.AiKindImage && kind != aim.AiKindVideo {
-		utils.BadRequest(c, "kind 需为 image 或 video")
+		infra.BadRequest(c, "kind 需为 image 或 video")
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	list, total, err := aim.ListAiMediaTasks(userID, kind, page, 20)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list, "total": total, "page": page})
+	infra.Success(c, gin.H{"list": list, "total": total, "page": page})
 }
 
 // ---------- 绘画协议族分发 ----------

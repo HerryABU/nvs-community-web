@@ -10,12 +10,12 @@ package admingov
 import (
 	"fmt"
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"time"
 
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/security"
@@ -38,7 +38,7 @@ func ListVulnerabilities(c *gin.Context) {
 	}
 	var list []security.Vulnerability
 	q.Order("created_at DESC").Find(&list)
-	utils.Success(c, gin.H{"list": list, "stats": security.GetVulnStats()})
+	infra.Success(c, gin.H{"list": list, "stats": security.GetVulnStats()})
 }
 
 // CreateVulnerability 新建漏洞记录
@@ -55,14 +55,14 @@ func CreateVulnerability(c *gin.Context) {
 		ReportedBy  string `json:"reported_by"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请填写漏洞名称与严重程度")
+		infra.BadRequest(c, "请填写漏洞名称与严重程度")
 		return
 	}
 	severity := strings.ToLower(strings.TrimSpace(req.Severity))
 	switch severity {
 	case security.VulnSeverityCritical, security.VulnSeverityHigh, security.VulnSeverityMedium, security.VulnSeverityLow:
 	default:
-		utils.BadRequest(c, "严重程度仅支持 critical / high / medium / low")
+		infra.BadRequest(c, "严重程度仅支持 critical / high / medium / low")
 		return
 	}
 	v := &security.Vulnerability{
@@ -74,10 +74,10 @@ func CreateVulnerability(c *gin.Context) {
 		ReportedBy:  req.ReportedBy,
 	}
 	if err := models.DB.Create(v).Error; err != nil {
-		utils.InternalError(c, "创建失败")
+		infra.InternalError(c, "创建失败")
 		return
 	}
-	utils.Success(c, v)
+	infra.Success(c, v)
 }
 
 // UpdateVulnerability 更新漏洞记录（状态流转：pending → fixing → fixed/ignored）
@@ -89,7 +89,7 @@ func UpdateVulnerability(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var v security.Vulnerability
 	if err := models.DB.First(&v, id).Error; err != nil {
-		utils.NotFound(c, "漏洞记录不存在")
+		infra.NotFound(c, "漏洞记录不存在")
 		return
 	}
 	var req struct {
@@ -102,7 +102,7 @@ func UpdateVulnerability(c *gin.Context) {
 		FixedAt     *string `json:"fixed_at"` // RFC3339 或留空
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	updates := map[string]interface{}{}
@@ -145,12 +145,12 @@ func UpdateVulnerability(c *gin.Context) {
 	}
 	if len(updates) > 0 {
 		if err := models.DB.Model(&v).Updates(updates).Error; err != nil {
-			utils.InternalError(c, "更新失败")
+			infra.InternalError(c, "更新失败")
 			return
 		}
 	}
 	models.DB.First(&v, id)
-	utils.Success(c, v)
+	infra.Success(c, v)
 }
 
 // DeleteVulnerability 删除漏洞记录
@@ -161,7 +161,7 @@ func DeleteVulnerability(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	models.DB.Delete(&security.Vulnerability{}, id)
-	utils.Success(c, gin.H{"message": "漏洞记录已删除"})
+	infra.Success(c, gin.H{"message": "漏洞记录已删除"})
 }
 
 // ExportVulnerabilities 导出漏洞报告 CSV（供配合公安检查）

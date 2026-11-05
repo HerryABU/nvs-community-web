@@ -2,13 +2,12 @@ package models
 
 import (
 	"encoding/json"
+	"nvs-server/utils/secure"
 	"regexp"
 	"strconv"
 	"time"
 
 	"gorm.io/gorm"
-
-	"nvs-server/utils"
 )
 
 type Comment struct {
@@ -373,7 +372,7 @@ func FloorAccessUnlocked(floor *Comment, viewerID uint, isStaff bool, passwords 
 	if pwd == "" {
 		return false
 	}
-	return utils.CheckPassword(pwd, floor.PasswordHash)
+	return secure.CheckPassword(pwd, floor.PasswordHash)
 }
 
 // RedactLockedComments 对平铺评论列表做楼加密脱敏（models 层统一收口）。

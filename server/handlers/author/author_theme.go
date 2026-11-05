@@ -3,7 +3,7 @@ package author
 import (
 	"nvs-server/handlers/adminsite"
 	"nvs-server/handlers/hctx"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +12,7 @@ import (
 
 // author_theme.go — G4 作者公开主题（访客在作者页可见，区别于作者个人登录主题）。
 //
-// 安全模型：与个人/站点主题同源——写入一律经服务端白名单消毒（utils.SanitizeCSS），
+// 安全模型：与个人/站点主题同源——写入一律经服务端白名单消毒（sanitize.SanitizeCSS），
 // 前端仅以 <style> textContent 注入，杜绝任何原始用户 JS / 危险 CSS。
 
 // GetAuthorTheme GET /api/author/:id/theme（公开，访客可见）
@@ -22,7 +22,7 @@ func GetAuthorTheme(c *gin.Context) {
 	if !ok {
 		return
 	}
-	utils.Success(c, gin.H{"css": theme.GetAuthorTheme(id)})
+	infra.Success(c, gin.H{"css": theme.GetAuthorTheme(id)})
 }
 
 // UpdateAuthorTheme PUT /api/author/:id/theme（作者本人或管理员覆盖）
@@ -34,34 +34,34 @@ func UpdateAuthorTheme(c *gin.Context) {
 	}
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	// 作者本人可改自己的；管理员可覆盖任意作者（override）
 	if uid != id && !adminsite.IsAdminUser(c) {
-		utils.Forbidden(c, "只能修改自己的作者主题")
+		infra.Forbidden(c, "只能修改自己的作者主题")
 		return
 	}
 	var req struct {
 		CSS string `json:"css"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	removed, err := theme.SetAuthorTheme(id, req.CSS)
 	if err != nil {
-		utils.InternalError(c, "保存作者主题失败")
+		infra.InternalError(c, "保存作者主题失败")
 		return
 	}
-	utils.Success(c, gin.H{"css": theme.GetAuthorTheme(id), "removed": removed})
+	infra.Success(c, gin.H{"css": theme.GetAuthorTheme(id), "removed": removed})
 }
 
 // ParseAuthorID 解析路由中的作者 ID（uint），非法时直接响应 400。
 func ParseAuthorID(c *gin.Context) (uint, bool) {
 	v, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || v == 0 {
-		utils.BadRequest(c, "作者 ID 非法")
+		infra.BadRequest(c, "作者 ID 非法")
 		return 0, false
 	}
 	return uint(v), true

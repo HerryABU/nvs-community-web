@@ -1,12 +1,12 @@
 package follow
 
 import (
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"nvs-server/handlers/blacklist"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	social "nvs-server/models/social"
@@ -22,18 +22,18 @@ func ToggleSpecialFollow(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	targetID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || targetID == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if uint(targetID) == userID {
-		utils.BadRequest(c, "不能对自己操作")
+		infra.BadRequest(c, "不能对自己操作")
 		return
 	}
 
 	// 目标用户必须存在
 	var target models.User
 	if err := models.DB.First(&target, uint(targetID)).Error; err != nil {
-		utils.NotFound(c, "用户不存在")
+		infra.NotFound(c, "用户不存在")
 		return
 	}
 
@@ -41,12 +41,12 @@ func ToggleSpecialFollow(c *gin.Context) {
 		Special bool `json:"special"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 
 	if err := social.SetSpecialFollow(userID, uint(targetID), req.Special); err != nil {
-		utils.InternalError(c, "操作失败")
+		infra.InternalError(c, "操作失败")
 		return
 	}
 
@@ -54,7 +54,7 @@ func ToggleSpecialFollow(c *gin.Context) {
 	if req.Special {
 		msg = "已设为特别关注"
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"message":    msg,
 		"is_special": req.Special,
 	})
@@ -68,14 +68,14 @@ func ListMySpecialFollows(c *gin.Context) {
 
 	users, total, err := social.ListSpecialFollowing(userID, page, pageSize)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	// 不回显邮箱等敏感字段
 	for i := range users {
 		users[i].Email = ""
 	}
-	utils.Success(c, gin.H{"list": users, "total": total})
+	infra.Success(c, gin.H{"list": users, "total": total})
 }
 
 // GetSpecialFeed GET /api/feed/special?page=&size= — 特别关注动态流（需登录）
@@ -87,7 +87,7 @@ func GetSpecialFeed(c *gin.Context) {
 
 	items, total, err := social.GetSpecialFeed(userID, page, pageSize)
 	if err != nil {
-		utils.InternalError(c, "获取动态失败")
+		infra.InternalError(c, "获取动态失败")
 		return
 	}
 
@@ -95,5 +95,5 @@ func GetSpecialFeed(c *gin.Context) {
 	// 仅在本次返回 page 内过滤；total 仍为聚合总数。过滤逻辑复用 blacklist.FilterHiddenItems。
 	items = blacklist.FilterHiddenItems(userID, items, func(it models.FeedItem) uint { return it.UserID })
 
-	utils.Success(c, gin.H{"list": items, "total": total})
+	infra.Success(c, gin.H{"list": items, "total": total})
 }

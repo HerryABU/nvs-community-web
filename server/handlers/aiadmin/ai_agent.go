@@ -2,7 +2,7 @@ package aiadmin
 
 import (
 	"nvs-server/handlers/admincommon"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
@@ -16,10 +16,10 @@ import (
 func AiAgentList(c *gin.Context) {
 	list, err := aim.ListAiAgents(true)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list, "categories": aim.ListAiAgentCategories()})
+	infra.Success(c, gin.H{"list": list, "categories": aim.ListAiAgentCategories()})
 }
 
 // ---------- 管理端 ----------
@@ -41,14 +41,14 @@ func AdminListAiAgents(c *gin.Context) {
 	}
 	list, err := aim.ListAiAgents(false)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	items := make([]gin.H, 0, len(list))
 	for i := range list {
 		items = append(items, aiAgentVO(&list[i]))
 	}
-	utils.Success(c, gin.H{"list": items, "total": len(items)})
+	infra.Success(c, gin.H{"list": items, "total": len(items)})
 }
 
 // AdminCreateAiAgent POST /api/admin/ai/agents
@@ -71,15 +71,15 @@ func AdminCreateAiAgent(c *gin.Context) {
 		CozeToken    string `json:"coze_token"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if strings.TrimSpace(req.Name) == "" {
-		utils.BadRequest(c, "名称不能为空")
+		infra.BadRequest(c, "名称不能为空")
 		return
 	}
 	if strings.TrimSpace(req.SystemPrompt) == "" {
-		utils.BadRequest(c, "系统提示词不能为空")
+		infra.BadRequest(c, "系统提示词不能为空")
 		return
 	}
 	a := &aim.AiAgent{
@@ -98,16 +98,16 @@ func AdminCreateAiAgent(c *gin.Context) {
 		a.SortOrder = *req.SortOrder
 	}
 	if err := aim.CreateAiAgent(a); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	if strings.TrimSpace(req.CozeToken) != "" {
 		if err := a.SetCozeToken(req.CozeToken); err != nil {
-			utils.InternalError(c, "扣子令牌加密保存失败")
+			infra.InternalError(c, "扣子令牌加密保存失败")
 			return
 		}
 	}
-	utils.Success(c, gin.H{"message": "已创建", "id": a.ID})
+	infra.Success(c, gin.H{"message": "已创建", "id": a.ID})
 }
 
 // AdminUpdateAiAgent PUT /api/admin/ai/agents/:id
@@ -117,7 +117,7 @@ func AdminUpdateAiAgent(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if _, err := aim.GetAiAgent(uint(id)); err != nil {
-		utils.NotFound(c, "智能体不存在")
+		infra.NotFound(c, "智能体不存在")
 		return
 	}
 	var req struct {
@@ -135,7 +135,7 @@ func AdminUpdateAiAgent(c *gin.Context) {
 		CozeToken    string `json:"coze_token"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	fields := map[string]interface{}{}
@@ -157,7 +157,7 @@ func AdminUpdateAiAgent(c *gin.Context) {
 	fields["category"] = strings.TrimSpace(req.Category)
 	upstream := strings.ToLower(strings.TrimSpace(req.Upstream))
 	if upstream != "" && upstream != "llm" && upstream != "coze" {
-		utils.BadRequest(c, "upstream 仅支持 llm 或 coze")
+		infra.BadRequest(c, "upstream 仅支持 llm 或 coze")
 		return
 	}
 	if upstream == "llm" {
@@ -167,18 +167,18 @@ func AdminUpdateAiAgent(c *gin.Context) {
 	fields["bot_id"] = strings.TrimSpace(req.BotID)
 	fields["coze_base"] = strings.TrimSpace(req.CozeBase)
 	if err := aim.UpdateAiAgentFields(uint(id), fields); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
 	if strings.TrimSpace(req.CozeToken) != "" {
 		if a, e := aim.GetAiAgent(uint(id)); e == nil {
 			if err := a.SetCozeToken(req.CozeToken); err != nil {
-				utils.InternalError(c, "扣子令牌加密保存失败")
+				infra.InternalError(c, "扣子令牌加密保存失败")
 				return
 			}
 		}
 	}
-	utils.Success(c, gin.H{"message": "已保存"})
+	infra.Success(c, gin.H{"message": "已保存"})
 }
 
 // AdminDeleteAiAgent DELETE /api/admin/ai/agents/:id
@@ -188,8 +188,8 @@ func AdminDeleteAiAgent(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := aim.DeleteAiAgent(uint(id)); err != nil {
-		utils.InternalError(c, "删除失败")
+		infra.InternalError(c, "删除失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已删除"})
+	infra.Success(c, gin.H{"message": "已删除"})
 }

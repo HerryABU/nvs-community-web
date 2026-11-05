@@ -2,7 +2,8 @@ package aiadmin
 
 import (
 	"nvs-server/handlers/admincommon"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/secure"
 	"strconv"
 	"strings"
 
@@ -52,7 +53,7 @@ func AdminGetAiConfig(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, gin.H{"enabled": aim.IsAiEnabled()})
+	infra.Success(c, gin.H{"enabled": aim.IsAiEnabled()})
 }
 
 // AdminSetAiConfig PUT /api/admin/ai/config
@@ -64,18 +65,18 @@ func AdminSetAiConfig(c *gin.Context) {
 		Enabled *bool `json:"enabled"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.Enabled == nil {
-		utils.BadRequest(c, "缺少 enabled 字段")
+		infra.BadRequest(c, "缺少 enabled 字段")
 		return
 	}
 	if err := aim.SetAiEnabled(*req.Enabled); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已保存（立即生效）"})
+	infra.Success(c, gin.H{"message": "已保存（立即生效）"})
 }
 
 // AdminListAiModels GET /api/admin/ai/models
@@ -85,14 +86,14 @@ func AdminListAiModels(c *gin.Context) {
 	}
 	list, err := aim.ListAiModels(false)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	items := make([]gin.H, 0, len(list))
 	for i := range list {
 		items = append(items, aiModelVO(&list[i]))
 	}
-	utils.Success(c, gin.H{"list": items, "total": len(items)})
+	infra.Success(c, gin.H{"list": items, "total": len(items)})
 }
 
 // aiModelInput 创建/更新共用入参
@@ -174,14 +175,14 @@ func AdminCreateAiModel(c *gin.Context) {
 	}
 	var req aiModelInput
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	name := strings.TrimSpace(req.Name)
 	modelID := strings.TrimSpace(req.ModelID)
 	baseURL := strings.TrimSpace(req.BaseURL)
 	if name == "" || modelID == "" || baseURL == "" {
-		utils.BadRequest(c, "展示名、模型标识、上游地址均为必填")
+		infra.BadRequest(c, "展示名、模型标识、上游地址均为必填")
 		return
 	}
 	kind := aim.NormalizeAiKind(strings.TrimSpace(req.Kind))
@@ -250,10 +251,10 @@ func AdminCreateAiModel(c *gin.Context) {
 		m.AccountTokenEnc = strings.TrimSpace(req.AccountToken) // CreateAiModel 内部加密
 	}
 	if err := aim.CreateAiModel(m, req.ApiKey); err != nil {
-		utils.InternalError(c, "创建失败")
+		infra.InternalError(c, "创建失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已创建", "id": m.ID})
+	infra.Success(c, gin.H{"message": "已创建", "id": m.ID})
 }
 
 // AdminUpdateAiModel PUT /api/admin/ai/models/:id
@@ -263,12 +264,12 @@ func AdminUpdateAiModel(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if _, err := aim.GetAiModel(uint(id)); err != nil {
-		utils.NotFound(c, "模型不存在")
+		infra.NotFound(c, "模型不存在")
 		return
 	}
 	var req aiModelInput
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	fields := map[string]interface{}{}
@@ -362,15 +363,15 @@ func AdminUpdateAiModel(c *gin.Context) {
 		fields["token_user_id"] = strings.TrimSpace(req.TokenUserID)
 	}
 	if at := strings.TrimSpace(req.AccountToken); at != "" {
-		if enc, e := utils.EncryptField(at); e == nil {
+		if enc, e := secure.EncryptField(at); e == nil {
 			fields["account_token_enc"] = enc
 		}
 	}
 	if err := aim.UpdateAiModelFields(uint(id), fields, req.ApiKey); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已保存（立即生效）"})
+	infra.Success(c, gin.H{"message": "已保存（立即生效）"})
 }
 
 // AdminDeleteAiModel DELETE /api/admin/ai/models/:id
@@ -380,10 +381,10 @@ func AdminDeleteAiModel(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := aim.DeleteAiModel(uint(id)); err != nil {
-		utils.InternalError(c, "删除失败")
+		infra.InternalError(c, "删除失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已删除"})
+	infra.Success(c, gin.H{"message": "已删除"})
 }
 
 // AdminAiModelPresets GET /api/admin/ai/presets — 模型预设（绘画/视频/对话）
@@ -395,7 +396,7 @@ func AdminAiModelPresets(c *gin.Context) {
 	kind := strings.TrimSpace(c.Query("kind"))
 	all := aiops.ListAiModelPresets()
 	if kind == "" {
-		utils.Success(c, gin.H{"list": all})
+		infra.Success(c, gin.H{"list": all})
 		return
 	}
 	out := make([]aiops.AiModelPreset, 0, len(all))
@@ -404,5 +405,5 @@ func AdminAiModelPresets(c *gin.Context) {
 			out = append(out, p)
 		}
 	}
-	utils.Success(c, gin.H{"list": out})
+	infra.Success(c, gin.H{"list": out})
 }

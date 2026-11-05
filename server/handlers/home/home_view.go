@@ -2,7 +2,7 @@ package home
 
 import (
 	"nvs-server/handlers/admincommon"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
 	theme "nvs-server/models/theme"
@@ -10,7 +10,7 @@ import (
 
 // GetHomeView GET /api/home-view —— 公开：当前首页形态（前端据此决定渲染哪套视图）
 func GetHomeView(c *gin.Context) {
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"view":  theme.GetHomeView(),
 		"views": theme.HomeViews,
 	})
@@ -21,7 +21,7 @@ func AdminGetHomeView(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"view":  theme.GetHomeView(),
 		"views": theme.HomeViews,
 	})
@@ -36,12 +36,12 @@ func AdminSaveHomeView(c *gin.Context) {
 		View string `json:"view"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数不合法")
+		infra.BadRequest(c, "参数不合法")
 		return
 	}
 	if err := theme.SetHomeView(req.View); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已保存，刷新首页生效", theme.GetHomeView())
+	infra.SuccessMessage(c, "已保存，刷新首页生效", theme.GetHomeView())
 }

@@ -9,6 +9,7 @@ import (
 	"archive/zip"
 	"fmt"
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +17,6 @@ import (
 
 	"nvs-server/config"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/security"
@@ -45,7 +45,7 @@ func GetComplianceReport(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, buildComplianceReport())
+	infra.Success(c, buildComplianceReport())
 }
 
 // buildComplianceReport 组装合规自查报告（报告接口与材料包共用同一份口径）
@@ -95,12 +95,12 @@ func ExportComplianceLogs(c *gin.Context) {
 	fromT, err1 := time.Parse("2006-01-02", from)
 	toT, err2 := time.Parse("2006-01-02", to)
 	if err1 != nil || err2 != nil || fromT.After(toT) {
-		utils.BadRequest(c, "时间范围非法（格式 YYYY-MM-DD，from ≤ to）")
+		infra.BadRequest(c, "时间范围非法（格式 YYYY-MM-DD，from ≤ to）")
 		return
 	}
 
 	// 收集 log/requests/<date>/<hour>.log 中落在范围内的文件
-	logRoot := filepath.Join(utils.DailyLogRoot, "requests")
+	logRoot := filepath.Join(infra.DailyLogRoot, "requests")
 	var files []string
 	for d := fromT; !d.After(toT); d = d.AddDate(0, 0, 1) {
 		dir := filepath.Join(logRoot, d.Format("2006-01-02"))
@@ -115,7 +115,7 @@ func ExportComplianceLogs(c *gin.Context) {
 		}
 	}
 	if len(files) == 0 {
-		utils.BadRequest(c, "所选时间范围内没有访问日志")
+		infra.BadRequest(c, "所选时间范围内没有访问日志")
 		return
 	}
 

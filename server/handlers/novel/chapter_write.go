@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/sanitize"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -23,7 +25,6 @@ import (
 	"nvs-server/models"
 	"nvs-server/moderation"
 	"nvs-server/security"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
@@ -41,12 +42,12 @@ func CreateChapter(c *gin.Context) {
 
 	novel, err := models.GetNovelByID(uint(novelID))
 	if err != nil {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return
 	}
 	actor := collab.ActorOf(novel.ID, userID, hctx.CurrentUserRole(c))
 	if !actor.Can(collab.CapWriteChapter) {
-		utils.Forbidden(c, "只有主笔或协作作者可以新建章节")
+		infra.Forbidden(c, "只有主笔或协作作者可以新建章节")
 		return
 	}
 
@@ -68,7 +69,7 @@ func CreateChapter(c *gin.Context) {
 		Mode       string `json:"mode"`        // 本章叙事形态：空=继承作品 / prose / script / mixed
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请填写章节标题和内容")
+		infra.BadRequest(c, "请填写章节标题和内容")
 		return
 	}
 
@@ -84,14 +85,14 @@ func CreateChapter(c *gin.Context) {
 	ownerID := novel.AuthorID
 	authorDir := filepath.Join(config.NovelDataDir, "authors", fmt.Sprintf("%d", ownerID), fmt.Sprintf("%d", novelID))
 	if err := os.MkdirAll(authorDir, 0755); err != nil {
-		utils.InternalError(c, "创建目录失败")
+		infra.InternalError(c, "创建目录失败")
 		return
 	}
 
 	contentPath := filepath.Join(authorDir, fmt.Sprintf("%d.html", nextNum))
 	// 直接存储原始 Markdown 内容，前端 Cherry Markdown 负责渲染
 	if err := os.WriteFile(contentPath, []byte(req.Content), 0644); err != nil {
-		utils.InternalError(c, "写入文件失败")
+		infra.InternalError(c, "写入文件失败")
 		return
 	}
 
@@ -136,7 +137,7 @@ func CreateChapter(c *gin.Context) {
 	}
 
 	if err := models.CreateChapter(chapter); err != nil {
-		utils.InternalError(c, "创建章节失败")
+		infra.InternalError(c, "创建章节失败")
 		return
 	}
 	// 发布流水记账（计入每日发文限额）：草稿不计，提审通过时再记
@@ -174,7 +175,7 @@ func CreateChapter(c *gin.Context) {
 	updateIndexJSON(ownerID, uint(novelID))
 	generateChecksums(ownerID, uint(novelID))
 
-	utils.Success(c, chapter)
+	infra.Success(c, chapter)
 }
 
 func UpdateChapter(c *gin.Context) {
@@ -184,17 +185,17 @@ func UpdateChapter(c *gin.Context) {
 
 	novel, err := models.GetNovelByID(uint(novelID))
 	if err != nil {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return
 	}
 	chapter, err := models.GetChapterByNovelAndNumber(uint(novelID), chapterNum)
 	if err != nil {
-		utils.NotFound(c, "章节不存在")
+		infra.NotFound(c, "章节不存在")
 		return
 	}
 	actor := collab.ActorOf(novel.ID, userID, hctx.CurrentUserRole(c))
 	if !actor.CanEditChapter(chapter) {
-		utils.Forbidden(c, "无权编辑本章（协作权限见作品协作设置）")
+		infra.Forbidden(c, "无权编辑本章（协作权限见作品协作设置）")
 		return
 	}
 
@@ -213,7 +214,7 @@ func UpdateChapter(c *gin.Context) {
 		Mode *string `json:"mode"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请求参数错误")
+		infra.BadRequest(c, "请求参数错误")
 		return
 	}
 
@@ -251,11 +252,11 @@ func UpdateChapter(c *gin.Context) {
 			Message:  req.Message,
 		})
 		if cerr != nil {
-			utils.InternalError(c, "记录章节版本失败")
+			infra.InternalError(c, "记录章节版本失败")
 			return
 		}
 		if cf != nil {
-			utils.Conflict(c, fmt.Sprintf("本章已被他人更新（你基于 v%d，当前 v%d）：请对比后选择「以我的为准」或放弃修改",
+			infra.Conflict(c, fmt.Sprintf("本章已被他人更新（你基于 v%d，当前 v%d）：请对比后选择「以我的为准」或放弃修改",
 				cf.BaseVersion, cf.ServerVersion), cf)
 			return
 		}
@@ -264,8 +265,8 @@ func UpdateChapter(c *gin.Context) {
 
 	if req.Content != "" {
 		// 直接存储原始 Markdown 内容
-		if err := os.WriteFile(utils.ResolveContentPath(chapter.ContentPath), []byte(req.Content), 0644); err != nil {
-			utils.InternalError(c, "写入文件失败")
+		if err := os.WriteFile(sanitize.ResolveContentPath(chapter.ContentPath), []byte(req.Content), 0644); err != nil {
+			infra.InternalError(c, "写入文件失败")
 			return
 		}
 		chapter.ContentHash = ComputeSHA256(req.Content)
@@ -277,7 +278,7 @@ func UpdateChapter(c *gin.Context) {
 	}
 
 	if err := models.UpdateChapter(chapter); err != nil {
-		utils.InternalError(c, "更新章节失败")
+		infra.InternalError(c, "更新章节失败")
 		return
 	}
 	// AI 内容审核（已发布章节被重新编辑后送检，开关来自后台配置）
@@ -305,7 +306,7 @@ func UpdateChapter(c *gin.Context) {
 	updateIndexJSON(novel.AuthorID, uint(novelID))
 	generateChecksums(novel.AuthorID, uint(novelID))
 
-	utils.Success(c, chapter)
+	infra.Success(c, chapter)
 }
 
 func DeleteChapter(c *gin.Context) {
@@ -315,17 +316,17 @@ func DeleteChapter(c *gin.Context) {
 
 	novel, err := models.GetNovelByID(uint(novelID))
 	if err != nil {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return
 	}
 	chapter, err := models.GetChapterByNovelAndNumber(uint(novelID), chapterNum)
 	if err != nil {
-		utils.NotFound(c, "章节不存在")
+		infra.NotFound(c, "章节不存在")
 		return
 	}
 	actor := collab.ActorOf(novel.ID, userID, hctx.CurrentUserRole(c))
 	if !actor.CanDeleteChapter(chapter) {
-		utils.Forbidden(c, "无权删除本章（已发布章节请先撤回）")
+		infra.Forbidden(c, "无权删除本章（已发布章节请先撤回）")
 		return
 	}
 
@@ -336,7 +337,7 @@ func DeleteChapter(c *gin.Context) {
 	os.MkdirAll(deletedDir, 0755)
 	deletedPath := filepath.Join(deletedDir, fmt.Sprintf("%d_%d.html", chapterNum, time.Now().Unix()))
 	if chapter.ContentPath != "" {
-		if err := os.Rename(utils.ResolveContentPath(chapter.ContentPath), deletedPath); err == nil {
+		if err := os.Rename(sanitize.ResolveContentPath(chapter.ContentPath), deletedPath); err == nil {
 			models.DB.Model(&models.Chapter{}).Where("id = ?", chapter.ID).Update("content_path", filepath.ToSlash(deletedPath))
 		}
 	}
@@ -345,7 +346,7 @@ func DeleteChapter(c *gin.Context) {
 	_ = models.DB.Model(&models.Chapter{}).Where("id = ?", chapter.ID).Update("ban_reason", "")
 
 	if err := models.DeleteChapter(chapter.ID); err != nil {
-		utils.InternalError(c, "删除章节失败")
+		infra.InternalError(c, "删除章节失败")
 		return
 	}
 
@@ -360,7 +361,7 @@ func DeleteChapter(c *gin.Context) {
 	updateIndexJSON(novel.AuthorID, uint(novelID))
 	generateChecksums(novel.AuthorID, uint(novelID))
 
-	utils.Success(c, gin.H{"message": "章节已删除（软删除留证，编号已自动补齐）"})
+	infra.Success(c, gin.H{"message": "章节已删除（软删除留证，编号已自动补齐）"})
 }
 
 // renumberChapters 删除章节后编号补齐：将 chapter_number > deletedNum 的剩余章节
@@ -375,7 +376,7 @@ func renumberChapters(novelID uint, deletedNum int, dir string) {
 
 	for _, ch := range chapters {
 		if ch.ChapterNumber > deletedNum {
-			oldPath := utils.ResolveContentPath(ch.ContentPath)
+			oldPath := sanitize.ResolveContentPath(ch.ContentPath)
 			newNum := ch.ChapterNumber - 1
 			newPath := filepath.Join(dir, fmt.Sprintf("%d.html", newNum))
 
@@ -461,7 +462,7 @@ func generateChecksums(authorID, novelID uint) {
 
 	entries := make([]ChecksumEntry, 0, len(chapters))
 	for _, ch := range chapters {
-		contentPath := utils.ResolveContentPath(ch.ContentPath)
+		contentPath := sanitize.ResolveContentPath(ch.ContentPath)
 		fileInfo, err := os.Stat(contentPath)
 		if err != nil {
 			continue

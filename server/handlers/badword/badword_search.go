@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"log"
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strings"
 	"time"
 
 	"nvs-server/aiclient"
 	"nvs-server/sentiment/store"
 	"nvs-server/sentiment/updater"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	ai "nvs-server/models/ai"
@@ -60,7 +60,7 @@ func SearchAugmentBadWords(c *gin.Context) {
 	// ── 1) 选对话模型（负责把检索结果归纳成结构化规则）──
 	chatModel, merr := pickBadwordChatModel(req.ModelID)
 	if merr != nil {
-		utils.BadRequest(c, merr.Error())
+		infra.BadRequest(c, merr.Error())
 		return
 	}
 
@@ -71,7 +71,7 @@ func SearchAugmentBadWords(c *gin.Context) {
 	// 复用平台密钥租赁（不向管理员暴露密钥，也不做用户级计费）
 	apiKey, kerr := acquireBadwordModelKey(chatModel)
 	if kerr != nil {
-		utils.InternalError(c, "获取模型密钥失败，无法发起检索："+kerr.Error())
+		infra.InternalError(c, "获取模型密钥失败，无法发起检索："+kerr.Error())
 		return
 	}
 	// 上游超时 180 秒：这是「检索 + 归纳出几十条规则」的一次重活，
@@ -126,7 +126,7 @@ func SearchAugmentBadWords(c *gin.Context) {
 		content, _, _, cerr = client.Complete(chatReq)
 	}
 	if cerr != nil {
-		utils.InternalError(c, "AI 检索失败："+cerr.Error())
+		infra.InternalError(c, "AI 检索失败："+cerr.Error())
 		return
 	}
 
@@ -136,12 +136,12 @@ func SearchAugmentBadWords(c *gin.Context) {
 		// 把原始返回记进服务端日志，便于定位；响应里只给可操作提示，不回显模型原文。
 		log.Printf("[badword-search] 模型返回无法解析为清单：err=%v raw=%s",
 			perr, truncateForLog(content, 800))
-		utils.BadRequest(c, "AI 返回无法解析为违禁词清单："+perr.Error()+
+		infra.BadRequest(c, "AI 返回无法解析为违禁词清单："+perr.Error()+
 			"（模型原始返回已记入服务端日志，可换个侧重方向后重试）")
 		return
 	}
 	if len(items) == 0 {
-		utils.Success(c, gin.H{
+		infra.Success(c, gin.H{
 			"total": 0, "created": 0, "skipped": 0,
 			"items":       []any{},
 			"search_mode": mode,
@@ -176,11 +176,11 @@ func SearchAugmentBadWords(c *gin.Context) {
 
 	created, skipped, ierr := security.ImportBadWords(items)
 	if ierr != nil {
-		utils.InternalError(c, "导入失败："+ierr.Error())
+		infra.InternalError(c, "导入失败："+ierr.Error())
 		return
 	}
 	ReloadBadWords()
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"total":       len(items),
 		"created":     created,
 		"skipped":     skipped,

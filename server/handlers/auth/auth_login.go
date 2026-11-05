@@ -9,7 +9,8 @@ import (
 	"nvs-server/middleware"
 	"nvs-server/models"
 	"nvs-server/security/slidecaptcha"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/secure"
 	"strings"
 	"time"
 
@@ -28,12 +29,12 @@ type LoginInput struct {
 // POST /api/auth/login
 func Login(c *gin.Context) {
 	if !models.GetLoginMethods().Email {
-		utils.Forbidden(c, "站长已关闭邮箱密码登录")
+		infra.Forbidden(c, "站长已关闭邮箱密码登录")
 		return
 	}
 	var input LoginInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		utils.BadRequest(c, "参数错误: "+err.Error())
+		infra.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
 
@@ -43,7 +44,7 @@ func Login(c *gin.Context) {
 	// 与注册、发码、找回密码一致；未通过滑块挑战直接拒绝，堵死「裸调 login」通道。
 	if models.IsCaptchaEnabled() {
 		if input.CaptchaToken == "" || !slidecaptcha.VerifyPassToken(input.CaptchaToken) {
-			utils.Forbidden(c, "请先完成滑块验证后再登录")
+			infra.Forbidden(c, "请先完成滑块验证后再登录")
 			return
 		}
 	}
@@ -53,10 +54,10 @@ func Login(c *gin.Context) {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// 合规审计：登录失败（账号不存在）
 			RecordUserAudit(c, 0, apikey.AuditLoginFail, "登录失败：邮箱不存在 "+input.Email, "fail")
-			utils.BadRequest(c, "邮箱或密码错误")
+			infra.BadRequest(c, "邮箱或密码错误")
 			return
 		}
-		utils.InternalError(c, "服务器错误")
+		infra.InternalError(c, "服务器错误")
 		return
 	}
 
@@ -65,11 +66,11 @@ func Login(c *gin.Context) {
 	const lockMinutes = 15
 	if user.LockedUntil != nil && user.LockedUntil.After(time.Now()) {
 		remaining := int(time.Until(*user.LockedUntil).Minutes()) + 1
-		utils.BadRequest(c, fmt.Sprintf("登录失败次数过多，账号已锁定，请在 %d 分钟后重试", remaining))
+		infra.BadRequest(c, fmt.Sprintf("登录失败次数过多，账号已锁定，请在 %d 分钟后重试", remaining))
 		return
 	}
 
-	if !utils.CheckPassword(input.Password, user.PasswordHash) {
+	if !secure.CheckPassword(input.Password, user.PasswordHash) {
 		// 合规审计：登录失败（密码错误）
 		RecordUserAudit(c, user.ID, apikey.AuditLoginFail, "登录失败：密码错误 "+user.Username, "fail")
 		// 递增失败计数；达到阈值锁定账号
@@ -81,7 +82,7 @@ func Login(c *gin.Context) {
 			updates["login_fail_count"] = 0
 		}
 		models.DB.Model(&models.User{}).Where("id = ?", user.ID).Updates(updates)
-		utils.BadRequest(c, "邮箱或密码错误")
+		infra.BadRequest(c, "邮箱或密码错误")
 		return
 	}
 
@@ -105,16 +106,16 @@ func Login(c *gin.Context) {
 	// 🔒 令牌绑定：把「设备指纹 + 登录地（省级）」加密进访问令牌，防 JWT 窃取后异地/异设备盗用；
 	//    刷新令牌带 JTI 族 ID，用于刷新轮换（旧刷新令牌在受害者另设备刷新后立即失效）。
 	fp := c.GetHeader(middleware.DeviceFingerprintHeader)
-	region := utils.RegionForBinding(c.ClientIP())
-	accessToken, err := utils.GenerateToken(user.ID, user.Email, user.Role, fp, region)
+	region := secure.RegionForBinding(c.ClientIP())
+	accessToken, err := secure.GenerateToken(user.ID, user.Email, user.Role, fp, region)
 	if err != nil {
-		utils.InternalError(c, "Token 生成失败")
+		infra.InternalError(c, "Token 生成失败")
 		return
 	}
-	jti := utils.RandomJTI()
-	refreshToken, err := utils.GenerateRefreshToken(user.ID, user.Email, user.Role, jti)
+	jti := secure.RandomJTI()
+	refreshToken, err := secure.GenerateRefreshToken(user.ID, user.Email, user.Role, jti)
 	if err != nil {
-		utils.InternalError(c, "Refresh Token 生成失败")
+		infra.InternalError(c, "Refresh Token 生成失败")
 		return
 	}
 	// 登记刷新令牌族 ID（刷新轮换/失效的基础；写入失败不阻断登录，仅降级为无轮换保护）
@@ -124,7 +125,7 @@ func Login(c *gin.Context) {
 	middleware.SetTokenCookie(c, accessToken)
 	middleware.SetRefreshCookie(c, refreshToken)
 
-	utils.SuccessMessage(c, "登录成功", gin.H{
+	infra.SuccessMessage(c, "登录成功", gin.H{
 		"user": user,
 	})
 }
@@ -133,28 +134,28 @@ func Login(c *gin.Context) {
 func GetCurrentUser(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 
 	user, err := models.GetUserByID(userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			utils.NotFound(c, "用户不存在")
+			infra.NotFound(c, "用户不存在")
 			return
 		}
-		utils.InternalError(c, "服务器错误")
+		infra.InternalError(c, "服务器错误")
 		return
 	}
 
-	utils.Success(c, user)
+	infra.Success(c, user)
 }
 
 // POST /api/auth/logout
 func Logout(c *gin.Context) {
 	// 合规审计：记录登出（从 Cookie 解析用户身份）
 	if token, err := c.Cookie("token"); err == nil && token != "" {
-		if claims, e := utils.ParseToken(token); e == nil {
+		if claims, e := secure.ParseToken(token); e == nil {
 			RecordUserAudit(c, claims.UserID, apikey.AuditLogout, "用户登出", "success")
 			// 清除刷新状态：使仍在有效期内的刷新令牌立即失效（防登出后令牌被续用）
 			if derr := siteops.DeleteRefreshState(claims.UserID); derr != nil {
@@ -164,7 +165,7 @@ func Logout(c *gin.Context) {
 	}
 	middleware.ClearTokenCookie(c)
 	middleware.ClearRefreshCookie(c)
-	utils.SuccessMessage(c, "已退出登录", nil)
+	infra.SuccessMessage(c, "已退出登录", nil)
 }
 
 // POST /api/auth/refresh
@@ -176,14 +177,14 @@ func Refresh(c *gin.Context) {
 	if err != nil || rt == "" {
 		middleware.ClearTokenCookie(c)
 		middleware.ClearRefreshCookie(c)
-		utils.Unauthorized(c, "会话已过期，请重新登录")
+		infra.Unauthorized(c, "会话已过期，请重新登录")
 		return
 	}
-	claims, err := utils.ParseRefreshToken(rt)
+	claims, err := secure.ParseRefreshToken(rt)
 	if err != nil {
 		middleware.ClearTokenCookie(c)
 		middleware.ClearRefreshCookie(c)
-		utils.Unauthorized(c, "刷新令牌无效或已过期")
+		infra.Unauthorized(c, "刷新令牌无效或已过期")
 		return
 	}
 
@@ -191,7 +192,7 @@ func Refresh(c *gin.Context) {
 	if _, uerr := models.GetUserByID(claims.UserID); uerr != nil {
 		middleware.ClearTokenCookie(c)
 		middleware.ClearRefreshCookie(c)
-		utils.Unauthorized(c, "账号不存在或已注销")
+		infra.Unauthorized(c, "账号不存在或已注销")
 		return
 	}
 
@@ -203,7 +204,7 @@ func Refresh(c *gin.Context) {
 			if state.ActiveJTI != claims.JTI {
 				middleware.ClearTokenCookie(c)
 				middleware.ClearRefreshCookie(c)
-				utils.Unauthorized(c, "会话已在其他设备刷新，请重新登录")
+				infra.Unauthorized(c, "会话已在其他设备刷新，请重新登录")
 				return
 			}
 		} else if !errors.Is(serr, gorm.ErrRecordNotFound) {
@@ -214,16 +215,16 @@ func Refresh(c *gin.Context) {
 
 	// 轮换出新 JTI 并登记，使本次使用的刷新令牌作废（下次刷新必须携带新 JTI）
 	fp := c.GetHeader(middleware.DeviceFingerprintHeader)
-	region := utils.RegionForBinding(c.ClientIP())
-	accessToken, err := utils.GenerateToken(claims.UserID, claims.Email, claims.Role, fp, region)
+	region := secure.RegionForBinding(c.ClientIP())
+	accessToken, err := secure.GenerateToken(claims.UserID, claims.Email, claims.Role, fp, region)
 	if err != nil {
-		utils.InternalError(c, "Token 生成失败")
+		infra.InternalError(c, "Token 生成失败")
 		return
 	}
-	newJTI := utils.RandomJTI()
-	newRefresh, err := utils.GenerateRefreshToken(claims.UserID, claims.Email, claims.Role, newJTI)
+	newJTI := secure.RandomJTI()
+	newRefresh, err := secure.GenerateRefreshToken(claims.UserID, claims.Email, claims.Role, newJTI)
 	if err != nil {
-		utils.InternalError(c, "Refresh Token 生成失败")
+		infra.InternalError(c, "Refresh Token 生成失败")
 		return
 	}
 	if err := siteops.SetRefreshState(claims.UserID, newJTI); err != nil {
@@ -231,5 +232,5 @@ func Refresh(c *gin.Context) {
 	}
 	middleware.SetTokenCookie(c, accessToken)
 	middleware.SetRefreshCookie(c, newRefresh)
-	utils.SuccessMessage(c, "已续期", nil)
+	infra.SuccessMessage(c, "已续期", nil)
 }

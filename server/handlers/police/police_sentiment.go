@@ -1,13 +1,13 @@
 package police
 
 import (
+	"nvs-server/utils/infra"
 	"strconv"
 	"time"
 
 	"nvs-server/handlers/hctx"
 	"nvs-server/sentiment/guard"
 	"nvs-server/sentiment/store"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	social "nvs-server/models/social"
@@ -27,7 +27,7 @@ func ensurePoliceGate(c *gin.Context) bool {
 	if social.IsAdminOrPolice(hctx.CurrentUserRole(c)) {
 		return true
 	}
-	utils.Forbidden(c, "需要警方或管理员权限")
+	infra.Forbidden(c, "需要警方或管理员权限")
 	return false
 }
 
@@ -39,11 +39,11 @@ func PoliceSentimentStats(c *gin.Context) {
 	days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
 	s, err := store.LoadStats(days)
 	if err != nil {
-		utils.InternalError(c, "统计失败")
+		infra.InternalError(c, "统计失败")
 		return
 	}
 	// 只给聚合口径，不给任何正文/词条详情
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"stats": s,
 		"fold_chars": func() int {
 			if cfg, e := store.GetConfig(); e == nil && cfg != nil {
@@ -82,5 +82,5 @@ func PoliceSentimentTrend(c *gin.Context) {
 			Count(&flagged)
 		out = append(out, row{Day: start.Format("01-02"), Blocked: blocked, Flagged: flagged})
 	}
-	utils.Success(c, gin.H{"items": out})
+	infra.Success(c, gin.H{"items": out})
 }

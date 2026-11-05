@@ -12,6 +12,8 @@ import (
 	"bytes"
 	"fmt"
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/sanitize"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -22,7 +24,6 @@ import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/security"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	softdel "nvs-server/models/softdel"
@@ -60,7 +61,7 @@ func AdminListHTMLs(c *gin.Context) {
 	}
 	var list []softdel.UserHTML
 	if err := q.Find(&list).Error; err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	// 补用户名，便于管理员一眼看出是谁传的
@@ -84,11 +85,11 @@ func AdminListHTMLs(c *gin.Context) {
 	for _, it := range list {
 		rows = append(rows, row{UserHTML: it, Username: names[it.UserID]})
 	}
-	utils.Success(c, rows)
+	infra.Success(c, rows)
 }
 
 // extractQuarantined 把封存的 ZIP 解压到正式目录，返回 (extractDir, entries, error)
-func extractQuarantined(item *softdel.UserHTML) (string, []utils.ZipEntry, error) {
+func extractQuarantined(item *softdel.UserHTML) (string, []sanitize.ZipEntry, error) {
 	data, err := os.ReadFile(item.QuarantinePath)
 	if err != nil {
 		return "", nil, fmt.Errorf("读取封存件失败: %w", err)
@@ -98,17 +99,17 @@ func extractQuarantined(item *softdel.UserHTML) (string, []utils.ZipEntry, error
 		return "", nil, fmt.Errorf("封存件不是合法 ZIP: %w", err)
 	}
 	// 放行时再验一次炸弹（管理员也可能误放，且封存件可被替换）
-	if ok, msg := utils.ValidateZipBomb(zr, nil); !ok {
+	if ok, msg := sanitize.ValidateZipBomb(zr, nil); !ok {
 		return "", nil, fmt.Errorf("解压失败: %s", msg)
 	}
-	safeName := utils.SanitizeFilename(item.Name)
+	safeName := sanitize.SanitizeFilename(item.Name)
 	ts := item.CreatedAt.UnixMilli()
 	dir := filepath.Join(config.UserHTMLDir, fmt.Sprintf("%d", item.UserID),
 		fmt.Sprintf("%s_%d", safeName, ts))
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", nil, err
 	}
-	entries, err := utils.ExtractZipSafe(zr, dir, nil)
+	entries, err := sanitize.ExtractZipSafe(zr, dir, nil)
 	if err != nil {
 		os.RemoveAll(dir)
 		return "", nil, err
@@ -141,7 +142,7 @@ func AdminReviewHTML(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var item softdel.UserHTML
 	if err := models.DB.First(&item, id).Error; err != nil {
-		utils.NotFound(c, "扩展不存在")
+		infra.NotFound(c, "扩展不存在")
 		return
 	}
 
@@ -152,12 +153,12 @@ func AdminReviewHTML(c *gin.Context) {
 		PurgeFile bool   `json:"purge_file"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	req.Action = strings.ToLower(strings.TrimSpace(req.Action))
 	if req.Action != "approve" && req.Action != "reject" {
-		utils.BadRequest(c, "action 只能是 approve 或 reject")
+		infra.BadRequest(c, "action 只能是 approve 或 reject")
 		return
 	}
 
@@ -179,10 +180,10 @@ func AdminReviewHTML(c *gin.Context) {
 			updates["quarantine_path"] = ""
 		}
 		if err := models.DB.Model(&item).Updates(updates).Error; err != nil {
-			utils.InternalError(c, "操作失败")
+			infra.InternalError(c, "操作失败")
 			return
 		}
-		utils.Success(c, gin.H{"message": "已驳回", "review_status": "rejected"})
+		infra.Success(c, gin.H{"message": "已驳回", "review_status": "rejected"})
 		return
 	}
 
@@ -191,7 +192,7 @@ func AdminReviewHTML(c *gin.Context) {
 		// 封存件必须先补解压（放行即意味着内容可信，需落盘才能运行）
 		dir, entries, err := extractQuarantined(&item)
 		if err != nil {
-			utils.BadRequest(c, "放行失败："+err.Error())
+			infra.BadRequest(c, "放行失败："+err.Error())
 			return
 		}
 		entry := ""
@@ -234,10 +235,10 @@ func AdminReviewHTML(c *gin.Context) {
 		updates["is_public"] = true
 	}
 	if err := models.DB.Model(&item).Updates(updates).Error; err != nil {
-		utils.InternalError(c, "操作失败")
+		infra.InternalError(c, "操作失败")
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"message":       "已通过审核",
 		"review_status": "approved",
 		"is_public":     req.Publish || item.IsPublic,
@@ -252,10 +253,10 @@ func AdminGetHTMLScan(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var item softdel.UserHTML
 	if err := models.DB.First(&item, id).Error; err != nil {
-		utils.NotFound(c, "扩展不存在")
+		infra.NotFound(c, "扩展不存在")
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"id":                item.ID,
 		"name":              item.Name,
 		"review_status":     item.ReviewStatus,

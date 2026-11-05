@@ -5,10 +5,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/rand"
+	"nvs-server/utils/secure"
 	"strings"
 	"time"
-
-	"nvs-server/utils"
 
 	"gorm.io/gorm"
 	"nvs-server/models"
@@ -101,7 +100,7 @@ func AddAiChannelKey(baseURL, label, plain, note string, weight int) (*AiChannel
 		return nil, fmt.Errorf("该渠道下已有同一把密钥（按内容判重），无需重复添加")
 	}
 
-	enc, err := utils.EncryptField(plain)
+	enc, err := secure.EncryptField(plain)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +146,7 @@ func DecryptAiChannelKey(k *AiChannelKey) (string, error) {
 	if k == nil || k.KeyEnc == "" {
 		return "", fmt.Errorf("卡密为空")
 	}
-	return utils.DecryptField(k.KeyEnc)
+	return secure.DecryptField(k.KeyEnc)
 }
 
 // pickChannelCandidates 可用卡密：启用 + 未达熔断阈值 + 权重 > 0
@@ -293,7 +292,7 @@ func ensureChannelKey(base, plain, label string) (bool, error) {
 	if n > 0 {
 		return false, nil
 	}
-	enc, err := utils.EncryptField(plain)
+	enc, err := secure.EncryptField(plain)
 	if err != nil {
 		return false, err
 	}

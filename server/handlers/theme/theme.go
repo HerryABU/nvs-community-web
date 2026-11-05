@@ -3,21 +3,21 @@ package theme
 import (
 	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/hctx"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
 	themem "nvs-server/models/theme"
 )
 
 // theme.go — F12 用户自定义网站主题（alist 式）API。
-// 安全模型：写入一律经服务端白名单消毒（utils.SanitizeCSS）后落库；
+// 安全模型：写入一律经服务端白名单消毒（sanitize.SanitizeCSS）后落库；
 // 前端仅以 <style> textContent 注入，不使用 innerHTML。
 
 // GetSiteTheme GET /api/theme/site（公开）
 // 站点默认主题：管理员配置，对所有访客生效（登录用户的个人主题覆盖之）。
 func GetSiteTheme(c *gin.Context) {
 	js, mode, delay := themem.GetSiteThemeJSBundle()
-	utils.Success(c, gin.H{"css": themem.GetSiteTheme(), "js": js, "js_mode": mode, "js_delay": delay})
+	infra.Success(c, gin.H{"css": themem.GetSiteTheme(), "js": js, "js_mode": mode, "js_delay": delay})
 }
 
 // GetMyTheme GET /api/theme/me（需登录）
@@ -25,11 +25,11 @@ func GetSiteTheme(c *gin.Context) {
 func GetMyTheme(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	js, mode, delay := themem.GetUserThemeJSBundle(userID)
-	utils.Success(c, gin.H{"css": themem.GetUserTheme(userID), "js": js, "js_mode": mode, "js_delay": delay})
+	infra.Success(c, gin.H{"css": themem.GetUserTheme(userID), "js": js, "js_mode": mode, "js_delay": delay})
 }
 
 // UpdateMyTheme PUT /api/theme/me（需登录）
@@ -37,7 +37,7 @@ func GetMyTheme(c *gin.Context) {
 func UpdateMyTheme(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	var req struct {
@@ -47,16 +47,16 @@ func UpdateMyTheme(c *gin.Context) {
 		JSDelay int    `json:"js_delay"` // delayed 模式的延迟秒数
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	removed, err := themem.SetUserTheme(userID, req.CSS, req.JS, req.JSMode, req.JSDelay)
 	if err != nil {
-		utils.InternalError(c, "保存个人主题失败")
+		infra.InternalError(c, "保存个人主题失败")
 		return
 	}
 	js, mode, delay := themem.GetUserThemeJSBundle(userID)
-	utils.Success(c, gin.H{"css": themem.GetUserTheme(userID), "js": js, "js_mode": mode, "js_delay": delay, "removed": removed})
+	infra.Success(c, gin.H{"css": themem.GetUserTheme(userID), "js": js, "js_mode": mode, "js_delay": delay, "removed": removed})
 }
 
 // UpdateSiteTheme PUT /api/theme/site（仅管理员）
@@ -72,14 +72,14 @@ func UpdateSiteTheme(c *gin.Context) {
 		JSDelay int    `json:"js_delay"` // delayed 模式的延迟秒数
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	removed, err := themem.SetSiteTheme(req.CSS, req.JS, req.JSMode, req.JSDelay)
 	if err != nil {
-		utils.InternalError(c, "保存站点主题失败")
+		infra.InternalError(c, "保存站点主题失败")
 		return
 	}
 	js, mode, delay := themem.GetSiteThemeJSBundle()
-	utils.Success(c, gin.H{"css": themem.GetSiteTheme(), "js": js, "js_mode": mode, "js_delay": delay, "removed": removed})
+	infra.Success(c, gin.H{"css": themem.GetSiteTheme(), "js": js, "js_mode": mode, "js_delay": delay, "removed": removed})
 }

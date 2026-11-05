@@ -12,7 +12,7 @@ import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/security"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"time"
@@ -81,7 +81,7 @@ func validateAllowedIPs(s string) error {
 func ListMyAPIKeys(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	var list []apikeym.APIKey
@@ -103,7 +103,7 @@ func ListMyAPIKeys(c *gin.Context) {
 		effective = gin.H{"req": req, "window": win}
 		limits = gin.H{"max_keys": p.MaxKeys, "keys_banned": p.IsBannedNow(), "ban_reason": p.BanReason}
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"list":            list,
 		"role":            role,
 		"role_quota":      gin.H{"req": quota.Req, "window": quota.Window},
@@ -116,7 +116,7 @@ func ListMyAPIKeys(c *gin.Context) {
 func CreateAPIKey(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	var req struct {
@@ -126,20 +126,20 @@ func CreateAPIKey(c *gin.Context) {
 		ExpiresAt   string `json:"expires_at"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := validateAllowedIPs(req.AllowedIPs); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	expiresAt, err := parseOptionalTime(req.ExpiresAt)
 	if err != nil {
-		utils.BadRequest(c, "过期时间格式无效（支持 YYYY-MM-DD / YYYY-MM-DD HH:MM:SS / RFC3339）")
+		infra.BadRequest(c, "过期时间格式无效（支持 YYYY-MM-DD / YYYY-MM-DD HH:MM:SS / RFC3339）")
 		return
 	}
 	if expiresAt != nil && expiresAt.Before(time.Now()) {
-		utils.BadRequest(c, "过期时间不能早于当前时间")
+		infra.BadRequest(c, "过期时间不能早于当前时间")
 		return
 	}
 
@@ -150,14 +150,14 @@ func CreateAPIKey(c *gin.Context) {
 			if reason == "" {
 				reason = "管理员已封禁你的 API 访问"
 			}
-			utils.Forbidden(c, reason)
+			infra.Forbidden(c, reason)
 			return
 		}
 		if policy.MaxKeys > 0 {
 			var used int64
 			models.DB.Model(&apikeym.APIKey{}).Where("user_id = ?", uid).Count(&used)
 			if int(used) >= policy.MaxKeys {
-				utils.Forbidden(c, fmt.Sprintf("管理员限制了你最多持有 %d 个 API Key，请先删除后再创建", policy.MaxKeys))
+				infra.Forbidden(c, fmt.Sprintf("管理员限制了你最多持有 %d 个 API Key，请先删除后再创建", policy.MaxKeys))
 				return
 			}
 		}
@@ -171,13 +171,13 @@ func CreateAPIKey(c *gin.Context) {
 		quota = roleQuota.Req
 	}
 	if quota > roleQuota.Req {
-		utils.BadRequest(c, fmt.Sprintf("请求配额不能超过当前角色上限 %d 次/%d 秒", roleQuota.Req, roleQuota.Window))
+		infra.BadRequest(c, fmt.Sprintf("请求配额不能超过当前角色上限 %d 次/%d 秒", roleQuota.Req, roleQuota.Window))
 		return
 	}
 
 	full, prefix, hash, err := apikeym.GenerateAPIKey(role)
 	if err != nil {
-		utils.InternalError(c, "生成 Key 失败")
+		infra.InternalError(c, "生成 Key 失败")
 		return
 	}
 	policy := bluemonday.StrictPolicy()
@@ -188,10 +188,10 @@ func CreateAPIKey(c *gin.Context) {
 		ExpiresAt: expiresAt, IsActive: true,
 	}
 	if err := models.DB.Create(key).Error; err != nil {
-		utils.InternalError(c, "保存 Key 失败")
+		infra.InternalError(c, "保存 Key 失败")
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"id": key.ID, "key": full, "key_prefix": prefix, "role": role,
 		"quota_per_min": quota, "name": key.Name,
 	})
@@ -201,13 +201,13 @@ func CreateAPIKey(c *gin.Context) {
 func UpdateAPIKey(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var key apikeym.APIKey
 	if err := models.DB.Where("id = ? AND user_id = ?", id, uid).First(&key).Error; err != nil {
-		utils.NotFound(c, "Key 不存在")
+		infra.NotFound(c, "Key 不存在")
 		return
 	}
 	var req struct {
@@ -218,7 +218,7 @@ func UpdateAPIKey(c *gin.Context) {
 		IsActive    *bool   `json:"is_active"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	updates := map[string]interface{}{}
@@ -229,14 +229,14 @@ func UpdateAPIKey(c *gin.Context) {
 		roleQuota := apikeym.LoadAPIRateLimitConfig().RoleQuotaFor(key.Role)
 		q := *req.QuotaPerMin
 		if q <= 0 || q > roleQuota.Req {
-			utils.BadRequest(c, fmt.Sprintf("请求配额需在 1 ~ %d 之间", roleQuota.Req))
+			infra.BadRequest(c, fmt.Sprintf("请求配额需在 1 ~ %d 之间", roleQuota.Req))
 			return
 		}
 		updates["quota_per_min"] = q
 	}
 	if req.AllowedIPs != nil {
 		if err := validateAllowedIPs(*req.AllowedIPs); err != nil {
-			utils.BadRequest(c, err.Error())
+			infra.BadRequest(c, err.Error())
 			return
 		}
 		updates["allowed_ips"] = strings.TrimSpace(*req.AllowedIPs)
@@ -244,7 +244,7 @@ func UpdateAPIKey(c *gin.Context) {
 	if req.ExpiresAt != nil {
 		t, err := parseOptionalTime(*req.ExpiresAt)
 		if err != nil {
-			utils.BadRequest(c, "过期时间格式无效")
+			infra.BadRequest(c, "过期时间格式无效")
 			return
 		}
 		updates["expires_at"] = t
@@ -255,47 +255,47 @@ func UpdateAPIKey(c *gin.Context) {
 	if len(updates) > 0 {
 		models.DB.Model(&key).Updates(updates)
 	}
-	utils.Success(c, gin.H{"message": "已更新", "key_prefix": key.KeyPrefix})
+	infra.Success(c, gin.H{"message": "已更新", "key_prefix": key.KeyPrefix})
 }
 
 // RegenerateAPIKey POST /api/apikeys/:id/regenerate —— 重新生成（旧 Key 立即失效）
 func RegenerateAPIKey(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var key apikeym.APIKey
 	if err := models.DB.Where("id = ? AND user_id = ?", id, uid).First(&key).Error; err != nil {
-		utils.NotFound(c, "Key 不存在")
+		infra.NotFound(c, "Key 不存在")
 		return
 	}
 	full, prefix, hash, err := apikeym.GenerateAPIKey(key.Role)
 	if err != nil {
-		utils.InternalError(c, "生成 Key 失败")
+		infra.InternalError(c, "生成 Key 失败")
 		return
 	}
 	models.DB.Model(&key).Updates(map[string]interface{}{
 		"key_hash": hash, "key_prefix": prefix, "last_used_at": nil, "total_calls": 0,
 	})
-	utils.Success(c, gin.H{"message": "已重新生成，旧 Key 立即失效", "key": full, "key_prefix": prefix})
+	infra.Success(c, gin.H{"message": "已重新生成，旧 Key 立即失效", "key": full, "key_prefix": prefix})
 }
 
 // DeleteAPIKey DELETE /api/apikeys/:id —— 删除（吊销）
 func DeleteAPIKey(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	res := models.DB.Where("id = ? AND user_id = ?", id, uid).Delete(&apikeym.APIKey{})
 	if res.RowsAffected == 0 {
-		utils.NotFound(c, "Key 不存在")
+		infra.NotFound(c, "Key 不存在")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已删除（吊销）"})
+	infra.Success(c, gin.H{"message": "已删除（吊销）"})
 }
 
 // ==================== 管理员侧：全局限流配置 ====================
@@ -306,7 +306,7 @@ func GetRateLimitConfig(c *gin.Context) {
 		return
 	}
 	cfg := apikeym.LoadAPIRateLimitConfig()
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"config":                 cfg,
 		"builtin_bot_keywords":   security.BuiltinBotKeywords(),
 		"builtin_block_keywords": security.BuiltinBlockKeywords(),
@@ -320,15 +320,15 @@ func UpdateRateLimitConfig(c *gin.Context) {
 	}
 	var cfg apikeym.APIRateLimitConfig
 	if err := c.ShouldBindJSON(&cfg); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := apikeym.SaveAPIRateLimitConfig(cfg); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
 	security.ReloadBotRules()
-	utils.Success(c, gin.H{"message": "限流配置已保存并立即生效"})
+	infra.Success(c, gin.H{"message": "限流配置已保存并立即生效"})
 }
 
 // ListRateLimitLogs GET /api/admin/ratelimit/logs?type=&page=&page_size=
@@ -341,10 +341,10 @@ func ListRateLimitLogs(c *gin.Context) {
 	idType := strings.TrimSpace(c.Query("type"))
 	list, total, err := apikeym.ListAccessLogs(page, pageSize, idType)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list, "total": total})
+	infra.Success(c, gin.H{"list": list, "total": total})
 }
 
 // GetRateLimitStats GET /api/admin/ratelimit/stats
@@ -352,7 +352,7 @@ func GetRateLimitStats(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, security.RateLimitStats())
+	infra.Success(c, security.RateLimitStats())
 }
 
 // ClearRateLimits POST /api/admin/ratelimit/clear —— 清空内存限流计数（误判解封）
@@ -361,7 +361,7 @@ func ClearRateLimits(c *gin.Context) {
 		return
 	}
 	security.ClearRateLimits()
-	utils.Success(c, gin.H{"message": "限流计数已清空（如属误判，对应 IP/Key 已解封）"})
+	infra.Success(c, gin.H{"message": "限流计数已清空（如属误判，对应 IP/Key 已解封）"})
 }
 
 // AdminListAPIKeys GET /api/admin/ratelimit/keys —— 全站用户 Key 一览（附用户名）
@@ -410,7 +410,7 @@ func AdminListAPIKeys(c *gin.Context) {
 		}
 		rows = append(rows, row)
 	}
-	utils.Success(c, rows)
+	infra.Success(c, rows)
 }
 
 // ==================== 管理员侧：全站 Key 管理（绕过归属校验） ====================
@@ -423,18 +423,18 @@ func AdminRegenerateAPIKey(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var key apikeym.APIKey
 	if err := models.DB.First(&key, id).Error; err != nil {
-		utils.NotFound(c, "Key 不存在")
+		infra.NotFound(c, "Key 不存在")
 		return
 	}
 	full, prefix, hash, err := apikeym.GenerateAPIKey(key.Role)
 	if err != nil {
-		utils.InternalError(c, "生成 Key 失败")
+		infra.InternalError(c, "生成 Key 失败")
 		return
 	}
 	models.DB.Model(&key).Updates(map[string]interface{}{
 		"key_hash": hash, "key_prefix": prefix, "last_used_at": nil, "total_calls": 0,
 	})
-	utils.Success(c, gin.H{"message": "已重新生成，旧 Key 立即失效", "key": full, "key_prefix": prefix})
+	infra.Success(c, gin.H{"message": "已重新生成，旧 Key 立即失效", "key": full, "key_prefix": prefix})
 }
 
 // AdminUpdateAPIKey PATCH /api/admin/ratelimit/keys/:id —— 管理员修改任意 Key（启停 / 备注）
@@ -445,7 +445,7 @@ func AdminUpdateAPIKey(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var key apikeym.APIKey
 	if err := models.DB.First(&key, id).Error; err != nil {
-		utils.NotFound(c, "Key 不存在")
+		infra.NotFound(c, "Key 不存在")
 		return
 	}
 	var req struct {
@@ -453,7 +453,7 @@ func AdminUpdateAPIKey(c *gin.Context) {
 		IsActive *bool   `json:"is_active"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	updates := map[string]interface{}{}
@@ -466,7 +466,7 @@ func AdminUpdateAPIKey(c *gin.Context) {
 	if len(updates) > 0 {
 		models.DB.Model(&key).Updates(updates)
 	}
-	utils.Success(c, gin.H{"message": "已更新", "key_prefix": key.KeyPrefix})
+	infra.Success(c, gin.H{"message": "已更新", "key_prefix": key.KeyPrefix})
 }
 
 // AdminDeleteAPIKey DELETE /api/admin/ratelimit/keys/:id —— 管理员删除（吊销）任意 Key
@@ -477,10 +477,10 @@ func AdminDeleteAPIKey(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	res := models.DB.Delete(&apikeym.APIKey{}, id)
 	if res.RowsAffected == 0 {
-		utils.NotFound(c, "Key 不存在")
+		infra.NotFound(c, "Key 不存在")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已删除（吊销）"})
+	infra.Success(c, gin.H{"message": "已删除（吊销）"})
 }
 
 // AdminTestAPIKey POST /api/admin/ratelimit/keys/:id/test
@@ -495,7 +495,7 @@ func AdminTestAPIKey(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var key apikeym.APIKey
 	if err := models.DB.First(&key, id).Error; err != nil {
-		utils.NotFound(c, "Key 不存在")
+		infra.NotFound(c, "Key 不存在")
 		return
 	}
 	now := time.Now()
@@ -540,5 +540,5 @@ func AdminTestAPIKey(c *gin.Context) {
 	if !ok {
 		msg = "检测到异常，Key 可能无法正常使用"
 	}
-	utils.Success(c, gin.H{"ok": ok, "message": msg, "checks": checks})
+	infra.Success(c, gin.H{"ok": ok, "message": msg, "checks": checks})
 }

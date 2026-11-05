@@ -2,13 +2,13 @@ package aicost
 
 import (
 	"errors"
+	"nvs-server/utils/secure"
 	"strings"
 	"time"
 
 	"gorm.io/gorm"
 
 	"nvs-server/models"
-	"nvs-server/utils"
 )
 
 // ==================== 用户自备 API Key（§5.5：BYOK） ====================
@@ -40,7 +40,7 @@ func (k *UserAiKey) DecryptApiKey() (string, error) {
 	if k.KeyEnc == "" {
 		return "", errors.New("密钥为空")
 	}
-	return utils.DecryptField(k.KeyEnc)
+	return secure.DecryptField(k.KeyEnc)
 }
 
 // ListUserAiKeys 我的自备密钥（不回传密钥本体）
@@ -78,7 +78,7 @@ func CreateUserAiKey(userID uint, label, baseURL, apiKey, modelID string) (*User
 	if int(cnt) >= MaxUserAiKeys {
 		return nil, errors.New("自备密钥数量已达上限（最多 5 个）")
 	}
-	enc, err := utils.EncryptField(apiKey)
+	enc, err := secure.EncryptField(apiKey)
 	if err != nil {
 		return nil, err
 	}

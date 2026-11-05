@@ -2,7 +2,7 @@ package gate
 
 import (
 	"nvs-server/handlers/hctx"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
 	siteops "nvs-server/models/siteops"
@@ -34,7 +34,7 @@ func guestSearchBlocked(c *gin.Context) bool {
 // RequireGuestRead 便捷守卫：被拦时已写好响应，调用方直接 return。
 func RequireGuestRead(c *gin.Context) bool {
 	if guestReadBlocked(c) {
-		utils.Unauthorized(c, "本站已关闭未登录浏览，请先登录")
+		infra.Unauthorized(c, "本站已关闭未登录浏览，请先登录")
 		return false
 	}
 	return true
@@ -43,7 +43,7 @@ func RequireGuestRead(c *gin.Context) bool {
 // RequireGuestSearch 便捷守卫：被拦时已写好响应，调用方直接 return。
 func RequireGuestSearch(c *gin.Context) bool {
 	if guestSearchBlocked(c) {
-		utils.Unauthorized(c, "本站已关闭未登录搜索，请先登录")
+		infra.Unauthorized(c, "本站已关闭未登录搜索，请先登录")
 		return false
 	}
 	return true

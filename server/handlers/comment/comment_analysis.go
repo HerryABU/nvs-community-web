@@ -4,7 +4,7 @@ import (
 	"nvs-server/handlers/adminsite"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
@@ -43,7 +43,7 @@ func GetMentionSource(c *gin.Context) {
 	if targetType != "" && targetID > 0 {
 		overrideSet = siteops.GetSetting(siteops.MentionSourceWorkKey(targetType, targetID), "") != ""
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"effective":    effective,
 		"site_default": siteops.GetMentionSource(),
 		"can_edit":     canEdit,
@@ -62,7 +62,7 @@ func SetMentionSource(c *gin.Context) {
 		Mode       string `json:"mode"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	valid := map[string]bool{
@@ -71,40 +71,40 @@ func SetMentionSource(c *gin.Context) {
 		siteops.MentionSourceManual:       true,
 	}
 	if !valid[req.Mode] {
-		utils.BadRequest(c, "无效的提及来源模式")
+		infra.BadRequest(c, "无效的提及来源模式")
 		return
 	}
 
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 
 	// 站点默认：仅站长
 	if req.TargetID == 0 {
 		if !adminsite.IsAdminUser(c) {
-			utils.Forbidden(c, "只有站长可设置站点默认提及来源")
+			infra.Forbidden(c, "只有站长可设置站点默认提及来源")
 			return
 		}
 		if err := siteops.SetSetting(siteops.MentionSourceKey, req.Mode); err != nil {
-			utils.InternalError(c, "保存失败")
+			infra.InternalError(c, "保存失败")
 			return
 		}
-		utils.Success(c, gin.H{"ok": true, "effective": req.Mode})
+		infra.Success(c, gin.H{"ok": true, "effective": req.Mode})
 		return
 	}
 
 	// 作品覆盖：站长或楼主
 	if !adminsite.IsAdminUser(c) && !isOwnerOfWork(c, req.TargetType, req.TargetID) {
-		utils.Forbidden(c, "只有站长或本作品作者可设置提及来源")
+		infra.Forbidden(c, "只有站长或本作品作者可设置提及来源")
 		return
 	}
 	if err := siteops.SetSetting(siteops.MentionSourceWorkKey(req.TargetType, req.TargetID), req.Mode); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, gin.H{"ok": true, "effective": siteops.GetEffectiveMentionSource(req.TargetType, req.TargetID)})
+	infra.Success(c, gin.H{"ok": true, "effective": siteops.GetEffectiveMentionSource(req.TargetType, req.TargetID)})
 }
 
 // GetMentionCandidates GET /api/mention-candidates?scope=participants|global&target_type=&target_id=&q=
@@ -125,10 +125,10 @@ func GetMentionCandidates(c *gin.Context) {
 	}
 	cands, err := commentstats.GetMentionCandidates(targetType, targetID, scope, q, limit)
 	if err != nil {
-		utils.InternalError(c, "获取候选失败")
+		infra.InternalError(c, "获取候选失败")
 		return
 	}
-	utils.Success(c, cands)
+	infra.Success(c, cands)
 }
 
 // GetCommentNetwork GET /api/comment-network?target_type=blog|novel&target_id=&user_id=
@@ -137,16 +137,16 @@ func GetCommentNetwork(c *gin.Context) {
 	targetType := strings.TrimSpace(c.Query("target_type"))
 	targetID := uint(mustUint(c.Query("target_id")))
 	if targetType == "" || targetID == 0 {
-		utils.BadRequest(c, "请指定作品类型与 id")
+		infra.BadRequest(c, "请指定作品类型与 id")
 		return
 	}
 	filterUserID := uint(mustUint(c.Query("user_id")))
 	net, err := commentstats.GetCommentNetwork(targetType, targetID, filterUserID)
 	if err != nil {
-		utils.InternalError(c, "分析失败")
+		infra.InternalError(c, "分析失败")
 		return
 	}
-	utils.Success(c, net)
+	infra.Success(c, net)
 }
 
 // mustUint 解析查询参数中的无符号整数（解析失败返回 0）

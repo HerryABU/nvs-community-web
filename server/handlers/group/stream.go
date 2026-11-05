@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"nvs-server/utils/infra"
 	"regexp"
 	"strconv"
 	"time"
 
 	"nvs-server/middleware"
 	"nvs-server/realtime"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -64,11 +64,11 @@ func publishGroupEvent(groupID uint, name string, data any) {
 func Stream(c *gin.Context) {
 	gid, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if gid == 0 {
-		utils.BadRequest(c, "群组 ID 无效")
+		infra.BadRequest(c, "群组 ID 无效")
 		return
 	}
 	if middleware.UserID(c) == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	ctx, ok := loadGroupCtx(c, uint(gid))
@@ -76,14 +76,14 @@ func Stream(c *gin.Context) {
 		return
 	}
 	if ctx.Status != "active" && !ctx.CanRead && !ctx.IsAdmin {
-		utils.Forbidden(c, "仅群成员可接收实时消息")
+		infra.Forbidden(c, "仅群成员可接收实时消息")
 		return
 	}
 
 	key := groupChannel(uint(gid))
 	client, err := groupHub.Subscribe(key)
 	if err != nil {
-		utils.Error(c, http.StatusServiceUnavailable, utils.CodeInternalError, "实时连接数已达上限，请稍后重试")
+		infra.Error(c, http.StatusServiceUnavailable, infra.CodeInternalError, "实时连接数已达上限，请稍后重试")
 		return
 	}
 	defer groupHub.Unsubscribe(key, client)

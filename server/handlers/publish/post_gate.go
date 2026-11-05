@@ -5,12 +5,12 @@ package publish
 // 口径统一在这一个文件里，避免发文/评论/回帖各写一份「新号一天能发几条」。
 
 import (
+	"nvs-server/utils/infra"
 	"time"
 
 	"nvs-server/gate"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -33,7 +33,7 @@ func CheckPostGate(c *gin.Context, kind string) bool {
 	if gerr := gate.CanPost(gate.PostGateInput{
 		UserID: uid, CreatedAt: user.CreatedAt, Kind: kind, TodayCount: today,
 	}); gerr != nil {
-		utils.Forbidden(c, gerr.Error())
+		infra.Forbidden(c, gerr.Error())
 		return false
 	}
 	return true

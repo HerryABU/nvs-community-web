@@ -1,12 +1,13 @@
 package auth
 
 import (
+	"nvs-server/utils/infra"
+	"nvs-server/utils/secure"
 	"strings"
 
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/security/slidecaptcha"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	apikey "nvs-server/models/apikey"
@@ -21,7 +22,7 @@ func SendVerificationCode(c *gin.Context) {
 		CaptchaToken string `json:"captcha_token"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请提供有效的邮箱地址")
+		infra.BadRequest(c, "请提供有效的邮箱地址")
 		return
 	}
 
@@ -29,7 +30,7 @@ func SendVerificationCode(c *gin.Context) {
 	// 仅当站长开启滑块验证码（captcha_enabled）时强制；关闭时为兼容旧链路放行。
 	if models.IsCaptchaEnabled() {
 		if req.CaptchaToken == "" || !slidecaptcha.VerifyPassToken(req.CaptchaToken) {
-			utils.Forbidden(c, "请先完成滑块验证后再获取邮箱验证码")
+			infra.Forbidden(c, "请先完成滑块验证后再获取邮箱验证码")
 			return
 		}
 	}
@@ -37,20 +38,20 @@ func SendVerificationCode(c *gin.Context) {
 	email := strings.TrimSpace(strings.ToLower(req.Email))
 
 	// 60 秒内只能发一次（防邮箱轰炸 / 验证码被频繁覆盖）
-	code := utils.GenerateVerificationCode()
-	if err := utils.StoreVerificationCode(email, code); err != nil {
-		utils.BadRequest(c, err.Error())
+	code := infra.GenerateVerificationCode()
+	if err := infra.StoreVerificationCode(email, code); err != nil {
+		infra.BadRequest(c, err.Error())
 		return
 	}
 
-	if err := utils.SendVerificationEmail(email, code); err != nil {
+	if err := infra.SendVerificationEmail(email, code); err != nil {
 		// 发送失败则回滚已写入的验证码，避免用户拿到无效码
-		utils.DeleteVerificationCode(email)
-		utils.InternalError(c, "发送验证码失败: "+err.Error())
+		infra.DeleteVerificationCode(email)
+		infra.InternalError(c, "发送验证码失败: "+err.Error())
 		return
 	}
 
-	utils.SuccessMessage(c, "验证码已发送，请查收邮件", nil)
+	infra.SuccessMessage(c, "验证码已发送，请查收邮件", nil)
 }
 
 // POST /api/auth/verify-code — 验证邮箱验证码
@@ -60,19 +61,19 @@ func VerifyEmailCode(c *gin.Context) {
 		Code  string `json:"code" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 
 	email := strings.TrimSpace(strings.ToLower(req.Email))
 
-	if !utils.VerifyCode(email, req.Code) {
-		utils.BadRequest(c, "验证码错误或已过期")
+	if !infra.VerifyCode(email, req.Code) {
+		infra.BadRequest(c, "验证码错误或已过期")
 		return
 	}
 
-	utils.DeleteVerificationCode(email)
-	utils.SuccessMessage(c, "验证成功", gin.H{"email": email})
+	infra.DeleteVerificationCode(email)
+	infra.SuccessMessage(c, "验证成功", gin.H{"email": email})
 }
 
 // POST /api/auth/forgot-password — 发送密码重置验证码
@@ -82,7 +83,7 @@ func ForgotPassword(c *gin.Context) {
 		CaptchaToken string `json:"captcha_token"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请提供有效的邮箱地址")
+		infra.BadRequest(c, "请提供有效的邮箱地址")
 		return
 	}
 
@@ -92,7 +93,7 @@ func ForgotPassword(c *gin.Context) {
 	// 与 /api/auth/send-code、/api/auth/register 一致，堵死「裸调 forgot-password」通道。
 	if models.IsCaptchaEnabled() {
 		if req.CaptchaToken == "" || !slidecaptcha.VerifyPassToken(req.CaptchaToken) {
-			utils.Forbidden(c, "请先完成滑块验证后再请求密码重置")
+			infra.Forbidden(c, "请先完成滑块验证后再请求密码重置")
 			return
 		}
 	}
@@ -101,19 +102,19 @@ func ForgotPassword(c *gin.Context) {
 	user, err := models.GetUserByEmail(email)
 	if err != nil || user == nil {
 		// 统一返回成功消息，防止邮箱枚举攻击
-		utils.SuccessMessage(c, "如果该邮箱已注册，重置邮件已发送", nil)
+		infra.SuccessMessage(c, "如果该邮箱已注册，重置邮件已发送", nil)
 		return
 	}
 
-	code := utils.GenerateVerificationCode()
-	utils.StoreVerificationCode(email, code)
+	code := infra.GenerateVerificationCode()
+	infra.StoreVerificationCode(email, code)
 
-	if err := utils.SendPasswordResetEmail(email, code); err != nil {
-		utils.InternalError(c, "发送邮件失败: "+err.Error())
+	if err := infra.SendPasswordResetEmail(email, code); err != nil {
+		infra.InternalError(c, "发送邮件失败: "+err.Error())
 		return
 	}
 
-	utils.SuccessMessage(c, "如果该邮箱已注册，重置邮件已发送", nil)
+	infra.SuccessMessage(c, "如果该邮箱已注册，重置邮件已发送", nil)
 }
 
 // POST /api/auth/reset-password — 验证验证码并重置密码
@@ -124,46 +125,46 @@ func ResetPassword(c *gin.Context) {
 		NewPassword string `json:"new_password" binding:"required,min=6,max=128"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误: "+err.Error())
+		infra.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
 
 	email := strings.TrimSpace(strings.ToLower(req.Email))
 
 	// 验证验证码
-	if !utils.VerifyCode(email, req.Code) {
-		utils.BadRequest(c, "验证码错误或已过期")
+	if !infra.VerifyCode(email, req.Code) {
+		infra.BadRequest(c, "验证码错误或已过期")
 		return
 	}
 
 	// 查找用户
 	user, err := models.GetUserByEmail(email)
 	if err != nil || user == nil {
-		utils.NotFound(c, "用户不存在")
+		infra.NotFound(c, "用户不存在")
 		return
 	}
 
 	// 哈希新密码
-	hash, err := utils.HashPassword(req.NewPassword)
+	hash, err := secure.HashPassword(req.NewPassword)
 	if err != nil {
-		utils.InternalError(c, "密码处理失败")
+		infra.InternalError(c, "密码处理失败")
 		return
 	}
 
 	// 更新密码
 	user.PasswordHash = hash
 	if err := models.UpdateUser(user); err != nil {
-		utils.InternalError(c, "重置密码失败")
+		infra.InternalError(c, "重置密码失败")
 		return
 	}
 
 	// 清除已验证的验证码
-	utils.DeleteVerificationCode(email)
+	infra.DeleteVerificationCode(email)
 
 	// 合规审计：重置密码
 	RecordUserAudit(c, user.ID, apikey.AuditChangePassword, "通过邮箱验证码重置密码", "success")
 
-	utils.SuccessMessage(c, "密码重置成功，请重新登录", nil)
+	infra.SuccessMessage(c, "密码重置成功，请重新登录", nil)
 }
 
 // POST /api/auth/change-password — 登录后修改密码
@@ -173,51 +174,51 @@ func ChangePassword(c *gin.Context) {
 		NewPassword string `json:"new_password" binding:"required,min=6,max=128"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误: 新密码长度至少6位")
+		infra.BadRequest(c, "参数错误: 新密码长度至少6位")
 		return
 	}
 
 	// 获取当前登录用户
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 
 	user, err := models.GetUserByID(userID)
 	if err != nil || user == nil {
-		utils.NotFound(c, "用户不存在")
+		infra.NotFound(c, "用户不存在")
 		return
 	}
 
 	// 验证旧密码
-	if !utils.CheckPassword(req.OldPassword, user.PasswordHash) {
-		utils.BadRequest(c, "原密码不正确")
+	if !secure.CheckPassword(req.OldPassword, user.PasswordHash) {
+		infra.BadRequest(c, "原密码不正确")
 		return
 	}
 
 	// 新旧密码不能相同
 	if req.OldPassword == req.NewPassword {
-		utils.BadRequest(c, "新密码不能与原密码相同")
+		infra.BadRequest(c, "新密码不能与原密码相同")
 		return
 	}
 
 	// 哈希新密码
-	hash, err := utils.HashPassword(req.NewPassword)
+	hash, err := secure.HashPassword(req.NewPassword)
 	if err != nil {
-		utils.InternalError(c, "密码处理失败")
+		infra.InternalError(c, "密码处理失败")
 		return
 	}
 
 	// 更新密码
 	user.PasswordHash = hash
 	if err := models.UpdateUser(user); err != nil {
-		utils.InternalError(c, "修改密码失败")
+		infra.InternalError(c, "修改密码失败")
 		return
 	}
 
 	// 合规审计：修改密码
 	RecordUserAudit(c, user.ID, apikey.AuditChangePassword, "修改登录密码", "success")
 
-	utils.SuccessMessage(c, "密码修改成功", nil)
+	infra.SuccessMessage(c, "密码修改成功", nil)
 }

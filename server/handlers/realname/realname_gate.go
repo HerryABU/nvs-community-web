@@ -6,7 +6,7 @@ package realname
 import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
 )
@@ -31,6 +31,6 @@ func CheckRealNameRequired(c *gin.Context) bool {
 	if user.RealNameVerified {
 		return false
 	}
-	utils.Forbidden(c, "本站要求实名后即可发布内容，请先完成实名认证")
+	infra.Forbidden(c, "本站要求实名后即可发布内容，请先完成实名认证")
 	return true
 }

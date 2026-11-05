@@ -3,7 +3,7 @@ package bookshelf
 import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -18,16 +18,16 @@ func AddToShelf(c *gin.Context) {
 		NovelID uint `json:"novel_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请提供作品ID")
+		infra.BadRequest(c, "请提供作品ID")
 		return
 	}
 
 	if err := social.AddToShelf(userID, req.NovelID); err != nil {
-		utils.InternalError(c, "添加书架失败")
+		infra.InternalError(c, "添加书架失败")
 		return
 	}
 
-	utils.Success(c, gin.H{"on_shelf": true})
+	infra.Success(c, gin.H{"on_shelf": true})
 }
 
 // RemoveFromShelf DELETE /api/bookshelf/:id  (id = novel_id)
@@ -35,16 +35,16 @@ func RemoveFromShelf(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	novelID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		utils.BadRequest(c, "无效的作品ID")
+		infra.BadRequest(c, "无效的作品ID")
 		return
 	}
 
 	if err := social.RemoveFromShelf(userID, uint(novelID)); err != nil {
-		utils.InternalError(c, "移出书架失败")
+		infra.InternalError(c, "移出书架失败")
 		return
 	}
 
-	utils.Success(c, gin.H{"on_shelf": false})
+	infra.Success(c, gin.H{"on_shelf": false})
 }
 
 // CheckShelf GET /api/bookshelf/check/:id  (id = novel_id)
@@ -52,12 +52,12 @@ func CheckShelf(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	novelID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		utils.BadRequest(c, "无效的作品ID")
+		infra.BadRequest(c, "无效的作品ID")
 		return
 	}
 
 	onShelf := social.IsOnShelf(userID, uint(novelID))
-	utils.Success(c, gin.H{"on_shelf": onShelf})
+	infra.Success(c, gin.H{"on_shelf": onShelf})
 }
 
 // ListShelf GET /api/bookshelf
@@ -75,7 +75,7 @@ func ListShelf(c *gin.Context) {
 
 	items, total, err := social.GetShelfList(userID, page, pageSize)
 	if err != nil {
-		utils.InternalError(c, "获取书架列表失败")
+		infra.InternalError(c, "获取书架列表失败")
 		return
 	}
 
@@ -102,7 +102,7 @@ func ListShelf(c *gin.Context) {
 		result = []ShelfItem{}
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"list":  result,
 		"total": total,
 	})
@@ -117,7 +117,7 @@ func UpdateShelfProgress(c *gin.Context) {
 		LastReadChapter int  `json:"last_read_chapter"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请提供作品ID和章节号")
+		infra.BadRequest(c, "请提供作品ID和章节号")
 		return
 	}
 
@@ -125,5 +125,5 @@ func UpdateShelfProgress(c *gin.Context) {
 		// 书架中不存在也静默成功——用户可能没加书架但读了
 	}
 
-	utils.Success(c, nil)
+	infra.Success(c, nil)
 }

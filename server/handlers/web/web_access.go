@@ -3,7 +3,7 @@ package web
 import (
 	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/auth"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -43,10 +43,10 @@ func ListWebAccessLogs(c *gin.Context) {
 	}
 	items, total, err := quota.ListWebAccess(q)
 	if err != nil {
-		utils.InternalError(c, "查询 Web 访问日志失败")
+		infra.InternalError(c, "查询 Web 访问日志失败")
 		return
 	}
-	utils.Success(c, gin.H{"total": total, "items": items})
+	infra.Success(c, gin.H{"total": total, "items": items})
 }
 
 // GetWebAccessStats GET /api/admin/web-access/stats
@@ -57,10 +57,10 @@ func GetWebAccessStats(c *gin.Context) {
 	}
 	s, err := quota.GetWebAccessStats()
 	if err != nil {
-		utils.InternalError(c, "统计 Web 访问日志失败")
+		infra.InternalError(c, "统计 Web 访问日志失败")
 		return
 	}
-	utils.Success(c, s)
+	infra.Success(c, s)
 }
 
 // CleanupWebAccessLogs POST /api/admin/web-access/cleanup
@@ -70,10 +70,10 @@ func CleanupWebAccessLogs(c *gin.Context) {
 		return
 	}
 	if err := quota.WebAccessLogCleanup(); err != nil {
-		utils.InternalError(c, "清空 Web 访问日志失败")
+		infra.InternalError(c, "清空 Web 访问日志失败")
 		return
 	}
-	utils.Success(c, gin.H{"ok": true})
+	infra.Success(c, gin.H{"ok": true})
 }
 
 // atoiDefault 安全解析整型查询参数，解析失败或空返回 def。

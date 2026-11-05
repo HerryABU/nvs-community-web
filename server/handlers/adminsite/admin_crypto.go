@@ -15,13 +15,13 @@ package adminsite
 import (
 	"crypto/x509"
 	"encoding/pem"
+	"nvs-server/utils/infra"
 	"os"
 	"time"
 
 	"nvs-server/audit"
 	"nvs-server/config"
 	"nvs-server/crypto"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -115,7 +115,7 @@ func AdminCryptoStatus(c *gin.Context) {
 		},
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"track":              string(cfg.Track),
 		"gm_provider":        cfg.GMProvider,
 		"compiled_providers": crypto.CompiledGMProviders(),

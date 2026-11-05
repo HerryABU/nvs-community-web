@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"nvs-server/utils/infra"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,6 @@ import (
 
 	"nvs-server/config"
 	"nvs-server/handlers/hctx"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -51,7 +51,7 @@ func isImageExt(ext string) bool {
 func UploadFile(c *gin.Context) {
 	// 登录即可上传（作者/读者均可，配额在存储层控制）
 	if hctx.CurrentUserID(c) == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 
@@ -59,57 +59,57 @@ func UploadFile(c *gin.Context) {
 	var header *multipart.FileHeader
 	var err error
 	if file, header, err = c.Request.FormFile("file"); err != nil {
-		utils.BadRequest(c, "请选择要上传的文件")
+		infra.BadRequest(c, "请选择要上传的文件")
 		return
 	}
 	defer file.Close()
 
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	if !allowedUploadExt[ext] {
-		utils.BadRequest(c, "不支持的文件类型，仅支持图片(png/jpg/gif/webp/bmp) / 视频(mp4/webm) / 音频(mp3/wav/ogg/m4a)")
+		infra.BadRequest(c, "不支持的文件类型，仅支持图片(png/jpg/gif/webp/bmp) / 视频(mp4/webm) / 音频(mp3/wav/ogg/m4a)")
 		return
 	}
 	if header.Size > uploadMaxFile {
-		utils.BadRequest(c, "文件不能超过 50MB")
+		infra.BadRequest(c, "文件不能超过 50MB")
 		return
 	}
 	if isImageExt(ext) && header.Size > maxImageSize {
-		utils.BadRequest(c, "图片不能超过 10MB")
+		infra.BadRequest(c, "图片不能超过 10MB")
 		return
 	}
 	if header.Size > maxMediaSize {
-		utils.BadRequest(c, "音视频文件不能超过 50MB")
+		infra.BadRequest(c, "音视频文件不能超过 50MB")
 		return
 	}
 
 	// 保存到 data/uploads/yyyy/mm/随机名.ext
 	randBytes := make([]byte, 8)
 	if _, err := rand.Read(randBytes); err != nil {
-		utils.InternalError(c, "生成文件名失败")
+		infra.InternalError(c, "生成文件名失败")
 		return
 	}
 	name := hex.EncodeToString(randBytes) + ext
 	relDir := time.Now().Format("2006/01")
 	absDir := filepath.Join(config.UploadDir, relDir)
 	if err := os.MkdirAll(absDir, 0o755); err != nil {
-		utils.InternalError(c, "创建上传目录失败")
+		infra.InternalError(c, "创建上传目录失败")
 		return
 	}
 	absPath := filepath.Join(absDir, name)
 	dst, err := os.Create(absPath)
 	if err != nil {
-		utils.InternalError(c, "保存文件失败")
+		infra.InternalError(c, "保存文件失败")
 		return
 	}
 	defer dst.Close()
 	if _, err := io.Copy(dst, file); err != nil {
 		_ = os.Remove(absPath)
-		utils.InternalError(c, "写入文件失败")
+		infra.InternalError(c, "写入文件失败")
 		return
 	}
 
 	url := fmt.Sprintf("/uploads/%s/%s", relDir, name)
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"url":  url,
 		"size": header.Size,
 		"name": header.Filename,

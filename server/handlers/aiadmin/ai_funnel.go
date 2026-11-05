@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"nvs-server/handlers/admincommon"
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -113,7 +113,7 @@ func AiFunnel(c *gin.Context) {
 		insight = "数据不足（窗口内 AI 调用或订单太少），先积累样本再看漏斗"
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"days": days, "since": since.Format("2006-01-02"),
 		"stages": stages, "insight": insight,
 		"note": fmt.Sprintf("口径为去重用户数；「用尽」按当日免费次数上限（当前平台默认 %d 次/日，按人覆盖优先）判定", limit),

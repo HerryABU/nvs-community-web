@@ -8,7 +8,7 @@ package auth
 import (
 	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/hctx"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"time"
@@ -41,12 +41,12 @@ func RecordZoneEnter(c *gin.Context) {
 	_ = c.ShouldBindJSON(&req)
 	zone := strings.TrimSpace(req.Zone)
 	if zone == "" {
-		utils.BadRequest(c, "缺少隔离墙分区名")
+		infra.BadRequest(c, "缺少隔离墙分区名")
 		return
 	}
 	// 仅写独立隔离墙进入表：含 user_id / zone / entered_at / ip / UA，已覆盖原审计日志 zone_enter 条目
 	platform.RecordZoneEnterLog(userID, zone, c.ClientIP(), c.Request.UserAgent(), time.Now())
-	utils.Success(c, gin.H{"message": "已记录进入时间"})
+	infra.Success(c, gin.H{"message": "已记录进入时间"})
 }
 
 // ListZoneAccessLogs GET /api/admin/zone-access — 查询隔离墙（敏感分区）进入记录（176号令专项）。
@@ -70,10 +70,10 @@ func ListZoneAccessLogs(c *gin.Context) {
 		PageSize: pageSize,
 	})
 	if err != nil {
-		utils.InternalError(c, "获取隔离墙进入记录失败")
+		infra.InternalError(c, "获取隔离墙进入记录失败")
 		return
 	}
-	utils.Success(c, gin.H{"total": total, "items": items})
+	infra.Success(c, gin.H{"total": total, "items": items})
 }
 
 // GetZoneAccessStats GET /api/admin/zone-access/stats — 隔离墙进入记录聚合统计（仪表盘卡片）。
@@ -83,10 +83,10 @@ func GetZoneAccessStats(c *gin.Context) {
 	}
 	stats, err := platform.GetZoneAccessStats()
 	if err != nil {
-		utils.InternalError(c, "获取隔离墙进入统计失败")
+		infra.InternalError(c, "获取隔离墙进入统计失败")
 		return
 	}
-	utils.Success(c, stats)
+	infra.Success(c, stats)
 }
 
 // ParseDateParam 解析日期查询参数，支持 RFC3339 / 2006-01-02T15:04:05 / 2006-01-02，空或非法返回零值。

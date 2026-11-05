@@ -4,7 +4,7 @@ import (
 	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/hctx"
 	"nvs-server/supervise"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -25,10 +25,10 @@ func AdminListSupervised(c *gin.Context) {
 	status := c.Query("status")
 	list, total, err := supervise.List(page, size, tier, status)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"items": list, "total": total, "page": page})
+	infra.Success(c, gin.H{"items": list, "total": total, "page": page})
 }
 
 // AdminGetSupervised GET /api/admin/supervise/:id
@@ -38,15 +38,15 @@ func AdminGetSupervised(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if id == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	su, logs, err := supervise.Get(uint(id))
 	if err != nil {
-		utils.NotFound(c, "记录不存在")
+		infra.NotFound(c, "记录不存在")
 		return
 	}
-	utils.Success(c, gin.H{"record": su, "logs": logs})
+	infra.Success(c, gin.H{"record": su, "logs": logs})
 }
 
 // AdminSetTier POST /api/admin/supervise/:id/set-tier
@@ -57,7 +57,7 @@ func AdminSetTier(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if id == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	var req struct {
@@ -65,14 +65,14 @@ func AdminSetTier(c *gin.Context) {
 		Note string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := supervise.SetTier(uint(id), hctx.CurrentUserID(c), req.Tier, req.Note); err != nil {
-		utils.InternalError(c, err.Error())
+		infra.InternalError(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已改档"})
+	infra.Success(c, gin.H{"message": "已改档"})
 }
 
 // AdminClearSupervised POST /api/admin/supervise/:id/clear
@@ -83,7 +83,7 @@ func AdminClearSupervised(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if id == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	var req struct {
@@ -91,10 +91,10 @@ func AdminClearSupervised(c *gin.Context) {
 	}
 	_ = c.ShouldBindJSON(&req)
 	if err := supervise.Clear(uint(id), hctx.CurrentUserID(c), req.Note); err != nil {
-		utils.InternalError(c, err.Error())
+		infra.InternalError(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已清除"})
+	infra.Success(c, gin.H{"message": "已清除"})
 }
 
 // AdminAddSuperviseNote POST /api/admin/supervise/:id/note
@@ -104,21 +104,21 @@ func AdminAddSuperviseNote(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if id == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	var req struct {
 		Note string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := supervise.AddNote(uint(id), hctx.CurrentUserID(c), req.Note); err != nil {
-		utils.InternalError(c, err.Error())
+		infra.InternalError(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已加注"})
+	infra.Success(c, gin.H{"message": "已加注"})
 }
 
 // AdminSuperviseStats GET /api/admin/supervise/stats
@@ -126,5 +126,5 @@ func AdminSuperviseStats(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, supervise.Stats())
+	infra.Success(c, supervise.Stats())
 }

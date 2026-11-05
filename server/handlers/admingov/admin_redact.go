@@ -9,12 +9,12 @@ package admingov
 import (
 	"log"
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
 	"nvs-server/config"
 	"nvs-server/middleware"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -26,7 +26,7 @@ func GetLogRedactConfig(c *gin.Context) {
 		return
 	}
 	rc := config.RedactMgr.GetConfig()
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"enabled":        rc.Enabled,
 		"mask":           rc.Mask,
 		"sensitive_keys": rc.SensitiveKeys,
@@ -47,7 +47,7 @@ func UpdateLogRedactConfig(c *gin.Context) {
 		SensitiveKeys []string `json:"sensitive_keys"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	rc := config.RedactMgr.GetConfig()
@@ -61,7 +61,7 @@ func UpdateLogRedactConfig(c *gin.Context) {
 		rc.SensitiveKeys = req.SensitiveKeys
 	}
 	if err := config.RedactMgr.Update(rc); err != nil {
-		utils.InternalError(c, "保存脱敏配置失败")
+		infra.InternalError(c, "保存脱敏配置失败")
 		return
 	}
 	// .env 自动同步（重启后仍生效；写失败仅告警不阻断）
@@ -72,7 +72,7 @@ func UpdateLogRedactConfig(c *gin.Context) {
 	}); err != nil {
 		log.Printf("[admin] 脱敏配置已保存但 .env 同步失败: %v", err)
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"message":        "日志脱敏配置已更新，即时生效",
 		"enabled":        rc.Enabled,
 		"mask":           rc.Mask,
@@ -99,7 +99,7 @@ func PreviewLogRedact(c *gin.Context) {
 		SensitiveKeys []string `json:"sensitive_keys"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	rc := config.RedactMgr.GetConfig()
@@ -141,5 +141,5 @@ func PreviewLogRedact(c *gin.Context) {
 	default: // body
 		result = r.RedactBody(req.Sample)
 	}
-	utils.Success(c, gin.H{"result": result})
+	infra.Success(c, gin.H{"result": result})
 }

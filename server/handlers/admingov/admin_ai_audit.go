@@ -2,13 +2,13 @@ package admingov
 
 import (
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"sort"
 	"strconv"
 	"strings"
 
 	"nvs-server/aiapi/vendor"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	ai "nvs-server/models/ai"
@@ -23,7 +23,7 @@ func AdminAiAuditStats(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, ai.AiAuditStats())
+	infra.Success(c, ai.AiAuditStats())
 }
 
 // AdminAiAuditSessions GET /api/admin/ai/audit/sessions?user_id=&page=
@@ -35,7 +35,7 @@ func AdminAiAuditSessions(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	list, total, err := ai.AdminListAiSessions(uint(uid), page, 20)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	items := make([]gin.H, 0, len(list))
@@ -50,7 +50,7 @@ func AdminAiAuditSessions(c *gin.Context) {
 			"created_at": s.CreatedAt, "updated_at": s.UpdatedAt,
 		})
 	}
-	utils.Success(c, gin.H{"list": items, "total": total, "page": page})
+	infra.Success(c, gin.H{"list": items, "total": total, "page": page})
 }
 
 // AdminAiAuditSessionMessages GET /api/admin/ai/audit/sessions/:id/messages
@@ -61,15 +61,15 @@ func AdminAiAuditSessionMessages(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var s ai.AiChatSession
 	if err := models.DB.Where("id = ?", id).First(&s).Error; err != nil {
-		utils.NotFound(c, "会话不存在")
+		infra.NotFound(c, "会话不存在")
 		return
 	}
 	msgs, err := ai.ListAiChatMessages(s.ID, 500)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"session": s, "messages": msgs})
+	infra.Success(c, gin.H{"session": s, "messages": msgs})
 }
 
 // AdminAiAuditMedia GET /api/admin/ai/audit/media?kind=&status=&page=
@@ -80,7 +80,7 @@ func AdminAiAuditMedia(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	list, total, err := ai.AdminListAiMedia(c.Query("kind"), c.Query("status"), page, 20)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	items := make([]gin.H, 0, len(list))
@@ -93,7 +93,7 @@ func AdminAiAuditMedia(c *gin.Context) {
 			"result": t.Result, "created_at": t.CreatedAt,
 		})
 	}
-	utils.Success(c, gin.H{"list": items, "total": total, "page": page})
+	infra.Success(c, gin.H{"list": items, "total": total, "page": page})
 }
 
 // AdminAiAuditCalls GET /api/admin/ai/audit/calls?status=&page=
@@ -104,10 +104,10 @@ func AdminAiAuditCalls(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	list, total, err := ai.AdminListAiCallLogs(c.Query("status"), page, 20)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list, "total": total, "page": page})
+	infra.Success(c, gin.H{"list": list, "total": total, "page": page})
 }
 
 // AdminGetAiFeatures GET /api/admin/ai/features — AI 功能开关
@@ -115,7 +115,7 @@ func AdminGetAiFeatures(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, aihub.GetAiFeatureFlags())
+	infra.Success(c, aihub.GetAiFeatureFlags())
 }
 
 // AdminSetAiFeatures PUT /api/admin/ai/features
@@ -125,14 +125,14 @@ func AdminSetAiFeatures(c *gin.Context) {
 	}
 	var req aihub.AiFeatureFlags
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := aihub.SetAiFeatureFlags(req); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已保存（立即生效）"})
+	infra.Success(c, gin.H{"message": "已保存（立即生效）"})
 }
 
 // ---------- 厂商字典 ----------
@@ -144,7 +144,7 @@ func AdminListAiVendors(c *gin.Context) {
 	}
 	list, err := aiops.ListAiVendors(false)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	// 附带每个厂商下的模型数，便于判断能否删除
@@ -158,7 +158,7 @@ func AdminListAiVendors(c *gin.Context) {
 		models.DB.Model(&ai.AiModel{}).Where("vendor = ?", v.Name).Count(&n)
 		out = append(out, row{AiVendor: v, Models: n})
 	}
-	utils.Success(c, gin.H{"list": out})
+	infra.Success(c, gin.H{"list": out})
 }
 
 // AdminCreateAiVendor POST /api/admin/ai/vendors
@@ -172,15 +172,15 @@ func AdminCreateAiVendor(c *gin.Context) {
 		SortOrder int    `json:"sort_order"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	v, err := aiops.CreateAiVendor(req.Name, req.SortOrder, req.Prefix)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, v)
+	infra.Success(c, v)
 }
 
 // AdminUpdateAiVendor PUT /api/admin/ai/vendors/:id
@@ -196,7 +196,7 @@ func AdminUpdateAiVendor(c *gin.Context) {
 		Enabled   *bool  `json:"enabled"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	enabled := true
@@ -204,10 +204,10 @@ func AdminUpdateAiVendor(c *gin.Context) {
 		enabled = *req.Enabled
 	}
 	if err := aiops.UpdateAiVendor(uint(id), strings.TrimSpace(req.Name), req.SortOrder, enabled, req.Prefix); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已保存"})
+	infra.Success(c, gin.H{"message": "已保存"})
 }
 
 // AdminDeleteAiVendor DELETE /api/admin/ai/vendors/:id
@@ -217,10 +217,10 @@ func AdminDeleteAiVendor(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := aiops.DeleteAiVendor(uint(id)); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已删除"})
+	infra.Success(c, gin.H{"message": "已删除"})
 }
 
 // ---------- 聚合分类定价（§厂商管理：按 chat/image/video 设价） ----------
@@ -232,10 +232,10 @@ func AdminGetCategoryPrices(c *gin.Context) {
 	}
 	list, err := ai.AllCategoryPrices()
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list})
+	infra.Success(c, gin.H{"list": list})
 }
 
 // AdminSetCategoryPrice PUT /api/admin/ai/category-prices — 保存某分类默认价
@@ -250,23 +250,23 @@ func AdminSetCategoryPrice(c *gin.Context) {
 		PriceCall int64  `json:"price_call"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	req.Kind = ai.NormalizeAiKind(req.Kind)
 	if req.Kind != ai.AiKindChat && req.Kind != ai.AiKindImage && req.Kind != ai.AiKindVideo {
-		utils.BadRequest(c, "kind 必须是 chat/image/video 之一")
+		infra.BadRequest(c, "kind 必须是 chat/image/video 之一")
 		return
 	}
 	if req.PriceIn < 0 || req.PriceOut < 0 || req.PriceCall < 0 {
-		utils.BadRequest(c, "价格不能为负")
+		infra.BadRequest(c, "价格不能为负")
 		return
 	}
 	if err := ai.SetCategoryPrice(req.Kind, req.PriceIn, req.PriceOut, req.PriceCall); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已保存"})
+	infra.Success(c, gin.H{"message": "已保存"})
 }
 
 // ---------- 厂商→版本→亚版本矩阵（管理端专用，含 newest 标记） ----------
@@ -363,12 +363,12 @@ func AdminAiVendorMatrix(c *gin.Context) {
 	}
 	vendors, err := aiops.ListAiVendors(false)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	allModels, err := ai.ListAiModels(false)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 
@@ -403,5 +403,5 @@ func AdminAiVendorMatrix(c *gin.Context) {
 			"models": len(group), "versions": buildVendorGroup(group),
 		})
 	}
-	utils.Success(c, gin.H{"vendors": out})
+	infra.Success(c, gin.H{"vendors": out})
 }

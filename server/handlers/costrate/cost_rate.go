@@ -1,7 +1,7 @@
 package costrate
 
 import (
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
 	aicost "nvs-server/models/aicost"
@@ -14,7 +14,7 @@ import (
 // 充 100 元可能到账 1000 虚拟美元。不声明比例，任何「余额还剩多少」都没有成本含义。
 func AdminGetCostRate(c *gin.Context) {
 	r := aicost.GetCostRate()
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"rate":            r,
 		"valid":           r.Valid(),
 		"ratio":           r.Ratio(),
@@ -30,15 +30,15 @@ func AdminGetCostRate(c *gin.Context) {
 func AdminSaveCostRate(c *gin.Context) {
 	var req aicost.CostRate
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := aicost.SetCostRate(req); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	r := aicost.GetCostRate()
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"rate":     r,
 		"valid":    r.Valid(),
 		"ratio":    r.Ratio(),
@@ -60,7 +60,7 @@ func AdminCostRatePreview(c *gin.Context) {
 		VirtualCurrency string  `json:"virtual_currency"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	rate := aicost.CostRate{
@@ -71,7 +71,7 @@ func AdminCostRatePreview(c *gin.Context) {
 		rate = aicost.GetCostRate()
 	}
 	real, ok := rate.ToReal(req.Virtual)
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"virtual":       req.Virtual,
 		"real":          real,
 		"ok":            ok,

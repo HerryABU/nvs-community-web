@@ -20,13 +20,14 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/secure"
 	"strings"
 	"time"
 
 	"nvs-server/config"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -50,30 +51,30 @@ const (
 // purpose=login（默认）：扫码登录/自动注册；purpose=bind：已登录用户绑定微信。
 func WeChatAuthStart(c *gin.Context) {
 	purpose := strings.ToLower(strings.TrimSpace(c.Query("purpose")))
-	if purpose != utils.WeChatPurposeBind {
-		purpose = utils.WeChatPurposeLogin
+	if purpose != infra.WeChatPurposeBind {
+		purpose = infra.WeChatPurposeLogin
 	}
 	// 登录用途受站长「登录方式」开关约束；绑定用途仅要求服务端已配置微信参数
-	if purpose == utils.WeChatPurposeLogin && !models.GetLoginMethods().WeChat {
-		utils.Forbidden(c, "站长已关闭微信扫码登录")
+	if purpose == infra.WeChatPurposeLogin && !models.GetLoginMethods().WeChat {
+		infra.Forbidden(c, "站长已关闭微信扫码登录")
 		return
 	}
-	state, err := utils.GenerateWeChatState()
+	state, err := infra.GenerateWeChatState()
 	if err != nil {
-		utils.InternalError(c, "生成登录状态失败")
+		infra.InternalError(c, "生成登录状态失败")
 		return
 	}
-	authURL, err := utils.WeChatAuthURL(state)
+	authURL, err := infra.WeChatAuthURL(state)
 	if err != nil {
 		// 服务端未配置 appid/secret/callback，直接把中文原因透出便于站长排查
-		utils.InternalError(c, err.Error())
+		infra.InternalError(c, err.Error())
 		return
 	}
-	if err := utils.SaveWeChatState(state, purpose); err != nil {
-		utils.InternalError(c, "保存登录状态失败")
+	if err := infra.SaveWeChatState(state, purpose); err != nil {
+		infra.InternalError(c, "保存登录状态失败")
 		return
 	}
-	utils.Success(c, gin.H{"url": authURL, "state": state, "purpose": purpose})
+	infra.Success(c, gin.H{"url": authURL, "state": state, "purpose": purpose})
 }
 
 // WeChatCallback GET /api/auth/wechat/callback?code&state
@@ -94,28 +95,28 @@ func WeChatCallback(c *gin.Context) {
 		fail("cancel")
 		return
 	}
-	purpose, err := utils.ConsumeWeChatState(state)
+	purpose, err := infra.ConsumeWeChatState(state)
 	if err != nil {
 		fail("state")
 		return
 	}
-	if purpose == utils.WeChatPurposeBind {
+	if purpose == infra.WeChatPurposeBind {
 		basePath = wechatBindRedirectPath
 	}
 
-	openID, unionID, accessToken, err := utils.WeChatExchangeCode(code)
+	openID, unionID, accessToken, err := infra.WeChatExchangeCode(code)
 	if err != nil {
 		fail("exchange")
 		return
 	}
-	nickname, headImg, err := utils.WeChatUserInfo(accessToken, openID)
+	nickname, headImg, err := infra.WeChatUserInfo(accessToken, openID)
 	if err != nil {
 		fail("userinfo")
 		return
 	}
 
 	// 绑定用途且当前请求携带有效登录态（public 组 OptionalAuth 已解析 Cookie）→ 绑定到当前账号
-	if purpose == utils.WeChatPurposeBind {
+	if purpose == infra.WeChatPurposeBind {
 		if uid := hctx.CurrentUserID(c); uid > 0 {
 			bindWeChatToUser(c, uid, openID, unionID, basePath)
 			return
@@ -197,7 +198,7 @@ func createWeChatUser(c *gin.Context, openID, unionID, nickname, headImg string)
 	if _, err := rand.Read(randPass); err != nil {
 		return nil, err
 	}
-	hash, err := utils.HashPassword("wx!" + hex.EncodeToString(randPass))
+	hash, err := secure.HashPassword("wx!" + hex.EncodeToString(randPass))
 	if err != nil {
 		return nil, err
 	}
@@ -246,15 +247,15 @@ func generateUniqueWeChatUsername(openID string) (string, error) {
 func WeChatBindStatus(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	user, err := models.GetUserByID(uid)
 	if err != nil {
-		utils.InternalError(c, "获取用户信息失败")
+		infra.InternalError(c, "获取用户信息失败")
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"bound":    user.WeChatOpenID != "",
 		"nickname": user.Nickname,
 		"avatar":   user.AvatarURL,
@@ -268,7 +269,7 @@ func WeChatBindStatus(c *gin.Context) {
 func WeChatBind(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	var req struct {
@@ -276,53 +277,53 @@ func WeChatBind(c *gin.Context) {
 		State string `json:"state" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
-	if _, err := utils.ConsumeWeChatState(strings.TrimSpace(req.State)); err != nil {
-		utils.BadRequest(c, "绑定状态已过期，请重新发起绑定")
+	if _, err := infra.ConsumeWeChatState(strings.TrimSpace(req.State)); err != nil {
+		infra.BadRequest(c, "绑定状态已过期，请重新发起绑定")
 		return
 	}
-	openID, unionID, _, err := utils.WeChatExchangeCode(strings.TrimSpace(req.Code))
+	openID, unionID, _, err := infra.WeChatExchangeCode(strings.TrimSpace(req.Code))
 	if err != nil {
-		utils.BadRequest(c, "微信授权失败: "+err.Error())
+		infra.BadRequest(c, "微信授权失败: "+err.Error())
 		return
 	}
 	if apikey.WeChatOpenIDTaken(openID) {
 		existing, eerr := models.GetUserByWeChatOpenID(openID)
 		if eerr != nil || existing == nil || existing.ID != uid {
-			utils.BadRequest(c, "该微信已绑定其他账号，请先在其账号下解绑")
+			infra.BadRequest(c, "该微信已绑定其他账号，请先在其账号下解绑")
 			return
 		}
 	}
 	if err := apikey.BindWeChat(uid, openID, unionID); err != nil {
-		utils.InternalError(c, "绑定失败")
+		infra.InternalError(c, "绑定失败")
 		return
 	}
 	RecordUserAudit(c, uid, auditWeChatBind, "绑定微信 "+openID, "success")
-	utils.SuccessMessage(c, "微信绑定成功", nil)
+	infra.SuccessMessage(c, "微信绑定成功", nil)
 }
 
 // WeChatUnbind POST /api/auth/wechat/unbind（登录态；清空 openid/unionid）
 func WeChatUnbind(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	user, err := models.GetUserByID(uid)
 	if err != nil {
-		utils.InternalError(c, "获取用户信息失败")
+		infra.InternalError(c, "获取用户信息失败")
 		return
 	}
 	if user.WeChatOpenID == "" {
-		utils.BadRequest(c, "尚未绑定微信")
+		infra.BadRequest(c, "尚未绑定微信")
 		return
 	}
 	if err := apikey.UnbindWeChat(uid); err != nil {
-		utils.InternalError(c, "解绑失败")
+		infra.InternalError(c, "解绑失败")
 		return
 	}
 	RecordUserAudit(c, uid, auditWeChatUnbind, "解绑微信 "+user.WeChatOpenID, "success")
-	utils.SuccessMessage(c, "已解绑微信", nil)
+	infra.SuccessMessage(c, "已解绑微信", nil)
 }

@@ -6,7 +6,7 @@ import (
 	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/admingov"
 	"nvs-server/security"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"regexp"
 	"strconv"
 	"strings"
@@ -123,10 +123,10 @@ func ListBadWords(c *gin.Context) {
 	}
 	words, err := securitym.ListBadWords()
 	if err != nil {
-		utils.InternalError(c, "获取违禁词列表失败")
+		infra.InternalError(c, "获取违禁词列表失败")
 		return
 	}
-	utils.Success(c, words)
+	infra.Success(c, words)
 }
 
 // POST /api/admin/bad-words — 新增违禁词规则
@@ -147,24 +147,24 @@ func CreateBadWord(c *gin.Context) {
 		Description string `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请求参数错误")
+		infra.BadRequest(c, "请求参数错误")
 		return
 	}
 	if req.Name == "" || req.Pattern == "" {
-		utils.BadRequest(c, "规则名称和违禁词不能为空")
+		infra.BadRequest(c, "规则名称和违禁词不能为空")
 		return
 	}
 	matchType := normalizeBadWordMatchType(req.MatchType)
 	if err, hint := validateBadWordPattern(matchType, req.Pattern); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	} else if hint != "" {
-		utils.BadRequest(c, hint)
+		infra.BadRequest(c, hint)
 		return
 	}
 	action := normalizeBadWordAction(req.Action)
 	if action == "replace" && req.Replacement == "" {
-		utils.BadRequest(c, "替换动作必须填写替换文本")
+		infra.BadRequest(c, "替换动作必须填写替换文本")
 		return
 	}
 	enabled := true
@@ -184,11 +184,11 @@ func CreateBadWord(c *gin.Context) {
 		Description: req.Description,
 	}
 	if err := securitym.CreateBadWord(word); err != nil {
-		utils.InternalError(c, "创建规则失败")
+		infra.InternalError(c, "创建规则失败")
 		return
 	}
 	ReloadBadWords()
-	utils.Success(c, word)
+	infra.Success(c, word)
 }
 
 // PUT /api/admin/bad-words/:id — 更新违禁词规则
@@ -199,7 +199,7 @@ func UpdateBadWord(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	word, err := securitym.GetBadWord(uint(id))
 	if err != nil {
-		utils.NotFound(c, "规则不存在")
+		infra.NotFound(c, "规则不存在")
 		return
 	}
 	var req struct {
@@ -215,7 +215,7 @@ func UpdateBadWord(c *gin.Context) {
 		Description string `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请求参数错误")
+		infra.BadRequest(c, "请求参数错误")
 		return
 	}
 	if req.Name != "" {
@@ -232,10 +232,10 @@ func UpdateBadWord(c *gin.Context) {
 	}
 	if req.Pattern != "" {
 		if err, hint := validateBadWordPattern(word.MatchType, req.Pattern); err != nil {
-			utils.BadRequest(c, err.Error())
+			infra.BadRequest(c, err.Error())
 			return
 		} else if hint != "" {
-			utils.BadRequest(c, hint)
+			infra.BadRequest(c, hint)
 			return
 		}
 		word.Pattern = req.Pattern
@@ -256,11 +256,11 @@ func UpdateBadWord(c *gin.Context) {
 		word.Description = req.Description
 	}
 	if err := securitym.UpdateBadWord(word); err != nil {
-		utils.InternalError(c, "更新规则失败")
+		infra.InternalError(c, "更新规则失败")
 		return
 	}
 	ReloadBadWords()
-	utils.Success(c, word)
+	infra.Success(c, word)
 }
 
 // DELETE /api/admin/bad-words/:id — 删除违禁词规则
@@ -270,11 +270,11 @@ func DeleteBadWord(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := securitym.DeleteBadWord(uint(id)); err != nil {
-		utils.InternalError(c, "删除规则失败")
+		infra.InternalError(c, "删除规则失败")
 		return
 	}
 	ReloadBadWords()
-	utils.Success(c, gin.H{"message": "规则已删除"})
+	infra.Success(c, gin.H{"message": "规则已删除"})
 }
 
 // GET /api/admin/bad-words/export — 导出全部规则为 JSON 数组（含分类/标签）
@@ -284,12 +284,12 @@ func ExportBadWords(c *gin.Context) {
 	}
 	words, err := securitym.ExportBadWords()
 	if err != nil {
-		utils.InternalError(c, "导出失败")
+		infra.InternalError(c, "导出失败")
 		return
 	}
 	c.Header("Content-Type", "application/json; charset=utf-8")
 	c.Header("Content-Disposition", "attachment; filename=\"bad-words.json\"")
-	utils.Success(c, words)
+	infra.Success(c, words)
 }
 
 // POST /api/admin/bad-words/import — 从 JSON 数组批量导入（按 name+match_type+pattern 去重，已存在则跳过）
@@ -299,7 +299,7 @@ func ImportBadWords(c *gin.Context) {
 	}
 	var items []securitym.BadWordImportItem
 	if err := c.ShouldBindJSON(&items); err != nil {
-		utils.BadRequest(c, "请求体须为 JSON 数组")
+		infra.BadRequest(c, "请求体须为 JSON 数组")
 		return
 	}
 	// 兼容「外层包了 { data: [...] }」的写法
@@ -313,11 +313,11 @@ func ImportBadWords(c *gin.Context) {
 	}
 	created, skipped, err := securitym.ImportBadWords(items)
 	if err != nil {
-		utils.InternalError(c, "导入失败："+err.Error())
+		infra.InternalError(c, "导入失败："+err.Error())
 		return
 	}
 	ReloadBadWords()
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"total":   len(items),
 		"created": created,
 		"skipped": skipped,
@@ -338,17 +338,17 @@ func TestBadWord(c *gin.Context) {
 		Text        string `json:"text"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请求参数错误")
+		infra.BadRequest(c, "请求参数错误")
 		return
 	}
 	if req.Pattern == "" {
-		utils.BadRequest(c, "违禁词不能为空")
+		infra.BadRequest(c, "违禁词不能为空")
 		return
 	}
 	matchType := normalizeBadWordMatchType(req.MatchType)
 	pattern := req.Pattern
 	if len(pattern) > security.MaxUserPatternLen {
-		utils.BadRequest(c, "正则长度超过 256 字节上限，请拆分多条规则")
+		infra.BadRequest(c, "正则长度超过 256 字节上限，请拆分多条规则")
 		return
 	}
 	if matchType == "literal" {
@@ -356,7 +356,7 @@ func TestBadWord(c *gin.Context) {
 	}
 	re, err := regexp.Compile(pattern)
 	if err != nil {
-		utils.BadRequest(c, "正则表达式无效: "+err.Error())
+		infra.BadRequest(c, "正则表达式无效: "+err.Error())
 		return
 	}
 	matches := re.FindAllString(req.Text, -1)
@@ -370,7 +370,7 @@ func TestBadWord(c *gin.Context) {
 	default: // mark：不改文本
 		result = req.Text
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"action":      action,
 		"result":      result,
 		"match_count": len(matches),
@@ -440,7 +440,7 @@ func ListBadWordFlags(c *gin.Context) {
 	}
 	flags, err := securitym.ListBadWordFlags(status, pageSize, (page-1)*pageSize)
 	if err != nil {
-		utils.InternalError(c, "获取标记列表失败")
+		infra.InternalError(c, "获取标记列表失败")
 		return
 	}
 	total, err := securitym.CountBadWordFlags(status)
@@ -459,7 +459,7 @@ func ListBadWordFlags(c *gin.Context) {
 		views = append(views, v)
 	}
 	pendingTotal, _ := securitym.CountBadWordFlags("pending")
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"items":         views,
 		"total":         total,
 		"page":          page,
@@ -479,7 +479,7 @@ func HandleBadWordFlag(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	flag, err := securitym.GetBadWordFlag(uint(id))
 	if err != nil {
-		utils.NotFound(c, "标记记录不存在")
+		infra.NotFound(c, "标记记录不存在")
 		return
 	}
 	var req struct {
@@ -488,7 +488,7 @@ func HandleBadWordFlag(c *gin.Context) {
 		DeleteContent bool   `json:"delete_content"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请求参数错误")
+		infra.BadRequest(c, "请求参数错误")
 		return
 	}
 	switch req.Status {
@@ -497,10 +497,10 @@ func HandleBadWordFlag(c *gin.Context) {
 		if req.DeleteContent {
 			if err := admingov.SoftDeleteContent(c, flag.ContentType, flag.ContentID, req.Note, "badword", "delete"); err != nil {
 				if err == admingov.ErrContentNotFound {
-					utils.NotFound(c, "对应内容不存在或已被删除")
+					infra.NotFound(c, "对应内容不存在或已被删除")
 					return
 				}
-				utils.InternalError(c, "删除内容失败: "+err.Error())
+				infra.InternalError(c, "删除内容失败: "+err.Error())
 				return
 			}
 		}
@@ -508,13 +508,13 @@ func HandleBadWordFlag(c *gin.Context) {
 	case "dismissed":
 		flag.Status = "dismissed"
 	default:
-		utils.BadRequest(c, "status 仅支持 confirmed / dismissed")
+		infra.BadRequest(c, "status 仅支持 confirmed / dismissed")
 		return
 	}
 	flag.Note = req.Note
 	if err := securitym.UpdateBadWordFlag(flag); err != nil {
-		utils.InternalError(c, "更新标记失败")
+		infra.InternalError(c, "更新标记失败")
 		return
 	}
-	utils.Success(c, flag)
+	infra.Success(c, flag)
 }

@@ -6,7 +6,7 @@ import (
 	"nvs-server/handlers/emergency"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,7 +37,7 @@ func collectDescendants(id uint, out *[]uint) {
 
 // GET /api/blog-categories — 公开分类树（含博客数）
 func ListBlogCategories(c *gin.Context) {
-	utils.Success(c, blogm.GetBlogCategoryTree())
+	infra.Success(c, blogm.GetBlogCategoryTree())
 }
 
 // GET /api/author/:id/blog-categories — 某作者的已公开分类树（个人专栏）
@@ -45,10 +45,10 @@ func ListBlogCategories(c *gin.Context) {
 func ListAuthorBlogCategories(c *gin.Context) {
 	author, err := apikey.ResolveUserKey(c.Param("id"))
 	if err != nil || author == nil {
-		utils.NotFound(c, "作者不存在")
+		infra.NotFound(c, "作者不存在")
 		return
 	}
-	utils.Success(c, blogm.GetAuthorCategoryTree(author.ID))
+	infra.Success(c, blogm.GetAuthorCategoryTree(author.ID))
 }
 
 // GET /api/blogs/like/status — 兼容：博客点赞状态（供详情页使用）
@@ -56,13 +56,13 @@ func ListAuthorBlogCategories(c *gin.Context) {
 func GetBlogLikes(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if id == 0 {
-		utils.BadRequest(c, "无效的博客ID")
+		infra.BadRequest(c, "无效的博客ID")
 		return
 	}
 	userID := hctx.CurrentUserID(c)
 	var count int64
 	models.DB.Model(&blogm.BlogLike{}).Where("blog_id = ?", id).Count(&count)
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"count": count,
 		"liked": blogm.UserLikedBlog(uint(id), userID),
 	})
@@ -73,22 +73,22 @@ func ToggleBlogLike(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if id == 0 {
-		utils.BadRequest(c, "无效的博客ID")
+		infra.BadRequest(c, "无效的博客ID")
 		return
 	}
 	blog, err := blogm.GetBlogByID(uint(id))
 	if err != nil {
-		utils.NotFound(c, "博客不存在")
+		infra.NotFound(c, "博客不存在")
 		return
 	}
 	liked, err := blogm.ToggleBlogLike(blog.ID, userID)
 	if err != nil {
-		utils.InternalError(c, "操作失败")
+		infra.InternalError(c, "操作失败")
 		return
 	}
 	var count int64
 	models.DB.Model(&blogm.BlogLike{}).Where("blog_id = ?", blog.ID).Count(&count)
-	utils.Success(c, gin.H{"liked": liked, "count": count})
+	infra.Success(c, gin.H{"liked": liked, "count": count})
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ func ToggleBlogLike(c *gin.Context) {
 // requireLogin 分类管理需要登录（作者/管理员均可）
 func requireLogin(c *gin.Context) bool {
 	if hctx.CurrentUserID(c) == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return false
 	}
 	return true
@@ -138,7 +138,7 @@ func ListMyBlogCategories(c *gin.Context) {
 			"full_name":     blogm.GetBlogCategoryName(m.ID),
 		})
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"platform": blogm.GetBlogCategoryTree(),
 		"mine":     mineItems,
 	})
@@ -156,26 +156,26 @@ func CreateBlogCategory(c *gin.Context) {
 		SortOrder int    `json:"sort_order"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请填写分类名称")
+		infra.BadRequest(c, "请填写分类名称")
 		return
 	}
 	req.Name = trimSpace(req.Name)
 	if req.Name == "" {
-		utils.BadRequest(c, "请填写分类名称")
+		infra.BadRequest(c, "请填写分类名称")
 		return
 	}
 	// 层级校验：最多三级（一级挂 0，二级挂一级，三级挂二级）；三级不能再挂子分类
 	if req.ParentID != 0 {
 		var p blogm.BlogCategory
 		if err := models.DB.First(&p, req.ParentID).Error; err != nil {
-			utils.BadRequest(c, "上级分类不存在")
+			infra.BadRequest(c, "上级分类不存在")
 			return
 		}
 		if p.ParentID != 0 {
 			// 父分类是二级/三级：检查其父级是否为一级（父=一级→当前为三级；父=二级→父已三级，拒绝）
 			var pp blogm.BlogCategory
 			if err := models.DB.First(&pp, p.ParentID).Error; err == nil && pp.ParentID != 0 {
-				utils.BadRequest(c, "分类最多支持三级，三级下不能再挂子分类")
+				infra.BadRequest(c, "分类最多支持三级，三级下不能再挂子分类")
 				return
 			}
 		}
@@ -183,7 +183,7 @@ func CreateBlogCategory(c *gin.Context) {
 	var cnt int64
 	models.DB.Model(&blogm.BlogCategory{}).Where("name = ? AND parent_id = ?", req.Name, req.ParentID).Count(&cnt)
 	if cnt > 0 {
-		utils.BadRequest(c, "同名分类已存在")
+		infra.BadRequest(c, "同名分类已存在")
 		return
 	}
 	// 状态：管理员创建直接通过；普通作者按站点审核模式
@@ -198,10 +198,10 @@ func CreateBlogCategory(c *gin.Context) {
 		CreatedBy: hctx.CurrentUserID(c), Status: status,
 	}
 	if err := models.DB.Create(cat).Error; err != nil {
-		utils.InternalError(c, "创建失败")
+		infra.InternalError(c, "创建失败")
 		return
 	}
-	utils.Success(c, cat)
+	infra.Success(c, cat)
 }
 
 // PUT /api/blog-categories/:id — 修改分类（改名 / 挂靠新父分类 / 排序）
@@ -213,11 +213,11 @@ func UpdateBlogCategory(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var cat blogm.BlogCategory
 	if err := models.DB.First(&cat, id).Error; err != nil {
-		utils.NotFound(c, "分类不存在")
+		infra.NotFound(c, "分类不存在")
 		return
 	}
 	if !canManageCategory(c, &cat) {
-		utils.Forbidden(c, "只能管理自己创建的分类")
+		infra.Forbidden(c, "只能管理自己创建的分类")
 		return
 	}
 	var req struct {
@@ -226,21 +226,21 @@ func UpdateBlogCategory(c *gin.Context) {
 		SortOrder *int   `json:"sort_order"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	updates := map[string]interface{}{}
 	if req.Name != "" {
 		name := trimSpace(req.Name)
 		if name == "" {
-			utils.BadRequest(c, "分类名称不能为空")
+			infra.BadRequest(c, "分类名称不能为空")
 			return
 		}
 		var cnt int64
 		models.DB.Model(&blogm.BlogCategory{}).
 			Where("name = ? AND parent_id = ? AND id <> ?", name, cat.ParentID, cat.ID).Count(&cnt)
 		if cnt > 0 {
-			utils.BadRequest(c, "同名分类已存在")
+			infra.BadRequest(c, "同名分类已存在")
 			return
 		}
 		updates["name"] = name
@@ -250,7 +250,7 @@ func UpdateBlogCategory(c *gin.Context) {
 		if req.ParentID != 0 {
 			var p blogm.BlogCategory
 			if err := models.DB.First(&p, req.ParentID).Error; err != nil {
-				utils.BadRequest(c, "上级分类不存在")
+				infra.BadRequest(c, "上级分类不存在")
 				return
 			}
 			// 目标父分类的深度决定新层级：父深度 ≥3 拒绝；若目标父分类已是三级，新分类会是四级
@@ -265,11 +265,11 @@ func UpdateBlogCategory(c *gin.Context) {
 				}
 			}
 			if parentDepth >= 3 {
-				utils.BadRequest(c, "分类最多支持三级，三级下不能再挂子分类")
+				infra.BadRequest(c, "分类最多支持三级，三级下不能再挂子分类")
 				return
 			}
 			if req.ParentID == cat.ID {
-				utils.BadRequest(c, "不能将分类挂到自己下面")
+				infra.BadRequest(c, "不能将分类挂到自己下面")
 				return
 			}
 			// 不能移到自己的子孙分类下（防止成环）
@@ -277,7 +277,7 @@ func UpdateBlogCategory(c *gin.Context) {
 			collectDescendants(cat.ID, &descendants)
 			for _, d := range descendants {
 				if req.ParentID == d {
-					utils.BadRequest(c, "不能将分类挂到自己的子分类下")
+					infra.BadRequest(c, "不能将分类挂到自己的子分类下")
 					return
 				}
 			}
@@ -288,15 +288,15 @@ func UpdateBlogCategory(c *gin.Context) {
 		updates["sort_order"] = *req.SortOrder
 	}
 	if len(updates) == 0 {
-		utils.BadRequest(c, "没有需要更新的内容")
+		infra.BadRequest(c, "没有需要更新的内容")
 		return
 	}
 	if err := models.DB.Model(&cat).Updates(updates).Error; err != nil {
-		utils.InternalError(c, "更新失败")
+		infra.InternalError(c, "更新失败")
 		return
 	}
 	models.DB.First(&cat, id)
-	utils.Success(c, cat)
+	infra.Success(c, cat)
 }
 
 // DELETE /api/blog-categories/:id — 删除分类（其下博客回到未分类；有子分类先删子分类）
@@ -308,23 +308,23 @@ func DeleteBlogCategory(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var cat blogm.BlogCategory
 	if err := models.DB.First(&cat, id).Error; err != nil {
-		utils.NotFound(c, "分类不存在")
+		infra.NotFound(c, "分类不存在")
 		return
 	}
 	if !canManageCategory(c, &cat) {
-		utils.Forbidden(c, "只能管理自己创建的分类")
+		infra.Forbidden(c, "只能管理自己创建的分类")
 		return
 	}
 	if blogm.BlogCategoryHasChildren(cat.ID) {
-		utils.BadRequest(c, "该分类下还有子分类，请先删除子分类")
+		infra.BadRequest(c, "该分类下还有子分类，请先删除子分类")
 		return
 	}
 	models.DB.Model(&blogm.AuthorBlog{}).Where("category_id = ?", cat.ID).Update("category_id", 0)
 	if err := models.DB.Delete(&cat).Error; err != nil {
-		utils.InternalError(c, "删除失败")
+		infra.InternalError(c, "删除失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已删除，该分类下的博客已回到未分类"})
+	infra.Success(c, gin.H{"message": "已删除，该分类下的博客已回到未分类"})
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -422,7 +422,7 @@ func AdminListBlogCategories(c *gin.Context) {
 		return groups[i].TotalCount > groups[j].TotalCount
 	})
 
-	utils.Success(c, gin.H{"list": list, "groups": groups})
+	infra.Success(c, gin.H{"list": list, "groups": groups})
 }
 
 // POST /api/admin/blog-categories/:id/review — 审核分类 { action: approve|reject, reason? }
@@ -433,7 +433,7 @@ func AdminReviewBlogCategory(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var cat blogm.BlogCategory
 	if err := models.DB.First(&cat, id).Error; err != nil {
-		utils.NotFound(c, "分类不存在")
+		infra.NotFound(c, "分类不存在")
 		return
 	}
 	var req struct {
@@ -441,7 +441,7 @@ func AdminReviewBlogCategory(c *gin.Context) {
 		Reason string `json:"reason"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	switch req.Action {
@@ -459,14 +459,14 @@ func AdminReviewBlogCategory(c *gin.Context) {
 		emergency.AuditEmergency(c, siteops.AuditContentDelete, "blog_category", cat.ID,
 			"管理员拒绝博客分类《"+cat.Name+"》："+cat.RejectReason)
 	default:
-		utils.BadRequest(c, "action 仅支持 approve / reject")
+		infra.BadRequest(c, "action 仅支持 approve / reject")
 		return
 	}
 	if err := models.DB.Save(&cat).Error; err != nil {
-		utils.InternalError(c, "操作失败")
+		infra.InternalError(c, "操作失败")
 		return
 	}
-	utils.Success(c, cat)
+	infra.Success(c, cat)
 }
 
 // GET /api/admin/blog-categories/mode — 获取博客分类审核模式
@@ -482,7 +482,7 @@ func AdminGetCategoryReviewMode(c *gin.Context) {
 	if mode == siteops.CategoryReviewModePreOpen {
 		label = "先公开（事后封禁）"
 	}
-	utils.Success(c, gin.H{"mode": mode, "label": label})
+	infra.Success(c, gin.H{"mode": mode, "label": label})
 }
 
 // PUT /api/admin/blog-categories/mode — 设置博客分类审核模式 { mode: post_review | pre_public }
@@ -494,15 +494,15 @@ func AdminSetCategoryReviewMode(c *gin.Context) {
 		Mode string `json:"mode" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.Mode != siteops.CategoryReviewModePost && req.Mode != siteops.CategoryReviewModePreOpen {
-		utils.BadRequest(c, "mode 仅支持 post_review（事后审核）/ pre_public（先公开）")
+		infra.BadRequest(c, "mode 仅支持 post_review（事后审核）/ pre_public（先公开）")
 		return
 	}
 	if err := siteops.SetSetting(siteops.CategoryReviewModeKey, req.Mode); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
 	label := "事后审核（通过后公开）"
@@ -511,7 +511,7 @@ func AdminSetCategoryReviewMode(c *gin.Context) {
 	}
 	emergency.AuditEmergency(c, siteops.AuditContentRestore, "blog_category", 0,
 		"管理员切换博客分类审核模式为："+label)
-	utils.Success(c, gin.H{"mode": req.Mode, "label": label})
+	infra.Success(c, gin.H{"mode": req.Mode, "label": label})
 }
 
 // FillBlogCategories 为博客列表填充分类名（含父级前缀）

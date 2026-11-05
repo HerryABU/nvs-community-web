@@ -1,13 +1,13 @@
 package collabhandler
 
 import (
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
 	"nvs-server/collab"
 	"nvs-server/middleware"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	social "nvs-server/models/social"
@@ -26,23 +26,23 @@ func isPlatform(c *gin.Context) bool {
 func List(c *gin.Context) {
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	novel, err := models.GetNovelByID(uint(novelID))
 	if err != nil {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return
 	}
 	actor := collab.ActorOf(uint(novelID), uid, middleware.UserRole(c))
 	if !actor.IsOwner && !actor.ActiveMember() && !actor.IsPlatform {
-		utils.Forbidden(c, "仅主笔或协作成员可查看")
+		infra.Forbidden(c, "仅主笔或协作成员可查看")
 		return
 	}
 	list, err := collab.List(uint(novelID), actor.IsOwner || actor.IsPlatform)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	// 主笔展示名（前端在列表里把主笔固定在第一位）
@@ -53,7 +53,7 @@ func List(c *gin.Context) {
 			ownerName = u.Username
 		}
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"list":       list,
 		"owner_id":   novel.AuthorID,
 		"owner_name": ownerName,
@@ -74,7 +74,7 @@ func List(c *gin.Context) {
 func Invite(c *gin.Context) {
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -83,59 +83,59 @@ func Invite(c *gin.Context) {
 		Role     string `json:"role"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	m, err := collab.Invite(uint(novelID), uid, req.Username, req.Role)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "邀请已发送，等待对方接受", m)
+	infra.SuccessMessage(c, "邀请已发送，等待对方接受", m)
 }
 
 // Update PUT /api/novels/:id/collaborators/:uid —— 角色/能力/分成/署名顺序
 func Update(c *gin.Context) {
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	target, _ := strconv.ParseUint(c.Param("uid"), 10, 64)
 	var in collab.UpdateInput
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := collab.Update(uint(novelID), uid, uint(target), in); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已保存", nil)
+	infra.SuccessMessage(c, "已保存", nil)
 }
 
 // Remove DELETE /api/novels/:id/collaborators/:uid
 func Remove(c *gin.Context) {
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	target, _ := strconv.ParseUint(c.Param("uid"), 10, 64)
 	if err := collab.Remove(uint(novelID), uid, uint(target)); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已移除（历史署名保留）", nil)
+	infra.SuccessMessage(c, "已移除（历史署名保留）", nil)
 }
 
 // Respond POST /api/collab/:novelId/respond { accept }
 func Respond(c *gin.Context) {
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	novelID, _ := strconv.ParseUint(c.Param("novelId"), 10, 64)
@@ -143,45 +143,45 @@ func Respond(c *gin.Context) {
 		Accept bool `json:"accept"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := collab.Respond(uint(novelID), uid, req.Accept); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	if req.Accept {
-		utils.SuccessMessage(c, "已接受邀请", nil)
+		infra.SuccessMessage(c, "已接受邀请", nil)
 		return
 	}
-	utils.SuccessMessage(c, "已拒绝邀请", nil)
+	infra.SuccessMessage(c, "已拒绝邀请", nil)
 }
 
 // Leave POST /api/collab/:novelId/leave —— 协作者主动退出
 func Leave(c *gin.Context) {
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	novelID, _ := strconv.ParseUint(c.Param("novelId"), 10, 64)
 	if err := collab.Leave(uint(novelID), uid); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已退出协作（历史署名保留）", nil)
+	infra.SuccessMessage(c, "已退出协作（历史署名保留）", nil)
 }
 
 // Invites GET /api/collab/invites —— 我收到的待接受邀请
 func Invites(c *gin.Context) {
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	list, err := collab.ListPendingByUser(uid)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	// 补作品标题
@@ -197,19 +197,19 @@ func Invites(c *gin.Context) {
 		}
 		out = append(out, vo)
 	}
-	utils.Success(c, gin.H{"list": out})
+	infra.Success(c, gin.H{"list": out})
 }
 
 // Works GET /api/collab/works —— 我参与协作的作品
 func Works(c *gin.Context) {
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	list, err := collab.ListActiveByUser(uid)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	type workVO struct {
@@ -246,7 +246,7 @@ func Works(c *gin.Context) {
 			OwnerName: ownerName, ChapterCnt: cnt,
 		})
 	}
-	utils.Success(c, gin.H{"list": out})
+	infra.Success(c, gin.H{"list": out})
 }
 
 // Transfer POST /api/novels/:id/transfer { to_user_id }
@@ -255,7 +255,7 @@ func Works(c *gin.Context) {
 func Transfer(c *gin.Context) {
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -263,14 +263,14 @@ func Transfer(c *gin.Context) {
 		ToUserID uint `json:"to_user_id"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil || in.ToUserID == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	role := middleware.UserRole(c)
 	isPlatform := role == social.RoleAdmin || role == social.RolePolice
 	if err := collab.Transfer(uint(novelID), uid, in.ToUserID, isPlatform); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "主笔已转让（原主笔保留编辑权限）", nil)
+	infra.SuccessMessage(c, "主笔已转让（原主笔保留编辑权限）", nil)
 }

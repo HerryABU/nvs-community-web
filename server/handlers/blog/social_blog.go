@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/sanitize"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -19,7 +21,6 @@ import (
 	"nvs-server/models"
 	"nvs-server/moderation"
 	"nvs-server/security"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	aihub "nvs-server/models/aihub"
@@ -70,12 +71,12 @@ func ImportBlogs(c *gin.Context) {
 
 	form, err := c.MultipartForm()
 	if err != nil {
-		utils.BadRequest(c, "请上传文件")
+		infra.BadRequest(c, "请上传文件")
 		return
 	}
 	files := form.File["files"]
 	if len(files) == 0 {
-		utils.BadRequest(c, "请至少上传一个文件")
+		infra.BadRequest(c, "请至少上传一个文件")
 		return
 	}
 	// 目标分类（可选）：导入后自动归入该分类（CSDN 式：导入时可指定专栏）
@@ -83,7 +84,7 @@ func ImportBlogs(c *gin.Context) {
 	if categoryID > 0 {
 		var cat blogm.BlogCategory
 		if err := models.DB.First(&cat, categoryID).Error; err != nil {
-			utils.BadRequest(c, "目标分类不存在")
+			infra.BadRequest(c, "目标分类不存在")
 			return
 		}
 	}
@@ -165,10 +166,10 @@ func ImportBlogs(c *gin.Context) {
 	}
 
 	if len(created) == 0 {
-		utils.BadRequest(c, "未能从上传文件中解析出任何博客内容")
+		infra.BadRequest(c, "未能从上传文件中解析出任何博客内容")
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"count":       len(created),
 		"skipped":     skipped,
 		"created":     created,
@@ -187,7 +188,7 @@ func CreateBlog(c *gin.Context) {
 	}
 	var req CreateBlogInput
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请填写博客标题和内容")
+		infra.BadRequest(c, "请填写博客标题和内容")
 		return
 	}
 
@@ -216,7 +217,7 @@ func CreateBlog(c *gin.Context) {
 		}
 	}
 	if err := blogm.CreateBlog(blog); err != nil {
-		utils.InternalError(c, "创建失败")
+		infra.InternalError(c, "创建失败")
 		return
 	}
 	// 发布流水记账（计入每日发文限额）
@@ -235,7 +236,7 @@ func CreateBlog(c *gin.Context) {
 	os.MkdirAll(authorDir, 0755)
 	contentPath := filepath.Join(authorDir, fmt.Sprintf("%d.md", blog.ID))
 	if err := os.WriteFile(contentPath, []byte(content), 0644); err != nil {
-		utils.InternalError(c, "写入文件失败")
+		infra.InternalError(c, "写入文件失败")
 		return
 	}
 
@@ -264,7 +265,7 @@ func CreateBlog(c *gin.Context) {
 		}
 	}
 
-	utils.Success(c, blog)
+	infra.Success(c, blog)
 }
 
 // 辅助：从文件系统加载博客内容
@@ -272,7 +273,7 @@ func loadBlogContent(blog *blogm.AuthorBlog) {
 	if blog.ContentPath == "" {
 		return
 	}
-	data, err := os.ReadFile(utils.ResolveContentPath(blog.ContentPath))
+	data, err := os.ReadFile(sanitize.ResolveContentPath(blog.ContentPath))
 	if err != nil {
 		return
 	}
@@ -293,11 +294,11 @@ func ListPublicBlogs(c *gin.Context) {
 		// 按标签筛选
 		ids, e := blogm.GetBlogIDsByTag(tag)
 		if e != nil {
-			utils.InternalError(c, "查询失败")
+			infra.InternalError(c, "查询失败")
 			return
 		}
 		if len(ids) == 0 {
-			utils.Success(c, gin.H{"list": []blogm.AuthorBlog{}, "total": 0})
+			infra.Success(c, gin.H{"list": []blogm.AuthorBlog{}, "total": 0})
 			return
 		}
 		blogs, total, err = blogm.ListBlogsByIDs(ids, uint(categoryID), page, pageSize)
@@ -305,19 +306,19 @@ func ListPublicBlogs(c *gin.Context) {
 		blogs, total, err = blogm.ListAllBlogs(uint(categoryID), page, pageSize)
 	}
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	FillBlogCategories(blogs)
 	blogm.FillBlogTags(blogs)
 	blogm.FillBlogTopics(blogs)
-	utils.Success(c, gin.H{"list": blogs, "total": total})
+	infra.Success(c, gin.H{"list": blogs, "total": total})
 }
 
 // GET /api/blog-tags — 全站标签云（按文章数降序）
 func ListBlogTags(c *gin.Context) {
 	cloud := blogm.GetBlogTagCloud(30)
-	utils.Success(c, cloud)
+	infra.Success(c, cloud)
 }
 
 // GET /api/blogs/:id — 获取博客详情
@@ -325,7 +326,7 @@ func GetBlog(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	blog, err := blogm.GetBlogByID(uint(id))
 	if err != nil {
-		utils.NotFound(c, "博客不存在")
+		infra.NotFound(c, "博客不存在")
 		return
 	}
 	loadBlogContent(blog)
@@ -336,7 +337,7 @@ func GetBlog(c *gin.Context) {
 	if blog.Author != nil {
 		blog.Author.Email = ""
 	}
-	utils.Success(c, blog)
+	infra.Success(c, blog)
 }
 
 // GET /api/author/:id/blogs/:blogId — 获取某作者的某篇博客详情（独立 URL）
@@ -344,18 +345,18 @@ func GetBlog(c *gin.Context) {
 func GetAuthorBlog(c *gin.Context) {
 	author, err := apikey.ResolveUserKey(c.Param("id"))
 	if err != nil || author == nil {
-		utils.NotFound(c, "作者不存在")
+		infra.NotFound(c, "作者不存在")
 		return
 	}
 	blogID, err := strconv.ParseUint(c.Param("blogId"), 10, 64)
 	if err != nil || blogID == 0 {
-		utils.BadRequest(c, "无效的博客ID")
+		infra.BadRequest(c, "无效的博客ID")
 		return
 	}
 
 	blog, err := blogm.GetBlogByID(uint(blogID))
 	if err != nil || blog.AuthorID != author.ID {
-		utils.NotFound(c, "博客不存在")
+		infra.NotFound(c, "博客不存在")
 		return
 	}
 
@@ -367,7 +368,7 @@ func GetAuthorBlog(c *gin.Context) {
 	if blog.Author != nil {
 		blog.Author.Email = ""
 	}
-	utils.Success(c, blog)
+	infra.Success(c, blog)
 }
 
 // GET /api/author/:id/blogs — 获取某作者的博客列表（支持 category_id 筛选）
@@ -375,7 +376,7 @@ func ListAuthorBlogs(c *gin.Context) {
 	// :id 兼容数字主键 id 与用户名（username）
 	author, err := apikey.ResolveUserKey(c.Param("id"))
 	if err != nil || author == nil {
-		utils.NotFound(c, "作者不存在")
+		infra.NotFound(c, "作者不存在")
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -392,7 +393,7 @@ func ListAuthorBlogs(c *gin.Context) {
 
 	blogs, total, err := blogm.GetBlogsByAuthorFilter(author.ID, cid, uint(excludeID), page, 10)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	FillBlogCategories(blogs)
@@ -403,7 +404,7 @@ func ListAuthorBlogs(c *gin.Context) {
 	}
 	blogm.FillBlogTags(blogs)
 	blogm.FillBlogTopics(blogs)
-	utils.Success(c, gin.H{"list": blogs, "total": total})
+	infra.Success(c, gin.H{"list": blogs, "total": total})
 }
 
 // PUT /api/blogs/:id — 更新博客
@@ -413,13 +414,13 @@ func UpdateBlog(c *gin.Context) {
 
 	blog, err := blogm.GetBlogByID(uint(id))
 	if err != nil || blog.AuthorID != userID {
-		utils.Forbidden(c, "无权编辑此博客")
+		infra.Forbidden(c, "无权编辑此博客")
 		return
 	}
 
 	var req UpdateBlogInput
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 
@@ -434,7 +435,7 @@ func UpdateBlog(c *gin.Context) {
 		var badHits []security.BadWordHit
 		content, badHits = badword.ProcessBadWords(raw, "blog")
 		if blog.ContentPath != "" {
-			os.WriteFile(utils.ResolveContentPath(blog.ContentPath), []byte(content), 0644)
+			os.WriteFile(sanitize.ResolveContentPath(blog.ContentPath), []byte(content), 0644)
 		}
 		contentHash := computeBlogHash(content)
 		blog.ContentHash = contentHash
@@ -455,7 +456,7 @@ func UpdateBlog(c *gin.Context) {
 		if cid > 0 {
 			var cat blogm.BlogCategory
 			if err := models.DB.First(&cat, cid).Error; err != nil {
-				utils.BadRequest(c, "分类不存在")
+				infra.BadRequest(c, "分类不存在")
 				return
 			}
 		}
@@ -465,21 +466,21 @@ func UpdateBlog(c *gin.Context) {
 	// 标签：仅当请求显式携带 tags 字段时同步（null 表示不修改）
 	if req.Tags != nil {
 		if err := blogm.SyncBlogTags(blog.ID, req.Tags); err != nil {
-			utils.InternalError(c, "标签保存失败")
+			infra.InternalError(c, "标签保存失败")
 			return
 		}
 	}
 	// 话题：仅当请求显式携带 topics 字段时同步
 	if req.Topics != nil {
 		if err := blogm.SyncBlogTopics(blog.ID, req.Topics); err != nil {
-			utils.InternalError(c, "话题保存失败")
+			infra.InternalError(c, "话题保存失败")
 			return
 		}
 	}
 
 	if len(updates) > 0 {
 		if err := models.DB.Model(blog).Updates(updates).Error; err != nil {
-			utils.InternalError(c, "更新失败")
+			infra.InternalError(c, "更新失败")
 			return
 		}
 	}
@@ -492,7 +493,7 @@ func UpdateBlog(c *gin.Context) {
 	blog.Category = blogm.GetBlogCategoryName(blog.CategoryID)
 	blog.Tags = blogm.GetBlogTags(blog.ID)
 	blog.Topics = blogm.GetBlogTopics(blog.ID)
-	utils.Success(c, blog)
+	infra.Success(c, blog)
 }
 
 // DELETE /api/blogs/:id — 删除博客
@@ -502,19 +503,19 @@ func DeleteBlog(c *gin.Context) {
 
 	blog, err := blogm.GetBlogByID(uint(id))
 	if err != nil || blog.AuthorID != userID {
-		utils.Forbidden(c, "无权删除此博客")
+		infra.Forbidden(c, "无权删除此博客")
 		return
 	}
 
 	// 合规留存：软删除，保留正文文件（不物理移除），审计可追溯原始内容
 	if err := blogm.DeleteBlog(uint(id)); err != nil {
-		utils.InternalError(c, "删除失败")
+		infra.InternalError(c, "删除失败")
 		return
 	}
 
 	// 标记为「用户自删」（区别于管理员封禁：deleted_by='admin'），回收站据此区分
 	_ = models.DB.Unscoped().Model(&blogm.AuthorBlog{}).Where("id = ?", id).Update("deleted_by", "user")
-	utils.Success(c, gin.H{"message": "已删除"})
+	infra.Success(c, gin.H{"message": "已删除"})
 }
 
 // BatchSetBlogCategory POST /api/blogs/batch-category — 批量设置博客分类（CSDN 式批量操作）
@@ -526,11 +527,11 @@ func BatchSetBlogCategory(c *gin.Context) {
 		CategoryID uint   `json:"category_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || len(req.IDs) == 0 {
-		utils.BadRequest(c, "请选择要操作的博客")
+		infra.BadRequest(c, "请选择要操作的博客")
 		return
 	}
 	if len(req.IDs) > 200 {
-		utils.BadRequest(c, "单次最多操作 200 篇")
+		infra.BadRequest(c, "单次最多操作 200 篇")
 		return
 	}
 	// 校验归属：只能操作自己的博客
@@ -538,20 +539,20 @@ func BatchSetBlogCategory(c *gin.Context) {
 	models.DB.Model(&blogm.AuthorBlog{}).
 		Where("id IN ? AND author_id = ?", req.IDs, userID).Count(&cnt)
 	if cnt != int64(len(req.IDs)) {
-		utils.Forbidden(c, "存在无权操作的博客")
+		infra.Forbidden(c, "存在无权操作的博客")
 		return
 	}
 	if req.CategoryID > 0 {
 		var cat blogm.BlogCategory
 		if err := models.DB.First(&cat, req.CategoryID).Error; err != nil {
-			utils.BadRequest(c, "分类不存在")
+			infra.BadRequest(c, "分类不存在")
 			return
 		}
 	}
 	if err := models.DB.Model(&blogm.AuthorBlog{}).
 		Where("id IN ?", req.IDs).Update("category_id", req.CategoryID).Error; err != nil {
-		utils.InternalError(c, "操作失败")
+		infra.InternalError(c, "操作失败")
 		return
 	}
-	utils.Success(c, gin.H{"updated": len(req.IDs), "category_id": req.CategoryID})
+	infra.Success(c, gin.H{"updated": len(req.IDs), "category_id": req.CategoryID})
 }

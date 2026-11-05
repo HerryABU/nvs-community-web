@@ -3,13 +3,13 @@ package aiadmin
 import (
 	"encoding/json"
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
 	"nvs-server/aiapi"
 	"nvs-server/aiapi/vendor"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	aim "nvs-server/models/ai"
@@ -27,7 +27,7 @@ func AdminPullAiModels(c *gin.Context) {
 		APIKey  string `json:"api_key"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	// 没填密钥 → 用该渠道已加密保存的模型密钥（站长不用每次粘贴一遍）
@@ -36,10 +36,10 @@ func AdminPullAiModels(c *gin.Context) {
 	}
 	sugs, err := aiapi.PullProviderModels(req.BaseURL, req.APIKey)
 	if err != nil {
-		utils.InternalError(c, "拉取失败："+err.Error())
+		infra.InternalError(c, "拉取失败："+err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"items": sugs})
+	infra.Success(c, gin.H{"items": sugs})
 }
 
 // AdminImportAiModels POST /api/admin/ai/models/import
@@ -61,11 +61,11 @@ func AdminImportAiModels(c *gin.Context) {
 		} `json:"items" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if len(req.Items) == 0 {
-		utils.BadRequest(c, "未选择任何模型")
+		infra.BadRequest(c, "未选择任何模型")
 		return
 	}
 	if strings.TrimSpace(req.APIKey) == "" {
@@ -122,7 +122,7 @@ func AdminImportAiModels(c *gin.Context) {
 		}
 		created++
 	}
-	utils.Success(c, gin.H{"created": created})
+	infra.Success(c, gin.H{"created": created})
 }
 
 // AdminSetModelVisibility POST /api/admin/ai/models/:id/visibility
@@ -136,16 +136,16 @@ func AdminSetModelVisibility(c *gin.Context) {
 		UserVisible bool `json:"user_visible"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	uv := req.UserVisible
 	if err := models.DB.Model(&aim.AiModel{}).Where("id = ?", id).
 		Updates(map[string]interface{}{"user_visible": &uv}).Error; err != nil {
-		utils.InternalError(c, "操作失败")
+		infra.InternalError(c, "操作失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已更新可见性"})
+	infra.Success(c, gin.H{"message": "已更新可见性"})
 }
 
 // AdminMergeModels POST /api/admin/ai/models/merge
@@ -159,15 +159,15 @@ func AdminMergeModels(c *gin.Context) {
 		Channel string `json:"channel" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := models.DB.Model(&aim.AiModel{}).Where("id IN ?", req.IDs).
 		Update("channel", req.Channel).Error; err != nil {
-		utils.InternalError(c, "合并失败")
+		infra.InternalError(c, "合并失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已合并到渠道 " + req.Channel})
+	infra.Success(c, gin.H{"message": "已合并到渠道 " + req.Channel})
 }
 
 // AdminSplitModels POST /api/admin/ai/models/split
@@ -180,15 +180,15 @@ func AdminSplitModels(c *gin.Context) {
 		IDs []uint `json:"ids" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := models.DB.Model(&aim.AiModel{}).Where("id IN ?", req.IDs).
 		Update("channel", "").Error; err != nil {
-		utils.InternalError(c, "拆分失败")
+		infra.InternalError(c, "拆分失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已拆分（清除渠道分组）"})
+	infra.Success(c, gin.H{"message": "已拆分（清除渠道分组）"})
 }
 
 // mustJSONStr 把字符串切片序列化为 JSON 数组字符串（分类标签落库）。

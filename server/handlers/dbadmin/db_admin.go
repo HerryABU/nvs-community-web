@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"io"
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -16,7 +17,6 @@ import (
 
 	"nvs-server/config"
 	"nvs-server/models"
-	"nvs-server/utils"
 	"nvs-server/version"
 
 	"github.com/gin-gonic/gin"
@@ -121,15 +121,15 @@ func AdminDBHealth(c *gin.Context) {
 	}
 
 	redisStatus := "disabled"
-	if utils.RedisClient != nil {
-		if _, err := utils.RedisClient.Ping(context.Background()).Result(); err == nil {
+	if infra.RedisClient != nil {
+		if _, err := infra.RedisClient.Ping(context.Background()).Result(); err == nil {
 			redisStatus = "ok"
 		} else {
 			redisStatus = "error: " + err.Error()
 		}
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"status":       dbStatus,
 		"driver":       dbDriver,
 		"redis":        redisStatus,
@@ -164,7 +164,7 @@ func AdminDBCurrent(c *gin.Context) {
 	if driver == "sqlite" {
 		host, port, user, name = "", "", "", ""
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"driver": driver,
 		"host":   host,
 		"port":   port,
@@ -182,22 +182,22 @@ func AdminDBMigrate(c *gin.Context) {
 	}
 	var req models.DBConfig
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请求参数错误")
+		infra.BadRequest(c, "请求参数错误")
 		return
 	}
 	req.Driver = strings.ToLower(strings.TrimSpace(req.Driver))
 	if req.Driver != "sqlite" && req.Driver != "mysql" {
-		utils.BadRequest(c, "目标驱动仅支持 sqlite 或 mysql")
+		infra.BadRequest(c, "目标驱动仅支持 sqlite 或 mysql")
 		return
 	}
 	if req.Driver == "mysql" && req.Name == "" {
-		utils.BadRequest(c, "MySQL 数据库名不能为空")
+		infra.BadRequest(c, "MySQL 数据库名不能为空")
 		return
 	}
 
 	job := newJob("migrate")
 	go runMigrationJob(job, req)
-	utils.Success(c, gin.H{"job_id": job.ID})
+	infra.Success(c, gin.H{"job_id": job.ID})
 }
 
 func runMigrationJob(job *dbJob, cfg models.DBConfig) {
@@ -247,9 +247,9 @@ func runMigrationJob(job *dbJob, cfg models.DBConfig) {
 
 	// 5. MySQL 模式重连 Redis，SQLite 模式禁用 Redis
 	if cfg.Driver == "mysql" {
-		utils.ConnectRedis(config.RedisHost, config.RedisPort, config.RedisPassword, config.RedisDB)
+		infra.ConnectRedis(config.RedisHost, config.RedisPort, config.RedisPassword, config.RedisDB)
 	} else {
-		utils.RedisClient = nil
+		infra.RedisClient = nil
 	}
 
 	finishJob(job, "done", "迁移完成，已切换到 "+cfg.Driver)
@@ -273,7 +273,7 @@ func AdminDBBackup(c *gin.Context) {
 		finishJob(job, "done", "备份完成")
 		job.Detail = map[string]interface{}{"path": path, "rows": rows}
 	}()
-	utils.Success(c, gin.H{"job_id": job.ID})
+	infra.Success(c, gin.H{"job_id": job.ID})
 }
 
 // GET /api/admin/db/job/:id — 查询后台任务进度
@@ -283,10 +283,10 @@ func AdminDBJob(c *gin.Context) {
 	}
 	job := getJob(c.Param("id"))
 	if job == nil {
-		utils.NotFound(c, "任务不存在")
+		infra.NotFound(c, "任务不存在")
 		return
 	}
-	utils.Success(c, job)
+	infra.Success(c, job)
 }
 
 // GET /api/admin/db/backups — 备份列表
@@ -296,10 +296,10 @@ func AdminDBListBackups(c *gin.Context) {
 	}
 	files, err := siteops.ListBackups()
 	if err != nil {
-		utils.InternalError(c, "读取备份列表失败: "+err.Error())
+		infra.InternalError(c, "读取备份列表失败: "+err.Error())
 		return
 	}
-	utils.Success(c, files)
+	infra.Success(c, files)
 }
 
 // DELETE /api/admin/db/backups/:name — 删除备份
@@ -309,10 +309,10 @@ func AdminDBDeleteBackup(c *gin.Context) {
 	}
 	name := c.Param("name")
 	if err := siteops.DeleteBackup(name); err != nil {
-		utils.InternalError(c, "删除失败: "+err.Error())
+		infra.InternalError(c, "删除失败: "+err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已删除", nil)
+	infra.SuccessMessage(c, "已删除", nil)
 }
 
 // GET /api/admin/db/backups/:name/download — 下载备份
@@ -322,11 +322,11 @@ func AdminDBDownloadBackup(c *gin.Context) {
 	}
 	p, err := siteops.BackupPath(c.Param("name"))
 	if err != nil {
-		utils.BadRequest(c, "非法文件名")
+		infra.BadRequest(c, "非法文件名")
 		return
 	}
 	if _, err := os.Stat(p); err != nil {
-		utils.NotFound(c, "备份不存在")
+		infra.NotFound(c, "备份不存在")
 		return
 	}
 	c.FileAttachment(p, filepath.Base(p))
@@ -341,20 +341,20 @@ func AdminDBRestore(c *gin.Context) {
 		Name string `json:"name"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.Name == "" {
-		utils.BadRequest(c, "请指定备份文件名")
+		infra.BadRequest(c, "请指定备份文件名")
 		return
 	}
 	if config.DBDriver != "sqlite" {
-		utils.BadRequest(c, "当前为 MySQL，仅支持恢复 SQLite 备份文件")
+		infra.BadRequest(c, "当前为 MySQL，仅支持恢复 SQLite 备份文件")
 		return
 	}
 	p, err := siteops.BackupPath(req.Name)
 	if err != nil {
-		utils.BadRequest(c, "非法文件名")
+		infra.BadRequest(c, "非法文件名")
 		return
 	}
 	if _, err := os.Stat(p); err != nil {
-		utils.NotFound(c, "备份不存在")
+		infra.NotFound(c, "备份不存在")
 		return
 	}
 
@@ -378,7 +378,7 @@ func AdminDBRestore(c *gin.Context) {
 		}
 		finishJob(job, "done", "恢复完成")
 	}()
-	utils.Success(c, gin.H{"job_id": job.ID})
+	infra.Success(c, gin.H{"job_id": job.ID})
 }
 
 func CopyFile(src, dst string) error {
@@ -413,7 +413,7 @@ func AdminDBBackupConfigGet(c *gin.Context) {
 			interval = n
 		}
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"enabled":     enabled,
 		"interval":    interval,
 		"last_backup": models.GetPlatformConfig("backup_last_at"),
@@ -430,7 +430,7 @@ func AdminDBBackupConfigPut(c *gin.Context) {
 		Interval *int  `json:"interval"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请求参数错误")
+		infra.BadRequest(c, "请求参数错误")
 		return
 	}
 	if req.Enabled != nil {
@@ -438,10 +438,10 @@ func AdminDBBackupConfigPut(c *gin.Context) {
 	}
 	if req.Interval != nil {
 		if *req.Interval <= 0 {
-			utils.BadRequest(c, "备份间隔必须大于 0 小时")
+			infra.BadRequest(c, "备份间隔必须大于 0 小时")
 			return
 		}
 		_ = models.SetPlatformConfig("backup_interval_hours", strconv.Itoa(*req.Interval))
 	}
-	utils.SuccessMessage(c, "已保存", nil)
+	infra.SuccessMessage(c, "已保存", nil)
 }

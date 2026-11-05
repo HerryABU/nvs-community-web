@@ -3,13 +3,14 @@ package auth
 import (
 	"errors"
 	"log"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/secure"
 	"strings"
 
 	"nvs-server/gate"
 	"nvs-server/middleware"
 	"nvs-server/models"
 	"nvs-server/security/slidecaptcha"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -32,7 +33,7 @@ type RegisterInput struct {
 func Register(c *gin.Context) {
 	var input RegisterInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		utils.BadRequest(c, "参数错误: "+err.Error())
+		infra.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
 
@@ -40,7 +41,7 @@ func Register(c *gin.Context) {
 	input.Email = strings.TrimSpace(strings.ToLower(input.Email))
 
 	if !input.AgreeToGuidelines {
-		utils.BadRequest(c, "请同意平台指南")
+		infra.BadRequest(c, "请同意平台指南")
 		return
 	}
 
@@ -48,7 +49,7 @@ func Register(c *gin.Context) {
 	// 否则直接拒绝，堵死「裸调 register」绕过滑块的通道。
 	if models.IsCaptchaEnabled() {
 		if input.CaptchaToken == "" || !slidecaptcha.VerifyPassToken(input.CaptchaToken) {
-			utils.Forbidden(c, "请先完成滑块验证后再注册")
+			infra.Forbidden(c, "请先完成滑块验证后再注册")
 			return
 		}
 	}
@@ -58,44 +59,44 @@ func Register(c *gin.Context) {
 	if gerr := gate.CanRegister(gate.RegisterInput{
 		IP: c.ClientIP(), DeviceID: deviceID, Email: input.Email, Invite: input.InviteCode,
 	}); gerr != nil {
-		utils.Forbidden(c, gerr.Error())
+		infra.Forbidden(c, gerr.Error())
 		return
 	}
 
 	// 邮箱域名黑白名单校验（黑名单禁止、白名单放行）
 	if allowed, reason := models.CheckEmailDomainAllowed(input.Email); !allowed {
-		utils.BadRequest(c, reason)
+		infra.BadRequest(c, reason)
 		return
 	}
 
 	// 邮箱验证码校验（站长开启邮箱验证时强制）
 	if models.GetPlatformConfig("email_verify") == "true" {
 		if input.VerifyCode == "" {
-			utils.BadRequest(c, "请输入邮箱验证码")
+			infra.BadRequest(c, "请输入邮箱验证码")
 			return
 		}
-		if !utils.VerifyCode(input.Email, input.VerifyCode) {
-			utils.BadRequest(c, "邮箱验证码错误或已过期")
+		if !infra.VerifyCode(input.Email, input.VerifyCode) {
+			infra.BadRequest(c, "邮箱验证码错误或已过期")
 			return
 		}
-		utils.DeleteVerificationCode(input.Email)
+		infra.DeleteVerificationCode(input.Email)
 	}
 
 	// 检查邮箱是否已注册
 	existing, err := models.GetUserByEmail(input.Email)
 	if err == nil && existing != nil {
-		utils.BadRequest(c, "该邮箱已被注册")
+		infra.BadRequest(c, "该邮箱已被注册")
 		return
 	}
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		utils.InternalError(c, "服务器错误")
+		infra.InternalError(c, "服务器错误")
 		return
 	}
 
 	// 哈希密码
-	hash, err := utils.HashPassword(input.Password)
+	hash, err := secure.HashPassword(input.Password)
 	if err != nil {
-		utils.InternalError(c, "密码处理失败")
+		infra.InternalError(c, "密码处理失败")
 		return
 	}
 
@@ -116,10 +117,10 @@ func Register(c *gin.Context) {
 
 	if err := models.CreateUser(user); err != nil {
 		if strings.Contains(err.Error(), "Duplicate") {
-			utils.BadRequest(c, "用户名或邮箱已被注册")
+			infra.BadRequest(c, "用户名或邮箱已被注册")
 			return
 		}
-		utils.InternalError(c, "注册失败")
+		infra.InternalError(c, "注册失败")
 		return
 	}
 
@@ -127,7 +128,7 @@ func Register(c *gin.Context) {
 	if cfg := gate.Load(); cfg.Enabled && cfg.RequireInvite && input.InviteCode != "" {
 		if uerr := gate.UseInvite(nil, input.InviteCode); uerr != nil {
 			_ = models.DB.Unscoped().Delete(&models.User{}, user.ID).Error
-			utils.BadRequest(c, "邀请码无效或已用尽")
+			infra.BadRequest(c, "邀请码无效或已用尽")
 			return
 		}
 	}
@@ -140,16 +141,16 @@ func Register(c *gin.Context) {
 	// 生成访问令牌 + 刷新令牌，均写入 HttpOnly Cookie
 	// 🔒 令牌绑定 + 刷新令牌 JTI 轮换（同登录流程，防 JWT/刷新令牌窃取盗用）
 	fp := c.GetHeader(middleware.DeviceFingerprintHeader)
-	region := utils.RegionForBinding(c.ClientIP())
-	accessToken, err := utils.GenerateToken(user.ID, user.Email, user.Role, fp, region)
+	region := secure.RegionForBinding(c.ClientIP())
+	accessToken, err := secure.GenerateToken(user.ID, user.Email, user.Role, fp, region)
 	if err != nil {
-		utils.InternalError(c, "Token 生成失败")
+		infra.InternalError(c, "Token 生成失败")
 		return
 	}
-	jti := utils.RandomJTI()
-	refreshToken, err := utils.GenerateRefreshToken(user.ID, user.Email, user.Role, jti)
+	jti := secure.RandomJTI()
+	refreshToken, err := secure.GenerateRefreshToken(user.ID, user.Email, user.Role, jti)
 	if err != nil {
-		utils.InternalError(c, "Refresh Token 生成失败")
+		infra.InternalError(c, "Refresh Token 生成失败")
 		return
 	}
 	if err := siteops.SetRefreshState(user.ID, jti); err != nil {
@@ -158,7 +159,7 @@ func Register(c *gin.Context) {
 	middleware.SetTokenCookie(c, accessToken)
 	middleware.SetRefreshCookie(c, refreshToken)
 
-	utils.SuccessMessage(c, "注册成功", gin.H{
+	infra.SuccessMessage(c, "注册成功", gin.H{
 		"user": user,
 	})
 }

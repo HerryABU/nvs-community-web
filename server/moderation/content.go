@@ -1,13 +1,13 @@
 package moderation
 
 import (
+	"nvs-server/utils/sanitize"
 	"os"
 	"strings"
 
 	"nvs-server/models"
 	"nvs-server/models/blog"
 	"nvs-server/scriptmode"
-	"nvs-server/utils"
 )
 
 // ResolveContent 从内容源抽取待审纯文本。返回 (text, found)。
@@ -124,7 +124,7 @@ func readTextFile(path string) string {
 	if path == "" {
 		return ""
 	}
-	b, err := os.ReadFile(utils.ResolveContentPath(path))
+	b, err := os.ReadFile(sanitize.ResolveContentPath(path))
 	if err != nil {
 		return ""
 	}

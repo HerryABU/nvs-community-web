@@ -6,7 +6,7 @@ import (
 	"nvs-server/handlers/admingov"
 	"nvs-server/handlers/hctx"
 	"nvs-server/moderation"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
@@ -20,10 +20,10 @@ func GetModerationConfig(c *gin.Context) {
 	}
 	cfg, err := moderation.GetConfig()
 	if err != nil {
-		utils.InternalError(c, "读取配置失败")
+		infra.InternalError(c, "读取配置失败")
 		return
 	}
-	utils.Success(c, cfg)
+	infra.Success(c, cfg)
 }
 
 // SaveModerationConfig PUT /api/admin/moderation/config
@@ -33,7 +33,7 @@ func SaveModerationConfig(c *gin.Context) {
 	}
 	var cfg moderation.ModerationConfig
 	if err := c.ShouldBindJSON(&cfg); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if cfg.BatchIntervalHours <= 0 {
@@ -49,10 +49,10 @@ func SaveModerationConfig(c *gin.Context) {
 		cfg.StopReviewAfter = 20
 	}
 	if err := moderation.SaveConfig(&cfg); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, cfg)
+	infra.Success(c, cfg)
 }
 
 // ListModerationRecords GET /api/admin/moderation/records
@@ -72,10 +72,10 @@ func ListModerationRecords(c *gin.Context) {
 	}
 	list, total, err := moderation.ListRecords(f)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"items": list, "total": total, "page": f.Page})
+	infra.Success(c, gin.H{"items": list, "total": total, "page": f.Page})
 }
 
 // moderationSoftDelType 审核作用域 → 软删留证类型。
@@ -106,12 +106,12 @@ func DecideModerationRecord(c *gin.Context) {
 		Reason string `json:"reason"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	rec, err := moderation.GetRecord(uint(id))
 	if err != nil {
-		utils.NotFound(c, "审核记录不存在")
+		infra.NotFound(c, "审核记录不存在")
 		return
 	}
 	reason := strings.TrimSpace(req.Reason)
@@ -121,7 +121,7 @@ func DecideModerationRecord(c *gin.Context) {
 	case moderation.ActionDelete, moderation.ActionBan:
 		ctype, ok := moderationSoftDelType(rec.Scope)
 		if !ok {
-			utils.BadRequest(c, "该内容类型不支持自动处置，请到对应页面处理")
+			infra.BadRequest(c, "该内容类型不支持自动处置，请到对应页面处理")
 			return
 		}
 		if reason == "" {
@@ -129,21 +129,21 @@ func DecideModerationRecord(c *gin.Context) {
 		}
 		if err := admingov.SoftDeleteContent(c, ctype, rec.TargetID, reason, "moderation", req.Action); err != nil {
 			if errors.Is(err, admingov.ErrContentNotFound) {
-				utils.NotFound(c, "目标内容不存在（可能已被删除或封禁）")
+				infra.NotFound(c, "目标内容不存在（可能已被删除或封禁）")
 				return
 			}
-			utils.InternalError(c, "处置失败："+err.Error())
+			infra.InternalError(c, "处置失败："+err.Error())
 			return
 		}
 	default:
-		utils.BadRequest(c, "action 只能是 pass / delete / ban")
+		infra.BadRequest(c, "action 只能是 pass / delete / ban")
 		return
 	}
 	if err := moderation.MarkReviewed(rec.ID, req.Action, reason, hctx.CurrentUserID(c)); err != nil {
-		utils.InternalError(c, "保存处置结果失败")
+		infra.InternalError(c, "保存处置结果失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已处置", "action": req.Action})
+	infra.Success(c, gin.H{"message": "已处置", "action": req.Action})
 }
 
 // RegisterModerationHooks 把 moderation 的「违规自动处置」接到软删留证。
@@ -168,10 +168,10 @@ func RunModerationBatch(c *gin.Context) {
 	}
 	n, err := moderation.RunBatchOnce()
 	if err != nil {
-		utils.InternalError(c, "批量审核失败")
+		infra.InternalError(c, "批量审核失败")
 		return
 	}
-	utils.Success(c, gin.H{"reviewed": n})
+	infra.Success(c, gin.H{"reviewed": n})
 }
 
 // GetModerationStats GET /api/admin/moderation/stats
@@ -181,10 +181,10 @@ func GetModerationStats(c *gin.Context) {
 	}
 	s, err := moderation.GetStats()
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, s)
+	infra.Success(c, s)
 }
 
 // ListMaliciousReporters GET /api/admin/moderation/malicious
@@ -194,10 +194,10 @@ func ListMaliciousReporters(c *gin.Context) {
 	}
 	list, err := moderation.ListMaliciousReporters()
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, list)
+	infra.Success(c, list)
 }
 
 // UnbanReporter POST /api/admin/moderation/malicious/:id/unban
@@ -207,8 +207,8 @@ func UnbanReporter(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := moderation.UnbanReporter(uint(id)); err != nil {
-		utils.InternalError(c, "操作失败")
+		infra.InternalError(c, "操作失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已恢复举报功能"})
+	infra.Success(c, gin.H{"message": "已恢复举报功能"})
 }

@@ -3,11 +3,11 @@ package grouphandler
 import (
 	"nvs-server/groups"
 	"nvs-server/middleware"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -29,7 +29,7 @@ type groupViewCtx struct {
 func loadGroupCtx(c *gin.Context, groupID uint) (*groupViewCtx, bool) {
 	g, err := groups.GetGroup(groupID)
 	if err != nil {
-		utils.NotFound(c, "群组不存在")
+		infra.NotFound(c, "群组不存在")
 		return nil, false
 	}
 	uid := middleware.UserID(c)
@@ -41,7 +41,7 @@ func loadGroupCtx(c *gin.Context, groupID uint) (*groupViewCtx, bool) {
 	}
 	ctx.CanRead = groups.CanReadGroupContent(g, ctx.Role, ctx.Status)
 	if g.Status == groups.GroupStatusBanned && !ctx.IsAdmin {
-		utils.NotFound(c, "群组不存在")
+		infra.NotFound(c, "群组不存在")
 		return nil, false
 	}
 	// 半公开/私密：非成员不暴露邀请码与内部数据
@@ -56,7 +56,7 @@ func loadGroupCtx(c *gin.Context, groupID uint) (*groupViewCtx, bool) {
 func requireGroupLogin(c *gin.Context) (uint, bool) {
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return 0, false
 	}
 	return uid, true
@@ -65,7 +65,7 @@ func requireGroupLogin(c *gin.Context) (uint, bool) {
 // GroupList GET /api/groups?scope=discover|my&category=&q=&page=
 func GroupList(c *gin.Context) {
 	if err := groups.CheckGroupEnabled(); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	scope := strings.TrimSpace(c.DefaultQuery("scope", "discover"))
@@ -76,10 +76,10 @@ func GroupList(c *gin.Context) {
 		}
 		list, err := groups.ListMyGroups(uid)
 		if err != nil {
-			utils.InternalError(c, "查询失败")
+			infra.InternalError(c, "查询失败")
 			return
 		}
-		utils.Success(c, gin.H{"list": list, "total": len(list), "categories": groups.GroupCategoryList()})
+		infra.Success(c, gin.H{"list": list, "total": len(list), "categories": groups.GroupCategoryList()})
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -92,10 +92,10 @@ func GroupList(c *gin.Context) {
 	}
 	list, total, err := groups.ListDiscoverGroups(middleware.UserID(c), c.Query("category"), c.Query("q"), page, size)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"list": list, "total": total, "page": page, "size": size,
 		"categories": groups.GroupCategoryList(),
 	})
@@ -104,7 +104,7 @@ func GroupList(c *gin.Context) {
 // GroupCreate POST /api/groups
 func GroupCreate(c *gin.Context) {
 	if err := groups.CheckGroupEnabled(); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	uid, ok := requireGroupLogin(c)
@@ -113,20 +113,20 @@ func GroupCreate(c *gin.Context) {
 	}
 	user, err := models.GetUserByID(uid)
 	if err != nil {
-		utils.Unauthorized(c, "用户不存在")
+		infra.Unauthorized(c, "用户不存在")
 		return
 	}
 	var req groupInputReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	g, cerr := groups.CreateGroup(uid, user, req.toInput())
 	if cerr != nil {
-		utils.BadRequest(c, cerr.Error())
+		infra.BadRequest(c, cerr.Error())
 		return
 	}
-	utils.SuccessMessage(c, "群组已创建", gin.H{"group": g})
+	infra.SuccessMessage(c, "群组已创建", gin.H{"group": g})
 }
 
 // groupInputReq 建群/改设置请求体
@@ -158,7 +158,7 @@ func (r groupInputReq) toInput() groups.GroupInput {
 // GroupDetail GET /api/groups/:id —— 详情（非成员只看简介；半公开/私密不返回帖子正文）
 func GroupDetail(c *gin.Context) {
 	if err := groups.CheckGroupEnabled(); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	gid, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -196,7 +196,7 @@ func GroupDetail(c *gin.Context) {
 			"owner":  ctx.Role == groups.GroupRoleOwner,
 		}
 	}
-	utils.Success(c, out)
+	infra.Success(c, out)
 }
 
 // GroupUpdate PUT /api/groups/:id —— 群主/管理员改设置
@@ -208,14 +208,14 @@ func GroupUpdate(c *gin.Context) {
 	}
 	var req groupInputReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := groups.UpdateGroupSettings(uint(gid), uid, middleware.UserRole(c), req.toInput()); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已保存", nil)
+	infra.SuccessMessage(c, "已保存", nil)
 }
 
 // GroupDissolve DELETE /api/groups/:id —— 群主解散（软删除）
@@ -227,24 +227,24 @@ func GroupDissolve(c *gin.Context) {
 	}
 	g, err := groups.GetGroup(uint(gid))
 	if err != nil {
-		utils.NotFound(c, "群组不存在")
+		infra.NotFound(c, "群组不存在")
 		return
 	}
 	if g.OwnerID != uid && !groups.IsGroupPlatformAdmin(middleware.UserRole(c)) {
-		utils.Forbidden(c, "仅群主可解散群组")
+		infra.Forbidden(c, "仅群主可解散群组")
 		return
 	}
 	if err := models.DB.Delete(&groups.Group{}, g.ID).Error; err != nil {
-		utils.InternalError(c, "解散失败")
+		infra.InternalError(c, "解散失败")
 		return
 	}
-	utils.SuccessMessage(c, "群组已解散", nil)
+	infra.SuccessMessage(c, "群组已解散", nil)
 }
 
 // GroupJoin POST /api/groups/:id/join { code?: 邀请码或群号 }
 func GroupJoin(c *gin.Context) {
 	if err := groups.CheckGroupEnabled(); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	uid, ok := requireGroupLogin(c)
@@ -253,13 +253,13 @@ func GroupJoin(c *gin.Context) {
 	}
 	user, err := models.GetUserByID(uid)
 	if err != nil {
-		utils.Unauthorized(c, "用户不存在")
+		infra.Unauthorized(c, "用户不存在")
 		return
 	}
 	gid, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	g, gerr := groups.GetGroup(uint(gid))
 	if gerr != nil {
-		utils.NotFound(c, "群组不存在")
+		infra.NotFound(c, "群组不存在")
 		return
 	}
 	var req struct {
@@ -268,7 +268,7 @@ func GroupJoin(c *gin.Context) {
 	_ = c.ShouldBindJSON(&req)
 	status, jerr := groups.JoinGroup(g, user, req.Code)
 	if jerr != nil {
-		utils.BadRequest(c, jerr.Error())
+		infra.BadRequest(c, jerr.Error())
 		return
 	}
 	msg := "已加入群组"
@@ -277,14 +277,14 @@ func GroupJoin(c *gin.Context) {
 	} else {
 		groups.RefreshGroupCounts(g.ID)
 	}
-	utils.SuccessMessage(c, msg, gin.H{"status": status})
+	infra.SuccessMessage(c, msg, gin.H{"status": status})
 }
 
 // GroupJoinByNo POST /api/groups/join { group_no?, code? } —— 按群号 / 邀请码加入
 // 路由刻意不用 /groups/by-no，避免与 /groups/:id 的通配段冲突（gin httprouter 限制）。
 func GroupJoinByNo(c *gin.Context) {
 	if err := groups.CheckGroupEnabled(); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	uid, ok := requireGroupLogin(c)
@@ -293,7 +293,7 @@ func GroupJoinByNo(c *gin.Context) {
 	}
 	user, err := models.GetUserByID(uid)
 	if err != nil {
-		utils.Unauthorized(c, "用户不存在")
+		infra.Unauthorized(c, "用户不存在")
 		return
 	}
 	var req struct {
@@ -301,12 +301,12 @@ func GroupJoinByNo(c *gin.Context) {
 		Code    string `json:"code"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	key := strings.TrimSpace(req.GroupNo)
 	if key == "" {
-		utils.BadRequest(c, "请输入群号或邀请码")
+		infra.BadRequest(c, "请输入群号或邀请码")
 		return
 	}
 	// 群号优先；纯数字当群号，否则当邀请码
@@ -324,26 +324,26 @@ func GroupJoinByNo(c *gin.Context) {
 		}
 	}
 	if g == nil {
-		utils.NotFound(c, "未找到该群组（群号或邀请码有误）")
+		infra.NotFound(c, "未找到该群组（群号或邀请码有误）")
 		return
 	}
 	status, jerr := groups.JoinGroup(g, user, req.Code)
 	if jerr != nil {
-		utils.BadRequest(c, jerr.Error())
+		infra.BadRequest(c, jerr.Error())
 		return
 	}
 	msg := "已加入群组"
 	if status == groups.GroupMemberPending {
 		msg = "申请已提交，等待群主审核"
 	}
-	utils.SuccessMessage(c, msg, gin.H{"status": status, "group": g})
+	infra.SuccessMessage(c, msg, gin.H{"status": status, "group": g})
 }
 
 // GroupSearchByNo GET /api/groups/search?no=1234567 —— 扫码/输入群号后先预览
 func GroupSearchByNo(c *gin.Context) {
 	no := strings.TrimSpace(c.Query("no"))
 	if no == "" {
-		utils.BadRequest(c, "请输入群号")
+		infra.BadRequest(c, "请输入群号")
 		return
 	}
 	g, err := groups.GetGroupByNo(no)
@@ -351,7 +351,7 @@ func GroupSearchByNo(c *gin.Context) {
 		// 兼容邀请码
 		var found groups.Group
 		if err2 := models.DB.Where("invite_code = ? AND invite_code <> ''", strings.ToUpper(no)).First(&found).Error; err2 != nil {
-			utils.NotFound(c, "未找到该群组")
+			infra.NotFound(c, "未找到该群组")
 			return
 		}
 		g = &found
@@ -363,7 +363,7 @@ func GroupSearchByNo(c *gin.Context) {
 		out["my_status"] = ctx.Status
 		out["my_role"] = ctx.Role
 	}
-	utils.Success(c, out)
+	infra.Success(c, out)
 }
 
 func isAllDigits(s string) bool {

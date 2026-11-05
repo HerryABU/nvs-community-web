@@ -1,12 +1,12 @@
 package aiadmin
 
 import (
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	aim "nvs-server/models/ai"
@@ -24,12 +24,12 @@ import (
 func AiSubmitAgent(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	var in aim.AgentSubmission
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 
@@ -41,7 +41,7 @@ func AiSubmitAgent(c *gin.Context) {
 
 	sub, err := aim.CreateAgentSubmission(uid, userName, in)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 
@@ -49,32 +49,32 @@ func AiSubmitAgent(c *gin.Context) {
 	if !cfg.NeedReview {
 		// 免审核：直接上架（reviewer 记 0 = 系统自动）
 		if err := aim.ApproveAgentSubmission(sub, 0, "免审核直上（站长设置）"); err != nil {
-			utils.InternalError(c, "上架失败："+err.Error())
+			infra.InternalError(c, "上架失败："+err.Error())
 			return
 		}
-		utils.Success(c, gin.H{"status": aim.AgentSubApproved, "message": "已上架，现在就能在智能体广场看到"})
+		infra.Success(c, gin.H{"status": aim.AgentSubApproved, "message": "已上架，现在就能在智能体广场看到"})
 		return
 	}
-	utils.Success(c, gin.H{"status": aim.AgentSubPending, "message": "已提交，等站长审核后上架"})
+	infra.Success(c, gin.H{"status": aim.AgentSubPending, "message": "已提交，等站长审核后上架"})
 }
 
 // AiMyAgentSubmissions GET /api/ai/agents/my-submissions
 func AiMyAgentSubmissions(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	var list []aim.AgentSubmission
 	models.DB.Where("user_id = ?", uid).Order("id DESC").Limit(50).Find(&list)
-	utils.Success(c, gin.H{"list": list})
+	infra.Success(c, gin.H{"list": list})
 }
 
 // AiAgentSubmitConfig GET /api/ai/agents/submit-config
 // 前台据此决定「投稿」入口是否显示、文案怎么写（需要审核 / 直上）。
 func AiAgentSubmitConfig(c *gin.Context) {
 	cfg := aim.GetAgentSubmitConfig()
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"enabled":     cfg.Enabled,
 		"need_review": cfg.NeedReview,
 		"max_pending": cfg.MaxPending,
@@ -94,7 +94,7 @@ func AdminListAgentSubmissions(c *gin.Context) {
 		size = 20
 	}
 	list, total := aim.ListAgentSubmissions(strings.TrimSpace(c.Query("status")), page, size)
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"list":    list,
 		"total":   total,
 		"pending": aim.CountPendingAgentSubmissions(),
@@ -108,7 +108,7 @@ func AdminReviewAgentSubmission(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var sub aim.AgentSubmission
 	if err := models.DB.First(&sub, id).Error; err != nil {
-		utils.NotFound(c, "投稿不存在")
+		infra.NotFound(c, "投稿不存在")
 		return
 	}
 	var req struct {
@@ -116,47 +116,47 @@ func AdminReviewAgentSubmission(c *gin.Context) {
 		Note   string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	switch strings.ToLower(strings.TrimSpace(req.Action)) {
 	case "approve":
 		if err := aim.ApproveAgentSubmission(&sub, uid, req.Note); err != nil {
-			utils.BadRequest(c, err.Error())
+			infra.BadRequest(c, err.Error())
 			return
 		}
-		utils.Success(c, gin.H{"message": "已通过，已出现在智能体广场"})
+		infra.Success(c, gin.H{"message": "已通过，已出现在智能体广场"})
 	case "reject":
 		if strings.TrimSpace(req.Note) == "" {
-			utils.BadRequest(c, "拒绝时请写明原因，用户才知道怎么改")
+			infra.BadRequest(c, "拒绝时请写明原因，用户才知道怎么改")
 			return
 		}
 		if err := aim.RejectAgentSubmission(&sub, uid, req.Note); err != nil {
-			utils.BadRequest(c, err.Error())
+			infra.BadRequest(c, err.Error())
 			return
 		}
-		utils.Success(c, gin.H{"message": "已拒绝"})
+		infra.Success(c, gin.H{"message": "已拒绝"})
 	default:
-		utils.BadRequest(c, "action 只能是 approve / reject")
+		infra.BadRequest(c, "action 只能是 approve / reject")
 	}
 }
 
 // AdminGetAgentSubmitConfig GET /api/admin/agent-submit-config
 func AdminGetAgentSubmitConfig(c *gin.Context) {
 	cfg := aim.GetAgentSubmitConfig()
-	utils.Success(c, gin.H{"config": cfg, "pending": aim.CountPendingAgentSubmissions()})
+	infra.Success(c, gin.H{"config": cfg, "pending": aim.CountPendingAgentSubmissions()})
 }
 
 // AdminSaveAgentSubmitConfig PUT /api/admin/agent-submit-config
 func AdminSaveAgentSubmitConfig(c *gin.Context) {
 	var cfg aim.AgentSubmitConfig
 	if err := c.ShouldBindJSON(&cfg); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := aim.SetAgentSubmitConfig(cfg); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已保存", "config": aim.GetAgentSubmitConfig()})
+	infra.Success(c, gin.H{"message": "已保存", "config": aim.GetAgentSubmitConfig()})
 }

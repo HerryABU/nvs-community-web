@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"nvs-server/handlers/admincommon"
 	"nvs-server/ipgeo"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strings"
 	"time"
 
@@ -29,7 +29,7 @@ func GetMapSetting(c *gin.Context) {
 		"country": reg.Country,
 		"code":    reg.CountryCD,
 	}
-	utils.Success(c, data)
+	infra.Success(c, data)
 }
 
 // AdminGetMapSetting GET /api/admin/map-setting —— 含完整配置（key 明文给站长自己核对）
@@ -37,7 +37,7 @@ func AdminGetMapSetting(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, theme.LoadMapSetting())
+	infra.Success(c, theme.LoadMapSetting())
 }
 
 // AdminSaveMapSetting PUT /api/admin/map-setting
@@ -47,14 +47,14 @@ func AdminSaveMapSetting(c *gin.Context) {
 	}
 	var in theme.MapSetting
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数不合法")
+		infra.BadRequest(c, "参数不合法")
 		return
 	}
 	if err := theme.SaveMapSetting(in); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "已保存", theme.LoadMapSetting())
+	infra.SuccessMessage(c, "已保存", theme.LoadMapSetting())
 }
 
 // AdminTestMapSetting POST /api/admin/map-setting/test
@@ -78,7 +78,7 @@ func AdminTestMapSetting(c *gin.Context) {
 		tk = strings.TrimSpace(theme.LoadMapSetting().TiandituKey)
 	}
 	if tk == "" {
-		utils.BadRequest(c, "还没有填 tk：请先到 tianditu.gov.cn 申请「浏览器端」密钥")
+		infra.BadRequest(c, "还没有填 tk：请先到 tianditu.gov.cn 申请「浏览器端」密钥")
 		return
 	}
 	referer := strings.TrimSpace(in.Referer)
@@ -99,7 +99,7 @@ func AdminTestMapSetting(c *gin.Context) {
 	client := &http.Client{Timeout: 8 * time.Second}
 	req, err := http.NewRequest(http.MethodGet, tile, nil)
 	if err != nil {
-		utils.BadRequest(c, "tk 含非法字符")
+		infra.BadRequest(c, "tk 含非法字符")
 		return
 	}
 	req.Header.Set("Referer", referer)
@@ -111,7 +111,7 @@ func AdminTestMapSetting(c *gin.Context) {
 	start := time.Now()
 	resp, err := client.Do(req)
 	if err != nil {
-		utils.Success(c, gin.H{
+		infra.Success(c, gin.H{
 			"ok": false, "stage": "network",
 			"reason": "无法连接天地图服务",
 			"hint":   "服务器出网可能被限制，或本地 DNS 解析不到 t0.tianditu.gov.cn：" + err.Error(),
@@ -165,7 +165,7 @@ func AdminTestMapSetting(c *gin.Context) {
 		out["reason"] = fmt.Sprintf("返回了非瓦片内容（HTTP %d, %s）", resp.StatusCode, ct)
 		out["hint"] = "多半是 tk 类别不对（服务端 key 不能用于前端底图），或该应用未开通此图层"
 	}
-	utils.Success(c, out)
+	infra.Success(c, out)
 }
 
 // plainSnippet 从 HTML/JSON 里抽一小段可读文本（去标签、压空白、截断），

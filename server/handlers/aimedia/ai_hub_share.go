@@ -2,7 +2,7 @@ package aimedia
 
 import (
 	"nvs-server/handlers/hctx"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
@@ -20,14 +20,14 @@ func AiHubRenameSession(c *gin.Context) {
 		Title string `json:"title"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := aim.RenameAiChatSession(uint(id), userID, req.Title); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已重命名"})
+	infra.Success(c, gin.H{"message": "已重命名"})
 }
 
 // AiHubShareSession POST /api/ai/sessions/:id/share — 生成/读取分享链接
@@ -36,10 +36,10 @@ func AiHubShareSession(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	token, err := aim.ShareAiChatSession(uint(id), userID)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"share_token": token, "path": "/ai/share/" + token})
+	infra.Success(c, gin.H{"share_token": token, "path": "/ai/share/" + token})
 }
 
 // AiHubUnshareSession DELETE /api/ai/sessions/:id/share — 取消分享
@@ -47,10 +47,10 @@ func AiHubUnshareSession(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := aim.UnshareAiChatSession(uint(id), userID); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已取消分享"})
+	infra.Success(c, gin.H{"message": "已取消分享"})
 }
 
 // AiSharedSession GET /api/ai/shared/:token — 公开只读快照（无需登录）
@@ -59,12 +59,12 @@ func AiSharedSession(c *gin.Context) {
 	token := strings.TrimSpace(c.Param("token"))
 	s, err := aim.GetSharedSessionByToken(token)
 	if err != nil {
-		utils.NotFound(c, err.Error())
+		infra.NotFound(c, err.Error())
 		return
 	}
 	msgs, err := aim.ListAiChatMessages(s.ID, 500)
 	if err != nil {
-		utils.InternalError(c, "读取失败")
+		infra.InternalError(c, "读取失败")
 		return
 	}
 	out := make([]gin.H, 0, len(msgs))
@@ -76,7 +76,7 @@ func AiSharedSession(c *gin.Context) {
 			"created_at": m.CreatedAt,
 		})
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"title":      s.Title,
 		"agent_name": s.AgentName,
 		"shared_at":  s.SharedAt,

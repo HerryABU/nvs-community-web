@@ -3,7 +3,7 @@ package moderation
 import (
 	"nvs-server/handlers/admincommon"
 	"nvs-server/security"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"regexp"
 	"strconv"
 
@@ -46,10 +46,10 @@ func ListXssRules(c *gin.Context) {
 	}
 	rules, err := securitym.ListXssRules()
 	if err != nil {
-		utils.InternalError(c, "获取规则列表失败")
+		infra.InternalError(c, "获取规则列表失败")
 		return
 	}
-	utils.Success(c, rules)
+	infra.Success(c, rules)
 }
 
 // POST /api/admin/xss-rules — 新增 XSS 规则
@@ -66,19 +66,19 @@ func CreateXssRule(c *gin.Context) {
 		Description string `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请求参数错误")
+		infra.BadRequest(c, "请求参数错误")
 		return
 	}
 	if req.Name == "" || req.Pattern == "" {
-		utils.BadRequest(c, "规则名称和正则表达式不能为空")
+		infra.BadRequest(c, "规则名称和正则表达式不能为空")
 		return
 	}
 	if err := security.ValidateUserPattern(req.Pattern); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	if hint := security.UserPatternHint(req.Pattern); hint != "" {
-		utils.BadRequest(c, hint)
+		infra.BadRequest(c, hint)
 		return
 	}
 	enabled := true
@@ -94,11 +94,11 @@ func CreateXssRule(c *gin.Context) {
 		Description: req.Description,
 	}
 	if err := securitym.CreateXssRule(rule); err != nil {
-		utils.InternalError(c, "创建规则失败")
+		infra.InternalError(c, "创建规则失败")
 		return
 	}
 	ReloadXssRules()
-	utils.Success(c, rule)
+	infra.Success(c, rule)
 }
 
 // PUT /api/admin/xss-rules/:id — 更新 XSS 规则
@@ -109,7 +109,7 @@ func UpdateXssRule(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	rule, err := securitym.GetXssRule(uint(id))
 	if err != nil {
-		utils.NotFound(c, "规则不存在")
+		infra.NotFound(c, "规则不存在")
 		return
 	}
 	var req struct {
@@ -121,7 +121,7 @@ func UpdateXssRule(c *gin.Context) {
 		Description string `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请求参数错误")
+		infra.BadRequest(c, "请求参数错误")
 		return
 	}
 	if req.Name != "" {
@@ -129,11 +129,11 @@ func UpdateXssRule(c *gin.Context) {
 	}
 	if req.Pattern != "" {
 		if err := security.ValidateUserPattern(req.Pattern); err != nil {
-			utils.BadRequest(c, err.Error())
+			infra.BadRequest(c, err.Error())
 			return
 		}
 		if hint := security.UserPatternHint(req.Pattern); hint != "" {
-			utils.BadRequest(c, hint)
+			infra.BadRequest(c, hint)
 			return
 		}
 		rule.Pattern = req.Pattern
@@ -151,11 +151,11 @@ func UpdateXssRule(c *gin.Context) {
 		rule.Description = req.Description
 	}
 	if err := securitym.UpdateXssRule(rule); err != nil {
-		utils.InternalError(c, "更新规则失败")
+		infra.InternalError(c, "更新规则失败")
 		return
 	}
 	ReloadXssRules()
-	utils.Success(c, rule)
+	infra.Success(c, rule)
 }
 
 // DELETE /api/admin/xss-rules/:id — 删除 XSS 规则
@@ -165,11 +165,11 @@ func DeleteXssRule(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := securitym.DeleteXssRule(uint(id)); err != nil {
-		utils.InternalError(c, "删除规则失败")
+		infra.InternalError(c, "删除规则失败")
 		return
 	}
 	ReloadXssRules()
-	utils.Success(c, gin.H{"message": "规则已删除"})
+	infra.Success(c, gin.H{"message": "规则已删除"})
 }
 
 // POST /api/admin/xss-rules/test — 测试正则规则（不落库，返回匹配结果）
@@ -184,20 +184,20 @@ func TestXssRule(c *gin.Context) {
 		Text        string `json:"text"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请求参数错误")
+		infra.BadRequest(c, "请求参数错误")
 		return
 	}
 	if req.Pattern == "" {
-		utils.BadRequest(c, "正则表达式不能为空")
+		infra.BadRequest(c, "正则表达式不能为空")
 		return
 	}
 	if err := security.ValidateUserPattern(req.Pattern); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	re, err := regexp.Compile(req.Pattern)
 	if err != nil {
-		utils.BadRequest(c, "正则表达式无效: "+err.Error())
+		infra.BadRequest(c, "正则表达式无效: "+err.Error())
 		return
 	}
 	matches := re.FindAllString(req.Text, -1)
@@ -213,7 +213,7 @@ func TestXssRule(c *gin.Context) {
 			return security.EscapeHTMLTags(match)
 		})
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"action":      action,
 		"result":      result,
 		"match_count": len(matches),

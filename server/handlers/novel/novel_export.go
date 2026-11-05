@@ -3,12 +3,13 @@ package novel
 import (
 	"archive/zip"
 	"fmt"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/sanitize"
 	"os"
 	"strconv"
 
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,31 +20,31 @@ func ExportNovel(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		utils.BadRequest(c, "无效的作品ID")
+		infra.BadRequest(c, "无效的作品ID")
 		return
 	}
 
 	novel, err := models.GetNovelByID(uint(id))
 	if err != nil {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return
 	}
 
 	if novel.AuthorID != userID && userRole != "admin" {
-		utils.Forbidden(c, "无权操作此作品")
+		infra.Forbidden(c, "无权操作此作品")
 		return
 	}
 
 	chapters, err := models.GetChaptersByNovel(uint(id))
 	if err != nil {
-		utils.InternalError(c, "获取章节失败")
+		infra.InternalError(c, "获取章节失败")
 		return
 	}
 
 	// 创建临时 ZIP 文件
 	tmpFile, err := os.CreateTemp("", fmt.Sprintf("novel_%d_*.zip", id))
 	if err != nil {
-		utils.InternalError(c, "创建临时文件失败")
+		infra.InternalError(c, "创建临时文件失败")
 		return
 	}
 	defer os.Remove(tmpFile.Name())
@@ -59,7 +60,7 @@ func ExportNovel(c *gin.Context) {
 	for _, ch := range chapters {
 		// 读取章节内容文件
 		if ch.ContentPath != "" {
-			content, err := os.ReadFile(utils.ResolveContentPath(ch.ContentPath))
+			content, err := os.ReadFile(sanitize.ResolveContentPath(ch.ContentPath))
 			if err == nil {
 				fileName := fmt.Sprintf("chapter_%04d.html", ch.ChapterNumber)
 				w, _ := zipWriter.Create(fileName)

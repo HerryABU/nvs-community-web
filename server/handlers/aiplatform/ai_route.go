@@ -2,7 +2,7 @@ package aiplatform
 
 import (
 	"nvs-server/handlers/admincommon"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
 	aim "nvs-server/models/ai"
@@ -21,7 +21,7 @@ func GetAiRouteConfig(c *gin.Context) {
 		return
 	}
 	cfg := aiops.LoadAiRouteConfig()
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"config": cfg,
 		"preview": gin.H{
 			// 各场景当前会选中谁（按当前策略实时算）
@@ -41,14 +41,14 @@ func UpdateAiRouteConfig(c *gin.Context) {
 	}
 	var in aiops.AiRouteConfig
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := aiops.SaveAiRouteConfig(in); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "已保存并即时生效", aiops.LoadAiRouteConfig())
+	infra.SuccessMessage(c, "已保存并即时生效", aiops.LoadAiRouteConfig())
 }
 
 // previewPick 按策略预览会选中的模型（含价格，便于核对「最便宜」到底多便宜）

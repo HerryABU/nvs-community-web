@@ -1,13 +1,13 @@
 package scripthandler
 
 import (
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
 	"nvs-server/collab"
 	"nvs-server/middleware"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -36,11 +36,11 @@ func novelIDOf(c *gin.Context) (uint, bool) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	novelID := uint(id)
 	if novelID == 0 {
-		utils.BadRequest(c, "作品 ID 无效")
+		infra.BadRequest(c, "作品 ID 无效")
 		return 0, false
 	}
 	if _, err := models.GetNovelByID(novelID); err != nil {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return 0, false
 	}
 	return novelID, true
@@ -53,15 +53,15 @@ func ListCharacters(c *gin.Context) {
 		return
 	}
 	if !canRead(c, novelID) {
-		utils.Forbidden(c, "无权查看该作品的角色")
+		infra.Forbidden(c, "无权查看该作品的角色")
 		return
 	}
 	list, err := models.ListNovelCharacters(novelID)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list})
+	infra.Success(c, gin.H{"list": list})
 }
 
 // CreateCharacter POST /api/novels/:id/characters
@@ -71,7 +71,7 @@ func CreateCharacter(c *gin.Context) {
 		return
 	}
 	if !canWrite(c, novelID) {
-		utils.Forbidden(c, "仅主笔可管理作品角色")
+		infra.Forbidden(c, "仅主笔可管理作品角色")
 		return
 	}
 	var req struct {
@@ -83,7 +83,7 @@ func CreateCharacter(c *gin.Context) {
 		SortOrder int    `json:"sort_order"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	ch := &models.NovelCharacter{
@@ -96,10 +96,10 @@ func CreateCharacter(c *gin.Context) {
 		SortOrder: req.SortOrder,
 	}
 	if err := models.CreateNovelCharacter(ch); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, ch)
+	infra.Success(c, ch)
 }
 
 // UpdateCharacter PUT /api/novels/:id/characters/:cid
@@ -109,13 +109,13 @@ func UpdateCharacter(c *gin.Context) {
 		return
 	}
 	if !canWrite(c, novelID) {
-		utils.Forbidden(c, "仅主笔可管理作品角色")
+		infra.Forbidden(c, "仅主笔可管理作品角色")
 		return
 	}
 	cid, _ := strconv.ParseUint(c.Param("cid"), 10, 64)
 	ch, err := models.GetNovelCharacter(uint(cid))
 	if err != nil || ch.NovelID != novelID {
-		utils.NotFound(c, "角色不存在")
+		infra.NotFound(c, "角色不存在")
 		return
 	}
 	// 指针字段：nil = 不改，避免零值被静默覆盖
@@ -128,7 +128,7 @@ func UpdateCharacter(c *gin.Context) {
 		SortOrder *int    `json:"sort_order"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	fields := map[string]interface{}{}
@@ -151,10 +151,10 @@ func UpdateCharacter(c *gin.Context) {
 		fields["sort_order"] = *req.SortOrder
 	}
 	if err := models.UpdateNovelCharacterFields(uint(cid), fields); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已保存"})
+	infra.Success(c, gin.H{"message": "已保存"})
 }
 
 // DeleteCharacter DELETE /api/novels/:id/characters/:cid
@@ -164,18 +164,18 @@ func DeleteCharacter(c *gin.Context) {
 		return
 	}
 	if !canWrite(c, novelID) {
-		utils.Forbidden(c, "仅主笔可管理作品角色")
+		infra.Forbidden(c, "仅主笔可管理作品角色")
 		return
 	}
 	cid, _ := strconv.ParseUint(c.Param("cid"), 10, 64)
 	ch, err := models.GetNovelCharacter(uint(cid))
 	if err != nil || ch.NovelID != novelID {
-		utils.NotFound(c, "角色不存在")
+		infra.NotFound(c, "角色不存在")
 		return
 	}
 	if err := models.DeleteNovelCharacter(uint(cid)); err != nil {
-		utils.InternalError(c, "删除失败")
+		infra.InternalError(c, "删除失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已删除"})
+	infra.Success(c, gin.H{"message": "已删除"})
 }

@@ -4,6 +4,8 @@ import (
 	"archive/zip"
 	"fmt"
 	"html"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/sanitize"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,7 +16,6 @@ import (
 	"nvs-server/handlers/docx"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -26,13 +27,13 @@ func ExportEPUB(c *gin.Context) {
 
 	novel, err := models.GetNovelByID(uint(novelID))
 	if err != nil || novel.AuthorID != userID {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return
 	}
 
 	chapters, err := models.GetChaptersByNovel(uint(novelID))
 	if err != nil {
-		utils.InternalError(c, "获取章节失败")
+		infra.InternalError(c, "获取章节失败")
 		return
 	}
 
@@ -76,7 +77,7 @@ func ExportEPUB(c *gin.Context) {
 
 	// 章节 xhtml
 	for i, ch := range chapters {
-		content, _ := os.ReadFile(utils.ResolveContentPath(ch.ContentPath))
+		content, _ := os.ReadFile(sanitize.ResolveContentPath(ch.ContentPath))
 		xhtml := fmt.Sprintf(`<?xml version="1.0"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -96,13 +97,13 @@ func ExportTXT(c *gin.Context) {
 
 	novel, err := models.GetNovelByID(uint(novelID))
 	if err != nil || novel.AuthorID != userID {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return
 	}
 
 	chapters, err := models.GetChaptersByNovel(uint(novelID))
 	if err != nil {
-		utils.InternalError(c, "获取章节失败")
+		infra.InternalError(c, "获取章节失败")
 		return
 	}
 
@@ -112,7 +113,7 @@ func ExportTXT(c *gin.Context) {
 		strings.Repeat("=", 50)))
 
 	for _, ch := range chapters {
-		content, _ := os.ReadFile(utils.ResolveContentPath(ch.ContentPath))
+		content, _ := os.ReadFile(sanitize.ResolveContentPath(ch.ContentPath))
 		// 保留原始内容（章节存储为 Markdown），转换为纯文本
 		text := string(content)
 		// 简单清理 Markdown 标记
@@ -138,19 +139,19 @@ func ExportDOCX(c *gin.Context) {
 
 	novel, err := models.GetNovelByID(uint(novelID))
 	if err != nil || novel.AuthorID != userID {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return
 	}
 
 	chapters, err := models.GetChaptersByNovel(uint(novelID))
 	if err != nil {
-		utils.InternalError(c, "获取章节失败")
+		infra.InternalError(c, "获取章节失败")
 		return
 	}
 
 	exports := make([]docx.ChapterForExport, 0, len(chapters))
 	for _, ch := range chapters {
-		content, _ := os.ReadFile(utils.ResolveContentPath(ch.ContentPath))
+		content, _ := os.ReadFile(sanitize.ResolveContentPath(ch.ContentPath))
 		exports = append(exports, docx.ChapterForExport{
 			Title:   fmt.Sprintf("第%d章 %s", ch.ChapterNumber, ch.Title),
 			Content: string(content),
@@ -159,7 +160,7 @@ func ExportDOCX(c *gin.Context) {
 
 	data, err := docx.BuildDocx(novel.Title, exports)
 	if err != nil {
-		utils.InternalError(c, "生成 Word 文档失败")
+		infra.InternalError(c, "生成 Word 文档失败")
 		return
 	}
 
@@ -174,13 +175,13 @@ func ExportMarkdown(c *gin.Context) {
 
 	novel, err := models.GetNovelByID(uint(novelID))
 	if err != nil || novel.AuthorID != userID {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return
 	}
 
 	chapters, err := models.GetChaptersByNovel(uint(novelID))
 	if err != nil {
-		utils.InternalError(c, "获取章节失败")
+		infra.InternalError(c, "获取章节失败")
 		return
 	}
 
@@ -189,7 +190,7 @@ func ExportMarkdown(c *gin.Context) {
 		novel.Title, novel.AuthorID, novel.Category, len(chapters)))
 
 	for _, ch := range chapters {
-		content, _ := os.ReadFile(utils.ResolveContentPath(ch.ContentPath))
+		content, _ := os.ReadFile(sanitize.ResolveContentPath(ch.ContentPath))
 		// 保留原始 Markdown 内容（不做 HTML→Markdown 转换）
 		md.WriteString(fmt.Sprintf("## 第%d章 %s\n\n%s\n\n", ch.ChapterNumber, ch.Title, string(content)))
 	}

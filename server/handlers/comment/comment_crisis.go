@@ -2,11 +2,11 @@ package comment
 
 import (
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
 	"nvs-server/crisis"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/security"
@@ -29,21 +29,21 @@ func GetCrisisReport(c *gin.Context) {
 	if raw != "" {
 		uid, err := strconv.ParseUint(raw, 10, 64)
 		if err != nil || uid == 0 {
-			utils.BadRequest(c, "user_id 不合法")
+			infra.BadRequest(c, "user_id 不合法")
 			return
 		}
 		report, rerr := crisis.BuildCrisisReport(uint(uid))
 		if rerr != nil {
-			utils.NotFound(c, "用户不存在")
+			infra.NotFound(c, "用户不存在")
 			return
 		}
-		utils.Success(c, gin.H{"user_id": uid, "report": report})
+		infra.Success(c, gin.H{"user_id": uid, "report": report})
 		return
 	}
 
 	users, uerr := security.ListUsersInObservation()
 	if uerr != nil {
-		utils.InternalError(c, "读取观察期用户失败")
+		infra.InternalError(c, "读取观察期用户失败")
 		return
 	}
 	list := make([]gin.H, 0, len(users))
@@ -62,5 +62,5 @@ func GetCrisisReport(c *gin.Context) {
 			"is_minor":      crisis.IsMinorUser(&u),
 		})
 	}
-	utils.Success(c, gin.H{"users": list})
+	infra.Success(c, gin.H{"users": list})
 }

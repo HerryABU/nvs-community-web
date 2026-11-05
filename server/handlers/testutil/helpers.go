@@ -10,11 +10,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"nvs-server/utils/infra"
 	"testing"
 
 	"nvs-server/middleware"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
@@ -24,7 +24,7 @@ import (
 // SetupHandlerTestDB 建立内存 sqlite 测试库并替换全局 models.DB。
 func SetupHandlerTestDB(t *testing.T) {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{Logger: utils.NewDBLogger()})
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{Logger: infra.NewDBLogger()})
 	if err != nil {
 		t.Fatalf("打开内存测试库失败: %v", err)
 	}

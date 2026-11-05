@@ -8,7 +8,7 @@ import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/realtime"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strings"
 	"sync"
 	"time"
@@ -233,7 +233,7 @@ func AiBotStatus(c *gin.Context) {
 	// 结果是每个带评论区的页面都会在控制台打一条 4xx（还会被后台异常横幅统计进来）。
 	// 现在统一 200 + enabled=false，前端只判断 enabled 即可。
 	if !aim.IsAiEnabled() {
-		utils.Success(c, gin.H{
+		infra.Success(c, gin.H{
 			"ai_enabled": false,
 			"enabled":    false,
 			"used":       0,
@@ -250,7 +250,7 @@ func AiBotStatus(c *gin.Context) {
 			left = 0
 		}
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"enabled":    aim.IsAiBotEnabled(),
 		"used":       int(used),
 		"daily_left": left, // -1=不限
@@ -262,7 +262,7 @@ func AdminGetAiBotConfig(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"enabled": aim.IsAiBotEnabled(),
 		"config":  aim.GetAiBotConfig(),
 	})
@@ -280,18 +280,18 @@ func AdminSetAiBotConfig(c *gin.Context) {
 		Signature  string `json:"signature"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := aim.SetAiBotConfig(aim.AiBotConfig{
 		DailyLimit: req.DailyLimit, AgentID: req.AgentID, Signature: req.Signature,
 	}); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
 	if err := aim.SetAiBotEnabled(req.Enabled); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "AI 评论机器人配置已保存（立即生效）"})
+	infra.Success(c, gin.H{"message": "AI 评论机器人配置已保存（立即生效）"})
 }

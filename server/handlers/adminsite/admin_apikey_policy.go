@@ -10,13 +10,13 @@ package adminsite
 
 import (
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"time"
 
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	apikey "nvs-server/models/apikey"
@@ -32,7 +32,7 @@ func AdminBanAPIKey(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var key apikey.APIKey
 	if err := models.DB.First(&key, id).Error; err != nil {
-		utils.NotFound(c, "Key 不存在")
+		infra.NotFound(c, "Key 不存在")
 		return
 	}
 	var req struct {
@@ -50,7 +50,7 @@ func AdminBanAPIKey(c *gin.Context) {
 		"banned_at":  now,
 		"banned_by":  hctx.CurrentUserID(c),
 	})
-	utils.Success(c, gin.H{"message": "已封禁该 API Key", "key_prefix": key.KeyPrefix})
+	infra.Success(c, gin.H{"message": "已封禁该 API Key", "key_prefix": key.KeyPrefix})
 }
 
 // AdminUnbanAPIKey POST /api/admin/ratelimit/keys/:id/unban —— 解封指定 Key
@@ -61,7 +61,7 @@ func AdminUnbanAPIKey(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var key apikey.APIKey
 	if err := models.DB.First(&key, id).Error; err != nil {
-		utils.NotFound(c, "Key 不存在")
+		infra.NotFound(c, "Key 不存在")
 		return
 	}
 	models.DB.Model(&key).Updates(map[string]interface{}{
@@ -70,7 +70,7 @@ func AdminUnbanAPIKey(c *gin.Context) {
 		"banned_at":  nil,
 		"banned_by":  0,
 	})
-	utils.Success(c, gin.H{"message": "已解封该 API Key", "key_prefix": key.KeyPrefix})
+	infra.Success(c, gin.H{"message": "已解封该 API Key", "key_prefix": key.KeyPrefix})
 }
 
 // ==================== 按人封禁 ====================
@@ -83,11 +83,11 @@ func AdminBanUserAPIKeys(c *gin.Context) {
 	}
 	uid, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if uid == 0 {
-		utils.BadRequest(c, "用户 ID 无效")
+		infra.BadRequest(c, "用户 ID 无效")
 		return
 	}
 	if _, err := models.GetUserByID(uint(uid)); err != nil {
-		utils.NotFound(c, "用户不存在")
+		infra.NotFound(c, "用户不存在")
 		return
 	}
 	var req struct {
@@ -112,10 +112,10 @@ func AdminBanUserAPIKeys(c *gin.Context) {
 		p.BanUntil = nil // 永久封禁
 	}
 	if err := apikey.SaveUserAPIPolicy(p); err != nil {
-		utils.InternalError(c, "封禁失败")
+		infra.InternalError(c, "封禁失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已封禁该用户的全部 API Key", "ban_until": p.BanUntil})
+	infra.Success(c, gin.H{"message": "已封禁该用户的全部 API Key", "ban_until": p.BanUntil})
 }
 
 // AdminUnbanUserAPIKeys POST /api/admin/ratelimit/users/:id/keys/unban —— 解除该用户的整体封禁
@@ -127,17 +127,17 @@ func AdminUnbanUserAPIKeys(c *gin.Context) {
 	uid, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	p := apikey.GetUserAPIPolicy(uint(uid))
 	if p == nil {
-		utils.Success(c, gin.H{"message": "该用户无封禁记录"})
+		infra.Success(c, gin.H{"message": "该用户无封禁记录"})
 		return
 	}
 	p.KeysBanned = false
 	p.BanReason = ""
 	p.BanUntil = nil
 	if err := apikey.SaveUserAPIPolicy(p); err != nil {
-		utils.InternalError(c, "解封失败")
+		infra.InternalError(c, "解封失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已解除该用户的 API 封禁"})
+	infra.Success(c, gin.H{"message": "已解除该用户的 API 封禁"})
 }
 
 // ==================== 按人限流配额 ====================
@@ -153,7 +153,7 @@ func AdminGetUserAPIQuota(c *gin.Context) {
 		// 无记录 = 跟随角色全局，回一个零值策略便于前端表单回填
 		p = &apikey.UserAPIPolicy{UserID: uint(uid)}
 	}
-	utils.Success(c, p)
+	infra.Success(c, p)
 }
 
 // AdminSetUserAPIQuota PUT /api/admin/ratelimit/users/:id/quota —— 设置某用户的专属配额 / Key 数上限
@@ -164,12 +164,12 @@ func AdminSetUserAPIQuota(c *gin.Context) {
 	}
 	uid, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if uid == 0 {
-		utils.BadRequest(c, "用户 ID 无效")
+		infra.BadRequest(c, "用户 ID 无效")
 		return
 	}
 	user, err := models.GetUserByID(uint(uid))
 	if err != nil || user == nil {
-		utils.NotFound(c, "用户不存在")
+		infra.NotFound(c, "用户不存在")
 		return
 	}
 	var req struct {
@@ -179,19 +179,19 @@ func AdminSetUserAPIQuota(c *gin.Context) {
 		Note        string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.QuotaPerMin < 0 || req.QuotaPerMin > 1000000 {
-		utils.BadRequest(c, "配额需在 0 ~ 1000000 之间（0 = 跟随角色全局）")
+		infra.BadRequest(c, "配额需在 0 ~ 1000000 之间（0 = 跟随角色全局）")
 		return
 	}
 	if req.WindowSecs < 0 || req.WindowSecs > 86400 {
-		utils.BadRequest(c, "时间窗口需在 0 ~ 86400 秒之间（0 = 跟随角色全局）")
+		infra.BadRequest(c, "时间窗口需在 0 ~ 86400 秒之间（0 = 跟随角色全局）")
 		return
 	}
 	if req.MaxKeys < 0 || req.MaxKeys > 1000 {
-		utils.BadRequest(c, "Key 数上限需在 0 ~ 1000 之间（0 = 不限制）")
+		infra.BadRequest(c, "Key 数上限需在 0 ~ 1000 之间（0 = 不限制）")
 		return
 	}
 
@@ -204,10 +204,10 @@ func AdminSetUserAPIQuota(c *gin.Context) {
 	p.MaxKeys = req.MaxKeys
 	p.Note = strings.TrimSpace(req.Note)
 	if err := apikey.SaveUserAPIPolicy(p); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已保存（立即生效）", "policy": p})
+	infra.Success(c, gin.H{"message": "已保存（立即生效）", "policy": p})
 }
 
 // AdminListUserAPIPolicies GET /api/admin/ratelimit/users —— 所有被单独设置/封禁过的用户
@@ -217,10 +217,10 @@ func AdminListUserAPIPolicies(c *gin.Context) {
 	}
 	list, err := apikey.ListUserAPIPolicies()
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, list)
+	infra.Success(c, list)
 }
 
 // AdminDeleteUserAPIPolicy DELETE /api/admin/ratelimit/users/:id/quota —— 撤销按人设置（恢复跟随全局）
@@ -230,5 +230,5 @@ func AdminDeleteUserAPIPolicy(c *gin.Context) {
 	}
 	uid, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	models.DB.Where("user_id = ?", uid).Delete(&apikey.UserAPIPolicy{})
-	utils.Success(c, gin.H{"message": "已撤销该用户的专属设置（恢复跟随全局配额）"})
+	infra.Success(c, gin.H{"message": "已撤销该用户的专属设置（恢复跟随全局配额）"})
 }

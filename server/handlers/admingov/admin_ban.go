@@ -2,12 +2,12 @@ package admingov
 
 import (
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strconv"
 	"time"
 
 	"nvs-server/handlers/emergency"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/blog"
@@ -98,7 +98,7 @@ func AdminListNovels(c *gin.Context) {
 		list = append(list, it)
 	}
 
-	utils.Success(c, gin.H{"list": list, "total": total, "page": page, "page_size": pageSize})
+	infra.Success(c, gin.H{"list": list, "total": total, "page": page, "page_size": pageSize})
 }
 
 // AdminRecomputeNovelStats 批量重算所有作品统计（章节数 / 总字数）。
@@ -115,22 +115,22 @@ func AdminRecomputeNovelStats(c *gin.Context) {
 	if idStr := c.Query("id"); idStr != "" {
 		id, err := strconv.ParseUint(idStr, 10, 64)
 		if err != nil {
-			utils.BadRequest(c, "无效的小说ID")
+			infra.BadRequest(c, "无效的小说ID")
 			return
 		}
 		if err := models.UpdateNovelStats(uint(id)); err != nil {
-			utils.InternalError(c, "重算失败: "+err.Error())
+			infra.InternalError(c, "重算失败: "+err.Error())
 			return
 		}
-		utils.Success(c, gin.H{"message": "已重算单部作品统计", "id": id})
+		infra.Success(c, gin.H{"message": "已重算单部作品统计", "id": id})
 		return
 	}
 	processed, changed, err := models.RecomputeAllNovelStats()
 	if err != nil {
-		utils.InternalError(c, "重算失败: "+err.Error())
+		infra.InternalError(c, "重算失败: "+err.Error())
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"message":   "已重算所有作品统计",
 		"processed": processed,
 		"changed":   changed,
@@ -145,7 +145,7 @@ func AdminListChapters(c *gin.Context) {
 	}
 	novelID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		utils.BadRequest(c, "无效的小说ID")
+		infra.BadRequest(c, "无效的小说ID")
 		return
 	}
 
@@ -189,7 +189,7 @@ func AdminListChapters(c *gin.Context) {
 		list = append(list, it)
 	}
 
-	utils.Success(c, list)
+	infra.Success(c, list)
 }
 
 // AdminRestoreContent 解封/恢复软删除内容（清除 deleted_at 与 ban_reason）。
@@ -203,7 +203,7 @@ func AdminRestoreContent(c *gin.Context) {
 		ID   uint   `json:"id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	clearDeleted := func(table interface{}, id uint) error {
@@ -215,14 +215,14 @@ func AdminRestoreContent(c *gin.Context) {
 	case "novel":
 		// 恢复小说及其全部章节
 		if err := clearDeleted(&models.Novel{}, req.ID); err != nil {
-			utils.InternalError(c, "解封失败")
+			infra.InternalError(c, "解封失败")
 			return
 		}
 		_ = models.DB.Unscoped().Model(&models.Chapter{}).Where("novel_id = ?", req.ID).
 			Updates(map[string]interface{}{"deleted_at": nil, "ban_reason": "", "deleted_by": ""}).Error
 	case "chapter":
 		if err := clearDeleted(&models.Chapter{}, req.ID); err != nil {
-			utils.InternalError(c, "解封失败")
+			infra.InternalError(c, "解封失败")
 			return
 		}
 	case "comment":
@@ -247,11 +247,11 @@ func AdminRestoreContent(c *gin.Context) {
 		_ = models.DB.Unscoped().Model(&models.User{}).Where("id = ?", req.ID).
 			Update("deleted_at", nil).Error
 	default:
-		utils.BadRequest(c, "不支持的类型（支持 novel/chapter/comment/thread/post/blog/forum/user）")
+		infra.BadRequest(c, "不支持的类型（支持 novel/chapter/comment/thread/post/blog/forum/user）")
 		return
 	}
 
 	emergency.AuditEmergency(c, siteops.AuditContentRestore, req.Type, req.ID,
 		"管理员解封/恢复 "+req.Type+" #"+strconv.FormatUint(uint64(req.ID), 10))
-	utils.Success(c, gin.H{"message": "已解封"})
+	infra.Success(c, gin.H{"message": "已解封"})
 }

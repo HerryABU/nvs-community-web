@@ -23,7 +23,7 @@ import (
 // 校验值：log/<category>/<日期>.sha256（每行 "sha256  <category>-<日期>-<小时>.log"）
 
 const (
-	LogDirName       = "log"                // 日志根目录（与 utils.DailyLogRoot 一致）
+	LogDirName       = "log"                // 日志根目录（与 infra.DailyLogRoot 一致）
 	LogBackupDirName = "backups/logs"       // 归档备份目录
 	LogRetentionDur  = 180 * 24 * time.Hour // 保留 6 个月
 )

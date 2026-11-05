@@ -1,11 +1,11 @@
 package police
 
 import (
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	social "nvs-server/models/social"
@@ -28,7 +28,7 @@ func PoliceGovernanceOverview(c *gin.Context) {
 		counts[ctype] = n
 		total += n
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"total":   total,
 		"by_type": counts,
 	})
@@ -48,7 +48,7 @@ func PoliceGovernanceList(c *gin.Context) {
 	}
 	items, err := softdel.ListSoftDel(ctype, limit)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	// 敏感信息过滤：留证快照(Snapshot)可能含真实姓名/手机/邮箱等 PII，
@@ -67,13 +67,13 @@ func PoliceGovernanceList(c *gin.Context) {
 			"deleted_at":  it.DeletedAt,
 		})
 	}
-	utils.Success(c, gin.H{"items": safe})
+	infra.Success(c, gin.H{"items": safe})
 }
 
 // ensurePolice 要求 admin 或 police（与中间件 PoliceRequired 口径一致）。
 func ensurePolice(c *gin.Context) bool {
 	if !social.IsAdminOrPolice(hctx.CurrentUserRole(c)) {
-		utils.Forbidden(c, "无权限")
+		infra.Forbidden(c, "无权限")
 		return false
 	}
 	return true

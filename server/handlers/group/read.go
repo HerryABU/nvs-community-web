@@ -1,11 +1,11 @@
 package grouphandler
 
 import (
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"nvs-server/groups"
 	"nvs-server/middleware"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -15,12 +15,12 @@ import (
 func MarkRead(c *gin.Context) {
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	gid, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if gid == 0 {
-		utils.BadRequest(c, "群组 ID 无效")
+		infra.BadRequest(c, "群组 ID 无效")
 		return
 	}
 	ctx, ok := loadGroupCtx(c, uint(gid))
@@ -28,7 +28,7 @@ func MarkRead(c *gin.Context) {
 		return
 	}
 	if ctx.Status != groups.GroupMemberActive {
-		utils.Success(c, gin.H{"unread": 0})
+		infra.Success(c, gin.H{"unread": 0})
 		return
 	}
 	var req struct {
@@ -36,8 +36,8 @@ func MarkRead(c *gin.Context) {
 	}
 	_ = c.ShouldBindJSON(&req)
 	if err := groups.MarkGroupRead(uint(gid), uid, req.PostID); err != nil {
-		utils.InternalError(c, "标记已读失败")
+		infra.InternalError(c, "标记已读失败")
 		return
 	}
-	utils.Success(c, gin.H{"unread": 0})
+	infra.Success(c, gin.H{"unread": 0})
 }

@@ -2,11 +2,12 @@ package port
 
 import (
 	"fmt"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/secure"
 
 	"nvs-server/handlers/hctx"
 	"nvs-server/middleware"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	softdel "nvs-server/models/softdel"
@@ -20,13 +21,13 @@ func AllocatePort(c *gin.Context) {
 		ProjectName string `json:"project_name" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误: project_name 为必填")
+		infra.BadRequest(c, "参数错误: project_name 为必填")
 		return
 	}
 
 	// 验证项目名（字母数字下划线横线，2-32字符）
 	if !isValidProjectName(req.ProjectName) {
-		utils.BadRequest(c, "项目名仅允许字母/数字/下划线/横线，2-32字符")
+		infra.BadRequest(c, "项目名仅允许字母/数字/下划线/横线，2-32字符")
 		return
 	}
 
@@ -35,21 +36,21 @@ func AllocatePort(c *gin.Context) {
 	// 检查同一用户下项目名唯一
 	var existing softdel.UserHTML
 	if err := models.DB.Where("user_id = ? AND project_name = ? AND port > 0 AND is_active = ?", userID, req.ProjectName, true).First(&existing).Error; err == nil {
-		utils.BadRequest(c, "项目名 \""+req.ProjectName+"\" 已被使用，请换一个")
+		infra.BadRequest(c, "项目名 \""+req.ProjectName+"\" 已被使用，请换一个")
 		return
 	}
 
 	// 🔒 安全审计 L4：端口绑定前校验 html 归属（防 IDOR 改写他人扩展）
 	var htmlItem softdel.UserHTML
 	if err := models.DB.Where("id = ? AND user_id = ?", req.HTMLID, userID).First(&htmlItem).Error; err != nil {
-		utils.Forbidden(c, "无权操作该扩展")
+		infra.Forbidden(c, "无权操作该扩展")
 		return
 	}
 
-	allocator := utils.GetPortAllocator()
+	allocator := secure.GetPortAllocator()
 	port, err := allocator.Allocate()
 	if err != nil {
-		utils.InternalError(c, "端口分配失败: "+err.Error())
+		infra.InternalError(c, "端口分配失败: "+err.Error())
 		return
 	}
 
@@ -65,7 +66,7 @@ func AllocatePort(c *gin.Context) {
 
 	proxyPath := fmt.Sprintf("/sandbox/proxy/%d/%s/", userID, req.ProjectName)
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"port":           port,
 		"project_name":   req.ProjectName,
 		"proxy_path":     proxyPath,
@@ -84,7 +85,7 @@ func ReleasePort(c *gin.Context) {
 		Port        int    `json:"port"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 
@@ -97,7 +98,7 @@ func ReleasePort(c *gin.Context) {
 
 	// 释放端口
 	if req.Port > 0 {
-		utils.GetPortAllocator().Release(req.Port)
+		secure.GetPortAllocator().Release(req.Port)
 	}
 
 	// 清除数据库（🔒 安全审计 L4：仅清除归属本人的 html 记录）
@@ -106,7 +107,7 @@ func ReleasePort(c *gin.Context) {
 		"project_name": "",
 	})
 
-	utils.Success(c, gin.H{"message": "端口已释放"})
+	infra.Success(c, gin.H{"message": "端口已释放"})
 }
 
 // ListPorts GET /api/port/list
@@ -127,7 +128,7 @@ func ListPorts(c *gin.Context) {
 		})
 	}
 
-	utils.Success(c, result)
+	infra.Success(c, result)
 }
 
 func isValidProjectName(name string) bool {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strconv"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/moderation"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
@@ -22,7 +22,7 @@ import (
 
 // GetReportReasons GET /api/reports/reasons — 预置举报理由
 func GetReportReasons(c *gin.Context) {
-	utils.Success(c, platform.PredefinedReportReasons())
+	infra.Success(c, platform.PredefinedReportReasons())
 }
 
 // CreateReport POST /api/reports — 提交举报（理由选择 + 提交）
@@ -36,7 +36,7 @@ func CreateReport(c *gin.Context) {
 		Detail     string `json:"detail"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 
@@ -44,7 +44,7 @@ func CreateReport(c *gin.Context) {
 	switch req.TargetType {
 	case "novel", "comment", "thread", "post", "blog", "forum", "chapter", "user", "userframe", "userhtml":
 	default:
-		utils.BadRequest(c, "不支持的举报对象类型")
+		infra.BadRequest(c, "不支持的举报对象类型")
 		return
 	}
 
@@ -58,7 +58,7 @@ func CreateReport(c *gin.Context) {
 
 	// 举报功能被没收（不实举报累计达阈值）的用户禁止再举报
 	if moderation.IsReportingBanned(userID) {
-		utils.BadRequest(c, "您的举报功能已被限制，暂不可举报")
+		infra.BadRequest(c, "您的举报功能已被限制，暂不可举报")
 		return
 	}
 
@@ -69,7 +69,7 @@ func CreateReport(c *gin.Context) {
 			userID, req.TargetType, req.TargetID, "pending").
 		Count(&dupCount)
 	if dupCount > 0 {
-		utils.BadRequest(c, "您已举报过该内容，请等待处理结果")
+		infra.BadRequest(c, "您已举报过该内容，请等待处理结果")
 		return
 	}
 
@@ -82,12 +82,12 @@ func CreateReport(c *gin.Context) {
 		Detail:     html.EscapeString(req.Detail),
 	}
 	if err := models.DB.Create(r).Error; err != nil {
-		utils.InternalError(c, "提交举报失败")
+		infra.InternalError(c, "提交举报失败")
 		return
 	}
 	// 被举报立刻送检 AI（异步，不阻塞举报响应）；链路逻辑见 moderation.OnReport
 	go moderation.OnReport(userID, req.TargetType, req.TargetID)
-	utils.Success(c, r)
+	infra.Success(c, r)
 }
 
 // ListMyReports GET /api/reports/mine — 我的举报（状态追踪）
@@ -105,7 +105,7 @@ func ListMyReports(c *gin.Context) {
 	for _, r := range reports {
 		items = append(items, reportItem{Report: r, TargetPreview: targetPreview(r.TargetType, r.TargetID)})
 	}
-	utils.Success(c, items)
+	infra.Success(c, items)
 }
 
 // targetPreview 根据举报目标类型返回内容预览，便于用户追踪
@@ -180,7 +180,7 @@ func ListReports(c *gin.Context) {
 	for _, r := range reports {
 		items = append(items, reportItem{Report: r, TargetPreview: targetPreview(r.TargetType, r.TargetID)})
 	}
-	utils.Success(c, items)
+	infra.Success(c, items)
 }
 
 // HandleReport POST /api/admin/reports/:id/handle — 处理举报（人工判定 + 可选删除目标）
@@ -197,17 +197,17 @@ func HandleReport(c *gin.Context) {
 		DeleteTarget bool   `json:"delete_target"` // 判定成立时是否删除被举报内容
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.Status != "accepted" && req.Status != "rejected" {
-		utils.BadRequest(c, "无效的处理状态")
+		infra.BadRequest(c, "无效的处理状态")
 		return
 	}
 
 	var report platform.Report
 	if err := models.DB.First(&report, id).Error; err != nil {
-		utils.NotFound(c, "举报不存在")
+		infra.NotFound(c, "举报不存在")
 		return
 	}
 
@@ -228,5 +228,5 @@ func HandleReport(c *gin.Context) {
 	// 合规审计：举报处理（target 关联举报记录本身）
 	emergency.AuditEmergency(c, siteops.AuditReportHandle, "report", uint(id),
 		fmt.Sprintf("举报处理：%s，判定：%s，删除目标：%v", req.Status, verdict, req.DeleteTarget))
-	utils.Success(c, gin.H{"message": "已处理"})
+	infra.Success(c, gin.H{"message": "已处理"})
 }

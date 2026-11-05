@@ -19,11 +19,10 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"nvs-server/utils/infra"
 	"regexp"
 	"strings"
 	"time"
-
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -143,7 +142,7 @@ var sqliCanary = randHex(16)
 func ServeSQLi(c *gin.Context, decoyID string) {
 	set := Current()
 	if !set.Enabled || set.Level == LevelOff || set.Level == LevelLow {
-		utils.NotFound(c, "接口不存在")
+		infra.NotFound(c, "接口不存在")
 		return
 	}
 	// payload 来源：query + body 摘要（不解析结构，只要字符串）

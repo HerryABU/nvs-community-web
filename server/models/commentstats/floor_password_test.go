@@ -1,9 +1,8 @@
 package commentstats
 
 import (
+	"nvs-server/utils/secure"
 	"testing"
-
-	"nvs-server/utils"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -34,7 +33,7 @@ func seedFloor(t *testing.T, authorID uint, withPassword bool) (*models.Comment,
 	t.Helper()
 	hash := ""
 	if withPassword {
-		h, err := utils.HashPassword("secret123")
+		h, err := secure.HashPassword("secret123")
 		if err != nil {
 			t.Fatalf("哈希密码失败: %v", err)
 		}
@@ -186,7 +185,7 @@ func TestSetFloorPasswordAndDetail(t *testing.T) {
 	}
 
 	// 楼设密
-	hash, _ := utils.HashPassword("newpass99")
+	hash, _ := secure.HashPassword("newpass99")
 	if err := models.SetFloorPassword(floor.ID, hash, true); err != nil {
 		t.Fatalf("设密失败: %v", err)
 	}

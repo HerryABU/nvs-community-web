@@ -6,7 +6,7 @@ import (
 	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
 	quota "nvs-server/models/quota"
@@ -32,7 +32,7 @@ func EnforceDailyPublish(c *gin.Context, kind string, addWords int) bool {
 	default:
 		msg = fmt.Sprintf("本次发布后今日总字数将超出上限（已用 %d 字 + 本次 %d 字，上限 %d 字），次日 0 点重置", usedWords, addWords, wordLimit)
 	}
-	utils.Error(c, http.StatusTooManyRequests, 42901, msg)
+	infra.Error(c, http.StatusTooManyRequests, 42901, msg)
 	return false
 }
 
@@ -43,7 +43,7 @@ func GetMyPublishQuota(c *gin.Context) {
 	enabled := quota.GetDailyPublishConfig().Enabled
 	countLimit, wordLimit := quota.EffectivePublishLimit(userID, role)
 	uc, uw := quota.CountTodayPublish(userID)
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"enabled":     enabled,
 		"used_count":  int(uc),
 		"count_limit": countLimit,
@@ -58,7 +58,7 @@ func AdminGetDailyPublishConfig(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, quota.GetDailyPublishConfig())
+	infra.Success(c, quota.GetDailyPublishConfig())
 }
 
 // AdminSetDailyPublishConfig PUT /api/admin/daily-publish/config — 保存配置（立即生效）
@@ -68,14 +68,14 @@ func AdminSetDailyPublishConfig(c *gin.Context) {
 	}
 	var cfg quota.DailyPublishConfig
 	if err := c.ShouldBindJSON(&cfg); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := quota.SetDailyPublishConfig(cfg); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "每日发文限额已保存（立即生效）"})
+	infra.Success(c, gin.H{"message": "每日发文限额已保存（立即生效）"})
 }
 
 // AdminListPublishOverrides GET /api/admin/daily-publish/overrides — 按人覆盖列表
@@ -85,10 +85,10 @@ func AdminListPublishOverrides(c *gin.Context) {
 	}
 	list, err := quota.ListUserPublishQuotas()
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, list)
+	infra.Success(c, list)
 }
 
 // AdminManagePublishOverride POST /api/admin/daily-publish/overrides — 设置/撤销按人覆盖
@@ -105,31 +105,31 @@ func AdminManagePublishOverride(c *gin.Context) {
 		Note    string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.UserID == 0 {
-		utils.BadRequest(c, "用户 ID 无效")
+		infra.BadRequest(c, "用户 ID 无效")
 		return
 	}
 	if _, err := models.GetUserByID(req.UserID); err != nil {
-		utils.NotFound(c, "用户不存在")
+		infra.NotFound(c, "用户不存在")
 		return
 	}
 	switch req.Action {
 	case "set":
 		if err := quota.SetUserPublishQuotaOverride(req.UserID, req.Count, req.WordCap, req.Note); err != nil {
-			utils.InternalError(c, "保存失败")
+			infra.InternalError(c, "保存失败")
 			return
 		}
-		utils.Success(c, gin.H{"message": "已保存该用户的发文限额（立即生效）"})
+		infra.Success(c, gin.H{"message": "已保存该用户的发文限额（立即生效）"})
 	case "remove":
 		if err := quota.DeleteUserPublishQuotaOverride(req.UserID); err != nil {
-			utils.InternalError(c, "操作失败")
+			infra.InternalError(c, "操作失败")
 			return
 		}
-		utils.Success(c, gin.H{"message": "已撤销该用户的限额覆盖（恢复跟随等级默认）"})
+		infra.Success(c, gin.H{"message": "已撤销该用户的限额覆盖（恢复跟随等级默认）"})
 	default:
-		utils.BadRequest(c, "未知的 action（支持 set / remove）")
+		infra.BadRequest(c, "未知的 action（支持 set / remove）")
 	}
 }

@@ -8,7 +8,8 @@ import (
 	"nvs-server/handlers/publish"
 	"nvs-server/models"
 	"nvs-server/security"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/secure"
 	"strconv"
 	"strings"
 
@@ -26,22 +27,22 @@ func ListForums(c *gin.Context) {
 	if parentIDStr != "" {
 		parentID, err := strconv.ParseUint(parentIDStr, 10, 64)
 		if err != nil {
-			utils.BadRequest(c, "无效的 parent_id")
+			infra.BadRequest(c, "无效的 parent_id")
 			return
 		}
 		forums, err := models.GetSubForums(uint(parentID))
 		if err != nil {
-			utils.InternalError(c, "获取子论坛列表失败")
+			infra.InternalError(c, "获取子论坛列表失败")
 			return
 		}
-		utils.Success(c, forums)
+		infra.Success(c, forums)
 		return
 	}
 
 	// 仅查询自建论坛
 	if ftype == "custom" {
 		forums := listCustomForums(userID)
-		utils.Success(c, forums)
+		infra.Success(c, forums)
 		return
 	}
 
@@ -50,7 +51,7 @@ func ListForums(c *gin.Context) {
 	if ftype == "all" {
 		all, e := models.ListAllForums("")
 		if e != nil {
-			utils.InternalError(c, "获取论坛列表失败")
+			infra.InternalError(c, "获取论坛列表失败")
 			return
 		}
 		// 系统论坛（非 custom）+ 自建论坛（公开非驳回 + 本人创建的）
@@ -67,10 +68,10 @@ func ListForums(c *gin.Context) {
 		forums, err = models.GetForumsByType(ftype)
 	}
 	if err != nil {
-		utils.InternalError(c, "获取论坛列表失败")
+		infra.InternalError(c, "获取论坛列表失败")
 		return
 	}
-	utils.Success(c, forums)
+	infra.Success(c, forums)
 }
 
 // listCustomForums 返回大厅自建区可见的论坛：公开且未驳回 + 本人创建的（含隐藏）
@@ -94,7 +95,7 @@ func GetForum(c *gin.Context) {
 
 	forum, err := models.GetForumByID(uint(forumID))
 	if err != nil {
-		utils.NotFound(c, "论坛不存在")
+		infra.NotFound(c, "论坛不存在")
 		return
 	}
 
@@ -112,9 +113,9 @@ func GetForum(c *gin.Context) {
 			pass = c.GetHeader("X-Forum-Password")
 		}
 		if !strings.EqualFold(strings.TrimSpace(room), forum.RoomCode) ||
-			(forum.HasPassword && !utils.CheckPassword(pass, forum.PasswordHash)) {
+			(forum.HasPassword && !secure.CheckPassword(pass, forum.PasswordHash)) {
 			// 🔒 安全审计 L5：未解锁时仅返回最小信息，不泄露论坛名称/描述等元数据
-			utils.Success(c, gin.H{
+			infra.Success(c, gin.H{
 				"forum": gin.H{
 					"id":        forum.ID,
 					"type":      forum.Type,
@@ -137,8 +138,8 @@ func GetForum(c *gin.Context) {
 		if password == "" {
 			password = c.GetHeader("X-Forum-Password")
 		}
-		if !utils.CheckPassword(password, forum.PasswordHash) {
-			utils.Success(c, gin.H{
+		if !secure.CheckPassword(password, forum.PasswordHash) {
+			infra.Success(c, gin.H{
 				"forum": gin.H{
 					"id":        forum.ID,
 					"type":      forum.Type,
@@ -157,7 +158,7 @@ func GetForum(c *gin.Context) {
 
 	threads, total, err := models.GetThreadsByForum(uint(forumID), page, 20)
 	if err != nil {
-		utils.InternalError(c, "获取帖子列表失败")
+		infra.InternalError(c, "获取帖子列表失败")
 		return
 	}
 
@@ -167,7 +168,7 @@ func GetForum(c *gin.Context) {
 	// 获取子论坛列表
 	subForums, _ := models.GetSubForums(uint(forumID))
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"forum":      forum,
 		"threads":    threads,
 		"total":      total,
@@ -181,7 +182,7 @@ func CreateThread(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	forumID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || forumID == 0 {
-		utils.BadRequest(c, "无效的论坛ID")
+		infra.BadRequest(c, "无效的论坛ID")
 		return
 	}
 
@@ -190,14 +191,14 @@ func CreateThread(c *gin.Context) {
 		return
 	}
 	if models.IsForumMuted(uint(forumID), userID) {
-		utils.Forbidden(c, "您已被本论坛禁言，无法发帖")
+		infra.Forbidden(c, "您已被本论坛禁言，无法发帖")
 		return
 	}
 
 	// 验证论坛是否存在
 	forum, err := models.GetForumByID(uint(forumID))
 	if err != nil {
-		utils.NotFound(c, "论坛不存在")
+		infra.NotFound(c, "论坛不存在")
 		return
 	}
 	_ = forum
@@ -207,7 +208,7 @@ func CreateThread(c *gin.Context) {
 		Content string `json:"content" binding:"required,max=65536"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请填写标题和内容")
+		infra.BadRequest(c, "请填写标题和内容")
 		return
 	}
 
@@ -228,7 +229,7 @@ func CreateThread(c *gin.Context) {
 	}
 
 	if err := models.CreateThread(thread); err != nil {
-		utils.InternalError(c, "发帖失败")
+		infra.InternalError(c, "发帖失败")
 		return
 	}
 	// 发布流水记账（计入每日发文限额）
@@ -237,7 +238,7 @@ func CreateThread(c *gin.Context) {
 	// 违禁词 mark 动作命中 → 写入待审标记记录
 	badword.FlagBadWords(badHits, "thread", thread.ID, userID, raw, thread.Title)
 
-	utils.Success(c, thread)
+	infra.Success(c, thread)
 }
 
 // GET /api/threads/:id — 帖子详情+回复
@@ -250,7 +251,7 @@ func GetThread(c *gin.Context) {
 
 	thread, err := models.GetThreadByID(uint(threadID))
 	if err != nil {
-		utils.NotFound(c, "帖子不存在")
+		infra.NotFound(c, "帖子不存在")
 		return
 	}
 
@@ -258,7 +259,7 @@ func GetThread(c *gin.Context) {
 
 	pg, err := models.GetPostsByThread(uint(threadID), page, 20)
 	if err != nil {
-		utils.InternalError(c, "获取回复失败")
+		infra.InternalError(c, "获取回复失败")
 		return
 	}
 
@@ -266,7 +267,7 @@ func GetThread(c *gin.Context) {
 	pg.List = blacklist.FilterHiddenItems(hctx.CurrentUserID(c), pg.List, func(p models.Post) uint { return p.UserID })
 
 	// 楼层模型：posts = 本页楼层 + 这些楼层下的全部回复（平铺，前端按 root_id 分组成「楼」）
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"thread":      thread,
 		"posts":       pg.List,
 		"total":       pg.Total,
@@ -281,18 +282,18 @@ func CreatePost(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	threadID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || threadID == 0 {
-		utils.BadRequest(c, "无效的帖子ID")
+		infra.BadRequest(c, "无效的帖子ID")
 		return
 	}
 
 	// 验证帖子是否存在且未被锁定
 	thread, err := models.GetThreadByID(uint(threadID))
 	if err != nil {
-		utils.NotFound(c, "帖子不存在")
+		infra.NotFound(c, "帖子不存在")
 		return
 	}
 	if thread.IsLocked {
-		utils.Forbidden(c, "帖子已被锁定，无法回复")
+		infra.Forbidden(c, "帖子已被锁定，无法回复")
 		return
 	}
 
@@ -301,7 +302,7 @@ func CreatePost(c *gin.Context) {
 		return
 	}
 	if models.IsForumMuted(thread.ForumID, userID) {
-		utils.Forbidden(c, "您已被本论坛禁言，无法回复")
+		infra.Forbidden(c, "您已被本论坛禁言，无法回复")
 		return
 	}
 
@@ -310,7 +311,7 @@ func CreatePost(c *gin.Context) {
 		ParentID *uint  `json:"parent_id"` // 楼层模型：空=回复楼主（开新楼）；有值=回复该条（挂靠其所属楼）
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请输入回复内容")
+		infra.BadRequest(c, "请输入回复内容")
 		return
 	}
 	// 父回帖必须属于同一帖子，防止跨帖挂靠
@@ -318,7 +319,7 @@ func CreatePost(c *gin.Context) {
 		var parent models.Post
 		if err := models.DB.Select("id", "thread_id").First(&parent, *req.ParentID).Error; err != nil ||
 			parent.ThreadID != uint(threadID) {
-			utils.BadRequest(c, "被回复的内容不存在")
+			infra.BadRequest(c, "被回复的内容不存在")
 			return
 		}
 	}
@@ -334,7 +335,7 @@ func CreatePost(c *gin.Context) {
 	}
 
 	if err := models.CreatePost(post); err != nil {
-		utils.InternalError(c, "回复失败")
+		infra.InternalError(c, "回复失败")
 		return
 	}
 
@@ -345,7 +346,7 @@ func CreatePost(c *gin.Context) {
 		post.User = user
 	}
 
-	utils.Success(c, post)
+	infra.Success(c, post)
 }
 
 // GET /api/novels/:id/forum — 获取作品子论坛
@@ -354,13 +355,13 @@ func GetNovelForum(c *gin.Context) {
 
 	novel, err := models.GetNovelByID(uint(novelID))
 	if err != nil {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return
 	}
 
 	forum, err := models.GetOrCreateForum(novel.Title+" 讨论区", "sub", strconv.FormatUint(novelID, 10), "作品《"+novel.Title+"》的专属讨论区")
 	if err != nil {
-		utils.InternalError(c, "获取论坛失败")
+		infra.InternalError(c, "获取论坛失败")
 		return
 	}
 
@@ -369,7 +370,7 @@ func GetNovelForum(c *gin.Context) {
 	// 黑名单 hide 模式（F13）：不看被自己屏蔽（hide）的作者发的帖子
 	threads = blacklist.FilterHiddenItems(hctx.CurrentUserID(c), threads, func(t models.Thread) uint { return t.UserID })
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"forum":   forum,
 		"threads": threads,
 		"total":   total,
@@ -381,12 +382,12 @@ func PinThread(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	thread, err := models.GetThreadByID(uint(id))
 	if err != nil {
-		utils.NotFound(c, "帖子不存在")
+		infra.NotFound(c, "帖子不存在")
 		return
 	}
 	thread.IsPinned = true
 	models.DB.Save(thread)
-	utils.Success(c, gin.H{"message": "置顶成功"})
+	infra.Success(c, gin.H{"message": "置顶成功"})
 }
 
 // POST /api/threads/:id/unpin — 取消置顶
@@ -394,10 +395,10 @@ func UnpinThread(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	thread, err := models.GetThreadByID(uint(id))
 	if err != nil {
-		utils.NotFound(c, "帖子不存在")
+		infra.NotFound(c, "帖子不存在")
 		return
 	}
 	thread.IsPinned = false
 	models.DB.Save(thread)
-	utils.Success(c, gin.H{"message": "已取消置顶"})
+	infra.Success(c, gin.H{"message": "已取消置顶"})
 }

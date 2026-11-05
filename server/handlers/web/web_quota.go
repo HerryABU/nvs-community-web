@@ -14,7 +14,7 @@ import (
 	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"time"
@@ -69,7 +69,7 @@ func MyWebQuota(c *gin.Context) {
 
 	requests, _ := quotam.ListMyWebQuotaRequests(userID)
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"quota":             quota,
 		"used":              used,
 		"remaining":         remaining,
@@ -94,13 +94,13 @@ func SetHTMLPublic(c *gin.Context) {
 		IsPublic bool `json:"is_public"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误: "+err.Error())
+		infra.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
 
 	var html softdel.UserHTML
 	if err := models.DB.Where("id = ? AND user_id = ?", req.ID, userID).First(&html).Error; err != nil {
-		utils.NotFound(c, "项目不存在或不属于你")
+		infra.NotFound(c, "项目不存在或不属于你")
 		return
 	}
 
@@ -110,22 +110,22 @@ func SetHTMLPublic(c *gin.Context) {
 			"is_public":  false,
 			"updated_at": time.Now(),
 		}).Error; err != nil {
-			utils.InternalError(c, "操作失败")
+			infra.InternalError(c, "操作失败")
 			return
 		}
-		utils.Success(c, gin.H{"is_public": false, "allowed": true, "need_review": false, "message": "已取消公开"})
+		infra.Success(c, gin.H{"is_public": false, "allowed": true, "need_review": false, "message": "已取消公开"})
 		return
 	}
 
 	allowed, _, reason, err := quotam.CheckAndApplyWebPublish(userID, quotam.WebQuotaTargetHTML, req.ID)
 	if err != nil {
-		utils.InternalError(c, "操作失败")
+		infra.InternalError(c, "操作失败")
 		return
 	}
 	if allowed {
-		utils.Success(c, gin.H{"is_public": true, "allowed": true, "need_review": false, "message": "已公开发布到广场"})
+		infra.Success(c, gin.H{"is_public": true, "allowed": true, "need_review": false, "message": "已公开发布到广场"})
 	} else {
-		utils.Success(c, gin.H{
+		infra.Success(c, gin.H{
 			"is_public":   false,
 			"allowed":     false,
 			"need_review": true,
@@ -142,13 +142,13 @@ func SetFramePublic(c *gin.Context) {
 		IsPublic bool `json:"is_public"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误: "+err.Error())
+		infra.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
 
 	var frame softdel.UserFrame
 	if err := models.DB.Where("id = ? AND user_id = ?", req.ID, userID).First(&frame).Error; err != nil {
-		utils.NotFound(c, "模板不存在或不属于你")
+		infra.NotFound(c, "模板不存在或不属于你")
 		return
 	}
 
@@ -157,22 +157,22 @@ func SetFramePublic(c *gin.Context) {
 			"is_public":  false,
 			"updated_at": time.Now(),
 		}).Error; err != nil {
-			utils.InternalError(c, "操作失败")
+			infra.InternalError(c, "操作失败")
 			return
 		}
-		utils.Success(c, gin.H{"is_public": false, "allowed": true, "need_review": false, "message": "已取消公开"})
+		infra.Success(c, gin.H{"is_public": false, "allowed": true, "need_review": false, "message": "已取消公开"})
 		return
 	}
 
 	allowed, _, reason, err := quotam.CheckAndApplyWebPublish(userID, quotam.WebQuotaTargetFrame, req.ID)
 	if err != nil {
-		utils.InternalError(c, "操作失败")
+		infra.InternalError(c, "操作失败")
 		return
 	}
 	if allowed {
-		utils.Success(c, gin.H{"is_public": true, "allowed": true, "need_review": false, "message": "已公开发布到广场"})
+		infra.Success(c, gin.H{"is_public": true, "allowed": true, "need_review": false, "message": "已公开发布到广场"})
 	} else {
-		utils.Success(c, gin.H{
+		infra.Success(c, gin.H{
 			"is_public":   false,
 			"allowed":     false,
 			"need_review": true,
@@ -191,10 +191,10 @@ func AdminListWebQuotaRequests(c *gin.Context) {
 	status := strings.TrimSpace(c.Query("status"))
 	list, err := quotam.ListWebQuotaRequests(status)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, list)
+	infra.Success(c, list)
 }
 
 // AdminApproveWebQuotaRequest POST /api/admin/web-quota/requests/:id/approve —— 批准超额公开
@@ -208,10 +208,10 @@ func AdminApproveWebQuotaRequest(c *gin.Context) {
 	}
 	_ = c.ShouldBindJSON(&req)
 	if err := quotam.ApproveQuotaRequest(uint(id), hctx.CurrentUserID(c), strings.TrimSpace(req.Note)); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已批准，项目已公开发布到广场", "status": quotam.WebQuotaStatusApproved})
+	infra.Success(c, gin.H{"message": "已批准，项目已公开发布到广场", "status": quotam.WebQuotaStatusApproved})
 }
 
 // AdminRejectWebQuotaRequest POST /api/admin/web-quota/requests/:id/reject —— 驳回超额公开
@@ -225,10 +225,10 @@ func AdminRejectWebQuotaRequest(c *gin.Context) {
 	}
 	_ = c.ShouldBindJSON(&req)
 	if err := quotam.RejectQuotaRequest(uint(id), hctx.CurrentUserID(c), strings.TrimSpace(req.Note)); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已驳回，项目保持私有", "status": quotam.WebQuotaStatusRejected})
+	infra.Success(c, gin.H{"message": "已驳回，项目保持私有", "status": quotam.WebQuotaStatusRejected})
 }
 
 // ==================== 管理端：额度配置（全局默认 + 按人覆盖） ====================
@@ -242,7 +242,7 @@ func AdminGetWebQuotaConfig(c *gin.Context) {
 	if err != nil {
 		overrides = []quotam.UserWebQuota{}
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"max_per_user": quotam.GetWebPublishQuotaConfig(),
 		"max_size_mb":  quotam.GetWebPublishQuotaSizeConfig(),
 		"overrides":    overrides,
@@ -270,48 +270,48 @@ func AdminSetWebQuotaConfig(c *gin.Context) {
 		Note        string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 
 	switch req.Action {
 	case "global":
 		if req.MaxPerUser == nil && req.MaxSizeMB == nil {
-			utils.BadRequest(c, "请至少填写一项：max_per_user（数量）或 max_size_mb（大小，0=不限）")
+			infra.BadRequest(c, "请至少填写一项：max_per_user（数量）或 max_size_mb（大小，0=不限）")
 			return
 		}
 		if req.MaxPerUser != nil {
 			if *req.MaxPerUser < 0 || *req.MaxPerUser > 1000 {
-				utils.BadRequest(c, "数量额度需在 0 ~ 1000 之间（0 = 禁止任何人公开发布）")
+				infra.BadRequest(c, "数量额度需在 0 ~ 1000 之间（0 = 禁止任何人公开发布）")
 				return
 			}
 			if err := quotam.SetWebPublishQuotaConfig(*req.MaxPerUser); err != nil {
-				utils.InternalError(c, "保存失败")
+				infra.InternalError(c, "保存失败")
 				return
 			}
 		}
 		if req.MaxSizeMB != nil {
 			if *req.MaxSizeMB < 0 || *req.MaxSizeMB > quotam.MaxWebQuotaSizeMB {
-				utils.BadRequest(c, "大小额度需在 0 ~ 102400 MB 之间（0 = 不限）")
+				infra.BadRequest(c, "大小额度需在 0 ~ 102400 MB 之间（0 = 不限）")
 				return
 			}
 			if err := quotam.SetWebPublishQuotaSizeConfig(*req.MaxSizeMB); err != nil {
-				utils.InternalError(c, "保存失败")
+				infra.InternalError(c, "保存失败")
 				return
 			}
 		}
-		utils.Success(c, gin.H{"message": "全局默认额度已保存（立即生效）"})
+		infra.Success(c, gin.H{"message": "全局默认额度已保存（立即生效）"})
 	case "set_user":
 		if req.UserID == 0 {
-			utils.BadRequest(c, "用户 ID 无效")
+			infra.BadRequest(c, "用户 ID 无效")
 			return
 		}
 		if req.Quota == nil && req.QuotaSizeMB == nil {
-			utils.BadRequest(c, "请至少填写一项：quota（数量）或 quota_size_mb（大小）")
+			infra.BadRequest(c, "请至少填写一项：quota（数量）或 quota_size_mb（大小）")
 			return
 		}
 		if _, err := models.GetUserByID(req.UserID); err != nil {
-			utils.NotFound(c, "用户不存在")
+			infra.NotFound(c, "用户不存在")
 			return
 		}
 		// 未提交的维度沿用已保存值（-1 = 跟随全局），实现「只改其一」
@@ -326,21 +326,21 @@ func AdminSetWebQuotaConfig(c *gin.Context) {
 			quotaSizeMB = *req.QuotaSizeMB
 		}
 		if err := quotam.SetUserWebQuotaOverride(req.UserID, quota, quotaSizeMB, strings.TrimSpace(req.Note)); err != nil {
-			utils.InternalError(c, "保存失败")
+			infra.InternalError(c, "保存失败")
 			return
 		}
-		utils.Success(c, gin.H{"message": "已保存按人额度（立即生效）"})
+		infra.Success(c, gin.H{"message": "已保存按人额度（立即生效）"})
 	case "remove_user":
 		if req.UserID == 0 {
-			utils.BadRequest(c, "用户 ID 无效")
+			infra.BadRequest(c, "用户 ID 无效")
 			return
 		}
 		if err := quotam.DeleteUserWebQuotaOverride(req.UserID); err != nil {
-			utils.InternalError(c, "操作失败")
+			infra.InternalError(c, "操作失败")
 			return
 		}
-		utils.Success(c, gin.H{"message": "已撤销该用户的额度覆盖（恢复跟随全局）"})
+		infra.Success(c, gin.H{"message": "已撤销该用户的额度覆盖（恢复跟随全局）"})
 	default:
-		utils.BadRequest(c, "未知的 action（支持 global / set_user / remove_user）")
+		infra.BadRequest(c, "未知的 action（支持 global / set_user / remove_user）")
 	}
 }

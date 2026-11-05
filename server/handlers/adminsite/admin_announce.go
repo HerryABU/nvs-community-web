@@ -6,11 +6,11 @@ package adminsite
 
 import (
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"nvs-server/middleware"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	siteops "nvs-server/models/siteops"
@@ -24,7 +24,7 @@ func AdminListAnnouncements(c *gin.Context) {
 	}
 	var list []siteops.Announcement
 	models.DB.Order("pinned DESC, created_at DESC").Find(&list)
-	utils.Success(c, list)
+	infra.Success(c, list)
 }
 
 // AdminCreateAnnouncement 发布公告
@@ -40,7 +40,7 @@ func AdminCreateAnnouncement(c *gin.Context) {
 		Published bool   `json:"published"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "公告标题不能为空")
+		infra.BadRequest(c, "公告标题不能为空")
 		return
 	}
 	a := &siteops.Announcement{
@@ -51,10 +51,10 @@ func AdminCreateAnnouncement(c *gin.Context) {
 		CreatedBy: middleware.UserID(c),
 	}
 	if err := models.DB.Create(a).Error; err != nil {
-		utils.InternalError(c, "发布失败")
+		infra.InternalError(c, "发布失败")
 		return
 	}
-	utils.Success(c, a)
+	infra.Success(c, a)
 }
 
 // AdminUpdateAnnouncement 更新公告
@@ -66,7 +66,7 @@ func AdminUpdateAnnouncement(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var a siteops.Announcement
 	if err := models.DB.First(&a, id).Error; err != nil {
-		utils.NotFound(c, "公告不存在")
+		infra.NotFound(c, "公告不存在")
 		return
 	}
 	var req struct {
@@ -76,7 +76,7 @@ func AdminUpdateAnnouncement(c *gin.Context) {
 		Published *bool   `json:"published"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	updates := map[string]interface{}{}
@@ -96,7 +96,7 @@ func AdminUpdateAnnouncement(c *gin.Context) {
 		models.DB.Model(&a).Updates(updates)
 	}
 	models.DB.First(&a, id)
-	utils.Success(c, a)
+	infra.Success(c, a)
 }
 
 // AdminDeleteAnnouncement 删除公告（软删除）
@@ -107,11 +107,11 @@ func AdminDeleteAnnouncement(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	models.DB.Delete(&siteops.Announcement{}, id)
-	utils.Success(c, gin.H{"message": "公告已删除"})
+	infra.Success(c, gin.H{"message": "公告已删除"})
 }
 
 // ListAnnouncements 公开公告列表（已发布，置顶优先）
 // GET /api/announcements
 func ListAnnouncements(c *gin.Context) {
-	utils.Success(c, siteops.ListPublishedAnnouncements(20))
+	infra.Success(c, siteops.ListPublishedAnnouncements(20))
 }

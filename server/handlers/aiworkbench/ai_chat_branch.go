@@ -1,10 +1,10 @@
 package aiworkbench
 
 import (
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"nvs-server/handlers/hctx"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	aim "nvs-server/models/ai"
@@ -46,33 +46,33 @@ func AiHubSwitchBranch(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	s, err := aim.GetAiChatSession(uint(id), userID)
 	if err != nil || s == nil {
-		utils.NotFound(c, "会话不存在")
+		infra.NotFound(c, "会话不存在")
 		return
 	}
 	var req struct {
 		MessageID uint `json:"message_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.MessageID == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	m, err := aihub.GetAiChatMessage(req.MessageID, s.ID)
 	if err != nil || m == nil {
-		utils.NotFound(c, "消息不存在")
+		infra.NotFound(c, "消息不存在")
 		return
 	}
 	// 兄弟分支可能各自又发展到不同深度，必须跟到该分支的末端，
 	// 否则切过去只显示到一半，后面的追问全丢了。
 	leaf := aihub.DeepestLeafFrom(s.ID, m.ID)
 	if err := aihub.SetActiveLeaf(s.ID, leaf); err != nil {
-		utils.InternalError(c, "切换失败")
+		infra.InternalError(c, "切换失败")
 		return
 	}
 	list, err := aihub.ListAiChatThread(s.ID, leaf)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	s.ActiveLeafID = leaf
-	utils.Success(c, gin.H{"session": s, "messages": chatMessageView(list)})
+	infra.Success(c, gin.H{"session": s, "messages": chatMessageView(list)})
 }

@@ -16,6 +16,7 @@ package aiworkbench
 //  3. 不生成任何违规内容 —— 优化后仍要过提示词初审。
 
 import (
+	"nvs-server/utils/infra"
 	"strings"
 	"time"
 
@@ -23,7 +24,6 @@ import (
 	"nvs-server/aisafety"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	aim "nvs-server/models/ai"
@@ -53,7 +53,7 @@ const promptOptimizeSystem = `你是 AI 绘画提示词优化助手。用户给�
 // 出参：{ prompt: string }
 func AiOptimizePrompt(c *gin.Context) {
 	if !aim.IsAiEnabled() {
-		utils.BadRequest(c, "AI 功能未开启")
+		infra.BadRequest(c, "AI 功能未开启")
 		return
 	}
 	userID := hctx.CurrentUserID(c)
@@ -63,16 +63,16 @@ func AiOptimizePrompt(c *gin.Context) {
 		ModelID uint   `json:"model_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	original := strings.TrimSpace(req.Prompt)
 	if original == "" {
-		utils.BadRequest(c, "请先输入提示词")
+		infra.BadRequest(c, "请先输入提示词")
 		return
 	}
 	if len([]rune(original)) > 2000 {
-		utils.BadRequest(c, "提示词过长（上限 2000 字）")
+		infra.BadRequest(c, "提示词过长（上限 2000 字）")
 		return
 	}
 
@@ -85,7 +85,7 @@ func AiOptimizePrompt(c *gin.Context) {
 				username = u.Username
 			}
 			aisafety.RecordDrawingPromptBlock(safetyCfg, userID, username, hits, reason)
-			utils.Forbidden(c, reason)
+			infra.Forbidden(c, reason)
 			return
 		}
 	}
@@ -93,7 +93,7 @@ func AiOptimizePrompt(c *gin.Context) {
 	// 选模型：优先用用户指定的；没指定就自动挑一个启用的 chat 模型
 	m, err := aim.GetEnabledAiModelOfKind(req.ModelID, aim.AiKindChat)
 	if err != nil || m == nil {
-		utils.BadRequest(c, "没有可用的对话模型，无法优化提示词")
+		infra.BadRequest(c, "没有可用的对话模型，无法优化提示词")
 		return
 	}
 
@@ -103,7 +103,7 @@ func AiOptimizePrompt(c *gin.Context) {
 		apiKey = lease.Key
 	}
 	if kerr != nil && apiKey == "" {
-		utils.InternalError(c, "模型密钥不可用，请联系管理员")
+		infra.InternalError(c, "模型密钥不可用，请联系管理员")
 		return
 	}
 	client := aiclient.NewClient(m.BaseURL, apiKey, 60*time.Second)
@@ -118,13 +118,13 @@ func AiOptimizePrompt(c *gin.Context) {
 		Temperature: 0.7,
 	})
 	if cerr != nil {
-		utils.BadRequest(c, "优化失败："+cerr.Error())
+		infra.BadRequest(c, "优化失败："+cerr.Error())
 		return
 	}
 
 	optimized := cleanOptimizedPrompt(out)
 	if optimized == "" {
-		utils.BadRequest(c, "优化结果为空，请重试")
+		infra.BadRequest(c, "优化结果为空，请重试")
 		return
 	}
 	// 优化结果同样过初审：模型可能「贴心地」把违规内容补得更详细
@@ -135,12 +135,12 @@ func AiOptimizePrompt(c *gin.Context) {
 				username = u.Username
 			}
 			aisafety.RecordDrawingPromptBlock(safetyCfg, userID, username, hits, reason)
-			utils.Forbidden(c, reason)
+			infra.Forbidden(c, reason)
 			return
 		}
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"prompt":   optimized,
 		"original": original,
 	})

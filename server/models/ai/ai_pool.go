@@ -2,10 +2,9 @@ package ai
 
 import (
 	"nvs-server/models"
+	"nvs-server/utils/secure"
 	"strings"
 	"time"
-
-	"nvs-server/utils"
 )
 
 // ==================== AI 模型池（§5.3 计费底座） ====================
@@ -280,14 +279,14 @@ func ListUserVisibleAiModelsByKind(kind string, onlyEnabled bool) ([]AiModel, er
 
 // CreateAiModel 创建模型；api_key 明文入参，加密落库
 func CreateAiModel(m *AiModel, apiKeyPlain string) error {
-	enc, err := utils.EncryptField(strings.TrimSpace(apiKeyPlain))
+	enc, err := secure.EncryptField(strings.TrimSpace(apiKeyPlain))
 	if err != nil {
 		return err
 	}
 	m.ApiKeyEnc = enc
 	if m.AccountTokenEnc != "" {
 		// 调用方传入的可能是明文：统一在这里加密
-		if aenc, e := utils.EncryptField(strings.TrimSpace(m.AccountTokenEnc)); e == nil {
+		if aenc, e := secure.EncryptField(strings.TrimSpace(m.AccountTokenEnc)); e == nil {
 			m.AccountTokenEnc = aenc
 		}
 	}
@@ -300,7 +299,7 @@ func CreateAiModel(m *AiModel, apiKeyPlain string) error {
 // UpdateAiModelFields map 精确更新（零值安全）；apiKeyPlain 非空时才轮换密钥
 func UpdateAiModelFields(id uint, fields map[string]interface{}, apiKeyPlain string) error {
 	if strings.TrimSpace(apiKeyPlain) != "" {
-		enc, err := utils.EncryptField(strings.TrimSpace(apiKeyPlain))
+		enc, err := secure.EncryptField(strings.TrimSpace(apiKeyPlain))
 		if err != nil {
 			return err
 		}
@@ -323,7 +322,7 @@ func (m *AiModel) DecryptApiKey() (string, error) {
 	if m.ApiKeyEnc == "" {
 		return "", nil
 	}
-	return utils.DecryptField(m.ApiKeyEnc)
+	return secure.DecryptField(m.ApiKeyEnc)
 }
 
 // DecryptAccountToken 解密中转站**系统访问令牌**（nap_ 开头，未配置返回空串）。
@@ -332,7 +331,7 @@ func (m *AiModel) DecryptAccountToken() (string, error) {
 	if m.AccountTokenEnc == "" {
 		return "", nil
 	}
-	return utils.DecryptField(m.AccountTokenEnc)
+	return secure.DecryptField(m.AccountTokenEnc)
 }
 
 // CountEnabledAiModels 启用模型数量（status 页展示）

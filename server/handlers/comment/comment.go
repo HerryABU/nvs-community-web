@@ -3,6 +3,7 @@ package comment
 import (
 	"fmt"
 	"nvs-server/handlers/adminsite"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"time"
@@ -21,7 +22,6 @@ import (
 	"nvs-server/realtime"
 	"nvs-server/security"
 	sentimentstore "nvs-server/sentiment/store"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/blog"
@@ -49,7 +49,7 @@ func GetComments(c *gin.Context) {
 		pg, err = models.GetCommentsByNovel(uint(novelID), chapterNum, page, pageSize, includeDeleted, sortKey)
 	}
 	if err != nil {
-		utils.InternalError(c, "获取评论失败")
+		infra.InternalError(c, "获取评论失败")
 		return
 	}
 
@@ -68,7 +68,7 @@ func GetComments(c *gin.Context) {
 	if cfg, cerr := sentimentstore.GetConfig(); cerr == nil && cfg != nil {
 		foldChars = cfg.FoldChars
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"fold_chars":  foldChars,
 		"list":        pg.List,
 		"total":       pg.Total,
@@ -106,12 +106,12 @@ func CreateComment(c *gin.Context) {
 		Images        []string `json:"images"` // 评论图片：仅允许站内上传路径 /uploads/images/...
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请填写评论内容")
+		infra.BadRequest(c, "请填写评论内容")
 		return
 	}
 
 	if req.NovelID == 0 && req.BlogID == 0 {
-		utils.BadRequest(c, "请指定作品或博客")
+		infra.BadRequest(c, "请指定作品或博客")
 		return
 	}
 
@@ -119,7 +119,7 @@ func CreateComment(c *gin.Context) {
 	if req.NovelID > 0 {
 		if novel, nerr := models.GetNovelByID(req.NovelID); nerr == nil && novel.AuthorID != userID {
 			if securitym.IsBlacklisted(novel.AuthorID, userID) {
-				utils.Forbidden(c, "你已被该作者拉黑，无法在其作品下评论")
+				infra.Forbidden(c, "你已被该作者拉黑，无法在其作品下评论")
 				return
 			}
 		}
@@ -127,7 +127,7 @@ func CreateComment(c *gin.Context) {
 	if req.BlogID > 0 {
 		if blog, berr := blog.GetBlogByID(req.BlogID); berr == nil && blog.AuthorID != userID {
 			if securitym.IsBlacklisted(blog.AuthorID, userID) {
-				utils.Forbidden(c, "你已被该作者拉黑，无法在其博客下评论")
+				infra.Forbidden(c, "你已被该作者拉黑，无法在其博客下评论")
 				return
 			}
 		}
@@ -156,7 +156,7 @@ func CreateComment(c *gin.Context) {
 			if !models.FloorAccessUnlocked(floor, userID, adminsite.IsPoliceOrAdminUser(c), map[uint]string{floor.ID: c.GetHeader("X-Floor-Password")}) {
 				policy := models.LoadCommentPolicy()
 				if policy.LockHidesReplies || !policy.LockedFloorCanReply {
-					utils.Forbidden(c, "该楼已加密，输入访问密码后才可回复")
+					infra.Forbidden(c, "该楼已加密，输入访问密码后才可回复")
 					return
 				}
 			}
@@ -171,7 +171,7 @@ func CreateComment(c *gin.Context) {
 	// 放在落库之前：拦下来就不该产生评论行，也不该发通知/广播。
 	// 判定依据是「内容话题（AI 敲定）+ 本次文本」，不是纯关键词。
 	if blocked, reason := guardComment(c, req.NovelID, req.BlogID, userID, cleaned); blocked {
-		utils.Forbidden(c, "该评论在当前话题下不适宜发布（"+reason+"），请调整措辞后重试")
+		infra.Forbidden(c, "该评论在当前话题下不适宜发布（"+reason+"），请调整措辞后重试")
 		return
 	}
 
@@ -215,7 +215,7 @@ func CreateComment(c *gin.Context) {
 	shielded := crisis.ShieldHighRiskTargets(comment, parentAuthorID, mentions)
 
 	if err := models.CreateComment(comment); err != nil {
-		utils.InternalError(c, "发表评论失败")
+		infra.InternalError(c, "发表评论失败")
 		return
 	}
 
@@ -271,7 +271,7 @@ func CreateComment(c *gin.Context) {
 		export.MaybeTriggerAiBot(c, comment)
 	}
 
-	utils.Success(c, comment)
+	infra.Success(c, comment)
 }
 
 func DeleteComment(c *gin.Context) {
@@ -280,23 +280,23 @@ func DeleteComment(c *gin.Context) {
 
 	comment, err := models.GetCommentByID(uint(commentID))
 	if err != nil {
-		utils.NotFound(c, "评论不存在")
+		infra.NotFound(c, "评论不存在")
 		return
 	}
 
 	if comment.UserID != userID {
-		utils.Forbidden(c, "无权删除此评论")
+		infra.Forbidden(c, "无权删除此评论")
 		return
 	}
 
 	if err := models.DeleteComment(uint(commentID)); err != nil {
-		utils.InternalError(c, "删除评论失败")
+		infra.InternalError(c, "删除评论失败")
 		return
 	}
 
 	// 标记为「用户自删」（区别于管理员删除：deleted_by='admin'）
 	_ = models.DB.Unscoped().Model(&models.Comment{}).Where("id = ?", commentID).Update("deleted_by", "user")
-	utils.Success(c, gin.H{"message": "评论已删除"})
+	infra.Success(c, gin.H{"message": "评论已删除"})
 }
 
 // sanitizeCommentImages 校验并规整评论图片 URL：
@@ -386,6 +386,6 @@ func moderateCommentImages(c *gin.Context, userID uint, comment *models.Comment,
 	if reason == "" {
 		reason = "图片内容疑似违规（" + strings.Join(v.Categories, "、") + "）"
 	}
-	utils.Forbidden(c, "评论中的图片未通过内容安全审核，已被拦截并留存记录（"+reason+"）")
+	infra.Forbidden(c, "评论中的图片未通过内容安全审核，已被拦截并留存记录（"+reason+"）")
 	return true, reason
 }

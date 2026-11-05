@@ -3,9 +3,9 @@ package adminsite
 import (
 	"github.com/gin-gonic/gin"
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 
 	"nvs-server/models"
-	"nvs-server/utils"
 )
 
 // 评论区策略的管理端接口。
@@ -19,7 +19,7 @@ func AdminGetCommentPolicy(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, gin.H{"config": models.LoadCommentPolicy()})
+	infra.Success(c, gin.H{"config": models.LoadCommentPolicy()})
 }
 
 // AdminSaveCommentPolicy PUT /api/admin/comment-policy
@@ -29,12 +29,12 @@ func AdminSaveCommentPolicy(c *gin.Context) {
 	}
 	var in models.CommentPolicy
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数不合法")
+		infra.BadRequest(c, "参数不合法")
 		return
 	}
 	if err := models.SaveCommentPolicy(in); err != nil {
-		utils.InternalError(c, "保存失败："+err.Error())
+		infra.InternalError(c, "保存失败："+err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"config": models.LoadCommentPolicy()})
+	infra.Success(c, gin.H{"config": models.LoadCommentPolicy()})
 }

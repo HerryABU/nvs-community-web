@@ -2,7 +2,7 @@ package security
 
 import (
 	"nvs-server/handlers/admincommon"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
 	securitym "nvs-server/models/security"
@@ -16,17 +16,17 @@ func RecordLeakHint(c *gin.Context) {
 		Types []string `json:"types"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if len(req.Types) > 6 {
 		req.Types = req.Types[:6]
 	}
 	if err := securitym.RecordLeakHint(req.Types); err != nil {
-		utils.InternalError(c, "统计失败")
+		infra.InternalError(c, "统计失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "ok"})
+	infra.Success(c, gin.H{"message": "ok"})
 }
 
 // AdminLeakHintStats GET /api/admin/security/leak-hint/stats
@@ -35,5 +35,5 @@ func AdminLeakHintStats(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, securitym.GetLeakHintStats())
+	infra.Success(c, securitym.GetLeakHintStats())
 }

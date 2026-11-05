@@ -7,12 +7,13 @@
 package auth
 
 import (
+	"nvs-server/utils/infra"
+	"nvs-server/utils/secure"
 	"strings"
 	"time"
 
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	apikey "nvs-server/models/apikey"
@@ -25,12 +26,12 @@ const birthDateLayout = "2006-01-02"
 func GetMinorStatus(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	user, err := models.GetUserByID(userID)
 	if err != nil || user == nil {
-		utils.NotFound(c, "用户不存在")
+		infra.NotFound(c, "用户不存在")
 		return
 	}
 
@@ -44,9 +45,9 @@ func GetMinorStatus(c *gin.Context) {
 	}
 	if user.BirthDate != nil {
 		resp["birth_date"] = user.BirthDate.Format(birthDateLayout)
-		resp["age"] = utils.AgeAt(*user.BirthDate, time.Now())
+		resp["age"] = secure.AgeAt(*user.BirthDate, time.Now())
 	}
-	utils.Success(c, resp)
+	infra.Success(c, resp)
 }
 
 // POST /api/auth/birthdate — 自报出生日期（需登录）
@@ -54,54 +55,54 @@ func GetMinorStatus(c *gin.Context) {
 func SetBirthDate(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	var req struct {
 		BirthDate string `json:"birth_date" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请选择出生日期")
+		infra.BadRequest(c, "请选择出生日期")
 		return
 	}
 	birth, err := time.Parse(birthDateLayout, strings.TrimSpace(req.BirthDate))
 	if err != nil {
-		utils.BadRequest(c, "出生日期格式应为 YYYY-MM-DD")
+		infra.BadRequest(c, "出生日期格式应为 YYYY-MM-DD")
 		return
 	}
 	now := time.Now()
 	if birth.After(now) {
-		utils.BadRequest(c, "出生日期不能晚于今天")
+		infra.BadRequest(c, "出生日期不能晚于今天")
 		return
 	}
 	if birth.Year() < 1900 {
-		utils.BadRequest(c, "出生日期过早，请检查")
+		infra.BadRequest(c, "出生日期过早，请检查")
 		return
 	}
 
 	user, err := models.GetUserByID(userID)
 	if err != nil || user == nil {
-		utils.NotFound(c, "用户不存在")
+		infra.NotFound(c, "用户不存在")
 		return
 	}
 	// 已实名（含国家 API 核验）的出生日期来自证件，不允许自报覆盖
 	if user.RealNameVerified {
-		utils.Forbidden(c, "你已完成实名认证，出生日期以证件为准，不可自报修改")
+		infra.Forbidden(c, "你已完成实名认证，出生日期以证件为准，不可自报修改")
 		return
 	}
 
-	age := utils.AgeAt(birth, now)
+	age := secure.AgeAt(birth, now)
 	minor := age < 18
 	if err := models.DB.Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
 		"birth_date":      &birth,
 		"minor_protected": minor,
 	}).Error; err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
 
 	RecordUserAudit(c, userID, apikey.AuditChangeProfile, "填报出生日期（未成年检测）", "success")
-	utils.SuccessMessage(c, "已保存", gin.H{
+	infra.SuccessMessage(c, "已保存", gin.H{
 		"age":             age,
 		"minor_protected": minor,
 	})
@@ -127,6 +128,6 @@ func CheckMinorPublishRestricted(c *gin.Context) bool {
 	if !user.MinorProtected {
 		return false
 	}
-	utils.Forbidden(c, "本站已开启严格保护模式，未成年人不可发布作品，评论互动不受影响")
+	infra.Forbidden(c, "本站已开启严格保护模式，未成年人不可发布作品，评论互动不受影响")
 	return true
 }

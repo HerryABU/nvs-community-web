@@ -3,7 +3,7 @@ package aimedia
 import (
 	"encoding/json"
 	"nvs-server/handlers/hctx"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
@@ -42,7 +42,7 @@ func galleryItem(t *aim.AiMediaTask) gin.H {
 func AiGalleryList(c *gin.Context) {
 	// 开关：关闭「公开」后仅登录用户可见
 	if !aihub.GetAiFeatureFlags().PublicGallery && hctx.CurrentUserID(c) == 0 {
-		utils.BadRequest(c, "灵感广场仅登录可见")
+		infra.BadRequest(c, "灵感广场仅登录可见")
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -50,14 +50,14 @@ func AiGalleryList(c *gin.Context) {
 	style := strings.TrimSpace(c.Query("style"))
 	list, total, err := aihub.ListPublicMedia(kind, style, page, 24)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	items := make([]gin.H, 0, len(list))
 	for i := range list {
 		items = append(items, galleryItem(&list[i]))
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"list": items, "total": total, "page": page,
 		"styles": aihub.GalleryStyles(kind),
 	})
@@ -73,24 +73,24 @@ func AiGalleryPublish(c *gin.Context) {
 		Style  string `json:"style"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := aihub.PublishAiMedia(uint(id), userID, req.Public, req.Title, req.Style); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": map[bool]string{true: "已发布到灵感广场", false: "已取消发布"}[req.Public]})
+	infra.Success(c, gin.H{"message": map[bool]string{true: "已发布到灵感广场", false: "已取消发布"}[req.Public]})
 }
 
 // AiGalleryLike POST /api/ai/gallery/:id/like — 点赞
 func AiGalleryLike(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := aihub.LikeAiMedia(uint(id)); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "ok"})
+	infra.Success(c, gin.H{"message": "ok"})
 }
 
 // AiMyMediaPublic GET /api/ai/media/:id/public — 查我的作品发布状态（发布弹窗回填）
@@ -99,10 +99,10 @@ func AiMyMediaPublic(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	t, err := aim.GetAiMediaTask(uint(id), userID)
 	if err != nil {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return
 	}
-	utils.Success(c, gin.H{"id": t.ID, "is_public": t.IsPublic, "title": t.Title, "style": t.Style})
+	infra.Success(c, gin.H{"id": t.ID, "is_public": t.IsPublic, "title": t.Title, "style": t.Style})
 }
 
 // ==================== 思维导图 ====================

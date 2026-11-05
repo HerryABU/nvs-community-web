@@ -4,13 +4,13 @@ package chaptervcshandler
 // 只做入参校验 + 权限判定 + 响应组装；规则一律走 chaptervcs / collab，前后端不各写一套。
 
 import (
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"nvs-server/chaptervcs"
 	"nvs-server/collab"
 	"nvs-server/middleware"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	social "nvs-server/models/social"
@@ -22,17 +22,17 @@ func loadChapter(c *gin.Context) (*models.Novel, *models.Chapter, bool) {
 	num, _ := strconv.Atoi(c.Param("num"))
 	novel, err := models.GetNovelByID(uint(novelID))
 	if err != nil {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return nil, nil, false
 	}
 	chapter, err := models.GetChapterByNovelAndNumber(uint(novelID), num)
 	if err != nil {
-		utils.NotFound(c, "章节不存在")
+		infra.NotFound(c, "章节不存在")
 		return nil, nil, false
 	}
 	actor := collab.ActorOf(novel.ID, middleware.UserID(c), middleware.UserRole(c))
 	if !actor.CanEditChapter(chapter) {
-		utils.Forbidden(c, "无权操作本章版本（需主笔 / 本章作者 / 有改他人章节权限）")
+		infra.Forbidden(c, "无权操作本章版本（需主笔 / 本章作者 / 有改他人章节权限）")
 		return nil, nil, false
 	}
 	return novel, chapter, true
@@ -57,11 +57,11 @@ func ListVersions(c *gin.Context) {
 	branch := chaptervcs.NormalizeBranch(c.Query("branch"))
 	list, err := chaptervcs.List(chapter.ID, branch)
 	if err != nil {
-		utils.InternalError(c, "查询版本失败")
+		infra.InternalError(c, "查询版本失败")
 		return
 	}
 	branches, _ := chaptervcs.Branches(chapter.ID)
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"list":     list,
 		"branch":   branch,
 		"branches": branches,
@@ -80,11 +80,11 @@ func GetVersion(c *gin.Context) {
 	branch := chaptervcs.NormalizeBranch(c.Query("branch"))
 	v, err := chaptervcs.Get(chapter.ID, branch, ver)
 	if err != nil {
-		utils.NotFound(c, "版本不存在")
+		infra.NotFound(c, "版本不存在")
 		return
 	}
 	content, _ := chaptervcs.Content(novel.AuthorID, novel.ID, v)
-	utils.Success(c, gin.H{"version": v, "content": content})
+	infra.Success(c, gin.H{"version": v, "content": content})
 }
 
 // DiffVersions GET /api/novels/:id/chapters/:num/versions/:ver/diff?to=2&branch=main
@@ -103,12 +103,12 @@ func DiffVersions(c *gin.Context) {
 	a, errA := chaptervcs.Get(chapter.ID, branch, from)
 	b, errB := chaptervcs.Get(chapter.ID, branch, to)
 	if errA != nil || errB != nil {
-		utils.NotFound(c, "版本不存在")
+		infra.NotFound(c, "版本不存在")
 		return
 	}
 	ca, _ := chaptervcs.Content(novel.AuthorID, novel.ID, a)
 	cb, _ := chaptervcs.Content(novel.AuthorID, novel.ID, b)
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"from": gin.H{"version": from, "author_name": a.AuthorName, "message": a.Message, "created_at": a.CreatedAt},
 		"to":   gin.H{"version": to, "author_name": b.AuthorName, "message": b.Message, "created_at": b.CreatedAt},
 		"diff": chaptervcs.DiffLines(ca, cb),
@@ -126,16 +126,16 @@ func RevertVersion(c *gin.Context) {
 	branch := chaptervcs.NormalizeBranch(c.Query("branch"))
 	target, err := chaptervcs.Get(chapter.ID, branch, ver)
 	if err != nil {
-		utils.NotFound(c, "版本不存在")
+		infra.NotFound(c, "版本不存在")
 		return
 	}
 	v, err := chaptervcs.Revert(novel.AuthorID, novel.ID, chapter, target, middleware.UserID(c))
 	if err != nil {
-		utils.InternalError(c, "回滚失败")
+		infra.InternalError(c, "回滚失败")
 		return
 	}
 	collab.LogChapterAction(novel.ID, middleware.UserID(c), "revert", chapter.ID, "回滚到 v"+strconv.Itoa(ver))
-	utils.SuccessMessage(c, "已回滚并生成新版本 v"+strconv.Itoa(v.Version), v)
+	infra.SuccessMessage(c, "已回滚并生成新版本 v"+strconv.Itoa(v.Version), v)
 }
 
 // DeleteVersion DELETE /api/novels/:id/chapters/:num/versions/:ver
@@ -146,17 +146,17 @@ func DeleteVersion(c *gin.Context) {
 		return
 	}
 	if !canDeleteHistory(c, novel, chapter) {
-		utils.Forbidden(c, "只有主笔或本章作者可删除历史版本")
+		infra.Forbidden(c, "只有主笔或本章作者可删除历史版本")
 		return
 	}
 	ver, _ := strconv.Atoi(c.Param("ver"))
 	branch := chaptervcs.NormalizeBranch(c.Query("branch"))
 	if err := chaptervcs.DeleteVersion(novel.AuthorID, novel.ID, chapter.ID, branch, ver); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	collab.LogChapterAction(novel.ID, middleware.UserID(c), "del_version", chapter.ID, branch+" v"+strconv.Itoa(ver))
-	utils.SuccessMessage(c, "已删除该历史快照（作者与提交记录保留）", nil)
+	infra.SuccessMessage(c, "已删除该历史快照（作者与提交记录保留）", nil)
 }
 
 // ListBranches GET /api/novels/:id/chapters/:num/branches
@@ -167,10 +167,10 @@ func ListBranches(c *gin.Context) {
 	}
 	list, err := chaptervcs.Branches(chapter.ID)
 	if err != nil {
-		utils.InternalError(c, "查询分支失败")
+		infra.InternalError(c, "查询分支失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list})
+	infra.Success(c, gin.H{"list": list})
 }
 
 // CreateBranch POST /api/novels/:id/chapters/:num/branches { name, from_branch, from_ver }
@@ -185,16 +185,16 @@ func CreateBranch(c *gin.Context) {
 		FromVer    int    `json:"from_ver"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	v, err := chaptervcs.CreateBranch(novel.AuthorID, novel.ID, chapter, req.Name, req.FromBranch, req.FromVer, middleware.UserID(c))
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	collab.LogChapterAction(novel.ID, middleware.UserID(c), "branch", chapter.ID, v.Branch)
-	utils.SuccessMessage(c, "已创建分支 "+v.Branch, v)
+	infra.SuccessMessage(c, "已创建分支 "+v.Branch, v)
 }
 
 // MergeBranch POST /api/novels/:id/chapters/:num/merge { from_branch, into_branch, message }
@@ -209,19 +209,19 @@ func MergeBranch(c *gin.Context) {
 		Message    string `json:"message"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	res, err := chaptervcs.Merge(novel.AuthorID, novel.ID, chapter, req.FromBranch, req.IntoBranch, middleware.UserID(c), req.Message)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	if res.Conflict {
-		utils.Conflict(c, "合并存在冲突，请人工确认", res)
+		infra.Conflict(c, "合并存在冲突，请人工确认", res)
 		return
 	}
 	collab.LogChapterAction(novel.ID, middleware.UserID(c), "merge", chapter.ID,
 		res.FromBranch+" → "+res.IntoBranch)
-	utils.SuccessMessage(c, "已合并并生成新版本 v"+strconv.Itoa(res.Version), res)
+	infra.SuccessMessage(c, "已合并并生成新版本 v"+strconv.Itoa(res.Version), res)
 }

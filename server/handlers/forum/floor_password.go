@@ -15,7 +15,8 @@ import (
 	"nvs-server/handlers/adminsite"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/secure"
 	"strconv"
 	"strings"
 
@@ -70,26 +71,26 @@ func VerifyFloorPassword(c *gin.Context) {
 		Password string `json:"password" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请输入访问密码")
+		infra.BadRequest(c, "请输入访问密码")
 		return
 	}
 
 	floor, err := models.GetCommentByID(uint(floorID))
 	if err != nil {
-		utils.NotFound(c, "楼层不存在")
+		infra.NotFound(c, "楼层不存在")
 		return
 	}
 	if !floor.HasPassword {
-		utils.Success(c, gin.H{"ok": true, "has_password": false})
+		infra.Success(c, gin.H{"ok": true, "has_password": false})
 		return
 	}
 
 	viewerID, isStaff, _ := ResolveFloorPasswordViewer(c)
 	if !models.FloorAccessUnlocked(floor, viewerID, isStaff, map[uint]string{floor.ID: req.Password}) {
-		utils.Forbidden(c, "密码错误")
+		infra.Forbidden(c, "密码错误")
 		return
 	}
-	utils.Success(c, gin.H{"ok": true, "has_password": true})
+	infra.Success(c, gin.H{"ok": true, "has_password": true})
 }
 
 // SetFloorPassword POST /api/comments/:id/password
@@ -103,56 +104,56 @@ func SetFloorPassword(c *gin.Context) {
 		Password string `json:"password"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	password := strings.TrimSpace(req.Password)
 
 	floor, err := models.GetCommentByID(uint(floorID))
 	if err != nil {
-		utils.NotFound(c, "楼层不存在")
+		infra.NotFound(c, "楼层不存在")
 		return
 	}
 	// 只有「楼」（顶层评论）能设访问密码；楼内回复不单独加密
 	if floor.ParentID != nil && *floor.ParentID != 0 {
-		utils.BadRequest(c, "只有楼层主贴可以设置访问密码")
+		infra.BadRequest(c, "只有楼层主贴可以设置访问密码")
 		return
 	}
 	// 作者本人或警方/管理员
 	if floor.UserID != userID && !adminsite.IsPoliceOrAdminUser(c) {
-		utils.Forbidden(c, "无权修改此楼的访问密码")
+		infra.Forbidden(c, "无权修改此楼的访问密码")
 		return
 	}
 
 	if password == "" {
 		// 解除加密
 		if err := models.SetFloorPassword(floor.ID, "", false); err != nil {
-			utils.InternalError(c, "解除加密失败")
+			infra.InternalError(c, "解除加密失败")
 			return
 		}
-		utils.Success(c, gin.H{"ok": true, "has_password": false, "message": "已解除该楼访问密码"})
+		infra.Success(c, gin.H{"ok": true, "has_password": false, "message": "已解除该楼访问密码"})
 		return
 	}
 	if len([]rune(password)) < floorPasswordMinLen {
-		utils.BadRequest(c, "访问密码至少 "+strconv.Itoa(floorPasswordMinLen)+" 位")
+		infra.BadRequest(c, "访问密码至少 "+strconv.Itoa(floorPasswordMinLen)+" 位")
 		return
 	}
 	// 逗号/冒号是多楼密码头（id:pwd,id:pwd）的分隔符，禁止出现在密码里
 	if strings.ContainsAny(password, ",:") {
-		utils.BadRequest(c, "访问密码不能包含逗号或冒号")
+		infra.BadRequest(c, "访问密码不能包含逗号或冒号")
 		return
 	}
 
-	hash, err := utils.HashPassword(password)
+	hash, err := secure.HashPassword(password)
 	if err != nil {
-		utils.InternalError(c, "密码处理失败")
+		infra.InternalError(c, "密码处理失败")
 		return
 	}
 	if err := models.SetFloorPassword(floor.ID, hash, true); err != nil {
-		utils.InternalError(c, "设置访问密码失败")
+		infra.InternalError(c, "设置访问密码失败")
 		return
 	}
-	utils.Success(c, gin.H{"ok": true, "has_password": true, "message": "已设置该楼访问密码"})
+	infra.Success(c, gin.H{"ok": true, "has_password": true, "message": "已设置该楼访问密码"})
 }
 
 // GetFloorDetail GET /api/comments/:id/detail
@@ -163,21 +164,21 @@ func GetFloorDetail(c *gin.Context) {
 
 	floor, err := models.GetCommentByID(uint(floorID))
 	if err != nil {
-		utils.NotFound(c, "楼层不存在")
+		infra.NotFound(c, "楼层不存在")
 		return
 	}
 	viewerID, isStaff, password := ResolveFloorPasswordViewer(c)
 	if !models.FloorAccessUnlocked(floor, viewerID, isStaff, map[uint]string{floor.ID: password}) {
-		utils.Forbidden(c, "该楼已加密，请输入访问密码")
+		infra.Forbidden(c, "该楼已加密，请输入访问密码")
 		return
 	}
 
 	full, replies, err := models.GetFloorWithReplies(floor.ID)
 	if err != nil {
-		utils.InternalError(c, "读取楼层失败")
+		infra.InternalError(c, "读取楼层失败")
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"floor":   full,
 		"replies": replies,
 	})

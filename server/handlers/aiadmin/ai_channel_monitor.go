@@ -5,12 +5,12 @@ import (
 	"io"
 	"net/http"
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"time"
 
 	"nvs-server/aiclient"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	aihub "nvs-server/models/aihub"
@@ -54,17 +54,17 @@ func AdminAiChannelMonitor(c *gin.Context) {
 	}
 	var req channelMonitorReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	in := normalizeMonitorInputs(req.BaseURL, req.Token, req.UserID, req.ModelKey)
 	base, token, uid, modelKey, warnings := in.Base, in.Token, in.UserID, in.ModelKey, in.Warnings
 	if base == "" {
-		utils.BadRequest(c, "请填写渠道地址")
+		infra.BadRequest(c, "请填写渠道地址")
 		return
 	}
 	if !strings.HasPrefix(base, "http://") && !strings.HasPrefix(base, "https://") {
-		utils.BadRequest(c, "渠道地址需以 http:// 或 https:// 开头")
+		infra.BadRequest(c, "渠道地址需以 http:// 或 https:// 开头")
 		return
 	}
 	// 没填令牌 → 用该渠道**加密入库**的凭据（解密后当场用、用完即弃，不回显）
@@ -90,7 +90,7 @@ func AdminAiChannelMonitor(c *gin.Context) {
 		}
 	}
 	if token == "" {
-		utils.BadRequest(c, "请填写令牌（模型密钥 sk_ 或系统访问令牌 nap_），或先在本页「保存到渠道」")
+		infra.BadRequest(c, "请填写令牌（模型密钥 sk_ 或系统访问令牌 nap_），或先在本页「保存到渠道」")
 		return
 	}
 
@@ -179,7 +179,7 @@ func AdminAiChannelMonitor(c *gin.Context) {
 			stringOf(out["currency"]), worstError(out))
 	}
 
-	utils.Success(c, out)
+	infra.Success(c, out)
 }
 
 // worstError 把各种 *_error 合成一句，供快照里显示

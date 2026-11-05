@@ -3,11 +3,11 @@ package adminsite
 import (
 	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/admingov"
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"nvs-server/models"
 	"nvs-server/security"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,10 +19,10 @@ func AdminListForums(c *gin.Context) {
 	}
 	forums, err := models.ListAllForums("")
 	if err != nil {
-		utils.InternalError(c, "获取论坛列表失败")
+		infra.InternalError(c, "获取论坛列表失败")
 		return
 	}
-	utils.Success(c, forums)
+	infra.Success(c, forums)
 }
 
 // POST /api/admin/forums — 创建论坛（管理员）
@@ -40,7 +40,7 @@ func AdminCreateForum(c *gin.Context) {
 		SortOrder   int    `json:"sort_order"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请填写论坛名称")
+		infra.BadRequest(c, "请填写论坛名称")
 		return
 	}
 	if req.Type == "" {
@@ -56,10 +56,10 @@ func AdminCreateForum(c *gin.Context) {
 		SortOrder:   req.SortOrder,
 	}
 	if err := models.CreateForum(forum); err != nil {
-		utils.InternalError(c, "创建论坛失败")
+		infra.InternalError(c, "创建论坛失败")
 		return
 	}
-	utils.Success(c, forum)
+	infra.Success(c, forum)
 }
 
 // PUT /api/admin/forums/:id — 更新论坛（管理员）
@@ -70,13 +70,13 @@ func AdminUpdateForum(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		utils.BadRequest(c, "无效的论坛ID")
+		infra.BadRequest(c, "无效的论坛ID")
 		return
 	}
 
 	forum, err := models.GetForumByID(uint(id))
 	if err != nil {
-		utils.NotFound(c, "论坛不存在")
+		infra.NotFound(c, "论坛不存在")
 		return
 	}
 
@@ -89,7 +89,7 @@ func AdminUpdateForum(c *gin.Context) {
 		SortOrder   *int    `json:"sort_order"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "无效的请求数据")
+		infra.BadRequest(c, "无效的请求数据")
 		return
 	}
 
@@ -113,10 +113,10 @@ func AdminUpdateForum(c *gin.Context) {
 	}
 
 	if err := models.UpdateForum(forum); err != nil {
-		utils.InternalError(c, "更新论坛失败")
+		infra.InternalError(c, "更新论坛失败")
 		return
 	}
-	utils.Success(c, forum)
+	infra.Success(c, forum)
 }
 
 // DELETE /api/admin/forums/:id — 删除论坛（软删除 + 留证）
@@ -127,19 +127,19 @@ func AdminDeleteForum(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		utils.BadRequest(c, "无效的论坛ID")
+		infra.BadRequest(c, "无效的论坛ID")
 		return
 	}
 
 	if err := admingov.SoftDeleteContent(c, "forum", uint(id), "管理员删除论坛", "admin", "delete"); err != nil {
 		if err == admingov.ErrContentNotFound {
-			utils.NotFound(c, "论坛不存在")
+			infra.NotFound(c, "论坛不存在")
 		} else {
-			utils.InternalError(c, err.Error())
+			infra.InternalError(c, err.Error())
 		}
 		return
 	}
-	utils.Success(c, gin.H{"message": "论坛已删除（留证）"})
+	infra.Success(c, gin.H{"message": "论坛已删除（留证）"})
 }
 
 // POST /api/admin/forums/:id/review — 审查自建论坛（通过/驳回）
@@ -150,7 +150,7 @@ func AdminReviewForum(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		utils.BadRequest(c, "无效的论坛ID")
+		infra.BadRequest(c, "无效的论坛ID")
 		return
 	}
 
@@ -159,11 +159,11 @@ func AdminReviewForum(c *gin.Context) {
 		Note   string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.Action != "approve" && req.Action != "reject" {
-		utils.BadRequest(c, "无效的操作")
+		infra.BadRequest(c, "无效的操作")
 		return
 	}
 
@@ -176,5 +176,5 @@ func AdminReviewForum(c *gin.Context) {
 		"review_status": status,
 		"review_note":   security.SanitizePlainText(req.Note),
 	})
-	utils.Success(c, gin.H{"message": "已审查"})
+	infra.Success(c, gin.H{"message": "已审查"})
 }

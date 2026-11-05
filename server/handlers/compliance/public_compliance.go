@@ -9,7 +9,7 @@ package compliance
 import (
 	"nvs-server/middleware"
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,7 +18,7 @@ import (
 // GET /api/algorithms/description
 func GetAlgoDescription(c *gin.Context) {
 	_, _, personalized, description := models.GetAlgoConfig()
-	utils.Success(c, gin.H{"description": description, "personalized_enabled": personalized})
+	infra.Success(c, gin.H{"description": description, "personalized_enabled": personalized})
 }
 
 // GetUserPreferences 获取当前用户偏好设置
@@ -26,15 +26,15 @@ func GetAlgoDescription(c *gin.Context) {
 func GetUserPreferences(c *gin.Context) {
 	userID := middleware.UserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	user, err := models.GetUserByID(userID)
 	if err != nil {
-		utils.NotFound(c, "用户不存在")
+		infra.NotFound(c, "用户不存在")
 		return
 	}
-	utils.Success(c, gin.H{"personalized_recommend": user.PersonalizedRecommend})
+	infra.Success(c, gin.H{"personalized_recommend": user.PersonalizedRecommend})
 }
 
 // UpdateUserPreferences 更新当前用户偏好设置
@@ -42,23 +42,23 @@ func GetUserPreferences(c *gin.Context) {
 func UpdateUserPreferences(c *gin.Context) {
 	userID := middleware.UserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	var req struct {
 		PersonalizedRecommend *bool `json:"personalized_recommend"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.PersonalizedRecommend != nil {
 		if err := models.DB.Model(&models.User{}).Where("id = ?", userID).
 			Update("personalized_recommend", *req.PersonalizedRecommend).Error; err != nil {
-			utils.InternalError(c, "保存失败")
+			infra.InternalError(c, "保存失败")
 			return
 		}
 	}
 	user, _ := models.GetUserByID(userID)
-	utils.Success(c, gin.H{"message": "偏好已保存", "personalized_recommend": user.PersonalizedRecommend})
+	infra.Success(c, gin.H{"message": "偏好已保存", "personalized_recommend": user.PersonalizedRecommend})
 }

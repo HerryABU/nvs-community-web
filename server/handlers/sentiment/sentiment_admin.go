@@ -7,7 +7,8 @@ import (
 	"nvs-server/sentiment/store"
 	"nvs-server/sentiment/topic"
 	"nvs-server/sentiment/updater"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/sanitize"
 	"strconv"
 	"strings"
 	"time"
@@ -27,10 +28,10 @@ func GetSentimentConfig(c *gin.Context) {
 	}
 	cfg, err := store.GetConfig()
 	if err != nil {
-		utils.InternalError(c, "读取配置失败")
+		infra.InternalError(c, "读取配置失败")
 		return
 	}
-	utils.Success(c, gin.H{"config": cfg})
+	infra.Success(c, gin.H{"config": cfg})
 }
 
 // SaveSentimentConfig PUT /api/admin/sentiment/config
@@ -40,7 +41,7 @@ func SaveSentimentConfig(c *gin.Context) {
 	}
 	var req store.Config
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	req.ID = 1
@@ -54,10 +55,10 @@ func SaveSentimentConfig(c *gin.Context) {
 		req.AutoUpdateHour = 4
 	}
 	if err := req.Save(); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已保存"})
+	infra.Success(c, gin.H{"message": "已保存"})
 }
 
 // ListSentimentTerms GET /api/admin/sentiment/terms?status=
@@ -86,7 +87,7 @@ func ListSentimentTerms(c *gin.Context) {
 	var list []store.Term
 	q.Order("status asc, severity desc, hit_count desc, id desc").
 		Offset((page - 1) * size).Limit(size).Find(&list)
-	utils.Success(c, gin.H{"items": list, "total": total, "page": page})
+	infra.Success(c, gin.H{"items": list, "total": total, "page": page})
 }
 
 // SentimentTermReq 词条新增/修改。
@@ -108,7 +109,7 @@ func CreateSentimentTerm(c *gin.Context) {
 	}
 	var req SentimentTermReq
 	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Word) == "" {
-		utils.BadRequest(c, "请填写词条")
+		infra.BadRequest(c, "请填写词条")
 		return
 	}
 	gs := strings.Join(req.EscalateUnder, ",")
@@ -128,18 +129,18 @@ func CreateSentimentTerm(c *gin.Context) {
 	}
 	var exist store.Term
 	if err := store.DB.Where("word = ?", t.Word).First(&exist).Error; err == nil {
-		utils.BadRequest(c, "该词已存在")
+		infra.BadRequest(c, "该词已存在")
 		return
 	}
 	if err := store.DB.Create(t).Error; err != nil {
-		utils.InternalError(c, "创建失败")
+		infra.InternalError(c, "创建失败")
 		return
 	}
 	store.DB.Model(&store.Term{}).Where("id = ?", t.ID).Updates(map[string]interface{}{
 		"severity": t.Severity, "confidence": t.Confidence,
 	})
 	writeTermAudit(c, t.ID, t.Word, "create", "", t.Note)
-	utils.Success(c, gin.H{"id": t.ID})
+	infra.Success(c, gin.H{"id": t.ID})
 }
 
 // UpdateSentimentTerm PUT /api/admin/sentiment/terms/:id
@@ -150,12 +151,12 @@ func UpdateSentimentTerm(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var t store.Term
 	if err := store.DB.First(&t, id).Error; err != nil {
-		utils.NotFound(c, "词条不存在")
+		infra.NotFound(c, "词条不存在")
 		return
 	}
 	var req SentimentTermReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	before := t.Note
@@ -171,11 +172,11 @@ func UpdateSentimentTerm(c *gin.Context) {
 		"updated_at":        time.Now(),
 	}
 	if err := store.DB.Model(&store.Term{}).Where("id = ?", id).Updates(updates).Error; err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
 	writeTermAudit(c, t.ID, t.Word, "update", before, req.Note)
-	utils.Success(c, gin.H{"message": "已保存"})
+	infra.Success(c, gin.H{"message": "已保存"})
 }
 
 // ReviewSentimentTerm POST /api/admin/sentiment/terms/:id/review
@@ -191,12 +192,12 @@ func ReviewSentimentTerm(c *gin.Context) {
 		Note   string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	var t store.Term
 	if err := store.DB.First(&t, id).Error; err != nil {
-		utils.NotFound(c, "词条不存在")
+		infra.NotFound(c, "词条不存在")
 		return
 	}
 	status := store.StatusActive
@@ -206,11 +207,11 @@ func ReviewSentimentTerm(c *gin.Context) {
 	if err := store.DB.Model(&store.Term{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status": status, "reviewed_at": time.Now(), "updated_at": time.Now(),
 	}).Error; err != nil {
-		utils.InternalError(c, "操作失败")
+		infra.InternalError(c, "操作失败")
 		return
 	}
 	writeTermAudit(c, t.ID, t.Word, req.Action, "", req.Note)
-	utils.Success(c, gin.H{"message": "已处理"})
+	infra.Success(c, gin.H{"message": "已处理"})
 }
 
 // DeleteSentimentTerm DELETE /api/admin/sentiment/terms/:id
@@ -221,15 +222,15 @@ func DeleteSentimentTerm(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var t store.Term
 	if err := store.DB.First(&t, id).Error; err != nil {
-		utils.NotFound(c, "词条不存在")
+		infra.NotFound(c, "词条不存在")
 		return
 	}
 	if err := store.DB.Delete(&store.Term{}, id).Error; err != nil {
-		utils.InternalError(c, "删除失败")
+		infra.InternalError(c, "删除失败")
 		return
 	}
 	writeTermAudit(c, t.ID, t.Word, "delete", t.Note, "")
-	utils.Success(c, gin.H{"message": "已删除"})
+	infra.Success(c, gin.H{"message": "已删除"})
 }
 
 // ListSentimentHits GET /api/admin/sentiment/hits
@@ -260,7 +261,7 @@ func ListSentimentHits(c *gin.Context) {
 	}
 	var list []store.Hit
 	q.Order("id desc").Offset((page - 1) * size).Limit(size).Find(&list)
-	utils.Success(c, gin.H{"items": list, "total": total, "page": page})
+	infra.Success(c, gin.H{"items": list, "total": total, "page": page})
 }
 
 // GetContentTopic GET /api/admin/sentiment/topics?content_type=&content_id=
@@ -271,10 +272,10 @@ func GetContentTopic(c *gin.Context) {
 	}
 	ct, err := store.TopicOf(c.Query("content_type"), parseUint(c.Query("content_id")))
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"topic": ct})
+	infra.Success(c, gin.H{"topic": ct})
 }
 
 // SetContentTopic PUT /api/admin/sentiment/topics
@@ -293,17 +294,17 @@ func SetContentTopic(c *gin.Context) {
 		Policy      string   `json:"policy"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.ContentID == 0 || req.ContentType == "" {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.Policy != "" && req.Policy != store.PolicyBlock &&
 		req.Policy != store.PolicyFlag && req.Policy != store.PolicyOff {
-		utils.BadRequest(c, "策略取值非法")
+		infra.BadRequest(c, "策略取值非法")
 		return
 	}
 	a := topic.Assess(req.Tags, "")
 	if err := store.ApplyAssessment(req.ContentType, req.ContentID, a, "manual"); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
 	if err := store.DB.Model(&store.ContentTopic{}).
@@ -315,10 +316,10 @@ func SetContentTopic(c *gin.Context) {
 			"reviewed_by":   hctx.CurrentUserID(c),
 			"reviewed_at":   time.Now(),
 		}).Error; err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已更新话题标注", "groups": a.Groups, "risk": a.Risk.String()})
+	infra.Success(c, gin.H{"message": "已更新话题标注", "groups": a.Groups, "risk": a.Risk.String()})
 }
 
 // RunSentimentUpdate POST /api/admin/sentiment/run-update
@@ -329,10 +330,10 @@ func RunSentimentUpdate(c *gin.Context) {
 	}
 	res, err := updater.RunOnce("manual")
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"result": res})
+	infra.Success(c, gin.H{"result": res})
 }
 
 // ListTermAudits GET /api/admin/sentiment/audits?term_id=
@@ -346,7 +347,7 @@ func ListTermAudits(c *gin.Context) {
 	}
 	var list []store.TermAudit
 	q.Order("id desc").Limit(100).Find(&list)
-	utils.Success(c, gin.H{"items": list})
+	infra.Success(c, gin.H{"items": list})
 }
 
 // writeTermAudit 统一写审计（失败只记日志级，不影响主操作返回）。
@@ -359,7 +360,7 @@ func writeTermAudit(c *gin.Context, termID uint, word, action, before, after str
 	_ = store.DB.Create(&store.TermAudit{
 		TermID: termID, Word: word, Action: action,
 		OperatorID: uid, Operator: name,
-		Before: utils.TruncateRunes(before, 400), After: utils.TruncateRunes(after, 400),
+		Before: sanitize.TruncateRunes(before, 400), After: sanitize.TruncateRunes(after, 400),
 		CreatedAt: time.Now(),
 	}).Error
 }

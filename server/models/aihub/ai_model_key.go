@@ -3,12 +3,12 @@ package aihub
 import (
 	"fmt"
 	"math/rand"
+	"nvs-server/utils/secure"
 	"strings"
 	"time"
 
 	"nvs-server/models"
 	ai "nvs-server/models/ai"
-	"nvs-server/utils"
 )
 
 // ==================== AI 模型密钥池（多密钥轮询） ====================
@@ -66,7 +66,7 @@ func AddAiModelKey(modelID uint, label, plain string, weight int) (*AiModelKey, 
 	if weight > 100 {
 		weight = 100
 	}
-	enc, err := utils.EncryptField(plain)
+	enc, err := secure.EncryptField(plain)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func DecryptAiModelKey(k *AiModelKey) (string, error) {
 	if strings.TrimSpace(k.KeyEnc) == "" {
 		return "", fmt.Errorf("密钥为空")
 	}
-	return utils.DecryptField(k.KeyEnc)
+	return secure.DecryptField(k.KeyEnc)
 }
 
 // pickCandidates 可用候选（启用且未达失败阈值、权重>0）

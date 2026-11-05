@@ -1,6 +1,7 @@
 package payment
 
 import (
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"time"
@@ -8,7 +9,6 @@ import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/payment"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	aihub "nvs-server/models/aihub"
@@ -35,7 +35,7 @@ func PaymentStatus(c *gin.Context) {
 			chanItem{Value: wallet.PayChannelMock, Label: wallet.PayChannelLabels[wallet.PayChannelMock]},
 		)
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"enabled":       wallet.IsPaymentEnabled(),
 		"token_enabled": wallet.IsTokenEnabled(),
 		"token_name":    wallet.GetTokenName(),
@@ -50,7 +50,7 @@ func PaymentStatus(c *gin.Context) {
 // PaymentCreateOrder POST /api/payment/order — 选档位下单，返回收银台地址
 func PaymentCreateOrder(c *gin.Context) {
 	if !wallet.IsPaymentEnabled() {
-		utils.BadRequest(c, "在线充值未开启")
+		infra.BadRequest(c, "在线充值未开启")
 		return
 	}
 	userID := hctx.CurrentUserID(c)
@@ -59,12 +59,12 @@ func PaymentCreateOrder(c *gin.Context) {
 		Fen     int64  `json:"fen"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	order, err := wallet.CreateRechargeOrder(userID, strings.TrimSpace(req.Channel), req.Fen)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	cfg := wallet.GetPaymentConfig()
@@ -81,14 +81,14 @@ func PaymentCreateOrder(c *gin.Context) {
 	payURL, perr := payment.GetProvider(cfg).CreateOrder(params, cfg)
 	if perr != nil {
 		// 下单失败：订单留在 pending 由超时关单回收，前端可重试
-		utils.BadRequest(c, "创建支付单失败："+perr.Error())
+		infra.BadRequest(c, "创建支付单失败："+perr.Error())
 		return
 	}
 	if err := wallet.UpdateOrderPayURL(order.OrderNo, payURL); err != nil {
-		utils.InternalError(c, "订单保存失败")
+		infra.InternalError(c, "订单保存失败")
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"order_no":     order.OrderNo,
 		"pay_url":      payURL,
 		"channel":      order.Channel,
@@ -105,11 +105,11 @@ func PaymentOrderStatus(c *gin.Context) {
 	orderNo := strings.TrimSpace(c.Param("no"))
 	order, err := wallet.GetRechargeOrderByNo(orderNo)
 	if err != nil {
-		utils.NotFound(c, "订单不存在")
+		infra.NotFound(c, "订单不存在")
 		return
 	}
 	if order.UserID != userID {
-		utils.NotFound(c, "订单不存在")
+		infra.NotFound(c, "订单不存在")
 		return
 	}
 	// 惰性关单：待支付且已过期 → 就地关闭，前端轮询立刻看到 closed
@@ -119,7 +119,7 @@ func PaymentOrderStatus(c *gin.Context) {
 			Updates(map[string]interface{}{"status": wallet.PayStatusClosed, "updated_at": time.Now()}).Error
 		order.Status = wallet.PayStatusClosed
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"order_no":     order.OrderNo,
 		"status":       order.Status,
 		"channel":      order.Channel,
@@ -139,22 +139,22 @@ func PaymentMyOrders(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	list, total, err := wallet.ListUserRechargeOrders(userID, page, pageSize)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list, "total": total, "page": page, "page_size": pageSize})
+	infra.Success(c, gin.H{"list": list, "total": total, "page": page, "page_size": pageSize})
 }
 
 // PaymentMockConfirm POST /api/payment/mock/confirm — 模拟支付确认（仅 mock provider）。
 // 与真实回调路径物理隔离：要求登录、本人订单、provider==mock。
 func PaymentMockConfirm(c *gin.Context) {
 	if !wallet.IsPaymentEnabled() {
-		utils.BadRequest(c, "在线充值未开启")
+		infra.BadRequest(c, "在线充值未开启")
 		return
 	}
 	cfg := wallet.GetPaymentConfig()
 	if cfg.Provider != wallet.PayProviderMock {
-		utils.BadRequest(c, "当前通道不是模拟支付")
+		infra.BadRequest(c, "当前通道不是模拟支付")
 		return
 	}
 	userID := hctx.CurrentUserID(c)
@@ -162,24 +162,24 @@ func PaymentMockConfirm(c *gin.Context) {
 		OrderNo string `json:"order_no"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	order, err := wallet.GetRechargeOrderByNo(strings.TrimSpace(req.OrderNo))
 	if err != nil {
-		utils.NotFound(c, "订单不存在")
+		infra.NotFound(c, "订单不存在")
 		return
 	}
 	if order.UserID != userID {
-		utils.NotFound(c, "订单不存在")
+		infra.NotFound(c, "订单不存在")
 		return
 	}
 	paid, credited, err := wallet.MarkOrderPaid(order.OrderNo, "MOCK-"+order.OrderNo, "mock-confirm by user "+strconv.FormatUint(uint64(userID), 10))
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"credited":     credited,
 		"status":       paid.Status,
 		"token_amount": paid.TokenAmount,
@@ -198,7 +198,7 @@ func MembershipInfo(c *gin.Context) {
 	cfg := wallet.GetPaymentConfig()
 	// 权益对比表要显示真实数字，不能写"平台配置"这种空话
 	quota := aihub.GetAiFreeQuotaConfig()
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"status":          wallet.GetMembershipStatus(uid),
 		"tiers":           wallet.GetPaymentTiers(),
 		"token_per_fen":   cfg.TokenPerFen,

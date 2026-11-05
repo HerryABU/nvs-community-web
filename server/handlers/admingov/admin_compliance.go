@@ -7,10 +7,10 @@ package admingov
 
 import (
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strings"
 
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -22,7 +22,7 @@ func GetAlgoConfig(c *gin.Context) {
 		return
 	}
 	sortRule, rankPeriod, personalized, description := models.GetAlgoConfig()
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"sort_rule":    sortRule,
 		"rank_period":  rankPeriod,
 		"personalized": personalized,
@@ -43,45 +43,45 @@ func UpdateAlgoConfig(c *gin.Context) {
 		Description  *string `json:"description"`  // 算法说明（面向用户）
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.SortRule != nil {
 		rule := strings.TrimSpace(*req.SortRule)
 		if rule != "updated_at" && rule != "created_at" && rule != "total_chapters" {
-			utils.BadRequest(c, "排序规则仅支持 updated_at / created_at / total_chapters")
+			infra.BadRequest(c, "排序规则仅支持 updated_at / created_at / total_chapters")
 			return
 		}
 		if err := models.SetPlatformConfig(models.AlgoSortRule, rule); err != nil {
-			utils.InternalError(c, "保存失败")
+			infra.InternalError(c, "保存失败")
 			return
 		}
 	}
 	if req.RankPeriod != nil {
 		period := strings.TrimSpace(*req.RankPeriod)
 		if period != "all" && period != "7d" && period != "30d" && period != "90d" {
-			utils.BadRequest(c, "排行榜周期仅支持 all / 7d / 30d / 90d")
+			infra.BadRequest(c, "排行榜周期仅支持 all / 7d / 30d / 90d")
 			return
 		}
 		if err := models.SetPlatformConfig(models.AlgoRankPeriod, period); err != nil {
-			utils.InternalError(c, "保存失败")
+			infra.InternalError(c, "保存失败")
 			return
 		}
 	}
 	if req.Personalized != nil {
 		if err := models.SetPlatformConfig(models.AlgoPersonalized, map[bool]string{true: "true", false: "false"}[*req.Personalized]); err != nil {
-			utils.InternalError(c, "保存失败")
+			infra.InternalError(c, "保存失败")
 			return
 		}
 	}
 	if req.Description != nil {
 		if err := models.SetPlatformConfig(models.AlgoDescription, strings.TrimSpace(*req.Description)); err != nil {
-			utils.InternalError(c, "保存失败")
+			infra.InternalError(c, "保存失败")
 			return
 		}
 	}
 	sortRule, rankPeriod, personalized, description := models.GetAlgoConfig()
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"message":      "算法配置已更新",
 		"sort_rule":    sortRule,
 		"rank_period":  rankPeriod,
@@ -97,7 +97,7 @@ func GetSecurityGrade(c *gin.Context) {
 		return
 	}
 	grade, note := models.GetSecurityGrade()
-	utils.Success(c, gin.H{"grade": grade, "note": note})
+	infra.Success(c, gin.H{"grade": grade, "note": note})
 }
 
 // UpdateSecurityGrade 保存等保/关基识别记录
@@ -111,26 +111,26 @@ func UpdateSecurityGrade(c *gin.Context) {
 		Note  *string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.Grade != nil {
 		grade := strings.TrimSpace(*req.Grade)
 		if grade != "1" && grade != "2" && grade != "3" && grade != "未定级" {
-			utils.BadRequest(c, "等保定级仅支持 1 / 2 / 3 / 未定级")
+			infra.BadRequest(c, "等保定级仅支持 1 / 2 / 3 / 未定级")
 			return
 		}
 		if err := models.SetPlatformConfig(models.SecurityGrade, grade); err != nil {
-			utils.InternalError(c, "保存失败")
+			infra.InternalError(c, "保存失败")
 			return
 		}
 	}
 	if req.Note != nil {
 		if err := models.SetPlatformConfig(models.SecurityGradeNote, strings.TrimSpace(*req.Note)); err != nil {
-			utils.InternalError(c, "保存失败")
+			infra.InternalError(c, "保存失败")
 			return
 		}
 	}
 	grade, note := models.GetSecurityGrade()
-	utils.Success(c, gin.H{"message": "等保记录已保存", "grade": grade, "note": note})
+	infra.Success(c, gin.H{"message": "等保记录已保存", "grade": grade, "note": note})
 }

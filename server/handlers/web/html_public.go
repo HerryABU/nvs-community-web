@@ -2,12 +2,13 @@ package web
 
 import (
 	"fmt"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/sanitize"
 	"os"
 	"path/filepath"
 	"strconv"
 
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	softdel "nvs-server/models/softdel"
@@ -32,7 +33,7 @@ func ListPublicHTMLs(c *gin.Context) {
 		Preload("User").Order("updated_at DESC").
 		Offset((page - 1) * size).Limit(size).Find(&htmls)
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"items": htmls,
 		"total": total,
 		"page":  page,
@@ -47,7 +48,7 @@ func GetAuthorPublicHTMLs(c *gin.Context) {
 	var htmls []softdel.UserHTML
 	models.DB.Where("user_id = ? AND is_public = ? AND is_active = ?", uint(authorID), true, true).
 		Preload("User").Order("updated_at DESC").Find(&htmls)
-	utils.Success(c, htmls)
+	infra.Success(c, htmls)
 }
 
 // DownloadHTMLZip GET /api/userhtmls/:id/download
@@ -56,17 +57,17 @@ func DownloadHTMLZip(c *gin.Context) {
 	htmlID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var html softdel.UserHTML
 	if err := models.DB.First(&html, htmlID).Error; err != nil {
-		utils.NotFound(c, "项目不存在")
+		infra.NotFound(c, "项目不存在")
 		return
 	}
 	if !html.IsDownloadable {
-		utils.Forbidden(c, "作者不允许下载此项目")
+		infra.Forbidden(c, "作者不允许下载此项目")
 		return
 	}
 
 	zipPath := filepath.Join(html.ExtractDir, "_original.zip")
 	if _, err := os.Stat(zipPath); os.IsNotExist(err) {
-		utils.NotFound(c, "ZIP文件不存在")
+		infra.NotFound(c, "ZIP文件不存在")
 		return
 	}
 
@@ -75,7 +76,7 @@ func DownloadHTMLZip(c *gin.Context) {
 }
 
 // findThumbImage 从解压文件列表中查找首张图片路径
-func findThumbImage(entries []utils.ZipEntry, baseDir string) string {
+func findThumbImage(entries []sanitize.ZipEntry, baseDir string) string {
 	imgExts := map[string]bool{".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true, ".svg": true}
 	for _, e := range entries {
 		ext := filepath.Ext(e.Name)

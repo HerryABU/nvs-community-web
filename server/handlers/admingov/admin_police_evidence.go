@@ -2,12 +2,12 @@ package admingov
 
 import (
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
 	"nvs-server/handlers/hctx"
 	"nvs-server/police"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -23,10 +23,10 @@ func AdminListEvidenceRequests(c *gin.Context) {
 	status := c.Query("status")
 	list, total, err := police.ListEvidenceRequests(page, size, status)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"items": list, "total": total, "page": page})
+	infra.Success(c, gin.H{"items": list, "total": total, "page": page})
 }
 
 // AdminReviewEvidenceRequest POST /api/admin/police/evidence-requests/:id/review
@@ -37,7 +37,7 @@ func AdminReviewEvidenceRequest(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if id == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	var req struct {
@@ -45,17 +45,17 @@ func AdminReviewEvidenceRequest(c *gin.Context) {
 		Note    string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if !req.Approve && strings.TrimSpace(req.Note) == "" {
-		utils.BadRequest(c, "驳回须填写理由")
+		infra.BadRequest(c, "驳回须填写理由")
 		return
 	}
 	adminID := hctx.CurrentUserID(c)
 	if err := police.ReviewEvidenceRequest(uint(id), adminID, req.Approve, req.Note); err != nil {
-		utils.InternalError(c, err.Error())
+		infra.InternalError(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已处理"})
+	infra.Success(c, gin.H{"message": "已处理"})
 }

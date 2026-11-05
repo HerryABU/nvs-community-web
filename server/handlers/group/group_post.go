@@ -4,12 +4,12 @@ import (
 	"nvs-server/groups"
 	"nvs-server/middleware"
 	"nvs-server/security"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"time"
 
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	aihub "nvs-server/models/aihub"
@@ -28,7 +28,7 @@ func GroupPostList(c *gin.Context) {
 		return
 	}
 	if !ctx.CanRead && ctx.Status != groups.GroupMemberActive {
-		utils.Forbidden(c, "该群内容仅成员可见")
+		infra.Forbidden(c, "该群内容仅成员可见")
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -42,10 +42,10 @@ func GroupPostList(c *gin.Context) {
 	includePending := c.Query("pending") == "1"
 	list, total, err := groups.ListGroupPosts(ctx.Group.ID, middleware.UserID(c), ctx.Role, includePending, page, size)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list, "total": total, "page": page, "size": size})
+	infra.Success(c, gin.H{"list": list, "total": total, "page": page, "size": size})
 }
 
 // GroupPostCreate POST /api/groups/:id/posts { title, content, ai_assisted }
@@ -61,7 +61,7 @@ func GroupPostCreate(c *gin.Context) {
 	}
 	user, err := models.GetUserByID(uid)
 	if err != nil {
-		utils.Unauthorized(c, "用户不存在")
+		infra.Unauthorized(c, "用户不存在")
 		return
 	}
 	var req struct {
@@ -70,14 +70,14 @@ func GroupPostCreate(c *gin.Context) {
 		AiAssisted bool   `json:"ai_assisted"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	// 违禁词：替换/删除动作在保存前生效，mark 动作留待审标记
 	cleaned, badHits := security.ApplyBadWords(req.Content, "group")
 	p, perr := groups.CreateGroupPost(ctx.Group, user, req.Title, cleaned, req.AiAssisted)
 	if perr != nil {
-		utils.BadRequest(c, perr.Error())
+		infra.BadRequest(c, perr.Error())
 		return
 	}
 	markBadWords(badHits, "group_post", p.ID, uid, cleaned, p.Title)
@@ -98,7 +98,7 @@ func GroupPostCreate(c *gin.Context) {
 	if p.Status == groups.GroupPostPending {
 		msg = "已提交，等待群主审核后可见"
 	}
-	utils.SuccessMessage(c, msg, gin.H{"post": p})
+	infra.SuccessMessage(c, msg, gin.H{"post": p})
 }
 
 // GroupPostDetail GET /api/groups/:id/posts/:pid
@@ -111,17 +111,17 @@ func GroupPostDetail(c *gin.Context) {
 	}
 	p, err := groups.GetGroupPost(uint(pid))
 	if err != nil || p.GroupID != ctx.Group.ID {
-		utils.NotFound(c, "帖子不存在")
+		infra.NotFound(c, "帖子不存在")
 		return
 	}
 	uid := middleware.UserID(c)
 	isManager := ctx.Role == groups.GroupRoleOwner || ctx.Role == groups.GroupRoleAdmin || ctx.IsAdmin
 	if p.Status == groups.GroupPostPending && p.UserID != uid && !isManager {
-		utils.NotFound(c, "帖子不存在")
+		infra.NotFound(c, "帖子不存在")
 		return
 	}
 	if !ctx.CanRead && ctx.Status != groups.GroupMemberActive && !isManager {
-		utils.Forbidden(c, "该群内容仅成员可见")
+		infra.Forbidden(c, "该群内容仅成员可见")
 		return
 	}
 	if author, aerr := models.GetUserByID(p.UserID); aerr == nil {
@@ -131,7 +131,7 @@ func GroupPostDetail(c *gin.Context) {
 		}
 		p.AuthorAvatar = author.AvatarURL
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"post":     p,
 		"group":    gin.H{"id": ctx.Group.ID, "name": ctx.Group.Name, "group_no": ctx.Group.GroupNo},
 		"my_role":  ctx.Role,
@@ -150,18 +150,18 @@ func GroupPostReview(c *gin.Context) {
 		Approve bool `json:"approve"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := groups.ReviewGroupPost(uint(pid), uid, middleware.UserRole(c), req.Approve); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	if req.Approve {
-		utils.SuccessMessage(c, "已通过", nil)
+		infra.SuccessMessage(c, "已通过", nil)
 		return
 	}
-	utils.SuccessMessage(c, "已拒绝", nil)
+	infra.SuccessMessage(c, "已拒绝", nil)
 }
 
 // GroupPostDelete DELETE /api/groups/:id/posts/:pid
@@ -172,10 +172,10 @@ func GroupPostDelete(c *gin.Context) {
 		return
 	}
 	if err := groups.DeleteGroupPost(uint(pid), uid, middleware.UserRole(c)); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已删除", nil)
+	infra.SuccessMessage(c, "已删除", nil)
 }
 
 // GroupReplyList GET /api/groups/:id/posts/:pid/replies
@@ -187,7 +187,7 @@ func GroupReplyList(c *gin.Context) {
 		return
 	}
 	if !ctx.CanRead && ctx.Status != groups.GroupMemberActive {
-		utils.Forbidden(c, "该群内容仅成员可见")
+		infra.Forbidden(c, "该群内容仅成员可见")
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -200,10 +200,10 @@ func GroupReplyList(c *gin.Context) {
 	}
 	list, total, err := groups.ListGroupReplies(ctx.Group.ID, uint(pid), page, size)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list, "total": total, "page": page, "size": size})
+	infra.Success(c, gin.H{"list": list, "total": total, "page": page, "size": size})
 }
 
 // GroupReplyCreate POST /api/groups/:id/posts/:pid/replies { content }
@@ -220,20 +220,20 @@ func GroupReplyCreate(c *gin.Context) {
 	}
 	user, err := models.GetUserByID(uid)
 	if err != nil {
-		utils.Unauthorized(c, "用户不存在")
+		infra.Unauthorized(c, "用户不存在")
 		return
 	}
 	var req struct {
 		Content string `json:"content"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	cleaned, badHits := security.ApplyBadWords(req.Content, "group")
 	r, rerr := groups.CreateGroupReply(ctx.Group, uint(pid), user, cleaned)
 	if rerr != nil {
-		utils.BadRequest(c, rerr.Error())
+		infra.BadRequest(c, rerr.Error())
 		return
 	}
 	markBadWords(badHits, "group_reply", r.ID, uid, cleaned, "")
@@ -243,7 +243,7 @@ func GroupReplyCreate(c *gin.Context) {
 		"author": displayNameOf(user), "at": time.Now().Unix(),
 	})
 	maybeTriggerGroupAiReply(ctx.Group, uint(pid), uid, cleaned, r.ID)
-	utils.SuccessMessage(c, "回复成功", gin.H{"reply": r})
+	infra.SuccessMessage(c, "回复成功", gin.H{"reply": r})
 }
 
 // GroupReplyDelete DELETE /api/groups/:id/posts/:pid/replies/:rid
@@ -254,8 +254,8 @@ func GroupReplyDelete(c *gin.Context) {
 		return
 	}
 	if err := groups.DeleteGroupReply(uint(rid), uid, middleware.UserRole(c)); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已删除", nil)
+	infra.SuccessMessage(c, "已删除", nil)
 }

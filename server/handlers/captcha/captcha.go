@@ -2,7 +2,7 @@ package captcha
 
 import (
 	"nvs-server/security/slidecaptcha"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
 )
@@ -12,10 +12,10 @@ import (
 func IssueCaptcha(c *gin.Context) {
 	id, bg, piece, err := slidecaptcha.Issue()
 	if err != nil {
-		utils.InternalError(c, "生成验证码失败: "+err.Error())
+		infra.InternalError(c, "生成验证码失败: "+err.Error())
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"challenge_id": id,
 		"bg_image":     bg,
 		"piece_image":  piece,
@@ -33,13 +33,13 @@ func VerifyCaptcha(c *gin.Context) {
 		X           int    `json:"x" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	token, ok := slidecaptcha.Verify(req.ChallengeID, req.X)
 	if !ok {
-		utils.BadRequest(c, "验证失败，请重试")
+		infra.BadRequest(c, "验证失败，请重试")
 		return
 	}
-	utils.Success(c, gin.H{"captcha_token": token})
+	infra.Success(c, gin.H{"captcha_token": token})
 }

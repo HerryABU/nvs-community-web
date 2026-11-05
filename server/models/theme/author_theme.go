@@ -1,16 +1,16 @@
 package theme
 
 import (
+	"nvs-server/utils/sanitize"
 	"time"
 
 	"nvs-server/models"
-	"nvs-server/utils"
 )
 
 // AuthorTheme 作者公开主题（F12 作者主题 / 访客可见）。
 // 每作者一行（author_id 主键）：作者配置后，其个人主页/作品页等作者域页面
 // 对访客注入该 CSS；与个人主题（UserTheme）互相独立。
-// 写入一律经服务端白名单消毒（utils.SanitizeCSS），与站点/个人主题同源安全模型。
+// 写入一律经服务端白名单消毒（sanitize.SanitizeCSS），与站点/个人主题同源安全模型。
 type AuthorTheme struct {
 	AuthorID  uint      `gorm:"primaryKey" json:"author_id"`
 	CSS       string    `gorm:"type:text" json:"css"` // 已消毒的作者主题 CSS
@@ -37,7 +37,7 @@ func SetAuthorTheme(authorID uint, css string) (removed []string, err error) {
 	if authorID == 0 {
 		return []string{}, nil
 	}
-	sanitized, removed := utils.SanitizeCSS(css)
+	sanitized, removed := sanitize.SanitizeCSS(css)
 	var t AuthorTheme
 	if err := models.DB.Where("author_id = ?", authorID).First(&t).Error; err == nil {
 		t.CSS = sanitized

@@ -4,7 +4,7 @@ package home
 //
 // 安全模型（务必先读）：
 //   - 我的主页装扮（/me）：仅本人登录态可见，允许原始 HTML+<script>，等同 alist 个人自定义（自 XSS）。
-//   - 作者公开主页（/author/:id）：他人可见，写入即消毒（utils.SanitizeCustomHTML，去脚本/危险 CSS），
+//   - 作者公开主页（/author/:id）：他人可见，写入即消毒（sanitize.SanitizeCustomHTML，去脚本/危险 CSS），
 //     并进入站长/管理员审核队列（pending）。自动化预检若发现问题（removed 非空），原文 raw_html
 //     一并送站长复核；站长检查原文后通过，则 public_html = safe_html（绝不发布原文脚本）对外可见。
 //   - 通知站长不依赖硬编码：按 role 查询管理员，复用现有 PushNotification 模式（见 notifyAdminsHTMLReview）。
@@ -17,7 +17,7 @@ import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/security"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -29,12 +29,12 @@ import (
 func GetMyHomeCustomize(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	var pub theme.AuthorHomeCustomize
 	models.DB.Where("author_id = ?", uid).First(&pub)
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"my_raw_html": theme.GetUserHomeCustomize(uid),
 		"author": gin.H{
 			"raw_html":      pub.RawHTML,
@@ -52,21 +52,21 @@ func GetMyHomeCustomize(c *gin.Context) {
 func UpdateMyHomeCustomize(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	var req struct {
 		RawHTML string `json:"raw_html"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := theme.SetUserHomeCustomize(uid, req.RawHTML); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, gin.H{"raw_html": req.RawHTML})
+	infra.Success(c, gin.H{"raw_html": req.RawHTML})
 }
 
 // GetAuthorHomeCustomize GET /api/author/:id/home-customize（公开）
@@ -76,7 +76,7 @@ func GetAuthorHomeCustomize(c *gin.Context) {
 	if !ok {
 		return
 	}
-	utils.Success(c, gin.H{"public_html": theme.GetApprovedAuthorHomeCustomize(id)})
+	infra.Success(c, gin.H{"public_html": theme.GetApprovedAuthorHomeCustomize(id)})
 }
 
 // UpdateAuthorHomeCustomize PUT /api/author/:id/home-customize（作者本人或管理员）
@@ -88,30 +88,30 @@ func UpdateAuthorHomeCustomize(c *gin.Context) {
 	}
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	if uid != id && !adminsite.IsAdminUser(c) {
-		utils.Forbidden(c, "只能修改自己的作者主页")
+		infra.Forbidden(c, "只能修改自己的作者主页")
 		return
 	}
 	var req struct {
 		RawHTML string `json:"raw_html"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	safe, removed, hadIssues, err := theme.SubmitAuthorHomeCustomize(id, req.RawHTML)
 	if err != nil {
-		utils.InternalError(c, "提交失败")
+		infra.InternalError(c, "提交失败")
 		return
 	}
 	// 自动化预检查出问题 → 原文送站长复核（按 role 查询，不硬编码具体账号）
 	if hadIssues {
 		notifyAdminsHomeCustomize(id)
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"safe_html":     safe,
 		"removed":       removed,
 		"had_issues":    hadIssues,
@@ -132,7 +132,7 @@ func ListHomeCustomizeReviews(c *gin.Context) {
 	}
 	var list []theme.AuthorHomeCustomize
 	if err := q.Find(&list).Error; err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	// 补作者名，便于站长一眼看出是谁提交的
@@ -156,7 +156,7 @@ func ListHomeCustomizeReviews(c *gin.Context) {
 	for _, it := range list {
 		rows = append(rows, row{AuthorHomeCustomize: it, Username: names[it.AuthorID]})
 	}
-	utils.Success(c, rows)
+	infra.Success(c, rows)
 }
 
 // ReviewHomeCustomize POST /api/admin/home-customize/reviews/:id/review（仅管理员）
@@ -174,12 +174,12 @@ func ReviewHomeCustomize(c *gin.Context) {
 		Note   string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	req.Action = strings.ToLower(strings.TrimSpace(req.Action))
 	if req.Action != "approve" && req.Action != "reject" {
-		utils.BadRequest(c, "action 只能是 approve 或 reject")
+		infra.BadRequest(c, "action 只能是 approve 或 reject")
 		return
 	}
 	note := security.SanitizePlainText(req.Note)
@@ -190,10 +190,10 @@ func ReviewHomeCustomize(c *gin.Context) {
 		err = theme.RejectAuthorHomeCustomize(id, adminID, note)
 	}
 	if err != nil {
-		utils.InternalError(c, "操作失败")
+		infra.InternalError(c, "操作失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已" + map[string]string{"approve": "通过", "reject": "驳回"}[req.Action], "review_status": req.Action + "d"})
+	infra.Success(c, gin.H{"message": "已" + map[string]string{"approve": "通过", "reject": "驳回"}[req.Action], "review_status": req.Action + "d"})
 }
 
 // notifyAdminsHomeCustomize 自动化预检发现问题时，按 role 查询站长/管理员并推送站内通知（不硬编码账号）。

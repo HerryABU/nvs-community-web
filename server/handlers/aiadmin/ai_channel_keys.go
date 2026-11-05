@@ -3,7 +3,7 @@ package aiadmin
 import (
 	"nvs-server/handlers/admincommon"
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"time"
@@ -48,19 +48,19 @@ func AdminListAiChannelKeys(c *gin.Context) {
 	}
 	base := strings.TrimSpace(c.Query("base_url"))
 	if base == "" {
-		utils.BadRequest(c, "请指定渠道地址")
+		infra.BadRequest(c, "请指定渠道地址")
 		return
 	}
 	list, err := aihub.ListAiChannelKeys(base)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	items := make([]gin.H, 0, len(list))
 	for i := range list {
 		items = append(items, channelKeyVO(&list[i]))
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"list": items, "total": len(items), "base_url": base,
 		"max_fail": aihub.MaxFailBeforeDisable,
 	})
@@ -80,21 +80,21 @@ func AdminCreateAiChannelKey(c *gin.Context) {
 		Weight  int    `json:"weight"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	base := strings.TrimSpace(req.BaseURL)
 	if base == "" {
-		utils.BadRequest(c, "请填写渠道地址")
+		infra.BadRequest(c, "请填写渠道地址")
 		return
 	}
 	lines := splitKeyLines(req.Keys)
 	if len(lines) == 0 {
-		utils.BadRequest(c, "请至少填写一把密钥")
+		infra.BadRequest(c, "请至少填写一把密钥")
 		return
 	}
 	if len(lines) > 200 {
-		utils.BadRequest(c, "单次最多导入 200 把，请分批")
+		infra.BadRequest(c, "单次最多导入 200 把，请分批")
 		return
 	}
 	added, dups, failed := 0, 0, 0
@@ -127,7 +127,7 @@ func AdminCreateAiChannelKey(c *gin.Context) {
 			msg += "（" + lastErr + "）"
 		}
 	}
-	utils.Success(c, gin.H{"message": msg, "added": added, "dups": dups, "failed": failed})
+	infra.Success(c, gin.H{"message": msg, "added": added, "dups": dups, "failed": failed})
 }
 
 // AdminUpdateAiChannelKey PATCH /api/admin/ai/channel-keys/:id
@@ -137,7 +137,7 @@ func AdminUpdateAiChannelKey(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if id == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	var req struct {
@@ -147,21 +147,21 @@ func AdminUpdateAiChannelKey(c *gin.Context) {
 		Enabled *bool   `json:"enabled"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	// 限定渠道，避免拿着别人的 id 改到另一条渠道的卡密
 	if strings.TrimSpace(req.BaseURL) != "" {
 		if _, err := aihub.GetAiChannelKey(uint(id), req.BaseURL); err != nil {
-			utils.NotFound(c, "卡密不存在")
+			infra.NotFound(c, "卡密不存在")
 			return
 		}
 	}
 	if err := aihub.UpdateAiChannelKey(uint(id), req.Label, req.Weight, req.Enabled); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已保存"})
+	infra.Success(c, gin.H{"message": "已保存"})
 }
 
 // AdminDeleteAiChannelKey DELETE /api/admin/ai/channel-keys/:id
@@ -171,14 +171,14 @@ func AdminDeleteAiChannelKey(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if id == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := aihub.DeleteAiChannelKey(uint(id)); err != nil {
-		utils.InternalError(c, "删除失败")
+		infra.InternalError(c, "删除失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已删除"})
+	infra.Success(c, gin.H{"message": "已删除"})
 }
 
 // AdminTestAiChannelKey POST /api/admin/ai/channel-keys/:id/test
@@ -190,27 +190,27 @@ func AdminTestAiChannelKey(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	base := strings.TrimSpace(c.Query("base_url"))
 	if id == 0 || base == "" {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	k, err := aihub.GetAiChannelKey(uint(id), base)
 	if err != nil {
-		utils.NotFound(c, "卡密不存在")
+		infra.NotFound(c, "卡密不存在")
 		return
 	}
 	plain, err := aihub.DecryptAiChannelKey(k)
 	if err != nil {
-		utils.InternalError(c, "卡密解密失败")
+		infra.InternalError(c, "卡密解密失败")
 		return
 	}
 	n, perr := probeUpstreamModels(k.BaseURL, plain, "")
 	if perr != "" {
 		aihub.ReportAiChannelKey(k.ID, false)
-		utils.Success(c, gin.H{"ok": false, "error": perr})
+		infra.Success(c, gin.H{"ok": false, "error": perr})
 		return
 	}
 	aihub.ReportAiChannelKey(k.ID, true)
-	utils.Success(c, gin.H{"ok": true, "model_count": n, "at": time.Now().Format(time.RFC3339)})
+	infra.Success(c, gin.H{"ok": true, "model_count": n, "at": time.Now().Format(time.RFC3339)})
 }
 
 // splitKeyLines 拆分多行密钥：去空行、去首尾空白、去掉行内逗号分隔的情况。
@@ -263,7 +263,7 @@ func AiPublicPricing(c *gin.Context) {
 	chatP := aim.GetCategoryPrice("chat")
 	imgP := aim.GetCategoryPrice("image")
 	vidP := aim.GetCategoryPrice("video")
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"models": items,
 		"categories": gin.H{
 			"chat":  gin.H{"price_in": chatP.PriceIn, "price_out": chatP.PriceOut},

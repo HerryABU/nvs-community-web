@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"nvs-server/handlers/adminsite"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/sanitize"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -18,7 +20,6 @@ import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/security"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	quota "nvs-server/models/quota"
@@ -106,7 +107,7 @@ func UploadZipHTML(c *gin.Context) {
 	novelIDStr := c.PostForm("novel_id")
 
 	if name == "" {
-		utils.BadRequest(c, "扩展名称不能为空")
+		infra.BadRequest(c, "扩展名称不能为空")
 		return
 	}
 	// run_mode 校验：默认 sandbox
@@ -116,45 +117,45 @@ func UploadZipHTML(c *gin.Context) {
 
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
-		utils.BadRequest(c, "请上传ZIP文件")
+		infra.BadRequest(c, "请上传ZIP文件")
 		return
 	}
 	defer file.Close()
 
 	// 检查是否为ZIP文件
 	if !strings.HasSuffix(strings.ToLower(header.Filename), ".zip") {
-		utils.BadRequest(c, "仅支持 .zip 文件")
+		infra.BadRequest(c, "仅支持 .zip 文件")
 		return
 	}
 
 	// 限制上传大小（最大20MB）
 	if header.Size > 20*1024*1024 {
-		utils.BadRequest(c, "ZIP文件不能超过 20MB")
+		infra.BadRequest(c, "ZIP文件不能超过 20MB")
 		return
 	}
 
 	// 读取ZIP到内存
 	zipData, err := io.ReadAll(file)
 	if err != nil {
-		utils.InternalError(c, "读取ZIP文件失败")
+		infra.InternalError(c, "读取ZIP文件失败")
 		return
 	}
 
 	// 解析ZIP
 	zipReader, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
 	if err != nil {
-		utils.BadRequest(c, "无效的ZIP文件: "+err.Error())
+		infra.BadRequest(c, "无效的ZIP文件: "+err.Error())
 		return
 	}
 
 	userDir := filepath.Join(config.UserHTMLDir, fmt.Sprintf("%d", userID))
 	timestamp := time.Now().UnixMilli()
-	safeName := utils.SanitizeFilename(name)
+	safeName := sanitize.SanitizeFilename(name)
 	extractDir := filepath.Join(userDir, fmt.Sprintf("%s_%d", safeName, timestamp))
 
 	// ====== 第一步：ZIP 炸弹检测（纯内存，不落盘） ======
-	if ok, msg := utils.ValidateZipBomb(zipReader, nil); !ok {
-		utils.BadRequest(c, msg)
+	if ok, msg := sanitize.ValidateZipBomb(zipReader, nil); !ok {
+		infra.BadRequest(c, msg)
 		return
 	}
 
@@ -171,7 +172,7 @@ func UploadZipHTML(c *gin.Context) {
 			c.JSON(http.StatusForbidden, gin.H{"code": 7, "message": qe.Reason, "data": quota.HTMLQuotaSnapshot(userID)})
 			return
 		}
-		utils.InternalError(c, "额度校验失败")
+		infra.InternalError(c, "额度校验失败")
 		return
 	}
 
@@ -187,7 +188,7 @@ func UploadZipHTML(c *gin.Context) {
 	if pre.Blocked {
 		qPath, err := quarantineZip(userID, safeName, timestamp, zipData)
 		if err != nil {
-			utils.InternalError(c, "封存失败，上传已中止")
+			infra.InternalError(c, "封存失败，上传已中止")
 			return
 		}
 		blockReason := pre.BlockInfo
@@ -215,7 +216,7 @@ func UploadZipHTML(c *gin.Context) {
 			ScanBlockReason: blockReason,
 		}
 		if err := models.DB.Create(item).Error; err != nil {
-			utils.InternalError(c, "创建封存记录失败")
+			infra.InternalError(c, "创建封存记录失败")
 			return
 		}
 		// ⚠️ 封存态的关键字段全是零值（is_extracted=false / is_active=false / is_public=false /
@@ -235,7 +236,7 @@ func UploadZipHTML(c *gin.Context) {
 		item.IsDownloadable = false
 		// 通知全部管理员：有待处置的封存件
 		adminsite.NotifyAdminsHTMLQuarantine(item)
-		utils.Success(c, gin.H{
+		infra.Success(c, gin.H{
 			"html":        item,
 			"quarantined": true,
 			"message":     "安全预检未通过，ZIP 已原样封存、未解压，等待管理员审核",
@@ -245,16 +246,16 @@ func UploadZipHTML(c *gin.Context) {
 
 	// ====== 第三步：预检通过 → 解压 ======
 	os.MkdirAll(extractDir, 0755)
-	entries, err := utils.ExtractZipSafe(zipReader, extractDir, nil)
+	entries, err := sanitize.ExtractZipSafe(zipReader, extractDir, nil)
 	if err != nil {
 		os.RemoveAll(extractDir) // 清理
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 
 	if len(entries) == 0 {
 		os.RemoveAll(extractDir)
-		utils.BadRequest(c, "ZIP文件中没有有效文件")
+		infra.BadRequest(c, "ZIP文件中没有有效文件")
 		return
 	}
 
@@ -265,7 +266,7 @@ func UploadZipHTML(c *gin.Context) {
 		// 验证指定的入口文件存在
 		if !hasEntry(entries, entryFile) {
 			os.RemoveAll(extractDir)
-			utils.BadRequest(c, "指定入口不存在: "+entryFile)
+			infra.BadRequest(c, "指定入口不存在: "+entryFile)
 			return
 		}
 	}
@@ -303,7 +304,7 @@ func UploadZipHTML(c *gin.Context) {
 	entryFile = strings.TrimPrefix(entryFile, "/")
 	if entryFile == "" || strings.HasPrefix(entryFile, "..") || strings.Contains(entryFile, "../") {
 		os.RemoveAll(extractDir)
-		utils.BadRequest(c, "入口文件路径非法：仅允许解压目录内的相对路径")
+		infra.BadRequest(c, "入口文件路径非法：仅允许解压目录内的相对路径")
 		return
 	}
 
@@ -335,7 +336,7 @@ func UploadZipHTML(c *gin.Context) {
 	}
 	if err := models.DB.Create(htmlItem).Error; err != nil {
 		os.RemoveAll(extractDir)
-		utils.InternalError(c, "创建记录失败")
+		infra.InternalError(c, "创建记录失败")
 		return
 	}
 
@@ -344,7 +345,7 @@ func UploadZipHTML(c *gin.Context) {
 	if isPublic {
 		allowed, needReview, reason, err := quota.CheckAndApplyWebPublish(userID, quota.WebQuotaTargetHTML, htmlItem.ID)
 		if err != nil {
-			utils.InternalError(c, "操作失败")
+			infra.InternalError(c, "操作失败")
 			return
 		}
 		if allowed {
@@ -355,7 +356,7 @@ func UploadZipHTML(c *gin.Context) {
 		}
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"html":        htmlItem,
 		"files":       entries,
 		"entry_file":  entryFile,
@@ -368,7 +369,7 @@ func ListHTMLs(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	var htmls []softdel.UserHTML
 	models.DB.Where("user_id = ?", userID).Order("updated_at DESC").Find(&htmls)
-	utils.Success(c, htmls)
+	infra.Success(c, htmls)
 }
 
 // GetHTML GET /api/userhtmls/:id
@@ -378,14 +379,14 @@ func GetHTML(c *gin.Context) {
 
 	var htmlItem softdel.UserHTML
 	if err := models.DB.Where("id = ? AND user_id = ?", htmlID, userID).First(&htmlItem).Error; err != nil {
-		utils.NotFound(c, "扩展不存在")
+		infra.NotFound(c, "扩展不存在")
 		return
 	}
 
 	// 列出解压目录中的文件
 	files := listExtractedFiles(htmlItem.ExtractDir)
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"html":  htmlItem,
 		"files": files,
 	})
@@ -398,7 +399,7 @@ func UpdateHTML(c *gin.Context) {
 
 	var htmlItem softdel.UserHTML
 	if err := models.DB.Where("id = ? AND user_id = ?", htmlID, userID).First(&htmlItem).Error; err != nil {
-		utils.NotFound(c, "扩展不存在")
+		infra.NotFound(c, "扩展不存在")
 		return
 	}
 
@@ -416,7 +417,7 @@ func UpdateHTML(c *gin.Context) {
 		BlogID         *uint   `json:"blog_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误: "+err.Error())
+		infra.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
 
@@ -439,7 +440,7 @@ func UpdateHTML(c *gin.Context) {
 		entry = strings.ReplaceAll(entry, "\\", "/")
 		entry = strings.TrimPrefix(entry, "/")
 		if entry == "" || strings.HasPrefix(entry, "..") || strings.Contains(entry, "../") {
-			utils.BadRequest(c, "入口文件路径非法：仅允许解压目录内的相对路径")
+			infra.BadRequest(c, "入口文件路径非法：仅允许解压目录内的相对路径")
 			return
 		}
 		updates["entry_file"] = entry
@@ -468,13 +469,13 @@ func UpdateHTML(c *gin.Context) {
 
 	if len(updates) > 0 {
 		if err := models.DB.Model(&htmlItem).Updates(updates).Error; err != nil {
-			utils.InternalError(c, "更新失败")
+			infra.InternalError(c, "更新失败")
 			return
 		}
 	}
 	// 重新载入最新数据返回（含未变更的关联字段）
 	models.DB.Where("id = ?", htmlItem.ID).First(&htmlItem)
-	utils.Success(c, htmlItem)
+	infra.Success(c, htmlItem)
 }
 
 // DeleteHTML DELETE /api/userhtmls/:id
@@ -484,13 +485,13 @@ func DeleteHTML(c *gin.Context) {
 
 	var htmlItem softdel.UserHTML
 	if err := models.DB.Where("id = ? AND user_id = ?", htmlID, userID).First(&htmlItem).Error; err != nil {
-		utils.NotFound(c, "扩展不存在")
+		infra.NotFound(c, "扩展不存在")
 		return
 	}
 
 	// 合规留存：软删除，保留 ZIP 与解压目录（不物理移除），可追溯原始内容
 	models.DB.Delete(&htmlItem)
-	utils.Success(c, gin.H{"message": "扩展已删除"})
+	infra.Success(c, gin.H{"message": "扩展已删除"})
 }
 
 // GetNovelHTMLs GET /api/novels/:id/htmls
@@ -499,7 +500,7 @@ func GetNovelHTMLs(c *gin.Context) {
 	var htmls []softdel.UserHTML
 	models.DB.Where("novel_id = ? AND is_active = ?", uint(novelID), true).
 		Order("updated_at DESC").Find(&htmls)
-	utils.Success(c, htmls)
+	infra.Success(c, htmls)
 }
 
 // GetBlogHTMLs GET /api/blogs/:id/htmls
@@ -509,12 +510,12 @@ func GetBlogHTMLs(c *gin.Context) {
 	var htmls []softdel.UserHTML
 	models.DB.Where("blog_id = ? AND is_active = ?", uint(blogID), true).
 		Order("updated_at DESC").Find(&htmls)
-	utils.Success(c, htmls)
+	infra.Success(c, htmls)
 }
 
 // ==================== 辅助 ====================
 
-func findEntryHTML(entries []utils.ZipEntry) string {
+func findEntryHTML(entries []sanitize.ZipEntry) string {
 	// 优先 index.html，其次 *.html，否则第一个.html
 	if len(entries) == 0 {
 		return ""
@@ -534,8 +535,8 @@ func findEntryHTML(entries []utils.ZipEntry) string {
 	return entries[0].Name
 }
 
-func listExtractedFiles(dir string) []utils.ZipEntry {
-	var result []utils.ZipEntry
+func listExtractedFiles(dir string) []sanitize.ZipEntry {
+	var result []sanitize.ZipEntry
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
@@ -546,7 +547,7 @@ func listExtractedFiles(dir string) []utils.ZipEntry {
 		if rel == "_original.zip" {
 			return nil
 		}
-		result = append(result, utils.ZipEntry{
+		result = append(result, sanitize.ZipEntry{
 			Name: rel,
 			Size: info.Size(),
 			Path: path,
@@ -556,7 +557,7 @@ func listExtractedFiles(dir string) []utils.ZipEntry {
 	return result
 }
 
-func hasEntry(entries []utils.ZipEntry, name string) bool {
+func hasEntry(entries []sanitize.ZipEntry, name string) bool {
 	for _, e := range entries {
 		if e.Name == name {
 			return true
@@ -565,7 +566,7 @@ func hasEntry(entries []utils.ZipEntry, name string) bool {
 	return false
 }
 
-func findThumbPath(entries []utils.ZipEntry, extractDir string, userID uint, safeName string, timestamp int64) string {
+func findThumbPath(entries []sanitize.ZipEntry, extractDir string, userID uint, safeName string, timestamp int64) string {
 	name := findThumbImage(entries, extractDir)
 	if name == "" {
 		return ""

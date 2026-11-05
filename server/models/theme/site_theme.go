@@ -2,9 +2,8 @@ package theme
 
 import (
 	"errors"
+	"nvs-server/utils/sanitize"
 	"time"
-
-	"nvs-server/utils"
 
 	"gorm.io/gorm"
 	"nvs-server/models"
@@ -55,8 +54,8 @@ func GetSiteThemeJSBundle() (js string, mode string, delay int) {
 // SetSiteTheme 保存站点默认主题：先经服务端白名单消毒再 Upsert 单行。
 // 返回被移除的规则列表（供前端提示管理员）。
 func SetSiteTheme(css string, customJS string, jsMode string, jsDelay int) (removed []string, err error) {
-	sanitized, removed := utils.SanitizeCSS(css)
-	sanitizedJS, jsRemoved := utils.SanitizeJS(customJS)
+	sanitized, removed := sanitize.SanitizeCSS(css)
+	sanitizedJS, jsRemoved := sanitize.SanitizeJS(customJS)
 	removed = append(removed, jsRemoved...)
 	var t SiteTheme
 	if ferr := models.DB.First(&t, 1).Error; ferr != nil {

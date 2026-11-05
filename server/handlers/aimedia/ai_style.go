@@ -2,7 +2,7 @@ package aimedia
 
 import (
 	"nvs-server/handlers/admincommon"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
@@ -16,14 +16,14 @@ import (
 func AiStyleList(c *gin.Context) {
 	list, err := aihub.ListAiStyles(c.Query("kind"), true)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	names := make([]string, 0, len(list))
 	for _, s := range list {
 		names = append(names, s.Name)
 	}
-	utils.Success(c, gin.H{"list": list, "names": names})
+	infra.Success(c, gin.H{"list": list, "names": names})
 }
 
 // AdminListAiStyles GET /api/admin/ai/styles?kind=
@@ -33,10 +33,10 @@ func AdminListAiStyles(c *gin.Context) {
 	}
 	list, err := aihub.ListAiStyles(c.Query("kind"), false)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list})
+	infra.Success(c, gin.H{"list": list})
 }
 
 // AdminCreateAiStyle POST /api/admin/ai/styles
@@ -50,15 +50,15 @@ func AdminCreateAiStyle(c *gin.Context) {
 		SortOrder int    `json:"sort_order"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	st, err := aihub.CreateAiStyle(req.Kind, req.Name, req.SortOrder)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, st)
+	infra.Success(c, st)
 }
 
 // AdminUpdateAiStyle PUT /api/admin/ai/styles/:id
@@ -73,7 +73,7 @@ func AdminUpdateAiStyle(c *gin.Context) {
 		Enabled   *bool  `json:"enabled"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	enabled := true
@@ -81,10 +81,10 @@ func AdminUpdateAiStyle(c *gin.Context) {
 		enabled = *req.Enabled
 	}
 	if err := aihub.UpdateAiStyle(uint(id), strings.TrimSpace(req.Name), req.SortOrder, enabled); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已保存"})
+	infra.Success(c, gin.H{"message": "已保存"})
 }
 
 // AdminDeleteAiStyle DELETE /api/admin/ai/styles/:id
@@ -94,8 +94,8 @@ func AdminDeleteAiStyle(c *gin.Context) {
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := aihub.DeleteAiStyle(uint(id)); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已删除"})
+	infra.Success(c, gin.H{"message": "已删除"})
 }

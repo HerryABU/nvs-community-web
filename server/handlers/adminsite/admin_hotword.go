@@ -2,9 +2,8 @@ package adminsite
 
 import (
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strconv"
-
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	search "nvs-server/models/search"
@@ -29,16 +28,16 @@ func AdminHotWords(c *gin.Context) {
 	case "search":
 		words, err := search.AggregateSearchWords(days, limit)
 		if err != nil {
-			utils.InternalError(c, "搜索热词统计失败")
+			infra.InternalError(c, "搜索热词统计失败")
 			return
 		}
 		queries, err := search.AggregateSearchQueries(days, limit)
 		if err != nil {
-			utils.InternalError(c, "搜索热词统计失败")
+			infra.InternalError(c, "搜索热词统计失败")
 			return
 		}
 		total, _ := search.CountSearchLogs(days)
-		utils.Success(c, gin.H{
+		infra.Success(c, gin.H{
 			"type":         "search",
 			"words":        words,
 			"queries":      queries,
@@ -49,10 +48,10 @@ func AdminHotWords(c *gin.Context) {
 	case "tag":
 		words, err := search.AggregateTagHotWords(days, limit)
 		if err != nil {
-			utils.InternalError(c, "标签热词统计失败")
+			infra.InternalError(c, "标签热词统计失败")
 			return
 		}
-		utils.Success(c, gin.H{
+		infra.Success(c, gin.H{
 			"type":  "tag",
 			"words": words,
 			"days":  days,
@@ -61,10 +60,10 @@ func AdminHotWords(c *gin.Context) {
 	default: // content
 		words, err := search.AggregateHotWords(days, limit)
 		if err != nil {
-			utils.InternalError(c, "热词统计失败")
+			infra.InternalError(c, "热词统计失败")
 			return
 		}
-		utils.Success(c, gin.H{
+		infra.Success(c, gin.H{
 			"type":  "content",
 			"words": words,
 			"days":  days,
@@ -85,15 +84,15 @@ func AdminSearchLogCleanup(c *gin.Context) {
 	if days > 0 {
 		removed, err := search.SearchLogRetentionCleanup(days)
 		if err != nil {
-			utils.InternalError(c, "清理搜索日志失败")
+			infra.InternalError(c, "清理搜索日志失败")
 			return
 		}
-		utils.Success(c, gin.H{"removed": removed})
+		infra.Success(c, gin.H{"removed": removed})
 		return
 	}
 	if err := search.SearchLogCleanup(); err != nil {
-		utils.InternalError(c, "清空搜索日志失败")
+		infra.InternalError(c, "清空搜索日志失败")
 		return
 	}
-	utils.Success(c, gin.H{"removed": -1})
+	infra.Success(c, gin.H{"removed": -1})
 }

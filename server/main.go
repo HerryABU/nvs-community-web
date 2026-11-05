@@ -6,6 +6,8 @@ import (
 	"net"
 	"net/http"
 	"nvs-server/handlers/aimedia"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/secure"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,7 +43,6 @@ import (
 	"nvs-server/sentiment/updater"
 	"nvs-server/supervise"
 	"nvs-server/tlsconfig"
-	"nvs-server/utils"
 	"nvs-server/version"
 
 	"github.com/gin-gonic/gin"
@@ -113,13 +114,13 @@ func main() {
 	}
 
 	// 设置 SMTP 配置提供者（从平台配置读取）
-	utils.SMTPConfigProvider = func() utils.SMTPConfig {
+	infra.SMTPConfigProvider = func() infra.SMTPConfig {
 		host, port, user, pass, from := models.GetSMTPConfigFromDB()
 		portInt := 587
 		if p, err := strconv.Atoi(port); err == nil {
 			portInt = p
 		}
-		return utils.SMTPConfig{
+		return infra.SMTPConfig{
 			Host: host, Port: fmt.Sprintf("%d", portInt), User: user, Password: pass, From: from,
 			// 兼容自签名/内网 SMTP：管理员在后台显式开启才跳过证书校验（默认校验证书，安全）
 			InsecureSkipVerify: models.GetPlatformConfig("smtp_insecure_skip_verify") == "true",
@@ -344,7 +345,7 @@ func initDatabase() error {
 
 	var err error
 	models.DB, err = gorm.Open(dialector, &gorm.Config{
-		Logger: utils.NewDBLogger(),
+		Logger: infra.NewDBLogger(),
 	})
 	if err != nil {
 		return err
@@ -356,7 +357,7 @@ func initDatabase() error {
 		sqlDB.SetMaxOpenConns(100)
 		sqlDB.SetConnMaxLifetime(time.Hour)
 		// MySQL 模式 → 自动启用 Redis 缓存
-		utils.ConnectRedis(config.RedisHost, config.RedisPort, config.RedisPassword, config.RedisDB)
+		infra.ConnectRedis(config.RedisHost, config.RedisPort, config.RedisPassword, config.RedisDB)
 	}
 
 	if config.DBDriver == "sqlite" && config.DBMemory {
@@ -365,7 +366,7 @@ func initDatabase() error {
 
 	// 短信网关（可插拔：log/http）与手机验证码存储后端（Redis/内存，随 ConnectRedis 决定）
 	sms.Init()
-	log.Printf("[sms] 验证码存储后端: %s", utils.PhoneCodeBackend())
+	log.Printf("[sms] 验证码存储后端: %s", infra.PhoneCodeBackend())
 
 	if err := models.AutoMigrateAll(models.DB); err != nil {
 		return err
@@ -485,7 +486,7 @@ func initDefaultAdmin() {
 		return
 	}
 
-	hash, err := utils.HashPassword("admin123")
+	hash, err := secure.HashPassword("admin123")
 	if err != nil {
 		log.Println("警告: 默认管理员密码哈希失败")
 		return

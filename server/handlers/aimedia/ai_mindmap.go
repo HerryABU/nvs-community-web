@@ -3,7 +3,7 @@ package aimedia
 import (
 	"nvs-server/aiclient"
 	"nvs-server/handlers/hctx"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 	"time"
@@ -18,7 +18,7 @@ import (
 
 func AiMindmap(c *gin.Context) {
 	if !aim.IsAiEnabled() {
-		utils.BadRequest(c, "AI 功能未开启")
+		infra.BadRequest(c, "AI 功能未开启")
 		return
 	}
 	userID := hctx.CurrentUserID(c)
@@ -28,16 +28,16 @@ func AiMindmap(c *gin.Context) {
 		ModelID uint   `json:"model_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	topic := strings.TrimSpace(req.Topic)
 	if topic == "" {
-		utils.BadRequest(c, "请输入需求描述")
+		infra.BadRequest(c, "请输入需求描述")
 		return
 	}
 	if len([]rune(topic)) > 2000 {
-		utils.BadRequest(c, "描述过长（上限 2000 字）")
+		infra.BadRequest(c, "描述过长（上限 2000 字）")
 		return
 	}
 	depth := req.Depth
@@ -48,14 +48,14 @@ func AiMindmap(c *gin.Context) {
 	if req.ModelID > 0 {
 		mm, err := aim.GetEnabledAiModelOfKind(req.ModelID, aim.AiKindChat)
 		if err != nil || mm == nil {
-			utils.BadRequest(c, "模型不可用")
+			infra.BadRequest(c, "模型不可用")
 			return
 		}
 		m = mm
 	} else {
 		list, err := aim.ListAiModelsByKind(aim.AiKindChat, true)
 		if err != nil || len(list) == 0 {
-			utils.BadRequest(c, "暂无可用对话模型")
+			infra.BadRequest(c, "暂无可用对话模型")
 			return
 		}
 		m = &list[0]
@@ -73,17 +73,17 @@ func AiMindmap(c *gin.Context) {
 	freeOK, _, _ := aihub.CheckAiFreeQuota(userID, tokensIn+tokensOut)
 	if !freeOK {
 		if !wallet.IsTokenEnabled() {
-			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
+			infra.BadRequest(c, "代币系统未开启，无法使用付费 AI")
 			return
 		}
 		if _, ok := aim.PrecheckAiBalance(userID, m, tokensIn, tokensOut); !ok {
-			utils.Error(c, 429, 42902, "余额不足，请先充值")
+			infra.Error(c, 429, 42902, "余额不足，请先充值")
 			return
 		}
 	}
 	callLog, lerr := aim.CreateAiCallLog(userID, m, "chat", "mindmap", 0, tokensIn, tokensOut, freeOK)
 	if lerr != nil {
-		utils.InternalError(c, "记录调用失败")
+		infra.InternalError(c, "记录调用失败")
 		return
 	}
 	lease, kerr := aihub.AcquireModelKey(m)
@@ -93,7 +93,7 @@ func AiMindmap(c *gin.Context) {
 	}
 	if kerr != nil {
 		aim.FailAiCallLog(callLog.ID, "密钥解密失败")
-		utils.InternalError(c, "模型密钥解密失败，请联系站长")
+		infra.InternalError(c, "模型密钥解密失败，请联系站长")
 		return
 	}
 	client := aiclient.NewClient(m.BaseURL, apiKey, 120*time.Second)
@@ -107,7 +107,7 @@ func AiMindmap(c *gin.Context) {
 	}
 	if kerr != nil {
 		aim.FailAiCallLog(callLog.ID, kerr.Error())
-		utils.BadRequest(c, "生成失败："+kerr.Error()+"（未扣款）")
+		infra.BadRequest(c, "生成失败："+kerr.Error()+"（未扣款）")
 		return
 	}
 	if realIn <= 0 {
@@ -121,7 +121,7 @@ func AiMindmap(c *gin.Context) {
 		aim.FailAiCallLog(callLog.ID, serr.Error())
 	}
 	nb := wallet.GetTokenBalance(userID)
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"outline": strings.TrimSpace(out),
 		"cost":    cost, "balance_after": nb, "free": freeOK,
 		"tokens_in": realIn, "tokens_out": realOut,

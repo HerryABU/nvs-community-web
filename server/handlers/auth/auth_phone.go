@@ -12,6 +12,8 @@ import (
 	"errors"
 	"log"
 	"math/big"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/secure"
 	"strings"
 	"time"
 
@@ -20,7 +22,6 @@ import (
 	"nvs-server/models"
 	"nvs-server/security/slidecaptcha"
 	"nvs-server/security/sms"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -36,37 +37,37 @@ func PhoneResetPassword(c *gin.Context) {
 		NewPassword string `json:"new_password" binding:"required,min=6,max=128"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误: 新密码长度至少6位")
+		infra.BadRequest(c, "参数错误: 新密码长度至少6位")
 		return
 	}
 	phone := sms.NormalizePhone(req.Phone)
 	if !sms.IsValidCNMobile(phone) {
-		utils.BadRequest(c, "手机号格式不正确")
+		infra.BadRequest(c, "手机号格式不正确")
 		return
 	}
-	if err := utils.VerifyPhoneCode(phone, strings.TrimSpace(req.Code), utils.PhonePurposeReset); err != nil {
-		utils.BadRequest(c, err.Error())
+	if err := infra.VerifyPhoneCode(phone, strings.TrimSpace(req.Code), infra.PhonePurposeReset); err != nil {
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	user, err := models.GetUserByPhone(phone)
 	if err != nil || user == nil {
 		// 防手机号枚举：统一话术
-		utils.NotFound(c, "该手机号未注册或无法重置")
+		infra.NotFound(c, "该手机号未注册或无法重置")
 		return
 	}
-	hash, err := utils.HashPassword(req.NewPassword)
+	hash, err := secure.HashPassword(req.NewPassword)
 	if err != nil {
-		utils.InternalError(c, "密码处理失败")
+		infra.InternalError(c, "密码处理失败")
 		return
 	}
 	if err := models.DB.Model(&models.User{}).Where("id = ?", user.ID).Update("password_hash", hash).Error; err != nil {
-		utils.InternalError(c, "重置密码失败")
+		infra.InternalError(c, "重置密码失败")
 		return
 	}
 	// 重置成功后作废该手机号全部未消费验证码
-	utils.DeletePhoneCode(phone, utils.PhonePurposeReset)
+	infra.DeletePhoneCode(phone, infra.PhonePurposeReset)
 	RecordUserAudit(c, user.ID, apikey.AuditChangePassword, "通过手机号验证码重置密码", "success")
-	utils.SuccessMessage(c, "密码重置成功，请重新登录", nil)
+	infra.SuccessMessage(c, "密码重置成功，请重新登录", nil)
 }
 
 // POST /api/auth/phone/send-code — 发送手机验证码
@@ -78,60 +79,60 @@ func SendPhoneCode(c *gin.Context) {
 		CaptchaToken string `json:"captcha_token"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请提供有效的手机号")
+		infra.BadRequest(c, "请提供有效的手机号")
 		return
 	}
 	phone := sms.NormalizePhone(req.Phone)
 	if !sms.IsValidCNMobile(phone) {
-		utils.BadRequest(c, "手机号格式不正确")
+		infra.BadRequest(c, "手机号格式不正确")
 		return
 	}
 	purpose := strings.TrimSpace(req.Purpose)
 	if purpose == "" {
-		purpose = utils.PhonePurposeLogin
+		purpose = infra.PhonePurposeLogin
 	}
-	if purpose != utils.PhonePurposeLogin && purpose != utils.PhonePurposeReset {
-		utils.BadRequest(c, "不支持的验证码用途")
+	if purpose != infra.PhonePurposeLogin && purpose != infra.PhonePurposeReset {
+		infra.BadRequest(c, "不支持的验证码用途")
 		return
 	}
 
 	// 🔒 与邮箱发码同策略：开启滑块验证码时必须先过人机校验（防短信轰炸/裸调）
 	if models.IsCaptchaEnabled() {
 		if req.CaptchaToken == "" || !slidecaptcha.VerifyPassToken(req.CaptchaToken) {
-			utils.Forbidden(c, "请先完成滑块验证后再获取短信验证码")
+			infra.Forbidden(c, "请先完成滑块验证后再获取短信验证码")
 			return
 		}
 	}
 
-	code, err := utils.GeneratePhoneCode(phone, purpose, c.ClientIP())
+	code, err := infra.GeneratePhoneCode(phone, purpose, c.ClientIP())
 	if err != nil {
 		switch {
-		case errors.Is(err, utils.ErrPhoneCodeTooOften):
-			utils.BadRequest(c, err.Error())
-		case errors.Is(err, utils.ErrPhoneCodeQuota):
-			utils.BadRequest(c, err.Error())
+		case errors.Is(err, infra.ErrPhoneCodeTooOften):
+			infra.BadRequest(c, err.Error())
+		case errors.Is(err, infra.ErrPhoneCodeQuota):
+			infra.BadRequest(c, err.Error())
 		default:
-			utils.InternalError(c, "验证码生成失败")
+			infra.InternalError(c, "验证码生成失败")
 		}
 		return
 	}
 
 	if err := sms.SendCode(c.Request.Context(), phone, code); err != nil {
 		// 发送失败作废验证码，避免用户拿到收不到的码
-		utils.DeletePhoneCode(phone, purpose)
-		utils.InternalError(c, "短信发送失败: "+err.Error())
+		infra.DeletePhoneCode(phone, purpose)
+		infra.InternalError(c, "短信发送失败: "+err.Error())
 		return
 	}
 
-	utils.SuccessMessage(c, "验证码已发送，请查收短信", gin.H{
-		"backend": utils.PhoneCodeBackend(),
+	infra.SuccessMessage(c, "验证码已发送，请查收短信", gin.H{
+		"backend": infra.PhoneCodeBackend(),
 	})
 }
 
 // POST /api/auth/phone/login — 手机号验证码登录（不存在则自动注册）
 func PhoneLogin(c *gin.Context) {
 	if !models.GetLoginMethods().Phone {
-		utils.Forbidden(c, "站长已关闭手机号登录")
+		infra.Forbidden(c, "站长已关闭手机号登录")
 		return
 	}
 	var req struct {
@@ -140,7 +141,7 @@ func PhoneLogin(c *gin.Context) {
 		CaptchaToken string `json:"captcha_token"` // 滑块验证码 pass token（站长开启滑块时必填）
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 
@@ -148,7 +149,7 @@ func PhoneLogin(c *gin.Context) {
 	// 与发码、注册等一致，堵死「裸调 phone/login」通道。
 	if models.IsCaptchaEnabled() {
 		if req.CaptchaToken == "" || !slidecaptcha.VerifyPassToken(req.CaptchaToken) {
-			utils.Forbidden(c, "请先完成滑块验证后再登录")
+			infra.Forbidden(c, "请先完成滑块验证后再登录")
 			return
 		}
 	}
@@ -156,25 +157,25 @@ func PhoneLogin(c *gin.Context) {
 	phone := sms.NormalizePhone(req.Phone)
 	code := strings.TrimSpace(req.Code)
 	if !sms.IsValidCNMobile(phone) {
-		utils.BadRequest(c, "手机号格式不正确")
+		infra.BadRequest(c, "手机号格式不正确")
 		return
 	}
 
-	if err := utils.VerifyPhoneCode(phone, code, utils.PhonePurposeLogin); err != nil {
-		utils.BadRequest(c, err.Error())
+	if err := infra.VerifyPhoneCode(phone, code, infra.PhonePurposeLogin); err != nil {
+		infra.BadRequest(c, err.Error())
 		return
 	}
 
 	user, err := models.GetUserByPhone(phone)
 	if err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			utils.InternalError(c, "服务器错误")
+			infra.InternalError(c, "服务器错误")
 			return
 		}
 		// 首次手机号登录 → 自动注册（176号令合规：记录注册 IP）
 		user, err = createPhoneUser(c, phone)
 		if err != nil {
-			utils.InternalError(c, "账号创建失败: "+err.Error())
+			infra.InternalError(c, "账号创建失败: "+err.Error())
 			return
 		}
 		RecordUserAudit(c, user.ID, apikey.AuditRegister, "手机号注册 "+phone, "success")
@@ -182,13 +183,13 @@ func PhoneLogin(c *gin.Context) {
 		// 账号锁定检查（与邮箱登录一致）
 		if user.LockedUntil != nil && user.LockedUntil.After(time.Now()) {
 			remaining := int(time.Until(*user.LockedUntil).Minutes()) + 1
-			utils.BadRequest(c, "登录失败次数过多，账号已锁定，请在 "+docx.Itoa(remaining)+" 分钟后重试")
+			infra.BadRequest(c, "登录失败次数过多，账号已锁定，请在 "+docx.Itoa(remaining)+" 分钟后重试")
 			return
 		}
 	}
 
 	issueSession(c, user, "手机号登录 "+phone)
-	utils.SuccessMessage(c, "登录成功", gin.H{"user": user})
+	infra.SuccessMessage(c, "登录成功", gin.H{"user": user})
 }
 
 // createPhoneUser 为手机号创建账号：占位邮箱（唯一）+ 随机密码哈希 + 默认读者角色。
@@ -202,7 +203,7 @@ func createPhoneUser(c *gin.Context, phone string) (*models.User, error) {
 	if _, err := rand.Read(randPass); err != nil {
 		return nil, err
 	}
-	hash, err := utils.HashPassword("ph!" + hex.EncodeToString(randPass))
+	hash, err := secure.HashPassword("ph!" + hex.EncodeToString(randPass))
 	if err != nil {
 		return nil, err
 	}
@@ -252,13 +253,13 @@ func issueSession(c *gin.Context, user *models.User, auditDesc string) {
 
 	// 🔒 令牌绑定 + 刷新令牌 JTI 轮换（同邮箱登录流程，防 JWT/刷新令牌窃取盗用）
 	fp := c.GetHeader(middleware.DeviceFingerprintHeader)
-	region := utils.RegionForBinding(c.ClientIP())
-	accessToken, err := utils.GenerateToken(user.ID, user.Email, user.Role, fp, region)
+	region := secure.RegionForBinding(c.ClientIP())
+	accessToken, err := secure.GenerateToken(user.ID, user.Email, user.Role, fp, region)
 	if err != nil {
 		return
 	}
-	jti := utils.RandomJTI()
-	refreshToken, err := utils.GenerateRefreshToken(user.ID, user.Email, user.Role, jti)
+	jti := secure.RandomJTI()
+	refreshToken, err := secure.GenerateRefreshToken(user.ID, user.Email, user.Role, jti)
 	if err != nil {
 		return
 	}

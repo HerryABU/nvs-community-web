@@ -9,6 +9,7 @@ import (
 	"image/png"
 	"io"
 	"net/http"
+	"nvs-server/utils/infra"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,7 +18,6 @@ import (
 	"nvs-server/config"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
@@ -30,7 +30,7 @@ func UploadImage(c *gin.Context) {
 
 	file, header, err := c.Request.FormFile("image")
 	if err != nil {
-		utils.BadRequest(c, "请选择要上传的图片")
+		infra.BadRequest(c, "请选择要上传的图片")
 		return
 	}
 	defer file.Close()
@@ -38,7 +38,7 @@ func UploadImage(c *gin.Context) {
 	// 安全检查：限制文件大小（最大 10MB）
 	const maxSize = 10 * 1024 * 1024
 	if header.Size > maxSize {
-		utils.BadRequest(c, "图片大小不能超过 10MB")
+		infra.BadRequest(c, "图片大小不能超过 10MB")
 		return
 	}
 
@@ -46,19 +46,19 @@ func UploadImage(c *gin.Context) {
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	allowedExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true}
 	if !allowedExts[ext] {
-		utils.BadRequest(c, "只支持 JPG/PNG/GIF/WebP 格式的图片")
+		infra.BadRequest(c, "只支持 JPG/PNG/GIF/WebP 格式的图片")
 		return
 	}
 
 	// 读取原始数据
 	rawData, err := io.ReadAll(file)
 	if err != nil {
-		utils.InternalError(c, "读取图片失败")
+		infra.InternalError(c, "读取图片失败")
 		return
 	}
 	// 空/过小文件防护（magic bytes 读取会越界）
 	if len(rawData) < 8 {
-		utils.BadRequest(c, "图片文件为空或已损坏")
+		infra.BadRequest(c, "图片文件为空或已损坏")
 		return
 	}
 
@@ -66,14 +66,14 @@ func UploadImage(c *gin.Context) {
 	// 兼容 WebP 内容配 .jpg 后缀等合法场景；防马由「解码重编码」保证）
 	actual := SniffImageFormat(rawData)
 	if actual == "" {
-		utils.BadRequest(c, "无法识别的图片格式（支持 JPG/PNG/GIF/WebP）")
+		infra.BadRequest(c, "无法识别的图片格式（支持 JPG/PNG/GIF/WebP）")
 		return
 	}
 
 	// 验证 MIME 类型（第二层防护）
 	contentType := http.DetectContentType(rawData)
 	if !strings.HasPrefix(contentType, "image/") {
-		utils.BadRequest(c, "文件不是有效的图片格式")
+		infra.BadRequest(c, "文件不是有效的图片格式")
 		return
 	}
 
@@ -85,14 +85,14 @@ func UploadImage(c *gin.Context) {
 		img, _, err = image.Decode(bytes.NewReader(rawData))
 	}
 	if err != nil {
-		utils.BadRequest(c, "无法解码图片，文件可能已损坏")
+		infra.BadRequest(c, "无法解码图片，文件可能已损坏")
 		return
 	}
 
 	// 创建上传目录
 	imgDir := filepath.Join(config.UploadDir, "images")
 	if err := os.MkdirAll(imgDir, 0755); err != nil {
-		utils.InternalError(c, "无法创建图片目录，请检查 data/uploads 权限: "+err.Error())
+		infra.InternalError(c, "无法创建图片目录，请检查 data/uploads 权限: "+err.Error())
 		return
 	}
 
@@ -107,7 +107,7 @@ func UploadImage(c *gin.Context) {
 			buf.Reset()
 			encodeErr = gif.Encode(&buf, img, nil)
 			if encodeErr != nil {
-				utils.InternalError(c, "图片编码失败")
+				infra.InternalError(c, "图片编码失败")
 				return
 			}
 			outExt = ".gif"
@@ -120,12 +120,12 @@ func UploadImage(c *gin.Context) {
 	imgPath := filepath.Join(imgDir, filename)
 
 	if err := os.WriteFile(imgPath, buf.Bytes(), 0644); err != nil {
-		utils.InternalError(c, "保存图片失败")
+		infra.InternalError(c, "保存图片失败")
 		return
 	}
 
 	imageURL := fmt.Sprintf("/uploads/images/%s", filename)
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"url":     imageURL,
 		"message": "图片上传成功",
 	})
@@ -191,7 +191,7 @@ func UpdateAuthorProfile(c *gin.Context) {
 		NovelID     *uint   `json:"novel_id"`     // 可选：指定作品
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 
@@ -200,7 +200,7 @@ func UpdateAuthorProfile(c *gin.Context) {
 		nick := strings.TrimSpace(*req.Nickname)
 		n := len([]rune(nick))
 		if n < 1 || n > 32 {
-			utils.BadRequest(c, "昵称长度需为 1-32 个字符")
+			infra.BadRequest(c, "昵称长度需为 1-32 个字符")
 			return
 		}
 		// 昵称不允许使用控制字符与 HTML 标签
@@ -212,7 +212,7 @@ func UpdateAuthorProfile(c *gin.Context) {
 	if req.Signature != nil {
 		sig := strings.TrimSpace(*req.Signature)
 		if len([]rune(sig)) > 128 {
-			utils.BadRequest(c, "签名不能超过128个字符")
+			infra.BadRequest(c, "签名不能超过128个字符")
 			return
 		}
 		models.DB.Model(&models.User{}).Where("id = ?", userID).Update("signature", bluemonday.StrictPolicy().Sanitize(sig))
@@ -222,7 +222,7 @@ func UpdateAuthorProfile(c *gin.Context) {
 	if req.Bio != nil {
 		bio := strings.TrimSpace(*req.Bio)
 		if len([]rune(bio)) > 500 {
-			utils.BadRequest(c, "简介不能超过 500 个字符")
+			infra.BadRequest(c, "简介不能超过 500 个字符")
 			return
 		}
 		bio = bluemonday.StrictPolicy().Sanitize(bio)
@@ -233,11 +233,11 @@ func UpdateAuthorProfile(c *gin.Context) {
 	if req.AvatarURL != nil {
 		av := strings.TrimSpace(*req.AvatarURL)
 		if len(av) > 512 {
-			utils.BadRequest(c, "头像地址过长")
+			infra.BadRequest(c, "头像地址过长")
 			return
 		}
 		if av != "" && !isSafeAvatarURL(av) {
-			utils.BadRequest(c, "头像地址仅支持站内上传（/uploads/...）或 http(s) 链接")
+			infra.BadRequest(c, "头像地址仅支持站内上传（/uploads/...）或 http(s) 链接")
 			return
 		}
 		models.DB.Model(&models.User{}).Where("id = ?", userID).Update("avatar_url", av)
@@ -250,7 +250,7 @@ func UpdateAuthorProfile(c *gin.Context) {
 			Update("wall_enabled", *req.WallEnabled)
 	}
 
-	utils.SuccessMessage(c, "更新成功", nil)
+	infra.SuccessMessage(c, "更新成功", nil)
 }
 
 // isSafeAvatarURL 头像地址白名单：站内相对上传路径 / 或 http(s) 绝对地址。

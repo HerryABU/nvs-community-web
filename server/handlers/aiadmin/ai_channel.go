@@ -2,10 +2,10 @@ package aiadmin
 
 import (
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"nvs-server/aiclient"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	aim "nvs-server/models/ai"
@@ -23,7 +23,7 @@ func AdminAiModelChannel(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	m, err := aim.GetAiModel(uint(id))
 	if err != nil {
-		utils.NotFound(c, "模型不存在")
+		infra.NotFound(c, "模型不存在")
 		return
 	}
 	key, kerr := m.DecryptApiKey()
@@ -33,7 +33,7 @@ func AdminAiModelChannel(c *gin.Context) {
 	// 按模型配置的「余额查询方式」取：官方 / 中转站 / 自定义规则分开处理
 	balance := resolveModelBalance(m, key)
 	probe := aiclient.ProbeChannel(m.BaseURL, key, m.ModelID)
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"model_id":     m.ID,
 		"model_name":   m.Name,
 		"model_id_str": m.ModelID,

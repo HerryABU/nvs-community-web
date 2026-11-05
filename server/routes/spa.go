@@ -18,7 +18,7 @@ import (
 	"nvs-server/honeypot"
 	"nvs-server/middleware"
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -88,7 +88,7 @@ func registerStaticAndSPA(r *gin.Engine) {
 		// 1) 未匹配路由的 /api/* 一律 404（JSON），绝不落入 SPA fallback。
 		//    防止任意 /api/xxx（含被反向代理污染的前缀，如 /api/go-nvs/...，以及 ../ 穿越）被当作前端路由返回 200。
 		if strings.HasPrefix(path, "/api/") {
-			c.JSON(http.StatusNotFound, gin.H{"code": utils.CodeNotFound, "message": "接口不存在", "data": nil})
+			c.JSON(http.StatusNotFound, gin.H{"code": infra.CodeNotFound, "message": "接口不存在", "data": nil})
 			return
 		}
 

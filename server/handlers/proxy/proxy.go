@@ -2,12 +2,12 @@ package proxy
 
 import (
 	"net/http"
+	"nvs-server/utils/infra"
 	"path/filepath"
 	"strings"
 
 	"nvs-server/config"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	platform "nvs-server/models/platform"
@@ -54,7 +54,7 @@ func OutsideWebProxy(c *gin.Context) {
 		cleanPath := filepath.Clean(newPath)
 		// 安全检查：防止路径遍历
 		if strings.Contains(cleanPath, "..") {
-			utils.Forbidden(c, "非法路径")
+			infra.Forbidden(c, "非法路径")
 			return
 		}
 
@@ -70,7 +70,7 @@ func OutsideWebProxy(c *gin.Context) {
 		novelAbs, _ := filepath.Abs(config.NovelDataDir)
 		uploadAbs, _ := filepath.Abs(config.UploadDir)
 		if !strings.HasPrefix(absPath, novelAbs) && !strings.HasPrefix(absPath, uploadAbs) {
-			utils.Forbidden(c, "非法路径")
+			infra.Forbidden(c, "非法路径")
 			return
 		}
 

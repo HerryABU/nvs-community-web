@@ -1,12 +1,12 @@
 package novel
 
 import (
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"nvs-server/collab"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	quota "nvs-server/models/quota"
@@ -30,12 +30,12 @@ func loadChapterForWorkflow(c *gin.Context) (*models.Novel, *models.Chapter, col
 	chapterNum, _ := strconv.Atoi(c.Param("num"))
 	novel, err := models.GetNovelByID(uint(novelID))
 	if err != nil {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return nil, nil, collab.Actor{}, false
 	}
 	chapter, err := models.GetChapterByNovelAndNumber(uint(novelID), chapterNum)
 	if err != nil {
-		utils.NotFound(c, "章节不存在")
+		infra.NotFound(c, "章节不存在")
 		return nil, nil, collab.Actor{}, false
 	}
 	actor := collab.ActorOf(novel.ID, hctx.CurrentUserID(c), hctx.CurrentUserRole(c))
@@ -49,20 +49,20 @@ func SubmitChapterReview(c *gin.Context) {
 		return
 	}
 	if !actor.CanEditChapter(chapter) {
-		utils.Forbidden(c, "无权操作本章")
+		infra.Forbidden(c, "无权操作本章")
 		return
 	}
 	if chapter.Status == models.ChapterStatusPublished {
-		utils.BadRequest(c, "本章已发布，无需提审")
+		infra.BadRequest(c, "本章已发布，无需提审")
 		return
 	}
 	if err := models.DB.Model(&models.Chapter{}).Where("id = ?", chapter.ID).
 		Updates(map[string]interface{}{"status": models.ChapterStatusPending, "review_note": ""}).Error; err != nil {
-		utils.InternalError(c, "提审失败")
+		infra.InternalError(c, "提审失败")
 		return
 	}
 	collab.LogChapterAction(novel.ID, hctx.CurrentUserID(c), "submit", chapter.ID, "")
-	utils.SuccessMessage(c, "已提交审核", nil)
+	infra.SuccessMessage(c, "已提交审核", nil)
 }
 
 // ReviewChapter POST /api/novels/:id/chapters/:num/review { approve, note }
@@ -72,7 +72,7 @@ func ReviewChapter(c *gin.Context) {
 		return
 	}
 	if !actor.Can(collab.CapReviewChapter) {
-		utils.Forbidden(c, "没有审稿权限")
+		infra.Forbidden(c, "没有审稿权限")
 		return
 	}
 	var req struct {
@@ -80,7 +80,7 @@ func ReviewChapter(c *gin.Context) {
 		Note    string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	status := models.ChapterStatusRejected
@@ -93,18 +93,18 @@ func ReviewChapter(c *gin.Context) {
 	}
 	if err := models.DB.Model(&models.Chapter{}).Where("id = ?", chapter.ID).
 		Updates(map[string]interface{}{"status": status, "review_note": note}).Error; err != nil {
-		utils.InternalError(c, "审核失败")
+		infra.InternalError(c, "审核失败")
 		return
 	}
 	if req.Approve {
 		quota.RecordPublish(chapter.AuthorID, quota.PublishKindChapter, chapter.ID, chapter.WordCount)
 		models.UpdateNovelStats(novel.ID)
 		collab.LogChapterAction(novel.ID, hctx.CurrentUserID(c), "publish", chapter.ID, "审核通过")
-		utils.SuccessMessage(c, "已通过并发布", nil)
+		infra.SuccessMessage(c, "已通过并发布", nil)
 		return
 	}
 	collab.LogChapterAction(novel.ID, hctx.CurrentUserID(c), "reject", chapter.ID, note)
-	utils.SuccessMessage(c, "已驳回", nil)
+	infra.SuccessMessage(c, "已驳回", nil)
 }
 
 // PublishChapter POST /api/novels/:id/chapters/:num/publish
@@ -114,22 +114,22 @@ func PublishChapter(c *gin.Context) {
 		return
 	}
 	if !actor.Can(collab.CapPublishChapter) {
-		utils.Forbidden(c, "没有直接发布权限（可提审后由审稿发布）")
+		infra.Forbidden(c, "没有直接发布权限（可提审后由审稿发布）")
 		return
 	}
 	if chapter.Status == models.ChapterStatusPublished {
-		utils.SuccessMessage(c, "本章已处于发布状态", nil)
+		infra.SuccessMessage(c, "本章已处于发布状态", nil)
 		return
 	}
 	if err := models.DB.Model(&models.Chapter{}).Where("id = ?", chapter.ID).
 		Updates(map[string]interface{}{"status": models.ChapterStatusPublished, "review_note": ""}).Error; err != nil {
-		utils.InternalError(c, "发布失败")
+		infra.InternalError(c, "发布失败")
 		return
 	}
 	quota.RecordPublish(chapter.AuthorID, quota.PublishKindChapter, chapter.ID, chapter.WordCount)
 	models.UpdateNovelStats(novel.ID)
 	collab.LogChapterAction(novel.ID, hctx.CurrentUserID(c), "publish", chapter.ID, "直接发布")
-	utils.SuccessMessage(c, "已发布", nil)
+	infra.SuccessMessage(c, "已发布", nil)
 }
 
 // WithdrawChapter POST /api/novels/:id/chapters/:num/withdraw
@@ -139,19 +139,19 @@ func WithdrawChapter(c *gin.Context) {
 		return
 	}
 	if !actor.IsOwner && chapter.AuthorID != hctx.CurrentUserID(c) && !actor.IsPlatform {
-		utils.Forbidden(c, "只有主笔或本章作者可以撤回")
+		infra.Forbidden(c, "只有主笔或本章作者可以撤回")
 		return
 	}
 	if chapter.Status != models.ChapterStatusPublished {
-		utils.BadRequest(c, "本章尚未发布")
+		infra.BadRequest(c, "本章尚未发布")
 		return
 	}
 	if err := models.DB.Model(&models.Chapter{}).Where("id = ?", chapter.ID).
 		Update("status", models.ChapterStatusDraft).Error; err != nil {
-		utils.InternalError(c, "撤回失败")
+		infra.InternalError(c, "撤回失败")
 		return
 	}
 	models.UpdateNovelStats(novel.ID)
 	collab.LogChapterAction(novel.ID, hctx.CurrentUserID(c), "withdraw", chapter.ID, "")
-	utils.SuccessMessage(c, "已撤回为草稿", nil)
+	infra.SuccessMessage(c, "已撤回为草稿", nil)
 }

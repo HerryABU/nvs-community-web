@@ -3,6 +3,7 @@ package novel
 import (
 	"encoding/json"
 	"fmt"
+	"nvs-server/utils/infra"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -16,7 +17,6 @@ import (
 	"nvs-server/models"
 	"nvs-server/moderation"
 	"nvs-server/security"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -37,7 +37,7 @@ func CreateNovel(c *gin.Context) {
 			updates["signing_key"] = signingKey
 		}
 		if err := models.DB.Model(&models.User{}).Where("id = ?", userID).Updates(updates).Error; err != nil {
-			utils.InternalError(c, "升级作者角色失败")
+			infra.InternalError(c, "升级作者角色失败")
 			return
 		}
 		userRole = "author"
@@ -45,7 +45,7 @@ func CreateNovel(c *gin.Context) {
 	}
 
 	if userRole != "author" && userRole != "vip_author" && userRole != "admin" {
-		utils.Forbidden(c, "只有作者才能发布作品")
+		infra.Forbidden(c, "只有作者才能发布作品")
 		return
 	}
 
@@ -65,14 +65,14 @@ func CreateNovel(c *gin.Context) {
 
 	var input CreateNovelInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		utils.BadRequest(c, "参数错误: "+err.Error())
+		infra.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
 
 	// 标题必填（trim 后判空，避免纯空格标题入库）
 	input.Title = strings.TrimSpace(input.Title)
 	if input.Title == "" {
-		utils.BadRequest(c, "请输入作品标题")
+		infra.BadRequest(c, "请输入作品标题")
 		return
 	}
 
@@ -112,7 +112,7 @@ func CreateNovel(c *gin.Context) {
 	}
 
 	if err := models.CreateNovel(novel); err != nil {
-		utils.InternalError(c, "创建作品失败")
+		infra.InternalError(c, "创建作品失败")
 		return
 	}
 	// 发布流水记账（计入每日发文限额）
@@ -146,7 +146,7 @@ func CreateNovel(c *gin.Context) {
 	// AI 内容审核（作品简介/标题也属于公开内容，与章节发布同等对待）
 	go moderation.ReviewOnWrite(moderation.ScopeNovel, novel.ID)
 
-	utils.SuccessMessage(c, "创建成功", novel)
+	infra.SuccessMessage(c, "创建成功", novel)
 }
 
 // PUT /api/novels/:id
@@ -156,29 +156,29 @@ func UpdateNovel(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		utils.BadRequest(c, "无效的作品 ID")
+		infra.BadRequest(c, "无效的作品 ID")
 		return
 	}
 
 	novel, err := models.GetNovelByID(uint(id))
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			utils.NotFound(c, "作品不存在")
+			infra.NotFound(c, "作品不存在")
 			return
 		}
-		utils.InternalError(c, "获取作品失败")
+		infra.InternalError(c, "获取作品失败")
 		return
 	}
 
 	// 只有作者本人或管理员可以编辑
 	if novel.AuthorID != userID && userRole != "admin" {
-		utils.Forbidden(c, "无权编辑此作品")
+		infra.Forbidden(c, "无权编辑此作品")
 		return
 	}
 
 	var input UpdateNovelInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		utils.BadRequest(c, "参数错误: "+err.Error())
+		infra.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
 
@@ -218,7 +218,7 @@ func UpdateNovel(c *gin.Context) {
 	}
 
 	if err := models.UpdateNovel(novel); err != nil {
-		utils.InternalError(c, "更新作品失败")
+		infra.InternalError(c, "更新作品失败")
 		return
 	}
 
@@ -239,7 +239,7 @@ func UpdateNovel(c *gin.Context) {
 	// 简介/标题改动后重新送检（否则改标题即可绕过首次审核）
 	go moderation.ReviewOnWrite(moderation.ScopeNovel, novel.ID)
 
-	utils.SuccessMessage(c, "更新成功", novel)
+	infra.SuccessMessage(c, "更新成功", novel)
 }
 
 // DELETE /api/novels/:id
@@ -249,22 +249,22 @@ func DeleteNovel(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		utils.BadRequest(c, "无效的作品 ID")
+		infra.BadRequest(c, "无效的作品 ID")
 		return
 	}
 
 	novel, err := models.GetNovelByID(uint(id))
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			utils.NotFound(c, "作品不存在")
+			infra.NotFound(c, "作品不存在")
 			return
 		}
-		utils.InternalError(c, "获取作品失败")
+		infra.InternalError(c, "获取作品失败")
 		return
 	}
 
 	if novel.AuthorID != userID && userRole != "admin" {
-		utils.Forbidden(c, "无权删除此作品")
+		infra.Forbidden(c, "无权删除此作品")
 		return
 	}
 
@@ -273,7 +273,7 @@ func DeleteNovel(c *gin.Context) {
 	_ = models.DB.Model(&models.Chapter{}).Where("novel_id = ?", id).Update("ban_reason", "")
 
 	if err := models.DeleteNovel(uint(id)); err != nil {
-		utils.InternalError(c, "删除失败")
+		infra.InternalError(c, "删除失败")
 		return
 	}
 
@@ -281,7 +281,7 @@ func DeleteNovel(c *gin.Context) {
 	_ = models.DB.Unscoped().Model(&models.Novel{}).Where("id = ?", id).Update("deleted_by", "user")
 
 	// 合规留存：软删除，保留正文文件（不物理移除），审计可追溯原始内容
-	utils.SuccessMessage(c, "删除成功", nil)
+	infra.SuccessMessage(c, "删除成功", nil)
 }
 
 // novelOwnershipCheck 检查当前用户是否是作品的作者

@@ -6,11 +6,11 @@ package ochandler
 // 一键发布限群主/管理员/流发起人（受未成年与限额约束）。
 
 import (
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"nvs-server/middleware"
 	"nvs-server/oc"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -31,12 +31,12 @@ func groupCanManage(c *gin.Context, groupID uint) bool {
 func GetSetting(c *gin.Context) {
 	gid := parseUint(c.Param("id"))
 	if gid == 0 {
-		utils.BadRequest(c, "群组 ID 无效")
+		infra.BadRequest(c, "群组 ID 无效")
 		return
 	}
 	set := oc.GetGroupSetting(gid)
 	agents, _ := oc.ListAgents(gid)
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"setting":    set,
 		"agents":     agents,
 		"can_manage": groupCanManage(c, gid),
@@ -48,25 +48,25 @@ func GetSetting(c *gin.Context) {
 func SaveSetting(c *gin.Context) {
 	gid := parseUint(c.Param("id"))
 	if !groupCanManage(c, gid) {
-		utils.Forbidden(c, "仅群主/管理员可配置 OC 模式")
+		infra.Forbidden(c, "仅群主/管理员可配置 OC 模式")
 		return
 	}
 	var in oc.GroupSetting
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	// 红队模式必须显式授权说明（隔离 + 授权 + 留痕）
 	if in.AuditLevel == oc.AuditRedTeam && in.RedTeamEnabled && len([]rune(in.RedTeamNote)) < 4 {
-		utils.BadRequest(c, "开启红队模式需填写授权说明（范围/责任人）")
+		infra.BadRequest(c, "开启红队模式需填写授权说明（范围/责任人）")
 		return
 	}
 	set, err := oc.SaveGroupSetting(gid, in)
 	if err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "已保存", set)
+	infra.SuccessMessage(c, "已保存", set)
 }
 
 // ─── 角色卡 ───
@@ -77,10 +77,10 @@ func ListCharacters(c *gin.Context) {
 	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	list, total, err := oc.ListCharacters(middleware.UserID(c), c.Query("scope"), c.Query("keyword"), page, ps)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list, "total": total})
+	infra.Success(c, gin.H{"list": list, "total": total})
 }
 
 // GetCharacter GET /api/oc/characters/:cid
@@ -88,30 +88,30 @@ func GetCharacter(c *gin.Context) {
 	id := parseUint(c.Param("cid"))
 	ch, err := oc.GetCharacter(id, middleware.UserID(c), isAdmin(c))
 	if err != nil {
-		utils.Forbidden(c, err.Error())
+		infra.Forbidden(c, err.Error())
 		return
 	}
-	utils.Success(c, ch)
+	infra.Success(c, ch)
 }
 
 // CreateCharacter POST /api/oc/characters
 func CreateCharacter(c *gin.Context) {
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	var in oc.CharacterInput
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	ch, err := oc.CreateCharacter(uid, in)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已创建角色卡", ch)
+	infra.SuccessMessage(c, "已创建角色卡", ch)
 }
 
 // UpdateCharacter PUT /api/oc/characters/:cid
@@ -120,24 +120,24 @@ func UpdateCharacter(c *gin.Context) {
 	id := parseUint(c.Param("cid"))
 	var in oc.CharacterInput
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	ch, err := oc.UpdateCharacter(uid, id, in)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已保存", ch)
+	infra.SuccessMessage(c, "已保存", ch)
 }
 
 // DeleteCharacter DELETE /api/oc/characters/:cid —— 软删除留证
 func DeleteCharacter(c *gin.Context) {
 	if err := oc.DeleteCharacter(middleware.UserID(c), parseUint(c.Param("cid"))); err != nil {
-		utils.InternalError(c, "删除失败")
+		infra.InternalError(c, "删除失败")
 		return
 	}
-	utils.SuccessMessage(c, "已删除（保留记录以备追溯）", nil)
+	infra.SuccessMessage(c, "已删除（保留记录以备追溯）", nil)
 }
 
 // ─── 世界书 ───
@@ -147,20 +147,20 @@ func ListBooks(c *gin.Context) {
 	gid := parseUint(c.Query("group_id"))
 	list, err := oc.ListWorldBooks(middleware.UserID(c), c.Query("scope"), gid)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list})
+	infra.Success(c, gin.H{"list": list})
 }
 
 // GetBook GET /api/oc/books/:bid
 func GetBook(c *gin.Context) {
 	b, err := oc.GetWorldBook(parseUint(c.Param("bid")), middleware.UserID(c), isAdmin(c))
 	if err != nil {
-		utils.Forbidden(c, err.Error())
+		infra.Forbidden(c, err.Error())
 		return
 	}
-	utils.Success(c, b)
+	infra.Success(c, b)
 }
 
 // CreateBook POST /api/oc/books
@@ -170,39 +170,39 @@ func CreateBook(c *gin.Context) {
 		GroupID                    uint
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	b, err := oc.CreateWorldBook(middleware.UserID(c), in.GroupID, in.Title, in.Summary, in.Visibility)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已创建世界书", b)
+	infra.SuccessMessage(c, "已创建世界书", b)
 }
 
 // UpdateBook PUT /api/oc/books/:bid
 func UpdateBook(c *gin.Context) {
 	var in struct{ Title, Summary, Visibility string }
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	b, err := oc.UpdateWorldBook(middleware.UserID(c), parseUint(c.Param("bid")), in.Title, in.Summary, in.Visibility)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已保存", b)
+	infra.SuccessMessage(c, "已保存", b)
 }
 
 // DeleteBook DELETE /api/oc/books/:bid
 func DeleteBook(c *gin.Context) {
 	if err := oc.DeleteWorldBook(middleware.UserID(c), parseUint(c.Param("bid"))); err != nil {
-		utils.InternalError(c, "删除失败")
+		infra.InternalError(c, "删除失败")
 		return
 	}
-	utils.SuccessMessage(c, "已删除（保留记录以备追溯）", nil)
+	infra.SuccessMessage(c, "已删除（保留记录以备追溯）", nil)
 }
 
 // SaveEntry POST /api/oc/books/:bid/entries
@@ -228,7 +228,7 @@ func SaveEntry(c *gin.Context) {
 		SortOrder      int
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	e, err := oc.SaveEntryFull(middleware.UserID(c), parseUint(c.Param("bid")), in.ID, oc.EntryInput{
@@ -240,19 +240,19 @@ func SaveEntry(c *gin.Context) {
 		Position: in.Position, Depth: in.Depth, Group: in.Group, SortOrder: in.SortOrder,
 	})
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已保存条目", e)
+	infra.SuccessMessage(c, "已保存条目", e)
 }
 
 // DeleteEntry DELETE /api/oc/books/:bid/entries/:eid
 func DeleteEntry(c *gin.Context) {
 	if err := oc.DeleteEntry(middleware.UserID(c), parseUint(c.Param("bid")), parseUint(c.Param("eid"))); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已删除条目", nil)
+	infra.SuccessMessage(c, "已删除条目", nil)
 }
 
 // ─── 群内 AI 角色 ───
@@ -261,7 +261,7 @@ func DeleteEntry(c *gin.Context) {
 func AddAgent(c *gin.Context) {
 	gid := parseUint(c.Param("id"))
 	if !groupCanManage(c, gid) {
-		utils.Forbidden(c, "仅群主/管理员可配置 AI 角色")
+		infra.Forbidden(c, "仅群主/管理员可配置 AI 角色")
 		return
 	}
 	var in struct {
@@ -271,48 +271,48 @@ func AddAgent(c *gin.Context) {
 		Strategy    string `json:"strategy"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	a, err := oc.AddAgent(gid, in.CharacterID, in.ModelID, in.TemplateID, in.Strategy)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已加入群内 AI 角色", a)
+	infra.SuccessMessage(c, "已加入群内 AI 角色", a)
 }
 
 // UpdateAgent PUT /api/groups/:id/oc/agents/:aid
 func UpdateAgent(c *gin.Context) {
 	gid := parseUint(c.Param("id"))
 	if !groupCanManage(c, gid) {
-		utils.Forbidden(c, "仅群主/管理员可配置 AI 角色")
+		infra.Forbidden(c, "仅群主/管理员可配置 AI 角色")
 		return
 	}
 	var in map[string]interface{}
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := oc.UpdateAgent(gid, parseUint(c.Param("aid")), in); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已保存", nil)
+	infra.SuccessMessage(c, "已保存", nil)
 }
 
 // RemoveAgent DELETE /api/groups/:id/oc/agents/:aid
 func RemoveAgent(c *gin.Context) {
 	gid := parseUint(c.Param("id"))
 	if !groupCanManage(c, gid) {
-		utils.Forbidden(c, "仅群主/管理员可配置 AI 角色")
+		infra.Forbidden(c, "仅群主/管理员可配置 AI 角色")
 		return
 	}
 	if err := oc.RemoveAgent(gid, parseUint(c.Param("aid"))); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已移除", nil)
+	infra.SuccessMessage(c, "已移除", nil)
 }
 
 // ─── 对话流 ───
@@ -321,10 +321,10 @@ func RemoveAgent(c *gin.Context) {
 func ListFlows(c *gin.Context) {
 	list, err := oc.ListFlows(parseUint(c.Param("id")), 20)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list})
+	infra.Success(c, gin.H{"list": list})
 }
 
 // CreateFlow POST /api/groups/:id/oc/flows
@@ -332,7 +332,7 @@ func CreateFlow(c *gin.Context) {
 	gid := parseUint(c.Param("id"))
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	var in struct {
@@ -341,15 +341,15 @@ func CreateFlow(c *gin.Context) {
 		BookID   uint   `json:"book_id"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	f, err := oc.CreateFlow(gid, uid, in.BookID, in.Title, in.Schedule)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "对话流已开启", f)
+	infra.SuccessMessage(c, "对话流已开启", f)
 }
 
 // ListTurns GET /api/oc/flows/:fid/turns?after_seq=&limit=
@@ -358,10 +358,10 @@ func ListTurns(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "100"))
 	list, err := oc.ListTurns(parseUint(c.Param("fid")), after, limit)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list})
+	infra.Success(c, gin.H{"list": list})
 }
 
 // StepFlow POST /api/oc/flows/:fid/step —— 推进一轮（单步）
@@ -369,19 +369,19 @@ func StepFlow(c *gin.Context) {
 	fid := parseUint(c.Param("fid"))
 	f, err := oc.GetFlow(fid)
 	if err != nil {
-		utils.NotFound(c, "对话流不存在")
+		infra.NotFound(c, "对话流不存在")
 		return
 	}
 	if !oc.CanOperateFlow(f, middleware.UserID(c), isAdmin(c)) {
-		utils.Forbidden(c, "仅群主/管理员或流的发起人可推进")
+		infra.Forbidden(c, "仅群主/管理员或流的发起人可推进")
 		return
 	}
 	res, serr := oc.Step(fid, middleware.UserID(c))
 	if serr != nil {
-		utils.BadRequest(c, serr.Error())
+		infra.BadRequest(c, serr.Error())
 		return
 	}
-	utils.Success(c, res)
+	infra.Success(c, res)
 }
 
 // SetFlowStatus POST /api/oc/flows/:fid/status { status, reason }
@@ -389,11 +389,11 @@ func SetFlowStatus(c *gin.Context) {
 	fid := parseUint(c.Param("fid"))
 	f, err := oc.GetFlow(fid)
 	if err != nil {
-		utils.NotFound(c, "对话流不存在")
+		infra.NotFound(c, "对话流不存在")
 		return
 	}
 	if !oc.CanOperateFlow(f, middleware.UserID(c), isAdmin(c)) {
-		utils.Forbidden(c, "无权操作该对话流")
+		infra.Forbidden(c, "无权操作该对话流")
 		return
 	}
 	var in struct {
@@ -401,14 +401,14 @@ func SetFlowStatus(c *gin.Context) {
 		Reason string `json:"reason"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := oc.SetFlowStatus(fid, in.Status, in.Reason); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已更新", nil)
+	infra.SuccessMessage(c, "已更新", nil)
 }
 
 // HumanTurn POST /api/oc/flows/:fid/turns { character_id, content } —— 真人以角色身份发言
@@ -416,12 +416,12 @@ func HumanTurn(c *gin.Context) {
 	fid := parseUint(c.Param("fid"))
 	f, err := oc.GetFlow(fid)
 	if err != nil {
-		utils.NotFound(c, "对话流不存在")
+		infra.NotFound(c, "对话流不存在")
 		return
 	}
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	var in struct {
@@ -429,22 +429,22 @@ func HumanTurn(c *gin.Context) {
 		Content     string `json:"content"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	// 只能用自己的角色发言
 	if in.CharacterID > 0 {
 		if ch, cerr := oc.GetCharacter(in.CharacterID, uid, isAdmin(c)); cerr != nil || ch.UserID != uid {
-			utils.Forbidden(c, "只能以本人角色身份发言")
+			infra.Forbidden(c, "只能以本人角色身份发言")
 			return
 		}
 	}
 	t, err := oc.AddHumanTurn(f.ID, uid, in.CharacterID, in.Content)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, t)
+	infra.Success(c, t)
 }
 
 // AuditFlow POST /api/oc/flows/:fid/audit { to_seq } —— 手动结算一个审核窗口
@@ -452,11 +452,11 @@ func AuditFlow(c *gin.Context) {
 	fid := parseUint(c.Param("fid"))
 	f, err := oc.GetFlow(fid)
 	if err != nil {
-		utils.NotFound(c, "对话流不存在")
+		infra.NotFound(c, "对话流不存在")
 		return
 	}
 	if !oc.CanOperateFlow(f, middleware.UserID(c), isAdmin(c)) {
-		utils.Forbidden(c, "无权操作该对话流")
+		infra.Forbidden(c, "无权操作该对话流")
 		return
 	}
 	var in struct {
@@ -465,30 +465,30 @@ func AuditFlow(c *gin.Context) {
 	_ = c.ShouldBindJSON(&in)
 	w, err := oc.AuditWindow(fid, in.ToSeq)
 	if err != nil {
-		utils.InternalError(c, "审核失败")
+		infra.InternalError(c, "审核失败")
 		return
 	}
-	utils.Success(c, gin.H{"window": w})
+	infra.Success(c, gin.H{"window": w})
 }
 
 // Windows GET /api/oc/flows/:fid/windows —— 审核窗口记录（可导出报告）
 func Windows(c *gin.Context) {
 	list, err := oc.ListWindows(parseUint(c.Param("fid")), 50)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list})
+	infra.Success(c, gin.H{"list": list})
 }
 
 // Report GET /api/oc/flows/:fid/report —— 红队/审计报告
 func Report(c *gin.Context) {
 	rep, err := oc.BuildReport(parseUint(c.Param("fid")))
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, rep)
+	infra.Success(c, rep)
 }
 
 // ─── 一键发布 ───
@@ -498,16 +498,16 @@ func Publish(c *gin.Context) {
 	fid := parseUint(c.Param("fid"))
 	f, err := oc.GetFlow(fid)
 	if err != nil {
-		utils.NotFound(c, "对话流不存在")
+		infra.NotFound(c, "对话流不存在")
 		return
 	}
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	if !oc.CanOperateFlow(f, uid, isAdmin(c)) {
-		utils.Forbidden(c, "仅群主/管理员或流的发起人可发布")
+		infra.Forbidden(c, "仅群主/管理员或流的发起人可发布")
 		return
 	}
 	var in struct {
@@ -522,7 +522,7 @@ func Publish(c *gin.Context) {
 		PublishNow      bool   `json:"publish_now"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	res, perr := oc.PublishFlowToNovel(oc.PublishInput{
@@ -531,10 +531,10 @@ func Publish(c *gin.Context) {
 		IncludeSettings: in.IncludeSettings, Polish: in.Polish, PublishNow: in.PublishNow,
 	})
 	if perr != nil {
-		utils.BadRequest(c, perr.Error())
+		infra.BadRequest(c, perr.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已发布为作品", res)
+	infra.SuccessMessage(c, "已发布为作品", res)
 }
 
 // ─── 工具 ───

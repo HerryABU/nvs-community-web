@@ -1,11 +1,11 @@
 package notification
 
 import (
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -16,38 +16,38 @@ import (
 func ListNotifications(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	list, total, err := models.ListNotifications(userID, page, pageSize)
 	if err != nil {
-		utils.InternalError(c, "获取通知失败")
+		infra.InternalError(c, "获取通知失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list, "total": total, "page": page, "page_size": pageSize})
+	infra.Success(c, gin.H{"list": list, "total": total, "page": page, "page_size": pageSize})
 }
 
 // GET /api/notifications/unread-count — 未读通知数（导航栏徽标轮询用）
 func UnreadNotificationCount(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	count, err := models.CountUnreadNotifications(userID)
 	if err != nil {
 		count = 0
 	}
-	utils.Success(c, gin.H{"count": count})
+	infra.Success(c, gin.H{"count": count})
 }
 
 // POST /api/notifications/read — 标记已读。body: {"id": 123}；id 缺省/0 = 全部已读。
 func MarkNotificationRead(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	var req struct {
@@ -55,8 +55,8 @@ func MarkNotificationRead(c *gin.Context) {
 	}
 	_ = c.ShouldBindJSON(&req)
 	if _, err := models.MarkNotificationRead(userID, req.ID); err != nil {
-		utils.InternalError(c, "标记已读失败")
+		infra.InternalError(c, "标记已读失败")
 		return
 	}
-	utils.SuccessMessage(c, "已更新", nil)
+	infra.SuccessMessage(c, "已更新", nil)
 }

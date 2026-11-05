@@ -2,6 +2,8 @@ package web
 
 import (
 	"fmt"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/sanitize"
 	"os"
 	"path"
 	"path/filepath"
@@ -13,7 +15,6 @@ import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/security"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	apikey "nvs-server/models/apikey"
@@ -46,19 +47,19 @@ func CreateFrame(c *gin.Context) {
 		Position     *string `json:"position"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误: "+err.Error())
+		infra.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
 
 	// 绑定互斥：一部模板只能绑定小说或博客其一（或均空=全局模板），避免归属歧义
 	if req.NovelID != nil && req.BlogID != nil {
-		utils.BadRequest(c, "模板只能绑定小说或博客其中之一")
+		infra.BadRequest(c, "模板只能绑定小说或博客其中之一")
 		return
 	}
 
-	safeName := utils.SanitizeFilename(req.Name)
+	safeName := sanitize.SanitizeFilename(req.Name)
 	if safeName == "" {
-		utils.BadRequest(c, "模板名称不合法")
+		infra.BadRequest(c, "模板名称不合法")
 		return
 	}
 
@@ -94,7 +95,7 @@ func CreateFrame(c *gin.Context) {
 	// 🔍 宽松自动化安全审查：critical/high 阻断，medium/low 仅告警（转人工复核）
 	blocked, _, warnings := security.ClassifyScan(req.Content, safeName+".html")
 	if blocked {
-		utils.BadRequest(c, "内容安全扫描未通过：检测到高危代码（提权/木马/窃取等），已拒绝保存")
+		infra.BadRequest(c, "内容安全扫描未通过：检测到高危代码（提权/木马/窃取等），已拒绝保存")
 		return
 	}
 	reviewStatus := "approved"
@@ -111,7 +112,7 @@ func CreateFrame(c *gin.Context) {
 	}
 
 	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
-		utils.InternalError(c, "保存模板文件失败")
+		infra.InternalError(c, "保存模板文件失败")
 		return
 	}
 
@@ -145,7 +146,7 @@ func CreateFrame(c *gin.Context) {
 	}
 	if err := models.DB.Create(frame).Error; err != nil {
 		os.Remove(filePath)
-		utils.InternalError(c, "创建模板记录失败")
+		infra.InternalError(c, "创建模板记录失败")
 		return
 	}
 
@@ -154,7 +155,7 @@ func CreateFrame(c *gin.Context) {
 	if req.IsPublic {
 		allowed, needReview, reason, err := quota.CheckAndApplyWebPublish(userID, quota.WebQuotaTargetFrame, frame.ID)
 		if err != nil {
-			utils.InternalError(c, "操作失败")
+			infra.InternalError(c, "操作失败")
 			return
 		}
 		if allowed {
@@ -165,7 +166,7 @@ func CreateFrame(c *gin.Context) {
 		}
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"frame":       frame,
 		"public_note": publicNote,
 	})
@@ -176,7 +177,7 @@ func ListFrames(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	var frames []softdel.UserFrame
 	models.DB.Where("user_id = ?", userID).Order("updated_at DESC").Find(&frames)
-	utils.Success(c, frames)
+	infra.Success(c, frames)
 }
 
 // GetFrame GET /api/userframes/:id
@@ -186,17 +187,17 @@ func GetFrame(c *gin.Context) {
 
 	var frame softdel.UserFrame
 	if err := models.DB.Where("id = ? AND user_id = ?", frameID, userID).First(&frame).Error; err != nil {
-		utils.NotFound(c, "模板不存在")
+		infra.NotFound(c, "模板不存在")
 		return
 	}
 
 	content, err := os.ReadFile(frame.FilePath)
 	if err != nil {
-		utils.InternalError(c, "读取模板文件失败")
+		infra.InternalError(c, "读取模板文件失败")
 		return
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"frame":   frame,
 		"content": string(content),
 	})
@@ -209,7 +210,7 @@ func UpdateFrame(c *gin.Context) {
 
 	var frame softdel.UserFrame
 	if err := models.DB.Where("id = ? AND user_id = ?", frameID, userID).First(&frame).Error; err != nil {
-		utils.NotFound(c, "模板不存在")
+		infra.NotFound(c, "模板不存在")
 		return
 	}
 
@@ -232,7 +233,7 @@ func UpdateFrame(c *gin.Context) {
 		Position     *string `json:"position"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误: "+err.Error())
+		infra.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
 
@@ -246,7 +247,7 @@ func UpdateFrame(c *gin.Context) {
 		finalBlogID = req.BlogID
 	}
 	if finalNovelID != nil && finalBlogID != nil {
-		utils.BadRequest(c, "模板只能绑定小说或博客其中之一")
+		infra.BadRequest(c, "模板只能绑定小说或博客其中之一")
 		return
 	}
 
@@ -304,7 +305,7 @@ func UpdateFrame(c *gin.Context) {
 		// 🔍 宽松自动化安全审查：critical/high 阻断，medium/low 告警转人工复核
 		blocked, _, warnings := security.ClassifyScan(*req.Content, frame.Name+".html")
 		if blocked {
-			utils.BadRequest(c, "内容安全扫描未通过：检测到高危代码，已拒绝更新")
+			infra.BadRequest(c, "内容安全扫描未通过：检测到高危代码，已拒绝更新")
 			return
 		}
 		content := *req.Content
@@ -312,7 +313,7 @@ func UpdateFrame(c *gin.Context) {
 			content = injectTemplateAPI(content)
 		}
 		if err := os.WriteFile(frame.FilePath, []byte(content), 0644); err != nil {
-			utils.InternalError(c, "更新模板文件失败")
+			infra.InternalError(c, "更新模板文件失败")
 			return
 		}
 		updates["version"] = frame.Version + 1
@@ -329,12 +330,12 @@ func UpdateFrame(c *gin.Context) {
 
 	if len(updates) > 0 {
 		if err := models.DB.Model(&frame).Updates(updates).Error; err != nil {
-			utils.InternalError(c, "更新模板失败")
+			infra.InternalError(c, "更新模板失败")
 			return
 		}
 	}
 	models.DB.Where("id = ?", frame.ID).First(&frame)
-	utils.Success(c, frame)
+	infra.Success(c, frame)
 }
 
 // DeleteFrame DELETE /api/userframes/:id
@@ -344,13 +345,13 @@ func DeleteFrame(c *gin.Context) {
 
 	var frame softdel.UserFrame
 	if err := models.DB.Where("id = ? AND user_id = ?", frameID, userID).First(&frame).Error; err != nil {
-		utils.NotFound(c, "模板不存在")
+		infra.NotFound(c, "模板不存在")
 		return
 	}
 
 	// 合规留存：软删除，保留模板文件（不物理移除），可追溯原始内容
 	models.DB.Delete(&frame)
-	utils.Success(c, gin.H{"message": "模板已删除"})
+	infra.Success(c, gin.H{"message": "模板已删除"})
 }
 
 // ListPublicFrames GET /api/userframes/public
@@ -358,7 +359,7 @@ func ListPublicFrames(c *gin.Context) {
 	var frames []softdel.UserFrame
 	models.DB.Where("is_public = ? AND is_active = ?", true, true).
 		Order("updated_at DESC").Limit(50).Find(&frames)
-	utils.Success(c, frames)
+	infra.Success(c, frames)
 }
 
 // GetNovelFrames GET /api/novels/:id/frames
@@ -368,14 +369,14 @@ func GetNovelFrames(c *gin.Context) {
 	// 先查作者
 	novel, err := models.GetNovelByID(uint(novelID))
 	if err != nil {
-		utils.Success(c, []softdel.UserFrame{})
+		infra.Success(c, []softdel.UserFrame{})
 		return
 	}
 	var frames []softdel.UserFrame
 	models.DB.Where("user_id = ? AND novel_id = ? AND frame_type = ? AND is_active = ?",
 		novel.AuthorID, uint(novelID), "reader", true).
 		Order("updated_at DESC").Find(&frames)
-	utils.Success(c, frames)
+	infra.Success(c, frames)
 }
 
 // GetBlogFrames GET /api/blogs/:id/frames
@@ -385,14 +386,14 @@ func GetBlogFrames(c *gin.Context) {
 	// 先查作者
 	blog, err := blog.GetBlogByID(uint(blogID))
 	if err != nil {
-		utils.Success(c, []softdel.UserFrame{})
+		infra.Success(c, []softdel.UserFrame{})
 		return
 	}
 	var frames []softdel.UserFrame
 	models.DB.Where("user_id = ? AND blog_id = ? AND frame_type = ? AND is_active = ?",
 		blog.AuthorID, uint(blogID), "reader", true).
 		Order("updated_at DESC").Find(&frames)
-	utils.Success(c, frames)
+	infra.Success(c, frames)
 }
 
 // GetAuthorFrames GET /api/author/:id/frames
@@ -400,14 +401,14 @@ func GetBlogFrames(c *gin.Context) {
 func GetAuthorFrames(c *gin.Context) {
 	user, err := apikey.ResolveUserKey(c.Param("id"))
 	if err != nil || user == nil {
-		utils.NotFound(c, "作者不存在")
+		infra.NotFound(c, "作者不存在")
 		return
 	}
 	var frames []softdel.UserFrame
 	models.DB.Where("user_id = ? AND frame_type = ? AND is_active = ?",
 		user.ID, "author", true).
 		Order("updated_at DESC").Find(&frames)
-	utils.Success(c, frames)
+	infra.Success(c, frames)
 }
 
 // ==================== 站内内容引用检索（CSDN式相对链接） ====================
@@ -476,10 +477,10 @@ func listContentRefs(query string) ([]ContentRef, error) {
 func ListContentRefs(c *gin.Context) {
 	refs, err := listContentRefs(c.Query("q"))
 	if err != nil {
-		utils.InternalError(c, "检索站内内容失败")
+		infra.InternalError(c, "检索站内内容失败")
 		return
 	}
-	utils.Success(c, refs)
+	infra.Success(c, refs)
 }
 
 // ==================== 模板格式API ====================
@@ -492,13 +493,13 @@ func GetTemplateAPI(c *gin.Context) {
 
 	novel, err := models.GetNovelByID(uint(novelID))
 	if err != nil {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return
 	}
 
 	chapters, _ := models.GetChaptersByNovel(uint(novelID))
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"novel": gin.H{
 			"id":             novel.ID,
 			"title":          novel.Title,

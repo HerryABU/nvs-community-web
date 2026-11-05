@@ -5,13 +5,13 @@ package ochandler
 import (
 	"io"
 	"net/http"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
 	"nvs-server/middleware"
 	"nvs-server/oc"
 	"nvs-server/scriptmode"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -22,15 +22,15 @@ import (
 func ListEmotes(c *gin.Context) {
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	list, err := oc.ListMyEmotes(uid)
 	if err != nil {
-		utils.InternalError(c, "读取失败")
+		infra.InternalError(c, "读取失败")
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"list":         list,
 		"builtin_keys": scriptmode.EmoteKeys(),
 		"custom_keys":  scriptmode.CustomEmoteKeys(),
@@ -42,7 +42,7 @@ func ListEmotes(c *gin.Context) {
 func CreateEmote(c *gin.Context) {
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	var in struct {
@@ -51,32 +51,32 @@ func CreateEmote(c *gin.Context) {
 		Note string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	e, err := oc.CreateEmote(uid, in.Key, in.URL, in.Note)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	scriptmode.RegisterCustomEmotes(oc.CustomEmoteMap())
-	utils.SuccessMessage(c, "已添加，可在气泡里用 ["+e.Key+"]", e)
+	infra.SuccessMessage(c, "已添加，可在气泡里用 ["+e.Key+"]", e)
 }
 
 // DeleteEmote DELETE /api/oc/emotes/:id
 func DeleteEmote(c *gin.Context) {
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := oc.DeleteEmote(uid, uint(id)); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	scriptmode.RegisterCustomEmotes(oc.CustomEmoteMap())
-	utils.SuccessMessage(c, "已删除", nil)
+	infra.SuccessMessage(c, "已删除", nil)
 }
 
 // ─────────────── 角色卡导入导出 ───────────────
@@ -87,18 +87,18 @@ func DeleteEmote(c *gin.Context) {
 func ExportCard(c *gin.Context) {
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("cid"), 10, 64)
 	ch, err := oc.GetCharacter(uint(id), uid, isAdmin(c))
 	if err != nil {
-		utils.NotFound(c, "角色不存在")
+		infra.NotFound(c, "角色不存在")
 		return
 	}
 	card, err := oc.ExportCard(ch)
 	if err != nil {
-		utils.InternalError(c, "导出失败")
+		infra.InternalError(c, "导出失败")
 		return
 	}
 	name := strings.ReplaceAll(ch.Name, "/", "_")
@@ -111,17 +111,17 @@ func ExportCard(c *gin.Context) {
 func ImportCard(c *gin.Context) {
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	raw, err := readCardBody(c)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	parsed, err := oc.ParseCard(raw)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	// 世界书先建（角色要引用它的 ID）
@@ -164,10 +164,10 @@ func ImportCard(c *gin.Context) {
 		Visibility: "private",
 	})
 	if cerr != nil {
-		utils.BadRequest(c, "导入失败："+cerr.Error())
+		infra.BadRequest(c, "导入失败："+cerr.Error())
 		return
 	}
-	utils.SuccessMessage(c, "导入成功", gin.H{
+	infra.SuccessMessage(c, "导入成功", gin.H{
 		"character": ch, "book_id": bookID,
 		"entries": func() int {
 			if parsed.Book != nil {
@@ -210,13 +210,13 @@ func (e *cardErr) Error() string { return e.msg }
 func ExportBook(c *gin.Context) {
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("bid"), 10, 64)
 	book, err := oc.GetWorldBook(uint(id), uid, isAdmin(c))
 	if err != nil {
-		utils.NotFound(c, "世界书不存在")
+		infra.NotFound(c, "世界书不存在")
 		return
 	}
 	entries, _ := oc.ListEntries(book.ID)
@@ -228,17 +228,17 @@ func ExportBook(c *gin.Context) {
 func ImportBook(c *gin.Context) {
 	uid := middleware.UserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	raw, err := readCardBody(c)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	parsed, err := oc.ParseLorebookJSON(raw)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	title := parsed.Name
@@ -247,7 +247,7 @@ func ImportBook(c *gin.Context) {
 	}
 	book, err := oc.CreateWorldBook(uid, 0, title, "从 Lorebook 导入", "private")
 	if err != nil {
-		utils.BadRequest(c, "创建世界书失败")
+		infra.BadRequest(c, "创建世界书失败")
 		return
 	}
 	n := 0
@@ -263,7 +263,7 @@ func ImportBook(c *gin.Context) {
 			n++
 		}
 	}
-	utils.SuccessMessage(c, "导入成功", gin.H{"book": book, "entries": n})
+	infra.SuccessMessage(c, "导入成功", gin.H{"book": book, "entries": n})
 }
 
 // boolPtr 小工具（EntryInput.Enabled 用指针区分「未设置」与「显式 false」）

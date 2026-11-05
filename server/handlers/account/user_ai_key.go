@@ -1,11 +1,11 @@
 package account
 
 import (
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
 	"nvs-server/handlers/hctx"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	ai "nvs-server/models/ai"
@@ -18,12 +18,12 @@ import (
 // AiMyKeys GET /api/ai/my-keys — 我的自备密钥列表（脱敏）
 func AiMyKeys(c *gin.Context) {
 	if !ai.IsAiEnabled() {
-		utils.BadRequest(c, "AI 功能未开启")
+		infra.BadRequest(c, "AI 功能未开启")
 		return
 	}
 	list, err := aicost.ListUserAiKeys(hctx.CurrentUserID(c))
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	out := make([]gin.H, 0, len(list))
@@ -36,13 +36,13 @@ func AiMyKeys(c *gin.Context) {
 			"created_at": k.CreatedAt,
 		})
 	}
-	utils.Success(c, gin.H{"list": out, "max": aicost.MaxUserAiKeys})
+	infra.Success(c, gin.H{"list": out, "max": aicost.MaxUserAiKeys})
 }
 
 // AiMyKeyCreate POST /api/ai/my-keys — 新增自备密钥
 func AiMyKeyCreate(c *gin.Context) {
 	if !ai.IsAiEnabled() {
-		utils.BadRequest(c, "AI 功能未开启")
+		infra.BadRequest(c, "AI 功能未开启")
 		return
 	}
 	var req struct {
@@ -52,45 +52,45 @@ func AiMyKeyCreate(c *gin.Context) {
 		ModelID string `json:"model_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if strings.TrimSpace(req.BaseURL) == "" || strings.TrimSpace(req.ApiKey) == "" {
-		utils.BadRequest(c, "上游地址与密钥均为必填")
+		infra.BadRequest(c, "上游地址与密钥均为必填")
 		return
 	}
 	k, err := aicost.CreateUserAiKey(hctx.CurrentUserID(c), req.Label, req.BaseURL, req.ApiKey, req.ModelID)
 	if err != nil {
-		utils.Error(c, 429, 42903, err.Error())
+		infra.Error(c, 429, 42903, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已添加（密钥加密存储，仅可添加不可查看）", "id": k.ID})
+	infra.Success(c, gin.H{"message": "已添加（密钥加密存储，仅可添加不可查看）", "id": k.ID})
 }
 
 // AiMyKeyDelete DELETE /api/ai/my-keys/:id — 删除
 func AiMyKeyDelete(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if id == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := aicost.DeleteUserAiKey(uint(id), hctx.CurrentUserID(c)); err != nil {
-		utils.NotFound(c, err.Error())
+		infra.NotFound(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已删除"})
+	infra.Success(c, gin.H{"message": "已删除"})
 }
 
 // AiMyKeySetDefault POST /api/ai/my-keys/:id/default — 设为默认
 func AiMyKeySetDefault(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if id == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := aicost.SetDefaultUserAiKey(uint(id), hctx.CurrentUserID(c)); err != nil {
-		utils.NotFound(c, err.Error())
+		infra.NotFound(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已设为默认"})
+	infra.Success(c, gin.H{"message": "已设为默认"})
 }

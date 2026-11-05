@@ -3,13 +3,14 @@ package admingov
 import (
 	"fmt"
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/sanitize"
 	"strconv"
 	"strings"
 
 	"nvs-server/handlers/emergency"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/blog"
@@ -32,7 +33,7 @@ func AdminListSoftDel(c *gin.Context) {
 	ctype := c.Query("type")
 	if ctype != "" {
 		if _, ok := softdel.SoftDelTables[ctype]; !ok {
-			utils.BadRequest(c, "无效的内容类型: "+ctype)
+			infra.BadRequest(c, "无效的内容类型: "+ctype)
 			return
 		}
 	}
@@ -42,10 +43,10 @@ func AdminListSoftDel(c *gin.Context) {
 	}
 	items, err := softdel.ListSoftDel(ctype, limit)
 	if err != nil {
-		utils.InternalError(c, err.Error())
+		infra.InternalError(c, err.Error())
 		return
 	}
-	utils.Success(c, items)
+	infra.Success(c, items)
 }
 
 // POST /api/admin/softdel — 管理员删除/封禁内容（软删除 + 留证）
@@ -61,18 +62,18 @@ func AdminModerateContent(c *gin.Context) {
 		Action string `json:"action"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := SoftDeleteContent(c, req.Type, req.ID, req.Reason, "admin", req.Action); err != nil {
 		if err == ErrContentNotFound {
-			utils.NotFound(c, "内容不存在或已被删除")
+			infra.NotFound(c, "内容不存在或已被删除")
 		} else {
-			utils.InternalError(c, err.Error())
+			infra.InternalError(c, err.Error())
 		}
 		return
 	}
-	utils.Success(c, gin.H{"message": "已软删除并留证"})
+	infra.Success(c, gin.H{"message": "已软删除并留证"})
 }
 
 // SoftDeleteContent 归档 + 软删除的通用实现（供管理员治理、举报处置等复用）。
@@ -123,7 +124,7 @@ func doSoftDelete(ctype string, id uint, reason, source, action string, operator
 		if err != nil {
 			return ErrContentNotFound
 		}
-		summary := utils.TruncateRunes(emergency.ToPlainText(cm.Content), 200)
+		summary := sanitize.TruncateRunes(emergency.ToPlainText(cm.Content), 200)
 		if err := softdel.ArchiveSoftDelete(source, "comment", id, operatorID, operator, reason, summary, cm); err != nil {
 			return err
 		}
@@ -207,7 +208,7 @@ func doSoftDelete(ctype string, id uint, reason, source, action string, operator
 		if err := models.DB.First(&p, id).Error; err != nil {
 			return ErrContentNotFound
 		}
-		if err := softdel.ArchiveSoftDelete(source, "post", id, operatorID, operator, reason, utils.TruncateRunes(emergency.ToPlainText(p.Content), 200), p); err != nil {
+		if err := softdel.ArchiveSoftDelete(source, "post", id, operatorID, operator, reason, sanitize.TruncateRunes(emergency.ToPlainText(p.Content), 200), p); err != nil {
 			return err
 		}
 		if err := models.DB.Delete(&models.Post{}, id).Error; err != nil {

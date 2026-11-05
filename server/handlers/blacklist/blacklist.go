@@ -1,11 +1,11 @@
 package blacklist
 
 import (
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	apikey "nvs-server/models/apikey"
@@ -30,7 +30,7 @@ func AddBlacklist(c *gin.Context) {
 		Reason  string `json:"reason"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 
@@ -38,24 +38,24 @@ func AddBlacklist(c *gin.Context) {
 	key := req.UserKey
 	if key == "" {
 		if req.UserID == 0 {
-			utils.BadRequest(c, "请指定要拉黑的用户")
+			infra.BadRequest(c, "请指定要拉黑的用户")
 			return
 		}
 		key = strconv.FormatUint(uint64(req.UserID), 10)
 	}
 	target, err := apikey.ResolveUserKey(key)
 	if err != nil || target == nil {
-		utils.NotFound(c, "用户不存在")
+		infra.NotFound(c, "用户不存在")
 		return
 	}
 
 	if target.ID == userID {
-		utils.BadRequest(c, "不能拉黑自己")
+		infra.BadRequest(c, "不能拉黑自己")
 		return
 	}
 	// 站长/警方/管理员不可被拉黑：保障平台治理与取证通道畅通
 	if social.IsAdminOrPolice(target.Role) {
-		utils.Forbidden(c, "无法拉黑站长/警方/管理员")
+		infra.Forbidden(c, "无法拉黑站长/警方/管理员")
 		return
 	}
 
@@ -68,14 +68,14 @@ func AddBlacklist(c *gin.Context) {
 		UserID:        userID,
 		BlockedUserID: target.ID,
 		Mode:          mode,
-		Reason:        utils.ClampString(req.Reason, utils.MaxReason),
+		Reason:        infra.ClampString(req.Reason, infra.MaxReason),
 	}
 	if err := security.AddBlacklist(entry); err != nil {
-		utils.InternalError(c, "操作失败")
+		infra.InternalError(c, "操作失败")
 		return
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"message": "已加入黑名单",
 		"id":      entry.ID,
 		"mode":    entry.Mode,
@@ -87,25 +87,25 @@ func RemoveBlacklist(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || id == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 
 	entry, err := security.GetBlacklistByID(uint(id))
 	if err != nil {
-		utils.NotFound(c, "黑名单记录不存在")
+		infra.NotFound(c, "黑名单记录不存在")
 		return
 	}
 	if entry.UserID != userID {
-		utils.Forbidden(c, "无权操作此记录")
+		infra.Forbidden(c, "无权操作此记录")
 		return
 	}
 	if err := security.RemoveBlacklist(userID, uint(id)); err != nil {
-		utils.InternalError(c, "解除失败")
+		infra.InternalError(c, "解除失败")
 		return
 	}
 
-	utils.Success(c, gin.H{"message": "已解除拉黑"})
+	infra.Success(c, gin.H{"message": "已解除拉黑"})
 }
 
 // HiddenAuthorIDs 返回 userID 以 hide 模式（屏蔽内容）拉黑的全部作者 ID。
@@ -155,11 +155,11 @@ func ListMyBlacklist(c *gin.Context) {
 
 	pg, err := security.ListBlacklist(userID, page, pageSize)
 	if err != nil {
-		utils.InternalError(c, "获取黑名单失败")
+		infra.InternalError(c, "获取黑名单失败")
 		return
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"list":  pg.List,
 		"total": pg.Total,
 		"page":  page,

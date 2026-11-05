@@ -5,10 +5,10 @@
 package home
 
 import (
+	"nvs-server/utils/infra"
 	"strconv"
 
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -34,7 +34,7 @@ func ListLatestThreads(c *gin.Context) {
 		Limit(limit).
 		Find(&threads).Error
 	if err != nil {
-		utils.InternalError(c, "获取最新帖失败")
+		infra.InternalError(c, "获取最新帖失败")
 		return
 	}
 
@@ -64,5 +64,5 @@ func ListLatestThreads(c *gin.Context) {
 		}
 		items = append(items, item)
 	}
-	utils.Success(c, gin.H{"items": items, "total": len(items)})
+	infra.Success(c, gin.H{"items": items, "total": len(items)})
 }

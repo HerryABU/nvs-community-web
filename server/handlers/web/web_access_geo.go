@@ -4,7 +4,7 @@ import (
 	"nvs-server/handlers/admincommon"
 	"nvs-server/ipgeo"
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"sort"
 	"time"
 
@@ -45,7 +45,7 @@ func GetWebAccessGeo(c *gin.Context) {
 
 	if !ipgeo.Available() {
 		// 数据没嵌进去属于构建问题，不该 500 —— 前端按「不可用」降级展示
-		utils.Success(c, gin.H{
+		infra.Success(c, gin.H{
 			"available": false,
 			"message":   "IP 归属地数据未嵌入（构建时缺少 ipgeo/data/ip2region_v4.xdb）",
 		})
@@ -65,7 +65,7 @@ func GetWebAccessGeo(c *gin.Context) {
 		Order("cnt desc").
 		Limit(topN).
 		Scan(&rows).Error; err != nil {
-		utils.InternalError(c, "聚合访问来源失败")
+		infra.InternalError(c, "聚合访问来源失败")
 		return
 	}
 
@@ -102,7 +102,7 @@ func GetWebAccessGeo(c *gin.Context) {
 		}
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"available": true,
 		"days":      days,
 		"provinces": toBuckets(provinces, "", 0),

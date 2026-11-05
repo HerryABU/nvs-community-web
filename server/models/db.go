@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"nvs-server/utils/infra"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,6 @@ import (
 	"gorm.io/gorm"
 
 	"nvs-server/config"
-	"nvs-server/utils"
 )
 
 // DBConfig 描述一个数据库连接目标（迁移/安装时由前端传入）
@@ -137,7 +137,7 @@ func OpenDB(cfg DBConfig) (*gorm.DB, error) {
 		}
 	}
 	db, err := gorm.Open(d, &gorm.Config{
-		Logger: utils.NewDBLogger(),
+		Logger: infra.NewDBLogger(),
 	})
 	if err != nil {
 		return nil, err

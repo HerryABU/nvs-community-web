@@ -8,7 +8,7 @@ import (
 	"nvs-server/police"
 	"nvs-server/risk"
 	"nvs-server/security"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
@@ -23,7 +23,7 @@ func AdminRiskConfig(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"config": risk.Load(), "stats": risk.Stats(),
 		"note": "allow=正常入账；hold=入账但打标待复核；block=不入账待复核。程序不自动扣回已到账余额，钱的事必须有人判断。",
 	})
@@ -36,14 +36,14 @@ func SaveRiskConfig(c *gin.Context) {
 	}
 	var in risk.Config
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := risk.Save(in); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "已保存", risk.Load())
+	infra.SuccessMessage(c, "已保存", risk.Load())
 }
 
 // AdminRiskEvents GET /api/admin/risk/events
@@ -55,10 +55,10 @@ func AdminRiskEvents(c *gin.Context) {
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
 	list, total, err := risk.List(page, size, c.Query("decision"), c.Query("status"))
 	if err != nil {
-		utils.InternalError(c, "读取失败")
+		infra.InternalError(c, "读取失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list, "total": total, "page": page, "size": size})
+	infra.Success(c, gin.H{"list": list, "total": total, "page": page, "size": size})
 }
 
 // HandleRiskEvent POST /api/admin/risk/events/:id/handle { status, note }
@@ -72,14 +72,14 @@ func HandleRiskEvent(c *gin.Context) {
 		Note   string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := risk.Handle(uint(id), hctx.CurrentUserID(c), in.Status, in.Note); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已处理", nil)
+	infra.SuccessMessage(c, "已处理", nil)
 }
 
 // ─────────────── 警方工单 ───────────────
@@ -92,7 +92,7 @@ func canHandleTickets(c *gin.Context) bool {
 // ListTickets GET /api/police/tickets
 func ListTickets(c *gin.Context) {
 	if !canHandleTickets(c) {
-		utils.Forbidden(c, "仅警方/管理员可访问")
+		infra.Forbidden(c, "仅警方/管理员可访问")
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -103,50 +103,50 @@ func ListTickets(c *gin.Context) {
 	}
 	list, total, err := police.List(page, size, c.Query("status"), c.Query("priority"), c.Query("kind"), handlerID)
 	if err != nil {
-		utils.InternalError(c, "读取失败")
+		infra.InternalError(c, "读取失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list, "total": total, "stats": police.Stats()})
+	infra.Success(c, gin.H{"list": list, "total": total, "stats": police.Stats()})
 }
 
 // GetTicket GET /api/police/tickets/:id
 func GetTicket(c *gin.Context) {
 	if !canHandleTickets(c) {
-		utils.Forbidden(c, "仅警方/管理员可访问")
+		infra.Forbidden(c, "仅警方/管理员可访问")
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	t, logs, err := police.Get(uint(id))
 	if err != nil {
-		utils.NotFound(c, "工单不存在")
+		infra.NotFound(c, "工单不存在")
 		return
 	}
-	utils.Success(c, gin.H{"ticket": t, "logs": logs})
+	infra.Success(c, gin.H{"ticket": t, "logs": logs})
 }
 
 // CreateTicket POST /api/police/tickets
 func CreateTicket(c *gin.Context) {
 	if !canHandleTickets(c) {
-		utils.Forbidden(c, "仅警方/管理员可建单")
+		infra.Forbidden(c, "仅警方/管理员可建单")
 		return
 	}
 	var in police.CreateInput
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	t, err := police.Create(hctx.CurrentUserID(c), in)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "工单已创建", t)
+	infra.SuccessMessage(c, "工单已创建", t)
 }
 
 // AssignTicket POST /api/police/tickets/:id/assign { handler_id }
 func AssignTicket(c *gin.Context) {
 	if !canHandleTickets(c) {
-		utils.Forbidden(c, "仅警方/管理员可派单")
+		infra.Forbidden(c, "仅警方/管理员可派单")
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -154,20 +154,20 @@ func AssignTicket(c *gin.Context) {
 		HandlerID uint `json:"handler_id"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil || in.HandlerID == 0 {
-		utils.BadRequest(c, "请指定处理人")
+		infra.BadRequest(c, "请指定处理人")
 		return
 	}
 	if err := police.Assign(uint(id), in.HandlerID, hctx.CurrentUserID(c)); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已派单", nil)
+	infra.SuccessMessage(c, "已派单", nil)
 }
 
 // SetTicketStatus POST /api/police/tickets/:id/status { status, note }
 func SetTicketStatus(c *gin.Context) {
 	if !canHandleTickets(c) {
-		utils.Forbidden(c, "仅警方/管理员可处理")
+		infra.Forbidden(c, "仅警方/管理员可处理")
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -176,20 +176,20 @@ func SetTicketStatus(c *gin.Context) {
 		Note   string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := police.SetStatus(uint(id), hctx.CurrentUserID(c), in.Status, in.Note); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已更新", nil)
+	infra.SuccessMessage(c, "已更新", nil)
 }
 
 // AddTicketNote POST /api/police/tickets/:id/notes { note }
 func AddTicketNote(c *gin.Context) {
 	if !canHandleTickets(c) {
-		utils.Forbidden(c, "仅警方/管理员可处理")
+		infra.Forbidden(c, "仅警方/管理员可处理")
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -197,14 +197,14 @@ func AddTicketNote(c *gin.Context) {
 		Note string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := police.AddNote(uint(id), hctx.CurrentUserID(c), in.Note); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已追加", nil)
+	infra.SuccessMessage(c, "已追加", nil)
 }
 
 // ─────────────── API Key 审计告警 ───────────────
@@ -227,10 +227,10 @@ func AdminKeyAlarms(c *gin.Context) {
 	}
 	list, total, err := security.ListKeyAlarms(page, size, c.Query("kind"), acked)
 	if err != nil {
-		utils.InternalError(c, "读取失败")
+		infra.InternalError(c, "读取失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list, "total": total})
+	infra.Success(c, gin.H{"list": list, "total": total})
 }
 
 // AckKeyAlarm POST /api/admin/api-key-alarms/:id/ack { note }
@@ -244,8 +244,8 @@ func AckKeyAlarm(c *gin.Context) {
 	}
 	_ = c.ShouldBindJSON(&in)
 	if err := security.AckKeyAlarm(uint(id), hctx.CurrentUserID(c), in.Note); err != nil {
-		utils.InternalError(c, "处理失败")
+		infra.InternalError(c, "处理失败")
 		return
 	}
-	utils.SuccessMessage(c, "已标记处理", nil)
+	infra.SuccessMessage(c, "已标记处理", nil)
 }

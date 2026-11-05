@@ -3,6 +3,7 @@ package wasm
 import (
 	"fmt"
 	"net/http"
+	"nvs-server/utils/infra"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -10,7 +11,6 @@ import (
 
 	"nvs-server/config"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	softdel "nvs-server/models/softdel"
@@ -93,7 +93,7 @@ func ServeSandboxPreview(c *gin.Context) {
 
 // GetSandboxInfo GET /api/sandbox/info
 func GetSandboxInfo(c *gin.Context) {
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"sandbox_policy":     "allow-scripts",
 		"wasm_supported":     true,
 		"zip_max_size":       "20MB",
@@ -114,13 +114,13 @@ func GetFramePreview(c *gin.Context) {
 
 	var frame softdel.UserFrame
 	if err := models.DB.Where("id = ? AND is_active = ?", frameID, true).First(&frame).Error; err != nil {
-		utils.NotFound(c, "模板不存在或已禁用")
+		infra.NotFound(c, "模板不存在或已禁用")
 		return
 	}
 
 	content, err := os.ReadFile(frame.FilePath)
 	if err != nil {
-		utils.InternalError(c, "读取模板内容失败")
+		infra.InternalError(c, "读取模板内容失败")
 		return
 	}
 
@@ -142,19 +142,19 @@ func GetHTMLPreview(c *gin.Context) {
 
 	var htmlItem softdel.UserHTML
 	if err := models.DB.Where("id = ? AND is_active = ?", htmlID, true).First(&htmlItem).Error; err != nil {
-		utils.NotFound(c, "扩展不存在或已禁用")
+		infra.NotFound(c, "扩展不存在或已禁用")
 		return
 	}
 
 	// 读取入口文件：强校验 entry_file 必须落在解压目录内（防路径穿越 LFI）
 	entryPath := filepath.Join(htmlItem.ExtractDir, htmlItem.EntryFile)
 	if !pathWithin(htmlItem.ExtractDir, entryPath) {
-		utils.BadRequest(c, "入口文件路径非法")
+		infra.BadRequest(c, "入口文件路径非法")
 		return
 	}
 	content, err := os.ReadFile(entryPath)
 	if err != nil {
-		utils.InternalError(c, "读取入口文件失败")
+		infra.InternalError(c, "读取入口文件失败")
 		return
 	}
 

@@ -1,10 +1,10 @@
 package theme
 
 import (
+	"nvs-server/utils/sanitize"
 	"time"
 
 	"nvs-server/models"
-	"nvs-server/utils"
 )
 
 // UserHomeCustomize 用户个人主页装扮（仅本人登录态可见，允许原始 HTML+style+script）。
@@ -82,7 +82,7 @@ func SubmitAuthorHomeCustomize(authorID uint, raw string) (safe string, removed 
 	if authorID == 0 {
 		return "", nil, false, nil
 	}
-	safe, removed = utils.SanitizeCustomHTML(raw)
+	safe, removed = sanitize.SanitizeCustomHTML(raw)
 	had := len(removed) > 0
 	now := time.Now()
 	var t AuthorHomeCustomize

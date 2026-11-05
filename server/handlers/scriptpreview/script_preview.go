@@ -4,7 +4,7 @@ import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/scriptmode"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
 	social "nvs-server/models/social"
@@ -22,26 +22,26 @@ func ScriptPreview(c *gin.Context) {
 		Mode    string `json:"mode"` // script（纯话本，默认） / mixed（散文与话本混排）
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if len([]rune(req.Content)) > 20000 {
-		utils.BadRequest(c, "预览内容过长（上限 20000 字）")
+		infra.BadRequest(c, "预览内容过长（上限 20000 字）")
 		return
 	}
 	if req.NovelID > 0 {
 		novel, err := models.GetNovelByID(req.NovelID)
 		if err != nil {
-			utils.NotFound(c, "作品不存在")
+			infra.NotFound(c, "作品不存在")
 			return
 		}
 		uid := hctx.CurrentUserID(c)
 		if uid == 0 {
-			utils.Unauthorized(c, "请先登录")
+			infra.Unauthorized(c, "请先登录")
 			return
 		}
 		if novel.AuthorID != uid && hctx.CurrentUserRole(c) != social.RoleAdmin && hctx.CurrentUserRole(c) != social.RolePolice {
-			utils.Forbidden(c, "仅作品创作成员可预览")
+			infra.Forbidden(c, "仅作品创作成员可预览")
 			return
 		}
 	}
@@ -50,7 +50,7 @@ func ScriptPreview(c *gin.Context) {
 	if req.Mode == "mixed" {
 		html = scriptmode.RenderMixedHTML(req.Content)
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"html":          html,
 		"speakers":      scriptmode.Speakers(req.Content),
 		"lines":         lines,

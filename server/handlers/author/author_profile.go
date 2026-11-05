@@ -2,13 +2,13 @@ package author
 
 import (
 	"fmt"
+	"nvs-server/utils/infra"
 	"strconv"
 	"time"
 
 	"nvs-server/handlers/blacklist"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	apikey "nvs-server/models/apikey"
@@ -19,10 +19,10 @@ func GetMyNovels(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	novels, _, err := models.GetNovelsByAuthor(userID, 1, 1000)
 	if err != nil {
-		utils.InternalError(c, "获取作品列表失败")
+		infra.InternalError(c, "获取作品列表失败")
 		return
 	}
-	utils.Success(c, novels)
+	infra.Success(c, novels)
 }
 
 // ResolveUserByKey GET /api/users/resolve?key=xxx — 轻量解析用户标识（id 或用户名）
@@ -31,10 +31,10 @@ func ResolveUserByKey(c *gin.Context) {
 	key := c.Query("key")
 	u, err := apikey.ResolveUserKey(key)
 	if err != nil || u == nil {
-		utils.NotFound(c, "用户不存在")
+		infra.NotFound(c, "用户不存在")
 		return
 	}
-	utils.Success(c, gin.H{"id": u.ID, "username": u.Username, "nickname": u.Nickname, "role": u.Role})
+	infra.Success(c, gin.H{"id": u.ID, "username": u.Username, "nickname": u.Nickname, "role": u.Role})
 }
 
 // GetAuthorProfile 获取作者公开主页信息（包括作品列表和统计数据）
@@ -42,7 +42,7 @@ func ResolveUserByKey(c *gin.Context) {
 func GetAuthorProfile(c *gin.Context) {
 	user, err := apikey.ResolveUserKey(c.Param("id"))
 	if err != nil || user == nil {
-		utils.NotFound(c, "作者不存在")
+		infra.NotFound(c, "作者不存在")
 		return
 	}
 	authorID := user.ID
@@ -132,7 +132,7 @@ func GetAuthorProfile(c *gin.Context) {
 		).Scan(&avgRating)
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"author":         user,
 		"author_id":      user.ID,
 		"novels":         novels,
@@ -157,7 +157,7 @@ func GetAuthorProfile(c *gin.Context) {
 func GetAuthorForum(c *gin.Context) {
 	user, err := apikey.ResolveUserKey(c.Param("id"))
 	if err != nil || user == nil {
-		utils.NotFound(c, "作者不存在")
+		infra.NotFound(c, "作者不存在")
 		return
 	}
 	authorID := user.ID
@@ -175,7 +175,7 @@ func GetAuthorForum(c *gin.Context) {
 		"作者 "+authorName+" 的专属讨论区，读者可以在此与作者交流。",
 	)
 	if err != nil {
-		utils.InternalError(c, "获取/创建论坛失败")
+		infra.InternalError(c, "获取/创建论坛失败")
 		return
 	}
 
@@ -184,7 +184,7 @@ func GetAuthorForum(c *gin.Context) {
 	// 黑名单 hide 模式（F13）：不看被自己屏蔽（hide）的作者（含其讨论区内他人代发内容不滤，仅滤作者本人所发）
 	threads = blacklist.FilterHiddenItems(hctx.CurrentUserID(c), threads, func(t models.Thread) uint { return t.UserID })
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"forum":   forum,
 		"threads": threads,
 		"total":   total,
@@ -198,7 +198,7 @@ func GetNovelStats(c *gin.Context) {
 
 	novel, err := models.GetNovelByID(uint(novelID))
 	if err != nil || novel.AuthorID != userID {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return
 	}
 
@@ -210,7 +210,7 @@ func GetNovelStats(c *gin.Context) {
 		"updated_at":     novel.UpdatedAt,
 	}
 
-	utils.Success(c, stats)
+	infra.Success(c, stats)
 }
 
 // GetAuthorBannedContent 获取作者被封禁（176号令）的小说/章节及封禁原因。
@@ -250,5 +250,5 @@ func GetAuthorBannedContent(c *gin.Context) {
 		Order("chapters.deleted_at DESC").
 		Scan(&chapters)
 
-	utils.Success(c, gin.H{"novels": novels, "chapters": chapters})
+	infra.Success(c, gin.H{"novels": novels, "chapters": chapters})
 }

@@ -2,6 +2,7 @@ package aiadmin
 
 import (
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"sort"
 	"strconv"
 	"strings"
@@ -9,7 +10,6 @@ import (
 
 	"nvs-server/aiclient"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	aim "nvs-server/models/ai"
@@ -37,7 +37,7 @@ func AdminChannelBalanceOverview(c *gin.Context) {
 	}
 	var ms []aim.AiModel
 	if err := models.DB.Order("base_url, id").Find(&ms).Error; err != nil {
-		utils.InternalError(c, "读取模型失败")
+		infra.InternalError(c, "读取模型失败")
 		return
 	}
 
@@ -198,7 +198,7 @@ func AdminChannelBalanceOverview(c *gin.Context) {
 		out = append(out, item)
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"channels": out,
 		"probed":   probed,
 		"total":    len(out),
@@ -242,7 +242,7 @@ func AdminAiUsageStats(c *gin.Context) {
 	days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
 	rows, err := aiops.AggregateAiUsage(dim, days)
 	if err != nil {
-		utils.InternalError(c, "统计失败")
+		infra.InternalError(c, "统计失败")
 		return
 	}
 	// 汇总行：前端顶部直接显示合计，不必自己把数组再加一遍
@@ -252,7 +252,7 @@ func AdminAiUsageStats(c *gin.Context) {
 		totalTok += r.TokensIn + r.TokensOut
 		totalCost += r.Cost
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"dim":        dim,
 		"days":       days,
 		"rows":       rows,

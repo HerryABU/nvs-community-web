@@ -1,11 +1,11 @@
 package aiadmin
 
 import (
+	"nvs-server/utils/infra"
 	"time"
 
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	aim "nvs-server/models/ai"
@@ -21,7 +21,7 @@ import (
 func AiMyModels(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "未登录")
+		infra.Unauthorized(c, "未登录")
 		return
 	}
 	since := time.Now().AddDate(0, 0, -30)
@@ -44,5 +44,5 @@ func AiMyModels(c *gin.Context) {
 	for _, r := range rows {
 		ids = append(ids, r.ModelID)
 	}
-	utils.Success(c, gin.H{"model_ids": ids, "days": 30})
+	infra.Success(c, gin.H{"model_ids": ids, "days": 30})
 }

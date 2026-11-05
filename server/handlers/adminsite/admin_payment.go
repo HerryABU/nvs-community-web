@@ -2,10 +2,9 @@ package adminsite
 
 import (
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
-
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	wallet "nvs-server/models/wallet"
@@ -21,7 +20,7 @@ func AdminGetPaymentConfig(c *gin.Context) {
 		return
 	}
 	cfg := wallet.GetPaymentConfig()
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"enabled":       wallet.IsPaymentEnabled(),
 		"provider":      cfg.Provider,
 		"gateway_url":   cfg.GatewayURL,
@@ -57,7 +56,7 @@ func AdminSetPaymentConfig(c *gin.Context) {
 		OrderTTLMin int     `json:"order_ttl_min"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	cfg := wallet.GetPaymentConfig() // 以现值起步，未传字段保持
@@ -82,16 +81,16 @@ func AdminSetPaymentConfig(c *gin.Context) {
 		cfg.OrderTTLMin = req.OrderTTLMin
 	}
 	if err := wallet.SetPaymentConfig(cfg); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
 	if req.Enabled != nil {
 		if err := wallet.SetPaymentEnabled(*req.Enabled); err != nil {
-			utils.InternalError(c, "保存失败")
+			infra.InternalError(c, "保存失败")
 			return
 		}
 	}
-	utils.Success(c, gin.H{"message": "支付配置已保存（立即生效）"})
+	infra.Success(c, gin.H{"message": "支付配置已保存（立即生效）"})
 }
 
 // AdminSetPaymentTiers PUT /api/admin/payment/tiers — 保存充值档位
@@ -103,14 +102,14 @@ func AdminSetPaymentTiers(c *gin.Context) {
 		Tiers []wallet.PaymentTier `json:"tiers"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := wallet.SetPaymentTiers(req.Tiers); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "档位已保存（立即生效，仅影响新订单）"})
+	infra.Success(c, gin.H{"message": "档位已保存（立即生效，仅影响新订单）"})
 }
 
 // AdminListPaymentOrders GET /api/admin/payment/orders — 订单列表（status/user_id 筛选）
@@ -123,10 +122,10 @@ func AdminListPaymentOrders(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	list, total, err := wallet.AdminListRechargeOrders(c.Query("status"), uint(userID64), page, pageSize)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
-	utils.Success(c, gin.H{"list": list, "total": total, "page": page, "page_size": pageSize})
+	infra.Success(c, gin.H{"list": list, "total": total, "page": page, "page_size": pageSize})
 }
 
 // AdminMarkOrderPaid POST /api/admin/payment/orders/mark-paid — 手动补单（留痕）
@@ -139,12 +138,12 @@ func AdminMarkOrderPaid(c *gin.Context) {
 		TransactionID string `json:"transaction_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	req.OrderNo = strings.TrimSpace(req.OrderNo)
 	if req.OrderNo == "" {
-		utils.BadRequest(c, "订单号不能为空")
+		infra.BadRequest(c, "订单号不能为空")
 		return
 	}
 	if req.TransactionID == "" {
@@ -152,14 +151,14 @@ func AdminMarkOrderPaid(c *gin.Context) {
 	}
 	order, credited, err := wallet.MarkOrderPaid(req.OrderNo, strings.TrimSpace(req.TransactionID), "manual mark-paid by admin")
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	msg := "补单完成，代币已到账"
 	if !credited {
 		msg = "该订单此前已到账（幂等，未重复入账）"
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"message":      msg,
 		"credited":     credited,
 		"token_amount": order.TokenAmount,

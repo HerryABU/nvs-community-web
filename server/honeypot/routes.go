@@ -8,10 +8,9 @@ package honeypot
 
 import (
 	"net/http"
+	"nvs-server/utils/infra"
 	"strings"
 	"time"
-
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -51,7 +50,7 @@ func Register(r *gin.Engine) {
 func serveDecoy(c *gin.Context, d Decoy) {
 	set := Current()
 	if !set.Enabled || set.Level == LevelOff {
-		utils.NotFound(c, "页面不存在")
+		infra.NotFound(c, "页面不存在")
 		return
 	}
 	// 等级是否覆盖该诱饵
@@ -76,7 +75,7 @@ func serveDecoy(c *gin.Context, d Decoy) {
 		}
 	}
 	if !covered {
-		utils.NotFound(c, "页面不存在")
+		infra.NotFound(c, "页面不存在")
 		return
 	}
 
@@ -117,7 +116,7 @@ func serveDecoy(c *gin.Context, d Decoy) {
 func serveBaitFile(c *gin.Context, path string) {
 	set := Current()
 	if !set.Enabled || set.Level == LevelOff {
-		utils.NotFound(c, "页面不存在")
+		infra.NotFound(c, "页面不存在")
 		return
 	}
 	if IsBanned(c.ClientIP()) {
@@ -172,7 +171,7 @@ func serveProbe(c *gin.Context, path string) {
 			_ = updateSessionStats(sess, 40, now)
 		}
 	}
-	utils.NotFound(c, "页面不存在")
+	infra.NotFound(c, "页面不存在")
 }
 
 // ProbeNotFound SPA 兜底前的探路记录（NoRoute 里调用；不改变原响应）

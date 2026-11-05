@@ -1,10 +1,10 @@
 package theme
 
 import (
+	"nvs-server/utils/sanitize"
 	"time"
 
 	"nvs-server/models"
-	"nvs-server/utils"
 )
 
 // UserTheme 用户个人主题（F12 用户自定义网站主题，alist 式）。
@@ -65,8 +65,8 @@ func SetUserTheme(userID uint, css string, customJS string, jsMode string, jsDel
 	if userID == 0 {
 		return []string{}, nil
 	}
-	sanitized, removed := utils.SanitizeCSS(css)
-	sanitizedJS, jsRemoved := utils.SanitizeJS(customJS)
+	sanitized, removed := sanitize.SanitizeCSS(css)
+	sanitizedJS, jsRemoved := sanitize.SanitizeJS(customJS)
 	removed = append(removed, jsRemoved...)
 	var t UserTheme
 	mode := NormalizeThemeJSMode(jsMode)

@@ -6,13 +6,14 @@
 package auth
 
 import (
+	"nvs-server/utils/infra"
+	"nvs-server/utils/secure"
 	"strings"
 	"time"
 
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/realname"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	apikey "nvs-server/models/apikey"
@@ -31,7 +32,7 @@ type NationalRealNameResp struct {
 func ApplyRealName(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	var req struct {
@@ -39,18 +40,18 @@ func ApplyRealName(c *gin.Context) {
 		IDCard   string `json:"id_card" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请填写姓名与身份证号")
+		infra.BadRequest(c, "请填写姓名与身份证号")
 		return
 	}
 	name := strings.TrimSpace(req.RealName)
 	idCard := strings.ToUpper(strings.TrimSpace(req.IDCard))
-	if utils.RuneLen(name) < 2 || utils.RuneLen(name) > 32 {
-		utils.BadRequest(c, "姓名长度应为 2-32 个字符")
+	if infra.RuneLen(name) < 2 || infra.RuneLen(name) > 32 {
+		infra.BadRequest(c, "姓名长度应为 2-32 个字符")
 		return
 	}
-	birth, err := utils.ValidateIDCard(idCard)
+	birth, err := secure.ValidateIDCard(idCard)
 	if err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
 
@@ -59,34 +60,34 @@ func ApplyRealName(c *gin.Context) {
 	var dup int64
 	models.DB.Model(&models.User{}).Where("id_card_hash = ? AND id != ?", idHash, userID).Count(&dup)
 	if dup > 0 {
-		utils.BadRequest(c, "该身份证号已完成实名，无法重复绑定")
+		infra.BadRequest(c, "该身份证号已完成实名，无法重复绑定")
 		return
 	}
 
-	encrypted, err := utils.EncryptField(name)
+	encrypted, err := secure.EncryptField(name)
 	if err != nil {
-		utils.InternalError(c, "实名信息加密失败")
+		infra.InternalError(c, "实名信息加密失败")
 		return
 	}
-	age := utils.AgeAt(birth, time.Now())
+	age := secure.AgeAt(birth, time.Now())
 	now := time.Now()
 	updates := map[string]interface{}{
 		"real_name":          encrypted,
 		"id_card_hash":       idHash,
-		"id_card_masked":     utils.MaskIDCard(idCard),
+		"id_card_masked":     secure.MaskIDCard(idCard),
 		"real_name_verified": true,
 		"real_name_at":       &now,
 		"birth_date":         &birth,
 		"minor_protected":    age < 18,
 	}
 	if err := models.DB.Model(&models.User{}).Where("id = ?", userID).Updates(updates).Error; err != nil {
-		utils.InternalError(c, "实名信息保存失败")
+		infra.InternalError(c, "实名信息保存失败")
 		return
 	}
 
 	RecordUserAudit(c, userID, apikey.AuditChangeProfile, "完成实名认证", "success")
-	utils.SuccessMessage(c, "实名认证成功", gin.H{
-		"id_card_masked":  utils.MaskIDCard(idCard),
+	infra.SuccessMessage(c, "实名认证成功", gin.H{
+		"id_card_masked":  secure.MaskIDCard(idCard),
 		"minor_protected": age < 18,
 	})
 }
@@ -95,15 +96,15 @@ func ApplyRealName(c *gin.Context) {
 func GetMyRealName(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	user, err := models.GetUserByID(userID)
 	if err != nil {
-		utils.NotFound(c, "用户不存在")
+		infra.NotFound(c, "用户不存在")
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"real_name_verified": user.RealNameVerified,
 		"id_card_masked":     user.IDCardMasked,
 		"birth_date":         user.BirthDate,
@@ -123,12 +124,12 @@ func GetMyRealName(c *gin.Context) {
 func NationalRealNameCheck(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	if userID == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	cfg := models.GetRealNameProviderConfig()
 	if cfg.Provider == "" {
-		utils.BadRequest(c, "站长尚未开启实名检测")
+		infra.BadRequest(c, "站长尚未开启实名检测")
 		return
 	}
 	var req struct {
@@ -137,13 +138,13 @@ func NationalRealNameCheck(c *gin.Context) {
 		Advanced bool   `json:"advanced"` // 高级模式：只验龄，不落身份信息
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请填写姓名与身份证号")
+		infra.BadRequest(c, "请填写姓名与身份证号")
 		return
 	}
 	name := strings.TrimSpace(req.RealName)
 	idCard := strings.ToUpper(strings.TrimSpace(req.IDCard))
-	if _, err := utils.ValidateIDCard(idCard); err != nil {
-		utils.BadRequest(c, err.Error())
+	if _, err := secure.ValidateIDCard(idCard); err != nil {
+		infra.BadRequest(c, err.Error())
 		return
 	}
 
@@ -151,10 +152,10 @@ func NationalRealNameCheck(c *gin.Context) {
 	res, verr := realname.Verify(c.Request.Context(), cfg, name, idCard)
 	if verr != nil {
 		if verr == realname.ErrNotConfigured {
-			utils.BadRequest(c, "站长尚未开启实名检测")
+			infra.BadRequest(c, "站长尚未开启实名检测")
 			return
 		}
-		utils.InternalError(c, "实名检测服务暂时不可用")
+		infra.InternalError(c, "实名检测服务暂时不可用")
 		return
 	}
 	out := NationalRealNameResp{
@@ -166,9 +167,9 @@ func NationalRealNameCheck(c *gin.Context) {
 	// 核验通过则落库。高级模式只验龄：仅按证件推算出生日期与未成年标记，
 	// 不存姓名/身份证哈希/脱敏串，real_name_verified 保持原值。
 	if out.Matched {
-		birth, verr := utils.ValidateIDCard(idCard)
+		birth, verr := secure.ValidateIDCard(idCard)
 		if verr == nil {
-			ageMinor := utils.AgeAt(birth, time.Now()) < 18
+			ageMinor := secure.AgeAt(birth, time.Now()) < 18
 			out.MinorProtected = ageMinor
 			if req.Advanced {
 				_ = models.DB.Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
@@ -176,7 +177,7 @@ func NationalRealNameCheck(c *gin.Context) {
 					"minor_protected": ageMinor,
 				}).Error
 				RecordUserAudit(c, userID, apikey.AuditChangeProfile, "国家实名核验通过（高级模式：仅验证年龄，不存储身份信息）", "success")
-			} else if encrypted, eerr := utils.EncryptField(name); eerr == nil {
+			} else if encrypted, eerr := secure.EncryptField(name); eerr == nil {
 				idHash := sha256Hex("idcard|" + idCard)
 				var dup int64
 				models.DB.Model(&models.User{}).Where("id_card_hash = ? AND id != ?", idHash, userID).Count(&dup)
@@ -185,7 +186,7 @@ func NationalRealNameCheck(c *gin.Context) {
 					_ = models.DB.Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
 						"real_name":          encrypted,
 						"id_card_hash":       idHash,
-						"id_card_masked":     utils.MaskIDCard(idCard),
+						"id_card_masked":     secure.MaskIDCard(idCard),
 						"real_name_verified": true,
 						"real_name_at":       &now,
 						"birth_date":         &birth,
@@ -197,5 +198,5 @@ func NationalRealNameCheck(c *gin.Context) {
 		}
 	}
 
-	utils.Success(c, out)
+	infra.Success(c, out)
 }

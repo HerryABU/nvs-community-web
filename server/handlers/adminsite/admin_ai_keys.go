@@ -2,11 +2,11 @@ package adminsite
 
 import (
 	"nvs-server/handlers/admincommon"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
 	"nvs-server/aiclient"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	ai "nvs-server/models/ai"
@@ -41,19 +41,19 @@ func AdminListAiModelKeys(c *gin.Context) {
 	}
 	modelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if _, err := ai.GetAiModel(uint(modelID)); err != nil {
-		utils.NotFound(c, "模型不存在")
+		infra.NotFound(c, "模型不存在")
 		return
 	}
 	list, err := aihub.ListAiModelKeys(uint(modelID))
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	items := make([]gin.H, 0, len(list))
 	for i := range list {
 		items = append(items, aiModelKeyVO(&list[i]))
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"list": items, "total": len(items),
 		"max_fail": aihub.MaxFailBeforeDisable,
 	})
@@ -66,7 +66,7 @@ func AdminCreateAiModelKey(c *gin.Context) {
 	}
 	modelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if _, err := ai.GetAiModel(uint(modelID)); err != nil {
-		utils.NotFound(c, "模型不存在")
+		infra.NotFound(c, "模型不存在")
 		return
 	}
 	var req struct {
@@ -76,7 +76,7 @@ func AdminCreateAiModelKey(c *gin.Context) {
 		Weight int    `json:"weight"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	raw := strings.TrimSpace(req.Keys)
@@ -91,11 +91,11 @@ func AdminCreateAiModelKey(c *gin.Context) {
 		lines = []string{strings.TrimSpace(req.Key)}
 	}
 	if len(lines) == 0 {
-		utils.BadRequest(c, "请填写密钥")
+		infra.BadRequest(c, "请填写密钥")
 		return
 	}
 	if len(lines) > 50 {
-		utils.BadRequest(c, "单次最多导入 50 把密钥")
+		infra.BadRequest(c, "单次最多导入 50 把密钥")
 		return
 	}
 	added := 0
@@ -108,7 +108,7 @@ func AdminCreateAiModelKey(c *gin.Context) {
 			added++
 		}
 	}
-	utils.Success(c, gin.H{"message": "已添加 " + strconv.Itoa(added) + " 把密钥", "added": added})
+	infra.Success(c, gin.H{"message": "已添加 " + strconv.Itoa(added) + " 把密钥", "added": added})
 }
 
 // AdminUpdateAiModelKey PUT /api/admin/ai/models/:id/keys/:keyId — 权重/启停/重置失败
@@ -125,7 +125,7 @@ func AdminUpdateAiModelKey(c *gin.Context) {
 		Reset   bool    `json:"reset"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	fields := map[string]interface{}{}
@@ -149,10 +149,10 @@ func AdminUpdateAiModelKey(c *gin.Context) {
 		fields["fail_count"] = 0
 	}
 	if err := aihub.UpdateAiModelKey(uint(keyID), uint(modelID), fields); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已保存"})
+	infra.Success(c, gin.H{"message": "已保存"})
 }
 
 // AdminDeleteAiModelKey DELETE /api/admin/ai/models/:id/keys/:keyId
@@ -163,10 +163,10 @@ func AdminDeleteAiModelKey(c *gin.Context) {
 	modelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	keyID, _ := strconv.ParseUint(c.Param("keyId"), 10, 64)
 	if err := aihub.DeleteAiModelKey(uint(keyID), uint(modelID)); err != nil {
-		utils.BadRequest(c, err.Error())
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, gin.H{"message": "已删除"})
+	infra.Success(c, gin.H{"message": "已删除"})
 }
 
 // AdminTestAiModelKey POST /api/admin/ai/models/:id/keys/test — 连通性测试
@@ -178,7 +178,7 @@ func AdminTestAiModelKey(c *gin.Context) {
 	modelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	m, err := ai.GetAiModel(uint(modelID))
 	if err != nil {
-		utils.NotFound(c, "模型不存在")
+		infra.NotFound(c, "模型不存在")
 		return
 	}
 	var req struct {
@@ -191,30 +191,30 @@ func AdminTestAiModelKey(c *gin.Context) {
 	if req.KeyID > 0 {
 		k, e := aihub.GetAiModelKey(req.KeyID, uint(modelID))
 		if e != nil {
-			utils.NotFound(c, "密钥不存在")
+			infra.NotFound(c, "密钥不存在")
 			return
 		}
 		plain, e = aihub.DecryptAiModelKey(k)
 		if e != nil {
-			utils.InternalError(c, "密钥解密失败")
+			infra.InternalError(c, "密钥解密失败")
 			return
 		}
 	} else {
 		plain = strings.TrimSpace(req.Key)
 	}
 	if plain == "" {
-		utils.BadRequest(c, "请提供要测试的密钥")
+		infra.BadRequest(c, "请提供要测试的密钥")
 		return
 	}
 	if err := aiclient.PingAuth(m.BaseURL, plain); err != nil {
-		utils.Success(c, gin.H{"ok": false, "message": err.Error()})
+		infra.Success(c, gin.H{"ok": false, "message": err.Error()})
 		return
 	}
 	// 池内密钥测试成功即清零失败计数
 	if req.KeyID > 0 {
 		aihub.ReportAiModelKey(req.KeyID, true)
 	}
-	utils.Success(c, gin.H{"ok": true, "message": "连通正常"})
+	infra.Success(c, gin.H{"ok": true, "message": "连通正常"})
 }
 
 // ==================== 管理端：扣子默认配置 ====================
@@ -224,7 +224,7 @@ func AdminGetAiCozeDefault(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, aihub.GetAiCozeDefault())
+	infra.Success(c, aihub.GetAiCozeDefault())
 }
 
 // AdminSetAiCozeDefault PUT /api/admin/ai/coze-default
@@ -234,12 +234,12 @@ func AdminSetAiCozeDefault(c *gin.Context) {
 	}
 	var req aihub.AiCozeDefault
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if err := aihub.SetAiCozeDefault(req); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已保存（新会话生效）"})
+	infra.Success(c, gin.H{"message": "已保存（新会话生效）"})
 }

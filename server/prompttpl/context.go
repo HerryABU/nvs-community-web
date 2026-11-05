@@ -2,12 +2,12 @@ package prompttpl
 
 import (
 	"fmt"
+	"nvs-server/utils/sanitize"
 	"os"
 	"strings"
 
 	"nvs-server/models"
 	aiops "nvs-server/models/aiops"
-	"nvs-server/utils"
 )
 
 // ==================== 模板上下文自动注入（§13.2） ====================
@@ -133,7 +133,7 @@ func readChapterBody(ch *models.Chapter, tailRunes int) string {
 	if ch == nil || strings.TrimSpace(ch.ContentPath) == "" {
 		return ""
 	}
-	b, err := os.ReadFile(utils.ResolveContentPath(ch.ContentPath))
+	b, err := os.ReadFile(sanitize.ResolveContentPath(ch.ContentPath))
 	if err != nil {
 		return ""
 	}

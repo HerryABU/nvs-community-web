@@ -4,7 +4,7 @@ import (
 	"nvs-server/collab"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
@@ -19,12 +19,12 @@ import (
 func ensureNovelOwner(c *gin.Context, novelID uint) bool {
 	n, err := models.GetNovelByID(novelID)
 	if err != nil {
-		utils.NotFound(c, "作品不存在")
+		infra.NotFound(c, "作品不存在")
 		return false
 	}
 	// 多人协作：主笔 + 生效中的协作者都可维护记忆（否则协作作者无法用 AI 辅助）
 	if !collab.CanUseAiContext(n.ID, hctx.CurrentUserID(c), hctx.CurrentUserRole(c)) {
-		utils.Error(c, 403, 40301, "仅主笔或协作成员可管理该作品的 AI 记忆")
+		infra.Error(c, 403, 40301, "仅主笔或协作成员可管理该作品的 AI 记忆")
 		return false
 	}
 	return true
@@ -33,12 +33,12 @@ func ensureNovelOwner(c *gin.Context, novelID uint) bool {
 // AiMemoryList GET /api/ai/memory?novel_id= — 我的作品记忆（大纲 + 摘要）
 func AiMemoryList(c *gin.Context) {
 	if !aim.IsAiEnabled() {
-		utils.BadRequest(c, "AI 功能未开启")
+		infra.BadRequest(c, "AI 功能未开启")
 		return
 	}
 	novelID, _ := strconv.ParseUint(c.Query("novel_id"), 10, 64)
 	if novelID == 0 {
-		utils.BadRequest(c, "novel_id 无效")
+		infra.BadRequest(c, "novel_id 无效")
 		return
 	}
 	if !ensureNovelOwner(c, uint(novelID)) {
@@ -46,11 +46,11 @@ func AiMemoryList(c *gin.Context) {
 	}
 	list, err := aiops.ListNovelMemories(uint(novelID))
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	outline, summaries := aiops.CountNovelMemories(uint(novelID))
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"list":       list,
 		"outline":    outline,
 		"characters": aiops.GetNovelCharacters(uint(novelID)),
@@ -63,7 +63,7 @@ func AiMemoryList(c *gin.Context) {
 // AiMemorySaveOutline PUT /api/ai/memory/outline — 保存/更新作品大纲
 func AiMemorySaveOutline(c *gin.Context) {
 	if !aim.IsAiEnabled() {
-		utils.BadRequest(c, "AI 功能未开启")
+		infra.BadRequest(c, "AI 功能未开启")
 		return
 	}
 	var req struct {
@@ -71,32 +71,32 @@ func AiMemorySaveOutline(c *gin.Context) {
 		Content string `json:"content"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.NovelID == 0 {
-		utils.BadRequest(c, "novel_id 无效")
+		infra.BadRequest(c, "novel_id 无效")
 		return
 	}
 	if !ensureNovelOwner(c, req.NovelID) {
 		return
 	}
 	if len([]rune(req.Content)) > 8000 {
-		utils.BadRequest(c, "大纲过长（上限 8000 字）")
+		infra.BadRequest(c, "大纲过长（上限 8000 字）")
 		return
 	}
 	if err := aiops.UpsertNovelOutline(req.NovelID, req.Content); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "大纲已保存"})
+	infra.Success(c, gin.H{"message": "大纲已保存"})
 }
 
 // AiMemorySaveCharacters PUT /api/ai/memory/characters — 保存/更新角色设定
 // 角色设定是模板「角色信息」变量的来源，也是续写注入的稳定人设锚点。
 func AiMemorySaveCharacters(c *gin.Context) {
 	if !aim.IsAiEnabled() {
-		utils.BadRequest(c, "AI 功能未开启")
+		infra.BadRequest(c, "AI 功能未开启")
 		return
 	}
 	var req struct {
@@ -104,31 +104,31 @@ func AiMemorySaveCharacters(c *gin.Context) {
 		Content string `json:"content"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.NovelID == 0 {
-		utils.BadRequest(c, "novel_id 无效")
+		infra.BadRequest(c, "novel_id 无效")
 		return
 	}
 	if !ensureNovelOwner(c, req.NovelID) {
 		return
 	}
 	if len([]rune(req.Content)) > 8000 {
-		utils.BadRequest(c, "角色设定过长（上限 8000 字）")
+		infra.BadRequest(c, "角色设定过长（上限 8000 字）")
 		return
 	}
 	if err := aiops.UpsertNovelCharacters(req.NovelID, req.Content); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "角色设定已保存"})
+	infra.Success(c, gin.H{"message": "角色设定已保存"})
 }
 
 // AiMemorySaveSummary PUT /api/ai/memory/summary — 保存/更新章节摘要
 func AiMemorySaveSummary(c *gin.Context) {
 	if !aim.IsAiEnabled() {
-		utils.BadRequest(c, "AI 功能未开启")
+		infra.BadRequest(c, "AI 功能未开启")
 		return
 	}
 	var req struct {
@@ -137,31 +137,31 @@ func AiMemorySaveSummary(c *gin.Context) {
 		Content   string `json:"content"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.NovelID == 0 || req.ChapterID == 0 {
-		utils.BadRequest(c, "novel_id / chapter_id 无效")
+		infra.BadRequest(c, "novel_id / chapter_id 无效")
 		return
 	}
 	if !ensureNovelOwner(c, req.NovelID) {
 		return
 	}
 	if len([]rune(req.Content)) > 4000 {
-		utils.BadRequest(c, "摘要过长（上限 4000 字）")
+		infra.BadRequest(c, "摘要过长（上限 4000 字）")
 		return
 	}
 	if err := aiops.UpsertChapterSummary(req.NovelID, req.ChapterID, req.Content); err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "章节摘要已保存"})
+	infra.Success(c, gin.H{"message": "章节摘要已保存"})
 }
 
 // AiMemoryDeleteSummary DELETE /api/ai/memory/summary — 删除章节摘要
 func AiMemoryDeleteSummary(c *gin.Context) {
 	if !aim.IsAiEnabled() {
-		utils.BadRequest(c, "AI 功能未开启")
+		infra.BadRequest(c, "AI 功能未开启")
 		return
 	}
 	var req struct {
@@ -169,27 +169,27 @@ func AiMemoryDeleteSummary(c *gin.Context) {
 		ChapterID uint `json:"chapter_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.NovelID == 0 || req.ChapterID == 0 {
-		utils.BadRequest(c, "novel_id / chapter_id 无效")
+		infra.BadRequest(c, "novel_id / chapter_id 无效")
 		return
 	}
 	if !ensureNovelOwner(c, req.NovelID) {
 		return
 	}
 	if err := aiops.DeleteChapterMemory(req.NovelID, req.ChapterID); err != nil {
-		utils.InternalError(c, "删除失败")
+		infra.InternalError(c, "删除失败")
 		return
 	}
-	utils.Success(c, gin.H{"message": "已删除"})
+	infra.Success(c, gin.H{"message": "已删除"})
 }
 
 // AiMemoryContext POST /api/ai/memory/context — 预览组装的长篇上下文（不扣费）
 func AiMemoryContext(c *gin.Context) {
 	if !aim.IsAiEnabled() {
-		utils.BadRequest(c, "AI 功能未开启")
+		infra.BadRequest(c, "AI 功能未开启")
 		return
 	}
 	var req struct {
@@ -199,18 +199,18 @@ func AiMemoryContext(c *gin.Context) {
 		Budget    int    `json:"budget"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	if req.NovelID == 0 {
-		utils.BadRequest(c, "novel_id 无效")
+		infra.BadRequest(c, "novel_id 无效")
 		return
 	}
 	if !ensureNovelOwner(c, req.NovelID) {
 		return
 	}
 	ctx, tokens := aiops.BuildNovelContext(req.NovelID, req.ChapterID, req.Text, req.Budget)
-	utils.Success(c, gin.H{"context": ctx, "tokens": tokens})
+	infra.Success(c, gin.H{"context": ctx, "tokens": tokens})
 }
 
 // aiContextBlock 将长篇上下文包装为 system 前缀（AI 调用注入用）

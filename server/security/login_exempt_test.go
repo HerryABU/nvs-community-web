@@ -3,11 +3,11 @@ package security
 import (
 	"net/http"
 	"net/http/httptest"
+	"nvs-server/utils/secure"
 	"testing"
 	"time"
 
 	"nvs-server/config"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,7 +17,7 @@ func TestIsLoggedInBrowser(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	config.JWTSecret = "test-secret-login-exempt"
 
-	tok, err := utils.GenerateToken(1, "a@b.c", "reader", "", "")
+	tok, err := secure.GenerateToken(1, "a@b.c", "reader", "", "")
 	if err != nil {
 		t.Fatalf("GenerateToken failed: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestIsLoggedInBrowser(t *testing.T) {
 func TestAPIKeyGuardBypassesLoggedInUser(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	config.JWTSecret = "test-secret-login-exempt"
-	tok, _ := utils.GenerateToken(1, "a@b.c", "reader", "", "")
+	tok, _ := secure.GenerateToken(1, "a@b.c", "reader", "", "")
 
 	// 预置：把该来源的匿名/爬虫配额打满（模拟访客已超限）
 	rateLimitStore["anon:"] = &rateLimiterEntry{count: 999999, windowStart: time.Now()}

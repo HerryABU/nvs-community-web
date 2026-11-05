@@ -2,12 +2,12 @@ package grouphandler
 
 import (
 	"encoding/json"
+	"nvs-server/utils/infra"
 	"strings"
 
 	"nvs-server/middleware"
 	"nvs-server/models"
 	"nvs-server/security"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	securitym "nvs-server/models/security"
@@ -22,7 +22,7 @@ func requirePlatformAdmin(c *gin.Context) bool {
 	uid := middleware.UserID(c)
 	user, _ := models.GetUserByID(uid)
 	if user == nil || user.Role != "admin" {
-		utils.Forbidden(c, "需要管理员权限")
+		infra.Forbidden(c, "需要管理员权限")
 		c.Abort()
 		return false
 	}

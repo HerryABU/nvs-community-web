@@ -3,7 +3,7 @@ package admincommon
 import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
 )
@@ -15,7 +15,7 @@ func EnsureAdmin(c *gin.Context) bool {
 	userID := hctx.CurrentUserID(c)
 	user, _ := models.GetUserByID(userID)
 	if user == nil || user.Role != "admin" {
-		utils.Forbidden(c, "需要管理员权限")
+		infra.Forbidden(c, "需要管理员权限")
 		c.Abort()
 		return false
 	}

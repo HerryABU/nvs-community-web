@@ -14,7 +14,7 @@ import (
 	"net/url"
 	"nvs-server/config"
 	"nvs-server/handlers/hctx"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
 	"os"
 	"path"
 	"path/filepath"
@@ -50,27 +50,27 @@ const (
 func AttachMedia(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	fh, err := c.FormFile("file")
 	if err != nil {
-		utils.BadRequest(c, "请选择文件")
+		infra.BadRequest(c, "请选择文件")
 		return
 	}
 	if fh.Size > maxAttachBytes {
-		utils.BadRequest(c, "附件不能超过 10MB")
+		infra.BadRequest(c, "附件不能超过 10MB")
 		return
 	}
 	ext := strings.ToLower(filepath.Ext(fh.Filename))
 	allowed := map[string]bool{".png": true, ".jpg": true, ".jpeg": true, ".webp": true, ".gif": true}
 	if !allowed[ext] {
-		utils.BadRequest(c, "只支持 png/jpg/jpeg/webp/gif")
+		infra.BadRequest(c, "只支持 png/jpg/jpeg/webp/gif")
 		return
 	}
 	f, err := fh.Open()
 	if err != nil {
-		utils.InternalError(c, "读取文件失败")
+		infra.InternalError(c, "读取文件失败")
 		return
 	}
 	defer f.Close()
@@ -78,23 +78,23 @@ func AttachMedia(c *gin.Context) {
 	relDir := filepath.Join("ai-refs", time.Now().Format("2006/01"))
 	absDir := filepath.Join(config.UploadDir, relDir)
 	if err := os.MkdirAll(absDir, 0o755); err != nil {
-		utils.InternalError(c, "创建目录失败")
+		infra.InternalError(c, "创建目录失败")
 		return
 	}
 	name := randHexName() + ext
 	dst, err := os.Create(filepath.Join(absDir, name))
 	if err != nil {
-		utils.InternalError(c, "保存失败")
+		infra.InternalError(c, "保存失败")
 		return
 	}
 	defer dst.Close()
 	written, err := io.Copy(dst, io.LimitReader(f, maxAttachBytes+1))
 	if err != nil || written > maxAttachBytes {
 		_ = os.Remove(filepath.Join(absDir, name))
-		utils.BadRequest(c, "文件过大或写入失败")
+		infra.BadRequest(c, "文件过大或写入失败")
 		return
 	}
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"url":  "/uploads/" + filepath.ToSlash(relDir) + "/" + name,
 		"name": fh.Filename,
 		"size": written,
@@ -107,12 +107,12 @@ func ExportMediaTask(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if uid == 0 || id == 0 {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 	task, err := aim.GetAiMediaTask(uint(id), uid)
 	if err != nil || task == nil {
-		utils.NotFound(c, "任务不存在")
+		infra.NotFound(c, "任务不存在")
 		return
 	}
 	if c.Query("files") != "1" {
@@ -123,7 +123,7 @@ func ExportMediaTask(c *gin.Context) {
 	}
 	buf, err := zipMediaTasks([]aim.AiMediaTask{*task})
 	if err != nil {
-		utils.InternalError(c, "打包失败")
+		infra.InternalError(c, "打包失败")
 		return
 	}
 	writeZip(c, buf, fmt.Sprintf("ai-media-%d.zip", task.ID))
@@ -134,19 +134,19 @@ func ExportMediaTask(c *gin.Context) {
 func ExportMediaHistory(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
-		utils.Unauthorized(c, "请先登录")
+		infra.Unauthorized(c, "请先登录")
 		return
 	}
 	kind := strings.TrimSpace(c.Query("kind"))
 	if kind != "" && kind != aim.AiKindImage && kind != aim.AiKindVideo {
-		utils.BadRequest(c, "kind 需为 image 或 video")
+		infra.BadRequest(c, "kind 需为 image 或 video")
 		return
 	}
 	var since, until time.Time
 	if m := strings.TrimSpace(c.Query("month")); m != "" {
 		t, perr := time.ParseInLocation("2006-01", m, time.Local)
 		if perr != nil {
-			utils.BadRequest(c, "month 格式应为 YYYY-MM")
+			infra.BadRequest(c, "month 格式应为 YYYY-MM")
 			return
 		}
 		since = t
@@ -155,16 +155,16 @@ func ExportMediaHistory(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "200"))
 	list, err := aim.ListAiMediaForExport(uid, kind, since, until, limit)
 	if err != nil {
-		utils.InternalError(c, "查询失败")
+		infra.InternalError(c, "查询失败")
 		return
 	}
 	if len(list) == 0 {
-		utils.BadRequest(c, "该范围内没有可导出的任务")
+		infra.BadRequest(c, "该范围内没有可导出的任务")
 		return
 	}
 	buf, err := zipMediaTasks(list)
 	if err != nil {
-		utils.InternalError(c, "打包失败")
+		infra.InternalError(c, "打包失败")
 		return
 	}
 	name := "ai-media-history"

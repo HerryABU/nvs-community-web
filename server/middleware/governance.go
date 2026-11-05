@@ -1,10 +1,9 @@
 package middleware
 
 import (
+	"nvs-server/utils/infra"
 	"regexp"
 	"strings"
-
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	apikey "nvs-server/models/apikey"
@@ -85,11 +84,11 @@ func AdminOrPoliceGovernance() gin.HandlerFunc {
 				return
 			}
 			auditPoliceAccess(c, "deny")
-			utils.Forbidden(c, "该操作不在警方的内容治理权限范围内")
+			infra.Forbidden(c, "该操作不在警方的内容治理权限范围内")
 			c.Abort()
 			return
 		default:
-			utils.Forbidden(c, "需要管理员权限")
+			infra.Forbidden(c, "需要管理员权限")
 			c.Abort()
 			return
 		}

@@ -8,7 +8,8 @@ import (
 	"nvs-server/handlers/emergency"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
+	"nvs-server/utils/infra"
+	"nvs-server/utils/sanitize"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -62,7 +63,7 @@ func ListAuthorRecycle(c *gin.Context) {
 		Find(&blogs)
 	blog.FillBlogCategories(blogs)
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"novels":      novels,
 		"novel_total": novelTotal,
 		"blogs":       blogs,
@@ -79,7 +80,7 @@ func RestoreAuthorRecycle(c *gin.Context) {
 		ID   uint   `json:"id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误")
+		infra.BadRequest(c, "参数错误")
 		return
 	}
 
@@ -87,15 +88,15 @@ func RestoreAuthorRecycle(c *gin.Context) {
 	case "novel":
 		var n models.Novel
 		if err := models.DB.Unscoped().First(&n, req.ID).Error; err != nil {
-			utils.NotFound(c, "作品不存在")
+			infra.NotFound(c, "作品不存在")
 			return
 		}
 		if n.AuthorID != userID {
-			utils.Forbidden(c, "只能恢复自己的作品")
+			infra.Forbidden(c, "只能恢复自己的作品")
 			return
 		}
 		if n.DeletedBy != "user" {
-			utils.Forbidden(c, "该内容由管理员封禁，无法自行恢复；请联系管理员申诉")
+			infra.Forbidden(c, "该内容由管理员封禁，无法自行恢复；请联系管理员申诉")
 			return
 		}
 		models.DB.Unscoped().Model(&models.Novel{}).Where("id = ?", req.ID).
@@ -106,15 +107,15 @@ func RestoreAuthorRecycle(c *gin.Context) {
 	case "blog":
 		var b blogm.AuthorBlog
 		if err := models.DB.Unscoped().First(&b, req.ID).Error; err != nil {
-			utils.NotFound(c, "博客不存在")
+			infra.NotFound(c, "博客不存在")
 			return
 		}
 		if b.AuthorID != userID {
-			utils.Forbidden(c, "只能恢复自己的博客")
+			infra.Forbidden(c, "只能恢复自己的博客")
 			return
 		}
 		if b.DeletedBy != "user" {
-			utils.Forbidden(c, "该内容由管理员封禁，无法自行恢复；请联系管理员申诉")
+			infra.Forbidden(c, "该内容由管理员封禁，无法自行恢复；请联系管理员申诉")
 			return
 		}
 		models.DB.Unscoped().Model(&blogm.AuthorBlog{}).Where("id = ?", req.ID).
@@ -122,20 +123,20 @@ func RestoreAuthorRecycle(c *gin.Context) {
 	case "chapter":
 		var ch models.Chapter
 		if err := models.DB.Unscoped().First(&ch, req.ID).Error; err != nil {
-			utils.NotFound(c, "章节不存在")
+			infra.NotFound(c, "章节不存在")
 			return
 		}
 		var n models.Novel
 		if err := models.DB.Unscoped().First(&n, ch.NovelID).Error; err != nil {
-			utils.NotFound(c, "作品不存在")
+			infra.NotFound(c, "作品不存在")
 			return
 		}
 		if n.AuthorID != userID {
-			utils.Forbidden(c, "只能恢复自己的章节")
+			infra.Forbidden(c, "只能恢复自己的章节")
 			return
 		}
 		if ch.DeletedBy != "user" {
-			utils.Forbidden(c, "该内容由管理员封禁，无法自行恢复；请联系管理员申诉")
+			infra.Forbidden(c, "该内容由管理员封禁，无法自行恢复；请联系管理员申诉")
 			return
 		}
 		models.DB.Unscoped().Model(&models.Chapter{}).Where("id = ?", req.ID).
@@ -146,25 +147,25 @@ func RestoreAuthorRecycle(c *gin.Context) {
 	case "comment":
 		var cm models.Comment
 		if err := models.DB.Unscoped().First(&cm, req.ID).Error; err != nil {
-			utils.NotFound(c, "评论不存在")
+			infra.NotFound(c, "评论不存在")
 			return
 		}
 		if cm.UserID != userID {
-			utils.Forbidden(c, "只能恢复自己的评论")
+			infra.Forbidden(c, "只能恢复自己的评论")
 			return
 		}
 		if cm.DeletedBy != "user" {
-			utils.Forbidden(c, "该内容由管理员封禁，无法自行恢复")
+			infra.Forbidden(c, "该内容由管理员封禁，无法自行恢复")
 			return
 		}
 		models.DB.Unscoped().Model(&models.Comment{}).Where("id = ?", req.ID).
 			Updates(map[string]interface{}{"deleted_at": nil, "deleted_by": ""})
 	default:
-		utils.BadRequest(c, "不支持的类型（支持 novel/blog/chapter/comment）")
+		infra.BadRequest(c, "不支持的类型（支持 novel/blog/chapter/comment）")
 		return
 	}
 
-	utils.Success(c, gin.H{"message": "已恢复到原位置"})
+	infra.Success(c, gin.H{"message": "已恢复到原位置"})
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -253,7 +254,7 @@ func AdminListRecycle(c *gin.Context) {
 			Order("deleted_at DESC").Limit(limit).
 			Scan(&rows)
 		for _, r := range rows {
-			items = append(items, recycleItem{Type: "comment", ID: r.ID, Title: utils.TruncateRunes(emergency.ToPlainText(r.Content), 60), AuthorID: r.UserID, DeletedAt: r.DeletedAt})
+			items = append(items, recycleItem{Type: "comment", ID: r.ID, Title: sanitize.TruncateRunes(emergency.ToPlainText(r.Content), 60), AuthorID: r.UserID, DeletedAt: r.DeletedAt})
 		}
 	}
 
@@ -294,7 +295,7 @@ func AdminListRecycle(c *gin.Context) {
 		items[i].AuthorName = names[items[i].AuthorID]
 	}
 
-	utils.Success(c, items)
+	infra.Success(c, items)
 }
 
 func keysOf(m map[uint]bool) []uint {
@@ -310,7 +311,7 @@ func restoreChapterFile(ch *models.Chapter) {
 	if ch.ContentPath == "" {
 		return
 	}
-	contentPath := utils.ResolveContentPath(ch.ContentPath)
+	contentPath := sanitize.ResolveContentPath(ch.ContentPath)
 	// 若正文文件不存在（在 .deleted/ 中），尝试按命名规则找回
 	if _, err := os.Stat(contentPath); err != nil {
 		dir := filepath.Dir(contentPath)

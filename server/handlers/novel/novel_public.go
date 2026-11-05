@@ -3,6 +3,7 @@ package novel
 import (
 	"fmt"
 	"nvs-server/handlers/adminsite"
+	"nvs-server/utils/infra"
 	"strconv"
 	"strings"
 
@@ -10,7 +11,6 @@ import (
 	"nvs-server/handlers/gate"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
@@ -84,7 +84,7 @@ func ListNovels(c *gin.Context) {
 
 	novels, total, err := models.GetNovelsSorted(category, search, sortBy, page, pageSize)
 	if err != nil {
-		utils.InternalError(c, "获取作品列表失败")
+		infra.InternalError(c, "获取作品列表失败")
 		return
 	}
 
@@ -93,7 +93,7 @@ func ListNovels(c *gin.Context) {
 		searchm.RecordSearchQuery(search, hctx.CurrentUserID(c), "novels", int(total))
 	}
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"list":      novels,
 		"total":     total,
 		"page":      page,
@@ -108,7 +108,7 @@ func SearchAuthors(c *gin.Context) {
 	}
 	search := c.Query("search")
 	if search == "" {
-		utils.Success(c, gin.H{"list": []models.User{}, "total": 0})
+		infra.Success(c, gin.H{"list": []models.User{}, "total": 0})
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -128,7 +128,7 @@ func SearchAuthors(c *gin.Context) {
 	models.SanitizeUserEmails(users)
 	// 搜索埋点（F9：搜索热词来源之一）
 	searchm.RecordSearchQuery(search, hctx.CurrentUserID(c), "authors", int(total))
-	utils.Success(c, gin.H{"list": users, "total": total})
+	infra.Success(c, gin.H{"list": users, "total": total})
 }
 
 // GET /api/search — 统一搜索（公开）：作品 / 作者 / 博客 / HTML 扩展 / 专栏 / 话题 / 论坛
@@ -139,7 +139,7 @@ func UnifiedSearch(c *gin.Context) {
 	}
 	q := strings.TrimSpace(c.Query("q"))
 	if q == "" {
-		utils.Success(c, gin.H{"q": "", "novels": []models.Novel{}, "authors": []models.User{}, "blogs": []blog.AuthorBlog{}, "htmls": []softdel.UserHTML{}})
+		infra.Success(c, gin.H{"q": "", "novels": []models.Novel{}, "authors": []models.User{}, "blogs": []blog.AuthorBlog{}, "htmls": []softdel.UserHTML{}})
 		return
 	}
 	like := "%" + q + "%"
@@ -225,7 +225,7 @@ func UnifiedSearch(c *gin.Context) {
 		len(categories) + len(topics) + len(forums)
 	searchm.RecordSearchQuery(q, hctx.CurrentUserID(c), "unified", hitCount)
 
-	utils.Success(c, gin.H{
+	infra.Success(c, gin.H{
 		"q": q, "novels": novels, "authors": authors, "blogs": blogs, "htmls": htmls,
 		"categories": categories, "topics": topics, "forums": forums,
 	})
@@ -235,17 +235,17 @@ func UnifiedSearch(c *gin.Context) {
 func GetNovel(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		utils.BadRequest(c, "无效的作品 ID")
+		infra.BadRequest(c, "无效的作品 ID")
 		return
 	}
 
 	novel, err := models.GetNovelByID(uint(id))
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			utils.NotFound(c, "作品不存在")
+			infra.NotFound(c, "作品不存在")
 			return
 		}
-		utils.InternalError(c, "获取作品失败")
+		infra.InternalError(c, "获取作品失败")
 		return
 	}
 
@@ -253,14 +253,14 @@ func GetNovel(c *gin.Context) {
 	isLogin := hctx.CurrentUserID(c) != 0
 	access := ResolveNovelAccess(novel, isLogin, hctx.CurrentUserRole(c))
 	if access.RequiresLogin && !isLogin {
-		utils.Unauthorized(c, "该作品需登录后查看")
+		infra.Unauthorized(c, "该作品需登录后查看")
 		return
 	}
 	if access.IsTrial {
 		access.TrialLimit = ComputeTrialLimit(novel.TotalChapters)
 	}
 
-	utils.Success(c, NovelView{
+	infra.Success(c, NovelView{
 		Novel:         *novel,
 		RequiresLogin: access.RequiresLogin,
 		IsTrial:       access.IsTrial,
@@ -271,7 +271,7 @@ func GetNovel(c *gin.Context) {
 
 // GET /api/categories
 func ListCategories(c *gin.Context) {
-	utils.Success(c, models.GetCategories())
+	infra.Success(c, models.GetCategories())
 }
 
 // GET /api/categories/stats — 每个分类的作品数 + 前3部预览
@@ -289,7 +289,7 @@ func ListCategoryStats(c *gin.Context) {
 			"novels":      novels,
 		})
 	}
-	utils.Success(c, result)
+	infra.Success(c, result)
 }
 
 // RedirectNovelReader 小说阅读路径301重定向

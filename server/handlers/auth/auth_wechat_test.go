@@ -11,13 +11,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"nvs-server/utils/infra"
 	"strings"
 	"testing"
 
 	"nvs-server/config"
 	"nvs-server/middleware"
 	"nvs-server/models"
-	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
@@ -61,9 +61,9 @@ func withWeChatConfig(t *testing.T, appID, secret, callback string) {
 // mockWeChatAPI 覆盖微信 API 端点为 httptest 服务（测试结束后恢复）
 func mockWeChatAPI(t *testing.T, tokenBody, infoBody string) {
 	t.Helper()
-	oldTok, oldInfo := utils.WeChatAccessTokenURL, utils.WeChatUserInfoURL
+	oldTok, oldInfo := infra.WeChatAccessTokenURL, infra.WeChatUserInfoURL
 	t.Cleanup(func() {
-		utils.WeChatAccessTokenURL, utils.WeChatUserInfoURL = oldTok, oldInfo
+		infra.WeChatAccessTokenURL, infra.WeChatUserInfoURL = oldTok, oldInfo
 	})
 	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -75,47 +75,47 @@ func mockWeChatAPI(t *testing.T, tokenBody, infoBody string) {
 	}))
 	t.Cleanup(tokenSrv.Close)
 	t.Cleanup(infoSrv.Close)
-	utils.WeChatAccessTokenURL = tokenSrv.URL
-	utils.WeChatUserInfoURL = infoSrv.URL
+	infra.WeChatAccessTokenURL = tokenSrv.URL
+	infra.WeChatUserInfoURL = infoSrv.URL
 }
 
 // ---------------- state 存取与一次性消费 ----------------
 
 func TestWeChatStateStoreLifecycle(t *testing.T) {
-	state, err := utils.GenerateWeChatState()
+	state, err := infra.GenerateWeChatState()
 	if err != nil {
 		t.Fatalf("生成 state 失败: %v", err)
 	}
 	if len(state) != 32 {
 		t.Errorf("state 应为 32 位 hex，实际 %d", len(state))
 	}
-	if err := utils.SaveWeChatState(state, utils.WeChatPurposeBind); err != nil {
+	if err := infra.SaveWeChatState(state, infra.WeChatPurposeBind); err != nil {
 		t.Fatalf("保存 state 失败: %v", err)
 	}
-	purpose, err := utils.ConsumeWeChatState(state)
+	purpose, err := infra.ConsumeWeChatState(state)
 	if err != nil {
 		t.Fatalf("消费 state 失败: %v", err)
 	}
-	if purpose != utils.WeChatPurposeBind {
+	if purpose != infra.WeChatPurposeBind {
 		t.Errorf("state 用途应为 bind，实际 %q", purpose)
 	}
 	// 一次性：二次消费必须失败（防 CSRF 重放）
-	if _, err := utils.ConsumeWeChatState(state); !errors.Is(err, utils.ErrWeChatStateInvalid) {
+	if _, err := infra.ConsumeWeChatState(state); !errors.Is(err, infra.ErrWeChatStateInvalid) {
 		t.Errorf("state 应一次性消费，二次消费错误: %v", err)
 	}
 	// 伪造 / 空 state 必须失败
-	if _, err := utils.ConsumeWeChatState("forged-state-xyz"); !errors.Is(err, utils.ErrWeChatStateInvalid) {
+	if _, err := infra.ConsumeWeChatState("forged-state-xyz"); !errors.Is(err, infra.ErrWeChatStateInvalid) {
 		t.Errorf("伪造 state 应被拒绝，实际: %v", err)
 	}
-	if _, err := utils.ConsumeWeChatState(""); !errors.Is(err, utils.ErrWeChatStateInvalid) {
+	if _, err := infra.ConsumeWeChatState(""); !errors.Is(err, infra.ErrWeChatStateInvalid) {
 		t.Errorf("空 state 应被拒绝，实际: %v", err)
 	}
 	// 未指定用途时按 login 处理
-	state2, _ := utils.GenerateWeChatState()
-	if err := utils.SaveWeChatState(state2, ""); err != nil {
+	state2, _ := infra.GenerateWeChatState()
+	if err := infra.SaveWeChatState(state2, ""); err != nil {
 		t.Fatalf("保存 state 失败: %v", err)
 	}
-	if p, err := utils.ConsumeWeChatState(state2); err != nil || p != utils.WeChatPurposeLogin {
+	if p, err := infra.ConsumeWeChatState(state2); err != nil || p != infra.WeChatPurposeLogin {
 		t.Errorf("缺省用途应为 login，实际 %q (%v)", p, err)
 	}
 }
@@ -124,12 +124,12 @@ func TestWeChatStateStoreLifecycle(t *testing.T) {
 
 func TestWeChatAuthURLConstruction(t *testing.T) {
 	withWeChatConfig(t, "", "", "")
-	if _, err := utils.WeChatAuthURL("st"); err == nil {
+	if _, err := infra.WeChatAuthURL("st"); err == nil {
 		t.Error("未配置 appid/secret 应返回中文错误")
 	}
 
 	withWeChatConfig(t, "wx1234567890abcdef", "secret123", "https://example.com/go-nvs/api/auth/wechat/callback")
-	u, err := utils.WeChatAuthURL("abc123")
+	u, err := infra.WeChatAuthURL("abc123")
 	if err != nil {
 		t.Fatalf("构造授权 URL 失败: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestWeChatAuthURLConstruction(t *testing.T) {
 
 func TestWeChatAuthURLMissingCallback(t *testing.T) {
 	withWeChatConfig(t, "wxappid", "wxsecret", "")
-	if _, err := utils.WeChatAuthURL("st"); err == nil {
+	if _, err := infra.WeChatAuthURL("st"); err == nil {
 		t.Error("缺少 WECHAT_CALLBACK 应返回中文错误")
 	}
 }
@@ -185,12 +185,12 @@ func TestWeChatExchangeCodeMock(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	oldTok := utils.WeChatAccessTokenURL
-	defer func() { utils.WeChatAccessTokenURL = oldTok }()
-	utils.WeChatAccessTokenURL = srv.URL
+	oldTok := infra.WeChatAccessTokenURL
+	defer func() { infra.WeChatAccessTokenURL = oldTok }()
+	infra.WeChatAccessTokenURL = srv.URL
 
 	// 正常分支
-	openID, unionID, token, err := utils.WeChatExchangeCode("good-code")
+	openID, unionID, token, err := infra.WeChatExchangeCode("good-code")
 	if err != nil {
 		t.Fatalf("正常换 token 应成功: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestWeChatExchangeCodeMock(t *testing.T) {
 	}
 
 	// 错误分支：errcode 非 0 → 中文错误且包含 errcode
-	_, _, _, err = utils.WeChatExchangeCode("bad-code")
+	_, _, _, err = infra.WeChatExchangeCode("bad-code")
 	if err == nil {
 		t.Fatal("errcode 非 0 应返回错误")
 	}
@@ -208,12 +208,12 @@ func TestWeChatExchangeCodeMock(t *testing.T) {
 	}
 
 	// 错误分支：响应缺少 openid
-	if _, _, _, err := utils.WeChatExchangeCode("no-openid"); err == nil {
+	if _, _, _, err := infra.WeChatExchangeCode("no-openid"); err == nil {
 		t.Error("缺少 openid 的响应应返回错误")
 	}
 
 	// 错误分支：空 code
-	if _, _, _, err := utils.WeChatExchangeCode("  "); err == nil {
+	if _, _, _, err := infra.WeChatExchangeCode("  "); err == nil {
 		t.Error("空 code 应返回错误")
 	}
 }
@@ -224,11 +224,11 @@ func TestWeChatExchangeCodeHTTPError(t *testing.T) {
 		http.Error(w, "boom", http.StatusInternalServerError)
 	}))
 	defer srv.Close()
-	oldTok := utils.WeChatAccessTokenURL
-	defer func() { utils.WeChatAccessTokenURL = oldTok }()
-	utils.WeChatAccessTokenURL = srv.URL
+	oldTok := infra.WeChatAccessTokenURL
+	defer func() { infra.WeChatAccessTokenURL = oldTok }()
+	infra.WeChatAccessTokenURL = srv.URL
 
-	if _, _, _, err := utils.WeChatExchangeCode("good-code"); err == nil {
+	if _, _, _, err := infra.WeChatExchangeCode("good-code"); err == nil {
 		t.Error("HTTP 500 应返回错误")
 	}
 }
@@ -244,12 +244,12 @@ func TestWeChatUserInfoMock(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
-	oldInfo := utils.WeChatUserInfoURL
-	defer func() { utils.WeChatUserInfoURL = oldInfo }()
-	utils.WeChatUserInfoURL = srv.URL
+	oldInfo := infra.WeChatUserInfoURL
+	defer func() { infra.WeChatUserInfoURL = oldInfo }()
+	infra.WeChatUserInfoURL = srv.URL
 
 	// 正常分支：昵称去首尾空白
-	nick, head, err := utils.WeChatUserInfo("AT", "ok-openid")
+	nick, head, err := infra.WeChatUserInfo("AT", "ok-openid")
 	if err != nil {
 		t.Fatalf("拉取用户信息应成功: %v", err)
 	}
@@ -261,25 +261,25 @@ func TestWeChatUserInfoMock(t *testing.T) {
 	}
 
 	// 错误分支：errcode 非 0
-	if _, _, err := utils.WeChatUserInfo("AT", "err-openid"); err == nil {
+	if _, _, err := infra.WeChatUserInfo("AT", "err-openid"); err == nil {
 		t.Error("errcode 非 0 应返回错误")
 	}
 
 	// 错误分支：空参数
-	if _, _, err := utils.WeChatUserInfo("", ""); err == nil {
+	if _, _, err := infra.WeChatUserInfo("", ""); err == nil {
 		t.Error("空 access_token/openid 应返回错误")
 	}
 }
 
 func TestCleanWeChatNickname(t *testing.T) {
-	if got := utils.CleanWeChatNickname("  空白昵称  "); got != "空白昵称" {
+	if got := infra.CleanWeChatNickname("  空白昵称  "); got != "空白昵称" {
 		t.Errorf("昵称应去首尾空白: %q", got)
 	}
-	if got := utils.CleanWeChatNickname("   "); got != "微信用户" {
+	if got := infra.CleanWeChatNickname("   "); got != "微信用户" {
 		t.Errorf("空昵称应回退默认值: %q", got)
 	}
 	long := strings.Repeat("昵", 40)
-	if got := utils.CleanWeChatNickname(long); len([]rune(got)) != 24 {
+	if got := infra.CleanWeChatNickname(long); len([]rune(got)) != 24 {
 		t.Errorf("昵称应限长 24 字符: %d", len([]rune(got)))
 	}
 }
@@ -370,11 +370,11 @@ func TestWeChatCallbackAutoRegisterLogin(t *testing.T) {
 		`{"access_token":"AT","expires_in":7200,"openid":"oCALLBACK","unionid":"uCALLBACK"}`,
 		`{"openid":"oCALLBACK","nickname":"回调用户","headimgurl":"https://thirdwx.qlogo.cn/mmopen/avatar"}`)
 
-	state, err := utils.GenerateWeChatState()
+	state, err := infra.GenerateWeChatState()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := utils.SaveWeChatState(state, utils.WeChatPurposeLogin); err != nil {
+	if err := infra.SaveWeChatState(state, infra.WeChatPurposeLogin); err != nil {
 		t.Fatal(err)
 	}
 
@@ -455,8 +455,8 @@ func TestWeChatCallbackFailureRedirects(t *testing.T) {
 	}
 
 	// state 一次性：同一 state 二次回调应判 state 失败
-	state, _ := utils.GenerateWeChatState()
-	if err := utils.SaveWeChatState(state, utils.WeChatPurposeLogin); err != nil {
+	state, _ := infra.GenerateWeChatState()
+	if err := infra.SaveWeChatState(state, infra.WeChatPurposeLogin); err != nil {
 		t.Fatal(err)
 	}
 	c, w := newCallbackContext("good-code", state)
@@ -484,8 +484,8 @@ func TestWeChatCallbackBindPurpose(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	state, _ := utils.GenerateWeChatState()
-	if err := utils.SaveWeChatState(state, utils.WeChatPurposeBind); err != nil {
+	state, _ := infra.GenerateWeChatState()
+	if err := infra.SaveWeChatState(state, infra.WeChatPurposeBind); err != nil {
 		t.Fatal(err)
 	}
 	c, w := newCallbackContext("good-code", state)
@@ -522,8 +522,8 @@ func TestWeChatCallbackBindTakenByOther(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	state, _ := utils.GenerateWeChatState()
-	if err := utils.SaveWeChatState(state, utils.WeChatPurposeBind); err != nil {
+	state, _ := infra.GenerateWeChatState()
+	if err := infra.SaveWeChatState(state, infra.WeChatPurposeBind); err != nil {
 		t.Fatal(err)
 	}
 	c, w := newCallbackContext("good-code", state)
@@ -556,8 +556,8 @@ func TestWeChatCallbackLoginRedirectWithPrefix(t *testing.T) {
 		`{"access_token":"AT","expires_in":7200,"openid":"oPREFIX","unionid":""}`,
 		`{"openid":"oPREFIX","nickname":"前缀用户"}`)
 
-	state, _ := utils.GenerateWeChatState()
-	if err := utils.SaveWeChatState(state, utils.WeChatPurposeLogin); err != nil {
+	state, _ := infra.GenerateWeChatState()
+	if err := infra.SaveWeChatState(state, infra.WeChatPurposeLogin); err != nil {
 		t.Fatal(err)
 	}
 	c, w := newCallbackContext("good-code", state)
@@ -707,8 +707,8 @@ func TestWeChatBind(t *testing.T) {
 	}
 
 	// 正常绑定
-	state, _ := utils.GenerateWeChatState()
-	if err := utils.SaveWeChatState(state, utils.WeChatPurposeBind); err != nil {
+	state, _ := infra.GenerateWeChatState()
+	if err := infra.SaveWeChatState(state, infra.WeChatPurposeBind); err != nil {
 		t.Fatal(err)
 	}
 	w2 := httptest.NewRecorder()
