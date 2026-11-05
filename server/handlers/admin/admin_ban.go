@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/blog"
+	siteops "nvs-server/models/siteops"
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -249,7 +250,7 @@ func AdminRestoreContent(c *gin.Context) {
 		return
 	}
 
-	emergency.AuditEmergency(c, models.AuditContentRestore, req.Type, req.ID,
+	emergency.AuditEmergency(c, siteops.AuditContentRestore, req.Type, req.ID,
 		"管理员解封/恢复 "+req.Type+" #"+strconv.FormatUint(uint64(req.ID), 10))
 	utils.Success(c, gin.H{"message": "已解封"})
 }

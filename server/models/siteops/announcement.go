@@ -1,6 +1,9 @@
-package models
+package siteops
 
-import "time"
+import (
+	"nvs-server/models"
+	"time"
+)
 
 // Announcement 站点公告（公告栏）。
 // 管理后台维护，前台首页/公告栏展示；置顶公告优先显示。
@@ -24,7 +27,7 @@ func ListPublishedAnnouncements(limit int) []Announcement {
 	if limit <= 0 {
 		limit = 20
 	}
-	DB.Where("published = ?", true).
+	models.DB.Where("published = ?", true).
 		Order("pinned DESC, created_at DESC").
 		Limit(limit).
 		Find(&list)

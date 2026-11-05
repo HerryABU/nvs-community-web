@@ -19,6 +19,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/security"
+	siteops "nvs-server/models/siteops"
 )
 
 // ComplianceReport 合规自查报告数据
@@ -52,7 +53,7 @@ func buildComplianceReport() ComplianceReport {
 	grade, note := models.GetSecurityGrade()
 	var userCount, announceCount int64
 	models.DB.Model(&models.User{}).Count(&userCount)
-	models.DB.Model(&models.Announcement{}).Count(&announceCount)
+	models.DB.Model(&siteops.Announcement{}).Count(&announceCount)
 
 	report := ComplianceReport{
 		GeneratedAt:       time.Now().Format("2006-01-02 15:04:05"),

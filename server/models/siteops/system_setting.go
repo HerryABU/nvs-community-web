@@ -1,6 +1,7 @@
-package models
+package siteops
 
 import (
+	"nvs-server/models"
 	"strconv"
 	"time"
 )
@@ -57,7 +58,7 @@ func (SystemSetting) TableName() string { return "system_settings" }
 // GetSetting 读取配置项，不存在返回 def
 func GetSetting(key, def string) string {
 	var s SystemSetting
-	if err := DB.First(&s, "key = ?", key).Error; err != nil {
+	if err := models.DB.First(&s, "key = ?", key).Error; err != nil {
 		return def
 	}
 	if s.Value == "" {
@@ -69,12 +70,12 @@ func GetSetting(key, def string) string {
 // SetSetting 写入配置项（存在则更新）
 func SetSetting(key, value string) error {
 	var s SystemSetting
-	err := DB.Where("key = ?", key).First(&s).Error
+	err := models.DB.Where("key = ?", key).First(&s).Error
 	if err == nil {
 		s.Value = value
-		return DB.Save(&s).Error
+		return models.DB.Save(&s).Error
 	}
-	return DB.Create(&SystemSetting{Key: key, Value: value}).Error
+	return models.DB.Create(&SystemSetting{Key: key, Value: value}).Error
 }
 
 // GetCategoryReviewMode 获取博客分类审核模式

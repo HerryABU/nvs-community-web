@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/blog"
+	siteops "nvs-server/models/siteops"
 )
 
 // isOwnerOfWork 判断当前登录用户是否为某作品/博客的作者（楼主）。
@@ -36,15 +37,15 @@ func isOwnerOfWork(c *gin.Context, targetType string, targetID uint) bool {
 func GetMentionSource(c *gin.Context) {
 	targetType := strings.TrimSpace(c.Query("target_type"))
 	targetID := uint(mustUint(c.Query("target_id")))
-	effective := models.GetEffectiveMentionSource(targetType, targetID)
+	effective := siteops.GetEffectiveMentionSource(targetType, targetID)
 	canEdit := admin.IsAdminUser(c) || isOwnerOfWork(c, targetType, targetID)
 	overrideSet := false
 	if targetType != "" && targetID > 0 {
-		overrideSet = models.GetSetting(models.MentionSourceWorkKey(targetType, targetID), "") != ""
+		overrideSet = siteops.GetSetting(siteops.MentionSourceWorkKey(targetType, targetID), "") != ""
 	}
 	utils.Success(c, gin.H{
 		"effective":    effective,
-		"site_default": models.GetMentionSource(),
+		"site_default": siteops.GetMentionSource(),
 		"can_edit":     canEdit,
 		"override_set": overrideSet,
 		"is_admin":     admin.IsAdminUser(c),
@@ -65,9 +66,9 @@ func SetMentionSource(c *gin.Context) {
 		return
 	}
 	valid := map[string]bool{
-		models.MentionSourceParticipants: true,
-		models.MentionSourceGlobal:       true,
-		models.MentionSourceManual:       true,
+		siteops.MentionSourceParticipants: true,
+		siteops.MentionSourceGlobal:       true,
+		siteops.MentionSourceManual:       true,
 	}
 	if !valid[req.Mode] {
 		utils.BadRequest(c, "无效的提及来源模式")
@@ -86,7 +87,7 @@ func SetMentionSource(c *gin.Context) {
 			utils.Forbidden(c, "只有站长可设置站点默认提及来源")
 			return
 		}
-		if err := models.SetSetting(models.MentionSourceKey, req.Mode); err != nil {
+		if err := siteops.SetSetting(siteops.MentionSourceKey, req.Mode); err != nil {
 			utils.InternalError(c, "保存失败")
 			return
 		}
@@ -99,11 +100,11 @@ func SetMentionSource(c *gin.Context) {
 		utils.Forbidden(c, "只有站长或本作品作者可设置提及来源")
 		return
 	}
-	if err := models.SetSetting(models.MentionSourceWorkKey(req.TargetType, req.TargetID), req.Mode); err != nil {
+	if err := siteops.SetSetting(siteops.MentionSourceWorkKey(req.TargetType, req.TargetID), req.Mode); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
-	utils.Success(c, gin.H{"ok": true, "effective": models.GetEffectiveMentionSource(req.TargetType, req.TargetID)})
+	utils.Success(c, gin.H{"ok": true, "effective": siteops.GetEffectiveMentionSource(req.TargetType, req.TargetID)})
 }
 
 // GetMentionCandidates GET /api/mention-candidates?scope=participants|global&target_type=&target_id=&q=
@@ -111,7 +112,7 @@ func SetMentionSource(c *gin.Context) {
 func GetMentionCandidates(c *gin.Context) {
 	scope := strings.TrimSpace(c.Query("scope"))
 	if scope == "" {
-		scope = models.MentionSourceParticipants
+		scope = siteops.MentionSourceParticipants
 	}
 	targetType := strings.TrimSpace(c.Query("target_type"))
 	targetID := uint(mustUint(c.Query("target_id")))

@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
+	siteops "nvs-server/models/siteops"
 )
 
 // GET /api/admin/users — 用户列表（支持关键词搜索 + 角色分类 + 状态筛选）
@@ -166,7 +167,7 @@ func MuteUser(c *gin.Context) {
 	if req.DurationHours > 0 {
 		duration = fmt.Sprintf("%d 小时", req.DurationHours)
 	}
-	emergency.AuditEmergency(c, models.AuditUserMute, "user", uint(id),
+	emergency.AuditEmergency(c, siteops.AuditUserMute, "user", uint(id),
 		fmt.Sprintf("管理员禁言用户ID %d，时长 %s，原因：%s",
 			id, duration, security.SanitizePlainText(req.Reason)))
 	utils.Success(c, gin.H{"message": "已禁言"})
@@ -184,7 +185,7 @@ func UnmuteUser(c *gin.Context) {
 		"mute_reason": "",
 	})
 	// 合规审计：解除禁言
-	emergency.AuditEmergency(c, models.AuditUserUnmute, "user", uint(id),
+	emergency.AuditEmergency(c, siteops.AuditUserUnmute, "user", uint(id),
 		fmt.Sprintf("管理员解除禁言用户ID %d", id))
 	utils.Success(c, gin.H{"message": "已解除禁言"})
 }
@@ -222,7 +223,7 @@ func AdminPromoteToPolice(c *gin.Context) {
 		utils.InternalError(c, "提权失败")
 		return
 	}
-	emergency.AuditEmergency(c, models.AuditUserPromotePolice, "user", uint(id),
+	emergency.AuditEmergency(c, siteops.AuditUserPromotePolice, "user", uint(id),
 		fmt.Sprintf("管理员 %s 将用户 %s(ID %d) 提权为警方取管台账号", operator, u.Username, id))
 	utils.Success(c, gin.H{
 		"message":           "已提权为警方取管台账号",
@@ -259,7 +260,7 @@ func AdminRevokePolice(c *gin.Context) {
 		utils.InternalError(c, "撤销失败")
 		return
 	}
-	emergency.AuditEmergency(c, models.AuditUserRevokePolice, "user", uint(id),
+	emergency.AuditEmergency(c, siteops.AuditUserRevokePolice, "user", uint(id),
 		fmt.Sprintf("管理员 %s 撤销用户 %s(ID %d) 的警方取管台权限", operator, u.Username, id))
 	utils.Success(c, gin.H{"message": "已撤销警方权限", "role": models.RoleReader})
 }

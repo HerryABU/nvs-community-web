@@ -2,10 +2,10 @@ package gate
 
 import (
 	"nvs-server/handlers/hctx"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	siteops "nvs-server/models/siteops"
 )
 
 // 访客门禁（站级开关）
@@ -20,7 +20,7 @@ func guestReadBlocked(c *gin.Context) bool {
 	if hctx.CurrentUserID(c) != 0 {
 		return false
 	}
-	return !models.LoadVisitSetting().AllowGuestBrowse
+	return !siteops.LoadVisitSetting().AllowGuestBrowse
 }
 
 // guestSearchBlocked 匿名且站长关闭了「允许未登录搜索」时返回 true。
@@ -28,7 +28,7 @@ func guestSearchBlocked(c *gin.Context) bool {
 	if hctx.CurrentUserID(c) != 0 {
 		return false
 	}
-	return !models.LoadVisitSetting().AllowGuestSearch
+	return !siteops.LoadVisitSetting().AllowGuestSearch
 }
 
 // RequireGuestRead 便捷守卫：被拦时已写好响应，调用方直接 return。

@@ -16,6 +16,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	siteops "nvs-server/models/siteops"
 )
 
 type LoginInput struct {
@@ -117,7 +118,7 @@ func Login(c *gin.Context) {
 		return
 	}
 	// 登记刷新令牌族 ID（刷新轮换/失效的基础；写入失败不阻断登录，仅降级为无轮换保护）
-	if err := models.SetRefreshState(user.ID, jti); err != nil {
+	if err := siteops.SetRefreshState(user.ID, jti); err != nil {
 		log.Printf("[auth] 写入刷新状态失败（用户 %d）：%v", user.ID, err)
 	}
 	middleware.SetTokenCookie(c, accessToken)
@@ -156,7 +157,7 @@ func Logout(c *gin.Context) {
 		if claims, e := utils.ParseToken(token); e == nil {
 			RecordUserAudit(c, claims.UserID, models.AuditLogout, "用户登出", "success")
 			// 清除刷新状态：使仍在有效期内的刷新令牌立即失效（防登出后令牌被续用）
-			if derr := models.DeleteRefreshState(claims.UserID); derr != nil {
+			if derr := siteops.DeleteRefreshState(claims.UserID); derr != nil {
 				log.Printf("[auth] 清除刷新状态失败（用户 %d）：%v", claims.UserID, derr)
 			}
 		}
@@ -198,7 +199,7 @@ func Refresh(c *gin.Context) {
 	// 旧刷新令牌（被窃取或已在别处刷新）因 JTI 不匹配而立即失效，防止刷新令牌被盗用后长期可用。
 	// 升级前签发的旧刷新令牌无 JTI（claims.JTI==""），首刷时直接认作有效并初始化状态（过渡兼容）。
 	if claims.JTI != "" {
-		if state, serr := models.GetRefreshState(claims.UserID); serr == nil {
+		if state, serr := siteops.GetRefreshState(claims.UserID); serr == nil {
 			if state.ActiveJTI != claims.JTI {
 				middleware.ClearTokenCookie(c)
 				middleware.ClearRefreshCookie(c)
@@ -225,7 +226,7 @@ func Refresh(c *gin.Context) {
 		utils.InternalError(c, "Refresh Token 生成失败")
 		return
 	}
-	if err := models.SetRefreshState(claims.UserID, newJTI); err != nil {
+	if err := siteops.SetRefreshState(claims.UserID, newJTI); err != nil {
 		log.Printf("[auth] 写入刷新状态失败（用户 %d）：%v", claims.UserID, err)
 	}
 	middleware.SetTokenCookie(c, accessToken)

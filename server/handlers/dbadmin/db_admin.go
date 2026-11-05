@@ -20,6 +20,7 @@ import (
 	"nvs-server/version"
 
 	"github.com/gin-gonic/gin"
+	siteops "nvs-server/models/siteops"
 )
 
 // ==================== 数据库管理（健康检查 / 迁移 / 备份） ====================
@@ -143,7 +144,7 @@ func AdminDBHealth(c *gin.Context) {
 }
 
 func backupCount() int {
-	files, err := models.ListBackups()
+	files, err := siteops.ListBackups()
 	if err != nil {
 		return 0
 	}
@@ -264,7 +265,7 @@ func AdminDBBackup(c *gin.Context) {
 	}
 	job := newJob("backup")
 	go func() {
-		path, rows, err := models.DoBackup()
+		path, rows, err := siteops.DoBackup()
 		if err != nil {
 			finishJob(job, "error", "备份失败: "+err.Error())
 			return
@@ -293,7 +294,7 @@ func AdminDBListBackups(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	files, err := models.ListBackups()
+	files, err := siteops.ListBackups()
 	if err != nil {
 		utils.InternalError(c, "读取备份列表失败: "+err.Error())
 		return
@@ -307,7 +308,7 @@ func AdminDBDeleteBackup(c *gin.Context) {
 		return
 	}
 	name := c.Param("name")
-	if err := models.DeleteBackup(name); err != nil {
+	if err := siteops.DeleteBackup(name); err != nil {
 		utils.InternalError(c, "删除失败: "+err.Error())
 		return
 	}
@@ -319,7 +320,7 @@ func AdminDBDownloadBackup(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	p, err := models.BackupPath(c.Param("name"))
+	p, err := siteops.BackupPath(c.Param("name"))
 	if err != nil {
 		utils.BadRequest(c, "非法文件名")
 		return
@@ -347,7 +348,7 @@ func AdminDBRestore(c *gin.Context) {
 		utils.BadRequest(c, "当前为 MySQL，仅支持恢复 SQLite 备份文件")
 		return
 	}
-	p, err := models.BackupPath(req.Name)
+	p, err := siteops.BackupPath(req.Name)
 	if err != nil {
 		utils.BadRequest(c, "非法文件名")
 		return

@@ -10,6 +10,7 @@ import (
 
 	"nvs-server/config"
 	"nvs-server/models"
+	siteops "nvs-server/models/siteops"
 	"nvs-server/utils"
 	"nvs-server/version"
 )
@@ -242,11 +243,11 @@ func runMaintenanceCLI(args []string) (handled bool, exitCode int) {
 	}
 
 	// 留痕：高危操作必须有审计，operator 记 cli 以便与真人操作区分
-	models.RecordEmergencyAudit(&models.EmergencyAuditLog{
+	siteops.RecordEmergencyAudit(&siteops.EmergencyAuditLog{
 		OperatorID: 0,
 		Operator:   "cli",
 		IP:         "local",
-		Action:     models.AuditSetPassword,
+		Action:     siteops.AuditSetPassword,
 		TargetType: "password",
 		Detail:     detail,
 	})

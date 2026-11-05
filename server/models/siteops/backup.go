@@ -1,4 +1,4 @@
-package models
+package siteops
 
 import (
 	"encoding/json"
@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"nvs-server/config"
+	"nvs-server/models"
 )
 
 // ==================== 多数据库备份 ====================
@@ -37,7 +38,7 @@ func ensureBackupDir() error {
 
 // BackupSQLiteFile 使用 VACUUM INTO 生成 SQLite 快照（无损、原子、最快）
 func BackupSQLiteFile(destPath string) error {
-	sqlDB, err := DB.DB()
+	sqlDB, err := models.DB.DB()
 	if err != nil {
 		return err
 	}
@@ -51,7 +52,7 @@ func BackupSQLiteFile(destPath string) error {
 
 // BackupMySQLJSON 导出所有表为 JSON 逻辑快照
 func BackupMySQLJSON(destPath string) (int, error) {
-	tables, err := DB.Migrator().GetTables()
+	tables, err := models.DB.Migrator().GetTables()
 	if err != nil {
 		return 0, err
 	}
@@ -67,7 +68,7 @@ func BackupMySQLJSON(destPath string) (int, error) {
 	total := 0
 	for _, t := range tables {
 		var rows []map[string]interface{}
-		if err := DB.Table(t).Find(&rows).Error; err != nil {
+		if err := models.DB.Table(t).Find(&rows).Error; err != nil {
 			return total, fmt.Errorf("导出表 %s 失败: %w", t, err)
 		}
 		data[t] = normalizeRowsForJSON(rows)
@@ -108,7 +109,7 @@ func normalizeRowsForJSON(rows []map[string]interface{}) []map[string]interface{
 
 // DoBackup 根据当前驱动执行一次备份，返回备份文件绝对路径与行数
 func DoBackup() (string, int, error) {
-	if DB == nil {
+	if models.DB == nil {
 		return "", 0, fmt.Errorf("数据库未初始化")
 	}
 	backupMu.Lock()
@@ -133,7 +134,7 @@ func DoBackup() (string, int, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	_ = SetPlatformConfig("backup_last_at", time.Now().Format(time.RFC3339))
+	_ = models.SetPlatformConfig("backup_last_at", time.Now().Format(time.RFC3339))
 	return path, rows, nil
 }
 
@@ -202,19 +203,19 @@ func StartBackupScheduler() {
 }
 
 func runScheduledBackupIfDue() {
-	if DB == nil {
+	if models.DB == nil {
 		return
 	}
-	if GetPlatformConfig("backup_enabled") != "true" {
+	if models.GetPlatformConfig("backup_enabled") != "true" {
 		return
 	}
 	intervalHours := 24
-	if v := GetPlatformConfig("backup_interval_hours"); v != "" {
+	if v := models.GetPlatformConfig("backup_interval_hours"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			intervalHours = n
 		}
 	}
-	if last := GetPlatformConfig("backup_last_at"); last != "" {
+	if last := models.GetPlatformConfig("backup_last_at"); last != "" {
 		if t, err := time.Parse(time.RFC3339, last); err == nil {
 			if time.Since(t) < time.Duration(intervalHours)*time.Hour {
 				return // 未到下次备份时间

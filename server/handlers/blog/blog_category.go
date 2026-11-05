@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	blogm "nvs-server/models/blog"
+	siteops "nvs-server/models/siteops"
 )
 
 // trimSpace 去除首尾空白
@@ -188,7 +189,7 @@ func CreateBlogCategory(c *gin.Context) {
 	//   事后审核(post_review，默认) → pending，管理员通过后公开
 	//   先公开(pre_public)         → approved 直接公开，管理员事后可封禁(拒绝)
 	status := blogm.CategoryStatusApproved
-	if !admin.IsAdminUser(c) && models.GetCategoryReviewMode() == models.CategoryReviewModePost {
+	if !admin.IsAdminUser(c) && siteops.GetCategoryReviewMode() == siteops.CategoryReviewModePost {
 		status = blogm.CategoryStatusPending
 	}
 	cat := &blogm.BlogCategory{
@@ -446,7 +447,7 @@ func AdminReviewBlogCategory(c *gin.Context) {
 	case "approve":
 		cat.Status = blogm.CategoryStatusApproved
 		cat.RejectReason = ""
-		emergency.AuditEmergency(c, models.AuditContentRestore, "blog_category", cat.ID,
+		emergency.AuditEmergency(c, siteops.AuditContentRestore, "blog_category", cat.ID,
 			"管理员通过博客分类《"+cat.Name+"》审核")
 	case "reject":
 		cat.Status = blogm.CategoryStatusRejected
@@ -454,7 +455,7 @@ func AdminReviewBlogCategory(c *gin.Context) {
 		if cat.RejectReason == "" {
 			cat.RejectReason = "分类名称/内容不符合平台规范"
 		}
-		emergency.AuditEmergency(c, models.AuditContentDelete, "blog_category", cat.ID,
+		emergency.AuditEmergency(c, siteops.AuditContentDelete, "blog_category", cat.ID,
 			"管理员拒绝博客分类《"+cat.Name+"》："+cat.RejectReason)
 	default:
 		utils.BadRequest(c, "action 仅支持 approve / reject")
@@ -475,9 +476,9 @@ func AdminGetCategoryReviewMode(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	mode := models.GetCategoryReviewMode()
+	mode := siteops.GetCategoryReviewMode()
 	label := "事后审核（通过后公开）"
-	if mode == models.CategoryReviewModePreOpen {
+	if mode == siteops.CategoryReviewModePreOpen {
 		label = "先公开（事后封禁）"
 	}
 	utils.Success(c, gin.H{"mode": mode, "label": label})
@@ -495,19 +496,19 @@ func AdminSetCategoryReviewMode(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if req.Mode != models.CategoryReviewModePost && req.Mode != models.CategoryReviewModePreOpen {
+	if req.Mode != siteops.CategoryReviewModePost && req.Mode != siteops.CategoryReviewModePreOpen {
 		utils.BadRequest(c, "mode 仅支持 post_review（事后审核）/ pre_public（先公开）")
 		return
 	}
-	if err := models.SetSetting(models.CategoryReviewModeKey, req.Mode); err != nil {
+	if err := siteops.SetSetting(siteops.CategoryReviewModeKey, req.Mode); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
 	label := "事后审核（通过后公开）"
-	if req.Mode == models.CategoryReviewModePreOpen {
+	if req.Mode == siteops.CategoryReviewModePreOpen {
 		label = "先公开（事后封禁）"
 	}
-	emergency.AuditEmergency(c, models.AuditContentRestore, "blog_category", 0,
+	emergency.AuditEmergency(c, siteops.AuditContentRestore, "blog_category", 0,
 		"管理员切换博客分类审核模式为："+label)
 	utils.Success(c, gin.H{"mode": req.Mode, "label": label})
 }

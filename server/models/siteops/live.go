@@ -1,4 +1,4 @@
-package models
+package siteops
 
 // ==================== 直播入口（gap-audit #23 的最后一块）====================
 // 先把边界说清楚（否则会被当成"本站自带推流"）：
@@ -17,6 +17,7 @@ package models
 import (
 	"encoding/json"
 	"errors"
+	"nvs-server/models"
 	"strings"
 	"time"
 )
@@ -57,7 +58,7 @@ func DefaultLiveSetting() LiveSetting {
 // LoadLiveSetting 读取
 func LoadLiveSetting() LiveSetting {
 	c := DefaultLiveSetting()
-	if raw := GetPlatformConfig(liveCfgKey); strings.TrimSpace(raw) != "" {
+	if raw := models.GetPlatformConfig(liveCfgKey); strings.TrimSpace(raw) != "" {
 		if err := json.Unmarshal([]byte(raw), &c); err != nil {
 			return DefaultLiveSetting()
 		}
@@ -121,5 +122,5 @@ func SaveLiveSetting(c LiveSetting) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(liveCfgKey, string(b))
+	return models.SetPlatformConfig(liveCfgKey, string(b))
 }

@@ -26,6 +26,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/blog"
 	securitym "nvs-server/models/security"
+	siteops "nvs-server/models/siteops"
 )
 
 func GetComments(c *gin.Context) {
@@ -376,9 +377,9 @@ func moderateCommentImages(c *gin.Context, userID uint, comment *models.Comment,
 	}
 	detail := fmt.Sprintf("AI 图片审核拦截 | 类别=%s | 分数=%d | 理由=%s",
 		strings.Join(v.Categories, "、"), v.Score, v.Reason)
-	models.RecordEmergencyAudit(&models.EmergencyAuditLog{
+	siteops.RecordEmergencyAudit(&siteops.EmergencyAuditLog{
 		OperatorID: userID, Operator: uname, IP: c.ClientIP(),
-		Action: models.AuditContentHide, TargetType: "comment", TargetID: comment.ID,
+		Action: siteops.AuditContentHide, TargetType: "comment", TargetID: comment.ID,
 		Detail: detail + " | 处置依据=AI 多模态审核 | 是否报告=false",
 	})
 	reason := strings.TrimSpace(v.Reason)

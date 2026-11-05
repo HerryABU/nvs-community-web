@@ -1,4 +1,4 @@
-package models
+package siteops
 
 // ==================== 自定义应用菜单（gap-audit #20）====================
 // 已有「扩展应用 /frames」——但那一套是「站内嵌入的第三方页面」，站长改导航仍要改代码。
@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // NavMenu 导航菜单项（两级：ParentID=0 为一级）
@@ -89,16 +90,16 @@ func SaveNavMenu(in NavMenu) (*NavMenu, error) {
 		// （visible 默认 true），之后再读 in.Visible 拿到的已经是 true，"精确写回"会写反。
 		wantVisible, wantLogin, wantAdmin := in.Visible, in.RequireLogin, in.AdminOnly
 		in.CreatedAt = time.Now()
-		if err := DB.Create(&in).Error; err != nil {
+		if err := models.DB.Create(&in).Error; err != nil {
 			return nil, err
 		}
-		_ = DB.Model(&NavMenu{}).Where("id = ?", in.ID).Updates(map[string]interface{}{
+		_ = models.DB.Model(&NavMenu{}).Where("id = ?", in.ID).Updates(map[string]interface{}{
 			"visible": wantVisible, "require_login": wantLogin, "admin_only": wantAdmin,
 		}).Error
 		in.Visible, in.RequireLogin, in.AdminOnly = wantVisible, wantLogin, wantAdmin
 		return &in, nil
 	}
-	if err := DB.Model(&NavMenu{}).Where("id = ?", in.ID).Updates(map[string]interface{}{
+	if err := models.DB.Model(&NavMenu{}).Where("id = ?", in.ID).Updates(map[string]interface{}{
 		"parent_id": in.ParentID, "title": in.Title, "icon": in.Icon, "url": in.URL,
 		"target": in.Target, "sort_order": in.SortOrder, "visible": in.Visible,
 		"require_login": in.RequireLogin, "admin_only": in.AdminOnly, "badge": in.Badge,
@@ -111,7 +112,7 @@ func SaveNavMenu(in NavMenu) (*NavMenu, error) {
 
 // DeleteNavMenu 删除（连带子项）
 func DeleteNavMenu(id uint) error {
-	return DB.Transaction(func(tx *gorm.DB) error {
+	return models.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("parent_id = ?", id).Delete(&NavMenu{}).Error; err != nil {
 			return err
 		}
@@ -122,7 +123,7 @@ func DeleteNavMenu(id uint) error {
 // AllNavMenus 管理端：全部（含隐藏）+ 组装两级树
 func AllNavMenus() ([]NavMenu, error) {
 	var list []NavMenu
-	if err := DB.Order("sort_order ASC, id ASC").Find(&list).Error; err != nil {
+	if err := models.DB.Order("sort_order ASC, id ASC").Find(&list).Error; err != nil {
 		return nil, err
 	}
 	return buildNavTree(list), nil
@@ -131,7 +132,7 @@ func AllNavMenus() ([]NavMenu, error) {
 // PublicNavMenus 前台：可见 + 按登录/角色过滤
 func PublicNavMenus(isLogin, isAdmin bool) ([]NavMenu, error) {
 	var list []NavMenu
-	q := DB.Where("visible = ?", true).Order("sort_order ASC, id ASC")
+	q := models.DB.Where("visible = ?", true).Order("sort_order ASC, id ASC")
 	if err := q.Find(&list).Error; err != nil {
 		return nil, err
 	}

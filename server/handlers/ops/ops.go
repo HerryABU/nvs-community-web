@@ -5,7 +5,7 @@ package ops
 // 管理接口（ensureAdmin）：全部 CRUD + 统计
 //
 // 口径说明：签到奖励必须幂等（同一天重复请求不再发），Redis 不在依赖里，
-// 所以用「唯一索引 + 先落记录后发币」保证并发安全（见 models.DoCheckIn）。
+// 所以用「唯一索引 + 先落记录后发币」保证并发安全（见 siteops.DoCheckIn）。
 
 import (
 	"strconv"
@@ -16,6 +16,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	siteops "nvs-server/models/siteops"
 )
 
 // ─────────────── 导航菜单 ───────────────
@@ -28,7 +29,7 @@ func PublicNavMenus(c *gin.Context) {
 		role := hctx.CurrentUserRole(c)
 		isAdmin = role == models.RoleAdmin || role == models.RolePolice
 	}
-	list, err := models.PublicNavMenus(isLogin, isAdmin)
+	list, err := siteops.PublicNavMenus(isLogin, isAdmin)
 	if err != nil {
 		utils.InternalError(c, "读取菜单失败")
 		return
@@ -41,7 +42,7 @@ func AdminNavMenus(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	list, err := models.AllNavMenus()
+	list, err := siteops.AllNavMenus()
 	if err != nil {
 		utils.InternalError(c, "读取菜单失败")
 		return
@@ -54,12 +55,12 @@ func SaveNavMenu(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	var in models.NavMenu
+	var in siteops.NavMenu
 	if err := c.ShouldBindJSON(&in); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	item, err := models.SaveNavMenu(in)
+	item, err := siteops.SaveNavMenu(in)
 	if err != nil {
 		utils.BadRequest(c, err.Error())
 		return
@@ -77,7 +78,7 @@ func DeleteNavMenu(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.DeleteNavMenu(uint(id)); err != nil {
+	if err := siteops.DeleteNavMenu(uint(id)); err != nil {
 		utils.InternalError(c, "删除失败")
 		return
 	}
@@ -88,7 +89,7 @@ func DeleteNavMenu(c *gin.Context) {
 
 // PublicCarousels GET /api/carousels
 func PublicCarousels(c *gin.Context) {
-	list, err := models.ActiveCarousels()
+	list, err := siteops.ActiveCarousels()
 	if err != nil {
 		utils.InternalError(c, "读取轮播失败")
 		return
@@ -101,7 +102,7 @@ func AdminCarousels(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	list, err := models.AdminCarousels()
+	list, err := siteops.AdminCarousels()
 	if err != nil {
 		utils.InternalError(c, "读取轮播失败")
 		return
@@ -114,12 +115,12 @@ func SaveCarousel(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	var in models.Carousel
+	var in siteops.Carousel
 	if err := c.ShouldBindJSON(&in); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	item, err := models.SaveCarousel(in)
+	item, err := siteops.SaveCarousel(in)
 	if err != nil {
 		utils.BadRequest(c, err.Error())
 		return
@@ -133,7 +134,7 @@ func DeleteCarousel(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := models.DeleteCarousel(uint(id)); err != nil {
+	if err := siteops.DeleteCarousel(uint(id)); err != nil {
 		utils.InternalError(c, "删除失败")
 		return
 	}
@@ -144,7 +145,7 @@ func DeleteCarousel(c *gin.Context) {
 
 // CheckInStatus GET /api/checkin/status
 func CheckInStatus(c *gin.Context) {
-	utils.Success(c, models.CheckInStatus(hctx.CurrentUserID(c)))
+	utils.Success(c, siteops.CheckInStatus(hctx.CurrentUserID(c)))
 }
 
 // DoCheckIn POST /api/checkin
@@ -154,7 +155,7 @@ func DoCheckIn(c *gin.Context) {
 		utils.Unauthorized(c, "请先登录")
 		return
 	}
-	res, err := models.DoCheckIn(uid)
+	res, err := siteops.DoCheckIn(uid)
 	if err != nil {
 		utils.BadRequest(c, err.Error())
 		return
@@ -172,8 +173,8 @@ func AdminCheckIn(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{
-		"config": models.LoadCheckInConfig(),
-		"stats":  models.CheckInStats(),
+		"config": siteops.LoadCheckInConfig(),
+		"stats":  siteops.CheckInStats(),
 	})
 }
 
@@ -182,23 +183,23 @@ func SaveCheckIn(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	var in models.CheckInConfig
+	var in siteops.CheckInConfig
 	if err := c.ShouldBindJSON(&in); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.SaveCheckInConfig(in); err != nil {
+	if err := siteops.SaveCheckInConfig(in); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "已保存", models.LoadCheckInConfig())
+	utils.SuccessMessage(c, "已保存", siteops.LoadCheckInConfig())
 }
 
 // ─────────────── 访客设置 ───────────────
 
 // PublicVisitSetting GET /api/visit-setting —— 前台用于决定「要不要拦」
 func PublicVisitSetting(c *gin.Context) {
-	s := models.LoadVisitSetting()
+	s := siteops.LoadVisitSetting()
 	utils.Success(c, gin.H{
 		"allow_guest_browse": s.AllowGuestBrowse,
 		"allow_guest_search": s.AllowGuestSearch,
@@ -214,8 +215,8 @@ func AdminVisitSetting(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{
-		"config": models.LoadVisitSetting(),
-		"stats":  models.VisitStats(14),
+		"config": siteops.LoadVisitSetting(),
+		"stats":  siteops.VisitStats(14),
 	})
 }
 
@@ -224,23 +225,23 @@ func SaveVisitSetting(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	var in models.VisitSetting
+	var in siteops.VisitSetting
 	if err := c.ShouldBindJSON(&in); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.SaveVisitSetting(in); err != nil {
+	if err := siteops.SaveVisitSetting(in); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "已保存", models.LoadVisitSetting())
+	utils.SuccessMessage(c, "已保存", siteops.LoadVisitSetting())
 }
 
 // ─────────────── 直播入口（gap-audit #23）───────────────
 
 // PublicLive GET /api/live —— 前台直播状态（未开启时 enabled=false，前端不显示入口）
 func PublicLive(c *gin.Context) {
-	s := models.LoadLiveSetting()
+	s := siteops.LoadLiveSetting()
 	if !s.Enabled {
 		utils.Success(c, gin.H{"enabled": false})
 		return
@@ -269,7 +270,7 @@ func AdminLive(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{
-		"config": models.LoadLiveSetting(),
+		"config": siteops.LoadLiveSetting(),
 		"note":   "本站不提供推流/转码/HLS：这里只做入口与嵌入。外部直播间填 embed_url（必须 https），录播可填 video_url 直链。",
 	})
 }
@@ -279,14 +280,14 @@ func SaveLive(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	var in models.LiveSetting
+	var in siteops.LiveSetting
 	if err := c.ShouldBindJSON(&in); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.SaveLiveSetting(in); err != nil {
+	if err := siteops.SaveLiveSetting(in); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMessage(c, "已保存", models.LoadLiveSetting())
+	utils.SuccessMessage(c, "已保存", siteops.LoadLiveSetting())
 }

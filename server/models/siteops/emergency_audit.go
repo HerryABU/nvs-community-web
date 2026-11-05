@@ -1,6 +1,9 @@
-package models
+package siteops
 
-import "time"
+import (
+	"nvs-server/models"
+	"time"
+)
 
 // EmergencyAuditLog 内容抢救台审计日志
 // 记录所有高危应急操作（解锁/预览/硬删除/改密码），供日后溯源，独立于业务库语义。
@@ -40,7 +43,7 @@ const (
 
 // RecordEmergencyAudit 写入一条抢救台审计日志
 func RecordEmergencyAudit(log *EmergencyAuditLog) {
-	_ = DB.Create(log).Error
+	_ = models.DB.Create(log).Error
 }
 
 // ListEmergencyAuditLogs 列出审计日志（最近 N 条）
@@ -49,6 +52,6 @@ func ListEmergencyAuditLogs(limit int) ([]EmergencyAuditLog, error) {
 		limit = 200
 	}
 	var logs []EmergencyAuditLog
-	err := DB.Order("id desc").Limit(limit).Find(&logs).Error
+	err := models.DB.Order("id desc").Limit(limit).Find(&logs).Error
 	return logs, err
 }

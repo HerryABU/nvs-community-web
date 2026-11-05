@@ -12,6 +12,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	siteops "nvs-server/models/siteops"
 )
 
 // AdminListAnnouncements 公告列表（管理端，含草稿）
@@ -20,7 +21,7 @@ func AdminListAnnouncements(c *gin.Context) {
 	if !EnsureAdmin(c) {
 		return
 	}
-	var list []models.Announcement
+	var list []siteops.Announcement
 	models.DB.Order("pinned DESC, created_at DESC").Find(&list)
 	utils.Success(c, list)
 }
@@ -41,7 +42,7 @@ func AdminCreateAnnouncement(c *gin.Context) {
 		utils.BadRequest(c, "公告标题不能为空")
 		return
 	}
-	a := &models.Announcement{
+	a := &siteops.Announcement{
 		Title:     req.Title,
 		Content:   req.Content,
 		Pinned:    req.Pinned,
@@ -62,7 +63,7 @@ func AdminUpdateAnnouncement(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var a models.Announcement
+	var a siteops.Announcement
 	if err := models.DB.First(&a, id).Error; err != nil {
 		utils.NotFound(c, "公告不存在")
 		return
@@ -104,12 +105,12 @@ func AdminDeleteAnnouncement(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	models.DB.Delete(&models.Announcement{}, id)
+	models.DB.Delete(&siteops.Announcement{}, id)
 	utils.Success(c, gin.H{"message": "公告已删除"})
 }
 
 // ListAnnouncements 公开公告列表（已发布，置顶优先）
 // GET /api/announcements
 func ListAnnouncements(c *gin.Context) {
-	utils.Success(c, models.ListPublishedAnnouncements(20))
+	utils.Success(c, siteops.ListPublishedAnnouncements(20))
 }

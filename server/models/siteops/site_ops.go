@@ -1,9 +1,9 @@
-package models
+package siteops
 
 // ==================== 运营位：画廊轮播 / 每日签到 / 访客设置（gap-audit #23）====================
 // 这三样都是「运营侧非主线」功能，但缺了站长就没法做活动。设计上刻意做薄：
 //   - 轮播：只存图 + 跳转 + 时段 + 排序，不做「智能投放」；
-//   - 签到：只做「每天一次 + 连签加成」，奖励进代币账本（复用 AppendTokenLedger，不新开账）；
+//   - 签到：只做「每天一次 + 连签加成」，奖励进代币账本（复用 models.AppendTokenLedger，不新开账）；
 //   - 访客：只做「未登录能看什么」的开关，不做复杂权限矩阵。
 //
 // 铁律：奖励发放必须**幂等**（同一天重复请求只发一次），否则就是一个无限刷币漏洞。
@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // ─────────────── 轮播 ───────────────
@@ -41,7 +42,7 @@ func (Carousel) TableName() string { return "carousels" }
 func ActiveCarousels() ([]Carousel, error) {
 	now := time.Now()
 	var list []Carousel
-	err := DB.Where("enabled = ?", true).
+	err := models.DB.Where("enabled = ?", true).
 		Where("(start_at IS NULL OR start_at <= ?) AND (end_at IS NULL OR end_at >= ?)", now, now).
 		Order("sort_order ASC, id DESC").Limit(10).Find(&list).Error
 	return list, err
@@ -68,15 +69,15 @@ func SaveCarousel(in Carousel) (*Carousel, error) {
 	if in.ID == 0 {
 		wantEnabled := in.Enabled // 同上：Create 会用列默认值回填，先存意图值
 		in.CreatedAt = time.Now()
-		if err := DB.Create(&in).Error; err != nil {
+		if err := models.DB.Create(&in).Error; err != nil {
 			return nil, err
 		}
-		_ = DB.Model(&Carousel{}).Where("id = ?", in.ID).
+		_ = models.DB.Model(&Carousel{}).Where("id = ?", in.ID).
 			Update("enabled", wantEnabled).Error
 		in.Enabled = wantEnabled
 		return &in, nil
 	}
-	if err := DB.Model(&Carousel{}).Where("id = ?", in.ID).Updates(map[string]interface{}{
+	if err := models.DB.Model(&Carousel{}).Where("id = ?", in.ID).Updates(map[string]interface{}{
 		"title": in.Title, "image_url": in.ImageURL, "link_url": in.LinkURL,
 		"target": in.Target, "sort_order": in.SortOrder, "enabled": in.Enabled,
 		"start_at": in.StartAt, "end_at": in.EndAt, "updated_at": in.UpdatedAt,
@@ -88,13 +89,13 @@ func SaveCarousel(in Carousel) (*Carousel, error) {
 
 // DeleteCarousel 删除
 func DeleteCarousel(id uint) error {
-	return DB.Where("id = ?", id).Delete(&Carousel{}).Error
+	return models.DB.Where("id = ?", id).Delete(&Carousel{}).Error
 }
 
 // AdminCarousels 管理端全量
 func AdminCarousels() ([]Carousel, error) {
 	var list []Carousel
-	err := DB.Order("sort_order ASC, id DESC").Find(&list).Error
+	err := models.DB.Order("sort_order ASC, id DESC").Find(&list).Error
 	return list, err
 }
 
@@ -120,7 +121,7 @@ func DefaultCheckInConfig() CheckInConfig {
 // LoadCheckInConfig 读取
 func LoadCheckInConfig() CheckInConfig {
 	c := DefaultCheckInConfig()
-	raw := GetPlatformConfig(checkInCfgKey)
+	raw := models.GetPlatformConfig(checkInCfgKey)
 	if strings.TrimSpace(raw) != "" {
 		if err := json.Unmarshal([]byte(raw), &c); err != nil {
 			return DefaultCheckInConfig()
@@ -145,7 +146,7 @@ func SaveCheckInConfig(c CheckInConfig) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(checkInCfgKey, string(b))
+	return models.SetPlatformConfig(checkInCfgKey, string(b))
 }
 
 // CheckInRecord 签到记录（UserID + Date 唯一，天然幂等）
@@ -180,15 +181,15 @@ func DoCheckIn(userID uint) (*CheckInResult, error) {
 	}
 	today := time.Now().Format("2006-01-02")
 	var exist CheckInRecord
-	if err := DB.Where("user_id = ? AND date = ?", userID, today).First(&exist).Error; err == nil {
+	if err := models.DB.Where("user_id = ? AND date = ?", userID, today).First(&exist).Error; err == nil {
 		return &CheckInResult{Already: true, Reward: exist.Reward, Streak: exist.Streak,
-			Balance: GetTokenBalance(userID), Date: today}, nil
+			Balance: models.GetTokenBalance(userID), Date: today}, nil
 	}
 	// 连签：昨天有记录则 +1，否则从 1 开始
 	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
 	streak := 1
 	var prev CheckInRecord
-	if err := DB.Where("user_id = ? AND date = ?", userID, yesterday).First(&prev).Error; err == nil {
+	if err := models.DB.Where("user_id = ? AND date = ?", userID, yesterday).First(&prev).Error; err == nil {
 		streak = prev.Streak + 1
 	}
 	reward := cfg.BaseReward
@@ -201,21 +202,21 @@ func DoCheckIn(userID uint) (*CheckInResult, error) {
 	}
 	// 先落记录（唯一索引兜底并发重复），再发币；发币失败则回滚删除
 	rec := &CheckInRecord{UserID: userID, Date: today, Streak: streak, Reward: reward, CreatedAt: time.Now()}
-	if err := DB.Create(rec).Error; err != nil {
+	if err := models.DB.Create(rec).Error; err != nil {
 		// 并发下被另一请求抢先：当作已签到
-		return &CheckInResult{Already: true, Balance: GetTokenBalance(userID), Date: today}, nil
+		return &CheckInResult{Already: true, Balance: models.GetTokenBalance(userID), Date: today}, nil
 	}
 	var balance int64
-	if reward > 0 && IsTokenEnabled() {
-		b, err := AppendTokenLedger(userID, "checkin", int64(reward), "checkin", rec.ID,
+	if reward > 0 && models.IsTokenEnabled() {
+		b, err := models.AppendTokenLedger(userID, "checkin", int64(reward), "checkin", rec.ID,
 			"每日签到（连签 "+strconv.Itoa(streak)+" 天）", "")
 		if err != nil {
-			_ = DB.Where("id = ?", rec.ID).Delete(&CheckInRecord{}).Error
+			_ = models.DB.Where("id = ?", rec.ID).Delete(&CheckInRecord{}).Error
 			return nil, err
 		}
 		balance = b
 	} else {
-		balance = GetTokenBalance(userID)
+		balance = models.GetTokenBalance(userID)
 	}
 	return &CheckInResult{Reward: reward, Streak: streak, Balance: balance, Date: today}, nil
 }
@@ -229,13 +230,13 @@ func CheckInStatus(userID uint) map[string]interface{} {
 		return out
 	}
 	var rec CheckInRecord
-	if err := DB.Where("user_id = ? AND date = ?", userID, today).First(&rec).Error; err == nil {
+	if err := models.DB.Where("user_id = ? AND date = ?", userID, today).First(&rec).Error; err == nil {
 		out["checked"] = true
 		out["streak"] = rec.Streak
 		out["reward"] = rec.Reward
 	}
 	var total int64
-	_ = DB.Model(&CheckInRecord{}).Where("user_id = ?", userID).Count(&total).Error
+	_ = models.DB.Model(&CheckInRecord{}).Where("user_id = ?", userID).Count(&total).Error
 	out["total_days"] = total
 	return out
 }
@@ -246,9 +247,9 @@ func CheckInStats() []map[string]interface{} {
 	for i := 6; i >= 0; i-- {
 		d := time.Now().AddDate(0, 0, -i).Format("2006-01-02")
 		var n int64
-		_ = DB.Model(&CheckInRecord{}).Where("date = ?", d).Count(&n).Error
+		_ = models.DB.Model(&CheckInRecord{}).Where("date = ?", d).Count(&n).Error
 		var sum int64
-		_ = DB.Model(&CheckInRecord{}).Where("date = ?", d).Select("COALESCE(SUM(reward),0)").Scan(&sum).Error
+		_ = models.DB.Model(&CheckInRecord{}).Where("date = ?", d).Select("COALESCE(SUM(reward),0)").Scan(&sum).Error
 		out = append(out, map[string]interface{}{"date": d, "users": n, "reward": sum})
 	}
 	return out
@@ -282,7 +283,7 @@ func DefaultVisitSetting() VisitSetting {
 // LoadVisitSetting 读取
 func LoadVisitSetting() VisitSetting {
 	c := DefaultVisitSetting()
-	raw := GetPlatformConfig(visitCfgKey)
+	raw := models.GetPlatformConfig(visitCfgKey)
 	if strings.TrimSpace(raw) != "" {
 		if err := json.Unmarshal([]byte(raw), &c); err != nil {
 			return DefaultVisitSetting()
@@ -301,7 +302,7 @@ func SaveVisitSetting(c VisitSetting) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(visitCfgKey, string(b))
+	return models.SetPlatformConfig(visitCfgKey, string(b))
 }
 
 // VisitStats 近 N 天访问量（复用 web_access_logs：UV 按 IP 去重）
@@ -315,9 +316,9 @@ func VisitStats(days int) []map[string]interface{} {
 		start := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, d.Location())
 		end := start.AddDate(0, 0, 1)
 		var pv, uv int64
-		_ = DB.Raw("SELECT COUNT(1) FROM web_access_logs WHERE created_at >= ? AND created_at < ?", start, end).
+		_ = models.DB.Raw("SELECT COUNT(1) FROM web_access_logs WHERE created_at >= ? AND created_at < ?", start, end).
 			Scan(&pv).Error
-		_ = DB.Raw("SELECT COUNT(DISTINCT ip) FROM web_access_logs WHERE created_at >= ? AND created_at < ?", start, end).
+		_ = models.DB.Raw("SELECT COUNT(DISTINCT ip) FROM web_access_logs WHERE created_at >= ? AND created_at < ?", start, end).
 			Scan(&uv).Error
 		out = append(out, map[string]interface{}{"date": start.Format("2006-01-02"), "pv": pv, "uv": uv})
 	}

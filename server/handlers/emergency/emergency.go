@@ -17,6 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/blog"
+	siteops "nvs-server/models/siteops"
 )
 
 // ═══ 内容抢救台：隔离的应急窗口 ═══
@@ -94,7 +95,7 @@ func AuditEmergency(c *gin.Context, action, targetType string, targetID uint, de
 			operator = u.Username
 		}
 	}
-	models.RecordEmergencyAudit(&models.EmergencyAuditLog{
+	siteops.RecordEmergencyAudit(&siteops.EmergencyAuditLog{
 		OperatorID: userID,
 		Operator:   operator,
 		IP:         c.ClientIP(),
@@ -731,7 +732,7 @@ func ListEmergencyAudit(c *gin.Context) {
 	if !ensureAdmin(c) {
 		return
 	}
-	logs, err := models.ListEmergencyAuditLogs(200)
+	logs, err := siteops.ListEmergencyAuditLogs(200)
 	if err != nil {
 		utils.InternalError(c, "获取审计日志失败")
 		return

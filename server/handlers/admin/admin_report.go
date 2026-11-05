@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
 	"nvs-server/models/blog"
+	siteops "nvs-server/models/siteops"
 )
 
 // GetReportReasons GET /api/reports/reasons — 预置举报理由
@@ -223,7 +224,7 @@ func HandleReport(c *gin.Context) {
 		"resolved_at": &now,
 	})
 	// 合规审计：举报处理（target 关联举报记录本身）
-	emergency.AuditEmergency(c, models.AuditReportHandle, "report", uint(id),
+	emergency.AuditEmergency(c, siteops.AuditReportHandle, "report", uint(id),
 		fmt.Sprintf("举报处理：%s，判定：%s，删除目标：%v", req.Status, verdict, req.DeleteTarget))
 	utils.Success(c, gin.H{"message": "已处理"})
 }

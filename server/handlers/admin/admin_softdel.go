@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/blog"
+	siteops "nvs-server/models/siteops"
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -92,9 +93,9 @@ func doSoftDelete(ctype string, id uint, reason, source, action string, operator
 			operator = u.Username
 		}
 	}
-	auditAction := models.AuditContentDelete
+	auditAction := siteops.AuditContentDelete
 	if action == "ban" {
-		auditAction = models.AuditUserBan
+		auditAction = siteops.AuditUserBan
 	}
 	// 审计留痕：有请求上下文走抢救台审计（带 IP/UA）；
 	// 系统自动处置（c == nil）没有请求，改记系统操作者，避免丢痕迹。
@@ -103,7 +104,7 @@ func doSoftDelete(ctype string, id uint, reason, source, action string, operator
 			emergency.AuditEmergency(c, a, targetType, targetID, detail)
 			return
 		}
-		models.RecordEmergencyAudit(&models.EmergencyAuditLog{
+		siteops.RecordEmergencyAudit(&siteops.EmergencyAuditLog{
 			OperatorID: 0, Operator: "system:moderation", IP: "-",
 			Action: a, TargetType: targetType, TargetID: targetID, Detail: detail,
 		})
@@ -140,7 +141,7 @@ func doSoftDelete(ctype string, id uint, reason, source, action string, operator
 		if err := models.DB.Delete(&models.User{}, id).Error; err != nil {
 			return err
 		}
-		audit(models.AuditUserBan, "user", id, fmt.Sprintf("管理员封禁用户 %s | 原因：%s", u.Username, reason))
+		audit(siteops.AuditUserBan, "user", id, fmt.Sprintf("管理员封禁用户 %s | 原因：%s", u.Username, reason))
 
 	case "novel":
 		n, err := models.GetNovelByID(id)

@@ -25,6 +25,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	siteops "nvs-server/models/siteops"
 )
 
 func setupLiveTestDB(t *testing.T) {
@@ -34,7 +35,7 @@ func setupLiveTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开内存测试库失败: %v", err)
 	}
-	if err := db.AutoMigrate(&models.RageConfig{}); err != nil {
+	if err := db.AutoMigrate(&siteops.RageConfig{}); err != nil {
 		t.Fatalf("迁移测试库失败: %v", err)
 	}
 	models.DB = db
@@ -51,13 +52,13 @@ func setupLiveTestDB(t *testing.T) {
 
 func saveTestRageConfig(t *testing.T, enabled bool, intervalSec, batchSize, maxConns int) {
 	t.Helper()
-	cfg := models.RageConfig{
+	cfg := siteops.RageConfig{
 		Enabled:          enabled,
 		BatchIntervalSec: intervalSec,
 		BatchSize:        batchSize,
 		MaxConns:         maxConns,
 	}
-	if err := models.UpdateRageConfig(cfg); err != nil {
+	if err := siteops.UpdateRageConfig(cfg); err != nil {
 		t.Fatalf("保存配置失败: %v", err)
 	}
 }
@@ -214,7 +215,7 @@ func setupLiveAdminTestDB(t *testing.T) {
 		t.Fatalf("迁移测试库失败: %v", err)
 	}
 	// RageConfig 尚未纳入 AllModels（由主 agent 接线），测试库显式补迁移
-	if err := db.AutoMigrate(&models.RageConfig{}); err != nil {
+	if err := db.AutoMigrate(&siteops.RageConfig{}); err != nil {
 		t.Fatalf("迁移 rage_configs 失败: %v", err)
 	}
 	models.DB = db
@@ -282,7 +283,7 @@ func TestUpdateRageConfigAdmin(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("合法参数应 200，实际 %d: %s", w.Code, w.Body.String())
 	}
-	got := models.GetRageConfig()
+	got := siteops.GetRageConfig()
 	if !got.Enabled || got.BatchIntervalSec != 5 || got.BatchSize != 30 || got.MaxConns != 500 {
 		t.Fatalf("配置未正确落库: %+v", got)
 	}
@@ -296,7 +297,7 @@ func TestUpdateRageConfigAdmin(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("保存 enabled=false 应 200，实际 %d: %s", w.Code, w.Body.String())
 	}
-	if models.GetRageConfig().Enabled {
+	if siteops.GetRageConfig().Enabled {
 		t.Fatal("enabled=false 应能写入（GORM 零值坑回归）")
 	}
 

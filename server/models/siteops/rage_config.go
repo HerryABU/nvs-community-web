@@ -1,6 +1,9 @@
-package models
+package siteops
 
-import "time"
+import (
+	"nvs-server/models"
+	"time"
+)
 
 // ─────────────────────────────────────────────────────────────
 // 狂暴模式配置（F19：评论区实时更新 / SSE 弹幕）
@@ -37,11 +40,11 @@ func GetRageConfig() RageConfig {
 		BatchSize:        rageDefaultBatchSize,
 		MaxConns:         rageDefaultMaxConns,
 	}
-	if DB == nil {
+	if models.DB == nil {
 		return cfg
 	}
 	var row RageConfig
-	if err := DB.First(&row, 1).Error; err != nil {
+	if err := models.DB.First(&row, 1).Error; err != nil {
 		return cfg
 	}
 	// Enabled 零值即 false（未保存过 = 关闭），无需纠正
@@ -61,16 +64,16 @@ func GetRageConfig() RageConfig {
 // 🔒 GORM 零值坑：结构体 Updates 会跳过零值字段，Enabled=false 永远写不进库，
 // 因此必须用 map 精确写列。行不存在时创建（ID 固定 1）。
 func UpdateRageConfig(cfg RageConfig) error {
-	if DB == nil {
+	if models.DB == nil {
 		return nil
 	}
 	var existing RageConfig
-	if err := DB.First(&existing, 1).Error; err != nil {
+	if err := models.DB.First(&existing, 1).Error; err != nil {
 		cfg.ID = 1
 		cfg.UpdatedAt = time.Now()
-		return DB.Create(&cfg).Error
+		return models.DB.Create(&cfg).Error
 	}
-	return DB.Model(&RageConfig{}).Where("id = ?", 1).Updates(map[string]interface{}{
+	return models.DB.Model(&RageConfig{}).Where("id = ?", 1).Updates(map[string]interface{}{
 		"enabled":            cfg.Enabled,
 		"batch_interval_sec": cfg.BatchIntervalSec,
 		"batch_size":         cfg.BatchSize,

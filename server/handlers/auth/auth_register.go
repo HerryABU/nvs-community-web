@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	siteops "nvs-server/models/siteops"
 )
 
 type RegisterInput struct {
@@ -150,7 +151,7 @@ func Register(c *gin.Context) {
 		utils.InternalError(c, "Refresh Token 生成失败")
 		return
 	}
-	if err := models.SetRefreshState(user.ID, jti); err != nil {
+	if err := siteops.SetRefreshState(user.ID, jti); err != nil {
 		log.Printf("[auth] 写入刷新状态失败（用户 %d）：%v", user.ID, err)
 	}
 	middleware.SetTokenCookie(c, accessToken)

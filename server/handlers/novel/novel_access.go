@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"nvs-server/models"
+	siteops "nvs-server/models/siteops"
 )
 
 // NovelView 作品详情返回体：内嵌 Novel 全部字段（保持前端 res.data.data.xxx 兼容），
@@ -43,7 +44,7 @@ func ResolveNovelAccess(novel *models.Novel, isLogin bool, _ string) NovelAccess
 	if isLogin {
 		return NovelAccess{RequiresLogin: false, IsTrial: false}
 	}
-	visit := models.LoadVisitSetting()
+	visit := siteops.LoadVisitSetting()
 	if !visit.AllowGuestBrowse {
 		return NovelAccess{RequiresLogin: true, IsTrial: false}
 	}

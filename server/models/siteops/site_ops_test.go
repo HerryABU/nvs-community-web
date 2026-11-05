@@ -1,4 +1,4 @@
-package models
+package siteops
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 func setupOpsDB(t *testing.T) {
@@ -14,16 +15,16 @@ func setupOpsDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	DB = db
-	if err := db.AutoMigrate(&PlatformConfig{}, &NavMenu{}, &Carousel{}, &CheckInRecord{},
-		&UserTokenBalance{}, &TokenLedger{}); err != nil {
+	models.DB = db
+	if err := db.AutoMigrate(&models.PlatformConfig{}, &NavMenu{}, &Carousel{}, &CheckInRecord{},
+		&models.UserTokenBalance{}, &models.TokenLedger{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	for _, tbl := range []string{"nav_menus", "carousels", "checkin_records", "token_ledger", "user_token_balances"} {
 		_ = db.Exec("DELETE FROM " + tbl).Error
 	}
-	_ = SetPlatformConfig(checkInCfgKey, "")
-	_ = SetTokenEnabled(false)
+	_ = models.SetPlatformConfig(checkInCfgKey, "")
+	_ = models.SetTokenEnabled(false)
 }
 
 // TestCheckInIdempotent 同一天重复签到不再发币（这是最重要的一条）
@@ -36,7 +37,7 @@ func TestCheckInIdempotent(t *testing.T) {
 	if err := SaveCheckInConfig(cfg); err != nil {
 		t.Fatal(err)
 	}
-	if err := SetTokenEnabled(true); err != nil {
+	if err := models.SetTokenEnabled(true); err != nil {
 		t.Fatal(err)
 	}
 	r1, err := DoCheckIn(1)
@@ -55,7 +56,7 @@ func TestCheckInIdempotent(t *testing.T) {
 	}
 	// 账本只有一条
 	var n int64
-	DB.Model(&TokenLedger{}).Where("user_id = ? AND type = ?", 1, "checkin").Count(&n)
+	models.DB.Model(&models.TokenLedger{}).Where("user_id = ? AND type = ?", 1, "checkin").Count(&n)
 	if n != 1 {
 		t.Fatalf("重复签到不应重复发币，账本 %d 条", n)
 	}
@@ -72,7 +73,7 @@ func TestCheckInStreak(t *testing.T) {
 		t.Fatal(err)
 	}
 	y := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	if err := DB.Create(&CheckInRecord{UserID: 5, Date: y, Streak: 3, Reward: 5, CreatedAt: time.Now()}).Error; err != nil {
+	if err := models.DB.Create(&CheckInRecord{UserID: 5, Date: y, Streak: 3, Reward: 5, CreatedAt: time.Now()}).Error; err != nil {
 		t.Fatal(err)
 	}
 	r, err := DoCheckIn(5)
@@ -150,7 +151,7 @@ func TestNavMenuTree(t *testing.T) {
 		t.Fatal(err)
 	}
 	var n int64
-	DB.Model(&NavMenu{}).Where("parent_id = ?", parent.ID).Count(&n)
+	models.DB.Model(&NavMenu{}).Where("parent_id = ?", parent.ID).Count(&n)
 	if n != 0 {
 		t.Fatalf("子项应被连带删除: %d", n)
 	}

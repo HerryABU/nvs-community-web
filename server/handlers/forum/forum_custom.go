@@ -16,6 +16,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	siteops "nvs-server/models/siteops"
 )
 
 // ==================== 用户自建论坛 ====================
@@ -377,7 +378,7 @@ func DeleteThreadByModerator(c *gin.Context) {
 			UpdateColumn("thread_count", gorm.Expr("CASE WHEN thread_count > 0 THEN thread_count - 1 ELSE 0 END"))
 	}
 	// 合规审计：内容删除处置（含作者/所属论坛）
-	emergency.AuditEmergency(c, models.AuditContentDelete, "thread", uint(threadID),
+	emergency.AuditEmergency(c, siteops.AuditContentDelete, "thread", uint(threadID),
 		fmt.Sprintf("管理员删除帖子：%s（作者ID：%d，ForumID：%d）",
 			security.SanitizePlainText(thread.Title), thread.UserID, thread.ForumID))
 	utils.Success(c, gin.H{"message": "帖子已删除"})
@@ -446,7 +447,7 @@ func DeletePostByModerator(c *gin.Context) {
 	models.DB.Model(&models.Thread{}).Where("id = ?", post.ThreadID).
 		UpdateColumn("post_count", gorm.Expr("CASE WHEN post_count >= ? THEN post_count - ? ELSE 0 END", removed, removed))
 	// 合规审计：内容删除处置（含作者/所属帖子）
-	emergency.AuditEmergency(c, models.AuditContentDelete, "post", uint(postID),
+	emergency.AuditEmergency(c, siteops.AuditContentDelete, "post", uint(postID),
 		fmt.Sprintf("管理员删除回帖（作者ID：%d，ThreadID：%d）", post.UserID, post.ThreadID))
 	utils.Success(c, gin.H{"message": "回帖已删除"})
 }

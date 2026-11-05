@@ -47,6 +47,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	siteops "nvs-server/models/siteops"
 )
 
 func main() {
@@ -152,10 +153,10 @@ func main() {
 	configureFirewall(config.ServerPort)
 
 	// 启动定时备份调度器（按平台配置 interval 自动备份）
-	models.StartBackupScheduler()
+	siteops.StartBackupScheduler()
 
 	// 启动访问日志归档调度器（每日 sha256 + gzip + 只读 + 6个月保留，176号令合规）
-	models.StartLogArchiver()
+	siteops.StartLogArchiver()
 
 	// 🔀 站点路径前缀（URL_PREFIX）在 gin 外层剥离：必须先于路由匹配执行。
 	// 未配置前缀时该包装零开销直通。

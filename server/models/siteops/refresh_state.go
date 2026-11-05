@@ -1,4 +1,8 @@
-package models
+package siteops
+
+import (
+	"nvs-server/models"
+)
 
 // RefreshState 记录每个用户当前「有效」刷新令牌族 ID（JTI）。
 //
@@ -14,13 +18,13 @@ type RefreshState struct {
 
 // SetRefreshState 写入 / 更新用户的有效刷新 JTI（幂等 upsert，按 UserID 主键）。
 func SetRefreshState(userID uint, jti string) error {
-	return DB.Save(&RefreshState{UserID: userID, ActiveJTI: jti}).Error
+	return models.DB.Save(&RefreshState{UserID: userID, ActiveJTI: jti}).Error
 }
 
 // GetRefreshState 读取用户当前有效刷新 JTI；无记录返回 gorm.ErrRecordNotFound。
 func GetRefreshState(userID uint) (*RefreshState, error) {
 	var s RefreshState
-	if err := DB.First(&s, "user_id = ?", userID).Error; err != nil {
+	if err := models.DB.First(&s, "user_id = ?", userID).Error; err != nil {
 		return nil, err
 	}
 	return &s, nil
@@ -28,5 +32,5 @@ func GetRefreshState(userID uint) (*RefreshState, error) {
 
 // DeleteRefreshState 清除用户刷新状态（登出 / 改密时调用，使仍在有效期内的刷新令牌立即失效）。
 func DeleteRefreshState(userID uint) error {
-	return DB.Delete(&RefreshState{}, "user_id = ?", userID).Error
+	return models.DB.Delete(&RefreshState{}, "user_id = ?", userID).Error
 }

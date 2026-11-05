@@ -43,6 +43,13 @@ var BlogFeedProvider func(ids []uint, window int) ([]FeedItem, int64, error)
 
 // AllModels 所有需要建表与迁移的模型（与 main.go 的 AutoMigrate 保持一致）。
 // 仅列出根包自身的模型；域子包模型由 DomainModelProviders 在运行时聚合。
+// 已下沉到域子包的模型由各自 init() 注册，不再在此重复列出：
+//
+//	models/blog      —— AuthorBlog / BlogCategory / BlogTag / BlogTopic 等
+//	models/security  —— BadWord / BadWordFlag / Blacklist / CrisisEvent / XssRule / Vulnerability
+//	models/theme     —— SiteTheme / UserTheme / AuthorTheme / HomeBlock / HomeCustomize 系列
+//	models/siteops   —— Announcement / SystemSetting / EmergencyAuditLog / NavMenu /
+//	                    Carousel / CheckInRecord / RageConfig / RefreshState
 func AllModels() []interface{} {
 	list := []interface{}{
 		&User{}, &Novel{}, &NovelCategory{}, &Chapter{}, &Comment{}, &Rating{},
@@ -51,14 +58,10 @@ func AllModels() []interface{} {
 		&Forum{}, &Thread{}, &Post{}, &ForumMute{}, &VipApplication{}, &Report{},
 		&WithdrawalRequest{}, &EarningsRecord{}, &BlacklistIP{}, &PlatformConfig{},
 		&FederatedSite{}, &FederatedNovel{}, &FederatedInbound{}, &BookShelf{}, &Follow{},
-		&UserFrame{}, &UserHTML{}, &EmergencyAuditLog{}, &UserAuditLog{},
-		// 违禁词库：规则 + 标记待审记录
-		&SystemSetting{}, // 系统设置（key/value）：博客分类审核模式等
+		&UserFrame{}, &UserHTML{}, &UserAuditLog{},
 		&ZoneAccessLog{}, // 隔离墙（敏感分区）进入记录，176号令合规
 		&Notification{},  // 站内消息通知
 		&ReadingNote{},   // 精读：书签 + 批注（含公开/私密）
-		// 漏洞整改记录（176号令 第七条第六项）
-		&Announcement{}, // 站点公告栏
 		// 软删除留证表（softdel_*，合规证据留存）
 		&SoftDelComment{}, &SoftDelNovel{}, &SoftDelChapter{}, &SoftDelUser{},
 		&SoftDelThread{}, &SoftDelPost{}, &SoftDelBlog{}, &SoftDelForum{},
@@ -76,14 +79,8 @@ func AllModels() []interface{} {
 		&AgentSubmission{},
 		// 全量 Web 访问日志（功能二：前台网络诊断 / 用户分布 / 攻击流量面板）
 		&WebAccessLog{},
-		// 用户黑名单（F13：拉黑禁言/屏蔽内容，站长/警方/管理员不可被拉黑）
-		// 用户黑名单（F13）—— 已迁至 models/security 子包
 		// 私信（F20：会话消息，互关才可发第 3 条）
 		&Message{},
-		// 站点主题 / 自定义主页模型已迁至 models/theme（由该子包 init 注册）：
-		// SiteTheme / UserTheme / AuthorTheme / HomeBlock / HomeCustomize 系列。
-		// 狂暴模式配置（F19：评论实时更新，默认关，带宽可控）
-		&RageConfig{},
 		// web 项目额度与超额审核（F17：发布到广场需额度，超额进入审核队列）
 		&UserWebQuota{}, &WebQuotaRequest{},
 		// 每日发文限额 / 用户配额体系（§13.4：等级×每日数量/字数，按人覆盖，AI 计入）
@@ -103,14 +100,8 @@ func AllModels() []interface{} {
 		&AiPrompt{}, &AiVendor{}, &AiModelKey{}, &AiStyle{}, &AiContentMark{},
 		// 搜索热词埋点（F9：站内搜索 query 记录，聚合出搜索热词）
 		&SearchLog{},
-		// 运营位：自定义导航菜单 / 轮播 / 签到（gap-audit #20 #23）
-		&NavMenu{}, &Carousel{}, &CheckInRecord{},
 		// API Key 审计告警（多 IP / 解密失败 / 封禁后仍使用）
 		&ApiKeyAlarm{},
-		// 未成年人心理危机事件留痕（供《高危用户心理干预报告》）
-		// 心理危机事件留痕 —— 已迁至 models/security 子包
-		// 刷新令牌轮换状态（JTI）：防止刷新令牌窃取后长期可用
-		&RefreshState{},
 		// AIGC 内容标识（GB 45438—2025）：原图 / 导出（ProduceID→模型名）/ 豁免日志
 		&AigcAsset{}, &AigcExport{}, &AigcWaiverLog{},
 		// 渠道账户凭据（nap_/sk_ 加密入库，供「拉取模型」「渠道监控」复用）

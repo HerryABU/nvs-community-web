@@ -24,6 +24,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	siteops "nvs-server/models/siteops"
 )
 
 // POST /api/auth/phone/reset-password — 手机号验证码重置密码（F22）
@@ -260,7 +261,7 @@ func issueSession(c *gin.Context, user *models.User, auditDesc string) {
 	if err != nil {
 		return
 	}
-	if err := models.SetRefreshState(user.ID, jti); err != nil {
+	if err := siteops.SetRefreshState(user.ID, jti); err != nil {
 		log.Printf("[auth] 写入刷新状态失败（用户 %d）：%v", user.ID, err)
 	}
 	middleware.SetTokenCookie(c, accessToken)

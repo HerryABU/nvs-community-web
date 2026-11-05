@@ -14,11 +14,11 @@ import (
 	"time"
 
 	"nvs-server/handlers/admin"
-	"nvs-server/models"
 	"nvs-server/realtime"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	siteops "nvs-server/models/siteops"
 )
 
 // liveChannelRe 频道 key 白名单：仅放行 comment:novel:<数字> / comment:blog:<数字>，
@@ -36,7 +36,7 @@ func LiveStream(c *gin.Context) {
 	// 管理员开关：默认关闭，关闭时拒绝连接。
 	// 注意：EventSource 无法读取 HTTP 状态码，故不走 403 JSON，而是以 SSE 协议返回
 	// 一个 `disabled` 事件后直接关闭——前端据此永久停止重连（避免对未开启的站点空转重试）。
-	cfg := models.GetRageConfig()
+	cfg := siteops.GetRageConfig()
 	if !cfg.Enabled {
 		c.Header("Content-Type", "text/event-stream")
 		c.Header("Cache-Control", "no-cache")
@@ -127,7 +127,7 @@ func writeSSEFrame(buf *bytes.Buffer, name string, data any) {
 // 前端评论区挂载时先查一次，关闭则根本不建 SSE 连接（避免 403 后退避空转）；
 // 仅暴露一个布尔开关，不泄露任何带宽参数。
 func LiveConfig(c *gin.Context) {
-	utils.Success(c, gin.H{"enabled": models.GetRageConfig().Enabled})
+	utils.Success(c, gin.H{"enabled": siteops.GetRageConfig().Enabled})
 }
 
 // GetRageConfigAdmin GET /api/admin/rage-config —— 读取狂暴模式配置
@@ -135,7 +135,7 @@ func GetRageConfigAdmin(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, models.GetRageConfig())
+	utils.Success(c, siteops.GetRageConfig())
 }
 
 // UpdateRageConfigAdmin PUT /api/admin/rage-config —— 保存狂暴模式配置（立即生效）
@@ -166,13 +166,13 @@ func UpdateRageConfigAdmin(c *gin.Context) {
 		return
 	}
 
-	cfg := models.RageConfig{
+	cfg := siteops.RageConfig{
 		Enabled:          req.Enabled,
 		BatchIntervalSec: req.BatchIntervalSec,
 		BatchSize:        req.BatchSize,
 		MaxConns:         req.MaxConns,
 	}
-	if err := models.UpdateRageConfig(cfg); err != nil {
+	if err := siteops.UpdateRageConfig(cfg); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
@@ -180,5 +180,5 @@ func UpdateRageConfigAdmin(c *gin.Context) {
 	realtime.DefaultHub.SetEnabled(cfg.Enabled)
 	realtime.DefaultHub.SetLimits(cfg.MaxConns,
 		time.Duration(cfg.BatchIntervalSec)*time.Second, cfg.BatchSize)
-	utils.Success(c, gin.H{"message": "已保存（立即生效）", "config": models.GetRageConfig()})
+	utils.Success(c, gin.H{"message": "已保存（立即生效）", "config": siteops.GetRageConfig()})
 }

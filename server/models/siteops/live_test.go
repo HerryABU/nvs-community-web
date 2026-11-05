@@ -1,10 +1,11 @@
-package models
+package siteops
 
 import (
 	"testing"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 func setupLiveDB(t *testing.T) {
@@ -13,11 +14,11 @@ func setupLiveDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	DB = db
-	if err := db.AutoMigrate(&PlatformConfig{}); err != nil {
+	models.DB = db
+	if err := db.AutoMigrate(&models.PlatformConfig{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	_ = SetPlatformConfig(liveCfgKey, "")
+	_ = models.SetPlatformConfig(liveCfgKey, "")
 }
 
 // TestLiveValidateEmbed 嵌入地址必须 https（http 会被浏览器拦，且不安全）
