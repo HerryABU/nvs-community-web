@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	aicost "nvs-server/models/aicost"
+	aihub "nvs-server/models/aihub"
 )
 
 // ==================== AI 工作台：绘画 / 视频（§5.4，按次计费） ====================
@@ -62,10 +63,10 @@ func AiHubVideoSubmit(c *gin.Context) {
 		m = mm
 	}
 	// 免费额度优先（按次消耗 1 次）
-	freeOK, _, _ := models.CheckAiFreeQuota(userID, 0)
+	freeOK, _, _ := aihub.CheckAiFreeQuota(userID, 0)
 	// 资金闸门：按次单价的单次上限与二次确认
 	if !freeOK && !req.Byok && m.PriceCall > 0 {
-		allowed, needConfirm, reason := models.CallGuard(m.PriceCall, req.Confirm)
+		allowed, needConfirm, reason := aihub.CallGuard(m.PriceCall, req.Confirm)
 		if !allowed {
 			utils.BadRequest(c, reason+"（未扣款）")
 			return
@@ -94,7 +95,7 @@ func AiHubVideoSubmit(c *gin.Context) {
 		utils.InternalError(c, "创建任务失败")
 		return
 	}
-	lease, kerr := models.AcquireModelKey(m)
+	lease, kerr := aihub.AcquireModelKey(m)
 	apiKey := ""
 	if lease != nil {
 		apiKey = lease.Key
@@ -151,7 +152,7 @@ func AiHubVideoSubmit(c *gin.Context) {
 		nb = models.GetTokenBalance(userID)
 	case freeOK:
 		_ = models.MarkAiMediaFree(task.ID)
-		_ = models.RecordAiFreeUsage(userID, 1, 0)
+		_ = aihub.RecordAiFreeUsage(userID, 1, 0)
 		nb = models.GetTokenBalance(userID)
 	default:
 		var cerr error
@@ -246,7 +247,7 @@ func AiHubVideoStatus(c *gin.Context) {
 		utils.BadRequest(c, "模型已删除，无法继续查询")
 		return
 	}
-	lease, kerr := models.AcquireModelKey(m)
+	lease, kerr := aihub.AcquireModelKey(m)
 	apiKey := ""
 	if lease != nil {
 		apiKey = lease.Key
@@ -362,7 +363,7 @@ func cancelUpstreamVideo(task *models.AiMediaTask, userID uint) {
 		if merr != nil {
 			return
 		}
-		lease, kerr := models.AcquireModelKey(m)
+		lease, kerr := aihub.AcquireModelKey(m)
 		if kerr != nil {
 			return
 		}

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 )
 
 // ==================== AI 思维导图：需求 → 层级大纲 ====================
@@ -68,7 +69,7 @@ func AiMindmap(c *gin.Context) {
 	}
 	tokensIn := models.EstimateTokens(systemPrompt) + models.EstimateTokens(topic)
 	tokensOut := 1200
-	freeOK, _, _ := models.CheckAiFreeQuota(userID, tokensIn+tokensOut)
+	freeOK, _, _ := aihub.CheckAiFreeQuota(userID, tokensIn+tokensOut)
 	if !freeOK {
 		if !models.IsTokenEnabled() {
 			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
@@ -84,7 +85,7 @@ func AiMindmap(c *gin.Context) {
 		utils.InternalError(c, "记录调用失败")
 		return
 	}
-	lease, kerr := models.AcquireModelKey(m)
+	lease, kerr := aihub.AcquireModelKey(m)
 	apiKey := ""
 	if lease != nil {
 		apiKey = lease.Key

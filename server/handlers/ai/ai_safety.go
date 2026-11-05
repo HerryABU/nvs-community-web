@@ -11,6 +11,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 )
 
 // ==================== AI 内容安全闸（提示词 + 用户特征 + 蓝队模型 B） ====================
@@ -57,7 +58,7 @@ func toJudgeTurns(history []models.AiChatMessage) []aisafety.JudgeTurn {
 func serveSafetyRefusal(c *gin.Context, session *models.AiChatSession, storeMsg string, dec *aisafety.InputDecision, term terminateOutcome, parentID uint) {
 	// 被拦截的提问也要落进消息树（用户要能看到自己问了什么），
 	// 并挂在当前分支上——否则前端重载后这一轮会消失。
-	um, _ := models.AppendAiChatMessageWithParent(session.ID, "user", storeMsg, parentID, 0, 0, 0, 0)
+	um, _ := aihub.AppendAiChatMessageWithParent(session.ID, "user", storeMsg, parentID, 0, 0, 0, 0)
 	models.TouchAiChatSession(session.ID, storeMsg)
 	text := term.Text
 	if strings.TrimSpace(text) == "" {
@@ -66,9 +67,9 @@ func serveSafetyRefusal(c *gin.Context, session *models.AiChatSession, storeMsg 
 	if strings.TrimSpace(text) == "" {
 		text = "抱歉，这个请求我不能提供。"
 	}
-	am, _ := models.AppendSafetyBlockedMessage(session.ID, um.ID, text, 0)
+	am, _ := aihub.AppendSafetyBlockedMessage(session.ID, um.ID, text, 0)
 	if am != nil && am.ID > 0 {
-		models.SetActiveLeaf(session.ID, am.ID)
+		aihub.SetActiveLeaf(session.ID, am.ID)
 	}
 	models.TouchAiChatSession(session.ID, "")
 
@@ -90,12 +91,12 @@ func serveSafetyRefusal(c *gin.Context, session *models.AiChatSession, storeMsg 
 // 用户看到的就是一句普通的 AI 回复，察觉不到自己已被静默记入「可疑名单」。
 func serveAppeaseResponse(c *gin.Context, session *models.AiChatSession, storeMsg string, term terminateOutcome, parentID uint) {
 	// 用户提问也要落进消息树（用户要能看到自己问了什么），挂在当前分支上。
-	um, _ := models.AppendAiChatMessageWithParent(session.ID, "user", storeMsg, parentID, 0, 0, 0, 0)
+	um, _ := aihub.AppendAiChatMessageWithParent(session.ID, "user", storeMsg, parentID, 0, 0, 0, 0)
 	models.TouchAiChatSession(session.ID, storeMsg)
 	// 引导内容以「普通助手消息」落库（不标记 SafetyBlocked），重载后与正常回答无异。
-	am, _ := models.AppendAiChatMessageWithParent(session.ID, "assistant", term.Text, um.ID, 0, 0, 0, 0)
+	am, _ := aihub.AppendAiChatMessageWithParent(session.ID, "assistant", term.Text, um.ID, 0, 0, 0, 0)
 	if am != nil && am.ID > 0 {
-		models.SetActiveLeaf(session.ID, am.ID)
+		aihub.SetActiveLeaf(session.ID, am.ID)
 	}
 	models.TouchAiChatSession(session.ID, "")
 	setupSSE(c)
@@ -398,7 +399,7 @@ func UnlockChatSession(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.UnlockAiChatSession(uint(sid)); err != nil {
+	if err := aihub.UnlockAiChatSession(uint(sid)); err != nil {
 		utils.InternalError(c, "操作失败")
 		return
 	}

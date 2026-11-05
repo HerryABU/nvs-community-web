@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 )
 
 // runCozeChat 扣子（Coze）智能体对话：非流式整段返回，仍按 SSE 事件回吐（前端无感）
@@ -25,7 +26,7 @@ func runCozeChat(c *gin.Context, ag *models.AiAgent, callLog *models.AiCallLog, 
 		return
 	}
 	// 全局默认值兜底：智能体未填 API 域名 / 超时时继承「扣子默认配置」
-	def := models.GetAiCozeDefault()
+	def := aihub.GetAiCozeDefault()
 	base := strings.TrimSpace(ag.CozeBase)
 	if base == "" {
 		base = def.BaseURL

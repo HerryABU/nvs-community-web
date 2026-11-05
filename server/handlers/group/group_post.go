@@ -12,6 +12,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 )
 
 // ==================== 群内帖子与回复 ====================
@@ -81,7 +82,7 @@ func GroupPostCreate(c *gin.Context) {
 	}
 	markBadWords(badHits, "group_post", p.ID, uid, cleaned, p.Title)
 	if p.AiAssisted {
-		_ = models.MarkAiContent(models.AiMarkGroupPost, p.ID, "")
+		_ = aihub.MarkAiContent(aihub.AiMarkGroupPost, p.ID, "")
 	}
 	// @提醒：只通知群内的被提及成员
 	notifyGroupMentions(ctx.Group, cleaned, uid, p.ID)

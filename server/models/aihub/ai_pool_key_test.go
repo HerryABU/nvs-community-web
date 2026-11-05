@@ -1,16 +1,18 @@
-package models
+package aihub
+
+import "nvs-server/models"
 
 import "testing"
 
 // TestModelKeyPool 密钥池：取用、失败计数、达阈值自动停用、重置、回退
 func TestModelKeyPool(t *testing.T) {
 	db := setupAiTestDB(t)
-	old := DB
-	DB = db
-	defer func() { DB = old }()
+	old := models.DB
+	models.DB = db
+	defer func() { models.DB = old }()
 
-	m := &AiModel{Name: "pool-test", Kind: AiKindChat, ModelID: "x", BaseURL: "https://x", Enabled: true}
-	if err := DB.Create(m).Error; err != nil {
+	m := &models.AiModel{Name: "pool-test", Kind: models.AiKindChat, ModelID: "x", BaseURL: "https://x", Enabled: true}
+	if err := models.DB.Create(m).Error; err != nil {
 		t.Fatalf("建模型失败：%v", err)
 	}
 	// 无池时回退到模型自带密钥（未设置则报错，属预期）
@@ -45,7 +47,7 @@ func TestModelKeyPool(t *testing.T) {
 		t.Fatalf("达失败阈值后不应再被选中：%+v", k)
 	}
 	var after AiModelKey
-	DB.Where("id = ?", k1.ID).First(&after)
+	models.DB.Where("id = ?", k1.ID).First(&after)
 	if after.Enabled {
 		t.Fatalf("达失败阈值应自动停用")
 	}
@@ -56,7 +58,7 @@ func TestModelKeyPool(t *testing.T) {
 	}
 	ReportAiModelKey(k1.ID, false)
 	ReportAiModelKey(k1.ID, true)
-	DB.Where("id = ?", k1.ID).First(&after)
+	models.DB.Where("id = ?", k1.ID).First(&after)
 	if after.FailCount != 0 {
 		t.Fatalf("成功上报应清零失败计数，得到 %d", after.FailCount)
 	}
@@ -65,9 +67,9 @@ func TestModelKeyPool(t *testing.T) {
 // TestAiStyleCRUD 风格字典：重名拒绝、改名级联作品、删除后历史风格保留
 func TestAiStyleCRUD(t *testing.T) {
 	db := setupAiTestDB(t)
-	old := DB
-	DB = db
-	defer func() { DB = old }()
+	old := models.DB
+	models.DB = db
+	defer func() { models.DB = old }()
 
 	st, err := CreateAiStyle("image", "写实摄影", 1)
 	if err != nil {
@@ -80,14 +82,14 @@ func TestAiStyleCRUD(t *testing.T) {
 		t.Fatalf("不同类型允许同名：%v", err)
 	}
 
-	task := &AiMediaTask{UserID: 1, Kind: AiKindImage, Prompt: "p", Status: AiMediaSucceeded, Style: "写实摄影"}
-	DB.Create(task)
+	task := &models.AiMediaTask{UserID: 1, Kind: models.AiKindImage, Prompt: "p", Status: models.AiMediaSucceeded, Style: "写实摄影"}
+	models.DB.Create(task)
 
 	if err := UpdateAiStyle(st.ID, "写实摄影PRO", 3, true); err != nil {
 		t.Fatalf("改名失败：%v", err)
 	}
-	var after AiMediaTask
-	DB.Where("id = ?", task.ID).First(&after)
+	var after models.AiMediaTask
+	models.DB.Where("id = ?", task.ID).First(&after)
 	if after.Style != "写实摄影PRO" {
 		t.Fatalf("改名未级联作品：%q", after.Style)
 	}
@@ -95,7 +97,7 @@ func TestAiStyleCRUD(t *testing.T) {
 	if err := DeleteAiStyle(st.ID); err != nil {
 		t.Fatalf("删除失败：%v", err)
 	}
-	DB.Where("id = ?", task.ID).First(&after)
+	models.DB.Where("id = ?", task.ID).First(&after)
 	if after.Style != "写实摄影PRO" {
 		t.Fatalf("删除风格不应清空历史作品风格")
 	}

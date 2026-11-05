@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 )
 
 // ==================== 语音合成 / 音乐（gap-audit #18）====================
@@ -81,7 +82,7 @@ func Speech(c *gin.Context) {
 		return
 	}
 
-	lease, kerr := models.AcquireModelKey(m)
+	lease, kerr := aihub.AcquireModelKey(m)
 	if kerr != nil {
 		utils.BadRequest(c, "模型密钥不可用")
 		return
@@ -144,8 +145,8 @@ func pickAudioModel(id uint) *models.AiModel {
 // chargeAudioCall 扣费：免费额度优先，否则扣 PriceCall 代币
 func chargeAudioCall(userID uint, m *models.AiModel) error {
 	// 免费额度：占用 1 次调用（与文本共用池子，站长可统一控总量）
-	if ok, _, _ := models.CheckAiFreeQuota(userID, 0); ok {
-		_ = models.RecordAiFreeUsage(userID, 1, 0)
+	if ok, _, _ := aihub.CheckAiFreeQuota(userID, 0); ok {
+		_ = aihub.RecordAiFreeUsage(userID, 1, 0)
 		return nil
 	}
 	price := m.PriceCall

@@ -1,14 +1,15 @@
-package models
+package aihub
 
 import (
 	"fmt"
+	"nvs-server/models"
 	"strings"
 	"time"
 )
 
 // ==================== 作品风格字典 ====================
 // 绘画/视频发布作品时从字典选风格；广场按字典生成筛选 chips。
-// 保留 AiMediaTask.Style 字符串字段，字典只做规范化与展示，零数据迁移。
+// 保留 models.AiMediaTask.Style 字符串字段，字典只做规范化与展示，零数据迁移。
 
 // AiStyle 风格
 type AiStyle struct {
@@ -25,9 +26,9 @@ func (AiStyle) TableName() string { return "ai_styles" }
 
 // ListAiStyles 风格列表（kind 为空 = 全部）
 func ListAiStyles(kind string, onlyEnabled bool) ([]AiStyle, error) {
-	q := DB.Order("sort_order ASC, id ASC")
+	q := models.DB.Order("sort_order ASC, id ASC")
 	if k := strings.TrimSpace(kind); k != "" {
-		q = q.Where("kind = ?", NormalizeAiKind(k))
+		q = q.Where("kind = ?", models.NormalizeAiKind(k))
 	}
 	if onlyEnabled {
 		q = q.Where("enabled = ?", true)
@@ -46,14 +47,14 @@ func CreateAiStyle(kind, name string, sortOrder int) (*AiStyle, error) {
 	if len([]rune(name)) > 32 {
 		name = string([]rune(name)[:32])
 	}
-	kind = NormalizeAiKind(kind)
+	kind = models.NormalizeAiKind(kind)
 	var n int64
-	DB.Model(&AiStyle{}).Where("kind = ? AND name = ?", kind, name).Count(&n)
+	models.DB.Model(&AiStyle{}).Where("kind = ? AND name = ?", kind, name).Count(&n)
 	if n > 0 {
 		return nil, fmt.Errorf("该类型下已存在风格「%s」", name)
 	}
 	st := &AiStyle{Kind: kind, Name: name, SortOrder: sortOrder, Enabled: true, CreatedAt: time.Now(), UpdatedAt: time.Now()}
-	if err := DB.Create(st).Error; err != nil {
+	if err := models.DB.Create(st).Error; err != nil {
 		return nil, err
 	}
 	return st, nil
@@ -62,27 +63,27 @@ func CreateAiStyle(kind, name string, sortOrder int) (*AiStyle, error) {
 // UpdateAiStyle 更新（改名时同步刷新作品里的风格名）
 func UpdateAiStyle(id uint, name string, sortOrder int, enabled bool) error {
 	var st AiStyle
-	if err := DB.Where("id = ?", id).First(&st).Error; err != nil {
+	if err := models.DB.Where("id = ?", id).First(&st).Error; err != nil {
 		return fmt.Errorf("风格不存在")
 	}
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return fmt.Errorf("风格名称不能为空")
 	}
-	if err := DB.Model(&AiStyle{}).Where("id = ?", id).Updates(map[string]interface{}{
+	if err := models.DB.Model(&AiStyle{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"name": name, "sort_order": sortOrder, "enabled": enabled, "updated_at": time.Now(),
 	}).Error; err != nil {
 		return err
 	}
 	if name != st.Name {
-		DB.Model(&AiMediaTask{}).Where("style = ?", st.Name).UpdateColumn("style", name)
+		models.DB.Model(&models.AiMediaTask{}).Where("style = ?", st.Name).UpdateColumn("style", name)
 	}
 	return nil
 }
 
 // DeleteAiStyle 删除风格（不阻断，作品里的历史 style 字符串保留）
 func DeleteAiStyle(id uint) error {
-	res := DB.Where("id = ?", id).Delete(&AiStyle{})
+	res := models.DB.Where("id = ?", id).Delete(&AiStyle{})
 	if res.Error != nil {
 		return res.Error
 	}
@@ -95,19 +96,19 @@ func DeleteAiStyle(id uint) error {
 // SeedAiStyles 内置常见风格（幂等）
 func SeedAiStyles() {
 	seeds := map[string][]string{
-		AiKindImage: {"写实摄影", "电商设计", "插画设计", "动漫游戏", "国风", "海报设计", "建筑空间", "头像写真"},
-		AiKindVideo: {"空镜", "人物特写", "转场", "广告片", "动画", "分镜叙事"},
+		models.AiKindImage: {"写实摄影", "电商设计", "插画设计", "动漫游戏", "国风", "海报设计", "建筑空间", "头像写真"},
+		models.AiKindVideo: {"空镜", "人物特写", "转场", "广告片", "动画", "分镜叙事"},
 	}
 	i := 0
 	for kind, names := range seeds {
 		for _, name := range names {
 			i++
 			var n int64
-			DB.Model(&AiStyle{}).Where("kind = ? AND name = ?", kind, name).Count(&n)
+			models.DB.Model(&AiStyle{}).Where("kind = ? AND name = ?", kind, name).Count(&n)
 			if n > 0 {
 				continue
 			}
-			DB.Create(&AiStyle{Kind: kind, Name: name, SortOrder: i, Enabled: true, CreatedAt: time.Now(), UpdatedAt: time.Now()})
+			models.DB.Create(&AiStyle{Kind: kind, Name: name, SortOrder: i, Enabled: true, CreatedAt: time.Now(), UpdatedAt: time.Now()})
 		}
 	}
 }

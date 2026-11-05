@@ -1,7 +1,8 @@
-package models
+package aihub
 
 import (
 	"fmt"
+	"nvs-server/models"
 	"testing"
 	"time"
 
@@ -16,12 +17,12 @@ func setupChannelKeyTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开内存测试库失败: %v", err)
 	}
-	if err := db.AutoMigrate(&AiModel{}, &AiChannelKey{}, &AiModelKey{}); err != nil {
+	if err := db.AutoMigrate(&models.AiModel{}, &AiChannelKey{}, &AiModelKey{}); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
-	old := DB
-	DB = db
-	t.Cleanup(func() { DB = old })
+	old := models.DB
+	models.DB = db
+	t.Cleanup(func() { models.DB = old })
 }
 
 const testChannel = "https://api.example.com/v1"
@@ -56,7 +57,7 @@ func TestPickAiChannelKey_AutoDisableAfterFails(t *testing.T) {
 		ReportAiChannelKey(k.ID, false)
 	}
 	var got AiChannelKey
-	if err := DB.Where("id = ?", k.ID).First(&got).Error; err != nil {
+	if err := models.DB.Where("id = ?", k.ID).First(&got).Error; err != nil {
 		t.Fatalf("查询失败: %v", err)
 	}
 	if got.Enabled {
@@ -76,7 +77,7 @@ func TestPickAiChannelKey_AutoDisableAfterFails(t *testing.T) {
 	if p := PickAiChannelKey(testChannel); p == nil || p.ID != k.ID {
 		t.Fatalf("启用后应能重新被选中")
 	}
-	if err := DB.Where("id = ?", k.ID).First(&got).Error; err == nil {
+	if err := models.DB.Where("id = ?", k.ID).First(&got).Error; err == nil {
 		if got.FailCount != 0 {
 			t.Fatalf("重新启用后连续失败计数应清零，实际 %d", got.FailCount)
 		}
@@ -93,7 +94,7 @@ func TestReportAiChannelKey_SuccessResetsFailCount(t *testing.T) {
 	ReportAiChannelKey(k.ID, false)
 	ReportAiChannelKey(k.ID, true)
 	var got AiChannelKey
-	DB.Where("id = ?", k.ID).First(&got)
+	models.DB.Where("id = ?", k.ID).First(&got)
 	if got.FailCount != 0 {
 		t.Fatalf("成功后连续失败计数应归零，实际 %d", got.FailCount)
 	}
@@ -105,8 +106,8 @@ func TestReportAiChannelKey_SuccessResetsFailCount(t *testing.T) {
 // 取密钥顺序：渠道池优先于模型自带密钥（老配置只作兜底）
 func TestAcquireModelKey_PrefersChannelPool(t *testing.T) {
 	setupChannelKeyTestDB(t)
-	model := &AiModel{Name: "m1", Kind: "chat", ModelID: "deepseek-chat", BaseURL: testChannel, Enabled: true}
-	if err := CreateAiModel(model, "sk-model-legacy-0001"); err != nil {
+	model := &models.AiModel{Name: "m1", Kind: "chat", ModelID: "deepseek-chat", BaseURL: testChannel, Enabled: true}
+	if err := models.CreateAiModel(model, "sk-model-legacy-0001"); err != nil {
 		t.Fatalf("建模型失败: %v", err)
 	}
 	// 只有模型密钥时，取到的是 model 来源
@@ -136,13 +137,13 @@ func TestAcquireModelKey_PrefersChannelPool(t *testing.T) {
 // 迁移：把按模型存的密钥并入渠道池，且重复执行不会重复插入
 func TestMigrateModelKeysToChannels_Idempotent(t *testing.T) {
 	setupChannelKeyTestDB(t)
-	m1 := &AiModel{Name: "m1", Kind: "chat", ModelID: "a", BaseURL: testChannel, Enabled: true}
-	m2 := &AiModel{Name: "m2", Kind: "chat", ModelID: "b", BaseURL: testChannel, Enabled: true}
-	if err := CreateAiModel(m1, "sk-shared-key-000001"); err != nil {
+	m1 := &models.AiModel{Name: "m1", Kind: "chat", ModelID: "a", BaseURL: testChannel, Enabled: true}
+	m2 := &models.AiModel{Name: "m2", Kind: "chat", ModelID: "b", BaseURL: testChannel, Enabled: true}
+	if err := models.CreateAiModel(m1, "sk-shared-key-000001"); err != nil {
 		t.Fatalf("建模型失败: %v", err)
 	}
 	// 第二个模型用同一把 key（同一渠道下重复是常态）
-	if err := CreateAiModel(m2, "sk-shared-key-000001"); err != nil {
+	if err := models.CreateAiModel(m2, "sk-shared-key-000001"); err != nil {
 		t.Fatalf("建模型失败: %v", err)
 	}
 	// 再给 m1 加一把模型池密钥（新 key）

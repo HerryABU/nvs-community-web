@@ -1,12 +1,12 @@
 package ai
 
 import (
-	"nvs-server/models"
 	"nvs-server/utils"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 )
 
 // AiMarks GET /api/ai/marks?items=blog:12,novel_chapter:34
@@ -21,7 +21,7 @@ func AiMarks(c *gin.Context) {
 	if len(parts) > 50 {
 		parts = parts[:50] // 上限保护
 	}
-	items := make([]models.AiMarkItem, 0, len(parts))
+	items := make([]aihub.AiMarkItem, 0, len(parts))
 	for _, p := range parts {
 		kv := strings.SplitN(strings.TrimSpace(p), ":", 2)
 		if len(kv) != 2 {
@@ -31,7 +31,7 @@ func AiMarks(c *gin.Context) {
 		if err != nil {
 			continue
 		}
-		items = append(items, models.AiMarkItem{Type: kv[0], ID: uint(id)})
+		items = append(items, aihub.AiMarkItem{Type: kv[0], ID: uint(id)})
 	}
-	utils.Success(c, gin.H{"marks": models.GetAiContentMarks(items)})
+	utils.Success(c, gin.H{"marks": aihub.GetAiContentMarks(items)})
 }

@@ -10,10 +10,10 @@ import (
 
 	"nvs-server/aiclient"
 	"nvs-server/handlers/admin"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 )
 
 // ==================== 渠道监控（临时凭据探测） ====================
@@ -71,7 +71,7 @@ func AdminAiChannelMonitor(c *gin.Context) {
 	usedSaved := false
 	var notices []string
 	if token == "" {
-		if acc, aerr := models.GetAiChannelAccount(base); aerr == nil && acc.Enabled {
+		if acc, aerr := aihub.GetAiChannelAccount(base); aerr == nil && acc.Enabled {
 			if t, derr := acc.DecryptAccessToken(); derr == nil && t != "" {
 				token = t
 				usedSaved = true
@@ -168,12 +168,12 @@ func AdminAiChannelMonitor(c *gin.Context) {
 	}
 
 	// 有保存凭据的渠道才记快照（监控是「临时看一眼」的主路径，别给所有探测都留痕）
-	if _, aerr := models.GetAiChannelAccount(base); aerr == nil {
+	if _, aerr := aihub.GetAiChannelAccount(base); aerr == nil {
 		okFlag, _ := out["balance_ok"].(bool)
 		if v, has := out["probe_ok"].(bool); has && v {
 			okFlag = true
 		}
-		models.RecordAiChannelProbe(base, okFlag,
+		aihub.RecordAiChannelProbe(base, okFlag,
 			intOf(out["model_count"]),
 			floatOf(out["remaining"]), floatOf(out["used"]),
 			stringOf(out["currency"]), worstError(out))

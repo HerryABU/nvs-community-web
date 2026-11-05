@@ -7,6 +7,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 )
 
 // ==================== 免费 AI 额度（§5.3：用尽才扣代币） ====================
@@ -17,7 +18,7 @@ func AiFreeQuotaStatus(c *gin.Context) {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
-	utils.Success(c, models.SummarizeAiFreeQuota(hctx.CurrentUserID(c)))
+	utils.Success(c, aihub.SummarizeAiFreeQuota(hctx.CurrentUserID(c)))
 }
 
 // AdminGetAiFreeQuotaConfig GET /api/admin/ai/free-quota/config — 读取配置
@@ -26,8 +27,8 @@ func AdminGetAiFreeQuotaConfig(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{
-		"enabled": models.IsAiFreeQuotaEnabled(),
-		"config":  models.GetAiFreeQuotaConfig(),
+		"enabled": aihub.IsAiFreeQuotaEnabled(),
+		"config":  aihub.GetAiFreeQuotaConfig(),
 	})
 }
 
@@ -45,13 +46,13 @@ func AdminSetAiFreeQuotaConfig(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.SetAiFreeQuotaConfig(models.AiFreeQuotaConfig{
+	if err := aihub.SetAiFreeQuotaConfig(aihub.AiFreeQuotaConfig{
 		CallsPerDay: req.CallsPerDay, MaxTokensPerDay: req.MaxTokensPerDay,
 	}); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
-	if err := models.SetAiFreeQuotaEnabled(req.Enabled); err != nil {
+	if err := aihub.SetAiFreeQuotaEnabled(req.Enabled); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
@@ -63,7 +64,7 @@ func AdminListAiFreeQuotaOverrides(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	list, err := models.ListUserAiFreeQuotas()
+	list, err := aihub.ListUserAiFreeQuotas()
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -98,13 +99,13 @@ func AdminManageAiFreeQuotaOverride(c *gin.Context) {
 	}
 	switch req.Action {
 	case "set":
-		if err := models.SetUserAiFreeQuotaOverride(req.UserID, req.DailyCalls, req.DailyTokens, req.Note); err != nil {
+		if err := aihub.SetUserAiFreeQuotaOverride(req.UserID, req.DailyCalls, req.DailyTokens, req.Note); err != nil {
 			utils.InternalError(c, "保存失败")
 			return
 		}
 		utils.Success(c, gin.H{"message": "已保存该用户的免费额度（立即生效）"})
 	case "remove":
-		if err := models.DeleteUserAiFreeQuotaOverride(req.UserID); err != nil {
+		if err := aihub.DeleteUserAiFreeQuotaOverride(req.UserID); err != nil {
 			utils.InternalError(c, "操作失败")
 			return
 		}

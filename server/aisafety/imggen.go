@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"nvs-server/aiclient"
-	"nvs-server/models"
+	aihub "nvs-server/models/aihub"
 )
 
 // ==================== AI 绘画审核 ====================
@@ -158,7 +158,7 @@ func JudgeImageOutput(images []string, prompt string) ImageOutputVerdict {
 	}
 
 	apiKey := ""
-	lease, kerr := models.AcquireModelKey(m)
+	lease, kerr := aihub.AcquireModelKey(m)
 	if lease != nil {
 		apiKey = lease.Key
 	}

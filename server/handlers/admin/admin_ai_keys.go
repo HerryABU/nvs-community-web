@@ -9,11 +9,12 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 )
 
 // ==================== 管理端：API 卡池（多密钥轮询） ====================
 
-func aiModelKeyVO(k *models.AiModelKey) gin.H {
+func aiModelKeyVO(k *aihub.AiModelKey) gin.H {
 	return gin.H{
 		"id": k.ID, "model_id": k.ModelID, "label": k.Label,
 		"weight": k.Weight, "enabled": k.Enabled, "fail_count": k.FailCount,
@@ -24,8 +25,8 @@ func aiModelKeyVO(k *models.AiModelKey) gin.H {
 }
 
 // keyHint 为密钥生成「尾 4 位」提示（解密失败则返回空）
-func keyHint(k *models.AiModelKey) string {
-	plain, err := models.DecryptAiModelKey(k)
+func keyHint(k *aihub.AiModelKey) string {
+	plain, err := aihub.DecryptAiModelKey(k)
 	if err != nil || len(plain) < 4 {
 		return ""
 	}
@@ -42,7 +43,7 @@ func AdminListAiModelKeys(c *gin.Context) {
 		utils.NotFound(c, "模型不存在")
 		return
 	}
-	list, err := models.ListAiModelKeys(uint(modelID))
+	list, err := aihub.ListAiModelKeys(uint(modelID))
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -53,7 +54,7 @@ func AdminListAiModelKeys(c *gin.Context) {
 	}
 	utils.Success(c, gin.H{
 		"list": items, "total": len(items),
-		"max_fail": models.MaxFailBeforeDisable,
+		"max_fail": aihub.MaxFailBeforeDisable,
 	})
 }
 
@@ -102,7 +103,7 @@ func AdminCreateAiModelKey(c *gin.Context) {
 		if label != "" && len(lines) > 1 {
 			label = label + "-" + strconv.Itoa(i+1)
 		}
-		if _, err := models.AddAiModelKey(uint(modelID), label, k, req.Weight); err == nil {
+		if _, err := aihub.AddAiModelKey(uint(modelID), label, k, req.Weight); err == nil {
 			added++
 		}
 	}
@@ -146,7 +147,7 @@ func AdminUpdateAiModelKey(c *gin.Context) {
 	if req.Reset {
 		fields["fail_count"] = 0
 	}
-	if err := models.UpdateAiModelKey(uint(keyID), uint(modelID), fields); err != nil {
+	if err := aihub.UpdateAiModelKey(uint(keyID), uint(modelID), fields); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
@@ -160,7 +161,7 @@ func AdminDeleteAiModelKey(c *gin.Context) {
 	}
 	modelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	keyID, _ := strconv.ParseUint(c.Param("keyId"), 10, 64)
-	if err := models.DeleteAiModelKey(uint(keyID), uint(modelID)); err != nil {
+	if err := aihub.DeleteAiModelKey(uint(keyID), uint(modelID)); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
@@ -187,12 +188,12 @@ func AdminTestAiModelKey(c *gin.Context) {
 
 	var plain string
 	if req.KeyID > 0 {
-		k, e := models.GetAiModelKey(req.KeyID, uint(modelID))
+		k, e := aihub.GetAiModelKey(req.KeyID, uint(modelID))
 		if e != nil {
 			utils.NotFound(c, "密钥不存在")
 			return
 		}
-		plain, e = models.DecryptAiModelKey(k)
+		plain, e = aihub.DecryptAiModelKey(k)
 		if e != nil {
 			utils.InternalError(c, "密钥解密失败")
 			return
@@ -210,7 +211,7 @@ func AdminTestAiModelKey(c *gin.Context) {
 	}
 	// 池内密钥测试成功即清零失败计数
 	if req.KeyID > 0 {
-		models.ReportAiModelKey(req.KeyID, true)
+		aihub.ReportAiModelKey(req.KeyID, true)
 	}
 	utils.Success(c, gin.H{"ok": true, "message": "连通正常"})
 }
@@ -222,7 +223,7 @@ func AdminGetAiCozeDefault(c *gin.Context) {
 	if !EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, models.GetAiCozeDefault())
+	utils.Success(c, aihub.GetAiCozeDefault())
 }
 
 // AdminSetAiCozeDefault PUT /api/admin/ai/coze-default
@@ -230,12 +231,12 @@ func AdminSetAiCozeDefault(c *gin.Context) {
 	if !EnsureAdmin(c) {
 		return
 	}
-	var req models.AiCozeDefault
+	var req aihub.AiCozeDefault
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.SetAiCozeDefault(req); err != nil {
+	if err := aihub.SetAiCozeDefault(req); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}

@@ -10,6 +10,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 )
 
 // ==================== 管理端：渠道卡密池 ====================
@@ -20,7 +21,7 @@ import (
 // 与「模型密钥池」(/ai/models/:id/keys) 的关系：后者是升级前的老接口，
 // 保留可用（老站点脚本不会立刻报错），但新配置一律走渠道池。
 
-func channelKeyVO(k *models.AiChannelKey) gin.H {
+func channelKeyVO(k *aihub.AiChannelKey) gin.H {
 	return gin.H{
 		"id": k.ID, "base_url": k.BaseURL, "label": k.Label,
 		"weight": k.Weight, "enabled": k.Enabled, "fail_count": k.FailCount,
@@ -32,8 +33,8 @@ func channelKeyVO(k *models.AiChannelKey) gin.H {
 	}
 }
 
-func channelKeyHint(k *models.AiChannelKey) string {
-	plain, err := models.DecryptAiChannelKey(k)
+func channelKeyHint(k *aihub.AiChannelKey) string {
+	plain, err := aihub.DecryptAiChannelKey(k)
 	if err != nil || len(plain) < 4 {
 		return ""
 	}
@@ -50,7 +51,7 @@ func AdminListAiChannelKeys(c *gin.Context) {
 		utils.BadRequest(c, "请指定渠道地址")
 		return
 	}
-	list, err := models.ListAiChannelKeys(base)
+	list, err := aihub.ListAiChannelKeys(base)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -61,7 +62,7 @@ func AdminListAiChannelKeys(c *gin.Context) {
 	}
 	utils.Success(c, gin.H{
 		"list": items, "total": len(items), "base_url": base,
-		"max_fail": models.MaxFailBeforeDisable,
+		"max_fail": aihub.MaxFailBeforeDisable,
 	})
 }
 
@@ -103,7 +104,7 @@ func AdminCreateAiChannelKey(c *gin.Context) {
 		if label == "" {
 			label = "卡密 " + strconv.Itoa(i+1)
 		}
-		_, err := models.AddAiChannelKey(base, label, line, req.Note, req.Weight)
+		_, err := aihub.AddAiChannelKey(base, label, line, req.Note, req.Weight)
 		if err != nil {
 			// 重复是「可预期的正常情况」，与真正失败分开计数，避免站长以为全都失败了
 			if strings.Contains(err.Error(), "已有同一把") {
@@ -151,12 +152,12 @@ func AdminUpdateAiChannelKey(c *gin.Context) {
 	}
 	// 限定渠道，避免拿着别人的 id 改到另一条渠道的卡密
 	if strings.TrimSpace(req.BaseURL) != "" {
-		if _, err := models.GetAiChannelKey(uint(id), req.BaseURL); err != nil {
+		if _, err := aihub.GetAiChannelKey(uint(id), req.BaseURL); err != nil {
 			utils.NotFound(c, "卡密不存在")
 			return
 		}
 	}
-	if err := models.UpdateAiChannelKey(uint(id), req.Label, req.Weight, req.Enabled); err != nil {
+	if err := aihub.UpdateAiChannelKey(uint(id), req.Label, req.Weight, req.Enabled); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
@@ -173,7 +174,7 @@ func AdminDeleteAiChannelKey(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.DeleteAiChannelKey(uint(id)); err != nil {
+	if err := aihub.DeleteAiChannelKey(uint(id)); err != nil {
 		utils.InternalError(c, "删除失败")
 		return
 	}
@@ -192,23 +193,23 @@ func AdminTestAiChannelKey(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	k, err := models.GetAiChannelKey(uint(id), base)
+	k, err := aihub.GetAiChannelKey(uint(id), base)
 	if err != nil {
 		utils.NotFound(c, "卡密不存在")
 		return
 	}
-	plain, err := models.DecryptAiChannelKey(k)
+	plain, err := aihub.DecryptAiChannelKey(k)
 	if err != nil {
 		utils.InternalError(c, "卡密解密失败")
 		return
 	}
 	n, perr := probeUpstreamModels(k.BaseURL, plain, "")
 	if perr != "" {
-		models.ReportAiChannelKey(k.ID, false)
+		aihub.ReportAiChannelKey(k.ID, false)
 		utils.Success(c, gin.H{"ok": false, "error": perr})
 		return
 	}
-	models.ReportAiChannelKey(k.ID, true)
+	aihub.ReportAiChannelKey(k.ID, true)
 	utils.Success(c, gin.H{"ok": true, "model_count": n, "at": time.Now().Format(time.RFC3339)})
 }
 

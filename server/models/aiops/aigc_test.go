@@ -8,6 +8,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	aihub "nvs-server/models/aihub"
 )
 
 // setupAigcTestDB 独立内存库（不用 setupTestDB 的共享库：同名 cache=shared 会串数据）
@@ -19,7 +20,7 @@ func setupAigcTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开内存库失败: %v", err)
 	}
-	if err := db.AutoMigrate(&AigcAsset{}, &AigcExport{}, &AigcWaiverLog{}, &models.AiChannelAccount{}, &models.PlatformConfig{}); err != nil {
+	if err := db.AutoMigrate(&AigcAsset{}, &AigcExport{}, &AigcWaiverLog{}, &aihub.AiChannelAccount{}, &models.PlatformConfig{}); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
 	models.DB = db

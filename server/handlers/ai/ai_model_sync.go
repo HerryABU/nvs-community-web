@@ -12,6 +12,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 )
 
 // AdminPullAiModels POST /api/admin/ai/models/pull
@@ -201,7 +202,7 @@ func mustJSONStr(s []string) string {
 // savedChannelKeyFor 取该渠道加密保存的密钥（优先 sk_ 模型密钥，其次 nap_ 账户令牌）。
 // 只用于「拉取/导入模型」这类需要 Bearer 的调用；解出来的明文不落日志、不回传。
 func savedChannelKeyFor(baseURL string) string {
-	acc, err := models.GetAiChannelAccount(baseURL)
+	acc, err := aihub.GetAiChannelAccount(baseURL)
 	if err != nil {
 		return ""
 	}

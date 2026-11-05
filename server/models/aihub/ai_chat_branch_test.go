@@ -1,4 +1,4 @@
-package models
+package aihub
 
 import (
 	"fmt"
@@ -8,34 +8,35 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"nvs-server/models"
 )
 
 // setupBranchDB 独立命名内存库（同名共享库会在多测试/重跑间复用数据）。
 func setupBranchDB(t *testing.T) {
 	t.Helper()
-	prev := DB
+	prev := models.DB
 	dsn := fmt.Sprintf("file:branch_test_%d?mode=memory&cache=shared", time.Now().UnixNano())
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		t.Fatalf("打开内存库失败：%v", err)
 	}
-	if err := db.AutoMigrate(&AiChatSession{}, &AiChatMessage{}); err != nil {
+	if err := db.AutoMigrate(&models.AiChatSession{}, &models.AiChatMessage{}); err != nil {
 		t.Fatalf("建表失败：%v", err)
 	}
-	DB = db
-	t.Cleanup(func() { DB = prev })
+	models.DB = db
+	t.Cleanup(func() { models.DB = prev })
 }
 
-func mustSession(t *testing.T) *AiChatSession {
+func mustSession(t *testing.T) *models.AiChatSession {
 	t.Helper()
-	s, err := CreateAiChatSession(1, 0, "", 1)
+	s, err := models.CreateAiChatSession(1, 0, "", 1)
 	if err != nil {
 		t.Fatalf("建会话失败：%v", err)
 	}
 	return s
 }
 
-func mustMsg(t *testing.T, sid uint, role, content string, parent uint) *AiChatMessage {
+func mustMsg(t *testing.T, sid uint, role, content string, parent uint) *models.AiChatMessage {
 	t.Helper()
 	m, err := AppendAiChatMessageWithParent(sid, role, content, parent, 0, 0, 0, 0)
 	if err != nil {
@@ -137,11 +138,11 @@ func TestThread_LegacyNoParent(t *testing.T) {
 	for _, r := range []struct{ role, content string }{
 		{"user", "老问1"}, {"assistant", "老答1"}, {"user", "老问2"}, {"assistant", "老答2"},
 	} {
-		m := &AiChatMessage{
+		m := &models.AiChatMessage{
 			SessionID: s.ID, Role: r.role, Content: r.content,
 			CreatedAt: time.Now(),
 		}
-		if err := DB.Create(m).Error; err != nil {
+		if err := models.DB.Create(m).Error; err != nil {
 			t.Fatalf("写老数据失败：%v", err)
 		}
 	}
@@ -176,7 +177,7 @@ func TestLockSession(t *testing.T) {
 	if err := LockAiChatSession(s.ID, "测试终止", 0); err != nil {
 		t.Fatalf("终止失败：%v", err)
 	}
-	got, _ := GetAiChatSession(s.ID, 1)
+	got, _ := models.GetAiChatSession(s.ID, 1)
 	if got == nil || !got.Locked {
 		t.Fatalf("会话应处于终止状态")
 	}
@@ -186,7 +187,7 @@ func TestLockSession(t *testing.T) {
 	if err := UnlockAiChatSession(s.ID); err != nil {
 		t.Fatalf("解锁失败：%v", err)
 	}
-	got, _ = GetAiChatSession(s.ID, 1)
+	got, _ = models.GetAiChatSession(s.ID, 1)
 	if got.Locked {
 		t.Fatalf("解锁后不应仍处于终止状态")
 	}

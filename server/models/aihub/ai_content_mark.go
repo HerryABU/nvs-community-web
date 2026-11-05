@@ -1,6 +1,7 @@
-package models
+package aihub
 
 import (
+	"nvs-server/models"
 	"strconv"
 	"strings"
 	"time"
@@ -40,20 +41,20 @@ func MarkAiContent(targetType string, targetID uint, aiModel string) error {
 		aiModel = string([]rune(aiModel)[:64])
 	}
 	var n int64
-	DB.Model(&AiContentMark{}).Where("target_type = ? AND target_id = ?", targetType, targetID).Count(&n)
+	models.DB.Model(&AiContentMark{}).Where("target_type = ? AND target_id = ?", targetType, targetID).Count(&n)
 	if n > 0 {
-		return DB.Model(&AiContentMark{}).
+		return models.DB.Model(&AiContentMark{}).
 			Where("target_type = ? AND target_id = ?", targetType, targetID).
 			UpdateColumn("ai_model", aiModel).Error
 	}
-	return DB.Create(&AiContentMark{
+	return models.DB.Create(&AiContentMark{
 		TargetType: targetType, TargetID: targetID, AiModel: aiModel, CreatedAt: time.Now(),
 	}).Error
 }
 
 // ClearAiContentMark 取消标记（作者选择"这是我写的"时）
 func ClearAiContentMark(targetType string, targetID uint) error {
-	return DB.Where("target_type = ? AND target_id = ?", targetType, targetID).Delete(&AiContentMark{}).Error
+	return models.DB.Where("target_type = ? AND target_id = ?", targetType, targetID).Delete(&AiContentMark{}).Error
 }
 
 // AiMarkItem 查询项
@@ -78,7 +79,7 @@ func GetAiContentMarks(items []AiMarkItem) map[string]string {
 	}
 	for t, ids := range byType {
 		var rows []AiContentMark
-		DB.Where("target_type = ? AND target_id IN ?", t, ids).Find(&rows)
+		models.DB.Where("target_type = ? AND target_id IN ?", t, ids).Find(&rows)
 		for _, r := range rows {
 			out[t+":"+strconv.FormatUint(uint64(r.TargetID), 10)] = r.AiModel
 		}

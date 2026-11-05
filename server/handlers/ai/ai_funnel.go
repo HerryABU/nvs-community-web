@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 )
 
 // ==================== 转化漏斗（gap-audit #13）====================
@@ -50,7 +51,7 @@ func AiFunnel(c *gin.Context) {
 	// 3) 用尽：触发过免费额度限制（记录在 ai_free_usages 的拒绝次数）或免费调用次数达到当日额度
 	// 用尽：窗口内出现过「当天免费次数已达上限」的用户。
 	// 上限取「按人覆盖优先，否则平台默认」（与 CheckAiFreeQuota 同口径）。
-	cfg := models.GetAiFreeQuotaConfig()
+	cfg := aihub.GetAiFreeQuotaConfig()
 	limit := cfg.CallsPerDay
 	exhausted := count(`SELECT COUNT(DISTINCT u.user_id) FROM user_ai_free_usages u
 		LEFT JOIN user_ai_free_quotas o ON o.user_id = u.user_id

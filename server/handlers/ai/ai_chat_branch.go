@@ -8,6 +8,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 )
 
 // ==================== 对话分支（同 DeepSeek / Qwen 官网） ====================
@@ -20,10 +21,10 @@ func chatMessageView(list []models.AiChatMessage) []gin.H {
 	out := make([]gin.H, 0, len(list))
 	for i := range list {
 		m := &list[i]
-		idx, cnt := models.SiblingIndex(m)
+		idx, cnt := aihub.SiblingIndex(m)
 		var ids []uint
 		if cnt > 1 {
-			ids = models.SiblingIDs(m)
+			ids = aihub.SiblingIDs(m)
 		}
 		out = append(out, gin.H{
 			"id": m.ID, "session_id": m.SessionID, "role": m.Role, "content": m.Content,
@@ -55,19 +56,19 @@ func AiHubSwitchBranch(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	m, err := models.GetAiChatMessage(req.MessageID, s.ID)
+	m, err := aihub.GetAiChatMessage(req.MessageID, s.ID)
 	if err != nil || m == nil {
 		utils.NotFound(c, "消息不存在")
 		return
 	}
 	// 兄弟分支可能各自又发展到不同深度，必须跟到该分支的末端，
 	// 否则切过去只显示到一半，后面的追问全丢了。
-	leaf := models.DeepestLeafFrom(s.ID, m.ID)
-	if err := models.SetActiveLeaf(s.ID, leaf); err != nil {
+	leaf := aihub.DeepestLeafFrom(s.ID, m.ID)
+	if err := aihub.SetActiveLeaf(s.ID, leaf); err != nil {
 		utils.InternalError(c, "切换失败")
 		return
 	}
-	list, err := models.ListAiChatThread(s.ID, leaf)
+	list, err := aihub.ListAiChatThread(s.ID, leaf)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return

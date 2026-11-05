@@ -22,6 +22,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 	blogm "nvs-server/models/blog"
 )
 
@@ -224,7 +225,7 @@ func CreateBlog(c *gin.Context) {
 
 	// AI 生成内容标识（合规）
 	if req.AiAssisted {
-		_ = models.MarkAiContent(models.AiMarkBlog, blog.ID, req.AiModel)
+		_ = aihub.MarkAiContent(aihub.AiMarkBlog, blog.ID, req.AiModel)
 	}
 
 	// 写入文件系统

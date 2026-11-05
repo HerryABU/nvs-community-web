@@ -11,6 +11,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 )
 
 // ==================== 在线支付充值（§7.4 微信/支付宝聚合通道） ====================
@@ -195,7 +196,7 @@ func MembershipInfo(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
 	cfg := models.GetPaymentConfig()
 	// 权益对比表要显示真实数字，不能写"平台配置"这种空话
-	quota := models.GetAiFreeQuotaConfig()
+	quota := aihub.GetAiFreeQuotaConfig()
 	utils.Success(c, gin.H{
 		"status":          models.GetMembershipStatus(uid),
 		"tiers":           models.GetPaymentTiers(),
@@ -203,7 +204,7 @@ func MembershipInfo(c *gin.Context) {
 		"payment_enabled": models.IsPaymentEnabled(),
 		"token_enabled":   models.IsTokenEnabled(),
 		"free_quota": gin.H{
-			"enabled":       models.IsAiFreeQuotaEnabled(),
+			"enabled":       aihub.IsAiFreeQuotaEnabled(),
 			"calls_per_day": quota.CallsPerDay,
 			"max_tokens":    quota.MaxTokensPerDay,
 			// 会员倍数：与 models.memberFreeQuotaMultiplier 保持一致

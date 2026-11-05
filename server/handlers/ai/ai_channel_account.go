@@ -15,10 +15,10 @@ import (
 	"strings"
 
 	"nvs-server/handlers/admin"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 )
 
 // AdminSaveChannelAccount POST /api/admin/ai/channel-account
@@ -39,7 +39,7 @@ func AdminSaveChannelAccount(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	acc, err := models.SaveAiChannelAccount(req.BaseURL, req.Label, req.UserID, req.AccessToken, req.ModelKey)
+	acc, err := aihub.SaveAiChannelAccount(req.BaseURL, req.Label, req.UserID, req.AccessToken, req.ModelKey)
 	if err != nil {
 		utils.BadRequest(c, err.Error())
 		return
@@ -53,7 +53,7 @@ func AdminGetChannelAccount(c *gin.Context) {
 		return
 	}
 	base := strings.TrimSpace(c.Query("base_url"))
-	acc, err := models.GetAiChannelAccount(base)
+	acc, err := aihub.GetAiChannelAccount(base)
 	if err != nil {
 		// 没保存过不是错误：前端据此显示「未保存」表单
 		utils.Success(c, gin.H{"exists": false})
@@ -67,7 +67,7 @@ func AdminListChannelAccounts(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	list := models.ListAiChannelAccounts()
+	list := aihub.ListAiChannelAccounts()
 	out := make([]gin.H, 0, len(list))
 	for i := range list {
 		out = append(out, redactAccount(&list[i]))
@@ -86,7 +86,7 @@ func AdminDeleteChannelAccount(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.DeleteAiChannelAccount(id); err != nil {
+	if err := aihub.DeleteAiChannelAccount(id); err != nil {
 		utils.InternalError(c, "删除失败")
 		return
 	}
@@ -94,7 +94,7 @@ func AdminDeleteChannelAccount(c *gin.Context) {
 }
 
 // redactAccount 脱敏：密文一律不出现在响应里，只给「有没有 / 尾号 / 上次结果」
-func redactAccount(a *models.AiChannelAccount) gin.H {
+func redactAccount(a *aihub.AiChannelAccount) gin.H {
 	if a == nil {
 		return gin.H{}
 	}

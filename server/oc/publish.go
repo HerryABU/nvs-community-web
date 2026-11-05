@@ -15,6 +15,7 @@ import (
 	"nvs-server/aiclient"
 	"nvs-server/config"
 	"nvs-server/models"
+	aihub "nvs-server/models/aihub"
 	"nvs-server/security"
 )
 
@@ -154,7 +155,7 @@ func PublishFlowToNovel(in PublishInput) (*PublishResult, error) {
 			return nil, err
 		}
 		if hasAI && modelName != "" {
-			_ = models.MarkAiContent(models.AiMarkChapter, ch.ID, modelName)
+			_ = aihub.MarkAiContent(aihub.AiMarkChapter, ch.ID, modelName)
 		}
 		res.ChapterIDs = append(res.ChapterIDs, ch.ID)
 		res.Words += len([]rune(body))
@@ -338,7 +339,7 @@ func polishChunk(body string, userID, groupID uint) (string, string, error) {
 	prompt := "请把下面的角色扮演对话整理成小说叙述段落：保留人物性格与信息量，" +
 		"补上必要的动作与环境描写，不改情节，不新增设定，输出纯正文。\n\n" + body
 	estTokens := models.EstimateTokens(prompt) + 1024
-	freeOK, _, _ := models.CheckAiFreeQuota(userID, estTokens)
+	freeOK, _, _ := aihub.CheckAiFreeQuota(userID, estTokens)
 	if !freeOK {
 		if !models.IsTokenEnabled() {
 			return body, "", nil
@@ -347,7 +348,7 @@ func polishChunk(body string, userID, groupID uint) (string, string, error) {
 			return body, "", nil
 		}
 	}
-	lease, kerr := models.AcquireModelKey(m)
+	lease, kerr := aihub.AcquireModelKey(m)
 	if kerr != nil {
 		return body, "", nil
 	}
@@ -384,7 +385,7 @@ func polishChunk(body string, userID, groupID uint) (string, string, error) {
 	}
 	cost := models.EstimateAiCost(m, realIn, realOut)
 	if freeOK {
-		_ = models.RecordAiFreeUsage(userID, 1, realIn+realOut)
+		_ = aihub.RecordAiFreeUsage(userID, 1, realIn+realOut)
 	} else if _, serr := models.SettleAiCallLog(callLog.ID, realIn, realOut); serr != nil {
 		return body, "", nil
 	}

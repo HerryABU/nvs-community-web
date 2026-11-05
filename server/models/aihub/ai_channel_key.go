@@ -1,4 +1,4 @@
-package models
+package aihub
 
 import (
 	"crypto/sha256"
@@ -11,6 +11,7 @@ import (
 	"nvs-server/utils"
 
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // ==================== AI 渠道卡密池（按渠道，而不是按模型） ====================
@@ -62,14 +63,14 @@ func FingerprintKey(plain string) string {
 // ListAiChannelKeys 某渠道的卡密池（不含明文）
 func ListAiChannelKeys(baseURL string) ([]AiChannelKey, error) {
 	var list []AiChannelKey
-	err := DB.Where("base_url = ?", normalizeChannelURL(baseURL)).Order("id ASC").Find(&list).Error
+	err := models.DB.Where("base_url = ?", normalizeChannelURL(baseURL)).Order("id ASC").Find(&list).Error
 	return list, err
 }
 
 // GetAiChannelKey 取一条（限定渠道，避免越权按 id 乱改其它渠道）
 func GetAiChannelKey(id uint, baseURL string) (*AiChannelKey, error) {
 	var k AiChannelKey
-	if err := DB.Where("id = ? AND base_url = ?", id, normalizeChannelURL(baseURL)).First(&k).Error; err != nil {
+	if err := models.DB.Where("id = ? AND base_url = ?", id, normalizeChannelURL(baseURL)).First(&k).Error; err != nil {
 		return nil, err
 	}
 	return &k, nil
@@ -94,7 +95,7 @@ func AddAiChannelKey(baseURL, label, plain, note string, weight int) (*AiChannel
 	fp := FingerprintKey(plain)
 
 	var dup int64
-	DB.Model(&AiChannelKey{}).Where("base_url = ? AND fingerprint = ?", base, fp).Count(&dup)
+	models.DB.Model(&AiChannelKey{}).Where("base_url = ? AND fingerprint = ?", base, fp).Count(&dup)
 	if dup > 0 {
 		return nil, fmt.Errorf("该渠道下已有同一把密钥（按内容判重），无需重复添加")
 	}
@@ -107,7 +108,7 @@ func AddAiChannelKey(baseURL, label, plain, note string, weight int) (*AiChannel
 		BaseURL: base, Label: strings.TrimSpace(label), KeyEnc: enc, Fingerprint: fp,
 		Weight: weight, Enabled: true, Note: strings.TrimSpace(note),
 	}
-	if err := DB.Create(k).Error; err != nil {
+	if err := models.DB.Create(k).Error; err != nil {
 		return nil, err
 	}
 	return k, nil
@@ -132,12 +133,12 @@ func UpdateAiChannelKey(id uint, label *string, weight *int, enabled *bool) erro
 			fields["fail_count"] = 0
 		}
 	}
-	return DB.Model(&AiChannelKey{}).Where("id = ?", id).Updates(fields).Error
+	return models.DB.Model(&AiChannelKey{}).Where("id = ?", id).Updates(fields).Error
 }
 
 // DeleteAiChannelKey 删除一把卡密
 func DeleteAiChannelKey(id uint) error {
-	return DB.Delete(&AiChannelKey{}, id).Error
+	return models.DB.Delete(&AiChannelKey{}, id).Error
 }
 
 // DecryptAiChannelKey 解密卡密明文（调用方用后即焚，不得落日志）
@@ -151,7 +152,7 @@ func DecryptAiChannelKey(k *AiChannelKey) (string, error) {
 // pickChannelCandidates 可用卡密：启用 + 未达熔断阈值 + 权重 > 0
 func pickChannelCandidates(baseURL string) []AiChannelKey {
 	var list []AiChannelKey
-	DB.Where("base_url = ? AND enabled = ? AND fail_count < ? AND weight > 0",
+	models.DB.Where("base_url = ? AND enabled = ? AND fail_count < ? AND weight > 0",
 		normalizeChannelURL(baseURL), true, MaxFailBeforeDisable).Find(&list)
 	return list
 }
@@ -187,14 +188,14 @@ func ReportAiChannelKey(keyID uint, ok bool) {
 	}
 	now := time.Now()
 	if ok {
-		DB.Model(&AiChannelKey{}).Where("id = ?", keyID).Updates(map[string]interface{}{
+		models.DB.Model(&AiChannelKey{}).Where("id = ?", keyID).Updates(map[string]interface{}{
 			"fail_count": 0, "last_used_at": now, "updated_at": now,
 			"success_total": gorm.Expr("success_total + ?", 1),
 		})
 		return
 	}
 	var k AiChannelKey
-	if err := DB.Where("id = ?", keyID).First(&k).Error; err != nil {
+	if err := models.DB.Where("id = ?", keyID).First(&k).Error; err != nil {
 		return
 	}
 	fails := k.FailCount + 1
@@ -205,7 +206,7 @@ func ReportAiChannelKey(keyID uint, ok bool) {
 	if fails >= MaxFailBeforeDisable {
 		fields["enabled"] = false // 自动摘除，避免持续打到坏卡密
 	}
-	DB.Model(&AiChannelKey{}).Where("id = ?", keyID).Updates(fields)
+	models.DB.Model(&AiChannelKey{}).Where("id = ?", keyID).Updates(fields)
 }
 
 // ChannelKeyStats 渠道卡密池概况（按渠道视图/余额弹窗用）
@@ -224,7 +225,7 @@ func GetChannelKeyStats() map[string]ChannelKeyStats {
 		Enabled int64
 	}
 	var rows []row
-	DB.Model(&AiChannelKey{}).
+	models.DB.Model(&AiChannelKey{}).
 		Select("base_url, COUNT(*) as total, SUM(CASE WHEN enabled THEN 1 ELSE 0 END) as enabled").
 		Group("base_url").Scan(&rows)
 	for _, r := range rows {
@@ -238,16 +239,16 @@ func GetChannelKeyStats() map[string]ChannelKeyStats {
 // MigrateModelKeysToChannels 把老配置（按模型存的密钥）迁到渠道卡密池。
 //
 // 幂等：按 (base_url, 指纹) 判重，重复启动不会重复插入。
-// 只读不改老数据：AiModel.ApiKeyEnc 与 ai_model_keys 保持原样，
+// 只读不改老数据：models.AiModel.ApiKeyEnc 与 ai_model_keys 保持原样，
 // 作为渠道池为空时的兜底 —— 升级后行为不变，但新配置都走渠道池。
 //
 // 返回新增条数，便于启动日志里给个确定结论。
 func MigrateModelKeysToChannels() (int, error) {
-	if DB == nil {
+	if models.DB == nil {
 		return 0, nil
 	}
-	var list []AiModel
-	if err := DB.Where("base_url <> ''").Find(&list).Error; err != nil {
+	var list []models.AiModel
+	if err := models.DB.Where("base_url <> ''").Find(&list).Error; err != nil {
 		return 0, err
 	}
 	added := 0
@@ -265,7 +266,7 @@ func MigrateModelKeysToChannels() (int, error) {
 		}
 		// 2) 按模型的密钥池
 		var keys []AiModelKey
-		DB.Where("model_id = ?", m.ID).Find(&keys)
+		models.DB.Where("model_id = ?", m.ID).Find(&keys)
 		for j := range keys {
 			plain, err := DecryptAiModelKey(&keys[j])
 			if err != nil || strings.TrimSpace(plain) == "" {
@@ -287,7 +288,7 @@ func MigrateModelKeysToChannels() (int, error) {
 func ensureChannelKey(base, plain, label string) (bool, error) {
 	fp := FingerprintKey(plain)
 	var n int64
-	DB.Model(&AiChannelKey{}).Where("base_url = ? AND fingerprint = ?", base, fp).Count(&n)
+	models.DB.Model(&AiChannelKey{}).Where("base_url = ? AND fingerprint = ?", base, fp).Count(&n)
 	if n > 0 {
 		return false, nil
 	}
@@ -299,7 +300,7 @@ func ensureChannelKey(base, plain, label string) (bool, error) {
 		BaseURL: base, Label: strings.TrimSpace(label), KeyEnc: enc, Fingerprint: fp,
 		Weight: 1, Enabled: true, Note: "自动迁移",
 	}
-	if err := DB.Create(k).Error; err != nil {
+	if err := models.DB.Create(k).Error; err != nil {
 		return false, err
 	}
 	return true, nil

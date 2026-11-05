@@ -17,6 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	aicost "nvs-server/models/aicost"
+	aihub "nvs-server/models/aihub"
 )
 
 // ==================== AI 工作台：会话 + 流式对话（§5.4） ====================
@@ -31,7 +32,7 @@ func AiHubStatus(c *gin.Context) {
 		"token_enabled": tokenEnabled,
 		"token_name":    models.GetTokenName(),
 		"balance":       models.GetTokenBalance(userID),
-		"free_quota":    models.SummarizeAiFreeQuota(userID),
+		"free_quota":    aihub.SummarizeAiFreeQuota(userID),
 		"chat_models":   []gin.H{},
 		"image_models":  []gin.H{},
 		"video_models":  []gin.H{},
@@ -86,7 +87,7 @@ func AiHubSessionMessages(c *gin.Context) {
 		return
 	}
 	// 按活跃叶子回溯当前分支，并附上兄弟信息（前端渲染「‹ 2/3 ›」）
-	list, err := models.ListAiChatThread(s.ID, s.ActiveLeafID)
+	list, err := aihub.ListAiChatThread(s.ID, s.ActiveLeafID)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -248,8 +249,8 @@ func AiHubChatStream(c *gin.Context) {
 	}
 
 	// ── 平台开关：每日对话上限 + 是否允许自备密钥 ──
-	flags := models.GetAiFeatureFlags()
-	if ok, reason := models.CheckAiChatDailyLimit(userID); !ok {
+	flags := aihub.GetAiFeatureFlags()
+	if ok, reason := aihub.CheckAiChatDailyLimit(userID); !ok {
 		utils.Error(c, 429, 42903, reason)
 		return
 	}
@@ -336,7 +337,7 @@ func AiHubChatStream(c *gin.Context) {
 	parentID := session.ActiveLeafID
 	var regenUser *models.AiChatMessage
 	if req.EditMsgID > 0 {
-		old, e := models.GetAiChatMessage(req.EditMsgID, session.ID)
+		old, e := aihub.GetAiChatMessage(req.EditMsgID, session.ID)
 		if e != nil || old == nil {
 			utils.NotFound(c, "被编辑的消息不存在")
 			return
@@ -347,7 +348,7 @@ func AiHubChatStream(c *gin.Context) {
 		}
 		parentID = old.ParentID
 	} else if req.RegenerateMsgID > 0 {
-		old, e := models.GetAiChatMessage(req.RegenerateMsgID, session.ID)
+		old, e := aihub.GetAiChatMessage(req.RegenerateMsgID, session.ID)
 		if e != nil || old == nil {
 			utils.NotFound(c, "被重新生成的消息不存在")
 			return
@@ -358,7 +359,7 @@ func AiHubChatStream(c *gin.Context) {
 		}
 		parentID = old.ParentID
 		// 复用原提问：前端不必再传一遍，也避免两次内容不一致
-		if u, e2 := models.GetAiChatMessage(old.ParentID, session.ID); e2 == nil && u != nil {
+		if u, e2 := aihub.GetAiChatMessage(old.ParentID, session.ID); e2 == nil && u != nil {
 			regenUser = u
 			msg = u.Content
 		} else {
@@ -370,7 +371,7 @@ func AiHubChatStream(c *gin.Context) {
 	// ── 历史 + 系统提示词 ──
 	// 按 parentID 回溯当前线程，而不是整表按时间取 —— 有分支后时间顺序会把
 	// 兄弟分支串在一起，模型会看到「问一次、答两次」的错乱上下文。
-	history, _ := models.ListAiChatThread(session.ID, parentID)
+	history, _ := aihub.ListAiChatThread(session.ID, parentID)
 
 	// ── 内容安全闸（输入侧）──
 	// 放在消息组装之前：拦下来就不该再算 token 预算，也不该把危险内容喂进上下文。
@@ -502,7 +503,7 @@ func AiHubChatStream(c *gin.Context) {
 		tokensOut = 8192
 	}
 	// 免费额度判定（优先）：命中则本次不扣代币；BYOK 一律不扣平台代币
-	freeOK, _, _ := models.CheckAiFreeQuota(userID, tokensIn+tokensOut)
+	freeOK, _, _ := aihub.CheckAiFreeQuota(userID, tokensIn+tokensOut)
 	if !freeOK && !req.Byok {
 		if !models.IsTokenEnabled() {
 			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
@@ -519,7 +520,7 @@ func AiHubChatStream(c *gin.Context) {
 	// ── 资金闸门：单次上限 + 二次确认（BYOK 不涉平台代币，跳过） ──
 	if !req.Byok && !freeOK {
 		estCost := models.EstimateAiCost(m, tokensIn, tokensOut)
-		allowed, needConfirm, reason := models.CallGuard(estCost, req.Confirm)
+		allowed, needConfirm, reason := aihub.CallGuard(estCost, req.Confirm)
 		if !allowed {
 			utils.BadRequest(c, reason+"（未扣款）")
 			return
@@ -537,7 +538,7 @@ func AiHubChatStream(c *gin.Context) {
 	if regenUser != nil {
 		userMsgID = regenUser.ID
 	} else {
-		um, uerr := models.AppendAiChatMessageWithParent(session.ID, "user", storeMsg, parentID, 0, 0, 0, 0)
+		um, uerr := aihub.AppendAiChatMessageWithParent(session.ID, "user", storeMsg, parentID, 0, 0, 0, 0)
 		if uerr != nil {
 			utils.InternalError(c, "记录消息失败")
 			return
@@ -562,7 +563,7 @@ func AiHubChatStream(c *gin.Context) {
 		}
 	}
 
-	lease, kerr := models.AcquireModelKey(m)
+	lease, kerr := aihub.AcquireModelKey(m)
 	apiKey := ""
 	if lease != nil {
 		apiKey = lease.Key
@@ -675,9 +676,9 @@ func AiHubChatStream(c *gin.Context) {
 		if aisafety.NormalizeMode(safetyCfg.TerminateMode) == aisafety.TerminateAppease {
 			term := applyTermination(session, safetyCfg, "输出侧拦截："+og.Reason())
 			text := term.Text
-			am, _ := models.AppendAiChatMessageWithParent(session.ID, "assistant", text, userMsgID, realIn, realOut, 0, callLog.ID)
+			am, _ := aihub.AppendAiChatMessageWithParent(session.ID, "assistant", text, userMsgID, realIn, realOut, 0, callLog.ID)
 			if am != nil && am.ID > 0 {
-				models.SetActiveLeaf(session.ID, am.ID)
+				aihub.SetActiveLeaf(session.ID, am.ID)
 			}
 			models.TouchAiChatSession(session.ID, "")
 			sseEvent(c, gin.H{
@@ -698,9 +699,9 @@ func AiHubChatStream(c *gin.Context) {
 			term = applyTermination(session, safetyCfg, "输出侧拦截："+og.Reason())
 		}
 		text := term.Text
-		am, _ := models.AppendSafetyBlockedMessage(session.ID, userMsgID, text, callLog.ID)
+		am, _ := aihub.AppendSafetyBlockedMessage(session.ID, userMsgID, text, callLog.ID)
 		if am != nil && am.ID > 0 {
-			models.SetActiveLeaf(session.ID, am.ID)
+			aihub.SetActiveLeaf(session.ID, am.ID)
 		}
 		models.TouchAiChatSession(session.ID, "")
 		sseEvent(c, gin.H{
@@ -759,17 +760,17 @@ func AiHubChatStream(c *gin.Context) {
 	}
 	cost := models.EstimateAiCost(m, realIn, realOut)
 	if freeOK {
-		_ = models.RecordAiFreeUsage(userID, 1, realIn+realOut)
+		_ = aihub.RecordAiFreeUsage(userID, 1, realIn+realOut)
 		cost = 0
 	}
 	if req.Byok {
 		aicost.TouchUserAiKey(uk.ID)
 		cost = 0
 	}
-	am, _ := models.AppendAiChatMessageWithParent(session.ID, "assistant", sb, userMsgID, realIn, realOut, cost, callLog.ID)
+	am, _ := aihub.AppendAiChatMessageWithParent(session.ID, "assistant", sb, userMsgID, realIn, realOut, cost, callLog.ID)
 	// 新回复成为活跃叶子：下次「继续追问」接在它后面，而不是接在旧分支上
 	if am != nil && am.ID > 0 {
-		models.SetActiveLeaf(session.ID, am.ID)
+		aihub.SetActiveLeaf(session.ID, am.ID)
 	}
 	models.TouchAiAgent(session.AgentID)
 	models.TouchAiChatSession(session.ID, "")

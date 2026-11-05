@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	aicost "nvs-server/models/aicost"
+	aihub "nvs-server/models/aihub"
 	aiops "nvs-server/models/aiops"
 )
 
@@ -80,7 +81,7 @@ func AiStatus(c *gin.Context) {
 		"token_name":    models.GetTokenName(),
 		"balance":       models.GetTokenBalance(userID),
 		"models":        modelList,
-		"free_quota":    models.SummarizeAiFreeQuota(userID),
+		"free_quota":    aihub.SummarizeAiFreeQuota(userID),
 	})
 }
 
@@ -111,7 +112,7 @@ func AiEstimate(c *gin.Context) {
 		tokensOut = m.MaxTokens
 	}
 	cost := models.EstimateAiCost(m, tokensIn, tokensOut)
-	freeOK, _, _ := models.CheckAiFreeQuota(userID, tokensIn+tokensOut)
+	freeOK, _, _ := aihub.CheckAiFreeQuota(userID, tokensIn+tokensOut)
 	utils.Success(c, gin.H{
 		"tokens_in":     tokensIn,
 		"tokens_out":    tokensOut,
@@ -264,7 +265,7 @@ func AiComplete(c *gin.Context) {
 		tokensOut = 8192
 	}
 	// 免费额度判定（优先）：命中则本次不扣代币
-	freeOK, _, _ := models.CheckAiFreeQuota(userID, tokensIn+tokensOut)
+	freeOK, _, _ := aihub.CheckAiFreeQuota(userID, tokensIn+tokensOut)
 	// 非免费路径：代币系统未开启或余额不足均拒绝（不发起上游）
 	if !freeOK {
 		if !models.IsTokenEnabled() {
@@ -328,7 +329,7 @@ func AiComplete(c *gin.Context) {
 	cost := models.EstimateAiCost(m, realIn, realOut)
 	if freeOK {
 		// 免费额度调用：记入当日免费用量（1 次 + 真实 tokens）
-		_ = models.RecordAiFreeUsage(userID, 1, realIn+realOut)
+		_ = aihub.RecordAiFreeUsage(userID, 1, realIn+realOut)
 		cost = 0
 	}
 	utils.Success(c, gin.H{

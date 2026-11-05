@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 )
 
 // ==================== @ai 评论区机器人（§5.6） ====================
@@ -98,7 +99,7 @@ func generateAiBotReply(triggerUser uint, trigger *models.Comment, cfg models.Ai
 
 	// 计费预检：免费额度优先，否则代币
 	estTokens := models.EstimateTokens(prompt) + models.EstimateTokens(parentContent) + 512
-	freeOK, _, _ := models.CheckAiFreeQuota(triggerUser, estTokens)
+	freeOK, _, _ := aihub.CheckAiFreeQuota(triggerUser, estTokens)
 	if !freeOK {
 		if !models.IsTokenEnabled() {
 			return
@@ -134,7 +135,7 @@ func generateAiBotReply(triggerUser uint, trigger *models.Comment, cfg models.Ai
 	sb.WriteString("召唤者说：" + triggerContent + "\n")
 	sb.WriteString("请针对以上内容给出回复。")
 
-	lease, kerr := models.AcquireModelKey(m)
+	lease, kerr := aihub.AcquireModelKey(m)
 	apiKey := ""
 	if lease != nil {
 		apiKey = lease.Key
@@ -173,7 +174,7 @@ func generateAiBotReply(triggerUser uint, trigger *models.Comment, cfg models.Ai
 	}
 	cost := models.EstimateAiCost(m, realIn, realOut)
 	if freeOK {
-		_ = models.RecordAiFreeUsage(triggerUser, 1, realIn+realOut)
+		_ = aihub.RecordAiFreeUsage(triggerUser, 1, realIn+realOut)
 		cost = 0
 	} else if _, serr := models.SettleAiCallLog(callLog.ID, realIn, realOut); serr != nil {
 		return // 结算失败（余额被并发耗尽）：不发布

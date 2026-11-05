@@ -7,6 +7,7 @@ import (
 
 	"nvs-server/aiclient"
 	"nvs-server/models"
+	aihub "nvs-server/models/aihub"
 )
 
 // JudgeVerdict 监管模型 B 的判定结论。
@@ -94,7 +95,7 @@ func JudgeConversation(in JudgeInput) *JudgeVerdict {
 	}
 
 	apiKey := ""
-	lease, kerr := models.AcquireModelKey(m)
+	lease, kerr := aihub.AcquireModelKey(m)
 	if lease != nil {
 		apiKey = lease.Key
 	}
@@ -495,7 +496,7 @@ func JudgeImage(images []string, text string) *JudgeVerdict {
 	v.ModelName = m.Name
 
 	apiKey := ""
-	lease, kerr := models.AcquireModelKey(m)
+	lease, kerr := aihub.AcquireModelKey(m)
 	if lease != nil {
 		apiKey = lease.Key
 	}

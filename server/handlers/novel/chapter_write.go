@@ -27,6 +27,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
+	aihub "nvs-server/models/aihub"
 )
 
 func CreateChapter(c *gin.Context) {
@@ -150,9 +151,9 @@ func CreateChapter(c *gin.Context) {
 
 	// AI 生成内容标识（合规）：作者在编辑器用过 AI 时落标，发布页/详情页展示徽标
 	if req.AiAssisted {
-		_ = models.MarkAiContent(models.AiMarkChapter, chapter.ID, req.AiModel)
+		_ = aihub.MarkAiContent(aihub.AiMarkChapter, chapter.ID, req.AiModel)
 	} else if chapter.ID > 0 {
-		_ = models.ClearAiContentMark(models.AiMarkChapter, chapter.ID)
+		_ = aihub.ClearAiContentMark(aihub.AiMarkChapter, chapter.ID)
 	}
 
 	// 版本控制：新建章节即产生 v1（快照 + 提交记录）
@@ -288,9 +289,9 @@ func UpdateChapter(c *gin.Context) {
 
 	// AI 生成内容标识（合规）：作者在编辑器用过 AI 时落标，发布页/详情页展示徽标
 	if req.AiAssisted {
-		_ = models.MarkAiContent(models.AiMarkChapter, chapter.ID, req.AiModel)
+		_ = aihub.MarkAiContent(aihub.AiMarkChapter, chapter.ID, req.AiModel)
 	} else if chapter.ID > 0 {
-		_ = models.ClearAiContentMark(models.AiMarkChapter, chapter.ID)
+		_ = aihub.ClearAiContentMark(aihub.AiMarkChapter, chapter.ID)
 	}
 
 	// 回传最新版本号，前端下次保存带 base_version 做冲突检测

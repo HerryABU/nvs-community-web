@@ -1,4 +1,4 @@
-package models
+package aihub
 
 import (
 	"fmt"
@@ -6,12 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"nvs-server/models"
 	"nvs-server/utils"
 )
 
 // ==================== AI 模型密钥池（多密钥轮询） ====================
 // 一个模型可挂多把上游客钥：按权重随机取用，失败计数超阈值自动停用，
-// 池为空时回退到 AiModel.ApiKeyEnc（兼容单密钥老配置）。
+// 池为空时回退到 models.AiModel.ApiKeyEnc（兼容单密钥老配置）。
 
 // MaxFailBeforeDisable 连续失败达到该次数自动停用该密钥
 const MaxFailBeforeDisable = 3
@@ -36,14 +37,14 @@ func (AiModelKey) TableName() string { return "ai_model_keys" }
 // ListAiModelKeys 某模型的密钥池（不含明文）
 func ListAiModelKeys(modelID uint) ([]AiModelKey, error) {
 	var list []AiModelKey
-	err := DB.Where("model_id = ?", modelID).Order("id ASC").Find(&list).Error
+	err := models.DB.Where("model_id = ?", modelID).Order("id ASC").Find(&list).Error
 	return list, err
 }
 
 // GetAiModelKey 取一把密钥
 func GetAiModelKey(id, modelID uint) (*AiModelKey, error) {
 	var k AiModelKey
-	if err := DB.Where("id = ? AND model_id = ?", id, modelID).First(&k).Error; err != nil {
+	if err := models.DB.Where("id = ? AND model_id = ?", id, modelID).First(&k).Error; err != nil {
 		return nil, err
 	}
 	return &k, nil
@@ -72,7 +73,7 @@ func AddAiModelKey(modelID uint, label, plain string, weight int) (*AiModelKey, 
 		ModelID: modelID, Label: strings.TrimSpace(label), KeyEnc: enc,
 		Weight: weight, Enabled: true, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
-	if err := DB.Create(k).Error; err != nil {
+	if err := models.DB.Create(k).Error; err != nil {
 		return nil, err
 	}
 	return k, nil
@@ -80,7 +81,7 @@ func AddAiModelKey(modelID uint, label, plain string, weight int) (*AiModelKey, 
 
 // DeleteAiModelKey 删除密钥
 func DeleteAiModelKey(id, modelID uint) error {
-	res := DB.Where("id = ? AND model_id = ?", id, modelID).Delete(&AiModelKey{})
+	res := models.DB.Where("id = ? AND model_id = ?", id, modelID).Delete(&AiModelKey{})
 	if res.Error != nil {
 		return res.Error
 	}
@@ -96,7 +97,7 @@ func UpdateAiModelKey(id, modelID uint, fields map[string]interface{}) error {
 		return nil
 	}
 	fields["updated_at"] = time.Now()
-	res := DB.Model(&AiModelKey{}).Where("id = ? AND model_id = ?", id, modelID).Updates(fields)
+	res := models.DB.Model(&AiModelKey{}).Where("id = ? AND model_id = ?", id, modelID).Updates(fields)
 	if res.Error != nil {
 		return res.Error
 	}
@@ -117,7 +118,7 @@ func DecryptAiModelKey(k *AiModelKey) (string, error) {
 // pickCandidates 可用候选（启用且未达失败阈值、权重>0）
 func pickCandidates(modelID uint) []AiModelKey {
 	var list []AiModelKey
-	DB.Where("model_id = ? AND enabled = ? AND fail_count < ? AND weight > 0",
+	models.DB.Where("model_id = ? AND enabled = ? AND fail_count < ? AND weight > 0",
 		modelID, true, MaxFailBeforeDisable).Find(&list)
 	return list
 }
@@ -152,12 +153,12 @@ func ReportAiModelKey(keyID uint, ok bool) {
 	}
 	now := time.Now()
 	if ok {
-		DB.Model(&AiModelKey{}).Where("id = ?", keyID).
+		models.DB.Model(&AiModelKey{}).Where("id = ?", keyID).
 			Updates(map[string]interface{}{"fail_count": 0, "last_used_at": now, "updated_at": now})
 		return
 	}
 	var k AiModelKey
-	if err := DB.Where("id = ?", keyID).First(&k).Error; err != nil {
+	if err := models.DB.Where("id = ?", keyID).First(&k).Error; err != nil {
 		return
 	}
 	fails := k.FailCount + 1
@@ -167,7 +168,7 @@ func ReportAiModelKey(keyID uint, ok bool) {
 	if fails >= MaxFailBeforeDisable {
 		fields["enabled"] = false // 自动摘除，避免持续打到坏密钥
 	}
-	DB.Model(&AiModelKey{}).Where("id = ?", keyID).Updates(fields)
+	models.DB.Model(&AiModelKey{}).Where("id = ?", keyID).Updates(fields)
 }
 
 // ModelKeyLease 一次调用占用的密钥（含来源信息，便于上报与排查）
@@ -212,7 +213,7 @@ func (l *ModelKeyLease) Fail() {
 // 为什么渠道优先：同一条 base_url 下的模型共用同一批上游密钥，
 // 按渠道池化才能让「轮询 / 熔断 / 停用」真正生效（按模型各算一套等于没有熔断）；
 // 后两级是升级前的老配置，保留它老站点不用改任何设置也能继续跑。
-func AcquireModelKey(m *AiModel) (*ModelKeyLease, error) {
+func AcquireModelKey(m *models.AiModel) (*ModelKeyLease, error) {
 	if m == nil {
 		return nil, fmt.Errorf("模型不存在")
 	}

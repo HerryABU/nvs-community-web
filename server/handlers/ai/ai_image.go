@@ -16,6 +16,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	aicost "nvs-server/models/aicost"
+	aihub "nvs-server/models/aihub"
 )
 
 func AiHubImage(c *gin.Context) {
@@ -98,7 +99,7 @@ func AiHubImage(c *gin.Context) {
 	if mode == "" {
 		mode = "t2i"
 	}
-	flags := models.GetAiFeatureFlags()
+	flags := aihub.GetAiFeatureFlags()
 	switch mode {
 	case "i2i":
 		if !flags.AllowI2I {
@@ -194,7 +195,7 @@ func AiHubImage(c *gin.Context) {
 	}
 	// 资金闸门：按 单价 × 张数
 	if est := m.PriceCall * int64(n); est > 0 {
-		allowed, needConfirm, reason := models.CallGuard(est, req.Confirm)
+		allowed, needConfirm, reason := aihub.CallGuard(est, req.Confirm)
 		if !allowed {
 			utils.BadRequest(c, reason+"（未扣款）")
 			return
@@ -214,7 +215,7 @@ func AiHubImage(c *gin.Context) {
 	if len(attachments) > 0 {
 		_ = models.SetMediaAttachments(task.ID, attachments)
 	}
-	lease, kerr := models.AcquireModelKey(m)
+	lease, kerr := aihub.AcquireModelKey(m)
 	apiKey := ""
 	if lease != nil {
 		apiKey = lease.Key
@@ -233,11 +234,11 @@ func AiHubImage(c *gin.Context) {
 		return
 	}
 	// 免费额度优先（按次消耗 1 次）；否则代币扣款
-	freeOK, _, _ := models.CheckAiFreeQuota(userID, 0)
+	freeOK, _, _ := aihub.CheckAiFreeQuota(userID, 0)
 	var nb int64
 	if freeOK {
 		_ = models.MarkAiMediaFree(task.ID)
-		_ = models.RecordAiFreeUsage(userID, 1, 0)
+		_ = aihub.RecordAiFreeUsage(userID, 1, 0)
 		nb = models.GetTokenBalance(userID)
 	} else {
 		if !models.IsTokenEnabled() {

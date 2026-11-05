@@ -1,6 +1,7 @@
-package models
+package aihub
 
 import (
+	"nvs-server/models"
 	"time"
 )
 
@@ -18,13 +19,13 @@ import (
 // 老数据（parent_id 全 0）由 BackfillMessageParents 串成链，行为与以前一致。
 
 // AppendAiChatMessageWithParent 落一条带父节点的消息。
-func AppendAiChatMessageWithParent(sessionID uint, role, content string, parentID uint, tokensIn, tokensOut int, cost int64, callLogID uint) (*AiChatMessage, error) {
-	m := &AiChatMessage{
+func AppendAiChatMessageWithParent(sessionID uint, role, content string, parentID uint, tokensIn, tokensOut int, cost int64, callLogID uint) (*models.AiChatMessage, error) {
+	m := &models.AiChatMessage{
 		SessionID: sessionID, Role: role, Content: content, ParentID: parentID,
 		TokensIn: tokensIn, TokensOut: tokensOut, Cost: cost, CallLogID: callLogID,
 		CreatedAt: time.Now(),
 	}
-	if err := DB.Create(m).Error; err != nil {
+	if err := models.DB.Create(m).Error; err != nil {
 		return nil, err
 	}
 	// ParentID 为 0 时会被 GORM 的零值规则忽略（走列默认 0，结果一样）；
@@ -34,21 +35,21 @@ func AppendAiChatMessageWithParent(sessionID uint, role, content string, parentI
 
 // AppendSafetyBlockedMessage 写一条「被安全闸拦截」的助手消息。
 // 与普通消息分开，是为了让前端能把它渲染成警告块而不是普通回答。
-func AppendSafetyBlockedMessage(sessionID, parentID uint, text string, callLogID uint) (*AiChatMessage, error) {
-	m := &AiChatMessage{
+func AppendSafetyBlockedMessage(sessionID, parentID uint, text string, callLogID uint) (*models.AiChatMessage, error) {
+	m := &models.AiChatMessage{
 		SessionID: sessionID, Role: "assistant", Content: text, ParentID: parentID,
 		SafetyBlocked: true, CallLogID: callLogID, CreatedAt: time.Now(),
 	}
-	if err := DB.Create(m).Error; err != nil {
+	if err := models.DB.Create(m).Error; err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
 // GetAiChatMessage 取一条消息（带会话归属校验，防止跨会话读取）。
-func GetAiChatMessage(id, sessionID uint) (*AiChatMessage, error) {
-	var m AiChatMessage
-	q := DB.Where("id = ?", id)
+func GetAiChatMessage(id, sessionID uint) (*models.AiChatMessage, error) {
+	var m models.AiChatMessage
+	q := models.DB.Where("id = ?", id)
 	if sessionID > 0 {
 		q = q.Where("session_id = ?", sessionID)
 	}
@@ -60,7 +61,7 @@ func GetAiChatMessage(id, sessionID uint) (*AiChatMessage, error) {
 
 // SetActiveLeaf 把会话的显示位置切到某个叶子。
 func SetActiveLeaf(sessionID, leafID uint) error {
-	return DB.Model(&AiChatSession{}).Where("id = ?", sessionID).
+	return models.DB.Model(&models.AiChatSession{}).Where("id = ?", sessionID).
 		UpdateColumn("active_leaf_id", leafID).Error
 }
 
@@ -68,23 +69,23 @@ func SetActiveLeaf(sessionID, leafID uint) error {
 //
 // 不用「全表按时间排序」是因为分支存在后，时间顺序会把兄弟分支串在一起，
 // 显示出来就是「问一次答两次」的错乱对话。
-func ListAiChatThread(sessionID, leafID uint) ([]AiChatMessage, error) {
+func ListAiChatThread(sessionID, leafID uint) ([]models.AiChatMessage, error) {
 	if sessionID == 0 {
 		return nil, nil
 	}
 	// leaf 未设置（老会话 / 空会话）：退化成"最新一条"
 	if leafID == 0 {
-		var last AiChatMessage
-		if err := DB.Where("session_id = ?", sessionID).Order("id DESC").Limit(1).Find(&last).Error; err != nil {
+		var last models.AiChatMessage
+		if err := models.DB.Where("session_id = ?", sessionID).Order("id DESC").Limit(1).Find(&last).Error; err != nil {
 			return nil, err
 		}
 		if last.ID == 0 {
-			return []AiChatMessage{}, nil
+			return []models.AiChatMessage{}, nil
 		}
 		leafID = last.ID
 	}
 
-	chain := make([]AiChatMessage, 0, 32)
+	chain := make([]models.AiChatMessage, 0, 32)
 	seen := map[uint]bool{}
 	cur := leafID
 	for cur > 0 && !seen[cur] && len(chain) < 500 {
@@ -107,31 +108,31 @@ func ListAiChatThread(sessionID, leafID uint) ([]AiChatMessage, error) {
 //
 // 只算同角色：对 user 消息「编辑重发」产生的是 user 兄弟，
 // assistant 的重新生成产生 assistant 兄弟，两者混在一起会让「第 2/3 条」失去意义。
-func SiblingIndex(m *AiChatMessage) (index int, count int) {
+func SiblingIndex(m *models.AiChatMessage) (index int, count int) {
 	if m == nil || m.ID == 0 {
 		return 0, 0
 	}
 	var total int64
-	DB.Model(&AiChatMessage{}).
+	models.DB.Model(&models.AiChatMessage{}).
 		Where("session_id = ? AND parent_id = ? AND role = ?", m.SessionID, m.ParentID, m.Role).
 		Count(&total)
 	if total == 0 {
 		return 0, 0
 	}
 	var before int64
-	DB.Model(&AiChatMessage{}).
+	models.DB.Model(&models.AiChatMessage{}).
 		Where("session_id = ? AND parent_id = ? AND role = ? AND id < ?", m.SessionID, m.ParentID, m.Role, m.ID).
 		Count(&before)
 	return int(before) + 1, int(total)
 }
 
 // SiblingIDs 取同父同角色兄弟的消息 ID（升序），供前端左右切换。
-func SiblingIDs(m *AiChatMessage) []uint {
+func SiblingIDs(m *models.AiChatMessage) []uint {
 	if m == nil {
 		return nil
 	}
 	var ids []uint
-	DB.Model(&AiChatMessage{}).
+	models.DB.Model(&models.AiChatMessage{}).
 		Where("session_id = ? AND parent_id = ? AND role = ?", m.SessionID, m.ParentID, m.Role).
 		Order("id ASC").Pluck("id", &ids)
 	return ids
@@ -146,9 +147,9 @@ func DeepestLeafFrom(sessionID, msgID uint) uint {
 	seen := map[uint]bool{}
 	for cur > 0 && !seen[cur] {
 		seen[cur] = true
-		var child AiChatMessage
+		var child models.AiChatMessage
 		// 取该节点最新的子节点（可能有多个，取最新的那条路径）
-		if err := DB.Where("session_id = ? AND parent_id = ?", sessionID, cur).
+		if err := models.DB.Where("session_id = ? AND parent_id = ?", sessionID, cur).
 			Order("id DESC").Limit(1).Find(&child).Error; err != nil || child.ID == 0 {
 			break
 		}
@@ -160,7 +161,7 @@ func DeepestLeafFrom(sessionID, msgID uint) uint {
 // LockAiChatSession 终止会话（内容安全判定）。by=0 表示系统判定。
 func LockAiChatSession(id uint, reason string, by uint) error {
 	now := time.Now()
-	return DB.Model(&AiChatSession{}).Where("id = ?", id).Updates(map[string]interface{}{
+	return models.DB.Model(&models.AiChatSession{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"locked":      true,
 		"locked_at":   now,
 		"lock_reason": truncateRunes(reason, 240),
@@ -170,7 +171,7 @@ func LockAiChatSession(id uint, reason string, by uint) error {
 
 // UnlockAiChatSession 解除终止（管理员复审后）。
 func UnlockAiChatSession(id uint) error {
-	return DB.Model(&AiChatSession{}).Where("id = ?", id).Updates(map[string]interface{}{
+	return models.DB.Model(&models.AiChatSession{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"locked":      false,
 		"locked_at":   nil,
 		"lock_reason": "",
@@ -196,11 +197,11 @@ func truncateRunes(s string, n int) string {
 // 幂等：只处理 parent_id=0 且前面已有消息的记录。
 func BackfillMessageParents() {
 	var sessionIDs []uint
-	DB.Model(&AiChatMessage{}).Where("parent_id = 0").
+	models.DB.Model(&models.AiChatMessage{}).Where("parent_id = 0").
 		Distinct().Pluck("session_id", &sessionIDs)
 	for _, sid := range sessionIDs {
-		var msgs []AiChatMessage
-		if err := DB.Where("session_id = ?", sid).Order("created_at ASC, id ASC").Find(&msgs).Error; err != nil {
+		var msgs []models.AiChatMessage
+		if err := models.DB.Where("session_id = ?", sid).Order("created_at ASC, id ASC").Find(&msgs).Error; err != nil {
 			continue
 		}
 		if len(msgs) <= 1 {
@@ -209,14 +210,14 @@ func BackfillMessageParents() {
 		prev := uint(0)
 		for i := range msgs {
 			if msgs[i].ParentID == 0 && prev != 0 {
-				DB.Model(&AiChatMessage{}).Where("id = ?", msgs[i].ID).
+				models.DB.Model(&models.AiChatMessage{}).Where("id = ?", msgs[i].ID).
 					UpdateColumn("parent_id", prev)
 				msgs[i].ParentID = prev
 			}
 			prev = msgs[i].ID
 		}
 		// 没设过活跃叶子的会话，指到最后一条
-		DB.Model(&AiChatSession{}).Where("id = ? AND active_leaf_id = 0", sid).
+		models.DB.Model(&models.AiChatSession{}).Where("id = ? AND active_leaf_id = 0", sid).
 			UpdateColumn("active_leaf_id", msgs[len(msgs)-1].ID)
 	}
 }
@@ -224,7 +225,7 @@ func BackfillMessageParents() {
 // MarkSessionContaminated 标记会话上下文已污染（中档模式：可继续但注入警告）。
 func MarkSessionContaminated(id uint) error {
 	now := time.Now()
-	return DB.Model(&AiChatSession{}).Where("id = ?", id).Updates(map[string]interface{}{
+	return models.DB.Model(&models.AiChatSession{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"contaminated":    true,
 		"contaminated_at": now,
 	}).Error

@@ -5,6 +5,7 @@ import (
 
 	"nvs-server/aisafety"
 	"nvs-server/models"
+	aihub "nvs-server/models/aihub"
 	"nvs-server/supervise"
 )
 
@@ -38,7 +39,7 @@ func applyTermination(session *models.AiChatSession, cfg *aisafety.SafetyConfig,
 	}
 	switch mode {
 	case aisafety.TerminateModerate:
-		_ = models.MarkSessionContaminated(session.ID)
+		_ = aihub.MarkSessionContaminated(session.ID)
 		return terminateOutcome{
 			Text:       aisafety.ModerateBlockedText(cfg),
 			Terminated: false,
@@ -67,7 +68,7 @@ func applyTermination(session *models.AiChatSession, cfg *aisafety.SafetyConfig,
 			Mode:       mode,
 		}
 	default:
-		_ = models.LockAiChatSession(session.ID, reason, 0)
+		_ = aihub.LockAiChatSession(session.ID, reason, 0)
 		return terminateOutcome{
 			Text:       aisafety.TerminatedText(cfg),
 			Terminated: true,

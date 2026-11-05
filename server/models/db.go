@@ -53,6 +53,7 @@ var BlogFeedProvider func(ids []uint, window int) ([]FeedItem, int64, error)
 //	models/search    —— SearchLog（热词聚合 / 标签热词）
 //	models/aicost    —— ChannelBalanceSample / UserAiKey / CostRate 等成本与用户密钥
 //	models/aiops     —— AiPrompt / AiVendor / AiNovelMemory / AigcAsset 等 AI 运营模型
+//	models/aihub     —— AiChannelKey / AiModelKey / AiStyle / UserAiFreeQuota 等渠道与工作台模型
 func AllModels() []interface{} {
 	list := []interface{}{
 		&User{}, &Novel{}, &NovelCategory{}, &Chapter{}, &Comment{}, &Rating{},
@@ -74,8 +75,6 @@ func AllModels() []interface{} {
 		&UserForumQuota{},
 		// HTML/WASM 托管额度：按人覆盖（管理员可单独放宽/收紧某人的项目数与空间）
 		&HTMLQuotaOverride{},
-		// 渠道卡密池（上游 API Key 按渠道归属，同一 base_url 下的模型共用）
-		&AiChannelKey{},
 		// 用户投稿智能体（提交 → 站长审核 → 广场上架）
 		&AgentSubmission{},
 		// 全量 Web 访问日志（功能二：前台网络诊断 / 用户分布 / 攻击流量面板）
@@ -94,13 +93,9 @@ func AllModels() []interface{} {
 		&AiModel{}, &AiCallLog{}, &AiCategoryPrice{},
 		// AI 工作台（§5.4）：会话/消息、智能体预设、绘画视频任务
 		&AiChatSession{}, &AiChatMessage{}, &AiAgent{}, &AiMediaTask{},
-		&UserAiFreeQuota{}, &UserAiFreeUsage{},
 		&AiBotUsage{},
-		&AiModelKey{}, &AiStyle{}, &AiContentMark{},
 		// API Key 审计告警（多 IP / 解密失败 / 封禁后仍使用）
 		&ApiKeyAlarm{},
-		// 渠道账户凭据（nap_/sk_ 加密入库，供「拉取模型」「渠道监控」复用）
-		&AiChannelAccount{},
 	}
 	for _, p := range DomainModelProviders {
 		list = append(list, p()...)

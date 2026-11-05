@@ -1,7 +1,9 @@
 package aiops
 
-import "nvs-server/models"
-
+import (
+	"nvs-server/models"
+	aihub "nvs-server/models/aihub"
+)
 import "testing"
 
 // TestAiVendorCRUD 厂商字典：重名拒绝、改名级联、被引用时禁止删除
@@ -91,18 +93,18 @@ func TestAiFeatureFlags(t *testing.T) {
 	models.DB = db
 	defer func() { models.DB = old }()
 
-	def := models.GetAiFeatureFlags()
+	def := aihub.GetAiFeatureFlags()
 	if !def.AllowByok || def.ContextMsgs != 20 || def.DailyChatLimit != -1 {
 		t.Fatalf("默认值异常：%+v", def)
 	}
 
-	if err := models.SetAiFeatureFlags(models.AiFeatureFlags{
+	if err := aihub.SetAiFeatureFlags(aihub.AiFeatureFlags{
 		AllowByok: false, AllowI2I: false, AllowFaceSwap: true,
 		ContextMsgs: 999, DailyChatLimit: -9, PublicGallery: false,
 	}); err != nil {
 		t.Fatalf("保存失败：%v", err)
 	}
-	got := models.GetAiFeatureFlags()
+	got := aihub.GetAiFeatureFlags()
 	if got.ContextMsgs != 60 {
 		t.Fatalf("上下文条数应被钳到 60，得到 %d", got.ContextMsgs)
 	}

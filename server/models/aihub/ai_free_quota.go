@@ -1,7 +1,8 @@
-package models
+package aihub
 
 import (
 	"encoding/json"
+	"nvs-server/models"
 	"strconv"
 	"strings"
 	"time"
@@ -50,20 +51,20 @@ func normalizeAiFreeQuotaConfig(cfg AiFreeQuotaConfig) AiFreeQuotaConfig {
 
 // IsAiFreeQuotaEnabled 免费额度是否开启（默认关闭）
 func IsAiFreeQuotaEnabled() bool {
-	return GetPlatformConfig(AiFreeQuotaEnabledKey) == "true"
+	return models.GetPlatformConfig(AiFreeQuotaEnabledKey) == "true"
 }
 
 // SetAiFreeQuotaEnabled 设置免费额度开关
 func SetAiFreeQuotaEnabled(on bool) error {
 	if on {
-		return SetPlatformConfig(AiFreeQuotaEnabledKey, "true")
+		return models.SetPlatformConfig(AiFreeQuotaEnabledKey, "true")
 	}
-	return SetPlatformConfig(AiFreeQuotaEnabledKey, "false")
+	return models.SetPlatformConfig(AiFreeQuotaEnabledKey, "false")
 }
 
 // GetAiFreeQuotaConfig 平台默认免费额度
 func GetAiFreeQuotaConfig() AiFreeQuotaConfig {
-	raw := strings.TrimSpace(GetPlatformConfig(AiFreeQuotaConfigKey))
+	raw := strings.TrimSpace(models.GetPlatformConfig(AiFreeQuotaConfigKey))
 	if raw == "" {
 		return DefaultAiFreeQuotaConfig()
 	}
@@ -81,7 +82,7 @@ func SetAiFreeQuotaConfig(cfg AiFreeQuotaConfig) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(AiFreeQuotaConfigKey, string(raw))
+	return models.SetPlatformConfig(AiFreeQuotaConfigKey, string(raw))
 }
 
 // UserAiFreeQuota 按人免费额度覆盖（无记录=跟随平台默认）
@@ -101,7 +102,7 @@ func (UserAiFreeQuota) TableName() string { return "user_ai_free_quotas" }
 // GetUserAiFreeQuotaOverride 查询按人覆盖（无记录返回 nil）
 func GetUserAiFreeQuotaOverride(userID uint) *UserAiFreeQuota {
 	var q UserAiFreeQuota
-	if err := DB.Where("user_id = ?", userID).First(&q).Error; err != nil {
+	if err := models.DB.Where("user_id = ?", userID).First(&q).Error; err != nil {
 		return nil
 	}
 	return &q
@@ -117,7 +118,7 @@ func SetUserAiFreeQuotaOverride(userID uint, dailyCalls, dailyTokens int, note s
 	}
 	note = strings.TrimSpace(note)
 	now := time.Now()
-	return DB.Exec(
+	return models.DB.Exec(
 		"INSERT INTO user_ai_free_quotas (user_id, daily_calls, daily_tokens, note, created_at, updated_at) "+
 			"VALUES (?, ?, ?, ?, ?, ?) "+
 			"ON CONFLICT(user_id) DO UPDATE SET daily_calls=excluded.daily_calls, "+
@@ -127,13 +128,13 @@ func SetUserAiFreeQuotaOverride(userID uint, dailyCalls, dailyTokens int, note s
 
 // DeleteUserAiFreeQuotaOverride 删除按人覆盖（恢复平台默认）
 func DeleteUserAiFreeQuotaOverride(userID uint) error {
-	return DB.Where("user_id = ?", userID).Delete(&UserAiFreeQuota{}).Error
+	return models.DB.Where("user_id = ?", userID).Delete(&UserAiFreeQuota{}).Error
 }
 
 // ListUserAiFreeQuotas 全部按人覆盖（管理员列表）
 func ListUserAiFreeQuotas() ([]UserAiFreeQuota, error) {
 	var list []UserAiFreeQuota
-	err := DB.Order("updated_at DESC").Find(&list).Error
+	err := models.DB.Order("updated_at DESC").Find(&list).Error
 	return list, err
 }
 
@@ -152,7 +153,7 @@ func EffectiveAiFreeLimit(userID uint) (calls, tokens int) {
 		return calls, tokens
 	}
 	// 0 = 不提供 / 不限，语义特殊，不参与放大
-	if DB != nil && userID > 0 && IsMember(userID) {
+	if models.DB != nil && userID > 0 && models.IsMember(userID) {
 		if calls > 0 {
 			calls *= memberFreeQuotaMultiplier
 		}
@@ -180,7 +181,7 @@ func aiFreeToday() string { return time.Now().Format("2006-01-02") }
 // GetTodayAiFreeUsage 今日已用免费额度
 func GetTodayAiFreeUsage(userID uint) (calls, tokens int64) {
 	var u UserAiFreeUsage
-	if err := DB.Where("user_id = ? AND day = ?", userID, aiFreeToday()).First(&u).Error; err != nil {
+	if err := models.DB.Where("user_id = ? AND day = ?", userID, aiFreeToday()).First(&u).Error; err != nil {
 		return 0, 0
 	}
 	return int64(u.CallsUsed), int64(u.TokensUsed)
@@ -190,14 +191,14 @@ func GetTodayAiFreeUsage(userID uint) (calls, tokens int64) {
 func RecordAiFreeUsage(userID uint, calls, tokens int) error {
 	day := aiFreeToday()
 	var u UserAiFreeUsage
-	err := DB.Where("user_id = ? AND day = ?", userID, day).First(&u).Error
+	err := models.DB.Where("user_id = ? AND day = ?", userID, day).First(&u).Error
 	if err != nil {
-		return DB.Create(&UserAiFreeUsage{
+		return models.DB.Create(&UserAiFreeUsage{
 			UserID: userID, Day: day, CallsUsed: calls, TokensUsed: tokens,
 			UpdatedAt: time.Now(),
 		}).Error
 	}
-	return DB.Model(&UserAiFreeUsage{}).Where("id = ?", u.ID).Updates(map[string]interface{}{
+	return models.DB.Model(&UserAiFreeUsage{}).Where("id = ?", u.ID).Updates(map[string]interface{}{
 		"calls_used":  u.CallsUsed + calls,
 		"tokens_used": u.TokensUsed + tokens,
 		"updated_at":  time.Now(),

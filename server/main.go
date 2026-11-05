@@ -47,6 +47,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	aihub "nvs-server/models/aihub"
 	aiops "nvs-server/models/aiops"
 	siteops "nvs-server/models/siteops"
 )
@@ -425,7 +426,7 @@ func initDatabase() error {
 	updater.Start()
 	// 对话分支：把老数据（parent_id 全 0）串成链并补活跃叶子。
 	// 不做的话升级后打开旧对话只能看到最后一条 —— 数据没丢但用户以为丢了。
-	models.BackfillMessageParents()
+	aihub.BackfillMessageParents()
 	// 审核调度器（定时批量审核论坛/评论区），失败不阻断启动
 	moderation.Init()
 	// 「AI 判违规自动下架」接到软删留证（moderation 包不依赖 handlers，靠回调注入）
@@ -444,7 +445,7 @@ func initDatabase() error {
 	models.SeedDefaultAiAgents() // AI 智能体内置种子（表为空时写入）
 	aiops.InitAiPrompts()        // AI 提示词库平台预设（幂等）
 	aiops.SeedAiVendors()        // AI 厂商字典（幂等）
-	models.SeedAiStyles()        // 作品风格字典（幂等）
+	aihub.SeedAiStyles()         // 作品风格字典（幂等）
 	// 管理端配置（DB）覆盖 .env 初始值：微信扫码凭据热更新进 config 包级变量
 	// （sms 网关由 resolveGateway 每次发送前读 DB，无需在此处理）
 	if wxID, wxSecret, wxCallback, fromDB := models.GetWeChatConfigFromDB(); fromDB {
@@ -464,7 +465,7 @@ func initDatabase() error {
 	initDefaultAdmin()
 	// 老站点升级：把「按模型存的密钥」并入「渠道卡密池」。
 	// 幂等（按 base_url + 密钥指纹判重），只增不改，老配置继续作为兜底。
-	if n, err := models.MigrateModelKeysToChannels(); err != nil {
+	if n, err := aihub.MigrateModelKeysToChannels(); err != nil {
 		log.Printf("[ai] 渠道卡密池迁移失败（不影响启动）：%v", err)
 	} else if n > 0 {
 		log.Printf("[ai] 渠道卡密池迁移完成：新增 %d 把卡密", n)

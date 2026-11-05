@@ -1,14 +1,15 @@
-package models
+package aihub
 
 // ==================== 扣子（Coze）全局默认配置 ====================
 import (
 	"encoding/json"
+	"nvs-server/models"
 	"strings"
 )
 
 func GetAiCozeDefault() AiCozeDefault {
 	out := AiCozeDefault{BaseURL: "https://api.coze.cn", TimeoutSeconds: 150}
-	raw := GetPlatformConfig("ai_coze_default")
+	raw := models.GetPlatformConfig("ai_coze_default")
 	if strings.TrimSpace(raw) == "" {
 		return out
 	}
@@ -35,5 +36,5 @@ func SetAiCozeDefault(d AiCozeDefault) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig("ai_coze_default", string(b))
+	return models.SetPlatformConfig("ai_coze_default", string(b))
 }

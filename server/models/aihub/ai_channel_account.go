@@ -1,4 +1,4 @@
-package models
+package aihub
 
 // ==================== 渠道账户凭据（加密入库） ====================
 //
@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"nvs-server/models"
 	"nvs-server/utils"
 )
 
@@ -80,7 +81,7 @@ func SaveAiChannelAccount(baseURL, label, userID, accessToken, modelKey string) 
 		return nil, fmt.Errorf("渠道地址为空")
 	}
 	var acc AiChannelAccount
-	err := DB.Where("base_url = ?", base).First(&acc).Error
+	err := models.DB.Where("base_url = ?", base).First(&acc).Error
 	if err != nil {
 		acc = AiChannelAccount{BaseURL: base, Enabled: true}
 	}
@@ -122,12 +123,12 @@ func SaveAiChannelAccount(baseURL, label, userID, accessToken, modelKey string) 
 	acc.UpdatedAt = time.Now()
 
 	if acc.ID == 0 {
-		if err := DB.Create(&acc).Error; err != nil {
+		if err := models.DB.Create(&acc).Error; err != nil {
 			return nil, err
 		}
 	} else {
 		// 用 map 写：密文字段可能被显式清空（零值），Create/Updates 的结构体写法会跳过
-		if err := DB.Model(&AiChannelAccount{}).Where("id = ?", acc.ID).Updates(map[string]interface{}{
+		if err := models.DB.Model(&AiChannelAccount{}).Where("id = ?", acc.ID).Updates(map[string]interface{}{
 			"label":             acc.Label,
 			"user_id":           acc.UserID,
 			"access_token_enc":  acc.AccessTokenEnc,
@@ -156,7 +157,7 @@ func GetAiChannelAccount(baseURL string) (*AiChannelAccount, error) {
 		return nil, ErrNoChannelAccount
 	}
 	var acc AiChannelAccount
-	if err := DB.Where("base_url = ?", base).First(&acc).Error; err != nil {
+	if err := models.DB.Where("base_url = ?", base).First(&acc).Error; err != nil {
 		return nil, ErrNoChannelAccount
 	}
 	return &acc, nil
@@ -165,13 +166,13 @@ func GetAiChannelAccount(baseURL string) (*AiChannelAccount, error) {
 // ListAiChannelAccounts 全部渠道凭据（后台列表用，密文不外泄）
 func ListAiChannelAccounts() []AiChannelAccount {
 	var list []AiChannelAccount
-	DB.Order("updated_at DESC").Find(&list)
+	models.DB.Order("updated_at DESC").Find(&list)
 	return list
 }
 
 // DeleteAiChannelAccount 删除凭据
 func DeleteAiChannelAccount(id uint) error {
-	return DB.Delete(&AiChannelAccount{}, id).Error
+	return models.DB.Delete(&AiChannelAccount{}, id).Error
 }
 
 // DecryptAccessToken 解出 nap_ 明文。调用方必须「用后即焚」，不得写日志、不得回传前端。
@@ -195,7 +196,7 @@ func (a *AiChannelAccount) HasAccessToken() bool { return a != nil && a.AccessTo
 func (a *AiChannelAccount) HasModelKey() bool    { return a != nil && a.ModelKeyEnc != "" }
 
 // RecordAiChannelProbe 记录一次探测结果（异步/同步都行，失败不影响主流程）
-func RecordAiChannelProbe(baseURL string, ok bool, models int, balance, used float64, currency, errText string) {
+func RecordAiChannelProbe(baseURL string, ok bool, modelCount int, balance, used float64, currency, errText string) {
 	base := normalizeAccountBase(baseURL)
 	if base == "" {
 		return
@@ -204,7 +205,7 @@ func RecordAiChannelProbe(baseURL string, ok bool, models int, balance, used flo
 	upd := map[string]interface{}{
 		"last_checked_at": now,
 		"last_ok":         ok,
-		"last_models":     models,
+		"last_models":     modelCount,
 		"last_error":      clipRunes(errText, 200),
 		"updated_at":      now,
 	}
@@ -213,7 +214,7 @@ func RecordAiChannelProbe(baseURL string, ok bool, models int, balance, used flo
 		upd["last_used"] = used
 		upd["last_currency"] = currency
 	}
-	_ = DB.Model(&AiChannelAccount{}).Where("base_url = ?", base).Updates(upd).Error
+	_ = models.DB.Model(&AiChannelAccount{}).Where("base_url = ?", base).Updates(upd).Error
 }
 
 // clipRunes 截断到 n 个字符（与 models.truncateRunes 区分：那是另一个文件里的同名函数）

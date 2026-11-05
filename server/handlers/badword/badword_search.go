@@ -16,6 +16,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 	"nvs-server/models/security"
 )
 
@@ -349,7 +350,7 @@ func acquireBadwordModelKey(m *models.AiModel) (string, error) {
 	if m == nil {
 		return "", fmt.Errorf("未配置模型")
 	}
-	lease, err := models.AcquireModelKey(m)
+	lease, err := aihub.AcquireModelKey(m)
 	if err != nil {
 		return "", err
 	}

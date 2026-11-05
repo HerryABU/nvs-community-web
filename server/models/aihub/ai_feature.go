@@ -1,7 +1,8 @@
-package models
+package aihub
 
 import (
 	"encoding/json"
+	"nvs-server/models"
 	"strconv"
 	"strings"
 	"time"
@@ -38,7 +39,7 @@ func DefaultAiFeatureFlags() AiFeatureFlags {
 // GetAiFeatureFlags 读取开关（未配置返回默认值；脏值逐项兜底）
 func GetAiFeatureFlags() AiFeatureFlags {
 	out := DefaultAiFeatureFlags()
-	raw := GetPlatformConfig(aiFeatureFlagsKey)
+	raw := models.GetPlatformConfig(aiFeatureFlagsKey)
 	if strings.TrimSpace(raw) == "" {
 		return out
 	}
@@ -84,10 +85,10 @@ func SetAiFeatureFlags(f AiFeatureFlags) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(aiFeatureFlagsKey, string(b))
+	return models.SetPlatformConfig(aiFeatureFlagsKey, string(b))
 }
 
-// CountTodayAiChats 今日对话次数（含免费与付费；按 AiCallLog 统计）
+// CountTodayAiChats 今日对话次数（含免费与付费；按 models.AiCallLog 统计）
 func CountTodayAiChats(userID uint) int64 {
 	if userID == 0 {
 		return 0
@@ -96,7 +97,7 @@ func CountTodayAiChats(userID uint) int64 {
 	now := time.Now()
 	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	var n int64
-	DB.Model(&AiCallLog{}).
+	models.DB.Model(&models.AiCallLog{}).
 		Where("user_id = ? AND action = ? AND created_at >= ?", userID, "chat", start).
 		Count(&n)
 	return n
@@ -123,10 +124,10 @@ func CallGuard(cost int64, confirmed bool) (allowed bool, needConfirm bool, reas
 	f := GetAiFeatureFlags()
 	if f.MaxCostPerCall > 0 && cost > f.MaxCostPerCall {
 		return false, false, "单次调用需 " + strconv.FormatInt(cost, 10) +
-			" " + GetTokenName() + "，超出站长设定的单次上限 " + strconv.FormatInt(f.MaxCostPerCall, 10)
+			" " + models.GetTokenName() + "，超出站长设定的单次上限 " + strconv.FormatInt(f.MaxCostPerCall, 10)
 	}
 	if f.ConfirmThreshold > 0 && cost >= f.ConfirmThreshold && !confirmed {
-		return true, true, "本次预计消耗 " + strconv.FormatInt(cost, 10) + " " + GetTokenName()
+		return true, true, "本次预计消耗 " + strconv.FormatInt(cost, 10) + " " + models.GetTokenName()
 	}
 	return true, false, ""
 }

@@ -11,6 +11,7 @@ import (
 
 	"nvs-server/aiclient"
 	"nvs-server/models"
+	aihub "nvs-server/models/aihub"
 	"nvs-server/sentiment/lexicon"
 	"nvs-server/sentiment/store"
 )
@@ -222,7 +223,7 @@ func pickModel(id uint) (*models.AiModel, string) {
 		return nil, ""
 	}
 	key := ""
-	if lease, err := models.AcquireModelKey(m); lease != nil && err == nil {
+	if lease, err := aihub.AcquireModelKey(m); lease != nil && err == nil {
 		key = lease.Key
 	}
 	return m, key

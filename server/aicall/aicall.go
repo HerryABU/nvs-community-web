@@ -14,6 +14,7 @@ import (
 
 	"nvs-server/aiclient"
 	"nvs-server/models"
+	aihub "nvs-server/models/aihub"
 	aiops "nvs-server/models/aiops"
 )
 
@@ -153,7 +154,7 @@ func attempt(req Request, m *models.AiModel, res *Result) (*Result, error) {
 	}
 
 	// 免费额度 / 余额预检（与既有一致：免费优先，其次代币）
-	freeOK, _, _ := models.CheckAiFreeQuota(req.PayerID, est)
+	freeOK, _, _ := aihub.CheckAiFreeQuota(req.PayerID, est)
 	if !freeOK {
 		if !models.IsTokenEnabled() {
 			return nil, errors.New("免费额度已用完且代币未启用")
@@ -163,7 +164,7 @@ func attempt(req Request, m *models.AiModel, res *Result) (*Result, error) {
 		}
 	}
 
-	lease, kerr := models.AcquireModelKey(m)
+	lease, kerr := aihub.AcquireModelKey(m)
 	if kerr != nil {
 		return nil, fmt.Errorf("模型密钥不可用：%v", kerr)
 	}
@@ -215,7 +216,7 @@ func attempt(req Request, m *models.AiModel, res *Result) (*Result, error) {
 	}
 	cost := models.EstimateAiCost(m, realIn, realOut)
 	if freeOK {
-		_ = models.RecordAiFreeUsage(req.PayerID, 1, realIn+realOut)
+		_ = aihub.RecordAiFreeUsage(req.PayerID, 1, realIn+realOut)
 		cost = 0
 	} else if _, serr := models.SettleAiCallLog(callLog.ID, realIn, realOut); serr != nil {
 		return nil, errors.New("结算失败")

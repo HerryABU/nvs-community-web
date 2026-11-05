@@ -26,6 +26,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 )
 
 // promptOptimizeSystem 提示词优化的系统提示词。
@@ -95,7 +96,7 @@ func AiOptimizePrompt(c *gin.Context) {
 		return
 	}
 
-	lease, kerr := models.AcquireModelKey(m)
+	lease, kerr := aihub.AcquireModelKey(m)
 	apiKey := ""
 	if lease != nil {
 		apiKey = lease.Key

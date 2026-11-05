@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 )
 
 // ==================== 作品广场（灵感广场） ====================
@@ -40,14 +41,14 @@ func galleryItem(t *models.AiMediaTask) gin.H {
 // AiGalleryList GET /api/ai/gallery?kind=image|video&style=&page= — 公开作品流
 func AiGalleryList(c *gin.Context) {
 	// 开关：关闭「公开」后仅登录用户可见
-	if !models.GetAiFeatureFlags().PublicGallery && hctx.CurrentUserID(c) == 0 {
+	if !aihub.GetAiFeatureFlags().PublicGallery && hctx.CurrentUserID(c) == 0 {
 		utils.BadRequest(c, "灵感广场仅登录可见")
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	kind := strings.TrimSpace(c.Query("kind"))
 	style := strings.TrimSpace(c.Query("style"))
-	list, total, err := models.ListPublicMedia(kind, style, page, 24)
+	list, total, err := aihub.ListPublicMedia(kind, style, page, 24)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -58,7 +59,7 @@ func AiGalleryList(c *gin.Context) {
 	}
 	utils.Success(c, gin.H{
 		"list": items, "total": total, "page": page,
-		"styles": models.GalleryStyles(kind),
+		"styles": aihub.GalleryStyles(kind),
 	})
 }
 
@@ -75,7 +76,7 @@ func AiGalleryPublish(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.PublishAiMedia(uint(id), userID, req.Public, req.Title, req.Style); err != nil {
+	if err := aihub.PublishAiMedia(uint(id), userID, req.Public, req.Title, req.Style); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
@@ -85,7 +86,7 @@ func AiGalleryPublish(c *gin.Context) {
 // AiGalleryLike POST /api/ai/gallery/:id/like — 点赞
 func AiGalleryLike(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := models.LikeAiMedia(uint(id)); err != nil {
+	if err := aihub.LikeAiMedia(uint(id)); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}

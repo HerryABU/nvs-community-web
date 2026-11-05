@@ -10,6 +10,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aihub "nvs-server/models/aihub"
 	aiops "nvs-server/models/aiops"
 )
 
@@ -112,7 +113,7 @@ func AdminGetAiFeatures(c *gin.Context) {
 	if !EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, models.GetAiFeatureFlags())
+	utils.Success(c, aihub.GetAiFeatureFlags())
 }
 
 // AdminSetAiFeatures PUT /api/admin/ai/features
@@ -120,12 +121,12 @@ func AdminSetAiFeatures(c *gin.Context) {
 	if !EnsureAdmin(c) {
 		return
 	}
-	var req models.AiFeatureFlags
+	var req aihub.AiFeatureFlags
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.SetAiFeatureFlags(req); err != nil {
+	if err := aihub.SetAiFeatureFlags(req); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
