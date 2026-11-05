@@ -10,7 +10,10 @@ package routes
 
 import (
 	"nvs-server/handlers/admin"
-	"nvs-server/handlers/ai"
+	"nvs-server/handlers/aiadmin"
+	"nvs-server/handlers/aimedia"
+	"nvs-server/handlers/aiplatform"
+	"nvs-server/handlers/aiworkbench"
 	"nvs-server/handlers/apikey"
 	"nvs-server/handlers/auth"
 	"nvs-server/handlers/badword"
@@ -220,14 +223,14 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.GET("/live", ops.AdminLive)
 		adminGrp.PUT("/live", ops.SaveLive)
 		// ===== 语音模型 / 转化漏斗 =====
-		adminGrp.GET("/ai/audio-models", ai.AdminSpeechModels)
-		adminGrp.GET("/ai/funnel", ai.AiFunnel)
+		adminGrp.GET("/ai/audio-models", aimedia.AdminSpeechModels)
+		adminGrp.GET("/ai/funnel", aiadmin.AiFunnel)
 		// 全站总预算 + 并发排队 / 三维限流
-		adminGrp.GET("/ai/budget", ai.GetAiBudget)
-		adminGrp.PUT("/ai/budget", ai.SaveAiBudget)
-		adminGrp.GET("/ai/throttle", ai.GetAiThrottle)
-		adminGrp.PUT("/ai/throttle", ai.SaveAiThrottle)
-		adminGrp.GET("/ai/agent-usage", ai.GetAiAgentUsage)
+		adminGrp.GET("/ai/budget", aiplatform.GetAiBudget)
+		adminGrp.PUT("/ai/budget", aiplatform.SaveAiBudget)
+		adminGrp.GET("/ai/throttle", aiplatform.GetAiThrottle)
+		adminGrp.PUT("/ai/throttle", aiplatform.SaveAiThrottle)
+		adminGrp.GET("/ai/agent-usage", aiplatform.GetAiAgentUsage)
 		// ===== 蜜罐：SQLi 命中与 TLS 采集率 =====
 		adminGrp.GET("/honeypot/sqli", honeypothandler.SQLiStats)
 		adminGrp.GET("/honeypot/tls", honeypothandler.TLSStats)
@@ -305,39 +308,39 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.POST("/token/adjust", token.AdminAdjustToken)
 		// AI 模型池（§5.3）：总开关 + 模型 CRUD（api_key 加密存储、只写不读）
 		// 独立子树 /ai：静态段，避让 :id 通配冲突
-		adminGrp.GET("/ai/config", ai.AdminGetAiConfig)
+		adminGrp.GET("/ai/config", aiadmin.AdminGetAiConfig)
 		// AIGC 内容标识（合规）
-		adminGrp.GET("/aigc/config", ai.AdminGetAigcConfig)
-		adminGrp.PUT("/aigc/config", ai.AdminSaveAigcConfig)
-		adminGrp.GET("/aigc/exports", ai.AdminListAigcExports)
-		adminGrp.GET("/aigc/waivers", ai.AdminListAigcWaivers)
-		adminGrp.GET("/aigc/verify/:produce_id", ai.AdminAigcVerify)
-		adminGrp.POST("/aigc/font", ai.AdminUploadAigcFont)
-		adminGrp.PUT("/ai/config", ai.AdminSetAiConfig)
-		adminGrp.GET("/ai/models", ai.AdminListAiModels)
+		adminGrp.GET("/aigc/config", aimedia.AdminGetAigcConfig)
+		adminGrp.PUT("/aigc/config", aimedia.AdminSaveAigcConfig)
+		adminGrp.GET("/aigc/exports", aimedia.AdminListAigcExports)
+		adminGrp.GET("/aigc/waivers", aimedia.AdminListAigcWaivers)
+		adminGrp.GET("/aigc/verify/:produce_id", aimedia.AdminAigcVerify)
+		adminGrp.POST("/aigc/font", aimedia.AdminUploadAigcFont)
+		adminGrp.PUT("/ai/config", aiadmin.AdminSetAiConfig)
+		adminGrp.GET("/ai/models", aiadmin.AdminListAiModels)
 		// AI 路由策略（最便宜/最快/场景）+ 失败降级开关
-		adminGrp.GET("/ai/route", ai.GetAiRouteConfig)
-		adminGrp.PUT("/ai/route", ai.UpdateAiRouteConfig)
-		adminGrp.GET("/ai/presets", ai.AdminAiModelPresets)
+		adminGrp.GET("/ai/route", aiplatform.GetAiRouteConfig)
+		adminGrp.PUT("/ai/route", aiplatform.UpdateAiRouteConfig)
+		adminGrp.GET("/ai/presets", aiadmin.AdminAiModelPresets)
 		// L5 渠道对账：拉取上游余额/消费 + 真实连通性探针
-		adminGrp.GET("/ai/models/:id/channel", ai.AdminAiModelChannel)
+		adminGrp.GET("/ai/models/:id/channel", aiadmin.AdminAiModelChannel)
 		// 按渠道聚合的余额一览（每条渠道还剩多少钱）
-		adminGrp.GET("/ai/channels/balance", ai.AdminChannelBalanceOverview)
+		adminGrp.GET("/ai/channels/balance", aiadmin.AdminChannelBalanceOverview)
 		// 模型统计：按渠道 / 模型 / 厂商聚合调用量、tokens、代扣与成功率
-		adminGrp.GET("/ai/usage-stats", ai.AdminAiUsageStats)
+		adminGrp.GET("/ai/usage-stats", aiadmin.AdminAiUsageStats)
 		// 渠道监控：临时输入令牌 + 用户 ID 探一次余额/连通性/最近扣费（不落库）
-		adminGrp.POST("/ai/channel-monitor", ai.AdminAiChannelMonitor)
+		adminGrp.POST("/ai/channel-monitor", aiadmin.AdminAiChannelMonitor)
 		// 渠道账户凭据（nap_/sk_ 加密入库）：保存一次，之后监控与「拉取模型」都不用再粘贴
-		adminGrp.GET("/ai/channel-accounts", ai.AdminListChannelAccounts)
-		adminGrp.GET("/ai/channel-account", ai.AdminGetChannelAccount)
-		adminGrp.POST("/ai/channel-account", ai.AdminSaveChannelAccount)
-		adminGrp.DELETE("/ai/channel-account/:id", ai.AdminDeleteChannelAccount)
+		adminGrp.GET("/ai/channel-accounts", aiadmin.AdminListChannelAccounts)
+		adminGrp.GET("/ai/channel-account", aiadmin.AdminGetChannelAccount)
+		adminGrp.POST("/ai/channel-account", aiadmin.AdminSaveChannelAccount)
+		adminGrp.DELETE("/ai/channel-account/:id", aiadmin.AdminDeleteChannelAccount)
 		// 渠道卡密池：一条渠道一个池，池内多把按权重轮询、连败自动摘除
-		adminGrp.GET("/ai/channel-keys", ai.AdminListAiChannelKeys)
-		adminGrp.POST("/ai/channel-keys", ai.AdminCreateAiChannelKey)
-		adminGrp.PATCH("/ai/channel-keys/:id", ai.AdminUpdateAiChannelKey)
-		adminGrp.DELETE("/ai/channel-keys/:id", ai.AdminDeleteAiChannelKey)
-		adminGrp.POST("/ai/channel-keys/:id/test", ai.AdminTestAiChannelKey)
+		adminGrp.GET("/ai/channel-keys", aiadmin.AdminListAiChannelKeys)
+		adminGrp.POST("/ai/channel-keys", aiadmin.AdminCreateAiChannelKey)
+		adminGrp.PATCH("/ai/channel-keys/:id", aiadmin.AdminUpdateAiChannelKey)
+		adminGrp.DELETE("/ai/channel-keys/:id", aiadmin.AdminDeleteAiChannelKey)
+		adminGrp.POST("/ai/channel-keys/:id/test", aiadmin.AdminTestAiChannelKey)
 
 		// API 卡池（多密钥轮询）
 		adminGrp.GET("/ai/models/:id/keys", admin.AdminListAiModelKeys)
@@ -347,10 +350,10 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.POST("/ai/models/:id/keys/test", admin.AdminTestAiModelKey)
 
 		// 风格字典 / 扣子默认配置
-		adminGrp.GET("/ai/styles", ai.AdminListAiStyles)
-		adminGrp.POST("/ai/styles", ai.AdminCreateAiStyle)
-		adminGrp.PUT("/ai/styles/:id", ai.AdminUpdateAiStyle)
-		adminGrp.DELETE("/ai/styles/:id", ai.AdminDeleteAiStyle)
+		adminGrp.GET("/ai/styles", aimedia.AdminListAiStyles)
+		adminGrp.POST("/ai/styles", aimedia.AdminCreateAiStyle)
+		adminGrp.PUT("/ai/styles/:id", aimedia.AdminUpdateAiStyle)
+		adminGrp.DELETE("/ai/styles/:id", aimedia.AdminDeleteAiStyle)
 		adminGrp.GET("/ai/coze-default", admin.AdminGetAiCozeDefault)
 		adminGrp.PUT("/ai/coze-default", admin.AdminSetAiCozeDefault)
 
@@ -369,15 +372,15 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.PUT("/ai/features", admin.AdminSetAiFeatures)
 
 		// AI 内容安全闸（提示词 + 用户特征 + 蓝队模型 B）
-		adminGrp.GET("/ai/safety/config", ai.GetAiSafetyConfig)
-		adminGrp.PUT("/ai/safety/config", ai.SaveAiSafetyConfig)
-		adminGrp.POST("/ai/safety/config/reset", ai.ResetAiSafetyConfig)
-		adminGrp.GET("/ai/safety/events", ai.ListAiSafetyEvents)
-		adminGrp.GET("/ai/safety/profiles", ai.ListAiSafetyProfiles)
-		adminGrp.POST("/ai/safety/profiles/:uid/clear", ai.ClearAiSafetyCooldown)
-		adminGrp.POST("/ai/safety/profiles/:uid/reset", ai.ResetAiSafetyProfile)
-		adminGrp.GET("/ai/safety/judge-logs", ai.ListJudgeLogs)
-		adminGrp.GET("/ai/safety/stats", ai.AiSafetyStats)
+		adminGrp.GET("/ai/safety/config", aiworkbench.GetAiSafetyConfig)
+		adminGrp.PUT("/ai/safety/config", aiworkbench.SaveAiSafetyConfig)
+		adminGrp.POST("/ai/safety/config/reset", aiworkbench.ResetAiSafetyConfig)
+		adminGrp.GET("/ai/safety/events", aiworkbench.ListAiSafetyEvents)
+		adminGrp.GET("/ai/safety/profiles", aiworkbench.ListAiSafetyProfiles)
+		adminGrp.POST("/ai/safety/profiles/:uid/clear", aiworkbench.ClearAiSafetyCooldown)
+		adminGrp.POST("/ai/safety/profiles/:uid/reset", aiworkbench.ResetAiSafetyProfile)
+		adminGrp.GET("/ai/safety/judge-logs", aiworkbench.ListJudgeLogs)
+		adminGrp.GET("/ai/safety/stats", aiworkbench.AiSafetyStats)
 
 		// 社区舆情守卫（话题驱动条件拦截 + 词表 + 命中留证）
 		adminGrp.GET("/sentiment/config", sentiment.GetSentimentConfig)
@@ -392,15 +395,15 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.GET("/sentiment/topics", sentiment.GetContentTopic)
 		adminGrp.PUT("/sentiment/topics", sentiment.SetContentTopic)
 		adminGrp.POST("/sentiment/run-update", sentiment.RunSentimentUpdate)
-		adminGrp.GET("/ai/safety/locked-sessions", ai.ListLockedSessions)
-		adminGrp.POST("/ai/safety/sessions/:sid/unlock", ai.UnlockChatSession)
+		adminGrp.GET("/ai/safety/locked-sessions", aiworkbench.ListLockedSessions)
+		adminGrp.POST("/ai/safety/sessions/:sid/unlock", aiworkbench.UnlockChatSession)
 		// 名单子系统（以疏代堵）：可疑/恶意名单 + 警方取证申请审批
-		adminGrp.GET("/supervise/list", ai.AdminListSupervised)
-		adminGrp.GET("/supervise/:id", ai.AdminGetSupervised)
-		adminGrp.POST("/supervise/:id/set-tier", ai.AdminSetTier)
-		adminGrp.POST("/supervise/:id/clear", ai.AdminClearSupervised)
-		adminGrp.POST("/supervise/:id/note", ai.AdminAddSuperviseNote)
-		adminGrp.GET("/supervise/stats", ai.AdminSuperviseStats)
+		adminGrp.GET("/supervise/list", aiadmin.AdminListSupervised)
+		adminGrp.GET("/supervise/:id", aiadmin.AdminGetSupervised)
+		adminGrp.POST("/supervise/:id/set-tier", aiadmin.AdminSetTier)
+		adminGrp.POST("/supervise/:id/clear", aiadmin.AdminClearSupervised)
+		adminGrp.POST("/supervise/:id/note", aiadmin.AdminAddSuperviseNote)
+		adminGrp.GET("/supervise/stats", aiadmin.AdminSuperviseStats)
 		// 警方取证导出申请（站长审批流）
 		adminGrp.GET("/police/evidence-requests", admin.AdminListEvidenceRequests)
 		adminGrp.POST("/police/evidence-requests/:id/review", admin.AdminReviewEvidenceRequest)
@@ -421,37 +424,37 @@ func registerAdminArea(r *gin.Engine) {
 
 		// 个人信息泄漏提示统计（仅类型计数，无内容）
 		adminGrp.GET("/security/leak-hint/stats", securityhandler.AdminLeakHintStats)
-		adminGrp.POST("/ai/models", ai.AdminCreateAiModel)
-		adminGrp.PUT("/ai/models/:id", ai.AdminUpdateAiModel)
-		adminGrp.DELETE("/ai/models/:id", ai.AdminDeleteAiModel)
+		adminGrp.POST("/ai/models", aiadmin.AdminCreateAiModel)
+		adminGrp.PUT("/ai/models/:id", aiadmin.AdminUpdateAiModel)
+		adminGrp.DELETE("/ai/models/:id", aiadmin.AdminDeleteAiModel)
 		// AI 模型资产管理：渠道拉取 / 批量导入 / 可见性 / 按渠道合并拆分
-		adminGrp.POST("/ai/models/pull", ai.AdminPullAiModels)
-		adminGrp.POST("/ai/models/import", ai.AdminImportAiModels)
-		adminGrp.POST("/ai/models/:id/visibility", ai.AdminSetModelVisibility)
-		adminGrp.POST("/ai/models/merge", ai.AdminMergeModels)
-		adminGrp.POST("/ai/models/split", ai.AdminSplitModels)
+		adminGrp.POST("/ai/models/pull", aiadmin.AdminPullAiModels)
+		adminGrp.POST("/ai/models/import", aiadmin.AdminImportAiModels)
+		adminGrp.POST("/ai/models/:id/visibility", aiadmin.AdminSetModelVisibility)
+		adminGrp.POST("/ai/models/merge", aiadmin.AdminMergeModels)
+		adminGrp.POST("/ai/models/split", aiadmin.AdminSplitModels)
 		// AI 智能体管理（§5.4）：预设增删改
-		adminGrp.GET("/ai/agents", ai.AdminListAiAgents)
-		adminGrp.POST("/ai/agents", ai.AdminCreateAiAgent)
-		adminGrp.PUT("/ai/agents/:id", ai.AdminUpdateAiAgent)
-		adminGrp.DELETE("/ai/agents/:id", ai.AdminDeleteAiAgent)
+		adminGrp.GET("/ai/agents", aiadmin.AdminListAiAgents)
+		adminGrp.POST("/ai/agents", aiadmin.AdminCreateAiAgent)
+		adminGrp.PUT("/ai/agents/:id", aiadmin.AdminUpdateAiAgent)
+		adminGrp.DELETE("/ai/agents/:id", aiadmin.AdminDeleteAiAgent)
 		// 智能体投稿审核（用户提交 → 站长审 → 广场上架）
-		adminGrp.GET("/agent-submissions", ai.AdminListAgentSubmissions)
-		adminGrp.POST("/agent-submissions/:id/review", ai.AdminReviewAgentSubmission)
-		adminGrp.GET("/ai-nav-items", ai.AdminGetAiNavItems)
-		adminGrp.PUT("/ai-nav-items", ai.AdminSaveAiNavItems)
-		adminGrp.GET("/agent-submit-config", ai.AdminGetAgentSubmitConfig)
-		adminGrp.PUT("/agent-submit-config", ai.AdminSaveAgentSubmitConfig)
+		adminGrp.GET("/agent-submissions", aiadmin.AdminListAgentSubmissions)
+		adminGrp.POST("/agent-submissions/:id/review", aiadmin.AdminReviewAgentSubmission)
+		adminGrp.GET("/ai-nav-items", aimedia.AdminGetAiNavItems)
+		adminGrp.PUT("/ai-nav-items", aimedia.AdminSaveAiNavItems)
+		adminGrp.GET("/agent-submit-config", aiadmin.AdminGetAgentSubmitConfig)
+		adminGrp.PUT("/agent-submit-config", aiadmin.AdminSaveAgentSubmitConfig)
 
 		// 免费 AI 额度（§5.3）：平台默认 + 按人覆盖（静态子树避让 :id 通配）
-		adminGrp.GET("/ai/free-quota/config", ai.AdminGetAiFreeQuotaConfig)
-		adminGrp.PUT("/ai/free-quota/config", ai.AdminSetAiFreeQuotaConfig)
-		adminGrp.GET("/ai/free-quota/overrides", ai.AdminListAiFreeQuotaOverrides)
-		adminGrp.POST("/ai/free-quota/overrides", ai.AdminManageAiFreeQuotaOverride)
+		adminGrp.GET("/ai/free-quota/config", aiplatform.AdminGetAiFreeQuotaConfig)
+		adminGrp.PUT("/ai/free-quota/config", aiplatform.AdminSetAiFreeQuotaConfig)
+		adminGrp.GET("/ai/free-quota/overrides", aiplatform.AdminListAiFreeQuotaOverrides)
+		adminGrp.POST("/ai/free-quota/overrides", aiplatform.AdminManageAiFreeQuotaOverride)
 
 		// @ai 评论机器人配置（§5.6）
-		adminGrp.GET("/ai/bot/config", ai.AdminGetAiBotConfig)
-		adminGrp.PUT("/ai/bot/config", ai.AdminSetAiBotConfig)
+		adminGrp.GET("/ai/bot/config", aiadmin.AdminGetAiBotConfig)
+		adminGrp.PUT("/ai/bot/config", aiadmin.AdminSetAiBotConfig)
 		// 在线支付通道（§7.4）：配置（密钥只写不读）/ 档位 / 订单列表 / 手动补单
 		adminGrp.GET("/payment/config", admin.AdminGetPaymentConfig)
 		adminGrp.PUT("/payment/config", admin.AdminSetPaymentConfig)

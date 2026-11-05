@@ -10,7 +10,8 @@ package routes
 
 import (
 	"nvs-server/handlers/admin"
-	"nvs-server/handlers/ai"
+	"nvs-server/handlers/aiadmin"
+	"nvs-server/handlers/aimedia"
 	"nvs-server/handlers/auth"
 	"nvs-server/handlers/author"
 	"nvs-server/handlers/batch"
@@ -123,13 +124,13 @@ func registerPublic(r *gin.Engine) {
 		public.GET("/live/config", live.LiveConfig)
 
 		// AI 会话分享：公开只读快照（令牌即凭据，无登录要求）
-		public.GET("/ai/shared/:token", ai.AiSharedSession)
+		public.GET("/ai/shared/:token", aimedia.AiSharedSession)
 		// 灵感广场：公开作品流（作者主动发布才可见）
-		public.GET("/ai/gallery", ai.AiGalleryList)
+		public.GET("/ai/gallery", aimedia.AiGalleryList)
 		// 风格字典（发布作品时下拉用）
-		public.GET("/ai/styles", ai.AiStyleList)
+		public.GET("/ai/styles", aimedia.AiStyleList)
 		// AI 生成内容标识（合规展示：只回模型名，不含内容）
-		public.GET("/ai/marks", ai.AiMarks)
+		public.GET("/ai/marks", aimedia.AiMarks)
 		// 在线支付回调（§7.4）：网关异步通知（验签准入，无鉴权）+ 支付完成同步跳转
 		public.POST("/payment/notify/:channel", security.RateLimit(120, 60), payment.PaymentNotify)
 		public.GET("/payment/return/:channel", payment.PaymentReturn)
@@ -140,11 +141,11 @@ func registerPublic(r *gin.Engine) {
 		// 首页形态（novels/blogs/forum/feed）：前端据此决定首页渲染哪套视图
 		public.GET("/home-view", home.GetHomeView)
 		// 给用户看的模型价目表（只含启用中模型与单价，不含上游地址/密钥）
-		public.GET("/ai/pricing", ai.AiPublicPricing)
+		public.GET("/ai/pricing", aiadmin.AiPublicPricing)
 		// 智能体投稿开关（前台据此决定是否显示「投稿」入口；投稿本身需登录）
-		public.GET("/ai/agents/submit-config", ai.AiAgentSubmitConfig)
+		public.GET("/ai/agents/submit-config", aiadmin.AiAgentSubmitConfig)
 		// AI 工作台左栏自定义菜单（站长设置，前台只取已启用项）
-		public.GET("/ai/nav-items", ai.AiNavItems)
+		public.GET("/ai/nav-items", aimedia.AiNavItems)
 		// 地图服务配置（标准地图合规：offline 示意 / 天地图 国内+全球）
 		public.GET("/map-setting", geo.GetMapSetting)
 		// F12b 作者主题（访客可见，仅 CSS，服务端消毒）

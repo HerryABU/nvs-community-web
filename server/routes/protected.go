@@ -11,7 +11,10 @@ package routes
 import (
 	"nvs-server/handlers/account"
 	"nvs-server/handlers/admin"
-	"nvs-server/handlers/ai"
+	"nvs-server/handlers/aiadmin"
+	"nvs-server/handlers/aimedia"
+	"nvs-server/handlers/aiplatform"
+	"nvs-server/handlers/aiworkbench"
 	"nvs-server/handlers/apikey"
 	"nvs-server/handlers/auth"
 	"nvs-server/handlers/author"
@@ -102,76 +105,76 @@ func registerProtected(r *gin.Engine) {
 		// 会员套餐：状态 + 在售套餐 + 支付可用性（会员页一次拉齐）
 		protected.GET("/membership", payment.MembershipInfo)
 		// AI 调用（§5.3）：可用性/预估/补全计费（限流防刷）
-		protected.GET("/ai/status", ai.AiStatus)
-		protected.POST("/ai/estimate", security.RateLimit(60, 60), ai.AiEstimate)
-		protected.POST("/ai/complete", security.RateLimit(20, 60), ai.AiComplete)
+		protected.GET("/ai/status", aiworkbench.AiStatus)
+		protected.POST("/ai/estimate", security.RateLimit(60, 60), aiworkbench.AiEstimate)
+		protected.POST("/ai/complete", security.RateLimit(20, 60), aiworkbench.AiComplete)
 		// AI 工作台（§5.4）：会话 / 流式对话 / 绘画 / 视频 / 智能体
-		protected.GET("/ai/hub/status", ai.AiHubStatus)
-		protected.GET("/ai/agents", ai.AiAgentList)
-		protected.GET("/ai/free-quota", ai.AiFreeQuotaStatus)
+		protected.GET("/ai/hub/status", aiworkbench.AiHubStatus)
+		protected.GET("/ai/agents", aiadmin.AiAgentList)
+		protected.GET("/ai/free-quota", aiplatform.AiFreeQuotaStatus)
 
 		// 用户自备 API Key（§5.5 BYOK）：CRUD + 默认（:id 通配与既有 /ai/video/:id 不同前缀段，无冲突）
 		protected.GET("/ai/my-keys", account.AiMyKeys)
 		// 「我的」筛选：最近用过的模型（模型广场的第四个筛选维度）
-		protected.GET("/ai/my-models", ai.AiMyModels)
+		protected.GET("/ai/my-models", aiadmin.AiMyModels)
 		// 智能体投稿：用户提交特殊提示词模板 → 站长审核 → 广场上架
-		protected.POST("/ai/agents/submit", ai.AiSubmitAgent)
-		protected.GET("/ai/agents/my-submissions", ai.AiMyAgentSubmissions)
+		protected.POST("/ai/agents/submit", aiadmin.AiSubmitAgent)
+		protected.GET("/ai/agents/my-submissions", aiadmin.AiMyAgentSubmissions)
 		protected.POST("/ai/my-keys", account.AiMyKeyCreate)
 		protected.DELETE("/ai/my-keys/:id", account.AiMyKeyDelete)
 		protected.POST("/ai/my-keys/:id/default", account.AiMyKeySetDefault)
 
 		// 长篇 AI 记忆（§13.5）：大纲/章节摘要/上下文组装（:id 通配在不同前缀段，无冲突）
-		protected.GET("/ai/memory", ai.AiMemoryList)
-		protected.PUT("/ai/memory/outline", ai.AiMemorySaveOutline)
-		protected.PUT("/ai/memory/characters", ai.AiMemorySaveCharacters)
-		protected.PUT("/ai/memory/summary", ai.AiMemorySaveSummary)
-		protected.DELETE("/ai/memory/summary", ai.AiMemoryDeleteSummary)
-		protected.POST("/ai/memory/context", ai.AiMemoryContext)
+		protected.GET("/ai/memory", aiworkbench.AiMemoryList)
+		protected.PUT("/ai/memory/outline", aiworkbench.AiMemorySaveOutline)
+		protected.PUT("/ai/memory/characters", aiworkbench.AiMemorySaveCharacters)
+		protected.PUT("/ai/memory/summary", aiworkbench.AiMemorySaveSummary)
+		protected.DELETE("/ai/memory/summary", aiworkbench.AiMemoryDeleteSummary)
+		protected.POST("/ai/memory/context", aiworkbench.AiMemoryContext)
 
 		// @ai 评论区机器人（§5.6）：状态查询（配置在管理端）
-		protected.GET("/ai/bot/status", ai.AiBotStatus)
-		protected.GET("/ai/sessions", ai.AiHubSessions)
-		protected.GET("/ai/sessions/:id/messages", ai.AiHubSessionMessages)
+		protected.GET("/ai/bot/status", aiadmin.AiBotStatus)
+		protected.GET("/ai/sessions", aiworkbench.AiHubSessions)
+		protected.GET("/ai/sessions/:id/messages", aiworkbench.AiHubSessionMessages)
 		// 对话分支：切到指定消息所在分支（不删任何消息，只改显示位置）
-		protected.POST("/ai/sessions/:id/switch", ai.AiHubSwitchBranch)
-		protected.DELETE("/ai/sessions/:id", ai.AiHubDeleteSession)
-		protected.PUT("/ai/sessions/:id", ai.AiHubRenameSession)
-		protected.POST("/ai/sessions/:id/share", ai.AiHubShareSession)
-		protected.DELETE("/ai/sessions/:id/share", ai.AiHubUnshareSession)
-		protected.POST("/ai/chat/stream", security.RateLimit(30, 60), ai.AiHubChatStream)
-		protected.POST("/ai/image", security.RateLimit(20, 60), ai.AiHubImage)
-		protected.POST("/ai/image/optimize-prompt", security.RateLimit(20, 60), ai.AiOptimizePrompt)
-		protected.POST("/ai/video", security.RateLimit(10, 60), ai.AiHubVideoSubmit)
-		protected.GET("/ai/video/:id", ai.AiHubVideoStatus)
+		protected.POST("/ai/sessions/:id/switch", aiworkbench.AiHubSwitchBranch)
+		protected.DELETE("/ai/sessions/:id", aiworkbench.AiHubDeleteSession)
+		protected.PUT("/ai/sessions/:id", aimedia.AiHubRenameSession)
+		protected.POST("/ai/sessions/:id/share", aimedia.AiHubShareSession)
+		protected.DELETE("/ai/sessions/:id/share", aimedia.AiHubUnshareSession)
+		protected.POST("/ai/chat/stream", security.RateLimit(30, 60), aiworkbench.AiHubChatStream)
+		protected.POST("/ai/image", security.RateLimit(20, 60), aimedia.AiHubImage)
+		protected.POST("/ai/image/optimize-prompt", security.RateLimit(20, 60), aiworkbench.AiOptimizePrompt)
+		protected.POST("/ai/video", security.RateLimit(10, 60), aimedia.AiHubVideoSubmit)
+		protected.GET("/ai/video/:id", aimedia.AiHubVideoStatus)
 		// 取消异步视频任务：置终态停止等待 + 已扣款原路退回
 		// 注意路径形态：POST 下已有 /ai/video 静态段，这里必须继续往下挂 :id 子节点，
 		// 不能与静态段同级加通配（gin 会 panic: conflicts with existing wildcard）
-		protected.POST("/ai/video/:id/cancel", ai.AiHubVideoCancel)
-		protected.GET("/ai/media", ai.AiHubMediaHistory)
+		protected.POST("/ai/video/:id/cancel", aimedia.AiHubVideoCancel)
+		protected.GET("/ai/media", aimedia.AiHubMediaHistory)
 		// 出图附件上传 + 历史导出（gap-audit #17）
 		// 注意：/ai/media 下不能加静态段（已有 /ai/media 精确路由 + /ai/media/:id/... 通配），
 		// 所以历史导出放 /ai/export/media.zip 独立子树
-		protected.POST("/ai/media/attach", security.RateLimit(30, 60), ai.AttachMedia)
-		protected.GET("/ai/media/:id/export", ai.ExportMediaTask)
-		protected.GET("/ai/export/media.zip", ai.ExportMediaHistory)
+		protected.POST("/ai/media/attach", security.RateLimit(30, 60), aimedia.AttachMedia)
+		protected.GET("/ai/media/:id/export", aimedia.ExportMediaTask)
+		protected.GET("/ai/export/media.zip", aimedia.ExportMediaHistory)
 		// AIGC 标识出口管道（GB 45438—2025）：
 		// 用户下载必须走这里 —— 服务端合成、烧显式角标、写隐式 AIGC 字段，前端不碰像素。
-		protected.GET("/ai/aigc/options", ai.AiAigcOptions)
-		protected.POST("/ai/aigc/export", security.RateLimit(20, 60), ai.AiAigcExport)
+		protected.GET("/ai/aigc/options", aimedia.AiAigcOptions)
+		protected.POST("/ai/aigc/export", security.RateLimit(20, 60), aimedia.AiAigcExport)
 
 		// AI 提示词库：平台预设（只读）+ 我的自定义（增删改）
-		protected.GET("/ai/prompts", ai.AiPromptList)
-		protected.POST("/ai/prompts", ai.AiPromptCreate)
-		protected.PUT("/ai/prompts/:id", ai.AiPromptUpdate)
-		protected.DELETE("/ai/prompts/:id", ai.AiPromptDelete)
-		protected.POST("/ai/prompts/:id/use", ai.AiPromptUse)
+		protected.GET("/ai/prompts", aiworkbench.AiPromptList)
+		protected.POST("/ai/prompts", aiworkbench.AiPromptCreate)
+		protected.PUT("/ai/prompts/:id", aiworkbench.AiPromptUpdate)
+		protected.DELETE("/ai/prompts/:id", aiworkbench.AiPromptDelete)
+		protected.POST("/ai/prompts/:id/use", aiworkbench.AiPromptUse)
 
 		// 灵感广场：发布/取消发布、点赞；思维导图生成
-		protected.POST("/ai/gallery/:id/publish", ai.AiGalleryPublish)
-		protected.POST("/ai/gallery/:id/like", ai.AiGalleryLike)
-		protected.GET("/ai/media/:id/public", ai.AiMyMediaPublic)
-		protected.POST("/ai/mindmap", security.RateLimit(10, 60), ai.AiMindmap)
+		protected.POST("/ai/gallery/:id/publish", aimedia.AiGalleryPublish)
+		protected.POST("/ai/gallery/:id/like", aimedia.AiGalleryLike)
+		protected.GET("/ai/media/:id/public", aimedia.AiMyMediaPublic)
+		protected.POST("/ai/mindmap", security.RateLimit(10, 60), aimedia.AiMindmap)
 
 		// 个人信息泄漏提示：只累计命中类型，不接收内容（检测不留痕）
 		protected.POST("/security/leak-hint", securityhandler.RecordLeakHint)
@@ -396,7 +399,7 @@ func registerProtected(r *gin.Engine) {
 		protected.POST("/blogs/:id/like", blog.ToggleBlogLike) // 博客点赞/取消
 		protected.POST("/upload", upload.UploadFile)           // 通用上传：博客图片/音视频
 		// AI 工作台附件：图片/文档上传（存盘不解析，发消息时原样内联给上游 API）
-		protected.POST("/ai/attachment", ai.AiAttachmentUpload)
+		protected.POST("/ai/attachment", aiworkbench.AiAttachmentUpload)
 		// 博客分类管理（登录作者/管理员均可：新增/编辑/删除/挂靠，支持三级；普通作者创建=待审核）
 		protected.GET("/blog-categories/manage", blog.ListMyBlogCategories)
 		protected.POST("/blog-categories", blog.CreateBlogCategory)
@@ -440,7 +443,7 @@ func registerProtected(r *gin.Engine) {
 		// ===== 运营位（gap-audit #20 #23）=====
 		protected.POST("/checkin", ops.DoCheckIn)
 		// ===== 语音合成 / 音乐（gap-audit #18）=====
-		protected.POST("/ai/speech", security.RateLimit(10, 60), ai.Speech)
+		protected.POST("/ai/speech", security.RateLimit(10, 60), aimedia.Speech)
 		// ===== OC 表情包 + 角色卡/世界书导入导出（gap-audit #22 #24）=====
 		// 注意：/oc/characters/:cid 已是通配段，import 必须换前缀（gin 不允许同层静态+通配）
 		protected.GET("/oc/emotes", ochandler.ListEmotes)
