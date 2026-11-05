@@ -1,9 +1,10 @@
-package models
+package quota
 
 import (
 	"time"
 
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // WebAccessLog 全量 Web 访问日志（数据库可查询版）。
@@ -76,7 +77,7 @@ func ListWebAccess(q WebAccessQuery) (items []WebAccessLog, total int64, err err
 	if q.Page <= 0 {
 		q.Page = 1
 	}
-	db := DB.Model(&WebAccessLog{})
+	db := models.DB.Model(&WebAccessLog{})
 	if q.IP != "" {
 		db = db.Where("ip LIKE ?", "%"+q.IP+"%")
 	}
@@ -144,45 +145,45 @@ func GetWebAccessStats() (*WebAccessStats, error) {
 	s := &WebAccessStats{}
 	today := time.Now().Format("2006-01-02")
 
-	if err := DB.Model(&WebAccessLog{}).Count(&s.Total).Error; err != nil {
+	if err := models.DB.Model(&WebAccessLog{}).Count(&s.Total).Error; err != nil {
 		return nil, err
 	}
-	if err := DB.Model(&WebAccessLog{}).Where("created_at >= ?", today+" 00:00:00").Count(&s.Today).Error; err != nil {
+	if err := models.DB.Model(&WebAccessLog{}).Where("created_at >= ?", today+" 00:00:00").Count(&s.Today).Error; err != nil {
 		return nil, err
 	}
-	if err := DB.Model(&WebAccessLog{}).Where("is_bot = ?", true).Count(&s.BotTotal).Error; err != nil {
+	if err := models.DB.Model(&WebAccessLog{}).Where("is_bot = ?", true).Count(&s.BotTotal).Error; err != nil {
 		return nil, err
 	}
 	yesterday := time.Now().Add(-24 * time.Hour).Format("2006-01-02 15:04:05")
-	if err := DB.Model(&WebAccessLog{}).
+	if err := models.DB.Model(&WebAccessLog{}).
 		Where("created_at >= ? AND ((is_bot = ?) OR (status_code >= ?))", yesterday, true, 400).
 		Count(&s.AttackTotal).Error; err != nil {
 		return nil, err
 	}
 
-	DB.Model(&WebAccessLog{}).Select("ip, COUNT(*) as cnt").Group("ip").Order("cnt desc").Limit(10).
+	models.DB.Model(&WebAccessLog{}).Select("ip, COUNT(*) as cnt").Group("ip").Order("cnt desc").Limit(10).
 		Scan(&s.TopIPs)
 	// 访问域名：带独立 IP 数，单看请求量分不清「一个人刷」还是「一批人从移动网络来」
-	DB.Model(&WebAccessLog{}).Where("host <> ''").
+	models.DB.Model(&WebAccessLog{}).Where("host <> ''").
 		Select("host, COUNT(*) as cnt, COUNT(DISTINCT ip) as ips").
 		Group("host").Order("cnt desc").Limit(15).
 		Scan(&s.TopHosts)
-	DB.Model(&WebAccessLog{}).Select("path, COUNT(*) as cnt").Group("path").Order("cnt desc").Limit(10).
+	models.DB.Model(&WebAccessLog{}).Select("path, COUNT(*) as cnt").Group("path").Order("cnt desc").Limit(10).
 		Scan(&s.TopPaths)
-	DB.Model(&WebAccessLog{}).Select("status_code, COUNT(*) as cnt").Group("status_code").Order("cnt desc").
+	models.DB.Model(&WebAccessLog{}).Select("status_code, COUNT(*) as cnt").Group("status_code").Order("cnt desc").
 		Scan(&s.StatusDist)
-	DB.Model(&WebAccessLog{}).Select("ua_family as family, COUNT(*) as cnt").Group("ua_family").Order("cnt desc").
+	models.DB.Model(&WebAccessLog{}).Select("ua_family as family, COUNT(*) as cnt").Group("ua_family").Order("cnt desc").
 		Scan(&s.UAFamilyDist)
-	DB.Model(&WebAccessLog{}).Where("os_name <> '' AND os_name <> 'unknown'").
+	models.DB.Model(&WebAccessLog{}).Where("os_name <> '' AND os_name <> 'unknown'").
 		Select("os_name as name, COUNT(*) as cnt").Group("os_name").Order("cnt desc").Limit(10).
 		Scan(&s.OSNameDist)
-	DB.Model(&WebAccessLog{}).Where("browser_name <> '' AND browser_name <> 'unknown'").
+	models.DB.Model(&WebAccessLog{}).Where("browser_name <> '' AND browser_name <> 'unknown'").
 		Select("browser_name as name, COUNT(*) as cnt").Group("browser_name").Order("cnt desc").Limit(10).
 		Scan(&s.BrowserNameDist)
-	DB.Model(&WebAccessLog{}).Where("device_type <> '' AND device_type <> 'unknown'").
+	models.DB.Model(&WebAccessLog{}).Where("device_type <> '' AND device_type <> 'unknown'").
 		Select("device_type as name, COUNT(*) as cnt").Group("device_type").Order("cnt desc").
 		Scan(&s.DeviceTypeDist)
-	DB.Model(&WebAccessLog{}).Where("is_bot = ? AND bot_reason <> ''", true).
+	models.DB.Model(&WebAccessLog{}).Where("is_bot = ? AND bot_reason <> ''", true).
 		Select("bot_reason as reason, COUNT(*) as cnt").Group("bot_reason").Order("cnt desc").Limit(10).
 		Scan(&s.BotReasonDist)
 	return s, nil
@@ -196,7 +197,7 @@ func init() {
 	go webAccessWorker()
 }
 
-// webAccessWorker 后台批量刷盘 worker（DB 未就绪时静默丢弃，不 panic）
+// webAccessWorker 后台批量刷盘 worker（models.DB 未就绪时静默丢弃，不 panic）
 func webAccessWorker() {
 	const batchSize = 200
 	batch := make([]*WebAccessLog, 0, batchSize)
@@ -205,11 +206,11 @@ func webAccessWorker() {
 		if len(batch) == 0 {
 			return
 		}
-		if DB == nil {
+		if models.DB == nil {
 			batch = batch[:0]
 			return
 		}
-		if err := DB.CreateInBatches(batch, batchSize).Error; err == nil {
+		if err := models.DB.CreateInBatches(batch, batchSize).Error; err == nil {
 			batch = batch[:0]
 		}
 	}
@@ -239,5 +240,5 @@ func EnqueueWebAccess(e *WebAccessLog) {
 
 // WebAccessLogCleanup 清空 Web 访问日志（管理员手动维护，保留合规证据由文件日志承担）
 func WebAccessLogCleanup() error {
-	return DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Where("1 = 1").Delete(&WebAccessLog{}).Error
+	return models.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Where("1 = 1").Delete(&WebAccessLog{}).Error
 }

@@ -5,10 +5,10 @@ import (
 
 	"nvs-server/handlers/admin"
 	"nvs-server/handlers/auth"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	quota "nvs-server/models/quota"
 )
 
 // ListWebAccessLogs GET /api/admin/web-access
@@ -17,7 +17,7 @@ func ListWebAccessLogs(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	q := models.WebAccessQuery{
+	q := quota.WebAccessQuery{
 		IP:         c.Query("ip"),
 		UA:         c.Query("ua"),
 		UAFamily:   c.Query("ua_family"),
@@ -42,7 +42,7 @@ func ListWebAccessLogs(c *gin.Context) {
 		b := v == "1" || v == "true"
 		q.IsBot = &b
 	}
-	items, total, err := models.ListWebAccess(q)
+	items, total, err := quota.ListWebAccess(q)
 	if err != nil {
 		utils.InternalError(c, "查询 Web 访问日志失败")
 		return
@@ -56,7 +56,7 @@ func GetWebAccessStats(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	s, err := models.GetWebAccessStats()
+	s, err := quota.GetWebAccessStats()
 	if err != nil {
 		utils.InternalError(c, "统计 Web 访问日志失败")
 		return
@@ -70,7 +70,7 @@ func CleanupWebAccessLogs(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	if err := models.WebAccessLogCleanup(); err != nil {
+	if err := quota.WebAccessLogCleanup(); err != nil {
 		utils.InternalError(c, "清空 Web 访问日志失败")
 		return
 	}

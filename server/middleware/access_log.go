@@ -10,11 +10,11 @@ import (
 
 	"nvs-server/config"
 	"nvs-server/honeypot"
-	"nvs-server/models"
 	"nvs-server/security"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	quota "nvs-server/models/quota"
 )
 
 // AccessLog 请求日志中间件（176号令合规：上网日志关联用户标识）。
@@ -164,7 +164,7 @@ func AccessLog() gin.HandlerFunc {
 			// 经 cpolar / nginx 转发时，Host 头可能被改写成上游地址（127.0.0.1:8000），
 			// 那记录 Host 就毫无意义 —— 所以优先取代理透传的 X-Forwarded-Host / X-Real-Host。
 			host, scheme := effectiveHost(c.Request)
-			models.EnqueueWebAccess(&models.WebAccessLog{
+			quota.EnqueueWebAccess(&quota.WebAccessLog{
 				UserID:         userID,
 				IdentityType:   identityType,
 				UAFamily:       uaFamily,

@@ -28,6 +28,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
 	aihub "nvs-server/models/aihub"
+	quota "nvs-server/models/quota"
 )
 
 func CreateChapter(c *gin.Context) {
@@ -106,7 +107,7 @@ func CreateChapter(c *gin.Context) {
 	wordCount := len([]rune(stripHTML(req.Content)))
 
 	// 每日发文限额预检（§13.4；后台关闭时不生效）
-	if !publish.EnforceDailyPublish(c, models.PublishKindChapter, wordCount) {
+	if !publish.EnforceDailyPublish(c, quota.PublishKindChapter, wordCount) {
 		return
 	}
 
@@ -140,7 +141,7 @@ func CreateChapter(c *gin.Context) {
 	}
 	// 发布流水记账（计入每日发文限额）：草稿不计，提审通过时再记
 	if status == models.ChapterStatusPublished {
-		models.RecordPublish(userID, models.PublishKindChapter, chapter.ID, wordCount)
+		quota.RecordPublish(userID, quota.PublishKindChapter, chapter.ID, wordCount)
 		collab.LogChapterAction(novel.ID, userID, "publish", chapter.ID, "新建即发布")
 		// AI 内容审核（发布时送检，链路逻辑见 moderation.ReviewOnWrite，开关来自后台配置）
 		go moderation.ReviewOnWrite(moderation.ScopeChapter, chapter.ID)

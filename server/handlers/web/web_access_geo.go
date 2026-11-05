@@ -10,6 +10,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	quota "nvs-server/models/quota"
 )
 
 // 网络诊断 —— 访问来源地域分布（离线解析，零外部请求）。
@@ -58,7 +59,7 @@ func GetWebAccessGeo(c *gin.Context) {
 	}
 	var rows []ipRow
 	since := time.Now().AddDate(0, 0, -days).Format("2006-01-02 15:04:05")
-	if err := models.DB.Model(&models.WebAccessLog{}).
+	if err := models.DB.Model(&quota.WebAccessLog{}).
 		Where("created_at >= ?", since).
 		Select("ip, COUNT(*) as cnt").
 		Group("ip").

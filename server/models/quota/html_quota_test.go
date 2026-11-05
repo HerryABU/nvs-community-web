@@ -1,4 +1,4 @@
-package models
+package quota
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // setupQuotaTestDB 独立内存库（唯一名，避免与其它包的共享内存库互相污染）
@@ -17,20 +18,20 @@ func setupQuotaTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开内存测试库失败: %v", err)
 	}
-	if err := db.AutoMigrate(&UserHTML{}, &HTMLQuotaOverride{}, &PlatformConfig{}); err != nil {
+	if err := db.AutoMigrate(&models.UserHTML{}, &HTMLQuotaOverride{}, &models.PlatformConfig{}); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
-	old := DB
-	DB = db
-	t.Cleanup(func() { DB = old })
+	old := models.DB
+	models.DB = db
+	t.Cleanup(func() { models.DB = old })
 }
 
 func seedHTML(t *testing.T, userID uint, size int64) {
 	t.Helper()
-	h := &UserHTML{
+	h := &models.UserHTML{
 		UserID: userID, Name: "p", ExtractDir: "/tmp/p", EntryFile: "index.html", TotalSize: size,
 	}
-	if err := DB.Create(h).Error; err != nil {
+	if err := models.DB.Create(h).Error; err != nil {
 		t.Fatalf("造数据失败: %v", err)
 	}
 }
@@ -72,7 +73,7 @@ func TestHTMLQuota_SizeLimit(t *testing.T) {
 func TestHTMLQuota_OverrideTighten(t *testing.T) {
 	setupQuotaTestDB(t)
 	_ = SaveHTMLQuotaSetting(DefaultHTMLQuotaSetting())
-	if err := DB.Create(&HTMLQuotaOverride{UserID: 11, MaxProjects: 1, Note: "试用"}).Error; err != nil {
+	if err := models.DB.Create(&HTMLQuotaOverride{UserID: 11, MaxProjects: 1, Note: "试用"}).Error; err != nil {
 		t.Fatalf("写入覆盖失败: %v", err)
 	}
 	seedHTML(t, 11, 1024)
@@ -85,7 +86,7 @@ func TestHTMLQuota_OverrideTighten(t *testing.T) {
 func TestHTMLQuota_OverrideUnlimited(t *testing.T) {
 	setupQuotaTestDB(t)
 	_ = SaveHTMLQuotaSetting(DefaultHTMLQuotaSetting())
-	_ = DB.Create(&HTMLQuotaOverride{UserID: 12, MaxProjects: -1, MaxTotalSizeMB: -1}).Error
+	_ = models.DB.Create(&HTMLQuotaOverride{UserID: 12, MaxProjects: -1, MaxTotalSizeMB: -1}).Error
 	for i := 0; i < 20; i++ {
 		seedHTML(t, 12, 50*1024*1024)
 	}

@@ -20,6 +20,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	quota "nvs-server/models/quota"
 )
 
 // POST /api/novels
@@ -58,7 +59,7 @@ func CreateNovel(c *gin.Context) {
 	}
 
 	// 每日发文限额预检（§13.4；后台关闭时不生效）
-	if !publish.EnforceDailyPublish(c, models.PublishKindNovel, 0) {
+	if !publish.EnforceDailyPublish(c, quota.PublishKindNovel, 0) {
 		return
 	}
 
@@ -115,7 +116,7 @@ func CreateNovel(c *gin.Context) {
 		return
 	}
 	// 发布流水记账（计入每日发文限额）
-	models.RecordPublish(userID, models.PublishKindNovel, novel.ID, 0)
+	quota.RecordPublish(userID, quota.PublishKindNovel, novel.ID, 0)
 
 	// 保存多分类
 	SaveNovelCategories(novel.ID, input.Categories, input.Category)

@@ -13,6 +13,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	quota "nvs-server/models/quota"
 )
 
 // ensurePoliceOrAdmin 警方取管台鉴权：仅 admin 或 police 可访问。
@@ -102,7 +103,7 @@ func PoliceExportPackage(c *gin.Context) {
 	if za, _, err := models.ListZoneAccessPage(models.ZoneAccessFilter{Page: 1, PageSize: 500}); err == nil {
 		pkg["zone_access"] = za
 	}
-	if wa, _, err := models.ListWebAccess(models.WebAccessQuery{Page: 1, PageSize: 500}); err == nil {
+	if wa, _, err := quota.ListWebAccess(quota.WebAccessQuery{Page: 1, PageSize: 500}); err == nil {
 		pkg["web_access"] = wa
 	}
 	if audit, err := models.ListUserAuditLogs(0, "", 500); err == nil {

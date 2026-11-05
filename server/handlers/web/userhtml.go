@@ -21,6 +21,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	quota "nvs-server/models/quota"
 )
 
 // ==================== UserHTML 扩展HTML（ZIP上传） ====================
@@ -163,10 +164,10 @@ func UploadZipHTML(c *gin.Context) {
 	// ====== 额度校验（项目数 / 累计空间） ======
 	// 放在预检之后：先确认包本身安全，再判断"该用户还有没有空间"，
 	// 避免用额度错误掩盖"这个包有问题"。解压后总大小用预检统计值。
-	if qerr := models.CheckHTMLQuota(userID, pre.TotalSize); qerr != nil {
-		var qe *models.HTMLQuotaError
+	if qerr := quota.CheckHTMLQuota(userID, pre.TotalSize); qerr != nil {
+		var qe *quota.HTMLQuotaError
 		if errors.As(qerr, &qe) {
-			c.JSON(http.StatusForbidden, gin.H{"code": 7, "message": qe.Reason, "data": models.HTMLQuotaSnapshot(userID)})
+			c.JSON(http.StatusForbidden, gin.H{"code": 7, "message": qe.Reason, "data": quota.HTMLQuotaSnapshot(userID)})
 			return
 		}
 		utils.InternalError(c, "额度校验失败")
@@ -340,7 +341,7 @@ func UploadZipHTML(c *gin.Context) {
 	// 用户勾选「广场展示」→ 过额度判断（数量/大小任一超额 → 转 quota_review 待审，不直接进广场）
 	publicNote := ""
 	if isPublic {
-		allowed, needReview, reason, err := models.CheckAndApplyWebPublish(userID, models.WebQuotaTargetHTML, htmlItem.ID)
+		allowed, needReview, reason, err := quota.CheckAndApplyWebPublish(userID, quota.WebQuotaTargetHTML, htmlItem.ID)
 		if err != nil {
 			utils.InternalError(c, "操作失败")
 			return

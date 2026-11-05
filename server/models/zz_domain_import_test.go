@@ -9,6 +9,7 @@ import (
 	_ "nvs-server/models/aihub"
 	_ "nvs-server/models/aiops"
 	_ "nvs-server/models/blog"
+	_ "nvs-server/models/quota"
 	_ "nvs-server/models/search"
 	_ "nvs-server/models/security"
 	_ "nvs-server/models/siteops"

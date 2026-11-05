@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	quota "nvs-server/models/quota"
 )
 
 // ==================== 群内帖子与回复 ====================
@@ -108,7 +109,7 @@ func CreateGroupPost(g *Group, user *models.User, title, content string, aiAssis
 		}
 	}
 	// 与全站每日发文额度联动（防止绕过限额批量铺内容）
-	if allowed, used, limit, _, _ := models.CheckDailyPublish(user.ID, user.Role, models.PublishKindGroupPost, len([]rune(content))); !allowed {
+	if allowed, used, limit, _, _ := quota.CheckDailyPublish(user.ID, user.Role, quota.PublishKindGroupPost, len([]rune(content))); !allowed {
 		return nil, fmt.Errorf("今日发布额度已用完（%d/%d），群组发帖同样计入", used, limit)
 	}
 
@@ -131,7 +132,7 @@ func CreateGroupPost(g *Group, user *models.User, title, content string, aiAssis
 		return nil, fmt.Errorf("发帖失败")
 	}
 	if status == GroupPostPublished {
-		_ = models.RecordPublish(user.ID, models.PublishKindGroupPost, p.ID, len([]rune(content)))
+		_ = quota.RecordPublish(user.ID, quota.PublishKindGroupPost, p.ID, len([]rune(content)))
 		RefreshGroupCounts(g.ID)
 	}
 	return p, nil
@@ -228,7 +229,7 @@ func ReviewGroupPost(postID, operatorID uint, operatorRole string, approve bool)
 		return err
 	}
 	if approve {
-		_ = models.RecordPublish(p.UserID, models.PublishKindGroupPost, p.ID, len([]rune(p.Content)))
+		_ = quota.RecordPublish(p.UserID, quota.PublishKindGroupPost, p.ID, len([]rune(p.Content)))
 	}
 	RefreshGroupCounts(p.GroupID)
 	return nil

@@ -10,6 +10,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	quota "nvs-server/models/quota"
 )
 
 func setupHeatTestDB(t *testing.T) *gorm.DB {
@@ -19,7 +20,7 @@ func setupHeatTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("打开内存测试库失败: %v", err)
 	}
-	if err := db.AutoMigrate(&models.WebAccessLog{}); err != nil {
+	if err := db.AutoMigrate(&quota.WebAccessLog{}); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
 	old := models.DB
@@ -33,7 +34,7 @@ func setupHeatTestDB(t *testing.T) *gorm.DB {
 func TestComputeGeoSummary_SplitsThreeBuckets(t *testing.T) {
 	db := setupHeatTestDB(t)
 
-	rows := []models.WebAccessLog{
+	rows := []quota.WebAccessLog{
 		{IP: "127.0.0.1"}, // 内网/保留
 		{IP: "127.0.0.1"},
 		{IP: "8.8.8.8"},         // 境外（美国）
@@ -83,7 +84,7 @@ func TestComputeCountryHeat_GroupsOverseas(t *testing.T) {
 	ips := []string{"8.8.8.8", "8.8.4.4", "1.1.1.1", "114.114.114.114", "114.114.115.115", "114.114.116.116"}
 	var china int64
 	for _, ip := range ips {
-		rec := models.WebAccessLog{IP: ip, CreatedAt: time.Now()}
+		rec := quota.WebAccessLog{IP: ip, CreatedAt: time.Now()}
 		if err := db.Create(&rec).Error; err != nil {
 			t.Fatalf("写日志失败: %v", err)
 		}

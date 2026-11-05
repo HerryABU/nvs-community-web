@@ -12,6 +12,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	quota "nvs-server/models/quota"
 )
 
 // setupGeoTestDB 独立内存库（唯一名，避免与同包其他测试共享污染）。
@@ -37,7 +38,7 @@ func setupGeoTestDB(t *testing.T) {
 func seedAccess(t *testing.T, ip string, n int, at time.Time) {
 	t.Helper()
 	for i := 0; i < n; i++ {
-		row := &models.WebAccessLog{
+		row := &quota.WebAccessLog{
 			IP: ip, Method: "GET", Path: "/novel/1",
 			UAFamily: "browser", IdentityType: "anonymous",
 			StatusCode: 200, CreatedAt: at,

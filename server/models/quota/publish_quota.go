@@ -1,8 +1,9 @@
-package models
+package quota
 
 import (
 	"encoding/json"
 	"fmt"
+	"nvs-server/models"
 	"time"
 )
 
@@ -51,12 +52,12 @@ func DefaultDailyPublishConfig() DailyPublishConfig {
 	return DailyPublishConfig{
 		Enabled: false,
 		Roles: map[string]DailyPublishRoleLimit{
-			RoleReader:     {Count: 5, WordCap: 0},
-			RoleAuthor:     {Count: 20, WordCap: 0},
-			RoleVipAuthor:  {Count: 50, WordCap: 0},
-			RoleArbitrator: {Count: 20, WordCap: 0},
-			RolePolice:     {Count: 100, WordCap: 0},
-			RoleAdmin:      {Count: -1, WordCap: 0}, // 管理员不限
+			models.RoleReader:     {Count: 5, WordCap: 0},
+			models.RoleAuthor:     {Count: 20, WordCap: 0},
+			models.RoleVipAuthor:  {Count: 50, WordCap: 0},
+			models.RoleArbitrator: {Count: 20, WordCap: 0},
+			models.RolePolice:     {Count: 100, WordCap: 0},
+			models.RoleAdmin:      {Count: -1, WordCap: 0}, // 管理员不限
 		},
 	}
 }
@@ -87,7 +88,7 @@ func normalizeDailyPublishConfig(cfg DailyPublishConfig) DailyPublishConfig {
 // GetDailyPublishConfig 读取配置（缺省回退默认）
 func GetDailyPublishConfig() DailyPublishConfig {
 	cfg := DefaultDailyPublishConfig()
-	v := GetPlatformConfig(DailyPublishConfigKey)
+	v := models.GetPlatformConfig(DailyPublishConfigKey)
 	if v == "" {
 		return cfg
 	}
@@ -105,7 +106,7 @@ func SetDailyPublishConfig(cfg DailyPublishConfig) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(DailyPublishConfigKey, string(b))
+	return models.SetPlatformConfig(DailyPublishConfigKey, string(b))
 }
 
 // ---------- 按人覆盖 ----------
@@ -133,7 +134,7 @@ func GetUserPublishQuotaOverride(userID uint) *UserPublishQuota {
 		return nil
 	}
 	var q UserPublishQuota
-	if err := DB.Where("user_id = ?", userID).First(&q).Error; err != nil {
+	if err := models.DB.Where("user_id = ?", userID).First(&q).Error; err != nil {
 		return nil
 	}
 	return &q
@@ -167,21 +168,21 @@ func SetUserPublishQuotaOverride(userID uint, count, wordCap int, note string) e
 		"updated_at": now,
 	}
 	if GetUserPublishQuotaOverride(userID) != nil {
-		return DB.Model(&UserPublishQuota{}).Where("user_id = ?", userID).Updates(cols).Error
+		return models.DB.Model(&UserPublishQuota{}).Where("user_id = ?", userID).Updates(cols).Error
 	}
 	cols["created_at"] = now
-	return DB.Model(&UserPublishQuota{}).Create(cols).Error
+	return models.DB.Model(&UserPublishQuota{}).Create(cols).Error
 }
 
 // DeleteUserPublishQuotaOverride 撤销按人覆盖（恢复跟随角色默认）
 func DeleteUserPublishQuotaOverride(userID uint) error {
-	return DB.Where("user_id = ?", userID).Delete(&UserPublishQuota{}).Error
+	return models.DB.Where("user_id = ?", userID).Delete(&UserPublishQuota{}).Error
 }
 
 // ListUserPublishQuotas 列出所有被单独设置过发文限额的用户（附用户名）
 func ListUserPublishQuotas() ([]UserPublishQuota, error) {
 	var list []UserPublishQuota
-	if err := DB.Order("updated_at DESC").Find(&list).Error; err != nil {
+	if err := models.DB.Order("updated_at DESC").Find(&list).Error; err != nil {
 		return nil, err
 	}
 	if len(list) == 0 {
@@ -191,8 +192,8 @@ func ListUserPublishQuotas() ([]UserPublishQuota, error) {
 	for _, q := range list {
 		ids = append(ids, q.UserID)
 	}
-	var users []User
-	DB.Where("id IN ?", ids).Find(&users)
+	var users []models.User
+	models.DB.Where("id IN ?", ids).Find(&users)
 	names := map[uint]string{}
 	for _, u := range users {
 		names[u.ID] = u.Username
@@ -208,7 +209,7 @@ func EffectivePublishLimit(userID uint, role string) (countLimit, wordLimit int)
 	cfg := GetDailyPublishConfig()
 	lim, ok := cfg.Roles[role]
 	if !ok {
-		lim = cfg.Roles[RoleReader] // 未知角色按最保守的 reader 处理
+		lim = cfg.Roles[models.RoleReader] // 未知角色按最保守的 reader 处理
 	}
 	countLimit, wordLimit = lim.Count, lim.WordCap
 	if o := GetUserPublishQuotaOverride(userID); o != nil {
@@ -253,15 +254,15 @@ func CountTodayPublish(userID uint) (count int64, words int64) {
 		return 0, 0
 	}
 	since := startOfToday()
-	DB.Model(&UserPublishLog{}).Where("user_id = ? AND created_at >= ?", userID, since).Count(&count)
-	DB.Model(&UserPublishLog{}).Where("user_id = ? AND created_at >= ?", userID, since).
+	models.DB.Model(&UserPublishLog{}).Where("user_id = ? AND created_at >= ?", userID, since).Count(&count)
+	models.DB.Model(&UserPublishLog{}).Where("user_id = ? AND created_at >= ?", userID, since).
 		Select("COALESCE(SUM(word_count), 0)").Scan(&words)
 	return
 }
 
 // RecordPublish 记录一次发布流水（成功发布后调用）
 func RecordPublish(userID uint, kind string, targetID uint, wordCount int) error {
-	return DB.Create(&UserPublishLog{
+	return models.DB.Create(&UserPublishLog{
 		UserID:    userID,
 		Kind:      kind,
 		TargetID:  targetID,

@@ -10,6 +10,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	quota "nvs-server/models/quota"
 )
 
 // ==================== 每日发文限额 / 用户配额体系（需求 §13.4） ====================
@@ -19,7 +20,7 @@ import (
 func EnforceDailyPublish(c *gin.Context, kind string, addWords int) bool {
 	userID := hctx.CurrentUserID(c)
 	role := hctx.CurrentUserRole(c)
-	allowed, usedCount, countLimit, usedWords, wordLimit := models.CheckDailyPublish(userID, role, kind, addWords)
+	allowed, usedCount, countLimit, usedWords, wordLimit := quota.CheckDailyPublish(userID, role, kind, addWords)
 	if allowed {
 		return true
 	}
@@ -40,16 +41,16 @@ func EnforceDailyPublish(c *gin.Context, kind string, addWords int) bool {
 func GetMyPublishQuota(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	role := hctx.CurrentUserRole(c)
-	enabled := models.GetDailyPublishConfig().Enabled
-	countLimit, wordLimit := models.EffectivePublishLimit(userID, role)
-	uc, uw := models.CountTodayPublish(userID)
+	enabled := quota.GetDailyPublishConfig().Enabled
+	countLimit, wordLimit := quota.EffectivePublishLimit(userID, role)
+	uc, uw := quota.CountTodayPublish(userID)
 	utils.Success(c, gin.H{
 		"enabled":     enabled,
 		"used_count":  int(uc),
 		"count_limit": countLimit,
 		"used_words":  int(uw),
 		"word_limit":  wordLimit,
-		"reset_at":    models.DailyResetTime(),
+		"reset_at":    quota.DailyResetTime(),
 	})
 }
 
@@ -58,7 +59,7 @@ func AdminGetDailyPublishConfig(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, models.GetDailyPublishConfig())
+	utils.Success(c, quota.GetDailyPublishConfig())
 }
 
 // AdminSetDailyPublishConfig PUT /api/admin/daily-publish/config — 保存配置（立即生效）
@@ -66,12 +67,12 @@ func AdminSetDailyPublishConfig(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	var cfg models.DailyPublishConfig
+	var cfg quota.DailyPublishConfig
 	if err := c.ShouldBindJSON(&cfg); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.SetDailyPublishConfig(cfg); err != nil {
+	if err := quota.SetDailyPublishConfig(cfg); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
@@ -83,7 +84,7 @@ func AdminListPublishOverrides(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	list, err := models.ListUserPublishQuotas()
+	list, err := quota.ListUserPublishQuotas()
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -118,13 +119,13 @@ func AdminManagePublishOverride(c *gin.Context) {
 	}
 	switch req.Action {
 	case "set":
-		if err := models.SetUserPublishQuotaOverride(req.UserID, req.Count, req.WordCap, req.Note); err != nil {
+		if err := quota.SetUserPublishQuotaOverride(req.UserID, req.Count, req.WordCap, req.Note); err != nil {
 			utils.InternalError(c, "保存失败")
 			return
 		}
 		utils.Success(c, gin.H{"message": "已保存该用户的发文限额（立即生效）"})
 	case "remove":
-		if err := models.DeleteUserPublishQuotaOverride(req.UserID); err != nil {
+		if err := quota.DeleteUserPublishQuotaOverride(req.UserID); err != nil {
 			utils.InternalError(c, "操作失败")
 			return
 		}

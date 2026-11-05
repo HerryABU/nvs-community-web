@@ -17,6 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/blog"
+	quota "nvs-server/models/quota"
 )
 
 // ==================== UserFrame 模板管理 ====================
@@ -149,7 +150,7 @@ func CreateFrame(c *gin.Context) {
 	// 用户勾选「公开分享」→ 过额度判断（数量/大小任一超额 → 转 quota_review 待审，不直接进广场）
 	publicNote := ""
 	if req.IsPublic {
-		allowed, needReview, reason, err := models.CheckAndApplyWebPublish(userID, models.WebQuotaTargetFrame, frame.ID)
+		allowed, needReview, reason, err := quota.CheckAndApplyWebPublish(userID, quota.WebQuotaTargetFrame, frame.ID)
 		if err != nil {
 			utils.InternalError(c, "操作失败")
 			return

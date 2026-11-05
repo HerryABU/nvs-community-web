@@ -1,8 +1,9 @@
-package models
+package quota
 
 import (
 	"encoding/json"
 	"fmt"
+	"nvs-server/models"
 	"strings"
 	"time"
 )
@@ -39,7 +40,7 @@ func DefaultHTMLQuotaSetting() HTMLQuotaSetting {
 // LoadHTMLQuotaSetting 读取全局额度配置（缺失或损坏时回退默认值）
 func LoadHTMLQuotaSetting() HTMLQuotaSetting {
 	c := DefaultHTMLQuotaSetting()
-	raw := GetPlatformConfig(htmlQuotaCfgKey)
+	raw := models.GetPlatformConfig(htmlQuotaCfgKey)
 	if strings.TrimSpace(raw) != "" {
 		if err := json.Unmarshal([]byte(raw), &c); err != nil {
 			return DefaultHTMLQuotaSetting()
@@ -61,7 +62,7 @@ func SaveHTMLQuotaSetting(c HTMLQuotaSetting) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(htmlQuotaCfgKey, string(b))
+	return models.SetPlatformConfig(htmlQuotaCfgKey, string(b))
 }
 
 // HTMLQuotaOverride 按人覆盖（0 表示「跟随全局」，-1 表示「不限」）
@@ -86,7 +87,7 @@ func EffectiveHTMLQuota(userID uint) (maxProjects, maxTotalMB int, enabled bool)
 	}
 	maxProjects, maxTotalMB = g.MaxProjects, g.MaxTotalSizeMB
 	var ov HTMLQuotaOverride
-	if err := DB.Where("user_id = ?", userID).First(&ov).Error; err == nil {
+	if err := models.DB.Where("user_id = ?", userID).First(&ov).Error; err == nil {
 		if ov.MaxProjects != 0 {
 			if ov.MaxProjects < 0 {
 				maxProjects = 0 // -1 = 不限
@@ -108,9 +109,9 @@ func EffectiveHTMLQuota(userID uint) (maxProjects, maxTotalMB int, enabled bool)
 // HTMLUsage 统计某用户已用额度（项目数 + 累计字节）
 func HTMLUsage(userID uint) (count int, totalBytes int64) {
 	var n int64
-	_ = DB.Model(&UserHTML{}).Where("user_id = ?", userID).Count(&n).Error
+	_ = models.DB.Model(&models.UserHTML{}).Where("user_id = ?", userID).Count(&n).Error
 	var sum int64
-	_ = DB.Model(&UserHTML{}).Where("user_id = ?", userID).
+	_ = models.DB.Model(&models.UserHTML{}).Where("user_id = ?", userID).
 		Select("COALESCE(SUM(total_size),0)").Scan(&sum).Error
 	return int(n), sum
 }

@@ -7,6 +7,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	quota "nvs-server/models/quota"
 )
 
 // ==================== HTML / WASM 托管额度（管理端） ====================
@@ -17,10 +18,10 @@ func AdminGetHTMLQuota(c *gin.Context) {
 	if !EnsureAdmin(c) {
 		return
 	}
-	var overrides []models.HTMLQuotaOverride
+	var overrides []quota.HTMLQuotaOverride
 	models.DB.Order("updated_at DESC").Limit(500).Find(&overrides)
 	utils.Success(c, gin.H{
-		"config":    models.LoadHTMLQuotaSetting(),
+		"config":    quota.LoadHTMLQuotaSetting(),
 		"overrides": overrides,
 	})
 }
@@ -30,7 +31,7 @@ func AdminSaveHTMLQuota(c *gin.Context) {
 	if !EnsureAdmin(c) {
 		return
 	}
-	var in models.HTMLQuotaSetting
+	var in quota.HTMLQuotaSetting
 	if err := c.ShouldBindJSON(&in); err != nil {
 		utils.BadRequest(c, "参数不合法")
 		return
@@ -41,11 +42,11 @@ func AdminSaveHTMLQuota(c *gin.Context) {
 	if in.MaxTotalSizeMB < 0 {
 		in.MaxTotalSizeMB = 0
 	}
-	if err := models.SaveHTMLQuotaSetting(in); err != nil {
+	if err := quota.SaveHTMLQuotaSetting(in); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "已保存", models.LoadHTMLQuotaSetting())
+	utils.SuccessMessage(c, "已保存", quota.LoadHTMLQuotaSetting())
 }
 
 // AdminSetHTMLQuotaOverride POST /api/admin/html-quota/overrides
@@ -68,16 +69,16 @@ func AdminSetHTMLQuotaOverride(c *gin.Context) {
 	switch req.Action {
 	case "remove":
 		if err := models.DB.Where("user_id = ?", req.UserID).
-			Delete(&models.HTMLQuotaOverride{}).Error; err != nil {
+			Delete(&quota.HTMLQuotaOverride{}).Error; err != nil {
 			utils.InternalError(c, "删除失败")
 			return
 		}
 		utils.SuccessMessage(c, "已恢复为全局额度", nil)
 	case "set":
-		var ov models.HTMLQuotaOverride
+		var ov quota.HTMLQuotaOverride
 		err := models.DB.Where("user_id = ?", req.UserID).First(&ov).Error
 		if err != nil {
-			ov = models.HTMLQuotaOverride{UserID: req.UserID}
+			ov = quota.HTMLQuotaOverride{UserID: req.UserID}
 		}
 		ov.MaxProjects = req.MaxProjects
 		ov.MaxTotalSizeMB = req.MaxTotalSizeMB
@@ -103,5 +104,5 @@ func AdminHTMLQuotaUsage(c *gin.Context) {
 		utils.BadRequest(c, "缺少 user_id")
 		return
 	}
-	utils.Success(c, models.HTMLQuotaSnapshot(uint(uid)))
+	utils.Success(c, quota.HTMLQuotaSnapshot(uint(uid)))
 }

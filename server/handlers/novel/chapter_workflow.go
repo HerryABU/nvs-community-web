@@ -9,6 +9,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	quota "nvs-server/models/quota"
 )
 
 // ==================== 章节工作流（多人协作） ====================
@@ -96,7 +97,7 @@ func ReviewChapter(c *gin.Context) {
 		return
 	}
 	if req.Approve {
-		models.RecordPublish(chapter.AuthorID, models.PublishKindChapter, chapter.ID, chapter.WordCount)
+		quota.RecordPublish(chapter.AuthorID, quota.PublishKindChapter, chapter.ID, chapter.WordCount)
 		models.UpdateNovelStats(novel.ID)
 		collab.LogChapterAction(novel.ID, hctx.CurrentUserID(c), "publish", chapter.ID, "审核通过")
 		utils.SuccessMessage(c, "已通过并发布", nil)
@@ -125,7 +126,7 @@ func PublishChapter(c *gin.Context) {
 		utils.InternalError(c, "发布失败")
 		return
 	}
-	models.RecordPublish(chapter.AuthorID, models.PublishKindChapter, chapter.ID, chapter.WordCount)
+	quota.RecordPublish(chapter.AuthorID, quota.PublishKindChapter, chapter.ID, chapter.WordCount)
 	models.UpdateNovelStats(novel.ID)
 	collab.LogChapterAction(novel.ID, hctx.CurrentUserID(c), "publish", chapter.ID, "直接发布")
 	utils.SuccessMessage(c, "已发布", nil)

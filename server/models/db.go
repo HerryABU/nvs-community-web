@@ -55,6 +55,7 @@ var BlogFeedProvider func(ids []uint, window int) ([]FeedItem, int64, error)
 //	models/aiops     —— AiPrompt / AiVendor / AiNovelMemory / AigcAsset 等 AI 运营模型
 //	models/aihub     —— AiChannelKey / AiModelKey / AiStyle / UserAiFreeQuota 等渠道与工作台模型
 //	models/ai        —— AiModel / AiCallLog / AiAgent / AiMediaTask / AgentSubmission 等核心模型
+//	models/quota     —— UserWebQuota / WebAccessLog / UserPublishLog / HTMLQuotaOverride 等额度模型
 func AllModels() []interface{} {
 	list := []interface{}{
 		&User{}, &Novel{}, &NovelCategory{}, &Chapter{}, &Comment{}, &Rating{},
@@ -74,16 +75,8 @@ func AllModels() []interface{} {
 		&APIKey{}, &FederatedPeerKey{}, &ApiAccessLog{}, &UserAPIPolicy{},
 		// 自建论坛额度：按人覆盖（管理员可削减/放开某人的建版数）
 		&UserForumQuota{},
-		// HTML/WASM 托管额度：按人覆盖（管理员可单独放宽/收紧某人的项目数与空间）
-		&HTMLQuotaOverride{},
-		// 全量 Web 访问日志（功能二：前台网络诊断 / 用户分布 / 攻击流量面板）
-		&WebAccessLog{},
 		// 私信（F20：会话消息，互关才可发第 3 条）
 		&Message{},
-		// web 项目额度与超额审核（F17：发布到广场需额度，超额进入审核队列）
-		&UserWebQuota{}, &WebQuotaRequest{},
-		// 每日发文限额 / 用户配额体系（§13.4：等级×每日数量/字数，按人覆盖，AI 计入）
-		&UserPublishLog{}, &UserPublishQuota{},
 		// 代币账本 + 卡密充值（§7：平台内消费积分，与作者收益账分离，不可篡改可对账）
 		&TokenLedger{}, &UserTokenBalance{}, &CardKey{},
 		// 在线支付充值订单（§7.4：微信/支付宝聚合通道，幂等到账）

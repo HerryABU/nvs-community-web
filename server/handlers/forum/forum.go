@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	quota "nvs-server/models/quota"
 )
 
 // GET /api/forums — 论坛列表
@@ -215,7 +216,7 @@ func CreateThread(c *gin.Context) {
 
 	// 每日发文限额预检（§13.4；后台关闭时不生效）
 	threadWords := len([]rune(cleaned))
-	if !publish.EnforceDailyPublish(c, models.PublishKindThread, threadWords) {
+	if !publish.EnforceDailyPublish(c, quota.PublishKindThread, threadWords) {
 		return
 	}
 
@@ -231,7 +232,7 @@ func CreateThread(c *gin.Context) {
 		return
 	}
 	// 发布流水记账（计入每日发文限额）
-	models.RecordPublish(userID, models.PublishKindThread, thread.ID, threadWords)
+	quota.RecordPublish(userID, quota.PublishKindThread, thread.ID, threadWords)
 
 	// 违禁词 mark 动作命中 → 写入待审标记记录
 	badword.FlagBadWords(badHits, "thread", thread.ID, userID, raw, thread.Title)

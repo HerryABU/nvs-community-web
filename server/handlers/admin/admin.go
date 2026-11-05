@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	ai "nvs-server/models/ai"
 	aiops "nvs-server/models/aiops"
+	quota "nvs-server/models/quota"
 	search "nvs-server/models/search"
 	"nvs-server/models/security"
 )
@@ -390,7 +391,7 @@ func computeCountryHeat(days int) []gin.H {
 	}
 	var rows []ipRow
 	since := time.Now().AddDate(0, 0, -days).Format("2006-01-02 15:04:05")
-	if err := models.DB.Model(&models.WebAccessLog{}).
+	if err := models.DB.Model(&quota.WebAccessLog{}).
 		Where("created_at >= ?", since).
 		Select("ip, COUNT(*) as cnt").
 		Group("ip").Order("cnt desc").Limit(5000).
@@ -452,7 +453,7 @@ func computeGeoSummary(days int) gin.H {
 	}
 	var rows []ipRow
 	since := time.Now().AddDate(0, 0, -days).Format("2006-01-02 15:04:05")
-	if err := models.DB.Model(&models.WebAccessLog{}).
+	if err := models.DB.Model(&quota.WebAccessLog{}).
 		Where("created_at >= ?", since).
 		Select("ip, COUNT(*) as cnt").
 		Group("ip").Order("cnt desc").Limit(5000).
@@ -503,7 +504,7 @@ func computeProvinceHeat(days int) []gin.H {
 	}
 	var rows []ipRow
 	since := time.Now().AddDate(0, 0, -days).Format("2006-01-02 15:04:05")
-	if err := models.DB.Model(&models.WebAccessLog{}).
+	if err := models.DB.Model(&quota.WebAccessLog{}).
 		Where("created_at >= ?", since).
 		Select("ip, COUNT(*) as cnt").
 		Group("ip").Order("cnt desc").Limit(5000).
@@ -562,15 +563,15 @@ func computeActiveHours(days int) [][]int64 {
 func computeClientBreakdown(days int) gin.H {
 	since := time.Now().AddDate(0, 0, -days).Format("2006-01-02 15:04:05")
 	var osDist, browserDist, deviceDist []map[string]any
-	models.DB.Model(&models.WebAccessLog{}).
+	models.DB.Model(&quota.WebAccessLog{}).
 		Where("created_at >= ? AND os_name <> '' AND os_name <> 'unknown'", since).
 		Select("os_name as name, COUNT(*) as cnt").Group("os_name").Order("cnt desc").Limit(8).
 		Scan(&osDist)
-	models.DB.Model(&models.WebAccessLog{}).
+	models.DB.Model(&quota.WebAccessLog{}).
 		Where("created_at >= ? AND browser_name <> '' AND browser_name <> 'unknown'", since).
 		Select("browser_name as name, COUNT(*) as cnt").Group("browser_name").Order("cnt desc").Limit(8).
 		Scan(&browserDist)
-	models.DB.Model(&models.WebAccessLog{}).
+	models.DB.Model(&quota.WebAccessLog{}).
 		Where("created_at >= ? AND device_type <> '' AND device_type <> 'unknown'", since).
 		Select("device_type as name, COUNT(*) as cnt").Group("device_type").Order("cnt desc").
 		Scan(&deviceDist)

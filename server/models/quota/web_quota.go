@@ -1,13 +1,13 @@
-package models
+package quota
 
 // ==================== Web 项目发布额度 + 超额审核 ====================
 //
-// 平台对「用户自定义 HTML 扩展（UserHTML）」与「用户自定义模板（UserFrame）」
+// 平台对「用户自定义 HTML 扩展（models.UserHTML）」与「用户自定义模板（models.UserFrame）」
 // 的公开发布做双重额度管控（数量 + 总大小，可同时开启）：
 //
-//   - 数量额度：UserHTML + UserFrame 中 is_public=true 的合计；
-//   - 大小额度：上述已公开项目的磁盘占用合计（UserHTML 取 TotalSize 列，
-//     UserFrame 按 FilePath 实际 stat，单文件/目录均可）；
+//   - 数量额度：models.UserHTML + models.UserFrame 中 is_public=true 的合计；
+//   - 大小额度：上述已公开项目的磁盘占用合计（models.UserHTML 取 TotalSize 列，
+//     models.UserFrame 按 FilePath 实际 stat，单文件/目录均可）；
 //   - 全局默认：platform_configs.web_publish_quota（数量，默认 3）与
 //     web_publish_quota_size_mb（大小 MB，默认 0 = 不限）；
 //   - 按人覆盖：user_web_quotas（quota=-1 跟随全局数量；quota_size_mb=-1 跟随全局大小，
@@ -24,6 +24,7 @@ package models
 
 import (
 	"fmt"
+	"nvs-server/models"
 	"os"
 	"strconv"
 	"time"
@@ -104,7 +105,7 @@ func (WebQuotaRequest) TableName() string { return "web_quota_requests" }
 
 // GetWebPublishQuotaConfig 读取全局默认 web 项目公开额度（缺省 DefaultWebPublishQuota，范围 0~1000）
 func GetWebPublishQuotaConfig() int {
-	val := GetPlatformConfig(WebPublishQuotaKey)
+	val := models.GetPlatformConfig(WebPublishQuotaKey)
 	if val == "" {
 		return DefaultWebPublishQuota
 	}
@@ -129,7 +130,7 @@ func SetWebPublishQuotaConfig(value int) error {
 	if value > 1000 {
 		value = 1000
 	}
-	return SetPlatformConfig(WebPublishQuotaKey, strconv.Itoa(value))
+	return models.SetPlatformConfig(WebPublishQuotaKey, strconv.Itoa(value))
 }
 
 // ---------- 全局默认大小额度（MB） ----------
@@ -137,7 +138,7 @@ func SetWebPublishQuotaConfig(value int) error {
 // GetWebPublishQuotaSizeConfig 读取全局默认总大小额度（MB）。
 // 0 = 不限（默认）；>0 = 每人已公开 web 项目的磁盘占用上限。
 func GetWebPublishQuotaSizeConfig() int {
-	val := GetPlatformConfig(WebPublishQuotaSizeKey)
+	val := models.GetPlatformConfig(WebPublishQuotaSizeKey)
 	if val == "" {
 		return DefaultWebPublishQuotaSizeMB
 	}
@@ -159,7 +160,7 @@ func SetWebPublishQuotaSizeConfig(value int) error {
 	if value > MaxWebQuotaSizeMB {
 		value = MaxWebQuotaSizeMB
 	}
-	return SetPlatformConfig(WebPublishQuotaSizeKey, strconv.Itoa(value))
+	return models.SetPlatformConfig(WebPublishQuotaSizeKey, strconv.Itoa(value))
 }
 
 // ---------- 按人覆盖 ----------
@@ -170,7 +171,7 @@ func GetUserWebQuotaOverride(userID uint) *UserWebQuota {
 		return nil
 	}
 	var q UserWebQuota
-	if err := DB.Where("user_id = ?", userID).First(&q).Error; err != nil {
+	if err := models.DB.Where("user_id = ?", userID).First(&q).Error; err != nil {
 		return nil
 	}
 	return &q
@@ -209,21 +210,21 @@ func SetUserWebQuotaOverride(userID uint, quota, quotaSizeMB int, note string) e
 		"updated_at":    now,
 	}
 	if existing := GetUserWebQuotaOverride(userID); existing != nil {
-		return DB.Model(&UserWebQuota{}).Where("user_id = ?", userID).Updates(cols).Error
+		return models.DB.Model(&UserWebQuota{}).Where("user_id = ?", userID).Updates(cols).Error
 	}
 	cols["created_at"] = now
-	return DB.Model(&UserWebQuota{}).Create(cols).Error
+	return models.DB.Model(&UserWebQuota{}).Create(cols).Error
 }
 
 // DeleteUserWebQuotaOverride 撤销按人覆盖（恢复跟随全局）
 func DeleteUserWebQuotaOverride(userID uint) error {
-	return DB.Where("user_id = ?", userID).Delete(&UserWebQuota{}).Error
+	return models.DB.Where("user_id = ?", userID).Delete(&UserWebQuota{}).Error
 }
 
 // ListUserWebQuotas 列出所有被单独设置过额度的用户（附用户名）
 func ListUserWebQuotas() ([]UserWebQuota, error) {
 	var list []UserWebQuota
-	if err := DB.Order("updated_at DESC").Find(&list).Error; err != nil {
+	if err := models.DB.Order("updated_at DESC").Find(&list).Error; err != nil {
 		return nil, err
 	}
 	if len(list) == 0 {
@@ -233,8 +234,8 @@ func ListUserWebQuotas() ([]UserWebQuota, error) {
 	for _, q := range list {
 		ids = append(ids, q.UserID)
 	}
-	var users []User
-	DB.Where("id IN ?", ids).Find(&users)
+	var users []models.User
+	models.DB.Where("id IN ?", ids).Find(&users)
 	names := map[uint]string{}
 	for _, u := range users {
 		names[u.ID] = u.Username
@@ -265,26 +266,26 @@ func GetWebPublishQuotaSizeMB(userID uint) int {
 // ---------- 已公开数与已用大小统计 ----------
 
 // CountPublicWeb 统计某用户已公开（is_public=true）的 web 项目数
-// （UserHTML + UserFrame 合计，与广场展示口径一致）
+// （models.UserHTML + models.UserFrame 合计，与广场展示口径一致）
 func CountPublicWeb(userID uint) int64 {
 	var htmlN, frameN int64
-	DB.Model(&UserHTML{}).Where("user_id = ? AND is_public = ?", userID, true).Count(&htmlN)
-	DB.Model(&UserFrame{}).Where("user_id = ? AND is_public = ?", userID, true).Count(&frameN)
+	models.DB.Model(&models.UserHTML{}).Where("user_id = ? AND is_public = ?", userID, true).Count(&htmlN)
+	models.DB.Model(&models.UserFrame{}).Where("user_id = ? AND is_public = ?", userID, true).Count(&frameN)
 	return htmlN + frameN
 }
 
 // CountPublicWebSize 统计某用户已公开 web 项目的磁盘占用合计（字节）。
-// UserHTML 取 TotalSize 列（上传解压时已统计）；UserFrame 为单文件模板，
+// models.UserHTML 取 TotalSize 列（上传解压时已统计）；models.UserFrame 为单文件模板，
 // 按 FilePath 实时 stat（文件被外部改动也能反映真实占用）。
 func CountPublicWebSize(userID uint) int64 {
 	var total int64
-	var htmls []UserHTML
-	DB.Model(&UserHTML{}).Where("user_id = ? AND is_public = ?", userID, true).Find(&htmls)
+	var htmls []models.UserHTML
+	models.DB.Model(&models.UserHTML{}).Where("user_id = ? AND is_public = ?", userID, true).Find(&htmls)
 	for _, h := range htmls {
 		total += h.TotalSize
 	}
-	var frames []UserFrame
-	DB.Model(&UserFrame{}).Where("user_id = ? AND is_public = ?", userID, true).Find(&frames)
+	var frames []models.UserFrame
+	models.DB.Model(&models.UserFrame{}).Where("user_id = ? AND is_public = ?", userID, true).Find(&frames)
 	for _, f := range frames {
 		total += pathSizeBytes(f.FilePath)
 	}
@@ -331,13 +332,13 @@ func filepathWalkSize(root string, total *int64) error {
 func WebTargetSize(targetType string, targetID uint) int64 {
 	switch targetType {
 	case WebQuotaTargetHTML:
-		var h UserHTML
-		if DB.First(&h, targetID).Error == nil {
+		var h models.UserHTML
+		if models.DB.First(&h, targetID).Error == nil {
 			return h.TotalSize
 		}
 	case WebQuotaTargetFrame:
-		var f UserFrame
-		if DB.First(&f, targetID).Error == nil {
+		var f models.UserFrame
+		if models.DB.First(&f, targetID).Error == nil {
 			return pathSizeBytes(f.FilePath)
 		}
 	}
@@ -355,9 +356,9 @@ func applyTargetVisibility(targetType string, targetID uint, isPublic bool, revi
 	}
 	switch targetType {
 	case WebQuotaTargetHTML:
-		return DB.Model(&UserHTML{}).Where("id = ?", targetID).Updates(updates).Error
+		return models.DB.Model(&models.UserHTML{}).Where("id = ?", targetID).Updates(updates).Error
 	case WebQuotaTargetFrame:
-		return DB.Model(&UserFrame{}).Where("id = ?", targetID).Updates(updates).Error
+		return models.DB.Model(&models.UserFrame{}).Where("id = ?", targetID).Updates(updates).Error
 	default:
 		return fmt.Errorf("未知的目标类型: %s", targetType)
 	}
@@ -379,14 +380,14 @@ func CheckAndApplyWebPublish(userID uint, targetType string, targetID uint) (all
 	var isPublic bool
 	switch targetType {
 	case WebQuotaTargetHTML:
-		var h UserHTML
-		if e := DB.First(&h, targetID).Error; e != nil {
+		var h models.UserHTML
+		if e := models.DB.First(&h, targetID).Error; e != nil {
 			return false, false, "", e
 		}
 		isPublic = h.IsPublic
 	case WebQuotaTargetFrame:
-		var f UserFrame
-		if e := DB.First(&f, targetID).Error; e != nil {
+		var f models.UserFrame
+		if e := models.DB.First(&f, targetID).Error; e != nil {
 			return false, false, "", e
 		}
 		isPublic = f.IsPublic
@@ -444,7 +445,7 @@ func CheckAndApplyWebPublish(userID uint, targetType string, targetID uint) (all
 // CreateWebQuotaRequest 生成一条超额审核单（同一目标已存在 pending 单则复用，避免重复建单）
 func CreateWebQuotaRequest(userID uint, targetType string, targetID uint, reason string) (*WebQuotaRequest, error) {
 	var existing WebQuotaRequest
-	if err := DB.Where("user_id = ? AND target_type = ? AND target_id = ? AND status = ?",
+	if err := models.DB.Where("user_id = ? AND target_type = ? AND target_id = ? AND status = ?",
 		userID, targetType, targetID, WebQuotaStatusPending).First(&existing).Error; err == nil {
 		return &existing, nil
 	}
@@ -455,7 +456,7 @@ func CreateWebQuotaRequest(userID uint, targetType string, targetID uint, reason
 		Status:     WebQuotaStatusPending,
 		Reason:     reason,
 	}
-	if err := DB.Create(&req).Error; err != nil {
+	if err := models.DB.Create(&req).Error; err != nil {
 		return nil, err
 	}
 	return &req, nil
@@ -463,7 +464,7 @@ func CreateWebQuotaRequest(userID uint, targetType string, targetID uint, reason
 
 // ListWebQuotaRequests 列出超额审核单（status 为空表示全部），并附用户名与目标名称
 func ListWebQuotaRequests(status string) ([]WebQuotaRequest, error) {
-	q := DB.Order("created_at DESC")
+	q := models.DB.Order("created_at DESC")
 	if status != "" {
 		q = q.Where("status = ?", status)
 	}
@@ -479,8 +480,8 @@ func ListWebQuotaRequests(status string) ([]WebQuotaRequest, error) {
 	for _, r := range list {
 		ids = append(ids, r.UserID)
 	}
-	var users []User
-	DB.Where("id IN ?", ids).Find(&users)
+	var users []models.User
+	models.DB.Where("id IN ?", ids).Find(&users)
 	names := map[uint]string{}
 	for _, u := range users {
 		names[u.ID] = u.Username
@@ -496,13 +497,13 @@ func ListWebQuotaRequests(status string) ([]WebQuotaRequest, error) {
 func GetWebQuotaTargetName(targetType string, targetID uint) string {
 	switch targetType {
 	case WebQuotaTargetHTML:
-		var h UserHTML
-		if DB.First(&h, targetID).Error == nil {
+		var h models.UserHTML
+		if models.DB.First(&h, targetID).Error == nil {
 			return h.Name
 		}
 	case WebQuotaTargetFrame:
-		var f UserFrame
-		if DB.First(&f, targetID).Error == nil {
+		var f models.UserFrame
+		if models.DB.First(&f, targetID).Error == nil {
 			return f.Name
 		}
 	}
@@ -512,7 +513,7 @@ func GetWebQuotaTargetName(targetType string, targetID uint) string {
 // ApproveQuotaRequest 管理员批准超额公开：目标 is_public=true 且 review_status=approved，审核单置 approved
 func ApproveQuotaRequest(reqID uint, adminID uint, note string) error {
 	var req WebQuotaRequest
-	if err := DB.First(&req, reqID).Error; err != nil {
+	if err := models.DB.First(&req, reqID).Error; err != nil {
 		return fmt.Errorf("审核单不存在")
 	}
 	if req.Status != WebQuotaStatusPending {
@@ -529,7 +530,7 @@ func ApproveQuotaRequest(reqID uint, adminID uint, note string) error {
 		"reviewed_at": now,
 		"updated_at":  now,
 	}
-	return DB.Model(&WebQuotaRequest{}).Where("id = ?", reqID).Updates(cols).Error
+	return models.DB.Model(&WebQuotaRequest{}).Where("id = ?", reqID).Updates(cols).Error
 }
 
 // RejectQuotaRequest 管理员驳回超额公开：目标保持私有（is_public=false），审核单置 rejected。
@@ -537,7 +538,7 @@ func ApproveQuotaRequest(reqID uint, adminID uint, note string) error {
 // 保留该状态即可（避免误改内容安全扫描的 pending/quarantine 等语义）。
 func RejectQuotaRequest(reqID uint, adminID uint, note string) error {
 	var req WebQuotaRequest
-	if err := DB.First(&req, reqID).Error; err != nil {
+	if err := models.DB.First(&req, reqID).Error; err != nil {
 		return fmt.Errorf("审核单不存在")
 	}
 	if req.Status != WebQuotaStatusPending {
@@ -551,13 +552,13 @@ func RejectQuotaRequest(reqID uint, adminID uint, note string) error {
 		"reviewed_at": now,
 		"updated_at":  now,
 	}
-	return DB.Model(&WebQuotaRequest{}).Where("id = ?", reqID).Updates(cols).Error
+	return models.DB.Model(&WebQuotaRequest{}).Where("id = ?", reqID).Updates(cols).Error
 }
 
 // ListMyWebQuotaRequests 列出某用户自己的超额审核单（含状态、目标名）
 func ListMyWebQuotaRequests(userID uint) ([]WebQuotaRequest, error) {
 	var list []WebQuotaRequest
-	if err := DB.Where("user_id = ?", userID).Order("created_at DESC").Find(&list).Error; err != nil {
+	if err := models.DB.Where("user_id = ?", userID).Order("created_at DESC").Find(&list).Error; err != nil {
 		return nil, err
 	}
 	for i := range list {

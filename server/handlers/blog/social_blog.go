@@ -24,6 +24,7 @@ import (
 	"github.com/gin-gonic/gin"
 	aihub "nvs-server/models/aihub"
 	blogm "nvs-server/models/blog"
+	quota "nvs-server/models/quota"
 )
 
 // ============ 作者博客 ============
@@ -197,7 +198,7 @@ func CreateBlog(c *gin.Context) {
 
 	// 每日发文限额预检（§13.4；后台关闭时不生效）
 	blogWords := len([]rune(content))
-	if !publish.EnforceDailyPublish(c, models.PublishKindBlog, blogWords) {
+	if !publish.EnforceDailyPublish(c, quota.PublishKindBlog, blogWords) {
 		return
 	}
 
@@ -218,7 +219,7 @@ func CreateBlog(c *gin.Context) {
 		return
 	}
 	// 发布流水记账（计入每日发文限额）
-	models.RecordPublish(userID, models.PublishKindBlog, blog.ID, blogWords)
+	quota.RecordPublish(userID, quota.PublishKindBlog, blog.ID, blogWords)
 
 	// 违禁词 mark 动作命中 → 写入待审标记记录
 	badword.FlagBadWords(badHits, "blog", blog.ID, userID, raw, blog.Title)
