@@ -1,6 +1,9 @@
-package models
+package platform
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"nvs-server/models"
+)
 
 // ZoneDetail 单个敏感分区的详细配置
 type ZoneDetail struct {
@@ -159,7 +162,7 @@ func (wc WallConfig) GetZoneDetail(zoneName string) ZoneDetail {
 
 // GetWallConfig 获取隔离墙配置
 func GetWallConfig() WallConfig {
-	val := GetPlatformConfig("wall_config")
+	val := models.GetPlatformConfig("wall_config")
 	if val == "" {
 		return DefaultWallConfig()
 	}
@@ -176,5 +179,5 @@ func SetWallConfig(cfg WallConfig) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig("wall_config", string(data))
+	return models.SetPlatformConfig("wall_config", string(data))
 }

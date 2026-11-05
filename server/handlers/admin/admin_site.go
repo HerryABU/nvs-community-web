@@ -23,6 +23,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
 	apikey "nvs-server/models/apikey"
+	platform "nvs-server/models/platform"
 )
 
 // configEncryptSecret 用机器密钥 AES-256-GCM 加密敏感明文（联邦出站 Key 落库）
@@ -192,19 +193,19 @@ func GetWallConfig(c *gin.Context) {
 	if !EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, models.GetWallConfig())
+	utils.Success(c, platform.GetWallConfig())
 }
 
 func UpdateWallConfig(c *gin.Context) {
 	if !EnsureAdmin(c) {
 		return
 	}
-	var req models.WallConfig
+	var req platform.WallConfig
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.SetWallConfig(req); err != nil {
+	if err := platform.SetWallConfig(req); err != nil {
 		utils.InternalError(c, "保存配置失败")
 		return
 	}
@@ -217,7 +218,7 @@ func ListFederatedSites(c *gin.Context) {
 	if !EnsureAdmin(c) {
 		return
 	}
-	var sites []models.FederatedSite
+	var sites []platform.FederatedSite
 	models.DB.Order("id ASC").Find(&sites)
 	utils.Success(c, sites)
 }
@@ -237,7 +238,7 @@ func CreateFederatedSite(c *gin.Context) {
 		return
 	}
 	policy := bluemonday.StrictPolicy()
-	site := &models.FederatedSite{Name: policy.Sanitize(req.Name), URL: policy.Sanitize(req.URL), APIURL: policy.Sanitize(req.APIURL), Description: policy.Sanitize(req.Description), Status: "active"}
+	site := &platform.FederatedSite{Name: policy.Sanitize(req.Name), URL: policy.Sanitize(req.URL), APIURL: policy.Sanitize(req.APIURL), Description: policy.Sanitize(req.Description), Status: "active"}
 	if err := models.DB.Create(site).Error; err != nil {
 		utils.InternalError(c, "添加失败")
 		return
@@ -250,7 +251,7 @@ func UpdateFederatedSite(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var site models.FederatedSite
+	var site platform.FederatedSite
 	if err := models.DB.First(&site, id).Error; err != nil {
 		utils.NotFound(c, "站点不存在")
 		return
@@ -285,8 +286,8 @@ func DeleteFederatedSite(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	models.DB.Where("site_id = ?", id).Delete(&models.FederatedNovel{})
-	models.DB.Delete(&models.FederatedSite{}, id)
+	models.DB.Where("site_id = ?", id).Delete(&platform.FederatedNovel{})
+	models.DB.Delete(&platform.FederatedSite{}, id)
 	utils.Success(c, gin.H{"message": "已删除"})
 }
 
@@ -363,7 +364,7 @@ func RecordInbound(c *gin.Context, endpoint string) {
 			}
 		}
 	}
-	models.RecordFederatedInbound(name, srcURL, c.ClientIP(), c.Request.UserAgent(), endpoint, keyPrefix, issuer)
+	platform.RecordFederatedInbound(name, srcURL, c.ClientIP(), c.Request.UserAgent(), endpoint, keyPrefix, issuer)
 }
 
 func SyncFederatedSite(c *gin.Context) {
@@ -371,7 +372,7 @@ func SyncFederatedSite(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var site models.FederatedSite
+	var site platform.FederatedSite
 	if err := models.DB.First(&site, id).Error; err != nil {
 		utils.NotFound(c, "站点不存在")
 		return
@@ -453,7 +454,7 @@ func SyncFederatedSite(c *gin.Context) {
 		if item.ID == 0 {
 			continue
 		}
-		var existing models.FederatedNovel
+		var existing platform.FederatedNovel
 		if models.DB.Where("site_id = ? AND remote_id = ?", id, item.ID).First(&existing).Error == nil {
 			continue
 		}
@@ -461,19 +462,19 @@ func SyncFederatedSite(c *gin.Context) {
 		if item.Author.Nickname != "" {
 			authorName = item.Author.Nickname
 		}
-		models.DB.Create(&models.FederatedNovel{SiteID: uint(id), RemoteID: item.ID, Title: item.Title, Category: item.Category, Author: authorName, Summary: item.Summary, CoverURL: item.CoverURL, SourceURL: fmt.Sprintf("%s/novel/%d", site.URL, item.ID), CachedAt: time.Now()})
+		models.DB.Create(&platform.FederatedNovel{SiteID: uint(id), RemoteID: item.ID, Title: item.Title, Category: item.Category, Author: authorName, Summary: item.Summary, CoverURL: item.CoverURL, SourceURL: fmt.Sprintf("%s/novel/%d", site.URL, item.ID), CachedAt: time.Now()})
 		synced++
 	}
 	now := time.Now()
 	count := int64(0)
-	models.DB.Model(&models.FederatedNovel{}).Where("site_id = ?", id).Count(&count)
+	models.DB.Model(&platform.FederatedNovel{}).Where("site_id = ?", id).Count(&count)
 	models.DB.Model(&site).Updates(map[string]interface{}{"last_sync_at": now, "novel_count": count})
 	utils.Success(c, gin.H{"message": "同步完成", "synced": synced, "total": count})
 }
 
 func ListPublicSites(c *gin.Context) {
 	RecordInbound(c, "federated/sites")
-	var sites []models.FederatedSite
+	var sites []platform.FederatedSite
 	models.DB.Where("status = ?", "active").Order("id ASC").Find(&sites)
 	utils.Success(c, sites)
 }
@@ -483,13 +484,13 @@ func ListFederatedNovels(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	siteID, _ := strconv.ParseUint(c.Query("site_id"), 10, 64)
-	query := models.DB.Model(&models.FederatedNovel{})
+	query := models.DB.Model(&platform.FederatedNovel{})
 	if siteID > 0 {
 		query = query.Where("site_id = ?", siteID)
 	}
 	var total int64
 	query.Count(&total)
-	var list []models.FederatedNovel
+	var list []platform.FederatedNovel
 	query.Order("cached_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list)
 	utils.Success(c, gin.H{"list": list, "total": total})
 }
@@ -498,7 +499,7 @@ func ListFederatedNovels(c *gin.Context) {
 
 func GetSiteInfo(c *gin.Context) {
 	RecordInbound(c, "site-info")
-	wallCfg := models.GetWallConfig()
+	wallCfg := platform.GetWallConfig()
 	// 平台指南：公开可读（注册页展示），消毒后返回
 	guidelines := models.GetPlatformConfig("guidelines")
 	if guidelines != "" {
@@ -535,7 +536,7 @@ func ListInboundSites(c *gin.Context) {
 	if !EnsureAdmin(c) {
 		return
 	}
-	list, err := models.ListFederatedInbound(200)
+	list, err := platform.ListFederatedInbound(200)
 	if err != nil {
 		utils.InternalError(c, "获取入站连接记录失败")
 		return
@@ -546,9 +547,9 @@ func ListInboundSites(c *gin.Context) {
 // ============ 联邦站点 API Key（双向可见） ============
 
 // getFederatedSiteOr404 取站点，不存在则已响应 404 并返回 false
-func getFederatedSiteOr404(c *gin.Context) (*models.FederatedSite, bool) {
+func getFederatedSiteOr404(c *gin.Context) (*platform.FederatedSite, bool) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var site models.FederatedSite
+	var site platform.FederatedSite
 	if err := models.DB.First(&site, id).Error; err != nil {
 		utils.NotFound(c, "站点不存在")
 		return nil, false
@@ -727,6 +728,6 @@ func DeleteFederatedKey(c *gin.Context) {
 
 func GetPublicZoneDetail(c *gin.Context) {
 	zoneName := c.Param("zone")
-	cfg := models.GetWallConfig()
+	cfg := platform.GetWallConfig()
 	utils.Success(c, cfg.GetZoneDetail(zoneName))
 }

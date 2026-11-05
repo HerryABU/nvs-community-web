@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	ai "nvs-server/models/ai"
 	aiops "nvs-server/models/aiops"
+	platform "nvs-server/models/platform"
 	quota "nvs-server/models/quota"
 	search "nvs-server/models/search"
 	"nvs-server/models/security"
@@ -42,7 +43,7 @@ func ApplyVip(c *gin.Context) {
 	}
 	c.ShouldBindJSON(&req)
 
-	app := &models.VipApplication{UserID: userID, Reason: req.Reason}
+	app := &platform.VipApplication{UserID: userID, Reason: req.Reason}
 	models.DB.Where("user_id = ? AND status = ?", userID, "pending").FirstOrCreate(app)
 
 	utils.Success(c, app)
@@ -53,7 +54,7 @@ func ListVipApplications(c *gin.Context) {
 	if !EnsureAdmin(c) {
 		return
 	}
-	var apps []models.VipApplication
+	var apps []platform.VipApplication
 	models.DB.Preload("User").Order("created_at DESC").Find(&apps)
 	utils.Success(c, apps)
 }
@@ -66,14 +67,14 @@ func ApproveVip(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
 	now := time.Now()
-	if err := models.DB.Model(&models.VipApplication{}).Where("id = ?", id).Updates(map[string]interface{}{
+	if err := models.DB.Model(&platform.VipApplication{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status": "approved", "reviewed_at": now,
 	}).Error; err != nil {
 		utils.InternalError(c, "操作失败")
 		return
 	}
 
-	var app models.VipApplication
+	var app platform.VipApplication
 	models.DB.First(&app, id)
 	models.DB.Model(&models.User{}).Where("id = ?", app.UserID).Update("role", "vip_author")
 
@@ -597,7 +598,7 @@ func RequestWithdraw(c *gin.Context) {
 		return
 	}
 
-	wr := &models.WithdrawalRequest{UserID: userID, Amount: req.Amount, Method: req.Method, Account: req.Account}
+	wr := &platform.WithdrawalRequest{UserID: userID, Amount: req.Amount, Method: req.Method, Account: req.Account}
 	models.DB.Create(wr)
 	utils.Success(c, wr)
 }
@@ -606,7 +607,7 @@ func RequestWithdraw(c *gin.Context) {
 func GetEarnings(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	var total float64
-	models.DB.Model(&models.EarningsRecord{}).Where("user_id = ?", userID).Select("COALESCE(SUM(amount),0)").Scan(&total)
+	models.DB.Model(&platform.EarningsRecord{}).Where("user_id = ?", userID).Select("COALESCE(SUM(amount),0)").Scan(&total)
 	utils.Success(c, gin.H{"total_earnings": total})
 }
 
@@ -616,7 +617,7 @@ func GetFinanceOverview(c *gin.Context) {
 		return
 	}
 	var totalTips float64
-	models.DB.Model(&models.EarningsRecord{}).Select("COALESCE(SUM(amount),0)").Scan(&totalTips)
+	models.DB.Model(&platform.EarningsRecord{}).Select("COALESCE(SUM(amount),0)").Scan(&totalTips)
 
 	var userCount int64
 	models.DB.Model(&models.User{}).Count(&userCount)

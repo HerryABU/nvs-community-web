@@ -10,6 +10,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	platform "nvs-server/models/platform"
 )
 
 // OutsideWebProxy 处理外联站点访问：/{outsidewebid}/*proxyPath → 转发到内部同路径处理
@@ -21,7 +22,7 @@ func OutsideWebProxy(c *gin.Context) {
 	c.Set("outside_web_id", outsideWebID)
 
 	// 验证外部站点 ID 是否存在且有效
-	var site models.FederatedSite
+	var site platform.FederatedSite
 	if err := models.DB.Where("id = ? AND status = ?", outsideWebID, "active").First(&site).Error; err != nil {
 		// 外联 ID 无效，但仍可尝试代理（可能是公开访问）
 		c.Set("outside_web_verified", false)

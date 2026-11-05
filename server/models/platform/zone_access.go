@@ -1,9 +1,10 @@
-package models
+package platform
 
 import (
 	"time"
 
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // ZoneAccessLog 隔离墙（敏感分区）进入记录表
@@ -29,7 +30,7 @@ func RecordZoneEnterLog(userID uint, zone, ip, ua string, enteredAt time.Time) {
 	if enteredAt.IsZero() {
 		enteredAt = time.Now()
 	}
-	_ = DB.Create(&ZoneAccessLog{
+	_ = models.DB.Create(&ZoneAccessLog{
 		UserID:    userID,
 		Zone:      zone,
 		EnteredAt: enteredAt,
@@ -47,7 +48,7 @@ type ZoneAccessLogView struct {
 
 // zoneAccessSelect 统一联表查询构造：LEFT JOIN users 取 username/nickname。
 func zoneAccessSelect() *gorm.DB {
-	return DB.Table("zone_access_logs").
+	return models.DB.Table("zone_access_logs").
 		Select("zone_access_logs.*, COALESCE(users.username,'') AS username, COALESCE(users.nickname,'') AS nickname").
 		Joins("LEFT JOIN users ON users.id = zone_access_logs.user_id")
 }
@@ -57,7 +58,7 @@ func ListZoneAccess(userID uint, zone string, limit int) ([]ZoneAccessLog, error
 	if limit <= 0 {
 		limit = 500
 	}
-	query := DB.Model(&ZoneAccessLog{}).Order("id desc")
+	query := models.DB.Model(&ZoneAccessLog{}).Order("id desc")
 	if userID > 0 {
 		query = query.Where("user_id = ?", userID)
 	}
@@ -92,7 +93,7 @@ func ListZoneAccessPage(f ZoneAccessFilter) ([]ZoneAccessLogView, int64, error) 
 		f.Page = 1
 	}
 	query := zoneAccessSelect()
-	countQuery := DB.Model(&ZoneAccessLog{})
+	countQuery := models.DB.Model(&ZoneAccessLog{})
 	if f.UserID > 0 {
 		query = query.Where("zone_access_logs.user_id = ?", f.UserID)
 		countQuery = countQuery.Where("user_id = ?", f.UserID)
@@ -136,18 +137,18 @@ type ZoneAccessZone struct {
 // GetZoneAccessStats 聚合统计：累计、今日、去重用户、按分区分布。
 func GetZoneAccessStats() (ZoneAccessStats, error) {
 	var s ZoneAccessStats
-	if err := DB.Model(&ZoneAccessLog{}).Count(&s.Total).Error; err != nil {
+	if err := models.DB.Model(&ZoneAccessLog{}).Count(&s.Total).Error; err != nil {
 		return s, err
 	}
 	todayStart := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.Local)
-	if err := DB.Model(&ZoneAccessLog{}).Where("entered_at >= ?", todayStart).Count(&s.Today).Error; err != nil {
+	if err := models.DB.Model(&ZoneAccessLog{}).Where("entered_at >= ?", todayStart).Count(&s.Today).Error; err != nil {
 		return s, err
 	}
-	if err := DB.Model(&ZoneAccessLog{}).Select("COUNT(DISTINCT user_id)").Scan(&s.UniqueUsers).Error; err != nil {
+	if err := models.DB.Model(&ZoneAccessLog{}).Select("COUNT(DISTINCT user_id)").Scan(&s.UniqueUsers).Error; err != nil {
 		return s, err
 	}
 	var rows []ZoneAccessZone
-	if err := DB.Model(&ZoneAccessLog{}).
+	if err := models.DB.Model(&ZoneAccessLog{}).
 		Select("zone, COUNT(*) AS count").
 		Group("zone").Order("count desc").
 		Scan(&rows).Error; err != nil {

@@ -15,12 +15,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
 	"nvs-server/models/blog"
+	platform "nvs-server/models/platform"
 	siteops "nvs-server/models/siteops"
 )
 
 // GetReportReasons GET /api/reports/reasons — 预置举报理由
 func GetReportReasons(c *gin.Context) {
-	utils.Success(c, models.PredefinedReportReasons())
+	utils.Success(c, platform.PredefinedReportReasons())
 }
 
 // CreateReport POST /api/reports — 提交举报（理由选择 + 提交）
@@ -49,7 +50,7 @@ func CreateReport(c *gin.Context) {
 	// 理由：优先预置编码，其次回退为自由文本
 	reasonLabel := bluemonday.UGCPolicy().Sanitize(req.Reason)
 	reasonCode := ""
-	if r, ok := models.LookupReportReason(req.ReasonCode); ok {
+	if r, ok := platform.LookupReportReason(req.ReasonCode); ok {
 		reasonCode = r.Code
 		reasonLabel = r.Label
 	}
@@ -62,7 +63,7 @@ func CreateReport(c *gin.Context) {
 
 	// 防止同一用户对同一目标重复举报
 	var dupCount int64
-	models.DB.Model(&models.Report{}).
+	models.DB.Model(&platform.Report{}).
 		Where("reporter_id = ? AND target_type = ? AND target_id = ? AND status = ?",
 			userID, req.TargetType, req.TargetID, "pending").
 		Count(&dupCount)
@@ -71,7 +72,7 @@ func CreateReport(c *gin.Context) {
 		return
 	}
 
-	r := &models.Report{
+	r := &platform.Report{
 		ReporterID: userID,
 		TargetType: req.TargetType,
 		TargetID:   req.TargetID,
@@ -91,12 +92,12 @@ func CreateReport(c *gin.Context) {
 // ListMyReports GET /api/reports/mine — 我的举报（状态追踪）
 func ListMyReports(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
-	var reports []models.Report
+	var reports []platform.Report
 	models.DB.Where("reporter_id = ?", userID).
 		Order("created_at DESC").Limit(200).Find(&reports)
 
 	type reportItem struct {
-		models.Report
+		platform.Report
 		TargetPreview string `json:"target_preview"`
 	}
 	items := make([]reportItem, 0, len(reports))
@@ -167,11 +168,11 @@ func ListReports(c *gin.Context) {
 	if targetType != "" {
 		query = query.Where("target_type = ?", targetType)
 	}
-	var reports []models.Report
+	var reports []platform.Report
 	query.Find(&reports)
 
 	type reportItem struct {
-		models.Report
+		platform.Report
 		TargetPreview string `json:"target_preview"`
 	}
 	items := make([]reportItem, 0, len(reports))
@@ -203,7 +204,7 @@ func HandleReport(c *gin.Context) {
 		return
 	}
 
-	var report models.Report
+	var report platform.Report
 	if err := models.DB.First(&report, id).Error; err != nil {
 		utils.NotFound(c, "举报不存在")
 		return
@@ -217,7 +218,7 @@ func HandleReport(c *gin.Context) {
 
 	verdict := bluemonday.UGCPolicy().Sanitize(req.Verdict)
 	now := time.Now()
-	models.DB.Model(&models.Report{}).Where("id = ?", id).Updates(map[string]interface{}{
+	models.DB.Model(&platform.Report{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status":      req.Status,
 		"handler_id":  userID,
 		"verdict":     verdict,

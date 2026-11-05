@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	apikey "nvs-server/models/apikey"
+	platform "nvs-server/models/platform"
 	quota "nvs-server/models/quota"
 	softdel "nvs-server/models/softdel"
 )
@@ -102,7 +103,7 @@ func PoliceExportPackage(c *gin.Context) {
 	if soft, err := softdel.ListSoftDel("", 2000); err == nil {
 		pkg["soft_deleted"] = soft
 	}
-	if za, _, err := models.ListZoneAccessPage(models.ZoneAccessFilter{Page: 1, PageSize: 500}); err == nil {
+	if za, _, err := platform.ListZoneAccessPage(platform.ZoneAccessFilter{Page: 1, PageSize: 500}); err == nil {
 		pkg["zone_access"] = za
 	}
 	if wa, _, err := quota.ListWebAccess(quota.WebAccessQuery{Page: 1, PageSize: 500}); err == nil {

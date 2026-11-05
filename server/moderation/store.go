@@ -7,6 +7,7 @@ import (
 	"nvs-server/models"
 
 	"gorm.io/gorm"
+	platform "nvs-server/models/platform"
 )
 
 // GetConfig 读取审核配置；无配置行则写入默认配置（默认值仅作首次种子，运行期以后台为准）。
@@ -81,7 +82,7 @@ func LatestRecord(targetType string, targetID uint) (*ModerationRecord, error) {
 // CountTargetReports 统计某内容累计举报数（含全部状态）。
 func CountTargetReports(targetType string, targetID uint) (int64, error) {
 	var n int64
-	err := models.DB.Model(&models.Report{}).
+	err := models.DB.Model(&platform.Report{}).
 		Where("target_type = ? AND target_id = ?", targetType, targetID).Count(&n).Error
 	return n, err
 }

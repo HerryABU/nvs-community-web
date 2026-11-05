@@ -1,6 +1,9 @@
-package models
+package platform
 
-import "time"
+import (
+	"nvs-server/models"
+	"time"
+)
 
 // FederatedSite 远程互通站点（模仿 alist 的站点互联）
 type FederatedSite struct {
@@ -60,9 +63,9 @@ func (FederatedInbound) TableName() string { return "federated_inbound" }
 func RecordFederatedInbound(name, url, ip, userAgent, endpoint, keyPrefix, issuer string) {
 	now := time.Now()
 	var rec FederatedInbound
-	err := DB.Where("ip = ? AND name = ? AND endpoint = ?", ip, name, endpoint).First(&rec).Error
+	err := models.DB.Where("ip = ? AND name = ? AND endpoint = ?", ip, name, endpoint).First(&rec).Error
 	if err != nil {
-		DB.Create(&FederatedInbound{
+		models.DB.Create(&FederatedInbound{
 			Name: name, URL: url, IP: ip, UserAgent: userAgent, Endpoint: endpoint,
 			KeyPrefix: keyPrefix, Issuer: issuer,
 			Count: 1, FirstSeen: now, LastSeen: now,
@@ -83,7 +86,7 @@ func RecordFederatedInbound(name, url, ip, userAgent, endpoint, keyPrefix, issue
 	if issuer != "" {
 		rec.Issuer = issuer
 	}
-	DB.Save(&rec)
+	models.DB.Save(&rec)
 }
 
 // ListFederatedInbound 列出入站连接记录（最近 N 条）
@@ -92,6 +95,6 @@ func ListFederatedInbound(limit int) ([]FederatedInbound, error) {
 		limit = 200
 	}
 	var list []FederatedInbound
-	err := DB.Order("last_seen DESC").Limit(limit).Find(&list).Error
+	err := models.DB.Order("last_seen DESC").Limit(limit).Find(&list).Error
 	return list, err
 }

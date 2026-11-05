@@ -12,11 +12,11 @@ import (
 
 	"nvs-server/handlers/admin"
 	"nvs-server/handlers/hctx"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	apikey "nvs-server/models/apikey"
+	platform "nvs-server/models/platform"
 )
 
 // RecordUserAudit 记录用户行为审计日志（176号令合规）。
@@ -46,7 +46,7 @@ func RecordZoneEnter(c *gin.Context) {
 		return
 	}
 	// 仅写独立隔离墙进入表：含 user_id / zone / entered_at / ip / UA，已覆盖原审计日志 zone_enter 条目
-	models.RecordZoneEnterLog(userID, zone, c.ClientIP(), c.Request.UserAgent(), time.Now())
+	platform.RecordZoneEnterLog(userID, zone, c.ClientIP(), c.Request.UserAgent(), time.Now())
 	utils.Success(c, gin.H{"message": "已记录进入时间"})
 }
 
@@ -62,7 +62,7 @@ func ListZoneAccessLogs(c *gin.Context) {
 	to := ParseDateParam(c.Query("to"))
 	page, _ := strconv.Atoi(c.Query("page"))
 	pageSize, _ := strconv.Atoi(c.Query("page_size"))
-	items, total, err := models.ListZoneAccessPage(models.ZoneAccessFilter{
+	items, total, err := platform.ListZoneAccessPage(platform.ZoneAccessFilter{
 		UserID:   uint(userID),
 		Zone:     zone,
 		From:     from,
@@ -82,7 +82,7 @@ func GetZoneAccessStats(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	stats, err := models.GetZoneAccessStats()
+	stats, err := platform.GetZoneAccessStats()
 	if err != nil {
 		utils.InternalError(c, "获取隔离墙进入统计失败")
 		return

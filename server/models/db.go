@@ -59,17 +59,16 @@ var BlogFeedProvider func(ids []uint, window int) ([]FeedItem, int64, error)
 //	models/wallet    —— TokenLedger / UserTokenBalance / CardKey / RechargeOrder 等代币与支付模型
 //	models/softdel   —— SoftDel* 留证表 / UserFrame / UserHTML（并注册迁移辅助钩子）
 //	models/apikey    —— APIKey / ApiAccessLog / ApiKeyAlarm / UserAuditLog 等密钥与审计模型
+//	models/platform  —— FederatedSite / VipApplication / Report / ZoneAccessLog 等平台治理模型
 func AllModels() []interface{} {
 	list := []interface{}{
 		&User{}, &Novel{}, &NovelCategory{}, &Chapter{}, &Comment{}, &Rating{},
 		// 作品角色表（话本气泡体的角色管理：头像/主题色/默认左右）
 		&NovelCharacter{},
-		&Forum{}, &Thread{}, &Post{}, &ForumMute{}, &VipApplication{}, &Report{},
-		&WithdrawalRequest{}, &EarningsRecord{}, &BlacklistIP{}, &PlatformConfig{},
-		&FederatedSite{}, &FederatedNovel{}, &FederatedInbound{}, &BookShelf{}, &Follow{},
-		&ZoneAccessLog{}, // 隔离墙（敏感分区）进入记录，176号令合规
-		&Notification{},  // 站内消息通知
-		&ReadingNote{},   // 精读：书签 + 批注（含公开/私密）
+		&Forum{}, &Thread{}, &Post{}, &ForumMute{}, &PlatformConfig{},
+		&BookShelf{}, &Follow{},
+		&Notification{}, // 站内消息通知
+		&ReadingNote{},  // 精读：书签 + 批注（含公开/私密）
 		// 自建论坛额度：按人覆盖（管理员可削减/放开某人的建版数）
 		&UserForumQuota{},
 		// 私信（F20：会话消息，互关才可发第 3 条）
