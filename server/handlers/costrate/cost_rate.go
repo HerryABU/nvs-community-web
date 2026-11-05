@@ -1,10 +1,10 @@
 package costrate
 
 import (
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aicost "nvs-server/models/aicost"
 )
 
 // AdminGetCostRate GET /api/admin/cost-rate
@@ -13,7 +13,7 @@ import (
 // 为什么需要它：中转站里 `quota ÷ 500000` 得到的「美元」只是站内代币，
 // 充 100 元可能到账 1000 虚拟美元。不声明比例，任何「余额还剩多少」都没有成本含义。
 func AdminGetCostRate(c *gin.Context) {
-	r := models.GetCostRate()
+	r := aicost.GetCostRate()
 	utils.Success(c, gin.H{
 		"rate":            r,
 		"valid":           r.Valid(),
@@ -28,16 +28,16 @@ func AdminGetCostRate(c *gin.Context) {
 // 入参沿用 CostRate 结构。允许「两个都填 0」表示清空（回到未设置状态）。
 // 只填一个数直接拒绝：半套比例算出来的是看似有据、实则荒谬的成本。
 func AdminSaveCostRate(c *gin.Context) {
-	var req models.CostRate
+	var req aicost.CostRate
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.SetCostRate(req); err != nil {
+	if err := aicost.SetCostRate(req); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
-	r := models.GetCostRate()
+	r := aicost.GetCostRate()
 	utils.Success(c, gin.H{
 		"rate":     r,
 		"valid":    r.Valid(),
@@ -63,12 +63,12 @@ func AdminCostRatePreview(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	rate := models.CostRate{
+	rate := aicost.CostRate{
 		RealAmount: req.RealAmount, VirtualAmount: req.VirtualAmount,
 		RealCurrency: req.RealCurrency, VirtualCurrency: req.VirtualCurrency,
 	}
 	if !rate.Valid() {
-		rate = models.GetCostRate()
+		rate = aicost.GetCostRate()
 	}
 	real, ok := rate.ToReal(req.Virtual)
 	utils.Success(c, gin.H{

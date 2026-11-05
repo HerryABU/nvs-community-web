@@ -1,4 +1,4 @@
-package models
+package aicost
 
 import (
 	"errors"
@@ -7,6 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"nvs-server/models"
 	"nvs-server/utils"
 )
 
@@ -45,14 +46,14 @@ func (k *UserAiKey) DecryptApiKey() (string, error) {
 // ListUserAiKeys 我的自备密钥（不回传密钥本体）
 func ListUserAiKeys(userID uint) ([]UserAiKey, error) {
 	var list []UserAiKey
-	err := DB.Where("user_id = ?", userID).Order("is_default DESC, id ASC").Find(&list).Error
+	err := models.DB.Where("user_id = ?", userID).Order("is_default DESC, id ASC").Find(&list).Error
 	return list, err
 }
 
 // GetUserAiKey 按 ID 读取（含归属校验，越权返回 nil, nil）
 func GetUserAiKey(id, userID uint) (*UserAiKey, error) {
 	var k UserAiKey
-	if err := DB.Where("id = ? AND user_id = ?", id, userID).First(&k).Error; err != nil {
+	if err := models.DB.Where("id = ? AND user_id = ?", id, userID).First(&k).Error; err != nil {
 		return nil, err
 	}
 	return &k, nil
@@ -71,7 +72,7 @@ func CreateUserAiKey(userID uint, label, baseURL, apiKey, modelID string) (*User
 		return nil, errors.New("上游地址与密钥均为必填")
 	}
 	var cnt int64
-	if err := DB.Model(&UserAiKey{}).Where("user_id = ?", userID).Count(&cnt).Error; err != nil {
+	if err := models.DB.Model(&UserAiKey{}).Where("user_id = ?", userID).Count(&cnt).Error; err != nil {
 		return nil, err
 	}
 	if int(cnt) >= MaxUserAiKeys {
@@ -88,7 +89,7 @@ func CreateUserAiKey(userID uint, label, baseURL, apiKey, modelID string) (*User
 		ModelID: modelID, Enabled: true, IsDefault: isDefault,
 		CreatedAt: now, UpdatedAt: now,
 	}
-	if err := DB.Create(k).Error; err != nil {
+	if err := models.DB.Create(k).Error; err != nil {
 		return nil, err
 	}
 	return k, nil
@@ -100,14 +101,14 @@ func DeleteUserAiKey(id, userID uint) error {
 	if err != nil || k == nil {
 		return errors.New("密钥不存在")
 	}
-	if err := DB.Where("id = ? AND user_id = ?", id, userID).Delete(&UserAiKey{}).Error; err != nil {
+	if err := models.DB.Where("id = ? AND user_id = ?", id, userID).Delete(&UserAiKey{}).Error; err != nil {
 		return err
 	}
 	if k.IsDefault {
 		var rest []UserAiKey
-		DB.Where("user_id = ?", userID).Order("id ASC").Limit(1).Find(&rest)
+		models.DB.Where("user_id = ?", userID).Order("id ASC").Limit(1).Find(&rest)
 		if len(rest) > 0 {
-			_ = DB.Model(&UserAiKey{}).Where("id = ?", rest[0].ID).
+			_ = models.DB.Model(&UserAiKey{}).Where("id = ?", rest[0].ID).
 				Update("is_default", true).Error
 		}
 	}
@@ -120,7 +121,7 @@ func SetDefaultUserAiKey(id, userID uint) error {
 	if err != nil || k == nil {
 		return errors.New("密钥不存在")
 	}
-	return DB.Transaction(func(tx *gorm.DB) error {
+	return models.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&UserAiKey{}).Where("user_id = ?", userID).
 			Update("is_default", false).Error; err != nil {
 			return err
@@ -133,7 +134,7 @@ func SetDefaultUserAiKey(id, userID uint) error {
 // ResolveUserAiKey 解析本次调用使用的自备密钥：指定 ID 优先，否则默认密钥。
 // 用户未配置/不可用返回 nil, nil。
 func ResolveUserAiKey(userID, keyID uint) (*UserAiKey, error) {
-	q := DB.Where("user_id = ? AND enabled = ?", userID, true)
+	q := models.DB.Where("user_id = ? AND enabled = ?", userID, true)
 	if keyID > 0 {
 		q = q.Where("id = ?", keyID)
 	} else {
@@ -149,6 +150,6 @@ func ResolveUserAiKey(userID, keyID uint) (*UserAiKey, error) {
 // TouchUserAiKey 记录最近使用时间
 func TouchUserAiKey(id uint) {
 	now := time.Now()
-	_ = DB.Model(&UserAiKey{}).Where("id = ?", id).
+	_ = models.DB.Model(&UserAiKey{}).Where("id = ?", id).
 		Update("last_used_at", &now).Error
 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	aicost "nvs-server/models/aicost"
 )
 
 // ==================== AI 工作台：绘画 / 视频（§5.4，按次计费） ====================
@@ -104,12 +105,12 @@ func AiHubVideoSubmit(c *gin.Context) {
 		return
 	}
 	// BYOK 视频：用用户自备密钥提交，任务记 0 费、不扣平台代币
-	var uk *models.UserAiKey
+	var uk *aicost.UserAiKey
 	baseURL, upModel := m.BaseURL, m.ModelID
 	byok := req.Byok
 	if byok {
 		var uerr error
-		uk, uerr = models.ResolveUserAiKey(userID, req.ByokKeyID)
+		uk, uerr = aicost.ResolveUserAiKey(userID, req.ByokKeyID)
 		if uerr != nil || uk == nil {
 			models.FailAiMediaTask(task.ID, "自备密钥不可用", false)
 			utils.BadRequest(c, "自备密钥不可用：请先在「我的钱包 → 上游密钥」中添加")
@@ -162,7 +163,7 @@ func AiHubVideoSubmit(c *gin.Context) {
 		}
 	}
 	if byok {
-		models.TouchUserAiKey(uk.ID)
+		aicost.TouchUserAiKey(uk.ID)
 	}
 	models.MarkAiMediaSubmitted(task.ID, remoteID)
 	utils.Success(c, gin.H{
@@ -200,7 +201,7 @@ func AiHubVideoStatus(c *gin.Context) {
 	}
 	// BYOK 任务（ModelID=0）：用用户默认自备密钥轮询上游
 	if task.ModelID == 0 {
-		uk, uerr := models.ResolveUserAiKey(userID, 0)
+		uk, uerr := aicost.ResolveUserAiKey(userID, 0)
 		if uerr != nil || uk == nil {
 			utils.BadRequest(c, "自备密钥不可用，无法查询任务状态")
 			return
@@ -347,7 +348,7 @@ func cancelUpstreamVideo(task *models.AiMediaTask, userID uint) {
 	var baseURL, apiKey string
 	if task.ModelID == 0 {
 		// BYOK 任务：用用户自己的密钥
-		uk, err := models.ResolveUserAiKey(userID, 0)
+		uk, err := aicost.ResolveUserAiKey(userID, 0)
 		if err != nil || uk == nil {
 			return
 		}

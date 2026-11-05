@@ -9,6 +9,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aicost "nvs-server/models/aicost"
 )
 
 // ==================== 用户自备 API Key（§5.5：BYOK） ====================
@@ -20,7 +21,7 @@ func AiMyKeys(c *gin.Context) {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
-	list, err := models.ListUserAiKeys(hctx.CurrentUserID(c))
+	list, err := aicost.ListUserAiKeys(hctx.CurrentUserID(c))
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -35,7 +36,7 @@ func AiMyKeys(c *gin.Context) {
 			"created_at": k.CreatedAt,
 		})
 	}
-	utils.Success(c, gin.H{"list": out, "max": models.MaxUserAiKeys})
+	utils.Success(c, gin.H{"list": out, "max": aicost.MaxUserAiKeys})
 }
 
 // AiMyKeyCreate POST /api/ai/my-keys — 新增自备密钥
@@ -58,7 +59,7 @@ func AiMyKeyCreate(c *gin.Context) {
 		utils.BadRequest(c, "上游地址与密钥均为必填")
 		return
 	}
-	k, err := models.CreateUserAiKey(hctx.CurrentUserID(c), req.Label, req.BaseURL, req.ApiKey, req.ModelID)
+	k, err := aicost.CreateUserAiKey(hctx.CurrentUserID(c), req.Label, req.BaseURL, req.ApiKey, req.ModelID)
 	if err != nil {
 		utils.Error(c, 429, 42903, err.Error())
 		return
@@ -73,7 +74,7 @@ func AiMyKeyDelete(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.DeleteUserAiKey(uint(id), hctx.CurrentUserID(c)); err != nil {
+	if err := aicost.DeleteUserAiKey(uint(id), hctx.CurrentUserID(c)); err != nil {
 		utils.NotFound(c, err.Error())
 		return
 	}
@@ -87,7 +88,7 @@ func AiMyKeySetDefault(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.SetDefaultUserAiKey(uint(id), hctx.CurrentUserID(c)); err != nil {
+	if err := aicost.SetDefaultUserAiKey(uint(id), hctx.CurrentUserID(c)); err != nil {
 		utils.NotFound(c, err.Error())
 		return
 	}

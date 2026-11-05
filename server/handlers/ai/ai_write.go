@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	aicost "nvs-server/models/aicost"
 )
 
 // ==================== AI 调用（用户端，§5.3 / §13.3） ====================
@@ -186,7 +187,7 @@ func AiComplete(c *gin.Context) {
 		if tokensOut > 8192 {
 			tokensOut = 8192
 		}
-		uk, uerr := models.ResolveUserAiKey(userID, req.ByokKeyID)
+		uk, uerr := aicost.ResolveUserAiKey(userID, req.ByokKeyID)
 		if uerr != nil {
 			utils.InternalError(c, "读取自备密钥失败")
 			return
@@ -235,7 +236,7 @@ func AiComplete(c *gin.Context) {
 			utils.Error(c, 429, 42902, fmt.Sprintf("结算失败：%v", serr))
 			return
 		}
-		models.TouchUserAiKey(uk.ID)
+		aicost.TouchUserAiKey(uk.ID)
 		utils.Success(c, gin.H{
 			"content":       content,
 			"tokens_in":     realIn,

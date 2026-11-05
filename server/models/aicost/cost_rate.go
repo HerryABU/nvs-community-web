@@ -1,8 +1,9 @@
-package models
+package aicost
 
 import (
 	"encoding/json"
 	"errors"
+	"nvs-server/models"
 	"strings"
 )
 
@@ -68,7 +69,7 @@ func (r CostRate) Describe() string {
 
 // GetCostRate 读取全局换算比例（未配置返回零值，Valid()==false）
 func GetCostRate() CostRate {
-	raw := strings.TrimSpace(GetPlatformConfig(costRateKey))
+	raw := strings.TrimSpace(models.GetPlatformConfig(costRateKey))
 	if raw == "" {
 		return CostRate{}
 	}
@@ -89,7 +90,7 @@ func SetCostRate(r CostRate) error {
 	r.VirtualCurrency = strings.TrimSpace(r.VirtualCurrency)
 	if r.RealAmount == 0 && r.VirtualAmount == 0 {
 		b, _ := json.Marshal(CostRate{RealCurrency: r.RealCurrency, VirtualCurrency: r.VirtualCurrency})
-		return SetPlatformConfig(costRateKey, string(b))
+		return models.SetPlatformConfig(costRateKey, string(b))
 	}
 	if r.RealAmount <= 0 || r.VirtualAmount <= 0 {
 		return errors.New("比例的两个数都必须大于 0（要清空请把两个都填 0）")
@@ -104,15 +105,15 @@ func SetCostRate(r CostRate) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(costRateKey, string(b))
+	return models.SetPlatformConfig(costRateKey, string(b))
 }
 
 // ResolveCostRate 取某渠道的生效比例：渠道级覆盖优先，否则用全局。
 // 返回 (比例, 来源) —— 来源为 "channel" / "global" / "none"，前端据此标注可信度。
 func ResolveCostRate(baseURL string) (CostRate, string) {
 	if strings.TrimSpace(baseURL) != "" {
-		var m AiModel
-		if err := DB.Where("base_url = ? AND (rate_real_amount > 0 OR rate_virtual_amount > 0)", baseURL).
+		var m models.AiModel
+		if err := models.DB.Where("base_url = ? AND (rate_real_amount > 0 OR rate_virtual_amount > 0)", baseURL).
 			Order("id").First(&m).Error; err == nil {
 			r := CostRate{
 				RealAmount: m.RateRealAmount, VirtualAmount: m.RateVirtualAmount,

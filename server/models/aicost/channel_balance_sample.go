@@ -1,9 +1,10 @@
-package models
+package aicost
 
 import (
 	"time"
 
 	"nvs-server/aiclient"
+	"nvs-server/models"
 )
 
 // ==================== 渠道余额采样（把「消耗了多少货币单位」算出来） ====================
@@ -56,11 +57,11 @@ func channelBalanceSampler() {
 // SampleAllChannels 对每个有密钥的渠道采样一次（供后台定时调用，也可被管理端手动触发）。
 // 单渠道失败只跳过，不影响其它渠道。
 func SampleAllChannels() int {
-	if DB == nil {
+	if models.DB == nil {
 		return 0
 	}
-	var modelsList []AiModel
-	if err := DB.Where("api_key_enc != ''").Order("base_url, id").Find(&modelsList).Error; err != nil {
+	var modelsList []models.AiModel
+	if err := models.DB.Where("api_key_enc != ''").Order("base_url, id").Find(&modelsList).Error; err != nil {
 		return 0
 	}
 	// 按 base_url 去重：同一渠道只采一次
@@ -79,12 +80,12 @@ func SampleAllChannels() int {
 		b := aiclient.QueryChannelBalance(m.BaseURL, key, m.ProviderHint)
 		if b.Error != "" && !b.Supported {
 			// 无余额端点的渠道也记一条（supported=false），便于前端说明原因
-			_ = DB.Create(&ChannelBalanceSample{
+			_ = models.DB.Create(&ChannelBalanceSample{
 				BaseURL: m.BaseURL, Currency: b.Currency, Supported: false, SampledAt: time.Now(),
 			}).Error
 			continue
 		}
-		_ = DB.Create(&ChannelBalanceSample{
+		_ = models.DB.Create(&ChannelBalanceSample{
 			BaseURL: m.BaseURL, Remaining: b.TotalRemaining, Used: b.TotalUsed,
 			Granted: b.TotalGranted, Currency: b.Currency, Supported: b.Supported,
 			SampledAt: time.Now(),
@@ -92,7 +93,7 @@ func SampleAllChannels() int {
 		ok++
 	}
 	// 顺手清理过期采样
-	_ = DB.Where("sampled_at < ?", time.Now().Add(-sampleRetention)).
+	_ = models.DB.Where("sampled_at < ?", time.Now().Add(-sampleRetention)).
 		Delete(&ChannelBalanceSample{}).Error
 	return ok
 }
@@ -100,10 +101,10 @@ func SampleAllChannels() int {
 // SaveChannelSample 记录一次渠道余额样本（后台定时采样与「管理端手动查询」共用）。
 // 手动查询也会留样本，站长多点几次「渠道余额」就能快速攒出估算窗口。
 func SaveChannelSample(baseURL string, b aiclient.ChannelBalance) {
-	if DB == nil || baseURL == "" {
+	if models.DB == nil || baseURL == "" {
 		return
 	}
-	_ = DB.Create(&ChannelBalanceSample{
+	_ = models.DB.Create(&ChannelBalanceSample{
 		BaseURL: baseURL, Remaining: b.TotalRemaining, Used: b.TotalUsed,
 		Granted: b.TotalGranted, Currency: b.Currency, Supported: b.Supported,
 		SampledAt: time.Now(),
@@ -132,11 +133,11 @@ type ChannelWindowCost struct {
 // ResolveChannelWindowCost 取某渠道最近两次采样，算出窗口内的消耗与单次估算。
 func ResolveChannelWindowCost(baseURL string) ChannelWindowCost {
 	var out ChannelWindowCost
-	if DB == nil {
+	if models.DB == nil {
 		return out
 	}
 	var samples []ChannelBalanceSample
-	if err := DB.Where("base_url = ? AND supported = ?", baseURL, true).
+	if err := models.DB.Where("base_url = ? AND supported = ?", baseURL, true).
 		Order("sampled_at DESC").Limit(2).Find(&samples).Error; err != nil || len(samples) < 2 {
 		return out
 	}
@@ -151,14 +152,14 @@ func ResolveChannelWindowCost(baseURL string) ChannelWindowCost {
 	}
 	// 该渠道下所有模型的请求数
 	var modelIDs []uint
-	DB.Model(&AiModel{}).Where("base_url = ?", baseURL).Pluck("id", &modelIDs)
+	models.DB.Model(&models.AiModel{}).Where("base_url = ?", baseURL).Pluck("id", &modelIDs)
 	if len(modelIDs) > 0 {
 		var agg struct {
 			N    int64
 			Tin  int64
 			Tout int64
 		}
-		DB.Model(&AiCallLog{}).
+		models.DB.Model(&models.AiCallLog{}).
 			Select("COUNT(*) as n, COALESCE(SUM(tokens_in),0) as tin, COALESCE(SUM(tokens_out),0) as tout").
 			Where("model_id IN ? AND created_at >= ? AND created_at <= ?", modelIDs, prev.SampledAt, latest.SampledAt).
 			Scan(&agg)

@@ -15,6 +15,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aicost "nvs-server/models/aicost"
 )
 
 func AiHubImage(c *gin.Context) {
@@ -138,7 +139,7 @@ func AiHubImage(c *gin.Context) {
 			utils.BadRequest(c, "使用自备密钥时需填写上游模型标识")
 			return
 		}
-		uk, uerr := models.ResolveUserAiKey(userID, req.ByokKeyID)
+		uk, uerr := aicost.ResolveUserAiKey(userID, req.ByokKeyID)
 		if uerr != nil {
 			utils.InternalError(c, "读取自备密钥失败")
 			return
@@ -171,7 +172,7 @@ func AiHubImage(c *gin.Context) {
 			utils.BadRequest(c, "绘画失败："+gerr.Error()+"（未扣款）")
 			return
 		}
-		models.TouchUserAiKey(uk.ID)
+		aicost.TouchUserAiKey(uk.ID)
 		utils.Success(c, gin.H{
 			"task_id":       0,
 			"images":        urls,

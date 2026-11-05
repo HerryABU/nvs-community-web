@@ -16,6 +16,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aicost "nvs-server/models/aicost"
 )
 
 // ==================== AI 工作台：会话 + 流式对话（§5.4） ====================
@@ -259,7 +260,7 @@ func AiHubChatStream(c *gin.Context) {
 
 	// ── 模型解析：BYOK 用用户自备密钥（伪模型，不落平台池） ──
 	var m *models.AiModel
-	var uk *models.UserAiKey
+	var uk *aicost.UserAiKey
 	byokModel := strings.TrimSpace(req.ByokModel)
 	if req.Byok {
 		if byokModel == "" {
@@ -267,7 +268,7 @@ func AiHubChatStream(c *gin.Context) {
 			return
 		}
 		var uerr error
-		uk, uerr = models.ResolveUserAiKey(userID, req.ByokKeyID)
+		uk, uerr = aicost.ResolveUserAiKey(userID, req.ByokKeyID)
 		if uerr != nil {
 			utils.InternalError(c, "读取自备密钥失败")
 			return
@@ -762,7 +763,7 @@ func AiHubChatStream(c *gin.Context) {
 		cost = 0
 	}
 	if req.Byok {
-		models.TouchUserAiKey(uk.ID)
+		aicost.TouchUserAiKey(uk.ID)
 		cost = 0
 	}
 	am, _ := models.AppendAiChatMessageWithParent(session.ID, "assistant", sb, userMsgID, realIn, realOut, cost, callLog.ID)

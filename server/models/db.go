@@ -51,6 +51,7 @@ var BlogFeedProvider func(ids []uint, window int) ([]FeedItem, int64, error)
 //	models/siteops   —— Announcement / SystemSetting / EmergencyAuditLog / NavMenu /
 //	                    Carousel / CheckInRecord / RageConfig / RefreshState
 //	models/search    —— SearchLog（热词聚合 / 标签热词）
+//	models/aicost    —— ChannelBalanceSample / UserAiKey / CostRate 等成本与用户密钥
 func AllModels() []interface{} {
 	list := []interface{}{
 		&User{}, &Novel{}, &NovelCategory{}, &Chapter{}, &Comment{}, &Rating{},
@@ -72,8 +73,6 @@ func AllModels() []interface{} {
 		&UserForumQuota{},
 		// HTML/WASM 托管额度：按人覆盖（管理员可单独放宽/收紧某人的项目数与空间）
 		&HTMLQuotaOverride{},
-		// 渠道余额采样（估算「单次请求消耗多少货币单位」的依据）
-		&ChannelBalanceSample{},
 		// 渠道卡密池（上游 API Key 按渠道归属，同一 base_url 下的模型共用）
 		&AiChannelKey{},
 		// 用户投稿智能体（提交 → 站长审核 → 广场上架）
@@ -95,7 +94,6 @@ func AllModels() []interface{} {
 		// AI 工作台（§5.4）：会话/消息、智能体预设、绘画视频任务
 		&AiChatSession{}, &AiChatMessage{}, &AiAgent{}, &AiMediaTask{},
 		&UserAiFreeQuota{}, &UserAiFreeUsage{},
-		&UserAiKey{},
 		&AiNovelMemory{},
 		&AiBotUsage{},
 		&AiPrompt{}, &AiVendor{}, &AiModelKey{}, &AiStyle{}, &AiContentMark{},

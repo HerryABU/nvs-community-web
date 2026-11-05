@@ -12,6 +12,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aicost "nvs-server/models/aicost"
 )
 
 // AdminChannelBalanceOverview GET /api/admin/ai/channels/balance
@@ -110,7 +111,7 @@ func AdminChannelBalanceOverview(c *gin.Context) {
 		}
 		// 顺手留一个样本：站长多点几次「渠道余额」就能攒出估算窗口
 		if b.Supported {
-			models.SaveChannelSample(g.BaseURL, b)
+			aicost.SaveChannelSample(g.BaseURL, b)
 		}
 		item["provider"] = b.Provider
 		item["supported"] = b.Supported
@@ -146,14 +147,14 @@ func AdminChannelBalanceOverview(c *gin.Context) {
 		}
 
 		// 窗口消耗 + 单次估算（估算值，前端必须标注）
-		w := models.ResolveChannelWindowCost(g.BaseURL)
+		w := aicost.ResolveChannelWindowCost(g.BaseURL)
 		item["window"] = w
 
 		// ── 真实成本换算 ──
 		// 上游给的「美元」在中转站里只是站内代币，必须按站长声明的充值比例
 		// 才能折算成真金白银。未配置比例时**不给任何 real_* 字段**，
 		// 前端据此显示「未设置比例」，而不是把虚拟金额当真实成本展示。
-		rate, rateSrc := models.ResolveCostRate(g.BaseURL)
+		rate, rateSrc := aicost.ResolveCostRate(g.BaseURL)
 		item["rate_source"] = rateSrc
 		if rate.Valid() {
 			item["rate"] = gin.H{

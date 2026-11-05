@@ -1,4 +1,4 @@
-package models
+package aicost
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // setupCostRateTestDB 独立内存库（唯一名，避免与其它测试共享同一内存库）
@@ -17,12 +18,12 @@ func setupCostRateTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开内存测试库失败: %v", err)
 	}
-	if err := db.AutoMigrate(&PlatformConfig{}, &AiModel{}); err != nil {
+	if err := db.AutoMigrate(&models.PlatformConfig{}, &models.AiModel{}); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
-	old := DB
-	DB = db
-	t.Cleanup(func() { DB = old })
+	old := models.DB
+	models.DB = db
+	t.Cleanup(func() { models.DB = old })
 }
 
 // 核心语义：虚拟单位不是钱。5274 虚拟美元在 1:10 的比例下只是 527.4 元。
@@ -130,12 +131,12 @@ func TestResolveCostRate_ChannelOverridesGlobal(t *testing.T) {
 	}
 
 	// 渠道 A 自己填 1:1，渠道 B 不填
-	a := AiModel{Name: "a", BaseURL: "https://a.example.com", RateRealAmount: 1, RateVirtualAmount: 1, RateRealCurrency: "USD"}
-	b := AiModel{Name: "b", BaseURL: "https://b.example.com"}
-	if err := DB.Create(&a).Error; err != nil {
+	a := models.AiModel{Name: "a", BaseURL: "https://a.example.com", RateRealAmount: 1, RateVirtualAmount: 1, RateRealCurrency: "USD"}
+	b := models.AiModel{Name: "b", BaseURL: "https://b.example.com"}
+	if err := models.DB.Create(&a).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := DB.Create(&b).Error; err != nil {
+	if err := models.DB.Create(&b).Error; err != nil {
 		t.Fatal(err)
 	}
 

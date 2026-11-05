@@ -1,6 +1,8 @@
-package models
+package aicost
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestUserAiKeyCrud(t *testing.T) {
 	setupAiTestDB(t)
