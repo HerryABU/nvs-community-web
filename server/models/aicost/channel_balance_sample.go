@@ -5,6 +5,7 @@ import (
 
 	"nvs-server/aiclient"
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 )
 
 // ==================== 渠道余额采样（把「消耗了多少货币单位」算出来） ====================
@@ -60,7 +61,7 @@ func SampleAllChannels() int {
 	if models.DB == nil {
 		return 0
 	}
-	var modelsList []models.AiModel
+	var modelsList []ai.AiModel
 	if err := models.DB.Where("api_key_enc != ''").Order("base_url, id").Find(&modelsList).Error; err != nil {
 		return 0
 	}
@@ -152,14 +153,14 @@ func ResolveChannelWindowCost(baseURL string) ChannelWindowCost {
 	}
 	// 该渠道下所有模型的请求数
 	var modelIDs []uint
-	models.DB.Model(&models.AiModel{}).Where("base_url = ?", baseURL).Pluck("id", &modelIDs)
+	models.DB.Model(&ai.AiModel{}).Where("base_url = ?", baseURL).Pluck("id", &modelIDs)
 	if len(modelIDs) > 0 {
 		var agg struct {
 			N    int64
 			Tin  int64
 			Tout int64
 		}
-		models.DB.Model(&models.AiCallLog{}).
+		models.DB.Model(&ai.AiCallLog{}).
 			Select("COUNT(*) as n, COALESCE(SUM(tokens_in),0) as tin, COALESCE(SUM(tokens_out),0) as tout").
 			Where("model_id IN ? AND created_at >= ? AND created_at <= ?", modelIDs, prev.SampledAt, latest.SampledAt).
 			Scan(&agg)

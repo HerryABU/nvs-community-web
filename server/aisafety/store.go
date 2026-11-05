@@ -8,6 +8,7 @@ import (
 	"nvs-server/models"
 
 	"gorm.io/gorm"
+	ai "nvs-server/models/ai"
 )
 
 // Migrate 建表（在 models.AutoMigrateAll 之后调用）。
@@ -96,7 +97,7 @@ type InputRequest struct {
 	HistoryTurns    []JudgeTurn // 完整对话（含助手回复），供模型 B 判定
 
 	// FallbackModel 主模型：judge_model_id 与它相同即复用（用户要求「模型可以同一个」）
-	FallbackModel *models.AiModel
+	FallbackModel *ai.AiModel
 }
 
 // CheckInput 输入侧拦截：冷却 → 规则 → 监管模型 B（双向裁定）。

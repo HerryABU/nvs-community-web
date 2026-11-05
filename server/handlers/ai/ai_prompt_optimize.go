@@ -26,6 +26,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 )
 
@@ -51,7 +52,7 @@ const promptOptimizeSystem = `你是 AI 绘画提示词优化助手。用户给�
 // 入参：{ prompt: string, model_id?: number }
 // 出参：{ prompt: string }
 func AiOptimizePrompt(c *gin.Context) {
-	if !models.IsAiEnabled() {
+	if !aim.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
@@ -90,7 +91,7 @@ func AiOptimizePrompt(c *gin.Context) {
 	}
 
 	// 选模型：优先用用户指定的；没指定就自动挑一个启用的 chat 模型
-	m, err := models.GetEnabledAiModelOfKind(req.ModelID, models.AiKindChat)
+	m, err := aim.GetEnabledAiModelOfKind(req.ModelID, aim.AiKindChat)
 	if err != nil || m == nil {
 		utils.BadRequest(c, "没有可用的对话模型，无法优化提示词")
 		return

@@ -615,3 +615,9 @@ func PaymentStats() map[string]int64 {
 		"pending_count": pendingCount, "closed_count": closedCount,
 	}
 }
+
+// AppendTokenLedgerTx 在既有事务内追加代币流水（appendTokenLedgerTx 的导出入口）。
+// 供 models/ai 等子包跨域调用：根包不能反向 import 子包，未导出函数亦无法跨包复用。
+func AppendTokenLedgerTx(tx *gorm.DB, userID uint, ttype string, amount int64, refType string, refID uint, remark, priceSnapshot string) (int64, error) {
+	return appendTokenLedgerTx(tx, userID, ttype, amount, refType, refID, remark, priceSnapshot)
+}

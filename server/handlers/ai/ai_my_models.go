@@ -8,6 +8,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 )
 
 // AiMyModels GET /api/ai/my-models
@@ -31,7 +32,7 @@ func AiMyModels(c *gin.Context) {
 	}
 	var rows []row
 	// 按模型分组取最近一次调用时间，再按时间倒序（最近用过的排在前面）
-	models.DB.Model(&models.AiCallLog{}).
+	models.DB.Model(&aim.AiCallLog{}).
 		Select("model_id, MAX(created_at) as last_at").
 		Where("user_id = ? AND created_at >= ? AND model_id > 0", uid, since).
 		Group("model_id").

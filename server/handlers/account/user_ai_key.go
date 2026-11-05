@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	"nvs-server/handlers/hctx"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	ai "nvs-server/models/ai"
 	aicost "nvs-server/models/aicost"
 )
 
@@ -17,7 +17,7 @@ import (
 
 // AiMyKeys GET /api/ai/my-keys — 我的自备密钥列表（脱敏）
 func AiMyKeys(c *gin.Context) {
-	if !models.IsAiEnabled() {
+	if !ai.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
@@ -41,7 +41,7 @@ func AiMyKeys(c *gin.Context) {
 
 // AiMyKeyCreate POST /api/ai/my-keys — 新增自备密钥
 func AiMyKeyCreate(c *gin.Context) {
-	if !models.IsAiEnabled() {
+	if !ai.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}

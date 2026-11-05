@@ -1,9 +1,10 @@
-package models
+package ai
 
 import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"nvs-server/models"
 	"strings"
 	"time"
 )
@@ -81,7 +82,7 @@ func CreateAiChatSession(userID, agentID uint, agentName string, modelID uint) (
 		UserID: userID, AgentID: agentID, AgentName: agentName, ModelID: modelID,
 		Title: "新对话", CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
-	if err := DB.Create(s).Error; err != nil {
+	if err := models.DB.Create(s).Error; err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -93,14 +94,14 @@ func ListAiChatSessions(userID uint, limit int) ([]AiChatSession, error) {
 		limit = 100
 	}
 	var list []AiChatSession
-	err := DB.Where("user_id = ?", userID).Order("updated_at DESC").Limit(limit).Find(&list).Error
+	err := models.DB.Where("user_id = ?", userID).Order("updated_at DESC").Limit(limit).Find(&list).Error
 	return list, err
 }
 
 // GetAiChatSession 取会话（校验归属，防越权）
 func GetAiChatSession(id, userID uint) (*AiChatSession, error) {
 	var s AiChatSession
-	if err := DB.Where("id = ? AND user_id = ?", id, userID).First(&s).Error; err != nil {
+	if err := models.DB.Where("id = ? AND user_id = ?", id, userID).First(&s).Error; err != nil {
 		return nil, err
 	}
 	return &s, nil
@@ -108,17 +109,17 @@ func GetAiChatSession(id, userID uint) (*AiChatSession, error) {
 
 // DeleteAiChatSession 删除会话（消息一并删）
 func DeleteAiChatSession(id, userID uint) error {
-	if err := DB.Where("id = ? AND user_id = ?", id, userID).Delete(&AiChatSession{}).Error; err != nil {
+	if err := models.DB.Where("id = ? AND user_id = ?", id, userID).Delete(&AiChatSession{}).Error; err != nil {
 		return err
 	}
-	return DB.Where("session_id = ?", id).Delete(&AiChatMessage{}).Error
+	return models.DB.Where("session_id = ?", id).Delete(&AiChatMessage{}).Error
 }
 
 // TouchAiChatSession 刷新会话时间；首条用户消息时顺带定标题
 func TouchAiChatSession(id uint, firstUserText string) {
 	updates := map[string]interface{}{"updated_at": time.Now()}
 	var s AiChatSession
-	if err := DB.Where("id = ?", id).First(&s).Error; err == nil && (s.Title == "" || s.Title == "新对话") {
+	if err := models.DB.Where("id = ?", id).First(&s).Error; err == nil && (s.Title == "" || s.Title == "新对话") {
 		title := strings.TrimSpace(firstUserText)
 		if len([]rune(title)) > 24 {
 			title = string([]rune(title)[:24]) + "…"
@@ -127,7 +128,7 @@ func TouchAiChatSession(id uint, firstUserText string) {
 			updates["title"] = title
 		}
 	}
-	DB.Model(&AiChatSession{}).Where("id = ?", id).Updates(updates)
+	models.DB.Model(&AiChatSession{}).Where("id = ?", id).Updates(updates)
 }
 
 // RenameAiChatSession 重命名会话（校验归属）
@@ -139,7 +140,7 @@ func RenameAiChatSession(id, userID uint, title string) error {
 	if len([]rune(title)) > 60 {
 		title = string([]rune(title)[:60])
 	}
-	res := DB.Model(&AiChatSession{}).Where("id = ? AND user_id = ?", id, userID).
+	res := models.DB.Model(&AiChatSession{}).Where("id = ? AND user_id = ?", id, userID).
 		Updates(map[string]interface{}{"title": title, "updated_at": time.Now()})
 	if res.Error != nil {
 		return res.Error
@@ -153,7 +154,7 @@ func RenameAiChatSession(id, userID uint, title string) error {
 // ShareAiChatSession 生成分享令牌（幂等：已分享则返回原令牌）
 func ShareAiChatSession(id, userID uint) (string, error) {
 	var s AiChatSession
-	if err := DB.Where("id = ? AND user_id = ?", id, userID).First(&s).Error; err != nil {
+	if err := models.DB.Where("id = ? AND user_id = ?", id, userID).First(&s).Error; err != nil {
 		return "", fmt.Errorf("会话不存在")
 	}
 	if s.ShareToken != nil && s.SharedAt != nil {
@@ -168,7 +169,7 @@ func ShareAiChatSession(id, userID uint) (string, error) {
 		}
 		token = hex.EncodeToString(b)
 		var n int64
-		DB.Model(&AiChatSession{}).Where("share_token = ?", token).Count(&n)
+		models.DB.Model(&AiChatSession{}).Where("share_token = ?", token).Count(&n)
 		if n == 0 {
 			break
 		}
@@ -179,7 +180,7 @@ func ShareAiChatSession(id, userID uint) (string, error) {
 	}
 	now := time.Now()
 	tk := token
-	if err := DB.Model(&AiChatSession{}).Where("id = ?", id).
+	if err := models.DB.Model(&AiChatSession{}).Where("id = ?", id).
 		Updates(map[string]interface{}{"share_token": &tk, "shared_at": &now, "updated_at": now}).Error; err != nil {
 		return "", err
 	}
@@ -188,7 +189,7 @@ func ShareAiChatSession(id, userID uint) (string, error) {
 
 // UnshareAiChatSession 取消分享（令牌置空，链接立即失效）
 func UnshareAiChatSession(id, userID uint) error {
-	res := DB.Model(&AiChatSession{}).Where("id = ? AND user_id = ?", id, userID).
+	res := models.DB.Model(&AiChatSession{}).Where("id = ? AND user_id = ?", id, userID).
 		Updates(map[string]interface{}{"share_token": nil, "shared_at": nil})
 	if res.Error != nil {
 		return res.Error
@@ -205,7 +206,7 @@ func GetSharedSessionByToken(token string) (*AiChatSession, error) {
 		return nil, fmt.Errorf("分享链接无效")
 	}
 	var s AiChatSession
-	if err := DB.Where("share_token = ? AND shared_at IS NOT NULL", token).First(&s).Error; err != nil {
+	if err := models.DB.Where("share_token = ? AND shared_at IS NOT NULL", token).First(&s).Error; err != nil {
 		return nil, fmt.Errorf("分享不存在或已取消")
 	}
 	return &s, nil
@@ -220,7 +221,7 @@ func AppendAiChatMessage(sessionID uint, role, content string, tokensIn, tokensO
 		TokensIn: tokensIn, TokensOut: tokensOut, Cost: cost, CallLogID: callLogID,
 		CreatedAt: time.Now(),
 	}
-	if err := DB.Create(m).Error; err != nil {
+	if err := models.DB.Create(m).Error; err != nil {
 		return nil, err
 	}
 	return m, nil
@@ -232,14 +233,14 @@ func ListAiChatMessages(sessionID uint, limit int) ([]AiChatMessage, error) {
 		limit = 200
 	}
 	var list []AiChatMessage
-	err := DB.Where("session_id = ?", sessionID).Order("created_at ASC, id ASC").Limit(limit).Find(&list).Error
+	err := models.DB.Where("session_id = ?", sessionID).Order("created_at ASC, id ASC").Limit(limit).Find(&list).Error
 	return list, err
 }
 
 // CountAiChatMessages 会话消息数（判断是否首条）
 func CountAiChatMessages(sessionID uint) (int64, error) {
 	var n int64
-	err := DB.Model(&AiChatMessage{}).Where("session_id = ?", sessionID).Count(&n).Error
+	err := models.DB.Model(&AiChatMessage{}).Where("session_id = ?", sessionID).Count(&n).Error
 	return n, err
 }
 
@@ -248,5 +249,5 @@ func SetSessionThirdConv(sessionID uint, convID string) {
 	if sessionID == 0 || strings.TrimSpace(convID) == "" {
 		return
 	}
-	DB.Model(&AiChatSession{}).Where("id = ?", sessionID).UpdateColumn("third_conv_id", convID)
+	models.DB.Model(&AiChatSession{}).Where("id = ?", sessionID).UpdateColumn("third_conv_id", convID)
 }

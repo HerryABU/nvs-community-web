@@ -5,10 +5,10 @@ import (
 
 	"nvs-server/aiclient"
 	"nvs-server/handlers/admin"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 )
 
 // ════════════════ AI 渠道对账 / 连通性（L5：拉取上游余额与消费，用于 API 对账） ════════════════
@@ -21,7 +21,7 @@ func AdminAiModelChannel(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	m, err := models.GetAiModel(uint(id))
+	m, err := aim.GetAiModel(uint(id))
 	if err != nil {
 		utils.NotFound(c, "模型不存在")
 		return

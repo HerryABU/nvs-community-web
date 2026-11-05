@@ -1,8 +1,9 @@
-package models
+package ai
 
 import (
 	"encoding/json"
 	"fmt"
+	"nvs-server/models"
 	"strings"
 	"time"
 )
@@ -75,7 +76,7 @@ func CreateAiMediaTask(userID uint, m *AiModel, kind, prompt string, params AiMe
 		Style:     params.Style, // 作品广场按风格筛选
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
-	if err := DB.Create(t).Error; err != nil {
+	if err := models.DB.Create(t).Error; err != nil {
 		return nil, err
 	}
 	return t, nil
@@ -94,33 +95,33 @@ func mediaPriceSnapshot(m *AiModel, cost int64) string {
 // 返回扣款后余额。重复调用安全（状态非 pending/running 直接返回当前成本）。
 func ChargeAiMediaTask(taskID uint) (int64, error) {
 	var t AiMediaTask
-	if err := DB.Where("id = ?", taskID).First(&t).Error; err != nil {
+	if err := models.DB.Where("id = ?", taskID).First(&t).Error; err != nil {
 		return 0, err
 	}
 	if t.Status == AiMediaSucceeded {
-		return GetTokenBalance(t.UserID), nil
+		return models.GetTokenBalance(t.UserID), nil
 	}
 	if t.Status != AiMediaPending && t.Status != AiMediaRunning {
 		return 0, fmt.Errorf("任务状态不可扣款：%s", t.Status)
 	}
 	var m AiModel
-	if err := DB.Where("id = ?", t.ModelID).First(&m).Error; err != nil {
+	if err := models.DB.Where("id = ?", t.ModelID).First(&m).Error; err != nil {
 		return 0, err
 	}
 	cost := m.PriceCall
 	now := time.Now()
 	if cost <= 0 {
-		_ = DB.Model(&AiMediaTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
+		_ = models.DB.Model(&AiMediaTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
 			"status": AiMediaSucceeded, "cost": 0, "updated_at": now,
 		}).Error
 		return 0, nil
 	}
-	nb, err := AppendTokenLedger(t.UserID, TokenTypeConsume, -cost, "ai", t.ID,
+	nb, err := models.AppendTokenLedger(t.UserID, models.TokenTypeConsume, -cost, "ai", t.ID,
 		fmt.Sprintf("AI %s：%s", mediaKindLabel(t.Kind), m.Name), mediaPriceSnapshot(&m, cost))
 	if err != nil {
 		return 0, err
 	}
-	_ = DB.Model(&AiMediaTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
+	_ = models.DB.Model(&AiMediaTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
 		"status": AiMediaSucceeded, "cost": cost, "updated_at": now,
 	}).Error
 	return nb, nil
@@ -128,7 +129,7 @@ func ChargeAiMediaTask(taskID uint) (int64, error) {
 
 // MarkAiMediaSubmitted 视频：记录上游任务 ID 并转 running
 func MarkAiMediaSubmitted(taskID uint, remoteID string) {
-	_ = DB.Model(&AiMediaTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
+	_ = models.DB.Model(&AiMediaTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
 		"status": AiMediaRunning, "remote_id": remoteID, "updated_at": time.Now(),
 	}).Error
 }
@@ -136,13 +137,13 @@ func MarkAiMediaSubmitted(taskID uint, remoteID string) {
 // MarkAiMediaFree 免费额度调用：费用归零（不扣代币；状态流转由调用方负责）。
 // 失败退款时 Cost<=0 天然不退。
 func MarkAiMediaFree(taskID uint) error {
-	return DB.Model(&AiMediaTask{}).Where("id = ?", taskID).
+	return models.DB.Model(&AiMediaTask{}).Where("id = ?", taskID).
 		Update("cost", 0).Error
 }
 
 // UpdateAiMediaResult 回写结果（成功）
 func UpdateAiMediaResult(taskID uint, resultJSON string) {
-	_ = DB.Model(&AiMediaTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
+	_ = models.DB.Model(&AiMediaTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
 		"status": AiMediaSucceeded, "result": resultJSON, "error": "", "updated_at": time.Now(),
 	}).Error
 }
@@ -157,7 +158,7 @@ func FailAiMediaTask(taskID uint, errMsg string, charged bool) {
 	if charged {
 		status = AiMediaSucceeded // 已扣款但上游失败：保持 succeeded 待退款，或调用方先退款
 	}
-	_ = DB.Model(&AiMediaTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
+	_ = models.DB.Model(&AiMediaTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
 		"status": status, "error": msg, "updated_at": time.Now(),
 	}).Error
 }
@@ -178,7 +179,7 @@ func IsAiMediaTerminal(status string) bool {
 // 用户付了钱、视频没出来，一分没退，前端却提示「已自动退款」（假话）。
 func RefundAiMediaTask(taskID uint, reason string) (int64, error) {
 	var t AiMediaTask
-	if err := DB.Where("id = ?", taskID).First(&t).Error; err != nil {
+	if err := models.DB.Where("id = ?", taskID).First(&t).Error; err != nil {
 		return 0, err
 	}
 	if t.Refunded {
@@ -190,12 +191,12 @@ func RefundAiMediaTask(taskID uint, reason string) (int64, error) {
 	if t.Status != AiMediaSucceeded && t.Status != AiMediaRunning && t.Status != AiMediaPending {
 		return 0, fmt.Errorf("该任务状态不可退款：%s", t.Status)
 	}
-	nb, err := AppendTokenLedger(t.UserID, TokenTypeRefund, t.Cost, "ai", t.ID, reason,
+	nb, err := models.AppendTokenLedger(t.UserID, models.TokenTypeRefund, t.Cost, "ai", t.ID, reason,
 		mediaPriceSnapshot(&AiModel{ID: t.ModelID, Name: t.ModelName}, t.Cost))
 	if err != nil {
 		return 0, err
 	}
-	_ = DB.Model(&AiMediaTask{}).Where("id = ?", taskID).
+	_ = models.DB.Model(&AiMediaTask{}).Where("id = ?", taskID).
 		Updates(map[string]interface{}{"status": AiMediaFailed, "refunded": true, "updated_at": time.Now()}).Error
 	return nb, nil
 }
@@ -206,7 +207,7 @@ func RefundAiMediaTask(taskID uint, reason string) (int64, error) {
 // 上游那边的账单只能由站长承担（不保证上游支持撤销），UI 文案如实说明这一点。
 func CancelAiMediaTask(taskID, userID uint) (refunded int64, err error) {
 	var t AiMediaTask
-	if err := DB.Where("id = ? AND user_id = ?", taskID, userID).First(&t).Error; err != nil {
+	if err := models.DB.Where("id = ? AND user_id = ?", taskID, userID).First(&t).Error; err != nil {
 		return 0, fmt.Errorf("任务不存在")
 	}
 	if IsAiMediaTerminal(t.Status) {
@@ -214,7 +215,7 @@ func CancelAiMediaTask(taskID, userID uint) (refunded int64, err error) {
 	}
 	doRefund := t.Cost > 0 && !t.Refunded
 	if doRefund {
-		if _, rerr := AppendTokenLedger(t.UserID, TokenTypeRefund, t.Cost, "ai", t.ID,
+		if _, rerr := models.AppendTokenLedger(t.UserID, models.TokenTypeRefund, t.Cost, "ai", t.ID,
 			"取消 AI 视频任务退款", mediaPriceSnapshot(&AiModel{ID: t.ModelID, Name: t.ModelName}, t.Cost)); rerr != nil {
 			return 0, fmt.Errorf("退款失败：%v", rerr)
 		}
@@ -224,7 +225,7 @@ func CancelAiMediaTask(taskID, userID uint) (refunded int64, err error) {
 	if doRefund {
 		msg = "已取消，费用已原路退回"
 	}
-	_ = DB.Model(&AiMediaTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
+	_ = models.DB.Model(&AiMediaTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
 		"status":     AiMediaCancelled,
 		"refunded":   doRefund,
 		"error":      msg,
@@ -238,7 +239,7 @@ func CancelAiMediaTask(taskID, userID uint) (refunded int64, err error) {
 // GetAiMediaTask 取任务（校验归属）
 func GetAiMediaTask(id, userID uint) (*AiMediaTask, error) {
 	var t AiMediaTask
-	if err := DB.Where("id = ? AND user_id = ?", id, userID).First(&t).Error; err != nil {
+	if err := models.DB.Where("id = ? AND user_id = ?", id, userID).First(&t).Error; err != nil {
 		return nil, err
 	}
 	return &t, nil
@@ -252,7 +253,7 @@ func ListAiMediaTasks(userID uint, kind string, page, pageSize int) ([]AiMediaTa
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 20
 	}
-	q := DB.Model(&AiMediaTask{}).Where("user_id = ?", userID)
+	q := models.DB.Model(&AiMediaTask{}).Where("user_id = ?", userID)
 	if kind != "" {
 		q = q.Where("kind = ?", kind)
 	}
@@ -272,7 +273,7 @@ func ListAiMediaForExport(userID uint, kind string, since, until time.Time, limi
 	if limit <= 0 || limit > 2000 {
 		limit = 500
 	}
-	q := DB.Model(&AiMediaTask{}).Where("user_id = ?", userID)
+	q := models.DB.Model(&AiMediaTask{}).Where("user_id = ?", userID)
 	if kind != "" {
 		q = q.Where("kind = ?", kind)
 	}
@@ -315,7 +316,7 @@ func SetMediaAttachments(taskID uint, list []MediaAttachment) error {
 	if err != nil {
 		return err
 	}
-	return DB.Model(&AiMediaTask{}).Where("id = ?", taskID).
+	return models.DB.Model(&AiMediaTask{}).Where("id = ?", taskID).
 		Update("attachments", string(b)).Error
 }
 

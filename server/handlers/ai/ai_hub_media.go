@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 	aicost "nvs-server/models/aicost"
 	aihub "nvs-server/models/aihub"
 )
@@ -21,7 +22,7 @@ import (
 // AiHubImage POST /api/ai/image — 绘画（同步出图，成功才扣款）
 // AiHubVideoSubmit POST /api/ai/video — 视频生成（异步：提交即扣款，失败退款）
 func AiHubVideoSubmit(c *gin.Context) {
-	if !models.IsAiEnabled() {
+	if !aim.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
@@ -51,11 +52,11 @@ func AiHubVideoSubmit(c *gin.Context) {
 		return
 	}
 	// 模型解析：BYOK 用伪模型（0 费、不进平台池）
-	var m *models.AiModel
+	var m *aim.AiModel
 	if req.Byok {
-		m = &models.AiModel{ID: 0, Name: "自备密钥", PriceCall: 0}
+		m = &aim.AiModel{ID: 0, Name: "自备密钥", PriceCall: 0}
 	} else {
-		mm, merr := models.GetEnabledAiModelOfKind(req.ModelID, models.AiKindVideo)
+		mm, merr := aim.GetEnabledAiModelOfKind(req.ModelID, aim.AiKindVideo)
 		if merr != nil || mm == nil {
 			utils.BadRequest(c, "视频模型不可用")
 			return
@@ -88,7 +89,7 @@ func AiHubVideoSubmit(c *gin.Context) {
 			return
 		}
 	}
-	task, terr := models.CreateAiMediaTask(userID, m, models.AiKindVideo, prompt, models.AiMediaParams{
+	task, terr := aim.CreateAiMediaTask(userID, m, aim.AiKindVideo, prompt, aim.AiMediaParams{
 		Duration: req.Duration, Size: strings.TrimSpace(req.Size),
 	})
 	if terr != nil {
@@ -101,7 +102,7 @@ func AiHubVideoSubmit(c *gin.Context) {
 		apiKey = lease.Key
 	}
 	if kerr != nil {
-		models.FailAiMediaTask(task.ID, "密钥不可用", false)
+		aim.FailAiMediaTask(task.ID, "密钥不可用", false)
 		utils.InternalError(c, "模型密钥不可用，请联系站长")
 		return
 	}
@@ -113,20 +114,20 @@ func AiHubVideoSubmit(c *gin.Context) {
 		var uerr error
 		uk, uerr = aicost.ResolveUserAiKey(userID, req.ByokKeyID)
 		if uerr != nil || uk == nil {
-			models.FailAiMediaTask(task.ID, "自备密钥不可用", false)
+			aim.FailAiMediaTask(task.ID, "自备密钥不可用", false)
 			utils.BadRequest(c, "自备密钥不可用：请先在「我的钱包 → 上游密钥」中添加")
 			return
 		}
 		ukKey, derr := uk.DecryptApiKey()
 		if derr != nil {
-			models.FailAiMediaTask(task.ID, "自备密钥解密失败", false)
+			aim.FailAiMediaTask(task.ID, "自备密钥解密失败", false)
 			utils.InternalError(c, "自备密钥解密失败，请删除后重新添加")
 			return
 		}
 		baseURL, apiKey = uk.BaseURL, ukKey
 		upModel = strings.TrimSpace(req.ByokModel)
 		if upModel == "" {
-			models.FailAiMediaTask(task.ID, "缺少上游模型标识", false)
+			aim.FailAiMediaTask(task.ID, "缺少上游模型标识", false)
 			utils.BadRequest(c, "使用自备密钥时需填写上游模型标识")
 			return
 		}
@@ -140,7 +141,7 @@ func AiHubVideoSubmit(c *gin.Context) {
 		if !byok {
 			lease.Fail()
 		}
-		models.FailAiMediaTask(task.ID, verr.Error(), false)
+		aim.FailAiMediaTask(task.ID, verr.Error(), false)
 		utils.BadRequest(c, "视频提交失败："+verr.Error()+"（未扣款）")
 		return
 	}
@@ -148,17 +149,17 @@ func AiHubVideoSubmit(c *gin.Context) {
 	var nb int64
 	switch {
 	case byok:
-		_ = models.MarkAiMediaFree(task.ID)
+		_ = aim.MarkAiMediaFree(task.ID)
 		nb = models.GetTokenBalance(userID)
 	case freeOK:
-		_ = models.MarkAiMediaFree(task.ID)
+		_ = aim.MarkAiMediaFree(task.ID)
 		_ = aihub.RecordAiFreeUsage(userID, 1, 0)
 		nb = models.GetTokenBalance(userID)
 	default:
 		var cerr error
-		nb, cerr = models.ChargeAiMediaTask(task.ID)
+		nb, cerr = aim.ChargeAiMediaTask(task.ID)
 		if cerr != nil {
-			models.FailAiMediaTask(task.ID, cerr.Error(), false)
+			aim.FailAiMediaTask(task.ID, cerr.Error(), false)
 			utils.Error(c, 429, 42902, cerr.Error()+"（未扣款，请充值后重试）")
 			return
 		}
@@ -166,7 +167,7 @@ func AiHubVideoSubmit(c *gin.Context) {
 	if byok {
 		aicost.TouchUserAiKey(uk.ID)
 	}
-	models.MarkAiMediaSubmitted(task.ID, remoteID)
+	aim.MarkAiMediaSubmitted(task.ID, remoteID)
 	utils.Success(c, gin.H{
 		"task_id":       task.ID,
 		"status":        status,
@@ -181,14 +182,14 @@ func AiHubVideoSubmit(c *gin.Context) {
 func AiHubVideoStatus(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	task, err := models.GetAiMediaTask(uint(id), userID)
+	task, err := aim.GetAiMediaTask(uint(id), userID)
 	if err != nil {
 		utils.NotFound(c, "任务不存在")
 		return
 	}
 	// 终态直接返回，不再打上游：已取消的任务若漏在这里，会被继续轮询到成功，
 	// 已退的款又变回「已扣款」——既多花钱又对不上账。
-	if models.IsAiMediaTerminal(task.Status) {
+	if aim.IsAiMediaTerminal(task.Status) {
 		utils.Success(c, gin.H{
 			"task_id": task.ID, "status": task.Status,
 			"result": task.Result, "error": task.Error, "cost": task.Cost,
@@ -221,13 +222,13 @@ func AiHubVideoStatus(c *gin.Context) {
 		switch status {
 		case "succeeded", "success", "completed":
 			if videoURL == "" {
-				utils.Success(c, gin.H{"task_id": task.ID, "status": models.AiMediaRunning, "cost": task.Cost})
+				utils.Success(c, gin.H{"task_id": task.ID, "status": aim.AiMediaRunning, "cost": task.Cost})
 				return
 			}
 			rj, _ := json.Marshal(gin.H{"video": videoURL})
-			models.UpdateAiMediaResult(task.ID, string(rj))
+			aim.UpdateAiMediaResult(task.ID, string(rj))
 			utils.Success(c, gin.H{
-				"task_id": task.ID, "status": models.AiMediaSucceeded,
+				"task_id": task.ID, "status": aim.AiMediaSucceeded,
 				"result": task.Result, "video": videoURL, "cost": task.Cost,
 			})
 		case "failed", "error", "cancelled", "canceled":
@@ -235,14 +236,14 @@ func AiHubVideoStatus(c *gin.Context) {
 			if msg == "" {
 				msg = "上游任务失败"
 			}
-			models.FailAiMediaTask(task.ID, msg, false)
-			utils.Success(c, gin.H{"task_id": task.ID, "status": models.AiMediaFailed, "error": msg, "cost": task.Cost})
+			aim.FailAiMediaTask(task.ID, msg, false)
+			utils.Success(c, gin.H{"task_id": task.ID, "status": aim.AiMediaFailed, "error": msg, "cost": task.Cost})
 		default:
-			utils.Success(c, gin.H{"task_id": task.ID, "status": models.AiMediaRunning, "cost": task.Cost})
+			utils.Success(c, gin.H{"task_id": task.ID, "status": aim.AiMediaRunning, "cost": task.Cost})
 		}
 		return
 	}
-	m, merr := models.GetAiModel(task.ModelID)
+	m, merr := aim.GetAiModel(task.ModelID)
 	if merr != nil {
 		utils.BadRequest(c, "模型已删除，无法继续查询")
 		return
@@ -266,13 +267,13 @@ func AiHubVideoStatus(c *gin.Context) {
 	switch status {
 	case "succeeded", "success", "completed":
 		if videoURL == "" {
-			utils.Success(c, gin.H{"task_id": task.ID, "status": models.AiMediaRunning, "cost": task.Cost})
+			utils.Success(c, gin.H{"task_id": task.ID, "status": aim.AiMediaRunning, "cost": task.Cost})
 			return
 		}
 		rj, _ := json.Marshal(gin.H{"video": videoURL})
-		models.UpdateAiMediaResult(task.ID, string(rj))
+		aim.UpdateAiMediaResult(task.ID, string(rj))
 		utils.Success(c, gin.H{
-			"task_id": task.ID, "status": models.AiMediaSucceeded,
+			"task_id": task.ID, "status": aim.AiMediaSucceeded,
 			"result": task.Result, "video": videoURL, "cost": task.Cost,
 		})
 	case "failed", "error", "cancelled", "canceled":
@@ -284,20 +285,20 @@ func AiHubVideoStatus(c *gin.Context) {
 		// 所以这里不能再调 FailAiMediaTask（那会把 refunded 覆盖回 false，前端就报错账）。
 		refunded := false
 		if task.Cost > 0 && !task.Refunded {
-			if _, rerr := models.RefundAiMediaTask(task.ID, "视频生成失败退款"); rerr == nil {
+			if _, rerr := aim.RefundAiMediaTask(task.ID, "视频生成失败退款"); rerr == nil {
 				refunded = true
 			} else {
-				models.FailAiMediaTask(task.ID, msg, false)
+				aim.FailAiMediaTask(task.ID, msg, false)
 			}
 		} else {
-			models.FailAiMediaTask(task.ID, msg, false)
+			aim.FailAiMediaTask(task.ID, msg, false)
 		}
 		utils.Success(c, gin.H{
-			"task_id": task.ID, "status": models.AiMediaFailed,
+			"task_id": task.ID, "status": aim.AiMediaFailed,
 			"error": msg, "cost": task.Cost, "refunded": refunded,
 		})
 	default:
-		utils.Success(c, gin.H{"task_id": task.ID, "status": models.AiMediaRunning, "cost": task.Cost})
+		utils.Success(c, gin.H{"task_id": task.ID, "status": aim.AiMediaRunning, "cost": task.Cost})
 	}
 }
 
@@ -316,12 +317,12 @@ func AiHubVideoCancel(c *gin.Context) {
 		utils.BadRequest(c, "任务 ID 无效")
 		return
 	}
-	task, err := models.GetAiMediaTask(uint(id), userID)
+	task, err := aim.GetAiMediaTask(uint(id), userID)
 	if err != nil {
 		utils.NotFound(c, "任务不存在")
 		return
 	}
-	if task.Kind != models.AiKindVideo {
+	if task.Kind != aim.AiKindVideo {
 		utils.BadRequest(c, "只有异步任务支持取消")
 		return
 	}
@@ -329,14 +330,14 @@ func AiHubVideoCancel(c *gin.Context) {
 	if task.RemoteID != "" {
 		cancelUpstreamVideo(task, userID)
 	}
-	refunded, cerr := models.CancelAiMediaTask(uint(id), userID)
+	refunded, cerr := aim.CancelAiMediaTask(uint(id), userID)
 	if cerr != nil {
 		utils.BadRequest(c, cerr.Error())
 		return
 	}
 	utils.Success(c, gin.H{
 		"task_id":       task.ID,
-		"status":        models.AiMediaCancelled,
+		"status":        aim.AiMediaCancelled,
 		"refunded":      refunded > 0,
 		"refund_amount": refunded,
 		"balance_after": models.GetTokenBalance(userID),
@@ -345,7 +346,7 @@ func AiHubVideoCancel(c *gin.Context) {
 }
 
 // cancelUpstreamVideo 尝试撤销上游任务（尽力而为，失败只记日志）
-func cancelUpstreamVideo(task *models.AiMediaTask, userID uint) {
+func cancelUpstreamVideo(task *aim.AiMediaTask, userID uint) {
 	var baseURL, apiKey string
 	if task.ModelID == 0 {
 		// BYOK 任务：用用户自己的密钥
@@ -359,7 +360,7 @@ func cancelUpstreamVideo(task *models.AiMediaTask, userID uint) {
 		}
 		baseURL, apiKey = uk.BaseURL, k
 	} else {
-		m, merr := models.GetAiModel(task.ModelID)
+		m, merr := aim.GetAiModel(task.ModelID)
 		if merr != nil {
 			return
 		}
@@ -380,12 +381,12 @@ func cancelUpstreamVideo(task *models.AiMediaTask, userID uint) {
 func AiHubMediaHistory(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	kind := strings.TrimSpace(c.Query("kind"))
-	if kind != models.AiKindImage && kind != models.AiKindVideo {
+	if kind != aim.AiKindImage && kind != aim.AiKindVideo {
 		utils.BadRequest(c, "kind 需为 image 或 video")
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	list, total, err := models.ListAiMediaTasks(userID, kind, page, 20)
+	list, total, err := aim.ListAiMediaTasks(userID, kind, page, 20)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return

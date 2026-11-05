@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"nvs-server/aiclient"
-	"nvs-server/models"
+	ai "nvs-server/models/ai"
 )
 
 // ReviewResult 一次 AI 中立判定的结果。
@@ -94,13 +94,13 @@ func ReviewText(scope string, content string, reTrigger bool, reportCount int) (
 }
 
 // pickModel 选取审核用 chat 模型：优先配置指定，否则取第一个启用 chat 模型。
-func pickModel() (*models.AiModel, error) {
+func pickModel() (*ai.AiModel, error) {
 	if cfg, err := GetConfig(); err == nil && cfg != nil && cfg.ModelID != 0 {
-		if m, e := models.GetAiModel(cfg.ModelID); e == nil && m != nil && m.Enabled {
+		if m, e := ai.GetAiModel(cfg.ModelID); e == nil && m != nil && m.Enabled {
 			return m, nil
 		}
 	}
-	list, err := models.ListAiModelsByKind("chat", true)
+	list, err := ai.ListAiModelsByKind("chat", true)
 	if err != nil {
 		return nil, err
 	}

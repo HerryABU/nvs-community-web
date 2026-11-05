@@ -12,6 +12,7 @@ import (
 
 	"nvs-server/aisafety"
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 )
 
 // ForensicsBundle 一次名单取证导出。
@@ -63,13 +64,13 @@ func BuildSuperviseForensicsZip(targetUserID, operatorID uint) (*ForensicsBundle
 	}
 
 	// AI 对话留痕（绥靖/名单场景最核心的证据：用户实际问了什么、模型回了什么）
-	sessions, _ := models.ListAiChatSessions(targetUserID, 500)
+	sessions, _ := ai.ListAiChatSessions(targetUserID, 500)
 	if err := add("sessions.json", sessions); err != nil {
 		return nil, err
 	}
-	msgs := make([]models.AiChatMessage, 0, 200)
+	msgs := make([]ai.AiChatMessage, 0, 200)
 	for _, s := range sessions {
-		list, _ := models.ListAiChatMessages(s.ID, 500)
+		list, _ := ai.ListAiChatMessages(s.ID, 500)
 		msgs = append(msgs, list...)
 	}
 	if err := add("messages.json", msgs); err != nil {

@@ -10,6 +10,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	ai "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 	aiops "nvs-server/models/aiops"
 )
@@ -21,7 +22,7 @@ func AdminAiAuditStats(c *gin.Context) {
 	if !EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, models.AiAuditStats())
+	utils.Success(c, ai.AiAuditStats())
 }
 
 // AdminAiAuditSessions GET /api/admin/ai/audit/sessions?user_id=&page=
@@ -31,7 +32,7 @@ func AdminAiAuditSessions(c *gin.Context) {
 	}
 	uid, _ := strconv.ParseUint(c.Query("user_id"), 10, 64)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	list, total, err := models.AdminListAiSessions(uint(uid), page, 20)
+	list, total, err := ai.AdminListAiSessions(uint(uid), page, 20)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -39,7 +40,7 @@ func AdminAiAuditSessions(c *gin.Context) {
 	items := make([]gin.H, 0, len(list))
 	for i := range list {
 		s := &list[i]
-		msgCount, _ := models.CountAiChatMessages(s.ID)
+		msgCount, _ := ai.CountAiChatMessages(s.ID)
 		items = append(items, gin.H{
 			"id": s.ID, "user_id": s.UserID, "title": s.Title,
 			"agent_id": s.AgentID, "agent_name": s.AgentName,
@@ -57,12 +58,12 @@ func AdminAiAuditSessionMessages(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var s models.AiChatSession
+	var s ai.AiChatSession
 	if err := models.DB.Where("id = ?", id).First(&s).Error; err != nil {
 		utils.NotFound(c, "会话不存在")
 		return
 	}
-	msgs, err := models.ListAiChatMessages(s.ID, 500)
+	msgs, err := ai.ListAiChatMessages(s.ID, 500)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -76,7 +77,7 @@ func AdminAiAuditMedia(c *gin.Context) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	list, total, err := models.AdminListAiMedia(c.Query("kind"), c.Query("status"), page, 20)
+	list, total, err := ai.AdminListAiMedia(c.Query("kind"), c.Query("status"), page, 20)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -100,7 +101,7 @@ func AdminAiAuditCalls(c *gin.Context) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	list, total, err := models.AdminListAiCallLogs(c.Query("status"), page, 20)
+	list, total, err := ai.AdminListAiCallLogs(c.Query("status"), page, 20)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -153,7 +154,7 @@ func AdminListAiVendors(c *gin.Context) {
 	out := make([]row, 0, len(list))
 	for _, v := range list {
 		var n int64
-		models.DB.Model(&models.AiModel{}).Where("vendor = ?", v.Name).Count(&n)
+		models.DB.Model(&ai.AiModel{}).Where("vendor = ?", v.Name).Count(&n)
 		out = append(out, row{AiVendor: v, Models: n})
 	}
 	utils.Success(c, gin.H{"list": out})
@@ -228,7 +229,7 @@ func AdminGetCategoryPrices(c *gin.Context) {
 	if !EnsureAdmin(c) {
 		return
 	}
-	list, err := models.AllCategoryPrices()
+	list, err := ai.AllCategoryPrices()
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -251,8 +252,8 @@ func AdminSetCategoryPrice(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	req.Kind = models.NormalizeAiKind(req.Kind)
-	if req.Kind != models.AiKindChat && req.Kind != models.AiKindImage && req.Kind != models.AiKindVideo {
+	req.Kind = ai.NormalizeAiKind(req.Kind)
+	if req.Kind != ai.AiKindChat && req.Kind != ai.AiKindImage && req.Kind != ai.AiKindVideo {
 		utils.BadRequest(c, "kind 必须是 chat/image/video 之一")
 		return
 	}
@@ -260,7 +261,7 @@ func AdminSetCategoryPrice(c *gin.Context) {
 		utils.BadRequest(c, "价格不能为负")
 		return
 	}
-	if err := models.SetCategoryPrice(req.Kind, req.PriceIn, req.PriceOut, req.PriceCall); err != nil {
+	if err := ai.SetCategoryPrice(req.Kind, req.PriceIn, req.PriceOut, req.PriceCall); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
@@ -272,14 +273,14 @@ func AdminSetCategoryPrice(c *gin.Context) {
 // matrixModel 归一化后的矩阵条目：老数据缺 vendor/version/sub_version 时，
 // 用模型 ID 的「前缀-版本-亚版本」兜底推导（功能上线前建的模型不用重导也能归类）。
 type matrixModel struct {
-	models.AiModel
+	ai.AiModel
 	VendorName string
 	Version    string
 	Sub        string
 }
 
 // normalizeMatrixModel 归一化单条模型
-func normalizeMatrixModel(m models.AiModel) matrixModel {
+func normalizeMatrixModel(m ai.AiModel) matrixModel {
 	p := vendor.ParseModelID(m.ModelID)
 	name := m.Vendor
 	if name == "" {
@@ -364,7 +365,7 @@ func AdminAiVendorMatrix(c *gin.Context) {
 		utils.InternalError(c, "查询失败")
 		return
 	}
-	allModels, err := models.ListAiModels(false)
+	allModels, err := ai.ListAiModels(false)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return

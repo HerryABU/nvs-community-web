@@ -1,6 +1,9 @@
-package models
+package ai
 
-import "time"
+import (
+	"nvs-server/models"
+	"time"
+)
 
 // ==================== AI 数据审计（管理端） ====================
 // 只做只读查询：会话 / 消息 / 媒体任务 / 调用流水 / 汇总统计。
@@ -14,7 +17,7 @@ func AdminListAiSessions(userID uint, page, size int) ([]AiChatSession, int64, e
 	if size <= 0 || size > 100 {
 		size = 20
 	}
-	q := DB.Model(&AiChatSession{})
+	q := models.DB.Model(&AiChatSession{})
 	if userID > 0 {
 		q = q.Where("user_id = ?", userID)
 	}
@@ -35,7 +38,7 @@ func AdminListAiMedia(kind, status string, page, size int) ([]AiMediaTask, int64
 	if size <= 0 || size > 100 {
 		size = 20
 	}
-	q := DB.Model(&AiMediaTask{})
+	q := models.DB.Model(&AiMediaTask{})
 	if kind != "" {
 		q = q.Where("kind = ?", NormalizeAiKind(kind))
 	}
@@ -59,7 +62,7 @@ func AdminListAiCallLogs(status string, page, size int) ([]AiCallLog, int64, err
 	if size <= 0 || size > 100 {
 		size = 20
 	}
-	q := DB.Model(&AiCallLog{})
+	q := models.DB.Model(&AiCallLog{})
 	if status != "" {
 		q = q.Where("status = ?", status)
 	}
@@ -77,7 +80,7 @@ func AiAuditStats() map[string]int64 {
 	since := time.Now().Add(-24 * time.Hour)
 	cnt := func(model interface{}, where string, args ...interface{}) int64 {
 		var n int64
-		q := DB.Model(model)
+		q := models.DB.Model(model)
 		if where != "" {
 			q = q.Where(where, args...)
 		}
@@ -85,7 +88,7 @@ func AiAuditStats() map[string]int64 {
 		return n
 	}
 	var cost int64
-	DB.Model(&AiCallLog{}).Select("COALESCE(SUM(cost),0)").Scan(&cost)
+	models.DB.Model(&AiCallLog{}).Select("COALESCE(SUM(cost),0)").Scan(&cost)
 	return map[string]int64{
 		"sessions":       cnt(&AiChatSession{}, ""),
 		"messages":       cnt(&AiChatMessage{}, ""),

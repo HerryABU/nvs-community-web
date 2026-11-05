@@ -10,6 +10,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 )
 
@@ -242,7 +243,7 @@ func splitKeyLines(s string) []string {
 //   - 价格单位写清是「代币 / 1K tokens」还是「代币 / 次」，避免用户把按次当按量；
 //   - 附三类默认价（chat/image/video），模型未单独定价时用户看到的就是这个默认价。
 func AiPublicPricing(c *gin.Context) {
-	var list []models.AiModel
+	var list []aim.AiModel
 	// 与 AI 对话页保持同一口径：启用 + 对用户可见（user_visible 为 NULL 的遗留模型视为可见）。
 	// 少判一半会出现「价目表里有、选择器里没有」的错位。
 	models.DB.Where("enabled = ?", true).
@@ -260,9 +261,9 @@ func AiPublicPricing(c *gin.Context) {
 			"per_call": m.Kind == "image" || m.Kind == "video",
 		})
 	}
-	chatP := models.GetCategoryPrice("chat")
-	imgP := models.GetCategoryPrice("image")
-	vidP := models.GetCategoryPrice("video")
+	chatP := aim.GetCategoryPrice("chat")
+	imgP := aim.GetCategoryPrice("image")
+	vidP := aim.GetCategoryPrice("video")
 	utils.Success(c, gin.H{
 		"models": items,
 		"categories": gin.H{

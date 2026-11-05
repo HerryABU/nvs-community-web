@@ -14,6 +14,7 @@ import (
 
 	"nvs-server/aiclient"
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 	aiops "nvs-server/models/aiops"
 )
@@ -73,13 +74,13 @@ func Complete(req Request) (*Result, error) {
 
 	// 全站并发闸门（gap-audit #12）：超出并发就排队，排不上就明确告诉用户"忙"，
 	// 而不是把上游打到 429 让所有人一起失败。
-	budgetCfg := models.LoadAiBudgetConfig()
-	limit := models.EffectiveConcurrency(budgetCfg)
+	budgetCfg := ai.LoadAiBudgetConfig()
+	limit := ai.EffectiveConcurrency(budgetCfg)
 	var release func()
 	var waited time.Duration
 	if limit > 0 {
 		timeout := time.Duration(budgetCfg.QueueTimeoutSec) * time.Second
-		release, waited, err = models.AcquireSlot(limit, timeout)
+		release, waited, err = ai.AcquireSlot(limit, timeout)
 		if err != nil {
 			return nil, err
 		}
@@ -89,7 +90,7 @@ func Complete(req Request) (*Result, error) {
 	strategy := aiops.EffectiveStrategy(cfg, req.Scene)
 
 	tried := make([]uint, 0, 2)
-	candidates := make([]*models.AiModel, 0, 2)
+	candidates := make([]*ai.AiModel, 0, 2)
 	candidates = append(candidates, first)
 	if cfg.Fallback {
 		for _, m := range aiops.FallbackChatModels([]uint{first.ID}, req.Scene, cfg.MaxFallback) {
@@ -127,7 +128,7 @@ func Complete(req Request) (*Result, error) {
 }
 
 // attempt 用指定模型尝试一次
-func attempt(req Request, m *models.AiModel, res *Result) (*Result, error) {
+func attempt(req Request, m *ai.AiModel, res *Result) (*Result, error) {
 	maxTokens := req.MaxTokens
 	if maxTokens <= 0 {
 		maxTokens = m.MaxTokens
@@ -142,10 +143,10 @@ func attempt(req Request, m *models.AiModel, res *Result) (*Result, error) {
 	if temp <= 0 {
 		temp = 0.7
 	}
-	est := models.EstimateTokens(req.System+"\n"+req.User) + maxTokens
+	est := ai.EstimateTokens(req.System+"\n"+req.User) + maxTokens
 
 	// 平台总预算闸门：到线即拒（仅在 HardStop 时阻断，否则只观测）
-	if berr := models.CheckGlobalBudget(models.EstimateAiCost(m, est, maxTokens)); berr != nil {
+	if berr := ai.CheckGlobalBudget(ai.EstimateAiCost(m, est, maxTokens)); berr != nil {
 		return nil, berr
 	}
 	// 三维交叉限流：人×模型 / 人 / 模型
@@ -159,7 +160,7 @@ func attempt(req Request, m *models.AiModel, res *Result) (*Result, error) {
 		if !models.IsTokenEnabled() {
 			return nil, errors.New("免费额度已用完且代币未启用")
 		}
-		if _, ok := models.PrecheckAiBalance(req.PayerID, m, est, maxTokens); !ok {
+		if _, ok := ai.PrecheckAiBalance(req.PayerID, m, est, maxTokens); !ok {
 			return nil, errors.New("余额不足")
 		}
 	}
@@ -172,7 +173,7 @@ func attempt(req Request, m *models.AiModel, res *Result) (*Result, error) {
 	if lease != nil {
 		apiKey = lease.Key
 	}
-	callLog, lerr := models.CreateAiCallLog(req.PayerID, m, req.Action, req.RefType, req.RefID, est, maxTokens, freeOK)
+	callLog, lerr := ai.CreateAiCallLog(req.PayerID, m, req.Action, req.RefType, req.RefID, est, maxTokens, freeOK)
 	if lerr != nil {
 		return nil, errors.New("创建调用记录失败")
 	}
@@ -192,33 +193,33 @@ func attempt(req Request, m *models.AiModel, res *Result) (*Result, error) {
 		MaxTokens: maxTokens, Temperature: temp,
 	})
 	latency := int(time.Since(start).Milliseconds())
-	models.SetAiCallLatency(callLog.ID, latency)
+	ai.SetAiCallLatency(callLog.ID, latency)
 
 	if cerr != nil {
 		if lease != nil {
 			lease.Fail()
 		}
-		models.FailAiCallLog(callLog.ID, cerr.Error())
+		ai.FailAiCallLog(callLog.ID, cerr.Error())
 		return nil, fmt.Errorf("%s：%v", m.Name, cerr)
 	}
 	if strings.TrimSpace(content) == "" {
 		if lease != nil {
 			lease.Fail()
 		}
-		models.FailAiCallLog(callLog.ID, "上游未返回内容")
+		ai.FailAiCallLog(callLog.ID, "上游未返回内容")
 		return nil, fmt.Errorf("%s：上游未返回内容", m.Name)
 	}
 	if realIn <= 0 {
 		realIn = est
 	}
 	if realOut <= 0 {
-		realOut = models.EstimateTokens(content)
+		realOut = ai.EstimateTokens(content)
 	}
-	cost := models.EstimateAiCost(m, realIn, realOut)
+	cost := ai.EstimateAiCost(m, realIn, realOut)
 	if freeOK {
 		_ = aihub.RecordAiFreeUsage(req.PayerID, 1, realIn+realOut)
 		cost = 0
-	} else if _, serr := models.SettleAiCallLog(callLog.ID, realIn, realOut); serr != nil {
+	} else if _, serr := ai.SettleAiCallLog(callLog.ID, realIn, realOut); serr != nil {
 		return nil, errors.New("结算失败")
 	}
 	lease.OK()

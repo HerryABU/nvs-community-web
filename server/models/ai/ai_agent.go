@@ -1,9 +1,10 @@
-package models
+package ai
 
 import (
 	"strings"
 	"time"
 
+	"nvs-server/models"
 	"nvs-server/utils"
 )
 
@@ -40,7 +41,7 @@ func (AiAgent) TableName() string { return "ai_agents" }
 // ListAiAgents 智能体列表（管理员全部 / 用户仅启用）
 func ListAiAgents(onlyEnabled bool) ([]AiAgent, error) {
 	var list []AiAgent
-	q := DB.Order("sort_order ASC, id ASC")
+	q := models.DB.Order("sort_order ASC, id ASC")
 	if onlyEnabled {
 		q = q.Where("enabled = ?", true)
 	}
@@ -51,7 +52,7 @@ func ListAiAgents(onlyEnabled bool) ([]AiAgent, error) {
 // GetAiAgent 取智能体
 func GetAiAgent(id uint) (*AiAgent, error) {
 	var a AiAgent
-	if err := DB.Where("id = ?", id).First(&a).Error; err != nil {
+	if err := models.DB.Where("id = ?", id).First(&a).Error; err != nil {
 		return nil, err
 	}
 	return &a, nil
@@ -66,7 +67,7 @@ func CreateAiAgent(a *AiAgent) error {
 	now := time.Now()
 	a.CreatedAt = now
 	a.UpdatedAt = now
-	return DB.Create(a).Error
+	return models.DB.Create(a).Error
 }
 
 var errAiAgentNameEmpty = &aiAgentError{"名称不能为空"}
@@ -81,18 +82,18 @@ func UpdateAiAgentFields(id uint, fields map[string]interface{}) error {
 		return nil
 	}
 	fields["updated_at"] = time.Now()
-	return DB.Model(&AiAgent{}).Where("id = ?", id).Updates(fields).Error
+	return models.DB.Model(&AiAgent{}).Where("id = ?", id).Updates(fields).Error
 }
 
 // DeleteAiAgent 删除智能体
 func DeleteAiAgent(id uint) error {
-	return DB.Where("id = ?", id).Delete(&AiAgent{}).Error
+	return models.DB.Where("id = ?", id).Delete(&AiAgent{}).Error
 }
 
 // SeedDefaultAiAgents 首次初始化内置智能体（仅当表为空时）
 func SeedDefaultAiAgents() {
 	var n int64
-	DB.Model(&AiAgent{}).Count(&n)
+	models.DB.Model(&AiAgent{}).Count(&n)
 	if n > 0 {
 		return
 	}
@@ -123,7 +124,7 @@ func SeedDefaultAiAgents() {
 		},
 	}
 	for i := range defaults {
-		_ = DB.Create(&defaults[i])
+		_ = models.DB.Create(&defaults[i])
 	}
 }
 
@@ -132,13 +133,13 @@ func TouchAiAgent(id uint) {
 	if id == 0 {
 		return
 	}
-	DB.Model(&AiAgent{}).Where("id = ?", id).UpdateColumn("used_count", DB.Raw("used_count + 1"))
+	models.DB.Model(&AiAgent{}).Where("id = ?", id).UpdateColumn("used_count", models.DB.Raw("used_count + 1"))
 }
 
 // ListAiAgentCategories 去重分类（仅启用）
 func ListAiAgentCategories() []string {
 	var cats []string
-	DB.Model(&AiAgent{}).Where("enabled = ? AND category <> ''", true).
+	models.DB.Model(&AiAgent{}).Where("enabled = ? AND category <> ''", true).
 		Distinct().Order("category ASC").Pluck("category", &cats)
 	return cats
 }
@@ -156,7 +157,7 @@ func (a *AiAgent) SetCozeToken(plain string) error {
 	if err != nil {
 		return err
 	}
-	return DB.Model(&AiAgent{}).Where("id = ?", a.ID).UpdateColumn("token_enc", enc).Error
+	return models.DB.Model(&AiAgent{}).Where("id = ?", a.ID).UpdateColumn("token_enc", enc).Error
 }
 
 // DecryptCozeToken 解密 Coze 令牌

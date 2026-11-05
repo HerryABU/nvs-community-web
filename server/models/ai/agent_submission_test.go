@@ -1,7 +1,8 @@
-package models
+package ai
 
 import (
 	"fmt"
+	"nvs-server/models"
 	"testing"
 	"time"
 
@@ -16,12 +17,12 @@ func setupAgentSubTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开内存测试库失败: %v", err)
 	}
-	if err := db.AutoMigrate(&PlatformConfig{}, &AiAgent{}, &AgentSubmission{}); err != nil {
+	if err := db.AutoMigrate(&models.PlatformConfig{}, &AiAgent{}, &AgentSubmission{}); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
-	old := DB
-	DB = db
-	t.Cleanup(func() { DB = old })
+	old := models.DB
+	models.DB = db
+	t.Cleanup(func() { models.DB = old })
 }
 
 // 投稿开关：默认开放且需要审核；关闭后提交被拒
@@ -59,7 +60,7 @@ func TestAgentSubmission_ApproveCreatesAgent(t *testing.T) {
 	}
 	// 审核通过前，广场里不应该有任何条目
 	var n int64
-	DB.Model(&AiAgent{}).Count(&n)
+	models.DB.Model(&AiAgent{}).Count(&n)
 	if n != 0 {
 		t.Errorf("审核通过前不应产生广场条目，实际 %d 条", n)
 	}
@@ -68,7 +69,7 @@ func TestAgentSubmission_ApproveCreatesAgent(t *testing.T) {
 		t.Fatalf("审核通过失败: %v", err)
 	}
 	var agent AiAgent
-	if err := DB.Where("name = ?", "严谨校对员").First(&agent).Error; err != nil {
+	if err := models.DB.Where("name = ?", "严谨校对员").First(&agent).Error; err != nil {
 		t.Fatalf("通过后应落一个广场智能体: %v", err)
 	}
 	if agent.SubmittedBy != 7 {
@@ -82,7 +83,7 @@ func TestAgentSubmission_ApproveCreatesAgent(t *testing.T) {
 	if err := ApproveAgentSubmission(sub, 1, "再通过一次"); err == nil {
 		t.Error("重复审核通过应被拒绝")
 	}
-	DB.Model(&AiAgent{}).Count(&n)
+	models.DB.Model(&AiAgent{}).Count(&n)
 	if n != 1 {
 		t.Errorf("重复通过不应二次建条目，实际 %d 条", n)
 	}
@@ -100,12 +101,12 @@ func TestAgentSubmission_RejectKeepsOutOfSquare(t *testing.T) {
 		t.Fatal(err)
 	}
 	var n int64
-	DB.Model(&AiAgent{}).Count(&n)
+	models.DB.Model(&AiAgent{}).Count(&n)
 	if n != 0 {
 		t.Errorf("被拒稿件不应上架，实际 %d 条", n)
 	}
 	var got AgentSubmission
-	DB.First(&got, sub.ID)
+	models.DB.First(&got, sub.ID)
 	if got.Status != AgentSubRejected || got.ReviewNote == "" {
 		t.Errorf("应记录拒绝状态与原因，实际 %+v", got)
 	}

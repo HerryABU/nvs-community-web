@@ -2,6 +2,7 @@ package aihub
 
 import (
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 	"testing"
 	"time"
 )
@@ -17,9 +18,9 @@ func TestPublishAndLikeMedia(t *testing.T) {
 	if err := models.DB.Create(&u).Error; err != nil {
 		t.Fatalf("建用户失败：%v", err)
 	}
-	task := &models.AiMediaTask{
-		UserID: u.ID, Kind: models.AiKindImage, ModelID: 0, ModelName: "测试模型",
-		Prompt: "雨夜霓虹下的旧书店", Status: models.AiMediaSucceeded,
+	task := &ai.AiMediaTask{
+		UserID: u.ID, Kind: ai.AiKindImage, ModelID: 0, ModelName: "测试模型",
+		Prompt: "雨夜霓虹下的旧书店", Status: ai.AiMediaSucceeded,
 		Result: `{"images":["https://example.com/a.png"]}`, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	if err := models.DB.Create(task).Error; err != nil {
@@ -30,7 +31,7 @@ func TestPublishAndLikeMedia(t *testing.T) {
 	if err := PublishAiMedia(task.ID, u.ID, true, "", "国风"); err != nil {
 		t.Fatalf("发布失败：%v", err)
 	}
-	list, total, err := ListPublicMedia(models.AiKindImage, "国风", 1, 10)
+	list, total, err := ListPublicMedia(ai.AiKindImage, "国风", 1, 10)
 	if err != nil || total != 1 || len(list) != 1 {
 		t.Fatalf("公开列表异常：total=%d len=%d err=%v", total, len(list), err)
 	}
@@ -42,7 +43,7 @@ func TestPublishAndLikeMedia(t *testing.T) {
 	if err := LikeAiMedia(task.ID); err != nil {
 		t.Fatalf("点赞失败：%v", err)
 	}
-	var after models.AiMediaTask
+	var after ai.AiMediaTask
 	models.DB.Where("id = ?", task.ID).First(&after)
 	if after.Likes != 1 {
 		t.Fatalf("点赞数应为 1，得到 %d", after.Likes)
@@ -56,7 +57,7 @@ func TestPublishAndLikeMedia(t *testing.T) {
 	}
 
 	// 失败任务不可发布
-	failed := &models.AiMediaTask{UserID: u.ID, Kind: models.AiKindImage, Prompt: "x", Status: models.AiMediaFailed, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	failed := &ai.AiMediaTask{UserID: u.ID, Kind: ai.AiKindImage, Prompt: "x", Status: ai.AiMediaFailed, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	models.DB.Create(failed)
 	if err := PublishAiMedia(failed.ID, u.ID, true, "", ""); err == nil {
 		t.Fatalf("失败任务不应可发布")
@@ -66,7 +67,7 @@ func TestPublishAndLikeMedia(t *testing.T) {
 	if err := PublishAiMedia(task.ID, u.ID, false, "", "国风"); err != nil {
 		t.Fatalf("取消发布失败：%v", err)
 	}
-	if _, total2, _ := ListPublicMedia(models.AiKindImage, "", 1, 10); total2 != 0 {
+	if _, total2, _ := ListPublicMedia(ai.AiKindImage, "", 1, 10); total2 != 0 {
 		t.Fatalf("取消发布后仍可见：%d", total2)
 	}
 }

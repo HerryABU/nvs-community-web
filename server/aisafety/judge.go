@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"nvs-server/aiclient"
-	"nvs-server/models"
+	ai "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 )
 
@@ -39,7 +39,7 @@ type JudgeTurn struct {
 // JudgeInput 送审入参。
 type JudgeInput struct {
 	Config         *SafetyConfig
-	FallbackModel  *models.AiModel // 主模型：judge_model_id 与它相同即复用（用户明确要求「模型可以同一个」）
+	FallbackModel  *ai.AiModel // 主模型：judge_model_id 与它相同即复用（用户明确要求「模型可以同一个」）
 	UserID         uint
 	Username       string
 	SessionID      uint
@@ -174,18 +174,18 @@ func JudgeConversation(in JudgeInput) *JudgeVerdict {
 // resolveJudgeModel 选判定模型：
 //  1. 配了 judge_model_id → 用它；若它就是主模型（或已禁用），退回传入的主模型；
 //  2. 没配 → 自动挑一个启用的 chat 模型，优先非思考型（快、便宜、输出稳定）。
-func resolveJudgeModel(cfg *SafetyConfig, fallback *models.AiModel) *models.AiModel {
+func resolveJudgeModel(cfg *SafetyConfig, fallback *ai.AiModel) *ai.AiModel {
 	if cfg.JudgeModelID > 0 {
-		if m, err := models.GetEnabledAiModelOfKind(cfg.JudgeModelID, models.AiKindChat); err == nil && m != nil {
+		if m, err := ai.GetEnabledAiModelOfKind(cfg.JudgeModelID, ai.AiKindChat); err == nil && m != nil {
 			return m
 		}
 		if fallback != nil && fallback.ID == cfg.JudgeModelID && fallback.ID > 0 {
 			return fallback
 		}
 	}
-	list, err := models.ListAiModelsByKind(models.AiKindChat, true)
+	list, err := ai.ListAiModelsByKind(ai.AiKindChat, true)
 	if err == nil {
-		var pick *models.AiModel
+		var pick *ai.AiModel
 		for i := range list {
 			m := &list[i]
 			if m.BaseURL == "" || m.ModelID == "" {
@@ -542,7 +542,7 @@ func JudgeImage(images []string, text string) *JudgeVerdict {
 	var content string
 	var cerr error
 	// 多模态同样要走对的上游协议：Anthropic 用 Messages API，其余走 /chat/completions。
-	if models.NormalizeAiApiKind(m.ApiKind) == models.AiApiClaude {
+	if ai.NormalizeAiApiKind(m.ApiKind) == ai.AiApiClaude {
 		content, _, _, cerr = client.CompleteClaude(chatReq)
 	} else {
 		content, _, _, cerr = client.Complete(chatReq)

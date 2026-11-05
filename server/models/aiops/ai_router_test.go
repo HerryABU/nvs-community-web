@@ -6,6 +6,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 )
 
 func setupRouterDB(t *testing.T) *gorm.DB {
@@ -14,7 +15,7 @@ func setupRouterDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("打开测试库失败: %v", err)
 	}
-	if err := db.AutoMigrate(&models.AiModel{}, &models.AiCallLog{}, &models.PlatformConfig{}); err != nil {
+	if err := db.AutoMigrate(&ai.AiModel{}, &ai.AiCallLog{}, &models.PlatformConfig{}); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
 	old := models.DB
@@ -28,10 +29,10 @@ func setupRouterDB(t *testing.T) *gorm.DB {
 	return db
 }
 
-func mkModel(t *testing.T, name string, priceIn, priceOut int64, priority int, provider string) *models.AiModel {
+func mkModel(t *testing.T, name string, priceIn, priceOut int64, priority int, provider string) *ai.AiModel {
 	t.Helper()
-	m := &models.AiModel{
-		Name: name, Kind: models.AiKindChat, ModelID: name, BaseURL: "http://localhost",
+	m := &ai.AiModel{
+		Name: name, Kind: ai.AiKindChat, ModelID: name, BaseURL: "http://localhost",
 		PriceIn: priceIn, PriceOut: priceOut, Priority: priority,
 		ProviderHint: provider, Enabled: true, MaxTokens: 1024,
 	}
@@ -84,8 +85,8 @@ func TestPickFastestUsesLatency(t *testing.T) {
 
 	// 造延迟样本：slow=3000ms，fast=200ms
 	for i := 0; i < 3; i++ {
-		models.DB.Create(&models.AiCallLog{UserID: 1, ModelID: slow.ID, TokensIn: 1, TokensOut: 1, LatencyMs: 3000})
-		models.DB.Create(&models.AiCallLog{UserID: 1, ModelID: fast.ID, TokensIn: 1, TokensOut: 1, LatencyMs: 200})
+		models.DB.Create(&ai.AiCallLog{UserID: 1, ModelID: slow.ID, TokensIn: 1, TokensOut: 1, LatencyMs: 3000})
+		models.DB.Create(&ai.AiCallLog{UserID: 1, ModelID: fast.ID, TokensIn: 1, TokensOut: 1, LatencyMs: 200})
 	}
 	if err := SaveAiRouteConfig(AiRouteConfig{Strategy: RouteFastest}); err != nil {
 		t.Fatal(err)

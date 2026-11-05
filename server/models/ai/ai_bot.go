@@ -1,9 +1,10 @@
-package models
+package ai
 
 import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"nvs-server/models"
 	"strings"
 	"time"
 
@@ -52,20 +53,20 @@ func normalizeAiBotConfig(cfg AiBotConfig) AiBotConfig {
 
 // IsAiBotEnabled 机器人是否开启（默认关闭）
 func IsAiBotEnabled() bool {
-	return GetPlatformConfig(AiBotEnabledKey) == "true"
+	return models.GetPlatformConfig(AiBotEnabledKey) == "true"
 }
 
 // SetAiBotEnabled 设置机器人开关
 func SetAiBotEnabled(on bool) error {
 	if on {
-		return SetPlatformConfig(AiBotEnabledKey, "true")
+		return models.SetPlatformConfig(AiBotEnabledKey, "true")
 	}
-	return SetPlatformConfig(AiBotEnabledKey, "false")
+	return models.SetPlatformConfig(AiBotEnabledKey, "false")
 }
 
 // GetAiBotConfig 机器人配置
 func GetAiBotConfig() AiBotConfig {
-	raw := strings.TrimSpace(GetPlatformConfig(AiBotConfigKey))
+	raw := strings.TrimSpace(models.GetPlatformConfig(AiBotConfigKey))
 	if raw == "" {
 		return DefaultAiBotConfig()
 	}
@@ -83,15 +84,15 @@ func SetAiBotConfig(cfg AiBotConfig) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(AiBotConfigKey, string(raw))
+	return models.SetPlatformConfig(AiBotConfigKey, string(raw))
 }
 
 // ---------- 机器人用户 ----------
 
 // EnsureAiBotUser 确保机器人用户存在（幂等；返回用户 ID）
 func EnsureAiBotUser() (uint, error) {
-	var u User
-	if err := DB.Where("username = ?", AiBotUsername).First(&u).Error; err == nil {
+	var u models.User
+	if err := models.DB.Where("username = ?", AiBotUsername).First(&u).Error; err == nil {
 		return u.ID, nil
 	}
 	// 随机密码哈希：无人可知，等价于禁止登录
@@ -103,11 +104,11 @@ func EnsureAiBotUser() (uint, error) {
 	if err != nil {
 		return 0, err
 	}
-	bot := &User{
+	bot := &models.User{
 		Username: AiBotUsername, Email: AiBotUsername + "@system.local",
 		PasswordHash: hash, Nickname: AiBotNickname, Role: "reader",
 	}
-	if err := DB.Create(bot).Error; err != nil {
+	if err := models.DB.Create(bot).Error; err != nil {
 		return 0, err
 	}
 	return bot.ID, nil
@@ -135,7 +136,7 @@ func CheckAiBotQuota(userID uint, limit int) bool {
 		return true
 	}
 	var u AiBotUsage
-	if err := DB.Where("user_id = ? AND day = ?", userID, time.Now().Format("2006-01-02")).
+	if err := models.DB.Where("user_id = ? AND day = ?", userID, time.Now().Format("2006-01-02")).
 		First(&u).Error; err != nil {
 		return true
 	}
@@ -146,11 +147,11 @@ func CheckAiBotQuota(userID uint, limit int) bool {
 func RecordAiBotUsage(userID uint) {
 	day := time.Now().Format("2006-01-02")
 	var u AiBotUsage
-	if err := DB.Where("user_id = ? AND day = ?", userID, day).First(&u).Error; err != nil {
-		_ = DB.Create(&AiBotUsage{UserID: userID, Day: day, CallsUsed: 1, UpdatedAt: time.Now()}).Error
+	if err := models.DB.Where("user_id = ? AND day = ?", userID, day).First(&u).Error; err != nil {
+		_ = models.DB.Create(&AiBotUsage{UserID: userID, Day: day, CallsUsed: 1, UpdatedAt: time.Now()}).Error
 		return
 	}
-	_ = DB.Model(&AiBotUsage{}).Where("id = ?", u.ID).Updates(map[string]interface{}{
+	_ = models.DB.Model(&AiBotUsage{}).Where("id = ?", u.ID).Updates(map[string]interface{}{
 		"calls_used": u.CallsUsed + 1, "updated_at": time.Now(),
 	}).Error
 }
@@ -158,7 +159,7 @@ func RecordAiBotUsage(userID uint) {
 // CountTodayAiBotUsage 今日已召唤次数（status 展示）
 func CountTodayAiBotUsage(userID uint) int64 {
 	var u AiBotUsage
-	if err := DB.Where("user_id = ? AND day = ?", userID, time.Now().Format("2006-01-02")).
+	if err := models.DB.Where("user_id = ? AND day = ?", userID, time.Now().Format("2006-01-02")).
 		First(&u).Error; err != nil {
 		return 0
 	}

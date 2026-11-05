@@ -1,4 +1,6 @@
-package models
+package ai
+
+import "nvs-server/models"
 
 import "testing"
 
@@ -80,7 +82,7 @@ func TestEnsureAiBotUser(t *testing.T) {
 	if err != nil || id2 != id1 {
 		t.Fatalf("应幂等返回同一 ID：%d vs %d", id2, id1)
 	}
-	u, uerr := GetUserByID(id1)
+	u, uerr := models.GetUserByID(id1)
 	if uerr != nil || u.Username != AiBotUsername || u.Nickname != AiBotNickname {
 		t.Fatalf("机器人用户属性异常: %+v err=%v", u, uerr)
 	}

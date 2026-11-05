@@ -1,7 +1,9 @@
 package aihub
 
-import "nvs-server/models"
-
+import (
+	"nvs-server/models"
+	ai "nvs-server/models/ai"
+)
 import "testing"
 
 // TestModelKeyPool 密钥池：取用、失败计数、达阈值自动停用、重置、回退
@@ -11,7 +13,7 @@ func TestModelKeyPool(t *testing.T) {
 	models.DB = db
 	defer func() { models.DB = old }()
 
-	m := &models.AiModel{Name: "pool-test", Kind: models.AiKindChat, ModelID: "x", BaseURL: "https://x", Enabled: true}
+	m := &ai.AiModel{Name: "pool-test", Kind: ai.AiKindChat, ModelID: "x", BaseURL: "https://x", Enabled: true}
 	if err := models.DB.Create(m).Error; err != nil {
 		t.Fatalf("建模型失败：%v", err)
 	}
@@ -82,13 +84,13 @@ func TestAiStyleCRUD(t *testing.T) {
 		t.Fatalf("不同类型允许同名：%v", err)
 	}
 
-	task := &models.AiMediaTask{UserID: 1, Kind: models.AiKindImage, Prompt: "p", Status: models.AiMediaSucceeded, Style: "写实摄影"}
+	task := &ai.AiMediaTask{UserID: 1, Kind: ai.AiKindImage, Prompt: "p", Status: ai.AiMediaSucceeded, Style: "写实摄影"}
 	models.DB.Create(task)
 
 	if err := UpdateAiStyle(st.ID, "写实摄影PRO", 3, true); err != nil {
 		t.Fatalf("改名失败：%v", err)
 	}
-	var after models.AiMediaTask
+	var after ai.AiMediaTask
 	models.DB.Where("id = ?", task.ID).First(&after)
 	if after.Style != "写实摄影PRO" {
 		t.Fatalf("改名未级联作品：%q", after.Style)

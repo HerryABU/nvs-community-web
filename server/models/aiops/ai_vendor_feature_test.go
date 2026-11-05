@@ -2,6 +2,7 @@ package aiops
 
 import (
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 )
 import "testing"
@@ -22,7 +23,7 @@ func TestAiVendorCRUD(t *testing.T) {
 	}
 
 	// 关联一个模型
-	m := &models.AiModel{Name: "gpt-test", Kind: models.AiKindChat, ModelID: "gpt-test", BaseURL: "https://x", Vendor: "OpenAI", Enabled: true}
+	m := &ai.AiModel{Name: "gpt-test", Kind: ai.AiKindChat, ModelID: "gpt-test", BaseURL: "https://x", Vendor: "OpenAI", Enabled: true}
 	if err := models.DB.Create(m).Error; err != nil {
 		t.Fatalf("建模型失败：%v", err)
 	}
@@ -34,14 +35,14 @@ func TestAiVendorCRUD(t *testing.T) {
 	if err := UpdateAiVendor(v.ID, "OpenAI Inc", 3, true); err != nil {
 		t.Fatalf("改名失败：%v", err)
 	}
-	var after models.AiModel
+	var after ai.AiModel
 	models.DB.Where("id = ?", m.ID).First(&after)
 	if after.Vendor != "OpenAI Inc" {
 		t.Fatalf("改名未级联到模型：%q", after.Vendor)
 	}
 
 	// 模型改走后即可删除
-	models.DB.Model(&models.AiModel{}).Where("id = ?", m.ID).UpdateColumn("vendor", "其他")
+	models.DB.Model(&ai.AiModel{}).Where("id = ?", m.ID).UpdateColumn("vendor", "其他")
 	if err := DeleteAiVendor(v.ID); err != nil {
 		t.Fatalf("无引用应可删除：%v", err)
 	}

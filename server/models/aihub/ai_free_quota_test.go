@@ -1,7 +1,9 @@
 package aihub
 
-import "nvs-server/models"
-
+import (
+	"nvs-server/models"
+	ai "nvs-server/models/ai"
+)
 import "testing"
 
 func TestAiFreeQuotaDefaultOff(t *testing.T) {
@@ -109,31 +111,31 @@ func TestAiCallLogFreeSettlement(t *testing.T) {
 	}
 	m := seedAiModel(t, 2, 4, 1024)
 	// 免费调用：结算后 cost=0、不产生代币流水
-	freeLog, err := models.CreateAiCallLog(1, m, "continue", "", 0, 1000, 500, true)
+	freeLog, err := ai.CreateAiCallLog(1, m, "continue", "", 0, 1000, 500, true)
 	if err != nil {
 		t.Fatalf("创建免费调用失败: %v", err)
 	}
-	nb, err := models.SettleAiCallLog(freeLog.ID, 1000, 500)
+	nb, err := ai.SettleAiCallLog(freeLog.ID, 1000, 500)
 	if err != nil {
 		t.Fatalf("结算失败: %v", err)
 	}
 	if nb != 0 {
 		t.Fatalf("免费调用不应改变余额，实际 %d", nb)
 	}
-	var log models.AiCallLog
+	var log ai.AiCallLog
 	if err := models.DB.Where("id = ?", freeLog.ID).First(&log).Error; err != nil {
 		t.Fatalf("查询失败: %v", err)
 	}
-	if log.Status != models.AiCallSettled || log.Cost != 0 {
+	if log.Status != ai.AiCallSettled || log.Cost != 0 {
 		t.Fatalf("免费调用应 settled 且 cost=0，实际 %s/%d", log.Status, log.Cost)
 	}
 	// 付费调用：正常结算扣款（模型价 2/4 → 1000 入 = 2，500 出 = 2，共 4）
-	payLog, err := models.CreateAiCallLog(2, m, "continue", "", 0, 1000, 500, false)
+	payLog, err := ai.CreateAiCallLog(2, m, "continue", "", 0, 1000, 500, false)
 	if err != nil {
 		t.Fatalf("创建付费调用失败: %v", err)
 	}
 	models.AppendTokenLedger(2, models.TokenTypeRechargeCard, 10, "", 0, "测试充值", "")
-	nb, err = models.SettleAiCallLog(payLog.ID, 1000, 500)
+	nb, err = ai.SettleAiCallLog(payLog.ID, 1000, 500)
 	if err != nil {
 		t.Fatalf("付费结算失败: %v", err)
 	}

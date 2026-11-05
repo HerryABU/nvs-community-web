@@ -12,6 +12,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 	aicost "nvs-server/models/aicost"
 	aiops "nvs-server/models/aiops"
 )
@@ -34,7 +35,7 @@ func AdminChannelBalanceOverview(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	var ms []models.AiModel
+	var ms []aim.AiModel
 	if err := models.DB.Order("base_url, id").Find(&ms).Error; err != nil {
 		utils.InternalError(c, "读取模型失败")
 		return
@@ -102,7 +103,7 @@ func AdminChannelBalanceOverview(c *gin.Context) {
 		// 取该渠道下第一个可用密钥（解密失败仍尝试，部分渠道无需密钥）
 		key := decryptKeyByBaseURL(g.BaseURL)
 
-		var rep models.AiModel
+		var rep aim.AiModel
 		b := aiclient.ChannelBalance{}
 		if err := models.DB.Where("base_url = ?", g.BaseURL).Order("id").First(&rep).Error; err == nil {
 			// 按该渠道代表模型配置的「余额查询方式」（官方/中转站/自定义）
@@ -206,7 +207,7 @@ func AdminChannelBalanceOverview(c *gin.Context) {
 
 // decryptAccountTokenByBaseURL 找该渠道下第一个已配置的系统访问令牌并解密。
 func decryptAccountTokenByBaseURL(baseURL string) (string, error) {
-	var m models.AiModel
+	var m aim.AiModel
 	if err := models.DB.Where("base_url = ? AND account_token_enc != ''", baseURL).
 		Order("id").First(&m).Error; err != nil {
 		return "", err
@@ -217,7 +218,7 @@ func decryptAccountTokenByBaseURL(baseURL string) (string, error) {
 // decryptKeyByBaseURL 找该渠道下第一个可用密钥并解密。
 // 放在这里而不是遍历 handler 里，是为了让「按渠道查余额」的逻辑自洽。
 func decryptKeyByBaseURL(baseURL string) string {
-	var m models.AiModel
+	var m aim.AiModel
 	if err := models.DB.Where("base_url = ? AND api_key_enc != ''", baseURL).
 		Order("id").First(&m).Error; err != nil {
 		return ""

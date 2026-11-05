@@ -12,6 +12,7 @@ import (
 
 	"gorm.io/gorm"
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 )
 
 // ==================== AI 渠道卡密池（按渠道，而不是按模型） ====================
@@ -239,7 +240,7 @@ func GetChannelKeyStats() map[string]ChannelKeyStats {
 // MigrateModelKeysToChannels 把老配置（按模型存的密钥）迁到渠道卡密池。
 //
 // 幂等：按 (base_url, 指纹) 判重，重复启动不会重复插入。
-// 只读不改老数据：models.AiModel.ApiKeyEnc 与 ai_model_keys 保持原样，
+// 只读不改老数据：ai.AiModel.ApiKeyEnc 与 ai_model_keys 保持原样，
 // 作为渠道池为空时的兜底 —— 升级后行为不变，但新配置都走渠道池。
 //
 // 返回新增条数，便于启动日志里给个确定结论。
@@ -247,7 +248,7 @@ func MigrateModelKeysToChannels() (int, error) {
 	if models.DB == nil {
 		return 0, nil
 	}
-	var list []models.AiModel
+	var list []ai.AiModel
 	if err := models.DB.Where("base_url <> ''").Find(&list).Error; err != nil {
 		return 0, err
 	}

@@ -16,6 +16,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 	aicost "nvs-server/models/aicost"
 	aihub "nvs-server/models/aihub"
 )
@@ -24,7 +25,7 @@ import (
 
 // AiHubStatus GET /api/ai/hub/status — 工作台总状态（分类型模型 + 余额）
 func AiHubStatus(c *gin.Context) {
-	aiEnabled := models.IsAiEnabled()
+	aiEnabled := aim.IsAiEnabled()
 	tokenEnabled := models.IsTokenEnabled()
 	userID := hctx.CurrentUserID(c)
 	out := gin.H{
@@ -40,7 +41,7 @@ func AiHubStatus(c *gin.Context) {
 	if aiEnabled {
 		collect := func(kind string) []gin.H {
 			items := []gin.H{}
-			list, err := models.ListUserVisibleAiModelsByKind(kind, true)
+			list, err := aim.ListUserVisibleAiModelsByKind(kind, true)
 			if err != nil {
 				return items
 			}
@@ -50,7 +51,7 @@ func AiHubStatus(c *gin.Context) {
 					"id": m.ID, "name": m.Name, "model_id": m.ModelID,
 					"price_in": m.PriceIn, "price_out": m.PriceOut,
 					"price_call": m.PriceCall, "max_tokens": m.MaxTokens,
-					"api_kind":      models.NormalizeAiApiKind(m.ApiKind),
+					"api_kind":      aim.NormalizeAiApiKind(m.ApiKind),
 					"provider_hint": m.ProviderHint, "note": m.Note,
 					"vendor": m.Vendor,
 					// 思考型：前端在模型选择处给出提示，避免用户以为「卡住了」
@@ -59,9 +60,9 @@ func AiHubStatus(c *gin.Context) {
 			}
 			return items
 		}
-		out["chat_models"] = collect(models.AiKindChat)
-		out["image_models"] = collect(models.AiKindImage)
-		out["video_models"] = collect(models.AiKindVideo)
+		out["chat_models"] = collect(aim.AiKindChat)
+		out["image_models"] = collect(aim.AiKindImage)
+		out["video_models"] = collect(aim.AiKindVideo)
 	}
 	utils.Success(c, out)
 }
@@ -69,7 +70,7 @@ func AiHubStatus(c *gin.Context) {
 // AiHubSessions GET /api/ai/sessions — 我的会话列表
 func AiHubSessions(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
-	list, err := models.ListAiChatSessions(userID, 100)
+	list, err := aim.ListAiChatSessions(userID, 100)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -81,7 +82,7 @@ func AiHubSessions(c *gin.Context) {
 func AiHubSessionMessages(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	s, err := models.GetAiChatSession(uint(id), userID)
+	s, err := aim.GetAiChatSession(uint(id), userID)
 	if err != nil {
 		utils.NotFound(c, "会话不存在")
 		return
@@ -99,7 +100,7 @@ func AiHubSessionMessages(c *gin.Context) {
 func AiHubDeleteSession(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := models.DeleteAiChatSession(uint(id), userID); err != nil {
+	if err := aim.DeleteAiChatSession(uint(id), userID); err != nil {
 		utils.InternalError(c, "删除失败")
 		return
 	}
@@ -172,7 +173,7 @@ func resolveContextLimit(flagsLimit, userLimit int, memory *bool) int {
 }
 
 func AiHubChatStream(c *gin.Context) {
-	if !models.IsAiEnabled() {
+	if !aim.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
@@ -260,7 +261,7 @@ func AiHubChatStream(c *gin.Context) {
 	}
 
 	// ── 模型解析：BYOK 用用户自备密钥（伪模型，不落平台池） ──
-	var m *models.AiModel
+	var m *aim.AiModel
 	var uk *aicost.UserAiKey
 	byokModel := strings.TrimSpace(req.ByokModel)
 	if req.Byok {
@@ -278,9 +279,9 @@ func AiHubChatStream(c *gin.Context) {
 			utils.BadRequest(c, "自备密钥不可用：请先在「我的钱包 → 上游密钥」中添加")
 			return
 		}
-		m = &models.AiModel{ID: 0, Name: "自备密钥 · " + uk.Label, MaxTokens: 2048, Temperature: 0.7}
+		m = &aim.AiModel{ID: 0, Name: "自备密钥 · " + uk.Label, MaxTokens: 2048, Temperature: 0.7}
 	} else {
-		mm, err := models.GetEnabledAiModelOfKind(req.ModelID, models.AiKindChat)
+		mm, err := aim.GetEnabledAiModelOfKind(req.ModelID, aim.AiKindChat)
 		if err != nil || mm == nil {
 			utils.BadRequest(c, "模型不可用")
 			return
@@ -289,9 +290,9 @@ func AiHubChatStream(c *gin.Context) {
 	}
 
 	// ── 会话 ──
-	var session *models.AiChatSession
+	var session *aim.AiChatSession
 	if req.SessionID > 0 {
-		s, e := models.GetAiChatSession(req.SessionID, userID)
+		s, e := aim.GetAiChatSession(req.SessionID, userID)
 		if e != nil {
 			utils.NotFound(c, "会话不存在")
 			return
@@ -300,11 +301,11 @@ func AiHubChatStream(c *gin.Context) {
 	} else {
 		var agentName string
 		if req.AgentID > 0 {
-			if a, e := models.GetAiAgent(req.AgentID); e == nil && a.Enabled {
+			if a, e := aim.GetAiAgent(req.AgentID); e == nil && a.Enabled {
 				agentName = a.Name
 			}
 		}
-		s, e := models.CreateAiChatSession(userID, req.AgentID, agentName, m.ID)
+		s, e := aim.CreateAiChatSession(userID, req.AgentID, agentName, m.ID)
 		if e != nil {
 			utils.InternalError(c, "创建会话失败")
 			return
@@ -335,7 +336,7 @@ func AiHubChatStream(c *gin.Context) {
 	// 默认接在当前活跃叶子后面；编辑/重新生成时接到「原消息的父节点」后面，
 	// 于是新消息与原消息成为兄弟分支，互不覆盖、可来回切。
 	parentID := session.ActiveLeafID
-	var regenUser *models.AiChatMessage
+	var regenUser *aim.AiChatMessage
 	if req.EditMsgID > 0 {
 		old, e := aihub.GetAiChatMessage(req.EditMsgID, session.ID)
 		if e != nil || old == nil {
@@ -422,7 +423,7 @@ func AiHubChatStream(c *gin.Context) {
 
 	systemPrompt := "你是一位乐于助人的中文写作助手。"
 	if session.AgentID > 0 {
-		if a, e := models.GetAiAgent(session.AgentID); e == nil {
+		if a, e := aim.GetAiAgent(session.AgentID); e == nil {
 			systemPrompt = a.SystemPrompt
 		}
 	}
@@ -481,9 +482,9 @@ func AiHubChatStream(c *gin.Context) {
 	}
 
 	// ── 预检（不足直接 429，不开流） ──
-	tokensIn := models.EstimateTokens(effMsg)
+	tokensIn := aim.EstimateTokens(effMsg)
 	for _, h := range history[start:] {
-		tokensIn += models.EstimateTokens(h.Content)
+		tokensIn += aim.EstimateTokens(h.Content)
 	}
 	// 附件按经验值估算（图片/文档由上游自己计量，这里只用于预检与额度判定）：
 	// 图片约 800 tokens/张，文档按大小折算（每 4 字节 base64 ≈ 1 token，封顶 20k）
@@ -509,8 +510,8 @@ func AiHubChatStream(c *gin.Context) {
 			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
 			return
 		}
-		if _, ok := models.PrecheckAiBalance(userID, m, tokensIn, tokensOut); !ok {
-			cost := models.EstimateAiCost(m, tokensIn, tokensOut)
+		if _, ok := aim.PrecheckAiBalance(userID, m, tokensIn, tokensOut); !ok {
+			cost := aim.EstimateAiCost(m, tokensIn, tokensOut)
 			utils.Error(c, 429, 42902, fmt.Sprintf("%s不足：本次约需 %d，当前余额 %d，请先充值",
 				models.GetTokenName(), cost, models.GetTokenBalance(userID)))
 			return
@@ -519,7 +520,7 @@ func AiHubChatStream(c *gin.Context) {
 
 	// ── 资金闸门：单次上限 + 二次确认（BYOK 不涉平台代币，跳过） ──
 	if !req.Byok && !freeOK {
-		estCost := models.EstimateAiCost(m, tokensIn, tokensOut)
+		estCost := aim.EstimateAiCost(m, tokensIn, tokensOut)
 		allowed, needConfirm, reason := aihub.CallGuard(estCost, req.Confirm)
 		if !allowed {
 			utils.BadRequest(c, reason+"（未扣款）")
@@ -544,9 +545,9 @@ func AiHubChatStream(c *gin.Context) {
 			return
 		}
 		userMsgID = um.ID
-		models.TouchAiChatSession(session.ID, storeMsg)
+		aim.TouchAiChatSession(session.ID, storeMsg)
 	}
-	callLog, lerr := models.CreateAiCallLog(userID, m, "chat", "session", session.ID, tokensIn, tokensOut, freeOK || req.Byok)
+	callLog, lerr := aim.CreateAiCallLog(userID, m, "chat", "session", session.ID, tokensIn, tokensOut, freeOK || req.Byok)
 	if lerr != nil {
 		utils.InternalError(c, "记录调用失败")
 		return
@@ -557,7 +558,7 @@ func AiHubChatStream(c *gin.Context) {
 
 	// ── 扣子（Coze）智能体：走 Coze v3/chat 协议（非流式，整段回吐） ──
 	if session.AgentID > 0 {
-		if ag, e := models.GetAiAgent(session.AgentID); e == nil && ag.IsCoze() {
+		if ag, e := aim.GetAiAgent(session.AgentID); e == nil && ag.IsCoze() {
 			runCozeChat(c, ag, callLog, session, userID, msg)
 			return
 		}
@@ -572,7 +573,7 @@ func AiHubChatStream(c *gin.Context) {
 		apiKey, kerr = uk.DecryptApiKey()
 	}
 	if kerr != nil {
-		models.FailAiCallLog(callLog.ID, "密钥解密失败")
+		aim.FailAiCallLog(callLog.ID, "密钥解密失败")
 		sseEvent(c, gin.H{"error": "模型密钥解密失败，请联系站长"})
 		return
 	}
@@ -604,7 +605,7 @@ func AiHubChatStream(c *gin.Context) {
 	}
 	// 协议族分发：Claude Messages API 与 OpenAI 兼容协议的事件流不同
 	var streamCh <-chan aiclient.StreamChunk
-	if models.NormalizeAiApiKind(m.ApiKind) == models.AiApiClaude {
+	if aim.NormalizeAiApiKind(m.ApiKind) == aim.AiApiClaude {
 		streamCh = client.CompleteStreamClaude(chatReq)
 	} else {
 		streamCh = client.CompleteStream(chatReq)
@@ -670,7 +671,7 @@ func AiHubChatStream(c *gin.Context) {
 	if blockedByGuard {
 		// 上游 token 已经烧了，但用户没拿到内容 → 不扣费、不占免费额度，成本由站长承担。
 		// 记成失败而不是成功结算，否则账单上和「正常回答」分不开。
-		models.FailAiCallLog(callLog.ID, "内容安全拦截："+og.Reason())
+		aim.FailAiCallLog(callLog.ID, "内容安全拦截："+og.Reason())
 		// 绥靖模式：输出侧被拦也「无感」——把危险内容改写成管理员选定的引导内容，
 		// 当作一次正常回答返回（不标 blocked / terminated），并静默入档。
 		if aisafety.NormalizeMode(safetyCfg.TerminateMode) == aisafety.TerminateAppease {
@@ -680,7 +681,7 @@ func AiHubChatStream(c *gin.Context) {
 			if am != nil && am.ID > 0 {
 				aihub.SetActiveLeaf(session.ID, am.ID)
 			}
-			models.TouchAiChatSession(session.ID, "")
+			aim.TouchAiChatSession(session.ID, "")
 			sseEvent(c, gin.H{
 				"content":    text,
 				"session_id": session.ID, "message_id": am.ID,
@@ -703,7 +704,7 @@ func AiHubChatStream(c *gin.Context) {
 		if am != nil && am.ID > 0 {
 			aihub.SetActiveLeaf(session.ID, am.ID)
 		}
-		models.TouchAiChatSession(session.ID, "")
+		aim.TouchAiChatSession(session.ID, "")
 		sseEvent(c, gin.H{
 			"replace": text, "blocked": true, "terminated": term.Terminated,
 			"terminate_mode": term.Mode, "reason": og.Reason(),
@@ -721,7 +722,7 @@ func AiHubChatStream(c *gin.Context) {
 		if !req.Byok && lease != nil {
 			lease.Fail()
 		}
-		models.FailAiCallLog(callLog.ID, streamErr)
+		aim.FailAiCallLog(callLog.ID, streamErr)
 		errMsg := "AI 调用失败：" + streamErr
 		// 文档抽不出正文时会回退成「原样发文件」（file content part），
 		// 而只有少数上游（如 Claude）支持该形态。此时补一句人话，指明怎么解。
@@ -743,7 +744,7 @@ func AiHubChatStream(c *gin.Context) {
 		answerInReasoning = true
 	}
 	if sb == "" {
-		models.FailAiCallLog(callLog.ID, "上游未返回内容")
+		aim.FailAiCallLog(callLog.ID, "上游未返回内容")
 		sseEvent(c, gin.H{"error": "AI 未返回内容，未扣款"})
 		return
 	}
@@ -751,14 +752,14 @@ func AiHubChatStream(c *gin.Context) {
 		realIn = tokensIn
 	}
 	if realOut <= 0 {
-		realOut = models.EstimateTokens(sb)
+		realOut = aim.EstimateTokens(sb)
 	}
-	nb, serr := models.SettleAiCallLog(callLog.ID, realIn, realOut)
+	nb, serr := aim.SettleAiCallLog(callLog.ID, realIn, realOut)
 	if serr != nil {
 		sseEvent(c, gin.H{"error": fmt.Sprintf("结算失败：%v（未扣款）", serr)})
 		return
 	}
-	cost := models.EstimateAiCost(m, realIn, realOut)
+	cost := aim.EstimateAiCost(m, realIn, realOut)
 	if freeOK {
 		_ = aihub.RecordAiFreeUsage(userID, 1, realIn+realOut)
 		cost = 0
@@ -772,8 +773,8 @@ func AiHubChatStream(c *gin.Context) {
 	if am != nil && am.ID > 0 {
 		aihub.SetActiveLeaf(session.ID, am.ID)
 	}
-	models.TouchAiAgent(session.AgentID)
-	models.TouchAiChatSession(session.ID, "")
+	aim.TouchAiAgent(session.AgentID)
+	aim.TouchAiChatSession(session.ID, "")
 	sseEvent(c, gin.H{
 		"done":          true,
 		"session_id":    session.ID,

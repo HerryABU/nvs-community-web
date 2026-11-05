@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 	"strings"
 )
 
@@ -112,7 +113,7 @@ func SetCostRate(r CostRate) error {
 // 返回 (比例, 来源) —— 来源为 "channel" / "global" / "none"，前端据此标注可信度。
 func ResolveCostRate(baseURL string) (CostRate, string) {
 	if strings.TrimSpace(baseURL) != "" {
-		var m models.AiModel
+		var m ai.AiModel
 		if err := models.DB.Where("base_url = ? AND (rate_real_amount > 0 OR rate_virtual_amount > 0)", baseURL).
 			Order("id").First(&m).Error; err == nil {
 			r := CostRate{

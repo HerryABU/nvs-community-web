@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 	aicost "nvs-server/models/aicost"
 	aihub "nvs-server/models/aihub"
 	aiops "nvs-server/models/aiops"
@@ -59,12 +60,12 @@ func aiActionValid(action string) bool {
 
 // AiStatus GET /api/ai/status — AI 可用性与我的余额/可用模型
 func AiStatus(c *gin.Context) {
-	aiEnabled := models.IsAiEnabled()
+	aiEnabled := aim.IsAiEnabled()
 	tokenEnabled := models.IsTokenEnabled()
 	userID := hctx.CurrentUserID(c)
 	var modelList []gin.H
 	if aiEnabled {
-		list, err := models.ListAiModelsByKind(models.AiKindChat, true)
+		list, err := aim.ListAiModelsByKind(aim.AiKindChat, true)
 		if err == nil {
 			for i := range list {
 				m := &list[i]
@@ -87,7 +88,7 @@ func AiStatus(c *gin.Context) {
 
 // AiEstimate POST /api/ai/estimate — 预估费用（不扣款）
 func AiEstimate(c *gin.Context) {
-	if !models.IsAiEnabled() {
+	if !aim.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
@@ -101,17 +102,17 @@ func AiEstimate(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	m, err := models.GetEnabledAiModel(req.ModelID)
+	m, err := aim.GetEnabledAiModel(req.ModelID)
 	if err != nil || m == nil {
 		utils.BadRequest(c, "模型不可用")
 		return
 	}
-	tokensIn := models.EstimateTokens(req.Text)
+	tokensIn := aim.EstimateTokens(req.Text)
 	tokensOut := req.MaxTokens
 	if tokensOut <= 0 {
 		tokensOut = m.MaxTokens
 	}
-	cost := models.EstimateAiCost(m, tokensIn, tokensOut)
+	cost := aim.EstimateAiCost(m, tokensIn, tokensOut)
 	freeOK, _, _ := aihub.CheckAiFreeQuota(userID, tokensIn+tokensOut)
 	utils.Success(c, gin.H{
 		"tokens_in":     tokensIn,
@@ -125,7 +126,7 @@ func AiEstimate(c *gin.Context) {
 
 // AiComplete POST /api/ai/complete — 调用上游并按 usage 计费
 func AiComplete(c *gin.Context) {
-	if !models.IsAiEnabled() {
+	if !aim.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
@@ -181,7 +182,7 @@ func AiComplete(c *gin.Context) {
 			utils.BadRequest(c, "使用自备密钥时需填写上游模型标识")
 			return
 		}
-		tokensIn := models.EstimateTokens(text) + memoryTokens
+		tokensIn := aim.EstimateTokens(text) + memoryTokens
 		tokensOut := req.MaxTokens
 		if tokensOut <= 0 {
 			tokensOut = 2048
@@ -203,8 +204,8 @@ func AiComplete(c *gin.Context) {
 			utils.InternalError(c, "自备密钥解密失败，请删除后重新添加")
 			return
 		}
-		pseudo := &models.AiModel{ID: 0, Name: "自备密钥 · " + uk.Label}
-		callLog, lerr := models.CreateAiCallLog(userID, pseudo, action, req.RefType, req.RefID, tokensIn, tokensOut, true)
+		pseudo := &aim.AiModel{ID: 0, Name: "自备密钥 · " + uk.Label}
+		callLog, lerr := aim.CreateAiCallLog(userID, pseudo, action, req.RefType, req.RefID, tokensIn, tokensOut, true)
 		if lerr != nil {
 			utils.InternalError(c, "记录调用失败")
 			return
@@ -224,7 +225,7 @@ func AiComplete(c *gin.Context) {
 			Temperature: temp,
 		})
 		if cerr != nil {
-			models.FailAiCallLog(callLog.ID, cerr.Error())
+			aim.FailAiCallLog(callLog.ID, cerr.Error())
 			utils.BadRequest(c, "AI 调用失败："+cerr.Error())
 			return
 		}
@@ -232,9 +233,9 @@ func AiComplete(c *gin.Context) {
 			realIn = tokensIn
 		}
 		if realOut <= 0 {
-			realOut = models.EstimateTokens(content)
+			realOut = aim.EstimateTokens(content)
 		}
-		if _, serr := models.SettleAiCallLog(callLog.ID, realIn, realOut); serr != nil {
+		if _, serr := aim.SettleAiCallLog(callLog.ID, realIn, realOut); serr != nil {
 			utils.Error(c, 429, 42902, fmt.Sprintf("结算失败：%v", serr))
 			return
 		}
@@ -251,12 +252,12 @@ func AiComplete(c *gin.Context) {
 		return
 	}
 
-	m, err := models.GetEnabledAiModel(req.ModelID)
+	m, err := aim.GetEnabledAiModel(req.ModelID)
 	if err != nil || m == nil {
 		utils.BadRequest(c, "模型不可用")
 		return
 	}
-	tokensIn := models.EstimateTokens(text) + memoryTokens
+	tokensIn := aim.EstimateTokens(text) + memoryTokens
 	tokensOut := req.MaxTokens
 	if tokensOut <= 0 {
 		tokensOut = m.MaxTokens
@@ -272,8 +273,8 @@ func AiComplete(c *gin.Context) {
 			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
 			return
 		}
-		if _, ok := models.PrecheckAiBalance(userID, m, tokensIn, tokensOut); !ok {
-			cost := models.EstimateAiCost(m, tokensIn, tokensOut)
+		if _, ok := aim.PrecheckAiBalance(userID, m, tokensIn, tokensOut); !ok {
+			cost := aim.EstimateAiCost(m, tokensIn, tokensOut)
 			utils.Error(c, 429, 42902, fmt.Sprintf("%s不足：本次约需 %d，当前余额 %d，请先充值",
 				models.GetTokenName(), cost, models.GetTokenBalance(userID)))
 			return
@@ -286,7 +287,7 @@ func AiComplete(c *gin.Context) {
 		return
 	}
 	// pending 流水（失败也不扣款的凭据）
-	callLog, lerr := models.CreateAiCallLog(userID, m, action, req.RefType, req.RefID, tokensIn, tokensOut, freeOK)
+	callLog, lerr := aim.CreateAiCallLog(userID, m, action, req.RefType, req.RefID, tokensIn, tokensOut, freeOK)
 	if lerr != nil {
 		utils.InternalError(c, "记录调用失败")
 		return
@@ -298,7 +299,7 @@ func AiComplete(c *gin.Context) {
 	}
 	client := aiclient.NewClient(m.BaseURL, apiKey, 120*time.Second)
 	completeFn := client.Complete
-	if models.NormalizeAiApiKind(m.ApiKind) == models.AiApiClaude {
+	if aim.NormalizeAiApiKind(m.ApiKind) == aim.AiApiClaude {
 		completeFn = client.CompleteClaude // Anthropic Messages API
 	}
 	content, realIn, realOut, cerr := completeFn(aiclient.ChatRequest{
@@ -311,7 +312,7 @@ func AiComplete(c *gin.Context) {
 		Temperature: temp,
 	})
 	if cerr != nil {
-		models.FailAiCallLog(callLog.ID, cerr.Error())
+		aim.FailAiCallLog(callLog.ID, cerr.Error())
 		utils.BadRequest(c, "AI 调用失败："+cerr.Error())
 		return
 	}
@@ -319,14 +320,14 @@ func AiComplete(c *gin.Context) {
 		realIn = tokensIn
 	}
 	if realOut <= 0 {
-		realOut = models.EstimateTokens(content)
+		realOut = aim.EstimateTokens(content)
 	}
-	nb, serr := models.SettleAiCallLog(callLog.ID, realIn, realOut)
+	nb, serr := aim.SettleAiCallLog(callLog.ID, realIn, realOut)
 	if serr != nil {
 		utils.Error(c, 429, 42902, fmt.Sprintf("结算失败：%v（未扣款）", serr))
 		return
 	}
-	cost := models.EstimateAiCost(m, realIn, realOut)
+	cost := aim.EstimateAiCost(m, realIn, realOut)
 	if freeOK {
 		// 免费额度调用：记入当日免费用量（1 次 + 真实 tokens）
 		_ = aihub.RecordAiFreeUsage(userID, 1, realIn+realOut)

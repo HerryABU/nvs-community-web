@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 	"nvs-server/security"
 )
 
@@ -168,7 +169,7 @@ func ListAgents(groupID uint) ([]Agent, error) {
 		for id := range modelIDs {
 			keys = append(keys, id)
 		}
-		var ms []models.AiModel
+		var ms []ai.AiModel
 		models.DB.Select("id, name").Where("id IN ?", keys).Find(&ms)
 		nameOf := map[uint]string{}
 		for _, m := range ms {

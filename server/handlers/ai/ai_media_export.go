@@ -14,7 +14,6 @@ import (
 	"net/url"
 	"nvs-server/config"
 	"nvs-server/handlers/hctx"
-	"nvs-server/models"
 	"nvs-server/utils"
 	"os"
 	"path"
@@ -24,6 +23,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 )
 
 // ==================== AI 出图：附件上传 + 历史导出（gap-audit #17）====================
@@ -110,7 +110,7 @@ func ExportMediaTask(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	task, err := models.GetAiMediaTask(uint(id), uid)
+	task, err := aim.GetAiMediaTask(uint(id), uid)
 	if err != nil || task == nil {
 		utils.NotFound(c, "任务不存在")
 		return
@@ -121,7 +121,7 @@ func ExportMediaTask(c *gin.Context) {
 		c.JSON(http.StatusOK, buildExportItem(*task, nil))
 		return
 	}
-	buf, err := zipMediaTasks([]models.AiMediaTask{*task})
+	buf, err := zipMediaTasks([]aim.AiMediaTask{*task})
 	if err != nil {
 		utils.InternalError(c, "打包失败")
 		return
@@ -138,7 +138,7 @@ func ExportMediaHistory(c *gin.Context) {
 		return
 	}
 	kind := strings.TrimSpace(c.Query("kind"))
-	if kind != "" && kind != models.AiKindImage && kind != models.AiKindVideo {
+	if kind != "" && kind != aim.AiKindImage && kind != aim.AiKindVideo {
 		utils.BadRequest(c, "kind 需为 image 或 video")
 		return
 	}
@@ -153,7 +153,7 @@ func ExportMediaHistory(c *gin.Context) {
 		until = t.AddDate(0, 1, 0)
 	}
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "200"))
-	list, err := models.ListAiMediaForExport(uid, kind, since, until, limit)
+	list, err := aim.ListAiMediaForExport(uid, kind, since, until, limit)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -180,31 +180,31 @@ func ExportMediaHistory(c *gin.Context) {
 // ─────────────── 打包 ───────────────
 
 type exportItem struct {
-	ID          uint                     `json:"id"`
-	Kind        string                   `json:"kind"`
-	Model       string                   `json:"model"`
-	Prompt      string                   `json:"prompt"`
-	Params      string                   `json:"params"`
-	Status      string                   `json:"status"`
-	Result      string                   `json:"result"`
-	Cost        int64                    `json:"cost"`
-	Error       string                   `json:"error,omitempty"`
-	CreatedAt   string                   `json:"created_at"`
-	Attachments []models.MediaAttachment `json:"attachments,omitempty"`
-	Files       []string                 `json:"files,omitempty"`
+	ID          uint                  `json:"id"`
+	Kind        string                `json:"kind"`
+	Model       string                `json:"model"`
+	Prompt      string                `json:"prompt"`
+	Params      string                `json:"params"`
+	Status      string                `json:"status"`
+	Result      string                `json:"result"`
+	Cost        int64                 `json:"cost"`
+	Error       string                `json:"error,omitempty"`
+	CreatedAt   string                `json:"created_at"`
+	Attachments []aim.MediaAttachment `json:"attachments,omitempty"`
+	Files       []string              `json:"files,omitempty"`
 }
 
-func buildExportItem(t models.AiMediaTask, files []string) exportItem {
+func buildExportItem(t aim.AiMediaTask, files []string) exportItem {
 	return exportItem{
 		ID: t.ID, Kind: t.Kind, Model: t.ModelName, Prompt: t.Prompt,
 		Params: t.Params, Status: t.Status, Result: t.Result, Cost: t.Cost,
 		Error: t.Error, CreatedAt: t.CreatedAt.Format(time.RFC3339),
-		Attachments: models.ParseAttachments(t.Attachments), Files: files,
+		Attachments: aim.ParseAttachments(t.Attachments), Files: files,
 	}
 }
 
 // zipMediaTasks 组包：items.json + files/ + manifest.json（含每个文件的 SHA256）
-func zipMediaTasks(list []models.AiMediaTask) ([]byte, error) {
+func zipMediaTasks(list []aim.AiMediaTask) ([]byte, error) {
 	var out bytes.Buffer
 	zw := zip.NewWriter(&out)
 

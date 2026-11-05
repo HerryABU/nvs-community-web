@@ -1,8 +1,9 @@
-package models
+package ai
 
 import (
 	"encoding/json"
 	"errors"
+	"nvs-server/models"
 	"strings"
 	"time"
 )
@@ -37,7 +38,7 @@ func DefaultAgentSubmitConfig() AgentSubmitConfig {
 
 // GetAgentSubmitConfig 读取投稿开关（配置写坏时回退默认，避免投稿入口 500）
 func GetAgentSubmitConfig() AgentSubmitConfig {
-	raw := strings.TrimSpace(GetPlatformConfig(agentSubmitConfigKey))
+	raw := strings.TrimSpace(models.GetPlatformConfig(agentSubmitConfigKey))
 	if raw == "" {
 		return DefaultAgentSubmitConfig()
 	}
@@ -60,7 +61,7 @@ func SetAgentSubmitConfig(c AgentSubmitConfig) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(agentSubmitConfigKey, string(b))
+	return models.SetPlatformConfig(agentSubmitConfigKey, string(b))
 }
 
 // AgentSubmission 投稿单
@@ -123,7 +124,7 @@ func CreateAgentSubmission(userID uint, userName string, in AgentSubmission) (*A
 	}
 	if cfg.MaxPending > 0 {
 		var n int64
-		DB.Model(&AgentSubmission{}).
+		models.DB.Model(&AgentSubmission{}).
 			Where("user_id = ? AND status = ?", userID, AgentSubPending).Count(&n)
 		if n >= int64(cfg.MaxPending) {
 			return nil, errors.New("你的待审投稿已达上限，请等站长审完再投")
@@ -139,7 +140,7 @@ func CreateAgentSubmission(userID uint, userName string, in AgentSubmission) (*A
 		SystemPrompt: prompt,
 		Status:       AgentSubPending,
 	}
-	if err := DB.Create(sub).Error; err != nil {
+	if err := models.DB.Create(sub).Error; err != nil {
 		return nil, err
 	}
 	return sub, nil
@@ -172,12 +173,12 @@ func ApproveAgentSubmission(sub *AgentSubmission, reviewerID uint, note string) 
 			"greeting": agent.Greeting, "category": agent.Category,
 			"system_prompt": agent.SystemPrompt, "enabled": true,
 		}
-		err = DB.Model(&AiAgent{}).Where("id = ?", sub.AgentID).Updates(fields).Error
+		err = models.DB.Model(&AiAgent{}).Where("id = ?", sub.AgentID).Updates(fields).Error
 		if err == nil {
 			agent.ID = sub.AgentID
 		}
 	} else {
-		err = DB.Create(agent).Error
+		err = models.DB.Create(agent).Error
 	}
 	if err != nil {
 		return err
@@ -187,7 +188,7 @@ func ApproveAgentSubmission(sub *AgentSubmission, reviewerID uint, note string) 
 		"status": AgentSubApproved, "review_note": strings.TrimSpace(note),
 		"reviewer_id": reviewerID, "reviewed_at": &now, "agent_id": agent.ID,
 	}
-	if err := DB.Model(&AgentSubmission{}).Where("id = ?", sub.ID).Updates(upd).Error; err != nil {
+	if err := models.DB.Model(&AgentSubmission{}).Where("id = ?", sub.ID).Updates(upd).Error; err != nil {
 		return err
 	}
 	// 同步内存对象：调用方常拿着同一个结构体连着做判断，
@@ -209,7 +210,7 @@ func RejectAgentSubmission(sub *AgentSubmission, reviewerID uint, note string) e
 		return errors.New("该投稿已被拒绝")
 	}
 	now := time.Now()
-	if err := DB.Model(&AgentSubmission{}).Where("id = ?", sub.ID).Updates(map[string]interface{}{
+	if err := models.DB.Model(&AgentSubmission{}).Where("id = ?", sub.ID).Updates(map[string]interface{}{
 		"status": AgentSubRejected, "review_note": strings.TrimSpace(note),
 		"reviewer_id": reviewerID, "reviewed_at": &now,
 	}).Error; err != nil {
@@ -224,7 +225,7 @@ func RejectAgentSubmission(sub *AgentSubmission, reviewerID uint, note string) e
 
 // ListAgentSubmissions 审核列表（status 空 = 全部，按新到旧）
 func ListAgentSubmissions(status string, page, size int) ([]AgentSubmission, int64) {
-	q := DB.Model(&AgentSubmission{})
+	q := models.DB.Model(&AgentSubmission{})
 	if s := strings.TrimSpace(status); s != "" {
 		q = q.Where("status = ?", s)
 	}
@@ -238,6 +239,6 @@ func ListAgentSubmissions(status string, page, size int) ([]AgentSubmission, int
 // CountPendingAgentSubmissions 待审数量（后台红点用）
 func CountPendingAgentSubmissions() int64 {
 	var n int64
-	DB.Model(&AgentSubmission{}).Where("status = ?", AgentSubPending).Count(&n)
+	models.DB.Model(&AgentSubmission{}).Where("status = ?", AgentSubPending).Count(&n)
 	return n
 }

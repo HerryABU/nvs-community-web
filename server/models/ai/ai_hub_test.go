@@ -1,6 +1,7 @@
-package models
+package ai
 
 import (
+	"nvs-server/models"
 	"testing"
 
 	"github.com/glebarez/sqlite"
@@ -13,10 +14,10 @@ func setupAiHubTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("打开测试库失败: %v", err)
 	}
-	if err := AutoMigrateAll(db); err != nil {
+	if err := models.AutoMigrateAll(db); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
-	DB = db
+	models.DB = db
 	t.Cleanup(func() {
 		if sqlDB, e := db.DB(); e == nil {
 			_ = sqlDB.Close()
@@ -108,7 +109,7 @@ func TestAiAgentSeedAndCRUD(t *testing.T) {
 func TestAiMediaImageCharge(t *testing.T) {
 	setupAiHubTestDB(t)
 	m := &AiModel{Name: "绘画模型", Kind: AiKindImage, ModelID: "img", BaseURL: "http://x", Enabled: true, PriceCall: 5}
-	if err := DB.Create(m).Error; err != nil {
+	if err := models.DB.Create(m).Error; err != nil {
 		t.Fatalf("建模型失败: %v", err)
 	}
 	// 类型筛选：chat 列表不含绘画模型
@@ -121,7 +122,7 @@ func TestAiMediaImageCharge(t *testing.T) {
 		t.Fatalf("image 列表应 1 个，实际 %d", len(imgModels))
 	}
 	// 空 kind（旧数据）按 chat 归一
-	_ = DB.Create(&AiModel{Name: "旧模型", ModelID: "old", BaseURL: "http://x", Enabled: true}).Error
+	_ = models.DB.Create(&AiModel{Name: "旧模型", ModelID: "old", BaseURL: "http://x", Enabled: true}).Error
 	chatModels2, _ := ListAiModelsByKind("", true)
 	if len(chatModels2) != 1 {
 		t.Errorf("空 kind 旧数据应按 chat 纳入，实际 %d", len(chatModels2))
@@ -131,7 +132,7 @@ func TestAiMediaImageCharge(t *testing.T) {
 	}
 
 	// 任务扣款：充 10 → 扣 5 → 退 5
-	if _, e := AppendTokenLedger(1, TokenTypeGrant, 10, "admin", 1, "", ""); e != nil {
+	if _, e := models.AppendTokenLedger(1, models.TokenTypeGrant, 10, "admin", 1, "", ""); e != nil {
 		t.Fatalf("增发失败: %v", e)
 	}
 	task, err := CreateAiMediaTask(1, m, AiKindImage, "一只猫", AiMediaParams{Size: "1024x1024", N: 1})
@@ -155,7 +156,7 @@ func TestAiMediaImageCharge(t *testing.T) {
 	}
 	// 流水：consume -5 一笔
 	var n int64
-	DB.Model(&TokenLedger{}).Where("user_id = ? AND type = ?", 1, TokenTypeConsume).Count(&n)
+	models.DB.Model(&models.TokenLedger{}).Where("user_id = ? AND type = ?", 1, models.TokenTypeConsume).Count(&n)
 	if n != 1 {
 		t.Errorf("应 1 笔消费流水，实际 %d", n)
 	}
@@ -179,7 +180,7 @@ func TestAiMediaImageCharge(t *testing.T) {
 	}
 	// free 模型不碰账本
 	free := &AiModel{Name: "免费绘画", Kind: AiKindImage, ModelID: "img2", BaseURL: "http://x", Enabled: true, PriceCall: 0}
-	_ = DB.Create(free).Error
+	_ = models.DB.Create(free).Error
 	ft, _ := CreateAiMediaTask(2, free, AiKindImage, "测试", AiMediaParams{})
 	if nb3, e := ChargeAiMediaTask(ft.ID); e != nil || nb3 != 0 {
 		t.Errorf("免费任务应返回 0，实际 nb=%d err=%v", nb3, e)

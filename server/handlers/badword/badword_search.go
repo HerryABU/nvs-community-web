@@ -10,12 +10,12 @@ import (
 
 	"nvs-server/aiclient"
 	"nvs-server/handlers/admin"
-	"nvs-server/models"
 	"nvs-server/sentiment/store"
 	"nvs-server/sentiment/updater"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	ai "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 	"nvs-server/models/security"
 )
@@ -266,15 +266,15 @@ func badwordSearchQuery(focus string) string {
 
 // pickBadwordChatModel 选用于「归纳成结构化规则」的对话模型。
 // 显式指定优先；否则用平台默认启用的对话模型。
-func pickBadwordChatModel(modelID uint) (*models.AiModel, error) {
+func pickBadwordChatModel(modelID uint) (*ai.AiModel, error) {
 	if modelID > 0 {
-		m, err := models.GetAiModel(modelID)
+		m, err := ai.GetAiModel(modelID)
 		if err != nil || m == nil || !m.Enabled {
 			return nil, fmt.Errorf("指定的模型不可用")
 		}
 		return m, nil
 	}
-	m, err := models.GetEnabledAiModelOfKind(0, models.AiKindChat)
+	m, err := ai.GetEnabledAiModelOfKind(0, ai.AiKindChat)
 	if err != nil {
 		return nil, fmt.Errorf("未配置可用的对话模型，无法发起联网检索")
 	}
@@ -292,7 +292,7 @@ func pickBadwordChatModel(modelID uint) (*models.AiModel, error) {
 //     全站只配一次，违禁词补充与舆情词表共用同一个联网通道。
 //
 // 都没有 → 返回 nil，表示这条路径不可用（会退到原生联网或提示词模式）。
-func resolveBadwordSearchModel(chatModel *models.AiModel) (*models.AiModel, string) {
+func resolveBadwordSearchModel(chatModel *ai.AiModel) (*ai.AiModel, string) {
 	if chatModel != nil && chatModel.SearchEndpoint {
 		return chatModel, "/search"
 	}
@@ -305,7 +305,7 @@ func resolveBadwordSearchModel(chatModel *models.AiModel) (*models.AiModel, stri
 		path = "/search"
 	}
 	if cfg.SearchModelID > 0 {
-		m, err := models.GetAiModel(cfg.SearchModelID)
+		m, err := ai.GetAiModel(cfg.SearchModelID)
 		if err != nil || m == nil || !m.Enabled {
 			return nil, ""
 		}
@@ -321,7 +321,7 @@ func resolveBadwordSearchModel(chatModel *models.AiModel) (*models.AiModel, stri
 // requested=endpoint → 有检索源才 endpoint，否则退回 auto 的判定
 // requested=native   → 模型确实带原生联网能力才 native，否则退回 prompt
 // requested=prompt   → 不联网
-func resolveBadwordSearchMode(requested string, chatModel *models.AiModel, hasSearchSource bool) string {
+func resolveBadwordSearchMode(requested string, chatModel *ai.AiModel, hasSearchSource bool) string {
 	switch strings.ToLower(strings.TrimSpace(requested)) {
 	case badwordSearchModeEndpoint:
 		if hasSearchSource {
@@ -346,7 +346,7 @@ func resolveBadwordSearchMode(requested string, chatModel *models.AiModel, hasSe
 }
 
 // acquireBadwordModelKey 取模型密钥（走平台密钥租赁，不暴露给前端、不做用户级计费）。
-func acquireBadwordModelKey(m *models.AiModel) (string, error) {
+func acquireBadwordModelKey(m *ai.AiModel) (string, error) {
 	if m == nil {
 		return "", fmt.Errorf("未配置模型")
 	}
@@ -364,7 +364,7 @@ func acquireBadwordModelKey(m *models.AiModel) (string, error) {
 //
 // 复用舆情词表更新模块的检索实现（同一套厂商 /search 协议与多返回结构兼容），
 // 保证两个功能用的是同一个联网通道、同一套返回结构解析。
-func badwordSearchSnippets(ctx context.Context, m *models.AiModel, apiKey, path, query string) ([]updater.Snippet, error) {
+func badwordSearchSnippets(ctx context.Context, m *ai.AiModel, apiKey, path, query string) ([]updater.Snippet, error) {
 	if m == nil {
 		return nil, fmt.Errorf("未配置检索模型")
 	}
@@ -382,7 +382,7 @@ func badwordSearchSnippets(ctx context.Context, m *models.AiModel, apiKey, path,
 //   - tools: [{"type":"web_search"}]：一部分中转/自建网关
 //
 // 两者都是可选字段；上游不认时会在 Complete 报错，由调用方降级重试。
-func attachNativeSearch(req *aiclient.ChatRequest, m *models.AiModel) {
+func attachNativeSearch(req *aiclient.ChatRequest, m *ai.AiModel) {
 	if req == nil || m == nil || !m.SearchNative {
 		return
 	}

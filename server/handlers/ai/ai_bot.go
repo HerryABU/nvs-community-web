@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 )
 
@@ -34,16 +35,16 @@ const aiBotDedupWindow = 60 * time.Second
 func init() { export.MaybeTriggerAiBot = maybeTriggerAiBot }
 
 func maybeTriggerAiBot(c *gin.Context, comment *models.Comment) {
-	if !models.IsAiBotEnabled() || !models.IsAiEnabled() {
+	if !aim.IsAiBotEnabled() || !aim.IsAiEnabled() {
 		return
 	}
-	agentName, prompt, ok := models.ParseAiBotInvocation(comment.Content)
+	agentName, prompt, ok := aim.ParseAiBotInvocation(comment.Content)
 	if !ok || prompt == "" {
 		return
 	}
-	cfg := models.GetAiBotConfig()
+	cfg := aim.GetAiBotConfig()
 	userID := comment.UserID
-	if !models.CheckAiBotQuota(userID, cfg.DailyLimit) {
+	if !aim.CheckAiBotQuota(userID, cfg.DailyLimit) {
 		return // 超限静默跳过（前端 status 展示剩余次数）
 	}
 
@@ -87,24 +88,24 @@ func floorKeyOf(comment *models.Comment) uint {
 }
 
 // generateAiBotReply 异步生成并落库机器人评论
-func generateAiBotReply(triggerUser uint, trigger *models.Comment, cfg models.AiBotConfig,
+func generateAiBotReply(triggerUser uint, trigger *models.Comment, cfg aim.AiBotConfig,
 	agentName, parentContent, triggerContent, prompt string) {
 
 	// 模型：平台启用的第一个 chat 模型
-	list, err := models.ListAiModelsByKind(models.AiKindChat, true)
+	list, err := aim.ListAiModelsByKind(aim.AiKindChat, true)
 	if err != nil || len(list) == 0 {
 		return
 	}
 	m := &list[0]
 
 	// 计费预检：免费额度优先，否则代币
-	estTokens := models.EstimateTokens(prompt) + models.EstimateTokens(parentContent) + 512
+	estTokens := aim.EstimateTokens(prompt) + aim.EstimateTokens(parentContent) + 512
 	freeOK, _, _ := aihub.CheckAiFreeQuota(triggerUser, estTokens)
 	if !freeOK {
 		if !models.IsTokenEnabled() {
 			return
 		}
-		if _, ok := models.PrecheckAiBalance(triggerUser, m, estTokens, m.MaxTokens); !ok {
+		if _, ok := aim.PrecheckAiBalance(triggerUser, m, estTokens, m.MaxTokens); !ok {
 			return // 余额不足：静默（评论区不打扰）
 		}
 	}
@@ -112,7 +113,7 @@ func generateAiBotReply(triggerUser uint, trigger *models.Comment, cfg models.Ai
 	// 人设：@智能体名 优先，否则配置默认
 	systemPrompt := "你是评论区里的 AI 助手，回答请简洁有趣、贴合讨论上下文，直接输出回复内容，不要解释。"
 	if agentName != "" {
-		if agents, aerr := models.ListAiAgents(true); aerr == nil {
+		if agents, aerr := aim.ListAiAgents(true); aerr == nil {
 			for _, a := range agents {
 				if a.Name == agentName {
 					systemPrompt = a.SystemPrompt + "\n（请以该人设简洁回复评论，直接输出内容）"
@@ -121,7 +122,7 @@ func generateAiBotReply(triggerUser uint, trigger *models.Comment, cfg models.Ai
 			}
 		}
 	} else if cfg.AgentID > 0 {
-		if a, aerr := models.GetAiAgent(cfg.AgentID); aerr == nil && a.Enabled {
+		if a, aerr := aim.GetAiAgent(cfg.AgentID); aerr == nil && a.Enabled {
 			systemPrompt = a.SystemPrompt + "\n（请以该人设简洁回复评论，直接输出内容）"
 		}
 	}
@@ -144,8 +145,8 @@ func generateAiBotReply(triggerUser uint, trigger *models.Comment, cfg models.Ai
 		return
 	}
 	client := aiclient.NewClient(m.BaseURL, apiKey, 60*time.Second)
-	callLog, lerr := models.CreateAiCallLog(triggerUser, m, "bot", "comment", trigger.ID,
-		models.EstimateTokens(sb.String()), m.MaxTokens, freeOK)
+	callLog, lerr := aim.CreateAiCallLog(triggerUser, m, "bot", "comment", trigger.ID,
+		aim.EstimateTokens(sb.String()), m.MaxTokens, freeOK)
 	if lerr != nil {
 		return
 	}
@@ -159,30 +160,30 @@ func generateAiBotReply(triggerUser uint, trigger *models.Comment, cfg models.Ai
 		Temperature: 0.7,
 	})
 	if cerr != nil {
-		models.FailAiCallLog(callLog.ID, cerr.Error())
+		aim.FailAiCallLog(callLog.ID, cerr.Error())
 		return
 	}
 	if strings.TrimSpace(content) == "" {
-		models.FailAiCallLog(callLog.ID, "上游未返回内容")
+		aim.FailAiCallLog(callLog.ID, "上游未返回内容")
 		return
 	}
 	if realIn <= 0 {
 		realIn = estTokens
 	}
 	if realOut <= 0 {
-		realOut = models.EstimateTokens(content)
+		realOut = aim.EstimateTokens(content)
 	}
-	cost := models.EstimateAiCost(m, realIn, realOut)
+	cost := aim.EstimateAiCost(m, realIn, realOut)
 	if freeOK {
 		_ = aihub.RecordAiFreeUsage(triggerUser, 1, realIn+realOut)
 		cost = 0
-	} else if _, serr := models.SettleAiCallLog(callLog.ID, realIn, realOut); serr != nil {
+	} else if _, serr := aim.SettleAiCallLog(callLog.ID, realIn, realOut); serr != nil {
 		return // 结算失败（余额被并发耗尽）：不发布
 	}
-	models.RecordAiBotUsage(triggerUser)
+	aim.RecordAiBotUsage(triggerUser)
 
 	// 机器人身份发评论：挂靠触发评论同楼
-	botID, berr := models.EnsureAiBotUser()
+	botID, berr := aim.EnsureAiBotUser()
 	if berr != nil {
 		return
 	}
@@ -230,7 +231,7 @@ func AiBotStatus(c *gin.Context) {
 	// 「AI 未开启」是正常状态而不是客户端错误：早期这里返回 400，
 	// 结果是每个带评论区的页面都会在控制台打一条 4xx（还会被后台异常横幅统计进来）。
 	// 现在统一 200 + enabled=false，前端只判断 enabled 即可。
-	if !models.IsAiEnabled() {
+	if !aim.IsAiEnabled() {
 		utils.Success(c, gin.H{
 			"ai_enabled": false,
 			"enabled":    false,
@@ -239,8 +240,8 @@ func AiBotStatus(c *gin.Context) {
 		})
 		return
 	}
-	cfg := models.GetAiBotConfig()
-	used := models.CountTodayAiBotUsage(hctx.CurrentUserID(c))
+	cfg := aim.GetAiBotConfig()
+	used := aim.CountTodayAiBotUsage(hctx.CurrentUserID(c))
 	left := cfg.DailyLimit
 	if left > 0 {
 		left = left - int(used)
@@ -249,7 +250,7 @@ func AiBotStatus(c *gin.Context) {
 		}
 	}
 	utils.Success(c, gin.H{
-		"enabled":    models.IsAiBotEnabled(),
+		"enabled":    aim.IsAiBotEnabled(),
 		"used":       int(used),
 		"daily_left": left, // -1=不限
 	})
@@ -261,8 +262,8 @@ func AdminGetAiBotConfig(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{
-		"enabled": models.IsAiBotEnabled(),
-		"config":  models.GetAiBotConfig(),
+		"enabled": aim.IsAiBotEnabled(),
+		"config":  aim.GetAiBotConfig(),
 	})
 }
 
@@ -281,13 +282,13 @@ func AdminSetAiBotConfig(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.SetAiBotConfig(models.AiBotConfig{
+	if err := aim.SetAiBotConfig(aim.AiBotConfig{
 		DailyLimit: req.DailyLimit, AgentID: req.AgentID, Signature: req.Signature,
 	}); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
-	if err := models.SetAiBotEnabled(req.Enabled); err != nil {
+	if err := aim.SetAiBotEnabled(req.Enabled); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}

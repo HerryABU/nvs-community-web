@@ -15,12 +15,13 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 	aicost "nvs-server/models/aicost"
 	aihub "nvs-server/models/aihub"
 )
 
 func AiHubImage(c *gin.Context) {
-	if !models.IsAiEnabled() {
+	if !aim.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
@@ -72,7 +73,7 @@ func AiHubImage(c *gin.Context) {
 		}
 	}
 	// ── 附件（参考图/素材）：只存地址不做下载（导出时才安全抓取），并校验协议 ──
-	attachments := make([]models.MediaAttachment, 0, len(req.AttachURLs))
+	attachments := make([]aim.MediaAttachment, 0, len(req.AttachURLs))
 	for _, raw := range req.AttachURLs {
 		u := strings.TrimSpace(raw)
 		if u == "" {
@@ -83,7 +84,7 @@ func AiHubImage(c *gin.Context) {
 			utils.BadRequest(c, "附件地址仅支持站内 /uploads/ 或 http(s)")
 			return
 		}
-		attachments = append(attachments, models.MediaAttachment{URL: u})
+		attachments = append(attachments, aim.MediaAttachment{URL: u})
 		if len(attachments) >= 6 {
 			break
 		}
@@ -184,7 +185,7 @@ func AiHubImage(c *gin.Context) {
 		})
 		return
 	}
-	m, err := models.GetEnabledAiModelOfKind(req.ModelID, models.AiKindImage)
+	m, err := aim.GetEnabledAiModelOfKind(req.ModelID, aim.AiKindImage)
 	if err != nil || m == nil {
 		utils.BadRequest(c, "绘画模型不可用")
 		return
@@ -205,7 +206,7 @@ func AiHubImage(c *gin.Context) {
 			return
 		}
 	}
-	task, terr := models.CreateAiMediaTask(userID, m, models.AiKindImage, prompt, models.AiMediaParams{
+	task, terr := aim.CreateAiMediaTask(userID, m, aim.AiKindImage, prompt, aim.AiMediaParams{
 		Size: size, Style: strings.TrimSpace(req.Style), N: n,
 	})
 	if terr != nil {
@@ -213,7 +214,7 @@ func AiHubImage(c *gin.Context) {
 		return
 	}
 	if len(attachments) > 0 {
-		_ = models.SetMediaAttachments(task.ID, attachments)
+		_ = aim.SetMediaAttachments(task.ID, attachments)
 	}
 	lease, kerr := aihub.AcquireModelKey(m)
 	apiKey := ""
@@ -221,7 +222,7 @@ func AiHubImage(c *gin.Context) {
 		apiKey = lease.Key
 	}
 	if kerr != nil {
-		models.FailAiMediaTask(task.ID, "密钥不可用", false)
+		aim.FailAiMediaTask(task.ID, "密钥不可用", false)
 		utils.InternalError(c, "模型密钥不可用（密钥池已被摘除且无兜底密钥），请联系站长")
 		return
 	}
@@ -229,7 +230,7 @@ func AiHubImage(c *gin.Context) {
 	urls, gerr := generateImagesByApiKind(client, m, promptForMode, size, strings.TrimSpace(req.Style), n, refs)
 	if gerr != nil {
 		lease.Fail()
-		models.FailAiMediaTask(task.ID, gerr.Error(), false)
+		aim.FailAiMediaTask(task.ID, gerr.Error(), false)
 		utils.BadRequest(c, "绘画失败："+gerr.Error()+"（未扣款）")
 		return
 	}
@@ -237,17 +238,17 @@ func AiHubImage(c *gin.Context) {
 	freeOK, _, _ := aihub.CheckAiFreeQuota(userID, 0)
 	var nb int64
 	if freeOK {
-		_ = models.MarkAiMediaFree(task.ID)
+		_ = aim.MarkAiMediaFree(task.ID)
 		_ = aihub.RecordAiFreeUsage(userID, 1, 0)
 		nb = models.GetTokenBalance(userID)
 	} else {
 		if !models.IsTokenEnabled() {
-			models.FailAiMediaTask(task.ID, "代币系统未开启", false)
+			aim.FailAiMediaTask(task.ID, "代币系统未开启", false)
 			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI（未扣款）")
 			return
 		}
 		var cerr error
-		nb, cerr = models.ChargeAiMediaTask(task.ID)
+		nb, cerr = aim.ChargeAiMediaTask(task.ID)
 		if cerr != nil {
 			utils.Error(c, 429, 42902, cerr.Error()+"（未扣款）")
 			return
@@ -272,17 +273,17 @@ func AiHubImage(c *gin.Context) {
 			// 审核不可用：尊重站长设定的失败策略
 			if !safetyCfg.JudgeFailOpen {
 				aisafety.LogImageOutput(safetyCfg, userID, username, verdict, true)
-				models.FailAiMediaTask(task.ID, "出图审核不可用，已拦截（未扣费）", false)
+				aim.FailAiMediaTask(task.ID, "出图审核不可用，已拦截（未扣费）", false)
 				utils.Forbidden(c, "出图审核暂时不可用，请稍后再试（未扣费）")
 				return
 			}
 			aisafety.LogImageOutput(safetyCfg, userID, username, verdict, false)
 		} else if verdict.Violated {
 			aisafety.LogImageOutput(safetyCfg, userID, username, verdict, true)
-			models.FailAiMediaTask(task.ID, "出图审核未通过："+verdict.Reason, false)
+			aim.FailAiMediaTask(task.ID, "出图审核未通过："+verdict.Reason, false)
 			// 退款：图片不返回给用户，就不该扣用户的钱
 			if !freeOK {
-				if _, rerr := models.RefundAiMediaTask(task.ID, "出图审核未通过，自动退款"); rerr != nil {
+				if _, rerr := aim.RefundAiMediaTask(task.ID, "出图审核未通过，自动退款"); rerr != nil {
 					// 退款失败要留下痕迹，否则等于白扣
 					utils.InternalError(c, "出图审核未通过，但退款失败，请联系管理员（已扣费）")
 					return
@@ -299,7 +300,7 @@ func AiHubImage(c *gin.Context) {
 	}
 
 	rj, _ := json.Marshal(gin.H{"images": urls})
-	models.UpdateAiMediaResult(task.ID, string(rj))
+	aim.UpdateAiMediaResult(task.ID, string(rj))
 	// AIGC 合规：原图原封不动落盘（不带任何标识），供用户下载时由服务端统一加标识。
 	// 异步做，失败只影响「能否导出」，不能把已扣费的出图判成失败。
 	SaveAigcOriginalsAsync(userID, task.ID, m.Name, urls)
@@ -381,9 +382,9 @@ func mjBotTypeOf(modelID string) aiclient.MJBotType {
 	return aiclient.MidJourney
 }
 
-func generateImagesByApiKind(client *aiclient.Client, m *models.AiModel, prompt, size, style string, n int, refs []aiclient.ImgRef) ([]string, error) {
-	switch models.NormalizeAiApiKind(m.ApiKind) {
-	case models.AiApiMJ:
+func generateImagesByApiKind(client *aiclient.Client, m *aim.AiModel, prompt, size, style string, n int, refs []aiclient.ImgRef) ([]string, error) {
+	switch aim.NormalizeAiApiKind(m.ApiKind) {
+	case aim.AiApiMJ:
 		p := prompt
 		if style != "" {
 			p += " --style " + style
@@ -393,7 +394,7 @@ func generateImagesByApiKind(client *aiclient.Client, m *models.AiModel, prompt,
 			Prompt:  p,
 			BotType: mjBotTypeOf(m.ModelID),
 		}, refs, 180*time.Second)
-	case models.AiApiGemini:
+	case aim.AiApiGemini:
 		p := prompt
 		if style != "" {
 			p += "\n\nstyle: " + style

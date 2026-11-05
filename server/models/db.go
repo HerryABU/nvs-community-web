@@ -54,6 +54,7 @@ var BlogFeedProvider func(ids []uint, window int) ([]FeedItem, int64, error)
 //	models/aicost    —— ChannelBalanceSample / UserAiKey / CostRate 等成本与用户密钥
 //	models/aiops     —— AiPrompt / AiVendor / AiNovelMemory / AigcAsset 等 AI 运营模型
 //	models/aihub     —— AiChannelKey / AiModelKey / AiStyle / UserAiFreeQuota 等渠道与工作台模型
+//	models/ai        —— AiModel / AiCallLog / AiAgent / AiMediaTask / AgentSubmission 等核心模型
 func AllModels() []interface{} {
 	list := []interface{}{
 		&User{}, &Novel{}, &NovelCategory{}, &Chapter{}, &Comment{}, &Rating{},
@@ -75,8 +76,6 @@ func AllModels() []interface{} {
 		&UserForumQuota{},
 		// HTML/WASM 托管额度：按人覆盖（管理员可单独放宽/收紧某人的项目数与空间）
 		&HTMLQuotaOverride{},
-		// 用户投稿智能体（提交 → 站长审核 → 广场上架）
-		&AgentSubmission{},
 		// 全量 Web 访问日志（功能二：前台网络诊断 / 用户分布 / 攻击流量面板）
 		&WebAccessLog{},
 		// 私信（F20：会话消息，互关才可发第 3 条）
@@ -89,11 +88,6 @@ func AllModels() []interface{} {
 		&TokenLedger{}, &UserTokenBalance{}, &CardKey{},
 		// 在线支付充值订单（§7.4：微信/支付宝聚合通道，幂等到账）
 		&RechargeOrder{},
-		// AI 模型池 + 调用计费（§5.3：OpenAI 兼容上游，代币按 usage 结算）
-		&AiModel{}, &AiCallLog{}, &AiCategoryPrice{},
-		// AI 工作台（§5.4）：会话/消息、智能体预设、绘画视频任务
-		&AiChatSession{}, &AiChatMessage{}, &AiAgent{}, &AiMediaTask{},
-		&AiBotUsage{},
 		// API Key 审计告警（多 IP / 解密失败 / 封禁后仍使用）
 		&ApiKeyAlarm{},
 	}

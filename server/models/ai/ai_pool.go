@@ -1,6 +1,7 @@
-package models
+package ai
 
 import (
+	"nvs-server/models"
 	"strings"
 	"time"
 
@@ -34,7 +35,7 @@ type AiModel struct {
 	// ProviderHint 上游归属：domestic（境内）/ overseas（境外）/ 空（未标注）→ 用于合规提示
 	ProviderHint string `gorm:"size:16;not null;default:''" json:"provider_hint"`
 	// TokenUserID 中转站（one-api/new-api）的用户 ID：查额度时要与访问令牌配对
-	// （请求头 New-Api-User）。官方渠道留空。非机密，明文存。
+	// （请求头 New-Api-models.User）。官方渠道留空。非机密，明文存。
 	TokenUserID string `gorm:"size:32;not null;default:''" json:"token_user_id"`
 	// AccountTokenEnc 中转站的**系统访问令牌**（nap_ 开头）密文。
 	// 与 ApiKeyEnc（sk_ 模型调用密钥）是两回事：
@@ -158,15 +159,15 @@ const (
 
 // IsAiEnabled AI 功能是否开启（默认关闭）
 func IsAiEnabled() bool {
-	return GetPlatformConfig(AiEnabledKey) == "true"
+	return models.GetPlatformConfig(AiEnabledKey) == "true"
 }
 
 // SetAiEnabled 设置 AI 功能开关
 func SetAiEnabled(on bool) error {
 	if on {
-		return SetPlatformConfig(AiEnabledKey, "true")
+		return models.SetPlatformConfig(AiEnabledKey, "true")
 	}
-	return SetPlatformConfig(AiEnabledKey, "false")
+	return models.SetPlatformConfig(AiEnabledKey, "false")
 }
 
 // ---------- CRUD ----------
@@ -174,7 +175,7 @@ func SetAiEnabled(on bool) error {
 // ListAiModels 模型列表（管理员视角：全部；onlyEnabled=true 时仅启用项）
 func ListAiModels(onlyEnabled bool) ([]AiModel, error) {
 	var list []AiModel
-	q := DB.Order("priority DESC, id ASC")
+	q := models.DB.Order("priority DESC, id ASC")
 	if onlyEnabled {
 		q = q.Where("enabled = ?", true)
 	}
@@ -186,7 +187,7 @@ func ListAiModels(onlyEnabled bool) ([]AiModel, error) {
 func ListAiModelsByKind(kind string, onlyEnabled bool) ([]AiModel, error) {
 	kind = NormalizeAiKind(kind)
 	var list []AiModel
-	q := DB.Order("priority DESC, id ASC")
+	q := models.DB.Order("priority DESC, id ASC")
 	if kind == AiKindChat {
 		// 旧数据 kind 列为空串（AutoMigrate 前创建），一并视为 chat
 		q = q.Where("kind IN ?", []string{AiKindChat, ""})
@@ -203,7 +204,7 @@ func ListAiModelsByKind(kind string, onlyEnabled bool) ([]AiModel, error) {
 // GetAiModel 按 ID 取模型
 func GetAiModel(id uint) (*AiModel, error) {
 	var m AiModel
-	if err := DB.Where("id = ?", id).First(&m).Error; err != nil {
+	if err := models.DB.Where("id = ?", id).First(&m).Error; err != nil {
 		return nil, err
 	}
 	return &m, nil
@@ -226,14 +227,14 @@ func GetEnabledAiModel(id uint) (*AiModel, error) {
 // id=0 表示「自动挑一个」：按优先级（priority DESC）取第一个启用且类型匹配的模型。
 //
 // 为什么要显式支持 0：调用方常把「用户没指定模型」传成 0，而原实现是
-// `DB.First(id=0)` —— 没有 id=0 的行，必然查不到，于是「没指定模型」被当成
+// `models.DB.First(id=0)` —— 没有 id=0 的行，必然查不到，于是「没指定模型」被当成
 // 「一个模型都没有」，直接报「未配置可用的对话模型」。这个坑让违禁词联网补充
 // 在不传 model_id 时 100% 失败，也让蓝队判定的 judge_model_id=0 永远选不到模型。
 func GetEnabledAiModelOfKind(id uint, kind string) (*AiModel, error) {
 	kind = NormalizeAiKind(kind)
 	if id == 0 {
 		var list []AiModel
-		q := DB.Where("enabled = ?", true)
+		q := models.DB.Where("enabled = ?", true)
 		if kind == AiKindChat {
 			// 遗留行的 kind 为空串也算对话模型（与用户侧可见列表口径一致）
 			q = q.Where("kind IN ?", []string{AiKindChat, ""})
@@ -263,7 +264,7 @@ func GetEnabledAiModelOfKind(id uint, kind string) (*AiModel, error) {
 func ListUserVisibleAiModelsByKind(kind string, onlyEnabled bool) ([]AiModel, error) {
 	kind = NormalizeAiKind(kind)
 	var list []AiModel
-	q := DB.Order("priority DESC, id ASC")
+	q := models.DB.Order("priority DESC, id ASC")
 	if kind == AiKindChat {
 		q = q.Where("kind IN ?", []string{AiKindChat, ""})
 	} else {
@@ -293,7 +294,7 @@ func CreateAiModel(m *AiModel, apiKeyPlain string) error {
 	now := time.Now()
 	m.CreatedAt = now
 	m.UpdatedAt = now
-	return DB.Create(m).Error
+	return models.DB.Create(m).Error
 }
 
 // UpdateAiModelFields map 精确更新（零值安全）；apiKeyPlain 非空时才轮换密钥
@@ -309,12 +310,12 @@ func UpdateAiModelFields(id uint, fields map[string]interface{}, apiKeyPlain str
 		return nil
 	}
 	fields["updated_at"] = time.Now()
-	return DB.Model(&AiModel{}).Where("id = ?", id).Updates(fields).Error
+	return models.DB.Model(&AiModel{}).Where("id = ?", id).Updates(fields).Error
 }
 
 // DeleteAiModel 删除模型
 func DeleteAiModel(id uint) error {
-	return DB.Where("id = ?", id).Delete(&AiModel{}).Error
+	return models.DB.Where("id = ?", id).Delete(&AiModel{}).Error
 }
 
 // DecryptApiKey 解密模型上游密钥（调用方用后即焚，不得落日志）
@@ -337,6 +338,6 @@ func (m *AiModel) DecryptAccountToken() (string, error) {
 // CountEnabledAiModels 启用模型数量（status 页展示）
 func CountEnabledAiModels() (int64, error) {
 	var n int64
-	err := DB.Model(&AiModel{}).Where("enabled = ?", true).Count(&n).Error
+	err := models.DB.Model(&AiModel{}).Where("enabled = ?", true).Count(&n).Error
 	return n, err
 }

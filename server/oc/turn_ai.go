@@ -12,6 +12,7 @@ import (
 
 	"nvs-server/aicall"
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 	"nvs-server/security"
 )
 
@@ -47,9 +48,9 @@ func Step(flowID, operatorID uint) (*StepResult, error) {
 	}
 
 	// 模型：角色绑定优先，其次平台第一个可用 chat 模型
-	var m *models.AiModel
+	var m *ai.AiModel
 	if ag.ModelID > 0 {
-		if mm, merr := models.GetAiModel(ag.ModelID); merr == nil && mm != nil && mm.Enabled && mm.Kind == models.AiKindChat {
+		if mm, merr := ai.GetAiModel(ag.ModelID); merr == nil && mm != nil && mm.Enabled && mm.Kind == ai.AiKindChat {
 			m = mm
 		}
 	}
@@ -59,7 +60,7 @@ func Step(flowID, operatorID uint) (*StepResult, error) {
 	}
 
 	// 预算闸门（用首选模型估算；降级后实际成本会略差，记账按真实值累加）
-	estForBudget := int(models.EstimateAiCost(m, models.EstimateTokens(prompt)+512, m.MaxTokens))
+	estForBudget := int(ai.EstimateAiCost(m, ai.EstimateTokens(prompt)+512, m.MaxTokens))
 	if berr := CheckBudget(f.GroupID, f.ID, ag.ID, estForBudget); berr != nil {
 		_ = SetFlowStatus(f.ID, FlowPaused, "预算上限")
 		return &StepResult{Stopped: true, Reason: berr.Error()}, nil
@@ -84,7 +85,7 @@ func Step(flowID, operatorID uint) (*StepResult, error) {
 	}
 	content := res.Content
 	realIn, realOut, cost := res.TokensIn, res.TokensOut, res.Cost
-	m = &models.AiModel{ID: res.ModelID, Name: res.ModelName}
+	m = &ai.AiModel{ID: res.ModelID, Name: res.ModelName}
 	// 降级提示：贴进正文尾部（不静默换模型），并单独存字段供前端标黄
 	degradeNote := res.Notice()
 

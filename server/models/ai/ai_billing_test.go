@@ -1,6 +1,7 @@
-package models
+package ai
 
 import (
+	"nvs-server/models"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -15,10 +16,10 @@ func setupAiTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("打开测试库失败: %v", err)
 	}
-	if err := AutoMigrateAll(db); err != nil {
+	if err := models.AutoMigrateAll(db); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
-	DB = db
+	models.DB = db
 	t.Cleanup(func() {
 		if sqlDB, e := db.DB(); e == nil {
 			_ = sqlDB.Close()
@@ -34,7 +35,7 @@ func seedAiModel(t *testing.T, priceIn, priceOut int64, maxTokens int) *AiModel 
 		Name: "测试模型", ModelID: "test-model", BaseURL: "http://127.0.0.1:1/v1",
 		Enabled: true, PriceIn: priceIn, PriceOut: priceOut, MaxTokens: maxTokens,
 	}
-	if err := DB.Create(m).Error; err != nil {
+	if err := models.DB.Create(m).Error; err != nil {
 		t.Fatalf("创建模型失败: %v", err)
 	}
 	return m
@@ -79,14 +80,14 @@ func TestAiPrecheckBalance(t *testing.T) {
 		t.Errorf("余额 0 应不可负担，cost=%d ok=%v", cost, ok)
 	}
 	// 充值 4（不足 5）→ 仍不可负担
-	if _, e := AppendTokenLedger(1, TokenTypeGrant, 4, "admin", 1, "", ""); e != nil {
+	if _, e := models.AppendTokenLedger(1, models.TokenTypeGrant, 4, "admin", 1, "", ""); e != nil {
 		t.Fatalf("增发失败: %v", e)
 	}
 	if _, ok := PrecheckAiBalance(1, m, 1500, 500); ok {
 		t.Errorf("余额 4 < 费用 5 应不可负担")
 	}
 	// 再充 1（=5）→ 可负担
-	if _, e := AppendTokenLedger(1, TokenTypeGrant, 1, "admin", 1, "", ""); e != nil {
+	if _, e := models.AppendTokenLedger(1, models.TokenTypeGrant, 1, "admin", 1, "", ""); e != nil {
 		t.Fatalf("增发失败: %v", e)
 	}
 	if _, ok := PrecheckAiBalance(1, m, 1500, 500); !ok {
@@ -97,7 +98,7 @@ func TestAiPrecheckBalance(t *testing.T) {
 func TestAiSettlePaidCall(t *testing.T) {
 	setupAiTestDB(t)
 	m := seedAiModel(t, 2, 4, 1024)
-	if _, e := AppendTokenLedger(7, TokenTypeRechargeCard, 100, "card", 1, "卡密", ""); e != nil {
+	if _, e := models.AppendTokenLedger(7, models.TokenTypeRechargeCard, 100, "card", 1, "卡密", ""); e != nil {
 		t.Fatalf("充值失败: %v", e)
 	}
 	log, err := CreateAiCallLog(7, m, "polish", "chapter", 3, 1500, 500, false)
@@ -113,8 +114,8 @@ func TestAiSettlePaidCall(t *testing.T) {
 		t.Fatalf("结算后期望余额 94，实际 nb=%d err=%v", nb, err)
 	}
 	// 流水落 consume + 快照
-	var entries []TokenLedger
-	DB.Where("user_id = ? AND type = ?", 7, TokenTypeConsume).Find(&entries)
+	var entries []models.TokenLedger
+	models.DB.Where("user_id = ? AND type = ?", 7, models.TokenTypeConsume).Find(&entries)
 	if len(entries) != 1 || entries[0].Amount != -6 {
 		t.Fatalf("应有 1 笔 -6 的消费流水，实际 %+v", entries)
 	}
@@ -123,7 +124,7 @@ func TestAiSettlePaidCall(t *testing.T) {
 	}
 	// 调用记录变 settled 且 tokens/cost 为真实值
 	var got AiCallLog
-	DB.Where("id = ?", log.ID).First(&got)
+	models.DB.Where("id = ?", log.ID).First(&got)
 	if got.Status != AiCallSettled || got.TokensIn != 1200 || got.TokensOut != 600 || got.Cost != 6 {
 		t.Errorf("结算记录异常: %+v", got)
 	}
@@ -136,7 +137,7 @@ func TestAiSettlePaidCall(t *testing.T) {
 	if err != nil || rb != 100 {
 		t.Fatalf("退款后期望余额 100，实际 rb=%d err=%v", rb, err)
 	}
-	DB.Where("id = ?", log.ID).First(&got)
+	models.DB.Where("id = ?", log.ID).First(&got)
 	if got.Status != AiCallRefunded {
 		t.Errorf("退款后状态应为 refunded，实际 %s", got.Status)
 	}
@@ -150,7 +151,7 @@ func TestAiSettleInsufficientBalance(t *testing.T) {
 	setupAiTestDB(t)
 	m := seedAiModel(t, 2, 4, 1024)
 	// 只充 2，费用需 6
-	if _, e := AppendTokenLedger(8, TokenTypeGrant, 2, "admin", 1, "", ""); e != nil {
+	if _, e := models.AppendTokenLedger(8, models.TokenTypeGrant, 2, "admin", 1, "", ""); e != nil {
 		t.Fatalf("增发失败: %v", e)
 	}
 	log, err := CreateAiCallLog(8, m, "continue", "", 0, 1200, 600, false)
@@ -161,16 +162,16 @@ func TestAiSettleInsufficientBalance(t *testing.T) {
 		t.Fatalf("余额不足结算应报错")
 	}
 	// 余额不变、记录 failed、无消费流水
-	if GetTokenBalance(8) != 2 {
-		t.Errorf("失败结算后余额应保持 2，实际 %d", GetTokenBalance(8))
+	if models.GetTokenBalance(8) != 2 {
+		t.Errorf("失败结算后余额应保持 2，实际 %d", models.GetTokenBalance(8))
 	}
 	var got AiCallLog
-	DB.Where("id = ?", log.ID).First(&got)
+	models.DB.Where("id = ?", log.ID).First(&got)
 	if got.Status != AiCallFailed {
 		t.Errorf("状态应为 failed，实际 %s", got.Status)
 	}
 	var n int64
-	DB.Model(&TokenLedger{}).Where("user_id = ? AND type = ?", 8, TokenTypeConsume).Count(&n)
+	models.DB.Model(&models.TokenLedger{}).Where("user_id = ? AND type = ?", 8, models.TokenTypeConsume).Count(&n)
 	if n != 0 {
 		t.Errorf("失败结算不应产生消费流水，实际 %d 笔", n)
 	}
@@ -188,12 +189,12 @@ func TestAiSettleFreeModel(t *testing.T) {
 		t.Fatalf("免费模型结算应返回余额 0，实际 nb=%d err=%v", nb, err)
 	}
 	var got AiCallLog
-	DB.Where("id = ?", log.ID).First(&got)
+	models.DB.Where("id = ?", log.ID).First(&got)
 	if got.Status != AiCallSettled || got.Cost != 0 {
 		t.Errorf("免费模型记录异常: %+v", got)
 	}
 	// 免费模型不碰代币账本（无余额行）
-	if GetTokenBalance(9) != 0 {
+	if models.GetTokenBalance(9) != 0 {
 		t.Errorf("免费模型不应建余额行")
 	}
 }
@@ -204,7 +205,7 @@ func TestSettleAiCallLogConcurrent(t *testing.T) {
 	setupAiTestDB(t)
 	m := seedAiModel(t, 2, 4, 1024)
 	// 充足余额（远大于单次费用 6），排除「余额不足」路径干扰
-	if _, e := AppendTokenLedger(77, TokenTypeGrant, 10000, "admin", 1, "", ""); e != nil {
+	if _, e := models.AppendTokenLedger(77, models.TokenTypeGrant, 10000, "admin", 1, "", ""); e != nil {
 		t.Fatalf("增发失败: %v", e)
 	}
 	log, err := CreateAiCallLog(77, m, "polish", "chapter", 3, 1200, 600, false)
@@ -224,8 +225,8 @@ func TestSettleAiCallLogConcurrent(t *testing.T) {
 	wg.Wait()
 
 	// 只应有一笔 -6 的消费流水（费用 6 = ceil(1.2×2)+ceil(0.6×4)）
-	var entries []TokenLedger
-	DB.Where("user_id = ? AND type = ?", 77, TokenTypeConsume).Find(&entries)
+	var entries []models.TokenLedger
+	models.DB.Where("user_id = ? AND type = ?", 77, models.TokenTypeConsume).Find(&entries)
 	if len(entries) != 1 {
 		t.Fatalf("并发结算应只产生 1 笔消费流水，实际 %d 笔（重复扣费！）", len(entries))
 	}
@@ -233,12 +234,12 @@ func TestSettleAiCallLogConcurrent(t *testing.T) {
 		t.Errorf("消费金额应为 -6，实际 %d", entries[0].Amount)
 	}
 	// 余额只应减少 6（从 10000 → 9994）
-	if b := GetTokenBalance(77); b != 9994 {
+	if b := models.GetTokenBalance(77); b != 9994 {
 		t.Errorf("并发结算后余额应为 9994，实际 %d（重复扣费！）", b)
 	}
 	// 记录状态最终为 settled（被某一条 worker 成功 claim）
 	var got AiCallLog
-	DB.Where("id = ?", log.ID).First(&got)
+	models.DB.Where("id = ?", log.ID).First(&got)
 	if got.Status != AiCallSettled {
 		t.Errorf("最终状态应为 settled，实际 %s", got.Status)
 	}
@@ -251,7 +252,7 @@ func TestAiModelKeyEncryption(t *testing.T) {
 		t.Fatalf("创建模型失败: %v", err)
 	}
 	var got AiModel
-	DB.Where("id = ?", m.ID).First(&got)
+	models.DB.Where("id = ?", m.ID).First(&got)
 	if got.ApiKeyEnc == "" {
 		t.Fatalf("密钥应加密落库")
 	}
@@ -266,7 +267,7 @@ func TestAiModelKeyEncryption(t *testing.T) {
 	if err := UpdateAiModelFields(m.ID, map[string]interface{}{"note": "x"}, ""); err != nil {
 		t.Fatalf("更新失败: %v", err)
 	}
-	DB.Where("id = ?", m.ID).First(&got)
+	models.DB.Where("id = ?", m.ID).First(&got)
 	plain2, _ := got.DecryptApiKey()
 	if plain2 != "sk-super-secret-123" {
 		t.Errorf("留空 api_key 不应轮换，实际 %q", plain2)
@@ -275,7 +276,7 @@ func TestAiModelKeyEncryption(t *testing.T) {
 	if err := UpdateAiModelFields(m.ID, map[string]interface{}{}, "sk-new-key-456"); err != nil {
 		t.Fatalf("轮换失败: %v", err)
 	}
-	DB.Where("id = ?", m.ID).First(&got)
+	models.DB.Where("id = ?", m.ID).First(&got)
 	plain3, _ := got.DecryptApiKey()
 	if plain3 != "sk-new-key-456" {
 		t.Errorf("轮换后密钥应更新，实际 %q", plain3)
@@ -294,10 +295,10 @@ func TestAiConfigAndQueries(t *testing.T) {
 		t.Errorf("开启后应生效")
 	}
 	// 启用/禁用筛选
-	_ = DB.Create(&AiModel{Name: "a", ModelID: "a", BaseURL: "http://x", Enabled: true}).Error
-	_ = DB.Model(&AiModel{}).Where("name = ?", "b").Create(&AiModel{Name: "b", ModelID: "b", BaseURL: "http://x", Enabled: false}).Error
+	_ = models.DB.Create(&AiModel{Name: "a", ModelID: "a", BaseURL: "http://x", Enabled: true}).Error
+	_ = models.DB.Model(&AiModel{}).Where("name = ?", "b").Create(&AiModel{Name: "b", ModelID: "b", BaseURL: "http://x", Enabled: false}).Error
 	// b 的 Enabled=false 会被 default:true 顶掉（struct Create 零值跳过），改用 map 精确写
-	_ = DB.Model(&AiModel{}).Where("model_id = ?", "b").Updates(map[string]interface{}{"enabled": false}).Error
+	_ = models.DB.Model(&AiModel{}).Where("model_id = ?", "b").Updates(map[string]interface{}{"enabled": false}).Error
 	all, _ := ListAiModels(false)
 	only, _ := ListAiModels(true)
 	if len(all) != 2 {
@@ -312,7 +313,7 @@ func TestAiConfigAndQueries(t *testing.T) {
 	}
 	// GetEnabledAiModel：禁用模型返回 nil
 	var b AiModel
-	_ = DB.Where("model_id = ?", "b").First(&b)
+	_ = models.DB.Where("model_id = ?", "b").First(&b)
 	em, err := GetEnabledAiModel(b.ID)
 	if err != nil || em != nil {
 		t.Errorf("禁用模型应返回 nil,nil，实际 %v err=%v", em, err)
@@ -335,7 +336,7 @@ func setupAiFileTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("打开文件测试库失败: %v", err)
 	}
-	if err := AutoMigrateAll(db); err != nil {
+	if err := models.AutoMigrateAll(db); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
 	sqlDB, e := db.DB()
@@ -343,7 +344,7 @@ func setupAiFileTestDB(t *testing.T) *gorm.DB {
 		t.Fatalf("取连接池失败: %v", e)
 	}
 	sqlDB.SetMaxOpenConns(8)
-	DB = db
+	models.DB = db
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	return db
 }
@@ -357,7 +358,7 @@ func TestAiSettleConcurrentIdempotent(t *testing.T) {
 	m := seedAiModel(t, 2, 4, 1024)
 	const grant = 100
 	const uid = 77
-	if _, e := AppendTokenLedger(uid, TokenTypeGrant, grant, "admin", 1, "", ""); e != nil {
+	if _, e := models.AppendTokenLedger(uid, models.TokenTypeGrant, grant, "admin", 1, "", ""); e != nil {
 		t.Fatalf("增发失败: %v", e)
 	}
 	log, err := CreateAiCallLog(uid, m, "continue", "", 0, 1000, 500, false)
@@ -397,15 +398,15 @@ func TestAiSettleConcurrentIdempotent(t *testing.T) {
 
 	// 核心不变量：只扣一次
 	var ledgerCount int64
-	DB.Model(&TokenLedger{}).Where("user_id = ? AND type = ?", uid, TokenTypeConsume).Count(&ledgerCount)
+	models.DB.Model(&models.TokenLedger{}).Where("user_id = ? AND type = ?", uid, models.TokenTypeConsume).Count(&ledgerCount)
 	if ledgerCount != 1 {
 		t.Errorf("并发结算应只产生 1 笔消费流水，实际 %d 笔", ledgerCount)
 	}
-	if bal := GetTokenBalance(uid); bal != grant-cost {
+	if bal := models.GetTokenBalance(uid); bal != grant-cost {
 		t.Errorf("并发结算后余额应为 %d（只扣一次），实际 %d", grant-cost, bal)
 	}
 	var got AiCallLog
-	DB.Where("id = ?", log.ID).First(&got)
+	models.DB.Where("id = ?", log.ID).First(&got)
 	if got.Status != AiCallSettled {
 		t.Errorf("记录状态应为 settled，实际 %s", got.Status)
 	}
@@ -414,11 +415,11 @@ func TestAiSettleConcurrentIdempotent(t *testing.T) {
 	if _, e := SettleAiCallLog(log.ID, 1000, 500); e == nil {
 		t.Errorf("已结算记录重复结算应被拒绝（状态机保护）")
 	}
-	DB.Model(&TokenLedger{}).Where("user_id = ? AND type = ?", uid, TokenTypeConsume).Count(&ledgerCount)
+	models.DB.Model(&models.TokenLedger{}).Where("user_id = ? AND type = ?", uid, models.TokenTypeConsume).Count(&ledgerCount)
 	if ledgerCount != 1 {
 		t.Errorf("重复结算后消费流水仍应为 1 笔，实际 %d 笔", ledgerCount)
 	}
-	if bal := GetTokenBalance(uid); bal != grant-cost {
+	if bal := models.GetTokenBalance(uid); bal != grant-cost {
 		t.Errorf("重复结算后余额仍应为 %d，实际 %d", grant-cost, bal)
 	}
 }

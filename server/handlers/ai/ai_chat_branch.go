@@ -4,10 +4,10 @@ import (
 	"strconv"
 
 	"nvs-server/handlers/hctx"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 )
 
@@ -17,7 +17,7 @@ import (
 //
 // 前端要靠 sibling_index / sibling_count 渲染「‹ 2/3 ›」，
 // sibling_ids 则用于点击左右切换（切到兄弟所在分支的最新叶子）。
-func chatMessageView(list []models.AiChatMessage) []gin.H {
+func chatMessageView(list []aim.AiChatMessage) []gin.H {
 	out := make([]gin.H, 0, len(list))
 	for i := range list {
 		m := &list[i]
@@ -44,7 +44,7 @@ func chatMessageView(list []models.AiChatMessage) []gin.H {
 func AiHubSwitchBranch(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	s, err := models.GetAiChatSession(uint(id), userID)
+	s, err := aim.GetAiChatSession(uint(id), userID)
 	if err != nil || s == nil {
 		utils.NotFound(c, "会话不存在")
 		return

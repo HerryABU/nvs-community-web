@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	"nvs-server/handlers/admin"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 	aiops "nvs-server/models/aiops"
 )
 
@@ -17,11 +17,11 @@ import (
 // 更新时留空表示不轮换。
 
 // aiModelVO 列表视图（密钥脱敏）
-func aiModelVO(m *models.AiModel) gin.H {
+func aiModelVO(m *aim.AiModel) gin.H {
 	return gin.H{
 		"id":            m.ID,
 		"name":          m.Name,
-		"kind":          models.NormalizeAiKind(m.Kind),
+		"kind":          aim.NormalizeAiKind(m.Kind),
 		"model_id":      m.ModelID,
 		"base_url":      m.BaseURL,
 		"has_api_key":   m.ApiKeyEnc != "",
@@ -32,7 +32,7 @@ func aiModelVO(m *models.AiModel) gin.H {
 		"temperature":   m.Temperature,
 		"enabled":       m.Enabled,
 		"priority":      m.Priority,
-		"api_kind":      models.NormalizeAiApiKind(m.ApiKind),
+		"api_kind":      aim.NormalizeAiApiKind(m.ApiKind),
 		"provider_hint": m.ProviderHint,
 		"vendor":        m.Vendor,
 		"note":          m.Note,
@@ -53,7 +53,7 @@ func AdminGetAiConfig(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, gin.H{"enabled": models.IsAiEnabled()})
+	utils.Success(c, gin.H{"enabled": aim.IsAiEnabled()})
 }
 
 // AdminSetAiConfig PUT /api/admin/ai/config
@@ -72,7 +72,7 @@ func AdminSetAiConfig(c *gin.Context) {
 		utils.BadRequest(c, "缺少 enabled 字段")
 		return
 	}
-	if err := models.SetAiEnabled(*req.Enabled); err != nil {
+	if err := aim.SetAiEnabled(*req.Enabled); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
@@ -84,7 +84,7 @@ func AdminListAiModels(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	list, err := models.ListAiModels(false)
+	list, err := aim.ListAiModels(false)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -185,11 +185,11 @@ func AdminCreateAiModel(c *gin.Context) {
 		utils.BadRequest(c, "展示名、模型标识、上游地址均为必填")
 		return
 	}
-	kind := models.NormalizeAiKind(strings.TrimSpace(req.Kind))
-	m := &models.AiModel{
+	kind := aim.NormalizeAiKind(strings.TrimSpace(req.Kind))
+	m := &aim.AiModel{
 		Name: name, Kind: kind, ModelID: modelID, BaseURL: baseURL,
-		ApiKind:      models.NormalizeAiApiKind(req.ApiKind),
-		ProviderHint: models.NormalizeProviderHint(req.ProviderHint),
+		ApiKind:      aim.NormalizeAiApiKind(req.ApiKind),
+		ProviderHint: aim.NormalizeProviderHint(req.ProviderHint),
 		Vendor:       strings.TrimSpace(strVal(req.Vendor)),
 		Note:         strings.TrimSpace(strVal(req.Note)),
 
@@ -250,7 +250,7 @@ func AdminCreateAiModel(c *gin.Context) {
 	if strings.TrimSpace(req.AccountToken) != "" {
 		m.AccountTokenEnc = strings.TrimSpace(req.AccountToken) // CreateAiModel 内部加密
 	}
-	if err := models.CreateAiModel(m, req.ApiKey); err != nil {
+	if err := aim.CreateAiModel(m, req.ApiKey); err != nil {
 		utils.InternalError(c, "创建失败")
 		return
 	}
@@ -263,7 +263,7 @@ func AdminUpdateAiModel(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if _, err := models.GetAiModel(uint(id)); err != nil {
+	if _, err := aim.GetAiModel(uint(id)); err != nil {
 		utils.NotFound(c, "模型不存在")
 		return
 	}
@@ -277,7 +277,7 @@ func AdminUpdateAiModel(c *gin.Context) {
 		fields["name"] = s
 	}
 	if s := strings.TrimSpace(req.Kind); s != "" {
-		fields["kind"] = models.NormalizeAiKind(s)
+		fields["kind"] = aim.NormalizeAiKind(s)
 	}
 	if s := strings.TrimSpace(req.ModelID); s != "" {
 		fields["model_id"] = s
@@ -307,10 +307,10 @@ func AdminUpdateAiModel(c *gin.Context) {
 		fields["priority"] = *req.Priority
 	}
 	if s := strings.TrimSpace(req.ApiKind); s != "" {
-		fields["api_kind"] = models.NormalizeAiApiKind(s)
+		fields["api_kind"] = aim.NormalizeAiApiKind(s)
 	}
 	if s := strings.TrimSpace(req.ProviderHint); s != "" {
-		fields["provider_hint"] = models.NormalizeProviderHint(s)
+		fields["provider_hint"] = aim.NormalizeProviderHint(s)
 	}
 	if req.UserVisible != nil {
 		fields["user_visible"] = *req.UserVisible
@@ -367,7 +367,7 @@ func AdminUpdateAiModel(c *gin.Context) {
 			fields["account_token_enc"] = enc
 		}
 	}
-	if err := models.UpdateAiModelFields(uint(id), fields, req.ApiKey); err != nil {
+	if err := aim.UpdateAiModelFields(uint(id), fields, req.ApiKey); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
@@ -380,7 +380,7 @@ func AdminDeleteAiModel(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := models.DeleteAiModel(uint(id)); err != nil {
+	if err := aim.DeleteAiModel(uint(id)); err != nil {
 		utils.InternalError(c, "删除失败")
 		return
 	}
@@ -401,7 +401,7 @@ func AdminAiModelPresets(c *gin.Context) {
 	}
 	out := make([]aiops.AiModelPreset, 0, len(all))
 	for _, p := range all {
-		if p.Kind == models.NormalizeAiKind(kind) {
+		if p.Kind == aim.NormalizeAiKind(kind) {
 			out = append(out, p)
 		}
 	}

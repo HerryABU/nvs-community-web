@@ -10,13 +10,14 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 )
 
 // ==================== AI 思维导图：需求 → 层级大纲 ====================
 
 func AiMindmap(c *gin.Context) {
-	if !models.IsAiEnabled() {
+	if !aim.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
@@ -43,16 +44,16 @@ func AiMindmap(c *gin.Context) {
 	if depth < 2 || depth > 4 {
 		depth = 3
 	}
-	var m *models.AiModel
+	var m *aim.AiModel
 	if req.ModelID > 0 {
-		mm, err := models.GetEnabledAiModelOfKind(req.ModelID, models.AiKindChat)
+		mm, err := aim.GetEnabledAiModelOfKind(req.ModelID, aim.AiKindChat)
 		if err != nil || mm == nil {
 			utils.BadRequest(c, "模型不可用")
 			return
 		}
 		m = mm
 	} else {
-		list, err := models.ListAiModelsByKind(models.AiKindChat, true)
+		list, err := aim.ListAiModelsByKind(aim.AiKindChat, true)
 		if err != nil || len(list) == 0 {
 			utils.BadRequest(c, "暂无可用对话模型")
 			return
@@ -67,7 +68,7 @@ func AiMindmap(c *gin.Context) {
 		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: topic},
 	}
-	tokensIn := models.EstimateTokens(systemPrompt) + models.EstimateTokens(topic)
+	tokensIn := aim.EstimateTokens(systemPrompt) + aim.EstimateTokens(topic)
 	tokensOut := 1200
 	freeOK, _, _ := aihub.CheckAiFreeQuota(userID, tokensIn+tokensOut)
 	if !freeOK {
@@ -75,12 +76,12 @@ func AiMindmap(c *gin.Context) {
 			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
 			return
 		}
-		if _, ok := models.PrecheckAiBalance(userID, m, tokensIn, tokensOut); !ok {
+		if _, ok := aim.PrecheckAiBalance(userID, m, tokensIn, tokensOut); !ok {
 			utils.Error(c, 429, 42902, "余额不足，请先充值")
 			return
 		}
 	}
-	callLog, lerr := models.CreateAiCallLog(userID, m, "chat", "mindmap", 0, tokensIn, tokensOut, freeOK)
+	callLog, lerr := aim.CreateAiCallLog(userID, m, "chat", "mindmap", 0, tokensIn, tokensOut, freeOK)
 	if lerr != nil {
 		utils.InternalError(c, "记录调用失败")
 		return
@@ -91,7 +92,7 @@ func AiMindmap(c *gin.Context) {
 		apiKey = lease.Key
 	}
 	if kerr != nil {
-		models.FailAiCallLog(callLog.ID, "密钥解密失败")
+		aim.FailAiCallLog(callLog.ID, "密钥解密失败")
 		utils.InternalError(c, "模型密钥解密失败，请联系站长")
 		return
 	}
@@ -99,13 +100,13 @@ func AiMindmap(c *gin.Context) {
 	chatReq := aiclient.ChatRequest{Model: m.ModelID, Messages: messages, MaxTokens: tokensOut, Temperature: 0.4}
 	var out string
 	var realIn, realOut int
-	if models.NormalizeAiApiKind(m.ApiKind) == models.AiApiClaude {
+	if aim.NormalizeAiApiKind(m.ApiKind) == aim.AiApiClaude {
 		out, realIn, realOut, kerr = client.CompleteClaude(chatReq)
 	} else {
 		out, realIn, realOut, kerr = client.Complete(chatReq)
 	}
 	if kerr != nil {
-		models.FailAiCallLog(callLog.ID, kerr.Error())
+		aim.FailAiCallLog(callLog.ID, kerr.Error())
 		utils.BadRequest(c, "生成失败："+kerr.Error()+"（未扣款）")
 		return
 	}
@@ -113,11 +114,11 @@ func AiMindmap(c *gin.Context) {
 		realIn = tokensIn
 	}
 	if realOut <= 0 {
-		realOut = models.EstimateTokens(out)
+		realOut = aim.EstimateTokens(out)
 	}
-	cost, serr := models.SettleAiCallLog(callLog.ID, realIn, realOut)
+	cost, serr := aim.SettleAiCallLog(callLog.ID, realIn, realOut)
 	if serr != nil {
-		models.FailAiCallLog(callLog.ID, serr.Error())
+		aim.FailAiCallLog(callLog.ID, serr.Error())
 	}
 	nb := models.GetTokenBalance(userID)
 	utils.Success(c, gin.H{

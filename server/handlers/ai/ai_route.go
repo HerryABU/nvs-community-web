@@ -2,10 +2,10 @@ package ai
 
 import (
 	"nvs-server/handlers/admin"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 	aiops "nvs-server/models/aiops"
 )
 
@@ -53,7 +53,7 @@ func UpdateAiRouteConfig(c *gin.Context) {
 
 // previewPick 按策略预览会选中的模型（含价格，便于核对「最便宜」到底多便宜）
 func previewPick(strategy string) []gin.H {
-	list, err := models.ListAiModelsByKind(models.AiKindChat, true)
+	list, err := aim.ListAiModelsByKind(aim.AiKindChat, true)
 	if err != nil || len(list) == 0 {
 		return []gin.H{}
 	}

@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 )
 
 // setupBranchDB 独立命名内存库（同名共享库会在多测试/重跑间复用数据）。
@@ -20,23 +21,23 @@ func setupBranchDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开内存库失败：%v", err)
 	}
-	if err := db.AutoMigrate(&models.AiChatSession{}, &models.AiChatMessage{}); err != nil {
+	if err := db.AutoMigrate(&ai.AiChatSession{}, &ai.AiChatMessage{}); err != nil {
 		t.Fatalf("建表失败：%v", err)
 	}
 	models.DB = db
 	t.Cleanup(func() { models.DB = prev })
 }
 
-func mustSession(t *testing.T) *models.AiChatSession {
+func mustSession(t *testing.T) *ai.AiChatSession {
 	t.Helper()
-	s, err := models.CreateAiChatSession(1, 0, "", 1)
+	s, err := ai.CreateAiChatSession(1, 0, "", 1)
 	if err != nil {
 		t.Fatalf("建会话失败：%v", err)
 	}
 	return s
 }
 
-func mustMsg(t *testing.T, sid uint, role, content string, parent uint) *models.AiChatMessage {
+func mustMsg(t *testing.T, sid uint, role, content string, parent uint) *ai.AiChatMessage {
 	t.Helper()
 	m, err := AppendAiChatMessageWithParent(sid, role, content, parent, 0, 0, 0, 0)
 	if err != nil {
@@ -138,7 +139,7 @@ func TestThread_LegacyNoParent(t *testing.T) {
 	for _, r := range []struct{ role, content string }{
 		{"user", "老问1"}, {"assistant", "老答1"}, {"user", "老问2"}, {"assistant", "老答2"},
 	} {
-		m := &models.AiChatMessage{
+		m := &ai.AiChatMessage{
 			SessionID: s.ID, Role: r.role, Content: r.content,
 			CreatedAt: time.Now(),
 		}
@@ -177,7 +178,7 @@ func TestLockSession(t *testing.T) {
 	if err := LockAiChatSession(s.ID, "测试终止", 0); err != nil {
 		t.Fatalf("终止失败：%v", err)
 	}
-	got, _ := models.GetAiChatSession(s.ID, 1)
+	got, _ := ai.GetAiChatSession(s.ID, 1)
 	if got == nil || !got.Locked {
 		t.Fatalf("会话应处于终止状态")
 	}
@@ -187,7 +188,7 @@ func TestLockSession(t *testing.T) {
 	if err := UnlockAiChatSession(s.ID); err != nil {
 		t.Fatalf("解锁失败：%v", err)
 	}
-	got, _ = models.GetAiChatSession(s.ID, 1)
+	got, _ = ai.GetAiChatSession(s.ID, 1)
 	if got.Locked {
 		t.Fatalf("解锁后不应仍处于终止状态")
 	}

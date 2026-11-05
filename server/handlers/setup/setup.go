@@ -15,6 +15,7 @@ import (
 	"nvs-server/version"
 
 	"github.com/gin-gonic/gin"
+	ai "nvs-server/models/ai"
 )
 
 // ==================== 建站向导（一次性安装，严防死守） ====================
@@ -158,7 +159,7 @@ func SetupInstall(c *gin.Context) {
 	models.DB = target
 	models.InitDefaultForums()
 	models.InitPlatformConfigs()
-	models.SeedDefaultAiAgents() // AI 智能体内置种子（表为空时写入）
+	ai.SeedDefaultAiAgents() // AI 智能体内置种子（表为空时写入）
 	_ = models.SetPlatformConfig("site_name", req.SiteName)
 	// .env 同步 SITE_NAME（重启后仍生效；写失败不阻断安装）
 	if _, err := config.SyncPlatformConfigEnv(map[string]string{"site_name": req.SiteName}); err != nil {

@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"nvs-server/aiclient"
-	"nvs-server/models"
+	ai "nvs-server/models/ai"
 )
 
 // Snippet 一次检索结果的最小投影。
@@ -71,7 +71,7 @@ type searchShape struct {
 //
 // path 可配（默认 /search），因为各家的实际路径不同（DeepSeek/Kimi 走 /v1/tools/search，
 // Perplexity 走 /search）。base_url 已含 /v1 的情况下这里只拼相对路径。
-func DoSearch(ctx context.Context, m *models.AiModel, apiKey, path, query string, recencyDays, maxResults int) ([]Snippet, error) {
+func DoSearch(ctx context.Context, m *ai.AiModel, apiKey, path, query string, recencyDays, maxResults int) ([]Snippet, error) {
 	if m == nil {
 		return nil, fmt.Errorf("未配置检索模型")
 	}

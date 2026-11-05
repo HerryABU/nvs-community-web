@@ -7,6 +7,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 )
 
@@ -14,7 +15,7 @@ import (
 
 // AiFreeQuotaStatus GET /api/ai/free-quota — 当前用户今日免费额度状态
 func AiFreeQuotaStatus(c *gin.Context) {
-	if !models.IsAiEnabled() {
+	if !aim.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}

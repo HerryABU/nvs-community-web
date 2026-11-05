@@ -2,6 +2,7 @@ package aiops
 
 import (
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 	"nvs-server/utils"
 )
 
@@ -13,7 +14,7 @@ func ReencryptAiModelKeys(oldKey, newKey []byte) (int, error) {
 	if len(oldKey) != 32 || len(newKey) != 32 {
 		return 0, utils.ErrFieldCryptoNoKey
 	}
-	var list []models.AiModel
+	var list []ai.AiModel
 	if err := models.DB.Where("api_key_enc != ''").Find(&list).Error; err != nil {
 		return 0, err
 	}
@@ -37,7 +38,7 @@ func ReencryptAiModelKeys(oldKey, newKey []byte) (int, error) {
 	// 第二阶段：统一落库
 	n := 0
 	for _, t := range todo {
-		if err := models.DB.Model(&models.AiModel{}).Where("id = ?", t.id).
+		if err := models.DB.Model(&ai.AiModel{}).Where("id = ?", t.id).
 			Update("api_key_enc", t.enc).Error; err != nil {
 			return n, err
 		}

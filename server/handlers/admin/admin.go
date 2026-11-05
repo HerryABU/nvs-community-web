@@ -12,6 +12,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	ai "nvs-server/models/ai"
 	aiops "nvs-server/models/aiops"
 	search "nvs-server/models/search"
 	"nvs-server/models/security"
@@ -715,7 +716,7 @@ func computeAiModelFamilyStack(days, limit int) []gin.H {
 	}
 	nameByID := map[uint]string{}
 	if len(ids) > 0 {
-		var list []models.AiModel
+		var list []ai.AiModel
 		models.DB.Select("id, name, model_id").Where("id IN ?", ids).Find(&list)
 		for _, m := range list {
 			label := m.Name

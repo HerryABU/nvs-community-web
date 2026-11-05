@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 	aiops "nvs-server/models/aiops"
 )
 
@@ -31,7 +32,7 @@ func ensureNovelOwner(c *gin.Context, novelID uint) bool {
 
 // AiMemoryList GET /api/ai/memory?novel_id= — 我的作品记忆（大纲 + 摘要）
 func AiMemoryList(c *gin.Context) {
-	if !models.IsAiEnabled() {
+	if !aim.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
@@ -61,7 +62,7 @@ func AiMemoryList(c *gin.Context) {
 
 // AiMemorySaveOutline PUT /api/ai/memory/outline — 保存/更新作品大纲
 func AiMemorySaveOutline(c *gin.Context) {
-	if !models.IsAiEnabled() {
+	if !aim.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
@@ -94,7 +95,7 @@ func AiMemorySaveOutline(c *gin.Context) {
 // AiMemorySaveCharacters PUT /api/ai/memory/characters — 保存/更新角色设定
 // 角色设定是模板「角色信息」变量的来源，也是续写注入的稳定人设锚点。
 func AiMemorySaveCharacters(c *gin.Context) {
-	if !models.IsAiEnabled() {
+	if !aim.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
@@ -126,7 +127,7 @@ func AiMemorySaveCharacters(c *gin.Context) {
 
 // AiMemorySaveSummary PUT /api/ai/memory/summary — 保存/更新章节摘要
 func AiMemorySaveSummary(c *gin.Context) {
-	if !models.IsAiEnabled() {
+	if !aim.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
@@ -159,7 +160,7 @@ func AiMemorySaveSummary(c *gin.Context) {
 
 // AiMemoryDeleteSummary DELETE /api/ai/memory/summary — 删除章节摘要
 func AiMemoryDeleteSummary(c *gin.Context) {
-	if !models.IsAiEnabled() {
+	if !aim.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
@@ -187,7 +188,7 @@ func AiMemoryDeleteSummary(c *gin.Context) {
 
 // AiMemoryContext POST /api/ai/memory/context — 预览组装的长篇上下文（不扣费）
 func AiMemoryContext(c *gin.Context) {
-	if !models.IsAiEnabled() {
+	if !aim.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}

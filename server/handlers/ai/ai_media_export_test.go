@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"nvs-server/config"
-	"nvs-server/models"
+	aim "nvs-server/models/ai"
 )
 
 // TestAssertPublicHost SSRF 第一道：私网/回环/元数据地址必须拒绝
@@ -89,9 +89,9 @@ func TestZipMediaTasksContainsManifest(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "2026", "10", "x.png"), []byte("hello-img"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	list := []models.AiMediaTask{{
-		ID: 7, Kind: models.AiKindImage, ModelName: "m", Prompt: "p",
-		Status: models.AiMediaSucceeded, Cost: 3,
+	list := []aim.AiMediaTask{{
+		ID: 7, Kind: aim.AiKindImage, ModelName: "m", Prompt: "p",
+		Status: aim.AiMediaSucceeded, Cost: 3,
 		Result:      `{"images":["/uploads/2026/10/x.png","/uploads/2026/10/missing.png"]}`,
 		Attachments: `[{"url":"/uploads/2026/10/ref.png"}]`,
 	}}

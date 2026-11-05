@@ -8,6 +8,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	ai "nvs-server/models/ai"
 )
 
 func setupChannelKeyTestDB(t *testing.T) {
@@ -17,7 +18,7 @@ func setupChannelKeyTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开内存测试库失败: %v", err)
 	}
-	if err := db.AutoMigrate(&models.AiModel{}, &AiChannelKey{}, &AiModelKey{}); err != nil {
+	if err := db.AutoMigrate(&ai.AiModel{}, &AiChannelKey{}, &AiModelKey{}); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
 	old := models.DB
@@ -106,8 +107,8 @@ func TestReportAiChannelKey_SuccessResetsFailCount(t *testing.T) {
 // 取密钥顺序：渠道池优先于模型自带密钥（老配置只作兜底）
 func TestAcquireModelKey_PrefersChannelPool(t *testing.T) {
 	setupChannelKeyTestDB(t)
-	model := &models.AiModel{Name: "m1", Kind: "chat", ModelID: "deepseek-chat", BaseURL: testChannel, Enabled: true}
-	if err := models.CreateAiModel(model, "sk-model-legacy-0001"); err != nil {
+	model := &ai.AiModel{Name: "m1", Kind: "chat", ModelID: "deepseek-chat", BaseURL: testChannel, Enabled: true}
+	if err := ai.CreateAiModel(model, "sk-model-legacy-0001"); err != nil {
 		t.Fatalf("建模型失败: %v", err)
 	}
 	// 只有模型密钥时，取到的是 model 来源
@@ -137,13 +138,13 @@ func TestAcquireModelKey_PrefersChannelPool(t *testing.T) {
 // 迁移：把按模型存的密钥并入渠道池，且重复执行不会重复插入
 func TestMigrateModelKeysToChannels_Idempotent(t *testing.T) {
 	setupChannelKeyTestDB(t)
-	m1 := &models.AiModel{Name: "m1", Kind: "chat", ModelID: "a", BaseURL: testChannel, Enabled: true}
-	m2 := &models.AiModel{Name: "m2", Kind: "chat", ModelID: "b", BaseURL: testChannel, Enabled: true}
-	if err := models.CreateAiModel(m1, "sk-shared-key-000001"); err != nil {
+	m1 := &ai.AiModel{Name: "m1", Kind: "chat", ModelID: "a", BaseURL: testChannel, Enabled: true}
+	m2 := &ai.AiModel{Name: "m2", Kind: "chat", ModelID: "b", BaseURL: testChannel, Enabled: true}
+	if err := ai.CreateAiModel(m1, "sk-shared-key-000001"); err != nil {
 		t.Fatalf("建模型失败: %v", err)
 	}
 	// 第二个模型用同一把 key（同一渠道下重复是常态）
-	if err := models.CreateAiModel(m2, "sk-shared-key-000001"); err != nil {
+	if err := ai.CreateAiModel(m2, "sk-shared-key-000001"); err != nil {
 		t.Fatalf("建模型失败: %v", err)
 	}
 	// 再给 m1 加一把模型池密钥（新 key）

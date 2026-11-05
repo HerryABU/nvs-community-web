@@ -3,19 +3,19 @@ package ai
 import (
 	"encoding/json"
 	"nvs-server/handlers/hctx"
-	"nvs-server/models"
 	"nvs-server/utils"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 )
 
 // ==================== 作品广场（灵感广场） ====================
 
 // galleryItem 公开作品视图（不含 cost/user_id 等隐私字段）
-func galleryItem(t *models.AiMediaTask) gin.H {
+func galleryItem(t *aim.AiMediaTask) gin.H {
 	images := []string{}
 	video := ""
 	var payload map[string]interface{}
@@ -97,7 +97,7 @@ func AiGalleryLike(c *gin.Context) {
 func AiMyMediaPublic(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	t, err := models.GetAiMediaTask(uint(id), userID)
+	t, err := aim.GetAiMediaTask(uint(id), userID)
 	if err != nil {
 		utils.NotFound(c, "作品不存在")
 		return

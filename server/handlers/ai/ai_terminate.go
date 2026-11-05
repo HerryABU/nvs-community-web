@@ -5,6 +5,7 @@ import (
 
 	"nvs-server/aisafety"
 	"nvs-server/models"
+	aim "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 	"nvs-server/supervise"
 )
@@ -32,7 +33,7 @@ type terminateOutcome struct {
 //	loose    宽松：会话可继续，不留任何额外限制，本档只拦当轮
 //
 // 默认严格：出问题时的默认取向应该是「先停住」，而不是继续消耗在一个已被污染的上下文里。
-func applyTermination(session *models.AiChatSession, cfg *aisafety.SafetyConfig, reason string) terminateOutcome {
+func applyTermination(session *aim.AiChatSession, cfg *aisafety.SafetyConfig, reason string) terminateOutcome {
 	mode := aisafety.NormalizeMode("")
 	if cfg != nil {
 		mode = aisafety.NormalizeMode(cfg.TerminateMode)

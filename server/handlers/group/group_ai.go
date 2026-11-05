@@ -14,6 +14,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	ai "nvs-server/models/ai"
 )
 
 // ==================== 群组 @ai 智能体（群内机器人） ====================
@@ -40,15 +41,15 @@ func maybeTriggerGroupAiReply(g *groups.Group, postID, triggerUser uint, content
 }
 
 func triggerGroupAi(g *groups.Group, postID, triggerUser uint, content string) {
-	if g == nil || !g.AiEnabled || !models.IsAiEnabled() || !models.IsAiBotEnabled() {
+	if g == nil || !g.AiEnabled || !ai.IsAiEnabled() || !ai.IsAiBotEnabled() {
 		return
 	}
-	_, prompt, ok := models.ParseAiBotInvocation(content)
+	_, prompt, ok := ai.ParseAiBotInvocation(content)
 	if !ok || strings.TrimSpace(prompt) == "" {
 		return
 	}
-	cfg := models.GetAiBotConfig()
-	if !models.CheckAiBotQuota(triggerUser, cfg.DailyLimit) {
+	cfg := ai.GetAiBotConfig()
+	if !ai.CheckAiBotQuota(triggerUser, cfg.DailyLimit) {
 		return // 超限静默（前端在 AI 设置里可见剩余次数）
 	}
 	key := fmt.Sprintf("%d:%d", g.ID, postID)
@@ -72,7 +73,7 @@ func triggerGroupAi(g *groups.Group, postID, triggerUser uint, content string) {
 }
 
 // generateGroupAiReply 异步生成并以机器人身份回帖
-func generateGroupAiReply(groupID, agentID, postID, triggerUser uint, question string, cfg models.AiBotConfig) {
+func generateGroupAiReply(groupID, agentID, postID, triggerUser uint, question string, cfg ai.AiBotConfig) {
 	// 人设：群绑定的智能体优先，其次平台默认
 	systemPrompt := "你是群组里的 AI 助手，回答简洁、贴合讨论，直接输出内容，不要解释。"
 	pickedID := agentID
@@ -80,7 +81,7 @@ func generateGroupAiReply(groupID, agentID, postID, triggerUser uint, question s
 		pickedID = cfg.AgentID
 	}
 	if pickedID > 0 {
-		if a, aerr := models.GetAiAgent(pickedID); aerr == nil && a.Enabled {
+		if a, aerr := ai.GetAiAgent(pickedID); aerr == nil && a.Enabled {
 			systemPrompt = a.SystemPrompt + "\n（请以该人设简洁回复，直接输出内容）"
 		}
 	}
@@ -95,9 +96,9 @@ func generateGroupAiReply(groupID, agentID, postID, triggerUser uint, question s
 	if aerr != nil {
 		return
 	}
-	models.RecordAiBotUsage(triggerUser)
+	ai.RecordAiBotUsage(triggerUser)
 
-	botID, berr := models.EnsureAiBotUser()
+	botID, berr := ai.EnsureAiBotUser()
 	if berr != nil {
 		return
 	}
@@ -137,12 +138,12 @@ func AiStatus(c *gin.Context) {
 	}
 	agentName := ""
 	if g.AiAgentID > 0 {
-		if a, aerr := models.GetAiAgent(g.AiAgentID); aerr == nil {
+		if a, aerr := ai.GetAiAgent(g.AiAgentID); aerr == nil {
 			agentName = a.Name
 		}
 	}
 	utils.Success(c, gin.H{
-		"enabled":    g.AiEnabled && models.IsAiEnabled() && models.IsAiBotEnabled(),
+		"enabled":    g.AiEnabled && ai.IsAiEnabled() && ai.IsAiBotEnabled(),
 		"agent_id":   g.AiAgentID,
 		"agent_name": agentName,
 	})

@@ -1,6 +1,8 @@
 package aiops
 
-import "nvs-server/models"
+import (
+	ai "nvs-server/models/ai"
+)
 
 // aiBudgetKey 与根包 ai_budget.go 中的平台配置键保持一致。
 // 该常量未导出、无法跨包复用，故在本子包测试内本地定义一份（值相同，行为不变）。
@@ -8,7 +10,7 @@ const aiBudgetKey = "ai_budget"
 
 // normalizeBudget 与根包 ai_budget.go 的实现等价：未导出函数无法跨包复用，
 // 这里复制一份供本子包测试验证预算配置的钳位规则（逻辑逐条对齐）。
-func normalizeBudget(c models.AiBudgetConfig) models.AiBudgetConfig {
+func normalizeBudget(c ai.AiBudgetConfig) ai.AiBudgetConfig {
 	if c.DailyCap < 0 {
 		c.DailyCap = 0
 	}

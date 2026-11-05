@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 )
 
@@ -124,8 +125,8 @@ func Speech(c *gin.Context) {
 }
 
 // pickAudioModel 选可用的 audio 模型（指定 ID 时校验 kind）
-func pickAudioModel(id uint) *models.AiModel {
-	var m models.AiModel
+func pickAudioModel(id uint) *aim.AiModel {
+	var m aim.AiModel
 	if id > 0 {
 		if err := models.DB.Where("id = ? AND enabled = ?", id, true).First(&m).Error; err != nil {
 			return nil
@@ -143,7 +144,7 @@ func pickAudioModel(id uint) *models.AiModel {
 }
 
 // chargeAudioCall 扣费：免费额度优先，否则扣 PriceCall 代币
-func chargeAudioCall(userID uint, m *models.AiModel) error {
+func chargeAudioCall(userID uint, m *aim.AiModel) error {
 	// 免费额度：占用 1 次调用（与文本共用池子，站长可统一控总量）
 	if ok, _, _ := aihub.CheckAiFreeQuota(userID, 0); ok {
 		_ = aihub.RecordAiFreeUsage(userID, 1, 0)
@@ -192,7 +193,7 @@ func AdminSpeechModels(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	var list []models.AiModel
+	var list []aim.AiModel
 	_ = models.DB.Where("kind = ?", "audio").Order("priority DESC, id ASC").Find(&list).Error
 	utils.Success(c, gin.H{
 		"list": list, "count": len(list),

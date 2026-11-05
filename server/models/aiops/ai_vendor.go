@@ -3,6 +3,7 @@ package aiops
 import (
 	"fmt"
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 	"strings"
 	"time"
 )
@@ -87,7 +88,7 @@ func UpdateAiVendor(id uint, name string, sortOrder int, enabled bool, prefix ..
 	}
 	if name != v.Name {
 		// 级联：模型表里的厂商名跟着改（map 更新，零值安全）
-		models.DB.Model(&models.AiModel{}).Where("vendor = ?", v.Name).UpdateColumn("vendor", name)
+		models.DB.Model(&ai.AiModel{}).Where("vendor = ?", v.Name).UpdateColumn("vendor", name)
 	}
 	return nil
 }
@@ -99,7 +100,7 @@ func DeleteAiVendor(id uint) error {
 		return fmt.Errorf("厂商不存在")
 	}
 	var n int64
-	models.DB.Model(&models.AiModel{}).Where("vendor = ?", v.Name).Count(&n)
+	models.DB.Model(&ai.AiModel{}).Where("vendor = ?", v.Name).Count(&n)
 	if n > 0 {
 		return fmt.Errorf("仍有 %d 个模型属于「%s」，请先改为其他厂商", n, v.Name)
 	}

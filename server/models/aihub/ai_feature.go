@@ -3,6 +3,7 @@ package aihub
 import (
 	"encoding/json"
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 	"strconv"
 	"strings"
 	"time"
@@ -88,7 +89,7 @@ func SetAiFeatureFlags(f AiFeatureFlags) error {
 	return models.SetPlatformConfig(aiFeatureFlagsKey, string(b))
 }
 
-// CountTodayAiChats 今日对话次数（含免费与付费；按 models.AiCallLog 统计）
+// CountTodayAiChats 今日对话次数（含免费与付费；按 ai.AiCallLog 统计）
 func CountTodayAiChats(userID uint) int64 {
 	if userID == 0 {
 		return 0
@@ -97,7 +98,7 @@ func CountTodayAiChats(userID uint) int64 {
 	now := time.Now()
 	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	var n int64
-	models.DB.Model(&models.AiCallLog{}).
+	models.DB.Model(&ai.AiCallLog{}).
 		Where("user_id = ? AND action = ? AND created_at >= ?", userID, "chat", start).
 		Count(&n)
 	return n

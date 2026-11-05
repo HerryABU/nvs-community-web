@@ -4,6 +4,7 @@ package models_test
 // 必须用外部测试包（models_test）导入，否则 package models 内部测试直接导入
 // 域子包会与「域→models」的引用形成 import cycle。
 import (
+	_ "nvs-server/models/ai"
 	_ "nvs-server/models/aicost"
 	_ "nvs-server/models/aihub"
 	_ "nvs-server/models/aiops"

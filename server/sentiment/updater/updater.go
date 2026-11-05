@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"nvs-server/aiclient"
-	"nvs-server/models"
+	ai "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 	"nvs-server/sentiment/lexicon"
 	"nvs-server/sentiment/store"
@@ -200,20 +200,20 @@ func truncate(s string, n int) string {
 }
 
 // pickModel 选检索/总结用的模型：优先配置指定的，否则挑一个启用的对话模型。
-func pickModel(id uint) (*models.AiModel, string) {
-	var m *models.AiModel
+func pickModel(id uint) (*ai.AiModel, string) {
+	var m *ai.AiModel
 	if id > 0 {
-		if got, err := models.GetAiModel(id); err == nil {
+		if got, err := ai.GetAiModel(id); err == nil {
 			m = got
 		}
 	}
 	if m == nil {
-		list, err := models.ListAiModels(false)
+		list, err := ai.ListAiModels(false)
 		if err != nil {
 			return nil, ""
 		}
 		for i := range list {
-			if list[i].Enabled && list[i].Kind == models.AiKindChat && list[i].BaseURL != "" {
+			if list[i].Enabled && list[i].Kind == ai.AiKindChat && list[i].BaseURL != "" {
 				m = &list[i]
 				break
 			}
@@ -272,7 +272,7 @@ func searchQueries(cfg *store.Config, n int) []string {
 // learnFromHits 对内线：把近期被标注/拦截的评论交给模型，归纳可疑新词。
 //
 // 只送「已被判定过的内容片段」，不碰未命中内容——避免把用户原文大批外发给上游。
-func learnFromHits(ctx context.Context, m *models.AiModel, apiKey string) ([]Candidate, error) {
+func learnFromHits(ctx context.Context, m *ai.AiModel, apiKey string) ([]Candidate, error) {
 	rows, err := store.DB.Model(&store.Hit{}).
 		Where("created_at >= ? AND decision IN ?", time.Now().AddDate(0, 0, -7), []string{"flag", "block"}).
 		Order("id DESC").Limit(30).Rows()

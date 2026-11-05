@@ -11,13 +11,14 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 )
 
 // ==================== AI 内容安全闸（提示词 + 用户特征 + 蓝队模型 B） ====================
 
 // countUserTurns 历史里用户发过几条消息（本轮轮次 = 这个数 + 1）。
-func countUserTurns(history []models.AiChatMessage) int {
+func countUserTurns(history []aim.AiChatMessage) int {
 	n := 0
 	for _, h := range history {
 		if h.Role == "user" {
@@ -31,7 +32,7 @@ func countUserTurns(history []models.AiChatMessage) int {
 //
 // 不能把助手回复混进去：模型的回答里必然出现危险术语，
 // 用户下一句「谢谢」也会被算成「承接追问」。
-func userMessagesOnly(history []models.AiChatMessage) []string {
+func userMessagesOnly(history []aim.AiChatMessage) []string {
 	out := make([]string, 0, len(history))
 	for _, h := range history {
 		if h.Role == "user" {
@@ -42,7 +43,7 @@ func userMessagesOnly(history []models.AiChatMessage) []string {
 }
 
 // toJudgeTurns 转成蓝队检查用的对话轮（含助手回复，判定要看上下文）。
-func toJudgeTurns(history []models.AiChatMessage) []aisafety.JudgeTurn {
+func toJudgeTurns(history []aim.AiChatMessage) []aisafety.JudgeTurn {
 	out := make([]aisafety.JudgeTurn, 0, len(history))
 	for _, h := range history {
 		role := h.Role
@@ -55,11 +56,11 @@ func toJudgeTurns(history []models.AiChatMessage) []aisafety.JudgeTurn {
 }
 
 // serveSafetyRefusal 输入侧拦截后的响应：落库（用户要看到自己问了什么）+ 拒答 + 不扣费。
-func serveSafetyRefusal(c *gin.Context, session *models.AiChatSession, storeMsg string, dec *aisafety.InputDecision, term terminateOutcome, parentID uint) {
+func serveSafetyRefusal(c *gin.Context, session *aim.AiChatSession, storeMsg string, dec *aisafety.InputDecision, term terminateOutcome, parentID uint) {
 	// 被拦截的提问也要落进消息树（用户要能看到自己问了什么），
 	// 并挂在当前分支上——否则前端重载后这一轮会消失。
 	um, _ := aihub.AppendAiChatMessageWithParent(session.ID, "user", storeMsg, parentID, 0, 0, 0, 0)
-	models.TouchAiChatSession(session.ID, storeMsg)
+	aim.TouchAiChatSession(session.ID, storeMsg)
 	text := term.Text
 	if strings.TrimSpace(text) == "" {
 		text = dec.Refusal
@@ -71,7 +72,7 @@ func serveSafetyRefusal(c *gin.Context, session *models.AiChatSession, storeMsg 
 	if am != nil && am.ID > 0 {
 		aihub.SetActiveLeaf(session.ID, am.ID)
 	}
-	models.TouchAiChatSession(session.ID, "")
+	aim.TouchAiChatSession(session.ID, "")
 
 	setupSSE(c)
 	sseEvent(c, gin.H{
@@ -89,16 +90,16 @@ func serveSafetyRefusal(c *gin.Context, session *models.AiChatSession, storeMsg 
 // serveAppeaseResponse 绥靖模式下的「无感」响应：把引导内容当作一次正常回答返回，
 // 不透 blocked / terminated / replace 任何拦截信号（前端据此不会弹警告、不会禁用输入）。
 // 用户看到的就是一句普通的 AI 回复，察觉不到自己已被静默记入「可疑名单」。
-func serveAppeaseResponse(c *gin.Context, session *models.AiChatSession, storeMsg string, term terminateOutcome, parentID uint) {
+func serveAppeaseResponse(c *gin.Context, session *aim.AiChatSession, storeMsg string, term terminateOutcome, parentID uint) {
 	// 用户提问也要落进消息树（用户要能看到自己问了什么），挂在当前分支上。
 	um, _ := aihub.AppendAiChatMessageWithParent(session.ID, "user", storeMsg, parentID, 0, 0, 0, 0)
-	models.TouchAiChatSession(session.ID, storeMsg)
+	aim.TouchAiChatSession(session.ID, storeMsg)
 	// 引导内容以「普通助手消息」落库（不标记 SafetyBlocked），重载后与正常回答无异。
 	am, _ := aihub.AppendAiChatMessageWithParent(session.ID, "assistant", term.Text, um.ID, 0, 0, 0, 0)
 	if am != nil && am.ID > 0 {
 		aihub.SetActiveLeaf(session.ID, am.ID)
 	}
-	models.TouchAiChatSession(session.ID, "")
+	aim.TouchAiChatSession(session.ID, "")
 	setupSSE(c)
 	sseEvent(c, gin.H{
 		"content":    term.Text,
@@ -377,10 +378,10 @@ func ListLockedSessions(c *gin.Context) {
 	if size < 1 || size > 200 {
 		size = 30
 	}
-	q := models.DB.Model(&models.AiChatSession{}).Where("locked = ?", true)
+	q := models.DB.Model(&aim.AiChatSession{}).Where("locked = ?", true)
 	var total int64
 	q.Count(&total)
-	var list []models.AiChatSession
+	var list []aim.AiChatSession
 	q.Order("locked_at DESC, id DESC").Offset((page - 1) * size).Limit(size).Find(&list)
 	utils.Success(c, gin.H{"items": list, "total": total, "page": page})
 }

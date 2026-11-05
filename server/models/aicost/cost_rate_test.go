@@ -8,6 +8,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 )
 
 // setupCostRateTestDB 独立内存库（唯一名，避免与其它测试共享同一内存库）
@@ -18,7 +19,7 @@ func setupCostRateTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开内存测试库失败: %v", err)
 	}
-	if err := db.AutoMigrate(&models.PlatformConfig{}, &models.AiModel{}); err != nil {
+	if err := db.AutoMigrate(&models.PlatformConfig{}, &ai.AiModel{}); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
 	old := models.DB
@@ -131,8 +132,8 @@ func TestResolveCostRate_ChannelOverridesGlobal(t *testing.T) {
 	}
 
 	// 渠道 A 自己填 1:1，渠道 B 不填
-	a := models.AiModel{Name: "a", BaseURL: "https://a.example.com", RateRealAmount: 1, RateVirtualAmount: 1, RateRealCurrency: "USD"}
-	b := models.AiModel{Name: "b", BaseURL: "https://b.example.com"}
+	a := ai.AiModel{Name: "a", BaseURL: "https://a.example.com", RateRealAmount: 1, RateVirtualAmount: 1, RateRealCurrency: "USD"}
+	b := ai.AiModel{Name: "b", BaseURL: "https://b.example.com"}
 	if err := models.DB.Create(&a).Error; err != nil {
 		t.Fatal(err)
 	}

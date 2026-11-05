@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"nvs-server/aiclient"
-	"nvs-server/models"
+	ai "nvs-server/models/ai"
 	"nvs-server/sentiment/updater"
 )
 
@@ -117,16 +117,16 @@ func TestTruncateForLog(t *testing.T) {
 
 // 三种联网方式（/search 检索、模型原生联网、纯提示词）必须能按可用性正确降级。
 func TestResolveBadwordSearchMode(t *testing.T) {
-	plain := &models.AiModel{}
-	native := &models.AiModel{ModelID: "gpt-4o-mini-search-preview"}
+	plain := &ai.AiModel{}
+	native := &ai.AiModel{ModelID: "gpt-4o-mini-search-preview"}
 	native.SearchNative = true
-	endpoint := &models.AiModel{ModelID: "perplexity"}
+	endpoint := &ai.AiModel{ModelID: "perplexity"}
 	endpoint.SearchEndpoint = true
 
 	cases := []struct {
 		name            string
 		requested       string
-		model           *models.AiModel
+		model           *ai.AiModel
 		hasSearchSource bool
 		want            string
 	}{
@@ -156,7 +156,7 @@ func TestResolveBadwordSearchMode(t *testing.T) {
 func TestAttachNativeSearch(t *testing.T) {
 	// 不支持的模型：不挂任何参数
 	req := &aiclient.ChatRequest{}
-	attachNativeSearch(req, &models.AiModel{})
+	attachNativeSearch(req, &ai.AiModel{})
 	if req.WebSearchOptions != nil || len(req.Tools) > 0 {
 		t.Fatalf("未标注支持的模型不应挂联网参数: %+v", req)
 	}
@@ -167,7 +167,7 @@ func TestAttachNativeSearch(t *testing.T) {
 	}
 
 	// 支持的模型：两种参数都带上
-	m := &models.AiModel{ModelID: "x"}
+	m := &ai.AiModel{ModelID: "x"}
 	m.SearchNative = true
 	req2 := &aiclient.ChatRequest{}
 	attachNativeSearch(req2, m)
@@ -271,7 +271,7 @@ func TestBadwordSearchSnippets(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	m := &models.AiModel{BaseURL: srv.URL, ModelID: "x"}
+	m := &ai.AiModel{BaseURL: srv.URL, ModelID: "x"}
 	hits, err := badwordSearchSnippets(context.Background(), m, "sk-test", "/search", "违禁词 黑话")
 	if err != nil {
 		t.Fatalf("检索失败: %v", err)

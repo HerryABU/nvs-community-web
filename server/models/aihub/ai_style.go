@@ -3,13 +3,14 @@ package aihub
 import (
 	"fmt"
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 	"strings"
 	"time"
 )
 
 // ==================== 作品风格字典 ====================
 // 绘画/视频发布作品时从字典选风格；广场按字典生成筛选 chips。
-// 保留 models.AiMediaTask.Style 字符串字段，字典只做规范化与展示，零数据迁移。
+// 保留 ai.AiMediaTask.Style 字符串字段，字典只做规范化与展示，零数据迁移。
 
 // AiStyle 风格
 type AiStyle struct {
@@ -28,7 +29,7 @@ func (AiStyle) TableName() string { return "ai_styles" }
 func ListAiStyles(kind string, onlyEnabled bool) ([]AiStyle, error) {
 	q := models.DB.Order("sort_order ASC, id ASC")
 	if k := strings.TrimSpace(kind); k != "" {
-		q = q.Where("kind = ?", models.NormalizeAiKind(k))
+		q = q.Where("kind = ?", ai.NormalizeAiKind(k))
 	}
 	if onlyEnabled {
 		q = q.Where("enabled = ?", true)
@@ -47,7 +48,7 @@ func CreateAiStyle(kind, name string, sortOrder int) (*AiStyle, error) {
 	if len([]rune(name)) > 32 {
 		name = string([]rune(name)[:32])
 	}
-	kind = models.NormalizeAiKind(kind)
+	kind = ai.NormalizeAiKind(kind)
 	var n int64
 	models.DB.Model(&AiStyle{}).Where("kind = ? AND name = ?", kind, name).Count(&n)
 	if n > 0 {
@@ -76,7 +77,7 @@ func UpdateAiStyle(id uint, name string, sortOrder int, enabled bool) error {
 		return err
 	}
 	if name != st.Name {
-		models.DB.Model(&models.AiMediaTask{}).Where("style = ?", st.Name).UpdateColumn("style", name)
+		models.DB.Model(&ai.AiMediaTask{}).Where("style = ?", st.Name).UpdateColumn("style", name)
 	}
 	return nil
 }
@@ -96,8 +97,8 @@ func DeleteAiStyle(id uint) error {
 // SeedAiStyles 内置常见风格（幂等）
 func SeedAiStyles() {
 	seeds := map[string][]string{
-		models.AiKindImage: {"写实摄影", "电商设计", "插画设计", "动漫游戏", "国风", "海报设计", "建筑空间", "头像写真"},
-		models.AiKindVideo: {"空镜", "人物特写", "转场", "广告片", "动画", "分镜叙事"},
+		ai.AiKindImage: {"写实摄影", "电商设计", "插画设计", "动漫游戏", "国风", "海报设计", "建筑空间", "头像写真"},
+		ai.AiKindVideo: {"空镜", "人物特写", "转场", "广告片", "动画", "分镜叙事"},
 	}
 	i := 0
 	for kind, names := range seeds {

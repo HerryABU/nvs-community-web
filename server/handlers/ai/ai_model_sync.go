@@ -12,6 +12,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 )
 
@@ -76,12 +77,12 @@ func AdminImportAiModels(c *gin.Context) {
 		if category == "" {
 			category = "chat"
 		}
-		kind := models.AiKindChat
+		kind := aim.AiKindChat
 		switch category {
 		case "image":
-			kind = models.AiKindImage
+			kind = aim.AiKindImage
 		case "video":
-			kind = models.AiKindVideo
+			kind = aim.AiKindVideo
 		}
 		alias := it.Alias
 		if alias == "" {
@@ -91,12 +92,12 @@ func AdminImportAiModels(c *gin.Context) {
 		// 解析「前缀-版本-亚版本」（如 deepseek-v3.1-turbo）→ 落库 version/sub_version，
 		// 便于管理端按版本矩阵比较「谁最新」；用户侧始终只看主名字（不暴露亚版本噪声）。
 		parsed := vendor.ParseModelID(it.RawID)
-		m := &models.AiModel{
+		m := &aim.AiModel{
 			Name:         alias,
 			Kind:         kind,
 			ModelID:      it.RawID,
 			BaseURL:      req.BaseURL,
-			ApiKind:      models.AiApiOpenAI,
+			ApiKind:      aim.AiApiOpenAI,
 			Vendor:       it.Vendor,
 			Channel:      req.Channel,
 			Alias:        alias,
@@ -110,13 +111,13 @@ func AdminImportAiModels(c *gin.Context) {
 		}
 		// 未显式给价时套用分类默认价（管理员在「聚合分类定价」里维护）
 		if m.PriceIn == 0 && m.PriceOut == 0 && m.PriceCall == 0 {
-			if cp := models.GetCategoryPrice(kind); cp.Kind != "" {
+			if cp := aim.GetCategoryPrice(kind); cp.Kind != "" {
 				m.PriceIn = cp.PriceIn
 				m.PriceOut = cp.PriceOut
 				m.PriceCall = cp.PriceCall
 			}
 		}
-		if err := models.CreateAiModel(m, req.APIKey); err != nil {
+		if err := aim.CreateAiModel(m, req.APIKey); err != nil {
 			continue
 		}
 		created++
@@ -139,7 +140,7 @@ func AdminSetModelVisibility(c *gin.Context) {
 		return
 	}
 	uv := req.UserVisible
-	if err := models.DB.Model(&models.AiModel{}).Where("id = ?", id).
+	if err := models.DB.Model(&aim.AiModel{}).Where("id = ?", id).
 		Updates(map[string]interface{}{"user_visible": &uv}).Error; err != nil {
 		utils.InternalError(c, "操作失败")
 		return
@@ -161,7 +162,7 @@ func AdminMergeModels(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.DB.Model(&models.AiModel{}).Where("id IN ?", req.IDs).
+	if err := models.DB.Model(&aim.AiModel{}).Where("id IN ?", req.IDs).
 		Update("channel", req.Channel).Error; err != nil {
 		utils.InternalError(c, "合并失败")
 		return
@@ -182,7 +183,7 @@ func AdminSplitModels(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.DB.Model(&models.AiModel{}).Where("id IN ?", req.IDs).
+	if err := models.DB.Model(&aim.AiModel{}).Where("id IN ?", req.IDs).
 		Update("channel", "").Error; err != nil {
 		utils.InternalError(c, "拆分失败")
 		return

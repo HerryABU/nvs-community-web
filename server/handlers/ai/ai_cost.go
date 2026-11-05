@@ -14,6 +14,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 	aiops "nvs-server/models/aiops"
 )
 
@@ -22,13 +23,13 @@ func GetAiBudget(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	cfg := models.LoadAiBudgetConfig()
-	usage := models.GetAiUsage()
+	cfg := aim.LoadAiBudgetConfig()
+	usage := aim.GetAiUsage()
 	utils.Success(c, gin.H{
 		"config": cfg, "usage": usage,
-		"inflight":      models.AiConcurrencyInUse(),
-		"is_peak":       models.IsPeakHour(cfg),
-		"effective_max": models.EffectiveConcurrency(cfg),
+		"inflight":      aim.AiConcurrencyInUse(),
+		"is_peak":       aim.IsPeakHour(cfg),
+		"effective_max": aim.EffectiveConcurrency(cfg),
 		"note": "HardStop 开启=到线直接拒绝；关闭=只记录告警继续跑（后台能看到已超）。" +
 			"并发超出时排队，超时报「忙」而不是把上游打到 429 连坐所有人。",
 	})
@@ -39,16 +40,16 @@ func SaveAiBudget(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	var in models.AiBudgetConfig
+	var in aim.AiBudgetConfig
 	if err := c.ShouldBindJSON(&in); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.SaveAiBudgetConfig(in); err != nil {
+	if err := aim.SaveAiBudgetConfig(in); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
-	utils.SuccessMessage(c, "已保存并即时生效", models.LoadAiBudgetConfig())
+	utils.SuccessMessage(c, "已保存并即时生效", aim.LoadAiBudgetConfig())
 }
 
 // GetAiThrottle GET /api/admin/ai/throttle

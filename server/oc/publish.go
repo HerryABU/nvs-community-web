@@ -15,6 +15,7 @@ import (
 	"nvs-server/aiclient"
 	"nvs-server/config"
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 	"nvs-server/security"
 )
@@ -331,20 +332,20 @@ func polishChunk(body string, userID, groupID uint) (string, string, error) {
 	if berr := CheckBudget(groupID, 0, 0, 0); berr != nil {
 		return body, "", nil // 预算已达上限：直接用未润色版本，不阻断发布
 	}
-	list, err := models.ListAiModelsByKind(models.AiKindChat, true)
+	list, err := ai.ListAiModelsByKind(ai.AiKindChat, true)
 	if err != nil || len(list) == 0 {
 		return body, "", nil
 	}
 	m := &list[0]
 	prompt := "请把下面的角色扮演对话整理成小说叙述段落：保留人物性格与信息量，" +
 		"补上必要的动作与环境描写，不改情节，不新增设定，输出纯正文。\n\n" + body
-	estTokens := models.EstimateTokens(prompt) + 1024
+	estTokens := ai.EstimateTokens(prompt) + 1024
 	freeOK, _, _ := aihub.CheckAiFreeQuota(userID, estTokens)
 	if !freeOK {
 		if !models.IsTokenEnabled() {
 			return body, "", nil
 		}
-		if _, ok := models.PrecheckAiBalance(userID, m, estTokens, m.MaxTokens); !ok {
+		if _, ok := ai.PrecheckAiBalance(userID, m, estTokens, m.MaxTokens); !ok {
 			return body, "", nil
 		}
 	}
@@ -356,8 +357,8 @@ func polishChunk(body string, userID, groupID uint) (string, string, error) {
 	if lease != nil {
 		apiKey = lease.Key
 	}
-	callLog, lerr := models.CreateAiCallLog(userID, m, "oc_publish", "oc_flow", 0,
-		models.EstimateTokens(prompt), m.MaxTokens, freeOK)
+	callLog, lerr := ai.CreateAiCallLog(userID, m, "oc_publish", "oc_flow", 0,
+		ai.EstimateTokens(prompt), m.MaxTokens, freeOK)
 	if lerr != nil {
 		return body, "", nil
 	}
@@ -373,7 +374,7 @@ func polishChunk(body string, userID, groupID uint) (string, string, error) {
 	if cerr != nil || strings.TrimSpace(out) == "" {
 		lease.Fail()
 		if callLog != nil {
-			models.FailAiCallLog(callLog.ID, "润色失败")
+			ai.FailAiCallLog(callLog.ID, "润色失败")
 		}
 		return body, "", nil
 	}
@@ -381,12 +382,12 @@ func polishChunk(body string, userID, groupID uint) (string, string, error) {
 		realIn = estTokens
 	}
 	if realOut <= 0 {
-		realOut = models.EstimateTokens(out)
+		realOut = ai.EstimateTokens(out)
 	}
-	cost := models.EstimateAiCost(m, realIn, realOut)
+	cost := ai.EstimateAiCost(m, realIn, realOut)
 	if freeOK {
 		_ = aihub.RecordAiFreeUsage(userID, 1, realIn+realOut)
-	} else if _, serr := models.SettleAiCallLog(callLog.ID, realIn, realOut); serr != nil {
+	} else if _, serr := ai.SettleAiCallLog(callLog.ID, realIn, realOut); serr != nil {
 		return body, "", nil
 	}
 	lease.OK()

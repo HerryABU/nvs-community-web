@@ -1,4 +1,4 @@
-package models
+package ai
 
 // ==================== 全站总预算 + 高峰排队（gap-audit #12）====================
 // 已有的是「单次上限 / 每日个人限额 / OC 群级预算」，缺的是**平台级总闸门**：
@@ -15,6 +15,7 @@ package models
 import (
 	"encoding/json"
 	"fmt"
+	"nvs-server/models"
 	"strings"
 	"sync"
 	"time"
@@ -87,7 +88,7 @@ func normalizeBudget(c AiBudgetConfig) AiBudgetConfig {
 
 // LoadAiBudgetConfig 读取配置
 func LoadAiBudgetConfig() AiBudgetConfig {
-	raw := GetPlatformConfig(aiBudgetKey)
+	raw := models.GetPlatformConfig(aiBudgetKey)
 	c := DefaultAiBudgetConfig()
 	if strings.TrimSpace(raw) != "" {
 		if err := json.Unmarshal([]byte(raw), &c); err != nil {
@@ -105,7 +106,7 @@ func SaveAiBudgetConfig(c AiBudgetConfig) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(aiBudgetKey, string(b))
+	return models.SetPlatformConfig(aiBudgetKey, string(b))
 }
 
 // AiUsage 用量快照
@@ -127,12 +128,12 @@ func GetAiUsage() AiUsage {
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	cfg := LoadAiBudgetConfig()
 	u := AiUsage{DailyCap: cfg.DailyCap, MonthlyCap: cfg.MonthlyCap}
-	if DB == nil {
+	if models.DB == nil {
 		return u
 	}
-	_ = DB.Model(&AiCallLog{}).Where("created_at >= ?", dayStart).
+	_ = models.DB.Model(&AiCallLog{}).Where("created_at >= ?", dayStart).
 		Select("COALESCE(SUM(cost),0)").Scan(&u.Today).Error
-	_ = DB.Model(&AiCallLog{}).Where("created_at >= ?", monthStart).
+	_ = models.DB.Model(&AiCallLog{}).Where("created_at >= ?", monthStart).
 		Select("COALESCE(SUM(cost),0)").Scan(&u.Month).Error
 	if cfg.DailyCap > 0 {
 		u.DailyRatio = float64(u.Today) / float64(cfg.DailyCap)

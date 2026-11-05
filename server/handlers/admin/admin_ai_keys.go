@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	"nvs-server/aiclient"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	ai "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 )
 
@@ -39,7 +39,7 @@ func AdminListAiModelKeys(c *gin.Context) {
 		return
 	}
 	modelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if _, err := models.GetAiModel(uint(modelID)); err != nil {
+	if _, err := ai.GetAiModel(uint(modelID)); err != nil {
 		utils.NotFound(c, "模型不存在")
 		return
 	}
@@ -64,7 +64,7 @@ func AdminCreateAiModelKey(c *gin.Context) {
 		return
 	}
 	modelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if _, err := models.GetAiModel(uint(modelID)); err != nil {
+	if _, err := ai.GetAiModel(uint(modelID)); err != nil {
 		utils.NotFound(c, "模型不存在")
 		return
 	}
@@ -175,7 +175,7 @@ func AdminTestAiModelKey(c *gin.Context) {
 		return
 	}
 	modelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	m, err := models.GetAiModel(uint(modelID))
+	m, err := ai.GetAiModel(uint(modelID))
 	if err != nil {
 		utils.NotFound(c, "模型不存在")
 		return

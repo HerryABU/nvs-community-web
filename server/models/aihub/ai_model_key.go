@@ -7,12 +7,13 @@ import (
 	"time"
 
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 	"nvs-server/utils"
 )
 
 // ==================== AI 模型密钥池（多密钥轮询） ====================
 // 一个模型可挂多把上游客钥：按权重随机取用，失败计数超阈值自动停用，
-// 池为空时回退到 models.AiModel.ApiKeyEnc（兼容单密钥老配置）。
+// 池为空时回退到 ai.AiModel.ApiKeyEnc（兼容单密钥老配置）。
 
 // MaxFailBeforeDisable 连续失败达到该次数自动停用该密钥
 const MaxFailBeforeDisable = 3
@@ -213,7 +214,7 @@ func (l *ModelKeyLease) Fail() {
 // 为什么渠道优先：同一条 base_url 下的模型共用同一批上游密钥，
 // 按渠道池化才能让「轮询 / 熔断 / 停用」真正生效（按模型各算一套等于没有熔断）；
 // 后两级是升级前的老配置，保留它老站点不用改任何设置也能继续跑。
-func AcquireModelKey(m *models.AiModel) (*ModelKeyLease, error) {
+func AcquireModelKey(m *ai.AiModel) (*ModelKeyLease, error) {
 	if m == nil {
 		return nil, fmt.Errorf("模型不存在")
 	}

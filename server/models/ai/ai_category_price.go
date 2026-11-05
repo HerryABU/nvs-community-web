@@ -1,4 +1,6 @@
-package models
+package ai
+
+import "nvs-server/models"
 
 import "time"
 
@@ -21,7 +23,7 @@ func (AiCategoryPrice) TableName() string { return "ai_category_prices" }
 // AllCategoryPrices 返回全部 3 种分类的定价（缺哪类补零值行，保证前端始终拿到 3 项）
 func AllCategoryPrices() ([]AiCategoryPrice, error) {
 	var list []AiCategoryPrice
-	if err := DB.Find(&list).Error; err != nil {
+	if err := models.DB.Find(&list).Error; err != nil {
 		return nil, err
 	}
 	have := map[string]bool{}
@@ -40,7 +42,7 @@ func AllCategoryPrices() ([]AiCategoryPrice, error) {
 func GetCategoryPrice(kind string) AiCategoryPrice {
 	kind = NormalizeAiKind(kind)
 	var p AiCategoryPrice
-	if err := DB.Where("kind = ?", kind).First(&p).Error; err != nil {
+	if err := models.DB.Where("kind = ?", kind).First(&p).Error; err != nil {
 		return AiCategoryPrice{Kind: kind}
 	}
 	return p
@@ -51,11 +53,11 @@ func SetCategoryPrice(kind string, priceIn, priceOut, priceCall int64) error {
 	kind = NormalizeAiKind(kind)
 	now := time.Now()
 	var cnt int64
-	DB.Model(&AiCategoryPrice{}).Where("kind = ?", kind).Count(&cnt)
+	models.DB.Model(&AiCategoryPrice{}).Where("kind = ?", kind).Count(&cnt)
 	if cnt > 0 {
-		return DB.Model(&AiCategoryPrice{}).Where("kind = ?", kind).Updates(map[string]interface{}{
+		return models.DB.Model(&AiCategoryPrice{}).Where("kind = ?", kind).Updates(map[string]interface{}{
 			"price_in": priceIn, "price_out": priceOut, "price_call": priceCall, "updated_at": now,
 		}).Error
 	}
-	return DB.Create(&AiCategoryPrice{Kind: kind, PriceIn: priceIn, PriceOut: priceOut, PriceCall: priceCall, UpdatedAt: now}).Error
+	return models.DB.Create(&AiCategoryPrice{Kind: kind, PriceIn: priceIn, PriceOut: priceOut, PriceCall: priceCall, UpdatedAt: now}).Error
 }

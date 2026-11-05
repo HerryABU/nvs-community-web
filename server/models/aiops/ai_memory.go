@@ -2,6 +2,7 @@ package aiops
 
 import (
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 	"strings"
 	"time"
 )
@@ -102,7 +103,7 @@ func GetChapterSummary(novelID, chapterID uint) string {
 
 func upsertAiMemory(novelID uint, kind string, chapterID uint, content string) error {
 	now := time.Now()
-	tokens := models.EstimateTokens(content)
+	tokens := ai.EstimateTokens(content)
 	return models.DB.Exec(
 		"INSERT INTO ai_novel_memories (novel_id, kind, chapter_id, content, tokens, created_at, updated_at) "+
 			"VALUES (?, ?, ?, ?, ?, ?, ?) "+
@@ -170,7 +171,7 @@ func BuildNovelContext(novelID, currentChapterID uint, currentText string, budge
 	tailTokens := 0
 	if len(runes) > 0 {
 		tailPart = "【当前章节结尾】\n" + string(runes)
-		tailTokens = models.EstimateTokens(tailPart)
+		tailTokens = ai.EstimateTokens(tailPart)
 	}
 
 	// 2. 最近 K 章摘要（新→旧遍历，放不下的更旧的直接跳过）
@@ -179,7 +180,7 @@ func BuildNovelContext(novelID, currentChapterID uint, currentText string, budge
 	sumUsed := 0
 	for _, s := range summaries {
 		line := "【前文摘要】" + s.Content
-		t := models.EstimateTokens(line)
+		t := ai.EstimateTokens(line)
 		if tailTokens+sumUsed+t > budget {
 			continue
 		}
@@ -196,7 +197,7 @@ func BuildNovelContext(novelID, currentChapterID uint, currentText string, budge
 	used := tailTokens + sumUsed
 	if outline := GetNovelOutline(novelID); outline != "" {
 		part := "【作品大纲】\n" + outline
-		if t := models.EstimateTokens(part); used+t <= budget {
+		if t := ai.EstimateTokens(part); used+t <= budget {
 			outlinePart = part
 			used += t
 		}

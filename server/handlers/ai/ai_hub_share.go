@@ -2,12 +2,12 @@ package ai
 
 import (
 	"nvs-server/handlers/hctx"
-	"nvs-server/models"
 	"nvs-server/utils"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 )
 
 // ==================== AI 会话：重命名 / 分享 / 公开只读 ====================
@@ -23,7 +23,7 @@ func AiHubRenameSession(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.RenameAiChatSession(uint(id), userID, req.Title); err != nil {
+	if err := aim.RenameAiChatSession(uint(id), userID, req.Title); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
@@ -34,7 +34,7 @@ func AiHubRenameSession(c *gin.Context) {
 func AiHubShareSession(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	token, err := models.ShareAiChatSession(uint(id), userID)
+	token, err := aim.ShareAiChatSession(uint(id), userID)
 	if err != nil {
 		utils.BadRequest(c, err.Error())
 		return
@@ -46,7 +46,7 @@ func AiHubShareSession(c *gin.Context) {
 func AiHubUnshareSession(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := models.UnshareAiChatSession(uint(id), userID); err != nil {
+	if err := aim.UnshareAiChatSession(uint(id), userID); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
@@ -57,12 +57,12 @@ func AiHubUnshareSession(c *gin.Context) {
 // 只暴露：会话标题、智能体名、消息角色与正文；不外泄用户、模型、费用信息。
 func AiSharedSession(c *gin.Context) {
 	token := strings.TrimSpace(c.Param("token"))
-	s, err := models.GetSharedSessionByToken(token)
+	s, err := aim.GetSharedSessionByToken(token)
 	if err != nil {
 		utils.NotFound(c, err.Error())
 		return
 	}
-	msgs, err := models.ListAiChatMessages(s.ID, 500)
+	msgs, err := aim.ListAiChatMessages(s.ID, 500)
 	if err != nil {
 		utils.InternalError(c, "读取失败")
 		return

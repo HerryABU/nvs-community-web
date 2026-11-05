@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 )
 
 // setupAigcTestDB 独立唯一内存库。原实现位于 aiops/aigc_test.go（未导出，
@@ -49,9 +50,9 @@ func setupAiTestDB(t *testing.T) *gorm.DB {
 }
 
 // seedAiModel 与根包 ai_billing_test.go 中的同名 helper 等价（未导出跨包不可复用）。
-func seedAiModel(t *testing.T, priceIn, priceOut int64, maxTokens int) *models.AiModel {
+func seedAiModel(t *testing.T, priceIn, priceOut int64, maxTokens int) *ai.AiModel {
 	t.Helper()
-	m := &models.AiModel{
+	m := &ai.AiModel{
 		Name: "测试模型", ModelID: "test-model", BaseURL: "http://127.0.0.1:1/v1",
 		Enabled: true, PriceIn: priceIn, PriceOut: priceOut, MaxTokens: maxTokens,
 	}

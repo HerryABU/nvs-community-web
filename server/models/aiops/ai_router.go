@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"nvs-server/models"
+	ai "nvs-server/models/ai"
 	"sort"
 	"strings"
 	"time"
@@ -126,7 +127,7 @@ func avgLatency7d(modelID uint) int {
 		N   int
 	}
 	var r row
-	models.DB.Model(&models.AiCallLog{}).
+	models.DB.Model(&ai.AiCallLog{}).
 		Select("COALESCE(AVG(latency_ms),0) as avg, COUNT(*) as n").
 		Where("model_id = ? AND latency_ms > 0 AND created_at >= ?", modelID, time.Now().AddDate(0, 0, -7)).
 		Scan(&r)
@@ -137,14 +138,14 @@ func avgLatency7d(modelID uint) int {
 }
 
 // rankChatModels 按策略排序候选（已启用、chat 类型）
-func rankChatModels(strategy string, preferDomestic bool) []models.AiModel {
-	list, err := models.ListAiModelsByKind(models.AiKindChat, true)
+func rankChatModels(strategy string, preferDomestic bool) []ai.AiModel {
+	list, err := ai.ListAiModelsByKind(ai.AiKindChat, true)
 	if err != nil || len(list) == 0 {
 		return nil
 	}
-	out := make([]models.AiModel, 0, len(list))
+	out := make([]ai.AiModel, 0, len(list))
 	for _, m := range list {
-		if m.Enabled && m.Kind == models.AiKindChat {
+		if m.Enabled && m.Kind == ai.AiKindChat {
 			out = append(out, m)
 		}
 	}
@@ -199,9 +200,9 @@ func rankChatModels(strategy string, preferDomestic bool) []models.AiModel {
 var ErrNoChatModel = errors.New("没有可用的对话模型")
 
 // PickChatModel 选模型：用户/角色指定优先，否则按策略排序取第一个
-func PickChatModel(userChoice uint, scene string) (*models.AiModel, error) {
+func PickChatModel(userChoice uint, scene string) (*ai.AiModel, error) {
 	if userChoice > 0 {
-		if m, err := models.GetAiModel(userChoice); err == nil && m != nil && m.Enabled && m.Kind == models.AiKindChat {
+		if m, err := ai.GetAiModel(userChoice); err == nil && m != nil && m.Enabled && m.Kind == ai.AiKindChat {
 			return m, nil
 		}
 	}
@@ -215,7 +216,7 @@ func PickChatModel(userChoice uint, scene string) (*models.AiModel, error) {
 }
 
 // FallbackChatModels 降级候选（排除已试过的模型），上限由配置决定
-func FallbackChatModels(tried []uint, scene string, limit int) []models.AiModel {
+func FallbackChatModels(tried []uint, scene string, limit int) []ai.AiModel {
 	if limit <= 0 {
 		limit = 1
 	}
@@ -232,7 +233,7 @@ func FallbackChatModels(tried []uint, scene string, limit int) []models.AiModel 
 	for _, id := range tried {
 		skip[id] = true
 	}
-	out := make([]models.AiModel, 0, limit)
+	out := make([]ai.AiModel, 0, limit)
 	for _, m := range all {
 		if skip[m.ID] {
 			continue

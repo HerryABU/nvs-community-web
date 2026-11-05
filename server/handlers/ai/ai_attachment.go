@@ -15,10 +15,10 @@ import (
 	"nvs-server/config"
 	"nvs-server/doctext"
 	"nvs-server/handlers/hctx"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	aim "nvs-server/models/ai"
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ func AiAttachmentUpload(c *gin.Context) {
 		utils.Unauthorized(c, "请先登录")
 		return
 	}
-	if !models.IsAiEnabled() {
+	if !aim.IsAiEnabled() {
 		utils.BadRequest(c, "AI 功能未开启")
 		return
 	}
