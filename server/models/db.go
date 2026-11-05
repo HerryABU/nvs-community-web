@@ -205,19 +205,19 @@ func AutoMigrateAll(db *gorm.DB) error {
 	}
 	// 方案A：移除 posts.deleted_at 列（统一走 softdel_posts 留证，幂等）
 	// 注意顺序：先 AutoMigrate（建表），再移除历史遗留列
-	if err := DropPostDeletedAt(db); err != nil {
+	if err := DropPostDeletedAtHook(db); err != nil {
 		return err
 	}
 	// 清理被新复合索引替代的旧单列索引（冗余索引会造成写放大）
-	if err := DropLegacyIndexes(db); err != nil {
+	if err := DropLegacyIndexesHook(db); err != nil {
 		return err
 	}
 	// 楼层模型：存量评论/回帖补 root_id 与 floor_no（幂等，仅缺失时回填）
 	// 注意：回填必须用传入的 db，AutoMigrateAll 阶段全局 DB 可能尚未就绪（测试场景）
-	BackfillCommentFloors(db)
-	BackfillPostFloors(db)
+	BackfillCommentFloorsHook(db)
+	BackfillPostFloorsHook(db)
 	// 应用扩展：存量已解压扩展补 is_extracted（新列默认 false，需按 extract_dir 回填）
-	BackfillUserHTMLExtracted(db)
+	BackfillUserHTMLExtractedHook(db)
 	return nil
 }
 

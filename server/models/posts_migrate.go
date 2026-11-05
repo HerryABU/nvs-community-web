@@ -130,7 +130,7 @@ func ArchivePostsByThread(db *gorm.DB, threadID, deletedBy uint, operator, reaso
 		if runes := []rune(summary); len(runes) > 200 {
 			summary = string(runes[:200])
 		}
-		if err := ArchiveSoftDelete(source, "post", p.ID, deletedBy, operator, reason, summary, p); err != nil {
+		if err := ArchiveSoftDeleteHook(source, "post", p.ID, deletedBy, operator, reason, summary, p); err != nil {
 			if firstErr == nil {
 				firstErr = err
 			}

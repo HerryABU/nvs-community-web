@@ -499,7 +499,7 @@ func CreateComment(comment *Comment) error {
 	if comment.ParentID != nil && *comment.ParentID != 0 {
 		var parent Comment
 		if DB.Select("user_id").First(&parent, *comment.ParentID).Error == nil {
-			_ = PushNotification(comment.UserID, parent.UserID, "comment_reply",
+			_ = PushNotificationHook(comment.UserID, parent.UserID, "comment_reply",
 				"你的评论收到回复", content, LinkForComment(comment))
 		}
 	}
@@ -507,7 +507,7 @@ func CreateComment(comment *Comment) error {
 	if comment.NovelID != 0 {
 		var n Novel
 		if DB.Select("author_id", "title").First(&n, comment.NovelID).Error == nil {
-			_ = PushNotification(comment.UserID, n.AuthorID, "novel_comment",
+			_ = PushNotificationHook(comment.UserID, n.AuthorID, "novel_comment",
 				"你的作品收到新评论", "《"+n.Title+"》", "/novel/"+strconv.FormatUint(uint64(comment.NovelID), 10))
 		}
 	}

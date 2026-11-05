@@ -419,7 +419,7 @@ func CreatePost(p *Post) error {
 		if len(title) > 40 {
 			title = title[:40] + "…"
 		}
-		_ = PushNotification(p.UserID, t.UserID, "thread_reply",
+		_ = PushNotificationHook(p.UserID, t.UserID, "thread_reply",
 			"你的帖子有新回复",
 			"《"+title+"》",
 			"/thread/"+strconv.FormatUint(uint64(p.ThreadID), 10))
@@ -432,7 +432,7 @@ func CreatePost(p *Post) error {
 			if runes := []rune(summary); len(runes) > 60 {
 				summary = string(runes[:60]) + "…"
 			}
-			_ = PushNotification(p.UserID, parent.UserID, "post_reply",
+			_ = PushNotificationHook(p.UserID, parent.UserID, "post_reply",
 				"你的回复收到新回复", summary,
 				"/thread/"+strconv.FormatUint(uint64(p.ThreadID), 10)+"#post-"+strconv.FormatUint(uint64(p.ID), 10))
 		}
