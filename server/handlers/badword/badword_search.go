@@ -16,6 +16,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	"nvs-server/models/security"
 )
 
 // ════════════════ 检索模式 ════════════════
@@ -172,7 +173,7 @@ func SearchAugmentBadWords(c *gin.Context) {
 		}
 	}
 
-	created, skipped, ierr := models.ImportBadWords(items)
+	created, skipped, ierr := security.ImportBadWords(items)
 	if ierr != nil {
 		utils.InternalError(c, "导入失败："+ierr.Error())
 		return
@@ -421,7 +422,7 @@ func isUnsupportedSearchParamError(err error) bool {
 //  3. 说明文字里本身带 [ ]（如「见下表[1]」）⇒ 不能用「首个 [ 到末个 ]」切；
 //  4. 包成对象 {"words": [...]};
 //  5. 一行一个对象的 JSONL。
-func parseBadWordJSON(content string) ([]models.BadWordImportItem, error) {
+func parseBadWordJSON(content string) ([]security.BadWordImportItem, error) {
 	s := stripCodeFence(strings.TrimSpace(content))
 	if s == "" {
 		return nil, fmt.Errorf("模型返回为空")
@@ -517,29 +518,29 @@ func findArrayField(obj string) (string, bool) {
 }
 
 // unmarshalItems 尝试把一段 JSON 解析成违禁词清单。
-func unmarshalItems(arr string) ([]models.BadWordImportItem, bool) {
-	var items []models.BadWordImportItem
+func unmarshalItems(arr string) ([]security.BadWordImportItem, bool) {
+	var items []security.BadWordImportItem
 	if err := json.Unmarshal([]byte(arr), &items); err == nil {
 		return items, true
 	}
 	// 单个对象（不是数组）
-	var one models.BadWordImportItem
+	var one security.BadWordImportItem
 	if err := json.Unmarshal([]byte(arr), &one); err == nil && one.Pattern != "" {
-		return []models.BadWordImportItem{one}, true
+		return []security.BadWordImportItem{one}, true
 	}
 	return nil, false
 }
 
 // salvageBraces 逐个抓 {…} 片段尝试解析（覆盖 JSONL 与「只吐了前几条」）。
-func salvageBraces(s string) ([]models.BadWordImportItem, bool) {
-	var out []models.BadWordImportItem
+func salvageBraces(s string) ([]security.BadWordImportItem, bool) {
+	var out []security.BadWordImportItem
 	rest := s
 	for {
 		seg, ok := matchBracket(rest, '{', '}')
 		if !ok {
 			break
 		}
-		var one models.BadWordImportItem
+		var one security.BadWordImportItem
 		if err := json.Unmarshal([]byte(seg), &one); err == nil && one.Pattern != "" {
 			out = append(out, one)
 		}

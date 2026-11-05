@@ -14,6 +14,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	securitym "nvs-server/models/security"
 )
 
 // setupCrisisTestDB 独立内存库（唯一名）。
@@ -113,7 +114,7 @@ func TestMinorCrisisSelfHarmSlang(t *testing.T) {
 		t.Errorf("抚慰私信应以系统身份发出，actor_id 应为 0，实际 %d", comfort.ActorID)
 	}
 	// 危机事件留痕（供《高危用户心理干预报告》）
-	var ev models.CrisisEvent
+	var ev securitym.CrisisEvent
 	if err := models.DB.Where("user_id = ?", 1).First(&ev).Error; err != nil {
 		t.Fatal("应写入危机事件留痕")
 	}

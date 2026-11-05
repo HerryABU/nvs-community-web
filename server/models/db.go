@@ -51,14 +51,14 @@ func AllModels() []interface{} {
 		&Forum{}, &Thread{}, &Post{}, &ForumMute{}, &VipApplication{}, &Report{},
 		&WithdrawalRequest{}, &EarningsRecord{}, &BlacklistIP{}, &PlatformConfig{},
 		&FederatedSite{}, &FederatedNovel{}, &FederatedInbound{}, &BookShelf{}, &Follow{},
-		&UserFrame{}, &UserHTML{}, &XssRule{}, &EmergencyAuditLog{}, &UserAuditLog{},
-		&BadWord{}, &BadWordFlag{}, // 违禁词库：规则 + 标记待审记录
+		&UserFrame{}, &UserHTML{}, &EmergencyAuditLog{}, &UserAuditLog{},
+		// 违禁词库：规则 + 标记待审记录
 		&SystemSetting{}, // 系统设置（key/value）：博客分类审核模式等
 		&ZoneAccessLog{}, // 隔离墙（敏感分区）进入记录，176号令合规
 		&Notification{},  // 站内消息通知
 		&ReadingNote{},   // 精读：书签 + 批注（含公开/私密）
-		&Vulnerability{}, // 漏洞整改记录（176号令 第七条第六项）
-		&Announcement{},  // 站点公告栏
+		// 漏洞整改记录（176号令 第七条第六项）
+		&Announcement{}, // 站点公告栏
 		// 软删除留证表（softdel_*，合规证据留存）
 		&SoftDelComment{}, &SoftDelNovel{}, &SoftDelChapter{}, &SoftDelUser{},
 		&SoftDelThread{}, &SoftDelPost{}, &SoftDelBlog{}, &SoftDelForum{},
@@ -77,7 +77,7 @@ func AllModels() []interface{} {
 		// 全量 Web 访问日志（功能二：前台网络诊断 / 用户分布 / 攻击流量面板）
 		&WebAccessLog{},
 		// 用户黑名单（F13：拉黑禁言/屏蔽内容，站长/警方/管理员不可被拉黑）
-		&Blacklist{},
+		// 用户黑名单（F13）—— 已迁至 models/security 子包
 		// 私信（F20：会话消息，互关才可发第 3 条）
 		&Message{},
 		// 自定义主页区块（F15：管理员可编辑/排序/套用布局预设）
@@ -112,7 +112,7 @@ func AllModels() []interface{} {
 		// API Key 审计告警（多 IP / 解密失败 / 封禁后仍使用）
 		&ApiKeyAlarm{},
 		// 未成年人心理危机事件留痕（供《高危用户心理干预报告》）
-		&CrisisEvent{},
+		// 心理危机事件留痕 —— 已迁至 models/security 子包
 		// 刷新令牌轮换状态（JTI）：防止刷新令牌窃取后长期可用
 		&RefreshState{},
 		// AIGC 内容标识（GB 45438—2025）：原图 / 导出（ProduceID→模型名）/ 豁免日志

@@ -1,6 +1,9 @@
-package models
+package security
 
-import "time"
+import (
+	"nvs-server/models"
+	"time"
+)
 
 // XssRule 管理员可配置的 XSS 防御正则规则
 // 规则会在 SanitizeUserContent（评论/帖子/章节/博客等所有用户内容）时动态应用，
@@ -23,21 +26,21 @@ func (XssRule) TableName() string { return "xss_rules" }
 // ListXssRules 列出所有规则（含禁用）
 func ListXssRules() ([]XssRule, error) {
 	var rules []XssRule
-	err := DB.Order("id asc").Find(&rules).Error
+	err := models.DB.Order("id asc").Find(&rules).Error
 	return rules, err
 }
 
 // ListEnabledXssRules 列出所有启用的规则
 func ListEnabledXssRules() ([]XssRule, error) {
 	var rules []XssRule
-	err := DB.Where("enabled = ?", true).Order("id asc").Find(&rules).Error
+	err := models.DB.Where("enabled = ?", true).Order("id asc").Find(&rules).Error
 	return rules, err
 }
 
 // GetXssRule 获取单个规则
 func GetXssRule(id uint) (*XssRule, error) {
 	var rule XssRule
-	if err := DB.First(&rule, id).Error; err != nil {
+	if err := models.DB.First(&rule, id).Error; err != nil {
 		return nil, err
 	}
 	return &rule, nil
@@ -45,15 +48,15 @@ func GetXssRule(id uint) (*XssRule, error) {
 
 // CreateXssRule 创建规则
 func CreateXssRule(rule *XssRule) error {
-	return DB.Create(rule).Error
+	return models.DB.Create(rule).Error
 }
 
 // UpdateXssRule 更新规则
 func UpdateXssRule(rule *XssRule) error {
-	return DB.Save(rule).Error
+	return models.DB.Save(rule).Error
 }
 
 // DeleteXssRule 删除规则
 func DeleteXssRule(id uint) error {
-	return DB.Delete(&XssRule{}, id).Error
+	return models.DB.Delete(&XssRule{}, id).Error
 }

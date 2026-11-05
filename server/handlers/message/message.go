@@ -13,6 +13,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	securitym "nvs-server/models/security"
 )
 
 // maxMessageContent 私信内容最大字符数（与前端 maxlength 一致；
@@ -75,7 +76,7 @@ func SendMessage(c *gin.Context) {
 	}
 
 	// 黑名单门禁（F13）：被接收方拉黑（block 模式）者无法发送私信
-	if models.IsBlacklisted(req.ReceiverID, userID) {
+	if securitym.IsBlacklisted(req.ReceiverID, userID) {
 		utils.Forbidden(c, "你已被对方拉黑，无法发送私信")
 		return
 	}

@@ -2,10 +2,10 @@ package security
 
 import (
 	"nvs-server/handlers/admin"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	securitym "nvs-server/models/security"
 )
 
 // RecordLeakHint POST /api/security/leak-hint
@@ -22,7 +22,7 @@ func RecordLeakHint(c *gin.Context) {
 	if len(req.Types) > 6 {
 		req.Types = req.Types[:6]
 	}
-	if err := models.RecordLeakHint(req.Types); err != nil {
+	if err := securitym.RecordLeakHint(req.Types); err != nil {
 		utils.InternalError(c, "统计失败")
 		return
 	}
@@ -35,5 +35,5 @@ func AdminLeakHintStats(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	utils.Success(c, models.GetLeakHintStats())
+	utils.Success(c, securitym.GetLeakHintStats())
 }

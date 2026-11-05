@@ -18,6 +18,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	"nvs-server/models/security"
 )
 
 // ComplianceReport 合规自查报告数据
@@ -62,7 +63,7 @@ func buildComplianceReport() ComplianceReport {
 		LogRetention:      true, // 访问日志自动留存（176号令 第三条）
 		LogRedactEnabled:  config.RedactMgr.IsEnabled(),
 		SecurityGrade:     grade,
-		VulnStats:         models.GetVulnStats(),
+		VulnStats:         security.GetVulnStats(),
 		AnnouncementCount: announceCount,
 		UserCount:         userCount,
 	}

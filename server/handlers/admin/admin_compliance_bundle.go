@@ -25,6 +25,7 @@ import (
 	"nvs-server/version"
 
 	"github.com/gin-gonic/gin"
+	"nvs-server/models/security"
 )
 
 // complianceFile 待打包文件
@@ -71,7 +72,7 @@ func ExportComplianceBundle(c *gin.Context) {
 		return
 	}
 	// 4) 漏洞整改统计
-	if err := addJSON("04-vulnerabilities.json", models.GetVulnStats()); err != nil {
+	if err := addJSON("04-vulnerabilities.json", security.GetVulnStats()); err != nil {
 		utils.InternalError(c, "生成漏洞统计失败")
 		return
 	}

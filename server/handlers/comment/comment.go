@@ -25,6 +25,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/blog"
+	securitym "nvs-server/models/security"
 )
 
 func GetComments(c *gin.Context) {
@@ -116,7 +117,7 @@ func CreateComment(c *gin.Context) {
 	// 黑名单门禁（F13）：被作品/博客作者拉黑（block 模式）者不可评论
 	if req.NovelID > 0 {
 		if novel, nerr := models.GetNovelByID(req.NovelID); nerr == nil && novel.AuthorID != userID {
-			if models.IsBlacklisted(novel.AuthorID, userID) {
+			if securitym.IsBlacklisted(novel.AuthorID, userID) {
 				utils.Forbidden(c, "你已被该作者拉黑，无法在其作品下评论")
 				return
 			}
@@ -124,7 +125,7 @@ func CreateComment(c *gin.Context) {
 	}
 	if req.BlogID > 0 {
 		if blog, berr := blog.GetBlogByID(req.BlogID); berr == nil && blog.AuthorID != userID {
-			if models.IsBlacklisted(blog.AuthorID, userID) {
+			if securitym.IsBlacklisted(blog.AuthorID, userID) {
 				utils.Forbidden(c, "你已被该作者拉黑，无法在其博客下评论")
 				return
 			}

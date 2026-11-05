@@ -7,6 +7,7 @@ import (
 
 	"nvs-server/aisafety"
 	"nvs-server/models"
+	securitym "nvs-server/models/security"
 	"nvs-server/security"
 	"nvs-server/sentiment"
 	"nvs-server/sentiment/store"
@@ -134,7 +135,7 @@ func RecordCrisisEvent(t Target, source, action, reason string) {
 	if u, e := models.GetUserByID(t.UserID); e == nil && u != nil {
 		username = u.Username
 	}
-	_ = models.CreateCrisisEvent(&models.CrisisEvent{
+	_ = securitym.CreateCrisisEvent(&securitym.CrisisEvent{
 		UserID:      t.UserID,
 		Username:    username,
 		Source:      source,

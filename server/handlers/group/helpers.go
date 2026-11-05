@@ -10,6 +10,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	securitym "nvs-server/models/security"
 )
 
 // ==================== 群组接口层内部辅助 ====================
@@ -39,11 +40,11 @@ func markBadWords(hits []security.BadWordHit, contentType string, contentID, use
 	if len(matched) == 0 {
 		return
 	}
-	if exists, _ := models.HasPendingFlag(contentType, contentID); exists {
+	if exists, _ := securitym.HasPendingFlag(contentType, contentID); exists {
 		return
 	}
 	b, _ := json.Marshal(matched)
-	_ = models.CreateBadWordFlag(&models.BadWordFlag{
+	_ = securitym.CreateBadWordFlag(&securitym.BadWordFlag{
 		ContentType: contentType, ContentID: contentID, UserID: userID,
 		ContentTitle: title, Snippet: snippetOf(raw), MatchedWords: string(b), Status: "pending",
 	})

@@ -1,6 +1,9 @@
-package models
+package security
 
-import "time"
+import (
+	"nvs-server/models"
+	"time"
+)
 
 // CrisisEvent 未成年人心理危机事件留痕（供站长生成《高危用户心理干预报告》）。
 //
@@ -23,26 +26,26 @@ func (CrisisEvent) TableName() string { return "crisis_events" }
 
 // CreateCrisisEvent 写一条危机事件留痕。
 func CreateCrisisEvent(e *CrisisEvent) error {
-	return DB.Create(e).Error
+	return models.DB.Create(e).Error
 }
 
 // ListCrisisEventsByUser 取某用户的全部危机事件（倒序）。
 func ListCrisisEventsByUser(userID uint) ([]CrisisEvent, error) {
 	var list []CrisisEvent
-	err := DB.Where("user_id = ?", userID).Order("created_at DESC").Find(&list).Error
+	err := models.DB.Where("user_id = ?", userID).Order("created_at DESC").Find(&list).Error
 	return list, err
 }
 
 // CountCrisisEventsByUser 统计某用户危机事件总数。
 func CountCrisisEventsByUser(userID uint) (int64, error) {
 	var n int64
-	err := DB.Model(&CrisisEvent{}).Where("user_id = ?", userID).Count(&n).Error
+	err := models.DB.Model(&CrisisEvent{}).Where("user_id = ?", userID).Count(&n).Error
 	return n, err
 }
 
 // ListUsersInObservation 取当前处于高危观察期的用户（供站长总览）。
-func ListUsersInObservation() ([]User, error) {
-	var users []User
-	err := DB.Where("risk_youth_mental = ?", true).Order("risk_youth_mental_until DESC").Find(&users).Error
+func ListUsersInObservation() ([]models.User, error) {
+	var users []models.User
+	err := models.DB.Where("risk_youth_mental = ?", true).Order("risk_youth_mental_until DESC").Find(&users).Error
 	return users, err
 }

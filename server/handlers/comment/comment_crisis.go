@@ -6,10 +6,10 @@ import (
 
 	"nvs-server/crisis"
 	"nvs-server/handlers/admin"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	"nvs-server/models/security"
 )
 
 // 未成年人心理危机防护（「赛博守护神」方案）的接入层（HTTP 边界）。
@@ -41,14 +41,14 @@ func GetCrisisReport(c *gin.Context) {
 		return
 	}
 
-	users, uerr := models.ListUsersInObservation()
+	users, uerr := security.ListUsersInObservation()
 	if uerr != nil {
 		utils.InternalError(c, "读取观察期用户失败")
 		return
 	}
 	list := make([]gin.H, 0, len(users))
 	for _, u := range users {
-		n, _ := models.CountCrisisEventsByUser(u.ID)
+		n, _ := security.CountCrisisEventsByUser(u.ID)
 		until := ""
 		if u.RiskYouthMentalUntil != nil {
 			until = u.RiskYouthMentalUntil.Format("2006-01-02 15:04")

@@ -8,18 +8,18 @@ import (
 	"strings"
 
 	"nvs-server/handlers/admin"
-	"nvs-server/models"
 	"nvs-server/security"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	securitym "nvs-server/models/security"
 )
 
 // ════════════════ 违禁词规则管理 ════════════════
 
 // ReloadBadWords 从数据库重新加载违禁词规则到安全层（启动时 + 每次 CRUD 后调用）
 func ReloadBadWords() {
-	words, err := models.ListEnabledBadWords()
+	words, err := securitym.ListEnabledBadWords()
 	if err != nil {
 		return
 	}
@@ -121,7 +121,7 @@ func ListBadWords(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	words, err := models.ListBadWords()
+	words, err := securitym.ListBadWords()
 	if err != nil {
 		utils.InternalError(c, "获取违禁词列表失败")
 		return
@@ -171,7 +171,7 @@ func CreateBadWord(c *gin.Context) {
 	if req.Enabled != nil {
 		enabled = *req.Enabled
 	}
-	word := &models.BadWord{
+	word := &securitym.BadWord{
 		Name:        req.Name,
 		Category:    normalizeBadWordCategory(req.Category),
 		Tags:        normalizeBadWordTags(req.Tags),
@@ -183,7 +183,7 @@ func CreateBadWord(c *gin.Context) {
 		Enabled:     enabled,
 		Description: req.Description,
 	}
-	if err := models.CreateBadWord(word); err != nil {
+	if err := securitym.CreateBadWord(word); err != nil {
 		utils.InternalError(c, "创建规则失败")
 		return
 	}
@@ -197,7 +197,7 @@ func UpdateBadWord(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	word, err := models.GetBadWord(uint(id))
+	word, err := securitym.GetBadWord(uint(id))
 	if err != nil {
 		utils.NotFound(c, "规则不存在")
 		return
@@ -255,7 +255,7 @@ func UpdateBadWord(c *gin.Context) {
 	if req.Description != "" {
 		word.Description = req.Description
 	}
-	if err := models.UpdateBadWord(word); err != nil {
+	if err := securitym.UpdateBadWord(word); err != nil {
 		utils.InternalError(c, "更新规则失败")
 		return
 	}
@@ -269,7 +269,7 @@ func DeleteBadWord(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := models.DeleteBadWord(uint(id)); err != nil {
+	if err := securitym.DeleteBadWord(uint(id)); err != nil {
 		utils.InternalError(c, "删除规则失败")
 		return
 	}
@@ -282,7 +282,7 @@ func ExportBadWords(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	words, err := models.ExportBadWords()
+	words, err := securitym.ExportBadWords()
 	if err != nil {
 		utils.InternalError(c, "导出失败")
 		return
@@ -297,7 +297,7 @@ func ImportBadWords(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	var items []models.BadWordImportItem
+	var items []securitym.BadWordImportItem
 	if err := c.ShouldBindJSON(&items); err != nil {
 		utils.BadRequest(c, "请求体须为 JSON 数组")
 		return
@@ -305,13 +305,13 @@ func ImportBadWords(c *gin.Context) {
 	// 兼容「外层包了 { data: [...] }」的写法
 	if len(items) == 0 {
 		var wrapper struct {
-			Data []models.BadWordImportItem `json:"data"`
+			Data []securitym.BadWordImportItem `json:"data"`
 		}
 		if err := c.ShouldBindJSON(&wrapper); err == nil {
 			items = wrapper.Data
 		}
 	}
-	created, skipped, err := models.ImportBadWords(items)
+	created, skipped, err := securitym.ImportBadWords(items)
 	if err != nil {
 		utils.InternalError(c, "导入失败："+err.Error())
 		return
@@ -397,11 +397,11 @@ func FlagBadWords(hits []security.BadWordHit, contentType string, contentID, use
 	if len(matched) == 0 {
 		return
 	}
-	if exists, _ := models.HasPendingFlag(contentType, contentID); exists {
+	if exists, _ := securitym.HasPendingFlag(contentType, contentID); exists {
 		return // 已有待审标记，不重复标记
 	}
 	b, _ := json.Marshal(matched)
-	flag := &models.BadWordFlag{
+	flag := &securitym.BadWordFlag{
 		ContentType:  contentType,
 		ContentID:    contentID,
 		UserID:       userID,
@@ -410,7 +410,7 @@ func FlagBadWords(hits []security.BadWordHit, contentType string, contentID, use
 		MatchedWords: string(b),
 		Status:       "pending",
 	}
-	_ = models.CreateBadWordFlag(flag)
+	_ = securitym.CreateBadWordFlag(flag)
 }
 
 // snippetOf 截取内容快照（前 200 字）供管理员快速判断
@@ -438,18 +438,18 @@ func ListBadWordFlags(c *gin.Context) {
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 20
 	}
-	flags, err := models.ListBadWordFlags(status, pageSize, (page-1)*pageSize)
+	flags, err := securitym.ListBadWordFlags(status, pageSize, (page-1)*pageSize)
 	if err != nil {
 		utils.InternalError(c, "获取标记列表失败")
 		return
 	}
-	total, err := models.CountBadWordFlags(status)
+	total, err := securitym.CountBadWordFlags(status)
 	if err != nil {
 		total = 0
 	}
 	// 补充命中词列表（JSON 数组解析）
 	type flagView struct {
-		models.BadWordFlag
+		securitym.BadWordFlag
 		Matched []string `json:"matched_list"`
 	}
 	views := make([]flagView, 0, len(flags))
@@ -458,7 +458,7 @@ func ListBadWordFlags(c *gin.Context) {
 		_ = json.Unmarshal([]byte(f.MatchedWords), &v.Matched)
 		views = append(views, v)
 	}
-	pendingTotal, _ := models.CountBadWordFlags("pending")
+	pendingTotal, _ := securitym.CountBadWordFlags("pending")
 	utils.Success(c, gin.H{
 		"items":         views,
 		"total":         total,
@@ -477,7 +477,7 @@ func HandleBadWordFlag(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	flag, err := models.GetBadWordFlag(uint(id))
+	flag, err := securitym.GetBadWordFlag(uint(id))
 	if err != nil {
 		utils.NotFound(c, "标记记录不存在")
 		return
@@ -512,7 +512,7 @@ func HandleBadWordFlag(c *gin.Context) {
 		return
 	}
 	flag.Note = req.Note
-	if err := models.UpdateBadWordFlag(flag); err != nil {
+	if err := securitym.UpdateBadWordFlag(flag); err != nil {
 		utils.InternalError(c, "更新标记失败")
 		return
 	}

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"nvs-server/models"
+	"nvs-server/models/security"
 )
 
 // BuildCrisisReport 生成《高危用户心理干预报告》。
@@ -16,7 +17,7 @@ func BuildCrisisReport(userID uint) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	events, _ := models.ListCrisisEventsByUser(userID)
+	events, _ := security.ListCrisisEventsByUser(userID)
 
 	var b strings.Builder
 	b.WriteString("# 高危用户心理干预报告\n\n")

@@ -12,6 +12,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	"nvs-server/models/security"
 )
 
 // ============ VIP 系统 ============
@@ -331,11 +332,11 @@ func GetDashboardStats(c *gin.Context) {
 // 不含"瞬时拒绝"（规则直接 block 且没留 flag 的那部分）：
 // 那部分没有内容快照，统计出来也无法溯源，宁可不报。
 func computeBadWordOverview(days int) gin.H {
-	total, pending, confirmed, words, err := models.BadWordHitStats(days)
+	total, pending, confirmed, words, err := security.BadWordHitStats(days)
 	if err != nil {
 		return gin.H{"available": false}
 	}
-	libTotal, libEnabled := models.BadWordLibraryStats()
+	libTotal, libEnabled := security.BadWordLibraryStats()
 	return gin.H{
 		"available":   true,
 		"blocked":     total,

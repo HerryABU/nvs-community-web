@@ -1,7 +1,8 @@
-package models
+package security
 
 import (
 	"encoding/json"
+	"nvs-server/models"
 	"sort"
 	"strings"
 	"time"
@@ -49,21 +50,21 @@ func (BadWord) TableName() string { return "bad_words" }
 // ListBadWords 列出所有违禁词规则（含禁用）
 func ListBadWords() ([]BadWord, error) {
 	var words []BadWord
-	err := DB.Order("id asc").Find(&words).Error
+	err := models.DB.Order("id asc").Find(&words).Error
 	return words, err
 }
 
 // ListEnabledBadWords 列出所有启用的违禁词规则
 func ListEnabledBadWords() ([]BadWord, error) {
 	var words []BadWord
-	err := DB.Where("enabled = ?", true).Order("id asc").Find(&words).Error
+	err := models.DB.Where("enabled = ?", true).Order("id asc").Find(&words).Error
 	return words, err
 }
 
 // GetBadWord 获取单个规则
 func GetBadWord(id uint) (*BadWord, error) {
 	var word BadWord
-	if err := DB.First(&word, id).Error; err != nil {
+	if err := models.DB.First(&word, id).Error; err != nil {
 		return nil, err
 	}
 	return &word, nil
@@ -71,17 +72,17 @@ func GetBadWord(id uint) (*BadWord, error) {
 
 // CreateBadWord 创建规则
 func CreateBadWord(word *BadWord) error {
-	return DB.Create(word).Error
+	return models.DB.Create(word).Error
 }
 
 // UpdateBadWord 更新规则
 func UpdateBadWord(word *BadWord) error {
-	return DB.Save(word).Error
+	return models.DB.Save(word).Error
 }
 
 // DeleteBadWord 删除规则
 func DeleteBadWord(id uint) error {
-	return DB.Delete(&BadWord{}, id).Error
+	return models.DB.Delete(&BadWord{}, id).Error
 }
 
 // ════════════════ 导入 / 导出（JSON 互操作） ════════════════
@@ -146,7 +147,7 @@ func ImportBadWords(items []BadWordImportItem) (created, skipped int, err error)
 			Enabled:     enabled,
 			Description: it.Description,
 		}
-		if err := DB.Create(word).Error; err != nil {
+		if err := models.DB.Create(word).Error; err != nil {
 			return created, skipped, err
 		}
 		seen[k] = true
@@ -181,7 +182,7 @@ func (BadWordFlag) TableName() string { return "bad_word_flags" }
 // ListBadWordFlags 查询标记记录，status 为空查全部，按创建时间倒序
 func ListBadWordFlags(status string, limit, offset int) ([]BadWordFlag, error) {
 	var flags []BadWordFlag
-	q := DB.Order("created_at desc")
+	q := models.DB.Order("created_at desc")
 	if status != "" {
 		q = q.Where("status = ?", status)
 	}
@@ -192,7 +193,7 @@ func ListBadWordFlags(status string, limit, offset int) ([]BadWordFlag, error) {
 // CountBadWordFlags 统计标记记录数量
 func CountBadWordFlags(status string) (int64, error) {
 	var count int64
-	q := DB.Model(&BadWordFlag{})
+	q := models.DB.Model(&BadWordFlag{})
 	if status != "" {
 		q = q.Where("status = ?", status)
 	}
@@ -203,7 +204,7 @@ func CountBadWordFlags(status string) (int64, error) {
 // GetBadWordFlag 获取单个标记记录
 func GetBadWordFlag(id uint) (*BadWordFlag, error) {
 	var flag BadWordFlag
-	if err := DB.First(&flag, id).Error; err != nil {
+	if err := models.DB.First(&flag, id).Error; err != nil {
 		return nil, err
 	}
 	return &flag, nil
@@ -211,18 +212,18 @@ func GetBadWordFlag(id uint) (*BadWordFlag, error) {
 
 // CreateBadWordFlag 创建标记记录
 func CreateBadWordFlag(flag *BadWordFlag) error {
-	return DB.Create(flag).Error
+	return models.DB.Create(flag).Error
 }
 
 // UpdateBadWordFlag 更新标记记录
 func UpdateBadWordFlag(flag *BadWordFlag) error {
-	return DB.Save(flag).Error
+	return models.DB.Save(flag).Error
 }
 
 // HasPendingFlag 判断某内容是否已有待审标记（避免重复标记）
 func HasPendingFlag(contentType string, contentID uint) (bool, error) {
 	var count int64
-	err := DB.Model(&BadWordFlag{}).
+	err := models.DB.Model(&BadWordFlag{}).
 		Where("content_type = ? AND content_id = ? AND status = ?", contentType, contentID, "pending").
 		Count(&count).Error
 	return count > 0, err
@@ -250,12 +251,12 @@ func BadWordHitStats(days int) (total, pending, confirmed int64, topWords []BadW
 	}
 	since := time.Now().AddDate(0, 0, -days)
 
-	DB.Model(&BadWordFlag{}).Where("created_at >= ?", since).Count(&total)
-	DB.Model(&BadWordFlag{}).Where("created_at >= ? AND status = ?", since, "pending").Count(&pending)
-	DB.Model(&BadWordFlag{}).Where("created_at >= ? AND status = ?", since, "confirmed").Count(&confirmed)
+	models.DB.Model(&BadWordFlag{}).Where("created_at >= ?", since).Count(&total)
+	models.DB.Model(&BadWordFlag{}).Where("created_at >= ? AND status = ?", since, "pending").Count(&pending)
+	models.DB.Model(&BadWordFlag{}).Where("created_at >= ? AND status = ?", since, "confirmed").Count(&confirmed)
 
 	var rows []BadWordFlag
-	if e := DB.Where("created_at >= ? AND matched_words <> ''", since).
+	if e := models.DB.Where("created_at >= ? AND matched_words <> ''", since).
 		Order("created_at desc").Limit(2000).Find(&rows).Error; e != nil {
 		err = e
 		return
@@ -293,7 +294,7 @@ func BadWordHitStats(days int) (total, pending, confirmed int64, topWords []BadW
 
 // BadWordLibraryStats 词库规模（词云/概览副标题用）
 func BadWordLibraryStats() (total, enabled int64) {
-	DB.Model(&BadWord{}).Count(&total)
-	DB.Model(&BadWord{}).Where("enabled = ?", true).Count(&enabled)
+	models.DB.Model(&BadWord{}).Count(&total)
+	models.DB.Model(&BadWord{}).Where("enabled = ?", true).Count(&enabled)
 	return
 }

@@ -17,6 +17,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	"nvs-server/models/security"
 )
 
 // ListVulnerabilities 漏洞列表 + 统计
@@ -27,16 +28,16 @@ func ListVulnerabilities(c *gin.Context) {
 	}
 	status := c.Query("status")
 	severity := c.Query("severity")
-	q := models.DB.Model(&models.Vulnerability{})
+	q := models.DB.Model(&security.Vulnerability{})
 	if status != "" {
 		q = q.Where("status = ?", status)
 	}
 	if severity != "" {
 		q = q.Where("severity = ?", severity)
 	}
-	var list []models.Vulnerability
+	var list []security.Vulnerability
 	q.Order("created_at DESC").Find(&list)
-	utils.Success(c, gin.H{"list": list, "stats": models.GetVulnStats()})
+	utils.Success(c, gin.H{"list": list, "stats": security.GetVulnStats()})
 }
 
 // CreateVulnerability 新建漏洞记录
@@ -58,16 +59,16 @@ func CreateVulnerability(c *gin.Context) {
 	}
 	severity := strings.ToLower(strings.TrimSpace(req.Severity))
 	switch severity {
-	case models.VulnSeverityCritical, models.VulnSeverityHigh, models.VulnSeverityMedium, models.VulnSeverityLow:
+	case security.VulnSeverityCritical, security.VulnSeverityHigh, security.VulnSeverityMedium, security.VulnSeverityLow:
 	default:
 		utils.BadRequest(c, "严重程度仅支持 critical / high / medium / low")
 		return
 	}
-	v := &models.Vulnerability{
+	v := &security.Vulnerability{
 		Name:        req.Name,
 		Description: req.Description,
 		Severity:    severity,
-		Status:      models.VulnStatusPending,
+		Status:      security.VulnStatusPending,
 		Affected:    req.Affected,
 		ReportedBy:  req.ReportedBy,
 	}
@@ -85,7 +86,7 @@ func UpdateVulnerability(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var v models.Vulnerability
+	var v security.Vulnerability
 	if err := models.DB.First(&v, id).Error; err != nil {
 		utils.NotFound(c, "漏洞记录不存在")
 		return
@@ -119,16 +120,16 @@ func UpdateVulnerability(c *gin.Context) {
 	if req.Severity != nil {
 		s := strings.ToLower(strings.TrimSpace(*req.Severity))
 		switch s {
-		case models.VulnSeverityCritical, models.VulnSeverityHigh, models.VulnSeverityMedium, models.VulnSeverityLow:
+		case security.VulnSeverityCritical, security.VulnSeverityHigh, security.VulnSeverityMedium, security.VulnSeverityLow:
 			updates["severity"] = s
 		}
 	}
 	if req.Status != nil {
 		s := strings.TrimSpace(*req.Status)
 		switch s {
-		case models.VulnStatusPending, models.VulnStatusFixing, models.VulnStatusFixed, models.VulnStatusIgnored:
+		case security.VulnStatusPending, security.VulnStatusFixing, security.VulnStatusFixed, security.VulnStatusIgnored:
 			updates["status"] = s
-			if s == models.VulnStatusFixed {
+			if s == security.VulnStatusFixed {
 				now := time.Now()
 				updates["fixed_at"] = &now
 			} else {
@@ -158,7 +159,7 @@ func DeleteVulnerability(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	models.DB.Delete(&models.Vulnerability{}, id)
+	models.DB.Delete(&security.Vulnerability{}, id)
 	utils.Success(c, gin.H{"message": "漏洞记录已删除"})
 }
 
@@ -168,7 +169,7 @@ func ExportVulnerabilities(c *gin.Context) {
 	if !EnsureAdmin(c) {
 		return
 	}
-	var list []models.Vulnerability
+	var list []security.Vulnerability
 	models.DB.Order("created_at DESC").Find(&list)
 	var b strings.Builder
 	b.WriteString("\xEF\xBB\xBF") // UTF-8 BOM（Excel 兼容）

@@ -8,6 +8,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	"nvs-server/models/security"
 )
 
 // ============ 用户黑名单（F13） ============
@@ -57,17 +58,17 @@ func AddBlacklist(c *gin.Context) {
 	}
 
 	mode := req.Mode
-	if mode != models.BlacklistModeHide {
-		mode = models.BlacklistModeBlock
+	if mode != security.BlacklistModeHide {
+		mode = security.BlacklistModeBlock
 	}
 
-	entry := &models.Blacklist{
+	entry := &security.Blacklist{
 		UserID:        userID,
 		BlockedUserID: target.ID,
 		Mode:          mode,
 		Reason:        utils.ClampString(req.Reason, utils.MaxReason),
 	}
-	if err := models.AddBlacklist(entry); err != nil {
+	if err := security.AddBlacklist(entry); err != nil {
 		utils.InternalError(c, "操作失败")
 		return
 	}
@@ -88,7 +89,7 @@ func RemoveBlacklist(c *gin.Context) {
 		return
 	}
 
-	entry, err := models.GetBlacklistByID(uint(id))
+	entry, err := security.GetBlacklistByID(uint(id))
 	if err != nil {
 		utils.NotFound(c, "黑名单记录不存在")
 		return
@@ -97,7 +98,7 @@ func RemoveBlacklist(c *gin.Context) {
 		utils.Forbidden(c, "无权操作此记录")
 		return
 	}
-	if err := models.RemoveBlacklist(userID, uint(id)); err != nil {
+	if err := security.RemoveBlacklist(userID, uint(id)); err != nil {
 		utils.InternalError(c, "解除失败")
 		return
 	}
@@ -113,8 +114,8 @@ func HiddenAuthorIDs(userID uint) ([]uint, error) {
 	if userID == 0 {
 		return ids, nil
 	}
-	err := models.DB.Model(&models.Blacklist{}).
-		Where("user_id = ? AND mode = ?", userID, models.BlacklistModeHide).
+	err := models.DB.Model(&security.Blacklist{}).
+		Where("user_id = ? AND mode = ?", userID, security.BlacklistModeHide).
 		Pluck("blocked_user_id", &ids).Error
 	return ids, err
 }
@@ -150,7 +151,7 @@ func ListMyBlacklist(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
-	pg, err := models.ListBlacklist(userID, page, pageSize)
+	pg, err := security.ListBlacklist(userID, page, pageSize)
 	if err != nil {
 		utils.InternalError(c, "获取黑名单失败")
 		return

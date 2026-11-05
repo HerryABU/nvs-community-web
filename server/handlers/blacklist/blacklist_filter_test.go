@@ -8,6 +8,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"nvs-server/models/security"
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -32,10 +33,10 @@ func TestFilterHiddenItems(t *testing.T) {
 
 	const viewer, hiddenAuthor, normalAuthor uint = 1, 2, 3
 	// viewer 以 hide 模式拉黑 hiddenAuthor，以 block 模式拉黑 normalAuthor
-	if err := models.AddBlacklist(&models.Blacklist{UserID: viewer, BlockedUserID: hiddenAuthor, Mode: models.BlacklistModeHide}); err != nil {
+	if err := security.AddBlacklist(&security.Blacklist{UserID: viewer, BlockedUserID: hiddenAuthor, Mode: security.BlacklistModeHide}); err != nil {
 		t.Fatalf("建 hide 拉黑失败: %v", err)
 	}
-	if err := models.AddBlacklist(&models.Blacklist{UserID: viewer, BlockedUserID: normalAuthor, Mode: models.BlacklistModeBlock}); err != nil {
+	if err := security.AddBlacklist(&security.Blacklist{UserID: viewer, BlockedUserID: normalAuthor, Mode: security.BlacklistModeBlock}); err != nil {
 		t.Fatalf("建 block 拉黑失败: %v", err)
 	}
 

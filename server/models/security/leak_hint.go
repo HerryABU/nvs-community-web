@@ -1,7 +1,8 @@
-package models
+package security
 
 import (
 	"encoding/json"
+	"nvs-server/models"
 	"strings"
 	"time"
 )
@@ -63,13 +64,13 @@ func RecordLeakHint(types []string) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(leakHintStatsKey, string(b))
+	return models.SetPlatformConfig(leakHintStatsKey, string(b))
 }
 
 // GetLeakHintStats 读取统计（未初始化返回空结构）
 func GetLeakHintStats() LeakHintStats {
 	out := LeakHintStats{Total: map[string]int64{}, Daily: map[string]int64{}}
-	raw := GetPlatformConfig(leakHintStatsKey)
+	raw := models.GetPlatformConfig(leakHintStatsKey)
 	if strings.TrimSpace(raw) == "" {
 		return out
 	}

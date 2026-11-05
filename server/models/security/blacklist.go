@@ -1,9 +1,10 @@
-package models
+package security
 
 import (
 	"time"
 
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // ============ 用户黑名单（F13） ============
@@ -40,10 +41,10 @@ func (Blacklist) TableName() string {
 // 成功后 b.ID 为记录主键（新建或既有行）。
 func AddBlacklist(b *Blacklist) error {
 	var existing Blacklist
-	err := DB.Where("user_id = ? AND blocked_user_id = ?", b.UserID, b.BlockedUserID).First(&existing).Error
+	err := models.DB.Where("user_id = ? AND blocked_user_id = ?", b.UserID, b.BlockedUserID).First(&existing).Error
 	if err == nil {
 		// 已拉黑 → 仅更新模式与理由，保留原创建时间
-		if uerr := DB.Model(&existing).Updates(map[string]interface{}{
+		if uerr := models.DB.Model(&existing).Updates(map[string]interface{}{
 			"mode":   b.Mode,
 			"reason": b.Reason,
 		}).Error; uerr != nil {
@@ -55,18 +56,18 @@ func AddBlacklist(b *Blacklist) error {
 	if err != gorm.ErrRecordNotFound {
 		return err
 	}
-	return DB.Create(b).Error
+	return models.DB.Create(b).Error
 }
 
 // RemoveBlacklist 解除拉黑（仅限记录归属者本人：userID 必须匹配）。
 func RemoveBlacklist(userID, id uint) error {
-	return DB.Where("id = ? AND user_id = ?", id, userID).Delete(&Blacklist{}).Error
+	return models.DB.Where("id = ? AND user_id = ?", id, userID).Delete(&Blacklist{}).Error
 }
 
 // GetBlacklistByID 按主键查询黑名单记录（供 handler 做归属校验）。
 func GetBlacklistByID(id uint) (*Blacklist, error) {
 	var b Blacklist
-	if err := DB.First(&b, id).Error; err != nil {
+	if err := models.DB.First(&b, id).Error; err != nil {
 		return nil, err
 	}
 	return &b, nil
@@ -88,14 +89,14 @@ func ListBlacklist(userID uint, page, pageSize int) (BlacklistPage, error) {
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 20
 	}
-	if err := DB.Model(&Blacklist{}).Where("user_id = ?", userID).Count(&out.Total).Error; err != nil {
+	if err := models.DB.Model(&Blacklist{}).Where("user_id = ?", userID).Count(&out.Total).Error; err != nil {
 		return out, err
 	}
 	if out.Total == 0 {
 		return out, nil
 	}
 	// LEFT JOIN：即使对方账号被软删除，黑名单记录本身仍要可见可解除
-	err := DB.Model(&Blacklist{}).
+	err := models.DB.Model(&Blacklist{}).
 		Select("blacklists.*, u.username AS blocked_username, u.nickname AS blocked_nickname, u.avatar_url AS blocked_avatar_url").
 		Joins("LEFT JOIN users u ON u.id = blacklists.blocked_user_id").
 		Where("blacklists.user_id = ?", userID).
@@ -111,7 +112,7 @@ func IsBlacklisted(blockerID, blockedID uint) bool {
 		return false
 	}
 	var n int64
-	DB.Model(&Blacklist{}).
+	models.DB.Model(&Blacklist{}).
 		Where("user_id = ? AND blocked_user_id = ?", blockerID, blockedID).
 		Count(&n)
 	return n > 0
@@ -123,7 +124,7 @@ func IsBlockedEither(a, b uint) bool {
 		return false
 	}
 	var n int64
-	DB.Model(&Blacklist{}).
+	models.DB.Model(&Blacklist{}).
 		Where("(user_id = ? AND blocked_user_id = ?) OR (user_id = ? AND blocked_user_id = ?)", a, b, b, a).
 		Count(&n)
 	return n > 0
@@ -132,6 +133,6 @@ func IsBlockedEither(a, b uint) bool {
 // CountBlacklist 统计某用户已拉黑的用户数。
 func CountBlacklist(userID uint) int64 {
 	var n int64
-	DB.Model(&Blacklist{}).Where("user_id = ?", userID).Count(&n)
+	models.DB.Model(&Blacklist{}).Where("user_id = ?", userID).Count(&n)
 	return n
 }

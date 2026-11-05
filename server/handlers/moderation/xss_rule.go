@@ -5,16 +5,16 @@ import (
 	"strconv"
 
 	"nvs-server/handlers/admin"
-	"nvs-server/models"
 	"nvs-server/security"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	securitym "nvs-server/models/security"
 )
 
 // ReloadXssRules 从数据库重新加载 XSS 规则到安全层（启动时 + 每次 CRUD 后调用）
 func ReloadXssRules() {
-	rules, err := models.ListEnabledXssRules()
+	rules, err := securitym.ListEnabledXssRules()
 	if err != nil {
 		return
 	}
@@ -45,7 +45,7 @@ func ListXssRules(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	rules, err := models.ListXssRules()
+	rules, err := securitym.ListXssRules()
 	if err != nil {
 		utils.InternalError(c, "获取规则列表失败")
 		return
@@ -86,7 +86,7 @@ func CreateXssRule(c *gin.Context) {
 	if req.Enabled != nil {
 		enabled = *req.Enabled
 	}
-	rule := &models.XssRule{
+	rule := &securitym.XssRule{
 		Name:        req.Name,
 		Pattern:     req.Pattern,
 		Action:      normalizeXssAction(req.Action),
@@ -94,7 +94,7 @@ func CreateXssRule(c *gin.Context) {
 		Enabled:     enabled,
 		Description: req.Description,
 	}
-	if err := models.CreateXssRule(rule); err != nil {
+	if err := securitym.CreateXssRule(rule); err != nil {
 		utils.InternalError(c, "创建规则失败")
 		return
 	}
@@ -108,7 +108,7 @@ func UpdateXssRule(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	rule, err := models.GetXssRule(uint(id))
+	rule, err := securitym.GetXssRule(uint(id))
 	if err != nil {
 		utils.NotFound(c, "规则不存在")
 		return
@@ -151,7 +151,7 @@ func UpdateXssRule(c *gin.Context) {
 	if req.Description != "" {
 		rule.Description = req.Description
 	}
-	if err := models.UpdateXssRule(rule); err != nil {
+	if err := securitym.UpdateXssRule(rule); err != nil {
 		utils.InternalError(c, "更新规则失败")
 		return
 	}
@@ -165,7 +165,7 @@ func DeleteXssRule(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := models.DeleteXssRule(uint(id)); err != nil {
+	if err := securitym.DeleteXssRule(uint(id)); err != nil {
 		utils.InternalError(c, "删除规则失败")
 		return
 	}
