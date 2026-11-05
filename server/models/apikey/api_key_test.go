@@ -1,4 +1,4 @@
-package models
+package apikey
 
 // API Key 模型纯函数单元测试（不依赖 DB）
 
@@ -12,6 +12,7 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
+	"nvs-server/models"
 )
 
 func TestGenerateAPIKey(t *testing.T) {
@@ -244,7 +245,7 @@ func TestNewTablesMigrateOnSQLite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开内存测试库失败: %v", err)
 	}
-	if err := AutoMigrateAll(db); err != nil {
+	if err := models.AutoMigrateAll(db); err != nil {
 		t.Fatalf("迁移测试库失败: %v", err)
 	}
 	for _, tb := range []string{"api_keys", "federated_peer_keys", "api_access_logs"} {

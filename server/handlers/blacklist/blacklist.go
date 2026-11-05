@@ -8,6 +8,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	apikey "nvs-server/models/apikey"
 	"nvs-server/models/security"
 )
 
@@ -15,7 +16,7 @@ import (
 
 // AddBlacklist POST /api/blacklist — 把某用户加入黑名单（已拉黑则更新模式）
 // body: { user_key 或 user_id, mode?, reason? }
-//   - user_key：用户名或数字 id（复用 models.ResolveUserKey 的解析规则）
+//   - user_key：用户名或数字 id（复用 apikey.ResolveUserKey 的解析规则）
 //   - mode：block=禁止在其评论区评论（默认）/ hide=屏蔽其内容不看
 //   - reason：可选理由（≤256 字符，超长自动截断）
 func AddBlacklist(c *gin.Context) {
@@ -41,7 +42,7 @@ func AddBlacklist(c *gin.Context) {
 		}
 		key = strconv.FormatUint(uint64(req.UserID), 10)
 	}
-	target, err := models.ResolveUserKey(key)
+	target, err := apikey.ResolveUserKey(key)
 	if err != nil || target == nil {
 		utils.NotFound(c, "用户不存在")
 		return

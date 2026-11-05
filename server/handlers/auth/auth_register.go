@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	apikey "nvs-server/models/apikey"
 	siteops "nvs-server/models/siteops"
 )
 
@@ -134,7 +135,7 @@ func Register(c *gin.Context) {
 	_ = gate.Bind(nil, deviceID, user.ID, c.ClientIP(), c.GetHeader("User-Agent"), deviceSrc)
 
 	// 合规审计：注册成功
-	RecordUserAudit(c, user.ID, models.AuditRegister, "新用户注册，邮箱 "+user.Email, "success")
+	RecordUserAudit(c, user.ID, apikey.AuditRegister, "新用户注册，邮箱 "+user.Email, "success")
 
 	// 生成访问令牌 + 刷新令牌，均写入 HttpOnly Cookie
 	// 🔒 令牌绑定 + 刷新令牌 JTI 轮换（同登录流程，防 JWT/刷新令牌窃取盗用）

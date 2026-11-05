@@ -16,12 +16,13 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	apikey "nvs-server/models/apikey"
 )
 
 // RecordUserAudit 记录用户行为审计日志（176号令合规）。
 // 从 gin context 提取 userID、IP、User-Agent 后写入 user_audit_logs。
 func RecordUserAudit(c *gin.Context, userID uint, action, detail, result string) {
-	models.RecordUserAudit(&models.UserAuditLog{
+	apikey.RecordUserAudit(&apikey.UserAuditLog{
 		UserID:    userID,
 		Action:    action,
 		IP:        c.ClientIP(),

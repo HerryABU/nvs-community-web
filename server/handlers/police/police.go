@@ -13,6 +13,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	apikey "nvs-server/models/apikey"
 	quota "nvs-server/models/quota"
 	softdel "nvs-server/models/softdel"
 )
@@ -107,7 +108,7 @@ func PoliceExportPackage(c *gin.Context) {
 	if wa, _, err := quota.ListWebAccess(quota.WebAccessQuery{Page: 1, PageSize: 500}); err == nil {
 		pkg["web_access"] = wa
 	}
-	if audit, err := models.ListUserAuditLogs(0, "", 500); err == nil {
+	if audit, err := apikey.ListUserAuditLogs(0, "", 500); err == nil {
 		pkg["user_audit"] = audit
 	}
 	serveEvidenceDownload(c, fmt.Sprintf("police_evidence_package_%s.json", time.Now().Format("20060102_150405")), pkg)

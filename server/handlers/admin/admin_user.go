@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
+	apikey "nvs-server/models/apikey"
 	siteops "nvs-server/models/siteops"
 )
 
@@ -68,7 +69,7 @@ func ListUserAuditLogs(c *gin.Context) {
 	}
 	userID, _ := strconv.ParseUint(c.Query("user_id"), 10, 64)
 	action := c.Query("action")
-	logs, err := models.ListUserAuditLogs(uint(userID), action, 500)
+	logs, err := apikey.ListUserAuditLogs(uint(userID), action, 500)
 	if err != nil {
 		utils.InternalError(c, "获取审计日志失败")
 		return

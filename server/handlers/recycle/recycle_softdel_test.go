@@ -12,6 +12,7 @@ import (
 	"nvs-server/models"
 
 	"github.com/gin-gonic/gin"
+	apikey "nvs-server/models/apikey"
 	blogm "nvs-server/models/blog"
 )
 
@@ -451,29 +452,29 @@ func TestResolveUserKey(t *testing.T) {
 	testutil.SeedTestUser(t, 42, "harry_zhou", "author")
 
 	// 数字 → id
-	u, err := models.ResolveUserKey("42")
+	u, err := apikey.ResolveUserKey("42")
 	if err != nil || u.ID != 42 {
 		t.Fatalf("数字 id 解析失败: %v %+v", err, u)
 	}
 	// 用户名 → username 查询
-	u, err = models.ResolveUserKey("harry_zhou")
+	u, err = apikey.ResolveUserKey("harry_zhou")
 	if err != nil || u.ID != 42 {
 		t.Fatalf("用户名解析失败: %v %+v", err, u)
 	}
 	// 用户名大小写不敏感
-	u, err = models.ResolveUserKey("HARRY_ZHOU")
+	u, err = apikey.ResolveUserKey("HARRY_ZHOU")
 	if err != nil || u.ID != 42 {
 		t.Fatalf("用户名大写解析失败: %v %+v", err, u)
 	}
 	// 不存在
-	if _, err = models.ResolveUserKey("nobody_here"); err == nil {
+	if _, err = apikey.ResolveUserKey("nobody_here"); err == nil {
 		t.Errorf("不存在的用户名应报错")
 	}
-	if _, err = models.ResolveUserKey("99999"); err == nil {
+	if _, err = apikey.ResolveUserKey("99999"); err == nil {
 		t.Errorf("不存在的 id 应报错")
 	}
 	// 空
-	if _, err = models.ResolveUserKey(""); err == nil {
+	if _, err = apikey.ResolveUserKey(""); err == nil {
 		t.Errorf("空标识应报错")
 	}
 }

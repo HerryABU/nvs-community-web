@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -100,7 +101,7 @@ func LoadForumQuotaConfig() ForumQuotaConfig {
 	if val == "" {
 		return cfg
 	}
-	if err := jsonUnmarshal([]byte(val), &cfg); err != nil {
+	if err := json.Unmarshal([]byte(val), &cfg); err != nil {
 		return DefaultForumQuotaConfig()
 	}
 	if cfg.MaxPerUser < 0 {
@@ -120,7 +121,7 @@ func SaveForumQuotaConfig(cfg ForumQuotaConfig) error {
 	if cfg.MaxPerUser > 1000 {
 		cfg.MaxPerUser = 1000
 	}
-	b, err := jsonMarshal(cfg)
+	b, err := json.Marshal(cfg)
 	if err != nil {
 		return err
 	}

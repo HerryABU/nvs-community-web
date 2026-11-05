@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"nvs-server/models"
+	apikey "nvs-server/models/apikey"
 )
 
 // 告警类型
@@ -120,12 +121,12 @@ func raiseAlarm(kind string, keyID, userID uint, dedupeMinutes int, detail strin
 	}
 	since := time.Now().Add(-time.Duration(dedupeMinutes) * time.Minute)
 	var n int64
-	_ = models.DB.Model(&models.ApiKeyAlarm{}).
+	_ = models.DB.Model(&apikey.ApiKeyAlarm{}).
 		Where("kind = ? AND key_id = ? AND created_at >= ?", kind, keyID, since).Count(&n).Error
 	if n > 0 {
 		return
 	}
-	_ = models.DB.Create(&models.ApiKeyAlarm{
+	_ = models.DB.Create(&apikey.ApiKeyAlarm{
 		Kind: kind, KeyID: keyID, UserID: userID,
 		Detail: truncate(detail, 512), CreatedAt: time.Now(),
 	}).Error
@@ -149,14 +150,14 @@ func ReportHMACMismatch(keyID, userID uint, detail string) {
 // ─────────────── 查询 ───────────────
 
 // ListKeyAlarms 告警列表
-func ListKeyAlarms(page, size int, kind string, acked *bool) ([]models.ApiKeyAlarm, int64, error) {
+func ListKeyAlarms(page, size int, kind string, acked *bool) ([]apikey.ApiKeyAlarm, int64, error) {
 	if page < 1 {
 		page = 1
 	}
 	if size <= 0 || size > 100 {
 		size = 20
 	}
-	q := models.DB.Model(&models.ApiKeyAlarm{})
+	q := models.DB.Model(&apikey.ApiKeyAlarm{})
 	if kind != "" {
 		q = q.Where("kind = ?", kind)
 	}
@@ -165,7 +166,7 @@ func ListKeyAlarms(page, size int, kind string, acked *bool) ([]models.ApiKeyAla
 	}
 	var total int64
 	q.Count(&total)
-	var list []models.ApiKeyAlarm
+	var list []apikey.ApiKeyAlarm
 	if err := q.Order("id DESC").Offset((page - 1) * size).Limit(size).Find(&list).Error; err != nil {
 		return nil, 0, err
 	}
@@ -175,7 +176,7 @@ func ListKeyAlarms(page, size int, kind string, acked *bool) ([]models.ApiKeyAla
 // AckKeyAlarm 标记已处理
 func AckKeyAlarm(id, operatorID uint, note string) error {
 	now := time.Now()
-	return models.DB.Model(&models.ApiKeyAlarm{}).Where("id = ?", id).Updates(map[string]interface{}{
+	return models.DB.Model(&apikey.ApiKeyAlarm{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"acked": true, "acked_by": operatorID, "acked_at": now, "note": truncate(note, 256),
 	}).Error
 }

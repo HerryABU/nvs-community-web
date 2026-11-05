@@ -6,6 +6,7 @@ import (
 
 	"gorm.io/gorm"
 	"nvs-server/models"
+	apikey "nvs-server/models/apikey"
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -100,7 +101,7 @@ func DropLegacyIndexes(db *gorm.DB) error {
 		{&models.Comment{}, "idx_comments_novel_id"},
 		{&models.Comment{}, "idx_comments_parent_id"}, // 旧匿名索引（ParentID 原为 index），被具名 idx_comments_parent 替代
 		{&models.Notification{}, "idx_notif_user_read"},
-		{&models.UserAuditLog{}, "idx_user_audit_logs_user_id"},
+		{&apikey.UserAuditLog{}, "idx_user_audit_logs_user_id"},
 		{&models.ZoneAccessLog{}, "idx_zone_access_logs_user_id"},
 		{&models.ZoneAccessLog{}, "idx_zone_access_logs_zone"},
 		{&models.ForumMute{}, "idx_forum_mutes_forum_id"},

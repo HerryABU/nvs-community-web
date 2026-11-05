@@ -20,6 +20,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
+	apikeym "nvs-server/models/apikey"
 )
 
 // apiKeyRoleForUser 用户角色 → Key 角色（vip_author 归入 author）
@@ -84,15 +85,15 @@ func ListMyAPIKeys(c *gin.Context) {
 		utils.Unauthorized(c, "未登录")
 		return
 	}
-	var list []models.APIKey
+	var list []apikeym.APIKey
 	models.DB.Where("user_id = ?", uid).Order("id DESC").Find(&list)
 	role := apiKeyRoleForUser(hctx.CurrentUserRole(c))
-	cfg := models.LoadAPIRateLimitConfig()
+	cfg := apikeym.LoadAPIRateLimitConfig()
 	quota := cfg.RoleQuotaFor(role)
 	// 管理员按人限流：叠加用户专属策略（展示为「实际生效配额」）
 	effective := gin.H{"req": quota.Req, "window": quota.Window}
 	limits := gin.H{"max_keys": 0, "keys_banned": false, "ban_reason": ""}
-	if p := models.GetUserAPIPolicy(uid); p != nil {
+	if p := apikeym.GetUserAPIPolicy(uid); p != nil {
 		req, win := quota.Req, quota.Window
 		if p.QuotaPerMin > 0 && p.QuotaPerMin < req {
 			req = p.QuotaPerMin
@@ -144,7 +145,7 @@ func CreateAPIKey(c *gin.Context) {
 	}
 
 	// 管理员按人管控：封禁中禁止新建 Key；达到 Key 数上限同样拒绝
-	if policy := models.GetUserAPIPolicy(uid); policy != nil {
+	if policy := apikeym.GetUserAPIPolicy(uid); policy != nil {
 		if policy.IsBannedNow() {
 			reason := policy.BanReason
 			if reason == "" {
@@ -155,7 +156,7 @@ func CreateAPIKey(c *gin.Context) {
 		}
 		if policy.MaxKeys > 0 {
 			var used int64
-			models.DB.Model(&models.APIKey{}).Where("user_id = ?", uid).Count(&used)
+			models.DB.Model(&apikeym.APIKey{}).Where("user_id = ?", uid).Count(&used)
 			if int(used) >= policy.MaxKeys {
 				utils.Forbidden(c, fmt.Sprintf("管理员限制了你最多持有 %d 个 API Key，请先删除后再创建", policy.MaxKeys))
 				return
@@ -164,7 +165,7 @@ func CreateAPIKey(c *gin.Context) {
 	}
 
 	role := apiKeyRoleForUser(hctx.CurrentUserRole(c))
-	cfg := models.LoadAPIRateLimitConfig()
+	cfg := apikeym.LoadAPIRateLimitConfig()
 	roleQuota := cfg.RoleQuotaFor(role)
 	quota := req.QuotaPerMin
 	if quota <= 0 {
@@ -175,13 +176,13 @@ func CreateAPIKey(c *gin.Context) {
 		return
 	}
 
-	full, prefix, hash, err := models.GenerateAPIKey(role)
+	full, prefix, hash, err := apikeym.GenerateAPIKey(role)
 	if err != nil {
 		utils.InternalError(c, "生成 Key 失败")
 		return
 	}
 	policy := bluemonday.StrictPolicy()
-	key := &models.APIKey{
+	key := &apikeym.APIKey{
 		UserID: uid, Name: policy.Sanitize(strings.TrimSpace(req.Name)),
 		Role: role, KeyHash: hash, KeyPrefix: prefix,
 		QuotaPerMin: quota, AllowedIPs: strings.TrimSpace(req.AllowedIPs),
@@ -205,7 +206,7 @@ func UpdateAPIKey(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var key models.APIKey
+	var key apikeym.APIKey
 	if err := models.DB.Where("id = ? AND user_id = ?", id, uid).First(&key).Error; err != nil {
 		utils.NotFound(c, "Key 不存在")
 		return
@@ -226,7 +227,7 @@ func UpdateAPIKey(c *gin.Context) {
 		updates["name"] = bluemonday.StrictPolicy().Sanitize(strings.TrimSpace(*req.Name))
 	}
 	if req.QuotaPerMin != nil {
-		roleQuota := models.LoadAPIRateLimitConfig().RoleQuotaFor(key.Role)
+		roleQuota := apikeym.LoadAPIRateLimitConfig().RoleQuotaFor(key.Role)
 		q := *req.QuotaPerMin
 		if q <= 0 || q > roleQuota.Req {
 			utils.BadRequest(c, fmt.Sprintf("请求配额需在 1 ~ %d 之间", roleQuota.Req))
@@ -266,12 +267,12 @@ func RegenerateAPIKey(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var key models.APIKey
+	var key apikeym.APIKey
 	if err := models.DB.Where("id = ? AND user_id = ?", id, uid).First(&key).Error; err != nil {
 		utils.NotFound(c, "Key 不存在")
 		return
 	}
-	full, prefix, hash, err := models.GenerateAPIKey(key.Role)
+	full, prefix, hash, err := apikeym.GenerateAPIKey(key.Role)
 	if err != nil {
 		utils.InternalError(c, "生成 Key 失败")
 		return
@@ -290,7 +291,7 @@ func DeleteAPIKey(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	res := models.DB.Where("id = ? AND user_id = ?", id, uid).Delete(&models.APIKey{})
+	res := models.DB.Where("id = ? AND user_id = ?", id, uid).Delete(&apikeym.APIKey{})
 	if res.RowsAffected == 0 {
 		utils.NotFound(c, "Key 不存在")
 		return
@@ -305,7 +306,7 @@ func GetRateLimitConfig(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	cfg := models.LoadAPIRateLimitConfig()
+	cfg := apikeym.LoadAPIRateLimitConfig()
 	utils.Success(c, gin.H{
 		"config":                 cfg,
 		"builtin_bot_keywords":   security.BuiltinBotKeywords(),
@@ -318,12 +319,12 @@ func UpdateRateLimitConfig(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	var cfg models.APIRateLimitConfig
+	var cfg apikeym.APIRateLimitConfig
 	if err := c.ShouldBindJSON(&cfg); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.SaveAPIRateLimitConfig(cfg); err != nil {
+	if err := apikeym.SaveAPIRateLimitConfig(cfg); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
@@ -339,7 +340,7 @@ func ListRateLimitLogs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	idType := strings.TrimSpace(c.Query("type"))
-	list, total, err := models.ListAccessLogs(page, pageSize, idType)
+	list, total, err := apikeym.ListAccessLogs(page, pageSize, idType)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -369,7 +370,7 @@ func AdminListAPIKeys(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	var keys []models.APIKey
+	var keys []apikeym.APIKey
 	models.DB.Order("id DESC").Limit(500).Find(&keys)
 
 	// 收集用户名
@@ -386,13 +387,13 @@ func AdminListAPIKeys(c *gin.Context) {
 		}
 	}
 	// 用户级策略（整体封禁 / 专属配额）命中情况，供列表直接展示
-	policies, _ := models.ListUserAPIPolicies()
-	policyMap := map[uint]*models.UserAPIPolicy{}
+	policies, _ := apikeym.ListUserAPIPolicies()
+	policyMap := map[uint]*apikeym.UserAPIPolicy{}
 	for i := range policies {
 		policyMap[policies[i].UserID] = &policies[i]
 	}
 	type keyRow struct {
-		models.APIKey
+		apikeym.APIKey
 		Username   string `json:"username"`
 		UserBanned bool   `json:"user_banned"`   // 该用户名下 Key 被整体封禁
 		UserQuota  int    `json:"user_quota"`    // 按人专属配额（0 = 跟随角色全局）
@@ -421,12 +422,12 @@ func AdminRegenerateAPIKey(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var key models.APIKey
+	var key apikeym.APIKey
 	if err := models.DB.First(&key, id).Error; err != nil {
 		utils.NotFound(c, "Key 不存在")
 		return
 	}
-	full, prefix, hash, err := models.GenerateAPIKey(key.Role)
+	full, prefix, hash, err := apikeym.GenerateAPIKey(key.Role)
 	if err != nil {
 		utils.InternalError(c, "生成 Key 失败")
 		return
@@ -443,7 +444,7 @@ func AdminUpdateAPIKey(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var key models.APIKey
+	var key apikeym.APIKey
 	if err := models.DB.First(&key, id).Error; err != nil {
 		utils.NotFound(c, "Key 不存在")
 		return
@@ -475,7 +476,7 @@ func AdminDeleteAPIKey(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	res := models.DB.Delete(&models.APIKey{}, id)
+	res := models.DB.Delete(&apikeym.APIKey{}, id)
 	if res.RowsAffected == 0 {
 		utils.NotFound(c, "Key 不存在")
 		return
@@ -493,7 +494,7 @@ func AdminTestAPIKey(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var key models.APIKey
+	var key apikeym.APIKey
 	if err := models.DB.First(&key, id).Error; err != nil {
 		utils.NotFound(c, "Key 不存在")
 		return
@@ -524,7 +525,7 @@ func AdminTestAPIKey(c *gin.Context) {
 		ok = false
 	} else {
 		checks = append(checks, gin.H{"name": "归属账号", "ok": true, "detail": "用户 @" + u.Username + " 存在"})
-		if p := models.GetUserAPIPolicy(key.UserID); p != nil && p.IsBannedNow() {
+		if p := apikeym.GetUserAPIPolicy(key.UserID); p != nil && p.IsBannedNow() {
 			reason := p.BanReason
 			if reason == "" {
 				reason = "管理员已封禁该用户 API 访问"

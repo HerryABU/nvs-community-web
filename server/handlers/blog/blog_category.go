@@ -13,6 +13,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	apikey "nvs-server/models/apikey"
 	blogm "nvs-server/models/blog"
 	siteops "nvs-server/models/siteops"
 )
@@ -42,7 +43,7 @@ func ListBlogCategories(c *gin.Context) {
 // GET /api/author/:id/blog-categories — 某作者的已公开分类树（个人专栏）
 // :id 兼容数字主键 id 与用户名（username）
 func ListAuthorBlogCategories(c *gin.Context) {
-	author, err := models.ResolveUserKey(c.Param("id"))
+	author, err := apikey.ResolveUserKey(c.Param("id"))
 	if err != nil || author == nil {
 		utils.NotFound(c, "作者不存在")
 		return

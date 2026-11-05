@@ -1,10 +1,11 @@
-package models
+package apikey
 
 import (
 	"errors"
 	"strings"
 
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // 微信扫码登录（F21.2）模型层查询/写入。
@@ -14,13 +15,13 @@ import (
 // GetUserByWeChatUnionID 按微信 UnionID 查询。
 // 同一开放平台主体下的多个应用共享 UnionID：用于「同主体的另一 App 已注册过账号」
 // 的跨应用认领（找到后补绑 openid 即可登录）。
-func GetUserByWeChatUnionID(unionID string) (*User, error) {
+func GetUserByWeChatUnionID(unionID string) (*models.User, error) {
 	unionID = strings.TrimSpace(unionID)
 	if unionID == "" {
 		return nil, gorm.ErrRecordNotFound
 	}
-	var user User
-	err := DB.Where("we_chat_union_id = ?", unionID).First(&user).Error
+	var user models.User
+	err := models.DB.Where("we_chat_union_id = ?", unionID).First(&user).Error
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +35,7 @@ func BindWeChat(userID uint, openID, unionID string) error {
 	if userID == 0 || openID == "" {
 		return errors.New("userID/openID 不能为空")
 	}
-	return DB.Model(&User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+	return models.DB.Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
 		"we_chat_open_id":  openID,
 		"we_chat_union_id": strings.TrimSpace(unionID),
 	}).Error
@@ -45,7 +46,7 @@ func UnbindWeChat(userID uint) error {
 	if userID == 0 {
 		return errors.New("userID 不能为空")
 	}
-	return DB.Model(&User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+	return models.DB.Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
 		"we_chat_open_id":  "",
 		"we_chat_union_id": "",
 	}).Error
@@ -59,6 +60,6 @@ func WeChatOpenIDTaken(openID string) bool {
 		return false
 	}
 	var n int64
-	DB.Model(&User{}).Where("we_chat_open_id = ?", openID).Count(&n)
+	models.DB.Model(&models.User{}).Where("we_chat_open_id = ?", openID).Count(&n)
 	return n > 0
 }

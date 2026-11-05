@@ -8,6 +8,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	apikey "nvs-server/models/apikey"
 )
 
 // ============ 关注作者 ============
@@ -99,7 +100,7 @@ func GetFollowStats(c *gin.Context) {
 // （当前登录用户口径），导致「看别人主页时显示的是自己的粉丝数」。
 // 只回计数，不暴露关注关系；:id 兼容用户名。
 func GetAuthorFollowStats(c *gin.Context) {
-	u, err := models.ResolveUserKey(c.Param("id"))
+	u, err := apikey.ResolveUserKey(c.Param("id"))
 	if err != nil || u == nil {
 		utils.NotFound(c, "用户不存在")
 		return

@@ -16,6 +16,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	apikey "nvs-server/models/apikey"
 	siteops "nvs-server/models/siteops"
 )
 
@@ -52,7 +53,7 @@ func Login(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// 合规审计：登录失败（账号不存在）
-			RecordUserAudit(c, 0, models.AuditLoginFail, "登录失败：邮箱不存在 "+input.Email, "fail")
+			RecordUserAudit(c, 0, apikey.AuditLoginFail, "登录失败：邮箱不存在 "+input.Email, "fail")
 			utils.BadRequest(c, "邮箱或密码错误")
 			return
 		}
@@ -71,7 +72,7 @@ func Login(c *gin.Context) {
 
 	if !utils.CheckPassword(input.Password, user.PasswordHash) {
 		// 合规审计：登录失败（密码错误）
-		RecordUserAudit(c, user.ID, models.AuditLoginFail, "登录失败：密码错误 "+user.Username, "fail")
+		RecordUserAudit(c, user.ID, apikey.AuditLoginFail, "登录失败：密码错误 "+user.Username, "fail")
 		// 递增失败计数；达到阈值锁定账号
 		newCount := user.LoginFailCount + 1
 		updates := map[string]interface{}{"login_fail_count": newCount}
@@ -92,7 +93,7 @@ func Login(c *gin.Context) {
 	})
 
 	// 合规审计：登录成功
-	RecordUserAudit(c, user.ID, models.AuditLoginSuccess, "登录成功 "+user.Username, "success")
+	RecordUserAudit(c, user.ID, apikey.AuditLoginSuccess, "登录成功 "+user.Username, "success")
 
 	// 合规留存：记录最后登录 IP 与时间
 	now := time.Now()
@@ -155,7 +156,7 @@ func Logout(c *gin.Context) {
 	// 合规审计：记录登出（从 Cookie 解析用户身份）
 	if token, err := c.Cookie("token"); err == nil && token != "" {
 		if claims, e := utils.ParseToken(token); e == nil {
-			RecordUserAudit(c, claims.UserID, models.AuditLogout, "用户登出", "success")
+			RecordUserAudit(c, claims.UserID, apikey.AuditLogout, "用户登出", "success")
 			// 清除刷新状态：使仍在有效期内的刷新令牌立即失效（防登出后令牌被续用）
 			if derr := siteops.DeleteRefreshState(claims.UserID); derr != nil {
 				log.Printf("[auth] 清除刷新状态失败（用户 %d）：%v", claims.UserID, derr)

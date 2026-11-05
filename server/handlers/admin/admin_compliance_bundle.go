@@ -25,6 +25,7 @@ import (
 	"nvs-server/version"
 
 	"github.com/gin-gonic/gin"
+	apikey "nvs-server/models/apikey"
 	"nvs-server/models/security"
 )
 
@@ -218,7 +219,7 @@ func logsManifest(days int) gin.H {
 
 // auditAdmExport 管理端导出留痕（写用户行为审计，失败不阻断下载）
 func auditAdmExport(operatorID uint, kind, target string) {
-	models.RecordUserAudit(&models.UserAuditLog{
+	apikey.RecordUserAudit(&apikey.UserAuditLog{
 		UserID: operatorID, Action: "export_" + kind,
 		Detail: target, Result: "success", CreatedAt: time.Now(),
 	})

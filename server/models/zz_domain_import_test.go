@@ -8,6 +8,7 @@ import (
 	_ "nvs-server/models/aicost"
 	_ "nvs-server/models/aihub"
 	_ "nvs-server/models/aiops"
+	_ "nvs-server/models/apikey"
 	_ "nvs-server/models/blog"
 	_ "nvs-server/models/quota"
 	_ "nvs-server/models/search"

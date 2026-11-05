@@ -4,10 +4,10 @@ import (
 	"regexp"
 	"strings"
 
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	apikey "nvs-server/models/apikey"
 )
 
 // 警方可用的「内容治理子集」白名单。
@@ -105,7 +105,7 @@ func auditPoliceAccess(c *gin.Context, result string) {
 	if uid == 0 {
 		return
 	}
-	models.RecordUserAudit(&models.UserAuditLog{
+	apikey.RecordUserAudit(&apikey.UserAuditLog{
 		UserID:    uid,
 		Action:    "police_governance_" + result,
 		IP:        c.ClientIP(),

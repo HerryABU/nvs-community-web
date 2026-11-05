@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"nvs-server/models"
+	apikey "nvs-server/models/apikey"
 	"nvs-server/security"
 )
 
@@ -88,7 +88,7 @@ func pathKeyword(p string) string {
 
 // ApplyRules 把选中的关键词写进爬虫阻断名单（追加 + 去重），并立即重载
 func ApplyRules(keywords []string) ([]string, error) {
-	cfg := models.LoadAPIRateLimitConfig()
+	cfg := apikey.LoadAPIRateLimitConfig()
 	have := map[string]bool{}
 	for _, k := range cfg.BotBlockKeywords {
 		have[strings.ToLower(strings.TrimSpace(k))] = true
@@ -107,7 +107,7 @@ func ApplyRules(keywords []string) ([]string, error) {
 	if len(added) == 0 {
 		return nil, nil
 	}
-	if err := models.SaveAPIRateLimitConfig(cfg); err != nil {
+	if err := apikey.SaveAPIRateLimitConfig(cfg); err != nil {
 		return nil, err
 	}
 	security.ReloadBotRules()

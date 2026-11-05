@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"nvs-server/models"
+	apikey "nvs-server/models/apikey"
 )
 
 // ==================== 内置爬虫关键词 ====================
@@ -74,7 +74,7 @@ var (
 
 // ReloadBotRules 从平台配置刷新爬虫规则（启动与管理端保存时调用）
 func ReloadBotRules() {
-	cfg := models.LoadAPIRateLimitConfig()
+	cfg := apikey.LoadAPIRateLimitConfig()
 	botKeywordsMu.Lock()
 	defer botKeywordsMu.Unlock()
 	botCustomKeywords = cfg.BotUAKeywords

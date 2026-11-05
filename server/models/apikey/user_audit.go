@@ -1,6 +1,9 @@
-package models
+package apikey
 
-import "time"
+import (
+	"nvs-server/models"
+	"time"
+)
 
 // UserAuditLog 用户行为审计日志（176号令合规：可追溯用户关键操作）
 // 记录登录成功/失败、登出、改密码、改邮箱、改资料、注册等操作，含 IP 与 User-Agent。
@@ -33,7 +36,7 @@ func RecordUserAudit(log *UserAuditLog) {
 	if log == nil {
 		return
 	}
-	_ = DB.Create(log).Error
+	_ = models.DB.Create(log).Error
 }
 
 // ListUserAuditLogs 按用户/操作筛选审计日志（最近 N 条）
@@ -41,7 +44,7 @@ func ListUserAuditLogs(userID uint, action string, limit int) ([]UserAuditLog, e
 	if limit <= 0 {
 		limit = 500
 	}
-	query := DB.Model(&UserAuditLog{}).Order("id desc")
+	query := models.DB.Model(&UserAuditLog{}).Order("id desc")
 	if userID > 0 {
 		query = query.Where("user_id = ?", userID)
 	}

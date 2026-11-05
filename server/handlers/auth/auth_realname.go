@@ -15,6 +15,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	apikey "nvs-server/models/apikey"
 )
 
 // NationalRealNameResp 实名核验的标准化返回
@@ -83,7 +84,7 @@ func ApplyRealName(c *gin.Context) {
 		return
 	}
 
-	RecordUserAudit(c, userID, models.AuditChangeProfile, "完成实名认证", "success")
+	RecordUserAudit(c, userID, apikey.AuditChangeProfile, "完成实名认证", "success")
 	utils.SuccessMessage(c, "实名认证成功", gin.H{
 		"id_card_masked":  utils.MaskIDCard(idCard),
 		"minor_protected": age < 18,
@@ -174,7 +175,7 @@ func NationalRealNameCheck(c *gin.Context) {
 					"birth_date":      &birth,
 					"minor_protected": ageMinor,
 				}).Error
-				RecordUserAudit(c, userID, models.AuditChangeProfile, "国家实名核验通过（高级模式：仅验证年龄，不存储身份信息）", "success")
+				RecordUserAudit(c, userID, apikey.AuditChangeProfile, "国家实名核验通过（高级模式：仅验证年龄，不存储身份信息）", "success")
 			} else if encrypted, eerr := utils.EncryptField(name); eerr == nil {
 				idHash := sha256Hex("idcard|" + idCard)
 				var dup int64
@@ -190,7 +191,7 @@ func NationalRealNameCheck(c *gin.Context) {
 						"birth_date":         &birth,
 						"minor_protected":    ageMinor,
 					}).Error
-					RecordUserAudit(c, userID, models.AuditChangeProfile, "国家实名核验通过并完成实名", "success")
+					RecordUserAudit(c, userID, apikey.AuditChangeProfile, "国家实名核验通过并完成实名", "success")
 				}
 			}
 		}

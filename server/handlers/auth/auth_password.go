@@ -9,6 +9,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	apikey "nvs-server/models/apikey"
 )
 
 // ============ 邮箱验证码 ============
@@ -160,7 +161,7 @@ func ResetPassword(c *gin.Context) {
 	utils.DeleteVerificationCode(email)
 
 	// 合规审计：重置密码
-	RecordUserAudit(c, user.ID, models.AuditChangePassword, "通过邮箱验证码重置密码", "success")
+	RecordUserAudit(c, user.ID, apikey.AuditChangePassword, "通过邮箱验证码重置密码", "success")
 
 	utils.SuccessMessage(c, "密码重置成功，请重新登录", nil)
 }
@@ -216,7 +217,7 @@ func ChangePassword(c *gin.Context) {
 	}
 
 	// 合规审计：修改密码
-	RecordUserAudit(c, user.ID, models.AuditChangePassword, "修改登录密码", "success")
+	RecordUserAudit(c, user.ID, apikey.AuditChangePassword, "修改登录密码", "success")
 
 	utils.SuccessMessage(c, "密码修改成功", nil)
 }

@@ -22,6 +22,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
+	apikey "nvs-server/models/apikey"
 )
 
 // configEncryptSecret 用机器密钥 AES-256-GCM 加密敏感明文（联邦出站 Key 落库）
@@ -351,7 +352,7 @@ func RecordInbound(c *gin.Context, endpoint string) {
 	keyPrefix := ""
 	issuer := ""
 	if ident, ok := c.Get(security.CtxKeyIdentity); ok {
-		if ki, ok2 := ident.(*models.KeyIdentity); ok2 && ki.ValidKey && ki.Type == "federated" {
+		if ki, ok2 := ident.(*apikey.KeyIdentity); ok2 && ki.ValidKey && ki.Type == "federated" {
 			keyPrefix = ki.KeyPrefix
 			issuer = ki.IssuerName
 			if name == "" {
@@ -396,7 +397,7 @@ func SyncFederatedSite(c *gin.Context) {
 	}
 	// 携带本站的联邦出站 Key（对方站签发给本站的 Key）：对方据此识别本站身份并给高配额。
 	// 未配置出站 Key 时仍可同步（走对方匿名通道，可能受限流约束）。
-	outboundKeys := models.ActiveOutboundKeys(uint(id))
+	outboundKeys := apikey.ActiveOutboundKeys(uint(id))
 	var sentKey string
 	for i := range outboundKeys {
 		if plain, derr := outboundKeys[i].DecryptOutboundKey(); derr == nil && plain != "" {
@@ -565,7 +566,7 @@ func ListFederatedSiteKeys(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var keys []models.FederatedPeerKey
+	var keys []apikey.FederatedPeerKey
 	models.DB.Where("site_id = ?", site.ID).Order("id DESC").Find(&keys)
 	type keyView struct {
 		ID          uint       `json:"id"`
@@ -605,17 +606,17 @@ func CreateFederatedInboundKey(c *gin.Context) {
 		AllowedIPs  string `json:"allowed_ips"`
 	}
 	_ = c.ShouldBindJSON(&req)
-	cfg := models.LoadAPIRateLimitConfig()
+	cfg := apikey.LoadAPIRateLimitConfig()
 	quota := req.QuotaPerMin
 	if quota <= 0 || quota > cfg.Federated.Req {
 		quota = cfg.Federated.Req
 	}
-	full, prefix, hash, err := models.GenerateFederatedKey()
+	full, prefix, hash, err := apikey.GenerateFederatedKey()
 	if err != nil {
 		utils.InternalError(c, "生成 Key 失败")
 		return
 	}
-	rec := &models.FederatedPeerKey{
+	rec := &apikey.FederatedPeerKey{
 		SiteID:      site.ID,
 		Direction:   "inbound",
 		PeerName:    site.Name, // 本站视角：对方站名（谁在用这个 Key）
@@ -669,11 +670,11 @@ func SaveFederatedOutboundKey(c *gin.Context) {
 	if len(prefix) > 12 {
 		prefix = prefix[:12]
 	}
-	rec := &models.FederatedPeerKey{
+	rec := &apikey.FederatedPeerKey{
 		SiteID:      site.ID,
 		Direction:   "outbound",
 		PeerName:    site.Name,
-		KeyHash:     models.HashAPIKey(plain), // 唯一索引占位；出站 Key 由对方站验证，本站不做入站校验
+		KeyHash:     apikey.HashAPIKey(plain), // 唯一索引占位；出站 Key 由对方站验证，本站不做入站校验
 		KeyPrefix:   prefix + "…",
 		KeyCipher:   cipher,
 		IssuerName:  site.Name, // 对方站签发给本站
@@ -697,7 +698,7 @@ func ToggleFederatedKey(c *gin.Context) {
 		return
 	}
 	kid, _ := strconv.ParseUint(c.Param("kid"), 10, 64)
-	var key models.FederatedPeerKey
+	var key apikey.FederatedPeerKey
 	if err := models.DB.Where("id = ? AND site_id = ?", kid, site.ID).First(&key).Error; err != nil {
 		utils.NotFound(c, "Key 不存在")
 		return
@@ -716,7 +717,7 @@ func DeleteFederatedKey(c *gin.Context) {
 		return
 	}
 	kid, _ := strconv.ParseUint(c.Param("kid"), 10, 64)
-	res := models.DB.Where("id = ? AND site_id = ?", kid, site.ID).Delete(&models.FederatedPeerKey{})
+	res := models.DB.Where("id = ? AND site_id = ?", kid, site.ID).Delete(&apikey.FederatedPeerKey{})
 	if res.RowsAffected == 0 {
 		utils.NotFound(c, "Key 不存在")
 		return

@@ -23,6 +23,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	aihub "nvs-server/models/aihub"
+	apikey "nvs-server/models/apikey"
 	blogm "nvs-server/models/blog"
 	quota "nvs-server/models/quota"
 )
@@ -341,7 +342,7 @@ func GetBlog(c *gin.Context) {
 // GET /api/author/:id/blogs/:blogId — 获取某作者的某篇博客详情（独立 URL）
 // :id 兼容数字主键 id 与用户名（username）
 func GetAuthorBlog(c *gin.Context) {
-	author, err := models.ResolveUserKey(c.Param("id"))
+	author, err := apikey.ResolveUserKey(c.Param("id"))
 	if err != nil || author == nil {
 		utils.NotFound(c, "作者不存在")
 		return
@@ -372,7 +373,7 @@ func GetAuthorBlog(c *gin.Context) {
 // GET /api/author/:id/blogs — 获取某作者的博客列表（支持 category_id 筛选）
 func ListAuthorBlogs(c *gin.Context) {
 	// :id 兼容数字主键 id 与用户名（username）
-	author, err := models.ResolveUserKey(c.Param("id"))
+	author, err := apikey.ResolveUserKey(c.Param("id"))
 	if err != nil || author == nil {
 		utils.NotFound(c, "作者不存在")
 		return

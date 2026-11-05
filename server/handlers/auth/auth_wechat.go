@@ -30,6 +30,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	apikey "nvs-server/models/apikey"
 )
 
 // 审计动作（UserAuditLog.Action 为 varchar(30)，以下均远小于上限）
@@ -130,7 +131,7 @@ func WeChatCallback(c *gin.Context) {
 		}
 		// openid 未命中 → 按 unionid 再找（同主体另一 App 已注册过账号）
 		if unionID != "" {
-			user, err = models.GetUserByWeChatUnionID(unionID)
+			user, err = apikey.GetUserByWeChatUnionID(unionID)
 			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 				fail("server")
 				return
@@ -143,10 +144,10 @@ func WeChatCallback(c *gin.Context) {
 				fail("register")
 				return
 			}
-			RecordUserAudit(c, user.ID, models.AuditRegister, "微信扫码注册 "+openID, "success")
+			RecordUserAudit(c, user.ID, apikey.AuditRegister, "微信扫码注册 "+openID, "success")
 		} else {
 			// unionid 命中历史账号：补绑 openid（同主体另一 App 首次经本应用登录）
-			if bindErr := models.BindWeChat(user.ID, openID, unionID); bindErr != nil {
+			if bindErr := apikey.BindWeChat(user.ID, openID, unionID); bindErr != nil {
 				fail("server")
 				return
 			}
@@ -169,14 +170,14 @@ func bindWeChatToUser(c *gin.Context, userID uint, openID, unionID, basePath str
 	fail := func(reason string) {
 		c.Redirect(http.StatusFound, config.URLPrefix+basePath+"?wechat=failed&reason="+url.QueryEscape(reason))
 	}
-	if models.WeChatOpenIDTaken(openID) {
+	if apikey.WeChatOpenIDTaken(openID) {
 		existing, err := models.GetUserByWeChatOpenID(openID)
 		if err != nil || existing == nil || existing.ID != userID {
 			fail("taken")
 			return
 		}
 	}
-	if err := models.BindWeChat(userID, openID, unionID); err != nil {
+	if err := apikey.BindWeChat(userID, openID, unionID); err != nil {
 		fail("server")
 		return
 	}
@@ -287,14 +288,14 @@ func WeChatBind(c *gin.Context) {
 		utils.BadRequest(c, "微信授权失败: "+err.Error())
 		return
 	}
-	if models.WeChatOpenIDTaken(openID) {
+	if apikey.WeChatOpenIDTaken(openID) {
 		existing, eerr := models.GetUserByWeChatOpenID(openID)
 		if eerr != nil || existing == nil || existing.ID != uid {
 			utils.BadRequest(c, "该微信已绑定其他账号，请先在其账号下解绑")
 			return
 		}
 	}
-	if err := models.BindWeChat(uid, openID, unionID); err != nil {
+	if err := apikey.BindWeChat(uid, openID, unionID); err != nil {
 		utils.InternalError(c, "绑定失败")
 		return
 	}
@@ -318,7 +319,7 @@ func WeChatUnbind(c *gin.Context) {
 		utils.BadRequest(c, "尚未绑定微信")
 		return
 	}
-	if err := models.UnbindWeChat(uid); err != nil {
+	if err := apikey.UnbindWeChat(uid); err != nil {
 		utils.InternalError(c, "解绑失败")
 		return
 	}

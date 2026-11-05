@@ -24,6 +24,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	apikey "nvs-server/models/apikey"
 	siteops "nvs-server/models/siteops"
 )
 
@@ -64,7 +65,7 @@ func PhoneResetPassword(c *gin.Context) {
 	}
 	// 重置成功后作废该手机号全部未消费验证码
 	utils.DeletePhoneCode(phone, utils.PhonePurposeReset)
-	RecordUserAudit(c, user.ID, models.AuditChangePassword, "通过手机号验证码重置密码", "success")
+	RecordUserAudit(c, user.ID, apikey.AuditChangePassword, "通过手机号验证码重置密码", "success")
 	utils.SuccessMessage(c, "密码重置成功，请重新登录", nil)
 }
 
@@ -176,7 +177,7 @@ func PhoneLogin(c *gin.Context) {
 			utils.InternalError(c, "账号创建失败: "+err.Error())
 			return
 		}
-		RecordUserAudit(c, user.ID, models.AuditRegister, "手机号注册 "+phone, "success")
+		RecordUserAudit(c, user.ID, apikey.AuditRegister, "手机号注册 "+phone, "success")
 	} else {
 		// 账号锁定检查（与邮箱登录一致）
 		if user.LockedUntil != nil && user.LockedUntil.After(time.Now()) {
@@ -247,7 +248,7 @@ func issueSession(c *gin.Context, user *models.User, auditDesc string) {
 		"last_login_ip":    c.ClientIP(),
 		"last_login_at":    &now,
 	})
-	RecordUserAudit(c, user.ID, models.AuditLoginSuccess, auditDesc, "success")
+	RecordUserAudit(c, user.ID, apikey.AuditLoginSuccess, auditDesc, "success")
 
 	// 🔒 令牌绑定 + 刷新令牌 JTI 轮换（同邮箱登录流程，防 JWT/刷新令牌窃取盗用）
 	fp := c.GetHeader(middleware.DeviceFingerprintHeader)

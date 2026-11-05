@@ -11,6 +11,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	apikey "nvs-server/models/apikey"
 )
 
 // GetMyNovels 获取我的作品列表
@@ -28,7 +29,7 @@ func GetMyNovels(c *gin.Context) {
 // 供前端把 URL 参数（可能是 username）解析为数字主键，避免拉取完整主页。
 func ResolveUserByKey(c *gin.Context) {
 	key := c.Query("key")
-	u, err := models.ResolveUserKey(key)
+	u, err := apikey.ResolveUserKey(key)
 	if err != nil || u == nil {
 		utils.NotFound(c, "用户不存在")
 		return
@@ -39,7 +40,7 @@ func ResolveUserByKey(c *gin.Context) {
 // GetAuthorProfile 获取作者公开主页信息（包括作品列表和统计数据）
 // :id 参数兼容：数字主键 id 或 用户名（username）
 func GetAuthorProfile(c *gin.Context) {
-	user, err := models.ResolveUserKey(c.Param("id"))
+	user, err := apikey.ResolveUserKey(c.Param("id"))
 	if err != nil || user == nil {
 		utils.NotFound(c, "作者不存在")
 		return
@@ -154,7 +155,7 @@ func GetAuthorProfile(c *gin.Context) {
 // GetAuthorForum 获取作者的专属讨论区（自动创建）
 // :id 兼容数字主键 id 与用户名（username）
 func GetAuthorForum(c *gin.Context) {
-	user, err := models.ResolveUserKey(c.Param("id"))
+	user, err := apikey.ResolveUserKey(c.Param("id"))
 	if err != nil || user == nil {
 		utils.NotFound(c, "作者不存在")
 		return

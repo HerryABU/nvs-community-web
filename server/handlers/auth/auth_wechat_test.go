@@ -22,6 +22,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	apikey "nvs-server/models/apikey"
 )
 
 // setupWeChatTestDB 独立命名内存 SQLite 库（file:...?mode=memory&cache=shared 按名隔离，
@@ -307,27 +308,27 @@ func TestWeChatModelQueries(t *testing.T) {
 	}
 
 	// unionid 查找（命中 / 空值直接未命中）
-	got, err = models.GetUserByWeChatUnionID("union_1")
+	got, err = apikey.GetUserByWeChatUnionID("union_1")
 	if err != nil || got.ID != u1.ID {
 		t.Fatalf("按 unionid 查找失败: %v", err)
 	}
-	if _, err := models.GetUserByWeChatUnionID(""); !errors.Is(err, gorm.ErrRecordNotFound) {
+	if _, err := apikey.GetUserByWeChatUnionID(""); !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Errorf("空 unionid 应返回 ErrRecordNotFound，实际: %v", err)
 	}
 
 	// 占用检查
-	if !models.WeChatOpenIDTaken("open_1") {
+	if !apikey.WeChatOpenIDTaken("open_1") {
 		t.Error("open_1 应被占用")
 	}
-	if models.WeChatOpenIDTaken("open_2") {
+	if apikey.WeChatOpenIDTaken("open_2") {
 		t.Error("open_2 不应被占用")
 	}
 
 	// 绑定到 u2 后立即可查
-	if err := models.BindWeChat(u2.ID, "open_2", "union_2"); err != nil {
+	if err := apikey.BindWeChat(u2.ID, "open_2", "union_2"); err != nil {
 		t.Fatalf("绑定失败: %v", err)
 	}
-	if !models.WeChatOpenIDTaken("open_2") {
+	if !apikey.WeChatOpenIDTaken("open_2") {
 		t.Error("绑定后 open_2 应被占用")
 	}
 	got2, err := models.GetUserByWeChatOpenID("open_2")
@@ -336,18 +337,18 @@ func TestWeChatModelQueries(t *testing.T) {
 	}
 
 	// 解绑后释放占用
-	if err := models.UnbindWeChat(u2.ID); err != nil {
+	if err := apikey.UnbindWeChat(u2.ID); err != nil {
 		t.Fatalf("解绑失败: %v", err)
 	}
-	if models.WeChatOpenIDTaken("open_2") {
+	if apikey.WeChatOpenIDTaken("open_2") {
 		t.Error("解绑后 open_2 不应被占用")
 	}
 
 	// 非法参数
-	if err := models.BindWeChat(0, "open_x", ""); err == nil {
+	if err := apikey.BindWeChat(0, "open_x", ""); err == nil {
 		t.Error("userID=0 应返回错误")
 	}
-	if err := models.UnbindWeChat(0); err == nil {
+	if err := apikey.UnbindWeChat(0); err == nil {
 		t.Error("userID=0 应返回错误")
 	}
 }
@@ -667,7 +668,7 @@ func TestWeChatBindStatusAndUnbind(t *testing.T) {
 	if w3.Code != http.StatusOK {
 		t.Fatalf("解绑应 200，实际 %d", w3.Code)
 	}
-	if models.WeChatOpenIDTaken("oBOUND") {
+	if apikey.WeChatOpenIDTaken("oBOUND") {
 		t.Error("解绑后 openid 应释放")
 	}
 

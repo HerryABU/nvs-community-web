@@ -15,6 +15,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	apikey "nvs-server/models/apikey"
 )
 
 // birthDateLayout 出生日期标准格式（前端 el-date-picker 默认 value-format）
@@ -99,7 +100,7 @@ func SetBirthDate(c *gin.Context) {
 		return
 	}
 
-	RecordUserAudit(c, userID, models.AuditChangeProfile, "填报出生日期（未成年检测）", "success")
+	RecordUserAudit(c, userID, apikey.AuditChangeProfile, "填报出生日期（未成年检测）", "success")
 	utils.SuccessMessage(c, "已保存", gin.H{
 		"age":             age,
 		"minor_protected": minor,

@@ -51,6 +51,7 @@ import (
 	aim "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 	aiops "nvs-server/models/aiops"
+	apikey "nvs-server/models/apikey"
 	siteops "nvs-server/models/siteops"
 )
 
@@ -458,7 +459,7 @@ func initDatabase() error {
 	}
 	// 限流与 API Key：连库后重载管理员配置（含自定义爬虫规则），并清理过期访问日志
 	security.ReloadBotRules()
-	models.CleanupAccessLogs(models.LoadAPIRateLimitConfig().LogRetentionDays)
+	apikey.CleanupAccessLogs(apikey.LoadAPIRateLimitConfig().LogRetentionDays)
 	// 日志脱敏：注入数据库持久化钩子并加载已保存的配置（后台从未保存过则使用 .env 默认）
 	config.RedactMgr.SetPersistence(models.LoadRedactConfig, models.StoreRedactConfig)
 	config.RedactMgr.LoadFromDB()

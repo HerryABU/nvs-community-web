@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	apikey "nvs-server/models/apikey"
 )
 
 // InternalBatchSecret /api/batch 内部转发密钥：聚合子请求携带该头，
@@ -43,7 +44,7 @@ var (
 // 供 security 中间件与 handlers 共享（middleware 已 import security，故常量放本包）
 
 const (
-	CtxKeyIdentity = "apiKeyIdentity" // *models.KeyIdentity：本次请求的身份识别结果
+	CtxKeyIdentity = "apiKeyIdentity" // *apikey.KeyIdentity：本次请求的身份识别结果
 	CtxKeyOK       = "apiKeyOK"       // bool：是否携带并通过校验的有效 Key
 	CtxKeySkipIP   = "apiKeySkipIP"   // bool：跳过 route 级 IP 限流（有效 Key GET/HEAD、已登录会话、/api/batch 内部子请求）
 )
@@ -195,7 +196,7 @@ func shouldThrottle(m map[string]*throttleEntry, key string) bool {
 }
 
 // recordAccessLog 记录访问日志（带节流：每 key/IP 每分钟最多 1 条）
-func recordAccessLog(identity *models.KeyIdentity, method, path, ip, ua string, statusCode int, botReason string) {
+func recordAccessLog(identity *apikey.KeyIdentity, method, path, ip, ua string, statusCode int, botReason string) {
 	dedupeKey := "anon:" + ip
 	if identity != nil && identity.ValidKey {
 		dedupeKey = "key:" + identity.KeyHash
@@ -213,7 +214,7 @@ func recordAccessLog(identity *models.KeyIdentity, method, path, ip, ua string, 
 		identityID = identity.ID
 		prefix = identity.KeyPrefix
 	}
-	_ = models.RecordAccessLog(&models.ApiAccessLog{
+	_ = apikey.RecordAccessLog(&apikey.ApiAccessLog{
 		IdentityType: logType,
 		IdentityID:   identityID,
 		KeyPrefix:    prefix,
@@ -227,7 +228,7 @@ func recordAccessLog(identity *models.KeyIdentity, method, path, ip, ua string, 
 }
 
 // touchKeyLastUsed 节流更新 Key 的 last_used_at（每 key 每分钟最多写一次）
-func touchKeyLastUsed(identity *models.KeyIdentity, ip string) {
+func touchKeyLastUsed(identity *apikey.KeyIdentity, ip string) {
 	if identity == nil || !identity.ValidKey {
 		return
 	}
@@ -242,10 +243,10 @@ func touchKeyLastUsed(identity *models.KeyIdentity, ip string) {
 		updates["last_used_at"] = now
 	}
 	if identity.Type == "federated" {
-		models.DB.Model(&models.FederatedPeerKey{}).Where("id = ?", identity.ID).
+		models.DB.Model(&apikey.FederatedPeerKey{}).Where("id = ?", identity.ID).
 			Updates(updates)
 	} else {
-		models.DB.Model(&models.APIKey{}).Where("id = ? AND user_id = ?", identity.ID, identity.UserID).
+		models.DB.Model(&apikey.APIKey{}).Where("id = ? AND user_id = ?", identity.ID, identity.UserID).
 			Updates(updates)
 		// 审计告警：同 key 多 IP 提醒（只提醒不封禁）+ 封禁 key 仍被使用
 		TrackKeyIP(identity.ID, identity.UserID, ip)
@@ -308,11 +309,11 @@ func APIKeyGuard() gin.HandlerFunc {
 			return
 		}
 
-		cfg := models.LoadAPIRateLimitConfig()
+		cfg := apikey.LoadAPIRateLimitConfig()
 		rawKey := extractAPIKey(c)
 
 		if rawKey != "" {
-			ident := models.ResolveAPIKey(rawKey)
+			ident := apikey.ResolveAPIKey(rawKey)
 			if ident != nil {
 				// Key 有效 —— 先判封禁（管理员可封禁单把 Key 或某用户全部 Key）
 				if ident.Banned {
@@ -322,7 +323,7 @@ func APIKeyGuard() gin.HandlerFunc {
 					c.Abort()
 					return
 				}
-				if !models.MatchAllowedIP(ident.AllowedIPs, ip) {
+				if !apikey.MatchAllowedIP(ident.AllowedIPs, ip) {
 					recordAccessLog(ident, method, path, ip, ua, http.StatusForbidden, "ip_not_allowed")
 					utils.Error(c, http.StatusForbidden, utils.CodeForbidden, "该 API Key 不允许从当前 IP 访问")
 					c.Abort()
@@ -346,7 +347,7 @@ func APIKeyGuard() gin.HandlerFunc {
 				return
 			}
 			// Key 无效 → 按匿名处理，记一条日志便于管理员排查伪造
-			invalidIdent := &models.KeyIdentity{Type: "anonymous", KeyPrefix: shortPrefix(rawKey), ValidKey: false}
+			invalidIdent := &apikey.KeyIdentity{Type: "anonymous", KeyPrefix: shortPrefix(rawKey), ValidKey: false}
 			recordAccessLog(invalidIdent, method, path, ip, ua, 0, "invalid_key")
 		}
 
@@ -354,7 +355,7 @@ func APIKeyGuard() gin.HandlerFunc {
 		// 0) 已知名头爬虫（AI 爬虫 / SEO 采集 / 管理员自定义）→ 直接 403 阻断，不消耗配额
 		if blocked, blockReason := IsBlockedBot(ua); blocked {
 			if shouldThrottle(botLogThrottle, "blocked:"+ip) {
-				_ = models.RecordAccessLog(&models.ApiAccessLog{
+				_ = apikey.RecordAccessLog(&apikey.ApiAccessLog{
 					IdentityType: "blocked", Method: method, Path: path,
 					RequestIP: ip, UserAgent: truncate(ua, 500), BotReason: blockReason,
 				})
@@ -375,7 +376,7 @@ func APIKeyGuard() gin.HandlerFunc {
 			isBot, botReason = ClassifyBot(ua, secFetch, ip)
 		}
 
-		identity := &models.KeyIdentity{Type: "anonymous", ValidKey: false}
+		identity := &apikey.KeyIdentity{Type: "anonymous", ValidKey: false}
 		quota := cfg.Anonymous
 		limitKey := "anon:" + ip
 		if isBot {
@@ -396,7 +397,7 @@ func APIKeyGuard() gin.HandlerFunc {
 		// bot 命中记录（每 IP 每分钟去重）
 		if isBot {
 			if shouldThrottle(botLogThrottle, "bot:"+ip) {
-				_ = models.RecordAccessLog(&models.ApiAccessLog{
+				_ = apikey.RecordAccessLog(&apikey.ApiAccessLog{
 					IdentityType: "bot", Method: method, Path: path,
 					RequestIP: ip, UserAgent: truncate(ua, 500), BotReason: botReason,
 				})

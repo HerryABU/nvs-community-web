@@ -10,6 +10,7 @@ import (
 	"nvs-server/models"
 
 	"github.com/gin-gonic/gin"
+	apikey "nvs-server/models/apikey"
 )
 
 // withLevel 设置等级并清缓存
@@ -188,7 +189,7 @@ func TestSuggestAndApplyRules(t *testing.T) {
 	if len(added) == 0 {
 		t.Fatal("应写入至少一条规则")
 	}
-	cfg := models.LoadAPIRateLimitConfig()
+	cfg := apikey.LoadAPIRateLimitConfig()
 	joined := strings.Join(cfg.BotBlockKeywords, ",")
 	if !strings.Contains(strings.ToLower(joined), "sqlmap") {
 		t.Fatalf("规则未写入限流配置: %s", joined)

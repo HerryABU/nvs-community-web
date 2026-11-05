@@ -16,6 +16,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	apikey "nvs-server/models/apikey"
 	"nvs-server/models/blog"
 	quota "nvs-server/models/quota"
 	softdel "nvs-server/models/softdel"
@@ -397,7 +398,7 @@ func GetBlogFrames(c *gin.Context) {
 // GetAuthorFrames GET /api/author/:id/frames
 // 获取作者展现模版（用于作者主页）；:id 兼容数字主键 id 与用户名
 func GetAuthorFrames(c *gin.Context) {
-	user, err := models.ResolveUserKey(c.Param("id"))
+	user, err := apikey.ResolveUserKey(c.Param("id"))
 	if err != nil || user == nil {
 		utils.NotFound(c, "作者不存在")
 		return

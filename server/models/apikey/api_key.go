@@ -1,4 +1,4 @@
-package models
+package apikey
 
 // API Key 体系：基于「身份」而非「IP」的多层级流量管理体系。
 //
@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"nvs-server/config"
+	"nvs-server/models"
 )
 
 // ==================== 用户级 API Key（admin/author/reader 统一） ====================
@@ -102,7 +103,7 @@ func GetUserAPIPolicy(userID uint) *UserAPIPolicy {
 		return nil
 	}
 	var p UserAPIPolicy
-	if err := DB.Where("user_id = ?", userID).First(&p).Error; err != nil {
+	if err := models.DB.Where("user_id = ?", userID).First(&p).Error; err != nil {
 		return nil
 	}
 	return &p
@@ -129,16 +130,16 @@ func SaveUserAPIPolicy(p *UserAPIPolicy) error {
 	}
 	if existing := GetUserAPIPolicy(p.UserID); existing != nil {
 		p.ID = existing.ID
-		return DB.Model(&UserAPIPolicy{}).Where("user_id = ?", p.UserID).Updates(cols).Error
+		return models.DB.Model(&UserAPIPolicy{}).Where("user_id = ?", p.UserID).Updates(cols).Error
 	}
 	cols["created_at"] = now
-	return DB.Model(&UserAPIPolicy{}).Create(cols).Error
+	return models.DB.Model(&UserAPIPolicy{}).Create(cols).Error
 }
 
 // ListUserAPIPolicies 列出所有被管理员单独设置过的用户 API 策略（附用户名）
 func ListUserAPIPolicies() ([]UserAPIPolicy, error) {
 	var list []UserAPIPolicy
-	if err := DB.Order("updated_at DESC").Find(&list).Error; err != nil {
+	if err := models.DB.Order("updated_at DESC").Find(&list).Error; err != nil {
 		return nil, err
 	}
 	if len(list) == 0 {
@@ -148,8 +149,8 @@ func ListUserAPIPolicies() ([]UserAPIPolicy, error) {
 	for _, p := range list {
 		ids = append(ids, p.UserID)
 	}
-	var users []User
-	DB.Where("id IN ?", ids).Find(&users)
+	var users []models.User
+	models.DB.Where("id IN ?", ids).Find(&users)
 	names := map[uint]string{}
 	for _, u := range users {
 		names[u.ID] = u.Username
@@ -317,7 +318,7 @@ const apiRateLimitConfigKey = "api_key_quota"
 // LoadAPIRateLimitConfig 读取全局限流配置（缺省回退默认值）
 func LoadAPIRateLimitConfig() APIRateLimitConfig {
 	cfg := DefaultAPIRateLimitConfig()
-	val := GetPlatformConfig(apiRateLimitConfigKey)
+	val := models.GetPlatformConfig(apiRateLimitConfigKey)
 	if val == "" {
 		return cfg
 	}
@@ -337,7 +338,7 @@ func SaveAPIRateLimitConfig(cfg APIRateLimitConfig) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(apiRateLimitConfigKey, string(b))
+	return models.SetPlatformConfig(apiRateLimitConfigKey, string(b))
 }
 
 // sanitizeQuotaConfig 补全零值字段并夹取合法范围
@@ -423,7 +424,7 @@ func ResolveAPIKey(rawKey string) *KeyIdentity {
 
 	// 1) 联邦 Key
 	var fed FederatedPeerKey
-	if err := DB.Where("key_hash = ? AND is_active = 1", hash).First(&fed).Error; err == nil {
+	if err := models.DB.Where("key_hash = ? AND is_active = 1", hash).First(&fed).Error; err == nil {
 		if fed.ExpiresAt != nil && fed.ExpiresAt.Before(time.Now()) {
 			return nil
 		}
@@ -441,7 +442,7 @@ func ResolveAPIKey(rawKey string) *KeyIdentity {
 
 	// 2) 用户 Key（admin/author/reader）
 	var ak APIKey
-	if err := DB.Where("key_hash = ? AND is_active = 1", hash).First(&ak).Error; err == nil {
+	if err := models.DB.Where("key_hash = ? AND is_active = 1", hash).First(&ak).Error; err == nil {
 		if ak.ExpiresAt != nil && ak.ExpiresAt.Before(time.Now()) {
 			return nil
 		}
@@ -529,7 +530,7 @@ func ipMatchesCIDR(pattern, ip string) bool {
 // ActiveOutboundKeys 返回某站点启用的出站联邦 Key（本站访问对方站时携带）
 func ActiveOutboundKeys(siteID uint) []FederatedPeerKey {
 	var list []FederatedPeerKey
-	DB.Where("site_id = ? AND direction = ? AND is_active = 1", siteID, "outbound").Find(&list)
+	models.DB.Where("site_id = ? AND direction = ? AND is_active = 1", siteID, "outbound").Find(&list)
 	return list
 }
 
@@ -548,7 +549,7 @@ func RecordAccessLog(log *ApiAccessLog) error {
 	if log.CreatedAt.IsZero() {
 		log.CreatedAt = time.Now()
 	}
-	return DB.Create(log).Error
+	return models.DB.Create(log).Error
 }
 
 // ListAccessLogs 分页查询访问日志
@@ -559,7 +560,7 @@ func ListAccessLogs(page, pageSize int, identityType string) ([]ApiAccessLog, in
 	if pageSize < 1 || pageSize > 200 {
 		pageSize = 20
 	}
-	q := DB.Model(&ApiAccessLog{})
+	q := models.DB.Model(&ApiAccessLog{})
 	if identityType != "" {
 		q = q.Where("identity_type = ?", identityType)
 	}
@@ -576,7 +577,7 @@ func CleanupAccessLogs(days int) {
 		days = 7
 	}
 	cutoff := time.Now().AddDate(0, 0, -days)
-	DB.Where("created_at < ?", cutoff).Delete(&ApiAccessLog{})
+	models.DB.Where("created_at < ?", cutoff).Delete(&ApiAccessLog{})
 }
 
 // ==================== 轻量 JSON 工具 ====================

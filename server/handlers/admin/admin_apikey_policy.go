@@ -18,6 +18,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	apikey "nvs-server/models/apikey"
 )
 
 // ==================== 按把封禁 ====================
@@ -28,7 +29,7 @@ func AdminBanAPIKey(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var key models.APIKey
+	var key apikey.APIKey
 	if err := models.DB.First(&key, id).Error; err != nil {
 		utils.NotFound(c, "Key 不存在")
 		return
@@ -57,7 +58,7 @@ func AdminUnbanAPIKey(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var key models.APIKey
+	var key apikey.APIKey
 	if err := models.DB.First(&key, id).Error; err != nil {
 		utils.NotFound(c, "Key 不存在")
 		return
@@ -94,9 +95,9 @@ func AdminBanUserAPIKeys(c *gin.Context) {
 	}
 	_ = c.ShouldBindJSON(&req)
 
-	p := models.GetUserAPIPolicy(uint(uid))
+	p := apikey.GetUserAPIPolicy(uint(uid))
 	if p == nil {
-		p = &models.UserAPIPolicy{UserID: uint(uid)}
+		p = &apikey.UserAPIPolicy{UserID: uint(uid)}
 	}
 	p.KeysBanned = true
 	p.BanReason = strings.TrimSpace(req.Reason)
@@ -109,7 +110,7 @@ func AdminBanUserAPIKeys(c *gin.Context) {
 	} else {
 		p.BanUntil = nil // 永久封禁
 	}
-	if err := models.SaveUserAPIPolicy(p); err != nil {
+	if err := apikey.SaveUserAPIPolicy(p); err != nil {
 		utils.InternalError(c, "封禁失败")
 		return
 	}
@@ -123,7 +124,7 @@ func AdminUnbanUserAPIKeys(c *gin.Context) {
 		return
 	}
 	uid, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	p := models.GetUserAPIPolicy(uint(uid))
+	p := apikey.GetUserAPIPolicy(uint(uid))
 	if p == nil {
 		utils.Success(c, gin.H{"message": "该用户无封禁记录"})
 		return
@@ -131,7 +132,7 @@ func AdminUnbanUserAPIKeys(c *gin.Context) {
 	p.KeysBanned = false
 	p.BanReason = ""
 	p.BanUntil = nil
-	if err := models.SaveUserAPIPolicy(p); err != nil {
+	if err := apikey.SaveUserAPIPolicy(p); err != nil {
 		utils.InternalError(c, "解封失败")
 		return
 	}
@@ -146,10 +147,10 @@ func AdminGetUserAPIQuota(c *gin.Context) {
 		return
 	}
 	uid, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	p := models.GetUserAPIPolicy(uint(uid))
+	p := apikey.GetUserAPIPolicy(uint(uid))
 	if p == nil {
 		// 无记录 = 跟随角色全局，回一个零值策略便于前端表单回填
-		p = &models.UserAPIPolicy{UserID: uint(uid)}
+		p = &apikey.UserAPIPolicy{UserID: uint(uid)}
 	}
 	utils.Success(c, p)
 }
@@ -193,15 +194,15 @@ func AdminSetUserAPIQuota(c *gin.Context) {
 		return
 	}
 
-	p := models.GetUserAPIPolicy(uint(uid))
+	p := apikey.GetUserAPIPolicy(uint(uid))
 	if p == nil {
-		p = &models.UserAPIPolicy{UserID: uint(uid)}
+		p = &apikey.UserAPIPolicy{UserID: uint(uid)}
 	}
 	p.QuotaPerMin = req.QuotaPerMin
 	p.WindowSecs = req.WindowSecs
 	p.MaxKeys = req.MaxKeys
 	p.Note = strings.TrimSpace(req.Note)
-	if err := models.SaveUserAPIPolicy(p); err != nil {
+	if err := apikey.SaveUserAPIPolicy(p); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
@@ -213,7 +214,7 @@ func AdminListUserAPIPolicies(c *gin.Context) {
 	if !EnsureAdmin(c) {
 		return
 	}
-	list, err := models.ListUserAPIPolicies()
+	list, err := apikey.ListUserAPIPolicies()
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -227,6 +228,6 @@ func AdminDeleteUserAPIPolicy(c *gin.Context) {
 		return
 	}
 	uid, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	models.DB.Where("user_id = ?", uid).Delete(&models.UserAPIPolicy{})
+	models.DB.Where("user_id = ?", uid).Delete(&apikey.UserAPIPolicy{})
 	utils.Success(c, gin.H{"message": "已撤销该用户的专属设置（恢复跟随全局配额）"})
 }
