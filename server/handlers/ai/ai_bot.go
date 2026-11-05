@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	aim "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
+	wallet "nvs-server/models/wallet"
 )
 
 // ==================== @ai 评论区机器人（§5.6） ====================
@@ -102,7 +103,7 @@ func generateAiBotReply(triggerUser uint, trigger *models.Comment, cfg aim.AiBot
 	estTokens := aim.EstimateTokens(prompt) + aim.EstimateTokens(parentContent) + 512
 	freeOK, _, _ := aihub.CheckAiFreeQuota(triggerUser, estTokens)
 	if !freeOK {
-		if !models.IsTokenEnabled() {
+		if !wallet.IsTokenEnabled() {
 			return
 		}
 		if _, ok := aim.PrecheckAiBalance(triggerUser, m, estTokens, m.MaxTokens); !ok {
@@ -192,7 +193,7 @@ func generateAiBotReply(triggerUser uint, trigger *models.Comment, cfg aim.AiBot
 		body += "\n\n" + cfg.Signature
 	}
 	if !freeOK && cost > 0 {
-		body += fmt.Sprintf("\n\n<small>本次召唤消耗 %d %s</small>", cost, models.GetTokenName())
+		body += fmt.Sprintf("\n\n<small>本次召唤消耗 %d %s</small>", cost, wallet.GetTokenName())
 	}
 	reply := &models.Comment{
 		UserID:        botID,

@@ -8,6 +8,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	wallet "nvs-server/models/wallet"
 )
 
 func setupRiskDB(t *testing.T) {
@@ -17,7 +18,7 @@ func setupRiskDB(t *testing.T) {
 		t.Fatalf("open: %v", err)
 	}
 	models.DB = db
-	if err := db.AutoMigrate(&models.PlatformConfig{}, &models.RechargeOrder{}, &models.User{}); err != nil {
+	if err := db.AutoMigrate(&models.PlatformConfig{}, &wallet.RechargeOrder{}, &models.User{}); err != nil {
 		t.Fatalf("migrate deps: %v", err)
 	}
 	if err := Migrate(db); err != nil {
@@ -47,7 +48,7 @@ func TestEvaluateRapidOrdersHold(t *testing.T) {
 	setupRiskDB(t)
 	// 窗口内 5 笔（默认阈值 5）
 	for i := 0; i < 5; i++ {
-		_ = models.DB.Create(&models.RechargeOrder{
+		_ = models.DB.Create(&wallet.RechargeOrder{
 			OrderNo: "R" + string(rune('a'+i)), UserID: 2, Channel: "wechat",
 			AmountFen: 100, Status: "pending", CreatedAt: time.Now(),
 		}).Error
@@ -88,7 +89,7 @@ func TestEvaluateNewAccountBigAmount(t *testing.T) {
 	}
 	// 叠加「高频 + 新号大额」到 60 → hold（不静默放行，也不直接拒）
 	for i := 0; i < 5; i++ {
-		_ = models.DB.Create(&models.RechargeOrder{
+		_ = models.DB.Create(&wallet.RechargeOrder{
 			OrderNo: "H" + string(rune('a'+i)), UserID: 3, Channel: "alipay",
 			AmountFen: 100, Status: "pending", CreatedAt: time.Now(),
 		}).Error
@@ -115,7 +116,7 @@ func TestEvaluateBlockThreshold(t *testing.T) {
 		_ = models.DB.Exec(`INSERT INTO gate_device_bindings (device_id, user_id) VALUES ('dev-bad', ?)`, i).Error
 	}
 	for i := 0; i < 6; i++ {
-		_ = models.DB.Create(&models.RechargeOrder{
+		_ = models.DB.Create(&wallet.RechargeOrder{
 			OrderNo: "B" + string(rune('a'+i)), UserID: 4, Channel: "wechat",
 			AmountFen: 100, Status: "pending", CreatedAt: time.Now(),
 		}).Error

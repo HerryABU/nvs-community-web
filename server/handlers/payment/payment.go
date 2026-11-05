@@ -12,35 +12,36 @@ import (
 
 	"github.com/gin-gonic/gin"
 	aihub "nvs-server/models/aihub"
+	wallet "nvs-server/models/wallet"
 )
 
 // ==================== 在线支付充值（§7.4 微信/支付宝聚合通道） ====================
 
 // PaymentStatus GET /api/payment/status — 充值页初始化数据（钱包页用）
 func PaymentStatus(c *gin.Context) {
-	cfg := models.GetPaymentConfig()
+	cfg := wallet.GetPaymentConfig()
 	type chanItem struct {
 		Value string `json:"value"`
 		Label string `json:"label"`
 	}
 	channels := []chanItem{}
-	if cfg.Provider == models.PayProviderAggregate {
+	if cfg.Provider == wallet.PayProviderAggregate {
 		channels = append(channels,
-			chanItem{Value: models.PayChannelWeChat, Label: models.PayChannelLabels[models.PayChannelWeChat]},
-			chanItem{Value: models.PayChannelAliPay, Label: models.PayChannelLabels[models.PayChannelAliPay]},
+			chanItem{Value: wallet.PayChannelWeChat, Label: wallet.PayChannelLabels[wallet.PayChannelWeChat]},
+			chanItem{Value: wallet.PayChannelAliPay, Label: wallet.PayChannelLabels[wallet.PayChannelAliPay]},
 		)
 	} else {
 		channels = append(channels,
-			chanItem{Value: models.PayChannelMock, Label: models.PayChannelLabels[models.PayChannelMock]},
+			chanItem{Value: wallet.PayChannelMock, Label: wallet.PayChannelLabels[wallet.PayChannelMock]},
 		)
 	}
 	utils.Success(c, gin.H{
-		"enabled":       models.IsPaymentEnabled(),
-		"token_enabled": models.IsTokenEnabled(),
-		"token_name":    models.GetTokenName(),
+		"enabled":       wallet.IsPaymentEnabled(),
+		"token_enabled": wallet.IsTokenEnabled(),
+		"token_name":    wallet.GetTokenName(),
 		"provider":      cfg.Provider,
 		"channels":      channels,
-		"tiers":         models.GetPaymentTiers(),
+		"tiers":         wallet.GetPaymentTiers(),
 		"token_per_fen": cfg.TokenPerFen,
 		"order_ttl_min": cfg.OrderTTLMin,
 	})
@@ -48,7 +49,7 @@ func PaymentStatus(c *gin.Context) {
 
 // PaymentCreateOrder POST /api/payment/order — 选档位下单，返回收银台地址
 func PaymentCreateOrder(c *gin.Context) {
-	if !models.IsPaymentEnabled() {
+	if !wallet.IsPaymentEnabled() {
 		utils.BadRequest(c, "在线充值未开启")
 		return
 	}
@@ -61,16 +62,16 @@ func PaymentCreateOrder(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	order, err := models.CreateRechargeOrder(userID, strings.TrimSpace(req.Channel), req.Fen)
+	order, err := wallet.CreateRechargeOrder(userID, strings.TrimSpace(req.Channel), req.Fen)
 	if err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
-	cfg := models.GetPaymentConfig()
-	tier, _ := models.ResolvePaymentTier(order.AmountFen)
-	subject := models.GetTokenName() + "充值 " + tier.Label
+	cfg := wallet.GetPaymentConfig()
+	tier, _ := wallet.ResolvePaymentTier(order.AmountFen)
+	subject := wallet.GetTokenName() + "充值 " + tier.Label
 	if subject == "" {
-		subject = models.GetTokenName() + "充值"
+		subject = wallet.GetTokenName() + "充值"
 	}
 	params := payment.CreateParams{
 		OrderNo: order.OrderNo, AmountFen: order.AmountFen, Channel: order.Channel,
@@ -83,7 +84,7 @@ func PaymentCreateOrder(c *gin.Context) {
 		utils.BadRequest(c, "创建支付单失败："+perr.Error())
 		return
 	}
-	if err := models.UpdateOrderPayURL(order.OrderNo, payURL); err != nil {
+	if err := wallet.UpdateOrderPayURL(order.OrderNo, payURL); err != nil {
 		utils.InternalError(c, "订单保存失败")
 		return
 	}
@@ -102,7 +103,7 @@ func PaymentCreateOrder(c *gin.Context) {
 func PaymentOrderStatus(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	orderNo := strings.TrimSpace(c.Param("no"))
-	order, err := models.GetRechargeOrderByNo(orderNo)
+	order, err := wallet.GetRechargeOrderByNo(orderNo)
 	if err != nil {
 		utils.NotFound(c, "订单不存在")
 		return
@@ -112,11 +113,11 @@ func PaymentOrderStatus(c *gin.Context) {
 		return
 	}
 	// 惰性关单：待支付且已过期 → 就地关闭，前端轮询立刻看到 closed
-	if order.Status == models.PayStatusPending && time.Now().After(order.ExpiresAt) {
-		_ = models.DB.Model(&models.RechargeOrder{}).
-			Where("order_no = ? AND status = ?", order.OrderNo, models.PayStatusPending).
-			Updates(map[string]interface{}{"status": models.PayStatusClosed, "updated_at": time.Now()}).Error
-		order.Status = models.PayStatusClosed
+	if order.Status == wallet.PayStatusPending && time.Now().After(order.ExpiresAt) {
+		_ = models.DB.Model(&wallet.RechargeOrder{}).
+			Where("order_no = ? AND status = ?", order.OrderNo, wallet.PayStatusPending).
+			Updates(map[string]interface{}{"status": wallet.PayStatusClosed, "updated_at": time.Now()}).Error
+		order.Status = wallet.PayStatusClosed
 	}
 	utils.Success(c, gin.H{
 		"order_no":     order.OrderNo,
@@ -127,7 +128,7 @@ func PaymentOrderStatus(c *gin.Context) {
 		"token_amount": order.TokenAmount,
 		"expires_at":   order.ExpiresAt,
 		"paid_at":      order.PaidAt,
-		"balance":      models.GetTokenBalance(userID),
+		"balance":      wallet.GetTokenBalance(userID),
 	})
 }
 
@@ -136,7 +137,7 @@ func PaymentMyOrders(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	list, total, err := models.ListUserRechargeOrders(userID, page, pageSize)
+	list, total, err := wallet.ListUserRechargeOrders(userID, page, pageSize)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -147,12 +148,12 @@ func PaymentMyOrders(c *gin.Context) {
 // PaymentMockConfirm POST /api/payment/mock/confirm — 模拟支付确认（仅 mock provider）。
 // 与真实回调路径物理隔离：要求登录、本人订单、provider==mock。
 func PaymentMockConfirm(c *gin.Context) {
-	if !models.IsPaymentEnabled() {
+	if !wallet.IsPaymentEnabled() {
 		utils.BadRequest(c, "在线充值未开启")
 		return
 	}
-	cfg := models.GetPaymentConfig()
-	if cfg.Provider != models.PayProviderMock {
+	cfg := wallet.GetPaymentConfig()
+	if cfg.Provider != wallet.PayProviderMock {
 		utils.BadRequest(c, "当前通道不是模拟支付")
 		return
 	}
@@ -164,7 +165,7 @@ func PaymentMockConfirm(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	order, err := models.GetRechargeOrderByNo(strings.TrimSpace(req.OrderNo))
+	order, err := wallet.GetRechargeOrderByNo(strings.TrimSpace(req.OrderNo))
 	if err != nil {
 		utils.NotFound(c, "订单不存在")
 		return
@@ -173,7 +174,7 @@ func PaymentMockConfirm(c *gin.Context) {
 		utils.NotFound(c, "订单不存在")
 		return
 	}
-	paid, credited, err := models.MarkOrderPaid(order.OrderNo, "MOCK-"+order.OrderNo, "mock-confirm by user "+strconv.FormatUint(uint64(userID), 10))
+	paid, credited, err := wallet.MarkOrderPaid(order.OrderNo, "MOCK-"+order.OrderNo, "mock-confirm by user "+strconv.FormatUint(uint64(userID), 10))
 	if err != nil {
 		utils.BadRequest(c, err.Error())
 		return
@@ -182,7 +183,7 @@ func PaymentMockConfirm(c *gin.Context) {
 		"credited":     credited,
 		"status":       paid.Status,
 		"token_amount": paid.TokenAmount,
-		"balance":      models.GetTokenBalance(userID),
+		"balance":      wallet.GetTokenBalance(userID),
 	})
 }
 
@@ -194,15 +195,15 @@ func PaymentMockConfirm(c *gin.Context) {
 // 会员页是首屏，分成三次请求会出现"卡片先出来、按钮后变灰"的跳变。
 func MembershipInfo(c *gin.Context) {
 	uid := hctx.CurrentUserID(c)
-	cfg := models.GetPaymentConfig()
+	cfg := wallet.GetPaymentConfig()
 	// 权益对比表要显示真实数字，不能写"平台配置"这种空话
 	quota := aihub.GetAiFreeQuotaConfig()
 	utils.Success(c, gin.H{
-		"status":          models.GetMembershipStatus(uid),
-		"tiers":           models.GetPaymentTiers(),
+		"status":          wallet.GetMembershipStatus(uid),
+		"tiers":           wallet.GetPaymentTiers(),
 		"token_per_fen":   cfg.TokenPerFen,
-		"payment_enabled": models.IsPaymentEnabled(),
-		"token_enabled":   models.IsTokenEnabled(),
+		"payment_enabled": wallet.IsPaymentEnabled(),
+		"token_enabled":   wallet.IsTokenEnabled(),
 		"free_quota": gin.H{
 			"enabled":       aihub.IsAiFreeQuotaEnabled(),
 			"calls_per_day": quota.CallsPerDay,

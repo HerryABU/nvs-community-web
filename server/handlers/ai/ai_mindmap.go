@@ -3,7 +3,6 @@ package ai
 import (
 	"nvs-server/aiclient"
 	"nvs-server/handlers/hctx"
-	"nvs-server/models"
 	"nvs-server/utils"
 	"strconv"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	aim "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
+	wallet "nvs-server/models/wallet"
 )
 
 // ==================== AI 思维导图：需求 → 层级大纲 ====================
@@ -72,7 +72,7 @@ func AiMindmap(c *gin.Context) {
 	tokensOut := 1200
 	freeOK, _, _ := aihub.CheckAiFreeQuota(userID, tokensIn+tokensOut)
 	if !freeOK {
-		if !models.IsTokenEnabled() {
+		if !wallet.IsTokenEnabled() {
 			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
 			return
 		}
@@ -120,7 +120,7 @@ func AiMindmap(c *gin.Context) {
 	if serr != nil {
 		aim.FailAiCallLog(callLog.ID, serr.Error())
 	}
-	nb := models.GetTokenBalance(userID)
+	nb := wallet.GetTokenBalance(userID)
 	utils.Success(c, gin.H{
 		"outline": strings.TrimSpace(out),
 		"cost":    cost, "balance_after": nb, "free": freeOK,

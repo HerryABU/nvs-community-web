@@ -1,6 +1,7 @@
-package models
+package wallet
 
 import (
+	"nvs-server/models"
 	"testing"
 	"time"
 )
@@ -44,7 +45,7 @@ func TestRechargeOrderFlowAndIdempotentCredit(t *testing.T) {
 		t.Fatalf("开启支付失败: %v", err)
 	}
 	// 会员时长需要真实用户行（会员到期时间挂在 users.member_until 上）
-	if err := DB.Create(&User{ID: 42, Username: "buyer", Email: "buyer@example.com", Role: RoleReader}).Error; err != nil {
+	if err := models.DB.Create(&models.User{ID: 42, Username: "buyer", Email: "buyer@example.com", Role: models.RoleReader}).Error; err != nil {
 		t.Fatalf("建用户失败: %v", err)
 	}
 	// 月卡档：3800 分 × 10 代币/分 = 38000（默认档位无赠送与优惠）
@@ -110,7 +111,7 @@ func TestCloseExpiredOrders(t *testing.T) {
 	}
 	// 手动置为已过期
 	past := time.Now().Add(-time.Minute)
-	if err := DB.Model(&RechargeOrder{}).Where("order_no = ?", order.OrderNo).
+	if err := models.DB.Model(&RechargeOrder{}).Where("order_no = ?", order.OrderNo).
 		Update("expires_at", past).Error; err != nil {
 		t.Fatalf("置过期失败: %v", err)
 	}

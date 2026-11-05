@@ -15,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	ai "nvs-server/models/ai"
+	wallet "nvs-server/models/wallet"
 )
 
 // ==================== 群组 @ai 智能体（群内机器人） ====================
@@ -106,7 +107,7 @@ func generateGroupAiReply(groupID, agentID, postID, triggerUser uint, question s
 	cleaned, _ := security.ApplyBadWords(res.Content, "group")
 	body := cleaned + "\n\n—— AI 生成 · " + res.ModelName
 	if res.Cost > 0 {
-		body += fmt.Sprintf(" · 消耗 %d %s", res.Cost, models.GetTokenName())
+		body += fmt.Sprintf(" · 消耗 %d %s", res.Cost, wallet.GetTokenName())
 	}
 	if note := res.Notice(); note != "" {
 		body += "\n—— " + note

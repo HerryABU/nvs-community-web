@@ -5,7 +5,6 @@ import (
 	"log"
 	"nvs-server/aiclient"
 	"nvs-server/handlers/hctx"
-	"nvs-server/models"
 	"nvs-server/utils"
 	"strconv"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	aim "nvs-server/models/ai"
 	aicost "nvs-server/models/aicost"
 	aihub "nvs-server/models/aihub"
+	wallet "nvs-server/models/wallet"
 )
 
 // ==================== AI 工作台：绘画 / 视频（§5.4，按次计费） ====================
@@ -79,13 +79,13 @@ func AiHubVideoSubmit(c *gin.Context) {
 	}
 	// 非免费预检：余额 ≥ 单次价（BYOK 不扣平台代币）
 	if !freeOK && !req.Byok {
-		if !models.IsTokenEnabled() {
+		if !wallet.IsTokenEnabled() {
 			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
 			return
 		}
-		if m.PriceCall > 0 && models.GetTokenBalance(userID) < m.PriceCall {
+		if m.PriceCall > 0 && wallet.GetTokenBalance(userID) < m.PriceCall {
 			utils.Error(c, 429, 42902, "余额不足：本次需 "+strconv.FormatInt(m.PriceCall, 10)+
-				"，当前余额 "+strconv.FormatInt(models.GetTokenBalance(userID), 10)+"，请先充值")
+				"，当前余额 "+strconv.FormatInt(wallet.GetTokenBalance(userID), 10)+"，请先充值")
 			return
 		}
 	}
@@ -150,11 +150,11 @@ func AiHubVideoSubmit(c *gin.Context) {
 	switch {
 	case byok:
 		_ = aim.MarkAiMediaFree(task.ID)
-		nb = models.GetTokenBalance(userID)
+		nb = wallet.GetTokenBalance(userID)
 	case freeOK:
 		_ = aim.MarkAiMediaFree(task.ID)
 		_ = aihub.RecordAiFreeUsage(userID, 1, 0)
-		nb = models.GetTokenBalance(userID)
+		nb = wallet.GetTokenBalance(userID)
 	default:
 		var cerr error
 		nb, cerr = aim.ChargeAiMediaTask(task.ID)
@@ -340,7 +340,7 @@ func AiHubVideoCancel(c *gin.Context) {
 		"status":        aim.AiMediaCancelled,
 		"refunded":      refunded > 0,
 		"refund_amount": refunded,
-		"balance_after": models.GetTokenBalance(userID),
+		"balance_after": wallet.GetTokenBalance(userID),
 		"message":       map[bool]string{true: "已取消，费用已退回", false: "已取消"}[refunded > 0],
 	})
 }

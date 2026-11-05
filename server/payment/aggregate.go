@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"nvs-server/models"
+	wallet "nvs-server/models/wallet"
 )
 
 // AggregateProvider 通用聚合支付 provider（易支付 / 码支付类）。
@@ -29,7 +29,7 @@ import (
 type AggregateProvider struct{}
 
 // Name 提供者标识
-func (AggregateProvider) Name() string { return models.PayProviderAggregate }
+func (AggregateProvider) Name() string { return wallet.PayProviderAggregate }
 
 // md5Sign 聚合网关 MD5 签名
 func md5Sign(params map[string]string, secret string) string {
@@ -55,7 +55,7 @@ func md5Sign(params map[string]string, secret string) string {
 }
 
 // CreateOrder 向聚合网关下单，返回收银台地址
-func (AggregateProvider) CreateOrder(p CreateParams, cfg models.PaymentConfig) (string, error) {
+func (AggregateProvider) CreateOrder(p CreateParams, cfg wallet.PaymentConfig) (string, error) {
 	gwType := channelToGatewayType(p.Channel)
 	if gwType == "" {
 		return "", errors.New("不支持的支付渠道")
@@ -112,7 +112,7 @@ func (AggregateProvider) CreateOrder(p CreateParams, cfg models.PaymentConfig) (
 }
 
 // VerifyNotify 验签并解析异步通知
-func (AggregateProvider) VerifyNotify(form url.Values, cfg models.PaymentConfig) (*NotifyResult, error) {
+func (AggregateProvider) VerifyNotify(form url.Values, cfg wallet.PaymentConfig) (*NotifyResult, error) {
 	if cfg.Secret == "" {
 		return nil, errors.New("商户密钥未配置")
 	}

@@ -13,7 +13,7 @@ package payment
 import (
 	"net/url"
 
-	"nvs-server/models"
+	wallet "nvs-server/models/wallet"
 )
 
 // CreateParams 下单参数（handler 从订单 + 配置组装）
@@ -40,16 +40,16 @@ type Provider interface {
 	// Name 提供者标识（mock / aggregate）
 	Name() string
 	// CreateOrder 向上游下单，返回收银台地址（用户跳转或扫码）
-	CreateOrder(p CreateParams, cfg models.PaymentConfig) (payURL string, err error)
+	CreateOrder(p CreateParams, cfg wallet.PaymentConfig) (payURL string, err error)
 	// VerifyNotify 验签并解析异步通知表单；验签失败返回 error
-	VerifyNotify(form url.Values, cfg models.PaymentConfig) (*NotifyResult, error)
+	VerifyNotify(form url.Values, cfg wallet.PaymentConfig) (*NotifyResult, error)
 	// NotifyAck 回调应答体（成功 success，失败 fail）
 	NotifyAck(ok bool) string
 }
 
 // GetProvider 按配置返回 provider（缺省 mock）
-func GetProvider(cfg models.PaymentConfig) Provider {
-	if cfg.Provider == models.PayProviderAggregate {
+func GetProvider(cfg wallet.PaymentConfig) Provider {
+	if cfg.Provider == wallet.PayProviderAggregate {
 		return AggregateProvider{}
 	}
 	return MockProvider{}
@@ -58,9 +58,9 @@ func GetProvider(cfg models.PaymentConfig) Provider {
 // channelToGatewayType 渠道 → 聚合网关 type 参数
 func channelToGatewayType(channel string) string {
 	switch channel {
-	case models.PayChannelWeChat:
+	case wallet.PayChannelWeChat:
 		return "wxpay"
-	case models.PayChannelAliPay:
+	case wallet.PayChannelAliPay:
 		return "alipay"
 	default:
 		return ""

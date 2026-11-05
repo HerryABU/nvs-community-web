@@ -1,4 +1,4 @@
-package models
+package wallet
 
 import (
 	"crypto/rand"
@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // ==================== 在线支付充值（§7.4：微信/支付宝聚合通道） ====================
@@ -160,20 +161,20 @@ func DefaultPaymentTiers() []PaymentTier {
 
 // IsPaymentEnabled 支付充值是否开启（默认关闭）
 func IsPaymentEnabled() bool {
-	return GetPlatformConfig(PaymentEnabledKey) == "true"
+	return models.GetPlatformConfig(PaymentEnabledKey) == "true"
 }
 
 // SetPaymentEnabled 设置支付充值开关
 func SetPaymentEnabled(on bool) error {
 	if on {
-		return SetPlatformConfig(PaymentEnabledKey, "true")
+		return models.SetPlatformConfig(PaymentEnabledKey, "true")
 	}
-	return SetPlatformConfig(PaymentEnabledKey, "false")
+	return models.SetPlatformConfig(PaymentEnabledKey, "false")
 }
 
 // GetPaymentConfig 读取支付配置（缺省回退默认值）
 func GetPaymentConfig() PaymentConfig {
-	raw := strings.TrimSpace(GetPlatformConfig(PaymentConfigKey))
+	raw := strings.TrimSpace(models.GetPlatformConfig(PaymentConfigKey))
 	if raw == "" {
 		return DefaultPaymentConfig()
 	}
@@ -191,12 +192,12 @@ func SetPaymentConfig(cfg PaymentConfig) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(PaymentConfigKey, string(raw))
+	return models.SetPlatformConfig(PaymentConfigKey, string(raw))
 }
 
 // GetPaymentTiers 读取档位（缺省默认）
 func GetPaymentTiers() []PaymentTier {
-	raw := strings.TrimSpace(GetPlatformConfig(PaymentTiersKey))
+	raw := strings.TrimSpace(models.GetPlatformConfig(PaymentTiersKey))
 	if raw == "" {
 		return DefaultPaymentTiers()
 	}
@@ -254,7 +255,7 @@ func SetPaymentTiers(tiers []PaymentTier) error {
 	if err != nil {
 		return err
 	}
-	return SetPlatformConfig(PaymentTiersKey, string(raw))
+	return models.SetPlatformConfig(PaymentTiersKey, string(raw))
 }
 
 // ResolvePaymentTier 按面额精确匹配档位（拒绝非档位金额，防刷防错价）
@@ -347,7 +348,7 @@ func CreateRechargeOrder(userID uint, channel string, fen int64) (*RechargeOrder
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
-	if err := DB.Create(order).Error; err != nil {
+	if err := models.DB.Create(order).Error; err != nil {
 		return nil, err
 	}
 	return order, nil
@@ -356,7 +357,7 @@ func CreateRechargeOrder(userID uint, channel string, fen int64) (*RechargeOrder
 // GetRechargeOrderByNo 按订单号查询
 func GetRechargeOrderByNo(orderNo string) (*RechargeOrder, error) {
 	var o RechargeOrder
-	if err := DB.Where("order_no = ?", orderNo).First(&o).Error; err != nil {
+	if err := models.DB.Where("order_no = ?", orderNo).First(&o).Error; err != nil {
 		return nil, fmt.Errorf("订单不存在")
 	}
 	return &o, nil
@@ -364,7 +365,7 @@ func GetRechargeOrderByNo(orderNo string) (*RechargeOrder, error) {
 
 // UpdateOrderPayURL 回填收银台地址
 func UpdateOrderPayURL(orderNo, payURL string) error {
-	return DB.Model(&RechargeOrder{}).Where("order_no = ?", orderNo).
+	return models.DB.Model(&RechargeOrder{}).Where("order_no = ?", orderNo).
 		Update("pay_url", payURL).Error
 }
 
@@ -377,9 +378,9 @@ func ListUserRechargeOrders(userID uint, page, pageSize int) ([]RechargeOrder, i
 		pageSize = 20
 	}
 	var total int64
-	DB.Model(&RechargeOrder{}).Where("user_id = ?", userID).Count(&total)
+	models.DB.Model(&RechargeOrder{}).Where("user_id = ?", userID).Count(&total)
 	var list []RechargeOrder
-	err := DB.Where("user_id = ?", userID).Order("created_at DESC").
+	err := models.DB.Where("user_id = ?", userID).Order("created_at DESC").
 		Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error
 	return list, total, err
 }
@@ -389,7 +390,7 @@ func ListUserRechargeOrders(userID uint, page, pageSize int) ([]RechargeOrder, i
 func MarkOrderPaid(orderNo, txnID, notifyRaw string) (*RechargeOrder, bool, error) {
 	var order *RechargeOrder
 	credited := false
-	err := DB.Transaction(func(tx *gorm.DB) error {
+	err := models.DB.Transaction(func(tx *gorm.DB) error {
 		var o RechargeOrder
 		if e := tx.Where("order_no = ?", orderNo).First(&o).Error; e != nil {
 			return fmt.Errorf("订单不存在")
@@ -454,7 +455,7 @@ func extendMembershipTx(tx *gorm.DB, userID uint, days int) error {
 	if userID == 0 || days <= 0 {
 		return nil
 	}
-	var u User
+	var u models.User
 	if err := tx.Select("id", "member_until").Where("id = ?", userID).First(&u).Error; err != nil {
 		// 用户已被删除：**不能**让整笔到账回滚。
 		// 钱在上游已经收了，这里回滚会导致「支付成功但订单没记、代币也没入账」，
@@ -470,7 +471,7 @@ func extendMembershipTx(tx *gorm.DB, userID uint, days int) error {
 		base = *u.MemberUntil
 	}
 	until := base.AddDate(0, 0, days)
-	return tx.Model(&User{}).Where("id = ?", userID).Update("member_until", until).Error
+	return tx.Model(&models.User{}).Where("id = ?", userID).Update("member_until", until).Error
 }
 
 // MembershipStatus 会员状态
@@ -486,8 +487,8 @@ func GetMembershipStatus(userID uint) MembershipStatus {
 	if userID == 0 {
 		return st
 	}
-	var u User
-	if err := DB.Select("id", "member_until").Where("id = ?", userID).First(&u).Error; err != nil {
+	var u models.User
+	if err := models.DB.Select("id", "member_until").Where("id = ?", userID).First(&u).Error; err != nil {
 		return st
 	}
 	if u.MemberUntil == nil {
@@ -545,7 +546,7 @@ func appendTokenLedgerTx(tx *gorm.DB, userID uint, ttype string, amount int64, r
 
 // CloseExpiredOrders 关闭所有超时的待支付订单，返回关闭笔数
 func CloseExpiredOrders() (int64, error) {
-	res := DB.Model(&RechargeOrder{}).
+	res := models.DB.Model(&RechargeOrder{}).
 		Where("status = ? AND expires_at < ?", PayStatusPending, time.Now()).
 		Updates(map[string]interface{}{"status": PayStatusClosed, "updated_at": time.Now()})
 	return res.RowsAffected, res.Error
@@ -559,7 +560,7 @@ func AdminListRechargeOrders(status string, userID uint, page, pageSize int) ([]
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 20
 	}
-	q := DB.Model(&RechargeOrder{})
+	q := models.DB.Model(&RechargeOrder{})
 	if status != "" {
 		q = q.Where("status = ?", status)
 	}
@@ -569,7 +570,7 @@ func AdminListRechargeOrders(status string, userID uint, page, pageSize int) ([]
 	var total int64
 	q.Count(&total)
 	var list []RechargeOrder
-	qq := DB.Order("created_at DESC")
+	qq := models.DB.Order("created_at DESC")
 	if status != "" {
 		qq = qq.Where("status = ?", status)
 	}
@@ -584,8 +585,8 @@ func AdminListRechargeOrders(status string, userID uint, page, pageSize int) ([]
 		for _, o := range list {
 			ids = append(ids, o.UserID)
 		}
-		var users []User
-		DB.Where("id IN ?", ids).Find(&users)
+		var users []models.User
+		models.DB.Where("id IN ?", ids).Find(&users)
 		names := map[uint]string{}
 		for _, u := range users {
 			names[u.ID] = u.Username
@@ -600,15 +601,15 @@ func AdminListRechargeOrders(status string, userID uint, page, pageSize int) ([]
 // PaymentStats 支付统计（管理端概览）
 func PaymentStats() map[string]int64 {
 	var paidCount, paidFen, paidToken, pendingCount, closedCount int64
-	DB.Model(&RechargeOrder{}).Where("status = ?", PayStatusPaid).
+	models.DB.Model(&RechargeOrder{}).Where("status = ?", PayStatusPaid).
 		Select("COUNT(*)").Scan(&paidCount)
-	DB.Model(&RechargeOrder{}).Where("status = ?", PayStatusPaid).
+	models.DB.Model(&RechargeOrder{}).Where("status = ?", PayStatusPaid).
 		Select("COALESCE(SUM(amount_fen), 0)").Scan(&paidFen)
-	DB.Model(&RechargeOrder{}).Where("status = ?", PayStatusPaid).
+	models.DB.Model(&RechargeOrder{}).Where("status = ?", PayStatusPaid).
 		Select("COALESCE(SUM(token_amount), 0)").Scan(&paidToken)
-	DB.Model(&RechargeOrder{}).Where("status = ?", PayStatusPending).
+	models.DB.Model(&RechargeOrder{}).Where("status = ?", PayStatusPending).
 		Select("COUNT(*)").Scan(&pendingCount)
-	DB.Model(&RechargeOrder{}).Where("status = ?", PayStatusClosed).
+	models.DB.Model(&RechargeOrder{}).Where("status = ?", PayStatusClosed).
 		Select("COUNT(*)").Scan(&closedCount)
 	return map[string]int64{
 		"paid_count": paidCount, "paid_fen": paidFen, "paid_token": paidToken,

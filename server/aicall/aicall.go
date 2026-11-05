@@ -13,10 +13,10 @@ import (
 	"time"
 
 	"nvs-server/aiclient"
-	"nvs-server/models"
 	ai "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 	aiops "nvs-server/models/aiops"
+	wallet "nvs-server/models/wallet"
 )
 
 // FallbackNote 一次降级的事实（给前端/正文提示用）
@@ -157,7 +157,7 @@ func attempt(req Request, m *ai.AiModel, res *Result) (*Result, error) {
 	// 免费额度 / 余额预检（与既有一致：免费优先，其次代币）
 	freeOK, _, _ := aihub.CheckAiFreeQuota(req.PayerID, est)
 	if !freeOK {
-		if !models.IsTokenEnabled() {
+		if !wallet.IsTokenEnabled() {
 			return nil, errors.New("免费额度已用完且代币未启用")
 		}
 		if _, ok := ai.PrecheckAiBalance(req.PayerID, m, est, maxTokens); !ok {

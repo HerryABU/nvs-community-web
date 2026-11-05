@@ -11,6 +11,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	wallet "nvs-server/models/wallet"
 )
 
 // ==================== 代币账本 / 卡密充值（需求 §7） ====================
@@ -20,9 +21,9 @@ import (
 func TokenStatus(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	utils.Success(c, gin.H{
-		"enabled": models.IsTokenEnabled(),
-		"name":    models.GetTokenName(),
-		"balance": models.GetTokenBalance(userID),
+		"enabled": wallet.IsTokenEnabled(),
+		"name":    wallet.GetTokenName(),
+		"balance": wallet.GetTokenBalance(userID),
 	})
 }
 
@@ -31,7 +32,7 @@ func TokenLedgerList(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	list, total, err := models.ListTokenLedger(userID, page, pageSize)
+	list, total, err := wallet.ListTokenLedger(userID, page, pageSize)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -41,7 +42,7 @@ func TokenLedgerList(c *gin.Context) {
 
 // RedeemCard POST /api/token/redeem — 兑换卡密
 func RedeemCard(c *gin.Context) {
-	if !models.IsTokenEnabled() {
+	if !wallet.IsTokenEnabled() {
 		utils.BadRequest(c, "代币系统未开启")
 		return
 	}
@@ -53,7 +54,7 @@ func RedeemCard(c *gin.Context) {
 		utils.BadRequest(c, "请输入卡密")
 		return
 	}
-	nb, err := models.RedeemCardKey(userID, req.Code)
+	nb, err := wallet.RedeemCardKey(userID, req.Code)
 	if err != nil {
 		utils.BadRequest(c, err.Error())
 		return
@@ -69,8 +70,8 @@ func AdminGetTokenConfig(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{
-		"enabled": models.IsTokenEnabled(),
-		"name":    models.GetTokenName(),
+		"enabled": wallet.IsTokenEnabled(),
+		"name":    wallet.GetTokenName(),
 	})
 }
 
@@ -88,13 +89,13 @@ func AdminSetTokenConfig(c *gin.Context) {
 		return
 	}
 	if req.Enabled != nil {
-		if err := models.SetTokenEnabled(*req.Enabled); err != nil {
+		if err := wallet.SetTokenEnabled(*req.Enabled); err != nil {
 			utils.InternalError(c, "保存失败")
 			return
 		}
 	}
 	if strings.TrimSpace(req.Name) != "" {
-		if err := models.SetTokenName(req.Name); err != nil {
+		if err := wallet.SetTokenName(req.Name); err != nil {
 			utils.InternalError(c, "保存失败")
 			return
 		}
@@ -123,7 +124,7 @@ func AdminGenerateCards(c *gin.Context) {
 		t := time.Now().Add(time.Duration(req.ExpiresIn) * 24 * time.Hour)
 		expiresAt = &t
 	}
-	codes, err := models.GenerateCardKeys(adminID, req.Count, req.Value, expiresAt, strings.TrimSpace(req.Note))
+	codes, err := wallet.GenerateCardKeys(adminID, req.Count, req.Value, expiresAt, strings.TrimSpace(req.Note))
 	if err != nil {
 		utils.BadRequest(c, err.Error())
 		return
@@ -140,7 +141,7 @@ func AdminListCards(c *gin.Context) {
 	if !admin.EnsureAdmin(c) {
 		return
 	}
-	list, err := models.ListCardKeys(c.Query("status"), c.Query("batch"), 200)
+	list, err := wallet.ListCardKeys(c.Query("status"), c.Query("batch"), 200)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -154,7 +155,7 @@ func AdminVoidCard(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := models.VoidCardKey(uint(id)); err != nil {
+	if err := wallet.VoidCardKey(uint(id)); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
@@ -184,7 +185,7 @@ func AdminAdjustToken(c *gin.Context) {
 		utils.NotFound(c, "用户不存在")
 		return
 	}
-	nb, err := models.AdminAdjustToken(adminID, req.UserID, req.Amount, strings.TrimSpace(req.Remark))
+	nb, err := wallet.AdminAdjustToken(adminID, req.UserID, req.Amount, strings.TrimSpace(req.Remark))
 	if err != nil {
 		utils.BadRequest(c, err.Error())
 		return

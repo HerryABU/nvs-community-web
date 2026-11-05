@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"nvs-server/models"
+	wallet "nvs-server/models/wallet"
 	"strings"
 	"time"
 )
@@ -99,7 +100,7 @@ func ChargeAiMediaTask(taskID uint) (int64, error) {
 		return 0, err
 	}
 	if t.Status == AiMediaSucceeded {
-		return models.GetTokenBalance(t.UserID), nil
+		return wallet.GetTokenBalance(t.UserID), nil
 	}
 	if t.Status != AiMediaPending && t.Status != AiMediaRunning {
 		return 0, fmt.Errorf("任务状态不可扣款：%s", t.Status)
@@ -116,7 +117,7 @@ func ChargeAiMediaTask(taskID uint) (int64, error) {
 		}).Error
 		return 0, nil
 	}
-	nb, err := models.AppendTokenLedger(t.UserID, models.TokenTypeConsume, -cost, "ai", t.ID,
+	nb, err := wallet.AppendTokenLedger(t.UserID, wallet.TokenTypeConsume, -cost, "ai", t.ID,
 		fmt.Sprintf("AI %s：%s", mediaKindLabel(t.Kind), m.Name), mediaPriceSnapshot(&m, cost))
 	if err != nil {
 		return 0, err
@@ -191,7 +192,7 @@ func RefundAiMediaTask(taskID uint, reason string) (int64, error) {
 	if t.Status != AiMediaSucceeded && t.Status != AiMediaRunning && t.Status != AiMediaPending {
 		return 0, fmt.Errorf("该任务状态不可退款：%s", t.Status)
 	}
-	nb, err := models.AppendTokenLedger(t.UserID, models.TokenTypeRefund, t.Cost, "ai", t.ID, reason,
+	nb, err := wallet.AppendTokenLedger(t.UserID, wallet.TokenTypeRefund, t.Cost, "ai", t.ID, reason,
 		mediaPriceSnapshot(&AiModel{ID: t.ModelID, Name: t.ModelName}, t.Cost))
 	if err != nil {
 		return 0, err
@@ -215,7 +216,7 @@ func CancelAiMediaTask(taskID, userID uint) (refunded int64, err error) {
 	}
 	doRefund := t.Cost > 0 && !t.Refunded
 	if doRefund {
-		if _, rerr := models.AppendTokenLedger(t.UserID, models.TokenTypeRefund, t.Cost, "ai", t.ID,
+		if _, rerr := wallet.AppendTokenLedger(t.UserID, wallet.TokenTypeRefund, t.Cost, "ai", t.ID,
 			"取消 AI 视频任务退款", mediaPriceSnapshot(&AiModel{ID: t.ModelID, Name: t.ModelName}, t.Cost)); rerr != nil {
 			return 0, fmt.Errorf("退款失败：%v", rerr)
 		}

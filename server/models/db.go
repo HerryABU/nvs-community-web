@@ -56,6 +56,7 @@ var BlogFeedProvider func(ids []uint, window int) ([]FeedItem, int64, error)
 //	models/aihub     —— AiChannelKey / AiModelKey / AiStyle / UserAiFreeQuota 等渠道与工作台模型
 //	models/ai        —— AiModel / AiCallLog / AiAgent / AiMediaTask / AgentSubmission 等核心模型
 //	models/quota     —— UserWebQuota / WebAccessLog / UserPublishLog / HTMLQuotaOverride 等额度模型
+//	models/wallet    —— TokenLedger / UserTokenBalance / CardKey / RechargeOrder 等代币与支付模型
 func AllModels() []interface{} {
 	list := []interface{}{
 		&User{}, &Novel{}, &NovelCategory{}, &Chapter{}, &Comment{}, &Rating{},
@@ -77,10 +78,6 @@ func AllModels() []interface{} {
 		&UserForumQuota{},
 		// 私信（F20：会话消息，互关才可发第 3 条）
 		&Message{},
-		// 代币账本 + 卡密充值（§7：平台内消费积分，与作者收益账分离，不可篡改可对账）
-		&TokenLedger{}, &UserTokenBalance{}, &CardKey{},
-		// 在线支付充值订单（§7.4：微信/支付宝聚合通道，幂等到账）
-		&RechargeOrder{},
 		// API Key 审计告警（多 IP / 解密失败 / 封禁后仍使用）
 		&ApiKeyAlarm{},
 	}

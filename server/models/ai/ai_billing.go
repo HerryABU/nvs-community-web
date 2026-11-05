@@ -9,11 +9,12 @@ import (
 
 	"gorm.io/gorm"
 	"nvs-server/models"
+	wallet "nvs-server/models/wallet"
 )
 
 // ==================== AI 调用计费（§5.3 / §13.3） ====================
 // 计费流：预检（余额 ≥ 预估费用）→ 记 pending 流水 → 调上游 → 按真实 usage 扣款
-// （models.AppendTokenLedger consume）→ settled；上游失败仅记 failed、不扣款。
+// （wallet.AppendTokenLedger consume）→ settled；上游失败仅记 failed、不扣款。
 // 价格快照随流水落库（token_ledger.price_snapshot），保证历史可对账。
 
 // ---------- 调用状态 ----------
@@ -98,7 +99,7 @@ func PrecheckAiBalance(userID uint, m *AiModel, tokensIn, tokensOut int) (int64,
 	if cost <= 0 {
 		return 0, true // 免费模型放行
 	}
-	return cost, models.GetTokenBalance(userID) >= cost
+	return cost, wallet.GetTokenBalance(userID) >= cost
 }
 
 // ---------- 调用生命周期 ----------
@@ -132,7 +133,7 @@ func CreateAiCallLog(userID uint, m *AiModel, action, refType string, refID uint
 // 并发安全：采用「原子 claim + 条件更新」保证不重复扣款——
 // 同一条 pending 记录在并发 settle 下只会被一个事务成功 claim
 // （UPDATE ... WHERE status=pending 的 RowsAffected=1），其余事务 RowsAffected=0
-// 直接报错退出、绝不入账；入账（models.AppendTokenLedger）发生在 claim 之后且在同一事务内，
+// 直接报错退出、绝不入账；入账（wallet.AppendTokenLedger）发生在 claim 之后且在同一事务内，
 // 余额不足会随事务回滚 claim（余额未扣、无消费流水），再在事务外把记录落 failed。
 func SettleAiCallLog(logID uint, tokensIn, tokensOut int) (int64, error) {
 	var costOut int64
@@ -185,7 +186,7 @@ func SettleAiCallLog(logID uint, tokensIn, tokensOut int) (int64, error) {
 		if cost <= 0 {
 			return nil // 免费额度 / 零费用：claim 即完成
 		}
-		nb, e := models.AppendTokenLedgerTx(tx, log.UserID, models.TokenTypeConsume, -cost, "ai", log.ID,
+		nb, e := wallet.AppendTokenLedgerTx(tx, log.UserID, wallet.TokenTypeConsume, -cost, "ai", log.ID,
 			fmt.Sprintf("AI 调用：%s（%s）", aiActionLabel(log.Action), m.Name), string(snapJSON))
 		if e != nil {
 			// 余额不足等：返回错误让事务整体回滚（claim 撤销、余额未扣、不留消费流水）。
@@ -240,7 +241,7 @@ func RefundAiCall(logID uint, reason string) (int64, error) {
 	if log.Status != AiCallSettled || log.Cost <= 0 {
 		return 0, fmt.Errorf("该调用不可退款")
 	}
-	nb, err := models.AppendTokenLedger(log.UserID, models.TokenTypeRefund, log.Cost, "ai", log.ID, reason, log.PriceSnapshot)
+	nb, err := wallet.AppendTokenLedger(log.UserID, wallet.TokenTypeRefund, log.Cost, "ai", log.ID, reason, log.PriceSnapshot)
 	if err != nil {
 		return 0, err
 	}

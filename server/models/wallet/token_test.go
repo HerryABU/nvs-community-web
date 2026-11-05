@@ -1,6 +1,7 @@
-package models
+package wallet
 
 import (
+	"nvs-server/models"
 	"strings"
 	"testing"
 
@@ -14,10 +15,10 @@ func setupTokenTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("打开测试库失败: %v", err)
 	}
-	if err := AutoMigrateAll(db); err != nil {
+	if err := models.AutoMigrateAll(db); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
-	DB = db
+	models.DB = db
 	t.Cleanup(func() {
 		if sqlDB, e := db.DB(); e == nil {
 			_ = sqlDB.Close()
@@ -70,7 +71,7 @@ func TestCardKeyLifecycle(t *testing.T) {
 	}
 	// 哈希存储：库里 code_hash != 明文
 	var ck CardKey
-	if e := DB.Where("code_hash = ?", hashCardCode(codes[0])).First(&ck).Error; e != nil {
+	if e := models.DB.Where("code_hash = ?", hashCardCode(codes[0])).First(&ck).Error; e != nil {
 		t.Fatalf("按哈希查卡密失败: %v", e)
 	}
 	if ck.CodeHash == codes[0] {
@@ -104,7 +105,7 @@ func TestCardKeyLifecycle(t *testing.T) {
 	// 作废一张未用卡密后不可兑换
 	codes2, _ := GenerateCardKeys(9, 1, 30, nil, "作废测试")
 	var ck2 CardKey
-	_ = DB.Where("code_hash = ?", hashCardCode(codes2[0])).First(&ck2)
+	_ = models.DB.Where("code_hash = ?", hashCardCode(codes2[0])).First(&ck2)
 	if e := VoidCardKey(ck2.ID); e != nil {
 		t.Fatalf("作废失败: %v", e)
 	}

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"nvs-server/aiclient"
 	"nvs-server/handlers/hctx"
-	"nvs-server/models"
 	"nvs-server/utils"
 	"strings"
 	"time"
@@ -14,6 +13,7 @@ import (
 	aicost "nvs-server/models/aicost"
 	aihub "nvs-server/models/aihub"
 	aiops "nvs-server/models/aiops"
+	wallet "nvs-server/models/wallet"
 )
 
 // ==================== AI 调用（用户端，§5.3 / §13.3） ====================
@@ -61,7 +61,7 @@ func aiActionValid(action string) bool {
 // AiStatus GET /api/ai/status — AI 可用性与我的余额/可用模型
 func AiStatus(c *gin.Context) {
 	aiEnabled := aim.IsAiEnabled()
-	tokenEnabled := models.IsTokenEnabled()
+	tokenEnabled := wallet.IsTokenEnabled()
 	userID := hctx.CurrentUserID(c)
 	var modelList []gin.H
 	if aiEnabled {
@@ -79,8 +79,8 @@ func AiStatus(c *gin.Context) {
 	utils.Success(c, gin.H{
 		"ai_enabled":    aiEnabled,
 		"token_enabled": tokenEnabled,
-		"token_name":    models.GetTokenName(),
-		"balance":       models.GetTokenBalance(userID),
+		"token_name":    wallet.GetTokenName(),
+		"balance":       wallet.GetTokenBalance(userID),
 		"models":        modelList,
 		"free_quota":    aihub.SummarizeAiFreeQuota(userID),
 	})
@@ -119,8 +119,8 @@ func AiEstimate(c *gin.Context) {
 		"tokens_out":    tokensOut,
 		"cost":          cost,
 		"free_eligible": freeOK,
-		"balance":       models.GetTokenBalance(userID),
-		"affordable":    freeOK || cost <= 0 || models.GetTokenBalance(userID) >= cost,
+		"balance":       wallet.GetTokenBalance(userID),
+		"affordable":    freeOK || cost <= 0 || wallet.GetTokenBalance(userID) >= cost,
 	})
 }
 
@@ -247,7 +247,7 @@ func AiComplete(c *gin.Context) {
 			"cost":          0,
 			"free":          false,
 			"byok":          true,
-			"balance_after": models.GetTokenBalance(userID),
+			"balance_after": wallet.GetTokenBalance(userID),
 		})
 		return
 	}
@@ -269,14 +269,14 @@ func AiComplete(c *gin.Context) {
 	freeOK, _, _ := aihub.CheckAiFreeQuota(userID, tokensIn+tokensOut)
 	// 非免费路径：代币系统未开启或余额不足均拒绝（不发起上游）
 	if !freeOK {
-		if !models.IsTokenEnabled() {
+		if !wallet.IsTokenEnabled() {
 			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
 			return
 		}
 		if _, ok := aim.PrecheckAiBalance(userID, m, tokensIn, tokensOut); !ok {
 			cost := aim.EstimateAiCost(m, tokensIn, tokensOut)
 			utils.Error(c, 429, 42902, fmt.Sprintf("%s不足：本次约需 %d，当前余额 %d，请先充值",
-				models.GetTokenName(), cost, models.GetTokenBalance(userID)))
+				wallet.GetTokenName(), cost, wallet.GetTokenBalance(userID)))
 			return
 		}
 	}

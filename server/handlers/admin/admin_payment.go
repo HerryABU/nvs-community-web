@@ -4,10 +4,10 @@ import (
 	"strconv"
 	"strings"
 
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	wallet "nvs-server/models/wallet"
 )
 
 // ==================== 支付通道管理端（§7.4） ====================
@@ -19,9 +19,9 @@ func AdminGetPaymentConfig(c *gin.Context) {
 	if !EnsureAdmin(c) {
 		return
 	}
-	cfg := models.GetPaymentConfig()
+	cfg := wallet.GetPaymentConfig()
 	utils.Success(c, gin.H{
-		"enabled":       models.IsPaymentEnabled(),
+		"enabled":       wallet.IsPaymentEnabled(),
 		"provider":      cfg.Provider,
 		"gateway_url":   cfg.GatewayURL,
 		"app_id":        cfg.AppID,
@@ -32,8 +32,8 @@ func AdminGetPaymentConfig(c *gin.Context) {
 		"min_fen":       cfg.MinFen,
 		"max_fen":       cfg.MaxFen,
 		"order_ttl_min": cfg.OrderTTLMin,
-		"tiers":         models.GetPaymentTiers(),
-		"stats":         models.PaymentStats(),
+		"tiers":         wallet.GetPaymentTiers(),
+		"stats":         wallet.PaymentStats(),
 	})
 }
 
@@ -59,7 +59,7 @@ func AdminSetPaymentConfig(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	cfg := models.GetPaymentConfig() // 以现值起步，未传字段保持
+	cfg := wallet.GetPaymentConfig() // 以现值起步，未传字段保持
 	cfg.Provider = req.Provider
 	cfg.GatewayURL = req.GatewayURL
 	cfg.AppID = req.AppID
@@ -80,12 +80,12 @@ func AdminSetPaymentConfig(c *gin.Context) {
 	if req.OrderTTLMin > 0 {
 		cfg.OrderTTLMin = req.OrderTTLMin
 	}
-	if err := models.SetPaymentConfig(cfg); err != nil {
+	if err := wallet.SetPaymentConfig(cfg); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
 	if req.Enabled != nil {
-		if err := models.SetPaymentEnabled(*req.Enabled); err != nil {
+		if err := wallet.SetPaymentEnabled(*req.Enabled); err != nil {
 			utils.InternalError(c, "保存失败")
 			return
 		}
@@ -99,13 +99,13 @@ func AdminSetPaymentTiers(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Tiers []models.PaymentTier `json:"tiers"`
+		Tiers []wallet.PaymentTier `json:"tiers"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.SetPaymentTiers(req.Tiers); err != nil {
+	if err := wallet.SetPaymentTiers(req.Tiers); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
@@ -120,7 +120,7 @@ func AdminListPaymentOrders(c *gin.Context) {
 	userID64, _ := strconv.ParseUint(strings.TrimSpace(c.Query("user_id")), 10, 64)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	list, total, err := models.AdminListRechargeOrders(c.Query("status"), uint(userID64), page, pageSize)
+	list, total, err := wallet.AdminListRechargeOrders(c.Query("status"), uint(userID64), page, pageSize)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -149,7 +149,7 @@ func AdminMarkOrderPaid(c *gin.Context) {
 	if req.TransactionID == "" {
 		req.TransactionID = "ADMIN-" + req.OrderNo
 	}
-	order, credited, err := models.MarkOrderPaid(req.OrderNo, strings.TrimSpace(req.TransactionID), "manual mark-paid by admin")
+	order, credited, err := wallet.MarkOrderPaid(req.OrderNo, strings.TrimSpace(req.TransactionID), "manual mark-paid by admin")
 	if err != nil {
 		utils.BadRequest(c, err.Error())
 		return
@@ -162,6 +162,6 @@ func AdminMarkOrderPaid(c *gin.Context) {
 		"message":      msg,
 		"credited":     credited,
 		"token_amount": order.TokenAmount,
-		"balance":      models.GetTokenBalance(order.UserID),
+		"balance":      wallet.GetTokenBalance(order.UserID),
 	})
 }

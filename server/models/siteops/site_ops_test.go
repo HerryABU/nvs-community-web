@@ -7,6 +7,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"nvs-server/models"
+	wallet "nvs-server/models/wallet"
 )
 
 func setupOpsDB(t *testing.T) {
@@ -17,14 +18,14 @@ func setupOpsDB(t *testing.T) {
 	}
 	models.DB = db
 	if err := db.AutoMigrate(&models.PlatformConfig{}, &NavMenu{}, &Carousel{}, &CheckInRecord{},
-		&models.UserTokenBalance{}, &models.TokenLedger{}); err != nil {
+		&wallet.UserTokenBalance{}, &wallet.TokenLedger{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	for _, tbl := range []string{"nav_menus", "carousels", "checkin_records", "token_ledger", "user_token_balances"} {
 		_ = db.Exec("DELETE FROM " + tbl).Error
 	}
 	_ = models.SetPlatformConfig(checkInCfgKey, "")
-	_ = models.SetTokenEnabled(false)
+	_ = wallet.SetTokenEnabled(false)
 }
 
 // TestCheckInIdempotent 同一天重复签到不再发币（这是最重要的一条）
@@ -37,7 +38,7 @@ func TestCheckInIdempotent(t *testing.T) {
 	if err := SaveCheckInConfig(cfg); err != nil {
 		t.Fatal(err)
 	}
-	if err := models.SetTokenEnabled(true); err != nil {
+	if err := wallet.SetTokenEnabled(true); err != nil {
 		t.Fatal(err)
 	}
 	r1, err := DoCheckIn(1)
@@ -56,7 +57,7 @@ func TestCheckInIdempotent(t *testing.T) {
 	}
 	// 账本只有一条
 	var n int64
-	models.DB.Model(&models.TokenLedger{}).Where("user_id = ? AND type = ?", 1, "checkin").Count(&n)
+	models.DB.Model(&wallet.TokenLedger{}).Where("user_id = ? AND type = ?", 1, "checkin").Count(&n)
 	if n != 1 {
 		t.Fatalf("重复签到不应重复发币，账本 %d 条", n)
 	}

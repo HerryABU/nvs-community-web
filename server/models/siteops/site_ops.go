@@ -3,7 +3,7 @@ package siteops
 // ==================== 运营位：画廊轮播 / 每日签到 / 访客设置（gap-audit #23）====================
 // 这三样都是「运营侧非主线」功能，但缺了站长就没法做活动。设计上刻意做薄：
 //   - 轮播：只存图 + 跳转 + 时段 + 排序，不做「智能投放」；
-//   - 签到：只做「每天一次 + 连签加成」，奖励进代币账本（复用 models.AppendTokenLedger，不新开账）；
+//   - 签到：只做「每天一次 + 连签加成」，奖励进代币账本（复用 wallet.AppendTokenLedger，不新开账）；
 //   - 访客：只做「未登录能看什么」的开关，不做复杂权限矩阵。
 //
 // 铁律：奖励发放必须**幂等**（同一天重复请求只发一次），否则就是一个无限刷币漏洞。
@@ -17,6 +17,7 @@ import (
 
 	"gorm.io/gorm"
 	"nvs-server/models"
+	wallet "nvs-server/models/wallet"
 )
 
 // ─────────────── 轮播 ───────────────
@@ -183,7 +184,7 @@ func DoCheckIn(userID uint) (*CheckInResult, error) {
 	var exist CheckInRecord
 	if err := models.DB.Where("user_id = ? AND date = ?", userID, today).First(&exist).Error; err == nil {
 		return &CheckInResult{Already: true, Reward: exist.Reward, Streak: exist.Streak,
-			Balance: models.GetTokenBalance(userID), Date: today}, nil
+			Balance: wallet.GetTokenBalance(userID), Date: today}, nil
 	}
 	// 连签：昨天有记录则 +1，否则从 1 开始
 	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
@@ -204,11 +205,11 @@ func DoCheckIn(userID uint) (*CheckInResult, error) {
 	rec := &CheckInRecord{UserID: userID, Date: today, Streak: streak, Reward: reward, CreatedAt: time.Now()}
 	if err := models.DB.Create(rec).Error; err != nil {
 		// 并发下被另一请求抢先：当作已签到
-		return &CheckInResult{Already: true, Balance: models.GetTokenBalance(userID), Date: today}, nil
+		return &CheckInResult{Already: true, Balance: wallet.GetTokenBalance(userID), Date: today}, nil
 	}
 	var balance int64
-	if reward > 0 && models.IsTokenEnabled() {
-		b, err := models.AppendTokenLedger(userID, "checkin", int64(reward), "checkin", rec.ID,
+	if reward > 0 && wallet.IsTokenEnabled() {
+		b, err := wallet.AppendTokenLedger(userID, "checkin", int64(reward), "checkin", rec.ID,
 			"每日签到（连签 "+strconv.Itoa(streak)+" 天）", "")
 		if err != nil {
 			_ = models.DB.Where("id = ?", rec.ID).Delete(&CheckInRecord{}).Error
@@ -216,7 +217,7 @@ func DoCheckIn(userID uint) (*CheckInResult, error) {
 		}
 		balance = b
 	} else {
-		balance = models.GetTokenBalance(userID)
+		balance = wallet.GetTokenBalance(userID)
 	}
 	return &CheckInResult{Reward: reward, Streak: streak, Balance: balance, Date: today}, nil
 }

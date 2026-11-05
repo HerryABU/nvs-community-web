@@ -8,6 +8,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	wallet "nvs-server/models/wallet"
 )
 
 func setupAiTestDB(t *testing.T) *gorm.DB {
@@ -80,14 +81,14 @@ func TestAiPrecheckBalance(t *testing.T) {
 		t.Errorf("余额 0 应不可负担，cost=%d ok=%v", cost, ok)
 	}
 	// 充值 4（不足 5）→ 仍不可负担
-	if _, e := models.AppendTokenLedger(1, models.TokenTypeGrant, 4, "admin", 1, "", ""); e != nil {
+	if _, e := wallet.AppendTokenLedger(1, wallet.TokenTypeGrant, 4, "admin", 1, "", ""); e != nil {
 		t.Fatalf("增发失败: %v", e)
 	}
 	if _, ok := PrecheckAiBalance(1, m, 1500, 500); ok {
 		t.Errorf("余额 4 < 费用 5 应不可负担")
 	}
 	// 再充 1（=5）→ 可负担
-	if _, e := models.AppendTokenLedger(1, models.TokenTypeGrant, 1, "admin", 1, "", ""); e != nil {
+	if _, e := wallet.AppendTokenLedger(1, wallet.TokenTypeGrant, 1, "admin", 1, "", ""); e != nil {
 		t.Fatalf("增发失败: %v", e)
 	}
 	if _, ok := PrecheckAiBalance(1, m, 1500, 500); !ok {
@@ -98,7 +99,7 @@ func TestAiPrecheckBalance(t *testing.T) {
 func TestAiSettlePaidCall(t *testing.T) {
 	setupAiTestDB(t)
 	m := seedAiModel(t, 2, 4, 1024)
-	if _, e := models.AppendTokenLedger(7, models.TokenTypeRechargeCard, 100, "card", 1, "卡密", ""); e != nil {
+	if _, e := wallet.AppendTokenLedger(7, wallet.TokenTypeRechargeCard, 100, "card", 1, "卡密", ""); e != nil {
 		t.Fatalf("充值失败: %v", e)
 	}
 	log, err := CreateAiCallLog(7, m, "polish", "chapter", 3, 1500, 500, false)
@@ -114,8 +115,8 @@ func TestAiSettlePaidCall(t *testing.T) {
 		t.Fatalf("结算后期望余额 94，实际 nb=%d err=%v", nb, err)
 	}
 	// 流水落 consume + 快照
-	var entries []models.TokenLedger
-	models.DB.Where("user_id = ? AND type = ?", 7, models.TokenTypeConsume).Find(&entries)
+	var entries []wallet.TokenLedger
+	models.DB.Where("user_id = ? AND type = ?", 7, wallet.TokenTypeConsume).Find(&entries)
 	if len(entries) != 1 || entries[0].Amount != -6 {
 		t.Fatalf("应有 1 笔 -6 的消费流水，实际 %+v", entries)
 	}
@@ -151,7 +152,7 @@ func TestAiSettleInsufficientBalance(t *testing.T) {
 	setupAiTestDB(t)
 	m := seedAiModel(t, 2, 4, 1024)
 	// 只充 2，费用需 6
-	if _, e := models.AppendTokenLedger(8, models.TokenTypeGrant, 2, "admin", 1, "", ""); e != nil {
+	if _, e := wallet.AppendTokenLedger(8, wallet.TokenTypeGrant, 2, "admin", 1, "", ""); e != nil {
 		t.Fatalf("增发失败: %v", e)
 	}
 	log, err := CreateAiCallLog(8, m, "continue", "", 0, 1200, 600, false)
@@ -162,8 +163,8 @@ func TestAiSettleInsufficientBalance(t *testing.T) {
 		t.Fatalf("余额不足结算应报错")
 	}
 	// 余额不变、记录 failed、无消费流水
-	if models.GetTokenBalance(8) != 2 {
-		t.Errorf("失败结算后余额应保持 2，实际 %d", models.GetTokenBalance(8))
+	if wallet.GetTokenBalance(8) != 2 {
+		t.Errorf("失败结算后余额应保持 2，实际 %d", wallet.GetTokenBalance(8))
 	}
 	var got AiCallLog
 	models.DB.Where("id = ?", log.ID).First(&got)
@@ -171,7 +172,7 @@ func TestAiSettleInsufficientBalance(t *testing.T) {
 		t.Errorf("状态应为 failed，实际 %s", got.Status)
 	}
 	var n int64
-	models.DB.Model(&models.TokenLedger{}).Where("user_id = ? AND type = ?", 8, models.TokenTypeConsume).Count(&n)
+	models.DB.Model(&wallet.TokenLedger{}).Where("user_id = ? AND type = ?", 8, wallet.TokenTypeConsume).Count(&n)
 	if n != 0 {
 		t.Errorf("失败结算不应产生消费流水，实际 %d 笔", n)
 	}
@@ -194,7 +195,7 @@ func TestAiSettleFreeModel(t *testing.T) {
 		t.Errorf("免费模型记录异常: %+v", got)
 	}
 	// 免费模型不碰代币账本（无余额行）
-	if models.GetTokenBalance(9) != 0 {
+	if wallet.GetTokenBalance(9) != 0 {
 		t.Errorf("免费模型不应建余额行")
 	}
 }
@@ -205,7 +206,7 @@ func TestSettleAiCallLogConcurrent(t *testing.T) {
 	setupAiTestDB(t)
 	m := seedAiModel(t, 2, 4, 1024)
 	// 充足余额（远大于单次费用 6），排除「余额不足」路径干扰
-	if _, e := models.AppendTokenLedger(77, models.TokenTypeGrant, 10000, "admin", 1, "", ""); e != nil {
+	if _, e := wallet.AppendTokenLedger(77, wallet.TokenTypeGrant, 10000, "admin", 1, "", ""); e != nil {
 		t.Fatalf("增发失败: %v", e)
 	}
 	log, err := CreateAiCallLog(77, m, "polish", "chapter", 3, 1200, 600, false)
@@ -225,8 +226,8 @@ func TestSettleAiCallLogConcurrent(t *testing.T) {
 	wg.Wait()
 
 	// 只应有一笔 -6 的消费流水（费用 6 = ceil(1.2×2)+ceil(0.6×4)）
-	var entries []models.TokenLedger
-	models.DB.Where("user_id = ? AND type = ?", 77, models.TokenTypeConsume).Find(&entries)
+	var entries []wallet.TokenLedger
+	models.DB.Where("user_id = ? AND type = ?", 77, wallet.TokenTypeConsume).Find(&entries)
 	if len(entries) != 1 {
 		t.Fatalf("并发结算应只产生 1 笔消费流水，实际 %d 笔（重复扣费！）", len(entries))
 	}
@@ -234,7 +235,7 @@ func TestSettleAiCallLogConcurrent(t *testing.T) {
 		t.Errorf("消费金额应为 -6，实际 %d", entries[0].Amount)
 	}
 	// 余额只应减少 6（从 10000 → 9994）
-	if b := models.GetTokenBalance(77); b != 9994 {
+	if b := wallet.GetTokenBalance(77); b != 9994 {
 		t.Errorf("并发结算后余额应为 9994，实际 %d（重复扣费！）", b)
 	}
 	// 记录状态最终为 settled（被某一条 worker 成功 claim）
@@ -358,7 +359,7 @@ func TestAiSettleConcurrentIdempotent(t *testing.T) {
 	m := seedAiModel(t, 2, 4, 1024)
 	const grant = 100
 	const uid = 77
-	if _, e := models.AppendTokenLedger(uid, models.TokenTypeGrant, grant, "admin", 1, "", ""); e != nil {
+	if _, e := wallet.AppendTokenLedger(uid, wallet.TokenTypeGrant, grant, "admin", 1, "", ""); e != nil {
 		t.Fatalf("增发失败: %v", e)
 	}
 	log, err := CreateAiCallLog(uid, m, "continue", "", 0, 1000, 500, false)
@@ -398,11 +399,11 @@ func TestAiSettleConcurrentIdempotent(t *testing.T) {
 
 	// 核心不变量：只扣一次
 	var ledgerCount int64
-	models.DB.Model(&models.TokenLedger{}).Where("user_id = ? AND type = ?", uid, models.TokenTypeConsume).Count(&ledgerCount)
+	models.DB.Model(&wallet.TokenLedger{}).Where("user_id = ? AND type = ?", uid, wallet.TokenTypeConsume).Count(&ledgerCount)
 	if ledgerCount != 1 {
 		t.Errorf("并发结算应只产生 1 笔消费流水，实际 %d 笔", ledgerCount)
 	}
-	if bal := models.GetTokenBalance(uid); bal != grant-cost {
+	if bal := wallet.GetTokenBalance(uid); bal != grant-cost {
 		t.Errorf("并发结算后余额应为 %d（只扣一次），实际 %d", grant-cost, bal)
 	}
 	var got AiCallLog
@@ -415,11 +416,11 @@ func TestAiSettleConcurrentIdempotent(t *testing.T) {
 	if _, e := SettleAiCallLog(log.ID, 1000, 500); e == nil {
 		t.Errorf("已结算记录重复结算应被拒绝（状态机保护）")
 	}
-	models.DB.Model(&models.TokenLedger{}).Where("user_id = ? AND type = ?", uid, models.TokenTypeConsume).Count(&ledgerCount)
+	models.DB.Model(&wallet.TokenLedger{}).Where("user_id = ? AND type = ?", uid, wallet.TokenTypeConsume).Count(&ledgerCount)
 	if ledgerCount != 1 {
 		t.Errorf("重复结算后消费流水仍应为 1 笔，实际 %d 笔", ledgerCount)
 	}
-	if bal := models.GetTokenBalance(uid); bal != grant-cost {
+	if bal := wallet.GetTokenBalance(uid); bal != grant-cost {
 		t.Errorf("重复结算后余额仍应为 %d，实际 %d", grant-cost, bal)
 	}
 }

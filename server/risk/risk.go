@@ -25,6 +25,7 @@ import (
 	"nvs-server/models"
 
 	"gorm.io/gorm"
+	wallet "nvs-server/models/wallet"
 )
 
 // 处置
@@ -271,7 +272,7 @@ func recentOrders(userID uint, minutes int) int64 {
 	}
 	since := time.Now().Add(-time.Duration(minutes) * time.Minute)
 	var n int64
-	_ = models.DB.Model(&models.RechargeOrder{}).
+	_ = models.DB.Model(&wallet.RechargeOrder{}).
 		Where("user_id = ? AND created_at >= ?", userID, since).Count(&n).Error
 	return n
 }
@@ -283,13 +284,13 @@ func refundRate(userID uint, days int) (float64, int64) {
 	}
 	since := time.Now().AddDate(0, 0, -days)
 	var total, refunded int64
-	_ = models.DB.Model(&models.RechargeOrder{}).
+	_ = models.DB.Model(&wallet.RechargeOrder{}).
 		Where("user_id = ? AND created_at >= ?", userID, since).Count(&total).Error
 	if total == 0 {
 		return 0, 0
 	}
 	// refunded 可能存在于不同实现；用 status 模糊匹配避免硬编码枚举失败
-	_ = models.DB.Model(&models.RechargeOrder{}).
+	_ = models.DB.Model(&wallet.RechargeOrder{}).
 		Where("user_id = ? AND created_at >= ? AND status LIKE ?", userID, since, "%refund%").
 		Count(&refunded).Error
 	return float64(refunded) / float64(total), total

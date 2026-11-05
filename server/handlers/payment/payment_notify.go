@@ -16,6 +16,7 @@ import (
 	"nvs-server/risk"
 
 	"github.com/gin-gonic/gin"
+	wallet "nvs-server/models/wallet"
 )
 
 // ==================== 支付网关回调（公开，无鉴权，验签准入） ====================
@@ -31,12 +32,12 @@ func PaymentNotify(c *gin.Context) {
 		}
 		c.String(http.StatusOK, "fail")
 	}
-	if !models.IsPaymentEnabled() {
+	if !wallet.IsPaymentEnabled() {
 		fail("payment disabled")
 		return
 	}
-	cfg := models.GetPaymentConfig()
-	if cfg.Provider != models.PayProviderAggregate {
+	cfg := wallet.GetPaymentConfig()
+	if cfg.Provider != wallet.PayProviderAggregate {
 		fail("provider not aggregate")
 		return
 	}
@@ -51,7 +52,7 @@ func PaymentNotify(c *gin.Context) {
 		fail("verify: " + err.Error())
 		return
 	}
-	order, err := models.GetRechargeOrderByNo(result.OrderNo)
+	order, err := wallet.GetRechargeOrderByNo(result.OrderNo)
 	if err != nil {
 		fail("order not found: " + result.OrderNo)
 		return
@@ -85,7 +86,7 @@ func PaymentNotify(c *gin.Context) {
 		c.String(http.StatusOK, provider.NotifyAck(true))
 		return
 	}
-	if _, _, err := models.MarkOrderPaid(order.OrderNo, result.TxnID, raw); err != nil {
+	if _, _, err := wallet.MarkOrderPaid(order.OrderNo, result.TxnID, raw); err != nil {
 		fail("mark paid: " + err.Error())
 		return
 	}

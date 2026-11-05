@@ -19,6 +19,7 @@ import (
 	"github.com/gin-gonic/gin"
 	aim "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
+	wallet "nvs-server/models/wallet"
 )
 
 // ==================== 语音合成 / 音乐（gap-audit #18）====================
@@ -154,13 +155,13 @@ func chargeAudioCall(userID uint, m *aim.AiModel) error {
 	if price <= 0 {
 		return nil
 	}
-	if !models.IsTokenEnabled() {
+	if !wallet.IsTokenEnabled() {
 		return fmt.Errorf("免费额度已用完且代币未启用")
 	}
-	if models.GetTokenBalance(userID) < price {
-		return fmt.Errorf("余额不足（本次需要 %d %s）", price, models.GetTokenName())
+	if wallet.GetTokenBalance(userID) < price {
+		return fmt.Errorf("余额不足（本次需要 %d %s）", price, wallet.GetTokenName())
 	}
-	if _, err := models.AppendTokenLedger(userID, "consume", -price, "ai_audio", m.ID,
+	if _, err := wallet.AppendTokenLedger(userID, "consume", -price, "ai_audio", m.ID,
 		"语音/音乐生成："+m.Name, ""); err != nil {
 		return fmt.Errorf("扣费失败：%v", err)
 	}

@@ -18,6 +18,7 @@ import (
 	aim "nvs-server/models/ai"
 	aicost "nvs-server/models/aicost"
 	aihub "nvs-server/models/aihub"
+	wallet "nvs-server/models/wallet"
 )
 
 func AiHubImage(c *gin.Context) {
@@ -181,7 +182,7 @@ func AiHubImage(c *gin.Context) {
 			"cost":          0,
 			"free":          false,
 			"byok":          true,
-			"balance_after": models.GetTokenBalance(userID),
+			"balance_after": wallet.GetTokenBalance(userID),
 		})
 		return
 	}
@@ -240,9 +241,9 @@ func AiHubImage(c *gin.Context) {
 	if freeOK {
 		_ = aim.MarkAiMediaFree(task.ID)
 		_ = aihub.RecordAiFreeUsage(userID, 1, 0)
-		nb = models.GetTokenBalance(userID)
+		nb = wallet.GetTokenBalance(userID)
 	} else {
-		if !models.IsTokenEnabled() {
+		if !wallet.IsTokenEnabled() {
 			aim.FailAiMediaTask(task.ID, "代币系统未开启", false)
 			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI（未扣款）")
 			return
@@ -288,7 +289,7 @@ func AiHubImage(c *gin.Context) {
 					utils.InternalError(c, "出图审核未通过，但退款失败，请联系管理员（已扣费）")
 					return
 				}
-				nb = models.GetTokenBalance(userID)
+				nb = wallet.GetTokenBalance(userID)
 			}
 			utils.Forbidden(c, "生成的图片未通过内容审核，已撤回"+
 				verdictCategorySuffix(verdict.Categories)+"（"+verdict.Reason+"）"+

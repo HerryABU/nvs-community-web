@@ -17,6 +17,7 @@ import (
 	"nvs-server/models"
 	ai "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
+	wallet "nvs-server/models/wallet"
 	"nvs-server/security"
 )
 
@@ -342,7 +343,7 @@ func polishChunk(body string, userID, groupID uint) (string, string, error) {
 	estTokens := ai.EstimateTokens(prompt) + 1024
 	freeOK, _, _ := aihub.CheckAiFreeQuota(userID, estTokens)
 	if !freeOK {
-		if !models.IsTokenEnabled() {
+		if !wallet.IsTokenEnabled() {
 			return body, "", nil
 		}
 		if _, ok := ai.PrecheckAiBalance(userID, m, estTokens, m.MaxTokens); !ok {

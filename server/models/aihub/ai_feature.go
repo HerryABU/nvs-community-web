@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"nvs-server/models"
 	ai "nvs-server/models/ai"
+	wallet "nvs-server/models/wallet"
 	"strconv"
 	"strings"
 	"time"
@@ -125,10 +126,10 @@ func CallGuard(cost int64, confirmed bool) (allowed bool, needConfirm bool, reas
 	f := GetAiFeatureFlags()
 	if f.MaxCostPerCall > 0 && cost > f.MaxCostPerCall {
 		return false, false, "单次调用需 " + strconv.FormatInt(cost, 10) +
-			" " + models.GetTokenName() + "，超出站长设定的单次上限 " + strconv.FormatInt(f.MaxCostPerCall, 10)
+			" " + wallet.GetTokenName() + "，超出站长设定的单次上限 " + strconv.FormatInt(f.MaxCostPerCall, 10)
 	}
 	if f.ConfirmThreshold > 0 && cost >= f.ConfirmThreshold && !confirmed {
-		return true, true, "本次预计消耗 " + strconv.FormatInt(cost, 10) + " " + models.GetTokenName()
+		return true, true, "本次预计消耗 " + strconv.FormatInt(cost, 10) + " " + wallet.GetTokenName()
 	}
 	return true, false, ""
 }

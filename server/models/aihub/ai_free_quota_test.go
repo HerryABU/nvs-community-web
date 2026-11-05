@@ -3,6 +3,7 @@ package aihub
 import (
 	"nvs-server/models"
 	ai "nvs-server/models/ai"
+	wallet "nvs-server/models/wallet"
 	"testing"
 	"time"
 )
@@ -137,7 +138,7 @@ func TestAiCallLogFreeSettlement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建付费调用失败: %v", err)
 	}
-	models.AppendTokenLedger(2, models.TokenTypeRechargeCard, 10, "", 0, "测试充值", "")
+	wallet.AppendTokenLedger(2, wallet.TokenTypeRechargeCard, 10, "", 0, "测试充值", "")
 	nb, err = ai.SettleAiCallLog(payLog.ID, 1000, 500)
 	if err != nil {
 		t.Fatalf("付费结算失败: %v", err)

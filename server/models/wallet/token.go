@@ -1,4 +1,4 @@
-package models
+package wallet
 
 import (
 	"crypto/rand"
@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // sha256Hex 计算字符串的 sha256 十六进制摘要
@@ -111,20 +112,20 @@ func (CardKey) TableName() string { return "card_keys" }
 
 // IsTokenEnabled 代币系统是否开启（默认关闭）
 func IsTokenEnabled() bool {
-	return GetPlatformConfig(TokenEnabledKey) == "true"
+	return models.GetPlatformConfig(TokenEnabledKey) == "true"
 }
 
 // SetTokenEnabled 设置代币系统开关
 func SetTokenEnabled(on bool) error {
 	if on {
-		return SetPlatformConfig(TokenEnabledKey, "true")
+		return models.SetPlatformConfig(TokenEnabledKey, "true")
 	}
-	return SetPlatformConfig(TokenEnabledKey, "false")
+	return models.SetPlatformConfig(TokenEnabledKey, "false")
 }
 
 // GetTokenName 代币展示名（缺省「星币」）
 func GetTokenName() string {
-	if n := strings.TrimSpace(GetPlatformConfig(TokenNameKey)); n != "" {
+	if n := strings.TrimSpace(models.GetPlatformConfig(TokenNameKey)); n != "" {
 		return n
 	}
 	return DefaultTokenName
@@ -139,7 +140,7 @@ func SetTokenName(name string) error {
 	if len([]rune(name)) > 16 {
 		name = string([]rune(name)[:16])
 	}
-	return SetPlatformConfig(TokenNameKey, name)
+	return models.SetPlatformConfig(TokenNameKey, name)
 }
 
 // ---------- 余额与流水 ----------
@@ -150,7 +151,7 @@ func GetTokenBalance(userID uint) int64 {
 		return 0
 	}
 	var b UserTokenBalance
-	if err := DB.Where("user_id = ?", userID).First(&b).Error; err != nil {
+	if err := models.DB.Where("user_id = ?", userID).First(&b).Error; err != nil {
 		return 0
 	}
 	return b.Balance
@@ -167,7 +168,7 @@ func AppendTokenLedger(userID uint, ttype string, amount int64, refType string, 
 		return 0, fmt.Errorf("金额不能为 0")
 	}
 	var newBalance int64
-	err := DB.Transaction(func(tx *gorm.DB) error {
+	err := models.DB.Transaction(func(tx *gorm.DB) error {
 		var b UserTokenBalance
 		if e := tx.Where("user_id = ?", userID).First(&b).Error; e != nil {
 			// 首次：初始化余额行（balance=0 为零值但无歧义默认，直接用 map 精确写）
@@ -207,9 +208,9 @@ func ListTokenLedger(userID uint, page, pageSize int) ([]TokenLedger, int64, err
 		pageSize = 20
 	}
 	var total int64
-	DB.Model(&TokenLedger{}).Where("user_id = ?", userID).Count(&total)
+	models.DB.Model(&TokenLedger{}).Where("user_id = ?", userID).Count(&total)
 	var list []TokenLedger
-	err := DB.Where("user_id = ?", userID).Order("created_at DESC").
+	err := models.DB.Where("user_id = ?", userID).Order("created_at DESC").
 		Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error
 	return list, total, err
 }
@@ -217,7 +218,7 @@ func ListTokenLedger(userID uint, page, pageSize int) ([]TokenLedger, int64, err
 // SumTokenLedger 由流水重算某用户余额（对账用：ledger 为准）
 func SumTokenLedger(userID uint) int64 {
 	var sum int64
-	DB.Model(&TokenLedger{}).Where("user_id = ?", userID).
+	models.DB.Model(&TokenLedger{}).Where("user_id = ?", userID).
 		Select("COALESCE(SUM(amount), 0)").Scan(&sum)
 	return sum
 }
@@ -227,14 +228,14 @@ func ReconcileTokenBalance(userID uint) (int64, error) {
 	sum := SumTokenLedger(userID)
 	now := time.Now()
 	var b UserTokenBalance
-	if err := DB.Where("user_id = ?", userID).First(&b).Error; err != nil {
-		if ce := DB.Create(&UserTokenBalance{UserID: userID, Balance: sum, UpdatedAt: now}).Error; ce != nil {
+	if err := models.DB.Where("user_id = ?", userID).First(&b).Error; err != nil {
+		if ce := models.DB.Create(&UserTokenBalance{UserID: userID, Balance: sum, UpdatedAt: now}).Error; ce != nil {
 			return 0, ce
 		}
 		return sum, nil
 	}
 	if b.Balance != sum {
-		if ue := DB.Model(&UserTokenBalance{}).Where("user_id = ?", userID).
+		if ue := models.DB.Model(&UserTokenBalance{}).Where("user_id = ?", userID).
 			Updates(map[string]interface{}{"balance": sum, "updated_at": now}).Error; ue != nil {
 			return 0, ue
 		}
@@ -295,7 +296,7 @@ func GenerateCardKeys(adminID uint, count, value int, expiresAt *time.Time, note
 			ExpiresAt:  expiresAt,
 			Note:       note,
 		}
-		if err := DB.Create(&ck).Error; err != nil {
+		if err := models.DB.Create(&ck).Error; err != nil {
 			return nil, err
 		}
 		codes = append(codes, code)
@@ -314,7 +315,7 @@ func RedeemCardKey(userID uint, code string) (int64, error) {
 	}
 	hash := hashCardCode(code)
 	var ck CardKey
-	if err := DB.Where("code_hash = ?", hash).First(&ck).Error; err != nil {
+	if err := models.DB.Where("code_hash = ?", hash).First(&ck).Error; err != nil {
 		return 0, fmt.Errorf("卡密无效")
 	}
 	if ck.Status == CardKeyUsed {
@@ -327,7 +328,7 @@ func RedeemCardKey(userID uint, code string) (int64, error) {
 		return 0, fmt.Errorf("卡密已过期")
 	}
 	// 原子占用：仅当仍为 unused 时更新，防并发重兑
-	res := DB.Model(&CardKey{}).Where("id = ? AND status = ?", ck.ID, CardKeyUnused).
+	res := models.DB.Model(&CardKey{}).Where("id = ? AND status = ?", ck.ID, CardKeyUnused).
 		Updates(map[string]interface{}{"status": CardKeyUsed, "used_by": userID, "used_at": time.Now()})
 	if res.Error != nil {
 		return 0, res.Error
@@ -347,7 +348,7 @@ func ListCardKeys(status, batch string, limit int) ([]CardKey, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 200
 	}
-	q := DB.Order("created_at DESC")
+	q := models.DB.Order("created_at DESC")
 	if status != "" {
 		q = q.Where("status = ?", status)
 	}
@@ -368,8 +369,8 @@ func ListCardKeys(status, batch string, limit int) ([]CardKey, error) {
 		}
 	}
 	if len(ids) > 0 {
-		var users []User
-		DB.Where("id IN ?", ids).Find(&users)
+		var users []models.User
+		models.DB.Where("id IN ?", ids).Find(&users)
 		names := map[uint]string{}
 		for _, u := range users {
 			names[u.ID] = u.Username
@@ -385,7 +386,7 @@ func ListCardKeys(status, batch string, limit int) ([]CardKey, error) {
 
 // VoidCardKey 作废一张未使用的卡密
 func VoidCardKey(id uint) error {
-	res := DB.Model(&CardKey{}).Where("id = ? AND status = ?", id, CardKeyUnused).
+	res := models.DB.Model(&CardKey{}).Where("id = ? AND status = ?", id, CardKeyUnused).
 		Update("status", CardKeyVoid)
 	if res.Error != nil {
 		return res.Error

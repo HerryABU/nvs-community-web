@@ -4,15 +4,15 @@ import (
 	"net/url"
 	"testing"
 
-	"nvs-server/models"
+	wallet "nvs-server/models/wallet"
 )
 
 // testSecret 测试用商户密钥
 const testSecret = "test-secret-123456"
 
-func testAggregateConfig() models.PaymentConfig {
-	cfg := models.DefaultPaymentConfig()
-	cfg.Provider = models.PayProviderAggregate
+func testAggregateConfig() wallet.PaymentConfig {
+	cfg := wallet.DefaultPaymentConfig()
+	cfg.Provider = wallet.PayProviderAggregate
 	cfg.GatewayURL = "https://gateway.example.com/submit"
 	cfg.AppID = "10001"
 	cfg.Secret = testSecret
@@ -114,12 +114,12 @@ func TestParseMoneyFen(t *testing.T) {
 }
 
 func TestGetProvider(t *testing.T) {
-	cfg := models.DefaultPaymentConfig()
-	if GetProvider(cfg).Name() != models.PayProviderMock {
+	cfg := wallet.DefaultPaymentConfig()
+	if GetProvider(cfg).Name() != wallet.PayProviderMock {
 		t.Fatal("默认应返回 mock provider")
 	}
-	cfg.Provider = models.PayProviderAggregate
-	if GetProvider(cfg).Name() != models.PayProviderAggregate {
+	cfg.Provider = wallet.PayProviderAggregate
+	if GetProvider(cfg).Name() != wallet.PayProviderAggregate {
 		t.Fatal("aggregate 配置应返回 aggregate provider")
 	}
 }

@@ -19,6 +19,7 @@ import (
 	aim "nvs-server/models/ai"
 	aicost "nvs-server/models/aicost"
 	aihub "nvs-server/models/aihub"
+	wallet "nvs-server/models/wallet"
 )
 
 // ==================== AI 工作台：会话 + 流式对话（§5.4） ====================
@@ -26,13 +27,13 @@ import (
 // AiHubStatus GET /api/ai/hub/status — 工作台总状态（分类型模型 + 余额）
 func AiHubStatus(c *gin.Context) {
 	aiEnabled := aim.IsAiEnabled()
-	tokenEnabled := models.IsTokenEnabled()
+	tokenEnabled := wallet.IsTokenEnabled()
 	userID := hctx.CurrentUserID(c)
 	out := gin.H{
 		"ai_enabled":    aiEnabled,
 		"token_enabled": tokenEnabled,
-		"token_name":    models.GetTokenName(),
-		"balance":       models.GetTokenBalance(userID),
+		"token_name":    wallet.GetTokenName(),
+		"balance":       wallet.GetTokenBalance(userID),
 		"free_quota":    aihub.SummarizeAiFreeQuota(userID),
 		"chat_models":   []gin.H{},
 		"image_models":  []gin.H{},
@@ -506,14 +507,14 @@ func AiHubChatStream(c *gin.Context) {
 	// 免费额度判定（优先）：命中则本次不扣代币；BYOK 一律不扣平台代币
 	freeOK, _, _ := aihub.CheckAiFreeQuota(userID, tokensIn+tokensOut)
 	if !freeOK && !req.Byok {
-		if !models.IsTokenEnabled() {
+		if !wallet.IsTokenEnabled() {
 			utils.BadRequest(c, "代币系统未开启，无法使用付费 AI")
 			return
 		}
 		if _, ok := aim.PrecheckAiBalance(userID, m, tokensIn, tokensOut); !ok {
 			cost := aim.EstimateAiCost(m, tokensIn, tokensOut)
 			utils.Error(c, 429, 42902, fmt.Sprintf("%s不足：本次约需 %d，当前余额 %d，请先充值",
-				models.GetTokenName(), cost, models.GetTokenBalance(userID)))
+				wallet.GetTokenName(), cost, wallet.GetTokenBalance(userID)))
 			return
 		}
 	}

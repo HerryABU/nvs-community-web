@@ -6,6 +6,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	wallet "nvs-server/models/wallet"
 )
 
 func setupAiHubTestDB(t *testing.T) *gorm.DB {
@@ -132,7 +133,7 @@ func TestAiMediaImageCharge(t *testing.T) {
 	}
 
 	// 任务扣款：充 10 → 扣 5 → 退 5
-	if _, e := models.AppendTokenLedger(1, models.TokenTypeGrant, 10, "admin", 1, "", ""); e != nil {
+	if _, e := wallet.AppendTokenLedger(1, wallet.TokenTypeGrant, 10, "admin", 1, "", ""); e != nil {
 		t.Fatalf("增发失败: %v", e)
 	}
 	task, err := CreateAiMediaTask(1, m, AiKindImage, "一只猫", AiMediaParams{Size: "1024x1024", N: 1})
@@ -156,7 +157,7 @@ func TestAiMediaImageCharge(t *testing.T) {
 	}
 	// 流水：consume -5 一笔
 	var n int64
-	models.DB.Model(&models.TokenLedger{}).Where("user_id = ? AND type = ?", 1, models.TokenTypeConsume).Count(&n)
+	models.DB.Model(&wallet.TokenLedger{}).Where("user_id = ? AND type = ?", 1, wallet.TokenTypeConsume).Count(&n)
 	if n != 1 {
 		t.Errorf("应 1 笔消费流水，实际 %d", n)
 	}

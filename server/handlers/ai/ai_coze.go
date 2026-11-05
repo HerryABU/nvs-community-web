@@ -2,7 +2,6 @@ package ai
 
 import (
 	"nvs-server/aiclient"
-	"nvs-server/models"
 	"strconv"
 	"strings"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	aim "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
+	wallet "nvs-server/models/wallet"
 )
 
 // runCozeChat 扣子（Coze）智能体对话：非流式整段返回，仍按 SSE 事件回吐（前端无感）
@@ -54,7 +54,7 @@ func runCozeChat(c *gin.Context, ag *aim.AiAgent, callLog *aim.AiCallLog, sessio
 		aim.FailAiCallLog(callLog.ID, serr.Error())
 	}
 	aim.AppendAiChatMessage(session.ID, "assistant", answer, in, out, cost, callLog.ID)
-	nb := models.GetTokenBalance(userID)
+	nb := wallet.GetTokenBalance(userID)
 
 	// 一次性把整段内容推给前端（与流式协议保持一致：先 content 后 done）
 	sseEvent(c, gin.H{"content": answer})

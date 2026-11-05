@@ -3,6 +3,7 @@ package aihub
 import (
 	"encoding/json"
 	"nvs-server/models"
+	wallet "nvs-server/models/wallet"
 	"strconv"
 	"strings"
 	"time"
@@ -153,7 +154,7 @@ func EffectiveAiFreeLimit(userID uint) (calls, tokens int) {
 		return calls, tokens
 	}
 	// 0 = 不提供 / 不限，语义特殊，不参与放大
-	if models.DB != nil && userID > 0 && models.IsMember(userID) {
+	if models.DB != nil && userID > 0 && wallet.IsMember(userID) {
 		if calls > 0 {
 			calls *= memberFreeQuotaMultiplier
 		}

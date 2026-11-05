@@ -14,4 +14,5 @@ import (
 	_ "nvs-server/models/security"
 	_ "nvs-server/models/siteops"
 	_ "nvs-server/models/theme"
+	_ "nvs-server/models/wallet"
 )
