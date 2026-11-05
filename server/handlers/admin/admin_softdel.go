@@ -11,6 +11,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	"nvs-server/models/blog"
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -216,7 +217,7 @@ func doSoftDelete(ctype string, id uint, reason, source, action string, operator
 		audit(auditAction, "post", id, fmt.Sprintf("管理员删除回复（作者 %s）| 原因：%s", emergency.UserOf(p.UserID), reason))
 
 	case "blog":
-		b, err := models.GetBlogByID(id)
+		b, err := blog.GetBlogByID(id)
 		if err != nil {
 			return ErrContentNotFound
 		}
@@ -224,7 +225,7 @@ func doSoftDelete(ctype string, id uint, reason, source, action string, operator
 			return err
 		}
 		models.DB.Where("blog_id = ?", id).Delete(&models.Comment{})
-		if err := models.DeleteBlog(id); err != nil {
+		if err := blog.DeleteBlog(id); err != nil {
 			return err
 		}
 		audit(auditAction, "blog", id, fmt.Sprintf("管理员删除博客《%s》（作者 %s）| 原因：%s", b.Title, emergency.UserOf(b.AuthorID), reason))
@@ -253,7 +254,7 @@ func doSoftDelete(ctype string, id uint, reason, source, action string, operator
 		"novel":   &models.Novel{},
 		"chapter": &models.Chapter{},
 		"thread":  &models.Thread{},
-		"blog":    &models.AuthorBlog{},
+		"blog":    &blog.AuthorBlog{},
 		"forum":   &models.Forum{},
 	}
 	if m, ok := deletedByMark[ctype]; ok {

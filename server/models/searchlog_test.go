@@ -237,60 +237,6 @@ func TestSearchLogCleanup(t *testing.T) {
 	}
 }
 
-func TestAggregateTagHotWords(t *testing.T) {
-	db := setupSearchLogTestDB(t)
-
-	// 1) 博客结构化标签
-	tagA := BlogTag{Name: "修真"}
-	tagB := BlogTag{Name: "科幻"}
-	db.Create(&tagA)
-	db.Create(&tagB)
-	blog1 := AuthorBlog{AuthorID: 1, Title: "博客一", ContentPath: "x", CreatedAt: time.Now()}
-	blog2 := AuthorBlog{AuthorID: 1, Title: "博客二", ContentPath: "x", CreatedAt: time.Now()}
-	db.Create(&blog1)
-	db.Create(&blog2)
-	db.Create(&BlogTagLink{BlogID: blog1.ID, TagID: tagA.ID})
-	db.Create(&BlogTagLink{BlogID: blog2.ID, TagID: tagA.ID})
-	db.Create(&BlogTagLink{BlogID: blog2.ID, TagID: tagB.ID})
-
-	// 2) 作品 JSON 标签
-	db.Create(&Novel{AuthorID: 1, Title: "作品一", Tags: `["修真","末日"]`, CreatedAt: time.Now()})
-	db.Create(&Novel{AuthorID: 1, Title: "作品二", Tags: `["修真"]`, CreatedAt: time.Now()})
-
-	// 窗口外博客不计入
-	oldBlog := AuthorBlog{AuthorID: 1, Title: "旧博客", ContentPath: "x", CreatedAt: time.Now().AddDate(0, 0, -30)}
-	db.Create(&oldBlog)
-	db.Create(&BlogTagLink{BlogID: oldBlog.ID, TagID: tagB.ID})
-
-	words, err := AggregateTagHotWords(7, 50)
-	if err != nil {
-		t.Fatalf("标签热词聚合失败: %v", err)
-	}
-	byTag := map[string]int{}
-	for _, w := range words {
-		byTag[w.Word] = w.Count
-	}
-	// 修真：博客 2 + 作品 2 = 4
-	if byTag["修真"] != 4 {
-		t.Errorf("修真 应计 4（博客2+作品2），实际 %d", byTag["修真"])
-	}
-	// 科幻：仅窗口内博客 1（旧博客不计）
-	if byTag["科幻"] != 1 {
-		t.Errorf("科幻 应计 1，实际 %d", byTag["科幻"])
-	}
-	// 末日：作品 JSON 标签 1
-	if byTag["末日"] != 1 {
-		t.Errorf("末日 应计 1，实际 %d", byTag["末日"])
-	}
-	// 降序校验
-	for i := 1; i < len(words); i++ {
-		if words[i-1].Count < words[i].Count {
-			t.Errorf("结果应按计数降序: %v", words)
-			break
-		}
-	}
-}
-
 func TestParseNovelTags(t *testing.T) {
 	// 合法 JSON 数组
 	got := parseNovelTags(`["修真","末日","  "]`)

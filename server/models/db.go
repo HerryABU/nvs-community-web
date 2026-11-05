@@ -27,20 +27,32 @@ type DBConfig struct {
 	Path     string `json:"path"` // sqlite 文件路径，留空默认 data/nvs.db
 }
 
-// AllModels 所有需要建表与迁移的模型（与 main.go 的 AutoMigrate 保持一致）
+// DomainModelProviders 由各域子包在 init 中注册，聚合其自有模型用于统一迁移。
+// 这样根包无需 import 任何域子包，避免「根↔域」导入循环。
+var DomainModelProviders []func() []interface{}
+
+// RegisterDomainModels 域子包在 init 调用，登记自身模型列表。
+func RegisterDomainModels(p func() []interface{}) {
+	DomainModelProviders = append(DomainModelProviders, p)
+}
+
+// 跨域解耦钩子：由各域子包在 init 注册，根包仅持有函数变量、不回引域子包，避免导入循环。
+// BlogCommentNotifier 新评论触达博客作者时通知；BlogFeedProvider 特别关注动态流的博客部分。
+var BlogCommentNotifier func(actorID, blogAuthorID uint, blogTitle, link string) error
+var BlogFeedProvider func(ids []uint, window int) ([]FeedItem, int64, error)
+
+// AllModels 所有需要建表与迁移的模型（与 main.go 的 AutoMigrate 保持一致）。
+// 仅列出根包自身的模型；域子包模型由 DomainModelProviders 在运行时聚合。
 func AllModels() []interface{} {
-	return []interface{}{
+	list := []interface{}{
 		&User{}, &Novel{}, &NovelCategory{}, &Chapter{}, &Comment{}, &Rating{},
 		// 作品角色表（话本气泡体的角色管理：头像/主题色/默认左右）
 		&NovelCharacter{},
 		&Forum{}, &Thread{}, &Post{}, &ForumMute{}, &VipApplication{}, &Report{},
 		&WithdrawalRequest{}, &EarningsRecord{}, &BlacklistIP{}, &PlatformConfig{},
-		&FederatedSite{}, &FederatedNovel{}, &FederatedInbound{}, &BookShelf{}, &Follow{}, &AuthorBlog{},
+		&FederatedSite{}, &FederatedNovel{}, &FederatedInbound{}, &BookShelf{}, &Follow{},
 		&UserFrame{}, &UserHTML{}, &XssRule{}, &EmergencyAuditLog{}, &UserAuditLog{},
 		&BadWord{}, &BadWordFlag{}, // 违禁词库：规则 + 标记待审记录
-		&BlogCategory{}, &BlogLike{}, // 博客分类（一/二级）+ 博客点赞
-		&BlogTag{}, &BlogTagLink{}, // 博客标签（#tag，多对多）
-		&BlogTopic{}, &BlogTopicLink{}, // 博客话题（#话题，多对多）
 		&SystemSetting{}, // 系统设置（key/value）：博客分类审核模式等
 		&ZoneAccessLog{}, // 隔离墙（敏感分区）进入记录，176号令合规
 		&Notification{},  // 站内消息通知
@@ -108,6 +120,10 @@ func AllModels() []interface{} {
 		// 渠道账户凭据（nap_/sk_ 加密入库，供「拉取模型」「渠道监控」复用）
 		&AiChannelAccount{},
 	}
+	for _, p := range DomainModelProviders {
+		list = append(list, p()...)
+	}
+	return list
 }
 
 // BuildDialector 根据配置构建 GORM 方言

@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
 	"gorm.io/gorm"
+	"nvs-server/models/blog"
 )
 
 // 分类列表（从数据库动态读取，不再硬编码）
@@ -136,7 +137,7 @@ func UnifiedSearch(c *gin.Context) {
 	}
 	q := strings.TrimSpace(c.Query("q"))
 	if q == "" {
-		utils.Success(c, gin.H{"q": "", "novels": []models.Novel{}, "authors": []models.User{}, "blogs": []models.AuthorBlog{}, "htmls": []models.UserHTML{}})
+		utils.Success(c, gin.H{"q": "", "novels": []models.Novel{}, "authors": []models.User{}, "blogs": []blog.AuthorBlog{}, "htmls": []models.UserHTML{}})
 		return
 	}
 	like := "%" + q + "%"
@@ -158,8 +159,8 @@ func UnifiedSearch(c *gin.Context) {
 	models.SanitizeUserEmails(authors)
 
 	// 3) 博客：标题 / 摘要（含关键词）
-	var blogs []models.AuthorBlog
-	models.DB.Model(&models.AuthorBlog{}).
+	var blogs []blog.AuthorBlog
+	models.DB.Model(&blog.AuthorBlog{}).
 		Where("(title LIKE ? OR summary LIKE ?)", like, like).
 		Preload("Author").Order("created_at DESC").Limit(limit).Find(&blogs)
 	for i := range blogs {
@@ -184,17 +185,17 @@ func UnifiedSearch(c *gin.Context) {
 		CreatorName string `json:"creator_name"`
 		BlogCount   int64  `json:"blog_count"`
 	}
-	var cats []models.BlogCategory
-	models.DB.Model(&models.BlogCategory{}).Where("status = ? AND name LIKE ?", "approved", like).
+	var cats []blog.BlogCategory
+	models.DB.Model(&blog.BlogCategory{}).Where("status = ? AND name LIKE ?", "approved", like).
 		Order("id ASC").Limit(limit).Find(&cats)
 	categories := make([]categoryHit, 0, len(cats))
 	for _, c := range cats {
 		hit := categoryHit{
 			ID: c.ID, Name: c.Name,
-			FullName:  models.GetBlogCategoryName(c.ID),
+			FullName:  blog.GetBlogCategoryName(c.ID),
 			CreatorID: c.CreatedBy,
 		}
-		models.DB.Model(&models.AuthorBlog{}).Where("category_id = ?", c.ID).Count(&hit.BlogCount)
+		models.DB.Model(&blog.AuthorBlog{}).Where("category_id = ?", c.ID).Count(&hit.BlogCount)
 		if c.CreatedBy > 0 {
 			if u, err := models.GetUserByID(c.CreatedBy); err == nil && u != nil {
 				hit.CreatorName = u.Nickname
@@ -207,8 +208,8 @@ func UnifiedSearch(c *gin.Context) {
 	}
 
 	// 6) 话题：话题名 / 描述
-	var topics []models.BlogTopic
-	models.DB.Model(&models.BlogTopic{}).Where("name LIKE ? OR description LIKE ?", like, like).
+	var topics []blog.BlogTopic
+	models.DB.Model(&blog.BlogTopic{}).Where("name LIKE ? OR description LIKE ?", like, like).
 		Order("id ASC").Limit(limit).Find(&topics)
 
 	// 7) 论坛：名称 / 描述（公开论坛）

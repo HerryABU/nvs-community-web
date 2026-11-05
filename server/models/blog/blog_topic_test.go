@@ -1,17 +1,20 @@
-package models
+package blog
 
-import "testing"
+import (
+	"nvs-server/models"
+	"testing"
+)
 
 // TestBlogTopics 博客话题：同步（去重/去#）/读取/列表统计
 func TestBlogTopics(t *testing.T) {
 	setupTestDB(t)
 
 	b1 := &AuthorBlog{AuthorID: 1, Title: "话题博客1"}
-	if err := DB.Create(b1).Error; err != nil {
+	if err := models.DB.Create(b1).Error; err != nil {
 		t.Fatalf("创建博客失败: %v", err)
 	}
 	b2 := &AuthorBlog{AuthorID: 1, Title: "话题博客2"}
-	if err := DB.Create(b2).Error; err != nil {
+	if err := models.DB.Create(b2).Error; err != nil {
 		t.Fatalf("创建博客失败: %v", err)
 	}
 

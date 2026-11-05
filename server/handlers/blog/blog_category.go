@@ -13,6 +13,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	blogm "nvs-server/models/blog"
 )
 
 // trimSpace 去除首尾空白
@@ -20,7 +21,7 @@ func trimSpace(s string) string { return strings.TrimSpace(s) }
 
 // collectDescendants 收集 id 分类的全部子孙 id（防止移动成环）
 func collectDescendants(id uint, out *[]uint) {
-	var kids []models.BlogCategory
+	var kids []blogm.BlogCategory
 	models.DB.Where("parent_id = ?", id).Find(&kids)
 	for _, k := range kids {
 		*out = append(*out, k.ID)
@@ -34,7 +35,7 @@ func collectDescendants(id uint, out *[]uint) {
 
 // GET /api/blog-categories — 公开分类树（含博客数）
 func ListBlogCategories(c *gin.Context) {
-	utils.Success(c, models.GetBlogCategoryTree())
+	utils.Success(c, blogm.GetBlogCategoryTree())
 }
 
 // GET /api/author/:id/blog-categories — 某作者的已公开分类树（个人专栏）
@@ -45,7 +46,7 @@ func ListAuthorBlogCategories(c *gin.Context) {
 		utils.NotFound(c, "作者不存在")
 		return
 	}
-	utils.Success(c, models.GetAuthorCategoryTree(author.ID))
+	utils.Success(c, blogm.GetAuthorCategoryTree(author.ID))
 }
 
 // GET /api/blogs/like/status — 兼容：博客点赞状态（供详情页使用）
@@ -58,10 +59,10 @@ func GetBlogLikes(c *gin.Context) {
 	}
 	userID := hctx.CurrentUserID(c)
 	var count int64
-	models.DB.Model(&models.BlogLike{}).Where("blog_id = ?", id).Count(&count)
+	models.DB.Model(&blogm.BlogLike{}).Where("blog_id = ?", id).Count(&count)
 	utils.Success(c, gin.H{
 		"count": count,
-		"liked": models.UserLikedBlog(uint(id), userID),
+		"liked": blogm.UserLikedBlog(uint(id), userID),
 	})
 }
 
@@ -73,18 +74,18 @@ func ToggleBlogLike(c *gin.Context) {
 		utils.BadRequest(c, "无效的博客ID")
 		return
 	}
-	blog, err := models.GetBlogByID(uint(id))
+	blog, err := blogm.GetBlogByID(uint(id))
 	if err != nil {
 		utils.NotFound(c, "博客不存在")
 		return
 	}
-	liked, err := models.ToggleBlogLike(blog.ID, userID)
+	liked, err := blogm.ToggleBlogLike(blog.ID, userID)
 	if err != nil {
 		utils.InternalError(c, "操作失败")
 		return
 	}
 	var count int64
-	models.DB.Model(&models.BlogLike{}).Where("blog_id = ?", blog.ID).Count(&count)
+	models.DB.Model(&blogm.BlogLike{}).Where("blog_id = ?", blog.ID).Count(&count)
 	utils.Success(c, gin.H{"liked": liked, "count": count})
 }
 
@@ -104,7 +105,7 @@ func requireLogin(c *gin.Context) bool {
 }
 
 // canManageCategory 当前用户能否管理该分类（创建者本人 或 管理员）
-func canManageCategory(c *gin.Context, cat *models.BlogCategory) bool {
+func canManageCategory(c *gin.Context, cat *blogm.BlogCategory) bool {
 	uid := hctx.CurrentUserID(c)
 	if uid == 0 {
 		return false
@@ -122,7 +123,7 @@ func ListMyBlogCategories(c *gin.Context) {
 		return
 	}
 	uid := hctx.CurrentUserID(c)
-	mine := models.GetMyCategories(uid)
+	mine := blogm.GetMyCategories(uid)
 	mineItems := make([]gin.H, 0, len(mine))
 	for _, m := range mine {
 		mineItems = append(mineItems, gin.H{
@@ -132,11 +133,11 @@ func ListMyBlogCategories(c *gin.Context) {
 			"sort_order":    m.SortOrder,
 			"status":        m.Status,
 			"reject_reason": m.RejectReason,
-			"full_name":     models.GetBlogCategoryName(m.ID),
+			"full_name":     blogm.GetBlogCategoryName(m.ID),
 		})
 	}
 	utils.Success(c, gin.H{
-		"platform": models.GetBlogCategoryTree(),
+		"platform": blogm.GetBlogCategoryTree(),
 		"mine":     mineItems,
 	})
 }
@@ -163,14 +164,14 @@ func CreateBlogCategory(c *gin.Context) {
 	}
 	// 层级校验：最多三级（一级挂 0，二级挂一级，三级挂二级）；三级不能再挂子分类
 	if req.ParentID != 0 {
-		var p models.BlogCategory
+		var p blogm.BlogCategory
 		if err := models.DB.First(&p, req.ParentID).Error; err != nil {
 			utils.BadRequest(c, "上级分类不存在")
 			return
 		}
 		if p.ParentID != 0 {
 			// 父分类是二级/三级：检查其父级是否为一级（父=一级→当前为三级；父=二级→父已三级，拒绝）
-			var pp models.BlogCategory
+			var pp blogm.BlogCategory
 			if err := models.DB.First(&pp, p.ParentID).Error; err == nil && pp.ParentID != 0 {
 				utils.BadRequest(c, "分类最多支持三级，三级下不能再挂子分类")
 				return
@@ -178,7 +179,7 @@ func CreateBlogCategory(c *gin.Context) {
 		}
 	}
 	var cnt int64
-	models.DB.Model(&models.BlogCategory{}).Where("name = ? AND parent_id = ?", req.Name, req.ParentID).Count(&cnt)
+	models.DB.Model(&blogm.BlogCategory{}).Where("name = ? AND parent_id = ?", req.Name, req.ParentID).Count(&cnt)
 	if cnt > 0 {
 		utils.BadRequest(c, "同名分类已存在")
 		return
@@ -186,11 +187,11 @@ func CreateBlogCategory(c *gin.Context) {
 	// 状态：管理员创建直接通过；普通作者按站点审核模式
 	//   事后审核(post_review，默认) → pending，管理员通过后公开
 	//   先公开(pre_public)         → approved 直接公开，管理员事后可封禁(拒绝)
-	status := models.CategoryStatusApproved
+	status := blogm.CategoryStatusApproved
 	if !admin.IsAdminUser(c) && models.GetCategoryReviewMode() == models.CategoryReviewModePost {
-		status = models.CategoryStatusPending
+		status = blogm.CategoryStatusPending
 	}
-	cat := &models.BlogCategory{
+	cat := &blogm.BlogCategory{
 		Name: req.Name, ParentID: req.ParentID, SortOrder: req.SortOrder,
 		CreatedBy: hctx.CurrentUserID(c), Status: status,
 	}
@@ -208,7 +209,7 @@ func UpdateBlogCategory(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var cat models.BlogCategory
+	var cat blogm.BlogCategory
 	if err := models.DB.First(&cat, id).Error; err != nil {
 		utils.NotFound(c, "分类不存在")
 		return
@@ -234,7 +235,7 @@ func UpdateBlogCategory(c *gin.Context) {
 			return
 		}
 		var cnt int64
-		models.DB.Model(&models.BlogCategory{}).
+		models.DB.Model(&blogm.BlogCategory{}).
 			Where("name = ? AND parent_id = ? AND id <> ?", name, cat.ParentID, cat.ID).Count(&cnt)
 		if cnt > 0 {
 			utils.BadRequest(c, "同名分类已存在")
@@ -245,7 +246,7 @@ func UpdateBlogCategory(c *gin.Context) {
 	// 改父级：最多三级；不能把自己挂到自己/子孙下；不能移到会超过三级的层级
 	if req.ParentID != cat.ParentID {
 		if req.ParentID != 0 {
-			var p models.BlogCategory
+			var p blogm.BlogCategory
 			if err := models.DB.First(&p, req.ParentID).Error; err != nil {
 				utils.BadRequest(c, "上级分类不存在")
 				return
@@ -253,7 +254,7 @@ func UpdateBlogCategory(c *gin.Context) {
 			// 目标父分类的深度决定新层级：父深度 ≥3 拒绝；若目标父分类已是三级，新分类会是四级
 			parentDepth := 1
 			if p.ParentID != 0 {
-				var pp models.BlogCategory
+				var pp blogm.BlogCategory
 				if err := models.DB.First(&pp, p.ParentID).Error; err == nil {
 					parentDepth = 2
 					if pp.ParentID != 0 {
@@ -303,7 +304,7 @@ func DeleteBlogCategory(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var cat models.BlogCategory
+	var cat blogm.BlogCategory
 	if err := models.DB.First(&cat, id).Error; err != nil {
 		utils.NotFound(c, "分类不存在")
 		return
@@ -312,11 +313,11 @@ func DeleteBlogCategory(c *gin.Context) {
 		utils.Forbidden(c, "只能管理自己创建的分类")
 		return
 	}
-	if models.BlogCategoryHasChildren(cat.ID) {
+	if blogm.BlogCategoryHasChildren(cat.ID) {
 		utils.BadRequest(c, "该分类下还有子分类，请先删除子分类")
 		return
 	}
-	models.DB.Model(&models.AuthorBlog{}).Where("category_id = ?", cat.ID).Update("category_id", 0)
+	models.DB.Model(&blogm.AuthorBlog{}).Where("category_id = ?", cat.ID).Update("category_id", 0)
 	if err := models.DB.Delete(&cat).Error; err != nil {
 		utils.InternalError(c, "删除失败")
 		return
@@ -346,17 +347,17 @@ func AdminListBlogCategories(c *gin.Context) {
 		BlogCount    int64     `json:"blog_count"`
 		CreatedAt    time.Time `json:"created_at"`
 	}
-	var cats []models.BlogCategory
+	var cats []blogm.BlogCategory
 	models.DB.Order("created_at DESC").Find(&cats)
 	list := make([]item, 0, len(cats))
 	for _, c := range cats {
 		it := item{
 			ID: c.ID, ParentID: c.ParentID, Name: c.Name,
-			FullName: models.GetBlogCategoryName(c.ID), SortOrder: c.SortOrder,
+			FullName: blogm.GetBlogCategoryName(c.ID), SortOrder: c.SortOrder,
 			Status: c.Status, RejectReason: c.RejectReason, CreatedBy: c.CreatedBy,
 			CreatedAt: c.CreatedAt,
 		}
-		models.DB.Model(&models.AuthorBlog{}).Where("category_id = ?", c.ID).Count(&it.BlogCount)
+		models.DB.Model(&blogm.AuthorBlog{}).Where("category_id = ?", c.ID).Count(&it.BlogCount)
 		if c.CreatedBy > 0 {
 			if u, err := models.GetUserByID(c.CreatedBy); err == nil && u != nil {
 				name := u.Nickname
@@ -428,7 +429,7 @@ func AdminReviewBlogCategory(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var cat models.BlogCategory
+	var cat blogm.BlogCategory
 	if err := models.DB.First(&cat, id).Error; err != nil {
 		utils.NotFound(c, "分类不存在")
 		return
@@ -443,12 +444,12 @@ func AdminReviewBlogCategory(c *gin.Context) {
 	}
 	switch req.Action {
 	case "approve":
-		cat.Status = models.CategoryStatusApproved
+		cat.Status = blogm.CategoryStatusApproved
 		cat.RejectReason = ""
 		emergency.AuditEmergency(c, models.AuditContentRestore, "blog_category", cat.ID,
 			"管理员通过博客分类《"+cat.Name+"》审核")
 	case "reject":
-		cat.Status = models.CategoryStatusRejected
+		cat.Status = blogm.CategoryStatusRejected
 		cat.RejectReason = trimSpace(req.Reason)
 		if cat.RejectReason == "" {
 			cat.RejectReason = "分类名称/内容不符合平台规范"
@@ -512,8 +513,8 @@ func AdminSetCategoryReviewMode(c *gin.Context) {
 }
 
 // FillBlogCategories 为博客列表填充分类名（含父级前缀）
-func FillBlogCategories(blogs []models.AuthorBlog) {
+func FillBlogCategories(blogs []blogm.AuthorBlog) {
 	for i := range blogs {
-		blogs[i].Category = models.GetBlogCategoryName(blogs[i].CategoryID)
+		blogs[i].Category = blogm.GetBlogCategoryName(blogs[i].CategoryID)
 	}
 }

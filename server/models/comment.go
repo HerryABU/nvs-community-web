@@ -511,12 +511,15 @@ func CreateComment(comment *Comment) error {
 				"你的作品收到新评论", "《"+n.Title+"》", "/novel/"+strconv.FormatUint(uint64(comment.NovelID), 10))
 		}
 	}
-	// 3) 博客收到新评论 → 通知博客作者
-	if comment.BlogID != 0 {
-		var b AuthorBlog
-		if DB.Select("author_id", "title").First(&b, comment.BlogID).Error == nil {
-			_ = PushNotification(comment.UserID, b.AuthorID, "blog_comment",
-				"你的博客收到新评论", "《"+b.Title+"》", "/author/"+strconv.FormatUint(uint64(b.AuthorID), 10)+"/blogs/"+strconv.FormatUint(uint64(comment.BlogID), 10))
+	// 3) 博客收到新评论 → 通知博客作者（经跨域钩子 BlogCommentNotifier，根包不回引 blog 域）
+	if comment.BlogID != 0 && BlogCommentNotifier != nil {
+		var b struct {
+			AuthorID uint
+			Title    string
+		}
+		if DB.Table("author_blogs").Select("author_id", "title").Where("id = ?", comment.BlogID).Scan(&b).Error == nil {
+			_ = BlogCommentNotifier(comment.UserID, b.AuthorID, b.Title,
+				"/author/"+strconv.FormatUint(uint64(b.AuthorID), 10)+"/blogs/"+strconv.FormatUint(uint64(comment.BlogID), 10))
 		}
 	}
 	return nil

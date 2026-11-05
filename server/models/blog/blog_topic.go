@@ -1,9 +1,10 @@
-package models
+package blog
 
 import (
 	"time"
 
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -31,7 +32,7 @@ func (BlogTopicLink) TableName() string { return "blog_topic_links" }
 
 // SyncBlogTopics 为博客同步话题（按名创建缺失话题并重建关联；空=清空）
 func SyncBlogTopics(blogID uint, topicNames []string) error {
-	return DB.Transaction(func(tx *gorm.DB) error {
+	return models.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("blog_id = ?", blogID).Delete(&BlogTopicLink{}).Error; err != nil {
 			return err
 		}
@@ -76,7 +77,7 @@ func trimTopicName(s string) string {
 // GetBlogTopics 取单篇博客的话题
 func GetBlogTopics(blogID uint) []BlogTopic {
 	var topics []BlogTopic
-	DB.Joins("JOIN blog_topic_links ON blog_topic_links.topic_id = blog_topics.id").
+	models.DB.Joins("JOIN blog_topic_links ON blog_topic_links.topic_id = blog_topics.id").
 		Where("blog_topic_links.blog_id = ?", blogID).
 		Order("blog_topics.id ASC").Find(&topics)
 	return topics
@@ -92,7 +93,7 @@ func FillBlogTopics(blogs []AuthorBlog) {
 		ids = append(ids, blogs[i].ID)
 	}
 	var links []BlogTopicLink
-	DB.Where("blog_id IN ?", ids).Find(&links)
+	models.DB.Where("blog_id IN ?", ids).Find(&links)
 	if len(links) == 0 {
 		return
 	}
@@ -101,7 +102,7 @@ func FillBlogTopics(blogs []AuthorBlog) {
 		topicIDs = append(topicIDs, l.TopicID)
 	}
 	var topics []BlogTopic
-	DB.Where("id IN ?", topicIDs).Find(&topics)
+	models.DB.Where("id IN ?", topicIDs).Find(&topics)
 	topicOf := map[uint]BlogTopic{}
 	for _, t := range topics {
 		topicOf[t.ID] = t
@@ -133,7 +134,7 @@ func ListBlogTopics(limit int) []TopicWithCount {
 		limit = 50
 	}
 	rows := []TopicWithCount{}
-	DB.Table("blog_topics").
+	models.DB.Table("blog_topics").
 		Select("blog_topics.*, COUNT(blog_topic_links.blog_id) AS blog_count").
 		Joins("JOIN blog_topic_links ON blog_topic_links.topic_id = blog_topics.id").
 		Joins("JOIN author_blogs ON author_blogs.id = blog_topic_links.blog_id").
@@ -147,7 +148,7 @@ func ListBlogTopics(limit int) []TopicWithCount {
 // GetBlogTopicByName 按名取话题
 func GetBlogTopicByName(name string) (*BlogTopic, error) {
 	var t BlogTopic
-	if err := DB.Where("name = ?", name).First(&t).Error; err != nil {
+	if err := models.DB.Where("name = ?", name).First(&t).Error; err != nil {
 		return nil, err
 	}
 	return &t, nil
@@ -156,7 +157,7 @@ func GetBlogTopicByName(name string) (*BlogTopic, error) {
 // GetBlogTopicByID 按 id 取话题
 func GetBlogTopicByID(id uint) (*BlogTopic, error) {
 	var t BlogTopic
-	if err := DB.First(&t, id).Error; err != nil {
+	if err := models.DB.First(&t, id).Error; err != nil {
 		return nil, err
 	}
 	return &t, nil

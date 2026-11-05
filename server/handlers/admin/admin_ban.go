@@ -9,6 +9,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	"nvs-server/models/blog"
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -235,7 +236,7 @@ func AdminRestoreContent(c *gin.Context) {
 		_ = models.DB.Unscoped().Model(&models.Post{}).Where("id = ?", req.ID).
 			Updates(map[string]interface{}{"ban_reason": ""}).Error
 	case "blog":
-		_ = models.DB.Unscoped().Model(&models.AuthorBlog{}).Where("id = ?", req.ID).
+		_ = models.DB.Unscoped().Model(&blog.AuthorBlog{}).Where("id = ?", req.ID).
 			Updates(map[string]interface{}{"deleted_at": nil, "deleted_by": ""}).Error
 	case "forum":
 		_ = models.DB.Unscoped().Model(&models.Forum{}).Where("id = ?", req.ID).

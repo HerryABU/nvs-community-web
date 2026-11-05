@@ -1,9 +1,10 @@
-package models
+package blog
 
 import (
 	"time"
 
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -32,7 +33,7 @@ func (BlogTagLink) TableName() string { return "blog_tag_links" }
 // tags 为空则清空全部关联。
 func SyncBlogTags(blogID uint, tags []string) error {
 	// 重建关联（事务）
-	return DB.Transaction(func(tx *gorm.DB) error {
+	return models.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("blog_id = ?", blogID).Delete(&BlogTagLink{}).Error; err != nil {
 			return err
 		}
@@ -77,7 +78,7 @@ func trimTagName(s string) string {
 // GetBlogTags 取单篇博客的标签
 func GetBlogTags(blogID uint) []BlogTag {
 	var tags []BlogTag
-	DB.Joins("JOIN blog_tag_links ON blog_tag_links.tag_id = blog_tags.id").
+	models.DB.Joins("JOIN blog_tag_links ON blog_tag_links.tag_id = blog_tags.id").
 		Where("blog_tag_links.blog_id = ?", blogID).
 		Order("blog_tags.id ASC").Find(&tags)
 	return tags
@@ -93,7 +94,7 @@ func FillBlogTags(blogs []AuthorBlog) {
 		ids = append(ids, blogs[i].ID)
 	}
 	var links []BlogTagLink
-	DB.Where("blog_id IN ?", ids).Find(&links)
+	models.DB.Where("blog_id IN ?", ids).Find(&links)
 	if len(links) == 0 {
 		return
 	}
@@ -102,7 +103,7 @@ func FillBlogTags(blogs []AuthorBlog) {
 		tagIDs = append(tagIDs, l.TagID)
 	}
 	var tags []BlogTag
-	DB.Where("id IN ?", tagIDs).Find(&tags)
+	models.DB.Where("id IN ?", tagIDs).Find(&tags)
 	tagOf := map[uint]BlogTag{}
 	for _, t := range tags {
 		tagOf[t.ID] = t
@@ -134,7 +135,7 @@ func GetBlogTagCloud(limit int) []struct {
 		Name  string `json:"name"`
 		Count int64  `json:"count"`
 	}{}
-	DB.Table("blog_tags").
+	models.DB.Table("blog_tags").
 		Select("blog_tags.name, COUNT(blog_tag_links.blog_id) AS count").
 		Joins("JOIN blog_tag_links ON blog_tag_links.tag_id = blog_tags.id").
 		Joins("JOIN author_blogs ON author_blogs.id = blog_tag_links.blog_id").
@@ -148,7 +149,7 @@ func GetBlogTagCloud(limit int) []struct {
 // GetBlogIDsByTag 按标签名查博客 id 集合（未删除）
 func GetBlogIDsByTag(tagName string) ([]uint, error) {
 	var ids []uint
-	err := DB.Table("blog_tag_links").
+	err := models.DB.Table("blog_tag_links").
 		Select("blog_tag_links.blog_id").
 		Joins("JOIN blog_tags ON blog_tags.id = blog_tag_links.tag_id").
 		Joins("JOIN author_blogs ON author_blogs.id = blog_tag_links.blog_id").

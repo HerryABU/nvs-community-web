@@ -24,6 +24,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	"nvs-server/models/blog"
 )
 
 func GetComments(c *gin.Context) {
@@ -122,7 +123,7 @@ func CreateComment(c *gin.Context) {
 		}
 	}
 	if req.BlogID > 0 {
-		if blog, berr := models.GetBlogByID(req.BlogID); berr == nil && blog.AuthorID != userID {
+		if blog, berr := blog.GetBlogByID(req.BlogID); berr == nil && blog.AuthorID != userID {
 			if models.IsBlacklisted(blog.AuthorID, userID) {
 				utils.Forbidden(c, "你已被该作者拉黑，无法在其博客下评论")
 				return

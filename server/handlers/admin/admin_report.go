@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
+	"nvs-server/models/blog"
 )
 
 // GetReportReasons GET /api/reports/reasons — 预置举报理由
@@ -132,7 +133,7 @@ func targetPreview(targetType string, targetID uint) string {
 			return truncate(p.Content)
 		}
 	case "blog":
-		if b, err := models.GetBlogByID(targetID); err == nil {
+		if b, err := blog.GetBlogByID(targetID); err == nil {
 			return truncate(b.Title)
 		}
 	case "forum":

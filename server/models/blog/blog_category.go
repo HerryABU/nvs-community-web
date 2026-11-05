@@ -1,6 +1,10 @@
-package models
+package blog
 
-import "time"
+import (
+	"time"
+
+	"nvs-server/models"
+)
 
 // ─────────────────────────────────────────────────────────────
 // 博客分类（支持三级，CSDN 式；按用户归属 + 事后审核）
@@ -49,7 +53,7 @@ type BlogCategoryNode struct {
 // statusFilter 为空 = 全部；否则只取该状态的分类（其父链上允许出现非目标状态但用于挂载）
 func buildCategoryTree(statusFilter string) []BlogCategoryNode {
 	var cats []BlogCategory
-	q := DB.Order("sort_order ASC, id ASC")
+	q := models.DB.Order("sort_order ASC, id ASC")
 	if statusFilter != "" {
 		// 取目标状态分类 + 其所有祖先（祖先用于挂载，即使状态不同）
 		ids := []uint{}
@@ -61,7 +65,7 @@ func buildCategoryTree(statusFilter string) []BlogCategoryNode {
 			for pid != 0 {
 				ids = append(ids, pid)
 				var p BlogCategory
-				if err := DB.First(&p, pid).Error; err != nil {
+				if err := models.DB.First(&p, pid).Error; err != nil {
 					break
 				}
 				pid = p.ParentID
@@ -70,7 +74,7 @@ func buildCategoryTree(statusFilter string) []BlogCategoryNode {
 		if len(ids) == 0 {
 			return []BlogCategoryNode{}
 		}
-		q = DB.Where("id IN ?", ids)
+		q = models.DB.Where("id IN ?", ids)
 	}
 	q.Find(&cats)
 
@@ -94,7 +98,7 @@ func buildCategoryTree(statusFilter string) []BlogCategoryNode {
 	// 统计每个分类直接挂载的博客数
 	for i := range nodes {
 		var cnt int64
-		DB.Model(&AuthorBlog{}).Where("category_id = ?", nodes[i].ID).Count(&cnt)
+		models.DB.Model(&AuthorBlog{}).Where("category_id = ?", nodes[i].ID).Count(&cnt)
 		nodes[i].BlogCount = cnt
 	}
 	// 父子映射（可到三级）
@@ -161,14 +165,14 @@ func GetAllCategoryTree() []BlogCategoryNode {
 // GetMyCategories 作者视图：自己创建的分类（任意状态，平铺）
 func GetMyCategories(userID uint) []BlogCategory {
 	var cats []BlogCategory
-	DB.Where("created_by = ?", userID).Order("sort_order ASC, id ASC").Find(&cats)
+	models.DB.Where("created_by = ?", userID).Order("sort_order ASC, id ASC").Find(&cats)
 	return cats
 }
 
 // GetAuthorCategoryTree 某作者的已公开分类树（个人专栏，仅 approved，含博客数）
 func GetAuthorCategoryTree(authorID uint) []BlogCategoryNode {
 	var cats []BlogCategory
-	DB.Where("created_by = ? AND status = ?", authorID, "approved").
+	models.DB.Where("created_by = ? AND status = ?", authorID, "approved").
 		Order("sort_order ASC, id ASC").Find(&cats)
 	if len(cats) == 0 {
 		return []BlogCategoryNode{}
@@ -183,7 +187,7 @@ func GetAuthorCategoryTree(authorID uint) []BlogCategoryNode {
 		pid := c.ParentID
 		if pid != 0 {
 			var p BlogCategory
-			if err := DB.First(&p, pid).Error; err != nil || p.CreatedBy != authorID || !ids[p.ID] {
+			if err := models.DB.First(&p, pid).Error; err != nil || p.CreatedBy != authorID || !ids[p.ID] {
 				pid = 0
 			}
 		}
@@ -195,7 +199,7 @@ func GetAuthorCategoryTree(authorID uint) []BlogCategoryNode {
 	// 统计博客数 + 父子映射（可到三级）
 	for i := range nodes {
 		var cnt int64
-		DB.Model(&AuthorBlog{}).Where("category_id = ?", nodes[i].ID).Count(&cnt)
+		models.DB.Model(&AuthorBlog{}).Where("category_id = ?", nodes[i].ID).Count(&cnt)
 		nodes[i].BlogCount = cnt
 	}
 	childrenOf := map[uint][]BlogCategoryNode{}
@@ -246,7 +250,7 @@ func GetBlogCategoryName(id uint) string {
 		return ""
 	}
 	var c BlogCategory
-	if err := DB.First(&c, id).Error; err != nil {
+	if err := models.DB.First(&c, id).Error; err != nil {
 		return ""
 	}
 	return blogCategoryFullName(&c)
@@ -258,7 +262,7 @@ func blogCategoryFullName(c *BlogCategory) string {
 	cur := c
 	for depth := 0; depth < 3 && cur.ParentID != 0; depth++ {
 		var p BlogCategory
-		if err := DB.First(&p, cur.ParentID).Error; err != nil {
+		if err := models.DB.First(&p, cur.ParentID).Error; err != nil {
 			break
 		}
 		if p.ID == c.ID {
@@ -280,7 +284,7 @@ func blogCategoryFullName(c *BlogCategory) string {
 // BlogCategoryHasChildren 是否存在子分类
 func BlogCategoryHasChildren(id uint) bool {
 	var cnt int64
-	DB.Model(&BlogCategory{}).Where("parent_id = ?", id).Count(&cnt)
+	models.DB.Model(&BlogCategory{}).Where("parent_id = ?", id).Count(&cnt)
 	return cnt > 0
 }
 
@@ -291,7 +295,7 @@ func GetBlogCategoryDescendants(rootID uint) []uint {
 		return ids
 	}
 	var all []BlogCategory
-	DB.Select("id", "parent_id").Find(&all)
+	models.DB.Select("id", "parent_id").Find(&all)
 	childMap := map[uint][]uint{}
 	for _, c := range all {
 		childMap[c.ParentID] = append(childMap[c.ParentID], c.ID)
@@ -314,7 +318,7 @@ func CategoryLevel(id uint) int {
 		return 0
 	}
 	var c BlogCategory
-	if err := DB.First(&c, id).Error; err != nil {
+	if err := models.DB.First(&c, id).Error; err != nil {
 		return -1
 	}
 	level := 0
@@ -322,7 +326,7 @@ func CategoryLevel(id uint) int {
 	for depth := 0; depth < 3 && cur.ParentID != 0; depth++ {
 		level++
 		var p BlogCategory
-		if err := DB.First(&p, cur.ParentID).Error; err != nil {
+		if err := models.DB.First(&p, cur.ParentID).Error; err != nil {
 			break
 		}
 		if p.ID == c.ID {
@@ -352,23 +356,23 @@ func (BlogLike) TableName() string { return "blog_likes" }
 // ToggleBlogLike 点赞/取消点赞，返回是否已点赞（true=刚点赞）
 func ToggleBlogLike(blogID, userID uint) (bool, error) {
 	var like BlogLike
-	err := DB.Where("blog_id = ? AND user_id = ?", blogID, userID).First(&like).Error
+	err := models.DB.Where("blog_id = ? AND user_id = ?", blogID, userID).First(&like).Error
 	if err == nil {
 		// 已点赞 → 取消
-		if err := DB.Delete(&like).Error; err != nil {
+		if err := models.DB.Delete(&like).Error; err != nil {
 			return false, err
 		}
-		DB.Model(&AuthorBlog{}).Where("id = ?", blogID).
-			UpdateColumn("like_count", DB.Raw("CASE WHEN like_count > 0 THEN like_count - 1 ELSE 0 END"))
+		models.DB.Model(&AuthorBlog{}).Where("id = ?", blogID).
+			UpdateColumn("like_count", models.DB.Raw("CASE WHEN like_count > 0 THEN like_count - 1 ELSE 0 END"))
 		return false, nil
 	}
 	// 未点赞 → 点赞
 	like = BlogLike{BlogID: blogID, UserID: userID}
-	if err := DB.Create(&like).Error; err != nil {
+	if err := models.DB.Create(&like).Error; err != nil {
 		return false, err
 	}
-	DB.Model(&AuthorBlog{}).Where("id = ?", blogID).
-		UpdateColumn("like_count", DB.Raw("like_count + 1"))
+	models.DB.Model(&AuthorBlog{}).Where("id = ?", blogID).
+		UpdateColumn("like_count", models.DB.Raw("like_count + 1"))
 	return true, nil
 }
 
@@ -378,6 +382,6 @@ func UserLikedBlog(blogID, userID uint) bool {
 		return false
 	}
 	var cnt int64
-	DB.Model(&BlogLike{}).Where("blog_id = ? AND user_id = ?", blogID, userID).Count(&cnt)
+	models.DB.Model(&BlogLike{}).Where("blog_id = ? AND user_id = ?", blogID, userID).Count(&cnt)
 	return cnt > 0
 }

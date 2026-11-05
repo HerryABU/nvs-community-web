@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"nvs-server/models"
+	"nvs-server/models/blog"
 	"nvs-server/scriptmode"
 	"nvs-server/utils"
 )
@@ -32,7 +33,7 @@ func ResolveContent(scope string, targetID uint) (string, bool) {
 		}
 		return t.Title + "\n" + t.Content, true
 	case ScopeBlog:
-		b, err := models.GetBlogByID(targetID)
+		b, err := blog.GetBlogByID(targetID)
 		if err != nil || b == nil || b.ContentPath == "" {
 			return "", false
 		}

@@ -16,6 +16,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	"nvs-server/models/blog"
 )
 
 // ==================== UserFrame 模板管理 ====================
@@ -379,7 +380,7 @@ func GetNovelFrames(c *gin.Context) {
 func GetBlogFrames(c *gin.Context) {
 	blogID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	// 先查作者
-	blog, err := models.GetBlogByID(uint(blogID))
+	blog, err := blog.GetBlogByID(uint(blogID))
 	if err != nil {
 		utils.Success(c, []models.UserFrame{})
 		return
@@ -437,7 +438,7 @@ func listContentRefs(query string) ([]ContentRef, error) {
 	}
 
 	// 博客（详情路由为 /author/:authorId/blogs/:blogId，须带 author_id）
-	var blogs []models.AuthorBlog
+	var blogs []blog.AuthorBlog
 	bq := models.DB.Select("id, title, author_id").Limit(perType)
 	if q != "" {
 		bq = bq.Where("title LIKE ?", like)

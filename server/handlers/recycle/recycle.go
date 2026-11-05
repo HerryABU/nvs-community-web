@@ -15,6 +15,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	blogm "nvs-server/models/blog"
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -50,9 +51,9 @@ func ListAuthorRecycle(c *gin.Context) {
 		Offset((page - 1) * pageSize).Limit(pageSize).
 		Find(&novels)
 
-	var blogs []models.AuthorBlog
+	var blogs []blogm.AuthorBlog
 	var blogTotal int64
-	models.DB.Unscoped().Model(&models.AuthorBlog{}).
+	models.DB.Unscoped().Model(&blogm.AuthorBlog{}).
 		Where("author_id = ? AND deleted_at IS NOT NULL AND deleted_by = ?", userID, "user").
 		Count(&blogTotal)
 	models.DB.Unscoped().Preload("Author").
@@ -104,7 +105,7 @@ func RestoreAuthorRecycle(c *gin.Context) {
 		models.DB.Unscoped().Model(&models.Chapter{}).Where("novel_id = ?", req.ID).
 			Updates(map[string]interface{}{"deleted_at": nil, "deleted_by": ""})
 	case "blog":
-		var b models.AuthorBlog
+		var b blogm.AuthorBlog
 		if err := models.DB.Unscoped().First(&b, req.ID).Error; err != nil {
 			utils.NotFound(c, "博客不存在")
 			return
@@ -117,7 +118,7 @@ func RestoreAuthorRecycle(c *gin.Context) {
 			utils.Forbidden(c, "该内容由管理员封禁，无法自行恢复；请联系管理员申诉")
 			return
 		}
-		models.DB.Unscoped().Model(&models.AuthorBlog{}).Where("id = ?", req.ID).
+		models.DB.Unscoped().Model(&blogm.AuthorBlog{}).Where("id = ?", req.ID).
 			Updates(map[string]interface{}{"deleted_at": nil, "deleted_by": "", "ban_reason": ""})
 	case "chapter":
 		var ch models.Chapter
@@ -213,7 +214,7 @@ func AdminListRecycle(c *gin.Context) {
 			AuthorID  uint   `json:"author_id"`
 			DeletedAt string `json:"deleted_at"`
 		}
-		models.DB.Unscoped().Model(&models.AuthorBlog{}).
+		models.DB.Unscoped().Model(&blogm.AuthorBlog{}).
 			Where("deleted_at IS NOT NULL AND deleted_by = ?", "user").
 			Order("deleted_at DESC").Limit(limit).
 			Scan(&rows)

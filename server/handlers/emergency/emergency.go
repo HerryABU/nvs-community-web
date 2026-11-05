@@ -16,6 +16,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	"nvs-server/models/blog"
 )
 
 // ═══ 内容抢救台：隔离的应急窗口 ═══
@@ -445,7 +446,7 @@ func PreviewEmergencyContent(c *gin.Context) {
 		preview["content_plain"] = ToPlainText(p.Content)
 		preview["created_at"] = p.CreatedAt
 	case "blog":
-		b, err := models.GetBlogByID(uint(id))
+		b, err := blog.GetBlogByID(uint(id))
 		if err != nil {
 			utils.NotFound(c, "博客不存在")
 			return
@@ -650,7 +651,7 @@ func DeleteEmergencyContent(c *gin.Context) {
 		}
 		AuditEmergency(c, "delete", ctype, uint(id), "删除回复（作者 "+UserOf(p.UserID)+"）")
 	case "blog":
-		b, err := models.GetBlogByID(uint(id))
+		b, err := blog.GetBlogByID(uint(id))
 		if err != nil {
 			utils.NotFound(c, "博客不存在")
 			return
@@ -659,7 +660,7 @@ func DeleteEmergencyContent(c *gin.Context) {
 			utils.InternalError(c, "留证归档失败")
 			return
 		}
-		models.DB.Delete(&models.AuthorBlog{}, id)
+		models.DB.Delete(&blog.AuthorBlog{}, id)
 		models.DB.Where("blog_id = ?", id).Delete(&models.Comment{})
 		AuditEmergency(c, "delete", ctype, uint(id), "删除博客《"+b.Title+"》（作者 "+UserOf(b.AuthorID)+"）")
 	case "novel":

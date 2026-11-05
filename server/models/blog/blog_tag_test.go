@@ -1,6 +1,9 @@
-package models
+package blog
 
-import "testing"
+import (
+	"nvs-server/models"
+	"testing"
+)
 
 // TestBlogTags 博客标签：同步（去重/去#）/读取/标签云/按标签查 id
 func TestBlogTags(t *testing.T) {
@@ -8,11 +11,11 @@ func TestBlogTags(t *testing.T) {
 
 	// 建两篇博客
 	b1 := &AuthorBlog{AuthorID: 1, Title: "标签博客1"}
-	if err := DB.Create(b1).Error; err != nil {
+	if err := models.DB.Create(b1).Error; err != nil {
 		t.Fatalf("创建博客失败: %v", err)
 	}
 	b2 := &AuthorBlog{AuthorID: 1, Title: "标签博客2"}
-	if err := DB.Create(b2).Error; err != nil {
+	if err := models.DB.Create(b2).Error; err != nil {
 		t.Fatalf("创建博客失败: %v", err)
 	}
 
@@ -72,19 +75,19 @@ func TestAuthorCategoryTree(t *testing.T) {
 
 	// 作者 1：一级 A + 二级 A1 + 三级 A1a（全部 approved）
 	ca := &BlogCategory{Name: "A", ParentID: 0, Status: "approved", CreatedBy: 1}
-	DB.Create(ca)
+	models.DB.Create(ca)
 	ca1 := &BlogCategory{Name: "A1", ParentID: ca.ID, Status: "approved", CreatedBy: 1}
-	DB.Create(ca1)
+	models.DB.Create(ca1)
 	ca1a := &BlogCategory{Name: "A1a", ParentID: ca1.ID, Status: "approved", CreatedBy: 1}
-	DB.Create(ca1a)
+	models.DB.Create(ca1a)
 	// 作者 1 的 pending 分类（不出现在公开专栏）
 	cp := &BlogCategory{Name: "A待审", ParentID: 0, Status: "pending", CreatedBy: 1}
-	DB.Create(cp)
+	models.DB.Create(cp)
 	// 作者 2 的分类 B；作者 1 的分类挂在 B 下（父非本人 → 上提为一级）
 	cb := &BlogCategory{Name: "B", ParentID: 0, Status: "approved", CreatedBy: 2}
-	DB.Create(cb)
+	models.DB.Create(cb)
 	cx := &BlogCategory{Name: "X挂B下", ParentID: cb.ID, Status: "approved", CreatedBy: 1}
-	DB.Create(cx)
+	models.DB.Create(cx)
 
 	tree := GetAuthorCategoryTree(1)
 	if len(tree) != 2 {

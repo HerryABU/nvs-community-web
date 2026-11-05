@@ -40,9 +40,8 @@ type UserFrame struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
-	User  *User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Novel *Novel      `gorm:"foreignKey:NovelID" json:"novel,omitempty"`
-	Blog  *AuthorBlog `gorm:"foreignKey:BlogID" json:"blog,omitempty"`
+	User  *User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Novel *Novel `gorm:"foreignKey:NovelID" json:"novel,omitempty"`
 }
 
 func (UserFrame) TableName() string { return "user_frames" }

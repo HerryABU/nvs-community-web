@@ -1,10 +1,11 @@
-package models
+package blog
 
 import (
 	"testing"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // setupTestDB 创建内存 sqlite 测试库并迁移全部表，替换全局 models.DB。
@@ -15,10 +16,10 @@ func setupTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开内存测试库失败: %v", err)
 	}
-	if err := AutoMigrateAll(db); err != nil {
+	if err := models.AutoMigrateAll(db); err != nil {
 		t.Fatalf("迁移测试库失败: %v", err)
 	}
-	DB = db
+	models.DB = db
 	t.Cleanup(func() {
 		if sqlDB, e := db.DB(); e == nil {
 			_ = sqlDB.Close()
@@ -46,10 +47,10 @@ func TestToggleBlogLike(t *testing.T) {
 		t.Fatalf("首次点赞应返回 liked=true: %v", err)
 	}
 	var cnt int64
-	DB.Model(&AuthorBlog{}).Where("id = ?", b.ID).Pluck("like_count", &cnt)
+	models.DB.Model(&AuthorBlog{}).Where("id = ?", b.ID).Pluck("like_count", &cnt)
 	// 重新查询避免缓存
 	var fresh AuthorBlog
-	DB.First(&fresh, b.ID)
+	models.DB.First(&fresh, b.ID)
 	if fresh.LikeCount != 1 {
 		t.Errorf("点赞后 like_count 应为 1，实际 %d", fresh.LikeCount)
 	}
@@ -62,7 +63,7 @@ func TestToggleBlogLike(t *testing.T) {
 	if err != nil || liked {
 		t.Fatalf("第二次点赞应取消（liked=false）: %v", err)
 	}
-	DB.First(&fresh, b.ID)
+	models.DB.First(&fresh, b.ID)
 	if fresh.LikeCount != 0 {
 		t.Errorf("取消后 like_count 应为 0，实际 %d", fresh.LikeCount)
 	}
@@ -73,7 +74,7 @@ func TestToggleBlogLike(t *testing.T) {
 	// 不同用户各点一次 → 2
 	ToggleBlogLike(b.ID, 101)
 	ToggleBlogLike(b.ID, 102)
-	DB.First(&fresh, b.ID)
+	models.DB.First(&fresh, b.ID)
 	if fresh.LikeCount != 2 {
 		t.Errorf("3 个不同用户点赞后 like_count 应为 2，实际 %d", fresh.LikeCount)
 	}
@@ -83,9 +84,9 @@ func TestToggleBlogLike(t *testing.T) {
 func TestGetBlogCategoryName(t *testing.T) {
 	setupTestDB(t)
 	p := &BlogCategory{Name: "技术", ParentID: 0, Status: "approved"}
-	DB.Create(p)
+	models.DB.Create(p)
 	s := &BlogCategory{Name: "Go 开发", ParentID: p.ID, Status: "approved"}
-	DB.Create(s)
+	models.DB.Create(s)
 
 	if got := GetBlogCategoryName(p.ID); got != "技术" {
 		t.Errorf("一级分类名 = %q，期望 技术", got)
@@ -105,13 +106,13 @@ func TestGetBlogCategoryName(t *testing.T) {
 func TestGetBlogCategoryTree(t *testing.T) {
 	setupTestDB(t)
 	p := &BlogCategory{Name: "技术", Status: "approved"}
-	DB.Create(p)
+	models.DB.Create(p)
 	s1 := &BlogCategory{Name: "Go", ParentID: p.ID, Status: "approved"}
-	DB.Create(s1)
+	models.DB.Create(s1)
 	s2 := &BlogCategory{Name: "Python", ParentID: p.ID, Status: "approved"}
-	DB.Create(s2)
+	models.DB.Create(s2)
 	orphan := &BlogCategory{Name: "随笔", Status: "approved"}
-	DB.Create(orphan)
+	models.DB.Create(orphan)
 
 	seedTestBlog(t, 1, p.ID, "博客A")  // 一级分类直接挂博客
 	seedTestBlog(t, 1, s1.ID, "博客B") // 二级分类挂博客
@@ -158,10 +159,10 @@ func TestAuthorBlogDeletedBy(t *testing.T) {
 		t.Fatalf("删除博客失败: %v", err)
 	}
 	// 模拟 handler 写入 deleted_by
-	DB.Unscoped().Model(&AuthorBlog{}).Where("id = ?", b.ID).Update("deleted_by", "user")
+	models.DB.Unscoped().Model(&AuthorBlog{}).Where("id = ?", b.ID).Update("deleted_by", "user")
 
 	var inTrash AuthorBlog
-	if err := DB.Unscoped().First(&inTrash, b.ID).Error; err != nil {
+	if err := models.DB.Unscoped().First(&inTrash, b.ID).Error; err != nil {
 		t.Fatalf("软删除记录应保留: %v", err)
 	}
 	if inTrash.DeletedBy != "user" {
@@ -173,7 +174,7 @@ func TestAuthorBlogDeletedBy(t *testing.T) {
 
 	// 正常查询（非 Unscoped）应查不到
 	var cnt int64
-	DB.Model(&AuthorBlog{}).Where("id = ?", b.ID).Count(&cnt)
+	models.DB.Model(&AuthorBlog{}).Where("id = ?", b.ID).Count(&cnt)
 	if cnt != 0 {
 		t.Errorf("软删除博客不应出现在普通查询中，count=%d", cnt)
 	}

@@ -112,10 +112,20 @@ func GetSpecialFeed(userID uint, page, pageSize int) ([]FeedItem, int64, error) 
 	window := page * pageSize
 
 	// 总数 = 三类计数之和（精确值，分页依赖它）
-	var novelTotal, blogTotal, threadTotal int64
+	var novelTotal, threadTotal int64
 	DB.Model(&Novel{}).Where("author_id IN ? AND status = ?", ids, "published").Count(&novelTotal)
-	DB.Model(&AuthorBlog{}).Where("author_id IN ?", ids).Count(&blogTotal)
 	DB.Model(&Thread{}).Where("user_id IN ?", ids).Count(&threadTotal)
+	// 博客部分经跨域钩子 BlogFeedProvider 获取（根包不回引 blog 域）
+	var blogTotal int64
+	var blogItems []FeedItem
+	if BlogFeedProvider != nil {
+		if bi, bt, berr := BlogFeedProvider(ids, window); berr != nil {
+			return nil, 0, berr
+		} else {
+			blogItems = bi
+			blogTotal = bt
+		}
+	}
 	total := novelTotal + blogTotal + threadTotal
 
 	items := make([]FeedItem, 0, window)
@@ -138,23 +148,8 @@ func GetSpecialFeed(userID uint, page, pageSize int) ([]FeedItem, int64, error) 
 		})
 	}
 
-	// 博客
-	var blogs []AuthorBlog
-	if err := DB.Where("author_id IN ?", ids).
-		Order("created_at DESC").Limit(window).Find(&blogs).Error; err != nil {
-		return nil, 0, err
-	}
-	for _, b := range blogs {
-		items = append(items, FeedItem{
-			Type:      "blog",
-			ID:        b.ID,
-			Title:     b.Title,
-			Summary:   clampSummary(b.Summary),
-			UserID:    b.AuthorID,
-			CreatedAt: b.CreatedAt,
-			URL:       feedURL("blog", b.AuthorID, b.ID),
-		})
-	}
+	// 博客（来自跨域钩子，已在 blog 域按同种窗口/排序规则产出）
+	items = append(items, blogItems...)
 
 	// 论坛帖子
 	var threads []Thread

@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"nvs-server/models/blog"
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -219,7 +220,7 @@ func TestGetSpecialFeed(t *testing.T) {
 	// 特别关注用户的小说（最早）
 	models.DB.Create(&models.Novel{AuthorID: 2, Title: "特别关注的小说", Summary: "小说摘要", Status: "published", CreatedAt: base})
 	// 特别关注用户的博客（中间）
-	models.DB.Create(&models.AuthorBlog{AuthorID: 2, Title: "特别关注的博客", Summary: "博客摘要", CreatedAt: base.Add(time.Hour)})
+	models.DB.Create(&blog.AuthorBlog{AuthorID: 2, Title: "特别关注的博客", Summary: "博客摘要", CreatedAt: base.Add(time.Hour)})
 	// 特别关注用户的帖子（最新）
 	models.DB.Create(&models.Thread{ForumID: 1, UserID: 2, Title: "特别关注的帖子", Content: "帖子内容", CreatedAt: base.Add(2 * time.Hour)})
 	// 未关注用户的内容（应被排除）

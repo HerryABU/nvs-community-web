@@ -10,6 +10,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	"nvs-server/models/blog"
 )
 
 // isOwnerOfWork 判断当前登录用户是否为某作品/博客的作者（楼主）。
@@ -19,7 +20,7 @@ func isOwnerOfWork(c *gin.Context, targetType string, targetID uint) bool {
 		return false
 	}
 	if targetType == "blog" {
-		if b, err := models.GetBlogByID(targetID); err == nil {
+		if b, err := blog.GetBlogByID(targetID); err == nil {
 			return b.AuthorID == uid
 		}
 		return false

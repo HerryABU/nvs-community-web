@@ -1,6 +1,7 @@
-package models
+package blog
 
 import (
+	"nvs-server/models"
 	"time"
 
 	"gorm.io/gorm"
@@ -25,21 +26,21 @@ type AuthorBlog struct {
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
-	Author *User       `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
-	Tags   []BlogTag   `gorm:"-" json:"tags,omitempty"`   // 博客标签（多对多，通过 blog_tag_links 关联）
-	Topics []BlogTopic `gorm:"-" json:"topics,omitempty"` // 博客话题（多对多，通过 blog_topic_links 关联）
+	Author *models.User `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
+	Tags   []BlogTag    `gorm:"-" json:"tags,omitempty"`   // 博客标签（多对多，通过 blog_tag_links 关联）
+	Topics []BlogTopic  `gorm:"-" json:"topics,omitempty"` // 博客话题（多对多，通过 blog_topic_links 关联）
 }
 
 func (AuthorBlog) TableName() string { return "author_blogs" }
 
 func CreateBlog(blog *AuthorBlog) error {
-	err := DB.Create(blog).Error
+	err := models.DB.Create(blog).Error
 	return err
 }
 
 func GetBlogByID(id uint) (*AuthorBlog, error) {
 	var blog AuthorBlog
-	err := DB.Preload("Author").First(&blog, id).Error
+	err := models.DB.Preload("Author").First(&blog, id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +64,7 @@ func GetBlogsByAuthorFilter(authorID uint, categoryID *uint, excludeCategoryID u
 	var blogs []AuthorBlog
 	var total int64
 
-	query := DB.Model(&AuthorBlog{}).Where("author_id = ?", authorID)
+	query := models.DB.Model(&AuthorBlog{}).Where("author_id = ?", authorID)
 	if categoryID != nil {
 		query = query.Where("category_id = ?", *categoryID)
 	}
@@ -83,7 +84,7 @@ func ListBlogsByIDs(ids []uint, categoryID uint, page, pageSize int) ([]AuthorBl
 	var blogs []AuthorBlog
 	var total int64
 
-	query := DB.Model(&AuthorBlog{}).Where("id IN ?", ids)
+	query := models.DB.Model(&AuthorBlog{}).Where("id IN ?", ids)
 	if categoryID > 0 {
 		query = query.Where("category_id = ?", categoryID)
 	}
@@ -101,11 +102,11 @@ func ListBlogsByIDs(ids []uint, categoryID uint, page, pageSize int) ([]AuthorBl
 }
 
 func UpdateBlog(blog *AuthorBlog) error {
-	return DB.Save(blog).Error
+	return models.DB.Save(blog).Error
 }
 
 func DeleteBlog(id uint) error {
-	return DB.Delete(&AuthorBlog{}, id).Error
+	return models.DB.Delete(&AuthorBlog{}, id).Error
 }
 
 // ListAllBlogs 博客列表（categoryID>0 时按分类过滤；一级分类自动包含其下全部子孙分类）
@@ -113,16 +114,16 @@ func ListAllBlogs(categoryID uint, page, pageSize int) ([]AuthorBlog, int64, err
 	var blogs []AuthorBlog
 	var total int64
 
-	query := DB.Model(&AuthorBlog{})
+	query := models.DB.Model(&AuthorBlog{})
 	if categoryID > 0 {
 		// 收集该分类全部子孙（最多三级），过滤其下所有博客
 		ids := []uint{categoryID}
 		var kids1 []uint
-		DB.Model(&BlogCategory{}).Where("parent_id = ?", categoryID).Pluck("id", &kids1)
+		models.DB.Model(&BlogCategory{}).Where("parent_id = ?", categoryID).Pluck("id", &kids1)
 		ids = append(ids, kids1...)
 		if len(kids1) > 0 {
 			var kids2 []uint
-			DB.Model(&BlogCategory{}).Where("parent_id IN ?", kids1).Pluck("id", &kids2)
+			models.DB.Model(&BlogCategory{}).Where("parent_id IN ?", kids1).Pluck("id", &kids2)
 			ids = append(ids, kids2...)
 		}
 		query = query.Where("category_id IN ?", ids)
@@ -142,5 +143,5 @@ func ListAllBlogs(categoryID uint, page, pageSize int) ([]AuthorBlog, int64, err
 }
 
 func IncrementBlogView(id uint) {
-	DB.Model(&AuthorBlog{}).Where("id = ?", id).UpdateColumn("view_count", DB.Raw("view_count + 1"))
+	models.DB.Model(&AuthorBlog{}).Where("id = ?", id).UpdateColumn("view_count", models.DB.Raw("view_count + 1"))
 }

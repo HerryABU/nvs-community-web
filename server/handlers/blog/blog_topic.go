@@ -9,6 +9,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	blogm "nvs-server/models/blog"
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -21,7 +22,7 @@ import (
 
 // GET /api/topics — 全站话题列表
 func ListTopics(c *gin.Context) {
-	utils.Success(c, models.ListBlogTopics(60))
+	utils.Success(c, blogm.ListBlogTopics(60))
 }
 
 // POST /api/topics — 创建话题 { name, description? }（登录；同名返回已存在）
@@ -43,11 +44,11 @@ func CreateTopic(c *gin.Context) {
 		utils.BadRequest(c, "请填写话题名称")
 		return
 	}
-	if existing, err := models.GetBlogTopicByName(name); err == nil && existing != nil {
+	if existing, err := blogm.GetBlogTopicByName(name); err == nil && existing != nil {
 		utils.Success(c, existing)
 		return
 	}
-	tp := &models.BlogTopic{
+	tp := &blogm.BlogTopic{
 		Name:        name,
 		Description: strings.TrimSpace(req.Description),
 		CreatedBy:   hctx.CurrentUserID(c),
@@ -62,14 +63,14 @@ func CreateTopic(c *gin.Context) {
 // GET /api/topics/:id — 话题详情
 func GetTopic(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	tp, err := models.GetBlogTopicByID(uint(id))
+	tp, err := blogm.GetBlogTopicByID(uint(id))
 	if err != nil {
 		utils.NotFound(c, "话题不存在")
 		return
 	}
 	// 文章数
 	var cnt int64
-	models.DB.Model(&models.AuthorBlog{}).
+	models.DB.Model(&blogm.AuthorBlog{}).
 		Joins("JOIN blog_topic_links ON blog_topic_links.blog_id = author_blogs.id").
 		Where("blog_topic_links.topic_id = ? AND author_blogs.deleted_at IS NULL", tp.ID).
 		Count(&cnt)
@@ -87,9 +88,9 @@ func ListTopicBlogs(c *gin.Context) {
 	if pageSize <= 0 || pageSize > 50 {
 		pageSize = 12
 	}
-	var blogs []models.AuthorBlog
+	var blogs []blogm.AuthorBlog
 	var total int64
-	query := models.DB.Model(&models.AuthorBlog{}).
+	query := models.DB.Model(&blogm.AuthorBlog{}).
 		Joins("JOIN blog_topic_links ON blog_topic_links.blog_id = author_blogs.id").
 		Where("blog_topic_links.topic_id = ?", id)
 	query.Count(&total)
@@ -102,8 +103,8 @@ func ListTopicBlogs(c *gin.Context) {
 		return
 	}
 	FillBlogCategories(blogs)
-	models.FillBlogTags(blogs)
-	models.FillBlogTopics(blogs)
+	blogm.FillBlogTags(blogs)
+	blogm.FillBlogTopics(blogs)
 	for i := range blogs {
 		if blogs[i].Author != nil {
 			blogs[i].Author.Email = ""

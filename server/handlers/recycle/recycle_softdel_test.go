@@ -12,6 +12,7 @@ import (
 	"nvs-server/models"
 
 	"github.com/gin-gonic/gin"
+	blogm "nvs-server/models/blog"
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -375,17 +376,17 @@ func TestBatchSetCategoryAndFilter(t *testing.T) {
 	testutil.SeedTestUser(t, 3, "other3", "author")
 
 	// 作者2 的分类（approved）
-	cat := &models.BlogCategory{Name: "Go", Status: "approved", CreatedBy: 2}
+	cat := &blogm.BlogCategory{Name: "Go", Status: "approved", CreatedBy: 2}
 	models.DB.Create(cat)
 	// 作者2 三篇博客：两篇未分类，一篇挂分类
-	b1 := &models.AuthorBlog{AuthorID: 2, Title: "B1"}
-	b2 := &models.AuthorBlog{AuthorID: 2, Title: "B2"}
-	b3 := &models.AuthorBlog{AuthorID: 2, Title: "B3", CategoryID: cat.ID}
+	b1 := &blogm.AuthorBlog{AuthorID: 2, Title: "B1"}
+	b2 := &blogm.AuthorBlog{AuthorID: 2, Title: "B2"}
+	b3 := &blogm.AuthorBlog{AuthorID: 2, Title: "B3", CategoryID: cat.ID}
 	models.DB.Create(b1)
 	models.DB.Create(b2)
 	models.DB.Create(b3)
 	// 作者3 的一篇博客（他人）
-	bo := &models.AuthorBlog{AuthorID: 3, Title: "他人博客"}
+	bo := &blogm.AuthorBlog{AuthorID: 3, Title: "他人博客"}
 	models.DB.Create(bo)
 
 	// 1) 批量把 b1/b2 归入分类 cat
@@ -398,7 +399,7 @@ func TestBatchSetCategoryAndFilter(t *testing.T) {
 	}
 	// 校验
 	var cnt int64
-	models.DB.Model(&models.AuthorBlog{}).Where("id IN ? AND category_id = ?", []uint{b1.ID, b2.ID}, cat.ID).Count(&cnt)
+	models.DB.Model(&blogm.AuthorBlog{}).Where("id IN ? AND category_id = ?", []uint{b1.ID, b2.ID}, cat.ID).Count(&cnt)
 	if cnt != 2 {
 		t.Errorf("b1/b2 应已归入分类，实际 %d", cnt)
 	}
@@ -417,7 +418,7 @@ func TestBatchSetCategoryAndFilter(t *testing.T) {
 	blog.BatchSetBlogCategory(c)
 	testutil.MustJSON(t, w)
 	var c3 int64
-	models.DB.Model(&models.AuthorBlog{}).Where("id = ? AND category_id = 0", b3.ID).Count(&c3)
+	models.DB.Model(&blogm.AuthorBlog{}).Where("id = ? AND category_id = 0", b3.ID).Count(&c3)
 	if c3 != 1 {
 		t.Errorf("b3 应移出到未分类")
 	}
@@ -551,8 +552,8 @@ func TestBlogCategoryFilterAndLike(t *testing.T) {
 	testutil.SeedTestUser(t, 1, "author1", "author")
 
 	// 建分类：技术(1) / Go(2)
-	models.DB.Create(&models.BlogCategory{Name: "技术", Status: "approved"})
-	models.DB.Create(&models.BlogCategory{Name: "Go", ParentID: 1, Status: "approved"})
+	models.DB.Create(&blogm.BlogCategory{Name: "技术", Status: "approved"})
+	models.DB.Create(&blogm.BlogCategory{Name: "Go", ParentID: 1, Status: "approved"})
 
 	// 作者创建博客挂二级分类
 	c, w := testutil.AsUser("author", 1)
