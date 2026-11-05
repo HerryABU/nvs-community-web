@@ -4,11 +4,11 @@ import (
 	"strconv"
 
 	"nvs-server/handlers/hctx"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	apikey "nvs-server/models/apikey"
+	social "nvs-server/models/social"
 )
 
 // ============ 关注作者 ============
@@ -23,12 +23,12 @@ func FollowAuthor(c *gin.Context) {
 		return
 	}
 
-	if models.IsFollowing(userID, uint(authorID)) {
+	if social.IsFollowing(userID, uint(authorID)) {
 		utils.BadRequest(c, "已关注该作者")
 		return
 	}
 
-	if err := models.CreateFollow(userID, uint(authorID)); err != nil {
+	if err := social.CreateFollow(userID, uint(authorID)); err != nil {
 		utils.InternalError(c, "关注失败")
 		return
 	}
@@ -40,7 +40,7 @@ func UnfollowAuthor(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	authorID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
-	if err := models.DeleteFollow(userID, uint(authorID)); err != nil {
+	if err := social.DeleteFollow(userID, uint(authorID)); err != nil {
 		utils.InternalError(c, "取消失败")
 		return
 	}
@@ -52,7 +52,7 @@ func ListFollowing(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 
-	users, total, err := models.GetFollowingList(userID, page, 20)
+	users, total, err := social.GetFollowingList(userID, page, 20)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -68,7 +68,7 @@ func ListFollowers(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 
-	users, total, err := models.GetFollowerList(userID, page, 20)
+	users, total, err := social.GetFollowerList(userID, page, 20)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -83,15 +83,15 @@ func ListFollowers(c *gin.Context) {
 func CheckFollow(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	authorID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	isFollow := models.IsFollowing(userID, uint(authorID))
+	isFollow := social.IsFollowing(userID, uint(authorID))
 	utils.Success(c, gin.H{"is_following": isFollow})
 }
 
 // GET /api/follow/stats — 关注统计（当前登录用户自己的）
 func GetFollowStats(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
-	following := models.GetFollowingCount(userID)
-	followers := models.GetFollowersCount(userID)
+	following := social.GetFollowingCount(userID)
+	followers := social.GetFollowersCount(userID)
 	utils.Success(c, gin.H{"following": following, "followers": followers})
 }
 
@@ -107,7 +107,7 @@ func GetAuthorFollowStats(c *gin.Context) {
 	}
 	utils.Success(c, gin.H{
 		"author_id": u.ID,
-		"following": models.GetFollowingCount(u.ID),
-		"followers": models.GetFollowersCount(u.ID),
+		"following": social.GetFollowingCount(u.ID),
+		"followers": social.GetFollowersCount(u.ID),
 	})
 }

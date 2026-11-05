@@ -10,6 +10,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	social "nvs-server/models/social"
 )
 
 // ==================== 多人协作：接口层 ====================
@@ -18,7 +19,7 @@ import (
 
 func isPlatform(c *gin.Context) bool {
 	r := middleware.UserRole(c)
-	return r == models.RoleAdmin || r == models.RolePolice
+	return r == social.RoleAdmin || r == social.RolePolice
 }
 
 // List GET /api/novels/:id/collaborators —— 协作成员 + 我的权限
@@ -266,7 +267,7 @@ func Transfer(c *gin.Context) {
 		return
 	}
 	role := middleware.UserRole(c)
-	isPlatform := role == models.RoleAdmin || role == models.RolePolice
+	isPlatform := role == social.RoleAdmin || role == social.RolePolice
 	if err := collab.Transfer(uint(novelID), uid, in.ToUserID, isPlatform); err != nil {
 		utils.BadRequest(c, err.Error())
 		return

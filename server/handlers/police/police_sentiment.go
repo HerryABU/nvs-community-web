@@ -5,12 +5,12 @@ import (
 	"time"
 
 	"nvs-server/handlers/hctx"
-	"nvs-server/models"
 	"nvs-server/sentiment/guard"
 	"nvs-server/sentiment/store"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	social "nvs-server/models/social"
 )
 
 // 警方台的舆情面板接口。
@@ -24,7 +24,7 @@ import (
 
 // ensurePolice 警方或管理员。
 func ensurePoliceGate(c *gin.Context) bool {
-	if models.IsAdminOrPolice(hctx.CurrentUserRole(c)) {
+	if social.IsAdminOrPolice(hctx.CurrentUserRole(c)) {
 		return true
 	}
 	utils.Forbidden(c, "需要警方或管理员权限")

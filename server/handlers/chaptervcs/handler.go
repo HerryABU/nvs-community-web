@@ -13,6 +13,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	social "nvs-server/models/social"
 )
 
 // loadChapter 载入作品/章节并校验「可编辑本章」（复用协作权限矩阵）
@@ -40,7 +41,7 @@ func loadChapter(c *gin.Context) (*models.Novel, *models.Chapter, bool) {
 // canDeleteHistory 删历史：主笔、本章作者、平台（避免协作者互删对方稿件）
 func canDeleteHistory(c *gin.Context, novel *models.Novel, chapter *models.Chapter) bool {
 	role := middleware.UserRole(c)
-	if role == models.RoleAdmin || role == models.RolePolice {
+	if role == social.RoleAdmin || role == social.RolePolice {
 		return true
 	}
 	uid := middleware.UserID(c)

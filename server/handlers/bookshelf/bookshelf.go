@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	social "nvs-server/models/social"
 )
 
 // AddToShelf POST /api/bookshelf
@@ -21,7 +22,7 @@ func AddToShelf(c *gin.Context) {
 		return
 	}
 
-	if err := models.AddToShelf(userID, req.NovelID); err != nil {
+	if err := social.AddToShelf(userID, req.NovelID); err != nil {
 		utils.InternalError(c, "添加书架失败")
 		return
 	}
@@ -38,7 +39,7 @@ func RemoveFromShelf(c *gin.Context) {
 		return
 	}
 
-	if err := models.RemoveFromShelf(userID, uint(novelID)); err != nil {
+	if err := social.RemoveFromShelf(userID, uint(novelID)); err != nil {
 		utils.InternalError(c, "移出书架失败")
 		return
 	}
@@ -55,7 +56,7 @@ func CheckShelf(c *gin.Context) {
 		return
 	}
 
-	onShelf := models.IsOnShelf(userID, uint(novelID))
+	onShelf := social.IsOnShelf(userID, uint(novelID))
 	utils.Success(c, gin.H{"on_shelf": onShelf})
 }
 
@@ -72,7 +73,7 @@ func ListShelf(c *gin.Context) {
 		pageSize = 50
 	}
 
-	items, total, err := models.GetShelfList(userID, page, pageSize)
+	items, total, err := social.GetShelfList(userID, page, pageSize)
 	if err != nil {
 		utils.InternalError(c, "获取书架列表失败")
 		return
@@ -120,7 +121,7 @@ func UpdateShelfProgress(c *gin.Context) {
 		return
 	}
 
-	if err := models.UpdateShelfProgress(userID, req.NovelID, req.LastReadChapter); err != nil {
+	if err := social.UpdateShelfProgress(userID, req.NovelID, req.LastReadChapter); err != nil {
 		// 书架中不存在也静默成功——用户可能没加书架但读了
 	}
 

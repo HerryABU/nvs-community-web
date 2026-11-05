@@ -10,6 +10,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	social "nvs-server/models/social"
 )
 
 func setupOCDB(t *testing.T) *gorm.DB {
@@ -42,7 +43,7 @@ func setupOCDB(t *testing.T) *gorm.DB {
 
 func mkOCUser(t *testing.T, name string) *models.User {
 	t.Helper()
-	u := &models.User{Username: name, Email: name + "@example.com", PasswordHash: "x", Role: models.RoleReader}
+	u := &models.User{Username: name, Email: name + "@example.com", PasswordHash: "x", Role: social.RoleReader}
 	if err := models.DB.Create(u).Error; err != nil {
 		t.Fatalf("建用户失败: %v", err)
 	}

@@ -9,6 +9,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	social "nvs-server/models/social"
 )
 
 // ============ 特别关注（F14） ============
@@ -44,7 +45,7 @@ func ToggleSpecialFollow(c *gin.Context) {
 		return
 	}
 
-	if err := models.SetSpecialFollow(userID, uint(targetID), req.Special); err != nil {
+	if err := social.SetSpecialFollow(userID, uint(targetID), req.Special); err != nil {
 		utils.InternalError(c, "操作失败")
 		return
 	}
@@ -65,7 +66,7 @@ func ListMySpecialFollows(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
 
-	users, total, err := models.ListSpecialFollowing(userID, page, pageSize)
+	users, total, err := social.ListSpecialFollowing(userID, page, pageSize)
 	if err != nil {
 		utils.InternalError(c, "查询失败")
 		return
@@ -84,7 +85,7 @@ func GetSpecialFeed(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
 
-	items, total, err := models.GetSpecialFeed(userID, page, pageSize)
+	items, total, err := social.GetSpecialFeed(userID, page, pageSize)
 	if err != nil {
 		utils.InternalError(c, "获取动态失败")
 		return

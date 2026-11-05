@@ -2,6 +2,7 @@ package collab
 
 import (
 	"nvs-server/models"
+	social "nvs-server/models/social"
 )
 
 // ==================== 协作权限矩阵（与 docs/novel-collaboration.md §2 对应） ====================
@@ -38,7 +39,7 @@ type Actor struct {
 // ActorOf 解析协作身份。platformRole 传 middleware.UserRole(c)（admin/police）。
 func ActorOf(novelID, userID uint, platformRole string) Actor {
 	a := Actor{NovelID: novelID, UserID: userID}
-	a.IsPlatform = platformRole == models.RoleAdmin || platformRole == models.RolePolice
+	a.IsPlatform = platformRole == social.RoleAdmin || platformRole == social.RolePolice
 	if novel, err := models.GetNovelByID(novelID); err == nil && novel != nil {
 		a.IsOwner = userID != 0 && novel.AuthorID == userID
 	}

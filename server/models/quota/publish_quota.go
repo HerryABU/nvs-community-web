@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"nvs-server/models"
+	social "nvs-server/models/social"
 	"time"
 )
 
@@ -52,12 +53,12 @@ func DefaultDailyPublishConfig() DailyPublishConfig {
 	return DailyPublishConfig{
 		Enabled: false,
 		Roles: map[string]DailyPublishRoleLimit{
-			models.RoleReader:     {Count: 5, WordCap: 0},
-			models.RoleAuthor:     {Count: 20, WordCap: 0},
-			models.RoleVipAuthor:  {Count: 50, WordCap: 0},
-			models.RoleArbitrator: {Count: 20, WordCap: 0},
-			models.RolePolice:     {Count: 100, WordCap: 0},
-			models.RoleAdmin:      {Count: -1, WordCap: 0}, // 管理员不限
+			social.RoleReader:     {Count: 5, WordCap: 0},
+			social.RoleAuthor:     {Count: 20, WordCap: 0},
+			social.RoleVipAuthor:  {Count: 50, WordCap: 0},
+			social.RoleArbitrator: {Count: 20, WordCap: 0},
+			social.RolePolice:     {Count: 100, WordCap: 0},
+			social.RoleAdmin:      {Count: -1, WordCap: 0}, // 管理员不限
 		},
 	}
 }
@@ -209,7 +210,7 @@ func EffectivePublishLimit(userID uint, role string) (countLimit, wordLimit int)
 	cfg := GetDailyPublishConfig()
 	lim, ok := cfg.Roles[role]
 	if !ok {
-		lim = cfg.Roles[models.RoleReader] // 未知角色按最保守的 reader 处理
+		lim = cfg.Roles[social.RoleReader] // 未知角色按最保守的 reader 处理
 	}
 	countLimit, wordLimit = lim.Count, lim.WordCap
 	if o := GetUserPublishQuotaOverride(userID); o != nil {

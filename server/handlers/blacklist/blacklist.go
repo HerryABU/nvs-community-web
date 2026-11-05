@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	apikey "nvs-server/models/apikey"
 	"nvs-server/models/security"
+	social "nvs-server/models/social"
 )
 
 // ============ 用户黑名单（F13） ============
@@ -53,7 +54,7 @@ func AddBlacklist(c *gin.Context) {
 		return
 	}
 	// 站长/警方/管理员不可被拉黑：保障平台治理与取证通道畅通
-	if models.IsAdminOrPolice(target.Role) {
+	if social.IsAdminOrPolice(target.Role) {
 		utils.Forbidden(c, "无法拉黑站长/警方/管理员")
 		return
 	}

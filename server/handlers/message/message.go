@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	securitym "nvs-server/models/security"
+	social "nvs-server/models/social"
 )
 
 // maxMessageContent 私信内容最大字符数（与前端 maxlength 一致；
@@ -82,24 +83,24 @@ func SendMessage(c *gin.Context) {
 	}
 
 	// 第 3 条消息起（已有 >=2 条），若对方要求互相关注，则校验双向关注
-	count, err := models.CountBetween(userID, req.ReceiverID)
+	count, err := social.CountBetween(userID, req.ReceiverID)
 	if err != nil {
 		utils.InternalError(c, "发送失败")
 		return
 	}
 	if count >= 2 && receiver.RequireFollowToMessage {
-		if !models.IsFollowing(userID, req.ReceiverID) || !models.IsFollowing(req.ReceiverID, userID) {
+		if !social.IsFollowing(userID, req.ReceiverID) || !social.IsFollowing(req.ReceiverID, userID) {
 			utils.Forbidden(c, "对方设置了互相关注才能继续发送")
 			return
 		}
 	}
 
-	msg := &models.Message{
+	msg := &social.Message{
 		SenderID:   userID,
 		ReceiverID: req.ReceiverID,
 		Content:    content,
 	}
-	if err := models.CreateMessage(msg); err != nil {
+	if err := social.CreateMessage(msg); err != nil {
 		utils.InternalError(c, "发送失败")
 		return
 	}
@@ -136,7 +137,7 @@ func RecallMessage(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	msg, err := models.GetMessageByID(req.ID)
+	msg, err := social.GetMessageByID(req.ID)
 	if err != nil {
 		utils.NotFound(c, "消息不存在")
 		return
@@ -153,7 +154,7 @@ func RecallMessage(c *gin.Context) {
 		utils.BadRequest(c, "超过 2 分钟的消息无法撤回")
 		return
 	}
-	if _, err := models.RecallMessage(msg.ID, userID); err != nil {
+	if _, err := social.RecallMessage(msg.ID, userID); err != nil {
 		utils.InternalError(c, "撤回失败")
 		return
 	}
@@ -176,7 +177,7 @@ func DeleteConversation(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if err := models.DeleteConversationBetween(userID, req.PeerID); err != nil {
+	if err := social.DeleteConversationBetween(userID, req.PeerID); err != nil {
 		utils.InternalError(c, "删除会话失败")
 		return
 	}
@@ -191,7 +192,7 @@ func ListConversations(c *gin.Context) {
 		utils.Unauthorized(c, "未登录")
 		return
 	}
-	convs, err := models.ListConversations(userID)
+	convs, err := social.ListConversations(userID)
 	if err != nil {
 		utils.InternalError(c, "获取会话列表失败")
 		return
@@ -221,7 +222,7 @@ func ListMessages(c *gin.Context) {
 		pageSize = 30
 	}
 
-	list, total, err := models.ListMessagesBetween(userID, uint(peerID), page, pageSize)
+	list, total, err := social.ListMessagesBetween(userID, uint(peerID), page, pageSize)
 	if err != nil {
 		utils.InternalError(c, "获取聊天记录失败")
 		return
@@ -249,7 +250,7 @@ func MarkMessageRead(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if _, err := models.MarkReadBetween(userID, req.PeerID); err != nil {
+	if _, err := social.MarkReadBetween(userID, req.PeerID); err != nil {
 		utils.InternalError(c, "操作失败")
 		return
 	}
@@ -263,7 +264,7 @@ func UnreadMessageCount(c *gin.Context) {
 		utils.Unauthorized(c, "未登录")
 		return
 	}
-	count, err := models.UnreadCount(userID)
+	count, err := social.UnreadCount(userID)
 	if err != nil {
 		utils.InternalError(c, "获取未读数失败")
 		return

@@ -18,6 +18,7 @@ import (
 	quota "nvs-server/models/quota"
 	search "nvs-server/models/search"
 	"nvs-server/models/security"
+	social "nvs-server/models/social"
 )
 
 // ============ VIP 系统 ============
@@ -662,7 +663,7 @@ func IsPoliceOrAdminUser(c *gin.Context) bool {
 		return false
 	}
 	user, _ := models.GetUserByID(userID)
-	return user != nil && models.IsAdminOrPolice(user.Role)
+	return user != nil && social.IsAdminOrPolice(user.Role)
 }
 
 // computeAiTop 首页大屏用的 AI 使用排行（模型 / 渠道两个维度）。

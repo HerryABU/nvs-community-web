@@ -12,11 +12,11 @@ import (
 
 	"nvs-server/handlers/admin"
 	"nvs-server/handlers/hctx"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
 	siteops "nvs-server/models/siteops"
+	social "nvs-server/models/social"
 )
 
 // ─────────────── 导航菜单 ───────────────
@@ -27,7 +27,7 @@ func PublicNavMenus(c *gin.Context) {
 	isAdmin := false
 	if isLogin {
 		role := hctx.CurrentUserRole(c)
-		isAdmin = role == models.RoleAdmin || role == models.RolePolice
+		isAdmin = role == social.RoleAdmin || role == social.RolePolice
 	}
 	list, err := siteops.PublicNavMenus(isLogin, isAdmin)
 	if err != nil {

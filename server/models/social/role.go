@@ -1,4 +1,4 @@
-package models
+package social
 
 // 角色常量与权限判定（权限模型）
 //

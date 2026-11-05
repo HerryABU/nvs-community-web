@@ -7,6 +7,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	social "nvs-server/models/social"
 )
 
 // ==================== 话本气泡体（script mode）预览 ====================
@@ -39,7 +40,7 @@ func ScriptPreview(c *gin.Context) {
 			utils.Unauthorized(c, "请先登录")
 			return
 		}
-		if novel.AuthorID != uid && hctx.CurrentUserRole(c) != models.RoleAdmin && hctx.CurrentUserRole(c) != models.RolePolice {
+		if novel.AuthorID != uid && hctx.CurrentUserRole(c) != social.RoleAdmin && hctx.CurrentUserRole(c) != social.RolePolice {
 			utils.Forbidden(c, "仅作品创作成员可预览")
 			return
 		}

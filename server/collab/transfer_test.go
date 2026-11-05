@@ -4,13 +4,14 @@ import (
 	"testing"
 
 	"nvs-server/models"
+	social "nvs-server/models/social"
 )
 
 // TestTransferOwner 主笔转让：换主笔 + 受让人退出成员表 + 原主笔降为编辑 + 审计
 func TestTransferOwner(t *testing.T) {
 	setupCollabDB(t)
-	owner := mkUser(t, "t_owner", models.RoleAuthor)
-	peer := mkUser(t, "t_peer", models.RoleReader)
+	owner := mkUser(t, "t_owner", social.RoleAuthor)
+	peer := mkUser(t, "t_peer", social.RoleReader)
 	novel := mkNovel(t, owner.ID, "转让测试")
 
 	// 邀请并接受
@@ -53,8 +54,8 @@ func TestTransferOwner(t *testing.T) {
 // TestTransferRejections 非主笔 / 转自己 / 非协作者 三种拒绝
 func TestTransferRejections(t *testing.T) {
 	setupCollabDB(t)
-	owner := mkUser(t, "t2_owner", models.RoleAuthor)
-	other := mkUser(t, "t2_other", models.RoleReader)
+	owner := mkUser(t, "t2_owner", social.RoleAuthor)
+	other := mkUser(t, "t2_other", social.RoleReader)
 	novel := mkNovel(t, owner.ID, "拒绝测试")
 
 	// 非主笔发起

@@ -4,10 +4,10 @@ import (
 	"strconv"
 
 	"nvs-server/handlers/hctx"
-	"nvs-server/models"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	social "nvs-server/models/social"
 )
 
 // POST /api/ratings — 提交或更新评分
@@ -38,7 +38,7 @@ func UpsertRating(c *gin.Context) {
 		return v
 	}
 
-	rating := &models.Rating{
+	rating := &social.Rating{
 		UserID:              userID,
 		NovelID:             req.NovelID,
 		TypeCompletion:      clamp(req.TypeCompletion),
@@ -48,7 +48,7 @@ func UpsertRating(c *gin.Context) {
 		UpdateStability:     clamp(req.UpdateStability),
 	}
 
-	if err := models.UpsertRating(rating); err != nil {
+	if err := social.UpsertRating(rating); err != nil {
 		utils.InternalError(c, "评分失败")
 		return
 	}
@@ -60,7 +60,7 @@ func GetUserRating(c *gin.Context) {
 	userID := hctx.CurrentUserID(c)
 	novelID, _ := strconv.ParseUint(c.Query("novel_id"), 10, 64)
 
-	rating, err := models.GetRatingByUserNovel(userID, uint(novelID))
+	rating, err := social.GetRatingByUserNovel(userID, uint(novelID))
 	if err != nil {
 		utils.Success(c, nil)
 		return
@@ -72,7 +72,7 @@ func GetUserRating(c *gin.Context) {
 func GetNovelRating(c *gin.Context) {
 	novelID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
-	stats, count, err := models.GetRatingStats(uint(novelID))
+	stats, count, err := social.GetRatingStats(uint(novelID))
 	if err != nil {
 		utils.InternalError(c, "获取评分失败")
 		return

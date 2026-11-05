@@ -1,9 +1,10 @@
-package models
+package social
 
 import (
 	"time"
 
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // recallWindow 撤回时间窗口：发送后 2 分钟内可撤回
@@ -40,13 +41,13 @@ type Conversation struct {
 
 // CreateMessage 写入一条私信
 func CreateMessage(m *Message) error {
-	return DB.Create(m).Error
+	return models.DB.Create(m).Error
 }
 
 // GetMessageByID 按主键取消息（撤回/权限校验用）
 func GetMessageByID(id uint) (*Message, error) {
 	var m Message
-	if err := DB.First(&m, id).Error; err != nil {
+	if err := models.DB.First(&m, id).Error; err != nil {
 		return nil, err
 	}
 	return &m, nil
@@ -69,7 +70,7 @@ func ListConversations(userID uint) ([]Conversation, error) {
 	}
 	cond, args := visibleWhere(userID)
 	var rows []peerRow
-	err := DB.Model(&Message{}).
+	err := models.DB.Model(&Message{}).
 		Select("CASE WHEN sender_id = ? THEN receiver_id ELSE sender_id END AS peer_id, MAX(created_at) AS last_at", userID).
 		Where(cond, args...).
 		Group("peer_id").
@@ -87,11 +88,11 @@ func ListConversations(userID uint) ([]Conversation, error) {
 	for _, r := range rows {
 		peerIDs = append(peerIDs, r.PeerID)
 	}
-	var peers []User
-	if err := DB.Where("id IN ?", peerIDs).Find(&peers).Error; err != nil {
+	var peers []models.User
+	if err := models.DB.Where("id IN ?", peerIDs).Find(&peers).Error; err != nil {
 		return nil, err
 	}
-	peerMap := make(map[uint]User, len(peers))
+	peerMap := make(map[uint]models.User, len(peers))
 	for _, u := range peers {
 		peerMap[u.ID] = u
 	}
@@ -102,7 +103,7 @@ func ListConversations(userID uint) ([]Conversation, error) {
 		var last Message
 		// 最后一条消息同样只算「我可见」的（对方删不删不影响我）
 		lastCond := "((sender_id = ? AND receiver_id = ? AND deleted_by_sender = ?) OR (sender_id = ? AND receiver_id = ? AND deleted_by_receiver = ?))"
-		if err := DB.Where(lastCond, userID, r.PeerID, false, r.PeerID, userID, false).
+		if err := models.DB.Where(lastCond, userID, r.PeerID, false, r.PeerID, userID, false).
 			Order("id DESC").First(&last).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				continue // 理论上不会：聚合里存在但明细没有（并发删除），跳过
@@ -110,7 +111,7 @@ func ListConversations(userID uint) ([]Conversation, error) {
 			return nil, err
 		}
 		var unread int64
-		if err := DB.Model(&Message{}).
+		if err := models.DB.Model(&Message{}).
 			Where("sender_id = ? AND receiver_id = ? AND read_at IS NULL AND recalled = ?", r.PeerID, userID, false).
 			Count(&unread).Error; err != nil {
 			return nil, err
@@ -141,14 +142,14 @@ func ListMessagesBetween(userID, peerID uint, page, pageSize int) ([]Message, in
 		pageSize = 30
 	}
 	cond := "((sender_id = ? AND receiver_id = ? AND deleted_by_sender = ?) OR (sender_id = ? AND receiver_id = ? AND deleted_by_receiver = ?))"
-	q := DB.Model(&Message{}).
+	q := models.DB.Model(&Message{}).
 		Where(cond, userID, peerID, false, peerID, userID, false)
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	var list []Message
-	if err := DB.Where(cond, userID, peerID, false, peerID, userID, false).
+	if err := models.DB.Where(cond, userID, peerID, false, peerID, userID, false).
 		Order("id DESC").
 		Offset((page - 1) * pageSize).Limit(pageSize).
 		Find(&list).Error; err != nil {
@@ -160,7 +161,7 @@ func ListMessagesBetween(userID, peerID uint, page, pageSize int) ([]Message, in
 // MarkReadBetween 把对方发给我的未读消息标记为已读，返回受影响行数
 func MarkReadBetween(receiverID, senderID uint) (int64, error) {
 	now := time.Now()
-	res := DB.Model(&Message{}).
+	res := models.DB.Model(&Message{}).
 		Where("sender_id = ? AND receiver_id = ? AND read_at IS NULL", senderID, receiverID).
 		Update("read_at", &now)
 	return res.RowsAffected, res.Error
@@ -169,7 +170,7 @@ func MarkReadBetween(receiverID, senderID uint) (int64, error) {
 // UnreadCount 我的未读私信数（排除已撤回）
 func UnreadCount(userID uint) (int64, error) {
 	var count int64
-	err := DB.Model(&Message{}).
+	err := models.DB.Model(&Message{}).
 		Where("receiver_id = ? AND read_at IS NULL AND recalled = ?", userID, false).
 		Count(&count).Error
 	return count, err
@@ -179,7 +180,7 @@ func UnreadCount(userID uint) (int64, error) {
 // 含撤回与删除记录，防止靠撤回/删除重置计数绕过规则）
 func CountBetween(aID, bID uint) (int64, error) {
 	var count int64
-	err := DB.Model(&Message{}).
+	err := models.DB.Model(&Message{}).
 		Where("(sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)", aID, bID, bID, aID).
 		Count(&count).Error
 	return count, err
@@ -188,7 +189,7 @@ func CountBetween(aID, bID uint) (int64, error) {
 // RecallMessage 撤回消息：仅发送者本人在 2 分钟内可撤，返回受影响行数（0=不满足条件）
 func RecallMessage(messageID, senderID uint) (int64, error) {
 	deadline := time.Now().Add(-recallWindow)
-	res := DB.Model(&Message{}).
+	res := models.DB.Model(&Message{}).
 		Where("id = ? AND sender_id = ? AND recalled = ? AND created_at >= ?", messageID, senderID, false, deadline).
 		Update("recalled", true)
 	return res.RowsAffected, res.Error
@@ -197,12 +198,12 @@ func RecallMessage(messageID, senderID uint) (int64, error) {
 // DeleteConversationBetween 单方删除会话：我发出的标记 deleted_by_sender，
 // 我收到的标记 deleted_by_receiver，对方视图不受影响。
 func DeleteConversationBetween(userID, peerID uint) error {
-	if err := DB.Model(&Message{}).
+	if err := models.DB.Model(&Message{}).
 		Where("sender_id = ? AND receiver_id = ?", userID, peerID).
 		Update("deleted_by_sender", true).Error; err != nil {
 		return err
 	}
-	return DB.Model(&Message{}).
+	return models.DB.Model(&Message{}).
 		Where("sender_id = ? AND receiver_id = ?", peerID, userID).
 		Update("deleted_by_receiver", true).Error
 }

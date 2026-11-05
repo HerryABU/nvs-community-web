@@ -18,6 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/blog"
 	siteops "nvs-server/models/siteops"
+	social "nvs-server/models/social"
 	softdel "nvs-server/models/softdel"
 )
 
@@ -677,8 +678,8 @@ func DeleteEmergencyContent(c *gin.Context) {
 		}
 		models.DB.Where("novel_id = ?", id).Delete(&models.Chapter{})
 		models.DB.Where("novel_id = ?", id).Delete(&models.Comment{})
-		models.DB.Where("novel_id = ?", id).Delete(&models.Rating{})
-		models.DB.Where("novel_id = ?", id).Delete(&models.BookShelf{})
+		models.DB.Where("novel_id = ?", id).Delete(&social.Rating{})
+		models.DB.Where("novel_id = ?", id).Delete(&social.BookShelf{})
 		models.DB.Where("novel_id = ?", id).Delete(&models.NovelCategory{})
 		models.DB.Delete(&models.Novel{}, id)
 		AuditEmergency(c, "delete", ctype, uint(id), "删除作品《"+n.Title+"》及其章节/评论/评分（作者 "+UserOf(n.AuthorID)+"）")

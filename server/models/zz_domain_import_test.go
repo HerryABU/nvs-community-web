@@ -15,6 +15,7 @@ import (
 	_ "nvs-server/models/search"
 	_ "nvs-server/models/security"
 	_ "nvs-server/models/siteops"
+	_ "nvs-server/models/social"
 	_ "nvs-server/models/softdel"
 	_ "nvs-server/models/theme"
 	_ "nvs-server/models/wallet"

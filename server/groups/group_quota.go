@@ -5,6 +5,7 @@ import (
 
 	"encoding/json"
 	"fmt"
+	social "nvs-server/models/social"
 	"strings"
 	"time"
 )
@@ -32,12 +33,12 @@ func DefaultGroupQuotaConfig() GroupQuotaConfig {
 		Enabled:    true,
 		MaxPerUser: 3,
 		Roles: map[string]int{
-			models.RoleReader:     1,
-			models.RoleAuthor:     3,
-			models.RoleVipAuthor:  10,
-			models.RoleArbitrator: 3,
-			models.RolePolice:     20,
-			models.RoleAdmin:      0, // 0 = 不限
+			social.RoleReader:     1,
+			social.RoleAuthor:     3,
+			social.RoleVipAuthor:  10,
+			social.RoleArbitrator: 3,
+			social.RolePolice:     20,
+			social.RoleAdmin:      0, // 0 = 不限
 		},
 		MemberLimit: 200,
 		DailyPosts:  20,
@@ -192,7 +193,7 @@ func ListUserGroupQuotas() ([]UserGroupQuota, error) {
 func EffectiveGroupQuota(userID uint, role string) (maxGroups, memberLimit, dailyPosts int) {
 	cfg := GetGroupQuotaConfig()
 	memberLimit, dailyPosts = cfg.MemberLimit, cfg.DailyPosts
-	if role == models.RoleAdmin || role == models.RolePolice {
+	if role == social.RoleAdmin || role == social.RolePolice {
 		return -1, memberLimit, dailyPosts
 	}
 	if q := GetUserGroupQuota(userID); q != nil && q.MaxGroups != -1 {

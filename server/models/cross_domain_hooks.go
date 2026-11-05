@@ -1,6 +1,10 @@
 package models
 
-import "gorm.io/gorm"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 // 跨域解耦钩子：根包只持有函数变量、不回引域子包，避免「根包被所有子包 import」
 // 造成的「根↔域」导入循环（与 db.go 中 BlogCommentNotifier 同一机制）。
@@ -21,3 +25,17 @@ var (
 	PushNotificationHook  func(actorID, targetUserID uint, notifType, title, content, link string) error                                       = PushNotification
 	ArchiveSoftDeleteHook func(source, ctype string, originalID, deletedBy uint, operator, reason, summary string, snapshot interface{}) error // softdel/softdel.go
 )
+
+// FeedItem 动态流统一条目（聚合 novels / author_blogs / threads 三类内容）。
+// 跨域共享类型：根包 BlogFeedProvider 钩子签名与 models/blog、models/social 均需使用，
+// 故保留在根包，避免「根包→子包」导入循环。
+type FeedItem struct {
+	Type      string    `json:"type"` // novel / blog / thread
+	ID        uint      `json:"id"`   // 内容 ID
+	Title     string    `json:"title"`
+	Summary   string    `json:"summary"`
+	UserID    uint      `json:"user_id"`
+	UserName  string    `json:"user_name"`
+	CreatedAt time.Time `json:"created_at"`
+	URL       string    `json:"url"`
+}

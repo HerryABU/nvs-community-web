@@ -8,6 +8,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	social "nvs-server/models/social"
 )
 
 func setupCollabDB(t *testing.T) *gorm.DB {
@@ -54,8 +55,8 @@ func mkNovel(t *testing.T, ownerID uint, title string) *models.Novel {
 // TestInviteAndActivate 邀请 → 待接受（无权限）→ 接受（生效）
 func TestInviteAndActivate(t *testing.T) {
 	setupCollabDB(t)
-	owner := mkUser(t, "c_owner", models.RoleAuthor)
-	co := mkUser(t, "c_co", models.RoleReader)
+	owner := mkUser(t, "c_owner", social.RoleAuthor)
+	co := mkUser(t, "c_co", social.RoleReader)
 	novel := mkNovel(t, owner.ID, "协作测试")
 
 	c, err := Invite(novel.ID, owner.ID, co.Username, RoleCoAuthor)
@@ -93,7 +94,7 @@ func TestInviteAndActivate(t *testing.T) {
 		}
 	}
 	// 路人无权限
-	stranger := mkUser(t, "c_stranger", models.RoleReader)
+	stranger := mkUser(t, "c_stranger", social.RoleReader)
 	if ActorOf(novel.ID, stranger.ID, "").Can(CapWriteChapter) {
 		t.Fatalf("非协作成员不应有创作权限")
 	}
@@ -106,9 +107,9 @@ func TestInviteAndActivate(t *testing.T) {
 // TestRoleDefaultsAndCaps 角色默认能力：编辑可改他人、审稿可审核、协作作者不可
 func TestRoleDefaultsAndCaps(t *testing.T) {
 	setupCollabDB(t)
-	owner := mkUser(t, "d_owner", models.RoleAuthor)
-	ed := mkUser(t, "d_editor", models.RoleReader)
-	rv := mkUser(t, "d_reviewer", models.RoleReader)
+	owner := mkUser(t, "d_owner", social.RoleAuthor)
+	ed := mkUser(t, "d_editor", social.RoleReader)
+	rv := mkUser(t, "d_reviewer", social.RoleReader)
 	novel := mkNovel(t, owner.ID, "角色默认值")
 
 	if _, err := Invite(novel.ID, owner.ID, ed.Username, RoleEditor); err != nil {
@@ -143,9 +144,9 @@ func TestRoleDefaultsAndCaps(t *testing.T) {
 // TestShareAndByline 分成总和校验 + 署名顺序
 func TestShareAndByline(t *testing.T) {
 	setupCollabDB(t)
-	owner := mkUser(t, "s_owner", models.RoleAuthor)
-	a := mkUser(t, "s_a", models.RoleReader)
-	b := mkUser(t, "s_b", models.RoleReader)
+	owner := mkUser(t, "s_owner", social.RoleAuthor)
+	a := mkUser(t, "s_a", social.RoleReader)
+	b := mkUser(t, "s_b", social.RoleReader)
 	novel := mkNovel(t, owner.ID, "分成测试")
 
 	_, _ = Invite(novel.ID, owner.ID, a.Username, RoleCoAuthor)
@@ -187,9 +188,9 @@ func TestShareAndByline(t *testing.T) {
 // TestChapterPermission 章节级权限：本人可改、他人需 edit_others、已发布不可直接删
 func TestChapterPermission(t *testing.T) {
 	setupCollabDB(t)
-	owner := mkUser(t, "p_owner", models.RoleAuthor)
-	co := mkUser(t, "p_co", models.RoleReader)
-	ed := mkUser(t, "p_ed", models.RoleReader)
+	owner := mkUser(t, "p_owner", social.RoleAuthor)
+	co := mkUser(t, "p_co", social.RoleReader)
+	ed := mkUser(t, "p_ed", social.RoleReader)
 	novel := mkNovel(t, owner.ID, "章节权限")
 
 	_, _ = Invite(novel.ID, owner.ID, co.Username, RoleCoAuthor)

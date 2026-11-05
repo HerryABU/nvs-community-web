@@ -16,6 +16,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"nvs-server/models/blog"
+	social "nvs-server/models/social"
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -73,21 +74,21 @@ func TestToggleSpecialFollow(t *testing.T) {
 	if data, _ := resp["data"].(map[string]interface{}); data == nil || data["is_special"] != true {
 		t.Fatalf("置位响应应带 is_special=true: %s", w.Body.String())
 	}
-	if !models.IsSpecialFollowing(1, 2) {
+	if !social.IsSpecialFollowing(1, 2) {
 		t.Error("置位后 IsSpecialFollowing 应为 true")
 	}
-	if !models.IsFollowing(1, 2) {
+	if !social.IsFollowing(1, 2) {
 		t.Error("置位特别关注时应自动建立普通关注")
 	}
 
 	// 2) 幂等：重复置位不报错且仍为特别关注
 	w = toggleSpecial(t, 1, 2, true)
 	testutil.MustJSON(t, w)
-	if !models.IsSpecialFollowing(1, 2) {
+	if !social.IsSpecialFollowing(1, 2) {
 		t.Error("重复置位后应仍为特别关注")
 	}
 	var followRows int64
-	models.DB.Model(&models.Follow{}).Where("follower_id = ? AND followed_id = ?", 1, 2).Count(&followRows)
+	models.DB.Model(&social.Follow{}).Where("follower_id = ? AND followed_id = ?", 1, 2).Count(&followRows)
 	if followRows != 1 {
 		t.Errorf("重复置位不应产生重复关注行，实际 %d 行", followRows)
 	}
@@ -98,10 +99,10 @@ func TestToggleSpecialFollow(t *testing.T) {
 	if data, _ := resp["data"].(map[string]interface{}); data == nil || data["is_special"] != false {
 		t.Fatalf("取消响应应带 is_special=false: %s", w.Body.String())
 	}
-	if models.IsSpecialFollowing(1, 2) {
+	if social.IsSpecialFollowing(1, 2) {
 		t.Error("取消后 IsSpecialFollowing 应为 false")
 	}
-	if !models.IsFollowing(1, 2) {
+	if !social.IsFollowing(1, 2) {
 		t.Error("取消特别关注后普通关注应保留")
 	}
 
@@ -135,10 +136,10 @@ func TestToggleSpecialFollow(t *testing.T) {
 	// 7) 边界：未关注时取消特别关注 = 无操作（不得顺手建出普通关注行）
 	w = toggleSpecial(t, 1, 3, false)
 	testutil.MustJSON(t, w)
-	if models.IsFollowing(1, 3) {
+	if social.IsFollowing(1, 3) {
 		t.Error("未关注时取消特别关注不应创建普通关注行")
 	}
-	if models.IsSpecialFollowing(1, 3) {
+	if social.IsSpecialFollowing(1, 3) {
 		t.Error("未关注时不应存在特别关注关系")
 	}
 }
@@ -152,13 +153,13 @@ func TestListMySpecialFollows(t *testing.T) {
 	testutil.SeedTestUser(t, 4, "normal4", "author")
 
 	// 2/3 特别关注，4 仅普通关注
-	if err := models.SetSpecialFollow(1, 2, true); err != nil {
+	if err := social.SetSpecialFollow(1, 2, true); err != nil {
 		t.Fatalf("设置特别关注失败: %v", err)
 	}
-	if err := models.SetSpecialFollow(1, 3, true); err != nil {
+	if err := social.SetSpecialFollow(1, 3, true); err != nil {
 		t.Fatalf("设置特别关注失败: %v", err)
 	}
-	if err := models.CreateFollow(1, 4); err != nil {
+	if err := social.CreateFollow(1, 4); err != nil {
 		t.Fatalf("创建普通关注失败: %v", err)
 	}
 
@@ -212,7 +213,7 @@ func TestGetSpecialFeed(t *testing.T) {
 	testutil.SeedTestUser(t, 3, "stranger", "author")
 
 	// 用户 1 特别关注用户 2；用户 3 未被关注
-	if err := models.SetSpecialFollow(1, 2, true); err != nil {
+	if err := social.SetSpecialFollow(1, 2, true); err != nil {
 		t.Fatalf("设置特别关注失败: %v", err)
 	}
 

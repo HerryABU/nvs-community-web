@@ -8,6 +8,7 @@ import (
 
 	"nvs-server/models"
 	aiops "nvs-server/models/aiops"
+	social "nvs-server/models/social"
 )
 
 // TestBuildNovelVars 上下文自动注入：作品信息 / 大纲 / 角色 / 摘要 / 前文 / 作者样本，
@@ -15,7 +16,7 @@ import (
 func TestBuildNovelVars(t *testing.T) {
 	setupTplDB(t)
 
-	author := &models.User{Username: "ctx_author", Email: "ctx@example.com", PasswordHash: "x", Role: models.RoleAuthor}
+	author := &models.User{Username: "ctx_author", Email: "ctx@example.com", PasswordHash: "x", Role: social.RoleAuthor}
 	if err := models.DB.Create(author).Error; err != nil {
 		t.Fatalf("建作者失败: %v", err)
 	}

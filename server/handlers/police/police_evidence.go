@@ -13,6 +13,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	social "nvs-server/models/social"
 )
 
 // PoliceCreateEvidenceRequest POST /api/police/evidence-requests
@@ -76,7 +77,7 @@ func PoliceExportUserForensics(c *gin.Context) {
 		utils.BadRequest(c, "请提供 user_id")
 		return
 	}
-	if models.IsPolice(role) && !police.HasApprovedRequest(uid, uint(target)) {
+	if social.IsPolice(role) && !police.HasApprovedRequest(uid, uint(target)) {
 		utils.Forbidden(c, "须先向站长提交取证申请并经批准")
 		return
 	}

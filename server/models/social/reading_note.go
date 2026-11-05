@@ -1,6 +1,7 @@
-package models
+package social
 
 import (
+	"nvs-server/models"
 	"time"
 )
 
@@ -30,13 +31,13 @@ func (ReadingNote) TableName() string { return "reading_notes" }
 
 // CreateReadingNote 新建书签/批注
 func CreateReadingNote(n *ReadingNote) error {
-	return DB.Create(n).Error
+	return models.DB.Create(n).Error
 }
 
 // ListMyReadingNotes 我的笔记（可按作品/章节/类型筛选）
 func ListMyReadingNotes(userID, novelID uint, chapterNumber int, noteType string) ([]ReadingNote, error) {
 	var list []ReadingNote
-	q := DB.Model(&ReadingNote{}).Where("user_id = ?", userID)
+	q := models.DB.Model(&ReadingNote{}).Where("user_id = ?", userID)
 	if novelID != 0 {
 		q = q.Where("novel_id = ?", novelID)
 	}
@@ -52,12 +53,12 @@ func ListMyReadingNotes(userID, novelID uint, chapterNumber int, noteType string
 
 // ListPublicNotes 公开批注/书签（按作品+章节）
 //
-// ⚠️ 不要 Preload("User")：ReadingNote 没有 User 关联（Username 是 gorm:"-" 的运行时字段），
+// ⚠️ 不要 Preload("models.User")：ReadingNote 没有 models.User 关联（Username 是 gorm:"-" 的运行时字段），
 // Preload 一个不存在的关联会让整个接口 500 —— 阅读器的公开划线因此一直是空的（后端报错，
 // 前端 catch 里静默降级成"本章没有别人的划线"）。用户名单独批量查。
 func ListPublicNotes(novelID uint, chapterNumber int) ([]ReadingNote, error) {
 	var list []ReadingNote
-	q := DB.Model(&ReadingNote{}).
+	q := models.DB.Model(&ReadingNote{}).
 		Where("visibility = ? AND novel_id = ?", "public", novelID)
 	if chapterNumber > 0 {
 		q = q.Where("chapter_number = ?", chapterNumber)
@@ -84,8 +85,8 @@ func fillNoteUsernames(list []ReadingNote) {
 	if len(ids) == 0 {
 		return
 	}
-	var users []User
-	if err := DB.Select("id", "username", "nickname").Where("id IN ?", ids).Find(&users).Error; err != nil {
+	var users []models.User
+	if err := models.DB.Select("id", "username", "nickname").Where("id IN ?", ids).Find(&users).Error; err != nil {
 		return // 补名字失败不影响批注本体
 	}
 	nameOf := make(map[uint]string, len(users))
@@ -105,7 +106,7 @@ func fillNoteUsernames(list []ReadingNote) {
 func ListAllMyNotes(userID uint, page, pageSize int) ([]ReadingNote, int64, error) {
 	var list []ReadingNote
 	var total int64
-	q := DB.Model(&ReadingNote{}).Where("user_id = ?", userID)
+	q := models.DB.Model(&ReadingNote{}).Where("user_id = ?", userID)
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -130,8 +131,8 @@ func ListAllMyNotes(userID uint, page, pageSize int) ([]ReadingNote, int64, erro
 		for id := range novelIDs {
 			ids = append(ids, id)
 		}
-		var novels []Novel
-		DB.Select("id", "title").Where("id IN ?", ids).Find(&novels)
+		var novels []models.Novel
+		models.DB.Select("id", "title").Where("id IN ?", ids).Find(&novels)
 		for _, n := range novels {
 			novelTitles[n.ID] = n.Title
 		}
@@ -140,8 +141,8 @@ func ListAllMyNotes(userID uint, page, pageSize int) ([]ReadingNote, int64, erro
 		list[i].NovelTitle = novelTitles[list[i].NovelID]
 		// 章节名
 		if list[i].ChapterNumber > 0 {
-			var ch Chapter
-			if DB.Select("title").Where("novel_id = ? AND chapter_number = ?", list[i].NovelID, list[i].ChapterNumber).
+			var ch models.Chapter
+			if models.DB.Select("title").Where("novel_id = ? AND chapter_number = ?", list[i].NovelID, list[i].ChapterNumber).
 				First(&ch).Error == nil {
 				list[i].ChapterTitle = ch.Title
 			}
@@ -153,7 +154,7 @@ func ListAllMyNotes(userID uint, page, pageSize int) ([]ReadingNote, int64, erro
 // GetReadingNote 单条笔记
 func GetReadingNote(id uint) (*ReadingNote, error) {
 	var n ReadingNote
-	err := DB.First(&n, id).Error
+	err := models.DB.First(&n, id).Error
 	return &n, err
 }
 
@@ -169,17 +170,17 @@ func UpdateReadingNote(id uint, content, visibility string) error {
 	if len(updates) == 0 {
 		return nil
 	}
-	return DB.Model(&ReadingNote{}).Where("id = ?", id).Updates(updates).Error
+	return models.DB.Model(&ReadingNote{}).Where("id = ?", id).Updates(updates).Error
 }
 
 // DeleteReadingNote 删除笔记
 func DeleteReadingNote(id uint) error {
-	return DB.Delete(&ReadingNote{}, id).Error
+	return models.DB.Delete(&ReadingNote{}, id).Error
 }
 
 // CountReadingNotes 笔记数（个人中心用）
 func CountReadingNotes(userID uint) int64 {
 	var c int64
-	DB.Model(&ReadingNote{}).Where("user_id = ?", userID).Count(&c)
+	models.DB.Model(&ReadingNote{}).Where("user_id = ?", userID).Count(&c)
 	return c
 }

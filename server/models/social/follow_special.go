@@ -1,27 +1,15 @@
-package models
+package social
 
 import (
+	"nvs-server/models"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // ==================== 特别关注（F14） ====================
 //
 // 语义：特别关注 = 关注关系的加强态。特别关注列表是动态流的数据源；
 // 「取消特别关注」只把 is_special 置 false，普通关注关系保留。
-
-// FeedItem 动态流统一条目（聚合 novels / author_blogs / threads 三类内容）
-type FeedItem struct {
-	Type      string    `json:"type"`       // novel / blog / thread
-	ID        uint      `json:"id"`         // 内容 ID
-	Title     string    `json:"title"`      // 标题
-	Summary   string    `json:"summary"`    // 摘要（长文本截断）
-	UserID    uint      `json:"user_id"`    // 作者/发帖人 ID
-	UserName  string    `json:"user_name"`  // 作者/发帖人展示名
-	CreatedAt time.Time `json:"created_at"` // 发布时间（倒序依据）
-	URL       string    `json:"url"`        // 前端路由路径
-}
 
 // SetSpecialFollow 设置/取消特别关注。
 // special=true：确保关注行存在（不存在则创建），并把 is_special 置 true；
@@ -33,17 +21,17 @@ func SetSpecialFollow(followerID, followedID uint, special bool) error {
 	}
 	// 先确保关注行存在（特别关注的前提是已关注）
 	var existing Follow
-	err := DB.Where("follower_id = ? AND followed_id = ?", followerID, followedID).First(&existing).Error
+	err := models.DB.Where("follower_id = ? AND followed_id = ?", followerID, followedID).First(&existing).Error
 	if err != nil {
 		if !special {
 			// 未关注时取消特别关注 = 无操作（不得顺手建出普通关注行）
 			return nil
 		}
-		if err := DB.Create(&Follow{FollowerID: followerID, FollowedID: followedID}).Error; err != nil {
+		if err := models.DB.Create(&Follow{FollowerID: followerID, FollowedID: followedID}).Error; err != nil {
 			return err
 		}
 	}
-	return DB.Model(&Follow{}).
+	return models.DB.Model(&Follow{}).
 		Where("follower_id = ? AND followed_id = ?", followerID, followedID).
 		Updates(map[string]interface{}{"is_special": special}).Error
 }
@@ -54,21 +42,21 @@ func IsSpecialFollowing(followerID, followedID uint) bool {
 		return false
 	}
 	var count int64
-	DB.Model(&Follow{}).
+	models.DB.Model(&Follow{}).
 		Where("follower_id = ? AND followed_id = ? AND is_special = ?", followerID, followedID, true).
 		Count(&count)
 	return count > 0
 }
 
 // ListSpecialFollowing 我的特别关注列表（JOIN users，按关注时间倒序）
-func ListSpecialFollowing(userID uint, page, pageSize int) ([]User, int64, error) {
+func ListSpecialFollowing(userID uint, page, pageSize int) ([]models.User, int64, error) {
 	var total int64
-	DB.Model(&Follow{}).Where("follower_id = ? AND is_special = ?", userID, true).Count(&total)
+	models.DB.Model(&Follow{}).Where("follower_id = ? AND is_special = ?", userID, true).Count(&total)
 
 	page, pageSize = normalizePage(page, pageSize)
 	offset := (page - 1) * pageSize
-	var users []User
-	err := DB.Table("users").
+	var users []models.User
+	err := models.DB.Table("users").
 		Joins("INNER JOIN follows ON follows.followed_id = users.id").
 		Where("follows.follower_id = ? AND follows.is_special = ?", userID, true).
 		Order("follows.created_at DESC").
@@ -80,7 +68,7 @@ func ListSpecialFollowing(userID uint, page, pageSize int) ([]User, int64, error
 // CountSpecialFollowing 特别关注人数
 func CountSpecialFollowing(userID uint) int64 {
 	var count int64
-	DB.Model(&Follow{}).Where("follower_id = ? AND is_special = ?", userID, true).Count(&count)
+	models.DB.Model(&Follow{}).Where("follower_id = ? AND is_special = ?", userID, true).Count(&count)
 	return count
 }
 
@@ -89,7 +77,7 @@ func CountSpecialFollowing(userID uint) int64 {
 // 若未来放开规模，可改为在 feed 聚合时用子查询下推。
 func specialFollowingIDs(userID uint) []uint {
 	var ids []uint
-	DB.Model(&Follow{}).
+	models.DB.Model(&Follow{}).
 		Where("follower_id = ? AND is_special = ?", userID, true).
 		Pluck("followed_id", &ids)
 	return ids
@@ -101,11 +89,11 @@ func specialFollowingIDs(userID uint) []uint {
 // （如时间列精度、LIMIT 语义差异），故采用「分查合并」：三类内容各查
 // 前 page*pageSize 条（足够覆盖本页所需的合并窗口），在内存中按
 // created_at 倒序归并后截取本页。总数 = 三类计数之和（精确值）。
-func GetSpecialFeed(userID uint, page, pageSize int) ([]FeedItem, int64, error) {
+func GetSpecialFeed(userID uint, page, pageSize int) ([]models.FeedItem, int64, error) {
 	page, pageSize = normalizePage(page, pageSize)
 	ids := specialFollowingIDs(userID)
 	if len(ids) == 0 {
-		return []FeedItem{}, 0, nil
+		return []models.FeedItem{}, 0, nil
 	}
 
 	// 合并窗口：本页之前 + 本页所需条数，保证截取后本页数据完整
@@ -113,13 +101,13 @@ func GetSpecialFeed(userID uint, page, pageSize int) ([]FeedItem, int64, error) 
 
 	// 总数 = 三类计数之和（精确值，分页依赖它）
 	var novelTotal, threadTotal int64
-	DB.Model(&Novel{}).Where("author_id IN ? AND status = ?", ids, "published").Count(&novelTotal)
-	DB.Model(&Thread{}).Where("user_id IN ?", ids).Count(&threadTotal)
-	// 博客部分经跨域钩子 BlogFeedProvider 获取（根包不回引 blog 域）
+	models.DB.Model(&models.Novel{}).Where("author_id IN ? AND status = ?", ids, "published").Count(&novelTotal)
+	models.DB.Model(&models.Thread{}).Where("user_id IN ?", ids).Count(&threadTotal)
+	// 博客部分经跨域钩子 models.BlogFeedProvider 获取（根包不回引 blog 域）
 	var blogTotal int64
-	var blogItems []FeedItem
-	if BlogFeedProvider != nil {
-		if bi, bt, berr := BlogFeedProvider(ids, window); berr != nil {
+	var blogItems []models.FeedItem
+	if models.BlogFeedProvider != nil {
+		if bi, bt, berr := models.BlogFeedProvider(ids, window); berr != nil {
 			return nil, 0, berr
 		} else {
 			blogItems = bi
@@ -128,16 +116,16 @@ func GetSpecialFeed(userID uint, page, pageSize int) ([]FeedItem, int64, error) 
 	}
 	total := novelTotal + blogTotal + threadTotal
 
-	items := make([]FeedItem, 0, window)
+	items := make([]models.FeedItem, 0, window)
 
 	// 小说（仅已发布；软删除由 GORM 自动排除）
-	var novels []Novel
-	if err := DB.Where("author_id IN ? AND status = ?", ids, "published").
+	var novels []models.Novel
+	if err := models.DB.Where("author_id IN ? AND status = ?", ids, "published").
 		Order("created_at DESC").Limit(window).Find(&novels).Error; err != nil {
 		return nil, 0, err
 	}
 	for _, n := range novels {
-		items = append(items, FeedItem{
+		items = append(items, models.FeedItem{
 			Type:      "novel",
 			ID:        n.ID,
 			Title:     n.Title,
@@ -152,13 +140,13 @@ func GetSpecialFeed(userID uint, page, pageSize int) ([]FeedItem, int64, error) 
 	items = append(items, blogItems...)
 
 	// 论坛帖子
-	var threads []Thread
-	if err := DB.Where("user_id IN ?", ids).
+	var threads []models.Thread
+	if err := models.DB.Where("user_id IN ?", ids).
 		Order("created_at DESC").Limit(window).Find(&threads).Error; err != nil {
 		return nil, 0, err
 	}
 	for _, t := range threads {
-		items = append(items, FeedItem{
+		items = append(items, models.FeedItem{
 			Type:      "thread",
 			ID:        t.ID,
 			Title:     t.Title,
@@ -175,7 +163,7 @@ func GetSpecialFeed(userID uint, page, pageSize int) ([]FeedItem, int64, error) 
 	// 截取本页
 	start := (page - 1) * pageSize
 	if start >= len(items) {
-		return []FeedItem{}, total, nil
+		return []models.FeedItem{}, total, nil
 	}
 	end := start + pageSize
 	if end > len(items) {
@@ -189,7 +177,7 @@ func GetSpecialFeed(userID uint, page, pageSize int) ([]FeedItem, int64, error) 
 }
 
 // fillFeedUserNames 批量填充 UserName（昵称优先，无昵称用用户名）
-func fillFeedUserNames(items []FeedItem) {
+func fillFeedUserNames(items []models.FeedItem) {
 	if len(items) == 0 {
 		return
 	}
@@ -201,8 +189,8 @@ func fillFeedUserNames(items []FeedItem) {
 	for id := range need {
 		ids = append(ids, id)
 	}
-	var users []User
-	DB.Where("id IN ?", ids).Find(&users)
+	var users []models.User
+	models.DB.Where("id IN ?", ids).Find(&users)
 	names := map[uint]string{}
 	for _, u := range users {
 		name := u.Nickname
@@ -217,7 +205,7 @@ func fillFeedUserNames(items []FeedItem) {
 }
 
 // sortFeedItems 按 CreatedAt 倒序；同秒按 ID 倒序保证稳定
-func sortFeedItems(items []FeedItem) {
+func sortFeedItems(items []models.FeedItem) {
 	for i := 1; i < len(items); i++ {
 		for j := i; j > 0; j-- {
 			a, b := items[j-1], items[j]

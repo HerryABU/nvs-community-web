@@ -8,6 +8,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	social "nvs-server/models/social"
 )
 
 // GET /api/author/dashboard — 作者端数据大屏
@@ -83,7 +84,7 @@ func GetAuthorDashboard(c *gin.Context) {
 	// 总收藏数 + 总阅读量（替代完本率）
 	var bookshelfCount, totalViews int64
 	if len(novelIDs) > 0 {
-		models.DB.Model(&models.BookShelf{}).Where("novel_id IN ?", novelIDs).Count(&bookshelfCount)
+		models.DB.Model(&social.BookShelf{}).Where("novel_id IN ?", novelIDs).Count(&bookshelfCount)
 		models.DB.Model(&models.Novel{}).Where("id IN ?", novelIDs).Select("COALESCE(SUM(view_count),0)").Scan(&totalViews)
 	}
 

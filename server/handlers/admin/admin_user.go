@@ -16,6 +16,7 @@ import (
 	"github.com/microcosm-cc/bluemonday"
 	apikey "nvs-server/models/apikey"
 	siteops "nvs-server/models/siteops"
+	social "nvs-server/models/social"
 )
 
 // GET /api/admin/users — 用户列表（支持关键词搜索 + 角色分类 + 状态筛选）
@@ -93,11 +94,11 @@ func UpdateUser(c *gin.Context) {
 	updates := map[string]interface{}{}
 	if req.Role != nil {
 		// police 角色必须通过专用提权接口设置（留审计），不允许通用编辑直接改
-		if *req.Role == models.RolePolice {
+		if *req.Role == social.RolePolice {
 			utils.BadRequest(c, "警方角色需通过「提权为警方」专用接口设置")
 			return
 		}
-		if !models.ValidPromotableRoles()[*req.Role] {
+		if !social.ValidPromotableRoles()[*req.Role] {
 			utils.BadRequest(c, "无效的角色: "+*req.Role)
 			return
 		}
@@ -207,7 +208,7 @@ func AdminPromoteToPolice(c *gin.Context) {
 		utils.NotFound(c, "用户不存在")
 		return
 	}
-	if u.Role == models.RoleAdmin {
+	if u.Role == social.RoleAdmin {
 		utils.BadRequest(c, "管理员无需提权为警方")
 		return
 	}
@@ -217,7 +218,7 @@ func AdminPromoteToPolice(c *gin.Context) {
 	}
 	now := time.Now()
 	if err := models.DB.Model(&models.User{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"role":              models.RolePolice,
+		"role":              social.RolePolice,
 		"police_granted_by": operator,
 		"police_granted_at": &now,
 	}).Error; err != nil {
@@ -228,7 +229,7 @@ func AdminPromoteToPolice(c *gin.Context) {
 		fmt.Sprintf("管理员 %s 将用户 %s(ID %d) 提权为警方取管台账号", operator, u.Username, id))
 	utils.Success(c, gin.H{
 		"message":           "已提权为警方取管台账号",
-		"role":              models.RolePolice,
+		"role":              social.RolePolice,
 		"police_granted_by": operator,
 		"police_granted_at": now,
 	})
@@ -245,7 +246,7 @@ func AdminRevokePolice(c *gin.Context) {
 		utils.NotFound(c, "用户不存在")
 		return
 	}
-	if u.Role != models.RolePolice {
+	if u.Role != social.RolePolice {
 		utils.BadRequest(c, "该用户不是警方账号")
 		return
 	}
@@ -254,7 +255,7 @@ func AdminRevokePolice(c *gin.Context) {
 		operator = admin.Username
 	}
 	if err := models.DB.Model(&models.User{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"role":              models.RoleReader,
+		"role":              social.RoleReader,
 		"police_granted_by": "",
 		"police_granted_at": nil,
 	}).Error; err != nil {
@@ -263,5 +264,5 @@ func AdminRevokePolice(c *gin.Context) {
 	}
 	emergency.AuditEmergency(c, siteops.AuditUserRevokePolice, "user", uint(id),
 		fmt.Sprintf("管理员 %s 撤销用户 %s(ID %d) 的警方取管台权限", operator, u.Username, id))
-	utils.Success(c, gin.H{"message": "已撤销警方权限", "role": models.RoleReader})
+	utils.Success(c, gin.H{"message": "已撤销警方权限", "role": social.RoleReader})
 }

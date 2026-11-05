@@ -13,6 +13,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	social "nvs-server/models/social"
 )
 
 // setupGroupTestDB 独立内存库（唯一名，避免与 models 包测试互相污染）
@@ -55,9 +56,9 @@ func mkUser(t *testing.T, username, role string) *models.User {
 // TestCreateGroupQuotaAndNumber 建群：群号生成 + 角色额度 + 未成年拦截
 func TestCreateGroupQuotaAndNumber(t *testing.T) {
 	setupGroupTestDB(t)
-	reader := mkUser(t, "g_reader", models.RoleReader)
-	author := mkUser(t, "g_author", models.RoleAuthor)
-	minor := mkUser(t, "g_minor", models.RoleReader)
+	reader := mkUser(t, "g_reader", social.RoleReader)
+	author := mkUser(t, "g_author", social.RoleAuthor)
+	minor := mkUser(t, "g_minor", social.RoleReader)
 	models.DB.Model(&models.User{}).Where("id = ?", minor.ID).Update("minor_protected", true)
 	minor.MinorProtected = true
 
@@ -95,10 +96,10 @@ func TestCreateGroupQuotaAndNumber(t *testing.T) {
 // TestJoinModesAndVisibility 加入方式与内容可见性
 func TestJoinModesAndVisibility(t *testing.T) {
 	setupGroupTestDB(t)
-	owner := mkUser(t, "j_owner", models.RoleAuthor)
-	m1 := mkUser(t, "j_u1", models.RoleReader)
-	m2 := mkUser(t, "j_u2", models.RoleReader)
-	m3 := mkUser(t, "j_u3", models.RoleReader)
+	owner := mkUser(t, "j_owner", social.RoleAuthor)
+	m1 := mkUser(t, "j_u1", social.RoleReader)
+	m2 := mkUser(t, "j_u2", social.RoleReader)
+	m3 := mkUser(t, "j_u3", social.RoleReader)
 
 	openG, err := CreateGroup(owner.ID, owner, GroupInput{Name: "开放群", JoinMode: GroupJoinOpen})
 	if err != nil {
@@ -139,8 +140,8 @@ func TestJoinModesAndVisibility(t *testing.T) {
 // TestPostReviewFlow 先审后发：pending → 群管通过 → 可回帖
 func TestPostReviewFlow(t *testing.T) {
 	setupGroupTestDB(t)
-	owner := mkUser(t, "p_owner", models.RoleAuthor)
-	member := mkUser(t, "p_member", models.RoleReader)
+	owner := mkUser(t, "p_owner", social.RoleAuthor)
+	member := mkUser(t, "p_member", social.RoleReader)
 	g, err := CreateGroup(owner.ID, owner, GroupInput{Name: "审核群", Visibility: GroupVisibilitySemi})
 	if err != nil {
 		t.Fatalf("建群失败: %v", err)
@@ -163,7 +164,7 @@ func TestPostReviewFlow(t *testing.T) {
 		t.Fatalf("待审帖不应允许回帖")
 	}
 	// 群主审核通过
-	if err := ReviewGroupPost(p.ID, owner.ID, models.RoleAuthor, true); err != nil {
+	if err := ReviewGroupPost(p.ID, owner.ID, social.RoleAuthor, true); err != nil {
 		t.Fatalf("审核失败: %v", err)
 	}
 	if _, err := CreateGroupReply(g, p.ID, owner, "欢迎"); err != nil {
@@ -171,7 +172,7 @@ func TestPostReviewFlow(t *testing.T) {
 	}
 	// 审核拒绝 → 不可见
 	p2, _ := CreateGroupPost(g, member, "第二篇", "内容内容", false)
-	if err := ReviewGroupPost(p2.ID, owner.ID, models.RoleAuthor, false); err != nil {
+	if err := ReviewGroupPost(p2.ID, owner.ID, social.RoleAuthor, false); err != nil {
 		t.Fatalf("拒绝失败: %v", err)
 	}
 	after, _ := GetGroupPost(p2.ID)
@@ -183,20 +184,20 @@ func TestPostReviewFlow(t *testing.T) {
 // TestInviteMemberPermission 拉人：作者可邀请；关闭成员邀请后普通成员不可邀请
 func TestInviteMemberPermission(t *testing.T) {
 	setupGroupTestDB(t)
-	owner := mkUser(t, "i_owner", models.RoleAuthor)
-	m1 := mkUser(t, "i_m1", models.RoleReader)
-	m2 := mkUser(t, "i_m2", models.RoleReader)
-	m3 := mkUser(t, "i_m3", models.RoleReader)
+	owner := mkUser(t, "i_owner", social.RoleAuthor)
+	m1 := mkUser(t, "i_m1", social.RoleReader)
+	m2 := mkUser(t, "i_m2", social.RoleReader)
+	m3 := mkUser(t, "i_m3", social.RoleReader)
 	g, err := CreateGroup(owner.ID, owner, GroupInput{Name: "拉人群"})
 	if err != nil {
 		t.Fatalf("建群失败: %v", err)
 	}
-	if _, err := InviteMember(g, owner.ID, models.RoleAuthor, owner.Username, m1.Username); err != nil {
+	if _, err := InviteMember(g, owner.ID, social.RoleAuthor, owner.Username, m1.Username); err != nil {
 		t.Fatalf("群主邀请失败: %v", err)
 	}
 	// 允许成员邀请时，普通成员可拉人
 	g, _ = GetGroup(g.ID)
-	if _, err := InviteMember(g, m1.ID, models.RoleReader, m1.Username, m2.Username); err != nil {
+	if _, err := InviteMember(g, m1.ID, social.RoleReader, m1.Username, m2.Username); err != nil {
 		t.Fatalf("成员邀请应成功: %v", err)
 	}
 	// 关闭成员邀请
@@ -205,7 +206,7 @@ func TestInviteMemberPermission(t *testing.T) {
 	if g.AllowMemberInvite {
 		t.Fatalf("关闭成员邀请未生效")
 	}
-	if _, err := InviteMember(g, m2.ID, models.RoleReader, m2.Username, m3.Username); err == nil {
+	if _, err := InviteMember(g, m2.ID, social.RoleReader, m2.Username, m3.Username); err == nil {
 		t.Fatalf("关闭成员邀请后普通成员不应能拉人")
 	}
 }

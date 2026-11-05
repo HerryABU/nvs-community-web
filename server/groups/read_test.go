@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"nvs-server/models"
+	social "nvs-server/models/social"
 )
 
 // TestParseMentions @提及解析：去重、忽略过短/非法、最多取前若干个由调用方限制
@@ -21,8 +22,8 @@ func TestParseMentions(t *testing.T) {
 // TestUnreadAndMarkRead 未读口径：他人已发布帖子计未读；自己发的不计；标记已读后归零
 func TestUnreadAndMarkRead(t *testing.T) {
 	setupGroupTestDB(t)
-	owner := mkUser(t, "r_owner", models.RoleAuthor)
-	member := mkUser(t, "r_member", models.RoleReader)
+	owner := mkUser(t, "r_owner", social.RoleAuthor)
+	member := mkUser(t, "r_member", social.RoleReader)
 
 	g, err := CreateGroup(owner.ID, owner, GroupInput{Name: "未读测试群"})
 	if err != nil {
@@ -68,7 +69,7 @@ func TestUnreadAndMarkRead(t *testing.T) {
 	}
 
 	// 非成员无未读
-	stranger := mkUser(t, "r_stranger", models.RoleReader)
+	stranger := mkUser(t, "r_stranger", social.RoleReader)
 	if n := UnreadCount(g.ID, stranger.ID); n != 0 {
 		t.Fatalf("非成员未读应为 0，得到 %d", n)
 	}
@@ -81,8 +82,8 @@ func TestUnreadAndMarkRead(t *testing.T) {
 // 现在 last_read_post_id 优先，这里把 last_read_at 人为推到未来，模拟最坏情况。
 func TestUnreadUsesPostIDNotTime(t *testing.T) {
 	setupGroupTestDB(t)
-	owner := mkUser(t, "id_owner", models.RoleAuthor)
-	member := mkUser(t, "id_member", models.RoleReader)
+	owner := mkUser(t, "id_owner", social.RoleAuthor)
+	member := mkUser(t, "id_member", social.RoleReader)
 
 	g, err := CreateGroup(owner.ID, owner, GroupInput{Name: "ID口径测试群"})
 	if err != nil {

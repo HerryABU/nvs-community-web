@@ -8,6 +8,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	social "nvs-server/models/social"
 	softdel "nvs-server/models/softdel"
 )
 
@@ -71,7 +72,7 @@ func PoliceGovernanceList(c *gin.Context) {
 
 // ensurePolice 要求 admin 或 police（与中间件 PoliceRequired 口径一致）。
 func ensurePolice(c *gin.Context) bool {
-	if !models.IsAdminOrPolice(hctx.CurrentUserRole(c)) {
+	if !social.IsAdminOrPolice(hctx.CurrentUserRole(c)) {
 		utils.Forbidden(c, "无权限")
 		return false
 	}

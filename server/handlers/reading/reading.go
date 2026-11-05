@@ -8,6 +8,7 @@ import (
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	social "nvs-server/models/social"
 )
 
 // ============ 精读：书签 + 批注 ============
@@ -46,12 +47,12 @@ func CreateReadingNote(c *gin.Context) {
 		utils.NotFound(c, "作品不存在")
 		return
 	}
-	note := &models.ReadingNote{
+	note := &social.ReadingNote{
 		UserID: userID, NovelID: req.NovelID, ChapterNumber: req.ChapterNumber,
 		Type: req.Type, Content: req.Content, SelectedText: req.SelectedText,
 		Anchor: req.Anchor, Visibility: vis,
 	}
-	if err := models.CreateReadingNote(note); err != nil {
+	if err := social.CreateReadingNote(note); err != nil {
 		utils.InternalError(c, "保存失败")
 		return
 	}
@@ -69,7 +70,7 @@ func ListMyReadingNotes(c *gin.Context) {
 	chapterNum, _ := strconv.Atoi(c.DefaultQuery("chapter_number", "0"))
 	noteType := c.Query("type")
 
-	list, err := models.ListMyReadingNotes(userID, uint(novelID), chapterNum, noteType)
+	list, err := social.ListMyReadingNotes(userID, uint(novelID), chapterNum, noteType)
 	if err != nil {
 		utils.InternalError(c, "获取笔记失败")
 		return
@@ -85,7 +86,7 @@ func ListPublicNotes(c *gin.Context) {
 		return
 	}
 	chapterNum, _ := strconv.Atoi(c.DefaultQuery("chapter_number", "0"))
-	list, err := models.ListPublicNotes(uint(novelID), chapterNum)
+	list, err := social.ListPublicNotes(uint(novelID), chapterNum)
 	if err != nil {
 		utils.InternalError(c, "获取公开批注失败")
 		return
@@ -102,7 +103,7 @@ func ListAllMyNotes(c *gin.Context) {
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	list, total, err := models.ListAllMyNotes(userID, page, pageSize)
+	list, total, err := social.ListAllMyNotes(userID, page, pageSize)
 	if err != nil {
 		utils.InternalError(c, "获取精读列表失败")
 		return
@@ -118,7 +119,7 @@ func UpdateReadingNote(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	note, err := models.GetReadingNote(uint(id))
+	note, err := social.GetReadingNote(uint(id))
 	if err != nil || note.UserID != userID {
 		utils.NotFound(c, "笔记不存在")
 		return
@@ -128,7 +129,7 @@ func UpdateReadingNote(c *gin.Context) {
 		Visibility string `json:"visibility"`
 	}
 	_ = c.ShouldBindJSON(&req)
-	if err := models.UpdateReadingNote(uint(id), req.Content, req.Visibility); err != nil {
+	if err := social.UpdateReadingNote(uint(id), req.Content, req.Visibility); err != nil {
 		utils.InternalError(c, "更新失败")
 		return
 	}
@@ -143,12 +144,12 @@ func DeleteReadingNote(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	note, err := models.GetReadingNote(uint(id))
+	note, err := social.GetReadingNote(uint(id))
 	if err != nil || note.UserID != userID {
 		utils.NotFound(c, "笔记不存在")
 		return
 	}
-	if err := models.DeleteReadingNote(uint(id)); err != nil {
+	if err := social.DeleteReadingNote(uint(id)); err != nil {
 		utils.InternalError(c, "删除失败")
 		return
 	}

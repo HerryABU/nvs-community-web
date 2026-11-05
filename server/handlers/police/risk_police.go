@@ -8,13 +8,13 @@ import (
 
 	"nvs-server/handlers/admin"
 	"nvs-server/handlers/hctx"
-	"nvs-server/models"
 	"nvs-server/police"
 	"nvs-server/risk"
 	"nvs-server/security"
 	"nvs-server/utils"
 
 	"github.com/gin-gonic/gin"
+	social "nvs-server/models/social"
 )
 
 // ─────────────── 充值风控 ───────────────
@@ -87,7 +87,7 @@ func HandleRiskEvent(c *gin.Context) {
 
 func canHandleTickets(c *gin.Context) bool {
 	role := hctx.CurrentUserRole(c)
-	return role == models.RoleAdmin || role == models.RolePolice
+	return role == social.RoleAdmin || role == social.RolePolice
 }
 
 // ListTickets GET /api/police/tickets
