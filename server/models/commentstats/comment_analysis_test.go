@@ -1,6 +1,7 @@
-package models
+package commentstats
 
 import (
+	"nvs-server/models"
 	"testing"
 	"time"
 )
@@ -8,7 +9,7 @@ import (
 // 造一个带指定时间的评论（直接落库，绕开 resolveFloor，仅用于分析测试）
 func seedComment(t *testing.T, userID, novelID uint, parentID *uint, created time.Time, micro int64) uint {
 	t.Helper()
-	c := &Comment{
+	c := &models.Comment{
 		UserID:        userID,
 		NovelID:       novelID,
 		ChapterNumber: 0,
@@ -17,7 +18,7 @@ func seedComment(t *testing.T, userID, novelID uint, parentID *uint, created tim
 		CreatedAt:     created,
 		CreatedMicro:  micro,
 	}
-	if err := DB.Create(c).Error; err != nil {
+	if err := models.DB.Create(c).Error; err != nil {
 		t.Fatalf("seed comment failed: %v", err)
 	}
 	return c.ID
@@ -26,12 +27,12 @@ func seedComment(t *testing.T, userID, novelID uint, parentID *uint, created tim
 func TestParseMentions(t *testing.T) {
 	setupTestDB(t)
 	// 两个用户：alice / 罗小黑
-	alice := User{Username: "alice", Email: "alice@example.com", Nickname: "爱丽丝"}
-	bob := User{Username: "luoheimao", Email: "luoheimao@example.com", Nickname: "罗小黑"}
-	if err := DB.Create(&alice).Error; err != nil {
+	alice := models.User{Username: "alice", Email: "alice@example.com", Nickname: "爱丽丝"}
+	bob := models.User{Username: "luoheimao", Email: "luoheimao@example.com", Nickname: "罗小黑"}
+	if err := models.DB.Create(&alice).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := DB.Create(&bob).Error; err != nil {
+	if err := models.DB.Create(&bob).Error; err != nil {
 		t.Fatal(err)
 	}
 
@@ -49,14 +50,14 @@ func TestParseMentions(t *testing.T) {
 		{"@罗小黑 中文昵称", []string{"罗小黑"}},
 	}
 	for _, c := range cases {
-		got := ParseMentions(c.content)
+		got := models.ParseMentions(c.content)
 		if len(got) != len(c.want) {
-			t.Errorf("ParseMentions(%q) = %d 条，期望 %d 条 (got=%v)", c.content, len(got), len(c.want), got)
+			t.Errorf("models.ParseMentions(%q) = %d 条，期望 %d 条 (got=%v)", c.content, len(got), len(c.want), got)
 			continue
 		}
 		for i, w := range c.want {
 			if got[i].Name != w {
-				t.Errorf("ParseMentions(%q)[%d].Name = %q，期望 %q", c.content, i, got[i].Name, w)
+				t.Errorf("models.ParseMentions(%q)[%d].Name = %q，期望 %q", c.content, i, got[i].Name, w)
 			}
 		}
 	}
@@ -68,11 +69,11 @@ func TestGetCommentNetwork_TimeEstimationAndDegrees(t *testing.T) {
 	base := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
 
 	// 用户 A、B、C
-	a := User{Username: "netA", Email: "neta@example.com"}
-	b := User{Username: "netB", Email: "netb@example.com"}
-	c := User{Username: "netC", Email: "netc@example.com"}
-	for _, u := range []*User{&a, &b, &c} {
-		if err := DB.Create(u).Error; err != nil {
+	a := models.User{Username: "netA", Email: "neta@example.com"}
+	b := models.User{Username: "netB", Email: "netb@example.com"}
+	c := models.User{Username: "netC", Email: "netc@example.com"}
+	for _, u := range []*models.User{&a, &b, &c} {
+		if err := models.DB.Create(u).Error; err != nil {
 			t.Fatal(err)
 		}
 	}

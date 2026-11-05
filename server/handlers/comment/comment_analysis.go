@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"nvs-server/models/blog"
+	commentstats "nvs-server/models/commentstats"
 	siteops "nvs-server/models/siteops"
 )
 
@@ -123,7 +124,7 @@ func GetMentionCandidates(c *gin.Context) {
 			limit = n
 		}
 	}
-	cands, err := models.GetMentionCandidates(targetType, targetID, scope, q, limit)
+	cands, err := commentstats.GetMentionCandidates(targetType, targetID, scope, q, limit)
 	if err != nil {
 		utils.InternalError(c, "获取候选失败")
 		return
@@ -141,7 +142,7 @@ func GetCommentNetwork(c *gin.Context) {
 		return
 	}
 	filterUserID := uint(mustUint(c.Query("user_id")))
-	net, err := models.GetCommentNetwork(targetType, targetID, filterUserID)
+	net, err := commentstats.GetCommentNetwork(targetType, targetID, filterUserID)
 	if err != nil {
 		utils.InternalError(c, "分析失败")
 		return

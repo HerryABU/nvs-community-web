@@ -1,4 +1,4 @@
-package models
+package commentstats
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"nvs-server/models"
 )
 
 // setupCommentSortTestDB 独立内存库（唯一名，避免与同包其他测试共享污染）
@@ -17,10 +18,10 @@ func setupCommentSortTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("打开测试库失败: %v", err)
 	}
-	if err := AutoMigrateAll(db); err != nil {
+	if err := models.AutoMigrateAll(db); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
-	DB = db
+	models.DB = db
 	t.Cleanup(func() {
 		if sqlDB, e := db.DB(); e == nil {
 			_ = sqlDB.Close()
@@ -34,12 +35,12 @@ func setupCommentSortTestDB(t *testing.T) *gorm.DB {
 //	A 楼（最早建，2 条回复）、B 楼（最晚建，0 条回复）、C 楼（居中，1 条回复）
 //
 // 期望：new → B,C,A；old → A,C,B；hot → A,C,B
-func seedSortFloors(t *testing.T) (a, b, c *Comment) {
+func seedSortFloors(t *testing.T) (a, b, c *models.Comment) {
 	t.Helper()
 	base := time.Now().Add(-3 * time.Hour)
-	mk := func(content string, at time.Time) *Comment {
-		cm := &Comment{UserID: 1, NovelID: 9001, Content: content, FloorNo: 1, CreatedAt: at, UpdatedAt: at}
-		if err := DB.Create(cm).Error; err != nil {
+	mk := func(content string, at time.Time) *models.Comment {
+		cm := &models.Comment{UserID: 1, NovelID: 9001, Content: content, FloorNo: 1, CreatedAt: at, UpdatedAt: at}
+		if err := models.DB.Create(cm).Error; err != nil {
 			t.Fatalf("创建楼失败: %v", err)
 		}
 		return cm
@@ -48,10 +49,10 @@ func seedSortFloors(t *testing.T) (a, b, c *Comment) {
 	c = mk("C楼", base.Add(time.Hour))
 	b = mk("B楼", base.Add(2*time.Hour))
 
-	mkReply := func(root *Comment, content string, at time.Time) {
+	mkReply := func(root *models.Comment, content string, at time.Time) {
 		rid := root.ID
-		r := &Comment{UserID: 2, NovelID: 9001, Content: content, RootID: &rid, ParentID: &rid, CreatedAt: at, UpdatedAt: at}
-		if err := DB.Create(r).Error; err != nil {
+		r := &models.Comment{UserID: 2, NovelID: 9001, Content: content, RootID: &rid, ParentID: &rid, CreatedAt: at, UpdatedAt: at}
+		if err := models.DB.Create(r).Error; err != nil {
 			t.Fatalf("创建回复失败: %v", err)
 		}
 	}
@@ -62,7 +63,7 @@ func seedSortFloors(t *testing.T) (a, b, c *Comment) {
 }
 
 // floorIDsOf 取分页结果里的楼层顺序（只保留顶层评论）
-func floorIDsOf(pg CommentsPage) []uint {
+func floorIDsOf(pg models.CommentsPage) []uint {
 	ids := make([]uint, 0, len(pg.List))
 	for _, cm := range pg.List {
 		if cm.ParentID == nil {
@@ -72,7 +73,7 @@ func floorIDsOf(pg CommentsPage) []uint {
 	return ids
 }
 
-func assertFloorOrder(t *testing.T, pg CommentsPage, want []uint, label string) {
+func assertFloorOrder(t *testing.T, pg models.CommentsPage, want []uint, label string) {
 	t.Helper()
 	got := floorIDsOf(pg)
 	if len(got) != len(want) {
@@ -101,8 +102,8 @@ func TestCommentsSortOrders(t *testing.T) {
 	setupCommentSortTestDB(t)
 	a, b, c := seedSortFloors(t)
 
-	base := func(sort string) CommentsPage {
-		pg, err := GetCommentsByNovel(9001, 0, 1, 20, false, sort)
+	base := func(sort string) models.CommentsPage {
+		pg, err := models.GetCommentsByNovel(9001, 0, 1, 20, false, sort)
 		if err != nil {
 			t.Fatalf("查询评论失败(sort=%q): %v", sort, err)
 		}
@@ -130,15 +131,15 @@ func TestCommentsSortHotIgnoresDeletedReplies(t *testing.T) {
 
 	// 把 A 楼的两条回复删掉 → A 热度归零；C 楼仍有 1 条回复排第一，
 	// A 与 B 同热度（0）时按建楼时间倒序 → B 在 A 前
-	var replies []Comment
-	DB.Where("root_id = ?", a.ID).Find(&replies)
+	var replies []models.Comment
+	models.DB.Where("root_id = ?", a.ID).Find(&replies)
 	for _, r := range replies {
-		if err := DeleteComment(r.ID); err != nil {
+		if err := models.DeleteComment(r.ID); err != nil {
 			t.Fatalf("删除回复失败: %v", err)
 		}
 	}
 
-	pg, err := GetCommentsByNovel(9001, 0, 1, 20, false, "hot")
+	pg, err := models.GetCommentsByNovel(9001, 0, 1, 20, false, "hot")
 	if err != nil {
 		t.Fatalf("查询评论失败: %v", err)
 	}

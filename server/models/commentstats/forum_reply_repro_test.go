@@ -1,55 +1,56 @@
-package models
+package commentstats
 
 import (
+	"nvs-server/models"
 	"testing"
 
 	"gorm.io/gorm"
 )
 
 // TestForumReplyVisibility 复现论坛「看不到回复」：建帖子→建楼→建楼内回复，
-// 验证 GetPostsByThread 是否把回复随楼层一并返回，且回复的 root_id 指向楼层。
+// 验证 models.GetPostsByThread 是否把回复随楼层一并返回，且回复的 root_id 指向楼层。
 func TestForumReplyVisibility(t *testing.T) {
 	setupTestDB(t)
 
 	// 造两个用户（楼主 + 回复者）
-	owner := &User{Username: "fowner", Nickname: "楼主", Email: "fowner@example.com"}
-	replier := &User{Username: "freplier", Nickname: "回复者", Email: "freplier@example.com"}
-	if err := DB.Create(owner).Error; err != nil {
+	owner := &models.User{Username: "fowner", Nickname: "楼主", Email: "fowner@example.com"}
+	replier := &models.User{Username: "freplier", Nickname: "回复者", Email: "freplier@example.com"}
+	if err := models.DB.Create(owner).Error; err != nil {
 		t.Fatalf("seed owner: %v", err)
 	}
-	if err := DB.Create(replier).Error; err != nil {
+	if err := models.DB.Create(replier).Error; err != nil {
 		t.Fatalf("seed replier: %v", err)
 	}
 
 	// 造论坛 + 帖子（线程）
-	forum := &Forum{Name: "测试论坛", Description: "d", Type: "general"}
-	if err := DB.Create(forum).Error; err != nil {
+	forum := &models.Forum{Name: "测试论坛", Description: "d", Type: "general"}
+	if err := models.DB.Create(forum).Error; err != nil {
 		t.Fatalf("seed forum: %v", err)
 	}
-	thread := &Thread{ForumID: forum.ID, UserID: owner.ID, Title: "测试帖", Content: "主楼内容"}
-	if err := CreateThread(thread); err != nil {
+	thread := &models.Thread{ForumID: forum.ID, UserID: owner.ID, Title: "测试帖", Content: "主楼内容"}
+	if err := models.CreateThread(thread); err != nil {
 		t.Fatalf("seed thread: %v", err)
 	}
 
 	// 1) 楼主发一条楼层（parent_id 为空）
-	floor := &Post{ThreadID: thread.ID, UserID: owner.ID, Content: "我是1楼", ParentID: nil}
-	if err := CreatePost(floor); err != nil {
+	floor := &models.Post{ThreadID: thread.ID, UserID: owner.ID, Content: "我是1楼", ParentID: nil}
+	if err := models.CreatePost(floor); err != nil {
 		t.Fatalf("create floor: %v", err)
 	}
 	t.Logf("floor id=%d root=%v floor_no=%d", floor.ID, floor.RootID, floor.FloorNo)
 
 	// 2) 回复者回复该楼层（parent_id = floor.ID）
 	replyParent := floor.ID
-	reply := &Post{ThreadID: thread.ID, UserID: replier.ID, Content: "回复1楼", ParentID: &replyParent}
-	if err := CreatePost(reply); err != nil {
+	reply := &models.Post{ThreadID: thread.ID, UserID: replier.ID, Content: "回复1楼", ParentID: &replyParent}
+	if err := models.CreatePost(reply); err != nil {
 		t.Fatalf("create reply: %v", err)
 	}
 	t.Logf("reply id=%d parent=%v root=%v floor_no=%d", reply.ID, reply.ParentID, reply.RootID, reply.FloorNo)
 
 	// 3) 取回帖子回复
-	pg, err := GetPostsByThread(thread.ID, 1, 20)
+	pg, err := models.GetPostsByThread(thread.ID, 1, 20)
 	if err != nil {
-		t.Fatalf("GetPostsByThread: %v", err)
+		t.Fatalf("models.GetPostsByThread: %v", err)
 	}
 	t.Logf("returned list len=%d total=%d floorTotal=%d", len(pg.List), pg.Total, pg.FloorTotal)
 

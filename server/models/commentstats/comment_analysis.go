@@ -1,6 +1,7 @@
-package models
+package commentstats
 
 import (
+	"nvs-server/models"
 	"strings"
 )
 
@@ -24,10 +25,10 @@ func GetMentionCandidates(targetType string, targetID uint, scope, q string, lim
 	if limit <= 0 || limit > 50 {
 		limit = 20
 	}
-	var users []User
+	var users []models.User
 	var err error
 	if scope == "global" {
-		q2 := DB.Model(&User{})
+		q2 := models.DB.Model(&models.User{})
 		if q != "" {
 			q2 = q2.Where("username LIKE ? OR nickname LIKE ?", "%"+q+"%", "%"+q+"%")
 		}
@@ -35,7 +36,7 @@ func GetMentionCandidates(targetType string, targetID uint, scope, q string, lim
 	} else {
 		// 本作品参与者：先取去重评论者 user_id，再按 q 过滤用户名
 		var uids []uint
-		base := DB.Model(&Comment{})
+		base := models.DB.Model(&models.Comment{})
 		if targetType == "blog" {
 			base = base.Where("blog_id = ?", targetID)
 		} else {
@@ -45,7 +46,7 @@ func GetMentionCandidates(targetType string, targetID uint, scope, q string, lim
 		if len(uids) == 0 {
 			return []MentionCandidate{}, nil
 		}
-		q2 := DB.Where("id IN ?", uids)
+		q2 := models.DB.Where("id IN ?", uids)
 		if q != "" {
 			q2 = q2.Where("username LIKE ? OR nickname LIKE ?", "%"+q+"%", "%"+q+"%")
 		}
@@ -126,7 +127,7 @@ func commentSnippet(s string) string {
 	return s
 }
 
-func effMicro(c Comment) int64 {
+func effMicro(c models.Comment) int64 {
 	if c.CreatedMicro > 0 {
 		return c.CreatedMicro
 	}
@@ -138,8 +139,8 @@ func effMicro(c Comment) int64 {
 // 时间估计：对每条 A→B 的回复，取 B 在回复时刻前的最新评论作为「估计目标」，
 // 若该估计目标 != 显式父评论，则标记 is_estimated=true（即 A 大概率是在顺着 B 最新轨迹留言）。
 func GetCommentNetwork(targetType string, targetID, filterUserID uint) (*CommentNetwork, error) {
-	var comments []Comment
-	base := DB.Model(&Comment{})
+	var comments []models.Comment
+	base := models.DB.Model(&models.Comment{})
 	if targetType == "blog" {
 		base = base.Where("blog_id = ?", targetID)
 	} else {
@@ -151,9 +152,9 @@ func GetCommentNetwork(targetType string, targetID, filterUserID uint) (*Comment
 		return nil, err
 	}
 
-	byID := make(map[uint]Comment, len(comments))
+	byID := make(map[uint]models.Comment, len(comments))
 	// 每位评论者的评论（按微秒倒序），用于时间估计取「回复时刻前的最新」
-	byUser := map[uint][]Comment{}
+	byUser := map[uint][]models.Comment{}
 	for _, c := range comments {
 		byID[c.ID] = c
 		byUser[c.UserID] = append(byUser[c.UserID], c)
@@ -181,8 +182,8 @@ func GetCommentNetwork(targetType string, targetID, filterUserID uint) (*Comment
 		for id := range needUID {
 			ids = append(ids, id)
 		}
-		var users []User
-		DB.Where("id IN ?", ids).Find(&users)
+		var users []models.User
+		models.DB.Where("id IN ?", ids).Find(&users)
 		for _, u := range users {
 			nameOf[u.ID] = struct{ username, nickname string }{u.Username, u.Nickname}
 		}
