@@ -32,8 +32,15 @@ func AdminGetPaymentConfig(c *gin.Context) {
 		"min_fen":       cfg.MinFen,
 		"max_fen":       cfg.MaxFen,
 		"order_ttl_min": cfg.OrderTTLMin,
-		"tiers":         wallet.GetPaymentTiers(),
-		"stats":         wallet.PaymentStats(),
+		// #67 官方直连：非敏感字段可读，私钥/密钥只返回「是否已设置」
+		"wx_app_id":    cfg.WxAppID,
+		"wx_mch_id":    cfg.WxMchID,
+		"wx_serial_no": cfg.WxSerialNo,
+		"ali_app_id":   cfg.AliAppID,
+		"ali_sandbox":  cfg.AliSandbox,
+		"direct_set":   cfg.DirectSensitiveSet(),
+		"tiers":        wallet.GetPaymentTiers(),
+		"stats":        wallet.PaymentStats(),
 	})
 }
 
@@ -54,6 +61,17 @@ func AdminSetPaymentConfig(c *gin.Context) {
 		MinFen      int64   `json:"min_fen"`
 		MaxFen      int64   `json:"max_fen"`
 		OrderTTLMin int     `json:"order_ttl_min"`
+		// #67 官方直连凭据（私钥类用指针：nil=保持原值，""=清空）
+		WxAppID        string  `json:"wx_app_id"`
+		WxMchID        string  `json:"wx_mch_id"`
+		WxSerialNo     string  `json:"wx_serial_no"`
+		WxAPIV3Key     *string `json:"wx_api_v3_key"`
+		WxPrivateKey   *string `json:"wx_private_key"`
+		WxPlatformCert *string `json:"wx_platform_cert"`
+		AliAppID       string  `json:"ali_app_id"`
+		AliPrivateKey  *string `json:"ali_private_key"`
+		AliPublicKey   *string `json:"ali_public_key"`
+		AliSandbox     *bool   `json:"ali_sandbox"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		infra.BadRequest(c, "参数错误")
@@ -79,6 +97,29 @@ func AdminSetPaymentConfig(c *gin.Context) {
 	}
 	if req.OrderTTLMin > 0 {
 		cfg.OrderTTLMin = req.OrderTTLMin
+	}
+	// #67 直连凭据：非敏感字段直接覆盖，敏感字段仅在显式传入时改动
+	cfg.WxAppID = req.WxAppID
+	cfg.WxMchID = req.WxMchID
+	cfg.WxSerialNo = req.WxSerialNo
+	cfg.AliAppID = req.AliAppID
+	if req.AliSandbox != nil {
+		cfg.AliSandbox = *req.AliSandbox
+	}
+	if req.WxAPIV3Key != nil {
+		cfg.WxAPIV3Key = *req.WxAPIV3Key
+	}
+	if req.WxPrivateKey != nil {
+		cfg.WxPrivateKey = *req.WxPrivateKey
+	}
+	if req.WxPlatformCert != nil {
+		cfg.WxPlatformCert = *req.WxPlatformCert
+	}
+	if req.AliPrivateKey != nil {
+		cfg.AliPrivateKey = *req.AliPrivateKey
+	}
+	if req.AliPublicKey != nil {
+		cfg.AliPublicKey = *req.AliPublicKey
 	}
 	if err := wallet.SetPaymentConfig(cfg); err != nil {
 		infra.InternalError(c, "保存失败")

@@ -47,6 +47,7 @@ const (
 
 	PayProviderMock      = "mock"      // 模拟 provider
 	PayProviderAggregate = "aggregate" // 通用聚合支付 provider（易支付/码支付类）
+	PayProviderDirect    = "direct"    // #67 官方直连（微信支付 APIv3 Native / 支付宝当面付）
 
 	PayStatusPending = "pending" // 待支付
 	PayStatusPaid    = "paid"    // 已支付（已到账）
@@ -73,7 +74,7 @@ var PayStatusLabels = map[string]string{
 
 // PaymentConfig 支付通道配置（secret 只写不读：管理端 GET 不返回明文）
 type PaymentConfig struct {
-	Provider    string `json:"provider"`      // mock / aggregate
+	Provider    string `json:"provider"`      // mock / aggregate / direct
 	GatewayURL  string `json:"gateway_url"`   // 聚合网关下单地址
 	AppID       string `json:"app_id"`        // 商户 ID（pid）
 	Secret      string `json:"secret"`        // 商户密钥（验签用，GET 时掩码）
@@ -83,6 +84,33 @@ type PaymentConfig struct {
 	MinFen      int64  `json:"min_fen"`       // 单笔下限（分），默认 100（1 元）
 	MaxFen      int64  `json:"max_fen"`       // 单笔上限（分），默认 1000000（10000 元）
 	OrderTTLMin int    `json:"order_ttl_min"` // 订单有效期（分钟），默认 30
+
+	// ── #67 官方直连凭据（仅在 provider=direct 时生效）──
+	// 私钥 / 密钥类字段沿用本文件既有约定：只写不读，管理端 GET 仅返回 *_set 布尔。
+	// 微信支付 APIv3 Native：商户私钥签名，微信平台证书（或平台公钥）验回调签名，
+	// APIv3Key 用于 AES-256-GCM 解密回调 resource。
+	WxAppID        string `json:"wx_app_id"`
+	WxMchID        string `json:"wx_mch_id"`
+	WxSerialNo     string `json:"wx_serial_no"`
+	WxAPIV3Key     string `json:"wx_api_v3_key"`
+	WxPrivateKey   string `json:"wx_private_key"`
+	WxPlatformCert string `json:"wx_platform_cert"`
+	// 支付宝当面付 alipay.trade.precreate：应用私钥签名，支付宝公钥验回调签名。
+	AliAppID      string `json:"ali_app_id"`
+	AliPrivateKey string `json:"ali_private_key"`
+	AliPublicKey  string `json:"ali_public_key"`
+	AliSandbox    bool   `json:"ali_sandbox"`
+}
+
+// DirectSensitiveSet 返回各敏感凭据是否已配置（管理端 GET 用，绝不回传明文）。
+func (c PaymentConfig) DirectSensitiveSet() map[string]bool {
+	return map[string]bool{
+		"wx_api_v3_key":    strings.TrimSpace(c.WxAPIV3Key) != "",
+		"wx_private_key":   strings.TrimSpace(c.WxPrivateKey) != "",
+		"wx_platform_cert": strings.TrimSpace(c.WxPlatformCert) != "",
+		"ali_private_key":  strings.TrimSpace(c.AliPrivateKey) != "",
+		"ali_public_key":   strings.TrimSpace(c.AliPublicKey) != "",
+	}
 }
 
 // DefaultPaymentConfig 默认配置：模拟支付、1 元=1000 代币
@@ -96,9 +124,19 @@ func DefaultPaymentConfig() PaymentConfig {
 // normalizePaymentConfig 钳制配置，防异常值
 func normalizePaymentConfig(cfg PaymentConfig) PaymentConfig {
 	cfg.Provider = strings.ToLower(strings.TrimSpace(cfg.Provider))
-	if cfg.Provider != PayProviderAggregate {
+	if cfg.Provider != PayProviderAggregate && cfg.Provider != PayProviderDirect {
 		cfg.Provider = PayProviderMock
 	}
+	// 直连凭据：PEM 私钥/证书允许内部换行，只去首尾空白；其余字段全 trim
+	cfg.WxAppID = strings.TrimSpace(cfg.WxAppID)
+	cfg.WxMchID = strings.TrimSpace(cfg.WxMchID)
+	cfg.WxSerialNo = strings.TrimSpace(cfg.WxSerialNo)
+	cfg.WxAPIV3Key = strings.TrimSpace(cfg.WxAPIV3Key)
+	cfg.WxPrivateKey = strings.TrimSpace(cfg.WxPrivateKey)
+	cfg.WxPlatformCert = strings.TrimSpace(cfg.WxPlatformCert)
+	cfg.AliAppID = strings.TrimSpace(cfg.AliAppID)
+	cfg.AliPrivateKey = strings.TrimSpace(cfg.AliPrivateKey)
+	cfg.AliPublicKey = strings.TrimSpace(cfg.AliPublicKey)
 	cfg.GatewayURL = strings.TrimSpace(cfg.GatewayURL)
 	cfg.AppID = strings.TrimSpace(cfg.AppID)
 	cfg.Secret = strings.TrimSpace(cfg.Secret)
@@ -325,7 +363,7 @@ func CreateRechargeOrder(userID uint, channel string, fen int64) (*RechargeOrder
 	if channel == PayChannelMock && cfg.Provider != PayProviderMock {
 		return nil, fmt.Errorf("当前通道未启用模拟支付")
 	}
-	if channel != PayChannelMock && cfg.Provider != PayProviderAggregate {
+	if channel != PayChannelMock && cfg.Provider != PayProviderAggregate && cfg.Provider != PayProviderDirect {
 		return nil, fmt.Errorf("当前通道未启用在线支付")
 	}
 	tier, ok := ResolvePaymentTier(fen)
