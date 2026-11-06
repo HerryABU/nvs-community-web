@@ -31,6 +31,7 @@ declare module 'vue' {
     AiPromptLibrary: typeof import('./src/components/ai/AiPromptLibrary.vue')['default']
     AiVideoPanel: typeof import('./src/components/ai/AiVideoPanel.vue')['default']
     AiWriteLayer: typeof import('./src/components/ai/floating/AiWriteLayer.vue')['default']
+    AiWriteVisuals: typeof import('./src/components/author/AiWriteVisuals.vue')['default']
     AnimatedNumber: typeof import('./src/components/common/AnimatedNumber.vue')['default']
     AuthorCard: typeof import('./src/components/author/AuthorCard.vue')['default']
     BlockBlogs: typeof import('./src/components/home/BlockBlogs.vue')['default']

@@ -48,6 +48,7 @@
           placeholder="更详细的风格要求（如：第三人称限知、冷峻白描、每章结尾留钩子…）"
         />
         <el-button size="small" :loading="saving" @click="saveAll">保存进度与设置</el-button>
+        <el-button size="small" @click="visVisible = true">可视化（时间线/人物关系）</el-button>
       </div>
 
       <!-- 结构化物料：设定 / 人物 / 大纲 / 时间线 / 正文 -->
@@ -88,6 +89,10 @@
         <el-button type="success" :loading="publishing" @click="publishNovel">生成小说（落地草稿）</el-button>
       </div>
     </div>
+
+    <el-dialog v-model="visVisible" title="AI 写作可视化" width="80%" top="5vh">
+      <AiWriteVisuals :timeline="form.timeline" :characters="form.characters" />
+    </el-dialog>
   </div>
 </template>
 
@@ -95,11 +100,13 @@
 import { ref, reactive } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { authorAiApi, STYLE_OPTIONS, type AiWriteProject, type StylePreset } from '@/api/authorai';
+import AiWriteVisuals from '@/components/author/AiWriteVisuals.vue';
 
 const loading = ref(false);
 const creating = ref(false);
 const saving = ref(false);
 const publishing = ref(false);
+const visVisible = ref(false);
 const projects = ref<AiWriteProject[]>([]);
 const current = ref<AiWriteProject | null>(null);
 
