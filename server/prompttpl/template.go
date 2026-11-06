@@ -653,8 +653,8 @@ var builtinSeeds = []Template{
 	},
 	{
 		Key: "authorai-timeline", Title: "AI写作·时间线/大事年表", Scene: SceneAuthorAI, Category: "素材", Kind: KindChat,
-		Note:    "含嵌套循环；循环格式由模板约定（[LOOP:loop_key] … [/LOOP]）",
-		Content: "你正在为长篇中文小说《{{NovelTitle}}》{{TaskMode}}大事年表（时间线）。\n\n风格基调：\n{{StyleDirective}}\n\n用户补充要求：\n{{ExtraRequirements}}\n\n已有时间线（若为「从零创作」可忽略；若已有请保持自洽）：\n{{ExistingContent}}\n\n输出格式要求：\n- 按故事内时间顺序列出事件；\n- 每个事件标注：时间、涉及人物、事件简述；\n- 嵌套循环用 [LOOP:loop_key] 开始、[/LOOP] 结束，循环内事件缩进表示层级；\n- 循环嵌套最多 3 层，每个 loop_key 全局唯一。\n只输出时间线正文。",
+		Note:    "含嵌套循环 [LOOP] 与特殊回环 ret/returnA/[A] 锚点；格式由本模板约定，可在后台自定义；用于 AI 故事方向指导，前端据此渲染流程图",
+		Content: "你正在为长篇中文小说《{{NovelTitle}}》{{TaskMode}}大事年表（时间线）。\n\n风格基调：\n{{StyleDirective}}\n\n用户补充要求：\n{{ExtraRequirements}}\n\n已有时间线（若为「从零创作」可忽略；若已有请保持自洽）：\n{{ExistingContent}}\n\n【时间线结构约定——请严格使用，便于前端可视化与续写一致性】\n用户给出的原始时间线往往是自由文本、口语化、非格式化的描述。请先将其「洗稿/归一化」为下方结构化约定，再输出：\n\n1. 基础事件：每行一个事件，格式「时间 事件简述（可含涉及人物）」，按故事内时间顺序。\n2. 嵌套循环（整段重复）：用 [LOOP:loop_key] 开始、[/LOOP] 结束（或 [LOOPEND:loop_key] 闭合）；循环内事件缩进表示层级；loop_key 全局唯一，嵌套最多 3 层。\n3. 特殊回环 / 时间回溯（点状跳回，用于时间循环、穿越、重启类叙事）：\n   - [A] 在某一行声明一个名为 A 的时间锚点（A 为字母数字，可附描述，如 [A] 1990 世界线开启）；\n   - ret         回到「最近一个锚点」（无锚点则回到时间线起点）；\n   - returnA/retA 回到名为 A 的锚点（A 也可指向某个 [LOOP:id] 的开启点，循环开启即隐式锚点）。\n4. 该约定是「故事方向提示」：用于你后续续写时维持时间线自洽（哪些事件反复发生、哪些被回溯重置），前端会据此渲染流程图。\n\n只输出归一化后的时间线正文，不要输出解释或示例之外的说明。",
 		Vars: []TemplateVar{
 			{Name: "NovelTitle", Label: "作品名", MaxLen: 60},
 			{Name: "StyleDirective", Label: "风格基调", MaxLen: 400},
