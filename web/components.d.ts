@@ -133,6 +133,7 @@ declare module 'vue' {
     GroupQrCard: typeof import('./src/components/group/GroupQrCard.vue')['default']
     GroupSettings: typeof import('./src/components/group/GroupSettings.vue')['default']
     HomeBlocks: typeof import('./src/components/home/HomeBlocks.vue')['default']
+    HomeHeader: typeof import('./src/components/home/HomeHeader.vue')['default']
     HomeHero: typeof import('./src/components/home/HomeHero.vue')['default']
     HomeModuleSection: typeof import('./src/components/home/HomeModuleSection.vue')['default']
     HomeNoticeBar: typeof import('./src/components/home/HomeNoticeBar.vue')['default']

@@ -14,6 +14,9 @@
     />
 
     <div class="page-container">
+      <!-- ====== 现代首页标头（替代被移除的旧 Hero） ====== -->
+      <HomeHeader />
+
       <div class="home-top-bar" v-if="authStore.isLoggedIn">
         <el-button type="primary" size="large" @click="$router.push('/author/editor')">
           <el-icon><Plus /></el-icon> 发布作品
@@ -41,6 +44,7 @@ import { useAuthStore } from '@/stores/auth';
 import { appPrefix } from '@/utils/prefix';
 import HomeSearchResults from '@/components/home/HomeSearchResults.vue';
 import HomeBlocks from '@/components/home/HomeBlocks.vue';
+import HomeHeader from '@/components/home/HomeHeader.vue';
 import { Grid, List, Plus } from '@element-plus/icons-vue';
 
 const authStore = useAuthStore();

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import { themeApi, type ThemeJSMode } from '@/api/home/theme';
+import { themeApi, type ThemeJSMode, type ThemeSettings } from '@/api/home/theme';
 import api from '@/api';
 import { useAuthStore } from '@/stores/auth';
 import { useAppStore } from '@/stores/app';
@@ -67,6 +67,9 @@ export const useThemeStore = defineStore('theme', () => {
   // F12a 全站 opt-in iframe（管理员配置允许列表 URL，访客可读启用状态）
   const globalIframe = ref<{ enabled: boolean; url: string }>({ enabled: false, url: '' });
 
+  // 结构化主题设置（可视化控件生成，与原始 CSS 互补）：背景 / 毛玻璃 / 按钮 / 看板娘
+  const siteSettings = ref<ThemeSettings>(defaultThemeSettings());
+
   // 生效 CSS：个人主题优先；两者均挂载时 my 后写入即覆盖 site
   const effectiveCss = computed(() => (myCss.value.trim() ? myCss.value : siteCss.value));
 
@@ -89,6 +92,7 @@ export const useThemeStore = defineStore('theme', () => {
       siteJs.value = site.value.data.data?.js || '';
       siteJsMode.value = normalizeJsMode(site.value.data.data?.js_mode);
       siteJsDelay.value = site.value.data.data?.js_delay || 0;
+      siteSettings.value = parseSettings(site.value.data.data?.settings);
     }
     const me = settled[1];
     if (me && me.status === 'fulfilled' && me.value?.data?.code === 0) {
@@ -104,13 +108,16 @@ export const useThemeStore = defineStore('theme', () => {
     loadGlobalIframe();
   }
 
-  // 写入两个 <style> 标签注入主题 CSS。安全：textContent（CSS 不构 XSS），
-  // 真正防线在服务端白名单消毒（utils.SanitizeCSS）。
+  // 写入 <style> 标签注入主题 CSS。优先级（后者覆盖前者）：
+  // 结构化 CSS（nvs-theme-structured，由可视化控件生成）→ 站点原始 CSS → 个人 CSS。
+  // 安全：textContent（CSS 不构 XSS）；真正防线在服务端白名单消毒（utils.SanitizeCSS）。
   function applyCustomTheme(): void {
+    writeStyleTag('nvs-theme-structured', buildStructuredCSS(siteSettings.value));
     writeStyleTag('nvs-site-theme', siteCss.value);
     writeStyleTag('nvs-my-theme', myCss.value);
     scheduleScriptTag('nvs-site-js', siteJs.value, siteJsMode.value, siteJsDelay.value);
     scheduleScriptTag('nvs-my-js', myJs.value, myJsMode.value, myJsDelay.value);
+    applyMascot(siteSettings.value);
   }
 
   // 重置个人主题（本地即时生效；持久化删除由页面调用 updateMyTheme('', '') 完成）
@@ -149,8 +156,84 @@ export const useThemeStore = defineStore('theme', () => {
     siteCss, myCss, effectiveCss, loadTheme, applyCustomTheme, resetMyTheme,
     globalIframe, loadGlobalIframe, loadAuthorTheme, clearAuthorTheme,
     siteJs, myJs, siteJsMode, siteJsDelay, myJsMode, myJsDelay,
+    siteSettings,
   };
 });
+
+// ===== 结构化主题设置（可视化控件 → 生成结构化 CSS，对齐 alist 的可视化美化能力）=====
+function defaultThemeSettings(): ThemeSettings {
+  return {
+    background: { type: 'color', value: '' },
+    glass: { enabled: true, blur: 20, opacity: 0.6, tint: '#ffffff' },
+    button: { radius: 12, primary: '' },
+    mascot: { enabled: false, script_url: '' },
+  };
+}
+
+// parseSettings 合并默认值，容错非法 JSON（前端本地解析，服务端还会再次校验）
+function parseSettings(raw?: string): ThemeSettings {
+  const def = defaultThemeSettings();
+  if (!raw) return def;
+  try {
+    const p = JSON.parse(raw);
+    return {
+      background: { ...def.background, ...(p.background || {}) },
+      glass: { ...def.glass, ...(p.glass || {}) },
+      button: { ...def.button, ...(p.button || {}) },
+      mascot: { ...def.mascot, ...(p.mascot || {}) },
+    };
+  } catch {
+    return def;
+  }
+}
+
+// hexToRgba 将 HEX 颜色转为带透明度的 rgba()（毛玻璃底色）
+function hexToRgba(hex: string, alpha: number): string {
+  let h = (hex || '').replace('#', '');
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  if (h.length !== 6) return `rgba(255,255,255,${alpha})`;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  if ([r, g, b].some((n) => Number.isNaN(n))) return `rgba(255,255,255,${alpha})`;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// buildStructuredCSS 由结构化设置生成 CSS：覆盖站点级 CSS 变量（背景 / 玻璃 / 主色 / 圆角）。
+// 原始 CSS 文本仍可覆盖这些变量，两者互补而非互斥。
+function buildStructuredCSS(s: ThemeSettings): string {
+  const rules: string[] = [];
+  if (s.background?.value) {
+    let bg = s.background.value;
+    if (s.background.type === 'image') bg = `url("${bg}") center / cover no-repeat fixed`;
+    rules.push(`html, body { background: ${bg} !important; }`);
+  }
+  const blur = s.glass?.enabled ? Math.max(0, s.glass.blur || 20) : 0;
+  const tint = s.glass?.tint || '#ffffff';
+  const opacity = s.glass?.enabled ? Math.min(1, Math.max(0, s.glass.opacity ?? 0.6)) : 0;
+  rules.push(`:root { --glass-blur: ${blur}px; --glass-bg: ${hexToRgba(tint, opacity)}; }`);
+  if (s.button?.primary) rules.push(`:root { --primary-color: ${s.button.primary}; }`);
+  if (s.button?.radius != null && s.button.radius >= 0) {
+    rules.push(`:root { --radius-md: ${s.button.radius}px; --radius-lg: ${s.button.radius + 4}px; }`);
+  }
+  return rules.join('\n');
+}
+
+// applyMascot 看板娘（兼容 alist/live2d 等任意外部脚本）：加载管理员配置的 script_url，
+// 挂载点 #nvs-mascot 由 App.vue 提供；未启用或无 URL 时隐藏挂载点。
+function applyMascot(s: ThemeSettings): void {
+  const existing = document.getElementById('nvs-mascot-script');
+  if (existing) existing.remove();
+  const slot = document.getElementById('nvs-mascot');
+  const enabled = !!s.mascot?.enabled && !!s.mascot?.script_url;
+  if (slot) slot.style.display = enabled ? '' : 'none';
+  if (!enabled) return;
+  const el = document.createElement('script');
+  el.id = 'nvs-mascot-script';
+  el.src = s.mascot.script_url;
+  el.async = true;
+  document.head.appendChild(el);
+}
 
 // writeStyleTag 确保 <style id> 存在并以 textContent 写入 CSS
 function writeStyleTag(id: string, css: string): void {

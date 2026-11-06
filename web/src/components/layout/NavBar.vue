@@ -527,8 +527,8 @@ onUnmounted(() => {
   height: calc(62px + env(safe-area-inset-top, 0px));
   padding-top: env(safe-area-inset-top, 0px);
   background: var(--glass-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(var(--glass-blur, 20px));
+  -webkit-backdrop-filter: blur(var(--glass-blur, 20px));
   border-bottom: 1px solid var(--glass-border);
   z-index: 100;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -537,8 +537,8 @@ onUnmounted(() => {
 
 [data-theme="dark"] .navbar {
   background: rgba(15, 17, 23, 0.8);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(var(--glass-blur, 20px));
+  -webkit-backdrop-filter: blur(var(--glass-blur, 20px));
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }

@@ -12,6 +12,8 @@ export interface ThemeSaveResult {
   js_mode: ThemeJSMode;
   js_delay: number;
   removed: string[];
+  /** 结构化主题设置（可视化控件生成的 JSON 字符串） */
+  settings: string;
 }
 
 export interface ThemeData {
@@ -19,6 +21,16 @@ export interface ThemeData {
   js: string;
   js_mode: ThemeJSMode;
   js_delay: number;
+  /** 结构化主题设置（可视化控件生成的 JSON 字符串） */
+  settings: string;
+}
+
+/** 结构化主题设置（可视化控件 → 生成结构化 CSS，对齐 alist 的可视化美化能力） */
+export interface ThemeSettings {
+  background: { type: 'color' | 'gradient' | 'image'; value: string };
+  glass: { enabled: boolean; blur: number; opacity: number; tint: string };
+  button: { radius: number; primary: string };
+  mascot: { enabled: boolean; script_url: string };
 }
 
 /** 主题自定义 JS 的加载模式（对齐 alist 的「延迟加载」） */
@@ -33,8 +45,8 @@ export const themeApi = {
   // 保存站点默认主题（仅管理员；对全站访客生效）。
   // 注意：必须打 /admin/theme/site——该 PUT 注册在服务端 admin 组（带鉴权中间件），
   // public 组的 /theme/site 只有 GET；漏掉 /admin 前缀会 404（gin httprouter 无此方法路由）。
-  updateSiteTheme(css: string, js: string, js_mode: ThemeJSMode = 'immediate', js_delay = 0) {
-    return api.put<{ code: number; data: ThemeSaveResult }>('/admin/theme/site', { css, js, js_mode, js_delay });
+  updateSiteTheme(css: string, js: string, js_mode: ThemeJSMode = 'immediate', js_delay = 0, settings = '') {
+    return api.put<{ code: number; data: ThemeSaveResult }>('/admin/theme/site', { css, js, js_mode, js_delay, settings });
   },
   // 我的个人主题（需登录；未登录返回 401，由 store 静默处理）
   getMyTheme() {

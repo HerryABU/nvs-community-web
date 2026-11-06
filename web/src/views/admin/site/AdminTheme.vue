@@ -8,6 +8,64 @@
         服务端会对 CSS 做白名单消毒（仅放行安全的属性/值，移除 <code>@import</code>、<code>expression()</code>、外部 <code>url()</code> 等危险内容），保存后即时全站生效。
       </el-alert>
 
+      <!-- F 可视化主题（结构化控件）：零代码美化，与 alist 同款；生成的样式与下方原始 CSS 互补 -->
+      <el-divider content-position="left">可视化主题（结构化控件）</el-divider>
+      <el-alert type="success" :closable="false" show-icon class="tip">
+        <template #title>零代码美化（对标 alist）</template>
+        通过下方控件即可调整背景、毛玻璃、按钮圆角与主色，无需手写 CSS。生成的样式与「主题 CSS」文本互补——
+        文本优先级更高，可覆盖控件效果；看板娘则兼容任意外部脚本（如 alist/live2d）。
+      </el-alert>
+      <el-form label-width="120px" class="theme-form">
+        <el-form-item label="背景类型">
+          <el-radio-group v-model="settings.background.type">
+            <el-radio-button value="color">纯色</el-radio-button>
+            <el-radio-button value="gradient">渐变</el-radio-button>
+            <el-radio-button value="image">图片</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item :label="bgLabel">
+          <el-color-picker v-if="settings.background.type === 'color'" v-model="settings.background.value" />
+          <el-input v-else v-model="settings.background.value" :placeholder="bgPlaceholder" style="max-width: 520px" />
+        </el-form-item>
+
+        <el-form-item label="毛玻璃">
+          <el-switch v-model="settings.glass.enabled" />
+          <span class="mode-hint">导航栏与玻璃面板的背景模糊（同步 CSS 变量 --glass-blur）</span>
+        </el-form-item>
+        <template v-if="settings.glass.enabled">
+          <el-form-item label="模糊半径">
+            <el-slider v-model="settings.glass.blur" :min="0" :max="40" :step="1" style="width: 220px" />
+          </el-form-item>
+          <el-form-item label="玻璃底色">
+            <el-color-picker v-model="settings.glass.tint" />
+            <el-slider v-model="settings.glass.opacity" :min="0" :max="1" :step="0.05" style="width: 160px; margin-left: 12px" />
+            <span class="mode-hint">不透明度</span>
+          </el-form-item>
+        </template>
+
+        <el-form-item label="按钮圆角">
+          <el-slider v-model="settings.button.radius" :min="0" :max="28" :step="1" style="width: 220px" />
+          <span class="mode-hint">px（同步 --radius-md / --radius-lg）</span>
+        </el-form-item>
+        <el-form-item label="主题主色">
+          <el-color-picker v-model="settings.button.primary" />
+          <span class="mode-hint">留空则沿用系统主色（同步 --primary-color）</span>
+        </el-form-item>
+
+        <el-form-item label="看板娘">
+          <el-switch v-model="settings.mascot.enabled" />
+          <span class="mode-hint">兼容 alist / live2d 等任意外部脚本</span>
+        </el-form-item>
+        <el-form-item v-if="settings.mascot.enabled" label="脚本地址">
+          <el-input v-model="settings.mascot.script_url" placeholder="https://cdn.example.com/live2d-widget/sdk.js" style="max-width: 520px" />
+          <span class="mode-hint">仅允许 http/https</span>
+        </el-form-item>
+
+        <el-form-item>
+          <el-button type="primary" :loading="saving" @click="save">保存可视化设置（全站生效）</el-button>
+        </el-form-item>
+      </el-form>
+
       <el-form label-width="120px" class="theme-form">
         <el-form-item label="主题 CSS">
           <el-input
@@ -127,8 +185,54 @@ import { ref, computed, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Brush } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
-import { themeApi, type ThemeJSMode } from '@/api/home/theme';
+import { themeApi, type ThemeJSMode, type ThemeSettings } from '@/api/home/theme';
+import { useThemeStore } from '@/stores/theme';
 import api from '@/api';
+
+const themeStore = useThemeStore();
+
+// 结构化主题设置（可视化控件绑定对象）
+function defaultSettings(): ThemeSettings {
+  return {
+    background: { type: 'color', value: '' },
+    glass: { enabled: true, blur: 20, opacity: 0.6, tint: '#ffffff' },
+    button: { radius: 12, primary: '' },
+    mascot: { enabled: false, script_url: '' },
+  };
+}
+function parseSettings(raw?: string): ThemeSettings {
+  const def = defaultSettings();
+  if (!raw) return def;
+  try {
+    const p = JSON.parse(raw);
+    return {
+      background: { ...def.background, ...(p.background || {}) },
+      glass: { ...def.glass, ...(p.glass || {}) },
+      button: { ...def.button, ...(p.button || {}) },
+      mascot: { ...def.mascot, ...(p.mascot || {}) },
+    };
+  } catch {
+    return def;
+  }
+}
+const settings = ref<ThemeSettings>(defaultSettings());
+const bgLabel = computed(() =>
+  settings.value.background.type === 'color' ? '背景颜色' : settings.value.background.type === 'gradient' ? '渐变串' : '图片 URL',
+);
+const bgPlaceholder = computed(() =>
+  settings.value.background.type === 'gradient' ? 'linear-gradient(135deg,#6366f1,#ec4899)' : 'https://example.com/bg.jpg',
+);
+// 序列化为后端可接受的结构化 JSON（颜色/URL 清掉空值与 null）
+function serializeSettings(): string {
+  const s = settings.value;
+  const clean = (v: any) => (v == null ? '' : String(v));
+  return JSON.stringify({
+    background: { type: s.background.type, value: clean(s.background.value) },
+    glass: { enabled: !!s.glass.enabled, blur: Number(s.glass.blur) || 0, opacity: Number(s.glass.opacity) || 0, tint: clean(s.glass.tint) },
+    button: { radius: Number(s.button.radius) || 0, primary: clean(s.button.primary) },
+    mascot: { enabled: !!s.mascot.enabled, script_url: clean(s.mascot.script_url) },
+  });
+}
 
 const loading = ref(false);
 const saving = ref(false);
@@ -199,6 +303,7 @@ async function reload() {
     js.value = r.data?.data?.js || '';
     jsMode.value = (r.data?.data?.js_mode as ThemeJSMode) || 'immediate';
     jsDelay.value = r.data?.data?.js_delay || 3;
+    settings.value = parseSettings(r.data?.data?.settings);
   } catch {
     ElMessage.error('加载失败');
   } finally {
@@ -209,11 +314,13 @@ async function reload() {
 async function save() {
   saving.value = true;
   try {
-    const r = await themeApi.updateSiteTheme(css.value, js.value, jsMode.value, jsDelay.value);
+    const r = await themeApi.updateSiteTheme(css.value, js.value, jsMode.value, jsDelay.value, serializeSettings());
     if (r.data?.code === 0) {
       removed.value = r.data.data?.removed || [];
       jsRemoved.value = (r.data.data?.removed || []).filter((x: string) => /script|注释/.test(x));
       ElMessage.success(removed.value.length ? '已保存（部分内容因安全风险被处理）' : '已保存，全站生效');
+      // 即时刷新线上主题（无需整页刷新）
+      themeStore.loadTheme();
     } else {
       ElMessage.error(r.data?.message || '保存失败');
     }
@@ -227,15 +334,17 @@ async function save() {
 async function resetDefault() {
   saving.value = true;
   try {
-    const r = await themeApi.updateSiteTheme('', '', 'immediate', 0);
+    const r = await themeApi.updateSiteTheme('', '', 'immediate', 0, JSON.stringify(defaultSettings()));
     if (r.data?.code === 0) {
       css.value = '';
       js.value = '';
       jsMode.value = 'immediate';
       jsDelay.value = 3;
+      settings.value = defaultSettings();
       removed.value = [];
       jsRemoved.value = [];
       ElMessage.success('已恢复默认');
+      themeStore.loadTheme();
     } else {
       ElMessage.error(r.data?.message || '操作失败');
     }

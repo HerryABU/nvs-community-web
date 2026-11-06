@@ -25,6 +25,9 @@
       />
       <SiteFooter />
 
+      <!-- 看板娘挂载点（F-美化）：由主题设置的 script_url 外部脚本注入内容；未启用时隐藏 -->
+      <div id="nvs-mascot" />
+
       <!-- 未成年检测引导（F21.1）：平台开启保护且未填报出生日期时询问 -->
       <MinorGateDialog v-model:visible="minorGateVisible" :mode="minorMode" @saved="onMinorSaved" @dismiss="onMinorDismiss" />
     </template>
