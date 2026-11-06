@@ -83,6 +83,13 @@ export interface PaymentAdminConfig {
   order_ttl_min: number;
   tiers: PaymentTier[];
   stats: PaymentStats;
+  // #67 官方直连（私钥/密钥不回传明文，仅 *_set 布尔）
+  wx_app_id: string;
+  wx_mch_id: string;
+  wx_serial_no: string;
+  ali_app_id: string;
+  ali_sandbox: boolean;
+  direct_set: Record<string, boolean>;
 }
 
 export const PAY_STATUS_LABELS: Record<string, string> = {
@@ -136,6 +143,17 @@ export const paymentApi = {
     min_fen?: number;
     max_fen?: number;
     order_ttl_min?: number;
+    // #67 直连凭据：私钥类留空/不传表示保持原值
+    wx_app_id?: string;
+    wx_mch_id?: string;
+    wx_serial_no?: string;
+    wx_api_v3_key?: string;
+    wx_private_key?: string;
+    wx_platform_cert?: string;
+    ali_app_id?: string;
+    ali_private_key?: string;
+    ali_public_key?: string;
+    ali_sandbox?: boolean;
   }) {
     return api.put('/admin/payment/config', data);
   },

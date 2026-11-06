@@ -46,6 +46,13 @@ export const readPermApi = {
   // 站长配置
   adminGet: () => api.get<AdminResp>('/admin/read-permission'),
   adminSave: (config: ReadPermConfig) => api.put('/admin/read-permission', config),
+  // #67 付费内容解锁（用代币购买）
+  purchase: (contentType: string, contentId: number) =>
+    api.post<{ code: number; data: { purchased: boolean; price: number; already?: boolean } }>(
+      '/readperm/purchase', { content_type: contentType, content_id: contentId }),
+  purchaseStatus: (contentType: string, contentId: number) =>
+    api.get<{ code: number; data: { purchased: boolean; price: number } }>(
+      '/readperm/purchase/status', { params: { type: contentType, id: contentId } }),
 };
 
 // 后端权限拒绝响应里的 data.reason，供读者端决定引导动作。

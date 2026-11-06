@@ -5,7 +5,10 @@
       :reason="permDeny.reason"
       :message="permDeny.message"
       :author-id="novelAuthorId"
+      content-type="novel"
+      :content-id="novelId"
       @close="closePermDeny"
+      @purchased="onPurchased"
     />
     <!-- 阅读进度（长章节必备：知道还剩多少） -->
     <div class="reader-progress" :title="`已读 ${progressPct}%`">
@@ -339,6 +342,10 @@ const permDeny = ref({ reason: '', message: '' });
 function closePermDeny() {
   permDeny.value = { reason: '', message: '' };
   router.push(`/novel/${novelId.value}`);
+}
+// #67 购买成功后整页刷新，让后端重新按「已购」放行
+function onPurchased() {
+  window.location.reload();
 }
 
 const route = useRoute();

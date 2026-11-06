@@ -443,7 +443,14 @@ async function checkOrder() {
 }
 
 function openCashier() {
-  if (order.value?.pay_url) window.open(order.value.pay_url, '_blank', 'noopener');
+  const o = order.value;
+  if (!o?.pay_url) return;
+  // #67 官方直连返回二维码内容，跳站内扫码收银台
+  if (o.provider === 'direct') {
+    router.push(`/pay/qr/${encodeURIComponent(o.order_no)}`);
+  } else {
+    window.open(o.pay_url, '_blank', 'noopener');
+  }
 }
 
 onMounted(load);

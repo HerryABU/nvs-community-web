@@ -230,9 +230,12 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { InfoFilled, Plus } from '@element-plus/icons-vue';
 import { tokenApi, TOKEN_TYPE_LABELS } from '@/api/auth/token';
+
+const router = useRouter();
 import { aiApi, type MyAiKey } from '@/api/ai';
 import {
   paymentApi, PAY_STATUS_LABELS, PAY_CHANNEL_LABELS,
@@ -371,8 +374,14 @@ async function createOrder() {
 }
 
 function openCashier() {
-  const url = payDialogOrder.value?.pay_url;
-  if (url) window.open(url, '_blank', 'noopener');
+  const o = payDialogOrder.value;
+  if (!o?.pay_url) return;
+  // #67 官方直连返回二维码内容，跳站内扫码收银台；其余通道仍打开外部收银台
+  if (o.provider === 'direct') {
+    router.push(`/pay/qr/${encodeURIComponent(o.order_no)}`);
+  } else {
+    window.open(o.pay_url, '_blank', 'noopener');
+  }
 }
 
 function stopPayPolling() {

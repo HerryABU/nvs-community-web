@@ -5,7 +5,10 @@
       :reason="permDeny.reason"
       :message="permDeny.message"
       :author-id="blog?.author_id"
+      content-type="blog"
+      :content-id="contentId"
       @close="closePermDeny"
+      @purchased="onPurchased"
     />
     <template v-if="blog">
       <div class="bd-layout">
@@ -184,6 +187,12 @@ const permDeny = ref({ reason: '', message: '' });
 function closePermDeny() {
   permDeny.value = { reason: '', message: '' };
   router.push('/blogs');
+}
+// 权限拒绝时 blog 已被清空，内容 ID 需独立保留给付费解锁使用
+const contentId = Number(route.params.blogId || route.params.id);
+// #67 购买成功后整页刷新，后端会按「已购」放行
+function onPurchased() {
+  window.location.reload();
 }
 const blogContentRef = ref<HTMLElement | null>(null);
 const commentTotal = ref(0);

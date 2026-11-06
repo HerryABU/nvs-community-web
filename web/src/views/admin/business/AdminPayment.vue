@@ -44,10 +44,65 @@
           <el-radio-group v-model="form.provider">
             <el-radio-button value="mock">模拟支付</el-radio-button>
             <el-radio-button value="aggregate">聚合支付</el-radio-button>
+            <el-radio-button value="direct">官方直连</el-radio-button>
           </el-radio-group>
           <span class="muted small" style="margin-left: 10px">
-            模拟支付走站内收银台，不接真实网关，用于演示与测试
+            模拟支付走站内收银台；官方直连需商户资质与公网可达回调地址
           </span>
+        </el-form-item>
+      </el-form>
+
+      <el-divider content-position="left">官方直连配置（provider=direct 时生效）</el-divider>
+      <el-alert type="info" :closable="false" show-icon class="direct-tip">
+        <template #title>微信支付 APIv3 Native + 支付宝当面付（扫码）</template>
+        <div>
+          商户自行签约、不经聚合网关。私钥与密钥<b>只写不读</b>：保存后不再回显，留空即保持原值。
+          回调地址必须公网可达，系统会自动按渠道补全
+          <code>/api/payment/notify/wechat|alipay</code>。
+        </div>
+      </el-alert>
+
+      <h4 class="direct-sub">微信支付 APIv3</h4>
+      <el-form label-width="150px" style="max-width: 680px">
+        <el-form-item label="AppID">
+          <el-input v-model="direct.wx_app_id" placeholder="公众号/小程序/开放平台 AppID" style="width: 320px" />
+        </el-form-item>
+        <el-form-item label="商户号 mchid">
+          <el-input v-model="direct.wx_mch_id" placeholder="微信支付商户号" style="width: 320px" />
+        </el-form-item>
+        <el-form-item label="证书序列号">
+          <el-input v-model="direct.wx_serial_no" placeholder="商户 API 证书序列号" style="width: 320px" />
+        </el-form-item>
+        <el-form-item label="APIv3 密钥">
+          <el-input v-model="direct.wx_api_v3_key" type="password" show-password
+            :placeholder="cfg.direct_set?.wx_api_v3_key ? '已设置（不修改请留空）' : '32 位 APIv3 密钥'" style="width: 320px" />
+        </el-form-item>
+        <el-form-item label="商户私钥">
+          <el-input v-model="direct.wx_private_key" type="textarea" :rows="3"
+            :placeholder="cfg.direct_set?.wx_private_key ? '已设置（不修改请留空）' : 'PKCS#1 / PKCS#8 RSA 私钥 PEM'" />
+        </el-form-item>
+        <el-form-item label="平台证书/公钥">
+          <el-input v-model="direct.wx_platform_cert" type="textarea" :rows="3"
+            :placeholder="cfg.direct_set?.wx_platform_cert ? '已设置（不修改请留空）' : '微信支付平台证书或平台公钥 PEM（验回调签名）'" />
+        </el-form-item>
+      </el-form>
+
+      <h4 class="direct-sub">支付宝当面付</h4>
+      <el-form label-width="150px" style="max-width: 680px">
+        <el-form-item label="AppID">
+          <el-input v-model="direct.ali_app_id" placeholder="开放平台应用 AppID" style="width: 320px" />
+        </el-form-item>
+        <el-form-item label="应用私钥">
+          <el-input v-model="direct.ali_private_key" type="textarea" :rows="3"
+            :placeholder="cfg.direct_set?.ali_private_key ? '已设置（不修改请留空）' : 'RSA2 应用私钥 PEM 或纯 base64'" />
+        </el-form-item>
+        <el-form-item label="支付宝公钥">
+          <el-input v-model="direct.ali_public_key" type="textarea" :rows="3"
+            :placeholder="cfg.direct_set?.ali_public_key ? '已设置（不修改请留空）' : '支付宝公钥 PEM 或纯 base64（验回调签名）'" />
+        </el-form-item>
+        <el-form-item label="沙箱环境">
+          <el-switch v-model="direct.ali_sandbox" />
+          <span class="muted small" style="margin-left: 10px">开启后下单指向 openapi.alipaydev.com</span>
         </el-form-item>
       </el-form>
 
@@ -293,12 +348,20 @@ const emptyConfig: PaymentAdminConfig = {
   enabled: false, provider: 'mock', gateway_url: '', app_id: '', secret_set: false,
   notify_url: '', return_url: '', token_per_fen: 10, min_fen: 100, max_fen: 1000000,
   order_ttl_min: 30, tiers: [],
+  wx_app_id: '', wx_mch_id: '', wx_serial_no: '', ali_app_id: '', ali_sandbox: false,
+  direct_set: {},
   stats: { paid_count: 0, paid_fen: 0, paid_token: 0, pending_count: 0, closed_count: 0 },
 };
 const cfg = reactive<PaymentAdminConfig>({ ...emptyConfig });
 const form = reactive({
   enabled: false, provider: 'mock', gateway_url: '', app_id: '', secret: '',
   notify_url: '', return_url: '', token_per_fen: 10, min_fen: 100, max_fen: 1000000, order_ttl_min: 30,
+});
+// #67 直连凭据：敏感字段留空 = 保持原值，仅在输入时随保存一起提交
+const direct = reactive({
+  wx_app_id: '', wx_mch_id: '', wx_serial_no: '',
+  wx_api_v3_key: '', wx_private_key: '', wx_platform_cert: '',
+  ali_app_id: '', ali_private_key: '', ali_public_key: '', ali_sandbox: false,
 });
 const tiers = ref<PaymentTier[]>([]);
 
@@ -322,6 +385,17 @@ async function load() {
       form.min_fen = cfg.min_fen;
       form.max_fen = cfg.max_fen;
       form.order_ttl_min = cfg.order_ttl_min;
+      direct.wx_app_id = cfg.wx_app_id || '';
+      direct.wx_mch_id = cfg.wx_mch_id || '';
+      direct.wx_serial_no = cfg.wx_serial_no || '';
+      direct.ali_app_id = cfg.ali_app_id || '';
+      direct.ali_sandbox = !!cfg.ali_sandbox;
+      // 密钥只写不读：每次加载后清空输入框，避免误把旧值当新值回传
+      direct.wx_api_v3_key = '';
+      direct.wx_private_key = '';
+      direct.wx_platform_cert = '';
+      direct.ali_private_key = '';
+      direct.ali_public_key = '';
       tiers.value = (cfg.tiers || []).map((t) => ({ ...t }));
       secretCleared.value = false;
     }
@@ -347,6 +421,17 @@ async function saveConfig() {
     // secret 指针语义：未输入且未点清空 → undefined（保持原值）；清空 → ''（清除）
     if (form.secret.trim() !== '') payload.secret = form.secret.trim();
     else if (secretCleared.value) payload.secret = '';
+    // #67 直连：非敏感字段总是提交，敏感字段留空即保持
+    payload.wx_app_id = direct.wx_app_id.trim();
+    payload.wx_mch_id = direct.wx_mch_id.trim();
+    payload.wx_serial_no = direct.wx_serial_no.trim();
+    payload.ali_app_id = direct.ali_app_id.trim();
+    payload.ali_sandbox = direct.ali_sandbox;
+    if (direct.wx_api_v3_key.trim()) payload.wx_api_v3_key = direct.wx_api_v3_key.trim();
+    if (direct.wx_private_key.trim()) payload.wx_private_key = direct.wx_private_key.trim();
+    if (direct.wx_platform_cert.trim()) payload.wx_platform_cert = direct.wx_platform_cert.trim();
+    if (direct.ali_private_key.trim()) payload.ali_private_key = direct.ali_private_key.trim();
+    if (direct.ali_public_key.trim()) payload.ali_public_key = direct.ali_public_key.trim();
     const res = await paymentApi.setConfig(payload);
     if (res.data.code === 0) {
       ElMessage.success('已保存（立即生效）');
@@ -486,6 +571,11 @@ onMounted(() => {
 .stat-num.muted { color: var(--text-light, #999); }
 .stat-label { font-size: 0.78rem; color: var(--text-light, #888); margin-top: 2px; }
 .cfg-card { border-radius: 10px; margin-bottom: 16px; }
+/* #67 官方直连配置 */
+.direct-tip { margin-bottom: 14px; }
+.direct-tip div { font-size: 0.84rem; line-height: 1.7; }
+.direct-tip code { padding: 1px 4px; border-radius: 4px; background: var(--bg-page, #f2f4f7); }
+.direct-sub { margin: 18px 0 12px; font-size: 0.95rem; font-weight: 600; }
 .card-title { font-weight: 600; font-size: 0.95rem; color: var(--text-color, #333); margin-bottom: 12px; }
 .muted { color: var(--text-light, #999); }
 .small { font-size: 0.78rem; font-weight: 400; }

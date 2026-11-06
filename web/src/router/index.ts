@@ -188,6 +188,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/pay/qr/:orderNo',
+      name: 'pay-qr',
+      component: () => import('@/views/payment/PayQrcode.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/ai',
       name: 'ai-hub',
       component: () => import('@/views/ai/AiHub.vue'),
