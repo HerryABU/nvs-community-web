@@ -19,6 +19,7 @@ import (
 	"nvs-server/handlers/apikey"
 	"nvs-server/handlers/auth"
 	"nvs-server/handlers/author"
+	authoraih "nvs-server/handlers/authorai"
 	"nvs-server/handlers/blacklist"
 	"nvs-server/handlers/blog"
 	"nvs-server/handlers/bookshelf"
@@ -297,6 +298,15 @@ func registerProtected(r *gin.Engine) {
 		protected.POST("/author/recycle/restore", recycle.RestoreAuthorRecycle) // 恢复自己删除的内容
 		protected.GET("/author/dashboard", author.GetAuthorDashboard)
 		protected.POST("/novels/:id/export", novel.ExportNovel)
+
+		// 作者工作台内置 AI 写作流（与 AI 中台数据隔离）
+		protected.GET("/author-ai/projects", authoraih.ListProjects)
+		protected.POST("/author-ai/projects", authoraih.CreateProject)
+		protected.GET("/author-ai/projects/:id", authoraih.GetProject)
+		protected.PUT("/author-ai/projects/:id", authoraih.UpdateProject)
+		protected.DELETE("/author-ai/projects/:id", authoraih.DeleteProject)
+		protected.POST("/author-ai/projects/:id/generate", authoraih.GenerateComponent)
+		protected.POST("/author-ai/projects/:id/publish", authoraih.PublishNovel)
 		protected.POST("/zone/enter", auth.RecordZoneEnter) // 记录进入隔离墙（敏感分区）时间，176号令合规
 		protected.POST("/ratings", rating.UpsertRating)
 		protected.GET("/ratings", rating.GetUserRating)
