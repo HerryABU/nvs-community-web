@@ -11,6 +11,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
 	"nvs-server/config"
@@ -18,13 +19,14 @@ import (
 
 // DBConfig 描述一个数据库连接目标（迁移/安装时由前端传入）
 type DBConfig struct {
-	Driver   string `json:"driver"` // "sqlite" | "mysql"
+	Driver   string `json:"driver"` // "sqlite" | "mysql" | "postgres"
 	Host     string `json:"host"`
 	Port     string `json:"port"`
 	User     string `json:"user"`
 	Password string `json:"password"`
 	Name     string `json:"name"`
-	Path     string `json:"path"` // sqlite 文件路径，留空默认 data/nvs.db
+	SSLMode  string `json:"sslmode"` // PostgreSQL 专用，缺省 disable
+	Path     string `json:"path"`    // sqlite 文件路径，留空默认 data/nvs.db
 }
 
 // DomainModelProviders 由各域子包在 init 中注册，聚合其自有模型用于统一迁移。
@@ -92,6 +94,22 @@ func BuildDialector(cfg DBConfig) (gorm.Dialector, error) {
 		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
 			cfg.User, cfg.Password, host, port, cfg.Name)
 		return mysql.Open(dsn), nil
+	case "postgres":
+		host := cfg.Host
+		if host == "" {
+			host = "127.0.0.1"
+		}
+		port := cfg.Port
+		if port == "" {
+			port = "5432"
+		}
+		sslmode := cfg.SSLMode
+		if sslmode == "" {
+			sslmode = "disable"
+		}
+		dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+			host, port, cfg.User, cfg.Password, cfg.Name, sslmode)
+		return postgres.Open(dsn), nil
 	case "sqlite":
 		path := cfg.Path
 		if path == "" {
@@ -142,7 +160,7 @@ func OpenDB(cfg DBConfig) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	if cfg.Driver == "mysql" {
+	if cfg.Driver == "mysql" || cfg.Driver == "postgres" {
 		if sqlDB, e := db.DB(); e == nil {
 			sqlDB.SetMaxIdleConns(10)
 			sqlDB.SetMaxOpenConns(100)
@@ -210,12 +228,18 @@ var mysqlJSONColumns = map[string][]string{
 // 复制期间临时关闭外键检查（防止表复制顺序触发外键失败），完成后恢复。
 // onTable 回调用于上报每张表的进度（table 名、行数）。
 func CopyAllTables(src, dst *gorm.DB, onTable func(table string, rows int64)) (map[string]int64, error) {
-	// 复制期间临时关闭目标库外键检查（SQLite / MySQL）
+	// 复制期间临时关闭目标库外键检查（SQLite / MySQL / PostgreSQL）
 	restoreFK := func() {}
-	if dst.Dialector.Name() == "sqlite" {
+	switch dst.Dialector.Name() {
+	case "sqlite":
 		_ = dst.Exec("PRAGMA foreign_keys = OFF").Error
 		restoreFK = func() { _ = dst.Exec("PRAGMA foreign_keys = ON").Error }
-	} else {
+	case "postgres":
+		// PostgreSQL 无 SET FOREIGN_KEY_CHECKS，改用 session_replication_role=replica
+		// 关闭触发器与外键强制，复制完成后恢复 origin。
+		_ = dst.Exec("SET session_replication_role = replica").Error
+		restoreFK = func() { _ = dst.Exec("SET session_replication_role = origin").Error }
+	default: // mysql
 		_ = dst.Exec("SET FOREIGN_KEY_CHECKS = 0").Error
 		restoreFK = func() { _ = dst.Exec("SET FOREIGN_KEY_CHECKS = 1").Error }
 	}
@@ -235,8 +259,9 @@ func CopyAllTables(src, dst *gorm.DB, onTable func(table string, rows int64)) (m
 		if err := src.Table(t).Find(&rows).Error; err != nil {
 			return result, fmt.Errorf("读取表 %s 失败: %w", t, err)
 		}
-		// MySQL 目标：JSON 列空字符串归一化为 "[]"（SQLite 允许空串，MySQL JSON 列拒绝 → Error 3140）
-		if dst.Dialector.Name() == "mysql" {
+		// 服务端数据库（MySQL/PostgreSQL）目标：JSON 列空字符串归一化为 "[]"
+		// （SQLite 允许空串，MySQL/PG 的 JSON 列拒绝空串 → Error 3140 / invalid input syntax）
+		if dst.Dialector.Name() == "mysql" || dst.Dialector.Name() == "postgres" {
 			if jsonCols, ok := mysqlJSONColumns[t]; ok && len(rows) > 0 {
 				for _, row := range rows {
 					for _, col := range jsonCols {

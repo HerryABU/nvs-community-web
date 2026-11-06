@@ -26,13 +26,14 @@ const (
 
 // SecureDBConfig 持久化的数据库配置（加密存储）
 type SecureDBConfig struct {
-	Driver   string `json:"driver"` // "sqlite" | "mysql"
+	Driver   string `json:"driver"` // "sqlite" | "mysql" | "postgres"
 	Host     string `json:"host"`
 	Port     string `json:"port"`
 	User     string `json:"user"`
 	Password string `json:"password"`
 	Name     string `json:"name"`
-	Path     string `json:"path"` // sqlite 文件路径
+	SSLMode  string `json:"sslmode"` // PostgreSQL 专用，缺省 disable
+	Path     string `json:"path"`    // sqlite 文件路径
 }
 
 // SecureConfigExists 是否已存在加密配置（= 是否已完成安装）
@@ -199,6 +200,10 @@ func ApplySecureConfig(sc *SecureDBConfig) {
 	DBUser = sc.User
 	DBPassword = sc.Password
 	DBName = sc.Name
+	DBSSLMode = sc.SSLMode
+	if DBSSLMode == "" {
+		DBSSLMode = "disable"
+	}
 	DBPath = sc.Path
 }
 

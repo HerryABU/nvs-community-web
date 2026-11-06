@@ -75,6 +75,13 @@ const router = createRouter({
       component: () => import('@/views/author/AuthorDashboard.vue'),
       meta: { requiresAuth: true },
     },
+    // 独立 AI 写作工作台（原作者工作台内的「AI 写作」tab 抽离为独立页）
+    {
+      path: '/ai-write',
+      name: 'ai-write',
+      component: () => import('@/views/author/parts/AuthorAiWriteView.vue'),
+      meta: { requiresAuth: true },
+    },
     {
       path: '/author/editor/:id?',
       name: 'editor',

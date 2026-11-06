@@ -12,13 +12,15 @@ import (
 
 // ==================== 默认 .env 模板（内嵌） ====================
 const defaultEnvTemplate = `# ==================== 数据库 ====================
-# DB_DRIVER: sqlite (默认，零配置) | mysql (需额外安装 MySQL)
+# DB_DRIVER: sqlite (默认，零配置) | mysql | postgres（服务端数据库，备份走原生 mysqldump/pg_dump）
 DB_DRIVER=sqlite
 DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_USER=nvs_user
 DB_PASSWORD=nvs_pass_2026
 DB_NAME=nvs
+# PostgreSQL 专用：SSL 模式（disable/require/verify-ca/verify-full），默认 disable
+DB_SSLMODE=disable
 DB_ROOT_PASSWORD=nvs_root_2026
 
 # ==================== Redis (SQLite模式下不需要) ====================
@@ -166,6 +168,7 @@ var (
 	DBUser     string
 	DBPassword string
 	DBName     string
+	DBSSLMode  string // PostgreSQL 专用：ssl 模式（disable/require/...），默认 disable
 	DBPath     string // SQLite 文件路径（默认 data/nvs.db）
 	DBMemory   bool
 
@@ -259,6 +262,7 @@ func Init() {
 	DBUser = getEnv("DB_USER", "nvs_user")
 	DBPassword = getEnv("DB_PASSWORD", "nvs_pass_2026")
 	DBName = getEnv("DB_NAME", "nvs")
+	DBSSLMode = getEnv("DB_SSLMODE", "disable")
 	DBPath = getEnv("DB_PATH", "data/nvs.db")
 	DBMemory = getEnvBool("DB_MEMORY", false)
 

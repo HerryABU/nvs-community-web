@@ -5,15 +5,8 @@
   <div class="home-blocks">
     <template v-if="!loading">
       <template v-for="b in blocks" :key="b.id">
-        <!-- 头图 -->
-        <HomeHero
-          v-if="b.type === 'hero'"
-          :site-name="siteName"
-          :categories="categories"
-          :show-categories="showCategories(b.config)"
-        />
         <!-- 轮播（运营位） -->
-        <BlockCarousel v-else-if="b.type === 'carousel'" :config="b.config" />
+        <BlockCarousel v-if="b.type === 'carousel'" :config="b.config" />
         <!-- 公告栏 -->
         <HomeNoticeBar v-else-if="b.type === 'notice'" ref="noticeRefs" :max-items="maxItems(b.config)" />
         <!-- 模块区（小说/博客/论坛） -->
@@ -30,9 +23,8 @@
         <BlockLinks v-else-if="b.type === 'links'" :title="b.title" :config="b.config" />
       </template>
 
-      <!-- 回退：无任何区块时渲染默认布局 -->
+      <!-- 回退：无任何区块时渲染默认布局（内容优先，无欢迎头图） -->
       <template v-if="!blocks.length">
-        <HomeHero :site-name="siteName" :categories="categories" />
         <HomeNoticeBar />
         <BlockModules :config="JSON.stringify({ modules: ['novels', 'blogs', 'forums'], featured_first: true })" />
       </template>
@@ -49,7 +41,6 @@ import { onMounted, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useAppStore } from '@/stores/app';
 import { homeBlockApi, type HomeBlock } from '@/api/home';
-import HomeHero from '@/components/home/HomeHero.vue';
 import HomeNoticeBar from '@/components/home/HomeNoticeBar.vue';
 import BlockModules from '@/components/home/BlockModules.vue';
 import BlockBlogs from '@/components/home/BlockBlogs.vue';

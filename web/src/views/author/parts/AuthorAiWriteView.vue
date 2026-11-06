@@ -4,7 +4,7 @@
     <div v-if="!current" class="aw-list">
       <div class="aw-list-head">
         <h3>AI 写作工程</h3>
-        <el-button type="primary" :loading="creating" @click="createProject">新建工程</el-button>
+        <el-button type="primary" @click="openCreate">新建工程</el-button>
       </div>
       <div v-if="loading" class="aw-empty">加载中…</div>
       <div v-else-if="projects.length === 0" class="aw-empty">还没有写作工程，点「新建工程」开始。</div>
@@ -90,6 +90,31 @@
       </div>
     </div>
 
+    <!-- 新建工程：先定义名字，再落入项目 -->
+    <el-dialog v-model="createVisible" title="新建 AI 写作工程" width="480px" @closed="onCreateClosed">
+      <el-form :model="createForm" label-width="80px">
+        <el-form-item label="工程名称" required>
+          <el-input
+            ref="createTitleRef"
+            v-model="createForm.title"
+            placeholder="给写作工程起个名字，如《画中梦》"
+            maxlength="80"
+            show-word-limit
+            @keyup.enter="confirmCreate"
+          />
+        </el-form-item>
+        <el-form-item label="风格库">
+          <el-select v-model="createForm.style_preset" placeholder="可选，创建后也能改" style="width: 100%">
+            <el-option v-for="o in styleOptions" :key="o.value" :label="o.label" :value="o.value" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createVisible = false">取消</el-button>
+        <el-button type="primary" :loading="creating" @click="confirmCreate">创建并进入</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="visVisible" title="AI 写作可视化" width="80%" top="5vh">
       <AiWriteVisuals :timeline="form.timeline" :characters="form.characters" />
     </el-dialog>
@@ -107,6 +132,9 @@ const creating = ref(false);
 const saving = ref(false);
 const publishing = ref(false);
 const visVisible = ref(false);
+const createVisible = ref(false);
+const createTitleRef = ref();
+const createForm = reactive({ title: '', style_preset: '' as StylePreset });
 const projects = ref<AiWriteProject[]>([]);
 const current = ref<AiWriteProject | null>(null);
 
@@ -164,12 +192,35 @@ async function loadList() {
   }
 }
 
-async function createProject() {
+// 新建工程：先弹窗定义名字，再创建并落入项目
+function openCreate() {
+  createForm.title = '';
+  createForm.style_preset = '';
+  createVisible.value = true;
+  // 自动聚焦名称输入框
+  requestAnimationFrame(() => createTitleRef.value?.focus?.());
+}
+
+function onCreateClosed() {
+  creating.value = false;
+}
+
+async function confirmCreate() {
+  const title = createForm.title.trim();
+  if (!title) {
+    ElMessage.warning('请先填写工程名称');
+    createTitleRef.value?.focus?.();
+    return;
+  }
   creating.value = true;
   try {
-    const res = await authorAiApi.create({ title: '未命名写作工程' });
+    const res = await authorAiApi.create({
+      title,
+      style_preset: (createForm.style_preset || undefined) as StylePreset | undefined,
+    });
     if (res.data.code === 0) {
-      ElMessage.success('已新建工程');
+      ElMessage.success('工程已创建');
+      createVisible.value = false;
       await loadList();
       openProject(res.data.data.id);
     }

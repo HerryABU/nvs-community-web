@@ -119,12 +119,12 @@ func SetupInstall(c *gin.Context) {
 
 	// 2. 校验数据库配置
 	req.Database.Driver = strings.ToLower(strings.TrimSpace(req.Database.Driver))
-	if req.Database.Driver != "sqlite" && req.Database.Driver != "mysql" {
-		infra.BadRequest(c, "数据库驱动仅支持 sqlite 或 mysql")
+	if req.Database.Driver != "sqlite" && req.Database.Driver != "mysql" && req.Database.Driver != "postgres" {
+		infra.BadRequest(c, "数据库驱动仅支持 sqlite / mysql / postgres")
 		return
 	}
-	if req.Database.Driver == "mysql" && req.Database.Name == "" {
-		infra.BadRequest(c, "MySQL 数据库名不能为空")
+	if (req.Database.Driver == "mysql" || req.Database.Driver == "postgres") && req.Database.Name == "" {
+		infra.BadRequest(c, "MySQL / PostgreSQL 数据库名不能为空")
 		return
 	}
 

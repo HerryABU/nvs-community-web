@@ -32,7 +32,31 @@ func SanitizeCSS(css string) (string, []string) {
 }
 
 // cssSanitizer 消毒状态机（removed 累积被拒规则的原因）
-type cssSanitizer struct{ removed []string }
+type cssSanitizer struct {
+	removed []string
+	relaxed bool // 宽松模式：专供管理员站点主题（管理员下不考量 XSS）
+}
+
+// SanitizeCSSRelaxed 宽松消毒，专供管理员站点主题（管理员下不考量 XSS）。
+//
+// 与 SanitizeCSS 的差异（仅本函数开启 relaxed）：
+//  1. 放行全部 @ 规则（含 @import / @font-face / @supports / @charset / @namespace…），
+//     严格模式仅留 @media / @keyframes；
+//  2. 放行 url() 外链资源（alist 式背景图 / 光标 / 网络字体 src）；
+//  3. 放行全部合法属性名（不再受白名单约束，如 background-position-x 等）；
+//  4. 放行反斜杠转义（字体名/内容转义）；
+//  5. 忽略 HTML 注释定界符 <!-- -->（不再报「已移除」）。
+//
+// 仍保留最后一道防线：expression( / javascript: / vbscript: / -moz-binding 与裸 <
+// 一律拒绝，以防误粘贴的攻击串破坏全站渲染或注入脚本（即便管理员也无需这些）。
+func SanitizeCSSRelaxed(css string) (string, []string) {
+	removed := []string{}
+	if len(css) > MaxCSSLength {
+		return "", append(removed, "CSS 长度超过 128KB 上限 已整体移除")
+	}
+	s := &cssSanitizer{removed: removed, relaxed: true}
+	return s.sanitizeRuleList(stripCSSComments(css), false), s.removed
+}
 
 // drop 记录一条被移除的规则（截断超长原因，避免回显爆炸）
 func (s *cssSanitizer) drop(reason string) {
@@ -161,6 +185,20 @@ func (s *cssSanitizer) sanitizeRuleList(body string, keyframeCtx bool) string {
 	var out strings.Builder
 	i := skipWS(body, 0)
 	for i < len(body) {
+		// 宽松模式：忽略 HTML 注释定界符（<!-- -->），不计入规则、不报「已移除」
+		if s.relaxed {
+			if strings.HasPrefix(body[i:], "<!--") {
+				if end := strings.Index(body[i+4:], "-->"); end >= 0 {
+					i = skipWS(body, i+4+end+3)
+					continue
+				}
+				break
+			}
+			if strings.HasPrefix(body[i:], "-->") {
+				i = skipWS(body, i+3)
+				continue
+			}
+		}
 		switch body[i] {
 		case '}':
 			i++ // 容忍孤立的右花括号
@@ -221,6 +259,30 @@ func (s *cssSanitizer) sanitizeAtRule(body string, i int) (string, int) {
 	semi := indexStructural(body, j, ";")
 
 	isKeyframes := strings.HasSuffix(name, "keyframes")
+
+	// 宽松模式：放行全部 @ 规则（@import/@font-face/@supports/@charset/@namespace…）
+	if s.relaxed && name != "@media" && !isKeyframes {
+		// 语句型（分号结尾，如 @import/@charset/@namespace）：原样保留至分号
+		if semi >= 0 && (brace < 0 || semi < brace) {
+			return body[i:semi+1] + "\n", semi + 1
+		}
+		// 块型（如 @font-face/@supports/@document）：整块保留，内部按宽松消毒。
+		// @font-face 内部是声明块（无选择器），其余（@supports/@document）内部是规则列表。
+		if brace >= 0 {
+			if end := matchBrace(body, brace); end >= 0 {
+				var inner string
+				if name == "@font-face" {
+					inner = s.sanitizeDeclarations(body[brace+1 : end])
+				} else {
+					inner = s.sanitizeRuleList(body[brace+1:end], false)
+				}
+				return name + " " + strings.TrimSpace(body[j:brace]) + " {\n" + inner + "}\n", end + 1
+			}
+			return "", len(body)
+		}
+		return "", len(body)
+	}
+
 	if name != "@media" && !isKeyframes {
 		// 白名单之外的 @ 规则：语句型（分号结尾，如 @import/@charset/@namespace）
 		// 移除至分号；块型（如 @font-face/@supports/@document）整块移除。
@@ -286,7 +348,12 @@ func (s *cssSanitizer) sanitizeDeclarations(block string) string {
 		}
 		prop := strings.TrimSpace(decl[:colon])
 		value := strings.TrimSpace(decl[colon+1:])
-		if !allowedProperty(strings.ToLower(prop)) {
+		if s.relaxed {
+			if !relaxedAllowedProperty(strings.ToLower(prop)) {
+				s.drop(prop + ": " + value + "（属性名非法）")
+				continue
+			}
+		} else if !allowedProperty(strings.ToLower(prop)) {
 			s.drop(prop + ": " + value + "（属性不在白名单）")
 			continue
 		}
@@ -294,7 +361,12 @@ func (s *cssSanitizer) sanitizeDeclarations(block string) string {
 			s.drop(prop + "（缺少值）")
 			continue
 		}
-		if bad, why := dangerousValue(value); bad {
+		if s.relaxed {
+			if bad, why := dangerousValueRelaxed(value); bad {
+				s.drop(prop + ": " + value + "（" + why + "）")
+				continue
+			}
+		} else if bad, why := dangerousValue(value); bad {
 			s.drop(prop + ": " + value + "（" + why + "）")
 			continue
 		}
@@ -319,6 +391,55 @@ func dangerousValue(v string) (bool, string) {
 		return true, "不允许 IE 滤镜 progid"
 	case strings.Contains(v, "\\"):
 		return true, "不允许反斜杠转义"
+	case strings.Contains(v, "<"):
+		return true, "不允许 < 字符"
+	}
+	return false, ""
+}
+
+// relaxedAllowedProperty 宽松模式属性名校验：放行全部合法 CSS 标识符
+// （含自定义属性 --x 与供应商前缀），仅做结构校验，不再限制白名单。
+// 仍拒绝脚本执行载体属性（behavior / -moz-binding），它们无合法主题用途。
+func relaxedAllowedProperty(prop string) bool {
+	if prop == "" {
+		return false
+	}
+	lp := strings.ToLower(prop)
+	switch lp {
+	case "behavior", "-moz-binding", "moz-binding":
+		return false
+	}
+	if strings.HasPrefix(prop, "--") {
+		if len(prop) <= 2 {
+			return false
+		}
+		for i := 0; i < len(prop); i++ {
+			if !isNameByte(prop[i]) {
+				return false
+			}
+		}
+		return true
+	}
+	for i := 0; i < len(prop); i++ {
+		if !isNameByte(prop[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// dangerousValueRelaxed 宽松模式值校验：放行 url()（背景/光标/字体外链）与反斜杠转义，
+// 仅拦截 expression( / javascript: / vbscript: / -moz-binding 与裸 < 字符，
+// 以防脚本执行与 </style> 破坏全站渲染。
+func dangerousValueRelaxed(v string) (bool, string) {
+	low := strings.ToLower(v)
+	switch {
+	case strings.Contains(low, "expression("):
+		return true, "不允许 expression()"
+	case strings.Contains(low, "javascript:"), strings.Contains(low, "vbscript:"):
+		return true, "不允许脚本协议"
+	case strings.Contains(low, "-moz-binding"):
+		return true, "不允许 -moz-binding"
 	case strings.Contains(v, "<"):
 		return true, "不允许 < 字符"
 	}

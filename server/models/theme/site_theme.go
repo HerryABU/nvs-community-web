@@ -51,10 +51,12 @@ func GetSiteThemeJSBundle() (js string, mode string, delay int) {
 	return t.CustomJS, NormalizeThemeJSMode(t.CustomJSMode), t.CustomJSDelay
 }
 
-// SetSiteTheme 保存站点默认主题：先经服务端白名单消毒再 Upsert 单行。
+// SetSiteTheme 保存站点默认主题：经服务端宽松消毒（管理员路径，不考量 XSS）后 Upsert 单行。
 // 返回被移除的规则列表（供前端提示管理员）。
+// 注意：站点主题仅管理员可写（UpdateSiteTheme 已 admincommon.EnsureAdmin 把关），
+// 故走 SanitizeCSSRelaxed——放行 @import/@font-face、url() 外链与全部属性名。
 func SetSiteTheme(css string, customJS string, jsMode string, jsDelay int) (removed []string, err error) {
-	sanitized, removed := sanitize.SanitizeCSS(css)
+	sanitized, removed := sanitize.SanitizeCSSRelaxed(css)
 	sanitizedJS, jsRemoved := sanitize.SanitizeJS(customJS)
 	removed = append(removed, jsRemoved...)
 	var t SiteTheme

@@ -594,7 +594,7 @@ export const adminApi = {
   getDbCurrent() {
     return api.get('/admin/db/current');
   },
-  migrateDb(data: { driver: string; host?: string; port?: string; user?: string; password?: string; name?: string; path?: string }) {
+  migrateDb(data: { driver: string; host?: string; port?: string; user?: string; password?: string; name?: string; sslmode?: string; path?: string }) {
     return api.post('/admin/db/migrate', data);
   },
   backupDb() {

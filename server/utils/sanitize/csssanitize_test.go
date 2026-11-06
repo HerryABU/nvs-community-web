@@ -317,3 +317,101 @@ func TestSanitizeCSSNestedMedia(t *testing.T) {
 		t.Fatal("应记录被移除的 url() 声明")
 	}
 }
+
+// ---------------- 宽松模式（管理员站点主题，不考量 XSS） ----------------
+
+// TestSanitizeCSSRelaxedKeepsImports 宽松模式必须保留 @import（网络字体/图标字体）
+func TestSanitizeCSSRelaxedKeepsImports(t *testing.T) {
+	cases := []string{
+		`@import url("https://npm.elemecdn.com/lxgw-wenkai-webfont@1.1.0/lxgwwenkai-regular.css");`,
+		`@import url("https://npm.elemecdn.com/font6pro@6.0.1/css/all.min.css");`,
+	}
+	for _, css := range cases {
+		out, removed := SanitizeCSSRelaxed(css)
+		if !strings.Contains(out, "@import") || !strings.Contains(out, "elemecdn.com") {
+			t.Fatalf("宽松模式应保留 @import，实际输出: %q（移除: %v）", out, removed)
+		}
+		if len(removed) != 0 {
+			t.Fatalf("宽松模式不应移除 @import，实际移除: %v", removed)
+		}
+	}
+}
+
+// TestSanitizeCSSRelaxedKeepsFontFace 宽松模式保留 @font-face（含 src: url() 字体外链）
+func TestSanitizeCSSRelaxedKeepsFontFace(t *testing.T) {
+	css := `@font-face { font-family: "My Font"; src: url("https://cdn.example/font.woff2") format("woff2"); font-display: swap; }`
+	out, removed := SanitizeCSSRelaxed(css)
+	if !strings.Contains(out, "@font-face") || !strings.Contains(out, "src:") || !strings.Contains(out, "url(") {
+		t.Fatalf("宽松模式应保留 @font-face 与 src url()，实际输出: %q（移除: %v）", out, removed)
+	}
+	if !strings.Contains(out, `font-family: "My Font"`) {
+		t.Fatalf("字体名（含空格，原反斜杠转义）应保留，实际: %q", out)
+	}
+}
+
+// TestSanitizeCSSRelaxedKeepsUrlAndProperties 宽松模式保留 url() 背景/光标与白名单外属性
+func TestSanitizeCSSRelaxedKeepsUrlAndProperties(t *testing.T) {
+	css := `
+body { background-image: url("https://pic.rmb.bdstatic.com/bjh/news/x.jpg"); background-position-x: center; }
+.a { cursor: url("https://luluossfile.lulufind.com/work/cur.cur"), pointer; }
+.selector, button, a:hover { cursor: url("https://x.example/c.cur"), auto; }
+input, textarea, input:focus { outline: none; }
+`
+	out, removed := SanitizeCSSRelaxed(css)
+	for _, keep := range []string{
+		"background-image: url(", "background-position-x: center",
+		"cursor: url(", "background-position-x",
+		"outline: none",
+	} {
+		if !strings.Contains(out, keep) {
+			t.Fatalf("宽松模式应保留 %q，实际输出: %q（移除: %v）", keep, out, removed)
+		}
+	}
+	if len(removed) != 0 {
+		t.Fatalf("宽松模式不应移除这些合法声明，实际移除: %v", removed)
+	}
+}
+
+// TestSanitizeCSSRelaxedKeepsHTMLComments 宽松模式忽略 HTML 注释定界符（不报移除）
+func TestSanitizeCSSRelaxedKeepsHTMLComments(t *testing.T) {
+	css := "<!-- 运营主题注释 -->\nbody { color: red; }\n<!-- 尾部 -->"
+	out, removed := SanitizeCSSRelaxed(css)
+	if !strings.Contains(out, "color: red") {
+		t.Fatalf("正常声明应保留，实际输出: %q", out)
+	}
+	if len(removed) != 0 {
+		t.Fatalf("宽松模式 HTML 注释不应计入移除，实际移除: %v", removed)
+	}
+}
+
+// TestSanitizeCSSRelaxedStillBlocksScripts 宽松模式仍拦截 expression()/javascript:/<（防脚本与 </style> 破坏）
+func TestSanitizeCSSRelaxedStillBlocksScripts(t *testing.T) {
+	cases := []string{
+		`.a { width: expression(alert(1)); }`,
+		`.a { background: javascript:alert(1); }`,
+		`.a { behavior: url(x.htc); }`,
+		`</style><script>alert(1)</script> { color: red; }`,
+	}
+	for _, css := range cases {
+		out, removed := SanitizeCSSRelaxed(css)
+		if containsAny(out, "expression(", "javascript:", "behavior", "<script", "</style>") {
+			t.Fatalf("宽松模式仍应拦截脚本攻击串，实际输出: %q（源: %q）", out, css)
+		}
+		if len(removed) == 0 {
+			t.Fatalf("宽松模式仍应记录被拦截规则，源: %q", css)
+		}
+	}
+}
+
+// TestSanitizeCSSRelaxedVsStrictParity 同一份含 @import/url() 的 CSS：严格模式移除、宽松模式保留
+func TestSanitizeCSSRelaxedVsStrictParity(t *testing.T) {
+	css := "@import url(\"https://x.example/a.css\");\n.a { background: url(https://x.example/x.png); }"
+	strictOut, _ := SanitizeCSS(css)
+	relaxedOut, _ := SanitizeCSSRelaxed(css)
+	if containsAny(strictOut, "@import", "url(") {
+		t.Fatalf("严格模式应移除 @import/url()，实际: %q", strictOut)
+	}
+	if !strings.Contains(relaxedOut, "@import") || !strings.Contains(relaxedOut, "url(") {
+		t.Fatalf("宽松模式应保留 @import/url()，实际: %q", relaxedOut)
+	}
+}

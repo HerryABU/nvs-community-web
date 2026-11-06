@@ -1,13 +1,13 @@
 <template>
   <div class="admin-page">
-    <AdminHeader title="数据库管理" subtitle="SQLite ↔ MySQL 迁移 · 多库备份" :icon="DataLine" />
+    <AdminHeader title="数据库管理" subtitle="SQLite ↔ MySQL ↔ PostgreSQL 迁移 · 多库备份" :icon="DataLine" />
     <div class="admin-page-body admin-panel">
       <el-tabs v-model="activeTab">
         <!-- ==================== 数据库迁移 ==================== -->
         <el-tab-pane label="数据库迁移" name="migrate">
           <el-alert type="info" :closable="false" show-icon style="margin-bottom:16px">
             <template #title>
-              支持 <b>SQLite → MySQL</b>、<b>MySQL → SQLite</b>、<b>MySQL → MySQL</b>。
+              支持 <b>SQLite ↔ MySQL ↔ PostgreSQL</b> 之间的相互迁移与同库搬迁。
               迁移完成后自动切换当前数据库连接（无需重启），并写入加密配置持久化。
             </template>
           </el-alert>
@@ -15,15 +15,26 @@
             <el-form-item label="目标数据库类型">
               <el-radio-group v-model="migrate.driver">
                 <el-radio-button value="mysql">MySQL</el-radio-button>
+                <el-radio-button value="postgres">PostgreSQL</el-radio-button>
                 <el-radio-button value="sqlite">SQLite</el-radio-button>
               </el-radio-group>
             </el-form-item>
-            <template v-if="migrate.driver === 'mysql'">
+            <template v-if="migrate.driver === 'mysql' || migrate.driver === 'postgres'">
               <el-form-item label="主机"><el-input v-model="migrate.host" placeholder="127.0.0.1" /></el-form-item>
-              <el-form-item label="端口"><el-input v-model="migrate.port" placeholder="3306" /></el-form-item>
+              <el-form-item :label="migrate.driver === 'postgres' ? '端口(默认5432)' : '端口(默认3306)'">
+                <el-input v-model="migrate.port" :placeholder="migrate.driver === 'postgres' ? '5432' : '3306'" />
+              </el-form-item>
               <el-form-item label="用户名"><el-input v-model="migrate.user" placeholder="nvs_user" /></el-form-item>
               <el-form-item label="密码"><el-input v-model="migrate.password" type="password" show-password /></el-form-item>
               <el-form-item label="数据库名"><el-input v-model="migrate.name" placeholder="nvs" /></el-form-item>
+              <el-form-item v-if="migrate.driver === 'postgres'" label="SSL 模式">
+                <el-select v-model="migrate.sslmode" style="width:200px">
+                  <el-option label="disable" value="disable" />
+                  <el-option label="require" value="require" />
+                  <el-option label="verify-ca" value="verify-ca" />
+                  <el-option label="verify-full" value="verify-full" />
+                </el-select>
+              </el-form-item>
             </template>
             <template v-else>
               <el-alert type="success" :closable="false" show-icon style="margin-bottom:12px">
@@ -67,9 +78,9 @@
 
           <el-table :data="backups" style="margin-top:8px" v-loading="backupsLoading">
             <el-table-column prop="name" label="文件名" min-width="220" show-overflow-tooltip />
-            <el-table-column label="类型" width="90">
+            <el-table-column label="类型" width="100">
               <template #default="{ row }">
-                <el-tag size="small" :type="row.driver === 'mysql' ? 'warning' : 'success'">{{ row.driver }}</el-tag>
+                <el-tag size="small" :type="row.driver === 'postgres' ? 'primary' : row.driver === 'mysql' ? 'warning' : 'success'">{{ row.driver }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column label="大小" width="110">
@@ -81,7 +92,7 @@
             <el-table-column label="操作" width="200">
               <template #default="{ row }">
                 <el-button size="small" :icon="Download" @click="downloadBackup(row)">下载</el-button>
-                <el-button v-if="row.driver === 'sqlite'" size="small" type="warning" @click="restoreBackup(row)">恢复</el-button>
+                <el-button size="small" type="warning" @click="restoreBackup(row)">恢复</el-button>
                 <el-button size="small" type="danger" :icon="Delete" @click="removeBackup(row)">删除</el-button>
               </template>
             </el-table-column>
@@ -108,14 +119,15 @@ const activeTab = ref('migrate');
 
 // ---------- 迁移 ----------
 const migrating = ref(false);
-const migrate = reactive({ driver: 'mysql', host: '127.0.0.1', port: '3306', user: '', password: '', name: '' });
+const migrate = reactive({ driver: 'mysql', host: '127.0.0.1', port: '3306', user: '', password: '', name: '', sslmode: 'disable' });
 
 const job = ref<any>(null);
 let jobTimer: any = null;
 
 async function startMigrate() {
-  if (migrate.driver === 'mysql' && (!migrate.host || !migrate.port || !migrate.user || !migrate.name)) {
-    ElMessage.warning('请完整填写 MySQL 连接信息');
+  if ((migrate.driver === 'mysql' || migrate.driver === 'postgres') &&
+      (!migrate.host || !migrate.port || !migrate.user || !migrate.name)) {
+    ElMessage.warning('请完整填写 ' + (migrate.driver === 'postgres' ? 'PostgreSQL' : 'MySQL') + ' 连接信息');
     return;
   }
   try {
@@ -128,13 +140,15 @@ async function startMigrate() {
   migrating.value = true;
   job.value = null;
   try {
+    const isServer = migrate.driver === 'mysql' || migrate.driver === 'postgres';
     const res = await adminApi.migrateDb({
       driver: migrate.driver,
-      host: migrate.driver === 'mysql' ? migrate.host : '',
-      port: migrate.driver === 'mysql' ? migrate.port : '',
-      user: migrate.driver === 'mysql' ? migrate.user : '',
-      password: migrate.driver === 'mysql' ? migrate.password : '',
-      name: migrate.driver === 'mysql' ? migrate.name : '',
+      host: isServer ? migrate.host : '',
+      port: isServer ? migrate.port : '',
+      user: isServer ? migrate.user : '',
+      password: isServer ? migrate.password : '',
+      name: isServer ? migrate.name : '',
+      sslmode: migrate.driver === 'postgres' ? migrate.sslmode : '',
       path: '',
     });
     startPolling(res.data?.data?.job_id);
@@ -217,9 +231,11 @@ async function removeBackup(row: any) {
 }
 
 async function restoreBackup(row: any) {
+  const driverLabel: Record<string, string> = { sqlite: 'SQLite 数据文件', mysql: 'MySQL 数据库', postgres: 'PostgreSQL 数据库' };
+  const label = driverLabel[row.driver] || row.driver;
   try {
     await ElMessageBox.confirm(
-      `恢复将用备份 ${row.name} 覆盖当前 SQLite 数据库，且不可撤销。请先备份当前数据。是否继续？`,
+      `恢复将用备份 ${row.name} 覆盖当前 ${label}，且不可撤销。请先备份当前数据。是否继续？`,
       '恢复数据库', { type: 'warning', confirmButtonText: '恢复', cancelButtonText: '取消' },
     );
   } catch { return; }

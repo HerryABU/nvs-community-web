@@ -53,7 +53,8 @@ var knownSPARoots = map[string]bool{
 	// 新增页面漏登记会直接 404（且只在「直接访问/刷新」时暴露，点链接进去是正常的），
 	// 属于最难自查的一类回归。CI 里有 `make spa-roots-check` 做前后端对撞。
 	"membership": true, "collab": true, "live": true,
-	"oc": true, // #78 独立 OC 工作台：此前遗漏，导致 /oc 直接访问/刷新 404（SPA 深链失效）
+	"oc":       true, // #78 独立 OC 工作台：此前遗漏，导致 /oc 直接访问/刷新 404（SPA 深链失效）
+	"ai-write": true, // 独立 AI 写作工作台（从作者工作台 tab 抽离为独立页）
 }
 
 // firstPathSegment 返回去前导斜杠后的路径首段，如 "novel/1"→"novel"，"admin"→"admin"

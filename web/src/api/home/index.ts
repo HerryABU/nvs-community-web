@@ -4,7 +4,7 @@ import api, { apiPrefix } from '@/api/index';
 
 export interface HomeBlock {
   id: number;
-  /** hero 头图 / notice 公告栏 / modules 模块区 / blogs 博客 / forums 版块 / threads 最新帖 / custom 自定义HTML / links 链接组 */
+  /** notice 公告栏 / modules 模块区 / blogs 博客 / forums 版块 / threads 最新帖 / custom 自定义HTML / links 链接组 */
   type: string;
   title: string;
   /** 按 type 解析的 JSON 配置 */
@@ -67,7 +67,6 @@ export const adminHomeBlockApi = {
 
 /** 区块类型的展示元信息（管理端与调试用） */
 export const HOME_BLOCK_TYPES: { type: string; name: string; desc: string }[] = [
-  { type: 'hero', name: '头图', desc: '站点欢迎头图（标题/副标题/分类快捷入口）' },
   { type: 'notice', name: '公告栏', desc: '滚动展示站点公告（置顶优先）' },
   { type: 'modules', name: '模块区', desc: '小说/博客/论坛模块顺序排列（主模块在前）' },
   { type: 'blogs', name: '最新博客', desc: '博客列表区块（可设条数与列表/网格视图）' },

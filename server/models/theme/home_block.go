@@ -1,13 +1,15 @@
 // home_block.go — 自定义主页区块（F15）。
 // 管理员可增删/排序/启停首页区块，并一键套用布局预设：
-//   - mixed   混合一条龙（默认： hero + 公告 + 模块区）
-//   - blog    博客首页风格（hero + 公告 + 博客大区块 + 小说副栏）
-//   - forum   论坛首页风格（hero + 公告 + 论坛区块 + 最新帖 + 博客副栏）
-//   - minimal 极简小说（hero + 小说模块）
+//   - mixed   混合一条龙（默认：公告 + 模块区）
+//   - blog    博客首页风格（公告 + 博客大区块 + 小说副栏 + 最新帖）
+//   - forum   论坛首页风格（公告 + 论坛区块 + 最新帖 + 博客副栏）
+//   - minimal 极简小说（小说模块）
+//
+// 注：原「头图（hero）」区块已废弃 —— 默认欢迎头图「欢迎来到 星海文学」过于花哨，
+// 改为内容优先的简洁布局，站点皮肤（背景/主题/按钮样式）交给自定义 CSS 主题体系。
 //
 // 区块类型与 config JSON：
 //
-//	hero     {site_title, subtitle, show_categories}
 //	notice   {max_items}
 //	modules  {modules: ["novels","blogs","forums"], featured_first}
 //	blogs    {limit, view: list|grid}
@@ -146,7 +148,6 @@ func HomeBlockPresets() []HomeBlockPreset {
 		{
 			Key: "mixed", Name: "混合一条龙", Desc: "小说/博客/论坛同页混排，信息最全（默认）",
 			Blocks: []HomeBlock{
-				hp(HomeBlockHero, "", `{"show_categories":true}`, true),
 				hp(HomeBlockNotice, "", `{"max_items":3}`, true),
 				hp(HomeBlockModules, "", `{"modules":["novels","blogs","forums"],"featured_first":true}`, true),
 			},
@@ -154,7 +155,6 @@ func HomeBlockPresets() []HomeBlockPreset {
 		{
 			Key: "blog", Name: "博客首页风格", Desc: "博客列表为主角，小说/论坛作副栏，适合创作型社区",
 			Blocks: []HomeBlock{
-				hp(HomeBlockHero, "", `{"show_categories":true}`, true),
 				hp(HomeBlockNotice, "", `{"max_items":2}`, true),
 				hp(HomeBlockBlogs, "最新博客", `{"limit":8,"view":"list"}`, true),
 				hp(HomeBlockModules, "", `{"modules":["novels"],"featured_first":false}`, true),
@@ -164,7 +164,6 @@ func HomeBlockPresets() []HomeBlockPreset {
 		{
 			Key: "forum", Name: "论坛首页风格", Desc: "论坛动态打头，最新帖 + 博客副栏，适合讨论型社区",
 			Blocks: []HomeBlock{
-				hp(HomeBlockHero, "", `{"show_categories":false}`, true),
 				hp(HomeBlockNotice, "", `{"max_items":2}`, true),
 				hp(HomeBlockThreads, "最新讨论", `{"limit":10}`, true),
 				hp(HomeBlockForums, "版块大厅", `{"limit":8}`, true),
@@ -172,9 +171,8 @@ func HomeBlockPresets() []HomeBlockPreset {
 			},
 		},
 		{
-			Key: "minimal", Name: "极简小说", Desc: "只保留头图与小说模块，最轻量",
+			Key: "minimal", Name: "极简小说", Desc: "只保留小说模块，最轻量",
 			Blocks: []HomeBlock{
-				hp(HomeBlockHero, "", `{"show_categories":true}`, true),
 				hp(HomeBlockModules, "", `{"modules":["novels"],"featured_first":true}`, true),
 			},
 		},

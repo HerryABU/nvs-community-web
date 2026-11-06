@@ -87,6 +87,7 @@ func writeDBEnv(cfg models.DBConfig) error {
 		User:     cfg.User,
 		Password: cfg.Password,
 		Name:     cfg.Name,
+		SSLMode:  cfg.SSLMode,
 		Path:     cfg.Path,
 	}
 	if sc.Driver == "sqlite" && sc.Path == "" {
@@ -186,12 +187,12 @@ func AdminDBMigrate(c *gin.Context) {
 		return
 	}
 	req.Driver = strings.ToLower(strings.TrimSpace(req.Driver))
-	if req.Driver != "sqlite" && req.Driver != "mysql" {
-		infra.BadRequest(c, "目标驱动仅支持 sqlite 或 mysql")
+	if req.Driver != "sqlite" && req.Driver != "mysql" && req.Driver != "postgres" {
+		infra.BadRequest(c, "目标驱动仅支持 sqlite / mysql / postgres")
 		return
 	}
-	if req.Driver == "mysql" && req.Name == "" {
-		infra.BadRequest(c, "MySQL 数据库名不能为空")
+	if (req.Driver == "mysql" || req.Driver == "postgres") && req.Name == "" {
+		infra.BadRequest(c, "MySQL / PostgreSQL 数据库名不能为空")
 		return
 	}
 
@@ -245,8 +246,8 @@ func runMigrationJob(job *dbJob, cfg models.DBConfig) {
 		return
 	}
 
-	// 5. MySQL 模式重连 Redis，SQLite 模式禁用 Redis
-	if cfg.Driver == "mysql" {
+	// 5. 服务端数据库（MySQL / PostgreSQL）模式重连 Redis，SQLite 模式禁用 Redis
+	if cfg.Driver == "mysql" || cfg.Driver == "postgres" {
 		infra.ConnectRedis(config.RedisHost, config.RedisPort, config.RedisPassword, config.RedisDB)
 	} else {
 		infra.RedisClient = nil
@@ -332,7 +333,9 @@ func AdminDBDownloadBackup(c *gin.Context) {
 	c.FileAttachment(p, filepath.Base(p))
 }
 
-// POST /api/admin/db/restore — 恢复 SQLite 备份（仅 sqlite 驱动，替换 .db 后重连）
+// POST /api/admin/db/restore — 恢复备份（按当前驱动与备份文件类型分派）
+//   - SQLite：覆盖 data/nvs.db 后热重连
+//   - MySQL / PostgreSQL：通过本机 mysql / psql 回放原生 SQL 转储
 func AdminDBRestore(c *gin.Context) {
 	if !admincommon.EnsureAdmin(c) {
 		return
@@ -342,10 +345,6 @@ func AdminDBRestore(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.Name == "" {
 		infra.BadRequest(c, "请指定备份文件名")
-		return
-	}
-	if config.DBDriver != "sqlite" {
-		infra.BadRequest(c, "当前为 MySQL，仅支持恢复 SQLite 备份文件")
 		return
 	}
 	p, err := siteops.BackupPath(req.Name)
@@ -360,23 +359,44 @@ func AdminDBRestore(c *gin.Context) {
 
 	job := newJob("restore")
 	go func() {
-		// 1. 关闭当前连接
-		if models.DB != nil {
-			if sqlDB, e := models.DB.DB(); e == nil && sqlDB != nil {
-				_ = sqlDB.Close()
+		switch config.DBDriver {
+		case "sqlite":
+			if !strings.HasSuffix(p, ".db") {
+				finishJob(job, "error", "SQLite 恢复仅支持 .db 备份文件")
+				return
 			}
+			// 1. 关闭当前连接
+			if models.DB != nil {
+				if sqlDB, e := models.DB.DB(); e == nil && sqlDB != nil {
+					_ = sqlDB.Close()
+				}
+			}
+			// 2. 覆盖当前 db 文件
+			if err := CopyFile(p, "data/nvs.db"); err != nil {
+				finishJob(job, "error", "恢复失败: "+err.Error())
+				return
+			}
+			// 3. 重连
+			if err := models.ReconnectDatabase(models.DBConfig{Driver: "sqlite", Path: "data/nvs.db"}); err != nil {
+				finishJob(job, "error", "恢复后重连失败: "+err.Error())
+				return
+			}
+			finishJob(job, "done", "恢复完成")
+		case "mysql":
+			if err := siteops.RestoreMySQLDump(p); err != nil {
+				finishJob(job, "error", "MySQL 恢复失败: "+err.Error())
+				return
+			}
+			finishJob(job, "done", "MySQL 恢复完成")
+		case "postgres":
+			if err := siteops.RestorePostgresDump(p); err != nil {
+				finishJob(job, "error", "PostgreSQL 恢复失败: "+err.Error())
+				return
+			}
+			finishJob(job, "done", "PostgreSQL 恢复完成")
+		default:
+			finishJob(job, "error", "当前驱动 "+config.DBDriver+" 不支持恢复")
 		}
-		// 2. 覆盖当前 db 文件
-		if err := CopyFile(p, "data/nvs.db"); err != nil {
-			finishJob(job, "error", "恢复失败: "+err.Error())
-			return
-		}
-		// 3. 重连
-		if err := models.ReconnectDatabase(models.DBConfig{Driver: "sqlite", Path: "data/nvs.db"}); err != nil {
-			finishJob(job, "error", "恢复后重连失败: "+err.Error())
-			return
-		}
-		finishJob(job, "done", "恢复完成")
 	}()
 	infra.Success(c, gin.H{"job_id": job.ID})
 }
