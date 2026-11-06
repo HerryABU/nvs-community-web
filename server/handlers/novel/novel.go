@@ -16,12 +16,37 @@ import (
 	"nvs-server/handlers/realname"
 	"nvs-server/models"
 	"nvs-server/moderation"
+	"nvs-server/readperm"
 	"nvs-server/security"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	quota "nvs-server/models/quota"
 )
+
+// applyPermissionInput 校验并写入作品级阅读权限（#65）。
+// perm / price 用指针区分「未传」与「显式清空」；等级必须仍在站长开放集合内，
+// paid 等级售价不得低于站长设定的最低价。返回 false 表示已写出响应。
+func applyPermissionInput(c *gin.Context, novel *models.Novel, perm *string, price *int64) bool {
+	if perm == nil && price == nil {
+		return true
+	}
+	level := novel.ReadPermission
+	if perm != nil {
+		level = *perm
+	}
+	p := novel.PaidPrice
+	if price != nil {
+		p = *price
+	}
+	if err := readperm.ValidateSelection(level, p); err != nil {
+		infra.BadRequest(c, err.Error())
+		return false
+	}
+	novel.ReadPermission = level
+	novel.PaidPrice = p
+	return true
+}
 
 // POST /api/novels
 func CreateNovel(c *gin.Context) {
@@ -109,6 +134,9 @@ func CreateNovel(c *gin.Context) {
 		Status:          status,
 		SourceType:      sourceType,
 		CreationMethod:  creationMethod,
+	}
+	if !applyPermissionInput(c, novel, input.ReadPermission, input.PaidPrice) {
+		return
 	}
 
 	if err := models.CreateNovel(novel); err != nil {
@@ -215,6 +243,9 @@ func UpdateNovel(c *gin.Context) {
 	// 作者隔离开关：true=外人需登录才能查看本作品（对应 3.2 作者自决）
 	if input.WallEnabled != nil {
 		novel.WallEnabled = *input.WallEnabled
+	}
+	if !applyPermissionInput(c, novel, input.ReadPermission, input.PaidPrice) {
+		return
 	}
 
 	if err := models.UpdateNovel(novel); err != nil {

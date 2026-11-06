@@ -32,6 +32,7 @@ import (
 	"nvs-server/handlers/ops"
 	"nvs-server/handlers/police"
 	"nvs-server/handlers/publish"
+	readpermh "nvs-server/handlers/readperm"
 	"nvs-server/handlers/recycle"
 	securityhandler "nvs-server/handlers/security"
 	"nvs-server/handlers/sentiment"
@@ -221,6 +222,9 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.PUT("/checkin", ops.SaveCheckIn)
 		adminGrp.GET("/visit-setting", ops.AdminVisitSetting)
 		adminGrp.PUT("/visit-setting", ops.SaveVisitSetting)
+		// #65 阅读权限：站长配置可用等级 / VIP 门槛 / 付费最低价
+		adminGrp.GET("/read-permission", readpermh.AdminGetConfig)
+		adminGrp.PUT("/read-permission", readpermh.AdminSaveConfig)
 		adminGrp.GET("/live", ops.AdminLive)
 		adminGrp.PUT("/live", ops.SaveLive)
 		// ===== 语音模型 / 转化漏斗 =====

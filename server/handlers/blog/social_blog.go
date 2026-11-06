@@ -70,6 +70,33 @@ func filterListableBlogs(c *gin.Context, blogs []blogm.AuthorBlog) ([]blogm.Auth
 	return out, removed
 }
 
+// applyBlogPermissionInput 校验并写入博客阅读权限（#65）。
+// updates 为 nil 时表示创建流程（整行 Create），否则同步写入 updates map。
+func applyBlogPermissionInput(c *gin.Context, b *blogm.AuthorBlog, updates map[string]interface{}, perm *string, price *int64) bool {
+	if perm == nil && price == nil {
+		return true
+	}
+	level := b.ReadPermission
+	if perm != nil {
+		level = *perm
+	}
+	p := b.PaidPrice
+	if price != nil {
+		p = *price
+	}
+	if err := readperm.ValidateSelection(level, p); err != nil {
+		infra.BadRequest(c, err.Error())
+		return false
+	}
+	b.ReadPermission = level
+	b.PaidPrice = p
+	if updates != nil {
+		updates["read_permission"] = level
+		updates["paid_price"] = p
+	}
+	return true
+}
+
 // ============ 作者博客 ============
 
 // 博客文件存储根目录：data/blogs
@@ -92,6 +119,9 @@ type CreateBlogInput struct {
 	// AI 辅助生成标识（176 号令）：作者在编辑器用过 AI 且未全部改写时置 true
 	AiAssisted bool   `json:"ai_assisted"`
 	AiModel    string `json:"ai_model"`
+	// #65 作品级阅读权限（等级集合由站长在后台配置）
+	ReadPermission *string `json:"read_permission"`
+	PaidPrice      *int64  `json:"paid_price"`
 }
 
 type UpdateBlogInput struct {
@@ -104,6 +134,9 @@ type UpdateBlogInput struct {
 	AiModel    string   `json:"ai_model"`
 	Tags       []string `json:"tags"`   // 博客标签（#tag），null=不修改
 	Topics     []string `json:"topics"` // 博客话题（#话题），null=不修改
+	// #65 作品级阅读权限；null=不修改
+	ReadPermission *string `json:"read_permission"`
+	PaidPrice      *int64  `json:"paid_price"`
 }
 
 // POST /api/blogs/import/batch — 批量导入博客（multipart，每个文件一篇博客，标题取文件名去扩展名）
@@ -250,6 +283,9 @@ func CreateBlog(c *gin.Context) {
 		AuthorID: userID,
 		Title:    title,
 		Summary:  summary,
+	}
+	if !applyBlogPermissionInput(c, blog, nil, req.ReadPermission, req.PaidPrice) {
+		return
 	}
 	if req.CategoryID > 0 {
 		var cat blogm.BlogCategory
@@ -513,6 +549,9 @@ func UpdateBlog(c *gin.Context) {
 		}
 		blog.CategoryID = cid
 		updates["category_id"] = cid
+	}
+	if !applyBlogPermissionInput(c, blog, updates, req.ReadPermission, req.PaidPrice) {
+		return
 	}
 	// 标签：仅当请求显式携带 tags 字段时同步（null 表示不修改）
 	if req.Tags != nil {

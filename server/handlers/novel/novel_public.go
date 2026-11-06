@@ -34,6 +34,8 @@ type CreateNovelInput struct {
 	SourceType      string   `json:"source_type"`     // original / reprint
 	CreationMethod  string   `json:"creation_method"` // human / ai / human_ai_assisted
 	Mode            string   `json:"mode"`            // prose（散文体）/ script（话本气泡体）
+	ReadPermission  *string  `json:"read_permission"` // #65 作品级阅读权限等级
+	PaidPrice       *int64   `json:"paid_price"`      // #65 paid 等级售价（代币）
 }
 
 type UpdateNovelInput struct {
@@ -49,7 +51,9 @@ type UpdateNovelInput struct {
 	CreationMethod  string   `json:"creation_method"` // human / ai / human_ai_assisted
 	WallEnabled     *bool    `json:"wall_enabled"`
 	WallWarning     *string  `json:"wall_warning"`
-	Mode            string   `json:"mode"` // prose / script
+	Mode            string   `json:"mode"`            // prose / script
+	ReadPermission  *string  `json:"read_permission"` // #65
+	PaidPrice       *int64   `json:"paid_price"`      // #65
 }
 
 var htmlSanitizer = bluemonday.UGCPolicy()

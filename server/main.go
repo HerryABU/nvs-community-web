@@ -34,6 +34,7 @@ import (
 	"nvs-server/oc"
 	"nvs-server/police"
 	"nvs-server/prompttpl"
+	_ "nvs-server/readperm" // 触发 content_purchases 模型注册（#65 付费解锁）
 	"nvs-server/risk"
 	"nvs-server/routes"
 	"nvs-server/scriptmode"

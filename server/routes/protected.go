@@ -40,6 +40,7 @@ import (
 	"nvs-server/handlers/publish"
 	"nvs-server/handlers/rating"
 	"nvs-server/handlers/reading"
+	readpermh "nvs-server/handlers/readperm"
 	"nvs-server/handlers/recycle"
 	"nvs-server/handlers/scriptpreview"
 	securityhandler "nvs-server/handlers/security"
@@ -462,6 +463,9 @@ func registerProtected(r *gin.Engine) {
 		protected.POST("/police/tickets/:id/assign", police.AssignTicket)
 		protected.POST("/police/tickets/:id/status", police.SetTicketStatus)
 		protected.POST("/police/tickets/:id/notes", police.AddTicketNote)
+
+		// #65 作者端阅读权限下拉（随站长配置实时变化）
+		protected.GET("/read-permission/levels", readpermh.Levels)
 	}
 
 	// 管理员路由
