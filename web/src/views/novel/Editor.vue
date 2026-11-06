@@ -32,7 +32,11 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="封面URL">
-              <el-input v-model="form.cover_url" placeholder="封面图片链接（可选）" />
+              <el-input v-model="form.cover_url" placeholder="封面图片链接（可选）">
+                <template #append>
+                  <el-button @click="openCoverGen">AI 生成</el-button>
+                </template>
+              </el-input>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -262,6 +266,30 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- AI 生成小说封面（复用 /api/ai/image 文生图） -->
+    <el-dialog v-model="coverGenVisible" title="AI 生成小说封面" width="520px">
+      <el-form label-width="70px">
+        <el-form-item label="提示词">
+          <el-input v-model="coverPrompt" type="textarea" :rows="4"
+            placeholder="描述你想要的封面画面，可留空用作品信息自动生成" />
+        </el-form-item>
+        <el-form-item label="比例">
+          <el-select v-model="coverRatio" style="width:160px">
+            <el-option label="3:4（竖版封面）" value="3:4" />
+            <el-option label="2:3" value="2:3" />
+            <el-option label="1:1" value="1:1" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="预览" v-if="coverPreview">
+          <el-image :src="coverPreview" fit="cover" style="width:120px;height:160px;border-radius:6px" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="coverGenVisible = false">取消</el-button>
+        <el-button type="primary" :loading="coverGenerating" @click="generateCover">生成</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -271,6 +299,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { novelApi, chapterApi, type Novel, type Chapter } from '@/api/novel';
 import { publicApi } from '@/api/admin';
 import { authApi } from '@/api/auth';
+import api from '@/api/index';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Upload, Plus, UploadFilled, Delete } from '@element-plus/icons-vue';
 import ReadPermissionPicker from '@/components/readperm/ReadPermissionPicker.vue';
@@ -302,6 +331,41 @@ const form = reactive<Partial<Novel>>({
   read_permission: 'public', // #65 作品级阅读权限
   paid_price: 0,             // #65 paid 等级售价（代币）
 });
+
+// AI 生成小说封面（复用 /api/ai/image 文生图，不需要新建端点）
+const coverGenVisible = ref(false);
+const coverPrompt = ref('');
+const coverRatio = ref('3:4');
+const coverGenerating = ref(false);
+const coverPreview = ref('');
+function openCoverGen() {
+  coverPrompt.value = `小说《${form.title || ''}》的封面：主题${form.summary || ''}。风格：${form.creation_method === 'ai' ? 'AI 质感' : '写实插画'}`;
+  coverPreview.value = '';
+  coverGenVisible.value = true;
+}
+async function generateCover() {
+  coverGenerating.value = true;
+  try {
+    const prompt = coverPrompt.value.trim() || `小说《${form.title}》封面`;
+    const res = await api.post<{ code: number; data: { images?: string[] } }>('/ai/image', {
+      prompt,
+      ratio: coverRatio.value,
+      n: 1,
+    });
+    if (res.data.code === 0 && res.data.data.images && res.data.data.images.length) {
+      const url = res.data.data.images[0];
+      form.cover_url = url;
+      coverPreview.value = url;
+      ElMessage.success('已生成，点击「保存」即可使用');
+    } else {
+      ElMessage.error('生成失败');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '生成失败');
+  } finally {
+    coverGenerating.value = false;
+  }
+}
 
 // 导入相关
 const showImportDialog = ref(false);
