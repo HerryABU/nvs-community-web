@@ -55,6 +55,7 @@ var knownSPARoots = map[string]bool{
 	"membership": true, "collab": true, "live": true,
 	"oc":       true, // #78 独立 OC 工作台：此前遗漏，导致 /oc 直接访问/刷新 404（SPA 深链失效）
 	"ai-write": true, // 独立 AI 写作工作台（从作者工作台 tab 抽离为独立页）
+	"novels":   true, // 小说专栏页（公开，复用首页小说块卡片栅格；「小说」主导航指向此页）
 }
 
 // firstPathSegment 返回去前导斜杠后的路径首段，如 "novel/1"→"novel"，"admin"→"admin"

@@ -776,6 +776,13 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      // 小说专栏页：公开，复用首页「类型文学」卡片栅格（与首页小说块视觉一致）。
+      // 「小说」主导航与首页「查看全部」均指向此页，而非特别关注动态流 /feed。
+      path: '/novels',
+      name: 'novels',
+      component: () => import('@/views/novel/NovelsView.vue'),
+    },
+    {
       path: '/user/messages',
       name: 'user-messages',
       component: () => import('@/views/user/Messages.vue'),

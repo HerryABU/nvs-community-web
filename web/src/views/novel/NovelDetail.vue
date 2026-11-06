@@ -46,7 +46,7 @@
             <router-link
               v-for="t in novel.tags"
               :key="t"
-              :to="`/feed?tag=${encodeURIComponent(t)}`"
+              :to="`/novels?search=${encodeURIComponent(t)}`"
               class="novel-tag-item"
             >#{{ t }}</router-link>
           </div>

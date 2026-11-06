@@ -17,7 +17,7 @@
            现在：高频左对齐，「更多」收纳低频，右侧用户区 flex-shrink:0 永不参与滚动。 -->
       <div class="nav-main">
         <router-link to="/" class="nav-link desktop-only">主页</router-link>
-        <router-link to="/feed" class="nav-link desktop-only">小说</router-link>
+        <router-link to="/novels" class="nav-link desktop-only">小说</router-link>
 
         <!-- 分类下拉 -->
         <el-dropdown class="category-dropdown" trigger="click">
@@ -226,7 +226,7 @@
       <!-- 浏览（与桌面导航对齐：桌面收进「更多」的入口，移动端必须在这里补齐） -->
       <div class="mnav-group-title">浏览</div>
       <div class="mnav-item" @click="mnavGo('/')"><el-icon><HomeFilled /></el-icon> 首页</div>
-      <div class="mnav-item" @click="mnavGo('/feed')"><span class="mnav-emoji">📖</span> 小说</div>
+      <div class="mnav-item" @click="mnavGo('/novels')"><span class="mnav-emoji">📖</span> 小说</div>
       <div class="mnav-item" @click="mnavGo('/forums')"><el-icon><ChatDotRound /></el-icon> 论坛</div>
       <div class="mnav-item" @click="mnavGo('/groups')"><span class="mnav-emoji">👥</span> 群组</div>
       <div class="mnav-item" @click="mnavGo('/blogs')"><el-icon><Document /></el-icon> 博客</div>

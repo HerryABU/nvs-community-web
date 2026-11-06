@@ -82,7 +82,7 @@ const metaMap: Record<
   { title: string; icon: string; more: string; emptyTitle: string; emptyHint: string; emptyAction: string }
 > = {
   novels: {
-    title: '类型文学', icon: '📚', more: '/feed',
+    title: '类型文学', icon: '📚', more: '/novels',
     emptyTitle: '还没有作品', emptyHint: '第一篇永远是最难写的，但也是最值得的。',
     emptyAction: '去发布作品',
   },
