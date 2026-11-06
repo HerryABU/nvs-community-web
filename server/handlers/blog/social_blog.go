@@ -20,6 +20,7 @@ import (
 	"nvs-server/handlers/publish"
 	"nvs-server/models"
 	"nvs-server/moderation"
+	"nvs-server/readperm"
 	"nvs-server/security"
 
 	"github.com/gin-gonic/gin"
@@ -28,6 +29,46 @@ import (
 	blogm "nvs-server/models/blog"
 	quota "nvs-server/models/quota"
 )
+
+// ============ 阅读权限（#65） ============
+
+// guardBlogPermission 博客详情 / 正文的作品级阅读权限闸门。
+// 必须在读取正文文件之前调用，否则受限内容会被写进 HTTP 响应。
+func guardBlogPermission(c *gin.Context, b *blogm.AuthorBlog) bool {
+	actor := readperm.NewActor(hctx.CurrentUserID(c), hctx.CurrentUserRole(c))
+	d := readperm.Check(actor, readperm.BlogContent(b.ID, b.AuthorID, b.ReadPermission, b.PaidPrice))
+	if d.Allowed {
+		return true
+	}
+	if d.Reason == readperm.ReasonLoginRequired {
+		infra.Unauthorized(c, d.Message)
+	} else {
+		infra.Forbidden(c, d.Message)
+	}
+	return false
+}
+
+// filterListableBlogs 列表页剔除当前访问者无权列出的私密博客。
+// 其余等级（登录 / 粉丝 / VIP / 付费）只在列表展示标题与摘要，正文由
+// guardBlogPermission 拦截 —— 这与付费内容的常规展示方式一致。
+// 返回过滤后的切片与被剔除条数，调用方据此修正 total。
+func filterListableBlogs(c *gin.Context, blogs []blogm.AuthorBlog) ([]blogm.AuthorBlog, int) {
+	actor := readperm.NewActor(hctx.CurrentUserID(c), hctx.CurrentUserRole(c))
+	out := make([]blogm.AuthorBlog, 0, len(blogs))
+	removed := 0
+	for i := range blogs {
+		b := &blogs[i]
+		if b.ReadPermission == readperm.LevelPrivate {
+			d := readperm.Check(actor, readperm.BlogContent(b.ID, b.AuthorID, b.ReadPermission, b.PaidPrice))
+			if !d.Allowed {
+				removed++
+				continue
+			}
+		}
+		out = append(out, *b)
+	}
+	return out, removed
+}
 
 // ============ 作者博客 ============
 
@@ -309,6 +350,8 @@ func ListPublicBlogs(c *gin.Context) {
 		infra.InternalError(c, "查询失败")
 		return
 	}
+	blogs, removed := filterListableBlogs(c, blogs)
+	total -= int64(removed)
 	FillBlogCategories(blogs)
 	blogm.FillBlogTags(blogs)
 	blogm.FillBlogTopics(blogs)
@@ -327,6 +370,9 @@ func GetBlog(c *gin.Context) {
 	blog, err := blogm.GetBlogByID(uint(id))
 	if err != nil {
 		infra.NotFound(c, "博客不存在")
+		return
+	}
+	if !guardBlogPermission(c, blog) {
 		return
 	}
 	loadBlogContent(blog)
@@ -357,6 +403,9 @@ func GetAuthorBlog(c *gin.Context) {
 	blog, err := blogm.GetBlogByID(uint(blogID))
 	if err != nil || blog.AuthorID != author.ID {
 		infra.NotFound(c, "博客不存在")
+		return
+	}
+	if !guardBlogPermission(c, blog) {
 		return
 	}
 
@@ -396,6 +445,8 @@ func ListAuthorBlogs(c *gin.Context) {
 		infra.InternalError(c, "查询失败")
 		return
 	}
+	blogs, removed := filterListableBlogs(c, blogs)
+	total -= int64(removed)
 	FillBlogCategories(blogs)
 	for i := range blogs {
 		if blogs[i].Author != nil {

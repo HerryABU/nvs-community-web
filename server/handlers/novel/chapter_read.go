@@ -29,6 +29,9 @@ func GetChapters(c *gin.Context) {
 	}
 	// 🔒 访客门禁：匿名且需登录/作者上锁时拒绝（对应 3.3 爬虫亦被拦截）
 	isLogin := hctx.CurrentUserID(c) != 0
+	if !guardNovelPermission(c, novel) {
+		return
+	}
 	access := ResolveNovelAccess(novel, isLogin, hctx.CurrentUserRole(c))
 	if access.RequiresLogin && !isLogin {
 		infra.Unauthorized(c, "该作品需登录后查看")
@@ -75,6 +78,9 @@ func GetChapterContent(c *gin.Context) {
 	}
 	// 🔒 访客门禁：匿名且需登录/作者上锁时拒绝
 	isLogin := hctx.CurrentUserID(c) != 0
+	if !guardNovelPermission(c, novel) {
+		return
+	}
 	access := ResolveNovelAccess(novel, isLogin, hctx.CurrentUserRole(c))
 	if access.RequiresLogin && !isLogin {
 		infra.Unauthorized(c, "该章节需登录后查看")
@@ -179,6 +185,9 @@ func VerifyChapter(c *gin.Context) {
 		return
 	}
 	isLogin := hctx.CurrentUserID(c) != 0
+	if !guardNovelPermission(c, novel) {
+		return
+	}
 	access := ResolveNovelAccess(novel, isLogin, hctx.CurrentUserRole(c))
 	if access.RequiresLogin && !isLogin {
 		infra.Unauthorized(c, "该章节需登录后查看")

@@ -3,8 +3,13 @@ package novel
 import (
 	"math"
 
+	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	siteops "nvs-server/models/siteops"
+	"nvs-server/readperm"
+	"nvs-server/utils/infra"
+
+	"github.com/gin-gonic/gin"
 )
 
 // NovelView 作品详情返回体：内嵌 Novel 全部字段（保持前端 res.data.data.xxx 兼容），
@@ -62,6 +67,45 @@ func ResolveNovelAccess(novel *models.Novel, isLogin bool, _ string) NovelAccess
 		return NovelAccess{RequiresLogin: false, IsTrial: true, TrialLimit: limit}
 	}
 	return NovelAccess{RequiresLogin: false, IsTrial: false}
+}
+
+// guardNovelPermission 作品级阅读权限闸门（#65）。
+//
+// 它跑在既有访客三级判定之前：后者只管「匿名 / 试读」，前者管「登录之后
+// 还要不要粉丝 / VIP / 已购 / 私密」。两者取更严的一侧，老数据
+// （read_permission 为空）由 EffectivePermission 兼容映射，行为不变。
+// 返回 false 表示已写出响应，调用方直接 return。
+func guardNovelPermission(c *gin.Context, novel *models.Novel) bool {
+	actor := readperm.NewActor(hctx.CurrentUserID(c), hctx.CurrentUserRole(c))
+	d := readperm.Check(actor, readperm.NovelContent(novel))
+	if d.Allowed {
+		return true
+	}
+	if d.Reason == readperm.ReasonLoginRequired {
+		infra.Unauthorized(c, d.Message)
+	} else {
+		infra.Forbidden(c, d.Message)
+	}
+	return false
+}
+
+// filterListableNovels 列表页剔除当前访问者无权列出的私密作品。
+// 其余等级只在列表展示书名与简介，正文 / 章节由 guardNovelPermission 拦截。
+func filterListableNovels(c *gin.Context, novels []models.Novel) ([]models.Novel, int) {
+	actor := readperm.NewActor(hctx.CurrentUserID(c), hctx.CurrentUserRole(c))
+	out := make([]models.Novel, 0, len(novels))
+	removed := 0
+	for i := range novels {
+		if novels[i].ReadPermission == readperm.LevelPrivate {
+			d := readperm.Check(actor, readperm.NovelContent(&novels[i]))
+			if !d.Allowed {
+				removed++
+				continue
+			}
+		}
+		out = append(out, novels[i])
+	}
+	return out, removed
 }
 
 // ComputeTrialLimit 计算试读章节上限：min(5, ceil(total*0.3))；total<=0 时取保守值 5。

@@ -87,6 +87,8 @@ func ListNovels(c *gin.Context) {
 		infra.InternalError(c, "获取作品列表失败")
 		return
 	}
+	novels, removed := filterListableNovels(c, novels)
+	total -= int64(removed)
 
 	// 搜索埋点（F9：搜索热词来源之一）
 	if search != "" {
@@ -251,6 +253,9 @@ func GetNovel(c *gin.Context) {
 
 	// 🔒 访客查看门禁（3.1/3.2/3.3）：匿名且需登录/作者上锁时拒绝，登录后可正常查看与爬取
 	isLogin := hctx.CurrentUserID(c) != 0
+	if !guardNovelPermission(c, novel) {
+		return
+	}
 	access := ResolveNovelAccess(novel, isLogin, hctx.CurrentUserRole(c))
 	if access.RequiresLogin && !isLogin {
 		infra.Unauthorized(c, "该作品需登录后查看")
