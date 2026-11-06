@@ -64,3 +64,8 @@ const (
 	TypeNovel = "novel"
 	TypeBlog  = "blog"
 )
+
+// IsKnownContentType 是否为支持付费解锁的内容类型。
+func IsKnownContentType(s string) bool {
+	return s == TypeNovel || s == TypeBlog
+}

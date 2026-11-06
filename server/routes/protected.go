@@ -471,6 +471,10 @@ func registerProtected(r *gin.Engine) {
 		// #66 VIP 等级卡密：兑换（限流防爆破）与我的会员状态
 		protected.POST("/vip-cards/redeem", security.RateLimit(10, 60), vipcardh.Redeem)
 		protected.GET("/vip-cards/membership", vipcardh.MyMembership)
+
+		// #67 付费内容解锁：代币购买 + 解锁状态查询
+		protected.POST("/readperm/purchase", security.RateLimit(10, 60), readpermh.Purchase)
+		protected.GET("/readperm/purchase/status", readpermh.PurchaseStatus)
 	}
 
 	// 管理员路由
