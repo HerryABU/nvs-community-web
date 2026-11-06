@@ -136,6 +136,13 @@ const router = createRouter({
       component: () => import('@/views/group/OcPanel.vue'),
       meta: { requiresAuth: true },
     },
+    // 独立 OC 工作台（不挂群组，个人 OC 资产管理）
+    {
+      path: '/oc',
+      name: 'oc-workspace',
+      component: () => import('@/views/oc/Workspace.vue'),
+      meta: { requiresAuth: true },
+    },
     {
       path: '/forums',
       name: 'forums',

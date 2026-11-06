@@ -208,6 +208,15 @@ func DeleteCharacter(userID uint, id uint) error {
 		Updates(map[string]interface{}{"status": "deleted", "visibility": VisPrivate}).Error
 }
 
+// GetCharacterByID 仅按主键读取 active 角色卡（供群组已绑定 agent 直接取人设，绕过私有可见性门槛）
+func GetCharacterByID(id uint) (*Character, error) {
+	var c Character
+	if err := models.DB.Where("id = ? AND status = ?", id, "active").First(&c).Error; err != nil {
+		return nil, errors.New("角色卡不存在")
+	}
+	return &c, nil
+}
+
 // GetCharacter 读取（私有仅本人可见；公开需审核通过）
 func GetCharacter(id uint, viewerID uint, isAdmin bool) (*Character, error) {
 	var c Character

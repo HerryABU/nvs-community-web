@@ -272,6 +272,7 @@ func registerProtected(r *gin.Engine) {
 		protected.POST("/groups/:id/oc/agents", ochandler.AddAgent)
 		protected.PUT("/groups/:id/oc/agents/:aid", ochandler.UpdateAgent)
 		protected.DELETE("/groups/:id/oc/agents/:aid", ochandler.RemoveAgent)
+		protected.POST("/groups/:id/oc/invoke", ochandler.InvokeOcInGroup) // 群组召唤 OC 角色发言（强化群组 + 群组调用 OC）
 		protected.GET("/groups/:id/oc/flows", ochandler.ListFlows)
 		protected.POST("/groups/:id/oc/flows", ochandler.CreateFlow)
 		protected.GET("/oc/flows/:fid/turns", ochandler.ListTurns)

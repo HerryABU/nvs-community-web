@@ -211,6 +211,13 @@ export const ocApi = {
   removeAgent(groupId: number, id: number) {
     return api.delete(`/groups/${groupId}/oc/agents/${id}`);
   },
+  // 群组召唤 OC 角色在群里发言（强化群组 + 群组调用 OC）
+  invokeOc(groupId: number, data: { agent_id?: number; prompt?: string }) {
+    return api.post<{ code: number; data: { post: any; character: string } }>(
+      `/groups/${groupId}/oc/invoke`,
+      data,
+    );
+  },
 
   // 对话流
   listFlows(groupId: number) {

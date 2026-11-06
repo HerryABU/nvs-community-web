@@ -5,6 +5,7 @@
       <el-tag v-if="setting?.enabled" size="small" type="success">{{ setting.mode === 'ai_only' ? '纯 AI 群' : '人机混合群' }}</el-tag>
       <el-tag v-else size="small" type="info">未启用</el-tag>
       <div class="oc-head-actions">
+        <el-button size="small" @click="$router.push('/oc')">我的 OC 工作台</el-button>
         <el-button size="small" @click="$router.push(`/group/${groupId}`)">返回群组</el-button>
       </div>
     </div>
@@ -76,6 +77,12 @@
 
       <el-tab-pane label="AI 角色" name="agents">
         <div class="oc-agents">
+          <div class="oc-agents-bar">
+            <el-button size="small" type="primary" :disabled="!canManage && agents.length === 0" @click="openInvoke">
+              召唤 OC 在群里发言
+            </el-button>
+            <span class="oc-tip">让已绑定本群的 OC 角色以人设发一条群帖（强化群组 · 群组调用 OC）</span>
+          </div>
           <el-table :data="agents" size="small">
             <el-table-column label="角色" min-width="140">
               <template #default="{ row }">{{ row.character_name || `角色#${row.character_id}` }}</template>
@@ -111,6 +118,23 @@
         <FlowPanel :group-id="groupId" />
       </el-tab-pane>
     </el-tabs>
+
+    <el-dialog v-model="invokeVisible" title="召唤 OC 在群里发言" width="520px">
+      <el-form label-width="88px">
+        <el-form-item label="选择角色">
+          <el-select v-model="invokeForm.agent_id" clearable placeholder="留空=首个启用角色" style="width:100%">
+            <el-option v-for="a in enabledAgents" :key="a.id" :label="a.character_name || `角色#${a.character_id}`" :value="a.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="发言提示">
+          <el-input v-model="invokeForm.prompt" type="textarea" :rows="3" placeholder="想让它聊什么（留空则自由发挥）" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="invokeVisible = false">取消</el-button>
+        <el-button type="primary" :loading="invoking" @click="doInvoke">召唤</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -134,6 +158,34 @@ const setting = ref<OcSetting | null>(null);
 const agents = ref<OcAgent[]>([]);
 const canManage = ref(false);
 const dailyUsed = ref(0);
+
+// 召唤 OC 发言
+const invokeVisible = ref(false);
+const invoking = ref(false);
+const invokeForm = reactive<{ agent_id?: number; prompt: string }>({ agent_id: undefined, prompt: '' });
+const enabledAgents = computed(() => agents.value.filter((a) => a.enabled));
+
+function openInvoke() {
+  invokeForm.agent_id = enabledAgents.value[0]?.id;
+  invokeForm.prompt = '';
+  invokeVisible.value = true;
+}
+
+async function doInvoke() {
+  invoking.value = true;
+  try {
+    const res = await ocApi.invokeOc(groupId.value, {
+      agent_id: invokeForm.agent_id || undefined,
+      prompt: invokeForm.prompt || undefined,
+    });
+    ElMessage.success(`已召唤「${res.data.data.character}」发言，去群聊查看`);
+    invokeVisible.value = false;
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '召唤失败');
+  } finally {
+    invoking.value = false;
+  }
+}
 
 const form = reactive<Partial<OcSetting>>({
   enabled: false, mode: 'mixed', audit_level: 'strict', audit_timing: 'post',
@@ -204,4 +256,5 @@ onMounted(load);
 .oc-tip { font-size: 0.75rem; color: var(--text-muted); }
 .oc-warn { margin-top: 12px; max-width: 760px; }
 .oc-agents { max-width: 900px; }
+.oc-agents-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
 </style>
