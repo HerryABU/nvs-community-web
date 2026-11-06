@@ -95,7 +95,6 @@
         <el-tab-pane label="章节" name="chapters">
           <div class="aw-chapters-head">
             <el-button size="small" type="primary" @click="createChapter">+ 新增章节</el-button>
-            <el-button size="small" :loading="mergeAllLoading" @click="mergeAllToBody">全部并入正文</el-button>
           </div>
           <div v-if="chaptersLoading" class="aw-empty">加载章节中…</div>
           <div v-else-if="chapters.length === 0" class="aw-empty">还没有章节，点「新增章节」开始逐章创作。</div>
@@ -120,26 +119,11 @@
                 <span class="aw-count">{{ charCount(ch.body) }} 字</span>
                 <span class="aw-chapter-foot-actions">
                   <el-button size="small" @click="saveChapter(ch)">保存本章</el-button>
-                  <el-button size="small" @click="mergeChapterToBody(ch)" :disabled="!ch.body">并入正文</el-button>
                   <el-button size="small" type="danger" plain @click="removeChapter(ch)">删除</el-button>
                 </span>
               </div>
             </div>
           </div>
-        </el-tab-pane>
-
-        <!-- ===== 正文（独立落点） ===== -->
-        <el-tab-pane label="正文" name="body">
-          <div class="aw-body-head">
-            <span class="aw-count">正文草稿共 {{ charCount(form.body_draft) }} 字</span>
-            <el-button size="small" :loading="saving" @click="saveAll">保存正文草稿</el-button>
-          </div>
-          <el-input
-            v-model="form.body_draft"
-            type="textarea"
-            :rows="26"
-            placeholder="正文草稿（独立落点）：可直接书写，或由「章节」逐章「并入正文」累积。"
-          />
         </el-tab-pane>
 
         <!-- ===== 可视化（内嵌，非弹窗） ===== -->
@@ -187,7 +171,6 @@ const creating = ref(false);
 const saving = ref(false);
 const publishing = ref(false);
 const genAllLoading = ref(false);
-const mergeAllLoading = ref(false);
 const chaptersLoading = ref(false);
 const createVisible = ref(false);
 const createTitleRef = ref();
@@ -209,7 +192,6 @@ const form = reactive({
   characters: '',
   timeline: '',
   outline: '',
-  body_draft: '',
   setting_input: '',
   character_input: '',
   outline_input: '',
@@ -310,7 +292,6 @@ async function openProject(id: number) {
       form.characters = p.characters || '';
       form.timeline = p.timeline || '';
       form.outline = p.outline || '';
-      form.body_draft = p.body_draft || '';
       form.setting_input = p.setting_input || '';
       form.character_input = p.character_input || '';
       form.outline_input = p.outline_input || '';
@@ -488,27 +469,6 @@ async function generateChapter(ch: AiWriteChapter, part: 'outline' | 'body') {
   }
 }
 
-function mergeChapterToBody(ch: AiWriteChapter) {
-  if (!ch.body) return;
-  const sep = form.body_draft ? '\n\n' : '';
-  form.body_draft = form.body_draft + sep + `第${ch.order}章 ${ch.title}\n` + ch.body;
-  ElMessage.success('已并入正文草稿');
-}
-
-async function mergeAllToBody() {
-  if (!chapters.value.length) return;
-  mergeAllLoading.value = true;
-  try {
-    for (const ch of chapters.value) {
-      if (ch.body) mergeChapterToBody(ch);
-    }
-    await saveAll();
-    ElMessage.success('全部已并入正文草稿');
-  } finally {
-    mergeAllLoading.value = false;
-  }
-}
-
 async function removeChapter(ch: AiWriteChapter) {
   if (!current.value) return;
   try {
@@ -600,6 +560,4 @@ loadList();
 .aw-chapter-outline-actions { display: flex; gap: 8px; margin-bottom: 8px; }
 .aw-chapter-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 .aw-chapter-foot-actions { display: flex; gap: 8px; }
-
-.aw-body-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 </style>
