@@ -19,6 +19,7 @@ import (
 	aim "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 	authoraim "nvs-server/models/authorai"
+	"nvs-server/prompttpl"
 	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
@@ -50,15 +51,19 @@ type createProjectInput struct {
 }
 
 type updateProjectInput struct {
-	Title       *string `json:"title"`
-	Setting     *string `json:"setting"`
-	Characters  *string `json:"characters"`
-	Timeline    *string `json:"timeline"`
-	Outline     *string `json:"outline"`
-	StylePreset *string `json:"style_preset"`
-	StyleDetail *string `json:"style_detail"`
-	BodyDraft   *string `json:"body_draft"`
-	Status      *string `json:"status"`
+	Title          *string `json:"title"`
+	Setting        *string `json:"setting"`
+	Characters     *string `json:"characters"`
+	Timeline       *string `json:"timeline"`
+	Outline        *string `json:"outline"`
+	StylePreset    *string `json:"style_preset"`
+	StyleDetail    *string `json:"style_detail"`
+	BodyDraft      *string `json:"body_draft"`
+	SettingInput   *string `json:"setting_input"`
+	CharacterInput *string `json:"character_input"`
+	OutlineInput   *string `json:"outline_input"`
+	TimelineInput  *string `json:"timeline_input"`
+	Status         *string `json:"status"`
 }
 
 type generateInput struct {
@@ -168,6 +173,18 @@ func UpdateProject(c *gin.Context) {
 	if in.BodyDraft != nil {
 		p.BodyDraft = *in.BodyDraft
 	}
+	if in.SettingInput != nil {
+		p.SettingInput = *in.SettingInput
+	}
+	if in.CharacterInput != nil {
+		p.CharacterInput = *in.CharacterInput
+	}
+	if in.OutlineInput != nil {
+		p.OutlineInput = *in.OutlineInput
+	}
+	if in.TimelineInput != nil {
+		p.TimelineInput = *in.TimelineInput
+	}
 	if in.Status != nil {
 		p.Status = *in.Status
 	}
@@ -206,38 +223,106 @@ func GenerateComponent(c *gin.Context) {
 		infra.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
-	systemPrompt, userPrompt := buildGeneratePrompt(p, in.Component, in.Prompt)
-	if systemPrompt == "" {
-		infra.BadRequest(c, "不支持的生成组件: "+in.Component)
+	content, err := generateViaTemplate(p, in.Component, in.Prompt)
+	if err != nil {
+		infra.BadRequest(c, err.Error())
 		return
 	}
-	content, err := callAI(hctx.CurrentUserID(c), in.ModelID, systemPrompt, userPrompt, p.ID)
-	if err != nil {
-		infra.InternalError(c, "AI 生成失败: "+err.Error())
+	genContent, gerr := genCall(hctx.CurrentUserID(c), in.ModelID, content, p.ID)
+	if gerr != nil {
+		infra.InternalError(c, "AI 生成失败: "+gerr.Error())
 		return
 	}
 	// 写回对应字段（body 累加到草稿末尾，其余覆盖）
 	switch in.Component {
 	case CompSetting:
-		p.Setting = content
+		p.Setting = genContent
 	case CompCharacter:
-		p.Characters = content
+		p.Characters = genContent
 	case CompOutline:
-		p.Outline = content
+		p.Outline = genContent
 	case CompTimeline:
-		p.Timeline = content
+		p.Timeline = genContent
 	case CompBody:
 		if strings.TrimSpace(p.BodyDraft) == "" {
-			p.BodyDraft = content
+			p.BodyDraft = genContent
 		} else {
-			p.BodyDraft = p.BodyDraft + "\n\n" + content
+			p.BodyDraft = p.BodyDraft + "\n\n" + genContent
 		}
 	}
 	if err := models.DB.Save(p).Error; err != nil {
 		infra.InternalError(c, "保存生成结果失败")
 		return
 	}
-	infra.SuccessMessage(c, "生成成功", gin.H{"component": in.Component, "content": content})
+	infra.SuccessMessage(c, "生成成功", gin.H{"component": in.Component, "content": genContent})
+}
+
+// genCall 以通用系统提示包装一次 AI 调用（模板渲染结果作为用户提示，统一风格基调与输出约束）。
+func genCall(userID, modelID uint, userText string, refID uint) (string, error) {
+	return callAI(userID, modelID,
+		"你是专业的中文小说创作助手，请严格按用户给出的要求输出，不解释、不评价，不重复指令本身。",
+		userText, refID)
+}
+
+// materialTplKey 素材/正文组件 → 对应 prompttpl 模板 key（与 ai_prompt_templates 表联动，可后台自定义）。
+var materialTplKey = map[string]string{
+	CompSetting:   "authorai-setting",
+	CompCharacter: "authorai-character",
+	CompOutline:   "authorai-outline",
+	CompTimeline:  "authorai-timeline",
+	CompBody:      "authorai-body",
+}
+
+// materialExistingAndInput 返回组件的「已有内容」与「用户补充要求」。
+func materialExistingAndInput(p *authoraim.NovelProject, comp string) (existing, input string) {
+	switch comp {
+	case CompSetting:
+		return p.Setting, p.SettingInput
+	case CompCharacter:
+		return p.Characters, p.CharacterInput
+	case CompOutline:
+		return p.Outline, p.OutlineInput
+	case CompTimeline:
+		return p.Timeline, p.TimelineInput
+	case CompBody:
+		return p.BodyDraft, ""
+	}
+	return "", ""
+}
+
+// generateViaTemplate 用 prompttpl 渲染指定组件的生成提示词。
+// 关键：是否「从零创作」还是「在已有基础上补充」由 Go 在组装时决定（写入 TaskMode 变量），
+// 模板内不写条件分支——AI 每次只面对一个明确任务。
+// 模板缺失时回落到内置 buildGeneratePrompt，保证健壮性。
+func generateViaTemplate(p *authoraim.NovelProject, comp, extraOverride string) (string, error) {
+	key, ok := materialTplKey[comp]
+	if !ok {
+		return "", fmt.Errorf("不支持的生成组件: %s", comp)
+	}
+	existing, input := materialExistingAndInput(p, comp)
+	extra := strings.TrimSpace(input)
+	if strings.TrimSpace(extraOverride) != "" {
+		extra = strings.TrimSpace(extraOverride)
+	}
+	taskMode := "从零创作完整内容"
+	if strings.TrimSpace(existing) != "" {
+		taskMode = "在已有内容基础上补充与完善，保持与已有内容严格自洽"
+	}
+	t, terr := prompttpl.GetByKey(key)
+	if terr != nil || t == nil {
+		// 模板未播种：回落到内置默认提示（仅取 user 部分作为渲染结果）
+		_, usr := buildGeneratePrompt(p, comp, extra)
+		return usr, nil
+	}
+	values := map[string]string{
+		"NovelTitle":        p.Title,
+		"StyleDirective":    styleDirective(p.StylePreset, p.StyleDetail),
+		"ExtraRequirements": extra,
+		"ExistingContent":   strings.TrimSpace(existing),
+		"TaskMode":          taskMode,
+	}
+	res := prompttpl.Render(t.Content, t.Vars, values)
+	return res.Text, nil
 }
 
 // 构建各组件的 system / user 提示词（注入风格库 + 详细风格要求）
@@ -310,7 +395,7 @@ func callAI(userID, modelID uint, system, user string, refID uint) (string, erro
 	req := aiclient.ChatRequest{
 		Model:       m.ModelID,
 		Messages:    []aiclient.Message{{Role: "system", Content: system}, {Role: "user", Content: user}},
-		MaxTokens:   2000,
+		MaxTokens:   4000,
 		Temperature: 0.8,
 	}
 	var content string

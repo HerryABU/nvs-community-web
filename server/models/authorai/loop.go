@@ -21,8 +21,10 @@ import (
 // ----------------------------------------------------------------------------
 
 var (
-	reLoopOpen  = regexp.MustCompile(`(?i)\[LOOP:([^\]]+)\]`)
-	reLoopClose = regexp.MustCompile(`(?i)\[LOOPEND:([^\]]+)\]`)
+	// 开循环：支持 [LOOP:id]（带标识）与 [LOOP]（无标识，自动编号）
+	reLoopOpen = regexp.MustCompile(`(?i)\[LOOP(?::([^\]]+))?\]`)
+	// 闭循环：支持 [/LOOP]（LIFO 关闭栈顶）与 [LOOPEND:id]（按标识关闭）
+	reLoopClose = regexp.MustCompile(`(?i)\[\/LOOP\]|\[LOOPEND(?::([^\]]+))?\]`)
 )
 
 // LoopContext 一个循环的投影结构（由文本解析派生）。
@@ -79,8 +81,8 @@ func ParseLoops(text string) LoopParseResult {
 		for _, m := range openMatches {
 			id := strings.TrimSpace(m[1])
 			if id == "" {
-				res.Errors = append(res.Errors, fmt.Sprintf("第 %d 行：空的循环 ID", lineNo))
-				continue
+				// 无标识形式 [LOOP]：自动编号，避免与显式 ID 冲突
+				id = fmt.Sprintf("loop_%d", len(opened)+1)
 			}
 			if seen[id] {
 				res.Errors = append(res.Errors, fmt.Sprintf("第 %d 行：循环 ID「%s」重复开启", lineNo, id))
@@ -104,24 +106,24 @@ func ParseLoops(text string) LoopParseResult {
 			stack = append(stack, id)
 		}
 
-		// 关闭
+		// 关闭：[/LOOP]（无标识，关闭栈顶）或 [LOOPEND:id]（按标识关闭）
 		for _, m := range closeMatches {
 			id := strings.TrimSpace(m[1])
-			if id == "" {
-				res.Errors = append(res.Errors, fmt.Sprintf("第 %d 行：空的循环结束 ID", lineNo))
-				continue
-			}
 			if len(stack) == 0 {
-				res.Errors = append(res.Errors, fmt.Sprintf("第 %d 行：循环「%s」结束但没有对应的开启", lineNo, id))
+				res.Errors = append(res.Errors, fmt.Sprintf("第 %d 行：循环结束但没有对应的开启", lineNo))
 				continue
 			}
 			top := stack[len(stack)-1]
-			if top != id {
+			if id != "" && id != top {
 				res.Errors = append(res.Errors,
 					fmt.Sprintf("第 %d 行：循环结束顺序不匹配（期望关闭「%s」，实际遇到「%s」）", lineNo, top, id))
 				continue
 			}
-			if c, ok := opened[id]; ok {
+			closeID := id
+			if closeID == "" {
+				closeID = top
+			}
+			if c, ok := opened[closeID]; ok {
 				c.CloseLine = lineNo
 			}
 			stack = stack[:len(stack)-1]

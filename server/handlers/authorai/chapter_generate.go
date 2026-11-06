@@ -135,13 +135,14 @@ func GenerateAllMaterials(c *gin.Context) {
 	steps := []string{CompSetting, CompCharacter, CompOutline, CompTimeline}
 	done := []string{}
 	for _, step := range steps {
-		system, user := buildGeneratePrompt(p, step, in.Prompt)
-		if system == "" {
-			continue
+		promptText, perr := generateViaTemplate(p, step, in.Prompt)
+		if perr != nil {
+			infra.InternalError(c, fmt.Sprintf("组装「%s」提示词失败: %s", step, perr.Error()))
+			return
 		}
-		content, err := callAI(hctx.CurrentUserID(c), in.ModelID, system, user, p.ID)
-		if err != nil {
-			infra.InternalError(c, fmt.Sprintf("生成「%s」失败: %s（已完成：%s）", step, err.Error(), strings.Join(done, "、")))
+		content, gerr := genCall(hctx.CurrentUserID(c), in.ModelID, promptText, p.ID)
+		if gerr != nil {
+			infra.InternalError(c, fmt.Sprintf("生成「%s」失败: %s（已完成：%s）", step, gerr.Error(), strings.Join(done, "、")))
 			return
 		}
 		switch step {

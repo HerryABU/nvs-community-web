@@ -33,6 +33,8 @@ const (
 	SceneNovelScript = "novel_script"
 	SceneBlog        = "blog"
 	SceneChat        = "chat"
+	// SceneAuthorAI 作者工作台 AI 写作流的素材/正文模板（世界观/人物/大纲/时间线/正文）
+	SceneAuthorAI = "authorai"
 
 	KindChat  = "chat"
 	KindImage = "image"
@@ -105,6 +107,8 @@ func NormalizeScene(s string) string {
 		return SceneChat
 	case SceneNovelScript:
 		return SceneNovelScript
+	case SceneAuthorAI:
+		return SceneAuthorAI
 	default:
 		return SceneNovelChapter
 	}
@@ -276,6 +280,16 @@ func List(scene, kind string, includeDisabled bool) ([]Template, error) {
 func Get(id uint) (*Template, error) {
 	var t Template
 	if err := models.DB.Where("id = ?", id).First(&t).Error; err != nil {
+		return nil, fmt.Errorf("模板不存在")
+	}
+	t.Vars = decodeVars(t.Variables)
+	return &t, nil
+}
+
+// GetByKey 按 key 取单个模板（供业务侧按固定标识取用内置/自定义模板）
+func GetByKey(key string) (*Template, error) {
+	var t Template
+	if err := models.DB.Where("key = ?", key).First(&t).Error; err != nil {
 		return nil, fmt.Errorf("模板不存在")
 	}
 	t.Vars = decodeVars(t.Variables)
@@ -599,6 +613,64 @@ var builtinSeeds = []Template{
 		Content: "你是专栏编辑。请审阅下面这篇博客，输出：\n\n1. 一句话主旨（作者真正想说的）\n2. 结构问题：哪几段可以合并/前移/删除\n3. 论据缺口：哪些判断缺少事实、数据或例子\n4. 标题建议 5 个（不夸张、不标题党）\n5. 只输出建议清单，不要重写全文\n\n【正文】\n{{原文}}",
 		Vars: []TemplateVar{
 			{Name: "原文", Label: "博客正文", Required: true, MaxLen: 8000},
+		},
+	},
+	// ==================== 作者工作台 AI 写作流（素材/正文模板，可后台自定义） ====================
+	// 变量约定：NovelTitle/StyleDirective/ExtraRequirements/ExistingContent 由业务侧注入；
+	// TaskMode 为内部变量（生成/补充二选一），由 Go 在组装时决定，模板内不写条件分支。
+	{
+		Key: "authorai-setting", Title: "AI写作·世界观设定", Scene: SceneAuthorAI, Category: "素材", Kind: KindChat,
+		Note:    "世界观/设定生成或补充；TaskMode 由系统按是否已填自动切换",
+		Content: "你是一位资深的世界观架构师。请为长篇中文小说《{{NovelTitle}}》{{TaskMode}}完整、自洽的世界观设定。\n\n风格基调：\n{{StyleDirective}}\n\n用户补充要求：\n{{ExtraRequirements}}\n\n已有设定（若为「从零创作」可忽略；若已有请在保持严格自洽的前提下补充与深化）：\n{{ExistingContent}}\n\n只输出世界观设定正文，不要解释、不要评价。",
+		Vars: []TemplateVar{
+			{Name: "NovelTitle", Label: "作品名", MaxLen: 60},
+			{Name: "StyleDirective", Label: "风格基调", MaxLen: 400},
+			{Name: "ExtraRequirements", Label: "补充要求", MaxLen: 1000},
+			{Name: "ExistingContent", Label: "已有设定", MaxLen: 4000},
+		},
+	},
+	{
+		Key: "authorai-character", Title: "AI写作·人物设定", Scene: SceneAuthorAI, Category: "素材", Kind: KindChat,
+		Note:    "人物设定卡生成或补充",
+		Content: "你是一位资深的中文小说角色设定师。请为长篇中文小说《{{NovelTitle}}》{{TaskMode}}有血有肉的主要人物卡（3-6 个）。\n\n风格基调：\n{{StyleDirective}}\n\n用户补充要求：\n{{ExtraRequirements}}\n\n已有角色（若为「从零创作」可忽略；若已有请避免重复、保持自洽）：\n{{ExistingContent}}\n\n每卡结构：姓名与称谓｜外貌（3 个可视觉化细节）｜性格与致命缺陷｜出身与处境｜核心欲望/深层需求｜秘密（读者后知）｜与其他角色的关系张力｜说话方式｜三个可推进情节的行动选项。\n只输出人物设定卡正文。",
+		Vars: []TemplateVar{
+			{Name: "NovelTitle", Label: "作品名", MaxLen: 60},
+			{Name: "StyleDirective", Label: "风格基调", MaxLen: 400},
+			{Name: "ExtraRequirements", Label: "补充要求", MaxLen: 1000},
+			{Name: "ExistingContent", Label: "已有角色", MaxLen: 4000},
+		},
+	},
+	{
+		Key: "authorai-outline", Title: "AI写作·大纲", Scene: SceneAuthorAI, Category: "素材", Kind: KindChat,
+		Note:    "分卷/分章大纲生成或补充",
+		Content: "你是一位擅长结构化的中文小说编剧。请为长篇中文小说《{{NovelTitle}}》{{TaskMode}}分卷/分章大纲。\n\n风格基调：\n{{StyleDirective}}\n\n用户补充要求：\n{{ExtraRequirements}}\n\n已有大纲（若为「从零创作」可忽略；若已有请保持衔接与伏笔回收）：\n{{ExistingContent}}\n\n要求：标注每章核心事件与人物弧光，保持节奏与伏笔回收。\n只输出大纲正文。",
+		Vars: []TemplateVar{
+			{Name: "NovelTitle", Label: "作品名", MaxLen: 60},
+			{Name: "StyleDirective", Label: "风格基调", MaxLen: 400},
+			{Name: "ExtraRequirements", Label: "补充要求", MaxLen: 1000},
+			{Name: "ExistingContent", Label: "已有大纲", MaxLen: 4000},
+		},
+	},
+	{
+		Key: "authorai-timeline", Title: "AI写作·时间线/大事年表", Scene: SceneAuthorAI, Category: "素材", Kind: KindChat,
+		Note:    "含嵌套循环；循环格式由模板约定（[LOOP:loop_key] … [/LOOP]）",
+		Content: "你正在为长篇中文小说《{{NovelTitle}}》{{TaskMode}}大事年表（时间线）。\n\n风格基调：\n{{StyleDirective}}\n\n用户补充要求：\n{{ExtraRequirements}}\n\n已有时间线（若为「从零创作」可忽略；若已有请保持自洽）：\n{{ExistingContent}}\n\n输出格式要求：\n- 按故事内时间顺序列出事件；\n- 每个事件标注：时间、涉及人物、事件简述；\n- 嵌套循环用 [LOOP:loop_key] 开始、[/LOOP] 结束，循环内事件缩进表示层级；\n- 循环嵌套最多 3 层，每个 loop_key 全局唯一。\n只输出时间线正文。",
+		Vars: []TemplateVar{
+			{Name: "NovelTitle", Label: "作品名", MaxLen: 60},
+			{Name: "StyleDirective", Label: "风格基调", MaxLen: 400},
+			{Name: "ExtraRequirements", Label: "补充要求", MaxLen: 1000},
+			{Name: "ExistingContent", Label: "已有时间线", MaxLen: 4000},
+		},
+	},
+	{
+		Key: "authorai-body", Title: "AI写作·正文草稿", Scene: SceneAuthorAI, Category: "正文", Kind: KindChat,
+		Note:    "基于设定/人物/大纲续写一章正文；正文草稿作为独立落点",
+		Content: "你是一位专业的中文小说写作助手。请为长篇中文小说《{{NovelTitle}}》{{TaskMode}}一章正文，保持风格与设定一致，只输出正文。\n\n风格基调：\n{{StyleDirective}}\n\n用户补充要求：\n{{ExtraRequirements}}\n\n参考设定/人物/大纲：\n{{ExistingContent}}\n\n只输出正文。",
+		Vars: []TemplateVar{
+			{Name: "NovelTitle", Label: "作品名", MaxLen: 60},
+			{Name: "StyleDirective", Label: "风格基调", MaxLen: 400},
+			{Name: "ExtraRequirements", Label: "补充要求", MaxLen: 1000},
+			{Name: "ExistingContent", Label: "参考设定/大纲", MaxLen: 4000},
 		},
 	},
 }

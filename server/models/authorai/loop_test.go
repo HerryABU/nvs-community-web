@@ -60,4 +60,21 @@ func TestParseLoops(t *testing.T) {
 	if re.HasLoop || len(re.Errors) != 0 {
 		t.Fatal("empty text should yield no loop, no errors")
 	}
+
+	// 无标识形式 [LOOP] / [/LOOP] 也应被解析（自动编号）
+	noID := "[LOOP]\n  主角回到1987\n  [LOOP]\n    内层\n  [/LOOP]\n[/LOOP]\n结局\n"
+	rn := ParseLoops(noID)
+	if !rn.HasLoop || len(rn.Loops) != 2 {
+		t.Fatalf("no-id form: expected 2 loops, got %d (hasLoop=%v)", len(rn.Loops), rn.HasLoop)
+	}
+	if len(rn.Errors) != 0 {
+		t.Fatalf("no-id form should have no errors, got %v", rn.Errors)
+	}
+
+	// 混合形式：[LOOP:a] 用 [/LOOP] 关闭
+	mixed := "[LOOP:a]\n  x\n[/LOOP]\n"
+	rm := ParseLoops(mixed)
+	if !rm.HasLoop || len(rm.Errors) != 0 {
+		t.Fatalf("mixed form should parse cleanly, got loops=%d errors=%v", len(rm.Loops), rm.Errors)
+	}
 }
