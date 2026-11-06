@@ -298,6 +298,8 @@ func registerProtected(r *gin.Engine) {
 		protected.POST("/author/recycle/restore", recycle.RestoreAuthorRecycle) // 恢复自己删除的内容
 		protected.GET("/author/dashboard", author.GetAuthorDashboard)
 		protected.POST("/novels/:id/export", novel.ExportNovel)
+		// #76 衍生同人列表（原著作者的粉丝/作者本人可见）
+		protected.GET("/novels/:id/derivatives", novel.ListDerivatives)
 
 		// 作者工作台内置 AI 写作流（与 AI 中台数据隔离）
 		protected.GET("/author-ai/projects", authoraih.ListProjects)

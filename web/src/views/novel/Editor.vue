@@ -79,6 +79,39 @@
             话本气泡体：正文按「角色：台词」逐行解析为对话气泡，【场景】为提示，其余为旁白
           </span>
         </el-form-item>
+        <!-- #76 同人衍生 -->
+        <el-divider content-position="left">同人衍生</el-divider>
+        <el-form-item label="作品性质">
+          <el-radio-group v-model="form.derivative_type">
+            <el-radio value="">原创</el-radio>
+            <el-radio value="site">站内同人</el-radio>
+            <el-radio value="external">站外同人</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="引用原著" v-if="form.derivative_type === 'site'">
+          <el-select
+            v-model="form.derivative_origin_id"
+            filterable
+            remote
+            :remote-method="searchOrigin"
+            placeholder="搜索站内已发布原著"
+            style="width:100%"
+            clearable
+          >
+            <el-option v-for="o in originOptions" :key="o.id" :label="o.title" :value="o.id" />
+          </el-select>
+          <span v-if="originTitle" style="margin-left:8px;font-size:0.8rem;color: var(--text-light, #999)">
+            已选：《{{ originTitle }}》
+          </span>
+        </el-form-item>
+        <el-form-item label="来源标注" v-if="form.derivative_type === 'external'">
+          <el-input
+            v-model="form.derivative_external_source"
+            placeholder="例如：原作《XXX》/ 作者 YYY / 来源平台 ZZ"
+            maxlength="256"
+            show-word-limit
+          />
+        </el-form-item>
         <!-- 隔离墙开关（仅编辑模式可见） -->
         <template v-if="isEditing">
           <el-divider content-position="left">隔离墙设置</el-divider>
@@ -330,6 +363,11 @@ const form = reactive<Partial<Novel>>({
   mode: 'prose', // prose 散文体 / script 话本气泡体
   read_permission: 'public', // #65 作品级阅读权限
   paid_price: 0,             // #65 paid 等级售价（代币）
+  // #76 同人衍生
+  derivative_type: '' as any,          // ""原创 / site站内同人 / external站外同人
+  derivative_origin_id: 0,
+  derivative_origin_title: '',
+  derivative_external_source: '',
 });
 
 // AI 生成小说封面（复用 /api/ai/image 文生图，不需要新建端点）
@@ -364,6 +402,26 @@ async function generateCover() {
     ElMessage.error(e?.response?.data?.message || '生成失败');
   } finally {
     coverGenerating.value = false;
+  }
+}
+
+// #76 同人衍生：搜索站内原著
+const originOptions = ref<{ id: number; title: string }[]>([]);
+const originTitle = computed(() =>
+  originOptions.value.find((o) => o.id === form.derivative_origin_id)?.title || form.derivative_origin_title || '',
+);
+async function searchOrigin(q: string) {
+  if (!q) {
+    originOptions.value = [];
+    return;
+  }
+  try {
+    const res = await api.get<{ code: number; data: { data: Novel[] } }>('/novels', {
+      params: { search: q, page: 1, page_size: 10 },
+    });
+    originOptions.value = (res.data.data?.data || []).map((n) => ({ id: n.id, title: n.title }));
+  } catch {
+    originOptions.value = [];
   }
 }
 
@@ -465,7 +523,16 @@ async function loadNovel() {
       wall_warning: novel.wall_warning || '',
       read_permission: novel.read_permission || 'public',
       paid_price: novel.paid_price || 0,
+      // #76 同人衍生回填
+      derivative_type: novel.derivative_type || '',
+      derivative_origin_id: novel.derivative_origin_id || 0,
+      derivative_origin_title: novel.derivative_origin_title || '',
+      derivative_external_source: novel.derivative_external_source || '',
     });
+    // 编辑态回填时，把已选原著放进候选，保证标题可显示
+    if (novel.derivative_origin_id) {
+      originOptions.value = [{ id: novel.derivative_origin_id, title: novel.derivative_origin_title || '' }];
+    }
     chapters.value = chaptersRes.data.data || [];
   } catch (e) {
     console.error(e);

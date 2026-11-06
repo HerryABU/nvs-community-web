@@ -19,6 +19,11 @@ export const novelApi = {
     return api.get<{ code: number; data: import('./types').Novel }>(`/novels/${id}`);
   },
 
+  // #76 衍生同人列表（原著作者的粉丝/作者本人可见）
+  getDerivatives(id: number) {
+    return api.get<{ code: number; data: { visible: boolean; items: import('./types').Novel[]; origin: any } }>(`/novels/${id}/derivatives`);
+  },
+
   createNovel(data: Partial<import('./types').Novel>) {
     return api.post('/novels', data);
   },

@@ -36,6 +36,10 @@ type CreateNovelInput struct {
 	Mode            string   `json:"mode"`            // prose（散文体）/ script（话本气泡体）
 	ReadPermission  *string  `json:"read_permission"` // #65 作品级阅读权限等级
 	PaidPrice       *int64   `json:"paid_price"`      // #65 paid 等级售价（代币）
+	// #76 同人衍生
+	DerivativeType           string `json:"derivative_type"`            // ""原创 / site站内同人 / external站外同人
+	DerivativeOriginID       uint   `json:"derivative_origin_id"`       // 站内原著 id
+	DerivativeExternalSource string `json:"derivative_external_source"` // 站外同人来源标注
 }
 
 type UpdateNovelInput struct {
@@ -54,6 +58,10 @@ type UpdateNovelInput struct {
 	Mode            string   `json:"mode"`            // prose / script
 	ReadPermission  *string  `json:"read_permission"` // #65
 	PaidPrice       *int64   `json:"paid_price"`      // #65
+	// #76 同人衍生（空字符串表示不改动）
+	DerivativeType           string `json:"derivative_type"`
+	DerivativeOriginID       uint   `json:"derivative_origin_id"`
+	DerivativeExternalSource string `json:"derivative_external_source"`
 }
 
 var htmlSanitizer = bluemonday.UGCPolicy()

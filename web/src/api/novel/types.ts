@@ -20,6 +20,12 @@ export interface Novel {
   wall_warning?: string;
   read_permission?: string; // #65 作品级阅读权限等级
   paid_price?: number;      // #65 paid 等级售价（代币）
+  // #76 同人衍生
+  derivative_type?: string;            // ""原创 / site站内同人 / external站外同人
+  derivative_origin_id?: number;       // 站内原著 id
+  derivative_origin_title?: string;    // 原著标题快照
+  derivative_origin_author?: string;   // 原著作者名快照
+  derivative_external_source?: string; // 站外同人来源标注
   author_name?: string;
   author?: {
     id: number;

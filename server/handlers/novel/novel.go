@@ -135,6 +135,38 @@ func CreateNovel(c *gin.Context) {
 		SourceType:      sourceType,
 		CreationMethod:  creationMethod,
 	}
+	// #76 同人衍生处理
+	switch input.DerivativeType {
+	case "site":
+		if input.DerivativeOriginID == 0 {
+			infra.BadRequest(c, "请选择引用的站内原著")
+			return
+		}
+		origin, oerr := models.GetNovelByID(input.DerivativeOriginID)
+		if oerr != nil || origin.Status != "published" {
+			infra.BadRequest(c, "引用的原著不存在或未发布")
+			return
+		}
+		novel.DerivativeType = "site"
+		novel.DerivativeOriginID = origin.ID
+		novel.DerivativeOriginTitle = origin.Title
+		if origin.Author != nil {
+			novel.DerivativeOriginAuthor = origin.Author.Nickname
+		}
+	case "external":
+		src := strings.TrimSpace(input.DerivativeExternalSource)
+		if src == "" {
+			infra.BadRequest(c, "站外同人请填写来源标注")
+			return
+		}
+		novel.DerivativeType = "external"
+		novel.DerivativeExternalSource = src
+	case "":
+		// 默认原创
+	default:
+		infra.BadRequest(c, "无效的同人类型")
+		return
+	}
 	if !applyPermissionInput(c, novel, input.ReadPermission, input.PaidPrice) {
 		return
 	}
@@ -239,6 +271,45 @@ func UpdateNovel(c *gin.Context) {
 	}
 	if input.CreationMethod != "" {
 		novel.CreationMethod = input.CreationMethod
+	}
+	// #76 同人衍生处理（空字符串=不改动；"original"=清除衍生）
+	switch input.DerivativeType {
+	case "site":
+		if input.DerivativeOriginID == 0 {
+			infra.BadRequest(c, "请选择引用的站内原著")
+			return
+		}
+		origin, oerr := models.GetNovelByID(input.DerivativeOriginID)
+		if oerr != nil || origin.Status != "published" {
+			infra.BadRequest(c, "引用的原著不存在或未发布")
+			return
+		}
+		novel.DerivativeType = "site"
+		novel.DerivativeOriginID = origin.ID
+		novel.DerivativeOriginTitle = origin.Title
+		if origin.Author != nil {
+			novel.DerivativeOriginAuthor = origin.Author.Nickname
+		}
+		novel.DerivativeExternalSource = ""
+	case "external":
+		src := strings.TrimSpace(input.DerivativeExternalSource)
+		if src == "" {
+			infra.BadRequest(c, "站外同人请填写来源标注")
+			return
+		}
+		novel.DerivativeType = "external"
+		novel.DerivativeOriginID = 0
+		novel.DerivativeOriginTitle = ""
+		novel.DerivativeOriginAuthor = ""
+		novel.DerivativeExternalSource = src
+	case "original":
+		novel.DerivativeType = ""
+		novel.DerivativeOriginID = 0
+		novel.DerivativeOriginTitle = ""
+		novel.DerivativeOriginAuthor = ""
+		novel.DerivativeExternalSource = ""
+	case "":
+		// 未传，不改动
 	}
 	// 作者隔离开关：true=外人需登录才能查看本作品（对应 3.2 作者自决）
 	if input.WallEnabled != nil {

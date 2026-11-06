@@ -29,6 +29,12 @@
             <el-tag v-if="novel.source_type === 'reprint'" size="small" type="warning" effect="plain">转载</el-tag>
             <el-tag v-if="novel.creation_method === 'ai'" size="small" effect="plain">AI 创作</el-tag>
             <el-tag v-else-if="novel.creation_method === 'human_ai_assisted'" size="small" effect="plain">AI 辅助</el-tag>
+            <el-tag v-if="novel.derivative_type === 'site'" size="small" type="danger" effect="plain">
+              同人·原作《{{ novel.derivative_origin_title }}》by {{ novel.derivative_origin_author }}
+            </el-tag>
+            <el-tag v-if="novel.derivative_type === 'external'" size="small" type="danger" effect="plain">
+              同人·来源：{{ novel.derivative_external_source }}
+            </el-tag>
             <span class="meta-item">作者：<router-link :to="`/author/${novel.author_id}`" class="author-link">{{ novel.author_name || novel.author?.nickname || novel.author?.username || '未知' }}</router-link></span>
             <span class="meta-item">{{ novel.total_words?.toLocaleString() || 0 }} 字</span>
             <span class="meta-item">{{ novel.total_chapters || 0 }} 章</span>
@@ -47,6 +53,26 @@
           <div class="novel-summary">
             <h3>作品简介</h3>
             <p>{{ novel.summary || '暂无简介' }}</p>
+          </div>
+          <!-- #76 衍生同人：原著作者的粉丝/作者本人可见 -->
+          <div class="novel-derivatives" v-if="derivativesVisible && derivatives.length">
+            <h3>衍生同人（{{ derivatives.length }}）</h3>
+            <div class="derivative-list">
+              <router-link
+                v-for="d in derivatives"
+                :key="d.id"
+                :to="`/novel/${d.id}`"
+                class="derivative-item"
+              >
+                <el-image v-if="d.cover_url" :src="d.cover_url" fit="cover" class="derivative-cover">
+                  <template #error><div class="derivative-cover placeholder">无封面</div></template>
+                </el-image>
+                <div class="derivative-body">
+                  <div class="derivative-title">{{ d.title }}</div>
+                  <div class="derivative-author">作者：{{ d.author_name || d.author?.nickname || '未知' }}</div>
+                </div>
+              </router-link>
+            </div>
           </div>
           <div class="novel-actions">
             <el-button type="primary" @click="startReading">
@@ -174,6 +200,9 @@ const novel = ref<Novel | null>(null);
 const chapters = ref<Chapter[]>([]);
 const onShelf = ref(false);
 const shelfLoading = ref(false);
+// #76 衍生同人（原著作者的粉丝/作者本人可见）
+const derivatives = ref<Novel[]>([]);
+const derivativesVisible = ref(false);
 
 // 目录折叠：章节 > 10 时只展示头尾各5章，中间可展开
 const COLLAPSE_THRESHOLD = 10;
@@ -313,6 +342,16 @@ onMounted(async () => {
     novel.value = novelRes.data.data;
     chapters.value = chaptersRes.data.data || [];
     loadLastRead(id);
+    // #76 衍生同人（粉丝/作者可见，匿名不展示）
+    if (authStore.isLoggedIn) {
+      try {
+        const dres = await novelApi.getDerivatives(id);
+        derivativesVisible.value = !!dres.data.data?.visible;
+        derivatives.value = dres.data.data?.items || [];
+      } catch {
+        derivativesVisible.value = false;
+      }
+    }
 
     // URL 规范化：/novel/:id（旧路径）→ /author/{authorId}/novel/:id（推荐路径）。
     // 数字是主键，规范路径用作者数字 id；不改变作者标识（无用户名可保留）。
@@ -590,6 +629,67 @@ onMounted(async () => {
   .chapter-date {
     display: none;
   }
+}
+
+/* #76 衍生同人区块 */
+.novel-derivatives {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border-color, rgba(255, 255, 255, 0.1));
+}
+.novel-derivatives h3 {
+  font-size: 0.95rem;
+  margin: 0 0 10px;
+  color: var(--text-color, #e2e8f0);
+}
+.derivative-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.derivative-item {
+  display: flex;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+.derivative-item:hover {
+  transform: translateY(-3px);
+  border-color: rgba(139, 92, 246, 0.5);
+}
+.derivative-cover {
+  width: 54px;
+  height: 72px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+.derivative-cover.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  color: var(--text-light, #999);
+  background: var(--border-color, rgba(255, 255, 255, 0.08));
+}
+.derivative-body {
+  min-width: 0;
+}
+.derivative-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.derivative-author {
+  font-size: 0.78rem;
+  color: var(--text-light, #999);
+  margin-top: 4px;
 }
 </style>
 

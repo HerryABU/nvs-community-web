@@ -19,18 +19,24 @@ type Novel struct {
 	SourceType      string  `gorm:"size:32;default:original" json:"source_type"`  // original / reprint
 	CreationMethod  string  `gorm:"size:32;default:human" json:"creation_method"` // human / ai / human_ai_assisted
 	// Mode 叙事形态：prose=散文体（默认）/ script=话本气泡体（对话为主，按「角色：台词」解析渲染）
-	Mode           string         `gorm:"size:12;not null;default:prose;index" json:"mode"`
-	WallEnabled    bool           `gorm:"not null;default:false" json:"wall_enabled"`                   // 作者隔离开关：true=外人需登录才能查看本作品（老数据，等价于 read_permission=login）
-	ReadPermission string         `gorm:"size:16;not null;default:public;index" json:"read_permission"` // 作品级阅读权限等级（站长在后台配置可选集合）
-	PaidPrice      int64          `gorm:"not null;default:0" json:"paid_price"`                         // paid 等级售价（代币），0 表示用站长设定的最低价
-	TotalWords     int            `gorm:"default:0" json:"total_words"`
-	TotalChapters  int            `gorm:"default:0" json:"total_chapters"`
-	ViewCount      int            `gorm:"default:0" json:"view_count"`
-	BanReason      string         `gorm:"type:text" json:"ban_reason"`                    // 封禁原因（可能很长）
-	DeletedBy      string         `gorm:"size:32;default:''" json:"deleted_by,omitempty"` // user/admin
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
-	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
+	Mode           string `gorm:"size:12;not null;default:prose;index" json:"mode"`
+	WallEnabled    bool   `gorm:"not null;default:false" json:"wall_enabled"`                   // 作者隔离开关：true=外人需登录才能查看本作品（老数据，等价于 read_permission=login）
+	ReadPermission string `gorm:"size:16;not null;default:public;index" json:"read_permission"` // 作品级阅读权限等级（站长在后台配置可选集合）
+	PaidPrice      int64  `gorm:"not null;default:0" json:"paid_price"`                         // paid 等级售价（代币），0 表示用站长设定的最低价
+	// 同人衍生信息（#76）：DerivativeType=""原创 / "site"站内同人 / "external"站外同人
+	DerivativeType           string         `gorm:"size:16;not null;default:''" json:"derivative_type"`
+	DerivativeOriginID       uint           `gorm:"not null;default:0;index" json:"derivative_origin_id"`           // 站内原著 novel id
+	DerivativeOriginTitle    string         `gorm:"size:256;not null;default:''" json:"derivative_origin_title"`    // 原著标题快照（避免 JOIN）
+	DerivativeOriginAuthor   string         `gorm:"size:64;not null;default:''" json:"derivative_origin_author"`    // 原著作者名快照
+	DerivativeExternalSource string         `gorm:"size:256;not null;default:''" json:"derivative_external_source"` // 站外同人来源标注
+	TotalWords               int            `gorm:"default:0" json:"total_words"`
+	TotalChapters            int            `gorm:"default:0" json:"total_chapters"`
+	ViewCount                int            `gorm:"default:0" json:"view_count"`
+	BanReason                string         `gorm:"type:text" json:"ban_reason"`                    // 封禁原因（可能很长）
+	DeletedBy                string         `gorm:"size:32;default:''" json:"deleted_by,omitempty"` // user/admin
+	CreatedAt                time.Time      `json:"created_at"`
+	UpdatedAt                time.Time      `json:"updated_at"`
+	DeletedAt                gorm.DeletedAt `gorm:"index" json:"-"`
 
 	Author        *User           `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
 	Categories    []NovelCategory `gorm:"foreignKey:NovelID" json:"-"`
