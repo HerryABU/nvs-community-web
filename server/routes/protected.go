@@ -47,6 +47,7 @@ import (
 	"nvs-server/handlers/theme"
 	"nvs-server/handlers/token"
 	"nvs-server/handlers/upload"
+	vipcardh "nvs-server/handlers/vipcard"
 	"nvs-server/handlers/web"
 	"nvs-server/middleware"
 	"nvs-server/security"
@@ -466,6 +467,10 @@ func registerProtected(r *gin.Engine) {
 
 		// #65 作者端阅读权限下拉（随站长配置实时变化）
 		protected.GET("/read-permission/levels", readpermh.Levels)
+
+		// #66 VIP 等级卡密：兑换（限流防爆破）与我的会员状态
+		protected.POST("/vip-cards/redeem", security.RateLimit(10, 60), vipcardh.Redeem)
+		protected.GET("/vip-cards/membership", vipcardh.MyMembership)
 	}
 
 	// 管理员路由

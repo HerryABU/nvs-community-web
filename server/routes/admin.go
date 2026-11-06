@@ -39,6 +39,7 @@ import (
 	"nvs-server/handlers/site"
 	"nvs-server/handlers/theme"
 	"nvs-server/handlers/token"
+	vipcardh "nvs-server/handlers/vipcard"
 	"nvs-server/handlers/web"
 	"nvs-server/middleware"
 	"nvs-server/security"
@@ -225,6 +226,10 @@ func registerAdminArea(r *gin.Engine) {
 		// #65 阅读权限：站长配置可用等级 / VIP 门槛 / 付费最低价
 		adminGrp.GET("/read-permission", readpermh.AdminGetConfig)
 		adminGrp.PUT("/read-permission", readpermh.AdminSaveConfig)
+		// #66 VIP 等级卡密：生成 / 列表 / 作废
+		adminGrp.GET("/vip-cards", vipcardh.AdminList)
+		adminGrp.POST("/vip-cards", vipcardh.AdminGenerate)
+		adminGrp.POST("/vip-cards/:id/void", vipcardh.AdminVoid)
 		adminGrp.GET("/live", ops.AdminLive)
 		adminGrp.PUT("/live", ops.SaveLive)
 		// ===== 语音模型 / 转化漏斗 =====

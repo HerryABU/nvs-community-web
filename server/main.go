@@ -45,6 +45,7 @@ import (
 	"nvs-server/supervise"
 	"nvs-server/tlsconfig"
 	"nvs-server/version"
+	_ "nvs-server/vipcard" // 触发 vip_cards 注册 + 覆盖 VipLevelOf 多等级钩子（#66）
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"

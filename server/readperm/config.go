@@ -18,14 +18,16 @@ const ConfigKey = "read_permission_config"
 // EnabledLevels：作者可选择的等级集合；未启用的等级在保存时会被拒绝，
 // 且历史内容若使用了被停用的等级，判定时保守降级为「登录可见」（避免内容意外全公开）。
 // Labels：站长可覆盖的等级展示文案。
-// VipMinLevel：vip 等级要求的最低会员等级（当前会员模型只有有效期，有效即 1 级；
-// #66 VIP 卡密 / 多等级会员接入后由 VipLevelOf 钩子给出更细的等级）。
+// VipMinLevel：vip 等级要求的最低会员等级（作品侧门槛）。
+// VipMaxLevel：#66 卡密可发行的最高会员等级（发行侧上限）。两者都由站长决定，
+// 形成「站长定区间 → 卡密发等级 → 作品设门槛」的完整链路。
 // PaidMinPrice：paid 等级的最低售价（代币），防止作者把付费内容标成 0。
 // 站长是否开放「付费解锁」= EnabledLevels 是否包含 paid。
 type Config struct {
 	EnabledLevels []string          `json:"enabled_levels"`
 	Labels        map[string]string `json:"labels"`
 	VipMinLevel   int               `json:"vip_min_level"`
+	VipMaxLevel   int               `json:"vip_max_level"`
 	PaidMinPrice  int64             `json:"paid_min_price"`
 }
 
@@ -37,6 +39,7 @@ func DefaultConfig() Config {
 		},
 		Labels:       map[string]string{},
 		VipMinLevel:  1,
+		VipMaxLevel:  3,
 		PaidMinPrice: 1,
 	}
 }
@@ -62,6 +65,17 @@ func (c *Config) normalize() {
 	}
 	if c.VipMinLevel > 99 {
 		c.VipMinLevel = 99
+	}
+	// 0 = #65 时期的旧配置没有该字段，回退默认上限（不能直接夹到 1）
+	if c.VipMaxLevel <= 0 {
+		c.VipMaxLevel = DefaultConfig().VipMaxLevel
+	}
+	if c.VipMaxLevel > 99 {
+		c.VipMaxLevel = 99
+	}
+	// 发行上限不得低于作品门槛下限，否则卡密永远无法满足任何 vip 作品
+	if c.VipMaxLevel < c.VipMinLevel {
+		c.VipMaxLevel = c.VipMinLevel
 	}
 	if c.PaidMinPrice < 0 {
 		c.PaidMinPrice = 0

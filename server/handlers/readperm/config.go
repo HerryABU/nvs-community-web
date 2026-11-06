@@ -51,6 +51,7 @@ func Levels(c *gin.Context) {
 	infra.Success(c, gin.H{
 		"levels":         rp.AvailableLevels(),
 		"vip_min_level":  cfg.VipMinLevel,
+		"vip_max_level":  cfg.VipMaxLevel,
 		"paid_min_price": cfg.PaidMinPrice,
 	})
 }
