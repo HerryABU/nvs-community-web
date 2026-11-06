@@ -49,6 +49,9 @@
         <el-tab-pane label="论坛与回收站" name="content" lazy>
           <AuthorContentView />
         </el-tab-pane>
+        <el-tab-pane label="AI 写作" name="aiwrite" lazy>
+          <AuthorAiWriteView />
+        </el-tab-pane>
       </el-tabs>
     </div>
   </div>
@@ -65,6 +68,7 @@ import AuthorBlogsView from './parts/AuthorBlogsView.vue';
 import AuthorHtmlView from './parts/AuthorHtmlView.vue';
 import AuthorKeysView from './parts/AuthorKeysView.vue';
 import AuthorContentView from './parts/AuthorContentView.vue';
+import AuthorAiWriteView from './parts/AuthorAiWriteView.vue';
 import { bumpAuthorData } from './parts/authorRefresh';
 
 // 作者工作台：拆成若干独立视图，用顶部切换栏切换，当前视图写进 URL 的 ?tab=。
@@ -74,7 +78,7 @@ const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 
-const TABS = ['stats', 'novels', 'blogs', 'html', 'keys', 'content'] as const;
+const TABS = ['stats', 'novels', 'blogs', 'html', 'keys', 'content', 'aiwrite'] as const;
 type TabKey = (typeof TABS)[number];
 const DEFAULT_TAB: TabKey = 'stats';
 
