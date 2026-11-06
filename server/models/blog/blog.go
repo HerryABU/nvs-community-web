@@ -9,22 +9,25 @@ import (
 
 // AuthorBlog 作者博客文章
 type AuthorBlog struct {
-	ID          uint           `gorm:"primaryKey" json:"id"`
-	AuthorID    uint           `gorm:"not null;index:idx_author_blog" json:"author_id"`
-	Title       string         `gorm:"size:256;not null" json:"title"`
-	Content     string         `gorm:"-" json:"content,omitempty"`
-	ContentPath string         `gorm:"size:512;not null" json:"-"`
-	ContentHash string         `gorm:"size:64;default:''" json:"content_hash,omitempty"`
-	Summary     string         `gorm:"size:512;default:''" json:"summary"`
-	CategoryID  uint           `gorm:"default:0;index:idx_blog_category" json:"category_id"` // 博客分类（blog_categories 表，0=未分类）
-	Category    string         `gorm:"-" json:"category,omitempty"`                          // 运行时填充：分类名（含父级前缀）
-	LikeCount   int            `gorm:"default:0" json:"like_count"`                          // 点赞数（blog_likes 冗余计数）
-	IsPinned    bool           `gorm:"default:false;index" json:"is_pinned"`
-	ViewCount   int            `gorm:"default:0" json:"view_count"`
-	DeletedBy   string         `gorm:"size:16;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
+	ID          uint   `gorm:"primaryKey" json:"id"`
+	AuthorID    uint   `gorm:"not null;index:idx_author_blog" json:"author_id"`
+	Title       string `gorm:"size:256;not null" json:"title"`
+	Content     string `gorm:"-" json:"content,omitempty"`
+	ContentPath string `gorm:"size:512;not null" json:"-"`
+	ContentHash string `gorm:"size:64;default:''" json:"content_hash,omitempty"`
+	Summary     string `gorm:"size:512;default:''" json:"summary"`
+	CategoryID  uint   `gorm:"default:0;index:idx_blog_category" json:"category_id"` // 博客分类（blog_categories 表，0=未分类）
+	Category    string `gorm:"-" json:"category,omitempty"`                          // 运行时填充：分类名（含父级前缀）
+	LikeCount   int    `gorm:"default:0" json:"like_count"`                          // 点赞数（blog_likes 冗余计数）
+	IsPinned    bool   `gorm:"default:false;index" json:"is_pinned"`
+	ViewCount   int    `gorm:"default:0" json:"view_count"`
+	// 作品级阅读权限（与小说同一套 readperm 模型；站长在后台配置可选等级集合）
+	ReadPermission string         `gorm:"size:16;not null;default:public;index" json:"read_permission"`
+	PaidPrice      int64          `gorm:"not null;default:0" json:"paid_price"`           // paid 等级售价（代币）
+	DeletedBy      string         `gorm:"size:16;default:''" json:"deleted_by,omitempty"` // user=用户自删 / admin=管理员封禁删除 / 空=未删除或旧数据
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"` // 合规留存：软删除标记
 
 	Author *models.User `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
 	Tags   []BlogTag    `gorm:"-" json:"tags,omitempty"`   // 博客标签（多对多，通过 blog_tag_links 关联）
