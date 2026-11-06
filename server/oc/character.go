@@ -37,6 +37,12 @@ type CharacterInput struct {
 	Affinity int
 	Energy   int
 	EmoteMap string // JSON：{"笑":"立绘URL"}
+
+	// #77 OC 分类与 furry 兼容
+	OcKind        string
+	Species       string
+	SpeciesTraits string
+	AnthroType    string
 }
 
 func normalizeCharacterInput(in *CharacterInput) {
@@ -55,9 +61,22 @@ func normalizeCharacterInput(in *CharacterInput) {
 	in.CreatorNotes = strings.TrimSpace(in.CreatorNotes)
 	in.Greetings = strings.TrimSpace(in.Greetings)
 	in.EmoteMap = strings.TrimSpace(in.EmoteMap)
+	in.OcKind = NormalizeOcKind(in.OcKind)
+	in.Species = strings.TrimSpace(in.Species)
+	in.SpeciesTraits = strings.TrimSpace(in.SpeciesTraits)
+	in.AnthroType = strings.TrimSpace(in.AnthroType)
 	in.Mood = clamp01(in.Mood, 50)
 	in.Affinity = clamp01(in.Affinity, 0)
 	in.Energy = clamp01(in.Energy, 100)
+}
+
+// NormalizeOcKind 归一化 OC 分类：仅 furry 合法，其余按原生 OC 处理
+func NormalizeOcKind(k string) string {
+	k = strings.TrimSpace(k)
+	if k == "furry" {
+		return "furry"
+	}
+	return "native"
 }
 
 func clamp01(v, def int) int {
@@ -86,6 +105,8 @@ func sanitizeCharacter(in *CharacterInput) []security.BadWordHit {
 	in.SystemPrompt = security.SanitizeUserContent(in.SystemPrompt)
 	in.PostHistory = security.SanitizeUserContent(in.PostHistory)
 	in.CreatorNotes = security.SanitizeUserContent(in.CreatorNotes)
+	in.Species = security.SanitizeUserContent(in.Species)
+	in.SpeciesTraits = security.SanitizeUserContent(in.SpeciesTraits)
 	var hits []security.BadWordHit
 	// scope 用 oc，便于后台单独配置 OC 词库
 	in.Name, _ = security.ApplyBadWords(in.Name, "oc")
@@ -129,6 +150,7 @@ func CreateCharacter(userID uint, in CharacterInput) (*Character, error) {
 		SystemPrompt: in.SystemPrompt, PostHistory: in.PostHistory,
 		CreatorNotes: in.CreatorNotes, Greetings: in.Greetings, BookID: in.BookID,
 		Mood: in.Mood, Affinity: in.Affinity, Energy: in.Energy, EmoteMap: in.EmoteMap,
+		OcKind: in.OcKind, Species: in.Species, SpeciesTraits: in.SpeciesTraits, AnthroType: in.AnthroType,
 		Visibility: in.Visibility, Review: review, Status: "active",
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
@@ -164,6 +186,10 @@ func UpdateCharacter(userID uint, id uint, in CharacterInput) (*Character, error
 	c.Affinity = in.Affinity
 	c.Energy = in.Energy
 	c.EmoteMap = in.EmoteMap
+	c.OcKind = in.OcKind
+	c.Species = in.Species
+	c.SpeciesTraits = in.SpeciesTraits
+	c.AnthroType = in.AnthroType
 	if in.Visibility == VisPublic && c.Visibility != VisPublic {
 		c.Review = ReviewPending // 转公开需重新审核
 	}

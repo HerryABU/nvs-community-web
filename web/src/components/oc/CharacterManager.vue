@@ -46,7 +46,15 @@
       <el-form label-width="96px" size="default">
         <el-row :gutter="12">
           <el-col :span="12"><el-form-item label="角色名"><el-input v-model="form.name" maxlength="40" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="头像 URL"><el-input v-model="form.avatar_url" /></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item label="头像 URL">
+              <el-input v-model="form.avatar_url" placeholder="头像图片链接">
+                <template #append>
+                  <el-button @click="openAvatarGen" :loading="avatarGenerating">AI 生成形象</el-button>
+                </template>
+              </el-input>
+            </el-form-item>
+          </el-col>
         </el-row>
         <el-form-item label="人设">
           <el-input v-model="form.persona" type="textarea" :rows="3" placeholder="身份/性格/背景（常驻注入）" />
@@ -86,6 +94,35 @@
           <el-col :span="8">
             <el-form-item label="标签">
               <el-input v-model="form.tags" placeholder="逗号分隔" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <!-- #77 OC 分类与 furry 兼容 -->
+        <el-divider content-position="left">OC 分类 / Furry 兼容</el-divider>
+        <el-form-item label="OC 分类">
+          <el-radio-group v-model="form.oc_kind">
+            <el-radio value="native">原生 OC</el-radio>
+            <el-radio value="furry">Furry 兽人</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-row :gutter="20">
+          <el-col :span="8">
+            <el-form-item label="物种" v-if="form.oc_kind === 'furry'">
+              <el-input v-model="form.species" placeholder="如：狼/猫/龙/兽人" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="拟人类型" v-if="form.oc_kind === 'furry'">
+              <el-select v-model="form.anthro_type" clearable placeholder="可选" style="width:100%">
+                <el-option label="完全兽（feral）" value="feral" />
+                <el-option label="半兽人（anthro）" value="anthro" />
+                <el-option label="完全拟人（full）" value="full" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="动物特征" v-if="form.oc_kind === 'furry'">
+              <el-input v-model="form.species_traits" type="textarea" :rows="2" placeholder="耳朵/尾巴/毛色/瞳色等特征描述" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -138,6 +175,7 @@ const form = reactive<Partial<OcCharacter>>({
   name: '', avatar_url: '', persona: '', appearance: '', speech: '',
   scenario: '', first_message: '', mes_example: '', system_prompt: '',
   book_id: 0, tags: '', emote_map: '', visibility: 'private',
+  oc_kind: 'native', species: '', species_traits: '', anthro_type: '',
 });
 
 // ── 导入 / 导出（gap-audit #24）──
@@ -228,8 +266,38 @@ function openEditor(c?: OcCharacter) {
         id: undefined, name: '', avatar_url: '', persona: '', appearance: '', speech: '',
         scenario: '', first_message: '', mes_example: '', system_prompt: '',
         book_id: 0, tags: '', emote_map: '', visibility: 'private',
+        oc_kind: 'native', species: '', species_traits: '', anthro_type: '',
       });
   editorVisible.value = true;
+}
+
+// #77 OC 对接绘画大模型：根据角色设定生成形象图，回填头像
+const avatarGenerating = ref(false);
+async function openAvatarGen() {
+  avatarGenerating.value = true;
+  try {
+    const parts = [
+      form.oc_kind === 'furry' ? `furry 兽人角色，${form.species || ''}，${form.species_traits || ''}` : '原创二次元角色',
+      form.appearance || '',
+      form.persona || '',
+    ].filter(Boolean);
+    const prompt = parts.join('；') || `OC 角色《${form.name}》形象设定稿`;
+    const res = await api.post<{ code: number; data: { images?: string[] } }>('/ai/image', {
+      prompt,
+      ratio: '1:1',
+      n: 1,
+    });
+    if (res.data.code === 0 && res.data.data.images && res.data.data.images.length) {
+      form.avatar_url = res.data.data.images[0];
+      ElMessage.success('已生成形象，点击「保存」即可使用');
+    } else {
+      ElMessage.error('生成失败');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '生成失败');
+  } finally {
+    avatarGenerating.value = false;
+  }
 }
 
 async function save() {

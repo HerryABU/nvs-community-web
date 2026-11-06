@@ -25,6 +25,11 @@ export interface OcCharacter {
   energy: number;
   emote_map: string;
   tags: string;
+  // #77 OC 分类与 furry 兼容
+  oc_kind?: string;        // native 原生 OC / furry 兽人 OC
+  species?: string;        // 物种
+  species_traits?: string; // 动物特征
+  anthro_type?: string;    // 拟人类型 full/anthro/feral
   visibility: 'private' | 'public';
   review: 'pending' | 'approved' | 'rejected';
   status: string;

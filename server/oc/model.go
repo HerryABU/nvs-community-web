@@ -115,6 +115,12 @@ type Character struct {
 	Energy   int    `gorm:"not null;default:100" json:"energy"` // 精力
 	EmoteMap string `gorm:"type:text" json:"emote_map"`         // 情绪→立绘/表情 JSON（{"笑":"url"}）
 
+	// #77 OC 分类与 furry 兼容
+	OcKind        string `gorm:"size:16;not null;default:native" json:"oc_kind"`     // native 原生 OC / furry 兽人 OC
+	Species       string `gorm:"size:64;not null;default:''" json:"species"`         // 物种（犬/猫/龙/兽人…）
+	SpeciesTraits string `gorm:"size:256;not null;default:''" json:"species_traits"` // 动物特征（耳朵/尾巴/毛色…）
+	AnthroType    string `gorm:"size:16;not null;default:''" json:"anthro_type"`     // 拟人类型（full/anthro/feral）
+
 	Tags string `gorm:"size:256;default:''" json:"tags"`
 
 	Visibility string `gorm:"size:16;not null;default:private;index" json:"visibility"` // private / public
