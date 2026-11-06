@@ -18,6 +18,7 @@ import (
 	datahandler "nvs-server/handlers/data"
 	"nvs-server/handlers/hctx"
 	"nvs-server/handlers/publish"
+	readpermh "nvs-server/handlers/readperm"
 	"nvs-server/models"
 	"nvs-server/moderation"
 	"nvs-server/readperm"
@@ -40,11 +41,7 @@ func guardBlogPermission(c *gin.Context, b *blogm.AuthorBlog) bool {
 	if d.Allowed {
 		return true
 	}
-	if d.Reason == readperm.ReasonLoginRequired {
-		infra.Unauthorized(c, d.Message)
-	} else {
-		infra.Forbidden(c, d.Message)
-	}
+	readpermh.WriteDeny(c, d)
 	return false
 }
 

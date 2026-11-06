@@ -120,6 +120,12 @@
       </div>
     </div>
 
+    <!-- #65 作品级阅读权限（可选等级由站长在后台配置） -->
+    <div class="be-perm-row">
+      <span class="be-perm-label">阅读权限</span>
+      <ReadPermissionPicker v-model="readPermission" v-model:price="paidPrice" :disabled="saving" />
+    </div>
+
     <!-- 插入视频/音频弹窗（上传或粘贴 URL，仿 CSDN） -->
     <el-dialog v-model="mediaDialog" :title="mediaType === 'video' ? '🎬 插入视频' : '🎵 插入音频'" width="480px">
       <el-upload
@@ -163,6 +169,7 @@ import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
 // engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
 import { renderMarkdown, editorEngineConfig } from '@/markdown/renderer';
 import AiWriteLayer from '@/components/ai/floating/AiWriteLayer.vue';
+import ReadPermissionPicker from '@/components/readperm/ReadPermissionPicker.vue';
 import { beginStream, writeStreamChunk, endStream, insertAtCursor, readEditorSelection, type StreamSession, type StreamTarget } from '@/utils/editorStream';
 import { guardLeak } from '@/composables/useLeakGuard';
 import { htmlToMarkdown } from '@/utils/turndown';
@@ -210,6 +217,9 @@ const editingId = ref(Number(route.params.id) || 0);
 const blogTitle = ref('');
 const blogSummary = ref('');
 const blogPinned = ref(false);
+// #65 作品级阅读权限
+const readPermission = ref('public');
+const paidPrice = ref(0);
 const blogCategoryId = ref<number | undefined>(undefined); // 提交用的分类（个人专栏，一级/二级/三级均可）
 const blogTags = ref<string[]>([]); // 博客标签（#tag）
 const blogTopics = ref<string[]>([]); // 博客话题（#话题）
@@ -429,6 +439,8 @@ async function loadBlog() {
       blogCategoryId.value = b.category_id || undefined;
       blogTags.value = (b.tags || []).map((t: any) => t.name);
       blogTopics.value = (b.topics || []).map((t: any) => t.name);
+      readPermission.value = b.read_permission || 'public';
+      paidPrice.value = b.paid_price || 0;
       // 分类树可能尚未加载完成：重新拉一次（个人专栏）
       await loadCategories();
       if (editorMode.value === 'md') {
@@ -458,6 +470,8 @@ async function saveBlog() {
       topics: blogTopics.value,
       ai_assisted: aiUsed.value || undefined,
       ai_model: aiUsed.value ? aiModelName.value : undefined,
+      read_permission: readPermission.value,
+      paid_price: paidPrice.value,
     };
     if (editingId.value) {
       await blogApi.update(editingId.value, payload);
@@ -524,6 +538,8 @@ onBeforeUnmount(() => {
 .be-media-btns { display: flex; gap: 6px; flex-shrink: 0; }
 .be-pinned { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .be-pinned-label { font-size: 0.8rem; color: #999; white-space: nowrap; }
+.be-perm-row { display: flex; align-items: flex-start; gap: 14px; margin: 10px 0 4px; padding: 10px 12px; border-radius: 8px; background: var(--bg-page, #f7f8fa); }
+.be-perm-label { flex-shrink: 0; padding-top: 5px; font-size: 0.84rem; color: var(--text-light, #888); }
 .media-or { text-align: center; color: #999; font-size: 0.85rem; margin: 14px 0 8px; }
 
 /* 编辑器区域 */

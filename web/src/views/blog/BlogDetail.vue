@@ -1,5 +1,12 @@
 <template>
   <div class="page-container blog-detail" :class="{ 'toc-collapsed': !tocPanelOpen }" v-loading="loading">
+    <!-- #65 作品级阅读权限拦截 -->
+    <ReadPermissionGate
+      :reason="permDeny.reason"
+      :message="permDeny.message"
+      :author-id="blog?.author_id"
+      @close="closePermDeny"
+    />
     <template v-if="blog">
       <div class="bd-layout">
         <!-- 正文区 -->
@@ -144,7 +151,7 @@
         </aside>
       </div>
     </template>
-    <el-empty v-else-if="!loading" description="博客不存在" />
+    <el-empty v-else-if="!loading && !permDeny.reason" description="博客不存在" />
   </div>
 </template>
 
@@ -161,6 +168,8 @@ import { useAuthStore } from '@/stores/auth';
 import { resolveUserKey } from '@/utils/userKey';
 import { ElMessage } from 'element-plus';
 import { CaretTop, Check, Fold, Expand } from '@element-plus/icons-vue';
+import ReadPermissionGate from '@/components/readperm/ReadPermissionGate.vue';
+import { parseReadPermDeny } from '@/api/readperm';
 
 const route = useRoute();
 // AI 生成标识（详情页徽标）
@@ -170,6 +179,12 @@ const authStore = useAuthStore();
 const blog = ref<any>(null);
 const htmlContent = ref('');
 const loading = ref(false);
+// #65 权限拒绝状态
+const permDeny = ref({ reason: '', message: '' });
+function closePermDeny() {
+  permDeny.value = { reason: '', message: '' };
+  router.push('/blogs');
+}
 const blogContentRef = ref<HTMLElement | null>(null);
 const commentTotal = ref(0);
 
@@ -350,7 +365,15 @@ onMounted(async () => {
       loadLikes();
       loadFrames();
     }
-  } catch { /* ignore */ }
+  } catch (e) {
+    const deny = parseReadPermDeny(e);
+    if (deny) {
+      blog.value = null;
+      htmlContent.value = '';
+      permDeny.value = deny;
+    }
+    /* 其它错误保持静默，沿用原有「博客不存在」空态 */
+  }
   finally { loading.value = false; }
 
   window.addEventListener('scroll', onScroll, { passive: true });

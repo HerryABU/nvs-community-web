@@ -147,6 +147,8 @@ declare module 'vue' {
     PoliceBadge: typeof import('./src/components/site/PoliceBadge.vue')['default']
     PublishQuotaHint: typeof import('./src/components/common/PublishQuotaHint.vue')['default']
     QrScanDialog: typeof import('./src/components/group/QrScanDialog.vue')['default']
+    ReadPermissionGate: typeof import('./src/components/readperm/ReadPermissionGate.vue')['default']
+    ReadPermissionPicker: typeof import('./src/components/readperm/ReadPermissionPicker.vue')['default']
     RealNameCard: typeof import('./src/components/user/RealNameCard.vue')['default']
     RealNameProviderForm: typeof import('./src/components/admin/RealNameProviderForm.vue')['default']
     ReportButton: typeof import('./src/components/comment/ReportButton.vue')['default']

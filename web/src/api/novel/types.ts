@@ -18,6 +18,8 @@ export interface Novel {
   updated_at: string;
   wall_enabled?: boolean;
   wall_warning?: string;
+  read_permission?: string; // #65 作品级阅读权限等级
+  paid_price?: number;      // #65 paid 等级售价（代币）
   author_name?: string;
   author?: {
     id: number;

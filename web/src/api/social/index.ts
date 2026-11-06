@@ -55,7 +55,7 @@ export const blogApi = {
   getAuthorBlog(authorId: number, blogId: number) {
     return api.get(`/author/${authorId}/blogs/${blogId}`);
   },
-  create(data: { title: string; content: string; summary?: string; category_id?: number; tags?: string[]; topics?: string[] }) {
+  create(data: { title: string; content: string; summary?: string; category_id?: number; tags?: string[]; topics?: string[]; read_permission?: string; paid_price?: number }) {
     return api.post('/blogs', data);
   },
   // 批量导入博客：每个文件一篇，标题取文件名（去扩展名）；categoryId 可选=导入到指定分类（CSDN 式）
@@ -68,7 +68,7 @@ export const blogApi = {
       formData,
     );
   },
-  update(id: number, data: { title?: string; content?: string; summary?: string; is_pinned?: boolean; category_id?: number; tags?: string[] | null; topics?: string[] | null }) {
+  update(id: number, data: { title?: string; content?: string; summary?: string; is_pinned?: boolean; category_id?: number; tags?: string[] | null; topics?: string[] | null; read_permission?: string; paid_price?: number }) {
     return api.put(`/blogs/${id}`, data);
   },
   delete(id: number) {

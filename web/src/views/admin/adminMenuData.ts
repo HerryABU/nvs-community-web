@@ -40,6 +40,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: '数据库管理', desc: 'SQLite↔MySQL 迁移 / 多库备份', path: '/admin/database', icon: DataLine, color: 'var(--gradient-teal)' },
       { title: '健康检查', desc: '服务器 / 数据库 / 网络 / 前端 API', path: '/admin/health', icon: Monitor, color: 'var(--gradient-success)' },
       { title: '远程站点互通', desc: '远程 NVS 站点互联与作品同步', path: '/admin/sites', icon: Connection, color: 'var(--gradient-teal)' },
+      { title: '阅读权限', desc: '小说/博客作品级权限 · 可用等级 · 会员门槛 · 付费解锁开关', path: '/admin/read-permission', icon: Lock, color: 'var(--gradient-indigo)' },
     ],
   },
   {

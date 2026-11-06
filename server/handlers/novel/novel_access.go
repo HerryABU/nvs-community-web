@@ -4,10 +4,10 @@ import (
 	"math"
 
 	"nvs-server/handlers/hctx"
+	readpermh "nvs-server/handlers/readperm"
 	"nvs-server/models"
 	siteops "nvs-server/models/siteops"
 	"nvs-server/readperm"
-	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
 )
@@ -81,11 +81,7 @@ func guardNovelPermission(c *gin.Context, novel *models.Novel) bool {
 	if d.Allowed {
 		return true
 	}
-	if d.Reason == readperm.ReasonLoginRequired {
-		infra.Unauthorized(c, d.Message)
-	} else {
-		infra.Forbidden(c, d.Message)
-	}
+	readpermh.WriteDeny(c, d)
 	return false
 }
 

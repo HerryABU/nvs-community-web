@@ -1,5 +1,12 @@
 <template>
   <div class="reader-page" v-loading="loading" :style="{ '--reader-font-size': fontSizePx }">
+    <!-- #65 作品级阅读权限拦截（登录 / 粉丝 / 会员 / 付费 / 私密） -->
+    <ReadPermissionGate
+      :reason="permDeny.reason"
+      :message="permDeny.message"
+      :author-id="novelAuthorId"
+      @close="closePermDeny"
+    />
     <!-- 阅读进度（长章节必备：知道还剩多少） -->
     <div class="reader-progress" :title="`已读 ${progressPct}%`">
       <span class="reader-progress-bar" :style="{ width: progressPct + '%' }" />
@@ -322,8 +329,17 @@ import { frameApi } from '@/api/home/frame';
 import { ElMessage } from 'element-plus';
 import { aiCostApi } from '@/api/admin/costrisk';
 import { ArrowLeft, List, Star, EditPen, Notebook, Microphone, Collection } from '@element-plus/icons-vue';
+import ReadPermissionGate from '@/components/readperm/ReadPermissionGate.vue';
+import { parseReadPermDeny } from '@/api/readperm';
 
 const authStore = useAuthStore();
+
+// #65 权限拒绝状态：有 reason 时由 ReadPermissionGate 接管引导
+const permDeny = ref({ reason: '', message: '' });
+function closePermDeny() {
+  permDeny.value = { reason: '', message: '' };
+  router.push(`/novel/${novelId.value}`);
+}
 
 const route = useRoute();
 const router = useRouter();
@@ -475,7 +491,15 @@ async function loadChapter() {
     // 精读：加载本章书签/批注 + 公开批注（渲染后高亮）
     loadNotes();
   } catch (e) {
-    console.error(e);
+    const deny = parseReadPermDeny(e);
+    if (deny) {
+      // 受限内容：清空已取到的任何片段，交由引导卡片接管
+      chapter.value = null;
+      htmlContent.value = '';
+      permDeny.value = deny;
+    } else {
+      console.error(e);
+    }
   } finally {
     loading.value = false;
   }

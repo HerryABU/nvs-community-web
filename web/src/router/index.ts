@@ -404,6 +404,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/read-permission',
+      name: 'admin-read-permission',
+      component: () => import('@/views/admin/content/AdminReadPermission.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/ai-cost',
       name: 'admin-ai-cost',
       component: () => import('@/views/admin/ai/AdminAiCost.vue'),

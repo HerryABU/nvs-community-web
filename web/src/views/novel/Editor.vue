@@ -86,6 +86,10 @@
             <el-input v-model="form.wall_warning" type="textarea" :rows="3" placeholder="自定义读者进入时的隔离警告语（如：本作品涉及敏感题材，请确认您年满18周岁并愿意承担阅读风险）" maxlength="512" show-word-limit />
           </el-form-item>
         </template>
+        <!-- #65 作品级阅读权限（可选等级由站长在后台配置） -->
+        <el-form-item label="阅读权限">
+          <ReadPermissionPicker v-model="form.read_permission" v-model:price="form.paid_price" :disabled="saving" />
+        </el-form-item>
       </el-form>
     </el-card>
 
@@ -269,6 +273,7 @@ import { publicApi } from '@/api/admin';
 import { authApi } from '@/api/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Upload, Plus, UploadFilled, Delete } from '@element-plus/icons-vue';
+import ReadPermissionPicker from '@/components/readperm/ReadPermissionPicker.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -294,6 +299,8 @@ const form = reactive<Partial<Novel>>({
   source_type: 'original',
   creation_method: 'human',
   mode: 'prose', // prose 散文体 / script 话本气泡体
+  read_permission: 'public', // #65 作品级阅读权限
+  paid_price: 0,             // #65 paid 等级售价（代币）
 });
 
 // 导入相关
@@ -392,6 +399,8 @@ async function loadNovel() {
       mode: novel.mode || 'prose',
       wall_enabled: novel.wall_enabled !== false,
       wall_warning: novel.wall_warning || '',
+      read_permission: novel.read_permission || 'public',
+      paid_price: novel.paid_price || 0,
     });
     chapters.value = chaptersRes.data.data || [];
   } catch (e) {
