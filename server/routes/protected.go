@@ -309,6 +309,13 @@ func registerProtected(r *gin.Engine) {
 		protected.PUT("/author-ai/projects/:id", authoraih.UpdateProject)
 		protected.DELETE("/author-ai/projects/:id", authoraih.DeleteProject)
 		protected.POST("/author-ai/projects/:id/generate", authoraih.GenerateComponent)
+		protected.POST("/author-ai/projects/:id/generate-all", authoraih.GenerateAllMaterials)
+		protected.GET("/author-ai/projects/:id/timeline-check", authoraih.TimelineCheck)
+		protected.GET("/author-ai/projects/:id/chapters", authoraih.ListChapters)
+		protected.POST("/author-ai/projects/:id/chapters", authoraih.CreateChapter)
+		protected.PUT("/author-ai/projects/:id/chapters/:cid", authoraih.UpdateChapter)
+		protected.DELETE("/author-ai/projects/:id/chapters/:cid", authoraih.DeleteChapter)
+		protected.POST("/author-ai/projects/:id/chapters/:cid/generate", authoraih.GenerateChapter)
 		protected.POST("/author-ai/projects/:id/publish", authoraih.PublishNovel)
 		protected.POST("/zone/enter", auth.RecordZoneEnter) // 记录进入隔离墙（敏感分区）时间，176号令合规
 		protected.POST("/ratings", rating.UpsertRating)

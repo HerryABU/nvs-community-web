@@ -31,5 +31,5 @@ func (NovelProject) TableName() string { return "authorai_projects" }
 
 // Models 返回本域需要迁移的模型列表（由根包 AllModels 运行时聚合）。
 func Models() []interface{} {
-	return []interface{}{&NovelProject{}}
+	return []interface{}{&NovelProject{}, &Chapter{}}
 }
