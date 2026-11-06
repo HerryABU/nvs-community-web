@@ -101,6 +101,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: 'web 项目额度与审核', desc: '广场发布额度配置 + 超额发布审核队列', path: '/admin/web-quota', icon: Box, color: 'var(--gradient-purple)' },
       { title: '每日发文限额', desc: '按用户等级配置每日发布数量/字数 · 按人覆盖 · AI 计入', path: '/admin/daily-publish', icon: Timer, color: 'var(--gradient-indigo)' },
       { title: '代币与卡密', desc: '平台内消费积分开关/命名 · 卡密生成作废 · 授信调整', path: '/admin/token', icon: Coin, color: 'var(--gradient-amber)' },
+      { title: 'VIP 等级卡密', desc: '发放会员等级与天数 · 解锁 VIP 可见作品 · 等级上限由阅读权限配置决定', path: '/admin/vip-cards', icon: Medal, color: 'var(--gradient-purple)' },
       { title: '在线支付通道', desc: '微信/支付宝聚合充值 · 档位面额 · 幂等到账 · 手动补单', path: '/admin/payment', icon: CreditCard, color: 'var(--gradient-success)' },
       { title: '公告栏', desc: '站点公告发布 · 合规通知', path: '/admin/announcements', icon: Bell, color: 'var(--gradient-blue)' },
       { title: '运营位', desc: '自定义导航菜单 · 首页轮播 · 每日签到 · 访客设置', path: '/admin/ops', icon: Grid, color: 'var(--gradient-teal)' },

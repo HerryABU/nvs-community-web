@@ -12,6 +12,7 @@ export interface ReadPermConfig {
   enabled_levels: string[];
   labels: Record<string, string>;
   vip_min_level: number;
+  vip_max_level: number; // #66 VIP 卡密可发行的最高等级
   paid_min_price: number;
 }
 

@@ -27,6 +27,32 @@
       </div>
     </header>
 
+    <!-- #66 VIP 等级卡密兑换：不依赖在线支付，站长发卡即可开通会员等级 -->
+    <section class="mb-redeem">
+      <div class="mb-redeem-text">
+        <h2>有 VIP 卡密？</h2>
+        <p>
+          输入卡密立即开通对应会员等级，无需在线支付。
+          当前：<b>{{ vip.active ? `Lv.${vip.level} 会员` : '尚无有效会员等级' }}</b>
+          <span v-if="vip.active && vip.member_until"> · {{ formatDate(vip.member_until) }} 到期</span>
+        </p>
+      </div>
+      <div class="mb-redeem-form">
+        <el-input
+          v-model="redeemCode"
+          placeholder="请输入 16 位卡密，如 ABCD-EFGH-JKMN-PQRS"
+          maxlength="32"
+          clearable
+          style="width: 320px"
+          @keyup.enter="redeemCard"
+        />
+        <el-button type="primary" :loading="redeeming" :disabled="!redeemCode.trim()" @click="redeemCard">
+          兑换
+        </el-button>
+      </div>
+      <p class="mb-redeem-note">等级取当前等级与卡密等级的较高者，会员时长可累加；卡密仅可使用一次。</p>
+    </section>
+
     <!-- 未开启提示：告诉用户找谁，而不是给一排点不动的按钮 -->
     <el-alert
       v-if="!loading && !info.payment_enabled"
@@ -178,6 +204,42 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import StateBlock from '@/components/common/StateBlock.vue';
 import { paymentApi, type MembershipInfo, type PaymentTier, type PaymentOrder } from '@/api/payment';
+import { vipCardApi, type VipMembership } from '@/api/vipcard';
+
+// #66 VIP 卡密兑换
+const redeemCode = ref('');
+const redeeming = ref(false);
+const vip = reactive<VipMembership>({ level: 0, member_until: null, active: false });
+
+async function loadVip() {
+  try {
+    const res = await vipCardApi.membership();
+    const d = res.data?.data;
+    if (d) {
+      vip.level = d.level || 0;
+      vip.member_until = d.member_until || null;
+      vip.active = !!d.active;
+    }
+  } catch { /* 静默：不影响套餐购买 */ }
+}
+
+async function redeemCard() {
+  const code = redeemCode.value.trim();
+  if (!code) return;
+  redeeming.value = true;
+  try {
+    const res = await vipCardApi.redeem(code);
+    if (res.data.code === 0) {
+      ElMessage.success(`兑换成功：已升至 Lv.${res.data.data.level}，会员延长 ${res.data.data.days} 天`);
+      redeemCode.value = '';
+      await loadVip();
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '兑换失败');
+  } finally {
+    redeeming.value = false;
+  }
+}
 
 const loading = ref(true);
 const info = reactive<MembershipInfo>({
@@ -385,6 +447,7 @@ function openCashier() {
 }
 
 onMounted(load);
+onMounted(loadVip);
 onUnmounted(stopPolling);
 </script>
 
@@ -440,6 +503,12 @@ onUnmounted(stopPolling);
 .mb-status-body b { font-size: var(--text-base, 14px); color: var(--text-color, #1f2328); }
 
 .mb-alert { margin-bottom: var(--space-4, 16px); border-radius: var(--radius-md, 10px); }
+/* #66 VIP 卡密兑换 */
+.mb-redeem { margin-bottom: var(--space-4, 16px); padding: 18px 20px; border-radius: var(--radius-md, 10px); background: var(--bg-card, #fff); box-shadow: var(--shadow-xs, 0 1px 3px rgba(0,0,0,.06)); }
+.mb-redeem-text h2 { margin: 0 0 6px; font-size: 1.05rem; }
+.mb-redeem-text p { margin: 0; font-size: 0.86rem; color: var(--text-light, #666); line-height: 1.6; }
+.mb-redeem-form { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.mb-redeem-note { margin: 10px 0 0; font-size: 0.78rem; color: var(--text-light, #999); }
 
 /* ---------- 套餐网格 ---------- */
 .mb-grid {

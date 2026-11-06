@@ -42,6 +42,11 @@
             <span class="rp-inline-hint">选择「VIP 可见」的作品，要求读者会员等级 ≥ 此值</span>
           </el-form-item>
 
+          <el-form-item label="VIP 最高等级">
+            <el-input-number v-model="form.vip_max_level" :min="1" :max="99" :step="1" controls-position="right" />
+            <span class="rp-inline-hint">#66 卡密可发行的最高等级（自动不低于最低等级）</span>
+          </el-form-item>
+
           <el-form-item label="付费最低价（代币）">
             <el-input-number v-model="form.paid_min_price" :min="0" :max="1000000" :step="1" controls-position="right" />
             <span class="rp-inline-hint">仅在勾选 paid 后生效，防止作者把付费内容标成 0</span>
@@ -97,11 +102,13 @@ const form = reactive<{
   enabled: string[];
   labels: Record<string, string>;
   vip_min_level: number;
+  vip_max_level: number;
   paid_min_price: number;
 }>({
   enabled: ['public'],
   labels: {},
   vip_min_level: 1,
+  vip_max_level: 3,
   paid_min_price: 1,
 });
 
@@ -124,6 +131,7 @@ async function reload() {
     form.enabled = (cfg.enabled_levels || ['public']).slice();
     form.labels = { ...(cfg.labels || {}) };
     form.vip_min_level = cfg.vip_min_level ?? 1;
+    form.vip_max_level = cfg.vip_max_level ?? 3;
     form.paid_min_price = cfg.paid_min_price ?? 1;
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '读取阅读权限配置失败');
@@ -145,6 +153,7 @@ async function save() {
       enabled_levels: form.enabled,
       labels,
       vip_min_level: form.vip_min_level,
+      vip_max_level: form.vip_max_level,
       paid_min_price: form.paid_min_price,
     };
     await readPermApi.adminSave(payload);

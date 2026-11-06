@@ -410,6 +410,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/vip-cards',
+      name: 'admin-vip-cards',
+      component: () => import('@/views/admin/business/AdminVipCards.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/ai-cost',
       name: 'admin-ai-cost',
       component: () => import('@/views/admin/ai/AdminAiCost.vue'),
