@@ -2,7 +2,7 @@
   <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go" alt="Go">
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?style=flat&logo=vuedotjs" alt="Vue">
   <img src="https://img.shields.io/badge/SQLite-3-003B57?style=flat&logo=sqlite" alt="SQLite">
-  <img src="https://img.shields.io/badge/version-4.8.6-4F46E5?style=flat" alt="Version">
+  <img src="https://img.shields.io/badge/version-4.8.7-4F46E5?style=flat" alt="Version">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue?style=flat" alt="Platform">
   <img src="https://img.shields.io/badge/CPU-x86%20%7C%20ARM%20%7C%20MIPS64%20%7C%20RISC--V-orange?style=flat" alt="CPU">
   <img src="https://img.shields.io/badge/license-AGPL%20v3-blue.svg" alt="License">
@@ -124,7 +124,10 @@
 - 💬 **话本气泡体**
 - 👥 **多人协作**
 - 🗂 **章节版本控制**
-- 🎭 **OC 模式群组**
+- 🎭 **OC 模式（与群组解耦）** — OC 角色卡 / 世界书 / 表情包为个人资产，独立于群组；前台新增独立「亚文化创作区」入口（内含 OC，兼容 furry 系）
+- 🧩 **OC 组（阵容）** — 将多个 OC 角色卡编成一组，支持「我的 / 公开」两级可见性、成员增删与排序、平台审核
+- 🤝 **群组召唤 OC / OC 组** — 群组可召唤单个 OC 以人设发群帖，亦可召唤整组 OC 依次登场（均注入 furry 物种 / 特征 / 拟人型设定）
+- 🤖 **OC AI 加强版** — 复用作者工作台 AI 写作流的 `prompttpl` + `aicall` 模式，从灵感生成完整 OC 角色卡、或补全润色已有角色（兼容 furry 物种 / 特征 / 拟人型）
 - 🧾 **提示词模板引擎**
 
 ### 💎 会员与额度

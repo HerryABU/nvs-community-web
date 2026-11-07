@@ -218,6 +218,13 @@ export const ocApi = {
       data,
     );
   },
+  // 群组召唤整队 OC 组（反向：群组调用某个 OC 组）
+  invokeOcGroup(groupId: number, data: { oc_group_id: number; prompt?: string }) {
+    return api.post<{ code: number; data: { count: number; posts: any[] } }>(
+      `/groups/${groupId}/oc/invoke-group`,
+      data,
+    );
+  },
 
   // 对话流
   listFlows(groupId: number) {
@@ -253,5 +260,92 @@ export const ocApi = {
   },
   publish(flowId: number, data: Record<string, any>) {
     return api.post(`/oc/flows/${flowId}/publish`, data);
+  },
+};
+
+// ==================== OC 组（阵容）：用户个人创作资产，与群组解耦 ====================
+
+export interface OcGroup {
+  id: number;
+  user_id: number;
+  name: string;
+  summary: string;
+  cover_url: string;
+  tags: string;
+  member_count: number;
+  visibility: 'private' | 'public';
+  review: string;
+  status: string;
+  owner_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OcGroupMember {
+  id: number;
+  group_id: number;
+  character_id: number;
+  sort_order: number;
+  character?: OcCharacter;
+}
+
+export const ocGroupApi = {
+  list(params: { scope?: string; keyword?: string; page?: number; page_size?: number } = {}) {
+    return api.get<{ code: number; data: { list: OcGroup[]; total: number } }>('/oc/groups', { params });
+  },
+  get(id: number) {
+    return api.get<{ code: number; data: { group: OcGroup; members: OcGroupMember[] } }>(`/oc/groups/${id}`);
+  },
+  create(data: { name: string; summary?: string; cover_url?: string; tags?: string; visibility?: string; character_ids?: number[] }) {
+    return api.post<{ code: number; data: OcGroup }>('/oc/groups', data);
+  },
+  update(id: number, data: { name?: string; summary?: string; cover_url?: string; tags?: string; visibility?: string }) {
+    return api.put<{ code: number; data: OcGroup }>(`/oc/groups/${id}`, data);
+  },
+  remove(id: number) {
+    return api.delete(`/oc/groups/${id}`);
+  },
+  listMembers(id: number) {
+    return api.get<{ code: number; data: { members: OcGroupMember[] } }>(`/oc/groups/${id}/members`);
+  },
+  addMember(id: number, characterId: number) {
+    return api.post(`/oc/groups/${id}/members`, { character_id: characterId });
+  },
+  removeMember(id: number, characterId: number) {
+    return api.delete(`/oc/groups/${id}/members/${characterId}`);
+  },
+  reorder(id: number, characterIds: number[]) {
+    return api.put(`/oc/groups/${id}/members/order`, { character_ids: characterIds });
+  },
+};
+
+// ==================== OC 角色卡 AI 生成 / 补全（借鉴作者工作台 AI 写作流） ====================
+
+export const ocAiApi = {
+  // 从灵感生成一张完整 OC 角色卡（furry 时传 oc_kind/species/traits）
+  generate(data: {
+    concept: string;
+    style_directive?: string;
+    oc_kind?: string;
+    species?: string;
+    species_traits?: string;
+    anthro_type?: string;
+    extra_requirements?: string;
+  }) {
+    return api.post<{ code: number; data: OcCharacter }>('/oc/ai-character', data);
+  },
+  // 在已有角色卡基础上补全/润色
+  fill(
+    characterId: number,
+    data: {
+      focus?: string;
+      extra_requirements?: string;
+      oc_kind?: string;
+      species?: string;
+      species_traits?: string;
+      anthro_type?: string;
+    },
+  ) {
+    return api.post<{ code: number; data: OcCharacter }>(`/oc/characters/${characterId}/ai-fill`, data);
   },
 };

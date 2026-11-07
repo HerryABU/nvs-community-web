@@ -35,6 +35,8 @@ const (
 	SceneChat        = "chat"
 	// SceneAuthorAI 作者工作台 AI 写作流的素材/正文模板（世界观/人物/大纲/时间线/正文）
 	SceneAuthorAI = "authorai"
+	// SceneOC 亚文化创作区 / OC 角色卡的 AI 生成与补全模板（与作者工作台 AI 流同源，数据隔离）
+	SceneOC = "oc"
 
 	KindChat  = "chat"
 	KindImage = "image"
@@ -109,6 +111,8 @@ func NormalizeScene(s string) string {
 		return SceneNovelScript
 	case SceneAuthorAI:
 		return SceneAuthorAI
+	case SceneOC:
+		return SceneOC
 	default:
 		return SceneNovelChapter
 	}
@@ -701,6 +705,31 @@ var builtinSeeds = []Template{
 			{Name: "Mode", Label: "微调模式", Required: true, MaxLen: 32},
 			{Name: "Instruction", Label: "作者本轮的话", MaxLen: 1500},
 			{Name: "History", Label: "多轮记录", MaxLen: 4000},
+		},
+	},
+	// ==================== 亚文化创作区 / OC 角色卡 AI 生成与补全 ====================
+	// 与作者工作台 AI 写作流同源（prompttpl 引擎 + aicall），但数据走 oc_characters，互不影响。
+	// 兼容 furry：FurryHint 由前端在用户选 furry 时注入（物种/特征/拟人类型），模板据此要求展开兽人设定。
+	{
+		Key: "oc-character", Title: "OC角色卡·从灵感生成", Scene: SceneOC, Category: "OC生成", Kind: KindChat,
+		Note:    "从一个核心概念/灵感生成一张结构完整的 OC 角色卡（JSON）；furry 时按 FurryHint 展开兽人设定",
+		Content: "你是一位擅长「亚文化创作区 / OC 角色卡」设计的设定师。请基于下面的灵感与要求，设计一张**结构完整、可直接使用**的 OC 角色卡。\n\n核心概念 / 灵感：{{Concept}}\n风格基调：{{StyleDirective}}\n{{FurryHint}}用户补充要求：{{ExtraRequirements}}\n\n请只输出一个 JSON 对象（不要 Markdown 代码块、不要数组以外的任何文字），字段如下：\n{\"name\":\"角色名\",\"persona\":\"人设/性格/背景（常驻设定，200-600字）\",\"appearance\":\"外貌描写（含可视觉化细节）\",\"speech\":\"说话风格（口头禅/句长/用词层级）\",\"scenario\":\"场景设定（角色所处情境/世界）\",\"first_message\":\"开场白（一句话，符合人设）\",\"mes_example\":\"对话示例（2-3 句，展示风格）\",\"system_prompt\":\"角色级系统提示（可选，留空则填空串）\",\"oc_kind\":\"native 或 furry\",\"species\":\"物种（furry 时填，如 狼/猫/龙；原生 OC 留空）\",\"species_traits\":\"动物特征（furry 时填，如 尖耳/蓬尾/毛色；原生 OC 留空）\",\"anthro_type\":\"拟人类型（furry 时填 full/anthro/feral；原生 OC 留空）\",\"tags\":\"标签（逗号分隔，如 社恐,赛博朋克）\",\"mood\":50,\"affinity\":0,\"energy\":100}\n\n要求：\n1. 若 FurryHint 指定了物种/特征，oc_kind 必须为 furry，并在 persona/appearance/speech 中自然融入兽人特征；\n2. 若不指定 FurryHint，按原生 OC（oc_kind:native）设计，species 等留空；\n3. 所有字段务必自洽，名字不要烂大街；\n4. 只输出 JSON。",
+		Vars: []TemplateVar{
+			{Name: "Concept", Label: "核心概念/灵感", Required: true, MaxLen: 1000},
+			{Name: "StyleDirective", Label: "风格基调", MaxLen: 400},
+			{Name: "FurryHint", Label: "Furry 提示", MaxLen: 400},
+			{Name: "ExtraRequirements", Label: "补充要求", MaxLen: 1000},
+		},
+	},
+	{
+		Key: "oc-character-fill", Title: "OC角色卡·补全润色", Scene: SceneOC, Category: "OC生成", Kind: KindChat,
+		Note:    "在已有角色卡基础上补全薄弱字段 / 润色；furry 时按 FurryHint 深化兽人设定",
+		Content: "你是一位 OC 角色卡精修师。下面是一张已有角色卡的当前内容（JSON 形式），请**补全缺失/薄弱的字段、润色已有内容、保持人设严格自洽**，输出完整的角色卡 JSON（字段同生成模板）。\n\n已有角色卡：\n{{ExistingContent}}\n\n{{FurryHint}}需要重点补全/打磨的字段：{{Focus}}\n用户补充要求：{{ExtraRequirements}}\n\n输出要求：\n1. 保持角色核心身份与已有设定不变，只补全空白、深化细节；\n2. 若指定了 FurryHint，确保 species/species_traits/anthro_type 与兽人特征在 persona/appearance/speech 中一致呈现且 oc_kind=furry；\n3. 只输出完整 JSON 对象，不要解释、不要 Markdown 代码块。",
+		Vars: []TemplateVar{
+			{Name: "ExistingContent", Label: "已有角色卡", Required: true, MaxLen: 6000},
+			{Name: "FurryHint", Label: "Furry 提示", MaxLen: 400},
+			{Name: "Focus", Label: "重点字段", MaxLen: 200},
+			{Name: "ExtraRequirements", Label: "补充要求", MaxLen: 1000},
 		},
 	},
 }

@@ -404,5 +404,6 @@ func Migrate(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&Character{}, &WorldBook{}, &WorldEntry{},
 		&GroupSetting{}, &Agent{}, &Flow{}, &Turn{}, &Window{}, &BudgetUsage{},
+		&OcGroup{}, &OcGroupMember{},
 	)
 }

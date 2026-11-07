@@ -150,6 +150,13 @@ const router = createRouter({
       component: () => import('@/views/oc/Workspace.vue'),
       meta: { requiresAuth: true },
     },
+    // 亚文化创作区（独立前台入口，与「群组」并列分开）：OC 角色库 + 我的 OC 组 + AI 创作助手，兼容 furry
+    {
+      path: '/subculture',
+      name: 'subculture',
+      component: () => import('@/views/subculture/SubcultureView.vue'),
+      meta: { requiresAuth: true },
+    },
     {
       path: '/forums',
       name: 'forums',

@@ -12,7 +12,7 @@
     </div>
 
     <div class="ocm-grid">
-      <div v-for="c in list" :key="c.id" class="ocm-card">
+      <div v-for="c in displayList" :key="c.id" class="ocm-card">
         <div class="ocm-head">
           <el-avatar :size="42" :src="c.avatar_url || ''">{{ (c.name || '?')[0] }}</el-avatar>
           <div class="ocm-title">
@@ -154,13 +154,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue';
+import { ref, computed, onMounted, reactive } from 'vue';
 import { ElMessage } from 'element-plus';
 import api from '@/api/index';
 import { appPrefix } from '@/utils/prefix';
 import { ocApi, type OcCharacter, type OcWorldBook } from '@/api/oc';
 
-const props = defineProps<{ groupId: number; canBind: boolean }>();
+const props = defineProps<{ groupId: number; canBind: boolean; filterKind?: 'all' | 'native' | 'furry' }>();
 const emit = defineEmits<{ bound: [] }>();
 
 const loading = ref(false);
@@ -169,6 +169,12 @@ const scope = ref<'mine' | 'public'>('mine');
 const keyword = ref('');
 const list = ref<OcCharacter[]>([]);
 const books = ref<OcWorldBook[]>([]);
+
+// 亚文化创作区：按 OC 分类（含 furry）客户端筛选
+const displayList = computed(() => {
+  if (!props.filterKind || props.filterKind === 'all') return list.value;
+  return list.value.filter((c) => (c.oc_kind || 'native') === props.filterKind);
+});
 
 const editorVisible = ref(false);
 const form = reactive<Partial<OcCharacter>>({

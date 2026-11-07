@@ -7,6 +7,7 @@ package oc
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -298,6 +299,42 @@ func fillAuthorNames(list []*Character) {
 	for _, c := range list {
 		c.AuthorName = nameOf[c.UserID]
 	}
+}
+
+// BuildOcPersona 组装角色人设系统提示词（含 furry 物种特征注入）。
+// 单角色召唤与整组召唤共用同一套人设拼装，保证行为一致。
+// 返回可直接用作 aicall.Request.System 的完整系统提示。
+func BuildOcPersona(ch *Character) string {
+	sysParts := []string{}
+	if ch.SystemPrompt != "" {
+		sysParts = append(sysParts, ch.SystemPrompt)
+	}
+	persona := strings.TrimSpace(ch.Persona)
+	if persona != "" {
+		sysParts = append(sysParts, "人设："+persona)
+	}
+	if ch.OcKind == "furry" {
+		species := strings.TrimSpace(ch.Species)
+		traits := strings.TrimSpace(ch.SpeciesTraits)
+		if species != "" || traits != "" {
+			furry := fmt.Sprintf("Furry 设定：物种 %s；特征 %s", species, traits)
+			if anthro := strings.TrimSpace(ch.AnthroType); anthro != "" {
+				furry += fmt.Sprintf("；拟人类型 %s", anthro)
+			}
+			sysParts = append(sysParts, furry)
+		}
+	}
+	if ch.Appearance != "" {
+		sysParts = append(sysParts, "外貌："+ch.Appearance)
+	}
+	if ch.Speech != "" {
+		sysParts = append(sysParts, "说话风格："+ch.Speech)
+	}
+	if ch.Scenario != "" {
+		sysParts = append(sysParts, "场景："+ch.Scenario)
+	}
+	sysParts = append(sysParts, fmt.Sprintf("请以《%s》的口吻发言，直接输出内容，不要破第四面墙。", ch.Name))
+	return strings.Join(sysParts, "\n")
 }
 
 // ReviewCharacter 平台审核公开角色卡（admin）

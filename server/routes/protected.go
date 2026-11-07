@@ -260,6 +260,9 @@ func registerProtected(r *gin.Engine) {
 		protected.GET("/oc/characters/:cid", ochandler.GetCharacter)
 		protected.PUT("/oc/characters/:cid", ochandler.UpdateCharacter)
 		protected.DELETE("/oc/characters/:cid", ochandler.DeleteCharacter)
+		// OC 角色卡 AI 生成 / 补全（借鉴作者工作台 AI 写作流，数据隔离）
+		protected.POST("/oc/ai-character", ochandler.AiGenerateCharacter)
+		protected.POST("/oc/characters/:cid/ai-fill", ochandler.AiFillCharacter)
 		protected.GET("/oc/books", ochandler.ListBooks)
 		protected.POST("/oc/books", ochandler.CreateBook)
 		protected.GET("/oc/books/:bid", ochandler.GetBook)
@@ -267,13 +270,26 @@ func registerProtected(r *gin.Engine) {
 		protected.DELETE("/oc/books/:bid", ochandler.DeleteBook)
 		protected.POST("/oc/books/:bid/entries", ochandler.SaveEntry)
 		protected.DELETE("/oc/books/:bid/entries/:eid", ochandler.DeleteEntry)
+		// OC 组（阵容）：用户个人创作资产，与群组解耦；群组可反向召唤 OC 组
+		protected.GET("/oc/groups", ochandler.ListOcGroups)
+		protected.POST("/oc/groups", ochandler.CreateOcGroupHandler)
+		protected.GET("/oc/groups/:gid", ochandler.GetOcGroupHandler)
+		protected.PUT("/oc/groups/:gid", ochandler.UpdateOcGroupHandler)
+		protected.DELETE("/oc/groups/:gid", ochandler.DeleteOcGroupHandler)
+		protected.GET("/oc/groups/:gid/members", ochandler.ListOcGroupMembersHandler)
+		protected.POST("/oc/groups/:gid/members", ochandler.AddOcGroupMemberHandler)
+		protected.DELETE("/oc/groups/:gid/members/:cid", ochandler.RemoveOcGroupMemberHandler)
+		protected.PUT("/oc/groups/:gid/members/order", ochandler.ReorderOcGroupMembersHandler)
+		// 平台审核公开 OC 组（admin）
+		protected.POST("/admin/oc-groups/:gid/review", ochandler.ReviewOcGroupHandler)
 		// 群级配置 / AI 角色 / 对话流
 		protected.GET("/groups/:id/oc", ochandler.GetSetting)
 		protected.PUT("/groups/:id/oc", ochandler.SaveSetting)
 		protected.POST("/groups/:id/oc/agents", ochandler.AddAgent)
 		protected.PUT("/groups/:id/oc/agents/:aid", ochandler.UpdateAgent)
 		protected.DELETE("/groups/:id/oc/agents/:aid", ochandler.RemoveAgent)
-		protected.POST("/groups/:id/oc/invoke", ochandler.InvokeOcInGroup) // 群组召唤 OC 角色发言（强化群组 + 群组调用 OC）
+		protected.POST("/groups/:id/oc/invoke", ochandler.InvokeOcInGroup)            // 群组召唤单 OC 角色发言
+		protected.POST("/groups/:id/oc/invoke-group", ochandler.InvokeOcGroupInGroup) // 群组召唤整队 OC 组
 		protected.GET("/groups/:id/oc/flows", ochandler.ListFlows)
 		protected.POST("/groups/:id/oc/flows", ochandler.CreateFlow)
 		protected.GET("/oc/flows/:fid/turns", ochandler.ListTurns)

@@ -39,6 +39,7 @@
 
         <router-link to="/forums" class="nav-link desktop-only">论坛</router-link>
         <router-link to="/groups" class="nav-link desktop-only">群组</router-link>
+        <router-link to="/subculture" class="nav-link desktop-only">亚文化创作区</router-link>
         <router-link to="/blogs" class="nav-link desktop-only">博客</router-link>
         <router-link to="/ai" class="nav-link nav-link-ai desktop-only">✨ AI 工作台</router-link>
 
@@ -229,6 +230,7 @@
       <div class="mnav-item" @click="mnavGo('/novels')"><span class="mnav-emoji">📖</span> 小说</div>
       <div class="mnav-item" @click="mnavGo('/forums')"><el-icon><ChatDotRound /></el-icon> 论坛</div>
       <div class="mnav-item" @click="mnavGo('/groups')"><span class="mnav-emoji">👥</span> 群组</div>
+      <div class="mnav-item" @click="mnavGo('/subculture')"><span class="mnav-emoji">🎭</span> 亚文化创作区</div>
       <div class="mnav-item" @click="mnavGo('/blogs')"><el-icon><Document /></el-icon> 博客</div>
       <div class="mnav-item" @click="mnavGo('/htmls')"><span class="mnav-emoji">🔌</span> 扩展应用</div>
       <div class="mnav-item" v-if="liveEnabled" @click="mnavGo('/live')"><span class="mnav-emoji">📺</span> 直播</div>

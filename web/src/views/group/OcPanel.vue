@@ -81,7 +81,10 @@
             <el-button size="small" type="primary" :disabled="!canManage && agents.length === 0" @click="openInvoke">
               召唤 OC 在群里发言
             </el-button>
-            <span class="oc-tip">让已绑定本群的 OC 角色以人设发一条群帖（强化群组 · 群组调用 OC）</span>
+            <el-button size="small" @click="openInvokeGroup">
+              召唤 OC 组（整队）
+            </el-button>
+            <span class="oc-tip">「召唤 OC」让单个已绑定角色发言；「召唤 OC 组」把某个 OC 组整队以各自人设进群（群组调用 OC 组）</span>
           </div>
           <el-table :data="agents" size="small">
             <el-table-column label="角色" min-width="140">
@@ -135,6 +138,29 @@
         <el-button type="primary" :loading="invoking" @click="doInvoke">召唤</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="invokeGroupVisible" title="召唤 OC 组（整队进群）" width="540px">
+      <el-form label-width="88px">
+        <el-form-item label="选择 OC 组">
+          <el-select v-model="invokeGroupForm.oc_group_id" filterable placeholder="选择我的或公开的 OC 组" style="width:100%">
+            <el-option-group label="我的 OC 组">
+              <el-option v-for="g in myOcGroups" :key="g.id" :label="`${g.name}（${g.member_count} 名成员）`" :value="g.id" />
+            </el-option-group>
+            <el-option-group label="公开库">
+              <el-option v-for="g in publicOcGroups" :key="g.id" :label="`${g.name}（${g.member_count} 名成员）`" :value="g.id" />
+            </el-option-group>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="场景提示">
+          <el-input v-model="invokeGroupForm.prompt" type="textarea" :rows="3" placeholder="这群角色此刻共处的场景（留空则自由互动）" />
+        </el-form-item>
+      </el-form>
+      <el-alert type="info" :closable="false" title="整队成员会各自以人设发一条群帖（含 Furry 物种设定），单次最多 12 名。" />
+      <template #footer>
+        <el-button @click="invokeGroupVisible = false">取消</el-button>
+        <el-button type="primary" :loading="invokingGroup" @click="doInvokeGroup">召唤整队</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -142,7 +168,7 @@
 import { ref, reactive, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { ocApi, type OcSetting, type OcAgent } from '@/api/oc';
+import { ocApi, ocGroupApi, type OcSetting, type OcAgent, type OcGroup } from '@/api/oc';
 import CharacterManager from '@/components/oc/CharacterManager.vue';
 import WorldBookManager from '@/components/oc/WorldBookManager.vue';
 import FlowPanel from '@/components/oc/FlowPanel.vue';
@@ -184,6 +210,54 @@ async function doInvoke() {
     ElMessage.error(e?.response?.data?.message || '召唤失败');
   } finally {
     invoking.value = false;
+  }
+}
+
+// 召唤 OC 组（整队）
+const invokeGroupVisible = ref(false);
+const invokingGroup = ref(false);
+const invokeGroupForm = reactive<{ oc_group_id?: number; prompt: string }>({ oc_group_id: undefined, prompt: '' });
+const myOcGroups = ref<OcGroup[]>([]);
+const publicOcGroups = ref<OcGroup[]>([]);
+
+async function loadOcGroups() {
+  try {
+    const [mine, pub] = await Promise.all([
+      ocGroupApi.list({ scope: 'mine', page_size: 50 }),
+      ocGroupApi.list({ scope: 'public', page_size: 50 }),
+    ]);
+    myOcGroups.value = mine.data.data?.list || [];
+    publicOcGroups.value = pub.data.data?.list || [];
+  } catch { /* 静默 */ }
+}
+
+function openInvokeGroup() {
+  if (myOcGroups.value.length === 0 && publicOcGroups.value.length === 0) {
+    loadOcGroups();
+  }
+  invokeGroupForm.oc_group_id = (myOcGroups.value[0]?.id) || (publicOcGroups.value[0]?.id);
+  invokeGroupForm.prompt = '';
+  invokeGroupVisible.value = true;
+}
+
+async function doInvokeGroup() {
+  if (!invokeGroupForm.oc_group_id) {
+    ElMessage.warning('请选择要召唤的 OC 组');
+    return;
+  }
+  invokingGroup.value = true;
+  try {
+    const res = await ocApi.invokeOcGroup(groupId.value, {
+      oc_group_id: invokeGroupForm.oc_group_id,
+      prompt: invokeGroupForm.prompt || undefined,
+    });
+    const n = res.data.data?.count || 0;
+    ElMessage.success(`已召唤整队 OC 组，共 ${n} 名角色发言，去群聊查看`);
+    invokeGroupVisible.value = false;
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '召唤失败');
+  } finally {
+    invokingGroup.value = false;
   }
 }
 
