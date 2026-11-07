@@ -28,6 +28,8 @@
 | POST | `/api/novels` | 作者 | 创建作品 |
 | PUT | `/api/novels/:id` | 作者 | 更新作品 |
 | DELETE | `/api/novels/:id` | 作者 | 删除作品 |
+| GET | `/api/novels/:id/likes` | — | 点赞数 + 当前用户是否已赞 |
+| POST | `/api/novels/:id/like` | JWT | 点赞 / 取消点赞（toggle，独立 `novel_likes` 表） |
 | GET | `/api/categories` | — | 分类列表 |
 | GET | `/api/categories/stats` | — | 分类作品统计 |
 
@@ -55,6 +57,7 @@
 | GET | `/api/blogs/:id` | — | 博客详情 |
 | GET | `/api/blogs/:id/likes` | — | 点赞数 + 当前用户是否已赞 |
 | POST | `/api/blogs/:id/like` | JWT | 点赞 / 取消点赞（toggle） |
+| POST | `/api/blogs/:id/favorite` | JWT | 收藏 / 取消收藏（toggle，独立 `blog_favorites` 表） |
 | GET | `/api/blog-categories` | — | 博客分类树（一/二/三级 + 博客数） |
 | GET | `/api/author/:id/blogs` | — | 作者博客列表 |
 | POST | `/api/blogs` | JWT | 创建博客（可带 `category_id`） |
@@ -147,6 +150,29 @@
 | 方法 | 端点 | 认证 | 说明 |
 |------|------|------|------|
 | POST | `/api/reports` | JWT | 提交举报 |
+
+### 🗳 舆论阵营分析（管理员）
+| 方法 | 端点 | 认证 | 说明 |
+|------|------|------|------|
+| GET | `/api/admin/sentiment/chat-models` | JWT(admin) | 阵营分析可用模型（启用+聊天+已配 `base_url`，含 `thinking` 标记） |
+| GET | `/api/admin/sentiment/camp-target-setting` | JWT(admin) | 读取某评论区阵营分析开关（`content_type` / `content_id`） |
+| POST | `/api/admin/sentiment/camp-target-setting` | JWT(admin) | 设置某评论区阵营分析开关（超管） |
+| GET | `/api/admin/sentiment/camp-analysis-global` | JWT(admin) | 读取平台级阵营分析默认开关 |
+| PUT | `/api/admin/sentiment/camp-analysis-global` | JWT(admin) | 设置平台级阵营分析默认开关（超管） |
+| POST | `/api/admin/sentiment/camp-analyze` | JWT(admin) | 运行阵营分析（回传 `ai_thinking` / `ai_reasoning`） |
+| POST | `/api/admin/sentiment/camp-marks` | JWT(admin) | 新增阵营标记（进 `pending`，待超管审核） |
+| GET | `/api/admin/sentiment/camp-marks` | JWT(admin) | 阵营标记列表（支持 `scope` 过滤：all/content/topic） |
+| GET | `/api/admin/sentiment/camp-graph` | JWT(admin) | 阵营图谱数据（节点=阵营、边=共现，仅聚合 `approved`；支持 `scope`） |
+| GET | `/api/admin/sentiment/topics/list` | JWT(admin) | 去重议题标签 + 命中内容数（供「按议题」下拉） |
+| POST | `/api/admin/sentiment/camp-marks/:id/approve` | JWT(admin) | 审核通过阵营标记（超管） |
+| POST | `/api/admin/sentiment/camp-marks/:id/reject` | JWT(admin) | 驳回阵营标记（超管） |
+| POST | `/api/admin/sentiment/camp-marks/:id/request-update` | JWT(admin) | 普通管理员申请修改阵营标记（待超管批准） |
+| POST | `/api/admin/sentiment/camp-marks/:id/request-delete` | JWT(admin) | 普通管理员申请删除阵营标记（待超管批准） |
+| PUT | `/api/admin/sentiment/camp-marks/:id` | JWT(admin) | 直接修改阵营标记（仅超管） |
+| DELETE | `/api/admin/sentiment/camp-marks/:id` | JWT(admin) | 直接删除阵营标记（仅超管） |
+| GET | `/api/admin/sentiment/delete-requests` | JWT(admin) | 阵营标记修改/删除申请列表 |
+| POST | `/api/admin/sentiment/delete-requests/:id/approve` | JWT(admin) | 批准申请（按 action 应用补丁或真删，超管） |
+| POST | `/api/admin/sentiment/delete-requests/:id/reject` | JWT(admin) | 驳回申请（超管） |
 
 ### 管理后台
 | 方法 | 端点 | 认证 | 说明 |

@@ -3,6 +3,47 @@
 > 按版本倒序记录每个版本改了什么、为什么改。README 不再承载更新日志。
 > 返回 [README](../README.md) · [API](API.md) · [配置](CONFIG.md) · [架构](ARCHITECTURE.md) · [开发](DEVELOPMENT.md) · [特性详解](FEATURES.md)
 
+### v4.8.4 叙事形态扩展 / 作者统计 / 舆论阵营分析增强（2026-11-07）
+
+> 本轮补齐自 v4.8.0 以来的功能增量（含 4.8.1–4.8.3 区间的舆情/创作/后台改进），统一纳入发布。
+
+**一、小说四种叙事形态（散文 / 话本气泡 / 漫画体 / 图片模式）**
+
+`Novel.Mode` / `Chapter.Mode` 枚举由 prose / script 扩展为 prose / script / comic / image：
+- **散文**：原 Markdown 正文形态；
+- **话本气泡**：角色对白气泡体（既有）；
+- **漫画体（comic）**：逐页翻看，阅读器按页渲染漫画内容；
+- **图片模式（image）**：以有序图集呈现，每章新增 `Images` JSON 列存 `[{url,caption}]`。
+
+章节 CRUD 在图片形态下改以 `images` 为准、正文可空；`normalizeChapterImages` 校验并规范化图集（非法回落 `[]`），正文/图片二选一校验。前端：作品编辑器加叙事形态单选；章节编辑器在图片形态下以图集编辑器（上传 / 排序 / 图注 / 删除）替代文字编辑器；阅读器按章节生效形态渲染（漫画体逐页、图片模式流览）。
+
+**二、作者每篇内容统计（阅读 / 点赞 / 收藏）**
+
+作者仪表盘 `GetAuthorDashboard` 返回 per-content 列表：`novel_stats`（含 `view_count` / `like_count` / `favorite_count` 书架数）与 `blog_stats`（含 `view_count` / `like_count` / `favorite_count`）。
+- 小说点赞独立 `novel_likes` 表（`ToggleNovelLike` / `UserLikedNovel` + 接口 `/api/novels/:id/like`、`/api/novels/:id/likes`）；小说收藏复用 bookshelf 统计，不另建列；
+- 博客收藏独立 `blog_favorites` 表（`ToggleBlogFavorite` / `UserFavoritedBlog` + 接口 `/api/blogs/:id/favorite`、`/api/blogs/:id/favorites`）。
+前端 `AuthorStatsView` 以双表展示每篇内容的阅读 / 点赞 / 收藏并可跳转详情。
+
+**三、舆论阵营分析增强**
+
+- **按评论区开关**：新增 `sentiment_camp_target_settings` 表（`content_type`+`content_id` 唯一，`enabled` 默认 true，仅存显式开关记录）；`campAnalysisEnabled(ct,cid)` 优先显式按内容设置、无记录回退平台默认（`platform_configs.sentiment_camp_analysis_enabled`，默认开启）。超管可设平台默认 + 单评论区开/关：关闭的评论区 `GetCampGraph` 返回空图谱 + 禁用说明、`all`/`topic` 维度过滤掉已关闭内容、`AnalyzeCamp` 拒绝对其运行 AI 分析。新增 4 个端点：`GET/POST /admin/sentiment/camp-target-setting`、`GET/PUT /admin/sentiment/camp-analysis-global`。
+- **AI 思考过程可见可折叠**：`AnalyzeAndPersist` 采集模型原生 `reasoning`（经 `CompleteWithReasoning` 暴露）与自述分析依据 `thinking`；`AnalyzeCamp` 回传 `ai_thinking` / `ai_reasoning`，前端新增可折叠「AI 思考过程」面板。
+- **模型锁定**：新增 `ListSentimentChatModels`（仅返回启用 + 聊天 + 已配 `base_url` 的模型 `id`/`name`/`model_id`/`thinking`）；前端模型选择器把所选 `model_id` 写入 `localStorage`（`sentiment_camp_model_id`），刷新 / 重开保持，不再每次回退第一个。
+- **语言格式全自由**：`camp/mod.go` 取消硬编码三路语言格式，改为自由文本标签（仅保留中立性约束与示例参考），自由标签 hash 着色、已知枚举保留固定色。
+- **三维度范围（scope）**：`all` 全局 / `content` 按评论区 / `topic` 按议题（经 content 桥接），范围标题实时回显，`ListCampMarks` 同步支持 scope。
+- **审核流（权限分层）**：`CampMark` 增 `status`（pending/approved/rejected，旧标记回填 approved）；普通管理员新增进 pending、唯一站长审核通过才进图谱；修改 / 删除走申请由站长批准 / 驳回。
+- **强中立提示词常驻 + 严格/绥靖隔离**：提示词只标记阵营与语言格式、严禁判对错 / 倒戈多数派，`showPrompt` 默认 true；**严格模式安全系统提示词仅在 `strict` 模式注入，绥靖（appease）模式走 `RelaxedSystemPrompt`，二者绝不混用**。
+
+**四、本轮一并纳入的近期改进（4.8.1–4.8.3 区间）**
+
+- 博客支持封面图（头图）：`AuthorBlog.cover_url`，详情页头图横幅、列表卡片优先用封面；
+- 作者可关闭评论区（默认开启）：`Novel` / `AuthorBlog` 增 `comments_enabled`，关闭时 `CreateComment` 返回 403、前端隐藏输入框并显示「已关闭」；
+- 阵营图谱改为审核后自动生成（pending → 超管审核 → 进图谱）；
+- 阵营标记修改 / 删除权限分层 + 强中立提示词闭环；
+- 三栏 AI 创作工作台（对标 Scriverse / NovelForge / 织叙 / Pagekin）+ ADRO 两用方法（苏格拉底 / 费曼 / 直接改写），创作场景免注入安全提示词（小说 / 话本 / AI 写作流不前置注入，未成年人保护 / 输入闸 / 输出闸 / 违禁词仍保留）；
+- 自定义配色真正全站生效（修复 `SetSiteTheme` 误写设置对象 bug，新增 accent / surface + 全链路 HEX 校验 + 7 套预设）；
+- 管理台移动端导航优化（窄屏汉堡 + 抽屉，内容区全宽，消灭死侧栏）。
+
 ### v4.8.0 绥靖模式 / 名单子系统 / 警方取证审批（2026-11-03）
 
 **一、绥靖模式（以疏代堵）—— AI 安全闸第四种终止模式**

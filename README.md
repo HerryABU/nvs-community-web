@@ -2,7 +2,7 @@
   <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go" alt="Go">
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?style=flat&logo=vuedotjs" alt="Vue">
   <img src="https://img.shields.io/badge/SQLite-3-003B57?style=flat&logo=sqlite" alt="SQLite">
-  <img src="https://img.shields.io/badge/version-4.8.3-4F46E5?style=flat" alt="Version">
+  <img src="https://img.shields.io/badge/version-4.8.4-4F46E5?style=flat" alt="Version">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue?style=flat" alt="Platform">
   <img src="https://img.shields.io/badge/CPU-x86%20%7C%20ARM%20%7C%20MIPS64%20%7C%20RISC--V-orange?style=flat" alt="CPU">
   <img src="https://img.shields.io/badge/license-AGPL%20v3-blue.svg" alt="License">
@@ -40,7 +40,7 @@
 
 ## ✨ 特性
 
-> 下面按模块列出**全部能力名**（125 项）—— 每条的具体参数、机制与边界条件见 [docs/FEATURES.md](docs/FEATURES.md)。
+> 下面按模块列出**全部能力名** —— 每条的具体参数、机制与边界条件见 [docs/FEATURES.md](docs/FEATURES.md)。
 
 ### 部署与运维
 - 🌍 **全平台全CPU支持**
@@ -71,6 +71,8 @@
 
 ### 作品创作
 - 📝 **12 大分类**
+- 📖 **四种叙事形态（散文 / 话本气泡 / 漫画体 / 图片模式）** — 散文（Markdown）/ 话本气泡（角色对白）/ 漫画体（逐页翻看）/ 图片模式（流览有序图集，每章存 `[{url,caption}]`）；形态按章节生效，图片形态正文可空、以图集为准
+- 📊 **每篇内容统计（阅读 / 点赞 / 收藏）** — 作者仪表盘逐篇明细，小说收藏复用书架、博客独立收藏表
 - 🎨 **Cherry Markdown 编辑器（0.11.9 完整版）**
 - 📂 **文件系统存储**
 - 🔗 **内容可验证**
@@ -185,6 +187,16 @@
 - 📛 **名单子系统（可疑 → 恶意两级）**（判定分越线自动升级；人工改档 / 清除 / 加注全程留痕）
 - 🧾 **一键取证包导出**（名单记录 + 会话 + 消息 + 判定日志 + SHA256 完整性清单）
 - 🤝 **警方取证审批流**（警方申请 → 站长批准 → 方可导出指定用户；越权导出拒绝并记审计）
+
+### 🗳 舆论阵营分析（阵营图谱）
+- 🕸 **阵营图谱** — 节点=阵营、边=共现，权重仅表规模、不裁决对错；SVG 无新依赖，只聚合已审核标记
+- 🔍 **三维度范围** — 全局总览 / 按评论区 / 按议题（议题经内容桥接），范围标题实时回显
+- 🔒 **按评论区开关** — 超级管理员可设平台默认 + 单评论区开/关阵营分析；关闭的评论区不进图谱、AI 分析被拒
+- 🧠 **AI 思考过程可见可折叠** — 回传原生思考链 + 自述分析依据，前端可折叠面板
+- 🔑 **模型锁定** — 阵营分析所选模型写入 localStorage，刷新/重开保持，不再每次回退第一个
+- 🗣 **语言格式全自由** — 阵营语言格式改为自由文本标签（饭圈/政治/普通人/混用/未识别仅作参考），hash 着色
+- ✅ **审核流** — 普通管理员新增标记进 pending，唯一站长审核通过才进图谱；修改/删除走申请由站长批准
+- 🛡 **强中立提示词常驻** — 只标记阵营与语言格式，严禁判对错/倒戈多数派；严格模式安全提示词绝不复用至绥靖模式
 
 ### 站点互通
 - 🌐 **联邦站点**

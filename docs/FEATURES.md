@@ -38,6 +38,8 @@
 - 📤 **多格式导出** — ZIP / Markdown / EPUB / TXT 一键导出
 - 📥 **多格式导入** — 支持 ZIP / Markdown / TXT 导入，自动解析章节结构，支持预览确认
 - 📦 **批量导入** — 小说批量导入支持三种模式：**一个文件一章**（标题取文件名，默认）/ 自定义正则拆分（快捷规则：第X章 / Markdown 标题 / 分割线）/ 自动识别标题；可选项「章节标题加第N章前缀」；**编辑模式下导入/批量导入自动追加到当前作品末尾，不会新建书本**（单文件导入同样支持追加）；**博客批量导入**：多文件一键创建多篇博客
+- 📖 **四种叙事形态（散文 / 话本气泡 / 漫画体 / 图片模式）** — `Novel.Mode` / `Chapter.Mode` 枚举扩展为 prose / script / comic / image：散文即 Markdown 正文；话本气泡为角色对白体；**漫画体**逐页翻看，阅读器按页渲染；**图片模式**流览有序图集（每章 `Images` JSON 列存 `[{url,caption}]`）。形态按章节生效，`normalizeChapterImages` 校验并规范化图集（非法回落 `[]`），图片形态正文可空、以图集为准，章节编辑器在图片形态下以图集编辑器（上传/排序/图注/删除）替代文字编辑器
+- 📊 **每篇内容统计（阅读 / 点赞 / 收藏）** — 作者仪表盘 `GetAuthorDashboard` 返回 per-content 列表：`novel_stats`（含 `view_count` / `like_count` / `favorite_count` 书架数）与 `blog_stats`（含 `view_count` / `like_count` / `favorite_count`）。小说点赞独立 `novel_likes` 表（`ToggleNovelLike` / `UserLikedNovel` + 接口 `/api/novels/:id/like`、`/api/novels/:id/likes`），小说收藏复用 bookshelf 统计不另建列；博客收藏独立 `blog_favorites` 表（`ToggleBlogFavorite` / `UserFavoritedBlog` + 接口 `/api/blogs/:id/favorite`、`/api/blogs/:id/favorites`）。前端 `AuthorStatsView` 以双表展示每篇内容的阅读/点赞/收藏并可跳转详情
 
 ### 🤖 AI 工作台（对话 / 绘画 / 视频 / 智能体）
 
@@ -233,6 +235,16 @@
 - ✨ **绘画提示词优化** — 把简短描述扩写成信息密度更高的提示词（补光线/镜头/材质/氛围/构图）。
   三条边界写进系统提示词：绝不改变创作意图、绝不删除用户已有限定词、只补全不添加冲突元素；
   优化前后各过一次初审，不让「优化」成为绕过审核的旁路。
+
+### 🗳 舆论阵营分析（阵营图谱）
+- 🕸 **阵营图谱** — 节点=阵营、边=共现，权重仅表规模、不裁决对错；前端 SVG 渲染无新依赖，`GetCampGraph` 只聚合 `status=approved` 的阵营标记
+- 🔍 **三维度范围（scope）** — `all` 全局总览（默认）/ `content` 按评论区（`content_type` + `content_id`）/ `topic` 按议题（从 `ContentTopic` 反查带该标签的内容集合再筛阵营标记，阵营标记本身不挂议题、经 content 桥接）；返回 `scope_label` 并在 notice 回显，`ListCampMarks` 同步支持 scope 保证范围一致
+- 🔒 **按评论区开关** — 新增 `sentiment_camp_target_settings` 表（`content_type`+`content_id` 唯一，`enabled` 默认 true，仅存显式开关记录）；`campAnalysisEnabled(ct,cid)` 优先看显式按内容设置、无记录回退平台默认（`platform_configs.sentiment_camp_analysis_enabled`，默认开启）。超级管理员可设平台默认 + 单评论区开/关：关闭的评论区 `GetCampGraph` 直接返回空图谱+禁用说明、`all`/`topic` 维度过滤掉已关闭内容、`AnalyzeCamp` 拒绝对其运行 AI 分析
+- 🧠 **AI 思考过程可见可折叠** — `AnalyzeAndPersist` 采集模型原生 `reasoning`（经 `CompleteWithReasoning` 暴露）与自述分析依据 `thinking`；`AnalyzeCamp` 回传 `ai_thinking` / `ai_reasoning`，前端 `SentimentCampGraph.vue` 新增可折叠「AI 思考过程」面板（原生思考链 + 自述依据）
+- 🔑 **模型锁定** — 新增 `ListSentimentChatModels` 仅返回启用+聊天+已配 `base_url` 的模型（`id`/`name`/`model_id`/`thinking`）；前端模型选择器把所选 `model_id` 写入 `localStorage`（`sentiment_camp_model_id`），刷新/重开保持，不再每次回退第一个
+- 🗣 **语言格式全自由** — `camp/mod.go` 取消硬编码三路语言格式，改为自由文本标签（仅保留中立性约束与示例参考）；`LangFormatLabel` / `NormalizeLangFormat` 支持自由文本原样透传，自由标签用 hash 着色、已知枚举（饭圈/政治/普通人/混用/未识别）保留固定色
+- ✅ **审核流（权限分层）** — `CampMark` 增加 `status`（pending/approved/rejected），旧标记迁移回填为 approved 避免图谱清空；普通管理员新增标记进 pending，唯一超级管理员（站长）审核通过才进图谱，站长自己新增直接 approved。标记修改/删除分层：普通管理员走申请（`RequestUpdateCampMark` / `RequestDeleteCampMark`），站长批准（`ApproveDeleteRequest` 按 action 应用补丁或真删）/驳回；前端列表加状态列与通过/驳回按钮
+- 🛡 **强中立提示词常驻 + 严格/绥靖隔离** — `sentiment/guard` 三明治结构提示词只标记阵营与语言格式、严禁判对错/倒戈多数派，`showPrompt` 默认 true 常驻显示；**严格模式安全系统提示词仅在 `strict` 模式注入，绥靖（appease）模式走 `RelaxedSystemPrompt`，二者绝不混用**（`ai_hub.go` 已按模式分支）
 
 ### 站点互通
 - 🌐 **联邦站点** — 支持远程站点互联与跨站作品同步（模仿 alist）
