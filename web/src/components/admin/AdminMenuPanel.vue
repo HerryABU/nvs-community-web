@@ -152,7 +152,7 @@ onMounted(() => {
 
 .admin-menu-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 12px;
 }
 .admin-menu-card {
@@ -190,4 +190,12 @@ onMounted(() => {
 [data-theme="dark"] .amp-cat-title { color: #e2e8f0; }
 [data-theme="dark"] .admin-menu-card { background: rgba(255,255,255,.03); }
 [data-theme="dark"] .amc-title { color: #e2e8f0; }
+
+/* 移动端：卡片网格已由 minmax(150px) 自适应为 2 列（不会再横向溢出），
+   这里只收紧图标与内边距，保证 2 列下文字不挤、点得准。 */
+@media (max-width: 768px) {
+  .admin-menu-card { padding: 12px; gap: 10px; }
+  .amc-icon { width: 38px; height: 38px; }
+  .amc-desc { font-size: 0.72rem; }
+}
 </style>

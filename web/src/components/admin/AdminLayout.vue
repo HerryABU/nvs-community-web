@@ -1,13 +1,19 @@
 <template>
   <el-container class="admin-shell">
-    <el-aside :width="effectiveCollapsed ? '64px' : '232px'" class="admin-aside">
+    <!-- 桌面：折叠侧栏；移动端：侧栏整条不挂载（v-if），导航改走顶栏汉堡 + 抽屉，避免两份 AdminSidebar 重复 DOM id -->
+    <el-aside v-if="!isMobile" :width="effectiveCollapsed ? '64px' : '232px'" class="admin-aside">
       <AdminSidebar :collapsed="effectiveCollapsed" />
     </el-aside>
 
     <el-container class="admin-right">
       <el-header class="admin-topbar">
         <div class="at-left">
-          <el-button text class="at-collapse" @click="onToggle">
+          <!-- 移动端：汉堡打开抽屉导航（侧栏在手机上是 64px 死条，无法导航） -->
+          <el-button v-if="isMobile" text class="at-hamburger" @click="drawerOpen = true" aria-label="打开菜单">
+            <el-icon size="20"><Menu /></el-icon>
+          </el-button>
+          <!-- 桌面：折叠/展开侧栏 -->
+          <el-button v-else text class="at-collapse" @click="onToggle">
             <el-icon size="20"><component :is="collapsed ? Expand : Fold" /></el-icon>
           </el-button>
           <el-breadcrumb separator="/" class="at-crumb">
@@ -40,13 +46,24 @@
         <router-view />
       </el-main>
     </el-container>
+
+    <!-- 移动端导航抽屉：复用 AdminSidebar（展开态），关闭时整条菜单隐藏，内容区全宽 -->
+    <el-drawer
+      v-model="drawerOpen"
+      direction="ltr"
+      :with-header="false"
+      size="min(82vw, 300px)"
+      class="admin-mobile-drawer"
+    >
+      <AdminSidebar :collapsed="false" />
+    </el-drawer>
   </el-container>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Expand, Fold, Monitor, ArrowDown } from '@element-plus/icons-vue';
+import { Expand, Fold, Monitor, ArrowDown, Menu } from '@element-plus/icons-vue';
 import AdminSidebar from '@/components/admin/AdminSidebar.vue';
 import { useAuthStore } from '@/stores/auth';
 import { adminMenuCategories } from '@/views/admin/adminMenuData';
@@ -58,19 +75,26 @@ const authStore = useAuthStore();
 // 折叠态持久化到 localStorage（企业级：刷新后保持）
 const LS_KEY = 'nvs_admin_sidebar_collapsed';
 const collapsed = ref(localStorage.getItem(LS_KEY) === '1');
-// 窄屏强制折叠：侧栏展开时内容区只剩 ~143px，手机上完全没法用。
-// 用 effectiveCollapsed 而不是直接改 collapsed，避免和用户的手动折叠互相打架。
-const isNarrow = ref(typeof window !== 'undefined' && window.innerWidth < 768);
+// 移动端判定：<768px 走抽屉导航（侧栏整条隐藏，避免手机上只剩 64px 死条无法导航）。
+// 桌面端 effectiveCollapsed 仅由用户手动折叠决定。
+const isMobile = ref(typeof window !== 'undefined' && window.innerWidth < 768);
 if (typeof window !== 'undefined') {
   window.addEventListener('resize', () => {
-    isNarrow.value = window.innerWidth < 768;
+    isMobile.value = window.innerWidth < 768;
   });
 }
-const effectiveCollapsed = computed(() => isNarrow.value || collapsed.value);
+const effectiveCollapsed = computed(() => collapsed.value);
 function onToggle() {
   collapsed.value = !collapsed.value;
   localStorage.setItem(LS_KEY, collapsed.value ? '1' : '0');
 }
+
+// 移动端抽屉导航状态：路由切换后自动关闭，避免"点了菜单还在抽屉里"的割裂感
+const drawerOpen = ref(false);
+watch(
+  () => route.path,
+  () => { drawerOpen.value = false; },
+);
 
 // 当前页标题（从菜单数据反查）
 const pageTitle = computed(() => {
@@ -147,6 +171,11 @@ function onUserCommand(cmd: string) {
 
 /* 窄屏：顶栏塞不下会横向溢出（实测 375px 溢出 35px）。
    处理：只留图标/头像、收紧间距、面包屑截断。 */
+/* 移动端抽屉导航：内容区去默认内边距，让 AdminSidebar 顶满抽屉宽度 */
+.admin-mobile-drawer :deep(.el-drawer__body) {
+  padding: 0;
+}
+
 @media (max-width: 768px) {
   .admin-topbar { padding: 0 10px; }
   .at-left { flex: 1; min-width: 0; overflow: hidden; }
@@ -154,5 +183,7 @@ function onUserCommand(cmd: string) {
   .at-right { gap: 10px; min-width: 0; }
   .at-health-text,
   .at-username { display: none; }
+  /* 内容区边距收窄，手机上把有限宽度让给内容 */
+  .admin-main { padding: 12px; }
 }
 </style>
