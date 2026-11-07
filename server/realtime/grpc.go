@@ -45,10 +45,19 @@ type StreamRequest struct {
 // LiveService 狂暴模式实时流服务（手动注册，无 protobuf 生成代码）。
 type LiveService struct{}
 
+// LiveServiceServer 定义 Live 服务必须实现的接口。
+// ⚠️ grpc.Server.RegisterService 要求 HandlerType 是「接口类型」的指针：
+// 内部会 reflect.TypeOf(HandlerType).Elem() 再调 Implements，若传具体类型（如
+// (*LiveService)(nil)）则 Elem() 得到结构体类型，Implements 直接 panic
+// （"reflect: non-interface type passed to Type.Implements"）。
+type LiveServiceServer interface {
+	Stream(*StreamRequest, grpc.ServerStream) error
+}
+
 // liveServiceDesc 手工构造的 gRPC 服务描述（服务端流式方法 Stream）。
 var liveServiceDesc = grpc.ServiceDesc{
 	ServiceName: "nvs.realtime.Live",
-	HandlerType: (*LiveService)(nil),
+	HandlerType: (*LiveServiceServer)(nil),
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "Stream",
@@ -127,15 +136,15 @@ type GRPCServer struct {
 
 // StartGRPC 拉起 gRPC 服务端（plaintext h2c，独立端口）。失败返回 error。
 func StartGRPC(bind string, port int) (*GRPCServer, error) {
-	g := &GRPCServer{Bind: bind, Port: port}
+	// ⚠️ 先建 server 并注册服务，再监听端口：注册失败/异常时不会留下已绑定却未关闭
+	// 的监听器（否则端口被残留句柄占住，下次启动报 bind: Only one usage...）。
+	srv := grpc.NewServer(grpc.ForceServerCodec(jsonCodec{}))
+	srv.RegisterService(&liveServiceDesc, &LiveService{})
 	lis, err := net.Listen("tcp", net.JoinHostPort(bind, strconv.Itoa(port)))
 	if err != nil {
 		return nil, err
 	}
-	srv := grpc.NewServer(grpc.ForceServerCodec(jsonCodec{}))
-	srv.RegisterService(&liveServiceDesc, &LiveService{})
-	g.server = srv
-	g.lis = lis
+	g := &GRPCServer{Bind: bind, Port: port, server: srv, lis: lis}
 	go func() {
 		if err := srv.Serve(lis); err != nil {
 			log.Printf("[grpc] 服务端已停止: %v", err)

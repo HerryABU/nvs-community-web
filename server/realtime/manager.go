@@ -11,6 +11,7 @@ package realtime
 import (
 	"log"
 	"sync"
+	"time"
 
 	"nvs-server/models/siteops"
 )
@@ -34,6 +35,11 @@ func (m *Manager) ApplyConfig(cfg siteops.RageConfig) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.cfg = cfg
+
+	// 同步 Hub 开关与限额：启动（main 装配）与后台保存都要立即生效，
+	// 否则重启后 gRPC Stream 会因 Hub.enabled 仍为 false 而返回「未开启」。
+	DefaultHub.SetEnabled(cfg.Enabled)
+	DefaultHub.SetLimits(cfg.MaxConns, time.Duration(cfg.BatchIntervalSec)*time.Second, cfg.BatchSize)
 
 	// ── MQTT ──
 	if cfg.MqttEnabled {
