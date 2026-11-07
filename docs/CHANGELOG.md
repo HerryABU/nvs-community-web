@@ -3,6 +3,17 @@
 > 按版本倒序记录每个版本改了什么、为什么改。README 不再承载更新日志。
 > 返回 [README](../README.md) · [API](API.md) · [配置](CONFIG.md) · [架构](ARCHITECTURE.md) · [开发](DEVELOPMENT.md) · [特性详解](FEATURES.md)
 
+### v4.8.5 缺陷修补：博客收藏接口 / 合著协作署名（2026-11-07）
+
+> 上一轮（v4.8.4）功能增量发布后发现的接口与页面缺陷，集中修补并部署。
+
+- **后端**：注册遗漏的 `GET /api/blogs/:id/favorites` 路由（`GetBlogFavorites` 处理器早已存在但未挂路由，此前收藏数/是否已收藏实际 404；只读，匿名 `favorited=false`）。
+- **合著协作署名（页面级）**：
+  - 修复「协作管理」弹窗把后端 `byline`（字符串）当 `string[]` 调 `.join()` 导致渲染崩溃的问题；前端改为字符串类型直接展示。
+  - 作品详情页展示协作署名整串（主笔：X · 协作：A、B），此前 API 已返回 `byline` 但页面未渲染。
+  - 阅读器章节目录显示每章作者（@协作者），多人协作章节归属此前不可见。
+  - `web/src/api/novel/types.ts` 的 `Novel` 补 `byline?: string` 字段；`docs/API.md` 补 `GET /api/blogs/:id/favorites`。
+
 ### v4.8.4 叙事形态扩展 / 作者统计 / 舆论阵营分析增强（2026-11-07）
 
 > 本轮补齐自 v4.8.0 以来的功能增量（含 4.8.1–4.8.3 区间的舆情/创作/后台改进），统一纳入发布。
