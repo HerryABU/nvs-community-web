@@ -90,9 +90,9 @@ func NotifySuperAdmin(actorID uint, notifType, title, body, link string) {
 	_ = models.PushNotification(actorID, sid, notifType, title, body, link)
 }
 
-// DeleteRequestHint 普通管理员被拦下时给前端的引导文案。
+// DeleteRequestHint 普通管理员被拦下时给前端的引导文案（修改/删除统一口径）。
 func DeleteRequestHint() string {
-	return "仅超级管理员（站长）可删除；已向站长提交删除申请并发送通知，等待批准后可删除。"
+	return "仅超级管理员（站长）可直接修改或删除；已提交修改/删除申请并通知站长，等待批准后方可生效。"
 }
 
 // RoleLabel 角色显示名（前端与通知文案统一口径）。

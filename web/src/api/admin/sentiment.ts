@@ -121,8 +121,30 @@ export const sentimentApi = {
   campMarks() {
     return api.get<{ code: number; data: CampMark[] }>('/admin/sentiment/camp-marks');
   },
+  /** 真正调用 AI（强中立提示词）分析争议文本 → 阵营/语言格式标记 → 落库 → 图谱有数据 */
+  analyzeCamp(data: { text: string; model_id?: number; content_type?: string; content_id?: number; comment_id?: number; save?: boolean }) {
+    return api.post<{ code: number; data: { marks: CampMark[]; confrontation?: boolean; source: string; notice: string } }>(
+      '/admin/sentiment/camp-analyze', data,
+    );
+  },
   createCampMark(data: Partial<CampMark>) {
     return api.post<{ code: number; data: CampMark }>('/admin/sentiment/camp-marks', data);
+  },
+  /** 普通管理员提交「修改申请」：不直改，等站长批准 */
+  requestUpdateCampMark(id: number, data: Partial<CampMark> & { reason?: string }) {
+    return api.post(`/admin/sentiment/camp-marks/${id}/request-update`, data);
+  },
+  /** 普通管理员提交「删除申请」：不直删，等站长批准 */
+  requestDeleteCampMark(id: number, reason = '') {
+    return api.post(`/admin/sentiment/camp-marks/${id}/request-delete`, { reason });
+  },
+  /** 仅超级管理员（站长）可直接修改阵营标记 */
+  updateCampMark(id: number, data: Partial<CampMark>) {
+    return api.put(`/admin/sentiment/camp-marks/${id}`, data);
+  },
+  /** 仅超级管理员（站长）可直接删除阵营标记 */
+  deleteCampMark(id: number) {
+    return api.delete(`/admin/sentiment/camp-marks/${id}`);
   },
   deleteRequests() {
     return api.get<{ code: number; data: { list: DeleteRequest[]; can_approve: boolean } }>(
@@ -139,6 +161,7 @@ export const sentimentApi = {
 
 export interface NeutralityPromptData {
   prompt: string;
+  tail_prompt?: string;
   notice: string;
   lang_formats: { value: string; label: string }[];
 }
@@ -177,16 +200,20 @@ export interface CampMark {
   content_type: string;
   content_id: number;
   comment_id: number;
+  source: string;
   created_at: string;
 }
 
 export interface DeleteRequest {
   id: number;
+  action: 'delete' | 'update';
   target_type: string;
   target_id: number;
   target_label: string;
   requester: string;
   reason: string;
+  before: string;
+  after: string;
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
 }

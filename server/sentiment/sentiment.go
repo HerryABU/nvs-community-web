@@ -78,6 +78,24 @@ func Evaluate(state store.TopicState, text string) guard.Decision {
 		BlockSeverity: 2,
 	}, terms)
 
+	// ── 阵营对抗不「一刀切」──
+	//
+	// 结构性原因：争议内容的对错取决于站在哪个阵营，系统没有裁判资格。
+	// 争议话题并存（≥2 组）会让 topic.riskOfGroups 自动升到中高风险，进而把
+	// 「命中词 + 话题风险达线」推成 block —— 这等于用话题标签替系统判了对错。
+	//
+	// 这里只做策略编排，不做任何立场判定：当 block 完全由「话题风险升档」造成，
+	// 且没有强制拦截词、没有刷屏/出征行为、命中词本身不含人身攻击时，
+	// 降级为仅标注，交给管理员台的 AI 阵营标记 + 人工复核。
+	// 真实辱骂 / 组织化出征 / 强制词依然照常拦截（不放松安全底线）。
+	if d.Action == guard.ActionBlock && isCampConfrontationBlock(d) {
+		d.Action = guard.ActionFlag
+		d.Flagged = append(d.Flagged, d.Blocked...)
+		d.Blocked = nil
+		d.Reason = "阵营对抗（争议话题并存）：对错基于阵营，系统不裁决，已降级为标记转人工；" + d.Reason
+		return d
+	}
+
 	// 策略强制：block 时只要有命中就拦（站长已人工确认过这个话题）
 	if state.Policy == store.PolicyBlock && d.Action != guard.ActionBlock && len(d.Hits) > 0 {
 		d.Action = guard.ActionBlock
@@ -112,6 +130,34 @@ func Evaluate(state store.TopicState, text string) guard.Decision {
 		d.Reason = why + "，已降级为标注转人工：" + d.Reason
 	}
 	return d
+}
+
+// isCampConfrontationBlock 判断这次 block 是否只由「争议话题风险升档」造成。
+//
+// 保守口径（不放松真实违规拦截），必须同时满足：
+//  1. 话题组 ≥2（多争议话题交叉，风险被自动抬到中高）；
+//  2. 没有强制拦截词（站长人工确认过的黑名单）；
+//  3. 没有达到阈值的刷屏 / 出征行为；
+//  4. 命中词里没有人身攻击 / 群体蔑称类（abuse / bigotry）—— 那些是实质违规，不是立场之争。
+//
+// 注意：这里不判断「谁对谁错」，也不看哪一方字数多、人多；
+// 只是识别「系统在这条上不具备裁决资格」的情形并降级为标记。
+func isCampConfrontationBlock(d guard.Decision) bool {
+	if len(d.Groups) < 2 {
+		return false
+	}
+	for _, h := range d.Hits {
+		if h.ForceBlock {
+			return false
+		}
+		if h.Cat == lexicon.CatAbuse || h.Cat == lexicon.CatBigotry {
+			return false
+		}
+	}
+	if guard.IsFlood(d.Flood) {
+		return false
+	}
+	return true
 }
 
 // wordList 取命中词（去重）。

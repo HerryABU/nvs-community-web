@@ -47,6 +47,9 @@ const (
 	ActionBlock = "block"
 )
 
+// IsFlood 导出刷屏/出征判定，供门面层在「阵营对抗降级」时排除行为型违规。
+func IsFlood(f lexicon.Flood) bool { return isFlood(f) }
+
 // isFlood 判定行为特征是否达到「刷屏 / 出征」。
 //
 // 阈值刻意保守：@ 5 人以上、同一短语重复 4 次以上且伴随长串感叹号、

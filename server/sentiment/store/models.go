@@ -189,20 +189,27 @@ type CampMark struct {
 
 func (CampMark) TableName() string { return "sentiment_camp_marks" }
 
-// DeleteRequest 普通管理员提交的「删除/停用」申请。
-// 普通管理员无删除权，只能提交申请；由唯一超级管理员（站长）批准或驳回。
+// DeleteRequest 普通管理员提交的「修改 / 删除申请」（用户称「修改项目」）。
+//
+// 权限分层（用户明确要求）：普通管理员只能新增，不能修改/删除；任何修改或删除动作
+// 都必须先提交申请（action=update/delete），由唯一超级管理员（站长）批准或驳回。
+// 这里把「删除申请」泛化为「修改/删除申请」，term 与 camp_mark 共用同一审批流。
 type DeleteRequest struct {
-	ID          uint       `gorm:"primaryKey" json:"id"`
-	TargetType  string     `gorm:"size:32;index" json:"target_type"` // term / topic / config
-	TargetID    uint       `gorm:"index" json:"target_id"`
-	TargetLabel string     `gorm:"size:255;default:''" json:"target_label"`
-	RequesterID uint       `gorm:"index" json:"requester_id"`
-	Requester   string     `gorm:"size:64;default:''" json:"requester"`
-	Reason      string     `gorm:"size:512;default:''" json:"reason"`
-	Status      string     `gorm:"size:16;default:pending;index" json:"status"` // pending / approved / rejected
-	ReviewerID  uint       `gorm:"default:0" json:"reviewer_id"`
-	ReviewedAt  *time.Time `json:"reviewed_at,omitempty"`
-	CreatedAt   time.Time  `gorm:"index" json:"created_at"`
+	ID          uint   `gorm:"primaryKey" json:"id"`
+	Action      string `gorm:"size:16;default:delete;index" json:"action"` // delete / update
+	TargetType  string `gorm:"size:32;index" json:"target_type"`           // term / camp_mark
+	TargetID    uint   `gorm:"index" json:"target_id"`
+	TargetLabel string `gorm:"size:255;default:''" json:"target_label"`
+	RequesterID uint   `gorm:"index" json:"requester_id"`
+	Requester   string `gorm:"size:64;default:''" json:"requester"`
+	Reason      string `gorm:"size:512;default:''" json:"reason"`
+	// Before / After：修改类申请的快照（JSON）。删除类只有 Before，After 为空。
+	Before     string     `gorm:"type:text" json:"before"`
+	After      string     `gorm:"type:text" json:"after"`
+	Status     string     `gorm:"size:16;default:pending;index" json:"status"` // pending / approved / rejected
+	ReviewerID uint       `gorm:"default:0" json:"reviewer_id"`
+	ReviewedAt *time.Time `json:"reviewed_at,omitempty"`
+	CreatedAt  time.Time  `gorm:"index" json:"created_at"`
 }
 
 func (DeleteRequest) TableName() string { return "sentiment_delete_requests" }
