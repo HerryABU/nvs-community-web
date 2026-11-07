@@ -60,6 +60,13 @@
         <el-radio-button value="content">按评论区</el-radio-button>
         <el-radio-button value="topic">按议题</el-radio-button>
       </el-radio-group>
+      <span class="camp-global-toggle">
+        <el-switch v-model="globalEnabled" :disabled="!canApprove || globalLoading" size="small" @change="onToggleGlobal" />
+        <span class="muted small">
+          平台默认：<b :class="globalEnabled ? 'on' : 'off'">{{ globalEnabled ? '开启' : '关闭' }}</b>
+          <template v-if="!canApprove">（仅超级管理员可设）</template>
+        </span>
+      </span>
       <template v-if="scopeMode === 'content'">
         <el-select v-model="scopeContentType" size="small" style="width: 116px" @change="onScopeChange">
           <el-option label="论坛 forum" value="forum" />
@@ -67,6 +74,13 @@
           <el-option label="博客 blog" value="blog" />
         </el-select>
         <el-input-number v-model="scopeContentID" :min="0" size="small" style="width: 150px" @change="onScopeChange" />
+        <span class="camp-target-toggle">
+          <el-switch v-model="targetEnabled" :disabled="!canApprove || targetLoading" size="small" @change="onToggleTarget" />
+          <span class="muted small">
+            该评论区阵营分析：<b :class="targetEnabled ? 'on' : 'off'">{{ targetEnabled ? '开启' : '已关闭' }}</b>
+            <template v-if="!canApprove">（仅超级管理员可开关）</template>
+          </span>
+        </span>
       </template>
       <template v-if="scopeMode === 'topic'">
         <el-select v-model="scopeTopic" size="small" filterable style="min-width: 230px" placeholder="选择议题标签" @change="onScopeChange">
@@ -102,6 +116,9 @@
     </div>
 
     <div v-if="loading" class="camp-empty">加载图谱中…</div>
+    <div v-else-if="scopeMode === 'content' && !targetEnabled" class="camp-empty camp-disabled">
+      ⛔ 该评论区已关闭阵营分析（由超级管理员设置）。在上方开关重新开启后，图谱才会展示其阵营标记。
+    </div>
     <div v-else-if="graph.nodes.length === 0" class="camp-empty">
       暂无阵营标记。可在下方「手动标记」里新增一条，或等待 AI 分析写入。
     </div>
@@ -264,7 +281,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { sentimentApi, type CampGraphData, type CampEdge, type DeleteRequest, type CampMark, type NeutralityPromptData, type TopicTag, type SentimentChatModel } from '@/api/admin/sentiment';
+import { sentimentApi, type CampGraphData, type CampEdge, type DeleteRequest, type CampMark, type NeutralityPromptData, type TopicTag, type SentimentChatModel, type CampTargetSetting, type CampGlobalSetting } from '@/api/admin/sentiment';
 
 const loading = ref(false);
 const marking = ref(false);
@@ -281,6 +298,11 @@ const analyzeModelID = ref<number>(0);
 const aiThinking = ref('');
 const aiReasoning = ref('');
 const showThinking = ref(true);
+// 按评论区开关（超级管理员）与平台默认开关
+const targetEnabled = ref(true);
+const targetLoading = ref(false);
+const globalEnabled = ref(true);
+const globalLoading = ref(false);
 
 // 图谱范围：all（全局总览）/ content（按评论区）/ topic（按议题）
 const scopeMode = ref<'all' | 'content' | 'topic'>('all');
@@ -384,6 +406,7 @@ function onScopeChange() {
     }
     markForm.content_id = scopeContentID.value;
   }
+  loadTargetSetting();
   load();
 }
 
@@ -652,6 +675,7 @@ async function reject(row: DeleteRequest) {
 onMounted(async () => {
   load();
   loadChatModels();
+  loadGlobalSetting();
   try {
     const res = await sentimentApi.topicTags();
     if (res.data?.code === 0) topicTagsList.value = res.data.data.items || [];
@@ -659,6 +683,80 @@ onMounted(async () => {
     /* 议题标签加载失败不影响图谱主流程 */
   }
 });
+
+// 读取当前「按评论区」选中内容的阵营分析开关（无内容 ID 时视为开启）
+async function loadTargetSetting() {
+  if (scopeMode.value !== 'content' || scopeContentID.value === 0) {
+    targetEnabled.value = true;
+    return;
+  }
+  try {
+    const res = await sentimentApi.campTargetSetting({ content_type: scopeContentType.value, content_id: scopeContentID.value });
+    if (res.data?.code === 0) targetEnabled.value = res.data.data.enabled;
+  } catch {
+    /* 读取开关失败不影响图谱主流程 */
+  }
+}
+
+// 超级管理员按评论区开/关阵营分析
+async function onToggleTarget(val: boolean) {
+  if (scopeContentID.value === 0) {
+    targetEnabled.value = !val;
+    ElMessage.warning('请先填写内容 ID');
+    return;
+  }
+  targetLoading.value = true;
+  try {
+    const res = await sentimentApi.setCampTargetSetting({
+      content_type: scopeContentType.value,
+      content_id: scopeContentID.value,
+      enabled: val,
+    });
+    if (res.data?.code === 0) {
+      targetEnabled.value = res.data.data.enabled;
+      ElMessage.success(val ? '已开启该评论区阵营分析' : '已关闭该评论区阵营分析');
+      await load();
+    } else {
+      ElMessage.error(res.data?.message || '操作失败');
+      targetEnabled.value = !val;
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+    targetEnabled.value = !val;
+  } finally {
+    targetLoading.value = false;
+  }
+}
+
+// 读取平台级阵营分析默认开关
+async function loadGlobalSetting() {
+  try {
+    const res = await sentimentApi.campGlobalSetting();
+    if (res.data?.code === 0) globalEnabled.value = res.data.data.enabled;
+  } catch {
+    /* 读取平台默认失败不影响主流程 */
+  }
+}
+
+// 超级管理员设置平台级阵营分析默认开关
+async function onToggleGlobal(val: boolean) {
+  globalLoading.value = true;
+  try {
+    const res = await sentimentApi.setCampGlobalSetting({ enabled: val });
+    if (res.data?.code === 0) {
+      globalEnabled.value = res.data.data.enabled;
+      ElMessage.success(val ? '已开启阵营分析（平台默认）' : '已关闭阵营分析（平台默认）');
+    } else {
+      ElMessage.error(res.data?.message || '操作失败');
+      globalEnabled.value = !val;
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+    globalEnabled.value = !val;
+  } finally {
+    globalLoading.value = false;
+  }
+}
 
 // 加载可用于阵营分析的对话模型；并把上次选择的模型「锁定」沿用（localStorage），
 // 没有记录则默认第一个并写回，避免每次都落到第一个模型。
@@ -733,5 +831,10 @@ function onModelChange(id: number) {
 .camp-badge { font-size: 0.7rem; font-weight: 600; color: #b45309; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 10px; padding: 1px 8px; }
 .muted { color: var(--text-light); }
 .small { font-size: 0.8rem; }
+.camp-target-toggle, .camp-global-toggle { display: inline-flex; align-items: center; gap: 6px; }
+.camp-global-toggle { margin-left: 2px; }
+.camp-target-toggle .on, .camp-global-toggle .on { color: var(--success-color, #10b981); }
+.camp-target-toggle .off, .camp-global-toggle .off { color: var(--danger-color, #ef4444); }
+.camp-disabled { color: var(--danger-color, #ef4444); border-color: var(--danger-color, #ef4444); background: color-mix(in srgb, var(--danger-color, #ef4444) 6%, transparent); }
 .patch-pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 0.74rem; line-height: 1.6; color: var(--text-color); }
 </style>

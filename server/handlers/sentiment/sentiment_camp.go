@@ -25,6 +25,42 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// 平台级默认开关：阵营分析默认开启；可被「按评论区」设置覆盖。
+// 仅当某内容被显式关闭（sentiment_camp_target_settings.enabled=false）时才关闭。
+const platformCampAnalysisEnabled = "sentiment_camp_analysis_enabled"
+
+// campAnalysisEnabled 判断某评论区（内容）是否开启阵营分析：
+// 优先看显式的按内容设置；无记录则回退平台默认（默认开启）。
+func campAnalysisEnabled(ct string, cid uint) bool {
+	var s store.SentimentCampTargetSetting
+	if err := store.DB.Where("content_type = ? AND content_id = ?", ct, cid).First(&s).Error; err == nil {
+		return s.Enabled
+	}
+	raw := models.GetPlatformConfig(platformCampAnalysisEnabled)
+	if raw == "" {
+		return true
+	}
+	b, _ := strconv.ParseBool(raw)
+	return b
+}
+
+// disabledCampTargets 返回所有被显式关闭阵营分析的评论区键（"type:id"），
+// 供「全局总览 / 按议题」聚合时把已关闭评论区的内容排除出图谱。
+func disabledCampTargets() map[string]bool {
+	out := map[string]bool{}
+	if store.DB == nil {
+		return out
+	}
+	var rows []store.SentimentCampTargetSetting
+	if err := store.DB.Where("enabled = ?", false).Find(&rows).Error; err != nil {
+		return out
+	}
+	for _, r := range rows {
+		out[fmt.Sprintf("%s:%d", r.ContentType, r.ContentID)] = true
+	}
+	return out
+}
+
 // GET /api/admin/sentiment/chat-models
 // 返回可用于阵营分析的对话模型（enabled + chat + 有 base_url），供后台「模型选择」下拉，
 // 让选择可被记住（锁定），而不是每次都默认第一个。
@@ -71,6 +107,119 @@ func GetNeutralityPrompt(c *gin.Context) {
 		},
 		"notice": "对错基于阵营，AI 只能标记阵营与语言格式，不能判断谁对谁错；语言格式由 AI 自由归纳，不得因人数多/文字多倒戈某一方。",
 	})
+}
+
+// GET /api/admin/sentiment/camp-target-setting?content_type=&content_id=
+// 读取某评论区的阵营分析开关状态（含平台默认值与是否显式设置）。
+func GetCampTargetSetting(c *gin.Context) {
+	if !admincommon.EnsureElevated(c) {
+		return
+	}
+	ct := c.Query("content_type")
+	cid := parseUint(c.Query("content_id"))
+	if ct == "" || cid == 0 {
+		infra.BadRequest(c, "请指定 content_type 与 content_id")
+		return
+	}
+	var s store.SentimentCampTargetSetting
+	explicit := store.DB.Where("content_type = ? AND content_id = ?", ct, cid).First(&s).Error == nil
+	def := true
+	if raw := models.GetPlatformConfig(platformCampAnalysisEnabled); raw != "" {
+		if b, e := strconv.ParseBool(raw); e == nil {
+			def = b
+		}
+	}
+	infra.Success(c, gin.H{
+		"content_type":     ct,
+		"content_id":       cid,
+		"enabled":          campAnalysisEnabled(ct, cid),
+		"explicit":         explicit,
+		"platform_default": def,
+	})
+}
+
+// POST /api/admin/sentiment/camp-target-setting
+// 超级管理员按评论区开/关阵营分析（content_type + content_id + enabled）。
+func SetCampTargetSetting(c *gin.Context) {
+	if !admincommon.EnsureSuperAdmin(c) {
+		return
+	}
+	var in struct {
+		ContentType string `json:"content_type"`
+		ContentID   uint   `json:"content_id"`
+		Enabled     *bool  `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil || in.Enabled == nil {
+		infra.BadRequest(c, "参数错误：需 content_type、content_id、enabled")
+		return
+	}
+	if in.ContentType == "" || in.ContentID == 0 {
+		infra.BadRequest(c, "请指定 content_type 与 content_id")
+		return
+	}
+	uid, name := admincommon.DescribeActor(c)
+	var s store.SentimentCampTargetSetting
+	err := store.DB.Where("content_type = ? AND content_id = ?", in.ContentType, in.ContentID).First(&s).Error
+	s.Enabled = *in.Enabled
+	s.OperatorID = uid
+	s.Operator = name
+	var dbErr error
+	if err != nil {
+		s.ContentType = in.ContentType
+		s.ContentID = in.ContentID
+		dbErr = store.DB.Create(&s).Error
+	} else {
+		dbErr = store.DB.Model(&store.SentimentCampTargetSetting{}).Where("id = ?", s.ID).
+			Updates(map[string]interface{}{"enabled": s.Enabled, "operator_id": s.OperatorID, "operator": s.Operator}).Error
+	}
+	if dbErr != nil {
+		infra.InternalError(c, "保存失败")
+		return
+	}
+	msg := "已关闭该评论区阵营分析"
+	if *in.Enabled {
+		msg = "已开启该评论区阵营分析"
+	}
+	infra.SuccessMessage(c, msg, gin.H{"enabled": s.Enabled})
+}
+
+// GET /api/admin/sentiment/camp-analysis-global
+// 读取平台级阵营分析默认开关。
+func GetCampGlobalSetting(c *gin.Context) {
+	if !admincommon.EnsureElevated(c) {
+		return
+	}
+	def := true
+	if raw := models.GetPlatformConfig(platformCampAnalysisEnabled); raw != "" {
+		if b, e := strconv.ParseBool(raw); e == nil {
+			def = b
+		}
+	}
+	infra.Success(c, gin.H{"enabled": def})
+}
+
+// PUT /api/admin/sentiment/camp-analysis-global
+// 超级管理员设置平台级阵营分析默认开关（新内容默认继承；已有显式设置的内容不受影响）。
+func SetCampGlobalSetting(c *gin.Context) {
+	if !admincommon.EnsureSuperAdmin(c) {
+		return
+	}
+	var in struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil || in.Enabled == nil {
+		infra.BadRequest(c, "请指定 enabled")
+		return
+	}
+	if err := models.SetPlatformConfig(platformCampAnalysisEnabled, strconv.FormatBool(*in.Enabled)); err != nil {
+		infra.InternalError(c, "保存失败")
+		return
+	}
+	msg := "已关闭阵营分析（平台默认）"
+	if *in.Enabled {
+		msg = "已开启阵营分析（平台默认）"
+	}
+	infra.SuccessMessage(c, msg, gin.H{"enabled": *in.Enabled})
 }
 
 type campMarkInput struct {
@@ -237,6 +386,11 @@ func AnalyzeCamp(c *gin.Context) {
 	if ct == "" {
 		ct = "forum"
 	}
+	// 评论区已关闭阵营分析 → 不允许对其运行分析（与分析/落库都无关，先挡在门口）
+	if in.ContentID != 0 && !campAnalysisEnabled(ct, in.ContentID) {
+		infra.BadRequest(c, "该评论区已关闭阵营分析，无法对其运行 AI 分析")
+		return
+	}
 	// 与手动标记同一审核规则：超管自审直接 approved；普通管理员先 pending 待审。
 	status := store.CampMarkApproved
 	if !admincommon.IsSuperAdmin(c) {
@@ -298,12 +452,26 @@ func GetCampGraph(c *gin.Context) {
 	scope := c.DefaultQuery("scope", "all")
 	var marks []store.CampMark
 	scopeLabel := "全局总览"
+	// 已关闭阵营分析的评论区集合（平台默认开启，仅显式关闭的才在表里有记录）
+	block := disabledCampTargets()
 	switch scope {
 	case "content":
 		ct := c.Query("content_type")
 		cid := parseUint(c.Query("content_id"))
 		if ct == "" || cid == 0 {
 			infra.BadRequest(c, "按评论区查看需提供 content_type 与 content_id")
+			return
+		}
+		scopeLabel = fmt.Sprintf("评论区：%s #%d", ct, cid)
+		// 该评论区已关闭阵营分析 → 图谱直接返回空，不展示其阵营标记
+		if !campAnalysisEnabled(ct, cid) {
+			infra.Success(c, gin.H{
+				"nodes":   []interface{}{},
+				"edges":   []interface{}{},
+				"scope":   scopeLabel,
+				"enabled": false,
+				"notice":  "该评论区已关闭阵营分析（由超级管理员设置），图谱不展示其阵营标记。仅超级管理员可在上方开关重新开启。",
+			})
 			return
 		}
 		// 仅聚合已审核通过的标记（审核后自动生成图谱）
@@ -313,7 +481,6 @@ func GetCampGraph(c *gin.Context) {
 			infra.InternalError(c, "读取标记失败")
 			return
 		}
-		scopeLabel = fmt.Sprintf("评论区：%s #%d", ct, cid)
 	case "topic":
 		tag := strings.TrimSpace(c.Query("topic"))
 		if tag == "" {
@@ -327,8 +494,9 @@ func GetCampGraph(c *gin.Context) {
 			return
 		}
 		for _, m := range all {
-			// 仅聚合已审核通过的标记
-			if m.Status == store.CampMarkApproved && keys[fmt.Sprintf("%s:%d", m.ContentType, m.ContentID)] {
+			// 仅聚合已审核通过的标记，并排除已关闭阵营分析的评论区
+			if m.Status == store.CampMarkApproved && keys[fmt.Sprintf("%s:%d", m.ContentType, m.ContentID)] &&
+				!block[fmt.Sprintf("%s:%d", m.ContentType, m.ContentID)] {
 				marks = append(marks, m)
 			}
 		}
@@ -339,6 +507,16 @@ func GetCampGraph(c *gin.Context) {
 			Where("status = ?", store.CampMarkApproved).Order("id ASC").Find(&marks).Error; err != nil {
 			infra.InternalError(c, "读取标记失败")
 			return
+		}
+		// 排除已关闭阵营分析的评论区（保持全局总览与按评论区开关一致）
+		if len(block) > 0 {
+			filtered := marks[:0]
+			for _, m := range marks {
+				if !block[fmt.Sprintf("%s:%d", m.ContentType, m.ContentID)] {
+					filtered = append(filtered, m)
+				}
+			}
+			marks = filtered
 		}
 	}
 	respondCampGraph(c, marks, scopeLabel)

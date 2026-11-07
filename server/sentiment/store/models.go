@@ -229,9 +229,26 @@ type DeleteRequest struct {
 
 func (DeleteRequest) TableName() string { return "sentiment_delete_requests" }
 
+// SentimentCampTargetSetting 超级管理员按「评论区（单条内容）」开关阵营分析。
+//
+// 设计：只存「显式开关」记录——某 content 在表中没有行 = 继承平台默认（默认开启）。
+// 绝大多数内容无需逐条写库；只有被站长主动开/关过的评论区才落表，避免全表膨胀。
+type SentimentCampTargetSetting struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	ContentType string    `gorm:"size:16;not null;uniqueIndex:idx_camp_target,priority:1" json:"content_type"`
+	ContentID   uint      `gorm:"not null;uniqueIndex:idx_camp_target,priority:2" json:"content_id"`
+	Enabled     bool      `gorm:"not null;default:true" json:"enabled"`
+	OperatorID  uint      `json:"operator_id"`
+	Operator    string    `gorm:"size:64;default:''" json:"operator"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func (SentimentCampTargetSetting) TableName() string { return "sentiment_camp_target_settings" }
+
 // Migrate 建表。由 main 在启动时调用（失败只记日志、不阻断启动）。
 func Migrate(db *gorm.DB) error {
-	if err := db.AutoMigrate(&ContentTopic{}, &Term{}, &Hit{}, &Config{}, &TermAudit{}, &CampMark{}, &DeleteRequest{}); err != nil {
+	if err := db.AutoMigrate(&ContentTopic{}, &Term{}, &Hit{}, &Config{}, &TermAudit{}, &CampMark{}, &DeleteRequest{}, &SentimentCampTargetSetting{}); err != nil {
 		return err
 	}
 	// 升级兼容：旧数据（升级前已存在的阵营标记）在新增 status 列时会被填成 pending 默认值，

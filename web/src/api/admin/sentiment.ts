@@ -119,6 +119,22 @@ export const sentimentApi = {
   chatModels() {
     return api.get<{ code: number; data: { models: SentimentChatModel[] } }>('/admin/sentiment/chat-models');
   },
+  /** 读取某评论区的阵营分析开关状态（含平台默认值） */
+  campTargetSetting(params: { content_type: string; content_id: number }) {
+    return api.get<{ code: number; data: CampTargetSetting }>('/admin/sentiment/camp-target-setting', { params });
+  },
+  /** 超级管理员按评论区开/关阵营分析 */
+  setCampTargetSetting(data: { content_type: string; content_id: number; enabled: boolean }) {
+    return api.post<{ code: number; data: { enabled: boolean } }>('/admin/sentiment/camp-target-setting', data);
+  },
+  /** 读取平台级阵营分析默认开关 */
+  campGlobalSetting() {
+    return api.get<{ code: number; data: CampGlobalSetting }>('/admin/sentiment/camp-analysis-global');
+  },
+  /** 超级管理员设置平台级阵营分析默认开关 */
+  setCampGlobalSetting(data: { enabled: boolean }) {
+    return api.put<{ code: number; data: { enabled: boolean } }>('/admin/sentiment/camp-analysis-global', data);
+  },
   campGraph(params: { scope?: string; content_type?: string; content_id?: number; topic?: string } = {}) {
     return api.get<{ code: number; data: CampGraphData }>('/admin/sentiment/camp-graph', { params });
   },
@@ -248,4 +264,18 @@ export interface DeleteRequest {
   after: string;
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
+}
+
+/** 某评论区的阵营分析开关状态 */
+export interface CampTargetSetting {
+  content_type: string;
+  content_id: number;
+  enabled: boolean;
+  explicit: boolean;
+  platform_default: boolean;
+}
+
+/** 平台级阵营分析默认开关 */
+export interface CampGlobalSetting {
+  enabled: boolean;
 }
