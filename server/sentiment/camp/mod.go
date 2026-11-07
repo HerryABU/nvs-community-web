@@ -102,6 +102,7 @@ const (
 )
 
 // LangFormatLabel 中文标签（前端图谱与列表直接展示）。
+// 已知枚举走固定中文名；自由文本标签原样返回（AI 自己归纳的风格名，不强翻）。
 func LangFormatLabel(v string) string {
 	switch v {
 	case LangFandom:
@@ -112,14 +113,21 @@ func LangFormatLabel(v string) string {
 		return "普通人语言格式"
 	case LangMixed:
 		return "混用"
-	default:
+	case "":
 		return "未识别"
+	default:
+		return v // 自由文本：原样展示
 	}
 }
 
-// NormalizeLangFormat 归一化 AI 输出，非法值回落 unknown（不让模型自由发挥成新枚举）。
+// NormalizeLangFormat 归一化 AI 输出。
+//
+// 已知枚举（fandom/political/everyday/mixed 及常见别名）收敛到规范值；
+// 其余一律**原样保留**（仅裁剪空白、保留大小写）——语言格式是 AI 自由归纳的字段，
+// 不应被强行压回固定枚举，否则「学术化论证 / 情绪宣泄式」这类贴合讨论的命名会被吞掉。
 func NormalizeLangFormat(v string) string {
-	switch strings.ToLower(strings.TrimSpace(v)) {
+	s := strings.ToLower(strings.TrimSpace(v))
+	switch s {
 	case LangFandom, "fan", "fandom_method":
 		return LangFandom
 	case LangPolitical, "politics", "political_method":
@@ -128,8 +136,10 @@ func NormalizeLangFormat(v string) string {
 		return LangEveryday
 	case LangMixed:
 		return LangMixed
+	case "":
+		return ""
 	default:
-		return LangUnknown
+		return strings.TrimSpace(v) // 自由文本：原样保留
 	}
 }
 
@@ -173,18 +183,29 @@ const NeutralityPrompt = `你是社区舆论场的**标记员**，不是裁判�
 
 【你只输出以下三类信息】
 1. 阵营标记 camps：每个可辨识的立场一个**中性**短名，附一句不含评价的立场摘要（position）。
-2. 语言格式标记（描述「怎么说话」，不是「说得对不对」）：
-   - fandom 饭圈方法：控评、打榜、反黑、粉籍划分、举报动员、统一话术模板、数据组/应援组织；
-   - political 政治语言方法：立法定性、路线/主义标签、敌我划分、纲领式表述、口号化、意识形态归类；
-   - everyday 普通人语言格式：日常口语、就事论事、无组织化话术；
-   - mixed 多种格式混用；unknown 证据不足。
+   阵营名由你**自由归纳**——争议话题千差万别，「支持方/反对方」只是最常见的一种；
+   也可能是「官方口径」「第三方观察」「民间声音」「圈内人」「圈外人」等，按文本实际命名，不要硬套。
+2. 语言格式标记（描述「怎么说话」，不是「说得对不对」）：这是**自由文本字段，不是固定三选一**。
+   你必须根据文本实际**自己归纳**说话方式的类型，不要硬塞进下面举例的类别。
+   举例（仅供参考，绝非穷尽或强制）：
+   - 饭圈方法：控评、打榜、反黑、粉籍划分、举报动员、统一话术模板；
+   - 政治语言方法：立法定性、路线/主义标签、敌我划分、纲领式表述；
+   - 普通人语言格式：日常口语、就事论事、无组织化话术；
+   但争议话题远远不止这些——你应当给出**贴合该讨论**的语言风格命名，例如「学术化论证」
+   「法律条文式」「情绪宣泄式」「网络梗式」「专业圈层黑话」「营销话术」「口号化动员」等。
+   lang_format 用简短标签（中文或英文均可，如 fandom / academic / emotional / meme）。
    lang_evidence 只写你观察到的**表达特征**，不要引用立场内容来论证优劣。
 3. confrontation：是否呈现「阵营对抗」（双向立场并存）。true 表示这是立场之争，
    系统只能标记、不能裁决；false 表示未观察到明显对抗。这个字段不表示谁对谁错。
 4. confidence：仅表示「这个标记有多确定」，**绝不表示谁更有理**。
 
+【分析依据 thinking · 必填】
+在 JSON 里用 thinking 字段用中文简述你的分析过程（会展示给管理员看，帮助理解你的判断，但不作为裁决依据、不得包含对错评价）：
+你是怎么识别各阵营的、为什么给每个阵营选了那个语言格式、以及你如何自检「没有因为某一方字多/人多就倒戈」。
+这一步正是让旁观者看清「AI 怎么想的」，务必写清楚。
+
 【输出契约 · 只输出一个 JSON 对象，不要 markdown、不要解释、不要多余文字】
-{"confrontation":true,"camps":[{"camp_id":"A","camp_label":"立场A","position":"中性摘要","lang_format":"fandom|political|everyday|mixed|unknown","lang_evidence":"表达特征","confidence":0,"note":"中性备注"}]}`
+{"confrontation":true,"thinking":"你如何识别阵营、如何为各阵营选择语言格式、如何自检中立性的中文简述（展示给管理员，不含裁决）","camps":[{"camp_id":"A","camp_label":"立场A","position":"中性摘要","lang_format":"自由文本标签，如 饭圈方法 / 学术化论证 / 情绪宣泄式","lang_evidence":"表达特征","confidence":0,"note":"中性备注"}]}`
 
 // NeutralityTailPrompt 三明治尾部：在长文本之后再压一遍最强约束，防止注意力被带偏。
 const NeutralityTailPrompt = `【再次确认 · 输出前自检】
@@ -192,8 +213,8 @@ const NeutralityTailPrompt = `【再次确认 · 输出前自检】
 请逐条自检后再输出：
 - 我有没有写「谁对谁错 / 谁更有理 / 谁赢了」？有则删掉。
 - 我是不是因为某一方字多、人多、声量大就偏向了它？是则改回中性。
-- 阵营名是否中性？语言格式是否只描述表达方式？
-- 输出是否只有 JSON 一个对象，且含 confrontation 与 camps？
+- 阵营名是否中性？语言格式是否只描述表达方式（自由归纳，没有硬套固定类别）？
+- 输出是否只有 JSON 一个对象，且含 confrontation、camps 与 thinking（thinking 已写明分析依据）？
 
 再次强调：对错基于阵营，无法客观判断，这是结构性原因。你只标记，不裁决。
 只输出 JSON。`

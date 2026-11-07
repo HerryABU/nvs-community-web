@@ -115,6 +115,10 @@ export const sentimentApi = {
   neutralityPrompt() {
     return api.get<{ code: number; data: NeutralityPromptData }>('/admin/sentiment/neutral-prompt');
   },
+  /** 可用于阵营分析的对话模型列表（enabled + chat），供「模型选择」下拉，选择可被记住/锁定 */
+  chatModels() {
+    return api.get<{ code: number; data: { models: SentimentChatModel[] } }>('/admin/sentiment/chat-models');
+  },
   campGraph(params: { scope?: string; content_type?: string; content_id?: number; topic?: string } = {}) {
     return api.get<{ code: number; data: CampGraphData }>('/admin/sentiment/camp-graph', { params });
   },
@@ -127,9 +131,10 @@ export const sentimentApi = {
   },
   /** 真正调用 AI（强中立提示词）分析争议文本 → 阵营/语言格式标记 → 落库 → 图谱有数据 */
   analyzeCamp(data: { text: string; model_id?: number; content_type?: string; content_id?: number; comment_id?: number; save?: boolean }) {
-    return api.post<{ code: number; data: { marks: CampMark[]; confrontation?: boolean; source: string; notice: string } }>(
-      '/admin/sentiment/camp-analyze', data,
-    );
+    return api.post<{
+      code: number;
+      data: { marks: CampMark[]; confrontation?: boolean; source: string; notice: string; ai_thinking?: string; ai_reasoning?: string };
+    }>('/admin/sentiment/camp-analyze', data);
   },
   createCampMark(data: Partial<CampMark>) {
     return api.post<{ code: number; data: CampMark }>('/admin/sentiment/camp-marks', data);
@@ -175,7 +180,15 @@ export interface NeutralityPromptData {
   prompt: string;
   tail_prompt?: string;
   notice: string;
+  lang_format_free?: boolean;
   lang_formats: { value: string; label: string }[];
+}
+
+export interface SentimentChatModel {
+  id: number;
+  name: string;
+  model_id: string;
+  thinking?: boolean;
 }
 
 export interface CampNode {

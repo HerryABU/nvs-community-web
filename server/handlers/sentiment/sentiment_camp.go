@@ -16,6 +16,7 @@ import (
 	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
+	"nvs-server/models/ai"
 	"nvs-server/sentiment/camp"
 	"nvs-server/sentiment/store"
 	"nvs-server/sentiment/topic"
@@ -23,6 +24,32 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// GET /api/admin/sentiment/chat-models
+// 返回可用于阵营分析的对话模型（enabled + chat + 有 base_url），供后台「模型选择」下拉，
+// 让选择可被记住（锁定），而不是每次都默认第一个。
+func ListSentimentChatModels(c *gin.Context) {
+	if !admincommon.EnsureElevated(c) {
+		return
+	}
+	list, err := ai.ListAiModels(false)
+	if err != nil {
+		infra.InternalError(c, "读取模型失败")
+		return
+	}
+	out := make([]gin.H, 0, len(list))
+	for i := range list {
+		if list[i].Enabled && list[i].Kind == ai.AiKindChat && strings.TrimSpace(list[i].BaseURL) != "" {
+			out = append(out, gin.H{
+				"id":       list[i].ID,
+				"name":     list[i].Name,
+				"model_id": list[i].ModelID,
+				"thinking": list[i].Thinking,
+			})
+		}
+	}
+	infra.Success(c, gin.H{"models": out})
+}
 
 // GET /api/admin/sentiment/neutral-prompt
 // 返回当前生效的中立性提示词，供管理员台查看/复制（明确禁止 AI 判对错、禁止倒戈多数派）。
@@ -33,14 +60,16 @@ func GetNeutralityPrompt(c *gin.Context) {
 	infra.Success(c, gin.H{
 		"prompt":      camp.NeutralityPrompt,
 		"tail_prompt": camp.NeutralityTailPrompt,
+		// 语言格式已是**自由文本字段**：AI 自行归纳，不再限定为固定三选一。
+		// 下列仅作「常见示例」展示，不是可选项集合；前端手动标记也改自由输入。
+		"lang_format_free": true,
 		"lang_formats": []map[string]string{
 			{"value": camp.LangFandom, "label": camp.LangFormatLabel(camp.LangFandom)},
 			{"value": camp.LangPolitical, "label": camp.LangFormatLabel(camp.LangPolitical)},
 			{"value": camp.LangEveryday, "label": camp.LangFormatLabel(camp.LangEveryday)},
 			{"value": camp.LangMixed, "label": camp.LangFormatLabel(camp.LangMixed)},
-			{"value": camp.LangUnknown, "label": camp.LangFormatLabel(camp.LangUnknown)},
 		},
-		"notice": "对错基于阵营，AI 只能标记阵营与语言格式，不能判断谁对谁错；不得因人数多/文字多倒戈某一方。",
+		"notice": "对错基于阵营，AI 只能标记阵营与语言格式，不能判断谁对谁错；语言格式由 AI 自由归纳，不得因人数多/文字多倒戈某一方。",
 	})
 }
 
@@ -214,7 +243,7 @@ func AnalyzeCamp(c *gin.Context) {
 		status = store.CampMarkPending
 	}
 	if doSave {
-		marks, err := camp.AnalyzeAndPersist(c.Request.Context(), in.Text, in.ModelID, ct, in.ContentID, in.CommentID, status)
+		marks, thinking, reasoning, err := camp.AnalyzeAndPersist(c.Request.Context(), in.Text, in.ModelID, ct, in.ContentID, in.CommentID, status)
 		if err != nil {
 			infra.BadRequest(c, err.Error())
 			return
@@ -232,7 +261,9 @@ func AnalyzeCamp(c *gin.Context) {
 		}
 		infra.SuccessMessage(c, msg, gin.H{
 			"marks": marks, "source": "ai", "status": status,
-			"notice": notice,
+			"ai_thinking":  thinking,
+			"ai_reasoning": reasoning,
+			"notice":       notice,
 		})
 		return
 	}
@@ -243,7 +274,9 @@ func AnalyzeCamp(c *gin.Context) {
 	}
 	infra.SuccessMessage(c, "AI 分析完成（未落库）", gin.H{
 		"marks": a.Marks, "confrontation": a.Confrontation, "source": "ai",
-		"notice": "仅预览，未写入标记表。",
+		"ai_thinking":  a.Thinking,
+		"ai_reasoning": a.Reasoning,
+		"notice":       "仅预览，未写入标记表。",
 	})
 }
 

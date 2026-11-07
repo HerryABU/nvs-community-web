@@ -93,14 +93,25 @@ func NewClient(baseURL, apiKey string, timeout time.Duration) *Client {
 	}
 }
 
-// Complete 发起一次对话补全，返回内容与真实 token 用量
+// Complete 发起一次对话补全，返回内容与真实 token 用量。
+// 不关心模型思考过程（思考链由 CompleteWithReasoning 暴露）。
 func (c *Client) Complete(req ChatRequest) (content string, tokensIn, tokensOut int, err error) {
+	content, _, tokensIn, tokensOut, err = c.CompleteWithReasoning(req)
+	return
+}
+
+// CompleteWithReasoning 同 Complete，但额外返回模型的思考过程（reasoning_content / reasoning）。
+//
+// 用途：把「AI 怎么想的」展示给终端用户（如阵营分析的可折叠思考面板），
+// 而不是只给一个结论。原生思考链只有推理模型（DeepSeek-R1 / QwQ 等）才回填，
+// 普通模型该字段为空 —— 此时可改用提示词里要求的 thinking 字段（结构化自述）兜底。
+func (c *Client) CompleteWithReasoning(req ChatRequest) (content, reasoning string, tokensIn, tokensOut int, err error) {
 	if c.BaseURL == "" {
-		return "", 0, 0, fmt.Errorf("上游地址未配置")
+		return "", "", 0, 0, fmt.Errorf("上游地址未配置")
 	}
 	body, merr := json.Marshal(req)
 	if merr != nil {
-		return "", 0, 0, merr
+		return "", "", 0, 0, merr
 	}
 	var httpReq *http.Request
 	var rerr error
@@ -110,7 +121,7 @@ func (c *Client) Complete(req ChatRequest) (content string, tokensIn, tokensOut 
 		httpReq, rerr = http.NewRequest(http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(body))
 	}
 	if rerr != nil {
-		return "", 0, 0, rerr
+		return "", "", 0, 0, rerr
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	if c.APIKey != "" {
@@ -118,26 +129,30 @@ func (c *Client) Complete(req ChatRequest) (content string, tokensIn, tokensOut 
 	}
 	resp, derr := c.HTTP.Do(httpReq)
 	if derr != nil {
-		return "", 0, 0, fmt.Errorf("上游连接失败：%v", derr)
+		return "", "", 0, 0, fmt.Errorf("上游连接失败：%v", derr)
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20)) // 4MB 上限防滥用
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		var er ErrorResponse
 		if json.Unmarshal(raw, &er) == nil && er.Error.Message != "" {
-			return "", 0, 0, fmt.Errorf("上游返回 %d：%s", resp.StatusCode, er.Error.Message)
+			return "", "", 0, 0, fmt.Errorf("上游返回 %d：%s", resp.StatusCode, er.Error.Message)
 		}
-		return "", 0, 0, fmt.Errorf("上游返回 %d", resp.StatusCode)
+		return "", "", 0, 0, fmt.Errorf("上游返回 %d", resp.StatusCode)
 	}
 	var cr ChatResponse
 	if uerr := json.Unmarshal(raw, &cr); uerr != nil {
-		return "", 0, 0, fmt.Errorf("上游响应解析失败")
+		return "", "", 0, 0, fmt.Errorf("上游响应解析失败")
 	}
 	if len(cr.Choices) == 0 {
-		return "", 0, 0, fmt.Errorf("上游未返回内容")
+		return "", "", 0, 0, fmt.Errorf("上游未返回内容")
 	}
 	msg := cr.Choices[0].Message
 	content = msg.Content
+	reasoning = strings.TrimSpace(msg.ReasoningContent)
+	if reasoning == "" {
+		reasoning = strings.TrimSpace(msg.Reasoning)
+	}
 	// 思考型模型的正文可能在 reasoning 字段里：content 为空时不能直接当失败返回，
 	// 否则「模型明明答了」却被判成「上游未返回内容」，还会把这次调用记为失败。
 	if strings.TrimSpace(content) == "" {
@@ -147,5 +162,5 @@ func (c *Client) Complete(req ChatRequest) (content string, tokensIn, tokensOut 
 			content = r
 		}
 	}
-	return content, cr.Usage.PromptTokens, cr.Usage.CompletionTokens, nil
+	return content, reasoning, cr.Usage.PromptTokens, cr.Usage.CompletionTokens, nil
 }

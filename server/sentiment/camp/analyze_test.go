@@ -49,13 +49,15 @@ func TestParseAIEnvelope(t *testing.T) {
 	}
 }
 
-// 归一化只做枚举收敛，绝不新增「对错」类字段。
+// 归一化只做枚举收敛，绝不新增「对错」类字段；
+// 自由文本标签原样保留（不强行压回固定枚举）。
 func TestNormalizeLangFormat(t *testing.T) {
 	for in, want := range map[string]string{
 		"fandom": LangFandom, "FAN": LangFandom, "fan": LangFandom,
 		"political": LangPolitical, "POLITICS": LangPolitical,
 		"everyday": LangEveryday, "plain": LangEveryday,
-		"mixed": LangMixed, "随便写的": LangUnknown,
+		"mixed": LangMixed, " ": "",
+		"学术化论证": "学术化论证", "情绪宣泄式": "情绪宣泄式", "academic": "academic",
 	} {
 		if got := NormalizeLangFormat(in); got != want {
 			t.Fatalf("%q → %q，期望 %q", in, got, want)

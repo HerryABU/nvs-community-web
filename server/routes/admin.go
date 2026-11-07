@@ -407,6 +407,7 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.POST("/sentiment/run-update", sentiment.RunSentimentUpdate)
 		// 阵营中立标记 / 语言格式 / 图谱 / 删除申请审批（超级管理员分层）
 		adminGrp.GET("/sentiment/neutral-prompt", sentiment.GetNeutralityPrompt)
+		adminGrp.GET("/sentiment/chat-models", sentiment.ListSentimentChatModels)
 		adminGrp.POST("/sentiment/camp-analyze", sentiment.AnalyzeCamp)
 		adminGrp.POST("/sentiment/camp-marks", sentiment.CreateCampMark)
 		adminGrp.GET("/sentiment/camp-marks", sentiment.ListCampMarks)

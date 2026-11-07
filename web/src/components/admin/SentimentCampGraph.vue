@@ -13,7 +13,15 @@
         <b>🤖 AI 阵营分析</b>
         <span>把一段争议文本交给强化后的中立性提示词，标记阵营与语言格式，写入图谱。</span>
       </div>
-      <el-input v-model="analyzeText" type="textarea" :rows="3" placeholder="粘贴一段争议讨论…AI 只标记阵营与「饭圈方法 / 政治语言方法 / 普通人语言格式」，不判断谁对谁错，也不会因哪一方字多就倒戈。" />
+      <el-input v-model="analyzeText" type="textarea" :rows="3" placeholder="粘贴一段争议讨论…AI 会自由归纳阵营与语言风格（如饭圈方法 / 学术化论证 / 情绪宣泄式），不判断谁对谁错，也不会因哪一方字多就倒戈。分析后可在下方展开「AI 思考过程」。" />
+      <div class="camp-analyze__model">
+        <span class="camp-analyze__model-label">分析模型</span>
+        <el-select v-model="analyzeModelID" size="small" :loading="modelsLoading" placeholder="选择模型（默认锁定上次）" style="min-width: 220px" @change="onModelChange">
+          <el-option v-for="m in chatModels" :key="m.id" :label="m.name + (m.thinking ? ' · 推理' : '')" :value="m.id" />
+          <template #empty>暂无可用对话模型</template>
+        </el-select>
+        <span class="muted small">选择会被记住，下次自动沿用（不再每次默认第一个）</span>
+      </div>
       <div class="camp-analyze__foot">
         <label class="camp-analyze__opt">
           <input type="checkbox" v-model="analyzeSave" /> 保存标记到图谱
@@ -22,6 +30,26 @@
           AI 分析并标记
         </el-button>
         <span v-if="analyzeResult" class="camp-analyze__result">{{ analyzeResult }}</span>
+      </div>
+      <!-- AI 思考过程：可折叠（展示 AI 怎么识别阵营、选语言格式、自检中立性） -->
+      <div v-if="aiThinking || aiReasoning" class="camp-thinking">
+        <div class="camp-thinking__head" @click="showThinking = !showThinking">
+          <b>🧠 AI 思考过程</b>
+          <span class="muted small">（展示 AI 如何识别阵营、选择语言格式、并自检中立性；仅分析依据，不含对错裁决）</span>
+          <el-button size="small" text type="primary">{{ showThinking ? '收起' : '展开' }}</el-button>
+        </div>
+        <el-collapse-transition>
+          <div v-show="showThinking" class="camp-thinking__body">
+            <div v-if="aiReasoning" class="camp-thinking__block">
+              <div class="camp-thinking__title">模型原生思考链（reasoning）</div>
+              <pre>{{ aiReasoning }}</pre>
+            </div>
+            <div v-if="aiThinking" class="camp-thinking__block">
+              <div class="camp-thinking__title">分析依据（AI 自述）</div>
+              <pre>{{ aiThinking }}</pre>
+            </div>
+          </div>
+        </el-collapse-transition>
       </div>
     </div>
 
@@ -68,7 +96,7 @@
     </el-collapse-transition>
 
     <div class="camp-legend">
-      <span v-for="l in langLegend" :key="l.value" class="camp-legend__item">
+      <span v-for="l in graphLangLegend" :key="l.value" class="camp-legend__item">
         <i :style="{ background: l.color }" />{{ l.label }}
       </span>
     </div>
@@ -103,9 +131,7 @@
           <el-form-item label="阵营标识"><el-input v-model="markForm.camp_id" placeholder="如 A / 支持方（中性）" /></el-form-item>
           <el-form-item label="显示名"><el-input v-model="markForm.camp_label" placeholder="中性短名" /></el-form-item>
           <el-form-item label="语言格式">
-            <el-select v-model="markForm.lang_format" style="width: 100%">
-              <el-option v-for="l in langLegend" :key="l.value" :label="l.label" :value="l.value" />
-            </el-select>
+            <el-input v-model="markForm.lang_format" placeholder="自由标签，如 饭圈方法 / 学术化论证 / 情绪宣泄式" />
           </el-form-item>
           <el-form-item label="表达特征"><el-input v-model="markForm.lang_evidence" placeholder="只写表达特征，不评价立场" /></el-form-item>
           <el-form-item label="内容 ID"><el-input-number v-model="markForm.content_id" :min="0" /></el-form-item>
@@ -215,9 +241,7 @@
         <el-form-item label="阵营标识"><el-input v-model="editForm.camp_id" placeholder="如 A / 支持方（中性）" /></el-form-item>
         <el-form-item label="显示名"><el-input v-model="editForm.camp_label" placeholder="中性短名" /></el-form-item>
         <el-form-item label="语言格式">
-          <el-select v-model="editForm.lang_format" style="width: 100%">
-            <el-option v-for="l in langLegend" :key="l.value" :label="l.label" :value="l.value" />
-          </el-select>
+          <el-input v-model="editForm.lang_format" placeholder="自由标签，如 饭圈方法 / 学术化论证 / 情绪宣泄式" />
         </el-form-item>
         <el-form-item label="立场摘要"><el-input v-model="editForm.position" placeholder="中性摘要，不评价" /></el-form-item>
         <el-form-item label="表达特征"><el-input v-model="editForm.lang_evidence" placeholder="只写表达特征，不评价立场" /></el-form-item>
@@ -240,7 +264,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { sentimentApi, type CampGraphData, type CampEdge, type DeleteRequest, type CampMark, type NeutralityPromptData, type TopicTag } from '@/api/admin/sentiment';
+import { sentimentApi, type CampGraphData, type CampEdge, type DeleteRequest, type CampMark, type NeutralityPromptData, type TopicTag, type SentimentChatModel } from '@/api/admin/sentiment';
 
 const loading = ref(false);
 const marking = ref(false);
@@ -249,6 +273,14 @@ const analyzeText = ref('');
 const analyzeSave = ref(true);
 const analyzeResult = ref('');
 const showPrompt = ref(true); // 强中立提示词默认常驻显示
+// 模型选择锁定：记住用户上次选的模型，而不是每次默认第一个
+const chatModels = ref<SentimentChatModel[]>([]);
+const modelsLoading = ref(false);
+const analyzeModelID = ref<number>(0);
+// AI 思考过程（可折叠展示）
+const aiThinking = ref('');
+const aiReasoning = ref('');
+const showThinking = ref(true);
 
 // 图谱范围：all（全局总览）/ content（按评论区）/ topic（按议题）
 const scopeMode = ref<'all' | 'content' | 'topic'>('all');
@@ -273,7 +305,7 @@ const editForm = reactive({
   position: '', lang_evidence: '', confidence: 0, note: '', reason: '',
 });
 
-const langLabel = (v: string) => langLegend.find((l) => l.value === v)?.label || v || '—';
+const langLabel = (v: string) => knownLangLabels[v] || v || '—';
 
 // 把 before/after 快照渲染成可读的「字段: 旧 → 新」文本（只取白名单字段）
 function patchText(beforeJSON: string, afterJSON: string): string {
@@ -298,15 +330,30 @@ function patchText(beforeJSON: string, afterJSON: string): string {
   }
 }
 
-const langLegend = [
-  { value: 'fandom', label: '饭圈方法', color: '#ec4899' },
-  { value: 'political', label: '政治语言方法', color: '#f59e0b' },
-  { value: 'everyday', label: '普通人语言格式', color: '#10b981' },
-  { value: 'mixed', label: '混用', color: '#8b5cf6' },
-  { value: 'unknown', label: '未识别', color: '#94a3b8' },
-];
-const langColor = (v: string) => langLegend.find((l) => l.value === v)?.color || '#94a3b8';
+// 已知枚举 → 固定中文名；其余自由文本标签原样展示（语言格式由 AI 自由归纳，不再限定固定三选一）
+const knownLangLabels: Record<string, string> = {
+  fandom: '饭圈方法', political: '政治语言方法', everyday: '普通人语言格式', mixed: '混用', unknown: '未识别',
+};
+const knownLangColors: Record<string, string> = {
+  fandom: '#ec4899', political: '#f59e0b', everyday: '#10b981', mixed: '#8b5cf6', unknown: '#94a3b8',
+};
+// 颜色按语言格式值哈希：同值同色、不同值异色，且自由文本标签也能稳定着色
+function hashHue(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+  return h;
+}
+const langColor = (v: string) => knownLangColors[v] || `hsl(${hashHue(v)}, 68%, 55%)`;
 const shortLabel = (s: string) => (s && s.length > 6 ? s.slice(0, 6) + '…' : s || '—');
+
+// 图谱图例：按当前图谱里实际出现的语言格式动态生成（自由文本 → 哈希色）
+const graphLangLegend = computed(() => {
+  const seen = new Map<string, string>();
+  for (const n of graph.value.nodes) {
+    if (n.lang_format) seen.set(n.lang_format, n.lang_label || n.lang_format);
+  }
+  return Array.from(seen, ([value, label]) => ({ value, label, color: langColor(value) }));
+});
 
 const markForm = reactive({
   camp_id: '', camp_label: '', lang_format: 'everyday',
@@ -392,10 +439,18 @@ async function runAnalyze() {
   analyzing.value = true;
   analyzeResult.value = '';
   try {
-    const res = await sentimentApi.analyzeCamp({ text: analyzeText.value.trim(), save: analyzeSave.value });
+    const res = await sentimentApi.analyzeCamp({
+      text: analyzeText.value.trim(),
+      save: analyzeSave.value,
+      model_id: analyzeModelID.value || undefined,
+    });
     if (res.data?.code === 0) {
       const d = res.data.data;
       analyzeResult.value = `已标记 ${d.marks?.length || 0} 个阵营（${d.source === 'ai' ? 'AI 强中立提示词' : '兜底'}）`;
+      // 可折叠的「AI 思考过程」
+      aiThinking.value = d.ai_thinking || '';
+      aiReasoning.value = d.ai_reasoning || '';
+      showThinking.value = !!(d.ai_thinking || d.ai_reasoning);
       if (d.status === 'pending') {
         ElMessage.warning(res.data?.message || 'AI 已完成阵营标记，待站长审核后进入图谱');
       } else {
@@ -596,6 +651,7 @@ async function reject(row: DeleteRequest) {
 
 onMounted(async () => {
   load();
+  loadChatModels();
   try {
     const res = await sentimentApi.topicTags();
     if (res.data?.code === 0) topicTagsList.value = res.data.data.items || [];
@@ -603,6 +659,35 @@ onMounted(async () => {
     /* 议题标签加载失败不影响图谱主流程 */
   }
 });
+
+// 加载可用于阵营分析的对话模型；并把上次选择的模型「锁定」沿用（localStorage），
+// 没有记录则默认第一个并写回，避免每次都落到第一个模型。
+async function loadChatModels() {
+  modelsLoading.value = true;
+  try {
+    const res = await sentimentApi.chatModels();
+    if (res.data?.code === 0) {
+      chatModels.value = res.data.data.models || [];
+      const saved = Number(localStorage.getItem('sentiment_camp_model_id') || 0);
+      if (saved > 0 && chatModels.value.some((m) => m.id === saved)) {
+        analyzeModelID.value = saved;
+      } else if (chatModels.value.length > 0) {
+        analyzeModelID.value = chatModels.value[0].id;
+        localStorage.setItem('sentiment_camp_model_id', String(analyzeModelID.value));
+      }
+    }
+  } catch {
+    /* 模型列表加载失败不影响主流程 */
+  } finally {
+    modelsLoading.value = false;
+  }
+}
+
+// 用户切换模型：锁定选择，下次自动沿用
+function onModelChange(id: number) {
+  analyzeModelID.value = id;
+  localStorage.setItem('sentiment_camp_model_id', String(id));
+}
 </script>
 
 <style scoped>
@@ -615,6 +700,15 @@ onMounted(async () => {
 .camp-analyze__foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
 .camp-analyze__opt { display: flex; align-items: center; gap: 4px; font-size: 0.74rem; color: var(--text-light); }
 .camp-analyze__result { font-size: 0.74rem; color: var(--success-color); }
+.camp-analyze__model { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.camp-analyze__model-label { font-size: 0.8rem; color: var(--text-color); }
+.camp-thinking { margin-top: 10px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-soft); overflow: hidden; }
+.camp-thinking__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; cursor: pointer; user-select: none; }
+.camp-thinking__head b { font-size: 0.84rem; color: var(--primary-color); }
+.camp-thinking__body { padding: 0 12px 10px; }
+.camp-thinking__block { margin-top: 8px; }
+.camp-thinking__title { font-size: 0.74rem; color: var(--text-light); margin-bottom: 4px; font-weight: 600; }
+.camp-thinking__block pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 0.78rem; line-height: 1.6; color: var(--text-color); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 10px; max-height: 280px; overflow-y: auto; }
 .camp-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .camp-scope { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .camp-scope-title { font-size: 0.82rem; color: var(--text-light); padding: 2px 0; }
