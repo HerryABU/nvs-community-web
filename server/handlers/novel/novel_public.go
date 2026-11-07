@@ -290,6 +290,49 @@ func GetNovel(c *gin.Context) {
 	})
 }
 
+// GET /api/novels/:id/likes — 点赞数 + 当前用户是否已点赞
+func GetNovelLikes(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	if id == 0 {
+		infra.BadRequest(c, "无效的作品 ID")
+		return
+	}
+	userID := hctx.CurrentUserID(c)
+	var count int64
+	models.DB.Model(&models.NovelLike{}).Where("novel_id = ?", id).Count(&count)
+	infra.Success(c, gin.H{
+		"count": count,
+		"liked": models.UserLikedNovel(uint(id), userID),
+	})
+}
+
+// POST /api/novels/:id/like — 点赞/取消点赞（toggle）
+func ToggleNovelLike(c *gin.Context) {
+	userID := hctx.CurrentUserID(c)
+	if userID == 0 {
+		infra.Unauthorized(c, "请先登录")
+		return
+	}
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	if id == 0 {
+		infra.BadRequest(c, "无效的作品 ID")
+		return
+	}
+	novel, err := models.GetNovelByID(uint(id))
+	if err != nil {
+		infra.NotFound(c, "作品不存在")
+		return
+	}
+	liked, err := models.ToggleNovelLike(novel.ID, userID)
+	if err != nil {
+		infra.InternalError(c, "操作失败")
+		return
+	}
+	var count int64
+	models.DB.Model(&models.NovelLike{}).Where("novel_id = ?", novel.ID).Count(&count)
+	infra.Success(c, gin.H{"liked": liked, "count": count})
+}
+
 // GET /api/categories
 func ListCategories(c *gin.Context) {
 	infra.Success(c, models.GetCategories())

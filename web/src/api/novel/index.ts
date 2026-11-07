@@ -46,6 +46,15 @@ export const novelApi = {
     return api.get<{ code: number; data: Record<string, number> }>(`/author/novels/${id}/stats`);
   },
 
+  // 作品点赞/取消点赞（toggle）
+  toggleNovelLike(id: number) {
+    return api.post<{ code: number; data: { liked: boolean; count: number } }>(`/novels/${id}/like`);
+  },
+  // 作品点赞数 + 当前用户是否已赞
+  getNovelLikes(id: number) {
+    return api.get<{ code: number; data: { count: number; liked: boolean } }>(`/novels/${id}/likes`);
+  },
+
   // 获取作者被封禁（176号令）的小说/章节及原因
   getBannedContent() {
     return api.get<{ code: number; data: { novels: any[]; chapters: any[] } }>('/author/banned-content');

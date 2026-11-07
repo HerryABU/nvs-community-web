@@ -69,16 +69,65 @@ func GetAuthorDashboard(c *gin.Context) {
 	}
 
 	type novelStatRow struct {
+		ID            uint
 		Title         string
 		TotalWords    int
 		TotalChapters int
+		ViewCount     int
+		LikeCount     int
 		Status        string
 	}
 	var novelStatsRaw []novelStatRow
-	models.DB.Raw("SELECT title, total_words, total_chapters, status FROM novels WHERE author_id = ? AND deleted_at IS NULL ORDER BY updated_at DESC", userID).Scan(&novelStatsRaw)
+	models.DB.Raw("SELECT id, title, total_words, total_chapters, view_count, like_count, status FROM novels WHERE author_id = ? AND deleted_at IS NULL ORDER BY updated_at DESC", userID).Scan(&novelStatsRaw)
+
+	// 每篇作品的收藏数（书架数），避免在循环里逐条 count
+	shelfCounts := map[uint]int64{}
+	if len(novelIDs) > 0 {
+		type shelfRow struct {
+			NovelID uint
+			C       int64
+		}
+		var rows []shelfRow
+		models.DB.Model(&social.BookShelf{}).Select("novel_id, COUNT(*) AS c").
+			Where("novel_id IN ?", novelIDs).Group("novel_id").Scan(&rows)
+		for _, r := range rows {
+			shelfCounts[r.NovelID] = r.C
+		}
+	}
+
 	novelStats := make([]gin.H, 0, len(novelStatsRaw))
 	for _, r := range novelStatsRaw {
-		novelStats = append(novelStats, gin.H{"title": r.Title, "total_words": r.TotalWords, "total_chapters": r.TotalChapters, "status": r.Status})
+		novelStats = append(novelStats, gin.H{
+			"id":             r.ID,
+			"title":          r.Title,
+			"total_words":    r.TotalWords,
+			"total_chapters": r.TotalChapters,
+			"view_count":     r.ViewCount,
+			"like_count":     r.LikeCount,
+			"favorite_count": shelfCounts[r.ID],
+			"status":         r.Status,
+		})
+	}
+
+	// 博客维度统计：阅读 / 点赞 / 收藏（收藏 = blog_favorites 冗余计数）
+	type blogStatRow struct {
+		ID            uint
+		Title         string
+		ViewCount     int
+		LikeCount     int
+		FavoriteCount int
+	}
+	var blogStatsRaw []blogStatRow
+	models.DB.Raw("SELECT id, title, view_count, like_count, favorite_count FROM author_blogs WHERE author_id = ? AND deleted_at IS NULL ORDER BY updated_at DESC", userID).Scan(&blogStatsRaw)
+	blogStats := make([]gin.H, 0, len(blogStatsRaw))
+	for _, r := range blogStatsRaw {
+		blogStats = append(blogStats, gin.H{
+			"id":             r.ID,
+			"title":          r.Title,
+			"view_count":     r.ViewCount,
+			"like_count":     r.LikeCount,
+			"favorite_count": r.FavoriteCount,
+		})
 	}
 
 	// 总收藏数 + 总阅读量（替代完本率）
@@ -122,6 +171,6 @@ func GetAuthorDashboard(c *gin.Context) {
 		"chapter_trend":    gin.H{"dates": dates, "counts": chapterTrendCounts},
 		"comment_trend":    gin.H{"dates": dates, "counts": commentTrendCounts},
 		"word_count_trend": gin.H{"dates": dates, "counts": wordsTrendCounts, "cumulative": cumulativeWordsCounts},
-		"novel_stats":      novelStats, "avg_rating": avgRating,
+		"novel_stats":      novelStats, "blog_stats": blogStats, "avg_rating": avgRating,
 	})
 }

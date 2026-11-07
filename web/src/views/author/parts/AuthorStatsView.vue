@@ -38,6 +38,45 @@
         <DashboardCharts :rating-gauge="avgRating" />
       </el-col>
     </el-row>
+
+    <!-- 每篇内容统计：阅读 / 点赞 / 收藏 -->
+    <el-row :gutter="20" class="chart-row">
+      <el-col :xs="24" :md="12">
+        <div class="glass-stat-card stat-table-card">
+          <div class="stat-table-title">📚 作品每篇数据（阅读 / 点赞 / 收藏）</div>
+          <el-table :data="novelStats" size="small" max-height="360" empty-text="暂无作品">
+            <el-table-column prop="title" label="作品" min-width="120" show-overflow-tooltip>
+              <template #default="{ row }">
+                <router-link :to="`/author/${authorId}/novel/${row.id}`" class="stat-link">《{{ row.title }}》</router-link>
+              </template>
+            </el-table-column>
+            <el-table-column prop="view_count" label="阅读" width="80" align="right" />
+            <el-table-column prop="like_count" label="点赞" width="80" align="right" />
+            <el-table-column prop="favorite_count" label="收藏" width="80" align="right" />
+            <el-table-column prop="status" label="状态" width="80" align="center">
+              <template #default="{ row }">
+                <el-tag size="small" :type="row.status === 'published' ? 'success' : 'info'">{{ row.status }}</el-tag>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </el-col>
+      <el-col :xs="24" :md="12">
+        <div class="glass-stat-card stat-table-card">
+          <div class="stat-table-title">📝 博客每篇数据（阅读 / 点赞 / 收藏）</div>
+          <el-table :data="blogStats" size="small" max-height="360" empty-text="暂无博客">
+            <el-table-column prop="title" label="博客" min-width="120" show-overflow-tooltip>
+              <template #default="{ row }">
+                <router-link :to="`/author/${authorId}/blogs/${row.id}`" class="stat-link">{{ row.title }}</router-link>
+              </template>
+            </el-table-column>
+            <el-table-column prop="view_count" label="阅读" width="80" align="right" />
+            <el-table-column prop="like_count" label="点赞" width="80" align="right" />
+            <el-table-column prop="favorite_count" label="收藏" width="80" align="right" />
+          </el-table>
+        </div>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
@@ -49,6 +88,7 @@ import AnimatedNumber from '@/components/common/AnimatedNumber.vue';
 import DashboardCharts from '@/components/admin/DashboardCharts.vue';
 import { adminApi } from '@/api/admin';
 import { novelApi, type Novel } from '@/api/novel';
+import { useAuthStore } from '@/stores/auth';
 
 // 收视率 / 数据总览视图：统计卡片 + 增长趋势 + 各作品对比 + 收藏阅读 + 评分仪表盘。
 // 数据自取自「作者仪表盘」接口 + 我的作品列表（作品维度图表需要作品数据）。
@@ -99,6 +139,13 @@ const totalViews = ref(0);
 const avgRating = ref<number | null>(null);
 
 const novels = ref<Novel[]>([]);
+
+const authStore = useAuthStore();
+const authorId = computed(() => authStore.user?.id || 0);
+
+// 每篇内容统计（阅读 / 点赞 / 收藏）
+const novelStats = ref<any[]>([]);
+const blogStats = ref<any[]>([]);
 
 const bookshelfBarData = computed(() => ({
   title: '总收藏',
@@ -190,6 +237,9 @@ async function loadDashboard() {
       if (d.avg_rating !== undefined) {
         avgRating.value = d.avg_rating;
       }
+
+      novelStats.value = Array.isArray(d.novel_stats) ? d.novel_stats : [];
+      blogStats.value = Array.isArray(d.blog_stats) ? d.blog_stats : [];
     }
   } catch {
     // fallback：拿不到仪表盘接口时用作品列表兜底
@@ -234,6 +284,23 @@ watch(authorDataVersion, () => {
 
 .chart-row {
   margin-bottom: 24px;
+}
+
+.stat-table-card {
+  padding: 16px 18px;
+}
+.stat-table-title {
+  font-weight: 600;
+  color: var(--text-color, #333);
+  font-size: 0.95rem;
+  margin-bottom: 12px;
+}
+.stat-link {
+  color: var(--el-color-primary, #409eff);
+  text-decoration: none;
+}
+.stat-link:hover {
+  text-decoration: underline;
 }
 
 @media (max-width: 768px) {

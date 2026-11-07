@@ -9,18 +9,19 @@ import (
 
 // AuthorBlog 作者博客文章
 type AuthorBlog struct {
-	ID          uint   `gorm:"primaryKey" json:"id"`
-	AuthorID    uint   `gorm:"not null;index:idx_author_blog" json:"author_id"`
-	Title       string `gorm:"size:256;not null" json:"title"`
-	Content     string `gorm:"-" json:"content,omitempty"`
-	ContentPath string `gorm:"size:512;not null" json:"-"`
-	ContentHash string `gorm:"size:64;default:''" json:"content_hash,omitempty"`
-	Summary     string `gorm:"size:512;default:''" json:"summary"`
-	CategoryID  uint   `gorm:"default:0;index:idx_blog_category" json:"category_id"` // 博客分类（blog_categories 表，0=未分类）
-	Category    string `gorm:"-" json:"category,omitempty"`                          // 运行时填充：分类名（含父级前缀）
-	LikeCount   int    `gorm:"default:0" json:"like_count"`                          // 点赞数（blog_likes 冗余计数）
-	IsPinned    bool   `gorm:"default:false;index" json:"is_pinned"`
-	ViewCount   int    `gorm:"default:0" json:"view_count"`
+	ID            uint   `gorm:"primaryKey" json:"id"`
+	AuthorID      uint   `gorm:"not null;index:idx_author_blog" json:"author_id"`
+	Title         string `gorm:"size:256;not null" json:"title"`
+	Content       string `gorm:"-" json:"content,omitempty"`
+	ContentPath   string `gorm:"size:512;not null" json:"-"`
+	ContentHash   string `gorm:"size:64;default:''" json:"content_hash,omitempty"`
+	Summary       string `gorm:"size:512;default:''" json:"summary"`
+	CategoryID    uint   `gorm:"default:0;index:idx_blog_category" json:"category_id"` // 博客分类（blog_categories 表，0=未分类）
+	Category      string `gorm:"-" json:"category,omitempty"`                          // 运行时填充：分类名（含父级前缀）
+	LikeCount     int    `gorm:"default:0" json:"like_count"`                          // 点赞数（blog_likes 冗余计数）
+	IsPinned      bool   `gorm:"default:false;index" json:"is_pinned"`
+	ViewCount     int    `gorm:"default:0" json:"view_count"`
+	FavoriteCount int    `gorm:"default:0" json:"favorite_count"` // 收藏数（blog_favorites 冗余计数）
 	// 封面图（头图）：作者可上传，列表/详情展示
 	CoverURL string `gorm:"size:512;default:''" json:"cover_url"`
 	// 评论区开关：作者可关闭本文评论区，默认开启

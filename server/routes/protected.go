@@ -226,6 +226,7 @@ func registerProtected(r *gin.Engine) {
 		protected.POST("/novels", novel.CreateNovel)
 		protected.PUT("/novels/:id", novel.UpdateNovel)
 		protected.DELETE("/novels/:id", novel.DeleteNovel)
+		protected.POST("/novels/:id/like", novel.ToggleNovelLike) // 小说点赞/取消
 		protected.POST("/novels/:id/chapters", novel.CreateChapter)
 		protected.PUT("/novels/:id/chapters/:num", novel.UpdateChapter)
 		protected.DELETE("/novels/:id/chapters/:num", novel.DeleteChapter)
@@ -427,8 +428,9 @@ func registerProtected(r *gin.Engine) {
 		protected.POST("/blogs/batch-category", blog.BatchSetBlogCategory) // 批量设置博客分类（CSDN 式）
 		protected.PUT("/blogs/:id", blog.UpdateBlog)
 		protected.DELETE("/blogs/:id", blog.DeleteBlog)
-		protected.POST("/blogs/:id/like", blog.ToggleBlogLike) // 博客点赞/取消
-		protected.POST("/upload", upload.UploadFile)           // 通用上传：博客图片/音视频
+		protected.POST("/blogs/:id/like", blog.ToggleBlogLike)         // 博客点赞/取消
+		protected.POST("/blogs/:id/favorite", blog.ToggleBlogFavorite) // 博客收藏/取消
+		protected.POST("/upload", upload.UploadFile)                   // 通用上传：博客图片/音视频
 		// AI 工作台附件：图片/文档上传（存盘不解析，发消息时原样内联给上游 API）
 		protected.POST("/ai/attachment", aiworkbench.AiAttachmentUpload)
 		// 博客分类管理（登录作者/管理员均可：新增/编辑/删除/挂靠，支持三级；普通作者创建=待审核）

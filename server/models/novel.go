@@ -33,6 +33,7 @@ type Novel struct {
 	TotalWords               int            `gorm:"default:0" json:"total_words"`
 	TotalChapters            int            `gorm:"default:0" json:"total_chapters"`
 	ViewCount                int            `gorm:"default:0" json:"view_count"`
+	LikeCount                int            `gorm:"default:0" json:"like_count"`                    // 点赞数（novel_likes 冗余计数）
 	BanReason                string         `gorm:"type:text" json:"ban_reason"`                    // 封禁原因（可能很长）
 	DeletedBy                string         `gorm:"size:32;default:''" json:"deleted_by,omitempty"` // user/admin
 	CreatedAt                time.Time      `json:"created_at"`
@@ -368,4 +369,52 @@ func RecomputeAllNovelStats() (processed int, changed int, err error) {
 		processed++
 	}
 	return processed, changed, nil
+}
+
+// ─────────────────────────────────────────────────────────────
+// novel_likes：novel_id + user_id 唯一，点赞/取消点赞为 toggle。
+// 点赞数直接在 novels.like_count 冗余计数（避免每次 count）。
+// ─────────────────────────────────────────────────────────────
+
+// NovelLike 小说点赞记录（与 blog_likes 对称）
+type NovelLike struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	NovelID   uint      `gorm:"not null;uniqueIndex:uk_novel_like,priority:1;index:idx_novel_like_novel" json:"novel_id"`
+	UserID    uint      `gorm:"not null;uniqueIndex:uk_novel_like,priority:2;index" json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (NovelLike) TableName() string { return "novel_likes" }
+
+// ToggleNovelLike 点赞/取消点赞，返回是否已点赞（true=刚点赞）
+func ToggleNovelLike(novelID, userID uint) (bool, error) {
+	var like NovelLike
+	err := DB.Where("novel_id = ? AND user_id = ?", novelID, userID).First(&like).Error
+	if err == nil {
+		// 已点赞 → 取消
+		if err := DB.Delete(&like).Error; err != nil {
+			return false, err
+		}
+		DB.Model(&Novel{}).Where("id = ?", novelID).
+			UpdateColumn("like_count", DB.Raw("CASE WHEN like_count > 0 THEN like_count - 1 ELSE 0 END"))
+		return false, nil
+	}
+	// 未点赞 → 点赞
+	like = NovelLike{NovelID: novelID, UserID: userID}
+	if err := DB.Create(&like).Error; err != nil {
+		return false, err
+	}
+	DB.Model(&Novel{}).Where("id = ?", novelID).
+		UpdateColumn("like_count", DB.Raw("like_count + 1"))
+	return true, nil
+}
+
+// UserLikedNovel 当前用户是否已点赞某小说
+func UserLikedNovel(novelID, userID uint) bool {
+	if userID == 0 {
+		return false
+	}
+	var cnt int64
+	DB.Model(&NovelLike{}).Where("novel_id = ? AND user_id = ?", novelID, userID).Count(&cnt)
+	return cnt > 0
 }

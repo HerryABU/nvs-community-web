@@ -93,6 +93,7 @@ func registerPublic(r *gin.Engine) {
 		// API 聚合中间层（一次请求批量获取多个接口数据，向后兼容原有独立调用）
 		public.POST("/batch", security.RateLimit(30, 60), batch.BatchHandler)
 		public.GET("/novels/:id/rating", rating.GetNovelRating)
+		public.GET("/novels/:id/likes", novel.GetNovelLikes)
 		public.GET("/forums", forum.ListForums)
 		// 群组（公开/半公开可浏览；私密仅成员）
 		public.GET("/groups", grouphandler.GroupList)

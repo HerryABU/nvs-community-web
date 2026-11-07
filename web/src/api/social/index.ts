@@ -121,6 +121,13 @@ export const blogApi = {
   toggleLike(id: number) {
     return api.post<{ code: number; data: { liked: boolean; count: number } }>(`/blogs/${id}/like`);
   },
+  // ===== 收藏 =====
+  getFavorites(id: number) {
+    return api.get<{ code: number; data: { count: number; favorited: boolean } }>(`/blogs/${id}/favorites`);
+  },
+  toggleFavorite(id: number) {
+    return api.post<{ code: number; data: { favorited: boolean; count: number } }>(`/blogs/${id}/favorite`);
+  },
 };
 
 // 通用文件上传（博客图片/音视频，CSDN 式编辑器）

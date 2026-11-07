@@ -10,7 +10,7 @@ import (
 // Models 返回 blog 域全部需要迁移的模型；根包 AllModels 在运行时聚合。
 func Models() []interface{} {
 	return []interface{}{
-		&AuthorBlog{}, &BlogCategory{}, &BlogLike{},
+		&AuthorBlog{}, &BlogCategory{}, &BlogLike{}, &BlogFavorite{},
 		&BlogTag{}, &BlogTagLink{}, &BlogTopic{}, &BlogTopicLink{},
 	}
 }

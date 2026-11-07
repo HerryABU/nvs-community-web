@@ -385,3 +385,50 @@ func UserLikedBlog(blogID, userID uint) bool {
 	models.DB.Model(&BlogLike{}).Where("blog_id = ? AND user_id = ?", blogID, userID).Count(&cnt)
 	return cnt > 0
 }
+
+// ─────────────────────────────────────────────────────────────
+// blog_favorites：blog_id + user_id 唯一，收藏/取消收藏为 toggle。
+// 收藏数直接在 author_blogs.favorite_count 冗余计数（避免每次 count）。
+// ─────────────────────────────────────────────────────────────
+
+type BlogFavorite struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	BlogID    uint      `gorm:"not null;uniqueIndex:uk_blog_fav,priority:1;index:idx_blog_fav_blog" json:"blog_id"`
+	UserID    uint      `gorm:"not null;uniqueIndex:uk_blog_fav,priority:2;index" json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (BlogFavorite) TableName() string { return "blog_favorites" }
+
+// ToggleBlogFavorite 收藏/取消收藏，返回是否已收藏（true=刚收藏）
+func ToggleBlogFavorite(blogID, userID uint) (bool, error) {
+	var fav BlogFavorite
+	err := models.DB.Where("blog_id = ? AND user_id = ?", blogID, userID).First(&fav).Error
+	if err == nil {
+		// 已收藏 → 取消
+		if err := models.DB.Delete(&fav).Error; err != nil {
+			return false, err
+		}
+		models.DB.Model(&AuthorBlog{}).Where("id = ?", blogID).
+			UpdateColumn("favorite_count", models.DB.Raw("CASE WHEN favorite_count > 0 THEN favorite_count - 1 ELSE 0 END"))
+		return false, nil
+	}
+	// 未收藏 → 收藏
+	fav = BlogFavorite{BlogID: blogID, UserID: userID}
+	if err := models.DB.Create(&fav).Error; err != nil {
+		return false, err
+	}
+	models.DB.Model(&AuthorBlog{}).Where("id = ?", blogID).
+		UpdateColumn("favorite_count", models.DB.Raw("favorite_count + 1"))
+	return true, nil
+}
+
+// UserFavoritedBlog 当前用户是否已收藏某博客
+func UserFavoritedBlog(blogID, userID uint) bool {
+	if userID == 0 {
+		return false
+	}
+	var cnt int64
+	models.DB.Model(&BlogFavorite{}).Where("blog_id = ? AND user_id = ?", blogID, userID).Count(&cnt)
+	return cnt > 0
+}

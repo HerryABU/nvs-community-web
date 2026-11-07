@@ -91,6 +91,49 @@ func ToggleBlogLike(c *gin.Context) {
 	infra.Success(c, gin.H{"liked": liked, "count": count})
 }
 
+// GET /api/blogs/:id/favorites — 收藏数 + 当前用户是否已收藏
+func GetBlogFavorites(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	if id == 0 {
+		infra.BadRequest(c, "无效的博客ID")
+		return
+	}
+	userID := hctx.CurrentUserID(c)
+	var count int64
+	models.DB.Model(&blogm.BlogFavorite{}).Where("blog_id = ?", id).Count(&count)
+	infra.Success(c, gin.H{
+		"count":     count,
+		"favorited": blogm.UserFavoritedBlog(uint(id), userID),
+	})
+}
+
+// POST /api/blogs/:id/favorite — 收藏/取消收藏（toggle）
+func ToggleBlogFavorite(c *gin.Context) {
+	userID := hctx.CurrentUserID(c)
+	if userID == 0 {
+		infra.Unauthorized(c, "请先登录")
+		return
+	}
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	if id == 0 {
+		infra.BadRequest(c, "无效的博客ID")
+		return
+	}
+	blog, err := blogm.GetBlogByID(uint(id))
+	if err != nil {
+		infra.NotFound(c, "博客不存在")
+		return
+	}
+	favorited, err := blogm.ToggleBlogFavorite(blog.ID, userID)
+	if err != nil {
+		infra.InternalError(c, "操作失败")
+		return
+	}
+	var count int64
+	models.DB.Model(&blogm.BlogFavorite{}).Where("blog_id = ?", blog.ID).Count(&count)
+	infra.Success(c, gin.H{"favorited": favorited, "count": count})
+}
+
 // ─────────────────────────────────────────────────────────────
 // 博客分类管理（登录用户即可创建；普通作者创建=待审核，管理员创建=已通过）
 // 权限：创建者可编辑/删除自己的分类；管理员可管理全部并审核。
