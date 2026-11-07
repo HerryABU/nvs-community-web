@@ -12,6 +12,7 @@
             <el-radio-button value="config">策略配置</el-radio-button>
             <el-radio-button value="terms">词表（待审 {{ pendingCount }}）</el-radio-button>
             <el-radio-button value="hits">拦截留证</el-radio-button>
+            <el-radio-button value="graph">阵营图谱</el-radio-button>
           </el-radio-group>
           <span class="muted small">{{ errorHint }}</span>
         </div>
@@ -235,6 +236,11 @@
           @current-change="loadHits"
         />
       </div>
+
+      <!-- ===== 阵营图谱（只标记阵营/语言格式，不裁决对错） ===== -->
+      <div v-if="tab === 'graph'" class="admin-panel">
+        <SentimentCampGraph />
+      </div>
     </div>
 
     <!-- 词条编辑 -->
@@ -283,9 +289,10 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { Lock } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import StateBlock from '@/components/common/StateBlock.vue';
+import SentimentCampGraph from '@/components/admin/SentimentCampGraph.vue';
 import { sentimentApi, type SentimentConfig, type SentimentHit, type SentimentTerm } from '@/api/admin/sentiment';
 
-const tab = ref<'config' | 'terms' | 'hits'>('config');
+const tab = ref<'config' | 'terms' | 'hits' | 'graph'>('config');
 const errorHint = ref('');
 
 const cfg = reactive<SentimentConfig>({
@@ -554,15 +561,20 @@ async function removeTerm(row: SentimentTerm) {
     return;
   }
   try {
-    await sentimentApi.deleteTerm(row.id);
-    ElMessage.success('已删除');
-    loadTerms(termPage.value);
+    const res = await sentimentApi.deleteTerm(row.id);
+    // 普通管理员无删除权：后端转成「删除申请」并通知超级管理员（站长）
+    if (res.data?.data?.pending) {
+      ElMessage.warning(res.data.data.message || '已向超级管理员提交删除申请，等待批准');
+    } else {
+      ElMessage.success('已删除');
+      loadTerms(termPage.value);
+    }
   } catch {
     ElMessage.error('删除失败');
   }
 }
 
-const currentTabLabel = computed(() => ({ config: '策略配置', terms: '词表', hits: '拦截留证' }[tab.value]));
+const currentTabLabel = computed(() => ({ config: '策略配置', terms: '词表', hits: '拦截留证', graph: '阵营图谱' }[tab.value]));
 
 onMounted(() => {
   loadConfig();

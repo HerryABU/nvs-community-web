@@ -22,6 +22,9 @@ type NovelProject struct {
 	StylePreset string `gorm:"size:32;default:''" json:"style_preset"` // realism / hard_sci_fi / light_novel / custom
 	StyleDetail string `gorm:"type:text" json:"style_detail"`          // 更详细的风格要求
 	BodyDraft   string `gorm:"type:text" json:"body_draft"`            // 正文草稿
+	// SeedTopic 引子 / 话题（ADRO 创作向的 Anchor）：一句话灵感，作为全书拆解的锚点，
+	// 注入每个素材组件的生成提示词，保证设定/人物/大纲/时间线围绕同一主题自洽。
+	SeedTopic string `gorm:"type:text" json:"seed_topic"`
 	// 四个素材模块的「用户输入状态（补充要求）」：空=待 AI 生成，非空=用户已填写。
 	// 与对应内容字段（Setting/Characters/Outline/Timeline）解耦：内容由 AI 产出，补充要求由用户持久化。
 	SettingInput   string    `gorm:"type:text" json:"setting_input"`
@@ -37,5 +40,5 @@ func (NovelProject) TableName() string { return "authorai_projects" }
 
 // Models 返回本域需要迁移的模型列表（由根包 AllModels 运行时聚合）。
 func Models() []interface{} {
-	return []interface{}{&NovelProject{}, &Chapter{}}
+	return []interface{}{&NovelProject{}, &Chapter{}, &Detail{}}
 }

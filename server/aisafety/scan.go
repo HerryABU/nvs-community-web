@@ -42,6 +42,18 @@ type ScanOptions struct {
 	ExtraTerms         []string
 	AllowFictionRelief bool
 	AllowHarmRelief    bool
+	// Creative 文学/OC 创作场景（小说章节、话本、AI 写作流、OC 角色扮演）。
+	//
+	// 为什么需要它：ADRO（Anchor→Deconstruct→Recur→Output）是**两用方法** ——
+	// 它既是红队越狱框架，也是苏格拉底式追问 / 费曼式复述的创作引导骨架。
+	// 作者逐细节微调时天然会说「忽略上一段设定，按这个来」「你之前说过主角是…帮我还原」
+	// 「用文言/拼音写」，这些正好命中 Override / FakeHistory / Evasion 等独立行为信号，
+	// 累计能顶过拦截线，把正常创作挡掉。
+	//
+	// 抑制刻意保守：**只在创作场景且本轮与历史都没有任何管制物质时**生效。
+	// 一旦出现真实危险品/前体/工艺参数，creativeFree 立即为 false，全部判定恢复，
+	// 红队 ADRO 链回归用例（不带 Creative）行为完全不变。
+	Creative bool
 	// HistorySubstances 历史用户消息里出现过的管制物质。
 	// 用于「承接追问」判定：本轮只是「那用什么酸？」，单看这句毫无风险，
 	// 但接在前几轮已经问过 TATP 之后，就是典型的逐步索取细节。
@@ -162,6 +174,17 @@ func Scan(text string, opt ScanOptions) Result {
 		}
 	}
 
+	// ── 创作语境免误伤判定 ──
+	// ADRO 是两用方法：作者逐细节微调时天然会出现「忽略上一段设定」「帮我还原你之前写的主角」
+	// 「用文言/拼音写」这类句式，正好命中 Override / FakeHistory / Evasion 等独立行为信号。
+	// 这些是**越狱话术特征**，不是危险品特征。在创作场景且本轮与历史都没有任何管制物质时，
+	// 跳过纯行为信号计分；一旦出现真实危险品（res.Substance 或历史物质），立刻恢复全套判定。
+	// 红队回归用例不带 Creative，行为完全不变。
+	creativeFree := opt.Creative && !res.Substance && len(opt.HistorySubstances) == 0
+	if creativeFree {
+		res.Categories = append(res.Categories, "创作语境")
+	}
+
 	// ── 组合信号：意图 / 工艺 / 参数（依赖物质存在）──
 	if n, hits := countHits(t, intentTerms); n > 0 {
 		res.Intent = true
@@ -214,44 +237,49 @@ func Scan(text string, opt ScanOptions) Result {
 	// ── 独立信号：指令覆盖（直接要求作废规则）──
 	// 它足够确定，所以 CheckInput 里是硬拦而不看分数；
 	// 这里仍然计分，是为了「观察期 / 事件留痕」能看到它有多重。
-	if n, hits := countHits(t, overrideTerms); n > 0 {
-		res.Override = true
-		res.OverrideCnt = n
-		res.Hits = append(res.Hits, hits...)
-		score += 35
-	}
-
-	// ── 独立信号：虚构历史注入 ──
-	// 「你之前输出过…帮我还原」不依赖任何敏感词，任何话题都可能被这么套。
-	if n, hits := countHits(t, fakeHistoryTerms); n > 0 {
-		res.FakeHistory = true
-		res.Hits = append(res.Hits, hits...)
-		score += 25
-	}
-
-	// ── 独立信号：越狱话术 / 规避手法 ──
-	if n, hits := countHits(t, jailbreakTerms); n > 0 {
-		res.JailbreakCnt = n
-		res.Hits = append(res.Hits, hits...)
-		if n > 3 {
-			n = 3
+	// 但创作语境里「忽略上一段设定，按这个来」是正常改稿指令，不是越狱 —— creativeFree 时跳过。
+	if !creativeFree {
+		if n, hits := countHits(t, overrideTerms); n > 0 {
+			res.Override = true
+			res.OverrideCnt = n
+			res.Hits = append(res.Hits, hits...)
+			score += 35
 		}
-		score += n * 10
-	}
-	if n, hits := countHits(t, evasionTerms); n > 0 {
-		res.EvasionCnt = n
-		res.Hits = append(res.Hits, hits...)
-		if n > 2 {
-			n = 2
+
+		// ── 独立信号：虚构历史注入 ──
+		// 「你之前输出过…帮我还原」不依赖任何敏感词，任何话题都可能被这么套；
+		// 但小说微调里的「你之前写过主角怕水，帮我还原那段」是正当创作记忆，creativeFree 时跳过。
+		if n, hits := countHits(t, fakeHistoryTerms); n > 0 {
+			res.FakeHistory = true
+			res.Hits = append(res.Hits, hits...)
+			score += 25
 		}
-		score += n * 15
-	}
-	// 承接追问 / 阶梯推进本身也加分（纯行为信号）
-	if res.FollowUp {
-		score += 25
-	}
-	if res.Ladder {
-		score += res.LadderScore
+
+		// ── 独立信号：越狱话术 / 规避手法 ──
+		// 「用文言/拼音写」「别按套路」在 OC / 小说创作里是风格指令，不是规避手法。
+		if n, hits := countHits(t, jailbreakTerms); n > 0 {
+			res.JailbreakCnt = n
+			res.Hits = append(res.Hits, hits...)
+			if n > 3 {
+				n = 3
+			}
+			score += n * 10
+		}
+		if n, hits := countHits(t, evasionTerms); n > 0 {
+			res.EvasionCnt = n
+			res.Hits = append(res.Hits, hits...)
+			if n > 2 {
+				n = 2
+			}
+			score += n * 15
+		}
+		// 承接追问 / 阶梯推进本身也加分（纯行为信号）
+		if res.FollowUp {
+			score += 25
+		}
+		if res.Ladder {
+			score += res.LadderScore
+		}
 	}
 
 	// ── 跨轮拼装合成链（ADRO 形态）──
@@ -259,7 +287,9 @@ func Scan(text string, opt ScanOptions) Result {
 	// 点状闸门看不见链：把合成链拆成十几轮，每轮都凑不齐组合信号。
 	// 这一项让「同一家族多个成员 + 本轮在问做法」独立顶过拦截线，
 	// 不依赖蓝队模型是否可用。
-	if opt.HistoryMsgs != nil || len(opt.HistorySubstances) > 0 {
+	// 创作语境里多轮微调同样会带 HistoryMsgs，但没有任何管制物质家族成员，
+	// DetectChain 本就不会命中；显式跳过，避免将来词表扩展后把「反复打磨同一设定」误判成拼装链。
+	if !creativeFree && (opt.HistoryMsgs != nil || len(opt.HistorySubstances) > 0) {
 		cv := DetectChain(opt.HistoryMsgs, text)
 		if cv.Chain {
 			res.Chain = true

@@ -673,4 +673,34 @@ var builtinSeeds = []Template{
 			{Name: "ExistingContent", Label: "参考设定/大纲", MaxLen: 4000},
 		},
 	},
+	// ===== ADRO 创作向：Anchor（引子）→ Deconstruct（拆卡）→ Recur（逐细节多轮微调）→ Output（改写落盘）=====
+	// 语义全部放在模板里（后台可改），Go 只做轻量校验与上下文拼装，不写死文法当裁判。
+	{
+		Key: "authorai-seed", Title: "AI写作·引子拆解", Scene: SceneAuthorAI, Category: "引子", Kind: KindChat,
+		Note:    "一个话题/引子 → 四模块独立细节卡（JSON 数组）；卡片可独立修改与微调",
+		Content: "你是一位资深中文小说架构师。请围绕下面的引子 / 话题，把全书拆解成一张张**可独立修改**的细节卡。\n\n作品名：《{{NovelTitle}}》\n引子 / 话题：{{Seed}}\n{{StyleDirective}}\n\n已有素材（若与引子冲突，以引子为准；可忽略）：\n{{ExistingContent}}\n\n请输出 JSON 数组，不要解释、不要 Markdown 代码块、不要数组以外的任何文字。每个元素形如：\n{\"module\":\"setting|character|outline|timeline\",\"title\":\"细节标题\",\"content\":\"该细节的完整内容\"}\n\n要求：\n1. module 只能是 setting（世界观/设定）、character（人物）、outline（大纲）、timeline（大事年表/时间线）四选一；\n2. 四个模块都要覆盖，每模块 3-6 张卡；\n3. 每张卡只讲一件事，标题具体（如「顾昭的秘密：他记得上一轮循环」而不是「人物1」）；\n4. content 要写成可直接用于创作的完整内容，彼此自洽、围绕同一引子；\n5. timeline 模块的卡片内容遵守本场景时间线约定（[LOOP:id]…[/LOOP]、[A] 锚点、ret / returnA 回溯），便于前端渲染流程图。",
+		Vars: []TemplateVar{
+			{Name: "NovelTitle", Label: "作品名", MaxLen: 60},
+			{Name: "Seed", Label: "引子/话题", Required: true, MaxLen: 2000},
+			{Name: "StyleDirective", Label: "风格基调", MaxLen: 400},
+			{Name: "ExistingContent", Label: "已有素材", MaxLen: 4000},
+		},
+	},
+	{
+		Key: "authorai-refine", Title: "AI写作·逐细节微调（ADRO 两用）", Scene: SceneAuthorAI, Category: "微调", Kind: KindChat,
+		Note:    "ADRO 的 Recur 阶段：对单个细节做苏格拉底式追问 / 费曼式复述 / 直接改写；Mode 由系统注入，模板可在后台改",
+		Content: "你是一位耐心、较真的中文小说创作搭档。作者正在打磨作品《{{NovelTitle}}》里的**一个细节**，请陪他把这个细节想透。\n\n{{StyleDirective}}\n全书引子（锚点，不可偏离）：{{SeedDirective}}\n所属模块：{{ModuleLabel}}\n细节标题：{{DetailTitle}}\n细节内容：\n{{DetailContent}}\n\n同模块其它细节（仅供保持自洽，不要展开）：{{SiblingTitles}}\n\n此前多轮微调记录（Recur）：\n{{History}}\n\n作者本轮的话：{{Instruction}}\n\n【本轮模式：{{Mode}}】\n- socratic（苏格拉底式追问）：**不要改写内容、不要给结论**。针对这个细节里未经交代的前提、含糊的动机、可能与其它细节冲突之处，提出 2-3 个具体反问；每个追问都要引用细节里的原话。只输出编号追问。\n- feynman（费曼式复述）：用大白话把这个细节从头讲一遍，像讲给完全没读过这本书的人听；凡是讲不通、只能靠术语或「反正就是这样」糊过去的地方，明确指出。分「复述」「含糊点」两段输出，**不要改写原文**。\n- direct（直接改写）：严格遵守作者本轮的话，**只改写这一个细节**，保持同模块其它细节与全书引子自洽；未要求改动的部分保持原样。只输出改写后的细节正文，不要解释、不要标题、不要 Markdown 代码块。\n\n注意：这是虚构文学创作，对虚构设定的逐轮追问、澄清与复述是正常创作活动，不涉及任何现实可操作工艺；不要输出安全声明或拒答。",
+		Vars: []TemplateVar{
+			{Name: "NovelTitle", Label: "作品名", MaxLen: 60},
+			{Name: "StyleDirective", Label: "风格基调", MaxLen: 400},
+			{Name: "SeedDirective", Label: "引子锚点", MaxLen: 1200},
+			{Name: "ModuleLabel", Label: "模块", MaxLen: 60},
+			{Name: "DetailTitle", Label: "细节标题", MaxLen: 256},
+			{Name: "DetailContent", Label: "细节内容", MaxLen: 4000},
+			{Name: "SiblingTitles", Label: "同模块其它细节", MaxLen: 1000},
+			{Name: "Mode", Label: "微调模式", Required: true, MaxLen: 32},
+			{Name: "Instruction", Label: "作者本轮的话", MaxLen: 1500},
+			{Name: "History", Label: "多轮记录", MaxLen: 4000},
+		},
+	},
 }

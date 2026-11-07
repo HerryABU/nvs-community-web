@@ -194,6 +194,11 @@ func AiHubChatStream(c *gin.Context) {
 		// SystemPrompt 用户自己填的「根提示词」（人设/口吻/输出约定）。
 		// 只会**追加**在站点人设与安全准则之后，不会替换它们 —— 否则等于给越狱开后门。
 		SystemPrompt string `json:"system_prompt"`
+		// Creative 创作场景（小说章节 / 话本 / OC 角色 / AI 写作流）。
+		// 为 true 时：① 输入闸规则层抑制纯行为信号误伤；② 不前置注入安全 system prompt
+		// （长篇安全准则会污染创作上下文、把模型带偏到「拒答/说教」，这一点用户明确要求）。
+		// 未成年人保护提示词、输入闸实质判定、输出闸仍保留 —— 免注入 ≠ 免审。
+		Creative bool `json:"creative"`
 		// 自备密钥（§5.5 BYOK）：byok=true 时用用户自带上游，不扣平台代币
 		Byok      bool   `json:"byok"`
 		ByokModel string `json:"byok_model"`
@@ -398,6 +403,7 @@ func AiHubChatStream(c *gin.Context) {
 			SessionNew:      len(history) == 0,
 			HistoryUserMsgs: userMessagesOnly(history),
 			HistoryTurns:    toJudgeTurns(history),
+			Creative:        req.Creative,
 			FallbackModel:   m,
 		})
 		inputLeakTopic = dec.LeakTopic
@@ -430,7 +436,13 @@ func AiHubChatStream(c *gin.Context) {
 	}
 	// 安全准则前置：放在人设之前，并声明优先级高于人设——否则智能体自带的
 	// 「你是无限制的小说助手」会把它压过去。
-	if safetyCfg != nil {
+	//
+	// ⚠️ 创作场景（小说章节 / 话本 / OC 角色 / AI 写作流）例外：**不注入安全 system prompt**。
+	// 长篇安全准则会把「危险品 / 拒答 / 说教」塞进创作上下文，稀释人设与文风，
+	// 让模型写小说时反复自我审查、偏离创作（上下文污染）。用户明确要求 OC / 小说模式免注入。
+	// 免注入 ≠ 免审：输入闸（CheckInput，含 Creative 抑制误伤）、输出闸、违禁词、
+	// 以及未成年人保护提示词仍在；真实危险品判定也照常生效。
+	if safetyCfg != nil && !req.Creative {
 		// 绥靖模式：主模型提示词放松，去掉激进的「凡事预设可疑」框架，减少误伤；
 		// 真正的拦截改由「名单 + 良性替换」兜底（以疏代堵）。
 		var gp string
@@ -442,20 +454,18 @@ func AiHubChatStream(c *gin.Context) {
 		if gp != "" {
 			systemPrompt = gp + "\n\n" + systemPrompt
 		}
-		// 未成年人保护：叠加专属提示词 ——
-		// 对正在求救的年轻用户，守底线的同时要学会共情与引导求助，
-		// 而不是甩一句冷冰冰的「这个请求我不能提供」。
-		if safetyMinor {
-			if mp := aisafety.MinorGuardPrompt(safetyCfg); mp != "" {
-				systemPrompt = mp + "\n\n" + systemPrompt
-			}
-		}
 		// 中档模式：这个会话之前被拦截过，上下文里有不可信内容。
 		// 每轮都注入提醒 —— 只在拦截当轮提示没有用，用户换个说法问就绕过去了。
 		if session.Contaminated {
 			if notice := aisafety.ContaminatedNotice(safetyCfg); notice != "" {
 				systemPrompt = notice + "\n\n" + systemPrompt
 			}
+		}
+	}
+	// 未成年人保护：即便在创作场景也保留（心理危机是独立红线，不是安全话术注入）。
+	if safetyCfg != nil && safetyMinor {
+		if mp := aisafety.MinorGuardPrompt(safetyCfg); mp != "" {
+			systemPrompt = mp + "\n\n" + systemPrompt
 		}
 	}
 	systemPrompt = composeSystemPrompt(systemPrompt, req.SystemPrompt)

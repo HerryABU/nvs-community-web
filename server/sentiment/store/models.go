@@ -165,7 +165,49 @@ type TermAudit struct {
 
 func (TermAudit) TableName() string { return "sentiment_term_audits" }
 
+// CampMark 一次「阵营 + 语言格式」标记记录。
+//
+// 刻意不含 verdict / right / wrong / winner 等字段：对错基于阵营，是结构性原因，
+// AI 与系统都无裁判资格。表里只存「谁属于哪个阵营、用什么语言格式说话」。
+type CampMark struct {
+	ID           uint   `gorm:"primaryKey" json:"id"`
+	ContentType  string `gorm:"size:16;index" json:"content_type"`
+	ContentID    uint   `gorm:"index" json:"content_id"`
+	CommentID    uint   `gorm:"default:0;index" json:"comment_id"`
+	UserID       uint   `gorm:"index" json:"user_id"`
+	CampID       string `gorm:"size:64;index" json:"camp_id"`
+	CampLabel    string `gorm:"size:128;default:''" json:"camp_label"`
+	Position     string `gorm:"size:512;default:''" json:"position"`
+	LangFormat   string `gorm:"size:16;index" json:"lang_format"` // fandom/political/everyday/mixed/unknown
+	LangEvidence string `gorm:"size:512;default:''" json:"lang_evidence"`
+	Confidence   int    `gorm:"default:0" json:"confidence"`
+	Note         string `gorm:"size:512;default:''" json:"note"`
+	// Source ai / manual
+	Source    string    `gorm:"size:16;default:ai" json:"source"`
+	CreatedAt time.Time `gorm:"index" json:"created_at"`
+}
+
+func (CampMark) TableName() string { return "sentiment_camp_marks" }
+
+// DeleteRequest 普通管理员提交的「删除/停用」申请。
+// 普通管理员无删除权，只能提交申请；由唯一超级管理员（站长）批准或驳回。
+type DeleteRequest struct {
+	ID          uint       `gorm:"primaryKey" json:"id"`
+	TargetType  string     `gorm:"size:32;index" json:"target_type"` // term / topic / config
+	TargetID    uint       `gorm:"index" json:"target_id"`
+	TargetLabel string     `gorm:"size:255;default:''" json:"target_label"`
+	RequesterID uint       `gorm:"index" json:"requester_id"`
+	Requester   string     `gorm:"size:64;default:''" json:"requester"`
+	Reason      string     `gorm:"size:512;default:''" json:"reason"`
+	Status      string     `gorm:"size:16;default:pending;index" json:"status"` // pending / approved / rejected
+	ReviewerID  uint       `gorm:"default:0" json:"reviewer_id"`
+	ReviewedAt  *time.Time `json:"reviewed_at,omitempty"`
+	CreatedAt   time.Time  `gorm:"index" json:"created_at"`
+}
+
+func (DeleteRequest) TableName() string { return "sentiment_delete_requests" }
+
 // Migrate 建表。由 main 在启动时调用（失败只记日志、不阻断启动）。
 func Migrate(db *gorm.DB) error {
-	return db.AutoMigrate(&ContentTopic{}, &Term{}, &Hit{}, &Config{}, &TermAudit{})
+	return db.AutoMigrate(&ContentTopic{}, &Term{}, &Hit{}, &Config{}, &TermAudit{}, &CampMark{}, &DeleteRequest{})
 }

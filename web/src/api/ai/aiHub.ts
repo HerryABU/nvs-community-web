@@ -335,6 +335,12 @@ export async function streamChat(
     edit_msg_id?: number;
     /** 对某条助手回复重新生成 → 新建 assistant 兄弟分支 */
     regenerate_msg_id?: number;
+    /**
+     * 创作场景（小说章节 / 话本 / OC 角色 / AI 写作流）。
+     * true 时服务端不前置注入安全 system prompt（避免上下文污染与创作偏离），
+     * 同时输入闸规则层抑制「逐细节追问」被误判为越狱；实质审核与未成年人保护仍保留。
+     */
+    creative?: boolean;
   },
   onChunk: (text: string) => void,
   signal?: AbortSignal,

@@ -481,6 +481,8 @@ async function run() {
         message: buildPrompt(),
         max_tokens: form.max_tokens,
         attachments: attachments.value,
+        // 小说章节 / 话本 / 博客写作：创作场景免注入安全提示词，避免上下文污染与文风偏离
+        creative: true,
       },
       (chunk: string) => {
         liveText.value += chunk;

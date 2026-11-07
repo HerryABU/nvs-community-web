@@ -48,6 +48,7 @@ type createProjectInput struct {
 	Title       string `json:"title"`
 	StylePreset string `json:"style_preset"`
 	StyleDetail string `json:"style_detail"`
+	SeedTopic   string `json:"seed_topic"` // 引子/话题（ADRO Anchor）
 }
 
 type updateProjectInput struct {
@@ -58,6 +59,7 @@ type updateProjectInput struct {
 	Outline        *string `json:"outline"`
 	StylePreset    *string `json:"style_preset"`
 	StyleDetail    *string `json:"style_detail"`
+	SeedTopic      *string `json:"seed_topic"` // 引子/话题（ADRO Anchor）
 	BodyDraft      *string `json:"body_draft"`
 	SettingInput   *string `json:"setting_input"`
 	CharacterInput *string `json:"character_input"`
@@ -118,6 +120,7 @@ func CreateProject(c *gin.Context) {
 		Title:       title,
 		StylePreset: in.StylePreset,
 		StyleDetail: in.StyleDetail,
+		SeedTopic:   strings.TrimSpace(in.SeedTopic),
 		Status:      "draft",
 	}
 	if err := models.DB.Create(p).Error; err != nil {
@@ -169,6 +172,9 @@ func UpdateProject(c *gin.Context) {
 	}
 	if in.StyleDetail != nil {
 		p.StyleDetail = *in.StyleDetail
+	}
+	if in.SeedTopic != nil {
+		p.SeedTopic = strings.TrimSpace(*in.SeedTopic)
 	}
 	if in.BodyDraft != nil {
 		p.BodyDraft = *in.BodyDraft
@@ -304,6 +310,14 @@ func generateViaTemplate(p *authoraim.NovelProject, comp, extraOverride string) 
 	if strings.TrimSpace(extraOverride) != "" {
 		extra = strings.TrimSpace(extraOverride)
 	}
+	// 引子（ADRO Anchor）作为全书锚点注入每个组件：即使模板是旧版、后台改过的版本，
+	// 也通过 ExtraRequirements 前缀生效；新模板可用 {{SeedDirective}} 单独放置。
+	seedDirective := ""
+	if s := strings.TrimSpace(p.SeedTopic); s != "" {
+		seedDirective = "【全书引子 / 话题锚点】" + clip(s, 1200) +
+			"（所有设定、人物、大纲、时间线必须围绕这一引子展开并保持自洽）"
+		extra = seedDirective + "\n" + extra
+	}
 	taskMode := "从零创作完整内容"
 	if strings.TrimSpace(existing) != "" {
 		taskMode = "在已有内容基础上补充与完善，保持与已有内容严格自洽"
@@ -320,6 +334,7 @@ func generateViaTemplate(p *authoraim.NovelProject, comp, extraOverride string) 
 		"ExtraRequirements": extra,
 		"ExistingContent":   strings.TrimSpace(existing),
 		"TaskMode":          taskMode,
+		"SeedDirective":     seedDirective,
 	}
 	res := prompttpl.Render(t.Content, t.Vars, values)
 	return res.Text, nil

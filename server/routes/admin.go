@@ -405,6 +405,14 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.GET("/sentiment/topics", sentiment.GetContentTopic)
 		adminGrp.PUT("/sentiment/topics", sentiment.SetContentTopic)
 		adminGrp.POST("/sentiment/run-update", sentiment.RunSentimentUpdate)
+		// 阵营中立标记 / 语言格式 / 图谱 / 删除申请审批（超级管理员分层）
+		adminGrp.GET("/sentiment/neutral-prompt", sentiment.GetNeutralityPrompt)
+		adminGrp.POST("/sentiment/camp-marks", sentiment.CreateCampMark)
+		adminGrp.GET("/sentiment/camp-marks", sentiment.ListCampMarks)
+		adminGrp.GET("/sentiment/camp-graph", sentiment.GetCampGraph)
+		adminGrp.GET("/sentiment/delete-requests", sentiment.ListDeleteRequests)
+		adminGrp.POST("/sentiment/delete-requests/:id/approve", sentiment.ApproveDeleteRequest)
+		adminGrp.POST("/sentiment/delete-requests/:id/reject", sentiment.RejectDeleteRequest)
 		adminGrp.GET("/ai/safety/locked-sessions", aiworkbench.ListLockedSessions)
 		adminGrp.POST("/ai/safety/sessions/:sid/unlock", aiworkbench.UnlockChatSession)
 		// 名单子系统（以疏代堵）：可疑/恶意名单 + 警方取证申请审批

@@ -1,6 +1,8 @@
 package sentiment
 
 import (
+	"fmt"
+
 	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
@@ -215,14 +217,36 @@ func ReviewSentimentTerm(c *gin.Context) {
 }
 
 // DeleteSentimentTerm DELETE /api/admin/sentiment/terms/:id
+//
+// 权限分层（用户明确要求）：**只有唯一超级管理员（站长）能删除**。
+// 普通管理员调用时不直接 403 让操作凭空消失，而是转成一条「删除申请」并通知站长，
+// 由站长在申请列表里批准后才真正删除 —— 既能新增规则，又不会误删/越权删。
 func DeleteSentimentTerm(c *gin.Context) {
-	if !admincommon.EnsureAdmin(c) {
+	if !admincommon.EnsureElevated(c) {
 		return
 	}
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var t store.Term
 	if err := store.DB.First(&t, id).Error; err != nil {
 		infra.NotFound(c, "词条不存在")
+		return
+	}
+	if !admincommon.CanDelete(c) {
+		uid, name := admincommon.DescribeActor(c)
+		req := store.DeleteRequest{
+			TargetType: "term", TargetID: t.ID, TargetLabel: t.Word,
+			RequesterID: uid, Requester: name,
+			Reason: strings.TrimSpace(c.Query("reason")), Status: "pending",
+		}
+		if err := store.DB.Create(&req).Error; err != nil {
+			infra.InternalError(c, "提交删除申请失败")
+			return
+		}
+		admincommon.NotifySuperAdmin(uid, "sentiment_delete_request",
+			"管理员提交删除申请",
+			fmt.Sprintf("管理员 %s 申请删除舆情词条「%s」（#%d），请前往管理员台审核。", name, t.Word, t.ID),
+			"/admin/sentiment")
+		infra.Success(c, gin.H{"pending": true, "request_id": req.ID, "message": admincommon.DeleteRequestHint()})
 		return
 	}
 	if err := store.DB.Delete(&store.Term{}, id).Error; err != nil {

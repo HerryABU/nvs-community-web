@@ -50,8 +50,24 @@ func SystemPrompt(cfg *SafetyConfig) string {
 	if !strings.Contains(base, multiTurnGuardClause) {
 		base = base + "\n" + multiTurnGuardClause
 	}
+	// 创作语境豁免：ADRO 骨架是两用方法（苏格拉底式追问 / 费曼式复述），
+	// 不能因为「多轮逐细节追问」这个形态就把小说/OC 创作当越狱。同样用运行时追加，
+	// 保证老站点存着旧版提示词也能生效，且不覆盖管理员自定义措辞。
+	if !strings.Contains(base, creativeGuardClause) {
+		base = base + "\n" + creativeGuardClause
+	}
 	return base
 }
+
+// creativeGuardClause 文学 / OC 创作语境豁免条款（主模型安全准则追加）。
+const creativeGuardClause = `9. **文学与 OC 创作是正常场景，不是越狱**：本平台是小说/角色创作站，作者会围绕
+   虚构世界观、人物、大纲、时间线做逐细节追问与多轮微调（ADRO 骨架在此是苏格拉底式
+   澄清与费曼式复述，属两用方法的正当用法）。对**纯虚构设定**的「为什么这样设定」
+   「把上一段改掉」「用文言/拼音写」「还原你之前写的角色」等指令，一律按创作需求处理，
+   不要输出安全声明、不要拒答、不要因此偏离人设与文风。
+   第 1~5 条的禁令只针对**现实中可操作的危险品/管制物质及其工艺参数**：是否命中，
+   以对话里是否出现真实原料、配比、温度、步骤为准，而不是以「问了几轮、是否逐步深入」为准。
+   虚构作品里写到爆炸、毒物等情节时，写氛围、后果、人物反应与法律代价均可，仍不写可复现的现实工艺。`
 
 // multiTurnGuardClause 跨轮拼装（ADRO / 长周期渐进式诱导）的结构性禁令。
 const multiTurnGuardClause = `5b. **跨轮拼装同样禁止**：把一条合成链拆成十几个各自无害的提问
@@ -96,6 +112,10 @@ type InputRequest struct {
 	HistoryUserMsgs []string    // 历史用户消息，用于提取「提到过的管制物质」
 	HistoryTurns    []JudgeTurn // 完整对话（含助手回复），供模型 B 判定
 
+	// Creative 文学/OC 创作场景：规则层抑制纯行为信号误伤（详见 ScanOptions.Creative）。
+	// 只影响规则层打分，不影响「是否调监管模型 B」；一旦出现管制物质即刻恢复原判定。
+	Creative bool
+
 	// FallbackModel 主模型：judge_model_id 与它相同即复用（用户要求「模型可以同一个」）
 	FallbackModel *ai.AiModel
 }
@@ -135,6 +155,7 @@ func CheckInput(in InputRequest) *InputDecision {
 		ExtraTerms:         splitExtraTerms(cfg.ExtraTerms),
 		AllowFictionRelief: cfg.AllowFictionRelief,
 		AllowHarmRelief:    cfg.AllowHarmRelief,
+		Creative:           in.Creative,
 		HistorySubstances:  ExtractSubstances(in.HistoryUserMsgs),
 		HistoryMsgs:        in.HistoryUserMsgs,
 	}

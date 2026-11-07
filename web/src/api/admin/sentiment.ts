@@ -110,4 +110,83 @@ export const sentimentApi = {
   runUpdate() {
     return api.post<{ code: number; data: { result: any } }>('/admin/sentiment/run-update');
   },
+
+  // ===== 阵营中立标记 / 语言格式 / 图谱 / 删除申请 =====
+  neutralityPrompt() {
+    return api.get<{ code: number; data: NeutralityPromptData }>('/admin/sentiment/neutral-prompt');
+  },
+  campGraph() {
+    return api.get<{ code: number; data: CampGraphData }>('/admin/sentiment/camp-graph');
+  },
+  campMarks() {
+    return api.get<{ code: number; data: CampMark[] }>('/admin/sentiment/camp-marks');
+  },
+  createCampMark(data: Partial<CampMark>) {
+    return api.post<{ code: number; data: CampMark }>('/admin/sentiment/camp-marks', data);
+  },
+  deleteRequests() {
+    return api.get<{ code: number; data: { list: DeleteRequest[]; can_approve: boolean } }>(
+      '/admin/sentiment/delete-requests',
+    );
+  },
+  approveDeleteRequest(id: number) {
+    return api.post(`/admin/sentiment/delete-requests/${id}/approve`, {});
+  },
+  rejectDeleteRequest(id: number, reason = '') {
+    return api.post(`/admin/sentiment/delete-requests/${id}/reject`, { reason });
+  },
 };
+
+export interface NeutralityPromptData {
+  prompt: string;
+  notice: string;
+  lang_formats: { value: string; label: string }[];
+}
+
+export interface CampNode {
+  id: string;
+  label: string;
+  size: number;
+  lang_format: string;
+  lang_label: string;
+  lang_mix: Record<string, number>;
+  confidence: number;
+}
+
+export interface CampEdge {
+  source: string;
+  target: string;
+  weight: number;
+}
+
+export interface CampGraphData {
+  nodes: CampNode[];
+  edges: CampEdge[];
+  notice: string;
+}
+
+export interface CampMark {
+  id: number;
+  camp_id: string;
+  camp_label: string;
+  position: string;
+  lang_format: string;
+  lang_evidence: string;
+  confidence: number;
+  note: string;
+  content_type: string;
+  content_id: number;
+  comment_id: number;
+  created_at: string;
+}
+
+export interface DeleteRequest {
+  id: number;
+  target_type: string;
+  target_id: number;
+  target_label: string;
+  requester: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+}
