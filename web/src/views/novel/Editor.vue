@@ -74,9 +74,11 @@
           <el-radio-group v-model="form.mode">
             <el-radio value="prose">散文体</el-radio>
             <el-radio value="script">话本气泡体</el-radio>
+            <el-radio value="comic">漫画体</el-radio>
+            <el-radio value="image">图片模式</el-radio>
           </el-radio-group>
           <span style="margin-left:12px;font-size:0.8rem;color: var(--text-light, #999)">
-            话本气泡体：正文按「角色：台词」逐行解析为对话气泡，【场景】为提示，其余为旁白
+            话本气泡体：正文按「角色：台词」逐行解析为对话气泡；漫画体/图片模式：每章以有序图片集呈现（漫画页或插画）
           </span>
         </el-form-item>
         <!-- #76 同人衍生 -->

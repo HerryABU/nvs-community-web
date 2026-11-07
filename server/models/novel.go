@@ -18,7 +18,7 @@ type Novel struct {
 	Status          string  `gorm:"size:32;default:draft;index:idx_novels_author_status,priority:2" json:"status"`
 	SourceType      string  `gorm:"size:32;default:original" json:"source_type"`  // original / reprint
 	CreationMethod  string  `gorm:"size:32;default:human" json:"creation_method"` // human / ai / human_ai_assisted
-	// Mode 叙事形态：prose=散文体（默认）/ script=话本气泡体（对话为主，按「角色：台词」解析渲染）
+	// Mode 叙事形态：prose=散文体（默认）/ script=话本气泡体 / comic=漫画体 / image=图片模式
 	Mode            string `gorm:"size:12;not null;default:prose;index" json:"mode"`
 	WallEnabled     bool   `gorm:"not null;default:false" json:"wall_enabled"`                   // 作者隔离开关：true=外人需登录才能查看本作品（老数据，等价于 read_permission=login）
 	CommentsEnabled bool   `gorm:"not null;default:true" json:"comments_enabled"`                // 评论区开关：作者可关闭本作品评论区（含章评），默认开启
@@ -224,8 +224,10 @@ type Chapter struct {
 	ContentSignature string `gorm:"size:64;default:''" json:"content_signature"` // HMAC-SHA256 作者签名
 	WordCount        int    `gorm:"default:0" json:"word_count"`
 	Status           string `gorm:"size:32;default:published;index" json:"status"` // draft/pending/published/rejected
-	// Mode 本章叙事形态：空=继承作品 / prose 散文体 / script 话本气泡体 / mixed 散文与话本混排
+	// Mode 本章叙事形态：空=继承作品 / prose 散文体 / script 话本气泡体 / mixed 散文与话本混排 / comic 漫画体 / image 图片模式
 	Mode string `gorm:"size:8;default:''" json:"mode"`
+	// Images 章节图片集（comic/image 形态）：有序 JSON 数组，元素 {url, caption}
+	Images string `gorm:"type:json;default:'[]'" json:"images"`
 	// SourceFlowID 来源追溯：由 OC 群组对话流一键发布而来（0 = 非 OC 来源）
 	SourceFlowID uint           `gorm:"not null;default:0;index" json:"source_flow_id"`
 	AuthorID     uint           `gorm:"not null;default:0;index" json:"author_id"`      // 本章作者（多人协作署名）

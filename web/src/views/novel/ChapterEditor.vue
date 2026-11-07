@@ -8,7 +8,7 @@
         </el-button>
         <span class="ce-novel-title">{{ novelTitle }}</span>
       </div>
-        <div class="ce-toolbar-center">
+        <div class="ce-toolbar-center" v-if="!imageMode">
           <el-radio-group v-model="editorMode" size="small" @change="onModeChange">
             <el-radio-button value="md">Markdown</el-radio-button>
             <el-radio-button value="richtext">富文本</el-radio-button>
@@ -148,30 +148,69 @@
           />
         </div>
 
-        <!-- Cherry Markdown 编辑器 -->
-        <div
-          v-show="editorMode === 'md'"
-          class="ce-md-wrapper"
-        >
-          <div ref="cherryContainer" class="ce-cherry-container"></div>
-        </div>
+        <!-- 文字类形态编辑器（散文 / 话本 / 混排） -->
+        <template v-if="!imageMode">
+          <!-- Cherry Markdown 编辑器 -->
+          <div
+            v-show="editorMode === 'md'"
+            class="ce-md-wrapper"
+          >
+            <div ref="cherryContainer" class="ce-cherry-container"></div>
+          </div>
 
-        <!-- 富文本编辑器 -->
-        <div v-show="editorMode === 'richtext'" class="ce-richtext-editor">
-          <RichTextEditor
-            v-model="richTextContent"
-            placeholder="开始写作..."
-            @save="saveChapter"
-          />
-        </div>
+          <!-- 富文本编辑器 -->
+          <div v-show="editorMode === 'richtext'" class="ce-richtext-editor">
+            <RichTextEditor
+              v-model="richTextContent"
+              placeholder="开始写作..."
+              @save="saveChapter"
+            />
+          </div>
 
-        <!-- 话本气泡体专用编辑器：角色气泡 + 头像 + 左右分侧 + 角色管理 -->
-        <div v-show="editorMode === 'bubble'" class="ce-bubble-wrapper">
-          <ScriptBubbleEditor
-            v-model="bubbleContent"
-            :mode="effectiveMode === 'mixed' ? 'mixed' : 'script'"
-            :novel-id="novelId"
-          />
+          <!-- 话本气泡体专用编辑器：角色气泡 + 头像 + 左右分侧 + 角色管理 -->
+          <div v-show="editorMode === 'bubble'" class="ce-bubble-wrapper">
+            <ScriptBubbleEditor
+              v-model="bubbleContent"
+              :mode="effectiveMode === 'mixed' ? 'mixed' : 'script'"
+              :novel-id="novelId"
+            />
+          </div>
+        </template>
+
+        <!-- 图片类形态编辑器（漫画体 / 图片模式）：有序图片集 -->
+        <div v-else class="ce-image-editor">
+          <div class="ce-image-toolbar">
+            <el-upload
+              :auto-upload="false"
+              :show-file-list="false"
+              :multiple="true"
+              accept="image/*"
+              :disabled="imageUploading"
+              @change="onImageSelected"
+            >
+              <el-button :icon="Plus" :loading="imageUploading" type="primary">添加图片</el-button>
+            </el-upload>
+            <span class="ce-image-hint">
+              {{ effectiveMode === 'comic' ? '漫画体：按分镜顺序上传页面，阅读器逐页呈现' : '图片模式：上传插画/图片，阅读器按顺序排列' }}
+            </span>
+          </div>
+          <div v-if="chapterImages.length === 0" class="ce-image-empty">
+            <el-empty description="暂无图片，点击「添加图片」上传" :image-size="80" />
+          </div>
+          <div v-else class="ce-image-list">
+            <div v-for="(img, idx) in chapterImages" :key="idx" class="ce-image-item">
+              <div class="ce-image-order">
+                <el-button size="small" text :disabled="idx === 0" @click="moveImage(idx, -1)">↑</el-button>
+                <span class="ce-image-index">{{ idx + 1 }}</span>
+                <el-button size="small" text :disabled="idx === chapterImages.length - 1" @click="moveImage(idx, 1)">↓</el-button>
+              </div>
+              <img :src="img.url" class="ce-image-thumb" alt="图片" />
+              <div class="ce-image-meta">
+                <el-input v-model="img.caption" size="small" placeholder="图注（可选）" />
+                <el-button size="small" type="danger" text @click="removeImage(idx)">删除</el-button>
+              </div>
+            </div>
+          </div>
         </div>
       </main>
     </div>
@@ -199,8 +238,11 @@ import {
   scriptApi,
   CHAPTER_MODE_OPTIONS,
   isBubbleMode,
+  isImageMode,
   type ChapterMode,
+  type ChapterImage,
 } from '@/api/novel/script';
+import { uploadApi } from '@/api/social';
 import { guardLeak } from '@/composables/useLeakGuard';
 // engineConfig 已内置 physicsKatex（含 mhchem + physics 物理宏包）
 import { renderMarkdown, editorEngineConfig } from '@/markdown/renderer';
@@ -231,6 +273,9 @@ const chapterContent = ref('');       // Markdown 源文本
 const richTextContent = ref('');      // 富文本 HTML 内容
 const bubbleContent = ref('');        // 话本气泡编辑器内容（源文本形态）
 const editorMode = ref<'md' | 'richtext' | 'bubble'>('md');
+// 图片类形态（漫画体 / 图片模式）：章节以有序图片集呈现
+const chapterImages = ref<ChapterImage[]>([]);
+const imageUploading = ref(false);
 const saving = ref(false);
 const lastSaved = ref('');
 
@@ -251,6 +296,7 @@ const novelMode = ref('prose');
 // 章节形态：'' = 继承作品（后端存空值），显式设置时为 prose/script/mixed
 const chapterMode = ref<ChapterMode>('');
 const effectiveMode = computed(() => chapterMode.value || novelMode.value || 'prose');
+const imageMode = computed(() => isImageMode(effectiveMode.value));
 const scriptPreviewVisible = ref(false);
 const scriptPreviewHtml = ref('');
 const scriptSpeakers = ref<string[]>([]);
@@ -286,6 +332,38 @@ function onChapterModeChange() {
       ? '本章将继承作品形态，保存后生效'
       : `本章形态已设为「${CHAPTER_MODE_OPTIONS.find((m) => m.value === chapterMode.value)?.label}」，保存后生效`,
   );
+}
+
+// ===== 图片类形态（漫画体 / 图片模式）编辑 =====
+async function onImageSelected(uploadFile: any) {
+  const raw = uploadFile?.raw as File | undefined;
+  if (!raw) return;
+  await uploadOneImage(raw);
+}
+async function uploadOneImage(file: File) {
+  imageUploading.value = true;
+  try {
+    const res = await uploadApi.upload(file);
+    const url = res.data?.data?.url;
+    if (!url) throw new Error('上传未返回地址');
+    chapterImages.value.push({ url, caption: '' });
+    ElMessage.success('图片已添加');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '上传失败');
+  } finally {
+    imageUploading.value = false;
+  }
+}
+function moveImage(idx: number, dir: number) {
+  const target = idx + dir;
+  if (target < 0 || target >= chapterImages.value.length) return;
+  const arr = chapterImages.value;
+  [arr[idx], arr[target]] = [arr[target], arr[idx]];
+  chapterImages.value = [...arr];
+}
+function removeImage(idx: number) {
+  chapterImages.value.splice(idx, 1);
+  chapterImages.value = [...chapterImages.value];
 }
 
 // 预览抽屉里点表情 → 插入编辑器
@@ -594,6 +672,14 @@ async function loadCurrentChapter() {
     canEditThis.value = computeCanEdit(ch);
     // 章节叙事形态（空=继承作品；这里取 DB 原值，未被列表回填的生效值污染）
     chapterMode.value = ((ch as any).mode || '') as ChapterMode;
+    // 图片类形态：载入已存图片集（有序 [{url,caption}]）
+    try {
+      const raw = (ch as any).images;
+      chapterImages.value = Array.isArray(raw) ? raw : (raw ? JSON.parse(raw) : []);
+    } catch {
+      chapterImages.value = [];
+    }
+    if (!Array.isArray(chapterImages.value)) chapterImages.value = [];
 
     if (editorMode.value === 'md' && cherryInstance) {
       cherryInstance.setValue(content);
@@ -656,11 +742,24 @@ async function saveChapter(force = false) {
   // 表现为「点保存没反应」。这里统一收口成真正的布尔值。
   const forceSave = force === true;
   const contentToSave = await getContentToSave();
-  // 个人信息泄漏提示（本地检测，高危需确认；后端只收命中类型计数）
-  if (!(await guardLeak(contentToSave, '章节正文'))) return;
+  // 个人信息泄漏提示（本地检测，高危需确认；后端只收命中类型计数）——图片形态无正文，跳过
+  if (!imageMode.value && !(await guardLeak(contentToSave, '章节正文'))) return;
   saving.value = true;
   try {
     let chapterId = 0;
+    // 图片类形态：以有序图片集上报，正文留空；文字形态：以正文上报
+    const payload: any = {
+      title: chapterTitle.value,
+      ai_assisted: aiUsed.value || undefined,
+      ai_model: aiUsed.value ? aiModelName.value : undefined,
+      mode: chapterMode.value, // '' = 继承作品形态
+    };
+    if (imageMode.value) {
+      payload.content = '';
+      payload.images = JSON.stringify(chapterImages.value || []);
+    } else {
+      payload.content = contentToSave;
+    }
     const existing = chapters.value.find(c => c.chapter_number === currentNum.value && c.id > 0);
     // 版本控制：base_version 落后即被服务端拒绝（409），前端弹并排对比
     const vcsFields = {
@@ -670,24 +769,14 @@ async function saveChapter(force = false) {
     } as any;
     if (existing) {
       const res = await chapterApi.updateChapter(novelId.value, currentNum.value, {
-        title: chapterTitle.value,
-        content: contentToSave,
-        ai_assisted: aiUsed.value || undefined,
-        ai_model: aiUsed.value ? aiModelName.value : undefined,
-        mode: chapterMode.value, // '' = 继承作品形态
+        ...payload,
         ...vcsFields,
       } as any);
       chapterId = existing.id;
       const ver = Number(res?.data?.data?.version || 0);
       if (ver > 0) baseVersion.value = ver;
     } else {
-      const res = await chapterApi.createChapter(novelId.value, {
-        title: chapterTitle.value,
-        content: contentToSave,
-        ai_assisted: aiUsed.value || undefined,
-        ai_model: aiUsed.value ? aiModelName.value : undefined,
-        mode: chapterMode.value,
-      } as any);
+      const res = await chapterApi.createChapter(novelId.value, payload as any);
       chapterId = Number(res.data?.data?.id) || 0;
       const ver = Number(res?.data?.data?.version || 0);
       if (ver > 0) baseVersion.value = ver;
@@ -1197,5 +1286,66 @@ onBeforeUnmount(() => {
   .ce-editor-header {
     padding: 8px;
   }
+}
+
+/* ===== 图片类形态编辑器（漫画体 / 图片模式） ===== */
+.ce-image-editor {
+  padding: 16px;
+  height: 100%;
+  overflow-y: auto;
+}
+.ce-image-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.ce-image-hint {
+  font-size: 0.8rem;
+  color: var(--text-light, #999);
+}
+.ce-image-empty {
+  padding: 40px 0;
+}
+.ce-image-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.ce-image-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--glass-border, #e5e7eb);
+  align-items: flex-start;
+}
+.ce-image-order {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 36px;
+}
+.ce-image-index {
+  font-weight: 600;
+  color: var(--text-color, #333);
+  font-size: 0.9rem;
+}
+.ce-image-thumb {
+  width: 96px;
+  height: 128px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #f1f5f9;
+  flex-shrink: 0;
+}
+.ce-image-meta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 </style>

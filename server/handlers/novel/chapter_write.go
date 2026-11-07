@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"nvs-server/chaptervcs"
@@ -62,15 +63,37 @@ func CreateChapter(c *gin.Context) {
 
 	var req struct {
 		Title      string `json:"title" binding:"required"`
-		Content    string `json:"content" binding:"required"`
+		Content    string `json:"content"`
 		AiAssisted bool   `json:"ai_assisted"` // 作者标记：本章含 AI 辅助生成
 		AiModel    string `json:"ai_model"`    // 使用的模型展示名
 		Publish    *bool  `json:"publish"`     // 是否直接发布（协作者无发布权时忽略）
-		Mode       string `json:"mode"`        // 本章叙事形态：空=继承作品 / prose / script / mixed
+		Mode       string `json:"mode"`        // 本章叙事形态：空=继承作品 / prose / script / mixed / comic / image
+		Images     string `json:"images"`      // 章节图片集（comic/image 形态）：有序 JSON 数组 [{url,caption}]
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		infra.BadRequest(c, "请填写章节标题和内容")
+		infra.BadRequest(c, "请求参数错误")
 		return
+	}
+
+	// 章节生效形态（章节未指定则继承作品）
+	chapterMode := normalizeChapterMode(req.Mode)
+	effMode := chapterMode
+	if effMode == "" {
+		effMode = novelMode(novel)
+	}
+	// 正文 / 图片 二选一：文字形态必须给正文；图片形态必须给图片集
+	if isImageMode(effMode) {
+		req.Images = normalizeChapterImages(req.Images)
+		if req.Images == "[]" {
+			infra.BadRequest(c, "图片模式章节至少需要一张图片")
+			return
+		}
+	} else {
+		req.Content = strings.TrimSpace(req.Content)
+		if req.Content == "" {
+			infra.BadRequest(c, "请填写章节内容")
+			return
+		}
 	}
 
 	// XSS 防护：移除内联 HTML 标签（保留 Markdown 语法与文本内容）
@@ -133,7 +156,8 @@ func CreateChapter(c *gin.Context) {
 		WordCount:        wordCount,
 		Status:           status,
 		AuthorID:         userID,
-		Mode:             normalizeChapterMode(req.Mode),
+		Mode:             chapterMode,
+		Images:           req.Images,
 	}
 
 	if err := models.CreateChapter(chapter); err != nil {
@@ -210,8 +234,10 @@ func UpdateChapter(c *gin.Context) {
 		Branch      string `json:"branch"`
 		Force       bool   `json:"force"`
 		Message     string `json:"message"`
-		// 本章叙事形态：nil=不改 / 空串=继承作品 / prose / script / mixed
+		// 本章叙事形态：nil=不改 / 空串=继承作品 / prose / script / mixed / comic / image
 		Mode *string `json:"mode"`
+		// 章节图片集（comic/image 形态）：nil=不改；传字符串覆盖（有序 JSON 数组 [{url,caption}]）
+		Images *string `json:"images"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		infra.BadRequest(c, "请求参数错误")
@@ -231,9 +257,13 @@ func UpdateChapter(c *gin.Context) {
 	if req.Title != "" {
 		chapter.Title = bluemonday.StrictPolicy().Sanitize(req.Title)
 	}
-	// 章节级叙事形态：可继承作品，也可单独设为散文 / 话本 / 混排
+	// 章节级叙事形态：可继承作品，也可单独设为散文 / 话本 / 混排 / 漫画体 / 图片模式
 	if req.Mode != nil {
 		chapter.Mode = normalizeChapterMode(*req.Mode)
+	}
+	// 章节图片集（comic/image 形态）：传了就覆盖规范化
+	if req.Images != nil {
+		chapter.Images = normalizeChapterImages(*req.Images)
 	}
 
 	// 版本控制：先做冲突检测并落快照，再覆盖正文文件——避免吞掉他人的改动

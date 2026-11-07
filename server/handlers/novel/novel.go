@@ -479,7 +479,7 @@ func normalizeNovelMode(m string) string {
 	return "prose"
 }
 
-// normalizeChapterMode 章节叙事形态：”=继承作品（默认）/ prose / script / mixed（散文与话本混排）
+// normalizeChapterMode 章节叙事形态："=继承作品（默认）/ prose / script / mixed / comic（漫画体）/ image（图片模式）
 func normalizeChapterMode(m string) string {
 	switch strings.ToLower(strings.TrimSpace(m)) {
 	case "prose":
@@ -488,6 +488,10 @@ func normalizeChapterMode(m string) string {
 		return "script"
 	case "mixed":
 		return "mixed"
+	case "comic":
+		return "comic"
+	case "image":
+		return "image"
 	default:
 		return "" // 继承作品形态
 	}
@@ -499,4 +503,41 @@ func effectiveChapterMode(chapter *models.Chapter, novel *models.Novel) string {
 		return chapter.Mode
 	}
 	return novelMode(novel)
+}
+
+// isImageMode 是否为图片类形态（comic 漫画体 / image 图片模式）：正文不再以文字为主，改为图片集
+func isImageMode(m string) bool {
+	return m == "comic" || m == "image"
+}
+
+// normalizeChapterImages 校验并规范化章节图片集 JSON（comic/image 形态）。
+// 接受数组（元素含 url；caption 可选），返回规范化后的 JSON 字符串；非法或空时回落 "[]"。
+func normalizeChapterImages(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "[]"
+	}
+	var arr []map[string]interface{}
+	if err := json.Unmarshal([]byte(s), &arr); err != nil {
+		return "[]"
+	}
+	clean := make([]map[string]interface{}, 0, len(arr))
+	for _, item := range arr {
+		u, _ := item["url"].(string)
+		if strings.TrimSpace(u) == "" {
+			continue
+		}
+		entry := map[string]interface{}{"url": strings.TrimSpace(u)}
+		if capV, ok := item["caption"].(string); ok {
+			entry["caption"] = capV
+		} else {
+			entry["caption"] = ""
+		}
+		clean = append(clean, entry)
+	}
+	b, err := json.Marshal(clean)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
 }

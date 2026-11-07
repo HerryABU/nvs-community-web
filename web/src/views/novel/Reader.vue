@@ -132,27 +132,53 @@
         </el-result>
       </div>
       <div v-else class="reader-content">
-        <!-- 话本气泡体：气泡视图 / 原文视图切换 -->
-        <div v-if="isScriptMode" class="reader-script-switch">
-          <el-radio-group v-model="scriptView" size="small" @change="renderCurrent">
-            <el-radio-button value="bubble">气泡对话</el-radio-button>
-            <el-radio-button value="text">原文</el-radio-button>
-          </el-radio-group>
-          <span class="rs-tip">
-            {{ effectiveMode === 'mixed' ? '混排作品：对话为气泡，其余段落按正文排版' : '话本作品：按「角色：台词」解析为对话气泡' }}
-          </span>
-        </div>
-        <div v-if="chapter?.content" class="reader-md-wrap">
-          <div class="reader-md markdown-body cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" v-html="renderedHtml" ref="mdContainer"
-            @click="onMdClick"
-            @pointerdown="onBubbleDown"
-            @pointerup="cancelBubblePress"
-            @pointercancel="cancelBubblePress"
-            @pointermove="onBubbleMove"
-            @contextmenu="onBubbleContextMenu"></div>
-        </div>
-        <p v-else-if="chapter" style="text-align:center;color:var(--warning-color)">章节已加载但内容为空（content长度=0）</p>
-        <p v-else style="text-align:center;color:var(--text-muted)">暂无内容（chapter 为 null）</p>
+        <!-- 图片类形态（漫画体 / 图片模式）：以有序图片集呈现 -->
+        <template v-if="isImageModeView">
+          <div v-if="chapterImages.length === 0" class="reader-empty-img">本章暂无图片</div>
+          <!-- 漫画体：逐页翻看 -->
+          <template v-else-if="effectiveMode === 'comic'">
+            <div class="reader-comic-page">
+              <img :src="chapterImages[comicPage].url" :alt="chapterImages[comicPage].caption || ('第' + (comicPage + 1) + '页')" />
+              <p v-if="chapterImages[comicPage].caption" class="reader-img-cap">{{ chapterImages[comicPage].caption }}</p>
+            </div>
+            <div class="reader-comic-nav">
+              <el-button :disabled="comicPage === 0" @click="comicPage--">上一页</el-button>
+              <span class="reader-comic-ind">{{ comicPage + 1 }} / {{ chapterImages.length }}</span>
+              <el-button :disabled="comicPage === chapterImages.length - 1" @click="comicPage++">下一页</el-button>
+            </div>
+          </template>
+          <!-- 图片模式：流览图集 -->
+          <template v-else>
+            <div v-for="(img, idx) in chapterImages" :key="idx" class="reader-img-item">
+              <img :src="img.url" :alt="img.caption || ('图' + (idx + 1))" />
+              <p v-if="img.caption" class="reader-img-cap">{{ img.caption }}</p>
+            </div>
+          </template>
+        </template>
+        <!-- 文字类形态：话本气泡体 / 散文 / 混排 -->
+        <template v-else>
+          <!-- 话本气泡体：气泡视图 / 原文视图切换 -->
+          <div v-if="isScriptMode" class="reader-script-switch">
+            <el-radio-group v-model="scriptView" size="small" @change="renderCurrent">
+              <el-radio-button value="bubble">气泡对话</el-radio-button>
+              <el-radio-button value="text">原文</el-radio-button>
+            </el-radio-group>
+            <span class="rs-tip">
+              {{ effectiveMode === 'mixed' ? '混排作品：对话为气泡，其余段落按正文排版' : '话本作品：按「角色：台词」解析为对话气泡' }}
+            </span>
+          </div>
+          <div v-if="chapter?.content" class="reader-md-wrap">
+            <div class="reader-md markdown-body cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" v-html="renderedHtml" ref="mdContainer"
+              @click="onMdClick"
+              @pointerdown="onBubbleDown"
+              @pointerup="cancelBubblePress"
+              @pointercancel="cancelBubblePress"
+              @pointermove="onBubbleMove"
+              @contextmenu="onBubbleContextMenu"></div>
+          </div>
+          <p v-else-if="chapter" style="text-align:center;color:var(--warning-color)">章节已加载但内容为空（content长度=0）</p>
+          <p v-else style="text-align:center;color:var(--text-muted)">暂无内容（chapter 为 null）</p>
+        </template>
       </div>
     </div>
 
@@ -334,6 +360,7 @@ import { aiCostApi } from '@/api/admin/costrisk';
 import { ArrowLeft, List, Star, EditPen, Notebook, Microphone, Collection } from '@element-plus/icons-vue';
 import ReadPermissionGate from '@/components/readperm/ReadPermissionGate.vue';
 import { parseReadPermDeny } from '@/api/readperm';
+import { isImageMode, type ChapterImage } from '@/api/novel/script';
 
 const authStore = useAuthStore();
 
@@ -464,6 +491,15 @@ async function loadChapter() {
     htmlContent.value = detail?.html_content || '';
     novelMode.value = (detail as any)?.novel_mode || novelRes.data.data.mode || 'prose';
     chapterMode.value = (detail as any)?.chapter_mode || '';
+    // 图片类形态：解析章节图片集（有序 [{url,caption}]）
+    comicPage.value = 0;
+    try {
+      const raw = (chapter.value as any)?.images;
+      chapterImages.value = Array.isArray(raw) ? raw : (raw ? JSON.parse(raw) : []);
+    } catch {
+      chapterImages.value = [];
+    }
+    if (!Array.isArray(chapterImages.value)) chapterImages.value = [];
     if (!chapter.value) {
       console.error('章节内容为空', detail);
     }
@@ -683,6 +719,9 @@ const novelMode = ref('prose');
 const chapterMode = ref('');
 const effectiveMode = computed(() => chapterMode.value || novelMode.value || 'prose');
 const isScriptMode = computed(() => effectiveMode.value === 'script' || effectiveMode.value === 'mixed');
+const isImageModeView = computed(() => isImageMode(effectiveMode.value));
+const chapterImages = ref<ChapterImage[]>([]);
+const comicPage = ref(0);
 const scriptView = ref<'bubble' | 'text'>('bubble');
 
 // 章节标题大字（明确需求，不可去掉）：
@@ -1778,6 +1817,31 @@ mark.note-ann:active {
 .note-meta { margin-top: 10px; font-size: 0.78rem; color: var(--text-muted); }
 .note-detail-content { white-space: pre-wrap; color: var(--text-color, #333); line-height: 1.7; }
 [data-theme="dark"] .note-selected { background: rgba(255,255,255,0.06); color: #cbd5e1; border-left-color: #f59e0b; }
+
+/* ===== 图片类形态（漫画体 / 图片模式） ===== */
+.reader-empty-img { text-align: center; color: var(--text-muted); padding: 40px 0; }
+.reader-comic-page { text-align: center; }
+.reader-comic-page img {
+  max-width: 100%;
+  max-height: 78vh;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+}
+.reader-comic-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin: 18px 0;
+}
+.reader-comic-ind { font-size: 0.9rem; color: var(--text-color, #333); }
+.reader-img-item { text-align: center; margin-bottom: 28px; }
+.reader-img-item img {
+  max-width: 100%;
+  border-radius: 8px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.12);
+}
+.reader-img-cap { margin-top: 10px; color: var(--text-muted); font-size: 0.85rem; }
 </style>
 
 <style>
