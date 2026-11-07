@@ -260,6 +260,10 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.POST("/sites/:id/keys/outbound", adminsite.SaveFederatedOutboundKey)
 		adminGrp.POST("/sites/:id/keys/:kid/toggle", adminsite.ToggleFederatedKey)
 		adminGrp.DELETE("/sites/:id/keys/:kid", adminsite.DeleteFederatedKey)
+		// 联邦展示模式开关（嵌入列表区块 / 独立友链页）
+		// GET 供后台读取当前开关（与公开 /api/federation/modes 同数据，仅两个布尔）
+		adminGrp.GET("/federation/modes", adminsite.GetFederationModes)
+		adminGrp.PUT("/federation/modes", adminsite.UpdateFederationModes)
 		// 限流与 API Key 管理（全局配额 / 爬虫规则 / 日志统计 / 全站 Key）
 		adminGrp.GET("/ratelimit/config", apikey.GetRateLimitConfig)
 		adminGrp.PUT("/ratelimit/config", apikey.UpdateRateLimitConfig)

@@ -87,6 +87,10 @@
                 <span class="nav-emoji">🌐</span> {{ site.name }}
               </el-dropdown-item>
 
+              <el-dropdown-item v-if="federatedIndependentEnabled" divided @click="$router.push('/federation')">
+                <span class="nav-emoji">🤝</span> 联邦互联页
+              </el-dropdown-item>
+
               <!-- 站长自定义菜单（扁平化避免三级嵌套；带子项的先用标题行分隔） -->
               <template v-for="m in dynamicMenus" :key="`dm-${m.id}`">
                 <template v-if="m.children && m.children.length">
@@ -235,6 +239,7 @@
       <div class="mnav-item" @click="mnavGo('/htmls')"><span class="mnav-emoji">🔌</span> 扩展应用</div>
       <div class="mnav-item" v-if="liveEnabled" @click="mnavGo('/live')"><span class="mnav-emoji">📺</span> 直播</div>
       <div class="mnav-item" v-if="federatedSites.length" @click="mnavFederated"><span class="mnav-emoji">🌐</span> 互联站点</div>
+      <div class="mnav-item" v-if="federatedIndependentEnabled" @click="mnavGo('/federation')"><span class="mnav-emoji">🤝</span> 联邦互联页</div>
 
       <!-- 站长自定义菜单（外链交给 goMenu，抽屉里不能直接 router.push） -->
       <template v-for="m in dynamicMenus" :key="`mnav-${m.id}`">
@@ -309,7 +314,8 @@ const route = useRoute();
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
 const appStore = useAppStore();
-const { categories, siteName, federatedSites, unreadCount } = storeToRefs(appStore);
+const { categories, siteName, federatedSites, federationModes, unreadCount } = storeToRefs(appStore);
+const federatedIndependentEnabled = computed(() => !!federationModes.value.independent_enabled);
 const searchText = ref('');
 
 // ====== 移动端导航抽屉 ======

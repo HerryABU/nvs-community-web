@@ -57,6 +57,8 @@ var knownSPARoots = map[string]bool{
 	"ai-write":   true, // 独立 AI 写作工作台（从作者工作台 tab 抽离为独立页）
 	"novels":     true, // 小说专栏页（公开，复用首页小说块卡片栅格；「小说」主导航指向此页）
 	"subculture": true, // 亚文化创作区（独立 OC 创作前台，与群组并列；刷新/深链需回退 index.html）
+	// 联邦独立页（友链式站点目录 + 跨站作品流；刷新/深链需回退 index.html）
+	"federation": true,
 }
 
 // firstPathSegment 返回去前导斜杠后的路径首段，如 "novel/1"→"novel"，"admin"→"admin"

@@ -17,6 +17,7 @@ package realtime
 
 import (
 	"errors"
+	"regexp"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -43,6 +44,10 @@ const (
 	HeartbeatInterval = 15 * time.Second
 )
 
+// liveChannelRe 频道 key 白名单：仅放行 comment:novel:<数字> / comment:blog:<数字>。
+// 与 handlers/live 中的白名单同源（此处供 gRPC/WS 等非 SSE 传输复用，杜绝任意频道枚举）。
+var liveChannelRe = regexp.MustCompile(`^comment:(novel|blog):\d+$`)
+
 // ErrTooManyConns 全局连接数已达上限，拒绝新订阅
 var ErrTooManyConns = errors.New("实时连接数已达上限")
 
@@ -56,6 +61,13 @@ type Event struct {
 type EventBatch struct {
 	Events []Event `json:"events"`
 }
+
+// Sink 外部传输泛播钩子：Hub 每广播一条原始事件即回调一次，供 MQTT 等
+// 非 Hub.Client 的外部代理（独立 Broker）实时转发出站。
+// 回调在 Hub 内部 goroutine（Publish 调用方所在的 goroutine）同步执行，
+// 因此 Sink 实现必须非阻塞、快速返回，绝不可在内部做重活或长时间等待——
+// 否则会拖慢所有订阅者的投递。建议 Sink 内部仅做「入队后即刻返回」的轻量动作。
+type Sink func(channel string, ev Event)
 
 // Client 单个订阅连接。channel 为服务端→处理器的事件通道；
 // done 关闭表示该连接已失效（客户端主动退订或被服务端判定慢客户端断开），
@@ -113,6 +125,11 @@ func (c *Client) closeDone() { c.once.Do(func() { close(c.done) }) }
 type Hub struct {
 	mu      sync.RWMutex
 	clients map[string]map[*Client]struct{}
+
+	// 外部传输泛播钩子（MQTT Broker 等）。受 sinkMu 保护，Publish 时快照后遍历，
+	// 保证增删 Sink 不阻塞投递主路径。以 id 索引，便于精确增删（同名传输只注册一份）。
+	sinkMu sync.Mutex
+	sinks  map[string]Sink
 
 	// 限额（原子读写，管理后台保存配置即时生效，无需重连）
 	maxConns      atomic.Int64
@@ -204,10 +221,54 @@ func (h *Hub) Publish(key string, ev Event) {
 	if batchSize <= 0 {
 		batchSize = DefaultBatchSize
 	}
+	// 外部传输泛播（MQTT 等）：原始单条事件，先外发再入本地 pending
+	h.fanoutSinks(key, ev)
 	for _, cl := range h.snapshotOf(key) {
 		if int64(cl.appendPending(ev)) >= batchSize {
 			h.deliver(cl, Event{Name: EventNameBatch, Data: EventBatch{Events: cl.takePending()}})
 		}
+	}
+}
+
+// AddSink 注册外部传输泛播钩子（如内嵌 MQTT Broker 的消息发布）。
+// id 用于精确增删，同名传输重复注册会覆盖而非叠加。
+func (h *Hub) AddSink(id string, s Sink) {
+	if s == nil || id == "" {
+		return
+	}
+	h.sinkMu.Lock()
+	defer h.sinkMu.Unlock()
+	if h.sinks == nil {
+		h.sinks = make(map[string]Sink)
+	}
+	h.sinks[id] = s
+}
+
+// RemoveSink 注销外部传输泛播钩子（传输关闭时调用）。
+func (h *Hub) RemoveSink(id string) {
+	if id == "" {
+		return
+	}
+	h.sinkMu.Lock()
+	defer h.sinkMu.Unlock()
+	delete(h.sinks, id)
+}
+
+// fanoutSinks 快照当前 sinks 后逐个回调（不在锁内执行回调，防止 Sink 内部阻塞影响投递）。
+func (h *Hub) fanoutSinks(key string, ev Event) {
+	h.sinkMu.Lock()
+	n := len(h.sinks)
+	if n == 0 {
+		h.sinkMu.Unlock()
+		return
+	}
+	snapshot := make([]Sink, 0, n)
+	for _, s := range h.sinks {
+		snapshot = append(snapshot, s)
+	}
+	h.sinkMu.Unlock()
+	for _, s := range snapshot {
+		s(key, ev)
 	}
 }
 

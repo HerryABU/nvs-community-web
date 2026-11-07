@@ -496,6 +496,48 @@ func ListFederatedNovels(c *gin.Context) {
 	infra.Success(c, gin.H{"list": list, "total": total})
 }
 
+// GetFederationModes GET /api/federation/modes —— 公开：联邦两种展示模式开关。
+// 前端据此决定：是否在列表内嵌入「来自联邦站点」区块（embed）、是否显示独立联邦页入口（independent）。
+// 不暴露任何站点/密钥数据，仅两个布尔。
+func GetFederationModes(c *gin.Context) {
+	infra.Success(c, gin.H{
+		"embed_enabled":       models.IsFederatedEmbedEnabled(),
+		"independent_enabled": models.IsFederatedIndependentEnabled(),
+	})
+}
+
+// UpdateFederationModes PUT /api/admin/federation/modes —— 保存联邦展示模式开关（站长）。
+func UpdateFederationModes(c *gin.Context) {
+	if !admincommon.EnsureAdmin(c) {
+		return
+	}
+	var req struct {
+		EmbedEnabled       *bool `json:"embed_enabled"`
+		IndependentEnabled *bool `json:"independent_enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		infra.BadRequest(c, "参数错误")
+		return
+	}
+	if req.EmbedEnabled != nil {
+		if err := models.SetPlatformConfig(models.FedEmbedEnabledKey, strconv.FormatBool(*req.EmbedEnabled)); err != nil {
+			infra.InternalError(c, "保存失败")
+			return
+		}
+	}
+	if req.IndependentEnabled != nil {
+		if err := models.SetPlatformConfig(models.FedIndependentEnabledKey, strconv.FormatBool(*req.IndependentEnabled)); err != nil {
+			infra.InternalError(c, "保存失败")
+			return
+		}
+	}
+	infra.Success(c, gin.H{
+		"message":             "已保存（立即生效）",
+		"embed_enabled":       models.IsFederatedEmbedEnabled(),
+		"independent_enabled": models.IsFederatedIndependentEnabled(),
+	})
+}
+
 // ============ 公共 API ============
 
 func GetSiteInfo(c *gin.Context) {

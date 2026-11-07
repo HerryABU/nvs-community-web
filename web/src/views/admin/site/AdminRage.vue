@@ -30,6 +30,45 @@
             <el-input-number v-model="form.max_conns" :min="100" :max="10000" :step="100" :disabled="saving" />
             <span class="form-tip">超出后拒绝新连接，前端指数退避重试（100~10000）</span>
           </el-form-item>
+        </el-form>
+
+        <!-- 多协议传输层（按需开启）：核心仍是 SSE；以下协议为可选叠加层，
+             保存即由 realtime.Manager 拉起/关停对应端口，无需重启。 -->
+        <SectionHeader title="多协议传输层（按需开启）" subtitle="核心 SSE 之外的附加通道，独立端口" :icon="'🔌'" gradient="violet" style="margin-top: 28px" />
+        <el-alert type="info" :closable="false" show-icon class="rage-warn">
+          <template #title>协议说明</template>
+          <b>WebSocket</b>：浏览器友好，复用同一事件 Hub；未开启或代理不支持时前端自动回退 SSE。<br />
+          <b>MQTT</b>：内嵌 Broker，供第三方/IoT 客户端订阅 <code>nvs/comment/&lt;type&gt;/&lt;id&gt;</code>（QoS 0）。<br />
+          <b>gRPC</b>：内嵌 HTTP/2 服务端，JSON Codec，服务名 <code>nvs.realtime.Live</code>，方法 <code>Stream</code>。
+        </el-alert>
+
+        <el-form label-width="160px" class="rage-form">
+          <el-form-item label="WebSocket 通道">
+            <el-switch v-model="form.ws_enabled" :disabled="saving" />
+            <span class="form-tip">开启后浏览器优先走 WS 订阅（回退 SSE）</span>
+          </el-form-item>
+
+          <el-form-item label="MQTT Broker">
+            <el-switch v-model="form.mqtt_enabled" :disabled="saving" />
+            <span class="form-tip">内嵌 Broker，独立监听端口（开启即生效）</span>
+          </el-form-item>
+          <el-form-item label="MQTT 监听地址">
+            <el-input v-model="form.mqtt_bind" :disabled="saving || !form.mqtt_enabled" style="max-width: 220px" />
+          </el-form-item>
+          <el-form-item label="MQTT 端口">
+            <el-input-number v-model="form.mqtt_port" :min="1" :max="65535" :disabled="saving || !form.mqtt_enabled" />
+          </el-form-item>
+
+          <el-form-item label="gRPC 服务端">
+            <el-switch v-model="form.grpc_enabled" :disabled="saving" />
+            <span class="form-tip">内嵌 HTTP/2 流式服务端，独立监听端口</span>
+          </el-form-item>
+          <el-form-item label="gRPC 监听地址">
+            <el-input v-model="form.grpc_bind" :disabled="saving || !form.grpc_enabled" style="max-width: 220px" />
+          </el-form-item>
+          <el-form-item label="gRPC 端口">
+            <el-input-number v-model="form.grpc_port" :min="1" :max="65535" :disabled="saving || !form.grpc_enabled" />
+          </el-form-item>
 
           <el-form-item>
             <el-button type="primary" :loading="saving" @click="save">保存配置（立即生效）</el-button>
@@ -46,6 +85,7 @@ import { ref, reactive, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Lightning } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
+import SectionHeader from '@/components/common/SectionHeader.vue';
 import { liveApi, type RageConfig } from '@/api/home/live';
 
 const loading = ref(false);
@@ -55,6 +95,13 @@ const form = reactive<RageConfig>({
   batch_interval_sec: 3,
   batch_size: 20,
   max_conns: 2000,
+  ws_enabled: false,
+  mqtt_enabled: false,
+  mqtt_bind: '0.0.0.0',
+  mqtt_port: 1883,
+  grpc_enabled: false,
+  grpc_bind: '0.0.0.0',
+  grpc_port: 50051,
 });
 
 async function reload() {
@@ -67,6 +114,13 @@ async function reload() {
         batch_interval_sec: r.data.data.batch_interval_sec ?? 3,
         batch_size: r.data.data.batch_size ?? 20,
         max_conns: r.data.data.max_conns ?? 2000,
+        ws_enabled: !!r.data.data.ws_enabled,
+        mqtt_enabled: !!r.data.data.mqtt_enabled,
+        mqtt_bind: r.data.data.mqtt_bind || '0.0.0.0',
+        mqtt_port: r.data.data.mqtt_port || 1883,
+        grpc_enabled: !!r.data.data.grpc_enabled,
+        grpc_bind: r.data.data.grpc_bind || '0.0.0.0',
+        grpc_port: r.data.data.grpc_port || 50051,
       });
     }
   } catch {

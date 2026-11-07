@@ -790,6 +790,12 @@ const router = createRouter({
       component: () => import('@/views/novel/NovelsView.vue'),
     },
     {
+      // 联邦独立页（友链式站点目录 + 跨站作品流），由后台「独立友链页」开关控制显隐
+      path: '/federation',
+      name: 'federation',
+      component: () => import('@/views/Federation.vue'),
+    },
+    {
       path: '/user/messages',
       name: 'user-messages',
       component: () => import('@/views/user/Messages.vue'),

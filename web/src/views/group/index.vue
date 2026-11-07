@@ -26,6 +26,9 @@
       <span class="join-tip">图片仅本地解析，不上传服务器</span>
     </div>
 
+    <!-- 联邦嵌入区块（站长开启「嵌入列表区块」时显示跨站作品） -->
+    <FederatedBlock title="来自联邦站点的作品" :limit="6" />
+
     <el-tabs v-model="tab" @tab-change="onTab">
       <el-tab-pane label="发现群组" name="discover" />
       <el-tab-pane v-if="auth.isLoggedIn" label="我的群组" name="my" />
@@ -141,6 +144,7 @@ import { parseGroupQr } from '@/utils/groupQr';
 import GroupQrCard from '@/components/group/GroupQrCard.vue';
 import QrScanDialog from '@/components/group/QrScanDialog.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
+import FederatedBlock from '@/components/federation/FederatedBlock.vue';
 
 const router = useRouter();
 const auth = useAuthStore();

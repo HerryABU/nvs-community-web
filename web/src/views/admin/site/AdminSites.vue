@@ -77,6 +77,42 @@
           </el-table-column>
         </el-table>
       </div>
+
+      <!-- 联邦展示模式（嵌入列表区块 / 独立友链页） -->
+      <div class="fed-modes-block">
+        <div class="fed-modes-head">
+          <h3>联邦展示模式</h3>
+          <el-button text size="small" @click="loadFedModes">刷新</el-button>
+        </div>
+        <p class="hint-text">
+          控制联邦内容在前台的呈现方式：<b>嵌入列表区块</b>会在小说/博客/群组列表页内嵌「来自联邦站点」作品区；
+          <b>独立友链页</b>则在导航「更多」开放 <code>/federation</code> 友链风格站点目录 + 跨站作品流。
+        </p>
+        <div class="fed-modes-rows">
+          <div class="fed-mode-row">
+            <div class="fed-mode-label">
+              <span class="fed-mode-name">嵌入列表区块</span>
+              <span class="fed-mode-desc">在内容列表页内嵌跨站作品</span>
+            </div>
+            <el-switch
+              v-model="embedEnabled"
+              :loading="savingEmbed"
+              @change="saveFedModes('embed', $event as boolean)"
+            />
+          </div>
+          <div class="fed-mode-row">
+            <div class="fed-mode-label">
+              <span class="fed-mode-name">独立友链页</span>
+              <span class="fed-mode-desc">开放 /federation 互联站点目录</span>
+            </div>
+            <el-switch
+              v-model="independentEnabled"
+              :loading="savingIndependent"
+              @change="saveFedModes('independent', $event as boolean)"
+            />
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 添加/编辑站点弹窗 -->
@@ -417,7 +453,46 @@ async function deleteKey(row: any) {
   } catch { /* cancelled */ }
 }
 
-onMounted(() => { loadSites(); loadInbound(); });
+// ===== 联邦展示模式开关（嵌入列表区块 / 独立友链页） =====
+const embedEnabled = ref(false);
+const independentEnabled = ref(false);
+const savingEmbed = ref(false);
+const savingIndependent = ref(false);
+
+async function loadFedModes() {
+  try {
+    const res = await adminApi.getFederationModes();
+    if (res.data.code === 0 && res.data.data) {
+      embedEnabled.value = !!res.data.data.embed_enabled;
+      independentEnabled.value = !!res.data.data.independent_enabled;
+    }
+  } catch { /* ignore */ }
+}
+
+async function saveFedModes(kind: 'embed' | 'independent', val: boolean) {
+  if (kind === 'embed') savingEmbed.value = true;
+  else savingIndependent.value = true;
+  try {
+    const payload: { embed_enabled?: boolean; independent_enabled?: boolean } = {};
+    if (kind === 'embed') payload.embed_enabled = val;
+    else payload.independent_enabled = val;
+    const res = await adminApi.updateFederationModes(payload);
+    if (res.data.code === 0 && res.data.data) {
+      embedEnabled.value = !!res.data.data.embed_enabled;
+      independentEnabled.value = !!res.data.data.independent_enabled;
+      ElMessage.success('已保存（立即生效）');
+    } else {
+      ElMessage.error(res.data.message || '保存失败');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  } finally {
+    savingEmbed.value = false;
+    savingIndependent.value = false;
+  }
+}
+
+onMounted(() => { loadSites(); loadInbound(); loadFedModes(); });
 </script>
 
 <style scoped>
@@ -429,6 +504,27 @@ onMounted(() => { loadSites(); loadInbound(); });
 .form-tip { width: 100%; font-size: 0.78rem; color: var(--text-light, #999); line-height: 1.5; }
 .form-tip code { background: var(--bg-soft); color: var(--primary-color); padding: 1px 6px; border-radius: 4px; font-size: 0.85rem; }
 .inbound-block { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border-color, #e5e7eb); }
+.fed-modes-block { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border-color, #e5e7eb); }
+.fed-modes-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.fed-modes-head h3 { margin: 0; font-size: 1.05rem; color: var(--text-color, #333); }
+.fed-modes-block code { background: var(--bg-soft); color: var(--primary-color); padding: 1px 6px; border-radius: 4px; font-size: 0.85rem; }
+.fed-modes-rows { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.fed-mode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 10px;
+  background: var(--bg-card, #fff);
+}
+.fed-mode-label { display: flex; flex-direction: column; gap: 2px; }
+.fed-mode-name { font-size: 0.95rem; font-weight: 600; color: var(--text-color, #333); }
+.fed-mode-desc { font-size: 0.78rem; color: var(--text-light, #999); }
+[data-theme="dark"] .fed-modes-block { border-color: #334155; }
+[data-theme="dark"] .fed-mode-row { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .fed-modes-head h3 { color: #e2e8f0; }
 .inbound-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .inbound-head h3 { margin: 0; font-size: 1.05rem; color: var(--text-color, #333); }
 .inbound-block code { background: var(--bg-soft); color: var(--primary-color); padding: 1px 6px; border-radius: 4px; font-size: 0.85rem; }

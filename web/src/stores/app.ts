@@ -32,6 +32,11 @@ export const useAppStore = defineStore('app', () => {
   });
   const realnameRequired = ref(false); // 发布/评论是否强制实名（F10）
   const federatedSites = ref<any[]>([]);
+  // 联邦两种展示模式开关（嵌入列表区块 / 独立友链页），由 /api/federation/modes 公开返回
+  const federationModes = ref<{ embed_enabled: boolean; independent_enabled: boolean }>({
+    embed_enabled: false,
+    independent_enabled: false,
+  });
   const unreadCount = ref(0);
   const installed = ref(true);
   const homeData = ref<HomeData | null>(null);
@@ -66,6 +71,7 @@ export const useAppStore = defineStore('app', () => {
       { id: 'site', path: '/api/site-info' },
       { id: 'cats', path: '/api/categories' },
       { id: 'fed', path: '/api/federated/sites' },
+      { id: 'fedmodes', path: '/api/federation/modes' },
       { id: 'notif', path: '/api/notifications/unread-count' },
       { id: 'setup', path: '/api/setup/status' },
     ];
@@ -88,6 +94,12 @@ export const useAppStore = defineStore('app', () => {
         }
         if (map.cats?.success && Array.isArray(map.cats.data)) categories.value = map.cats.data;
         if (map.fed?.success && map.fed.data) federatedSites.value = map.fed.data || [];
+        if (map.fedmodes?.success && map.fedmodes.data) {
+          federationModes.value = {
+            embed_enabled: !!map.fedmodes.data.embed_enabled,
+            independent_enabled: !!map.fedmodes.data.independent_enabled,
+          };
+        }
         if (map.notif?.success && typeof map.notif.data?.count === 'number') {
           unreadCount.value = map.notif.data.count;
         }
@@ -130,7 +142,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   return {
-    siteInfo, siteName, categories, homeModule, loginMethods, realnameRequired, federatedSites, unreadCount, installed, homeData,
+    siteInfo, siteName, categories, homeModule, loginMethods, realnameRequired, federatedSites, federationModes, unreadCount, installed, homeData,
     bootstrap, ensureHomeLoaded, refreshUnread,
   };
 });

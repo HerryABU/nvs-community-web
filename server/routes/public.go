@@ -126,7 +126,10 @@ func registerPublic(r *gin.Engine) {
 		public.GET("/threads/latest", home.ListLatestThreads)
 		// 狂暴模式（F19）：SSE 评论实时流 + 公开状态查询（管理员开关，默认关）
 		public.GET("/live/stream", live.LiveStream)
+		public.GET("/live/ws", live.LiveWS)
 		public.GET("/live/config", live.LiveConfig)
+		// 联邦模式：两种展示开关（嵌入列表区块 / 独立友链页），前端据此显隐
+		public.GET("/federation/modes", adminsite.GetFederationModes)
 
 		// AI 会话分享：公开只读快照（令牌即凭据，无登录要求）
 		public.GET("/ai/shared/:token", aimedia.AiSharedSession)

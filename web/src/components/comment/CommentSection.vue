@@ -126,6 +126,7 @@
         :owner-id="ownerUserId"
         target-type="comment"
         :live-channel="liveChannel"
+        :live-transport="liveTransport"
         :mention-source="mentionSource"
         :work-type="mentionTargetType"
         :target-i-d="mentionTargetID"
@@ -287,6 +288,8 @@ const ownerUserId = computed(() => props.ownerId || 0);
 // 仅当服务端开启狂暴模式后才订阅对应频道（避免对未开启站点空转重连）。
 // 频道按 novel/blog 区分；章节评论只接受同章节的实时推送，跨章节仅提示刷新。
 const rageEnabled = ref(false);
+// 狂暴模式传输层：优先 ws（浏览器友好），未开启 ws 时回退 sse
+const liveTransport = ref<'sse' | 'ws'>('sse');
 const liveChannel = computed(() =>
   rageEnabled.value
     ? (props.blogId ? blogCommentChannel(props.blogId) : (props.novelId ? novelCommentChannel(props.novelId) : ''))
@@ -374,9 +377,15 @@ onMounted(() => {
   fetchComments(true);
   loadMentionSource();
   pollTimer = setInterval(pollNewComments, 30000);
-  // 探测狂暴模式是否开启（开启才订阅实时评论，未开启则不建 SSE 连接）
+  // 探测狂暴模式是否开启（开启才订阅实时评论，未开启则不建连接）；并择优传输层（ws > sse）
   liveApi.publicConfig()
-    .then((r) => { if (r.data?.enabled) rageEnabled.value = true; })
+    .then((r) => {
+      const cfg = r.data || {};
+      if (cfg.enabled) {
+        rageEnabled.value = true;
+        liveTransport.value = cfg.ws_enabled ? 'ws' : 'sse';
+      }
+    })
     .catch(() => { /* 探测失败按未开启处理，不影响评论区正常使用 */ });
 });
 

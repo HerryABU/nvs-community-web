@@ -52,6 +52,9 @@
       </el-select>
     </div>
 
+    <!-- 联邦嵌入区块（站长开启「嵌入列表区块」时显示跨站作品） -->
+    <FederatedBlock title="来自联邦站点的作品" :limit="8" />
+
     <!-- 结果区 -->
     <div v-loading="loading" class="nv-body">
       <!-- 骨架：与首页同款卡片占位 -->
@@ -102,6 +105,7 @@ import { Search } from '@element-plus/icons-vue';
 import { novelApi, type Novel } from '@/api/novel';
 import { useAppStore } from '@/stores/app';
 import NovelCard from '@/components/novel/NovelCard.vue';
+import FederatedBlock from '@/components/federation/FederatedBlock.vue';
 
 const router = useRouter();
 const route = useRoute();

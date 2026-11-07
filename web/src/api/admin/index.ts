@@ -531,6 +531,14 @@ export const adminApi = {
     return api.delete(`/admin/sites/${id}/keys/${kid}`);
   },
 
+  // 联邦展示模式开关（嵌入列表区块 / 独立友链页）
+  getFederationModes() {
+    return api.get<{ code: number; data: { embed_enabled: boolean; independent_enabled: boolean } }>('/admin/federation/modes');
+  },
+  updateFederationModes(data: { embed_enabled?: boolean; independent_enabled?: boolean }) {
+    return api.put<{ code: number; data: { embed_enabled: boolean; independent_enabled: boolean } }>('/admin/federation/modes', data);
+  },
+
   // 限流与 API Key 管理
   getRateLimitConfig() {
     return api.get('/admin/ratelimit/config');

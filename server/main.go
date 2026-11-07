@@ -36,6 +36,7 @@ import (
 	"nvs-server/police"
 	"nvs-server/prompttpl"
 	_ "nvs-server/readperm" // 触发 content_purchases 模型注册（#65 付费解锁）
+	"nvs-server/realtime"
 	"nvs-server/risk"
 	"nvs-server/routes"
 	"nvs-server/scriptmode"
@@ -478,6 +479,8 @@ func initDatabase() error {
 		log.Printf("[ai] 渠道卡密池迁移完成：新增 %d 把卡密", n)
 	}
 	log.Println("数据库迁移完成")
+	// 狂暴模式传输层装配：按 RageConfig 拉起/关停 MQTT、gRPC（保存即生效；此处为启动态装配）
+	realtime.GetManager().ApplyConfig(siteops.GetRageConfig())
 	return nil
 }
 

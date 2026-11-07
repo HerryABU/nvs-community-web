@@ -13,12 +13,23 @@ import (
 
 // RageConfig 狂暴模式配置（单行，ID 固定为 1）
 type RageConfig struct {
-	ID               uint      `gorm:"primaryKey" json:"id"`
-	Enabled          bool      `gorm:"default:false" json:"enabled"`        // 总开关（默认关闭）
-	BatchIntervalSec int       `gorm:"default:3" json:"batch_interval_sec"` // 批量 flush 周期（秒，1-60）
-	BatchSize        int       `gorm:"default:20" json:"batch_size"`        // pending 累积立即 flush 阈值（1-100）
-	MaxConns         int       `gorm:"default:2000" json:"max_conns"`       // 全局 SSE 连接数上限（100-10000）
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID               uint `gorm:"primaryKey" json:"id"`
+	Enabled          bool `gorm:"default:false" json:"enabled"`        // 总开关（默认关闭，SSE 基线）
+	BatchIntervalSec int  `gorm:"default:3" json:"batch_interval_sec"` // 批量 flush 周期（秒，1-60）
+	BatchSize        int  `gorm:"default:20" json:"batch_size"`        // pending 累积立即 flush 阈值（1-100）
+	MaxConns         int  `gorm:"default:2000" json:"max_conns"`       // 全局 SSE 连接数上限（100-10000）
+
+	// 按需开启的额外传输协议（总开关 Enabled 仍控制 SSE 基线；以下为可选叠加层）。
+	// 全部默认关闭——狂暴模式的核心仍是 SSE，其余协议仅在站长显式开启时拉起独立端口。
+	WsEnabled   bool   `gorm:"default:false" json:"ws_enabled"`   // WebSocket 长连接订阅（复用 Hub.Client）
+	MqttEnabled bool   `gorm:"default:false" json:"mqtt_enabled"` // 内嵌 MQTT Broker（独立端口）
+	MqttBind    string `gorm:"size:64;default:'0.0.0.0'" json:"mqtt_bind"`
+	MqttPort    int    `gorm:"default:1883" json:"mqtt_port"`
+	GrpcEnabled bool   `gorm:"default:false" json:"grpc_enabled"` // 内嵌 gRPC 服务端（HTTP/2 流式）
+	GrpcBind    string `gorm:"size:64;default:'0.0.0.0'" json:"grpc_bind"`
+	GrpcPort    int    `gorm:"default:50051" json:"grpc_port"`
+
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func (RageConfig) TableName() string { return "rage_configs" }
@@ -28,6 +39,10 @@ const (
 	rageDefaultBatchIntervalSec = 3
 	rageDefaultBatchSize        = 20
 	rageDefaultMaxConns         = 2000
+	rageDefaultMqttBind         = "0.0.0.0"
+	rageDefaultMqttPort         = 1883
+	rageDefaultGrpcBind         = "0.0.0.0"
+	rageDefaultGrpcPort         = 50051
 )
 
 // GetRageConfig 读取狂暴模式配置。
@@ -39,6 +54,10 @@ func GetRageConfig() RageConfig {
 		BatchIntervalSec: rageDefaultBatchIntervalSec,
 		BatchSize:        rageDefaultBatchSize,
 		MaxConns:         rageDefaultMaxConns,
+		MqttBind:         rageDefaultMqttBind,
+		MqttPort:         rageDefaultMqttPort,
+		GrpcBind:         rageDefaultGrpcBind,
+		GrpcPort:         rageDefaultGrpcPort,
 	}
 	if models.DB == nil {
 		return cfg
@@ -57,6 +76,18 @@ func GetRageConfig() RageConfig {
 	if row.MaxConns <= 0 {
 		row.MaxConns = rageDefaultMaxConns
 	}
+	if row.MqttBind == "" {
+		row.MqttBind = rageDefaultMqttBind
+	}
+	if row.MqttPort <= 0 {
+		row.MqttPort = rageDefaultMqttPort
+	}
+	if row.GrpcBind == "" {
+		row.GrpcBind = rageDefaultGrpcBind
+	}
+	if row.GrpcPort <= 0 {
+		row.GrpcPort = rageDefaultGrpcPort
+	}
 	return row
 }
 
@@ -67,9 +98,20 @@ func UpdateRageConfig(cfg RageConfig) error {
 	if models.DB == nil {
 		return nil
 	}
+	// bind 字段空串兜底默认（避免把 DB 默认值覆盖成空）
+	mqttBind := cfg.MqttBind
+	if mqttBind == "" {
+		mqttBind = rageDefaultMqttBind
+	}
+	grpcBind := cfg.GrpcBind
+	if grpcBind == "" {
+		grpcBind = rageDefaultGrpcBind
+	}
 	var existing RageConfig
 	if err := models.DB.First(&existing, 1).Error; err != nil {
 		cfg.ID = 1
+		cfg.MqttBind = mqttBind
+		cfg.GrpcBind = grpcBind
 		cfg.UpdatedAt = time.Now()
 		return models.DB.Create(&cfg).Error
 	}
@@ -78,6 +120,13 @@ func UpdateRageConfig(cfg RageConfig) error {
 		"batch_interval_sec": cfg.BatchIntervalSec,
 		"batch_size":         cfg.BatchSize,
 		"max_conns":          cfg.MaxConns,
+		"ws_enabled":         cfg.WsEnabled,
+		"mqtt_enabled":       cfg.MqttEnabled,
+		"mqtt_bind":          mqttBind,
+		"mqtt_port":          cfg.MqttPort,
+		"grpc_enabled":       cfg.GrpcEnabled,
+		"grpc_bind":          grpcBind,
+		"grpc_port":          cfg.GrpcPort,
 		"updated_at":         time.Now(),
 	}).Error
 }

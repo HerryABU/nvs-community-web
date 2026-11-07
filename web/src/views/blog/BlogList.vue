@@ -15,6 +15,9 @@
           </template>
         </SectionHeader>
 
+        <!-- 联邦嵌入区块（站长开启「嵌入列表区块」时显示跨站作品） -->
+        <FederatedBlock title="来自联邦站点的作品" :limit="6" />
+
         <div v-loading="loading" class="bl-list" style="min-height: 200px">
           <EmptyState v-if="!loading && blogs.length === 0" icon="📭" text="该分类下暂无博客文章" />
 
@@ -80,6 +83,7 @@
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { blogApi } from '@/api/social';
+import FederatedBlock from '@/components/federation/FederatedBlock.vue';
 
 const route = useRoute();
 

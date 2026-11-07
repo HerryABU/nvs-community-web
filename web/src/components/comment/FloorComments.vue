@@ -246,7 +246,8 @@ const props = withDefaults(defineProps<{
   canMute?: boolean;            // 版主：可禁言
   previewCount?: number;        // 楼内回复默认展示条数，超出折叠
   foldChars?: number;           // 长文本折叠阈值（字符）；由服务端配置下发
-  liveChannel?: string;         // 狂暴模式（F19）SSE 频道 key；传入即开启实时评论订阅
+  liveChannel?: string;         // 狂暴模式（F19）频道 key；传入即开启实时评论订阅
+  liveTransport?: 'sse' | 'ws'; // 狂暴模式传输层（默认 sse；ws 未开启时自动回退 sse）
   // 新增：@ 提及相关
   mentionSource?: string;       // participants / global / manual（生效的提及来源）
   workType?: string;            // 作品类型 blog / novel（联想候选用）
@@ -261,6 +262,7 @@ const props = withDefaults(defineProps<{
   foldChars: 400,
   previewCount: 3,
   liveChannel: '',
+  liveTransport: 'sse',
   mentionSource: 'participants',
   workType: '',
   targetID: 0,
@@ -276,7 +278,7 @@ const emit = defineEmits<{
 
 // 狂暴模式（F19）：评论区实时订阅。频道为空（未开启/未传）时 composable 内部直接短路不建连接；
 // 传 getter 以便频道异步就绪（确认开启后）自动重建连接。组件卸载时由 composable 自行断开。
-const live = useLiveComments(() => props.liveChannel || '', (c: any) => emit('live', c));
+const live = useLiveComments(() => props.liveChannel || '', (c: any) => emit('live', c), { transport: props.liveTransport });
 
 // ── 长文本折叠 ──
 // 用纯字符数判定（不按行）：中文评论在不同屏宽下换行数会变，按行会抖。

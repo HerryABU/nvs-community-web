@@ -20,6 +20,25 @@ type PlatformConfig struct {
 
 func (PlatformConfig) TableName() string { return "platform_configs" }
 
+// ============ 联邦模式展示开关（嵌入列表区块 / 独立友链页） ============
+const (
+	// FedEmbedEnabledKey 在小说/博客/群组列表内嵌入「来自联邦站点」区块（默认开）。
+	// 仅当值为 "true" 时开启；缺失或 "false" 均视为关闭。
+	FedEmbedEnabledKey = "federated_embed_enabled"
+	// FedIndependentEnabledKey 启用独立联邦页 /federation（友链风格站点目录，默认开）。
+	FedIndependentEnabledKey = "federated_independent_enabled"
+)
+
+// IsFederatedEmbedEnabled 列表内嵌联邦区块是否开启（默认开）
+func IsFederatedEmbedEnabled() bool {
+	return GetPlatformConfig(FedEmbedEnabledKey) == "true"
+}
+
+// IsFederatedIndependentEnabled 独立联邦页是否开启（默认开）
+func IsFederatedIndependentEnabled() bool {
+	return GetPlatformConfig(FedIndependentEnabledKey) == "true"
+}
+
 // ============ 访客查看小说门禁（站长前台可配） ============
 const (
 	// NovelVisitorModeKey 访客查看小说模式：
@@ -130,6 +149,9 @@ func InitPlatformConfigs() {
 		"robots_txt":                "User-agent: *\nAllow: /\n",
 		"web_publish_quota":         "3", // 每用户默认可公开发布的 web 项目（UserHTML+UserFrame 合计）数量上限
 		"web_publish_quota_size_mb": "0", // 每用户默认可公开发布的 web 项目总大小上限（MB，0 = 不限）
+		// 联邦模式展示开关：嵌入列表区块（默认开）/ 独立友链页（默认开）
+		"federated_embed_enabled":       "true",
+		"federated_independent_enabled": "true",
 	}
 	for k, v := range defaults {
 		var count int64

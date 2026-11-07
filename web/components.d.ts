@@ -127,6 +127,7 @@ declare module 'vue' {
     ElUpload: typeof import('element-plus/es')['ElUpload']
     EmoteManager: typeof import('./src/components/oc/EmoteManager.vue')['default']
     EmptyState: typeof import('./src/components/common/EmptyState.vue')['default']
+    FederatedBlock: typeof import('./src/components/federation/FederatedBlock.vue')['default']
     FloorComments: typeof import('./src/components/comment/FloorComments.vue')['default']
     FlowPanel: typeof import('./src/components/oc/FlowPanel.vue')['default']
     ForgotPasswordDialog: typeof import('./src/components/auth/ForgotPasswordDialog.vue')['default']
