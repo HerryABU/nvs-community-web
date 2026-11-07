@@ -615,13 +615,15 @@ async function loadCollab() {
   }
 }
 
-// 我能否编辑本章：主笔 / 有 edit_others / 本章是我写的
+// 我能否编辑本章：主笔 / 有 edit_others / 本章是我写的 / 有写作能力的新章节
 function computeCanEdit(ch: { author_id?: number }): boolean {
   const me = collabMe.value;
   if (!me) return true;
   if (me.is_owner || me.can_edit_others) return true;
   const authorId = Number(ch?.author_id || 0);
-  return authorId > 0 && authorId === Number(authStore.user?.id || 0);
+  if (authorId > 0) return authorId === Number(authStore.user?.id || 0);
+  // 新建章节（author_id 尚未落库）：协作作者（有写作能力）可撰写并提交
+  return !!me.can_write;
 }
 
 // 工作流回调：本地同步状态（后端已落库）

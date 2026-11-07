@@ -245,7 +245,7 @@ func Invite(novelID, inviterID uint, username, role string) (*Collaborator, erro
 	_ = models.PushNotification(inviterID, user.ID, "novel_collab",
 		fmt.Sprintf("《%s》邀请你参与协作", novel.Title),
 		fmt.Sprintf("角色：%s。接受后即可按权限参与创作。", roleLabel(role)),
-		"/author/collab")
+		"/collab")
 
 	c.Username = user.Username
 	c.Nickname = user.Nickname
