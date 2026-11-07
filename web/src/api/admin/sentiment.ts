@@ -115,11 +115,15 @@ export const sentimentApi = {
   neutralityPrompt() {
     return api.get<{ code: number; data: NeutralityPromptData }>('/admin/sentiment/neutral-prompt');
   },
-  campGraph() {
-    return api.get<{ code: number; data: CampGraphData }>('/admin/sentiment/camp-graph');
+  campGraph(params: { scope?: string; content_type?: string; content_id?: number; topic?: string } = {}) {
+    return api.get<{ code: number; data: CampGraphData }>('/admin/sentiment/camp-graph', { params });
   },
-  campMarks() {
-    return api.get<{ code: number; data: CampMark[] }>('/admin/sentiment/camp-marks');
+  campMarks(params: { scope?: string; content_type?: string; content_id?: number; topic?: string } = {}) {
+    return api.get<{ code: number; data: CampMark[] }>('/admin/sentiment/camp-marks', { params });
+  },
+  /** 议题标签列表（去重 + 命中内容数），供图谱「按议题」维度下拉 */
+  topicTags() {
+    return api.get<{ code: number; data: { items: TopicTag[] } }>('/admin/sentiment/topics/list');
   },
   /** 真正调用 AI（强中立提示词）分析争议文本 → 阵营/语言格式标记 → 落库 → 图谱有数据 */
   analyzeCamp(data: { text: string; model_id?: number; content_type?: string; content_id?: number; comment_id?: number; save?: boolean }) {
@@ -185,7 +189,13 @@ export interface CampEdge {
 export interface CampGraphData {
   nodes: CampNode[];
   edges: CampEdge[];
+  scope: string;
   notice: string;
+}
+
+export interface TopicTag {
+  tag: string;
+  count: number;
 }
 
 export interface CampMark {

@@ -8,6 +8,7 @@ package sentiment
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"nvs-server/models"
 	"nvs-server/sentiment/camp"
 	"nvs-server/sentiment/store"
+	"nvs-server/sentiment/topic"
 	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
@@ -90,21 +92,73 @@ func CreateCampMark(c *gin.Context) {
 	infra.SuccessMessage(c, "已标记", m)
 }
 
-// GET /api/admin/sentiment/camp-marks
+// GET /api/admin/sentiment/camp-marks?scope=all|content|topic&content_type=&content_id=&topic=
+// 阵营标记原始列表（与图谱共用 scope 维度，便于「按评论区/议题」查看时列表与图一致）。
 func ListCampMarks(c *gin.Context) {
 	if !admincommon.EnsureElevated(c) {
 		return
 	}
+	scope := c.DefaultQuery("scope", "all")
+	ct := c.Query("content_type")
+	cid := parseUint(c.Query("content_id"))
+	tag := strings.TrimSpace(c.Query("topic"))
+
 	var list []store.CampMark
 	q := store.DB.Model(&store.CampMark{}).Order("id DESC").Limit(500)
-	if ct := c.Query("content_type"); ct != "" {
-		q = q.Where("content_type = ?", ct)
+	if scope == "content" {
+		if ct != "" {
+			q = q.Where("content_type = ?", ct)
+		}
+		if cid != 0 {
+			q = q.Where("content_id = ?", cid)
+		}
 	}
 	if err := q.Find(&list).Error; err != nil {
 		infra.InternalError(c, "读取标记失败")
 		return
 	}
+	if scope == "topic" && tag != "" {
+		keys := topicContentKeys(tag)
+		filtered := list[:0]
+		for _, m := range list {
+			if keys[fmt.Sprintf("%s:%d", m.ContentType, m.ContentID)] {
+				filtered = append(filtered, m)
+			}
+		}
+		list = filtered
+	}
 	infra.Success(c, list)
+}
+
+// GET /api/admin/sentiment/topics/list
+// 返回去重后的议题标签 + 每标签命中的内容数，供阵营图谱「按议题」维度下拉选择。
+func ListTopicTags(c *gin.Context) {
+	if !admincommon.EnsureElevated(c) {
+		return
+	}
+	var topics []store.ContentTopic
+	if err := store.DB.Model(&store.ContentTopic{}).Find(&topics).Error; err != nil {
+		infra.InternalError(c, "读取议题失败")
+		return
+	}
+	counts := map[string]int{}
+	for _, t := range topics {
+		for _, x := range topic.ParseTagsJSON(t.Tags) {
+			if x != "" {
+				counts[x]++
+			}
+		}
+	}
+	type tagCount struct {
+		Tag   string `json:"tag"`
+		Count int    `json:"count"`
+	}
+	items := make([]tagCount, 0, len(counts))
+	for tag, n := range counts {
+		items = append(items, tagCount{Tag: tag, Count: n})
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Count > items[j].Count })
+	infra.Success(c, gin.H{"items": items})
 }
 
 // POST /api/admin/sentiment/camp-analyze
@@ -158,20 +212,89 @@ func AnalyzeCamp(c *gin.Context) {
 	})
 }
 
-// GET /api/admin/sentiment/camp-graph
+// GET /api/admin/sentiment/camp-graph?scope=all|content|topic&content_type=&content_id=&topic=
 // 生成管理员台图谱数据：节点=阵营（大小=标记数，颜色=主导语言格式），
 // 边=同一内容下共同出现的阵营（权重=共现次数）。
+//
+// scope 维度（用户要求「两者都要」）：
+//   - all（默认）：全平台总览，不加任何过滤；
+//   - content：按单条内容（评论区）划分，需 content_type + content_id；
+//   - topic：按议题标签跨内容聚合——阵营标记本身不挂议题，需从 ContentTopic 反查
+//     带该标签的内容集合，再筛出这些内容的阵营标记。
 //
 // ⚠️ 节点大小/边权重只是**规模**，不是「谁更有理」；前端必须显示这条免责说明。
 func GetCampGraph(c *gin.Context) {
 	if !admincommon.EnsureElevated(c) {
 		return
 	}
+	scope := c.DefaultQuery("scope", "all")
 	var marks []store.CampMark
-	if err := store.DB.Order("id ASC").Find(&marks).Error; err != nil {
-		infra.InternalError(c, "读取标记失败")
-		return
+	scopeLabel := "全局总览"
+	switch scope {
+	case "content":
+		ct := c.Query("content_type")
+		cid := parseUint(c.Query("content_id"))
+		if ct == "" || cid == 0 {
+			infra.BadRequest(c, "按评论区查看需提供 content_type 与 content_id")
+			return
+		}
+		if err := store.DB.Model(&store.CampMark{}).
+			Where("content_type = ? AND content_id = ?", ct, cid).Order("id ASC").Find(&marks).Error; err != nil {
+			infra.InternalError(c, "读取标记失败")
+			return
+		}
+		scopeLabel = fmt.Sprintf("评论区：%s #%d", ct, cid)
+	case "topic":
+		tag := strings.TrimSpace(c.Query("topic"))
+		if tag == "" {
+			infra.BadRequest(c, "按议题查看需提供 topic 标签")
+			return
+		}
+		keys := topicContentKeys(tag)
+		var all []store.CampMark
+		if err := store.DB.Model(&store.CampMark{}).Order("id ASC").Find(&all).Error; err != nil {
+			infra.InternalError(c, "读取标记失败")
+			return
+		}
+		for _, m := range all {
+			if keys[fmt.Sprintf("%s:%d", m.ContentType, m.ContentID)] {
+				marks = append(marks, m)
+			}
+		}
+		scopeLabel = fmt.Sprintf("议题：%s（%d 个相关内容的阵营标记）", tag, len(keys))
+	default: // all
+		if err := store.DB.Model(&store.CampMark{}).Order("id ASC").Find(&marks).Error; err != nil {
+			infra.InternalError(c, "读取标记失败")
+			return
+		}
 	}
+	respondCampGraph(c, marks, scopeLabel)
+}
+
+// topicContentKeys 返回带某议题标签的内容集合键（"type:id"）。
+// 阵营标记本身不挂议题，按议题聚合时必须经 content 桥接：先查 ContentTopic 命中标签的内容，再回筛阵营标记。
+func topicContentKeys(tag string) map[string]bool {
+	keys := map[string]bool{}
+	if tag == "" {
+		return keys
+	}
+	var topics []store.ContentTopic
+	if err := store.DB.Model(&store.ContentTopic{}).Find(&topics).Error; err != nil {
+		return keys
+	}
+	for _, t := range topics {
+		for _, x := range topic.ParseTagsJSON(t.Tags) {
+			if x == tag {
+				keys[fmt.Sprintf("%s:%d", t.ContentType, t.ContentID)] = true
+				break
+			}
+		}
+	}
+	return keys
+}
+
+// respondCampGraph 把一批阵营标记聚合成图谱（节点=阵营，边=同内容共现），与 scope 无关。
+func respondCampGraph(c *gin.Context, marks []store.CampMark, scopeLabel string) {
 	type node struct {
 		ID         string         `json:"id"`
 		Label      string         `json:"label"`
@@ -248,8 +371,8 @@ func GetCampGraph(c *gin.Context) {
 		outEdges = append(outEdges, e)
 	}
 	infra.Success(c, gin.H{
-		"nodes": outNodes, "edges": outEdges,
-		"notice": "图谱只呈现阵营与语言格式的分布和共现；节点大小与边权重仅代表规模，不代表谁对谁错。",
+		"nodes": outNodes, "edges": outEdges, "scope": scopeLabel,
+		"notice": "图谱只呈现阵营与语言格式的分布和共现；节点大小与边权重仅代表规模，不代表谁对谁错。当前范围：" + scopeLabel,
 	})
 }
 

@@ -411,6 +411,7 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.POST("/sentiment/camp-marks", sentiment.CreateCampMark)
 		adminGrp.GET("/sentiment/camp-marks", sentiment.ListCampMarks)
 		adminGrp.GET("/sentiment/camp-graph", sentiment.GetCampGraph)
+		adminGrp.GET("/sentiment/topics/list", sentiment.ListTopicTags)
 		adminGrp.POST("/sentiment/camp-marks/:id/request-update", sentiment.RequestUpdateCampMark)
 		adminGrp.POST("/sentiment/camp-marks/:id/request-delete", sentiment.RequestDeleteCampMark)
 		adminGrp.PUT("/sentiment/camp-marks/:id", sentiment.UpdateCampMark)

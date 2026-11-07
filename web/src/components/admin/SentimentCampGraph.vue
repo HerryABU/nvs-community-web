@@ -25,13 +25,38 @@
       </div>
     </div>
 
+    <!-- 图谱范围（用户要求「两者都要」：全局总览 + 按评论区 + 按议题） -->
+    <div class="camp-scope">
+      <el-radio-group v-model="scopeMode" size="small" @change="onScopeChange">
+        <el-radio-button value="all">全局总览</el-radio-button>
+        <el-radio-button value="content">按评论区</el-radio-button>
+        <el-radio-button value="topic">按议题</el-radio-button>
+      </el-radio-group>
+      <template v-if="scopeMode === 'content'">
+        <el-select v-model="scopeContentType" size="small" style="width: 116px" @change="onScopeChange">
+          <el-option label="论坛 forum" value="forum" />
+          <el-option label="小说 novel" value="novel" />
+          <el-option label="博客 blog" value="blog" />
+        </el-select>
+        <el-input-number v-model="scopeContentID" :min="0" size="small" style="width: 150px" @change="onScopeChange" />
+      </template>
+      <template v-if="scopeMode === 'topic'">
+        <el-select v-model="scopeTopic" size="small" filterable style="min-width: 230px" placeholder="选择议题标签" @change="onScopeChange">
+          <el-option v-for="t in topicTagsList" :key="t.tag" :label="`${t.tag}（${t.count}）`" :value="t.tag" />
+          <template #empty>暂无议题标签</template>
+        </el-select>
+      </template>
+    </div>
+
     <div class="camp-toolbar">
       <el-button size="small" :loading="loading" @click="load">刷新图谱</el-button>
       <el-button size="small" type="primary" plain @click="showPrompt = !showPrompt">
-        {{ showPrompt ? '收起' : '查看' }}AI 中立性提示词
+        {{ showPrompt ? '收起' : '展开' }}AI 中立性提示词
       </el-button>
       <span class="camp-stat" v-if="!loading">阵营 {{ graph.nodes.length }} 个 · 共现 {{ graph.edges.length }} 条</span>
     </div>
+
+    <div v-if="graph.scope" class="camp-scope-title">当前范围：{{ graph.scope }}</div>
 
     <el-collapse-transition>
       <div v-if="showPrompt" class="camp-prompt">
@@ -203,7 +228,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { sentimentApi, type CampGraphData, type CampEdge, type DeleteRequest, type CampMark, type NeutralityPromptData } from '@/api/admin/sentiment';
+import { sentimentApi, type CampGraphData, type CampEdge, type DeleteRequest, type CampMark, type NeutralityPromptData, type TopicTag } from '@/api/admin/sentiment';
 
 const loading = ref(false);
 const marking = ref(false);
@@ -211,7 +236,14 @@ const analyzing = ref(false);
 const analyzeText = ref('');
 const analyzeSave = ref(true);
 const analyzeResult = ref('');
-const showPrompt = ref(false);
+const showPrompt = ref(true); // 强中立提示词默认常驻显示
+
+// 图谱范围：all（全局总览）/ content（按评论区）/ topic（按议题）
+const scopeMode = ref<'all' | 'content' | 'topic'>('all');
+const scopeContentType = ref('forum');
+const scopeContentID = ref(0);
+const scopeTopic = ref('');
+const topicTagsList = ref<TopicTag[]>([]);
 const graph = ref<CampGraphData>({ nodes: [], edges: [], notice: '' });
 const promptData = ref<NeutralityPromptData>({ prompt: '', notice: '', lang_formats: [] });
 const requests = ref<DeleteRequest[]>([]);
@@ -267,6 +299,33 @@ const markForm = reactive({
   lang_evidence: '', content_type: 'forum', content_id: 0,
 });
 
+// 构建当前 scope 的查询参数（与图谱、列表共用，保证图与表一致）
+function scopeParams(): { scope: string; content_type?: string; content_id?: number; topic?: string } {
+  const p: any = { scope: scopeMode.value };
+  if (scopeMode.value === 'content') {
+    p.content_type = scopeContentType.value;
+    p.content_id = scopeContentID.value;
+  } else if (scopeMode.value === 'topic') {
+    p.topic = scopeTopic.value;
+  }
+  return p;
+}
+
+function onScopeChange() {
+  // 切换到「按评论区」时，把手动标记表单的归属也带过去，减少重复填写
+  if (scopeMode.value === 'content') {
+    markForm.content_type = scopeContentType.value;
+    // 内容 ID 未填（默认 0）时不要发必败的请求，提示用户先填真实内容 ID
+    if (scopeContentID.value === 0) {
+      markForm.content_id = 0;
+      ElMessage.warning('按评论区查看请先填写内容 ID');
+      return;
+    }
+    markForm.content_id = scopeContentID.value;
+  }
+  load();
+}
+
 const svg = { w: 720, h: 340, cx: 360, cy: 160, r: 125 };
 const positionedNodes = computed(() => {
   const ns = graph.value.nodes;
@@ -293,11 +352,12 @@ const positionedEdges = computed(() => {
 async function load() {
   loading.value = true;
   try {
+    const params = scopeParams();
     const [g, p, r, m] = await Promise.all([
-      sentimentApi.campGraph(),
+      sentimentApi.campGraph(params),
       sentimentApi.neutralityPrompt(),
       sentimentApi.deleteRequests(),
-      sentimentApi.campMarks(),
+      sentimentApi.campMarks(params),
     ]);
     if (g.data?.code === 0) graph.value = g.data.data;
     if (p.data?.code === 0) promptData.value = p.data.data;
@@ -472,7 +532,15 @@ async function reject(row: DeleteRequest) {
   }
 }
 
-onMounted(load);
+onMounted(async () => {
+  load();
+  try {
+    const res = await sentimentApi.topicTags();
+    if (res.data?.code === 0) topicTagsList.value = res.data.data.items || [];
+  } catch {
+    /* 议题标签加载失败不影响图谱主流程 */
+  }
+});
 </script>
 
 <style scoped>
@@ -486,6 +554,8 @@ onMounted(load);
 .camp-analyze__opt { display: flex; align-items: center; gap: 4px; font-size: 0.74rem; color: var(--text-light); }
 .camp-analyze__result { font-size: 0.74rem; color: var(--success-color); }
 .camp-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.camp-scope { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.camp-scope-title { font-size: 0.82rem; color: var(--text-light); padding: 2px 0; }
 .camp-stat { font-size: 0.82rem; color: var(--text-light); }
 .camp-prompt { background: var(--bg-soft); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px 14px; }
 .camp-prompt__head { font-weight: 600; color: var(--text-color); margin-bottom: 8px; font-size: 0.88rem; }
