@@ -165,7 +165,7 @@ const loading = ref(false);
 const members = ref<Collaborator[]>([]);
 const ownerId = ref(0);
 const ownerName = ref('');
-const byline = ref<string[]>([]);
+const byline = ref<string>('');
 const isOwner = ref(false);
 const transferVisible = ref(false);
 const transferTo = ref<number>(0);
@@ -202,7 +202,7 @@ async function doTransfer() {
 }
 
 const ownerInitial = computed(() => (ownerName.value || '主')[0]);
-const bylineText = computed(() => (byline.value.length > 0 ? byline.value.join(' · ') : ownerName.value || '主笔'));
+const bylineText = computed(() => (byline.value ? byline.value : (ownerName.value || '主笔')));
 const totalShareBP = computed(() =>
   members.value.filter((m) => m.status === 'active').reduce((s, m) => s + (m.revenue_share_bp || 0), 0),
 );
@@ -297,7 +297,7 @@ async function load() {
     members.value = d.list || [];
     ownerId.value = d.owner_id || 0;
     ownerName.value = d.owner_name || '';
-    byline.value = d.byline || [];
+    byline.value = d.byline || '';
     isOwner.value = !!d.me?.is_owner;
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '加载协作成员失败');

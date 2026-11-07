@@ -28,6 +28,7 @@ export interface Novel {
   derivative_origin_author?: string;   // 原著作者名快照
   derivative_external_source?: string; // 站外同人来源标注
   author_name?: string;
+  byline?: string; // 多人协作署名概览：主笔：X · 协作：A、B
   author?: {
     id: number;
     username: string;

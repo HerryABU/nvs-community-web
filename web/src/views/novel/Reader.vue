@@ -116,6 +116,7 @@
         >
           <span class="toc-num">第{{ ch.chapter_number }}章</span>
           <span class="toc-title">{{ ch.title }}</span>
+          <span v-if="ch.author_name" class="toc-author">@{{ ch.author_name }}</span>
         </div>
         <el-empty v-if="!tocLoading && chapters.length === 0" description="暂无章节" :image-size="60" />
       </div>
@@ -1615,6 +1616,20 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 0;
   font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toc-author {
+  flex-shrink: 0;
+  margin-left: 6px;
+  font-size: 0.72rem;
+  color: var(--el-color-primary, #6366f1);
+  background: var(--el-color-primary-light-9, rgba(99, 102, 241, 0.1));
+  border-radius: 4px;
+  padding: 1px 6px;
+  max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

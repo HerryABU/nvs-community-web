@@ -56,7 +56,8 @@ export interface CollabListData {
   list: Collaborator[];
   owner_id: number;
   owner_name: string;
-  byline: string[];
+  /** 署名概览串：主笔：X · 协作：A、B（后端 collab.Byline 直接生成，非数组） */
+  byline: string;
   me: CollabMe;
 }
 

@@ -16,6 +16,7 @@ import (
 	"nvs-server/handlers/auth"
 	"nvs-server/handlers/author"
 	"nvs-server/handlers/batch"
+	"nvs-server/handlers/blog"
 	"nvs-server/handlers/captcha"
 	"nvs-server/handlers/comment"
 	"nvs-server/handlers/compliance"
@@ -94,6 +95,8 @@ func registerPublic(r *gin.Engine) {
 		public.POST("/batch", security.RateLimit(30, 60), batch.BatchHandler)
 		public.GET("/novels/:id/rating", rating.GetNovelRating)
 		public.GET("/novels/:id/likes", novel.GetNovelLikes)
+		// 博客收藏数 + 当前用户是否已收藏（只读；匿名 favorited=false）
+		public.GET("/blogs/:id/favorites", blog.GetBlogFavorites)
 		public.GET("/forums", forum.ListForums)
 		// 群组（公开/半公开可浏览；私密仅成员）
 		public.GET("/groups", grouphandler.GroupList)

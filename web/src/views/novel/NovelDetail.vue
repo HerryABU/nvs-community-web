@@ -41,6 +41,9 @@
             <span class="meta-item">更新：{{ formatDate(novel.updated_at) }}</span>
             <span class="meta-item" v-if="novel.price_per_chapter > 0">约 {{ novel.price_per_chapter }} 代币/章</span>
           </div>
+          <div class="novel-byline" v-if="novel.byline">
+            <el-icon><UserFilled /></el-icon><span>{{ novel.byline }}</span>
+          </div>
           <div class="novel-tags" v-if="novel.tags && novel.tags.length">
             <span class="tags-label">标签</span>
             <router-link
@@ -187,7 +190,7 @@ import CommentSection from '@/components/comment/CommentSection.vue';
 import StarRating from '@/components/novel/StarRating.vue';
 import SensitiveZoneGuard from '@/components/common/SensitiveZoneGuard.vue';
 import ReportButton from '@/components/comment/ReportButton.vue';
-import { ArrowDown, ArrowUp, Search } from '@element-plus/icons-vue';
+import { ArrowDown, ArrowUp, Search, UserFilled } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
 import { shouldShowGuard, markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';
 
@@ -399,6 +402,19 @@ onMounted(async () => {
   display: flex;
   gap: 32px;
   margin-bottom: 40px;
+}
+
+.novel-byline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 0.82rem;
+  color: var(--el-color-primary, #6366f1);
+  font-weight: 600;
+}
+.novel-byline .el-icon {
+  font-size: 0.95rem;
 }
 
 .cover-placeholder {

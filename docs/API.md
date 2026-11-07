@@ -58,6 +58,7 @@
 | GET | `/api/blogs/:id/likes` | — | 点赞数 + 当前用户是否已赞 |
 | POST | `/api/blogs/:id/like` | JWT | 点赞 / 取消点赞（toggle） |
 | POST | `/api/blogs/:id/favorite` | JWT | 收藏 / 取消收藏（toggle，独立 `blog_favorites` 表） |
+| GET | `/api/blogs/:id/favorites` | — | 收藏数 + 当前用户是否已收藏（匿名 `favorited=false`） |
 | GET | `/api/blog-categories` | — | 博客分类树（一/二/三级 + 博客数） |
 | GET | `/api/author/:id/blogs` | — | 作者博客列表 |
 | POST | `/api/blogs` | JWT | 创建博客（可带 `category_id`） |
