@@ -121,6 +121,8 @@ type CreateBlogInput struct {
 	PaidPrice      *int64  `json:"paid_price"`
 	// 评论区开关：默认开启，作者可关闭本文评论区
 	CommentsEnabled *bool `json:"comments_enabled"`
+	// 封面图（头图）URL：仅允许站内上传路径 /uploads/images/…
+	CoverURL string `json:"cover_url" binding:"max=512"`
 }
 
 type UpdateBlogInput struct {
@@ -138,6 +140,8 @@ type UpdateBlogInput struct {
 	PaidPrice      *int64  `json:"paid_price"`
 	// 评论区开关；null=不修改
 	CommentsEnabled *bool `json:"comments_enabled"`
+	// 封面图（头图）URL；空字符串表示不改动
+	CoverURL string `json:"cover_url" binding:"max=512"`
 }
 
 // POST /api/blogs/import/batch — 批量导入博客（multipart，每个文件一篇博客，标题取文件名去扩展名）
@@ -284,6 +288,7 @@ func CreateBlog(c *gin.Context) {
 		AuthorID:        userID,
 		Title:           title,
 		Summary:         summary,
+		CoverURL:        req.CoverURL,
 		CommentsEnabled: req.CommentsEnabled == nil || *req.CommentsEnabled,
 	}
 	if !applyBlogPermissionInput(c, blog, nil, req.ReadPermission, req.PaidPrice) {
@@ -559,6 +564,11 @@ func UpdateBlog(c *gin.Context) {
 	if req.CommentsEnabled != nil {
 		blog.CommentsEnabled = *req.CommentsEnabled
 		updates["comments_enabled"] = *req.CommentsEnabled
+	}
+	// 封面图：空字符串表示不改动（仅当显式传非空时才更新）
+	if req.CoverURL != "" {
+		blog.CoverURL = req.CoverURL
+		updates["cover_url"] = req.CoverURL
 	}
 	// 标签：仅当请求显式携带 tags 字段时同步（null 表示不修改）
 	if req.Tags != nil {

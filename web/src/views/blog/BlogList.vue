@@ -39,11 +39,11 @@
               {{ blog.title }}
             </h2>
 
-            <!-- 内容预览：前100字 + 图片提取 -->
+            <!-- 内容预览：前100字 + 封面优先（无封面则抽正文首图） -->
             <div class="bl-preview">
               <img
-                v-if="extractFirstImage(blog.content)"
-                :src="extractFirstImage(blog.content)"
+                v-if="blog.cover_url || extractFirstImage(blog.content)"
+                :src="blog.cover_url || extractFirstImage(blog.content)"
                 class="bl-cover-img"
               />
               <p class="bl-summary">

@@ -91,6 +91,9 @@
             </div>
           </div>
 
+          <!-- 头图（封面）：作者设置的封面优先展示为文章头图横幅 -->
+          <img v-if="blog.cover_url" :src="blog.cover_url" class="blog-cover" alt="封面" />
+
           <div class="blog-content markdown-body cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" v-html="htmlContent" ref="blogContentRef"></div>
 
           <!-- 自定义模板Footer区域（position=footer 的模版，渲染在正文下方） -->
@@ -421,6 +424,8 @@ onBeforeUnmount(() => {
 .bd-ai-mark { margin-left: 4px; }
 .bd-toc-restore { flex-shrink: 0; }
 .blog-header h1 { font-size: 1.5rem; margin-bottom: 8px; }
+/* 头图（封面）横幅 */
+.blog-cover { width: 100%; max-height: 360px; object-fit: cover; border-radius: 12px; margin-bottom: 20px; background: var(--bg-secondary, #f3f4f8); display: block; }
 .blog-meta-line {
   display: flex; align-items: center; gap: 14px;
   font-size: 0.85rem; color: var(--text-muted); flex-wrap: wrap;

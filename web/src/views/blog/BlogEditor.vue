@@ -131,6 +131,17 @@
       <el-switch v-model="blogCommentsEnabled" size="small" />
       <span class="be-pinned-label">{{ blogCommentsEnabled ? '开启 - 读者可评论' : '已关闭 - 读者无法评论' }}</span>
     </div>
+    <!-- 封面图（头图） -->
+    <div class="be-perm-row">
+      <span class="be-perm-label">封面图</span>
+      <div class="be-cover">
+        <img v-if="blogCover" :src="blogCover" class="be-cover-img" alt="封面预览" />
+        <el-upload class="be-cover-upload" :show-file-list="false" :before-upload="beforeUploadCover" accept="image/*">
+          <el-button size="small">{{ blogCover ? '更换封面' : '上传封面' }}</el-button>
+        </el-upload>
+        <el-button v-if="blogCover" size="small" text type="danger" @click="blogCover = ''">移除</el-button>
+      </div>
+    </div>
 
     <!-- 插入视频/音频弹窗（上传或粘贴 URL，仿 CSDN） -->
     <el-dialog v-model="mediaDialog" :title="mediaType === 'video' ? '🎬 插入视频' : '🎵 插入音频'" width="480px">
@@ -225,6 +236,8 @@ const blogSummary = ref('');
 const blogPinned = ref(false);
 // 评论区开关：默认开启，作者可关闭本文评论区
 const blogCommentsEnabled = ref(true);
+// 封面图（头图）：仅允许站内上传路径
+const blogCover = ref('');
 // #65 作品级阅读权限
 const readPermission = ref('public');
 const paidPrice = ref(0);
@@ -445,6 +458,7 @@ async function loadBlog() {
       blogSummary.value = b.summary || '';
       blogPinned.value = b.is_pinned || false;
       blogCommentsEnabled.value = b.comments_enabled !== false;
+      blogCover.value = b.cover_url || '';
       blogCategoryId.value = b.category_id || undefined;
       blogTags.value = (b.tags || []).map((t: any) => t.name);
       blogTopics.value = (b.topics || []).map((t: any) => t.name);
@@ -459,6 +473,19 @@ async function loadBlog() {
       }
     }
   } catch { ElMessage.error('加载博客失败'); router.push('/author'); }
+}
+
+// 封面上传：走通用 /upload，服务端解码重编码防图片马；仅收站内 /uploads/images/ 路径
+async function beforeUploadCover(file: File): Promise<boolean> {
+  try {
+    const res = await uploadApi.upload(file);
+    const url = res?.data?.data?.url || '';
+    if (!url) { ElMessage.error('封面上传失败'); return false; }
+    blogCover.value = url;
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '封面上传失败');
+  }
+  return false; // 阻止 el-upload 自动上传（我们自行调用 uploadApi）
 }
 
 async function saveBlog() {
@@ -482,6 +509,7 @@ async function saveBlog() {
       read_permission: readPermission.value,
       paid_price: paidPrice.value,
       comments_enabled: blogCommentsEnabled.value,
+      cover_url: blogCover.value,
     };
     if (editingId.value) {
       await blogApi.update(editingId.value, payload);
