@@ -125,6 +125,12 @@
       <span class="be-perm-label">阅读权限</span>
       <ReadPermissionPicker v-model="readPermission" v-model:price="paidPrice" :disabled="saving" />
     </div>
+    <!-- 评论区开关：作者可关闭本文评论区 -->
+    <div class="be-perm-row">
+      <span class="be-perm-label">评论区</span>
+      <el-switch v-model="blogCommentsEnabled" size="small" />
+      <span class="be-pinned-label">{{ blogCommentsEnabled ? '开启 - 读者可评论' : '已关闭 - 读者无法评论' }}</span>
+    </div>
 
     <!-- 插入视频/音频弹窗（上传或粘贴 URL，仿 CSDN） -->
     <el-dialog v-model="mediaDialog" :title="mediaType === 'video' ? '🎬 插入视频' : '🎵 插入音频'" width="480px">
@@ -217,6 +223,8 @@ const editingId = ref(Number(route.params.id) || 0);
 const blogTitle = ref('');
 const blogSummary = ref('');
 const blogPinned = ref(false);
+// 评论区开关：默认开启，作者可关闭本文评论区
+const blogCommentsEnabled = ref(true);
 // #65 作品级阅读权限
 const readPermission = ref('public');
 const paidPrice = ref(0);
@@ -436,6 +444,7 @@ async function loadBlog() {
       blogContent.value = b.content || '';
       blogSummary.value = b.summary || '';
       blogPinned.value = b.is_pinned || false;
+      blogCommentsEnabled.value = b.comments_enabled !== false;
       blogCategoryId.value = b.category_id || undefined;
       blogTags.value = (b.tags || []).map((t: any) => t.name);
       blogTopics.value = (b.topics || []).map((t: any) => t.name);
@@ -472,6 +481,7 @@ async function saveBlog() {
       ai_model: aiUsed.value ? aiModelName.value : undefined,
       read_permission: readPermission.value,
       paid_price: paidPrice.value,
+      comments_enabled: blogCommentsEnabled.value,
     };
     if (editingId.value) {
       await blogApi.update(editingId.value, payload);

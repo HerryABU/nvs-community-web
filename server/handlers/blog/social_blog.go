@@ -119,6 +119,8 @@ type CreateBlogInput struct {
 	// #65 作品级阅读权限（等级集合由站长在后台配置）
 	ReadPermission *string `json:"read_permission"`
 	PaidPrice      *int64  `json:"paid_price"`
+	// 评论区开关：默认开启，作者可关闭本文评论区
+	CommentsEnabled *bool `json:"comments_enabled"`
 }
 
 type UpdateBlogInput struct {
@@ -134,6 +136,8 @@ type UpdateBlogInput struct {
 	// #65 作品级阅读权限；null=不修改
 	ReadPermission *string `json:"read_permission"`
 	PaidPrice      *int64  `json:"paid_price"`
+	// 评论区开关；null=不修改
+	CommentsEnabled *bool `json:"comments_enabled"`
 }
 
 // POST /api/blogs/import/batch — 批量导入博客（multipart，每个文件一篇博客，标题取文件名去扩展名）
@@ -277,9 +281,10 @@ func CreateBlog(c *gin.Context) {
 
 	// 先创建数据库记录获取 ID
 	blog := &blogm.AuthorBlog{
-		AuthorID: userID,
-		Title:    title,
-		Summary:  summary,
+		AuthorID:        userID,
+		Title:           title,
+		Summary:         summary,
+		CommentsEnabled: req.CommentsEnabled == nil || *req.CommentsEnabled,
 	}
 	if !applyBlogPermissionInput(c, blog, nil, req.ReadPermission, req.PaidPrice) {
 		return
@@ -549,6 +554,11 @@ func UpdateBlog(c *gin.Context) {
 	}
 	if !applyBlogPermissionInput(c, blog, updates, req.ReadPermission, req.PaidPrice) {
 		return
+	}
+	// 评论区开关：仅当请求显式携带 comments_enabled 字段时同步（null 表示不修改）
+	if req.CommentsEnabled != nil {
+		blog.CommentsEnabled = *req.CommentsEnabled
+		updates["comments_enabled"] = *req.CommentsEnabled
 	}
 	// 标签：仅当请求显式携带 tags 字段时同步（null 表示不修改）
 	if req.Tags != nil {

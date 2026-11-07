@@ -124,9 +124,14 @@
           </el-form-item>
         </template>
         <!-- #65 作品级阅读权限（可选等级由站长在后台配置） -->
-        <el-form-item label="阅读权限">
-          <ReadPermissionPicker v-model="form.read_permission" v-model:price="form.paid_price" :disabled="saving" />
-        </el-form-item>
+          <el-form-item label="阅读权限">
+            <ReadPermissionPicker v-model="form.read_permission" v-model:price="form.paid_price" :disabled="saving" />
+          </el-form-item>
+          <!-- 评论区开关：作者可关闭本作品评论区（含章评） -->
+          <el-form-item label="评论区">
+            <el-switch v-model="form.comments_enabled" size="small" />
+            <span style="margin-left:8px;font-size:0.8rem;color: var(--text-light, #999)">{{ form.comments_enabled !== false ? '开启 - 读者可评论' : '已关闭 - 读者无法评论' }}</span>
+          </el-form-item>
       </el-form>
     </el-card>
 
@@ -351,6 +356,7 @@ const chapters = ref<Chapter[]>([]);
 const form = reactive<Partial<Novel>>({
   wall_enabled: true,
   wall_warning: '',
+  comments_enabled: true, // 评论区开关：默认开启，作者可关闭本作品评论区
   title: '',
   category: '其他',
   categories: [] as string[],
@@ -521,6 +527,7 @@ async function loadNovel() {
       mode: novel.mode || 'prose',
       wall_enabled: novel.wall_enabled !== false,
       wall_warning: novel.wall_warning || '',
+      comments_enabled: novel.comments_enabled !== false,
       read_permission: novel.read_permission || 'public',
       paid_price: novel.paid_price || 0,
       // #76 同人衍生回填

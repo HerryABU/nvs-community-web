@@ -16,8 +16,12 @@
       </p>
     </div>
 
+    <!-- 评论区已关闭（作者开关 comments_enabled=false）：隐藏输入框，历史评论仍只读展示 -->
+    <div v-if="!commentsEnabled" class="comment-closed">
+      🔒 作者已关闭评论区
+    </div>
     <!-- 发表评论 -->
-    <div class="comment-form" v-if="authStore.isLoggedIn">
+    <div class="comment-form" v-else-if="authStore.isLoggedIn">
       <div v-if="mentionCanEdit" class="mention-source-row">
         <span class="mention-source-label">@ 提及来源</span>
         <el-select
@@ -226,6 +230,8 @@ async function onChangeMentionSource(val: string) {
 }
 
 const comments = ref<Comment[]>([]);
+// 评论区开关：后端 GetComments 返回 comments_enabled（默认 true），false=作者已关闭评论区
+const commentsEnabled = ref(true);
 const newComment = ref('');
 const submitting = ref(false);
 // 附图（评论图片）：上传后先本地预览，提交时随 content 一起送；后端只收 /uploads/images/ 前缀
@@ -317,6 +323,7 @@ async function fetchComments(reset = false) {
       items: comments.value, // 带上已解锁楼密码（X-Floor-Password 头）
     });
     const data = res.data.data;
+    commentsEnabled.value = data.comments_enabled !== false;
     if (reset) {
       comments.value = data.list || [];
       latestTotal.value = Number(data.total) || comments.value.length;
@@ -423,6 +430,7 @@ async function crossDomainCheck(): Promise<boolean> {
 }
 
 async function submitComment() {
+  if (!commentsEnabled.value) return;
   if (!newComment.value.trim()) return;
 
   // 跨域评论检查
@@ -504,6 +512,7 @@ function afterCreate(res: any, isReply: boolean) {
 
 // parentId 为 null 表示回复主内容（开新楼）；有值表示回复楼内某条（挂靠该楼）
 async function handleReply(parentId: number | null, content: string) {
+  if (!commentsEnabled.value) return;
   const allowed = await crossDomainCheck();
   if (!allowed) return;
   try {
@@ -702,6 +711,17 @@ defineExpose({ setQuote });
   text-align: center;
   padding: 24px;
   color: var(--text-light);
+  font-size: 0.9rem;
+}
+
+.comment-closed {
+  text-align: center;
+  padding: 22px;
+  margin-bottom: 16px;
+  border: 1px dashed var(--border-color, #e3e6ec);
+  border-radius: 10px;
+  background: var(--bg-card, #fbfcfe);
+  color: var(--text-light, #8a92a6);
   font-size: 0.9rem;
 }
 

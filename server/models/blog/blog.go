@@ -21,6 +21,8 @@ type AuthorBlog struct {
 	LikeCount   int    `gorm:"default:0" json:"like_count"`                          // 点赞数（blog_likes 冗余计数）
 	IsPinned    bool   `gorm:"default:false;index" json:"is_pinned"`
 	ViewCount   int    `gorm:"default:0" json:"view_count"`
+	// 评论区开关：作者可关闭本文评论区，默认开启
+	CommentsEnabled bool `gorm:"not null;default:true" json:"comments_enabled"`
 	// 作品级阅读权限（与小说同一套 readperm 模型；站长在后台配置可选等级集合）
 	ReadPermission string         `gorm:"size:16;not null;default:public;index" json:"read_permission"`
 	PaidPrice      int64          `gorm:"not null;default:0" json:"paid_price"`           // paid 等级售价（代币）

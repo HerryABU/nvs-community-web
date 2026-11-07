@@ -45,7 +45,7 @@ export const commentApi = {
     const { items, ...query } = params;
     return api.get<{
       code: number;
-      data: { list: Comment[]; total: number; floor_total: number; has_more: boolean; page: number; sort?: CommentSort };
+      data: { list: Comment[]; total: number; floor_total: number; has_more: boolean; page: number; sort?: CommentSort; comments_enabled?: boolean };
     }>('/comments', {
       params: query,
       headers: floorPasswordHeaders(items),

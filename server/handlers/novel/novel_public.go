@@ -36,6 +36,8 @@ type CreateNovelInput struct {
 	Mode            string   `json:"mode"`            // prose（散文体）/ script（话本气泡体）
 	ReadPermission  *string  `json:"read_permission"` // #65 作品级阅读权限等级
 	PaidPrice       *int64   `json:"paid_price"`      // #65 paid 等级售价（代币）
+	// 评论区开关：默认开启，作者可关闭本作品评论区（含章评）
+	CommentsEnabled *bool `json:"comments_enabled"`
 	// #76 同人衍生
 	DerivativeType           string `json:"derivative_type"`            // ""原创 / site站内同人 / external站外同人
 	DerivativeOriginID       uint   `json:"derivative_origin_id"`       // 站内原著 id
@@ -58,6 +60,8 @@ type UpdateNovelInput struct {
 	Mode            string   `json:"mode"`            // prose / script
 	ReadPermission  *string  `json:"read_permission"` // #65
 	PaidPrice       *int64   `json:"paid_price"`      // #65
+	// 评论区开关；nil=不修改
+	CommentsEnabled *bool `json:"comments_enabled"`
 	// #76 同人衍生（空字符串表示不改动）
 	DerivativeType           string `json:"derivative_type"`
 	DerivativeOriginID       uint   `json:"derivative_origin_id"`

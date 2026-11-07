@@ -134,6 +134,7 @@ func CreateNovel(c *gin.Context) {
 		Status:          status,
 		SourceType:      sourceType,
 		CreationMethod:  creationMethod,
+		CommentsEnabled: input.CommentsEnabled == nil || *input.CommentsEnabled,
 	}
 	// #76 同人衍生处理
 	switch input.DerivativeType {
@@ -314,6 +315,10 @@ func UpdateNovel(c *gin.Context) {
 	// 作者隔离开关：true=外人需登录才能查看本作品（对应 3.2 作者自决）
 	if input.WallEnabled != nil {
 		novel.WallEnabled = *input.WallEnabled
+	}
+	// 评论区开关：nil=不修改，非 nil 直接覆盖（Save 全字段持久化）
+	if input.CommentsEnabled != nil {
+		novel.CommentsEnabled = *input.CommentsEnabled
 	}
 	if !applyPermissionInput(c, novel, input.ReadPermission, input.PaidPrice) {
 		return

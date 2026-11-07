@@ -17,6 +17,7 @@ export interface Novel {
   created_at: string;
   updated_at: string;
   wall_enabled?: boolean;
+  comments_enabled?: boolean; // 评论区开关：作者可关闭本作品评论区（含章评），默认开启
   wall_warning?: string;
   read_permission?: string; // #65 作品级阅读权限等级
   paid_price?: number;      // #65 paid 等级售价（代币）

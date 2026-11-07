@@ -19,10 +19,11 @@ type Novel struct {
 	SourceType      string  `gorm:"size:32;default:original" json:"source_type"`  // original / reprint
 	CreationMethod  string  `gorm:"size:32;default:human" json:"creation_method"` // human / ai / human_ai_assisted
 	// Mode 叙事形态：prose=散文体（默认）/ script=话本气泡体（对话为主，按「角色：台词」解析渲染）
-	Mode           string `gorm:"size:12;not null;default:prose;index" json:"mode"`
-	WallEnabled    bool   `gorm:"not null;default:false" json:"wall_enabled"`                   // 作者隔离开关：true=外人需登录才能查看本作品（老数据，等价于 read_permission=login）
-	ReadPermission string `gorm:"size:16;not null;default:public;index" json:"read_permission"` // 作品级阅读权限等级（站长在后台配置可选集合）
-	PaidPrice      int64  `gorm:"not null;default:0" json:"paid_price"`                         // paid 等级售价（代币），0 表示用站长设定的最低价
+	Mode            string `gorm:"size:12;not null;default:prose;index" json:"mode"`
+	WallEnabled     bool   `gorm:"not null;default:false" json:"wall_enabled"`                   // 作者隔离开关：true=外人需登录才能查看本作品（老数据，等价于 read_permission=login）
+	CommentsEnabled bool   `gorm:"not null;default:true" json:"comments_enabled"`                // 评论区开关：作者可关闭本作品评论区（含章评），默认开启
+	ReadPermission  string `gorm:"size:16;not null;default:public;index" json:"read_permission"` // 作品级阅读权限等级（站长在后台配置可选集合）
+	PaidPrice       int64  `gorm:"not null;default:0" json:"paid_price"`                         // paid 等级售价（代币），0 表示用站长设定的最低价
 	// 同人衍生信息（#76）：DerivativeType=""原创 / "site"站内同人 / "external"站外同人
 	DerivativeType           string         `gorm:"size:16;not null;default:''" json:"derivative_type"`
 	DerivativeOriginID       uint           `gorm:"not null;default:0;index" json:"derivative_origin_id"`           // 站内原著 novel id

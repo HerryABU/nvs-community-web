@@ -43,9 +43,18 @@ func GetComments(c *gin.Context) {
 	includeDeleted := adminsite.IsPoliceOrAdminUser(c)
 	var pg models.CommentsPage
 	var err error
+	// 评论区开关：作者可关闭评论区（默认开启）。即使关闭也照常返回历史评论，
+	// 仅通过 comments_enabled 标志告知前端「评论区已关闭」，由前端隐藏输入框/区。
+	commentsEnabled := true
 	if blogID > 0 {
+		if b, berr := blog.GetBlogByID(uint(blogID)); berr == nil {
+			commentsEnabled = b.CommentsEnabled
+		}
 		pg, err = models.GetCommentsByBlog(uint(blogID), page, pageSize, includeDeleted, sortKey)
 	} else {
+		if n, nerr := models.GetNovelByID(uint(novelID)); nerr == nil {
+			commentsEnabled = n.CommentsEnabled
+		}
 		pg, err = models.GetCommentsByNovel(uint(novelID), chapterNum, page, pageSize, includeDeleted, sortKey)
 	}
 	if err != nil {
@@ -69,13 +78,14 @@ func GetComments(c *gin.Context) {
 		foldChars = cfg.FoldChars
 	}
 	infra.Success(c, gin.H{
-		"fold_chars":  foldChars,
-		"list":        pg.List,
-		"total":       pg.Total,
-		"floor_total": pg.FloorTotal,
-		"has_more":    pg.HasMore,
-		"page":        page,
-		"sort":        sortKey,
+		"fold_chars":       foldChars,
+		"comments_enabled": commentsEnabled,
+		"list":             pg.List,
+		"total":            pg.Total,
+		"floor_total":      pg.FloorTotal,
+		"has_more":         pg.HasMore,
+		"page":             page,
+		"sort":             sortKey,
 	})
 }
 
@@ -128,6 +138,22 @@ func CreateComment(c *gin.Context) {
 		if blog, berr := blog.GetBlogByID(req.BlogID); berr == nil && blog.AuthorID != userID {
 			if securitym.IsBlacklisted(blog.AuthorID, userID) {
 				infra.Forbidden(c, "你已被该作者拉黑，无法在其博客下评论")
+				return
+			}
+			if !blog.CommentsEnabled {
+				infra.Forbidden(c, "作者已关闭本文评论区")
+				return
+			}
+		}
+	}
+	if req.NovelID > 0 {
+		if novel, nerr := models.GetNovelByID(req.NovelID); nerr == nil && novel.AuthorID != userID {
+			if securitym.IsBlacklisted(novel.AuthorID, userID) {
+				infra.Forbidden(c, "你已被该作者拉黑，无法在其作品下评论")
+				return
+			}
+			if !novel.CommentsEnabled {
+				infra.Forbidden(c, "作者已关闭本作品评论区")
 				return
 			}
 		}
