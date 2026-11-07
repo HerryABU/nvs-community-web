@@ -115,13 +115,13 @@
         </el-form>
       </div>
       <div class="camp-panel">
-        <h4>阵营标记列表</h4>
+        <h4>阵营标记列表<span v-if="pendingCount" class="camp-badge">待审核 {{ pendingCount }}</span></h4>
         <div class="muted small" style="margin-bottom: 8px">
           <template v-if="canApprove">
-            当前为超级管理员（站长）：可直接修改 / 删除阵营标记。
+            当前为超级管理员（站长）：可直接新增 / 修改 / 删除阵营标记，并审核普通管理员的待审标记。
           </template>
           <template v-else>
-            当前为管理员：只能【新增】，修改 / 删除需提交申请，由超级管理员（站长）批准。
+            当前为管理员：新增的标记需经站长审核后才进入图谱；修改 / 删除需提交申请，由超级管理员（站长）批准。
           </template>
         </div>
         <el-table :data="marks" size="small" max-height="300" empty-text="暂无标记">
@@ -133,9 +133,21 @@
             <template #default="{ row }">{{ langLabel(row.lang_format) }}</template>
           </el-table-column>
           <el-table-column label="来源" width="64" prop="source" />
-          <el-table-column label="操作" width="150">
+          <el-table-column label="状态" width="92">
             <template #default="{ row }">
-              <template v-if="canApprove">
+              <el-tag v-if="row.status === 'approved'" size="small" type="success" effect="plain">已审核</el-tag>
+              <el-tag v-else-if="row.status === 'pending'" size="small" type="warning" effect="plain">待审核</el-tag>
+              <el-tag v-else size="small" type="info" effect="plain">已驳回</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="180">
+            <template #default="{ row }">
+              <template v-if="canApprove && row.status === 'pending'">
+                <el-button link type="success" size="small" @click="approveMark(row)">通过</el-button>
+                <el-button link type="danger" size="small" @click="rejectMark(row)">驳回</el-button>
+                <el-button link type="primary" size="small" @click="openEdit(row, 'direct')">修改</el-button>
+              </template>
+              <template v-else-if="canApprove">
                 <el-button link type="primary" size="small" @click="openEdit(row, 'direct')">修改</el-button>
                 <el-button link type="danger" size="small" @click="directDelete(row)">删除</el-button>
               </template>
@@ -249,6 +261,8 @@ const promptData = ref<NeutralityPromptData>({ prompt: '', notice: '', lang_form
 const requests = ref<DeleteRequest[]>([]);
 const marks = ref<CampMark[]>([]);
 const canApprove = ref(false);
+// 待站长审核的标记数（仅 pending）；超管据此在列表里审核
+const pendingCount = computed(() => marks.value.filter((m) => m.status === 'pending').length);
 
 const editDialog = ref(false);
 const editMode = ref<'direct' | 'request'>('request');
@@ -382,7 +396,11 @@ async function runAnalyze() {
     if (res.data?.code === 0) {
       const d = res.data.data;
       analyzeResult.value = `已标记 ${d.marks?.length || 0} 个阵营（${d.source === 'ai' ? 'AI 强中立提示词' : '兜底'}）`;
-      ElMessage.success(res.data?.message || 'AI 已完成阵营标记');
+      if (d.status === 'pending') {
+        ElMessage.warning(res.data?.message || 'AI 已完成阵营标记，待站长审核后进入图谱');
+      } else {
+        ElMessage.success(res.data?.message || 'AI 已完成阵营标记');
+      }
       await load();
     } else {
       ElMessage.error(res.data?.message || 'AI 分析失败');
@@ -403,7 +421,12 @@ async function submitMark() {
   try {
     const res = await sentimentApi.createCampMark({ ...markForm });
     if (res.data?.code === 0) {
-      ElMessage.success('已新增标记');
+      const st = (res.data.data as CampMark)?.status;
+      if (st === 'pending') {
+        ElMessage.warning('已提交阵营标记，待站长审核后进入图谱');
+      } else {
+        ElMessage.success('已新增标记（已生效）');
+      }
       markForm.camp_id = '';
       markForm.camp_label = '';
       await load();
@@ -501,6 +524,45 @@ async function directDelete(row: CampMark) {
   }
 }
 
+// 超级管理员（站长）审核通过阵营标记：pending → approved，随即进入图谱
+async function approveMark(row: CampMark) {
+  try {
+    const res = await sentimentApi.approveCampMark(row.id);
+    if (res.data?.code === 0) {
+      ElMessage.success(res.data?.message || '已审核通过，图谱已更新');
+      await load();
+    } else {
+      ElMessage.error(res.data?.message || '操作失败');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
+// 超级管理员（站长）驳回阵营标记：pending → rejected，永不进入图谱
+async function rejectMark(row: CampMark) {
+  let reason = '站长认为无需纳入图谱';
+  try {
+    const r = await ElMessageBox.prompt('驳回理由（给提交人，可选）', '驳回阵营标记', {
+      inputType: 'textarea', inputValue: '站长认为无需纳入图谱', confirmButtonText: '驳回', cancelButtonText: '取消', type: 'warning',
+    });
+    reason = r.value || reason;
+  } catch {
+    return; // 用户取消
+  }
+  try {
+    const res = await sentimentApi.rejectCampMark(row.id, reason);
+    if (res.data?.code === 0) {
+      ElMessage.success(res.data?.message || '已驳回');
+      await load();
+    } else {
+      ElMessage.error(res.data?.message || '操作失败');
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
 async function approve(row: DeleteRequest) {
   try {
     await ElMessageBox.confirm(`批准${row.action === 'update' ? '修改' : '删除'}「${row.target_label}」？`, '批准申请', { type: 'warning' });
@@ -573,7 +635,8 @@ onMounted(async () => {
 .camp-disclaimer { text-align: center; font-size: 0.76rem; color: var(--text-muted); padding: 4px 8px; }
 .camp-panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
 .camp-panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; }
-.camp-panel h4 { margin: 0 0 12px; font-size: 0.98rem; color: var(--text-color); }
+.camp-panel h4 { margin: 0 0 12px; font-size: 0.98rem; color: var(--text-color); display: flex; align-items: center; gap: 8px; }
+.camp-badge { font-size: 0.7rem; font-weight: 600; color: #b45309; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 10px; padding: 1px 8px; }
 .muted { color: var(--text-light); }
 .small { font-size: 0.8rem; }
 .patch-pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 0.74rem; line-height: 1.6; color: var(--text-color); }

@@ -78,18 +78,33 @@ func CreateCampMark(c *gin.Context) {
 	if in.Confidence > 100 {
 		in.Confidence = 100
 	}
+	// 「审核后自动生成图谱」：普通管理员新增的标记先进 pending，由站长审核后才进图谱；
+	// 超级管理员（站长）自己新增视为本人审核，直接 approved。
+	status := store.CampMarkApproved
+	if !admincommon.IsSuperAdmin(c) {
+		status = store.CampMarkPending
+	}
 	m := store.CampMark{
 		ContentType: in.ContentType, ContentID: in.ContentID, CommentID: in.CommentID,
 		UserID: hctx.CurrentUserID(c),
 		CampID: in.CampID, CampLabel: in.CampLabel, Position: in.Position,
 		LangFormat: camp.NormalizeLangFormat(in.LangFormat), LangEvidence: in.LangEvidence,
-		Confidence: in.Confidence, Note: in.Note, Source: "manual",
+		Confidence: in.Confidence, Note: in.Note, Source: "manual", Status: status,
 	}
 	if err := store.DB.Create(&m).Error; err != nil {
 		infra.InternalError(c, "保存标记失败")
 		return
 	}
-	infra.SuccessMessage(c, "已标记", m)
+	if status == store.CampMarkPending {
+		uid, name := admincommon.DescribeActor(c)
+		admincommon.NotifySuperAdmin(uid, "sentiment_camp_pending",
+			"管理员提交阵营标记待审核",
+			fmt.Sprintf("管理员 %s 新增阵营标记「%s」，待站长审核后才会进入图谱。", name, campMarkLabel(m)),
+			"/admin/sentiment")
+		infra.SuccessMessage(c, "已提交阵营标记，待超级管理员（站长）审核后进入图谱", m)
+		return
+	}
+	infra.SuccessMessage(c, "已标记（站长，直接生效）", m)
 }
 
 // GET /api/admin/sentiment/camp-marks?scope=all|content|topic&content_type=&content_id=&topic=
@@ -102,9 +117,13 @@ func ListCampMarks(c *gin.Context) {
 	ct := c.Query("content_type")
 	cid := parseUint(c.Query("content_id"))
 	tag := strings.TrimSpace(c.Query("topic"))
+	statusFilter := strings.TrimSpace(c.Query("status"))
 
 	var list []store.CampMark
 	q := store.DB.Model(&store.CampMark{}).Order("id DESC").Limit(500)
+	if statusFilter != "" {
+		q = q.Where("status = ?", statusFilter)
+	}
 	if scope == "content" {
 		if ct != "" {
 			q = q.Where("content_type = ?", ct)
@@ -189,15 +208,31 @@ func AnalyzeCamp(c *gin.Context) {
 	if ct == "" {
 		ct = "forum"
 	}
+	// 与手动标记同一审核规则：超管自审直接 approved；普通管理员先 pending 待审。
+	status := store.CampMarkApproved
+	if !admincommon.IsSuperAdmin(c) {
+		status = store.CampMarkPending
+	}
 	if doSave {
-		marks, err := camp.AnalyzeAndPersist(c.Request.Context(), in.Text, in.ModelID, ct, in.ContentID, in.CommentID)
+		marks, err := camp.AnalyzeAndPersist(c.Request.Context(), in.Text, in.ModelID, ct, in.ContentID, in.CommentID, status)
 		if err != nil {
 			infra.BadRequest(c, err.Error())
 			return
 		}
-		infra.SuccessMessage(c, "AI 已完成阵营标记", gin.H{
-			"marks": marks, "source": "ai",
-			"notice": "AI 只标记阵营与语言格式，不判断谁对谁错；阵营对抗属结构性不可裁决，不会对任何立场做处置。",
+		notice := "AI 只标记阵营与语言格式，不判断谁对谁错；阵营对抗属结构性不可裁决，不会对任何立场做处置。"
+		msg := "AI 已完成阵营标记"
+		if status == store.CampMarkPending {
+			uid, name := admincommon.DescribeActor(c)
+			admincommon.NotifySuperAdmin(uid, "sentiment_camp_pending",
+				"AI 阵营标记待审核",
+				fmt.Sprintf("管理员 %s 通过 AI 新增 %d 条阵营标记，待站长审核后进入图谱。", name, len(marks)),
+				"/admin/sentiment")
+			notice += "（当前为管理员，标记待站长审核后才进入图谱）"
+			msg = "AI 已完成阵营标记，待站长审核后进入图谱"
+		}
+		infra.SuccessMessage(c, msg, gin.H{
+			"marks": marks, "source": "ai", "status": status,
+			"notice": notice,
 		})
 		return
 	}
@@ -238,8 +273,10 @@ func GetCampGraph(c *gin.Context) {
 			infra.BadRequest(c, "按评论区查看需提供 content_type 与 content_id")
 			return
 		}
+		// 仅聚合已审核通过的标记（审核后自动生成图谱）
 		if err := store.DB.Model(&store.CampMark{}).
-			Where("content_type = ? AND content_id = ?", ct, cid).Order("id ASC").Find(&marks).Error; err != nil {
+			Where("content_type = ? AND content_id = ?", ct, cid).
+			Where("status = ?", store.CampMarkApproved).Order("id ASC").Find(&marks).Error; err != nil {
 			infra.InternalError(c, "读取标记失败")
 			return
 		}
@@ -257,13 +294,16 @@ func GetCampGraph(c *gin.Context) {
 			return
 		}
 		for _, m := range all {
-			if keys[fmt.Sprintf("%s:%d", m.ContentType, m.ContentID)] {
+			// 仅聚合已审核通过的标记
+			if m.Status == store.CampMarkApproved && keys[fmt.Sprintf("%s:%d", m.ContentType, m.ContentID)] {
 				marks = append(marks, m)
 			}
 		}
 		scopeLabel = fmt.Sprintf("议题：%s（%d 个相关内容的阵营标记）", tag, len(keys))
 	default: // all
-		if err := store.DB.Model(&store.CampMark{}).Order("id ASC").Find(&marks).Error; err != nil {
+		// 仅聚合已审核通过的标记（审核后自动生成图谱）
+		if err := store.DB.Model(&store.CampMark{}).
+			Where("status = ?", store.CampMarkApproved).Order("id ASC").Find(&marks).Error; err != nil {
 			infra.InternalError(c, "读取标记失败")
 			return
 		}
@@ -372,7 +412,7 @@ func respondCampGraph(c *gin.Context, marks []store.CampMark, scopeLabel string)
 	}
 	infra.Success(c, gin.H{
 		"nodes": outNodes, "edges": outEdges, "scope": scopeLabel,
-		"notice": "图谱只呈现阵营与语言格式的分布和共现；节点大小与边权重仅代表规模，不代表谁对谁错。当前范围：" + scopeLabel,
+		"notice": "图谱只呈现【已审核通过】的阵营与语言格式的分布和共现（待审核的标记不进图谱）；节点大小与边权重仅代表规模，不代表谁对谁错。当前范围：" + scopeLabel,
 	})
 }
 
@@ -569,6 +609,68 @@ func DeleteCampMark(c *gin.Context) {
 		return
 	}
 	infra.Success(c, gin.H{"message": "已删除（站长）"})
+}
+
+// ─────────────────────────────────────────────────────────────
+// 阵营标记的「新增」审核（与改/删同一审批人：唯一超级管理员 / 站长）。
+// 普通管理员新增的标记先进 pending，由站长审核通过后才进入图谱（审核后自动生成图谱）。
+// ─────────────────────────────────────────────────────────────
+
+// POST /api/admin/sentiment/camp-marks/:id/approve
+// 仅超级管理员（站长）可审核通过：pending → approved，标记随即进入图谱。
+func ApproveCampMark(c *gin.Context) {
+	if !admincommon.EnsureSuperAdmin(c) {
+		return
+	}
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	var m store.CampMark
+	if err := store.DB.First(&m, id).Error; err != nil {
+		infra.NotFound(c, "标记不存在")
+		return
+	}
+	if m.Status == store.CampMarkApproved {
+		infra.SuccessMessage(c, "已是审核通过", gin.H{"status": m.Status})
+		return
+	}
+	if err := store.DB.Model(&store.CampMark{}).Where("id = ?", id).Update("status", store.CampMarkApproved).Error; err != nil {
+		infra.InternalError(c, "审核失败")
+		return
+	}
+	// 通知提交人（仅当提交人不是审核人自己时）
+	if m.UserID != 0 && m.UserID != hctx.CurrentUserID(c) {
+		_ = models.PushNotification(hctx.CurrentUserID(c), m.UserID, "sentiment_camp_approved",
+			"阵营标记已审核通过", fmt.Sprintf("你提交的阵营标记「%s」已由超级管理员（站长）审核通过，已进入图谱。", campMarkLabel(m)),
+			"/admin/sentiment")
+	}
+	infra.SuccessMessage(c, "已审核通过，图谱已更新", gin.H{"status": store.CampMarkApproved})
+}
+
+// POST /api/admin/sentiment/camp-marks/:id/reject
+// 仅超级管理员（站长）可驳回：pending → rejected，标记永不进入图谱。
+func RejectCampMark(c *gin.Context) {
+	if !admincommon.EnsureSuperAdmin(c) {
+		return
+	}
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	var m store.CampMark
+	if err := store.DB.First(&m, id).Error; err != nil {
+		infra.NotFound(c, "标记不存在")
+		return
+	}
+	if err := store.DB.Model(&store.CampMark{}).Where("id = ?", id).Update("status", store.CampMarkRejected).Error; err != nil {
+		infra.InternalError(c, "操作失败")
+		return
+	}
+	if m.UserID != 0 && m.UserID != hctx.CurrentUserID(c) {
+		var body struct {
+			Reason string `json:"reason"`
+		}
+		_ = c.ShouldBindJSON(&body)
+		_ = models.PushNotification(hctx.CurrentUserID(c), m.UserID, "sentiment_camp_rejected",
+			"阵营标记未通过审核", fmt.Sprintf("你提交的阵营标记「%s」未通过审核。原因：%s", campMarkLabel(m), strings.TrimSpace(body.Reason)),
+			"/admin/sentiment")
+	}
+	infra.SuccessMessage(c, "已驳回", gin.H{"status": store.CampMarkRejected})
 }
 
 func mustJSON(v interface{}) string {

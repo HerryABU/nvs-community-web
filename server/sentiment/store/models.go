@@ -31,6 +31,18 @@ const (
 	StatusRejected = "rejected" // 已否决
 )
 
+// 阵营标记审核状态
+//
+// 设计前提（用户明确要求「审核后自动生成图谱」）：
+// 阵营标记的图谱**只**聚合已审核通过的标记；普通管理员新增的标记先进 pending，
+// 由唯一超级管理员（站长）审核通过后（approved）才进入图谱；被驳回（rejected）的永不进图谱。
+// 超级管理员（站长）自己新增的标记视为本人审核，直接 approved。
+const (
+	CampMarkPending  = "pending"  // 待站长审核（不进图谱）
+	CampMarkApproved = "approved" // 已审核通过（进图谱）
+	CampMarkRejected = "rejected" // 已驳回（不进图谱）
+)
+
 // 话题策略覆盖
 const (
 	PolicyInherit = ""      // 继承全局（按风险判定）
@@ -183,7 +195,10 @@ type CampMark struct {
 	Confidence   int    `gorm:"default:0" json:"confidence"`
 	Note         string `gorm:"size:512;default:''" json:"note"`
 	// Source ai / manual
-	Source    string    `gorm:"size:16;default:ai" json:"source"`
+	Source string `gorm:"size:16;default:ai" json:"source"`
+	// Status 审核状态：pending=待站长审核（不进图谱）；approved=已审核通过（进图谱）；rejected=已驳回。
+	// 图谱与列表按此状态过滤，确保「审核后自动生成图谱」。
+	Status    string    `gorm:"size:16;default:pending;index" json:"status"`
 	CreatedAt time.Time `gorm:"index" json:"created_at"`
 }
 
@@ -216,5 +231,11 @@ func (DeleteRequest) TableName() string { return "sentiment_delete_requests" }
 
 // Migrate 建表。由 main 在启动时调用（失败只记日志、不阻断启动）。
 func Migrate(db *gorm.DB) error {
-	return db.AutoMigrate(&ContentTopic{}, &Term{}, &Hit{}, &Config{}, &TermAudit{}, &CampMark{}, &DeleteRequest{})
+	if err := db.AutoMigrate(&ContentTopic{}, &Term{}, &Hit{}, &Config{}, &TermAudit{}, &CampMark{}, &DeleteRequest{}); err != nil {
+		return err
+	}
+	// 升级兼容：旧数据（升级前已存在的阵营标记）在新增 status 列时会被填成 pending 默认值，
+	// 但这些标记是已经生效的，必须回填为 approved，否则图谱会突然清空。
+	db.Exec("UPDATE sentiment_camp_marks SET status = ? WHERE status = '' OR status IS NULL", CampMarkApproved)
+	return nil
 }

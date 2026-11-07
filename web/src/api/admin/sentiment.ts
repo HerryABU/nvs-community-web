@@ -118,7 +118,7 @@ export const sentimentApi = {
   campGraph(params: { scope?: string; content_type?: string; content_id?: number; topic?: string } = {}) {
     return api.get<{ code: number; data: CampGraphData }>('/admin/sentiment/camp-graph', { params });
   },
-  campMarks(params: { scope?: string; content_type?: string; content_id?: number; topic?: string } = {}) {
+  campMarks(params: { scope?: string; content_type?: string; content_id?: number; topic?: string; status?: string } = {}) {
     return api.get<{ code: number; data: CampMark[] }>('/admin/sentiment/camp-marks', { params });
   },
   /** 议题标签列表（去重 + 命中内容数），供图谱「按议题」维度下拉 */
@@ -149,6 +149,14 @@ export const sentimentApi = {
   /** 仅超级管理员（站长）可直接删除阵营标记 */
   deleteCampMark(id: number) {
     return api.delete(`/admin/sentiment/camp-marks/${id}`);
+  },
+  /** 仅超级管理员（站长）审核通过阵营标记：pending → approved，随即进入图谱 */
+  approveCampMark(id: number) {
+    return api.post(`/admin/sentiment/camp-marks/${id}/approve`, {});
+  },
+  /** 仅超级管理员（站长）驳回阵营标记：pending → rejected */
+  rejectCampMark(id: number, reason = '') {
+    return api.post(`/admin/sentiment/camp-marks/${id}/reject`, { reason });
   },
   deleteRequests() {
     return api.get<{ code: number; data: { list: DeleteRequest[]; can_approve: boolean } }>(
@@ -211,6 +219,7 @@ export interface CampMark {
   content_id: number;
   comment_id: number;
   source: string;
+  status: 'pending' | 'approved' | 'rejected';
   created_at: string;
 }
 

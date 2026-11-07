@@ -92,10 +92,14 @@ func Analyze(ctx context.Context, text string, modelID uint) (*Analysis, error) 
 
 // AnalyzeAndPersist 分析并把标记写入 store.CampMark（source=ai），供管理员台图谱读取。
 // confrontation 由 AI 判定并写入 note（Go 不复算、不裁决）。
-func AnalyzeAndPersist(ctx context.Context, text string, modelID uint, contentType string, contentID, commentID uint) ([]store.CampMark, error) {
+// status 由调用方按角色决定：超级管理员（站长）自审直接 approved；普通管理员新增先进 pending，待站长审核。
+func AnalyzeAndPersist(ctx context.Context, text string, modelID uint, contentType string, contentID, commentID uint, status string) ([]store.CampMark, error) {
 	a, err := Analyze(ctx, text, modelID)
 	if err != nil {
 		return nil, err
+	}
+	if status == "" {
+		status = store.CampMarkPending
 	}
 	out := make([]store.CampMark, 0, len(a.Marks))
 	for _, r := range a.Marks {
@@ -110,7 +114,7 @@ func AnalyzeAndPersist(ctx context.Context, text string, modelID uint, contentTy
 			ContentType: contentType, ContentID: contentID, CommentID: commentID,
 			CampID: r.CampID, CampLabel: r.CampLabel, Position: r.Position,
 			LangFormat: r.LangFormat, LangEvidence: r.LangEvidence,
-			Confidence: r.Confidence, Note: note, Source: "ai",
+			Confidence: r.Confidence, Note: note, Source: "ai", Status: status,
 		}
 		if err := store.DB.Create(&m).Error; err != nil {
 			return out, fmt.Errorf("保存阵营标记失败: %w", err)
