@@ -123,7 +123,7 @@ async function submit() {
 }
 .report-reason-card.active {
   border-color: var(--primary-color);
-  background: rgba(var(--primary-rgb, 64, 158, 255), 0.08);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
 }
 .rr-label {
   font-weight: 600;

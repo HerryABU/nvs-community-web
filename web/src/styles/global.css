@@ -8,9 +8,15 @@
     'Helvetica Neue', Helvetica, Arial, sans-serif;
   --font-serif: Georgia, 'Noto Serif SC', 'Source Han Serif SC', serif;
 
-  /* Palette */
+  /* Palette
+     主色是唯一真源：其余主色系变量（渐变 / Element Plus / 光晕 / 浅底）全部由
+     --primary-color 运行时派生。无论管理员用「主题主色」取色器，还是在自定义 CSS 里
+     写 :root { --primary-color: #e11d48; }，改成任意颜色后全站组件都会跟随，
+     不会再残留写死的紫色渐变。color-mix 由现代浏览器原生支持，无需预编译。 */
   --primary-color: #5b5fe3;
-  --primary-light: #818cf8;
+  --primary-light: color-mix(in srgb, var(--primary-color) 62%, #fff);
+  --primary-lighter: color-mix(in srgb, var(--primary-color) 30%, #fff);
+  --primary-dark: color-mix(in srgb, var(--primary-color) 86%, #000);
   --accent-color: #f59e0b;
   --bg-color: #fafbfc;
   --bg-soft: #f1f5f9;
@@ -55,15 +61,31 @@
   --deleted-color: #94a3b8;
   --deleted-bg: rgba(148, 163, 184, 0.08);
 
+  /* 表面色（结构化主题可整体重着色，如 AI 写作卡片） */
+  --surface-color: var(--bg-card);
+
+  /* AI 写作可视化配色（均可在自定义主题 / 自定义 CSS 中覆盖） */
+  --aw-node: #6366f1;
+  --aw-loop: #ef4444;
+  --aw-loop-2: #f59e0b;
+  --aw-loop-3: #10b981;
+  --aw-return: #06b6d4;
+  --aw-axis: #cbd5e1;
+
   /* Glass */
   --glass-bg: rgba(255, 255, 255, 0.72);
   --glass-bg-strong: rgba(255, 255, 255, 0.85);
   --glass-border: rgba(255, 255, 255, 0.35);
   --glass-blur: 16px;
 
-  /* Gradients */
-  --gradient-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
-  --gradient-accent: linear-gradient(135deg, #f59e0b 0%, #f97316 50%, #ef4444 100%);
+  /* Gradients —— 主色渐变跟随 --primary-color（自定义配色时按钮/标签/分页同步变色） */
+  --gradient-primary: linear-gradient(
+    135deg,
+    var(--primary-color) 0%,
+    color-mix(in srgb, var(--primary-color) 72%, var(--accent-color)) 50%,
+    color-mix(in srgb, var(--primary-color) 55%, #fff) 100%
+  );
+  --gradient-accent: linear-gradient(135deg, var(--accent-color) 0%, #f97316 50%, #ef4444 100%);
   --gradient-success: linear-gradient(135deg, #10b981 0%, #34d399 100%);
   --gradient-danger: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
   --gradient-blue: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
@@ -81,14 +103,16 @@
   --transition-base: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* ===== Element Plus CSS Variable Overrides (Light) ===== */
-  --el-color-primary: #6366f1;
-  --el-color-primary-light-3: #818cf8;
-  --el-color-primary-light-5: #a5b4fc;
-  --el-color-primary-light-7: #c7d2fe;
-  --el-color-primary-light-8: #ddd6fe;
-  --el-color-primary-light-9: #ede9fe;
-  --el-color-primary-dark-2: #4f46e5;
+  /* ===== Element Plus CSS Variable Overrides (Light) =====
+     Element Plus 组件（按钮/输入框/分页/开关/标签）读的是 --el-color-primary 系列，
+     必须同步跟随 --primary-color，否则自定义主色只改了本站自绘元素、EP 组件仍是紫色。 */
+  --el-color-primary: var(--primary-color);
+  --el-color-primary-light-3: color-mix(in srgb, var(--primary-color) 76%, #fff);
+  --el-color-primary-light-5: color-mix(in srgb, var(--primary-color) 56%, #fff);
+  --el-color-primary-light-7: color-mix(in srgb, var(--primary-color) 36%, #fff);
+  --el-color-primary-light-8: color-mix(in srgb, var(--primary-color) 22%, #fff);
+  --el-color-primary-light-9: color-mix(in srgb, var(--primary-color) 10%, #fff);
+  --el-color-primary-dark-2: color-mix(in srgb, var(--primary-color) 84%, #000);
   --el-color-success: #10b981;
   --el-color-warning: #f59e0b;
   --el-color-danger: #ef4444;
@@ -117,6 +141,39 @@
   --el-box-shadow-light: var(--shadow-sm);
   --el-box-shadow-lighter: var(--shadow-xs);
   --el-box-shadow-dark: var(--shadow-lg);
+}
+
+/* 渐进增强回退：极老浏览器（不支持 color-mix）下，派生声明整体失效会让
+   按钮渐变/Element Plus 主色变成空值 → 组件失去背景。这里补一组静态色，
+   保证至少渲染出原本的紫色主题；支持 color-mix 的现代浏览器不受影响。 */
+@supports not (color: color-mix(in srgb, red, blue)) {
+  :root {
+    --primary-light: #818cf8;
+    --primary-lighter: #c7d2fe;
+    --primary-dark: #4f46e5;
+    --gradient-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
+    --gradient-accent: linear-gradient(135deg, #f59e0b 0%, #f97316 50%, #ef4444 100%);
+    --el-color-primary: #6366f1;
+    --el-color-primary-light-3: #818cf8;
+    --el-color-primary-light-5: #a5b4fc;
+    --el-color-primary-light-7: #c7d2fe;
+    --el-color-primary-light-8: #ddd6fe;
+    --el-color-primary-light-9: #ede9fe;
+    --el-color-primary-dark-2: #4f46e5;
+  }
+  [data-theme="dark"] {
+    --el-color-primary: #818cf8;
+    --el-color-primary-light-3: #6366f1;
+    --el-color-primary-light-5: #4f46e5;
+    --el-color-primary-light-7: #4338ca;
+    --el-color-primary-light-8: #3730a3;
+    --el-color-primary-light-9: #312e81;
+    --el-color-primary-dark-2: #a5b4fc;
+  }
+  .el-button--primary { box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3); }
+  .el-input__wrapper.is-focus,
+  .el-textarea__inner:focus { box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25) !important; }
+  .el-tag--primary { background: rgba(99, 102, 241, 0.12) !important; }
 }
 
 /* ===== Reset & Base ===== */
@@ -333,12 +390,12 @@ a:hover {
   background: var(--gradient-primary) !important;
   border: none !important;
   color: #fff !important;
-  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--primary-color) 30%, transparent);
 }
 
 .el-button--primary:hover {
   filter: brightness(1.1);
-  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--primary-color) 40%, transparent);
   transform: translateY(-1px);
 }
 
@@ -404,7 +461,7 @@ a:hover {
 }
 
 .el-input__wrapper.is-focus {
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 25%, transparent) !important;
 }
 
 .el-input__inner {
@@ -423,7 +480,7 @@ a:hover {
 }
 
 .el-textarea__inner:focus {
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 25%, transparent) !important;
 }
 
 /* --- Table --- */
@@ -452,7 +509,7 @@ a:hover {
 }
 
 .el-table__body tr:hover > td.el-table__cell {
-  background-color: rgba(99, 102, 241, 0.04) !important;
+  background-color: color-mix(in srgb, var(--primary-color) 4%, transparent) !important;
 }
 
 .el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
@@ -504,8 +561,8 @@ a:hover {
 }
 
 .el-tag--primary {
-  background: rgba(99, 102, 241, 0.12) !important;
-  color: #6366f1 !important;
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent) !important;
+  color: var(--primary-color) !important;
 }
 
 .el-tag--success {
@@ -856,14 +913,14 @@ kbd {
   --glass-bg-strong: rgba(15, 17, 23, 0.9);
   --glass-border: rgba(255, 255, 255, 0.08);
 
-  /* Element Plus vars */
-  --el-color-primary: #818cf8;
-  --el-color-primary-light-3: #6366f1;
-  --el-color-primary-light-5: #4f46e5;
-  --el-color-primary-light-7: #4338ca;
-  --el-color-primary-light-8: #3730a3;
-  --el-color-primary-light-9: #312e81;
-  --el-color-primary-dark-2: #a5b4fc;
+  /* Element Plus vars —— 暗色下同样跟随 --primary-color（混黑派生，保持暗色语义） */
+  --el-color-primary: var(--primary-color);
+  --el-color-primary-light-3: color-mix(in srgb, var(--primary-color) 85%, #000);
+  --el-color-primary-light-5: color-mix(in srgb, var(--primary-color) 70%, #000);
+  --el-color-primary-light-7: color-mix(in srgb, var(--primary-color) 52%, #000);
+  --el-color-primary-light-8: color-mix(in srgb, var(--primary-color) 38%, #000);
+  --el-color-primary-light-9: color-mix(in srgb, var(--primary-color) 22%, #000);
+  --el-color-primary-dark-2: color-mix(in srgb, var(--primary-color) 80%, #fff);
   --el-color-success: #34d399;
   --el-color-warning: #fbbf24;
   --el-color-danger: #f87171;
@@ -929,7 +986,7 @@ kbd {
 
 /* Dark: Element Plus overrides */
 [data-theme="dark"] .el-button--primary {
-  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.25);
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--primary-color) 25%, transparent);
 }
 
 [data-theme="dark"] .el-button--default {
@@ -971,7 +1028,7 @@ kbd {
 }
 
 [data-theme="dark"] .el-table__body tr:hover > td.el-table__cell {
-  background-color: rgba(99, 102, 241, 0.08) !important;
+  background-color: color-mix(in srgb, var(--primary-color) 8%, transparent) !important;
 }
 
 [data-theme="dark"] .el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
@@ -1019,7 +1076,7 @@ kbd {
 }
 
 [data-theme="dark"] .el-tag--primary {
-  background-color: rgba(99, 102, 241, 0.2);
+  background-color: color-mix(in srgb, var(--primary-color) 20%, transparent);
   color: #a5b4fc;
 }
 

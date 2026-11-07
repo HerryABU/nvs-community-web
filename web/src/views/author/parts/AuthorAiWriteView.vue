@@ -1,22 +1,51 @@
 <template>
-  <div class="ai-write">
+  <div class="aw-page">
     <!-- ===== 工程列表 / 新建 ===== -->
     <div v-if="!current" class="aw-list">
       <div class="aw-list-head">
-        <h3>AI 写作工程</h3>
-        <el-button type="primary" @click="openCreate">新建工程</el-button>
+        <div>
+          <h2 class="aw-h2">
+            <el-icon class="aw-h2__icon"><EditPen /></el-icon>
+            AI 写作工程
+          </h2>
+          <p class="aw-sub">用 AI 辅助搭建世界观、人物、大纲与时间线，逐章生成正文，一键落地成小说。</p>
+        </div>
+        <el-button type="primary" :icon="Plus" @click="openCreate">新建工程</el-button>
       </div>
-      <div v-if="loading" class="aw-empty">加载中…</div>
-      <div v-else-if="projects.length === 0" class="aw-empty">还没有写作工程，点「新建工程」开始。</div>
+
+      <div v-if="loading" class="aw-state">
+        <el-icon class="is-loading"><Loading /></el-icon>
+        <span>加载中…</span>
+      </div>
+
+      <div v-else-if="projects.length === 0" class="aw-empty">
+        <div class="aw-empty__art"><el-icon><EditPen /></el-icon></div>
+        <h3>还没有写作工程</h3>
+        <p>从一部作品的设定开始，让 AI 帮你铺开整个世界。</p>
+        <el-button type="primary" :icon="Plus" @click="openCreate">新建第一个工程</el-button>
+      </div>
+
       <div v-else class="aw-cards">
-        <div v-for="p in projects" :key="p.id" class="aw-card" @click="openProject(p.id)">
-          <div class="aw-card-title">{{ p.title }}</div>
-          <div class="aw-card-meta">
-            <el-tag size="small">{{ styleLabel(p.style_preset) }}</el-tag>
-            <span class="aw-card-time">{{ formatDate(p.updated_at) }}</span>
+        <div v-for="p in projects" :key="p.id" class="aw-proj" @click="openProject(p.id)">
+          <div class="aw-proj__cover">
+            <el-icon><EditPen /></el-icon>
           </div>
-          <div class="aw-card-actions">
-            <el-button size="small" type="danger" plain @click.stop="removeProject(p.id)">删除</el-button>
+          <div class="aw-proj__body">
+            <div class="aw-proj__title">{{ p.title }}</div>
+            <div class="aw-proj__meta">
+              <el-tag size="small" effect="light" class="aw-proj__tag">{{ styleLabel(p.style_preset) }}</el-tag>
+              <span class="aw-proj__time">{{ formatDate(p.updated_at) }}</span>
+            </div>
+            <div class="aw-proj__foot">
+              <span class="aw-proj__open">打开 <el-icon><ArrowRight /></el-icon></span>
+              <el-button
+                size="small"
+                type="danger"
+                plain
+                :icon="Delete"
+                @click.stop="removeProject(p.id)"
+              >删除</el-button>
+            </div>
           </div>
         </div>
       </div>
@@ -25,25 +54,38 @@
     <!-- ===== 工程编辑器（标签式） ===== -->
     <div v-else class="aw-editor">
       <div class="aw-editor-head">
-        <el-button text @click="backToList">← 返回工程列表</el-button>
-        <span class="aw-editor-title">{{ current.title }}</span>
-        <el-button type="success" :loading="publishing" @click="publishNovel">生成小说</el-button>
+        <el-button text :icon="ArrowLeft" @click="backToList">返回</el-button>
+        <div class="aw-editor-head__title">
+          <span class="aw-editor-title">{{ current.title }}</span>
+          <el-tag size="small" effect="light">{{ styleLabel(form.style_preset) }}</el-tag>
+        </div>
+        <div class="aw-pills">
+          <span class="aw-pill" :class="{ 'is-done': materialsFilled >= 4 }">
+            <el-icon><Collection /></el-icon>素材 {{ materialsFilled }}/4
+          </span>
+          <span class="aw-pill">
+            <el-icon><Document /></el-icon>章节 {{ chapters.length }}
+          </span>
+        </div>
+        <el-button type="success" :loading="publishing" :icon="Promotion" @click="publishNovel">生成小说</el-button>
       </div>
 
       <el-tabs v-model="activeTab" class="aw-tabs">
         <!-- ===== 素材层 ===== -->
         <el-tab-pane label="素材" name="materials">
-          <div class="aw-meta">
-            <el-form :model="form" label-width="80px" inline>
-              <el-form-item label="作品标题">
-                <el-input v-model="form.title" placeholder="作品标题" style="width: 240px" />
-              </el-form-item>
-              <el-form-item label="风格库">
-                <el-select v-model="form.style_preset" placeholder="选择风格" style="width: 180px">
+          <div class="aw-meta glass-panel">
+            <div class="aw-meta-row">
+              <div class="aw-field">
+                <label>作品标题</label>
+                <el-input v-model="form.title" placeholder="作品标题" />
+              </div>
+              <div class="aw-field aw-field--style">
+                <label>风格库</label>
+                <el-select v-model="form.style_preset" placeholder="选择风格">
                   <el-option v-for="o in styleOptions" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
-              </el-form-item>
-            </el-form>
+              </div>
+            </div>
             <el-input
               v-model="form.style_detail"
               type="textarea"
@@ -51,8 +93,8 @@
               placeholder="更详细的风格要求（如：第三人称限知、冷峻白描、每章结尾留钩子…）"
             />
             <div class="aw-meta-actions">
-              <el-button size="small" :loading="saving" @click="saveAll">保存进度与设置</el-button>
-              <el-button size="small" type="primary" :loading="genAllLoading" @click="generateAll">AI 一键全生成素材</el-button>
+              <el-button :icon="Select" size="small" :loading="saving" @click="saveAll">保存进度与设置</el-button>
+              <el-button type="primary" :icon="MagicStick" size="small" :loading="genAllLoading" @click="generateAll">AI 一键全生成素材</el-button>
             </div>
           </div>
 
@@ -62,21 +104,34 @@
             type="warning"
             :closable="false"
             show-icon
-            :title="'时间线 [LOOP] 嵌套循环存在一致性问题：'"
+            title="时间线 [LOOP] 嵌套循环存在一致性问题："
           >
             <ul>
               <li v-for="(e, i) in timelineWarn" :key="i">{{ e }}</li>
             </ul>
           </el-alert>
 
-          <div class="aw-sections">
-            <section v-for="sec in materialSections" :key="sec.key" class="aw-section">
-              <div class="aw-section-head">
-                <h4>{{ sec.label }}</h4>
-                <div class="aw-section-actions">
-                  <el-input v-model="form[sec.inputField]" size="small" :placeholder="sec.promptPh" style="width: 220px" />
-                  <el-button size="small" type="primary" :loading="sec.loading" @click="generateMaterial(sec)">AI 生成</el-button>
+          <div class="aw-mat-grid">
+            <section
+              v-for="(sec, i) in materialSections"
+              :key="sec.key"
+              class="aw-mat"
+              :class="{ 'is-filled': (form[sec.field] || '').length > 0 }"
+            >
+              <div class="aw-mat__head">
+                <span class="aw-ic" :class="'aw-ic--' + (i % 4)"><el-icon><component :is="sec.icon" /></el-icon></span>
+                <div class="aw-mat__titles">
+                  <h4>{{ sec.label }}</h4>
+                  <span class="aw-mat__count">{{ charCount(form[sec.field]) }} 字</span>
                 </div>
+                <span class="aw-mat__status" :class="(form[sec.field] || '').length > 0 ? 'ok' : 'todo'">
+                  <el-icon><component :is="(form[sec.field] || '').length > 0 ? Check : EditPen" /></el-icon>
+                  {{ (form[sec.field] || '').length > 0 ? '已生成' : '待填写' }}
+                </span>
+              </div>
+              <div class="aw-mat__actions">
+                <el-input v-model="form[sec.inputField]" size="small" :placeholder="sec.promptPh" />
+                <el-button size="small" type="primary" :icon="MagicStick" :loading="sec.loading" @click="generateMaterial(sec)">AI 生成</el-button>
               </div>
               <el-input
                 v-model="form[sec.field]"
@@ -84,9 +139,6 @@
                 :rows="sec.rows"
                 :placeholder="sec.ph"
               />
-              <div class="aw-section-foot">
-                <span class="aw-count">{{ charCount(form[sec.field]) }} 字</span>
-              </div>
             </section>
           </div>
         </el-tab-pane>
@@ -94,33 +146,50 @@
         <!-- ===== 章节（独立页面，逐章生成） ===== -->
         <el-tab-pane label="章节" name="chapters">
           <div class="aw-chapters-head">
-            <el-button size="small" type="primary" @click="createChapter">+ 新增章节</el-button>
+            <el-button size="small" type="primary" :icon="Plus" @click="createChapter">新增章节</el-button>
+            <span class="aw-chapters-hint">逐章生成章纲与正文，已生成的内容会自动落库。</span>
           </div>
-          <div v-if="chaptersLoading" class="aw-empty">加载章节中…</div>
-          <div v-else-if="chapters.length === 0" class="aw-empty">还没有章节，点「新增章节」开始逐章创作。</div>
+          <div v-if="chaptersLoading" class="aw-state">
+            <el-icon class="is-loading"><Loading /></el-icon>
+            <span>加载章节中…</span>
+          </div>
+          <div v-else-if="chapters.length === 0" class="aw-empty aw-empty--sm">
+            <div class="aw-empty__art"><el-icon><Document /></el-icon></div>
+            <p>还没有章节，点「新增章节」开始逐章创作。</p>
+          </div>
           <div v-else class="aw-chapter-list">
-            <div v-for="ch in chapters" :key="ch.id" class="aw-chapter">
-              <div class="aw-chapter-head">
-                <span class="aw-chapter-order">第 {{ ch.order }} 章</span>
-                <el-input v-model="ch.title" size="small" class="aw-chapter-title" placeholder="章节标题" />
-                <span class="aw-chapter-status">
-                  <el-tag size="small" v-if="ch.status === 'generated'" type="success">已生成正文</el-tag>
-                  <el-tag size="small" v-else-if="ch.status === 'outline'" type="warning">已有章纲</el-tag>
-                  <el-tag size="small" v-else type="info">未生成</el-tag>
-                </span>
-              </div>
-              <el-input v-model="ch.outline" type="textarea" :rows="3" placeholder="本章章纲（AI 生成或手填）" class="aw-chapter-outline" />
-              <div class="aw-chapter-outline-actions">
-                <el-button size="small" :loading="chGen[ch.id]?.outline" @click="generateChapter(ch, 'outline')">AI 生成章纲</el-button>
-                <el-button size="small" type="primary" :loading="chGen[ch.id]?.body" @click="generateChapter(ch, 'body')">AI 生成正文</el-button>
-              </div>
-              <el-input v-model="ch.body" type="textarea" :rows="8" placeholder="本章正文（AI 生成或手填）" />
-              <div class="aw-chapter-foot">
-                <span class="aw-count">{{ charCount(ch.body) }} 字</span>
-                <span class="aw-chapter-foot-actions">
-                  <el-button size="small" @click="saveChapter(ch)">保存本章</el-button>
-                  <el-button size="small" type="danger" plain @click="removeChapter(ch)">删除</el-button>
-                </span>
+            <div
+              v-for="ch in chapters"
+              :key="ch.id"
+              class="aw-chapter"
+              :class="'aw-chapter--' + (ch.status === 'generated' ? 'done' : ch.status === 'outline' ? 'outline' : 'todo')"
+            >
+              <div class="aw-chapter__bar" />
+              <div class="aw-chapter__main">
+                <div class="aw-chapter-head">
+                  <span class="aw-chapter-order">{{ ch.order }}</span>
+                  <el-input v-model="ch.title" size="small" class="aw-chapter-title" placeholder="章节标题" />
+                  <span class="aw-chapter-status">
+                    <el-tag size="small" v-if="ch.status === 'generated'" type="success" effect="light">已生成正文</el-tag>
+                    <el-tag size="small" v-else-if="ch.status === 'outline'" type="warning" effect="light">已有章纲</el-tag>
+                    <el-tag size="small" v-else type="info" effect="light">未生成</el-tag>
+                  </span>
+                </div>
+                <div class="aw-chapter-outline">
+                  <el-input v-model="ch.outline" type="textarea" :rows="3" placeholder="本章章纲（AI 生成或手填）" />
+                  <div class="aw-chapter-outline-actions">
+                    <el-button size="small" :icon="MagicStick" :loading="chGen[ch.id]?.outline" @click="generateChapter(ch, 'outline')">AI 生成章纲</el-button>
+                    <el-button size="small" type="primary" :icon="MagicStick" :loading="chGen[ch.id]?.body" @click="generateChapter(ch, 'body')">AI 生成正文</el-button>
+                  </div>
+                </div>
+                <el-input v-model="ch.body" type="textarea" :rows="8" placeholder="本章正文（AI 生成或手填）" />
+                <div class="aw-chapter-foot">
+                  <span class="aw-count">{{ charCount(ch.body) }} 字</span>
+                  <span class="aw-chapter-foot-actions">
+                    <el-button size="small" :icon="Select" @click="saveChapter(ch)">保存本章</el-button>
+                    <el-button size="small" type="danger" plain :icon="Delete" @click="removeChapter(ch)">删除</el-button>
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -154,15 +223,19 @@
       </el-form>
       <template #footer>
         <el-button @click="createVisible = false">取消</el-button>
-        <el-button type="primary" :loading="creating" @click="confirmCreate">创建并进入</el-button>
+        <el-button type="primary" :loading="creating" :icon="Plus" @click="confirmCreate">创建并进入</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
+import { ref, reactive, computed } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import {
+  Plus, Delete, ArrowLeft, Promotion, MagicStick, Select, EditPen,
+  Setting, User, List, Calendar, Collection, Document, ArrowRight, Check, Loading,
+} from '@element-plus/icons-vue';
 import { authorAiApi, STYLE_OPTIONS, type AiWriteProject, type AiWriteChapter, type StylePreset } from '@/api/authorai';
 import AiWriteVisuals from '@/components/author/AiWriteVisuals.vue';
 
@@ -183,6 +256,12 @@ const timelineWarn = ref<string[]>([]);
 const chGen = reactive<Record<number, { outline: boolean; body: boolean }>>({});
 
 const styleOptions = STYLE_OPTIONS;
+
+// 素材完成度（4 个主素材非空计数）
+const materialsFilled = computed(() => {
+  if (!current.value) return 0;
+  return ['setting', 'characters', 'outline', 'timeline'].filter((k) => (form as any)[k]?.length > 0).length;
+});
 
 const form = reactive({
   title: '',
@@ -207,13 +286,14 @@ interface MaterialSection {
   promptPh: string;
   rows: number;
   loading: boolean;
+  icon: any;
 }
 
 const materialSections = reactive<MaterialSection[]>([
-  { key: 'setting', field: 'setting', inputField: 'setting_input', label: '世界观 / 设定', ph: '在此填写或 AI 生成世界观设定', promptPh: '补充设定要求', rows: 6, loading: false },
-  { key: 'characters', field: 'characters', inputField: 'character_input', label: '人物设定', ph: '在此填写或 AI 生成人物设定卡', promptPh: '补充人物要求', rows: 8, loading: false },
-  { key: 'outline', field: 'outline', inputField: 'outline_input', label: '大纲', ph: '在此填写或 AI 生成分卷/分章大纲', promptPh: '补充大纲要求', rows: 8, loading: false },
-  { key: 'timeline', field: 'timeline', inputField: 'timeline_input', label: '大事年表 / 时间线（含嵌套循环）', ph: '在此填写或 AI 生成大事年表；嵌套循环用 [LOOP:loop_key] 开始、[/LOOP] 结束', promptPh: '补充时间线要求', rows: 6, loading: false },
+  { key: 'setting', field: 'setting', inputField: 'setting_input', label: '世界观 / 设定', ph: '在此填写或 AI 生成世界观设定', promptPh: '补充设定要求', rows: 6, loading: false, icon: Setting },
+  { key: 'characters', field: 'characters', inputField: 'character_input', label: '人物设定', ph: '在此填写或 AI 生成人物设定卡', promptPh: '补充人物要求', rows: 8, loading: false, icon: User },
+  { key: 'outline', field: 'outline', inputField: 'outline_input', label: '大纲', ph: '在此填写或 AI 生成分卷/分章大纲', promptPh: '补充大纲要求', rows: 8, loading: false, icon: List },
+  { key: 'timeline', field: 'timeline', inputField: 'timeline_input', label: '大事年表 / 时间线（含嵌套循环）', ph: '在此填写或 AI 生成大事年表；嵌套循环用 [LOOP:loop_key] 开始、[/LOOP] 结束', promptPh: '补充时间线要求', rows: 6, loading: false, icon: Calendar },
 ]);
 
 function charCount(s?: string) {
@@ -514,50 +594,118 @@ loadList();
 </script>
 
 <style scoped>
-.ai-write { padding: 4px 0; }
-.aw-list-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.aw-list-head h3 { margin: 0; color: var(--text-color); }
-.aw-empty { color: var(--text-light); padding: 24px 0; text-align: center; }
-.aw-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
-.aw-card {
+.aw-page { max-width: 1180px; margin: 0 auto; padding: 28px 20px 48px; }
+
+/* ===== 列表 ===== */
+.aw-list-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
+.aw-h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--text-color); }
+.aw-h2__icon { color: var(--primary-color); font-size: 1.4rem; }
+.aw-sub { margin: 6px 0 0; color: var(--text-light); font-size: 0.9rem; }
+
+.aw-state { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 40px 0; color: var(--text-light); }
+.aw-state .is-loading { animation: aw-spin 1s linear infinite; }
+@keyframes aw-spin { to { transform: rotate(360deg); } }
+
+.aw-empty { text-align: center; padding: 56px 20px; border: 1px dashed var(--border-color); border-radius: var(--radius-lg); background: var(--bg-soft); }
+.aw-empty--sm { padding: 32px 16px; }
+.aw-empty__art { width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; color: #fff; background: var(--gradient-primary); box-shadow: var(--shadow-md); }
+.aw-empty h3 { margin: 0 0 6px; font-size: 1.1rem; color: var(--text-color); }
+.aw-empty p { margin: 0 0 16px; color: var(--text-light); font-size: 0.9rem; }
+
+.aw-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
+.aw-proj {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 14px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
   cursor: pointer;
-  transition: box-shadow 0.2s, transform 0.2s;
+  box-shadow: var(--shadow-card);
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+  display: flex; flex-direction: column;
 }
-.aw-card:hover { box-shadow: 0 4px 14px rgba(15, 23, 42, 0.1); transform: translateY(-1px); }
-.aw-card-title { font-weight: 600; color: var(--text-color); margin-bottom: 8px; }
-.aw-card-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.aw-card-time { font-size: 0.75rem; color: var(--text-light); }
+.aw-proj:hover { transform: translateY(-4px); box-shadow: var(--shadow-card-hover); }
+.aw-proj__cover { height: 88px; background: var(--gradient-primary); display: flex; align-items: center; justify-content: center; font-size: 2rem; color: #fff; }
+.aw-proj__body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.aw-proj__title { font-weight: 700; font-size: 1.05rem; color: var(--text-color); }
+.aw-proj__meta { display: flex; align-items: center; justify-content: space-between; }
+.aw-proj__time { font-size: 0.75rem; color: var(--text-light); }
+.aw-proj__foot { display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
+.aw-proj__open { display: inline-flex; align-items: center; gap: 4px; color: var(--primary-color); font-size: 0.85rem; font-weight: 600; }
 
-.aw-editor-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-.aw-editor-title { font-size: 1.1rem; font-weight: 700; color: var(--text-color); flex: 1; }
+/* ===== 编辑器头部 ===== */
+.aw-editor-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
+.aw-editor-head__title { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 180px; }
+.aw-editor-title { font-size: 1.15rem; font-weight: 700; color: var(--text-color); }
+.aw-pills { display: flex; gap: 8px; }
+.aw-pill { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: var(--radius-full); background: var(--bg-soft); color: var(--text-light); font-size: 0.8rem; border: 1px solid var(--border-color); }
+.aw-pill.is-done { color: #fff; background: var(--gradient-success); border-color: transparent; }
+
+/* ===== Tabs ===== */
 .aw-tabs { margin-top: 4px; }
+.aw-tabs :deep(.el-tabs__header) { margin-bottom: 18px; }
 
-.aw-meta { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px; }
-.aw-meta-actions { display: flex; gap: 8px; }
+/* ===== 素材 meta 玻璃卡 ===== */
+.aw-meta { padding: 18px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 12px; }
+.aw-meta-row { display: flex; gap: 16px; flex-wrap: wrap; }
+.aw-field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 200px; }
+.aw-field--style { max-width: 280px; }
+.aw-field label { font-size: 0.8rem; color: var(--text-light); }
+.aw-meta-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .aw-tl-warn { margin-bottom: 14px; }
 .aw-tl-warn ul { margin: 4px 0 0; padding-left: 18px; }
 
-.aw-sections { display: flex; flex-direction: column; gap: 14px; }
-.aw-section { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; }
-.aw-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
-.aw-section-head h4 { margin: 0; color: var(--text-color); }
-.aw-section-actions { display: flex; align-items: center; gap: 8px; }
-.aw-section-foot { margin-top: 6px; }
+/* ===== 素材卡片栅格 ===== */
+.aw-mat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.aw-mat {
+  background: var(--surface-color, var(--bg-card));
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  box-shadow: var(--shadow-card);
+  display: flex; flex-direction: column; gap: 12px;
+  transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
+}
+.aw-mat:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+.aw-mat.is-filled { border-color: color-mix(in srgb, var(--primary-color) 35%, var(--border-color)); }
+.aw-mat__head { display: flex; align-items: center; gap: 12px; }
+.aw-ic { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 1.2rem; flex-shrink: 0; }
+/* 图标渐变跟随主题主色/强调色；自定义 CSS 也可直接覆盖 --aw-ic-* 四个变量 */
+.aw-ic--0 { background: linear-gradient(135deg, var(--primary-color), color-mix(in srgb, var(--primary-color) 55%, #fff)); }
+.aw-ic--1 { background: linear-gradient(135deg, var(--accent-color), color-mix(in srgb, var(--accent-color) 55%, #fff)); }
+.aw-ic--2 { background: linear-gradient(135deg, color-mix(in srgb, var(--primary-color) 60%, var(--accent-color)), var(--primary-color)); }
+.aw-ic--3 { background: linear-gradient(135deg, var(--aw-return, #06b6d4), color-mix(in srgb, var(--aw-return, #06b6d4) 55%, #fff)); }
+.aw-mat__titles { flex: 1; min-width: 0; }
+.aw-mat__titles h4 { margin: 0 0 2px; font-size: 1rem; color: var(--text-color); }
+.aw-mat__count { font-size: 0.75rem; color: var(--text-light); }
+.aw-mat__status { display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; padding: 3px 9px; border-radius: var(--radius-full); white-space: nowrap; }
+.aw-mat__status.ok { color: var(--success-color); background: rgba(16, 185, 129, 0.12); }
+.aw-mat__status.todo { color: var(--text-light); background: var(--bg-soft); }
+.aw-mat__actions { display: flex; align-items: center; gap: 8px; }
+.aw-mat__actions .el-input { flex: 1; }
+
+/* ===== 章节 ===== */
+.aw-chapters-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.aw-chapters-hint { font-size: 0.82rem; color: var(--text-light); }
+.aw-chapter-list { display: flex; flex-direction: column; gap: 14px; }
+.aw-chapter { display: flex; background: var(--surface-color, var(--bg-card)); border: 1px solid var(--border-color); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-card); }
+.aw-chapter__bar { width: 5px; flex-shrink: 0; background: var(--text-muted); }
+.aw-chapter--done .aw-chapter__bar { background: var(--gradient-success); }
+.aw-chapter--outline .aw-chapter__bar { background: var(--gradient-amber); }
+.aw-chapter--todo .aw-chapter__bar { background: var(--gradient-slate); }
+.aw-chapter__main { flex: 1; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.aw-chapter-head { display: flex; align-items: center; gap: 10px; }
+.aw-chapter-order { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; background: var(--gradient-primary); flex-shrink: 0; font-size: 0.9rem; }
+.aw-chapter-title { flex: 1; }
+.aw-chapter-outline { display: flex; flex-direction: column; gap: 8px; }
+.aw-chapter-outline-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.aw-chapter-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.aw-chapter-foot-actions { display: flex; gap: 8px; }
 .aw-count { font-size: 0.75rem; color: var(--text-light); }
 
-.aw-chapters-head { display: flex; gap: 8px; margin-bottom: 12px; }
-.aw-chapter-list { display: flex; flex-direction: column; gap: 14px; }
-.aw-chapter { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; }
-.aw-chapter-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.aw-chapter-order { font-weight: 600; color: var(--text-color); white-space: nowrap; }
-.aw-chapter-title { flex: 1; }
-.aw-chapter-outline { margin-bottom: 8px; }
-.aw-chapter-outline-actions { display: flex; gap: 8px; margin-bottom: 8px; }
-.aw-chapter-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
-.aw-chapter-foot-actions { display: flex; gap: 8px; }
+@media (max-width: 768px) {
+  .aw-page { padding: 18px 12px 32px; }
+  .aw-mat-grid { grid-template-columns: 1fr; }
+  .aw-list-head { flex-direction: column; }
+}
 </style>

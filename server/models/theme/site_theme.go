@@ -50,6 +50,14 @@ type ThemeButton struct {
 	Primary string  `json:"primary"` // 主色 HEX
 }
 
+type ThemeAccent struct {
+	Color string `json:"color"` // 强调色 HEX（覆盖 --accent-color；同时驱动 AI 写作图表主节点/回环色）
+}
+
+type ThemeSurface struct {
+	Color string `json:"color"` // 表面色 HEX（覆盖卡片/面板底色 --surface-color）
+}
+
 type ThemeMascot struct {
 	Enabled   bool   `json:"enabled"`    // 是否启用看板娘
 	ScriptURL string `json:"script_url"` // 外部看板娘脚本 URL（兼容 alist/live2d 等任意方案）
@@ -59,6 +67,8 @@ type ThemeSettings struct {
 	Background ThemeBackground `json:"background"`
 	Glass      ThemeGlass      `json:"glass"`
 	Button     ThemeButton     `json:"button"`
+	Accent     ThemeAccent     `json:"accent"`
+	Surface    ThemeSurface    `json:"surface"`
 	Mascot     ThemeMascot     `json:"mascot"`
 }
 
@@ -68,6 +78,8 @@ func DefaultThemeSettings() ThemeSettings {
 		Background: ThemeBackground{Type: "color", Value: ""},
 		Glass:      ThemeGlass{Enabled: true, Blur: 20, Opacity: 0.6, Tint: "#ffffff"},
 		Button:     ThemeButton{Radius: 12, Primary: ""},
+		Accent:     ThemeAccent{Color: ""},
+		Surface:    ThemeSurface{Color: ""},
 		Mascot:     ThemeMascot{Enabled: false, ScriptURL: ""},
 	}
 }
@@ -118,6 +130,18 @@ func ParseThemeSettings(s string) (ThemeSettings, []string) {
 		out.Button.Primary = raw.Button.Primary
 	} else if raw.Button.Primary != "" {
 		removed = append(removed, "button.primary: 非法颜色，已忽略")
+	}
+	// 强调色
+	if hexColorRe.MatchString(raw.Accent.Color) {
+		out.Accent.Color = raw.Accent.Color
+	} else if raw.Accent.Color != "" {
+		removed = append(removed, "accent.color: 非法颜色，已忽略")
+	}
+	// 表面色
+	if hexColorRe.MatchString(raw.Surface.Color) {
+		out.Surface.Color = raw.Surface.Color
+	} else if raw.Surface.Color != "" {
+		removed = append(removed, "surface.color: 非法颜色，已忽略")
 	}
 	// 看板娘
 	out.Mascot.Enabled = raw.Mascot.Enabled
@@ -178,7 +202,9 @@ func SetSiteTheme(css string, customJS string, jsMode string, jsDelay int, setti
 	sanitizedJS, jsRemoved := sanitize.SanitizeJS(customJS)
 	removed = append(removed, jsRemoved...)
 	// 结构化设置：解析 + 校验 + 规范化（非法字段回退默认）
-	_, normalized := ParseThemeSettings(settings)
+	// ⚠️ ParseThemeSettings 返回 (ThemeSettings, []string)：第一个才是规范化后的设置，
+	// 第二个是被回退提示列表。写反会把 nil 列表 Marshal 成 "null" 落库，导致配色永远不生效。
+	normalized, _ := ParseThemeSettings(settings)
 	settingsJSON, _ := json.Marshal(normalized)
 	var t SiteTheme
 	if ferr := models.DB.First(&t, 1).Error; ferr != nil {

@@ -30,6 +30,8 @@ export interface ThemeSettings {
   background: { type: 'color' | 'gradient' | 'image'; value: string };
   glass: { enabled: boolean; blur: number; opacity: number; tint: string };
   button: { radius: number; primary: string };
+  accent: { color: string };
+  surface: { color: string };
   mascot: { enabled: boolean; script_url: string };
 }
 

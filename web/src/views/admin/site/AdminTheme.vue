@@ -12,10 +12,29 @@
       <el-divider content-position="left">可视化主题（结构化控件）</el-divider>
       <el-alert type="success" :closable="false" show-icon class="tip">
         <template #title>零代码美化（对标 alist）</template>
-        通过下方控件即可调整背景、毛玻璃、按钮圆角与主色，无需手写 CSS。生成的样式与「主题 CSS」文本互补——
-        文本优先级更高，可覆盖控件效果；看板娘则兼容任意外部脚本（如 alist/live2d）。
+        通过下方控件即可调整背景、毛玻璃、按钮圆角，以及<b>主题主色 / 强调色 / 表面色</b>。
+        主色是全站唯一真源：改成任意颜色后，按钮渐变、Element Plus 组件、标签、分页、聚焦光晕与 AI 写作图表会<b>同步变色</b>，
+        不会残留写死的紫色。生成的样式与「主题 CSS」文本互补——文本优先级更高，可覆盖控件效果；
+        也可在文本里直接写 <code>:root { --primary-color: #e11d48; --accent-color: #0ea5e9; --surface-color: #fff7ed; }</code> 自定义任意配色。
+        看板娘兼容任意外部脚本（如 alist/live2d）。
       </el-alert>
       <el-form label-width="120px" class="theme-form">
+        <el-form-item label="配色预设">
+          <div class="preset-row">
+            <button
+              v-for="p in colorPresets"
+              :key="p.key"
+              type="button"
+              class="preset-chip"
+              :title="`应用「${p.label}」配色到主色 / 强调色 / 表面色`"
+              @click="applyPreset(p)"
+            >
+              <span class="preset-swatch" :style="{ background: p.primary }"><i :style="{ background: p.accent }" /></span>
+              {{ p.label }}
+            </button>
+            <span class="mode-hint">点击即填充下方取色器（仍需点保存才会全站生效）</span>
+          </div>
+        </el-form-item>
         <el-form-item label="背景类型">
           <el-radio-group v-model="settings.background.type">
             <el-radio-button value="color">纯色</el-radio-button>
@@ -50,6 +69,14 @@
         <el-form-item label="主题主色">
           <el-color-picker v-model="settings.button.primary" />
           <span class="mode-hint">留空则沿用系统主色（同步 --primary-color）</span>
+        </el-form-item>
+        <el-form-item label="强调色">
+          <el-color-picker v-model="settings.accent.color" />
+          <span class="mode-hint">用于高亮、标签与 AI 写作可视化主节点/回环（同步 --accent-color / --aw-node / --aw-return）；留空沿用系统强调色</span>
+        </el-form-item>
+        <el-form-item label="表面色">
+          <el-color-picker v-model="settings.surface.color" />
+          <span class="mode-hint">卡片、面板等表面底色（同步 --surface-color）；留空沿用系统卡片色</span>
         </el-form-item>
 
         <el-form-item label="看板娘">
@@ -173,6 +200,8 @@
         <div class="preview-title">实时预览（仅本编辑器内预览，不影响线上）</div>
         <div class="preview-box" :style="previewStyle">
           <span class="preview-primary">主色按钮</span>
+          <span class="preview-accent">强调色标签</span>
+          <span class="preview-surface">表面色卡片</span>
           <span class="preview-bg">背景区块</span>
         </div>
       </div>
@@ -197,6 +226,8 @@ function defaultSettings(): ThemeSettings {
     background: { type: 'color', value: '' },
     glass: { enabled: true, blur: 20, opacity: 0.6, tint: '#ffffff' },
     button: { radius: 12, primary: '' },
+    accent: { color: '' },
+    surface: { color: '' },
     mascot: { enabled: false, script_url: '' },
   };
 }
@@ -209,6 +240,8 @@ function parseSettings(raw?: string): ThemeSettings {
       background: { ...def.background, ...(p.background || {}) },
       glass: { ...def.glass, ...(p.glass || {}) },
       button: { ...def.button, ...(p.button || {}) },
+      accent: { ...def.accent, ...(p.accent || {}) },
+      surface: { ...def.surface, ...(p.surface || {}) },
       mascot: { ...def.mascot, ...(p.mascot || {}) },
     };
   } catch {
@@ -216,6 +249,23 @@ function parseSettings(raw?: string): ThemeSettings {
   }
 }
 const settings = ref<ThemeSettings>(defaultSettings());
+
+// 配色预设：一键把主色 / 强调色 / 表面色填进控件（仅本地，需保存生效）
+const colorPresets = [
+  { key: 'indigo', label: '星海蓝紫', primary: '#5b5fe3', accent: '#f59e0b', surface: '' },
+  { key: 'rose', label: '玫红', primary: '#e11d48', accent: '#f43f5e', surface: '#fff1f2' },
+  { key: 'cyan', label: '青碧', primary: '#0e7490', accent: '#06b6d4', surface: '#ecfeff' },
+  { key: 'emerald', label: '翠绿', primary: '#059669', accent: '#10b981', surface: '#ecfdf5' },
+  { key: 'violet', label: '紫罗兰', primary: '#7c3aed', accent: '#a78bfa', surface: '#f5f3ff' },
+  { key: 'amber', label: '琥珀', primary: '#b45309', accent: '#f59e0b', surface: '#fffbeb' },
+  { key: 'slate', label: '石墨', primary: '#334155', accent: '#64748b', surface: '#f8fafc' },
+];
+function applyPreset(p: (typeof colorPresets)[number]) {
+  settings.value.button.primary = p.primary;
+  settings.value.accent.color = p.accent;
+  settings.value.surface.color = p.surface;
+}
+
 const bgLabel = computed(() =>
   settings.value.background.type === 'color' ? '背景颜色' : settings.value.background.type === 'gradient' ? '渐变串' : '图片 URL',
 );
@@ -230,6 +280,8 @@ function serializeSettings(): string {
     background: { type: s.background.type, value: clean(s.background.value) },
     glass: { enabled: !!s.glass.enabled, blur: Number(s.glass.blur) || 0, opacity: Number(s.glass.opacity) || 0, tint: clean(s.glass.tint) },
     button: { radius: Number(s.button.radius) || 0, primary: clean(s.button.primary) },
+    accent: { color: clean(s.accent.color) },
+    surface: { color: clean(s.surface.color) },
     mascot: { enabled: !!s.mascot.enabled, script_url: clean(s.mascot.script_url) },
   });
 }
@@ -284,13 +336,16 @@ async function saveIframe() {
   }
 }
 
-// 编辑器内即时预览（仅本地，不注入全局）
+// 编辑器内即时预览（仅本地，不注入全局）：
+// 可视化控件取值优先，其次才回退到主题 CSS 文本里的声明。
 const previewStyle = computed(() => {
-  // 取 :root / body 这类顶层规则外的简单声明做轻量预览
-  const m = css.value.match(/--primary-color\s*:\s*([^;]+);/);
+  const cssPrimary = css.value.match(/--primary-color\s*:\s*([^;]+);/);
   const bg = css.value.match(/body\s*\{[^}]*background\s*:\s*([^;]+);/);
   const s: Record<string, string> = {};
-  if (m) s['--preview-primary'] = m[1].trim();
+  const primary = settings.value.button.primary || (cssPrimary ? cssPrimary[1].trim() : '');
+  if (primary) s['--preview-primary'] = primary;
+  if (settings.value.accent.color) s['--preview-accent'] = settings.value.accent.color;
+  if (settings.value.surface.color) s['--preview-surface'] = settings.value.surface.color;
   if (bg) s.background = bg[1].trim();
   return s;
 });
@@ -364,6 +419,20 @@ onMounted(() => {
 <style scoped>
 .theme-form { max-width: 880px; margin-top: 16px; }
 .mode-hint { font-size: 12px; color: var(--text-muted, #909399); margin-top: 4px; line-height: 1.6; }
+.preset-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; width: 100%; }
+.preset-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px 4px 5px; border-radius: var(--radius-full, 999px);
+  border: 1px solid var(--border-color, #e5e7eb); background: var(--bg-card, #fff);
+  color: var(--text-color); font-size: 12px; cursor: pointer;
+  transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+.preset-chip:hover { border-color: var(--primary-color); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.preset-swatch {
+  width: 18px; height: 18px; border-radius: 50%; display: inline-flex;
+  align-items: center; justify-content: center; flex-shrink: 0;
+}
+.preset-swatch i { width: 8px; height: 8px; border-radius: 50%; display: block; }
 .css-editor :deep(textarea) { font-family: 'Cascadia Code', Consolas, monospace; font-size: 13px; }
 .js-editor :deep(textarea) { font-family: 'Cascadia Code', Consolas, monospace; font-size: 13px; }
 .rm-tag { margin-right: 6px; }
@@ -377,8 +446,17 @@ onMounted(() => {
   background: var(--bg-color, #fff);
 }
 .preview-primary {
-  color: #fff; padding: 4px 12px; border-radius: 6px;
+  color: #fff; padding: 6px 14px; border-radius: 8px;
   background: var(--preview-primary, var(--primary-color, #4f46e5));
 }
-.preview-bg { padding: 4px 12px; border-radius: 6px; }
+.preview-accent {
+  color: #fff; padding: 6px 14px; border-radius: 8px;
+  background: var(--preview-accent, var(--accent-color, #f59e0b));
+}
+.preview-surface {
+  padding: 6px 14px; border-radius: 8px; color: var(--text-color);
+  border: 1px solid var(--border-color, #e5e7eb);
+  background: var(--preview-surface, var(--bg-card, #fff));
+}
+.preview-bg { padding: 6px 14px; border-radius: 8px; }
 </style>

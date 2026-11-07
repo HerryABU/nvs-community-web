@@ -1,6 +1,34 @@
 package theme
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
+
+// TestNormalizedSettingsJSON 回归：SetSiteTheme 曾把 ParseThemeSettings 的两个返回值写反，
+// 将 removed 列表 Marshal 成 "null" 落库，导致可视化配色永远不生效。
+// 这里保证「规范化后的设置」序列化为含全部字段的 JSON 对象（而非 null）。
+func TestNormalizedSettingsJSON(t *testing.T) {
+	raw := `{"background":{"type":"color","value":""},"glass":{"enabled":true,"blur":20,"opacity":0.6,"tint":"#ffffff"},"button":{"radius":16,"primary":"#e11d48"},"accent":{"color":"#f43f5e"},"surface":{"color":"#fff1f2"},"mascot":{"enabled":false,"script_url":""}}`
+	normalized, removed := ParseThemeSettings(raw)
+	if len(removed) != 0 {
+		t.Fatalf("合法设置不应有回退提示，得到 %v", removed)
+	}
+	b, err := json.Marshal(normalized)
+	if err != nil {
+		t.Fatalf("marshal 失败: %v", err)
+	}
+	s := string(b)
+	if strings.TrimSpace(s) == "null" || !strings.HasPrefix(s, "{") {
+		t.Fatalf("规范化设置必须序列化为 JSON 对象，得到 %q", s)
+	}
+	for _, key := range []string{`"button"`, `"accent"`, `"surface"`, `"#e11d48"`, `"#f43f5e"`, `"#fff1f2"`} {
+		if !strings.Contains(s, key) {
+			t.Fatalf("序列化结果缺少 %s: %q", key, s)
+		}
+	}
+}
 
 func TestParseThemeSettings(t *testing.T) {
 	def := DefaultThemeSettings()

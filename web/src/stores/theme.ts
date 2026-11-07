@@ -166,6 +166,8 @@ function defaultThemeSettings(): ThemeSettings {
     background: { type: 'color', value: '' },
     glass: { enabled: true, blur: 20, opacity: 0.6, tint: '#ffffff' },
     button: { radius: 12, primary: '' },
+    accent: { color: '' },
+    surface: { color: '' },
     mascot: { enabled: false, script_url: '' },
   };
 }
@@ -180,6 +182,8 @@ function parseSettings(raw?: string): ThemeSettings {
       background: { ...def.background, ...(p.background || {}) },
       glass: { ...def.glass, ...(p.glass || {}) },
       button: { ...def.button, ...(p.button || {}) },
+      accent: { ...def.accent, ...(p.accent || {}) },
+      surface: { ...def.surface, ...(p.surface || {}) },
       mascot: { ...def.mascot, ...(p.mascot || {}) },
     };
   } catch {
@@ -187,19 +191,27 @@ function parseSettings(raw?: string): ThemeSettings {
   }
 }
 
-// hexToRgba 将 HEX 颜色转为带透明度的 rgba()（毛玻璃底色）
-function hexToRgba(hex: string, alpha: number): string {
+// hexToRgb 将 HEX 颜色拆成 "r, g, b"，供 rgba(var(--primary-rgb), a) 这类旧式自定义 CSS 使用。
+// 返回 null 表示非法颜色（调用方据此跳过输出，避免污染变量）。
+function hexToRgb(hex: string): string | null {
   let h = (hex || '').replace('#', '');
   if (h.length === 3) h = h.split('').map((c) => c + c).join('');
-  if (h.length !== 6) return `rgba(255,255,255,${alpha})`;
+  if (h.length !== 6) return null;
   const r = parseInt(h.slice(0, 2), 16);
   const g = parseInt(h.slice(2, 4), 16);
   const b = parseInt(h.slice(4, 6), 16);
-  if ([r, g, b].some((n) => Number.isNaN(n))) return `rgba(255,255,255,${alpha})`;
-  return `rgba(${r},${g},${b},${alpha})`;
+  if ([r, g, b].some((n) => Number.isNaN(n))) return null;
+  return `${r}, ${g}, ${b}`;
 }
 
-// buildStructuredCSS 由结构化设置生成 CSS：覆盖站点级 CSS 变量（背景 / 玻璃 / 主色 / 圆角）。
+// hexToRgba 将 HEX 颜色转为带透明度的 rgba()（毛玻璃底色）
+function hexToRgba(hex: string, alpha: number): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return `rgba(255,255,255,${alpha})`;
+  return `rgba(${rgb},${alpha})`;
+}
+
+// buildStructuredCSS 由结构化设置生成 CSS：覆盖站点级 CSS 变量（背景 / 玻璃 / 主色 / 强调色 / 表面色 / 圆角）。
 // 原始 CSS 文本仍可覆盖这些变量，两者互补而非互斥。
 function buildStructuredCSS(s: ThemeSettings): string {
   const rules: string[] = [];
@@ -212,7 +224,20 @@ function buildStructuredCSS(s: ThemeSettings): string {
   const tint = s.glass?.tint || '#ffffff';
   const opacity = s.glass?.enabled ? Math.min(1, Math.max(0, s.glass.opacity ?? 0.6)) : 0;
   rules.push(`:root { --glass-blur: ${blur}px; --glass-bg: ${hexToRgba(tint, opacity)}; }`);
-  if (s.button?.primary) rules.push(`:root { --primary-color: ${s.button.primary}; }`);
+  // 主色：除 --primary-color 外同步输出 --primary-rgb，兼容旧式 rgba(var(--primary-rgb), a) 自定义 CSS。
+  // 其余主色系（渐变 / Element Plus 光晕 / 浅底）已在 global.css 中用 color-mix 派生，自动跟随。
+  if (s.button?.primary) {
+    const rgb = hexToRgb(s.button.primary);
+    rules.push(`:root { --primary-color: ${s.button.primary};${rgb ? ` --primary-rgb: ${rgb};` : ''} }`);
+  }
+  if (s.accent?.color) {
+    rules.push(`:root { --accent-color: ${s.accent.color}; }`);
+    // 强调色同时驱动 AI 写作可视化主节点与回环色，做到「换个强调色，图表随之变色」
+    rules.push(`:root { --aw-node: ${s.accent.color}; --aw-return: ${s.accent.color}; }`);
+    // 循环弧三色也由强调色派生，避免换了强调色后图表仍残留红/橙/绿
+    rules.push(`:root { --aw-loop: ${s.accent.color}; --aw-loop-2: color-mix(in srgb, ${s.accent.color} 65%, #f59e0b); --aw-loop-3: color-mix(in srgb, ${s.accent.color} 55%, #10b981); }`);
+  }
+  if (s.surface?.color) rules.push(`:root { --surface-color: ${s.surface.color}; }`);
   if (s.button?.radius != null && s.button.radius >= 0) {
     rules.push(`:root { --radius-md: ${s.button.radius}px; --radius-lg: ${s.button.radius + 4}px; }`);
   }

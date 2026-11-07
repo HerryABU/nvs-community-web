@@ -273,24 +273,24 @@ const cgEdges = computed<CgEdge[]>(() => {
 
 <style scoped>
 .vis-hint { font-size: 0.8rem; color: var(--text-light, #999); margin-bottom: 10px; }
-.vis-hint code { background: rgba(139, 92, 246, 0.15); padding: 1px 5px; border-radius: 4px; }
+.vis-hint code { background: color-mix(in srgb, var(--aw-node, #6366f1) 16%, transparent); padding: 1px 5px; border-radius: 4px; color: var(--text-color); }
 .svg-wrap { width: 100%; overflow-x: auto; }
 .vis-svg { width: 100%; min-width: 600px; background: var(--bg-card, #fff); border: 1px solid var(--border-color, #eee); border-radius: 10px; }
-.axis { stroke: var(--text-light, #bbb); stroke-width: 2; }
-.ev-dot { fill: #8b5cf6; }
-.ev-dot.ev-inloop { fill: #ef4444; }
+.axis { stroke: var(--aw-axis, #cbd5e1); stroke-width: 2; }
+.ev-dot { fill: var(--aw-node, #6366f1); }
+.ev-dot.ev-inloop { fill: var(--aw-loop, #ef4444); }
 .ev-time { font-size: 11px; fill: var(--text-color, #333); text-anchor: middle; }
 .ev-desc { font-size: 10px; fill: var(--text-light, #888); text-anchor: middle; }
 .loop-arc { stroke-width: 2; stroke-dasharray: 5 4; }
-.loop-0 { stroke: #ef4444; }
-.loop-1 { stroke: #f59e0b; }
-.loop-2 { stroke: #10b981; }
-.arrow-head { fill: #ef4444; }
-.ret-arc { stroke-width: 2.5; stroke: #06b6d4; stroke-dasharray: 2 5; }
-.arrow-head-ret { fill: #06b6d4; }
-.ev-dot.ev-return { fill: #06b6d4; }
-.ev-return-label { font-size: 11px; fill: #06b6d4; text-anchor: middle; font-weight: 600; }
-.cg-node { fill: #6366f1; opacity: 0.92; }
+.loop-0 { stroke: var(--aw-loop, #ef4444); }
+.loop-1 { stroke: var(--aw-loop-2, #f59e0b); }
+.loop-2 { stroke: var(--aw-loop-3, #10b981); }
+.arrow-head { fill: var(--aw-loop, #ef4444); }
+.ret-arc { stroke-width: 2.5; stroke: var(--aw-return, #06b6d4); stroke-dasharray: 2 5; }
+.arrow-head-ret { fill: var(--aw-return, #06b6d4); }
+.ev-dot.ev-return { fill: var(--aw-return, #06b6d4); }
+.ev-return-label { font-size: 11px; fill: var(--aw-return, #06b6d4); text-anchor: middle; font-weight: 600; }
+.cg-node { fill: var(--aw-node, #6366f1); opacity: 0.92; }
 .cg-nlabel { font-size: 12px; fill: #fff; text-anchor: middle; }
 .cg-edge { stroke: var(--text-light, #aaa); stroke-width: 1.5; }
 .cg-elabel { font-size: 10px; fill: var(--text-light, #888); text-anchor: middle; }
