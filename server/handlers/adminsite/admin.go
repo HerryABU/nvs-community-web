@@ -640,7 +640,7 @@ func IsAdminUser(c *gin.Context) bool {
 		return false
 	}
 	user, _ := models.GetUserByID(userID)
-	return user != nil && user.Role == "admin"
+	return user != nil && social.IsElevated(user.Role)
 }
 
 // IsPoliceOrAdminUser 非阻断式判断当前用户是否具备「警方取管台 / 管理员」权限。

@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"nvs-server/config"
+	"nvs-server/models/social"
 
 	"github.com/gin-gonic/gin"
 )
@@ -96,7 +97,7 @@ func AuthorRequired() gin.HandlerFunc {
 			return
 		}
 
-		if roleStr != "author" && roleStr != "vip_author" && roleStr != "admin" {
+		if roleStr != "author" && roleStr != "vip_author" && !social.IsElevated(roleStr) {
 			infra.Forbidden(c, "需要作者权限")
 			c.Abort()
 			return
@@ -111,7 +112,7 @@ func AuthorRequired() gin.HandlerFunc {
 func AdminRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role := UserRole(c)
-		if role != "admin" {
+		if !social.IsElevated(role) {
 			infra.Forbidden(c, "需要管理员权限")
 			c.Abort()
 			return
@@ -125,7 +126,7 @@ func AdminRequired() gin.HandlerFunc {
 func PoliceRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role := UserRole(c)
-		if role != "admin" && role != "police" {
+		if !social.IsElevated(role) && role != "police" {
 			infra.Forbidden(c, "需要警方或管理员权限")
 			c.Abort()
 			return

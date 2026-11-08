@@ -16,28 +16,33 @@ import (
 
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
+	"nvs-server/models/social"
 	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
 )
 
+// 角色常量与判定统一收敛到 models/social（叶子包），此处保留别名供管理端包内使用，
+// 避免 middleware → admincommon → hctx → middleware 的 import 环。
 const (
-	RoleSuperAdmin = "super_admin"
-	RoleAdmin      = "admin"
-	RoleManager    = "manager"
-	RolePolice     = "police"
+	RoleSuperAdmin = social.RoleSuperAdmin
+	RoleSuper      = social.RoleSuper
+	RoleAdmin      = social.RoleAdmin
+	RoleManager    = social.RoleManager
+	RolePolice     = social.RolePolice
 )
 
-// IsElevated 是否是管理端账号（超级管理员 / 管理员；警方走自己的台，不算）。
-func IsElevated(role string) bool {
-	return role == RoleSuperAdmin || role == RoleAdmin || role == RoleManager
-}
+// IsSuperRole 是否为超级管理员（站长）角色（含 super 别名）。
+func IsSuperRole(role string) bool { return social.IsSuperRole(role) }
+
+// IsElevated 是否是管理端账号（超级管理员 / 管理员 / 经理；警方走自己的台，不算）。
+func IsElevated(role string) bool { return social.IsElevated(role) }
 
 // SuperAdminID 返回唯一超级管理员的用户 ID。
-// 优先取显式 role=super_admin 中 ID 最小者；没有则退回落库的 role=admin 中 ID 最小者。
+// 优先取显式超级管理员（super_admin / super）中 ID 最小者；没有则退回落库的 role=admin 中 ID 最小者。
 func SuperAdminID() uint {
 	var u models.User
-	if err := models.DB.Where("role = ?", RoleSuperAdmin).Order("id ASC").First(&u).Error; err == nil && u.ID > 0 {
+	if err := models.DB.Where("role IN ?", []string{RoleSuperAdmin, RoleSuper}).Order("id ASC").First(&u).Error; err == nil && u.ID > 0 {
 		return u.ID
 	}
 	if err := models.DB.Where("role = ?", RoleAdmin).Order("id ASC").First(&u).Error; err == nil && u.ID > 0 {
@@ -53,6 +58,15 @@ func IsSuperAdmin(c *gin.Context) bool {
 		return false
 	}
 	return uid == SuperAdminID()
+}
+
+// IsSuperUser 判断某用户是否为超级管理员（站长）：
+// 角色为 super_admin/super，或该用户即 SuperAdminID() 的回退对象（首位 admin）。
+func IsSuperUser(u *models.User) bool {
+	if u == nil {
+		return false
+	}
+	return IsSuperRole(u.Role) || (u.ID != 0 && u.ID == SuperAdminID())
 }
 
 // EnsureElevated 管理端基础鉴权（超级管理员 + 管理员都可通过）。
@@ -98,7 +112,7 @@ func DeleteRequestHint() string {
 // RoleLabel 角色显示名（前端与通知文案统一口径）。
 func RoleLabel(role string) string {
 	switch role {
-	case RoleSuperAdmin:
+	case RoleSuperAdmin, RoleSuper:
 		return "超级管理员（站长）"
 	case RoleAdmin, RoleManager:
 		return "管理员"

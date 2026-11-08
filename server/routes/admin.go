@@ -264,6 +264,9 @@ func registerAdminArea(r *gin.Engine) {
 		// GET 供后台读取当前开关（与公开 /api/federation/modes 同数据，仅两个布尔）
 		adminGrp.GET("/federation/modes", adminsite.GetFederationModes)
 		adminGrp.PUT("/federation/modes", adminsite.UpdateFederationModes)
+		// 导航模块布局（仅超级管理员可配）
+		adminGrp.GET("/nav-layout", adminsite.AdminGetNavLayout)
+		adminGrp.PUT("/nav-layout", adminsite.AdminUpdateNavLayout)
 		// 限流与 API Key 管理（全局配额 / 爬虫规则 / 日志统计 / 全站 Key）
 		adminGrp.GET("/ratelimit/config", apikey.GetRateLimitConfig)
 		adminGrp.PUT("/ratelimit/config", apikey.UpdateRateLimitConfig)

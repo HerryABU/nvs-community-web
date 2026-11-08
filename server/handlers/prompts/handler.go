@@ -8,6 +8,7 @@ import (
 	"nvs-server/collab"
 	"nvs-server/middleware"
 	"nvs-server/models"
+	"nvs-server/models/social"
 	"nvs-server/prompttpl"
 
 	"github.com/gin-gonic/gin"
@@ -19,7 +20,7 @@ import (
 
 func requireAdmin(c *gin.Context) bool {
 	user, _ := models.GetUserByID(middleware.UserID(c))
-	if user == nil || user.Role != "admin" {
+	if user == nil || !social.IsElevated(user.Role) {
 		infra.Forbidden(c, "需要管理员权限")
 		c.Abort()
 		return false

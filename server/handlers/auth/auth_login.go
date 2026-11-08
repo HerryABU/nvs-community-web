@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/adminsite"
 	"nvs-server/handlers/hctx"
 	"nvs-server/middleware"
@@ -125,6 +126,7 @@ func Login(c *gin.Context) {
 	middleware.SetTokenCookie(c, accessToken)
 	middleware.SetRefreshCookie(c, refreshToken)
 
+	user.IsSuper = admincommon.IsSuperUser(user)
 	infra.SuccessMessage(c, "登录成功", gin.H{
 		"user": user,
 	})
@@ -148,6 +150,7 @@ func GetCurrentUser(c *gin.Context) {
 		return
 	}
 
+	user.IsSuper = admincommon.IsSuperUser(user)
 	infra.Success(c, user)
 }
 

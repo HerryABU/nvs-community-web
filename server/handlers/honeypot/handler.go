@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"nvs-server/handlers/admincommon"
 	"nvs-server/honeypot"
 	"nvs-server/middleware"
 	"nvs-server/models"
@@ -17,8 +18,8 @@ import (
 )
 
 func EnsureAdmin(c *gin.Context) bool {
-	role := middleware.UserRole(c)
-	if role != "admin" {
+	// 管理端账号（超级管理员 / 管理员 / 经理）均可操作。
+	if !admincommon.IsElevated(middleware.UserRole(c)) {
 		infra.Forbidden(c, "仅管理员可操作")
 		return false
 	}

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { authApi, type User } from '@/api/auth';
 import { appPrefix } from '@/utils/prefix';
+import { isSuperRole, isElevatedRole } from '@/utils/roles';
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null);
@@ -18,6 +19,12 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isLoggedIn = computed(() => !!user.value);
   const isAuthor = computed(() => user.value?.role === 'author' || user.value?.role === 'vip_author');
+  /** 是否超级管理员（站长）：优先取后端下发的 is_super，其次看角色（含 super 别名） */
+  const isSuperAdmin = computed(() => !!user.value?.is_super || isSuperRole(user.value?.role));
+  /** 是否管理端账号（超级管理员 / 管理员 / 经理） */
+  const isAdminElevated = computed(() => isElevatedRole(user.value?.role));
+  /** 严格管理员（不含超级管理员/经理） */
+  const isStrictAdmin = computed(() => user.value?.role === 'admin');
 
   /** 恢复登录态（幂等）：已恢复过直接返回；正在请求则复用同一个 promise，调用方可以安全 await */
   async function fetchUser(force = false) {
@@ -88,6 +95,9 @@ export const useAuthStore = defineStore('auth', () => {
     ready,
     isLoggedIn,
     isAuthor,
+    isSuperAdmin,
+    isAdminElevated,
+    isStrictAdmin,
     fetchUser,
     login,
     phoneLogin,

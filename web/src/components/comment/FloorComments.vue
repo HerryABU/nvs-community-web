@@ -232,6 +232,7 @@ import { Lock } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { formatRelativeTime, formatAbsoluteMicro } from '@/utils/relativeTime';
 import { renderCommentHTML } from '@/utils/commentRender';
+import { isElevatedRole } from '@/utils/roles';
 
 // 楼层模型（公众号评论区 + Discuz 楼中楼）：
 //  - 回复主内容（作品/博客/帖子）→ 开新楼（parent_id 为空，floor_no 递增）
@@ -334,7 +335,7 @@ function toggleAll() {
 // 前端据此以红字标注「已删除」内容。普通用户拿不到已删除评论，即使拿到也只显示占位符。
 const isModerator = computed(() => {
   const r = authStore.user?.role;
-  return r === 'admin' || r === 'police';
+  return isElevatedRole(r) || r === 'police';
 });
 // 已删除内容是否应以红字展示（仅警方/管理员）
 function showDeleted(item: any) {

@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -37,6 +38,87 @@ func IsFederatedEmbedEnabled() bool {
 // IsFederatedIndependentEnabled 独立联邦页是否开启（默认开）
 func IsFederatedIndependentEnabled() bool {
 	return GetPlatformConfig(FedIndependentEnabledKey) == "true"
+}
+
+// ============ 导航模块布局（超级管理员可配：主导航 / 更多） ============
+
+// NavLayoutKey 导航模块布局配置键（JSON 数组）。
+const NavLayoutKey = "nav_module_layout"
+
+// NavModule 一个可配置的导航模块。
+// Location: main=主导航（导航栏高频区） / more=「更多」下拉（低频区）。
+type NavModule struct {
+	Key      string `json:"key"`
+	Label    string `json:"label"`
+	Icon     string `json:"icon"`
+	Path     string `json:"path"`
+	Location string `json:"location"`
+	Visible  bool   `json:"visible"`
+	Sort     int    `json:"sort"`
+}
+
+// DefaultNavModules 默认布局：主导航（主页/小说/分类/论坛/群组/博客/AI 工作台），
+// 亚文化创作区默认收进「更多」。
+func DefaultNavModules() []NavModule {
+	return []NavModule{
+		{Key: "home", Label: "主页", Icon: "HomeFilled", Path: "/", Location: "main", Visible: true, Sort: 0},
+		{Key: "novels", Label: "小说", Icon: "Reading", Path: "/novels", Location: "main", Visible: true, Sort: 1},
+		{Key: "category", Label: "分类", Icon: "Menu", Path: "", Location: "main", Visible: true, Sort: 2},
+		{Key: "forums", Label: "论坛", Icon: "ChatDotRound", Path: "/forums", Location: "main", Visible: true, Sort: 3},
+		{Key: "groups", Label: "群组", Icon: "UserFilled", Path: "/groups", Location: "main", Visible: true, Sort: 4},
+		{Key: "subculture", Label: "亚文化创作区", Icon: "Avatar", Path: "/subculture", Location: "more", Visible: true, Sort: 5},
+		{Key: "blogs", Label: "博客", Icon: "Document", Path: "/blogs", Location: "main", Visible: true, Sort: 6},
+		{Key: "ai", Label: "AI 工作台", Icon: "MagicStick", Path: "/ai", Location: "main", Visible: true, Sort: 7},
+	}
+}
+
+// GetNavModules 读取导航模块布局；无配置或异常时回退默认。
+// 用默认目录补全缺失模块、丢弃已下线模块，避免版本升级后新模块消失。
+func GetNavModules() []NavModule {
+	def := DefaultNavModules()
+	val := GetPlatformConfig(NavLayoutKey)
+	if val == "" {
+		return def
+	}
+	var stored []NavModule
+	if err := json.Unmarshal([]byte(val), &stored); err != nil || len(stored) == 0 {
+		return def
+	}
+	byKey := make(map[string]NavModule, len(def))
+	for _, m := range def {
+		byKey[m.Key] = m
+	}
+	out := make([]NavModule, 0, len(stored))
+	seen := make(map[string]bool, len(stored))
+	for _, m := range stored {
+		d, ok := byKey[m.Key]
+		if !ok {
+			continue // 已下线模块，丢弃
+		}
+		if m.Location != "main" && m.Location != "more" {
+			m.Location = d.Location
+		}
+		// 文案/图标/路径以默认目录为准（防止前端注入任意跳转）
+		m.Label, m.Icon, m.Path, m.Sort = d.Label, d.Icon, d.Path, d.Sort
+		out = append(out, m)
+		seen[m.Key] = true
+	}
+	for _, d := range def {
+		if !seen[d.Key] {
+			out = append(out, d)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Sort < out[j].Sort })
+	return out
+}
+
+// SetNavModules 保存导航模块布局。
+func SetNavModules(mods []NavModule) error {
+	b, err := json.Marshal(mods)
+	if err != nil {
+		return err
+	}
+	return SetPlatformConfig(NavLayoutKey, string(b))
 }
 
 // ============ 访客查看小说门禁（站长前台可配） ============

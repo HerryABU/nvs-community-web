@@ -68,8 +68,15 @@ const authStore = useAuthStore();
 // 后端已按路由逐项 403，此处只做前端收敛（避免展示不可达入口）。
 // 白名单与路由守卫共用 constants/policeAccess.ts，避免两处各写一份而漂移。
 const visibleCats = computed(() => {
-  if (authStore.user?.role !== 'police') return adminMenuCategories;
-  return adminMenuCategories
+  // 超级管理员专属入口（如导航模块布局）仅超管可见
+  const isSuper = authStore.isSuperAdmin;
+  let cats = adminMenuCategories.map((c) => ({
+    ...c,
+    items: c.items.filter((it) => !it.superOnly || isSuper),
+  }));
+  if (authStore.user?.role !== 'police') return cats.filter((c) => c.items.length > 0);
+  // 警方仅能看到「内容治理子集」
+  return cats
     .map((c) => ({ ...c, items: c.items.filter((it) => POLICE_ALLOWED_PATHS.has(it.path)) }))
     .filter((c) => c.items.length > 0);
 });

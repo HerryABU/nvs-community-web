@@ -35,6 +35,8 @@ export interface User {
   bio: string;
   role: string;
   created_at: string;
+  /** 是否超级管理员（站长）：后端按角色 + SuperAdminID 回退判定后下发 */
+  is_super?: boolean;
 }
 
 export const authApi = {

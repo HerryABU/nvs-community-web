@@ -20,6 +20,8 @@ type User struct {
 	Signature    string `gorm:"size:256;default:''" json:"signature"`
 	Bio          string `gorm:"type:text" json:"bio"`
 	Role         string `gorm:"size:32;default:reader" json:"role"`
+	// IsSuper 是否超级管理员（站长）：非持久化字段，由 /api/auth/me 等按需填充
+	IsSuper bool `gorm:"-" json:"is_super"`
 	// 会员有效期（购买含 Days 的套餐后延长；nil 或已过期 = 非会员）
 	MemberUntil *time.Time `gorm:"index" json:"member_until,omitempty"`
 	// #66 会员等级（由 VIP 卡密兑换提升；0=非会员；到期后等级不自动清零，

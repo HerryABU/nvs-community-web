@@ -3,6 +3,7 @@ import {
   Collection, Lock, Histogram, Stamp, Key, ChatDotRound, Cpu, WarningFilled,
   Box, Notebook, TrendCharts, Connection, Postcard, Lightning, Brush, Grid, Message,
   Timer, Coin, MagicStick, ChatLineRound, ChatDotSquare, Present, Operation, CreditCard, Aim, User, Sunny,
+  Menu,
 } from '@element-plus/icons-vue';
 
 // 管理员控制台「管理功能」分类数据（F8：分类折叠 + ?category=/?item= 深链定位）。
@@ -14,6 +15,8 @@ export interface AdminMenuItem {
   path: string;
   icon: any;
   color: string;
+  /** 仅超级管理员（站长）可见 */
+  superOnly?: boolean;
 }
 
 export interface AdminMenuCategory {
@@ -32,6 +35,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
     color: 'var(--gradient-blue)',
     items: [
       { title: '站点设置', desc: '站点名称、首页主模块、平台指南、备案、robots.txt', path: '/admin/settings', icon: Setting, color: 'var(--gradient-blue)' },
+      { title: '导航模块布局', desc: '控制导航栏（前面）与「更多」中的模块；仅超级管理员', path: '/admin/nav-layout', icon: Menu, color: 'var(--gradient-indigo)', superOnly: true },
       { title: '登录方式管理', desc: '邮箱/手机号/微信扫码入口 · 注册验证 · SMTP 通道 · 域名限制', path: '/admin/login-methods', icon: Message, color: 'var(--gradient-indigo)' },
       { title: '自定义主页', desc: '编排首页区块：头图/公告/模块/博客/版块/最新帖/自定义HTML/链接', path: '/admin/home-blocks', icon: Grid, color: 'var(--gradient-teal)' },
       { title: '自定义主题', desc: 'alist 式全局主题：CSS 消毒后全站生效', path: '/admin/theme', icon: Brush, color: 'var(--gradient-pink)' },

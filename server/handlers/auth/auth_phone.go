@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/docx"
 	"nvs-server/middleware"
 	"nvs-server/models"
@@ -188,6 +189,7 @@ func PhoneLogin(c *gin.Context) {
 		}
 	}
 
+	user.IsSuper = admincommon.IsSuperUser(user)
 	issueSession(c, user, "手机号登录 "+phone)
 	infra.SuccessMessage(c, "登录成功", gin.H{"user": user})
 }

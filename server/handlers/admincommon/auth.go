@@ -14,7 +14,8 @@ import (
 func EnsureAdmin(c *gin.Context) bool {
 	userID := hctx.CurrentUserID(c)
 	user, _ := models.GetUserByID(userID)
-	if user == nil || user.Role != "admin" {
+	// 管理端账号（超级管理员 / 管理员 / 经理）均可通过；警方由各自的中间件把关。
+	if user == nil || !IsElevated(user.Role) {
 		infra.Forbidden(c, "需要管理员权限")
 		c.Abort()
 		return false

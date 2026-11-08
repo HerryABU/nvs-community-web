@@ -6,6 +6,7 @@ package realname
 import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
+	"nvs-server/models/social"
 	"nvs-server/utils/infra"
 
 	"github.com/gin-gonic/gin"
@@ -25,7 +26,7 @@ func CheckRealNameRequired(c *gin.Context) bool {
 	if err != nil || user == nil {
 		return false
 	}
-	if user.Role == "admin" || user.Role == "police" {
+	if social.IsElevated(user.Role) || user.Role == "police" {
 		return false
 	}
 	if user.RealNameVerified {

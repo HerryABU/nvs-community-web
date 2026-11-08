@@ -97,7 +97,7 @@ func Check(a Actor, ct Content) Decision {
 	}
 	// 平台角色（admin / police）合规审查放行；与协作权限矩阵不同，
 	// 这里只涉及「读取」，不赋予任何创作能力。
-	if a.Role == "admin" || a.Role == "police" {
+	if social.IsElevated(a.Role) || a.Role == "police" {
 		return allow(level)
 	}
 	if a.UserID != 0 && a.UserID == ct.AuthorID {

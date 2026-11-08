@@ -178,8 +178,8 @@ func SetupInstall(c *gin.Context) {
 		Username:     req.Admin.Username,
 		Email:        req.Admin.Email,
 		PasswordHash: hash,
-		Nickname:     "管理员",
-		Role:         "admin",
+		Nickname:     "超级管理员",
+		Role:         "super_admin", // 首位建站账号 = 超级管理员（站长）
 	}
 	if err := models.DB.Create(admin).Error; err != nil {
 		infra.InternalError(c, "创建管理员失败: "+err.Error())

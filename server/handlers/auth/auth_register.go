@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"nvs-server/gate"
+	"nvs-server/handlers/admincommon"
 	"nvs-server/middleware"
 	"nvs-server/models"
 	"nvs-server/security/slidecaptcha"
@@ -159,6 +160,7 @@ func Register(c *gin.Context) {
 	middleware.SetTokenCookie(c, accessToken)
 	middleware.SetRefreshCookie(c, refreshToken)
 
+	user.IsSuper = admincommon.IsSuperUser(user)
 	infra.SuccessMessage(c, "注册成功", gin.H{
 		"user": user,
 	})

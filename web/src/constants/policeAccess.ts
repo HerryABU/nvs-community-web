@@ -25,11 +25,13 @@ export const POLICE_ALLOWED_PATHS: ReadonlySet<string> = new Set<string>([
 ]);
 
 /** 该角色能否访问这个路径（仅用于 admin / police 前缀的收敛判断）。 */
+import { isElevatedRole } from '@/utils/roles';
+
 export function canAccessPath(role: string | undefined, path: string): boolean {
   const isAdminArea = path === '/admin' || path.startsWith('/admin/');
   const isPoliceArea = path === '/police' || path.startsWith('/police/');
 
-  if (role === 'admin') return true;
+  if (isElevatedRole(role)) return true;
   if (role === 'police') {
     if (isPoliceArea) return true;
     return isAdminArea && POLICE_ALLOWED_PATHS.has(path);

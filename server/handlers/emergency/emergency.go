@@ -38,7 +38,7 @@ var (
 func ensureAdmin(c *gin.Context) bool {
 	userID := hctx.CurrentUserID(c)
 	user, _ := models.GetUserByID(userID)
-	if user == nil || user.Role != "admin" {
+	if user == nil || !social.IsElevated(user.Role) {
 		infra.Forbidden(c, "需要管理员权限")
 		c.Abort()
 		return false

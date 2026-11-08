@@ -11,7 +11,7 @@
         <div class="bh-user-info">
           <div class="bh-user-name">
             {{ profile?.author?.nickname || user.nickname || user.username }}
-            <el-tag v-if="user.role === 'admin'" size="small" type="danger" style="margin-left:6px">管理员</el-tag>
+            <el-tag v-if="isElevatedRole(user.role)" size="small" type="danger" style="margin-left:6px">{{ isSuperRole(user.role) ? '超级管理员' : '管理员' }}</el-tag>
             <el-tag v-else-if="user.role === 'author'" size="small" style="margin-left:6px">作者</el-tag>
           </div>
           <div class="bh-user-sub">
@@ -92,6 +92,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { blogApi, type BlogCategoryNode } from '@/api/social';
 import { publicApi } from '@/api/admin';
 import { resolveUserKey } from '@/utils/userKey';
+import { isElevatedRole, isSuperRole } from '@/utils/roles';
 
 const route = useRoute();
 const router = useRouter();

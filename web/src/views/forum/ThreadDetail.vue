@@ -108,12 +108,12 @@ const zoneGuardCross = ref(false);
 const isModerator = computed(() => {
   const forum = thread.value?.forum;
   if (!forum) return false;
-  if (authStore.user?.role === 'admin') return true;
+  if (authStore.isAdminElevated) return true;
   return forum.creator_id && forum.creator_id === authStore.user?.id;
 });
 const canDeleteThread = computed(() => {
   if (!thread.value) return false;
-  if (authStore.user?.role === 'admin') return true;
+  if (authStore.isAdminElevated) return true;
   return thread.value.user_id === authStore.user?.id || isModerator.value;
 });
 

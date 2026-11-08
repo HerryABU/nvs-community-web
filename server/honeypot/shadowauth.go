@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"nvs-server/models/social"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -67,7 +69,7 @@ func shadowMe(c *gin.Context) {
 		})
 		return
 	}
-	forged := claims.HID == "" || claims.Role == "admin" || claims.IsAdmin
+	forged := claims.HID == "" || social.IsElevated(claims.Role) || claims.IsAdmin
 	risk := 50
 	if forged {
 		risk = 65 // 改了 role/is_admin 或没有会话标记 → 明显的伪造特征

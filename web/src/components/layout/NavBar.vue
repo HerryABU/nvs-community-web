@@ -16,32 +16,32 @@
            而 overflow 又加在整个 navbar-inner 上 → 右侧头像/用户菜单被推出视野（"看不到用户"）。
            现在：高频左对齐，「更多」收纳低频，右侧用户区 flex-shrink:0 永不参与滚动。 -->
       <div class="nav-main">
-        <router-link to="/" class="nav-link desktop-only">主页</router-link>
-        <router-link to="/novels" class="nav-link desktop-only">小说</router-link>
-
-        <!-- 分类下拉 -->
-        <el-dropdown class="category-dropdown" trigger="click">
-          <span class="category-trigger">
-            分类 <el-icon><ArrowDown /></el-icon>
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item
-                v-for="cat in categories"
-                :key="cat"
-                @click="$router.push(`/category/${encodeURIComponent(cat)}`)"
-              >
-                {{ cat }}
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-
-        <router-link to="/forums" class="nav-link desktop-only">论坛</router-link>
-        <router-link to="/groups" class="nav-link desktop-only">群组</router-link>
-        <router-link to="/subculture" class="nav-link desktop-only">亚文化创作区</router-link>
-        <router-link to="/blogs" class="nav-link desktop-only">博客</router-link>
-        <router-link to="/ai" class="nav-link nav-link-ai desktop-only">✨ AI 工作台</router-link>
+        <!-- 主导航模块（超级管理员可在后台调配到「更多」） -->
+        <template v-for="m in mainModules" :key="m.key">
+          <!-- 分类下拉（特殊模块：下拉展示全部分类） -->
+          <el-dropdown v-if="m.key === 'category'" class="category-dropdown" trigger="click">
+            <span class="category-trigger">
+              分类 <el-icon><ArrowDown /></el-icon>
+            </span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item
+                  v-for="cat in categories"
+                  :key="cat"
+                  @click="$router.push(`/category/${encodeURIComponent(cat)}`)"
+                >
+                  {{ cat }}
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <router-link
+            v-else
+            :to="m.path"
+            class="nav-link desktop-only"
+            :class="{ 'nav-link-ai': m.key === 'ai' }"
+          >{{ m.key === 'ai' ? '✨ ' : '' }}{{ m.label }}</router-link>
+        </template>
 
         <!-- 更多：扩展/自定义/书架/直播/签到/互联/站长自定义菜单 -->
         <el-dropdown class="desktop-only nav-more" trigger="click" popper-class="nav-more-popper">
@@ -51,6 +51,15 @@
           </span>
           <template #dropdown>
             <el-dropdown-menu>
+              <!-- 超级管理员配置到「更多」的模块 -->
+              <el-dropdown-item
+                v-for="m in moreModules"
+                :key="'mm-' + m.key"
+                @click="goModule(m)"
+              >
+                <el-icon class="nav-mi"><component :is="navIcon(m.icon)" /></el-icon> {{ m.label }}
+              </el-dropdown-item>
+
               <el-dropdown-item @click="$router.push('/htmls')">
                 <span class="nav-emoji">🔌</span> 扩展应用
               </el-dropdown-item>
@@ -181,12 +190,12 @@
                 <el-dropdown-item @click="$router.push(`/author/${authStore.user?.id}`)">
                   <el-icon><HomeFilled /></el-icon> 我的主页
                 </el-dropdown-item>
-                <el-dropdown-item v-if="authStore.user?.role === 'admin'" divided @click="$router.push('/admin')">
-                  <el-icon><Setting /></el-icon> 管理员面板
+                <el-dropdown-item v-if="authStore.isAdminElevated" divided @click="$router.push('/admin')">
+                  <el-icon><Setting /></el-icon> {{ adminPanelLabel }}
                 </el-dropdown-item>
                 <el-dropdown-item
-                  v-if="authStore.user?.role === 'admin' || authStore.user?.role === 'police'"
-                  :divided="authStore.user?.role !== 'admin'"
+                  v-if="authStore.isAdminElevated || authStore.user?.role === 'police'"
+                  :divided="!authStore.isAdminElevated"
                   @click="$router.push('/police')"
                 >
                   <el-icon><Stamp /></el-icon> 警方取管台
@@ -280,8 +289,8 @@
         <div class="mnav-group-title">账号</div>
         <div class="mnav-item" @click="mnavGo('/me')"><el-icon><User /></el-icon> 个人中心</div>
         <div class="mnav-item" @click="mnavGo(`/author/${authStore.user?.id}`)"><el-icon><HomeFilled /></el-icon> 我的主页</div>
-        <div class="mnav-item" v-if="authStore.user?.role === 'admin'" @click="mnavGo('/admin')"><el-icon><Setting /></el-icon> 管理员面板</div>
-        <div class="mnav-item" v-if="authStore.user?.role === 'admin' || authStore.user?.role === 'police'" @click="mnavGo('/police')"><el-icon><Stamp /></el-icon> 警方取管台</div>
+        <div class="mnav-item" v-if="authStore.isAdminElevated" @click="mnavGo('/admin')"><el-icon><Setting /></el-icon> {{ adminPanelLabel }}</div>
+        <div class="mnav-item" v-if="authStore.isAdminElevated || authStore.user?.role === 'police'" @click="mnavGo('/police')"><el-icon><Stamp /></el-icon> 警方取管台</div>
         <div class="mnav-item mnav-logout" @click="mnavLogout"><el-icon><SwitchButton /></el-icon> 退出登录</div>
       </template>
       <template v-else>
@@ -307,15 +316,40 @@ import api from '@/api/index';
 import { opsApi, type NavMenuItem } from '@/api/admin/ops';
 import { appPrefix } from '@/utils/prefix';
 import { ElMessage } from 'element-plus';
-import { Setting, Document, Bell, Menu, HomeFilled, ChatDotRound, Plus, Notebook, User, SwitchButton, Stamp, MagicStick, ArrowDown, Search, EditPen } from '@element-plus/icons-vue';
+import { Setting, Document, Bell, Menu, HomeFilled, ChatDotRound, Plus, Notebook, User, SwitchButton, Stamp, MagicStick, ArrowDown, Search, EditPen, Reading, UserFilled, Avatar } from '@element-plus/icons-vue';
 
 const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
 const appStore = useAppStore();
-const { categories, siteName, federatedSites, federationModes, unreadCount } = storeToRefs(appStore);
+const { categories, siteName, federatedSites, federationModes, navModules, unreadCount } = storeToRefs(appStore);
 const federatedIndependentEnabled = computed(() => !!federationModes.value.independent_enabled);
+
+// ====== 导航模块布局（超级管理员可配：主导航 / 更多） ======
+const NAV_ICON_MAP: Record<string, any> = {
+  HomeFilled, Reading, Menu, ChatDotRound, UserFilled, Avatar, Document, MagicStick,
+};
+function navIcon(name: string) {
+  return NAV_ICON_MAP[name] || Menu;
+}
+const mainModules = computed(() =>
+  (navModules.value || []).filter((m: any) => m.location === 'main' && m.visible !== false),
+);
+const moreModules = computed(() =>
+  (navModules.value || []).filter((m: any) => m.location === 'more' && m.visible !== false),
+);
+function goModule(m: any) {
+  if (m.key === 'category') {
+    const first = categories.value[0];
+    router.push(first ? `/category/${encodeURIComponent(first)}` : '/forums');
+    return;
+  }
+  if (m.path) router.push(m.path);
+}
+
+// 管理面板入口名称：超级管理员 → 超级管理员面板；普通管理员 → 管理员面板
+const adminPanelLabel = computed(() => (authStore.isSuperAdmin ? '超级管理员面板' : '管理员面板'));
 const searchText = ref('');
 
 // ====== 移动端导航抽屉 ======
@@ -509,6 +543,7 @@ onUnmounted(() => {
 <style scoped>
 /* 自定义菜单与签到（gap-audit #20 #23） */
 .nav-emoji { margin-right: 4px; }
+.nav-mi { margin-right: 6px; }
 .nav-badge {
   margin-left: 4px; font-size: 0.6rem; padding: 0 4px; border-radius: 6px;
   background: var(--el-color-danger); color: #fff; vertical-align: super;

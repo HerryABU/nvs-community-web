@@ -296,7 +296,7 @@ const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 /** 未就绪态的文案与按钮按角色分流：管理员看到的是「怎么开」，普通用户看到的是「找谁开」 */
-const isAdmin = computed(() => authStore.user?.role === 'admin');
+const isAdmin = computed(() => authStore.isAdminElevated);
 const status = reactive<AiHubStatus>({
   ai_enabled: false,
   token_enabled: true,

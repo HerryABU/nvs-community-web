@@ -233,7 +233,7 @@ func SetGroupAnnouncement(groupID, operatorID uint, operatorRole, content string
 
 // IsGroupPlatformAdmin 平台管理员/警方（可越过群组权限）
 func IsGroupPlatformAdmin(role string) bool {
-	return role == social.RoleAdmin || role == social.RolePolice
+	return social.IsElevated(role) || role == social.RolePolice
 }
 
 // generateInviteCode 生成 8 位邀请码（大写字母+数字，剔除易混淆 0/O/1/I）

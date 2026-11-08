@@ -7,6 +7,7 @@ import (
 
 	"nvs-server/middleware"
 	"nvs-server/models"
+	"nvs-server/models/social"
 	"nvs-server/security"
 
 	"github.com/gin-gonic/gin"
@@ -21,7 +22,7 @@ import (
 func requirePlatformAdmin(c *gin.Context) bool {
 	uid := middleware.UserID(c)
 	user, _ := models.GetUserByID(uid)
-	if user == nil || user.Role != "admin" {
+	if user == nil || !social.IsElevated(user.Role) {
 		infra.Forbidden(c, "需要管理员权限")
 		c.Abort()
 		return false

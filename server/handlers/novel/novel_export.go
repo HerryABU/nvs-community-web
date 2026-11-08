@@ -10,6 +10,7 @@ import (
 
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
+	"nvs-server/models/social"
 
 	"github.com/gin-gonic/gin"
 )
@@ -30,7 +31,7 @@ func ExportNovel(c *gin.Context) {
 		return
 	}
 
-	if novel.AuthorID != userID && userRole != "admin" {
+	if novel.AuthorID != userID && !social.IsElevated(userRole) {
 		infra.Forbidden(c, "无权操作此作品")
 		return
 	}

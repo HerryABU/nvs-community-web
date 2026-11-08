@@ -37,6 +37,8 @@ export const useAppStore = defineStore('app', () => {
     embed_enabled: false,
     independent_enabled: false,
   });
+  // 导航模块布局（超级管理员可配：主导航 / 更多），由 /api/nav-layout 公开返回
+  const navModules = ref<any[]>([]);
   const unreadCount = ref(0);
   const installed = ref(true);
   const homeData = ref<HomeData | null>(null);
@@ -72,6 +74,7 @@ export const useAppStore = defineStore('app', () => {
       { id: 'cats', path: '/api/categories' },
       { id: 'fed', path: '/api/federated/sites' },
       { id: 'fedmodes', path: '/api/federation/modes' },
+      { id: 'navlayout', path: '/api/nav-layout' },
       { id: 'notif', path: '/api/notifications/unread-count' },
       { id: 'setup', path: '/api/setup/status' },
     ];
@@ -99,6 +102,9 @@ export const useAppStore = defineStore('app', () => {
             embed_enabled: !!map.fedmodes.data.embed_enabled,
             independent_enabled: !!map.fedmodes.data.independent_enabled,
           };
+        }
+        if (map.navlayout?.success && Array.isArray(map.navlayout.data?.modules)) {
+          navModules.value = map.navlayout.data.modules;
         }
         if (map.notif?.success && typeof map.notif.data?.count === 'number') {
           unreadCount.value = map.notif.data.count;
@@ -142,7 +148,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   return {
-    siteInfo, siteName, categories, homeModule, loginMethods, realnameRequired, federatedSites, federationModes, unreadCount, installed, homeData,
+    siteInfo, siteName, categories, homeModule, loginMethods, realnameRequired, federatedSites, federationModes, navModules, unreadCount, installed, homeData,
     bootstrap, ensureHomeLoaded, refreshUnread,
   };
 });

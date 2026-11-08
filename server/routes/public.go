@@ -130,6 +130,8 @@ func registerPublic(r *gin.Engine) {
 		public.GET("/live/config", live.LiveConfig)
 		// 联邦模式：两种展示开关（嵌入列表区块 / 独立友链页），前端据此显隐
 		public.GET("/federation/modes", adminsite.GetFederationModes)
+		// 导航模块布局（超级管理员可配：主导航 / 更多）
+		public.GET("/nav-layout", adminsite.GetNavLayout)
 
 		// AI 会话分享：公开只读快照（令牌即凭据，无登录要求）
 		public.GET("/ai/shared/:token", aimedia.AiSharedSession)

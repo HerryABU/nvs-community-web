@@ -15,6 +15,7 @@ import (
 	"nvs-server/handlers/publish"
 	"nvs-server/handlers/realname"
 	"nvs-server/models"
+	"nvs-server/models/social"
 	"nvs-server/moderation"
 	"nvs-server/readperm"
 	"nvs-server/security"
@@ -69,7 +70,7 @@ func CreateNovel(c *gin.Context) {
 		hctx.SetCurrentUserRole(c, "author")
 	}
 
-	if userRole != "author" && userRole != "vip_author" && userRole != "admin" {
+	if userRole != "author" && userRole != "vip_author" && !social.IsElevated(userRole) {
 		infra.Forbidden(c, "只有作者才能发布作品")
 		return
 	}
@@ -232,7 +233,7 @@ func UpdateNovel(c *gin.Context) {
 	}
 
 	// 只有作者本人或管理员可以编辑
-	if novel.AuthorID != userID && userRole != "admin" {
+	if novel.AuthorID != userID && !social.IsElevated(userRole) {
 		infra.Forbidden(c, "无权编辑此作品")
 		return
 	}
@@ -370,7 +371,7 @@ func DeleteNovel(c *gin.Context) {
 		return
 	}
 
-	if novel.AuthorID != userID && userRole != "admin" {
+	if novel.AuthorID != userID && !social.IsElevated(userRole) {
 		infra.Forbidden(c, "无权删除此作品")
 		return
 	}
@@ -401,7 +402,7 @@ func novelOwnershipCheck(c *gin.Context, novelID uint) (*models.Novel, bool) {
 		return nil, false
 	}
 
-	if novel.AuthorID != userID && userRole != "admin" {
+	if novel.AuthorID != userID && !social.IsElevated(userRole) {
 		return novel, false
 	}
 

@@ -342,7 +342,7 @@ async function enterForum(forum: Forum) {
 
 // 进入自建论坛（有密码则先验证）
 async function enterCustomForum(forum: Forum) {
-  if (forum.creator_id === authStore.user?.id || authStore.user?.role === 'admin') {
+  if (forum.creator_id === authStore.user?.id || authStore.isAdminElevated) {
     router.push(`/forum/${forum.id}`);
     return;
   }

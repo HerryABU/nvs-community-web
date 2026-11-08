@@ -29,6 +29,7 @@ import (
 	"nvs-server/handlers/hctx"
 	"nvs-server/handlers/web"
 	"nvs-server/models"
+	"nvs-server/models/social"
 
 	"github.com/gin-gonic/gin"
 	aiops "nvs-server/models/aiops"
@@ -351,7 +352,7 @@ func resolveAigcAsset(uid, assetID, taskID uint, index int) (*aiops.AigcAsset, e
 // isAdminID 按用户 ID 判管理员（导出时允许站长查看任意原图）
 func isAdminID(uid uint) bool {
 	u, err := models.GetUserByID(uid)
-	return err == nil && u != nil && u.Role == "admin"
+	return err == nil && u != nil && social.IsElevated(u.Role)
 }
 
 func sameConfirmText(got, want string) bool {

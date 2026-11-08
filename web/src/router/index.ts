@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { canAccessPath, POLICE_ALLOWED_PATHS } from '@/constants/policeAccess';
+import { isElevatedRole } from '@/utils/roles';
 import api from '@/api';
 import { appPrefix } from '@/utils/prefix';
 
@@ -347,6 +348,13 @@ const router = createRouter({
       path: '/admin/sites',
       name: 'admin-sites',
       component: () => import('@/views/admin/site/AdminSites.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      // 导航模块布局（仅超级管理员可配；后端 EnsureSuperAdmin 把关）
+      path: '/admin/nav-layout',
+      name: 'admin-nav-layout',
+      component: () => import('@/views/admin/site/AdminNavLayout.vue'),
       meta: { requiresAuth: true },
     },
     {
@@ -958,7 +966,7 @@ router.beforeEach(async (to, _from, next) => {
   if (to.meta.requiresAdmin || to.meta.requiresPolice) {
     const authStore = useAuthStore();
     const role = authStore.user?.role;
-    if (to.meta.requiresAdmin && role !== 'admin') {
+    if (to.meta.requiresAdmin && !isElevatedRole(role)) {
       next('/');
       return;
     }

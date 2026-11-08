@@ -119,7 +119,7 @@ const router = useRouter();
 const authStore = useAuthStore();
 
 // 论坛管理者：管理员 或 论坛创建者
-const isAdmin = computed(() => authStore.user?.role === 'admin');
+const isAdmin = computed(() => authStore.isAdminElevated);
 const isModerator = computed(() => {
   const f = forum.value;
   if (!f) return false;

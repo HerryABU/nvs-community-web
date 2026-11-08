@@ -108,4 +108,25 @@ export const opsApi = {
   saveVisit(data: VisitSetting) {
     return api.put('/admin/visit-setting', data);
   },
+
+  // ── 导航模块布局（主导航 / 更多；仅超级管理员可配）──
+  adminNavLayout() {
+    return api.get<{ code: number; data: { modules: NavModule[] } }>('/admin/nav-layout');
+  },
+  saveNavLayout(modules: NavModule[]) {
+    return api.put<{ code: number; message: string; data: { modules: NavModule[] } }>(
+      '/admin/nav-layout',
+      { modules },
+    );
+  },
 };
+
+export interface NavModule {
+  key: string;
+  label: string;
+  icon: string;
+  path: string;
+  location: 'main' | 'more';
+  visible: boolean;
+  sort: number;
+}
