@@ -128,10 +128,13 @@
         <el-form-item label="昵称"><el-input v-model="editForm.nickname" /></el-form-item>
         <el-form-item label="邮箱"><el-input v-model="editForm.email" /></el-form-item>
         <el-form-item label="角色">
-          <el-select v-model="editForm.role" :disabled="!authStore.isSuperAdmin">
+          <el-select v-model="editForm.role" :disabled="!authStore.isSuperAdmin || isSelfEdit">
             <el-option v-for="r in roleOptions" :key="r.value" :label="r.label" :value="r.value" />
           </el-select>
-          <div v-if="!authStore.isSuperAdmin" class="um-role-hint">
+          <div v-if="isSelfEdit" class="um-role-hint">
+            不能修改自己的身份（角色）。如需调整，请由其他超级管理员操作。
+          </div>
+          <div v-else-if="!authStore.isSuperAdmin" class="um-role-hint">
             仅超级管理员（站长）可调整管理端角色（经理 / 管理员）。
           </div>
           <div v-else-if="editForm.role === 'police'" class="um-role-hint">
@@ -187,6 +190,9 @@ const saving = ref(false);
 
 const editVisible = ref(false);
 const editForm = ref<UserRow | null>(null);
+
+/** 正在编辑的是自己：身份（角色）不可修改（后端同样拦截，双保险） */
+const isSelfEdit = computed(() => !!editForm.value && editForm.value.id === authStore.user?.id);
 
 function formatDate(d?: string) {
   if (!d) return '';
@@ -277,11 +283,13 @@ async function doSave() {
   if (!editForm.value) return;
   saving.value = true;
   try {
-    await adminApi.updateUser(editForm.value.id, {
-      role: editForm.value.role,
+    const payload: { role?: string; nickname?: string; email?: string } = {
       nickname: editForm.value.nickname,
       email: editForm.value.email,
-    });
+    };
+    // 编辑自己时不提交角色（身份不可变）
+    if (!isSelfEdit.value) payload.role = editForm.value.role;
+    await adminApi.updateUser(editForm.value.id, payload);
     ElMessage.success('保存成功');
     editVisible.value = false;
     loadUsers();

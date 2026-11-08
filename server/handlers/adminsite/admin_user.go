@@ -101,6 +101,13 @@ func UpdateUser(c *gin.Context) {
 	}
 	c.ShouldBindJSON(&req)
 
+	// 禁止通过通用编辑修改自己的角色（身份）——防止站长自我降级或自我提权。
+	// 仅拦截 role 字段；昵称、邮箱等资料仍可正常修改。
+	if req.Role != nil && uint(id) == hctx.CurrentUserID(c) {
+		infra.Forbidden(c, "不能修改自己的角色（身份）")
+		return
+	}
+
 	updates := map[string]interface{}{}
 	if req.Role != nil {
 		// police 角色必须通过专用提权接口设置（留审计），不允许通用编辑直接改
