@@ -4,11 +4,11 @@
     <div class="be-toolbar">
       <div class="be-toolbar-left">
         <el-button text @click="$router.push('/author')">
-          <el-icon><ArrowLeft /></el-icon>返回工作台
+          <el-icon><ArrowLeft /></el-icon><span class="be-btn-text">返回工作台</span>
         </el-button>
-        <el-button text :icon="Link" @click="showRefPicker = true">插入站内链接</el-button>
+        <el-button text :icon="Link" @click="showRefPicker = true"><span class="be-btn-text">插入站内链接</span></el-button>
         <el-button text @click="openAiWrite">
-          <el-icon><MagicStick /></el-icon>AI 写作
+          <el-icon><MagicStick /></el-icon><span class="be-btn-text">AI 写作</span>
         </el-button>
       </div>
       <div class="be-toolbar-center">
@@ -595,10 +595,28 @@ onBeforeUnmount(() => {
     flex-wrap: wrap;
     gap: 6px;
   }
-  .be-page-title {
+  .be-page-title,
+  .be-saved-time {
     display: none;
   }
-  .be-saved-time {
+  /* 三列改两行：左/右各占一行，模式切换独占一行居中 */
+  .be-toolbar-left {
+    order: 1;
+    flex: 1 1 auto;
+  }
+  .be-toolbar-right {
+    order: 2;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .be-toolbar-center {
+    order: 3;
+    flex: 1 0 100%;
+    justify-content: center;
+  }
+  /* 左侧按钮只留图标 */
+  .be-btn-text {
     display: none;
   }
   .be-header {
@@ -607,12 +625,40 @@ onBeforeUnmount(() => {
   .be-header-row {
     flex-wrap: wrap;
   }
+  .be-summary-input {
+    flex: 1 0 100%;
+    min-width: 0;
+  }
   .be-cat-select, .be-tags-select, .be-topics-select {
     width: 100%;
     flex: 1 0 100%;
   }
+  .be-media-btns {
+    flex-wrap: wrap;
+  }
+  .be-perm-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
   .be-editor {
     padding: 0 10px 10px;
+  }
+  .be-md-wrapper,
+  .be-cherry-container {
+    min-width: 0;
+  }
+  /* Cherry 工具栏换行，避免窄屏溢出 */
+  .cherry-toolbar {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 640px) {
+  .be-header {
+    padding: 8px 8px 0;
+  }
+  .be-editor {
+    padding: 0 8px 8px;
   }
 }
 </style>

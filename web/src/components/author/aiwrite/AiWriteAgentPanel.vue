@@ -214,4 +214,9 @@ async function send() {
 .aap-ctx ul { margin: 0; padding-left: 14px; }
 .aap-ctx li { font-size: 0.68rem; color: var(--text-light); line-height: 1.7; }
 @media (max-width: 1280px) { .aap { width: 280px; } }
+/* 移动端：全宽、去 sticky、高度自适应（由父容器堆叠） */
+@media (max-width: 768px) {
+  .aap { width: 100%; height: auto; min-height: 0; position: static; }
+  .aap-chat { min-height: 200px; max-height: 320px; }
+}
 </style>

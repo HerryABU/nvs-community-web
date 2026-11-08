@@ -455,4 +455,15 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); document.b
   .awx-work { flex-wrap: wrap; }
   .awx-work > :last-child { width: 100%; height: auto; min-height: 420px; position: static; }
 }
+
+/* 移动端：三栏纵向堆叠，工程卡片单列 */
+@media (max-width: 768px) {
+  .awx { padding: 10px; }
+  .awx-list__head { flex-direction: column; gap: 10px; }
+  .awx-list__head h2 { font-size: 1.25rem; }
+  .awx-list__head .el-button { width: 100%; }
+  .awx-list__grid { grid-template-columns: 1fr; }
+  .awx-work { flex-direction: column; }
+  .awx-work > * { width: 100% !important; }
+}
 </style>

@@ -160,4 +160,9 @@ const progress = computed(() => {
 .aws-publish:disabled { opacity: 0.6; cursor: wait; }
 .aws-kbd { font-size: 0.66rem; color: var(--text-muted); text-align: center; }
 @media (max-width: 1100px) { .aws { width: 200px; } }
+/* 移动端：全宽、去 sticky、高度自适应（由父容器堆叠） */
+@media (max-width: 768px) {
+  .aws { width: 100%; height: auto; min-height: 0; position: static; }
+  .aws-nav { max-height: 220px; }
+}
 </style>

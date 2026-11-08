@@ -3,8 +3,11 @@
     <!-- 顶部工具栏 -->
     <div class="ce-toolbar">
       <div class="ce-toolbar-left">
+        <el-button v-if="isMobile" text class="ce-hamburger" @click="sidebarOpen = true">
+          <el-icon><Menu /></el-icon>
+        </el-button>
         <el-button text @click="goBack">
-          <el-icon><ArrowLeft /></el-icon>返回作品
+          <el-icon><ArrowLeft /></el-icon><span class="ce-back-text">返回作品</span>
         </el-button>
         <span class="ce-novel-title">{{ novelTitle }}</span>
       </div>
@@ -83,8 +86,11 @@
     </el-drawer>
 
     <div class="ce-body">
+      <!-- 移动端遮罩：点击收起章节列表抽屉 -->
+      <div v-if="isMobile && sidebarOpen" class="ce-sidebar-mask" @click="sidebarOpen = false"></div>
+
       <!-- 左侧章节列表 -->
-      <aside class="ce-sidebar">
+      <aside class="ce-sidebar" :class="{ 'ce-sidebar--open': sidebarOpen }">
         <div class="ce-sidebar-header">
           <span>章节列表</span>
           <el-button size="small" type="primary" circle @click="addChapter">
@@ -222,7 +228,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router';
 import { novelApi, chapterApi, type Chapter } from '@/api/novel';
 import { ElMessage } from 'element-plus';
-import { ArrowLeft, Plus, Delete, Link, MagicStick, ChatDotRound, Clock } from '@element-plus/icons-vue';
+import { ArrowLeft, Plus, Delete, Link, MagicStick, ChatDotRound, Clock, Menu } from '@element-plus/icons-vue';
 import RichTextEditor from '@/components/editor/RichTextEditor.vue';
 import ScriptBubbleEditor from '@/components/editor/script/ScriptBubbleEditor.vue';
 import ContentRefPicker from '@/components/frame/ContentRefPicker.vue';
@@ -260,6 +266,18 @@ const currentChapterId = computed(() => {
 });
 
 const authStore = useAuthStore();
+
+// ===== 移动端：章节列表抽屉化（<768px 常驻侧栏改为汉堡抽屉）=====
+const isMobile = ref(typeof window !== 'undefined' && window.innerWidth < 768);
+const sidebarOpen = ref(false);
+function onResize() {
+  isMobile.value = typeof window !== 'undefined' && window.innerWidth < 768;
+  if (!isMobile.value) sidebarOpen.value = false;
+}
+if (typeof window !== 'undefined') window.addEventListener('resize', onResize);
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') window.removeEventListener('resize', onResize);
+});
 
 const novelTitle = ref('');
 const chapters = ref<Chapter[]>([]);
@@ -709,6 +727,8 @@ async function switchChapter(num: number) {
   currentNum.value = num;
   router.replace(`/author/editor/${novelId.value}/chapter/${num}`);
   await loadCurrentChapter();
+  // 移动端：切换章节后收起抽屉，露出编辑区
+  if (isMobile.value) sidebarOpen.value = false;
 }
 
 async function addChapter() {
@@ -1263,10 +1283,14 @@ onBeforeUnmount(() => {
     flex-wrap: wrap;
     gap: 6px;
   }
-  .ce-novel-title {
+  .ce-novel-title,
+  .ce-saved-time,
+  .ce-ch-words,
+  .ce-ch-del {
     display: none;
   }
-  .ce-saved-time {
+  /* 返回按钮只留图标，省出横向空间 */
+  .ce-back-text {
     display: none;
   }
   .ce-toolbar-center {
@@ -1274,19 +1298,48 @@ onBeforeUnmount(() => {
     width: 100%;
     justify-content: center;
   }
-  /* 侧栏收窄，只保留编号 */
-  .ce-sidebar {
-    width: 140px;
+  .ce-toolbar-right {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    row-gap: 2px;
   }
-  .ce-ch-words,
-  .ce-ch-del {
-    display: none;
+  /* 侧栏改抽屉：默认滑出屏幕外，汉堡打开、遮罩点击收起 */
+  .ce-sidebar {
+    position: fixed;
+    top: 62px;
+    bottom: 0;
+    left: 0;
+    width: 240px;
+    z-index: 40;
+    transform: translateX(-105%);
+    transition: transform 0.25s ease;
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.18);
+  }
+  .ce-sidebar.ce-sidebar--open {
+    transform: none;
+  }
+  .ce-sidebar-mask {
+    position: fixed;
+    inset: 0;
+    z-index: 39;
+    background: rgba(0, 0, 0, 0.4);
   }
   .ce-chapter-item {
     padding: 10px 10px;
   }
   .ce-editor-header {
     padding: 8px;
+    flex-wrap: wrap;
+  }
+  .ce-editor-header .el-select {
+    width: 100% !important;
+  }
+  .ce-title-input {
+    margin-top: 6px;
+  }
+  /* Cherry 工具栏换行，避免窄屏溢出 */
+  .cherry-toolbar {
+    flex-wrap: wrap;
   }
 }
 

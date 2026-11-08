@@ -294,4 +294,10 @@ const cgEdges = computed<CgEdge[]>(() => {
 .cg-nlabel { font-size: 12px; fill: #fff; text-anchor: middle; }
 .cg-edge { stroke: var(--text-light, #aaa); stroke-width: 1.5; }
 .cg-elabel { font-size: 10px; fill: var(--text-light, #888); text-anchor: middle; }
+
+/* 移动端：缩小最小宽度便于单手滑动查看，保留横向滚动 */
+@media (max-width: 768px) {
+  .svg-wrap { padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
+  .vis-svg { min-width: 480px; }
+}
 </style>

@@ -564,6 +564,20 @@ onBeforeUnmount(() => {
   border-color: rgba(255, 255, 255, 0.08);
 }
 
+/* 移动端：底部抽屉式浮层，避免遮挡整屏 */
+@media (max-width: 768px) {
+  .ai-write-layer {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 70vh;
+    left: 0 !important;
+    right: 0;
+    top: auto !important;
+    bottom: 0;
+    border-radius: 14px 14px 0 0;
+  }
+}
+
 .awl-head {
   display: flex;
   align-items: center;

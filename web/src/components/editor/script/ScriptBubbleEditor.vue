@@ -354,4 +354,23 @@ onMounted(() => {
 .sbe-image-preview { max-width: 100%; max-height: 180px; border-radius: 8px; display: block; }
 .muted { color: var(--text-light, #999); }
 .small { font-size: 0.78rem; }
+
+/* 移动端：角色栏改顶部横向滚动，气泡行内元素换行全宽 */
+@media (max-width: 768px) {
+  .sbe { min-height: 0; }
+  .sbe-main { flex-direction: column; gap: 8px; }
+  .sbe-rail {
+    width: 100%; max-height: 128px; flex-shrink: 0;
+    display: flex; flex-direction: row; align-items: center; gap: 4px;
+    overflow-x: auto; overflow-y: hidden; padding: 6px;
+  }
+  .sbe-rail-title { display: none; }
+  .sbe-char { width: auto; flex-shrink: 0; margin-bottom: 0; }
+  .sbe-char-name { max-width: 64px; }
+  .sbe-bubble { padding: 8px; }
+  .sbe-bubble-head { flex-wrap: wrap; }
+  .sbe-speaker { width: 100%; }
+  .sbe-row-ops { margin-left: 0; width: 100%; justify-content: flex-end; }
+  .sbe-block-image .sbe-image-row { flex-wrap: wrap; }
+}
 </style>

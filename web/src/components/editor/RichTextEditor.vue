@@ -353,4 +353,21 @@ watch(
 .rte-content :deep(.ProseMirror li) {
   margin-bottom: 0.3em;
 }
+
+/* 移动端：加大触控目标、收窄留白、16px 字号防 iOS 聚焦缩放 */
+@media (max-width: 768px) {
+  .rte-toolbar { padding: 6px; gap: 2px; }
+  .rte-btn {
+    min-width: 44px;
+    height: 40px;
+    padding: 0 8px;
+    font-size: 0.95rem;
+  }
+  .rte-separator { display: none; }
+  .rte-content { padding: 12px 12px 24px; }
+  .rte-content :deep(.ProseMirror) {
+    font-size: 16px;
+    min-height: 240px;
+  }
+}
 </style>

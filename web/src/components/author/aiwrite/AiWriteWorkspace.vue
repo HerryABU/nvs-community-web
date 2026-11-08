@@ -372,4 +372,18 @@ function openDetail(d: AiWriteDetail) {
 .aww-review-card b { display: block; font-size: 1.5rem; color: var(--primary-color); }
 .aww-review-card span { font-size: 0.72rem; color: var(--text-light); }
 @media (max-width: 1100px) { .aww-chapters { grid-template-columns: 1fr; } .aww-modgrid { grid-template-columns: 1fr; } }
+/* 移动端：卡片/章节/审阅单列，时间线看板纵向堆叠 */
+@media (max-width: 768px) {
+  .aww-cards,
+  .aww-timeline-cards,
+  .aww-recent { grid-template-columns: 1fr; }
+  .aww-chapters { grid-template-columns: 1fr; }
+  .aww-chapters__list { max-height: 200px; }
+  .aww-review-grid { grid-template-columns: repeat(2, 1fr); }
+  .aww-track { flex-direction: column; gap: 6px; }
+  .aww-track__label { width: auto; }
+  .aww-track__items { width: 100%; }
+  .aww-chapters__gen, .aww-chapters__foot { flex-wrap: wrap; }
+  .aww-bar__actions { width: 100%; }
+}
 </style>
