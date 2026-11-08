@@ -45,7 +45,10 @@ func ListUsers(c *gin.Context) {
 		like := "%" + search + "%"
 		db = db.Where("username LIKE ? OR nickname LIKE ? OR email LIKE ?", like, like, like)
 	}
-	if role != "" {
+	if role == "super" {
+		// 「超级管理员」筛选：唯一超管（显式 super_* 或回退的首位 admin）
+		db = db.Where("id = ?", admincommon.SuperAdminID())
+	} else if role != "" {
 		db = db.Where("role = ?", role)
 	}
 	switch status {
@@ -62,6 +65,11 @@ func ListUsers(c *gin.Context) {
 
 	var users []models.User
 	db.Offset((page - 1) * 20).Limit(20).Order("id DESC").Find(&users)
+	// 回填「是否超级管理员」（非持久化字段），供前端区分命名
+	superID := admincommon.SuperAdminID()
+	for i := range users {
+		users[i].IsSuper = social.IsSuperRole(users[i].Role) || users[i].ID == superID
+	}
 	infra.Success(c, gin.H{"list": users, "total": total})
 }
 
@@ -102,6 +110,12 @@ func UpdateUser(c *gin.Context) {
 		}
 		if !social.ValidPromotableRoles()[*req.Role] {
 			infra.BadRequest(c, "无效的角色: "+*req.Role)
+			return
+		}
+		// 管理端角色（admin / manager）仅超级管理员可指派；
+		// 普通管理员不得把他人提升为管理员，避免越权。
+		if social.IsElevated(*req.Role) && !admincommon.IsSuperAdmin(c) {
+			infra.Forbidden(c, "仅超级管理员（站长）可指派管理端角色")
 			return
 		}
 		updates["role"] = *req.Role

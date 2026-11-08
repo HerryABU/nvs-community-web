@@ -43,6 +43,9 @@ func ValidPromotableRoles() map[string]bool {
 		RoleVipAuthor:  true,
 		RoleArbitrator: true,
 		RoleAdmin:      true,
+		RoleManager:    true,
+		// 注意：RoleSuperAdmin / RoleSuper 不在此列 —— 超级管理员全站唯一，
+		// 由建站首位账号或既有 role=admin 最小 ID 回退产生，不允许通用编辑指派。
 	}
 }
 

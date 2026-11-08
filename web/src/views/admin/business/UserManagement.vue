@@ -20,6 +20,7 @@
             <el-option label="VIP作者" value="vip_author" />
             <el-option label="仲裁员" value="arbitrator" />
             <el-option label="警方" value="police" />
+            <el-option label="超级管理员" value="super" />
             <el-option label="管理员" value="admin" />
           </el-select>
           <el-select v-model="statusFilter" placeholder="状态" clearable style="width: 130px" @change="doSearch">
@@ -65,7 +66,7 @@
       <el-table-column prop="email" label="邮箱" min-width="200" />
       <el-table-column prop="role" label="角色" width="120">
         <template #default="{ row }">
-          <el-tag :type="roleTagType(row.role)" size="small">{{ roleLabel(row.role) }}</el-tag>
+          <el-tag :type="roleTagType(row)" size="small">{{ roleLabel(row) }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="created_at" label="注册时间" width="170">
@@ -88,11 +89,11 @@
             <el-button size="small" text>更多 ▾</el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="ban" :disabled="row.role === 'admin'">
+                <el-dropdown-item command="ban" :disabled="isSuperRow(row)">
                   封禁（软删除留证）
                 </el-dropdown-item>
                 <el-dropdown-item
-                  v-if="row.role !== 'police' && row.role !== 'admin'"
+                  v-if="row.role !== 'police' && !isElevatedRole(row.role)"
                   command="promote"
                   divided
                 >
@@ -127,15 +128,13 @@
         <el-form-item label="昵称"><el-input v-model="editForm.nickname" /></el-form-item>
         <el-form-item label="邮箱"><el-input v-model="editForm.email" /></el-form-item>
         <el-form-item label="角色">
-          <el-select v-model="editForm.role">
-            <el-option label="读者 (reader)" value="reader" />
-            <el-option label="作者 (author)" value="author" />
-            <el-option label="VIP作者 (vip_author)" value="vip_author" />
-            <el-option label="仲裁员 (arbitrator)" value="arbitrator" />
-            <el-option label="警方 (police)" value="police" />
-            <el-option label="管理员 (admin)" value="admin" />
+          <el-select v-model="editForm.role" :disabled="!authStore.isSuperAdmin">
+            <el-option v-for="r in roleOptions" :key="r.value" :label="r.label" :value="r.value" />
           </el-select>
-          <div v-if="editForm.role === 'police'" class="um-role-hint">
+          <div v-if="!authStore.isSuperAdmin" class="um-role-hint">
+            仅超级管理员（站长）可调整管理端角色（经理 / 管理员）。
+          </div>
+          <div v-else-if="editForm.role === 'police'" class="um-role-hint">
             警方角色建议用列表里的「更多 → 撤销警方权限」处理，那条路径会写提权/撤销审计。
           </div>
         </el-form-item>
@@ -154,6 +153,8 @@ import { adminApi } from '@/api/admin';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { User, Search } from '@element-plus/icons-vue';
+import { useAuthStore } from '@/stores/auth';
+import { isSuperRole, isElevatedRole } from '@/utils/roles';
 
 interface UserRow {
   id: number;
@@ -164,7 +165,11 @@ interface UserRow {
   created_at: string;
   muted_until?: string;
   mute_reason?: string;
+  /** 是否超级管理员（站长），后端下发 */
+  is_super?: boolean;
 }
+
+const authStore = useAuthStore();
 
 const users = ref<UserRow[]>([]);
 const total = ref(0);
@@ -188,21 +193,44 @@ function formatDate(d?: string) {
   return new Date(d).toLocaleString('zh-CN');
 }
 
-function roleLabel(role: string) {
-  const m: Record<string, string> = {
-    reader: '读者', author: '作者', vip_author: 'VIP作者',
-    arbitrator: '仲裁员', admin: '管理员', police: '警方',
-  };
-  return m[role] || role;
+/** 是否超级管理员（站长）：后端 is_super 优先，其次看角色 */
+function isSuperRow(row: UserRow): boolean {
+  return !!row.is_super || isSuperRole(row.role);
 }
 
-function roleTagType(role: string) {
+function roleLabel(row: UserRow) {
+  if (isSuperRow(row)) return '超级管理员';
+  const m: Record<string, string> = {
+    reader: '读者', author: '作者', vip_author: 'VIP作者',
+    arbitrator: '仲裁员', admin: '管理员', manager: '经理', police: '警方',
+  };
+  return m[row.role] || row.role;
+}
+
+function roleTagType(row: UserRow) {
+  if (isSuperRow(row)) return 'danger';
   const m: Record<string, string> = {
     reader: '', author: 'success', vip_author: 'warning',
-    arbitrator: 'info', admin: 'danger', police: 'danger',
+    arbitrator: 'info', admin: 'danger', manager: 'warning', police: 'danger',
   };
-  return m[role] || '';
+  return m[row.role] || '';
 }
+
+/** 编辑弹窗可选角色：管理端角色（admin/manager）仅超级管理员可指派 */
+const roleOptions = computed(() => {
+  const all = [
+    { value: 'reader', label: '读者 (reader)' },
+    { value: 'author', label: '作者 (author)' },
+    { value: 'vip_author', label: 'VIP作者 (vip_author)' },
+    { value: 'arbitrator', label: '仲裁员 (arbitrator)' },
+    { value: 'manager', label: '经理 (manager)' },
+    { value: 'admin', label: '管理员 (admin)' },
+  ];
+  if (authStore.isSuperAdmin) return all;
+  // 非超管：只保留当前值 + 非管理端角色，禁止把他人提升为管理员
+  const cur = editForm.value?.role;
+  return all.filter((r) => r.value === cur || !isElevatedRole(r.value));
+});
 
 async function loadUsers() {
   loading.value = true;
