@@ -59,7 +59,7 @@ func toJudgeTurns(history []aim.AiChatMessage) []aisafety.JudgeTurn {
 func serveSafetyRefusal(c *gin.Context, session *aim.AiChatSession, storeMsg string, dec *aisafety.InputDecision, term terminateOutcome, parentID uint) {
 	// 被拦截的提问也要落进消息树（用户要能看到自己问了什么），
 	// 并挂在当前分支上——否则前端重载后这一轮会消失。
-	um, _ := aihub.AppendAiChatMessageWithParent(session.ID, "user", storeMsg, parentID, 0, 0, 0, 0)
+	um, _ := aihub.AppendAiChatMessageWithParent(session.ID, "user", storeMsg, "", parentID, 0, 0, 0, 0)
 	aim.TouchAiChatSession(session.ID, storeMsg)
 	text := term.Text
 	if strings.TrimSpace(text) == "" {
@@ -92,10 +92,10 @@ func serveSafetyRefusal(c *gin.Context, session *aim.AiChatSession, storeMsg str
 // 用户看到的就是一句普通的 AI 回复，察觉不到自己已被静默记入「可疑名单」。
 func serveAppeaseResponse(c *gin.Context, session *aim.AiChatSession, storeMsg string, term terminateOutcome, parentID uint) {
 	// 用户提问也要落进消息树（用户要能看到自己问了什么），挂在当前分支上。
-	um, _ := aihub.AppendAiChatMessageWithParent(session.ID, "user", storeMsg, parentID, 0, 0, 0, 0)
+	um, _ := aihub.AppendAiChatMessageWithParent(session.ID, "user", storeMsg, "", parentID, 0, 0, 0, 0)
 	aim.TouchAiChatSession(session.ID, storeMsg)
 	// 引导内容以「普通助手消息」落库（不标记 SafetyBlocked），重载后与正常回答无异。
-	am, _ := aihub.AppendAiChatMessageWithParent(session.ID, "assistant", term.Text, um.ID, 0, 0, 0, 0)
+	am, _ := aihub.AppendAiChatMessageWithParent(session.ID, "assistant", term.Text, "", um.ID, 0, 0, 0, 0)
 	if am != nil && am.ID > 0 {
 		aihub.SetActiveLeaf(session.ID, am.ID)
 	}

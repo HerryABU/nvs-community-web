@@ -412,6 +412,8 @@ const props = defineProps<{
   agentId: number;
   /** 从「大模型广场」带入的模型 id（0 = 用默认第一个） */
   presetModelId?: number;
+  /** 当前会话上次使用的模型 id（打开历史会话时恢复，模型锁定） */
+  sessionModelId?: number;
 }>();
 const emit = defineEmits<{
   (e: 'session-created', id: number): void;
@@ -510,7 +512,12 @@ watch([contextLimit, memoryOn, maxTokens, systemPrompt], () => {
 let abortCtrl: AbortController | null = null;
 let loadingSession = 0;
 
-const modelId = ref(0);
+// 模型选择：本地记住上次选择（localStorage），避免每次打开/对话后被重置
+const MODEL_STORAGE_KEY = 'ai_model_id';
+const modelId = ref(Number(localStorage.getItem(MODEL_STORAGE_KEY) || 0));
+watch(modelId, (id) => {
+  if (id) localStorage.setItem(MODEL_STORAGE_KEY, String(id));
+});
 
 /** 按厂商分组（弹窗里的模型下拉用；组内保持后端给的优先级顺序） */
 const modelGroups = computed(() => {
@@ -578,9 +585,20 @@ watch(
   () => props.status.chat_models,
   (list) => {
     if (!list.length) return;
-    // 广场带入的模型优先（用户是从模型卡片点进来的，不要给他换成默认第一个）；下架则回落默认
+    // 广场带入的模型优先（用户是从模型卡片点进来的，不要给他换成默认第一个）；下架则回落
     if (props.presetModelId && list.some((m) => m.id === props.presetModelId)) {
       if (modelId.value !== props.presetModelId) modelId.value = props.presetModelId;
+      return;
+    }
+    // 历史会话恢复：用会话上次实际使用的模型（模型锁定，不被重置为默认）
+    if (props.sessionModelId && list.some((m) => m.id === props.sessionModelId)) {
+      if (modelId.value !== props.sessionModelId) modelId.value = props.sessionModelId;
+      return;
+    }
+    // 本地记住的上次选择
+    const saved = Number(localStorage.getItem(MODEL_STORAGE_KEY) || 0);
+    if (saved && list.some((m) => m.id === saved)) {
+      if (modelId.value !== saved) modelId.value = saved;
       return;
     }
     if (!modelId.value || !list.some((m) => m.id === modelId.value)) modelId.value = list[0].id;
@@ -929,7 +947,7 @@ async function send(rawText?: string, confirmed = false, skipPush = false, opts:
       messages.value.push({
         id: -Date.now() - 1, role: 'assistant', content: result.content,
         tokens_in: 0, tokens_out: 0, cost: result.cost, free: result.free,
-        // 推理过程只留在本地（后端未持久化），刷新后不再显示。
+        // 推理过程随消息落库，刷新/重开会话后仍可展开回看。
         // 若整段回答本就来自 reasoning（思考型模型 content 为空），
         // 它已经是正文了，再折叠一次就等于同一段文字出现两遍。
         reasoning: result.answerInReasoning ? undefined : result.reasoning || undefined,

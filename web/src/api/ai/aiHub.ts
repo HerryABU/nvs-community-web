@@ -111,7 +111,7 @@ export interface AiChatMessage {
   tokens_out: number;
   cost: number;
   free?: boolean;
-  /** 思考型模型的推理过程：仅本次会话内可见（后端不入库，刷新后消失） */
+  /** 思考型模型的推理过程（已落库，历史消息可展开回看） */
   reasoning?: string;
   /** 分支：父消息 id（0 = 会话根） */
   parent_id?: number;

@@ -242,6 +242,7 @@
           :session-id="activeSessionId"
           :agent-id="activeAgentId"
           :preset-model-id="presetModelId"
+          :session-model-id="activeSessionModelId"
           @session-created="onSessionCreated"
           @balance-updated="onBalanceUpdated"
           @sessions-changed="loadSessions"
@@ -311,6 +312,10 @@ const agents = ref<AiAgent[]>([]);
 const sessions = ref<AiChatSession[]>([]);
 const activeSessionId = ref<number | null>(null);
 const activeAgentId = ref(0);
+/** 当前会话上次使用的模型（打开历史会话时恢复，模型锁定） */
+const activeSessionModelId = computed(() =>
+  sessions.value.find((s) => s.id === activeSessionId.value)?.model_id || 0,
+);
 /** 从「大模型广场」点某个模型进来时，把它带给对话面板预选 */
 const presetModelId = ref(0);
 

@@ -39,7 +39,7 @@ func mustSession(t *testing.T) *ai.AiChatSession {
 
 func mustMsg(t *testing.T, sid uint, role, content string, parent uint) *ai.AiChatMessage {
 	t.Helper()
-	m, err := AppendAiChatMessageWithParent(sid, role, content, parent, 0, 0, 0, 0)
+	m, err := AppendAiChatMessageWithParent(sid, role, content, "", parent, 0, 0, 0, 0)
 	if err != nil {
 		t.Fatalf("落消息失败：%v", err)
 	}

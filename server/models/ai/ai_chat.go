@@ -66,6 +66,9 @@ type AiChatMessage struct {
 	// 有它才能做分支：对同一条消息「重新生成」或「编辑后重发」时，
 	// 新消息与原消息共享同一个 parent，于是成为兄弟分支，可左右切换。
 	ParentID uint `gorm:"not null;default:0;index" json:"parent_id"`
+	// Reasoning 模型原生思考链（reasoning_content）。思考型模型每轮都有，
+	// 历史消息要能回看，所以落库；正文为空时它同时兜底成 content（此时不再重复展示）。
+	Reasoning string `gorm:"type:text" json:"reasoning,omitempty"`
 	// SafetyBlocked 这条助手消息是安全闸拦截后写入的占位内容（不是模型的真实回答）。
 	// 前端据此渲染成「警告块」而不是普通气泡 —— 否则用户会以为 AI 真的这样回答了。
 	SafetyBlocked bool      `gorm:"not null;default:false" json:"safety_blocked"`
@@ -113,6 +116,15 @@ func DeleteAiChatSession(id, userID uint) error {
 		return err
 	}
 	return models.DB.Where("session_id = ?", id).Delete(&AiChatMessage{}).Error
+}
+
+// UpdateAiChatSessionModel 更新会话实际使用的模型（模型锁定：下次打开恢复）。
+func UpdateAiChatSessionModel(sessionID, modelID uint) error {
+	if sessionID == 0 || modelID == 0 {
+		return nil
+	}
+	return models.DB.Model(&AiChatSession{}).Where("id = ?", sessionID).
+		Updates(map[string]interface{}{"model_id": modelID, "updated_at": time.Now()}).Error
 }
 
 // TouchAiChatSession 刷新会话时间；首条用户消息时顺带定标题

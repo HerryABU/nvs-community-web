@@ -28,6 +28,7 @@ func chatMessageView(list []aim.AiChatMessage) []gin.H {
 		}
 		out = append(out, gin.H{
 			"id": m.ID, "session_id": m.SessionID, "role": m.Role, "content": m.Content,
+			"reasoning": m.Reasoning,
 			"tokens_in": m.TokensIn, "tokens_out": m.TokensOut, "cost": m.Cost,
 			"call_log_id": m.CallLogID, "parent_id": m.ParentID, "created_at": m.CreatedAt,
 			"safety_blocked": m.SafetyBlocked,

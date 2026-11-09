@@ -20,9 +20,10 @@ import (
 // 老数据（parent_id 全 0）由 BackfillMessageParents 串成链，行为与以前一致。
 
 // AppendAiChatMessageWithParent 落一条带父节点的消息。
-func AppendAiChatMessageWithParent(sessionID uint, role, content string, parentID uint, tokensIn, tokensOut int, cost int64, callLogID uint) (*ai.AiChatMessage, error) {
+// reasoning 为模型原生思考链（仅助手消息可能有），落库供历史回看。
+func AppendAiChatMessageWithParent(sessionID uint, role, content, reasoning string, parentID uint, tokensIn, tokensOut int, cost int64, callLogID uint) (*ai.AiChatMessage, error) {
 	m := &ai.AiChatMessage{
-		SessionID: sessionID, Role: role, Content: content, ParentID: parentID,
+		SessionID: sessionID, Role: role, Content: content, Reasoning: reasoning, ParentID: parentID,
 		TokensIn: tokensIn, TokensOut: tokensOut, Cost: cost, CallLogID: callLogID,
 		CreatedAt: time.Now(),
 	}

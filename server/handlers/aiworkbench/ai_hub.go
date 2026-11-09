@@ -550,7 +550,7 @@ func AiHubChatStream(c *gin.Context) {
 	if regenUser != nil {
 		userMsgID = regenUser.ID
 	} else {
-		um, uerr := aihub.AppendAiChatMessageWithParent(session.ID, "user", storeMsg, parentID, 0, 0, 0, 0)
+		um, uerr := aihub.AppendAiChatMessageWithParent(session.ID, "user", storeMsg, "", parentID, 0, 0, 0, 0)
 		if uerr != nil {
 			infra.InternalError(c, "记录消息失败")
 			return
@@ -688,7 +688,7 @@ func AiHubChatStream(c *gin.Context) {
 		if aisafety.NormalizeMode(safetyCfg.TerminateMode) == aisafety.TerminateAppease {
 			term := applyTermination(session, safetyCfg, "输出侧拦截："+og.Reason())
 			text := term.Text
-			am, _ := aihub.AppendAiChatMessageWithParent(session.ID, "assistant", text, userMsgID, realIn, realOut, 0, callLog.ID)
+			am, _ := aihub.AppendAiChatMessageWithParent(session.ID, "assistant", text, "", userMsgID, realIn, realOut, 0, callLog.ID)
 			if am != nil && am.ID > 0 {
 				aihub.SetActiveLeaf(session.ID, am.ID)
 			}
@@ -779,10 +779,20 @@ func AiHubChatStream(c *gin.Context) {
 		aicost.TouchUserAiKey(uk.ID)
 		cost = 0
 	}
-	am, _ := aihub.AppendAiChatMessageWithParent(session.ID, "assistant", sb, userMsgID, realIn, realOut, cost, callLog.ID)
+	// 思考链落库：answer_in_reasoning 时它已作为正文，不再重复存 reasoning
+	reasoningForStore := sbReasoning
+	if answerInReasoning {
+		reasoningForStore = ""
+	}
+	am, _ := aihub.AppendAiChatMessageWithParent(session.ID, "assistant", sb, reasoningForStore, userMsgID, realIn, realOut, cost, callLog.ID)
 	// 新回复成为活跃叶子：下次「继续追问」接在它后面，而不是接在旧分支上
 	if am != nil && am.ID > 0 {
 		aihub.SetActiveLeaf(session.ID, am.ID)
+	}
+	// 会话模型跟随实际使用的模型：下次打开会话时恢复「上次用的模型」，
+	// 避免被重置为默认模型（模型锁定）。
+	if req.ModelID > 0 && session.ModelID != req.ModelID {
+		aim.UpdateAiChatSessionModel(session.ID, req.ModelID)
 	}
 	aim.TouchAiAgent(session.AgentID)
 	aim.TouchAiChatSession(session.ID, "")
