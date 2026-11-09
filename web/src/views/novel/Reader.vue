@@ -823,7 +823,11 @@ const detailPublic = ref(false);
 const savingNote = ref(false);
 
 // 是否已选中正文文字（批注按钮可用）
+// window.getSelection() 不是响应式数据，Vue computed 不会因选区变化自动重算，
+// 按钮会一直停在旧的 disabled 状态 → 用 selectionTick 作为显式重算信号。
+const selectionTick = ref(0);
 const hasSelection = computed(() => {
+  selectionTick.value; // 依赖：mouseup / selectionchange 时递增
   const sel = window.getSelection?.();
   const txt = sel?.toString()?.trim();
   return !!txt && !!mdContainer.value && mdContainer.value.contains(sel!.anchorNode);
@@ -835,7 +839,15 @@ const hasSelection = computed(() => {
 const showAnnoFloat = ref(false);
 const annoFloatPos = ref({ x: 0, y: 0 });
 
+// 键盘/辅助技术改变选区时也要触发重算与浮动按钮刷新
+function onSelectionChange() {
+  selectionTick.value++;
+  updateAnnoFloat();
+}
+
 function updateAnnoFloat() {
+  // 触发 hasSelection 重算（选区可能刚变化）
+  selectionTick.value++;
   const sel = window.getSelection?.();
   const txt = sel?.toString()?.trim();
   if (!txt || !mdContainer.value || !mdContainer.value.contains(sel!.anchorNode)) {
@@ -1168,9 +1180,11 @@ onMounted(() => {
     }).catch(() => {});
   }
   loadChapter();
-  // 选区浮动批注按钮：正文 mouseup 检测选区，document mousedown 收起
+  // 选区浮动批注按钮：正文 mouseup 检测选区，document mousedown 收起；
+  // selectionchange 兜底键盘/辅助技术选区，并触发 hasSelection 重算
   document.addEventListener('mouseup', onReaderMouseUp);
   document.addEventListener('mousedown', onGlobalMouseDown);
+  document.addEventListener('selectionchange', onSelectionChange);
   // 阅读进度条
   updateProgress();
   window.addEventListener('scroll', updateProgress, { passive: true });
@@ -1181,6 +1195,7 @@ onBeforeUnmount(() => {
   stopTTS();
   document.removeEventListener('mouseup', onReaderMouseUp);
   document.removeEventListener('mousedown', onGlobalMouseDown);
+  document.removeEventListener('selectionchange', onSelectionChange);
   window.removeEventListener('scroll', updateProgress);
   window.removeEventListener('resize', updateProgress);
 });
