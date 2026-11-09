@@ -97,9 +97,10 @@ func GetForum(c *gin.Context) {
 		return
 	}
 
-	// 统一门禁：创建者/警方/管理员豁免；敏感区需 24h 内确认落库；
-	// 非公开需正确房间号；有密码需正确密码。未解锁仅返回最小信息。
-	if ok, payload := checkForumAccess(c, forum, userID); !ok {
+	// 统一门禁（隔离墙 / 密码分开）：创建者/警方/管理员豁免；
+	// 隔离墙需 24h 内确认落库；非公开需正确房间号；有密码需正确密码。
+	// 未解锁仅返回最小信息 + lock_type。
+	if ok, _, payload := checkForumAccess(c, forum, userID); !ok {
 		if payload == nil {
 			infra.NotFound(c, "论坛不存在")
 			return
@@ -148,14 +149,18 @@ func CreateThread(c *gin.Context) {
 		return
 	}
 
-	// 验证论坛是否存在 + 统一门禁（房间号 / 密码 / 敏感区确认），
+	// 验证论坛是否存在 + 统一门禁（隔离墙 / 密码分开），
 	// 防止绕过论坛锁定直接发帖。
-	if ok, _, payload := checkForumAccessByID(c, uint(forumID), userID); !ok {
+	if ok, lockType, _, payload := checkForumAccessByID(c, uint(forumID), userID); !ok {
 		if payload == nil {
 			infra.NotFound(c, "论坛不存在")
 			return
 		}
-		infra.Forbidden(c, "该论坛已锁定，需先验证访问权限")
+		if lockType == LockTypeSensitive {
+			infra.Forbidden(c, "该分区为敏感隔离墙，需先确认进入")
+			return
+		}
+		infra.Forbidden(c, "该论坛已锁定，需先验证房间号 / 密码")
 		return
 	}
 
@@ -213,7 +218,7 @@ func GetThread(c *gin.Context) {
 
 	// 🔒 路径穿透防护：帖子所属论坛须通过统一门禁（房间号 / 密码 / 敏感区确认），
 	// 否则改 URL 数字即可绕过论坛门禁读取内容。
-	if ok, _, payload := checkForumAccessByID(c, thread.ForumID, hctx.CurrentUserID(c)); !ok {
+	if ok, _, _, payload := checkForumAccessByID(c, thread.ForumID, hctx.CurrentUserID(c)); !ok {
 		if payload == nil {
 			infra.NotFound(c, "帖子不存在")
 			return
@@ -272,13 +277,17 @@ func CreatePost(c *gin.Context) {
 		return
 	}
 
-	// 🔒 路径穿透防护：所属论坛须通过统一门禁（房间号 / 密码 / 敏感区确认）才能回复
-	if ok, _, payload := checkForumAccessByID(c, thread.ForumID, userID); !ok {
+	// 🔒 路径穿透防护：所属论坛须通过统一门禁（隔离墙 / 密码分开）才能回复
+	if ok, lockType, _, payload := checkForumAccessByID(c, thread.ForumID, userID); !ok {
 		if payload == nil {
 			infra.NotFound(c, "帖子不存在")
 			return
 		}
-		infra.Forbidden(c, "该论坛已锁定，需先验证访问权限")
+		if lockType == LockTypeSensitive {
+			infra.Forbidden(c, "该分区为敏感隔离墙，需先确认进入")
+			return
+		}
+		infra.Forbidden(c, "该论坛已锁定，需先验证房间号 / 密码")
 		return
 	}
 

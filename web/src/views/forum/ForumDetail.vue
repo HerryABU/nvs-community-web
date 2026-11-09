@@ -42,8 +42,21 @@
         </div>
       </el-dialog>
 
-      <!-- 密码门禁 -->
-      <div v-if="locked" class="password-gate">
+      <!-- 隔离墙门禁（敏感分区：只需进入确认，与密码门禁分开） -->
+      <div v-if="locked && lockType === 'sensitive'" class="password-gate">
+        <el-result
+          icon="warning"
+          title="该分区受隔离墙保护"
+          :sub-title="`「${lockZone || '敏感分区'}」需确认进入后方可查看内容`"
+        >
+          <template #extra>
+            <el-button type="primary" :loading="verifying" @click="confirmSensitive">我已知晓，确认进入</el-button>
+          </template>
+        </el-result>
+      </div>
+
+      <!-- 密码门禁（非公开房间号 / 进入密码） -->
+      <div v-else-if="locked" class="password-gate">
         <el-result icon="lock" :title="needRoom ? '该论坛不可见' : '该论坛需要密码'" :sub-title="needRoom ? '请输入房间号（有密码的论坛还需密码）以进入' : '请输入进入密码以查看帖子'">
           <template #extra>
             <div style="display:flex;flex-direction:column;gap:8px;align-items:center">
@@ -113,6 +126,8 @@ import { useRoute, useRouter } from 'vue-router';
 import { novelApi, forumApi } from '@/api/novel';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { markZoneConfirmed } from '@/utils/sensitiveZone';
+import api from '@/api';
 
 const route = useRoute();
 const router = useRouter();
@@ -168,8 +183,10 @@ const newTitle = ref('');
 const newContent = ref('');
 const posting = ref(false);
 
-// 密码门禁
+// 门禁（隔离墙 / 密码分开）
 const locked = ref(false);
+const lockType = ref(''); // sensitive=隔离墙；password=房间号/密码
+const lockZone = ref(''); // 隔离墙分区名（响应顶层 zone）
 const passwordInput = ref('');
 const roomInput = ref('');
 const verifying = ref(false);
@@ -210,6 +227,8 @@ async function load() {
     const d = res.data.data;
     forum.value = d.forum;
     locked.value = !!d.locked;
+    lockType.value = d.lock_type || '';
+    lockZone.value = d.zone || '';
     threads.value = d.threads || [];
     subForums.value = d.sub_forums || [];
   } catch (e) {
@@ -244,6 +263,26 @@ async function submitPassword() {
     }
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '密码错误');
+  } finally {
+    verifying.value = false;
+  }
+}
+
+// 隔离墙门禁：确认进入敏感分区（服务端落库 + 本地记录，之后放行 24h）
+async function confirmSensitive() {
+  const zone = lockZone.value;
+  if (!zone) {
+    ElMessage.error('缺少分区信息，请刷新重试');
+    return;
+  }
+  verifying.value = true;
+  try {
+    await api.post('/zone/enter', { zone });
+    markZoneConfirmed(zone);
+    locked.value = false;
+    await load();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '确认失败，请重试');
   } finally {
     verifying.value = false;
   }

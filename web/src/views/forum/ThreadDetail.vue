@@ -3,7 +3,10 @@
     <!-- 论坛门禁拦截：帖子所属论坛未通过验证（房间号/密码/敏感区确认） -->
     <div v-if="lockedForum" class="thread-locked">
       <el-icon><Lock /></el-icon>
-      <p>该帖子所属论坛已锁定，需先验证访问权限（房间号 / 密码 / 敏感区确认）。</p>
+      <p v-if="lockedForum.lock_type === 'sensitive'">
+        该帖子所属分区「{{ lockedForum.zone || '敏感分区' }}」受隔离墙保护，需确认进入。
+      </p>
+      <p v-else>该帖子所属论坛已锁定，需先验证房间号 / 密码。</p>
       <el-button v-if="lockedForum.id" type="primary" @click="$router.push(`/forum/${lockedForum.id}`)">
         前往论坛验证
       </el-button>
@@ -196,7 +199,7 @@ async function load(reset = true) {
     const d = res.data.data;
     // 论坛门禁拦截（locked）：不渲染内容，仅提示前往论坛验证
     if (d.locked) {
-      lockedForum.value = d.forum || null;
+      lockedForum.value = { ...(d.forum || {}), lock_type: d.lock_type || '', zone: d.zone || '' };
       thread.value = null;
       posts.value = [];
       total.value = 0;
