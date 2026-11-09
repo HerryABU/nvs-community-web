@@ -117,14 +117,14 @@ func generateAiBotReply(triggerUser uint, trigger *models.Comment, cfg aim.AiBot
 		if agents, aerr := aim.ListAiAgents(true); aerr == nil {
 			for _, a := range agents {
 				if a.Name == agentName {
-					systemPrompt = a.SystemPrompt + "\n（请以该人设简洁回复评论，直接输出内容）"
+					systemPrompt = aim.BuildAgentPersona(&a) + "\n（请以该人设简洁回复评论，直接输出内容）"
 					break
 				}
 			}
 		}
 	} else if cfg.AgentID > 0 {
 		if a, aerr := aim.GetAiAgent(cfg.AgentID); aerr == nil && a.Enabled {
-			systemPrompt = a.SystemPrompt + "\n（请以该人设简洁回复评论，直接输出内容）"
+			systemPrompt = aim.BuildAgentPersona(a) + "\n（请以该人设简洁回复评论，直接输出内容）"
 		}
 	}
 

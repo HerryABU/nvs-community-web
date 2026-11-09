@@ -65,6 +65,33 @@
             placeholder="定义智能体的人设与行为准则，将作为每次对话的 system 消息"
           />
         </el-form-item>
+        <el-form-item label="人设">
+          <el-input
+            v-model="form.persona"
+            type="textarea"
+            :rows="2"
+            resize="none"
+            placeholder="性格 / 背景 / 行事风格（角色卡式补充，会拼进人设提示词）"
+          />
+        </el-form-item>
+        <el-form-item label="外貌">
+          <el-input
+            v-model="form.appearance"
+            type="textarea"
+            :rows="2"
+            resize="none"
+            placeholder="外形特征（可选，用于角色扮演 / 群内 AI 人格化）"
+          />
+        </el-form-item>
+        <el-form-item label="说话风格">
+          <el-input
+            v-model="form.speech"
+            type="textarea"
+            :rows="2"
+            resize="none"
+            placeholder="语气 / 口癖 / 称呼习惯（可选）"
+          />
+        </el-form-item>
         <el-form-item label="分类">
           <el-input v-model="form.category" placeholder="如：写作 / 编程 / 绘画 / 翻译（用于市场分组）" maxlength="32" />
         </el-form-item>
@@ -154,6 +181,7 @@ const editing = ref<any | null>(null);
 function blankForm() {
   return {
     name: '', emoji: '', description: '', system_prompt: '', greeting: '',
+    persona: '', appearance: '', speech: '',
     sort_order: 0, enabled: true,
     category: '', upstream: '', bot_id: '', coze_base: 'https://api.coze.cn', coze_token: '',
   };
@@ -171,6 +199,7 @@ function openEdit(row: any) {
   Object.assign(form, {
     name: row.name, emoji: row.emoji, description: row.description,
     system_prompt: row.system_prompt, greeting: row.greeting,
+    persona: row.persona || '', appearance: row.appearance || '', speech: row.speech || '',
     sort_order: row.sort_order, enabled: row.enabled,
     category: row.category || '', upstream: row.upstream || '',
     bot_id: row.bot_id || '', coze_base: row.coze_base || 'https://api.coze.cn', coze_token: '',
@@ -195,6 +224,9 @@ async function saveAgent() {
       description: form.description.trim(),
       system_prompt: form.system_prompt.trim(),
       greeting: form.greeting.trim(),
+      persona: (form.persona || '').trim(),
+      appearance: (form.appearance || '').trim(),
+      speech: (form.speech || '').trim(),
       sort_order: form.sort_order,
       enabled: form.enabled,
       category: form.category.trim(),

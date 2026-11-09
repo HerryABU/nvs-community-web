@@ -19,9 +19,14 @@ type AiAgent struct {
 	Emoji        string `gorm:"size:8;default:''" json:"emoji"`
 	Description  string `gorm:"size:256;default:''" json:"description"`
 	SystemPrompt string `gorm:"type:text" json:"system_prompt"`
-	Greeting     string `gorm:"size:256;default:''" json:"greeting"`      // 开场白
-	Category     string `gorm:"size:32;default:'';index" json:"category"` // 分类（写作/编程/绘画/翻译…）
-	UsedCount    int64  `gorm:"not null;default:0" json:"used_count"`     // 使用次数（市场排序用）
+	Greeting     string `gorm:"size:256;default:''" json:"greeting"` // 开场白
+	// 角色卡式详细设定（与 OC 角色卡对齐：人设/外貌/说话风格），
+	// 供群组多 AI、评论机器人等场景注入更完整的人格。
+	Persona    string `gorm:"type:text" json:"persona"`
+	Appearance string `gorm:"type:text" json:"appearance"`
+	Speech     string `gorm:"type:text" json:"speech"`
+	Category   string `gorm:"size:32;default:'';index" json:"category"` // 分类（写作/编程/绘画/翻译…）
+	UsedCount  int64  `gorm:"not null;default:0" json:"used_count"`     // 使用次数（市场排序用）
 	// 上游类型：空/llm = 平台模型池；coze = 扣子（Coze）官方智能体
 	Upstream string `gorm:"size:16;not null;default:''" json:"upstream"`
 	BotID    string `gorm:"size:64;default:''" json:"bot_id"`      // Coze bot_id
@@ -37,6 +42,28 @@ type AiAgent struct {
 }
 
 func (AiAgent) TableName() string { return "ai_agents" }
+
+// BuildAgentPersona 组装智能体人设提示词：系统提示 + 角色卡字段
+// （人设 / 外貌 / 说话风格），供群 AI、评论机器人、AI 工作台共用。
+func BuildAgentPersona(a *AiAgent) string {
+	if a == nil {
+		return ""
+	}
+	parts := []string{}
+	if a.SystemPrompt != "" {
+		parts = append(parts, a.SystemPrompt)
+	}
+	if a.Persona != "" {
+		parts = append(parts, "人设："+a.Persona)
+	}
+	if a.Appearance != "" {
+		parts = append(parts, "外貌："+a.Appearance)
+	}
+	if a.Speech != "" {
+		parts = append(parts, "说话风格："+a.Speech)
+	}
+	return strings.Join(parts, "\n")
+}
 
 // ListAiAgents 智能体列表（管理员全部 / 用户仅启用）
 func ListAiAgents(onlyEnabled bool) ([]AiAgent, error) {

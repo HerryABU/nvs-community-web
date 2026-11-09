@@ -29,6 +29,7 @@ func aiAgentVO(a *aim.AiAgent) gin.H {
 	return gin.H{
 		"id": a.ID, "name": a.Name, "emoji": a.Emoji, "description": a.Description,
 		"system_prompt": a.SystemPrompt, "greeting": a.Greeting, "builtin": a.Builtin,
+		"persona": a.Persona, "appearance": a.Appearance, "speech": a.Speech,
 		"enabled": a.Enabled, "sort_order": a.SortOrder,
 		"created_at": a.CreatedAt, "updated_at": a.UpdatedAt,
 	}
@@ -62,6 +63,9 @@ func AdminCreateAiAgent(c *gin.Context) {
 		Description  string `json:"description"`
 		SystemPrompt string `json:"system_prompt"`
 		Greeting     string `json:"greeting"`
+		Persona      string `json:"persona"`
+		Appearance   string `json:"appearance"`
+		Speech       string `json:"speech"`
 		Enabled      *bool  `json:"enabled"`
 		SortOrder    *int   `json:"sort_order"`
 		Category     string `json:"category"`
@@ -86,6 +90,7 @@ func AdminCreateAiAgent(c *gin.Context) {
 		Name: strings.TrimSpace(req.Name), Emoji: strings.TrimSpace(req.Emoji),
 		Description:  strings.TrimSpace(req.Description),
 		SystemPrompt: req.SystemPrompt, Greeting: strings.TrimSpace(req.Greeting),
+		Persona: req.Persona, Appearance: req.Appearance, Speech: req.Speech,
 		Category: strings.TrimSpace(req.Category),
 		Upstream: strings.TrimSpace(req.Upstream), BotID: strings.TrimSpace(req.BotID),
 		CozeBase: strings.TrimSpace(req.CozeBase),
@@ -126,6 +131,9 @@ func AdminUpdateAiAgent(c *gin.Context) {
 		Description  string `json:"description"`
 		SystemPrompt string `json:"system_prompt"`
 		Greeting     string `json:"greeting"`
+		Persona      string `json:"persona"`
+		Appearance   string `json:"appearance"`
+		Speech       string `json:"speech"`
 		Enabled      *bool  `json:"enabled"`
 		SortOrder    *int   `json:"sort_order"`
 		Category     string `json:"category"`
@@ -148,6 +156,9 @@ func AdminUpdateAiAgent(c *gin.Context) {
 		fields["system_prompt"] = s
 	}
 	fields["greeting"] = strings.TrimSpace(req.Greeting)
+	fields["persona"] = strings.TrimSpace(req.Persona)
+	fields["appearance"] = strings.TrimSpace(req.Appearance)
+	fields["speech"] = strings.TrimSpace(req.Speech)
 	if req.Enabled != nil {
 		fields["enabled"] = *req.Enabled
 	}

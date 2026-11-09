@@ -48,6 +48,10 @@ export interface AiAgent {
   description: string;
   system_prompt: string;
   greeting: string;
+  /** 角色卡式详细设定（人设 / 外貌 / 说话风格），拼入人设提示词 */
+  persona?: string;
+  appearance?: string;
+  speech?: string;
   enabled: boolean;
   sort_order: number;
   category?: string;
