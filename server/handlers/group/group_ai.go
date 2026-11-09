@@ -3,6 +3,7 @@ package grouphandler
 import (
 	"fmt"
 	"nvs-server/groups"
+	"nvs-server/oc"
 	"nvs-server/security"
 	"nvs-server/utils/infra"
 	"strconv"
@@ -27,6 +28,10 @@ import (
 var (
 	groupAiMu     sync.Mutex
 	groupAiRecent = map[string]time.Time{} // key: group:post → 最近触发
+
+	// 群内多 AI 角色轮选游标（round robin）：@ai 未指定角色时依次发言
+	groupAiRoleMu     sync.Mutex
+	groupAiRoleCursor = map[uint]uint{}
 )
 
 const groupAiDedupWindow = 60 * time.Second
@@ -45,7 +50,7 @@ func triggerGroupAi(g *groups.Group, postID, triggerUser uint, content string) {
 	if g == nil || !g.AiEnabled || !ai.IsAiEnabled() || !ai.IsAiBotEnabled() {
 		return
 	}
-	_, prompt, ok := ai.ParseAiBotInvocation(content)
+	agentName, prompt, ok := ai.ParseAiBotInvocation(content)
 	if !ok || strings.TrimSpace(prompt) == "" {
 		return
 	}
@@ -69,21 +74,73 @@ func triggerGroupAi(g *groups.Group, postID, triggerUser uint, content string) {
 	}
 	go func() {
 		defer func() { _ = recover() }()
-		generateGroupAiReply(groupID, agentID, post, triggerUser, question, cfg)
+		generateGroupAiReply(groupID, agentID, post, triggerUser, agentName, question, cfg)
 	}()
 }
 
-// generateGroupAiReply 异步生成并以机器人身份回帖
-func generateGroupAiReply(groupID, agentID, postID, triggerUser uint, question string, cfg ai.AiBotConfig) {
-	// 人设：群绑定的智能体优先，其次平台默认
-	systemPrompt := "你是群组里的 AI 助手，回答简洁、贴合讨论，直接输出内容，不要解释。"
-	pickedID := agentID
-	if pickedID == 0 && cfg.AgentID > 0 {
-		pickedID = cfg.AgentID
+// pickGroupAiRole 从群内 AI 角色（oc_agents）中选一个：
+//   - @角色名 指定时按角色卡名精确匹配；
+//   - 未指定时 round robin 依次发言（多 AI 轮流，避免总是同一个）。
+//
+// 返回人设提示词与角色名；群内无启用角色返回 ok=false（回退平台智能体）。
+func pickGroupAiRole(groupID uint, wantName string) (persona, displayName string, ok bool) {
+	agents, err := oc.ListAgents(groupID)
+	if err != nil || len(agents) == 0 {
+		return "", "", false
 	}
-	if pickedID > 0 {
-		if a, aerr := ai.GetAiAgent(pickedID); aerr == nil && a.Enabled {
-			systemPrompt = a.SystemPrompt + "\n（请以该人设简洁回复，直接输出内容）"
+	enabled := make([]oc.Agent, 0, len(agents))
+	for _, a := range agents {
+		if a.Enabled {
+			enabled = append(enabled, a)
+		}
+	}
+	if len(enabled) == 0 {
+		return "", "", false
+	}
+	want := strings.TrimSpace(wantName)
+	var picked *oc.Agent
+	if want != "" {
+		for i := range enabled {
+			if enabled[i].CharacterName == want {
+				picked = &enabled[i]
+				break
+			}
+		}
+		if picked == nil {
+			return "", "", false
+		}
+	} else {
+		groupAiRoleMu.Lock()
+		idx := groupAiRoleCursor[groupID] % uint(len(enabled))
+		groupAiRoleCursor[groupID]++
+		groupAiRoleMu.Unlock()
+		picked = &enabled[idx]
+	}
+	ch, err := oc.GetCharacterByID(picked.CharacterID)
+	if err != nil || ch == nil {
+		return "", "", false
+	}
+	return oc.BuildOcPersona(ch), ch.Name, true
+}
+
+// generateGroupAiReply 异步生成并以机器人身份回帖
+func generateGroupAiReply(groupID, agentID, postID, triggerUser uint, agentName, question string, cfg ai.AiBotConfig) {
+	// 人设：群内多 AI 角色（OC）优先——@角色名 指定或 round robin 轮选；
+	// 群内没有角色时回退群绑定的平台智能体，再回退平台默认。
+	systemPrompt := "你是群组里的 AI 助手，回答简洁、贴合讨论，直接输出内容，不要解释。"
+	roleName := ""
+	if persona, name, ok := pickGroupAiRole(groupID, agentName); ok {
+		systemPrompt = persona + "\n（请以该角色身份、按其说话风格简洁回复，直接输出内容）"
+		roleName = name
+	} else {
+		pickedID := agentID
+		if pickedID == 0 && cfg.AgentID > 0 {
+			pickedID = cfg.AgentID
+		}
+		if pickedID > 0 {
+			if a, aerr := ai.GetAiAgent(pickedID); aerr == nil && a.Enabled {
+				systemPrompt = ai.BuildAgentPersona(a) + "\n（请以该人设简洁回复，直接输出内容）"
+			}
 		}
 	}
 
@@ -105,7 +162,11 @@ func generateGroupAiReply(groupID, agentID, postID, triggerUser uint, question s
 	}
 	// 输出侧过违禁词（与用户投稿同一套规则）
 	cleaned, _ := security.ApplyBadWords(res.Content, "group")
-	body := cleaned + "\n\n—— AI 生成 · " + res.ModelName
+	byline := "AI 生成"
+	if roleName != "" {
+		byline = roleName + " · AI 生成"
+	}
+	body := cleaned + "\n\n—— " + byline + " · " + res.ModelName
 	if res.Cost > 0 {
 		body += fmt.Sprintf(" · 消耗 %d %s", res.Cost, wallet.GetTokenName())
 	}
@@ -143,9 +204,18 @@ func AiStatus(c *gin.Context) {
 			agentName = a.Name
 		}
 	}
+	roleCount := 0
+	if agents, aerr := oc.ListAgents(g.ID); aerr == nil {
+		for _, a := range agents {
+			if a.Enabled {
+				roleCount++
+			}
+		}
+	}
 	infra.Success(c, gin.H{
 		"enabled":    g.AiEnabled && ai.IsAiEnabled() && ai.IsAiBotEnabled(),
 		"agent_id":   g.AiAgentID,
 		"agent_name": agentName,
+		"role_count": roleCount,
 	})
 }

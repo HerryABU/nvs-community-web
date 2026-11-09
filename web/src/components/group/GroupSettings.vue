@@ -68,6 +68,14 @@
             <el-option v-for="a in agents" :key="a.id" :label="`${a.emoji || '🤖'} ${a.name}`" :value="a.id" />
           </el-select>
         </el-form-item>
+        <el-form-item v-if="form.ai_enabled" label="群内 AI 角色">
+          <el-button size="small" text type="primary" @click="router.push(`/group/${group.id}/oc`)">
+            管理群内 AI 角色
+          </el-button>
+          <span class="gs-hint" style="margin-left:8px">
+            可绑定多个 OC 角色；@ai 未指定角色时轮流发言，@角色名 时由该角色回复
+          </span>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="saving" @click="save">保存设置</el-button>
         </el-form-item>
