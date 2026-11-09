@@ -1,6 +1,14 @@
 <template>
   <div class="page-container" v-loading="loading">
-    <template v-if="thread">
+    <!-- 论坛门禁拦截：帖子所属论坛未通过验证（房间号/密码/敏感区确认） -->
+    <div v-if="lockedForum" class="thread-locked">
+      <el-icon><Lock /></el-icon>
+      <p>该帖子所属论坛已锁定，需先验证访问权限（房间号 / 密码 / 敏感区确认）。</p>
+      <el-button v-if="lockedForum.id" type="primary" @click="$router.push(`/forum/${lockedForum.id}`)">
+        前往论坛验证
+      </el-button>
+    </div>
+    <template v-else-if="thread">
       <div class="thread-header">
         <h1>{{ thread.title }}</h1>
         <div class="thread-meta">
@@ -88,12 +96,14 @@ import { renderMarkdown } from '@/markdown/renderer';
 import SensitiveZoneGuard from '@/components/common/SensitiveZoneGuard.vue';
 import FloorComments from '@/components/comment/FloorComments.vue';
 import { markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';
+import { Lock } from '@element-plus/icons-vue';
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const loading = ref(false);
 const thread = ref<any>(null);
+const lockedForum = ref<any>(null);
 const posts = ref<any[]>([]);
 const total = ref(0);
 const replyContent = ref('');
@@ -184,6 +194,16 @@ async function load(reset = true) {
   try {
     const res = await forumApi.getThread(Number(route.params.id), page.value);
     const d = res.data.data;
+    // 论坛门禁拦截（locked）：不渲染内容，仅提示前往论坛验证
+    if (d.locked) {
+      lockedForum.value = d.forum || null;
+      thread.value = null;
+      posts.value = [];
+      total.value = 0;
+      hasMore.value = false;
+      return;
+    }
+    lockedForum.value = null;
     thread.value = d.thread;
     checkSensitiveForum();
     if (reset) {
@@ -423,5 +443,23 @@ async function handleReply(parentId: number | null, content: string) {
   .reply-actions .el-button {
     flex: 1;
   }
+}
+
+/* 论坛门禁锁定态 */
+.thread-locked {
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--text-light, #999);
+  border: 1px dashed var(--border-color, #e5e7eb);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--bg-soft, #fafafa);
+}
+.thread-locked .el-icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+}
+.thread-locked p {
+  margin: 0 0 16px;
+  line-height: 1.6;
 }
 </style>

@@ -39,6 +39,21 @@ func RecordZoneEnterLog(userID uint, zone, ip, ua string, enteredAt time.Time) {
 	}).Error
 }
 
+// HasRecentZoneEnter 判断用户是否在 within 时间内确认进入过该分区。
+// 用于敏感论坛的服务端门禁：仅靠前端 localStorage 确认可绕过，这里要求
+// 「确认动作已落库」且未过期（前端确认与本函数共用同一张 zone_access_logs）。
+func HasRecentZoneEnter(userID uint, zone string, within time.Duration) bool {
+	if userID == 0 || zone == "" {
+		return false
+	}
+	since := time.Now().Add(-within)
+	var count int64
+	_ = models.DB.Model(&ZoneAccessLog{}).
+		Where("user_id = ? AND zone = ? AND entered_at >= ?", userID, zone, since).
+		Count(&count).Error
+	return count > 0
+}
+
 // ZoneAccessLogView 联表视图：在 ZoneAccessLog 基础上附带用户名/昵称，供前台仪表盘展示。
 type ZoneAccessLogView struct {
 	ZoneAccessLog

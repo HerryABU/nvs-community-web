@@ -1,7 +1,6 @@
 package forum
 
 import (
-	"nvs-server/handlers/adminsite"
 	"nvs-server/handlers/badword"
 	"nvs-server/handlers/blacklist"
 	"nvs-server/handlers/hctx"
@@ -9,7 +8,6 @@ import (
 	"nvs-server/models"
 	"nvs-server/security"
 	"nvs-server/utils/infra"
-	"nvs-server/utils/secure"
 	"strconv"
 	"strings"
 
@@ -99,61 +97,16 @@ func GetForum(c *gin.Context) {
 		return
 	}
 
-	// 房间号门禁：非公开（不可见）自建论坛，非创建者/管理员/警方须凭房间号进入。
-	// 有密码的论坛还需同时提供正确密码（room + password）。
-	// 🔒 警方取证豁免：警方（police）与管理员可越过门禁直接查看封锁/加密/隐藏论坛。
-	if !forum.IsPublic && forum.CreatorID != userID && !adminsite.IsPoliceOrAdminUser(c) {
-		room := c.Query("room")
-		pass := c.Query("password")
-		// 兼容请求头传递（🔒 安全审计：密码不进 URL——前端已改为 header + sessionStorage）
-		if room == "" {
-			room = c.GetHeader("X-Forum-Room")
-		}
-		if pass == "" {
-			pass = c.GetHeader("X-Forum-Password")
-		}
-		if !strings.EqualFold(strings.TrimSpace(room), forum.RoomCode) ||
-			(forum.HasPassword && !secure.CheckPassword(pass, forum.PasswordHash)) {
-			// 🔒 安全审计 L5：未解锁时仅返回最小信息，不泄露论坛名称/描述等元数据
-			infra.Success(c, gin.H{
-				"forum": gin.H{
-					"id":        forum.ID,
-					"type":      forum.Type,
-					"is_public": forum.IsPublic,
-					"locked":    true,
-				},
-				"locked":     true,
-				"threads":    []models.Thread{},
-				"total":      0,
-				"page":       page,
-				"sub_forums": []models.Forum{},
-			})
+	// 统一门禁：创建者/警方/管理员豁免；敏感区需 24h 内确认落库；
+	// 非公开需正确房间号；有密码需正确密码。未解锁仅返回最小信息。
+	if ok, payload := checkForumAccess(c, forum, userID); !ok {
+		if payload == nil {
+			infra.NotFound(c, "论坛不存在")
 			return
 		}
-	}
-
-	// 密码门禁：有密码且非创建者/管理员/警方时，需提供正确密码才能读取帖子
-	if forum.HasPassword && forum.CreatorID != userID && !adminsite.IsPoliceOrAdminUser(c) {
-		password := c.Query("password")
-		if password == "" {
-			password = c.GetHeader("X-Forum-Password")
-		}
-		if !secure.CheckPassword(password, forum.PasswordHash) {
-			infra.Success(c, gin.H{
-				"forum": gin.H{
-					"id":        forum.ID,
-					"type":      forum.Type,
-					"is_public": forum.IsPublic,
-					"locked":    true,
-				},
-				"locked":     true,
-				"threads":    []models.Thread{},
-				"total":      0,
-				"page":       page,
-				"sub_forums": []models.Forum{},
-			})
-			return
-		}
+		payload["page"] = page
+		infra.Success(c, payload)
+		return
 	}
 
 	threads, total, err := models.GetThreadsByForum(uint(forumID), page, 20)
@@ -195,13 +148,16 @@ func CreateThread(c *gin.Context) {
 		return
 	}
 
-	// 验证论坛是否存在
-	forum, err := models.GetForumByID(uint(forumID))
-	if err != nil {
-		infra.NotFound(c, "论坛不存在")
+	// 验证论坛是否存在 + 统一门禁（房间号 / 密码 / 敏感区确认），
+	// 防止绕过论坛锁定直接发帖。
+	if ok, _, payload := checkForumAccessByID(c, uint(forumID), userID); !ok {
+		if payload == nil {
+			infra.NotFound(c, "论坛不存在")
+			return
+		}
+		infra.Forbidden(c, "该论坛已锁定，需先验证访问权限")
 		return
 	}
-	_ = forum
 
 	var req struct {
 		Title   string `json:"title" binding:"required,max=256"`
@@ -255,6 +211,25 @@ func GetThread(c *gin.Context) {
 		return
 	}
 
+	// 🔒 路径穿透防护：帖子所属论坛须通过统一门禁（房间号 / 密码 / 敏感区确认），
+	// 否则改 URL 数字即可绕过论坛门禁读取内容。
+	if ok, _, payload := checkForumAccessByID(c, thread.ForumID, hctx.CurrentUserID(c)); !ok {
+		if payload == nil {
+			infra.NotFound(c, "帖子不存在")
+			return
+		}
+		payload["posts"] = []models.Post{}
+		payload["total"] = 0
+		payload["floor_total"] = 0
+		payload["has_more"] = false
+		payload["thread"] = gin.H{"id": thread.ID, "forum_id": thread.ForumID, "locked": true}
+		payload["page"] = page
+		infra.Success(c, payload)
+		return
+	}
+	// 脱敏：不向外泄露所属论坛的房间号 / 密码标记
+	redactThreadForum(thread)
+
 	models.IncrementThreadView(uint(threadID))
 
 	pg, err := models.GetPostsByThread(uint(threadID), page, 20)
@@ -294,6 +269,16 @@ func CreatePost(c *gin.Context) {
 	}
 	if thread.IsLocked {
 		infra.Forbidden(c, "帖子已被锁定，无法回复")
+		return
+	}
+
+	// 🔒 路径穿透防护：所属论坛须通过统一门禁（房间号 / 密码 / 敏感区确认）才能回复
+	if ok, _, payload := checkForumAccessByID(c, thread.ForumID, userID); !ok {
+		if payload == nil {
+			infra.NotFound(c, "帖子不存在")
+			return
+		}
+		infra.Forbidden(c, "该论坛已锁定，需先验证访问权限")
 		return
 	}
 

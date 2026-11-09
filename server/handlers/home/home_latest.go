@@ -26,6 +26,8 @@ func ListLatestThreads(c *gin.Context) {
 		Where("forums.password_hash = ?", "").
 		Where("forums.review_status = ?", "approved").
 		Where("forums.type != ? OR forums.is_public = ?", "custom", true).
+		// 敏感区帖子不进公开最新流（服务端强制，不依赖前端确认）
+		Where("forums.type != ?", "sensitive").
 		Where("threads.deleted_at IS NULL").
 		Where("forums.deleted_at IS NULL").
 		Preload("User").
