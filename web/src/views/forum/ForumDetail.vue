@@ -42,31 +42,58 @@
         </div>
       </el-dialog>
 
-      <!-- 隔离墙门禁（敏感分区：只需进入确认，与密码门禁分开） -->
+      <!-- 隔离墙门禁（敏感分区：多步确认弹窗，含输入确认语） -->
       <div v-if="locked && lockType === 'sensitive'" class="password-gate">
         <el-result
           icon="warning"
           title="该分区受隔离墙保护"
-          :sub-title="`「${lockZone || '敏感分区'}」需确认进入后方可查看内容`"
+          :sub-title="`「${lockZone || '敏感分区'}」需完成进入确认后方可查看内容`"
         >
           <template #extra>
-            <el-button type="primary" :loading="verifying" @click="confirmSensitive">我已知晓，确认进入</el-button>
+            <el-button type="primary" @click="zoneGuardVisible = true">开始进入确认</el-button>
           </template>
         </el-result>
       </div>
 
-      <!-- 密码门禁（非公开房间号 / 进入密码） -->
+      <!-- 密码门禁（非公开房间号 / 进入密码）：输入在弹窗中 -->
       <div v-else-if="locked" class="password-gate">
         <el-result icon="lock" :title="needRoom ? '该论坛不可见' : '该论坛需要密码'" :sub-title="needRoom ? '请输入房间号（有密码的论坛还需密码）以进入' : '请输入进入密码以查看帖子'">
           <template #extra>
-            <div style="display:flex;flex-direction:column;gap:8px;align-items:center">
-              <el-input v-if="needRoom" v-model="roomInput" placeholder="房间号（创建者分享给你）" style="width:240px" @keyup.enter="submitPassword" />
-              <el-input v-model="passwordInput" :type="forum?.has_password ? 'password' : 'text'" :placeholder="forum?.has_password ? '进入密码' : '无需密码，仅填房间号'" style="width:240px" show-password @keyup.enter="submitPassword" />
-              <el-button type="primary" style="margin-left:8px" :loading="verifying" @click="submitPassword">进入</el-button>
-            </div>
+            <el-button type="primary" @click="passwordDialogVisible = true">输入房间号 / 密码</el-button>
           </template>
         </el-result>
       </div>
+
+      <!-- 密码/房间号输入弹窗 -->
+      <el-dialog v-model="passwordDialogVisible" :title="needRoom ? '输入房间号进入' : '输入密码进入'" width="420px">
+        <el-form label-position="top">
+          <el-form-item v-if="needRoom" label="房间号">
+            <el-input v-model="roomInput" placeholder="创建者分享给你的房间号" @keyup.enter="submitPassword" />
+          </el-form-item>
+          <el-form-item :label="forum?.has_password ? '进入密码' : '密码（无密码可留空）'">
+            <el-input
+              v-model="passwordInput"
+              :type="forum?.has_password ? 'password' : 'text'"
+              :placeholder="forum?.has_password ? '请输入进入密码' : '该论坛无密码，可留空'"
+              show-password
+              @keyup.enter="submitPassword"
+            />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="passwordDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="verifying" @click="submitPassword">进入</el-button>
+        </template>
+      </el-dialog>
+
+      <!-- 隔离墙多步确认弹窗（含输入确认语） -->
+      <SensitiveZoneGuard
+        :visible="zoneGuardVisible"
+        :zone-name="lockZone || '敏感分区'"
+        :is-cross-domain="false"
+        @confirm="onZoneGuardConfirm"
+        @cancel="zoneGuardVisible = false"
+      />
 
       <!-- 发帖表单 -->
       <el-dialog v-model="showNewThread" title="发布新帖" width="600px" destroy-on-close>
@@ -128,6 +155,7 @@ import { useAuthStore } from '@/stores/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { markZoneConfirmed } from '@/utils/sensitiveZone';
 import api from '@/api';
+import SensitiveZoneGuard from '@/components/common/SensitiveZoneGuard.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -190,6 +218,8 @@ const lockZone = ref(''); // 隔离墙分区名（响应顶层 zone）
 const passwordInput = ref('');
 const roomInput = ref('');
 const verifying = ref(false);
+const zoneGuardVisible = ref(false); // 隔离墙多步确认弹窗
+const passwordDialogVisible = ref(false); // 密码/房间号输入弹窗
 // 不可见（非公开）论坛需凭房间号进入；管理员/创建者豁免
 const needRoom = computed(() => {
   const f = forum.value;
@@ -250,6 +280,7 @@ async function submitPassword() {
       const r = await forumApi.enterByRoomCode(code, passwordInput.value);
       if (r.data.code === 0) {
         locked.value = false;
+        passwordDialogVisible.value = false;
         saveForumAccess(route.params.id, { room: code, password: passwordInput.value });
         await load();
         return;
@@ -258,6 +289,7 @@ async function submitPassword() {
     const res = await forumApi.verifyPassword(Number(route.params.id), passwordInput.value);
     if (res.data.code === 0) {
       locked.value = false;
+      passwordDialogVisible.value = false;
       saveForumAccess(route.params.id, { password: passwordInput.value });
       await load();
     }
@@ -268,8 +300,9 @@ async function submitPassword() {
   }
 }
 
-// 隔离墙门禁：确认进入敏感分区（服务端落库 + 本地记录，之后放行 24h）
-async function confirmSensitive() {
+// 隔离墙门禁：完成多步确认（含输入确认语）后进入敏感分区
+// （服务端落库 + 本地记录，之后放行 24h）
+async function onZoneGuardConfirm() {
   const zone = lockZone.value;
   if (!zone) {
     ElMessage.error('缺少分区信息，请刷新重试');
@@ -279,6 +312,7 @@ async function confirmSensitive() {
   try {
     await api.post('/zone/enter', { zone });
     markZoneConfirmed(zone);
+    zoneGuardVisible.value = false;
     locked.value = false;
     await load();
   } catch (e: any) {
