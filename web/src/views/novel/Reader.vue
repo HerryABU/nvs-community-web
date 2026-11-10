@@ -42,7 +42,7 @@
         >
           <el-icon><Star /></el-icon><span class="desktop-only"> {{ myBookmark ? '已书签' : '书签' }}</span>
         </el-button>
-        <el-button text :disabled="!hasSelection" :title="hasSelection ? '为选中内容添加批注' : '先选中正文文字再批注'" @click="openAnnotationDialog">
+        <el-button text :disabled="!hasSelection && !lastNoteSelection" :title="hasSelection || lastNoteSelection ? '为选中内容添加批注' : '先选中正文文字再批注'" @mousedown.prevent @click="openAnnotationDialog">
           <el-icon><EditPen /></el-icon><span class="desktop-only"> 批注</span>
         </el-button>
         <!-- 本章划线列表：原来只能靠"碰巧点到正文里的下划线"才发现公开批注，
@@ -230,7 +230,7 @@
         v-if="showAnnoFloat && authStore.isLoggedIn && !isTrialExceeded"
         class="anno-float-btn"
         :style="{ left: annoFloatPos.x + 'px', top: annoFloatPos.y + 'px' }"
-        @mousedown.prevent
+        @mousedown.prevent.stop
         @touchstart.prevent.stop
         @click.stop="onAnnoFloatClick"
       >
@@ -826,6 +826,16 @@ const savingNote = ref(false);
 // window.getSelection() 不是响应式数据，Vue computed 不会因选区变化自动重算，
 // 按钮会一直停在旧的 disabled 状态 → 用 selectionTick 作为显式重算信号。
 const selectionTick = ref(0);
+// 缓存最近一次有效选区：某些浏览器点击工具条按钮（mousedown）会清空 selection，
+// 此时仍能凭缓存打开批注框，避免「明明选了字却提示先选中文字」。
+const lastNoteSelection = ref<{ text: string; inMd: boolean } | null>(null);
+function captureNoteSelection() {
+  const sel = window.getSelection?.();
+  const txt = sel?.toString()?.trim() || '';
+  if (txt && mdContainer.value?.contains(sel!.anchorNode)) {
+    lastNoteSelection.value = { text: txt, inMd: true };
+  }
+}
 const hasSelection = computed(() => {
   selectionTick.value; // 依赖：mouseup / selectionchange 时递增
   const sel = window.getSelection?.();
@@ -842,6 +852,7 @@ const annoFloatPos = ref({ x: 0, y: 0 });
 // 键盘/辅助技术改变选区时也要触发重算与浮动按钮刷新
 function onSelectionChange() {
   selectionTick.value++;
+  captureNoteSelection();
   updateAnnoFloat();
 }
 
@@ -874,7 +885,10 @@ function onReaderMouseUp(e: MouseEvent) {
   // 点击批注划线等非选区操作不弹出
   if ((e.target as HTMLElement)?.closest?.('mark.note-ann')) return;
   // 稍作延迟，等待浏览器确定选区
-  setTimeout(updateAnnoFloat, 20);
+  setTimeout(() => {
+    captureNoteSelection();
+    updateAnnoFloat();
+  }, 20);
 }
 
 // ====== 气泡对话长按菜单 ======
@@ -1119,8 +1133,14 @@ async function saveBookmark() {
 
 function openAnnotationDialog() {
   const sel = window.getSelection?.();
-  const txt = sel?.toString()?.trim() || '';
-  if (!txt || !mdContainer.value?.contains(sel!.anchorNode)) {
+  let txt = sel?.toString()?.trim() || '';
+  let inMd = !!txt && !!mdContainer.value?.contains(sel!.anchorNode);
+  // 缓存兜底：点击工具条按钮时若 selection 被清空，用最近一次有效选区
+  if ((!txt || !inMd) && lastNoteSelection.value) {
+    txt = lastNoteSelection.value.text;
+    inMd = true;
+  }
+  if (!txt || !inMd) {
     ElMessage.warning('请先在正文中选中文字，再点「批注」');
     return;
   }
