@@ -7,6 +7,8 @@ export type { Novel, Chapter, ChapterDetail, ChapterVerify, Comment, NovelListPa
 export { chapterApi } from './chapters';
 export { commentApi } from './comments';
 export { forumApi } from '@/api/social/forums';
+export { documentApi, DOC_KIND_OPTIONS, docKindLabel } from './documents';
+export type { NovelDocument } from './documents';
 
 export const novelApi = {
   // ============ 作品 CRUD ============

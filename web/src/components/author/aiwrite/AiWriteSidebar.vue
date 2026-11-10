@@ -100,6 +100,7 @@ const navViews = [
   { key: 'character', label: '人物', icon: '👤' },
   { key: 'outline', label: '大纲', icon: '📑' },
   { key: 'timeline', label: '时间线看板', icon: '🕰️' },
+  { key: 'storyline', label: '故事线', icon: '🧵' },
   { key: 'chapters', label: '正文 / 章节', icon: '✍️' },
 ];
 const toolViews = [
@@ -109,16 +110,16 @@ const toolViews = [
 
 const totalDetails = computed(() => props.details.length);
 function detailCount(view: string) {
-  if (!['setting', 'character', 'outline', 'timeline'].includes(view)) return 0;
+  if (!['setting', 'character', 'outline', 'timeline', 'storyline'].includes(view)) return 0;
   const mod = view === 'character' ? 'character' : view;
   return props.details.filter((d) => d.module === mod).length;
 }
 const filledModules = computed(() => {
   const p = props.project;
-  return [p.setting, p.characters, p.outline, p.timeline].filter((s) => (s || '').trim()).length;
+  return [p.setting, p.characters, p.outline, p.timeline, p.storyline].filter((s) => (s || '').trim()).length;
 });
 const progress = computed(() => {
-  const parts = [filledModules.value / 4, props.chapterCount > 0 ? 1 : 0, props.project.seed_topic ? 1 : 0];
+  const parts = [filledModules.value / 5, props.chapterCount > 0 ? 1 : 0, props.project.seed_topic ? 1 : 0];
   return Math.round((parts.reduce((a, b) => a + b, 0) / parts.length) * 100);
 });
 </script>

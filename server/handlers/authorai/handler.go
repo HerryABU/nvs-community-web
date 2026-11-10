@@ -39,6 +39,7 @@ const (
 	CompCharacter = "character" // 人物设定
 	CompOutline   = "outline"   // 大纲
 	CompTimeline  = "timeline"  // 大事年表（含嵌套循环时间线）
+	CompStoryline = "storyline" // 故事线（主线 / 支线，可多条、可交联）
 	CompBody      = "body"      // 章节正文
 )
 
@@ -249,6 +250,8 @@ func GenerateComponent(c *gin.Context) {
 		p.Outline = genContent
 	case CompTimeline:
 		p.Timeline = genContent
+	case CompStoryline:
+		p.Storyline = genContent
 	case CompBody:
 		if strings.TrimSpace(p.BodyDraft) == "" {
 			p.BodyDraft = genContent
@@ -276,6 +279,7 @@ var materialTplKey = map[string]string{
 	CompCharacter: "authorai-character",
 	CompOutline:   "authorai-outline",
 	CompTimeline:  "authorai-timeline",
+	CompStoryline: "authorai-storyline",
 	CompBody:      "authorai-body",
 }
 
@@ -290,6 +294,8 @@ func materialExistingAndInput(p *authoraim.NovelProject, comp string) (existing,
 		return p.Outline, p.OutlineInput
 	case CompTimeline:
 		return p.Timeline, p.TimelineInput
+	case CompStoryline:
+		return p.Storyline, p.StorylineInput
 	case CompBody:
 		return p.BodyDraft, ""
 	}

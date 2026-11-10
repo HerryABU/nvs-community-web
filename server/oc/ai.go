@@ -25,6 +25,7 @@ type OcGenSeed struct {
 	SpeciesTraits     string
 	AnthroType        string
 	ExtraRequirements string
+	BookID            uint // 生成后绑定的世界书（可选，快速创建时注入）
 }
 
 // OcFillSeed OC 角色卡补全入参
@@ -101,7 +102,171 @@ func GenerateOCCharacter(userID uint, seed OcGenSeed) (*Character, error) {
 	if strings.TrimSpace(in.Name) == "" {
 		in.Name = "未命名OC"
 	}
+	// 快速创建：把生成的角色卡绑到刚生成的世界书
+	if seed.BookID > 0 {
+		in.BookID = seed.BookID
+	}
 	return CreateCharacter(userID, in)
+}
+
+// OcBookSeed OC 世界书生成入参
+type OcBookSeed struct {
+	Concept           string // 核心概念/灵感
+	StyleDirective    string // 风格基调
+	ExtraRequirements string
+}
+
+// ocBookJSON 世界书 AI 输出结构
+type ocBookJSON struct {
+	Title   string `json:"title"`
+	Summary string `json:"summary"`
+	Entries []struct {
+		Kind           string `json:"kind"`
+		Key            string `json:"key"`
+		Content        string `json:"content"`
+		SecondaryKeys  string `json:"secondary_keys"`
+		Constant       bool   `json:"constant"`
+		InsertionOrder int    `json:"insertion_order"`
+	} `json:"entries"`
+}
+
+// extractJSON 从 AI 文本中截取最外层 JSON 对象
+func extractJSON(content string) string {
+	raw := strings.TrimSpace(content)
+	if i := strings.Index(raw, "{"); i >= 0 {
+		if j := strings.LastIndex(raw, "}"); j > i {
+			return raw[i : j+1]
+		}
+	}
+	return raw
+}
+
+// GenerateWorldBook 从概念生成 OC 世界书（落库，含条目）
+func GenerateWorldBook(userID, groupID uint, seed OcBookSeed) (*WorldBook, error) {
+	t, terr := prompttpl.GetByKey("oc-worldbook")
+	if terr != nil || t == nil {
+		return nil, fmt.Errorf("世界书生成模板未就绪")
+	}
+	values := map[string]string{
+		"Concept":           strings.TrimSpace(seed.Concept),
+		"StyleDirective":    strings.TrimSpace(seed.StyleDirective),
+		"ExtraRequirements": strings.TrimSpace(seed.ExtraRequirements),
+	}
+	rendered := prompttpl.Render(t.Content, t.Vars, values)
+	userText := rendered.Text
+	if strings.TrimSpace(userText) == "" {
+		userText = "请基于概念设计一本 OC 世界书：" + strings.TrimSpace(seed.Concept)
+	}
+	res, gerr := aicall.Complete(aicall.Request{
+		PayerID: userID, Scene: "oc_ai", Action: "oc_book",
+		RefType: "oc_world_book", RefID: 0,
+		System:    "你是专业的 OC 世界书设计助手，请严格按用户给出的结构与要求输出 JSON，不解释、不评价。",
+		User:      userText,
+		MaxTokens: 3000, Temperature: 0.85,
+	})
+	if gerr != nil {
+		return nil, fmt.Errorf("AI 生成失败：%w", gerr)
+	}
+	var bj ocBookJSON
+	if err := json.Unmarshal([]byte(extractJSON(res.Content)), &bj); err != nil || strings.TrimSpace(bj.Title) == "" {
+		return nil, fmt.Errorf("AI 生成的世界书无法解析")
+	}
+	book, err := CreateWorldBook(userID, groupID, bj.Title, bj.Summary, "private")
+	if err != nil {
+		return nil, err
+	}
+	enabled := true
+	for i, e := range bj.Entries {
+		order := e.InsertionOrder
+		if order == 0 {
+			order = (i + 1) * 100
+		}
+		kind := strings.TrimSpace(e.Kind)
+		if kind == "" {
+			kind = "world"
+		}
+		_, _ = SaveEntryFull(userID, book.ID, 0, EntryInput{
+			Kind: kind, Key: strings.TrimSpace(e.Key), Content: e.Content,
+			SecondaryKeys: e.SecondaryKeys, Constant: e.Constant,
+			Enabled: &enabled, InsertionOrder: order,
+		})
+	}
+	return book, nil
+}
+
+// OcQuickSeed 快速创建「世界 + 角色」入参
+type OcQuickSeed struct {
+	WorldConcept      string // 世界概念（若留空则用 CharacterConcept）
+	WorldStyle        string
+	CharacterConcept  string // 角色概念（若留空则用 WorldConcept）
+	StyleDirective    string
+	ExtraRequirements string
+	OcKind            string
+	Species           string
+	SpeciesTraits     string
+	AnthroType        string
+	CharacterCount    int    // 1-4，默认 1
+	GroupTitle        string // 可选：打包成 OC 组
+}
+
+// QuickResult 快速创建结果
+type QuickResult struct {
+	Book       *WorldBook   `json:"book"`
+	Characters []*Character `json:"characters"`
+	Group      *OcGroup     `json:"group,omitempty"`
+}
+
+// QuickCreate 一键生成「世界书 + N 张角色卡」（可选打包 OC 组）
+func QuickCreate(userID, groupID uint, seed OcQuickSeed) (*QuickResult, error) {
+	worldConcept := strings.TrimSpace(seed.WorldConcept)
+	if worldConcept == "" {
+		worldConcept = strings.TrimSpace(seed.CharacterConcept)
+	}
+	if worldConcept == "" {
+		return nil, fmt.Errorf("请填写世界或角色概念")
+	}
+	book, err := GenerateWorldBook(userID, groupID, OcBookSeed{
+		Concept: worldConcept, StyleDirective: seed.WorldStyle, ExtraRequirements: seed.ExtraRequirements,
+	})
+	if err != nil {
+		return nil, err
+	}
+	count := seed.CharacterCount
+	if count < 1 {
+		count = 1
+	}
+	if count > 4 {
+		count = 4
+	}
+	charConcept := strings.TrimSpace(seed.CharacterConcept)
+	if charConcept == "" {
+		charConcept = worldConcept
+	}
+	chars := make([]*Character, 0, count)
+	for i := 0; i < count; i++ {
+		ch, cerr := GenerateOCCharacter(userID, OcGenSeed{
+			Concept: charConcept, StyleDirective: seed.StyleDirective,
+			OcKind: seed.OcKind, Species: seed.Species, SpeciesTraits: seed.SpeciesTraits,
+			AnthroType: seed.AnthroType, ExtraRequirements: seed.ExtraRequirements,
+			BookID: book.ID,
+		})
+		if cerr == nil && ch != nil {
+			chars = append(chars, ch)
+		}
+	}
+	res := &QuickResult{Book: book, Characters: chars}
+	if gname := strings.TrimSpace(seed.GroupTitle); gname != "" && len(chars) > 0 {
+		ids := make([]uint, 0, len(chars))
+		for _, c := range chars {
+			ids = append(ids, c.ID)
+		}
+		if g, gerr := CreateOcGroup(userID, OcGroupInput{
+			Name: gname, Summary: book.Summary, Visibility: "private", CharacterIDs: ids,
+		}); gerr == nil {
+			res.Group = g
+		}
+	}
+	return res, nil
 }
 
 // FillOCCharacter 在已有角色卡基础上补全/润色（落库更新）

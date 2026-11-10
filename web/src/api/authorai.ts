@@ -12,6 +12,8 @@ export interface AiWriteProject {
   characters: string;
   timeline: string;
   outline: string;
+  /** 故事线（主线/支线，可多条、可交织） */
+  storyline: string;
   style_preset: string;
   style_detail: string;
   /** 引子 / 话题（ADRO Anchor）：全书拆解的锚点 */
@@ -22,6 +24,7 @@ export interface AiWriteProject {
   character_input: string;
   outline_input: string;
   timeline_input: string;
+  storyline_input: string;
   status: string;
   created_at: string;
   updated_at: string;
@@ -57,7 +60,7 @@ export interface TimelineCheckResult {
 }
 
 // ── 结构化细节卡（NovelForge 式独立实体，真源；四个大字段是投影）──
-export type DetailModule = 'setting' | 'character' | 'outline' | 'timeline';
+export type DetailModule = 'setting' | 'character' | 'outline' | 'timeline' | 'storyline';
 export interface AiWriteDetail {
   id: number;
   project_id: number;
@@ -75,7 +78,95 @@ export const DETAIL_MODULES: { value: DetailModule; label: string; icon: string;
   { value: 'character', label: '人物', icon: '👤', hint: '角色卡、欲望、秘密、关系张力' },
   { value: 'outline', label: '大纲', icon: '📑', hint: '分卷 / 分章、节奏与伏笔' },
   { value: 'timeline', label: '时间线', icon: '🕰️', hint: '大事年表、[LOOP] 嵌套循环与回环' },
+  { value: 'storyline', label: '故事线', icon: '🧵', hint: '主线 / 支线多条并存、跨线交织' },
 ];
+
+// ==================== 故事线结构化解析（与后端 server/models/authorai/storyline.go 同构） ====================
+// 语法：[LINE:id|类型|标题]…[/LINE]；事件行可带 [CROSS:线id] / [INFLUENCE:线id|影响] /
+// [IMPACT:关键词] / [A] 锚点 / ret、returnA 回溯。
+export interface StorylineEvent {
+  text: string;
+  cross: string[];
+  influence: string[];
+  impact: string[];
+  anchors: string[];
+  return_to?: string;
+  is_return?: boolean;
+}
+export interface Storyline {
+  id: string;
+  type: string;
+  title: string;
+  events: StorylineEvent[];
+  cross: string[];
+  influence: string[];
+  impact: string[];
+}
+
+function tagList(line: string, tag: string): string[] {
+  const out: string[] = [];
+  const re = new RegExp(`\\[${tag}:([^\\]]+)\\]`, 'gi');
+  let m: RegExpExecArray | null;
+  let rest = line;
+  while ((m = re.exec(rest)) !== null) {
+    for (const p of m[1].split(',')) {
+      const v = p.trim();
+      if (v) out.push(v);
+    }
+    rest = rest.replace(m[0], '');
+    re.lastIndex = 0;
+  }
+  return out;
+}
+
+function stripTags(line: string): string {
+  let out = line.replace(/\[[^\]]*\]/g, ' ');
+  out = out.replace(/\b(ret|return[A-Za-z](?:@[A-Za-z0-9_]+)?)\b/gi, ' ');
+  return out;
+}
+
+export function parseStorylines(text: string): Storyline[] {
+  const out: Storyline[] = [];
+  let cur: Storyline | null = null;
+  for (const raw of (text || '').split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const open = line.match(/^\[LINE:([^\]]+)\]/i);
+    if (open) {
+      const parts = open[1].split('|').map((s) => s.trim());
+      const lane: Storyline = {
+        id: parts[0] || '', type: parts[1] || '支线', title: parts[2] || parts[0] || '',
+        events: [], cross: [], influence: [], impact: [],
+      };
+      if (!lane.id) lane.id = lane.title;
+      if (!lane.type) lane.type = '支线';
+      out.push(lane);
+      cur = lane;
+      continue;
+    }
+    if (/^\[\/LINE\]/i.test(line)) { cur = null; continue; }
+    if (!cur) continue;
+    const cross = tagList(line, 'CROSS');
+    const influence = tagList(line, 'INFLUENCE');
+    const impact = tagList(line, 'IMPACT');
+    const anchors = line.split(/\s+/).filter((t) => /^\[A\]$/i.test(t)).map(() => 'A');
+    const retMatch = line.match(/\b(ret|return[A-Za-z](?:@[A-Za-z0-9_]+)?)\b/i);
+    const body = stripTags(line).replace(/^\d+[\s、.]?/, '').trim();
+    if (!body) continue;
+    cur.events.push({
+      text: body, cross, influence, impact, anchors,
+      return_to: retMatch ? retMatch[1].toLowerCase() : undefined,
+      is_return: !!retMatch,
+    });
+    for (const c of cross) if (!cur.cross.includes(c)) cur.cross.push(c);
+    for (const inf of influence) {
+      const target = inf.split('|')[0].trim();
+      if (target && !cur.influence.includes(target)) cur.influence.push(target);
+    }
+    for (const im of impact) if (!cur.impact.includes(im)) cur.impact.push(im);
+  }
+  return out;
+}
 
 export type RefineMode = 'socratic' | 'feynman' | 'direct';
 export const REFINE_MODES: { value: RefineMode; label: string; hint: string; icon: string }[] = [
@@ -135,6 +226,13 @@ export const authorAiApi = {
   timelineCheck(id: number) {
     return api.get<{ code: number; data: TimelineCheckResult }>(
       `/author-ai/projects/${id}/timeline-check`,
+    );
+  },
+  // 文本 → 视图：格式化（推荐提示词路线，故事线/时间线/大纲）
+  format(id: number, component: 'storyline' | 'timeline' | 'outline', modelId?: number) {
+    return api.post<{ code: number; data: { component: string; content: string } }>(
+      `/author-ai/projects/${id}/format`,
+      { component, model_id: modelId || 0 },
     );
   },
   // 章节 CRUD

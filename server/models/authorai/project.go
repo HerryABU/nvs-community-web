@@ -19,6 +19,7 @@ type NovelProject struct {
 	Characters  string `gorm:"type:text" json:"characters"`            // JSON 数组：人物设定卡
 	Timeline    string `gorm:"type:text" json:"timeline"`              // JSON：大事年表 + 嵌套循环时间线
 	Outline     string `gorm:"type:text" json:"outline"`               // JSON：大纲层级
+	Storyline   string `gorm:"type:text" json:"storyline"`             // 故事线（主线/支线，可多条、可交联）
 	StylePreset string `gorm:"size:32;default:''" json:"style_preset"` // realism / hard_sci_fi / light_novel / custom
 	StyleDetail string `gorm:"type:text" json:"style_detail"`          // 更详细的风格要求
 	BodyDraft   string `gorm:"type:text" json:"body_draft"`            // 正文草稿
@@ -31,6 +32,7 @@ type NovelProject struct {
 	CharacterInput string    `gorm:"type:text" json:"character_input"`
 	OutlineInput   string    `gorm:"type:text" json:"outline_input"`
 	TimelineInput  string    `gorm:"type:text" json:"timeline_input"`
+	StorylineInput string    `gorm:"type:text" json:"storyline_input"`
 	Status         string    `gorm:"size:32;default:draft" json:"status"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`

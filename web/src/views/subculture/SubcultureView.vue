@@ -151,6 +151,52 @@
             </el-form>
             <el-alert v-if="fillResult" type="success" :closable="false" :title="`已补全「${fillResult.name}」`" />
           </el-card>
+
+          <el-card class="subc-ai-card" shadow="never">
+            <template #header><span class="subc-ai-h">🚀 快速创建世界 + 角色</span></template>
+            <el-form label-width="96px" size="default">
+              <el-form-item label="世界概念" required>
+                <el-input v-model="quick.world_concept" type="textarea" :rows="2" placeholder="例如：近未来废土，兽人在辐射带边缘建立聚落" />
+              </el-form-item>
+              <el-form-item label="世界风格">
+                <el-input v-model="quick.world_style" placeholder="如：荒凉 / 温暖 / 赛博（可空）" />
+              </el-form-item>
+              <el-form-item label="角色概念">
+                <el-input v-model="quick.character_concept" type="textarea" :rows="2" placeholder="留空则以世界概念生成角色（可填主角/反派等方向）" />
+              </el-form-item>
+              <el-form-item label="角色数量">
+                <el-input-number v-model="quick.character_count" :min="1" :max="4" />
+                <span class="subc-tip" style="margin-left:8px">一次生成 1-4 张角色卡，均绑定到新生成的世界书</span>
+              </el-form-item>
+              <el-form-item label="OC 分类">
+                <el-radio-group v-model="quick.oc_kind">
+                  <el-radio value="native">原生 OC</el-radio>
+                  <el-radio value="furry">Furry 兽人</el-radio>
+                </el-radio-group>
+              </el-form-item>
+              <template v-if="quick.oc_kind === 'furry'">
+                <el-row :gutter="12">
+                  <el-col :span="8"><el-form-item label="物种"><el-input v-model="quick.species" placeholder="狼/猫/龙…" /></el-form-item></el-col>
+                  <el-col :span="8"><el-form-item label="拟人类型">
+                    <el-select v-model="quick.anthro_type" clearable placeholder="可选" style="width:100%">
+                      <el-option label="完全兽（feral）" value="feral" />
+                      <el-option label="半兽人（anthro）" value="anthro" />
+                      <el-option label="完全拟人（full）" value="full" />
+                    </el-select>
+                  </el-form-item></el-col>
+                  <el-col :span="8"><el-form-item label="动物特征"><el-input v-model="quick.species_traits" placeholder="耳朵/尾巴/毛色…" /></el-form-item></el-col>
+                </el-row>
+              </template>
+              <el-form-item label="打包 OC 组">
+                <el-input v-model="quick.group_title" placeholder="填写组名可把生成的角色打包成 OC 组（可空）" />
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" :loading="quickLoading" @click="doQuickCreate">一键生成世界 + 角色</el-button>
+              </el-form-item>
+            </el-form>
+            <el-alert v-if="quickResult" type="success" :closable="false"
+              :title="`已生成世界书「${quickResult.book?.title || ''}」与 ${quickResult.characters?.length || 0} 张角色卡${quickResult.group ? '，并打包为 OC 组' : ''}`" />
+          </el-card>
         </div>
       </el-tab-pane>
     </el-tabs>
@@ -400,6 +446,34 @@ async function doFill() {
     ElMessage.error(e?.response?.data?.message || '补全失败');
   } finally {
     fillLoading.value = false;
+  }
+}
+
+// 快速创建「世界 + 角色」
+const quickLoading = ref(false);
+const quickResult = ref<any>(null);
+const quick = reactive({
+  world_concept: '', world_style: '', character_concept: '',
+  character_count: 1, oc_kind: 'native',
+  species: '', species_traits: '', anthro_type: '',
+  group_title: '',
+});
+
+async function doQuickCreate() {
+  if (!quick.world_concept.trim()) {
+    ElMessage.warning('请填写世界概念');
+    return;
+  }
+  quickLoading.value = true;
+  quickResult.value = null;
+  try {
+    const res = await ocAiApi.quickCreate({ ...quick });
+    quickResult.value = res.data.data;
+    ElMessage.success('快速创建完成');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '生成失败');
+  } finally {
+    quickLoading.value = false;
   }
 }
 

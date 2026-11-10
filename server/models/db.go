@@ -70,6 +70,8 @@ func AllModels() []interface{} {
 		&NovelLike{},
 		// 作品角色表（话本气泡体的角色管理：头像/主题色/默认左右）
 		&NovelCharacter{},
+		// 小说附属文档（设定集 / 大纲 / 人物 / 时间线 / 故事线 / 资料）
+		&NovelDocument{},
 		&Forum{}, &Thread{}, &Post{}, &ForumMute{}, &PlatformConfig{},
 		&Notification{}, // 站内消息通知
 		// 自建论坛额度：按人覆盖（管理员可削减/放开某人的建版数）

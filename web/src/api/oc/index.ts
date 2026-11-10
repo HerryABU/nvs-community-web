@@ -348,4 +348,28 @@ export const ocAiApi = {
   ) {
     return api.post<{ code: number; data: OcCharacter }>(`/oc/characters/${characterId}/ai-fill`, data);
   },
+  // 从概念生成世界书（含条目）
+  generateBook(data: { concept: string; style_directive?: string; extra_requirements?: string; group_id?: number }) {
+    return api.post<{ code: number; data: OcWorldBook }>('/oc/ai-book', data);
+  },
+  // 快速创建「世界书 + N 张角色卡」，可选打包 OC 组
+  quickCreate(data: {
+    world_concept?: string;
+    world_style?: string;
+    character_concept?: string;
+    style_directive?: string;
+    extra_requirements?: string;
+    oc_kind?: string;
+    species?: string;
+    species_traits?: string;
+    anthro_type?: string;
+    character_count?: number;
+    group_title?: string;
+    group_id?: number;
+  }) {
+    return api.post<{ code: number; data: { book: OcWorldBook; characters: OcCharacter[]; group?: OcGroup | null } }>(
+      '/oc/quick-create',
+      data,
+    );
+  },
 };

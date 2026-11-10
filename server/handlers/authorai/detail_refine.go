@@ -157,6 +157,7 @@ func compileMaterials(projectID uint) error {
 			"characters": join(authoraim.ModCharacter),
 			"outline":    join(authoraim.ModOutline),
 			"timeline":   join(authoraim.ModTimeline),
+			"storyline":  join(authoraim.ModStoryline),
 		}).Error
 }
 

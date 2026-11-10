@@ -226,6 +226,11 @@ func registerProtected(r *gin.Engine) {
 		protected.POST("/novels", novel.CreateNovel)
 		protected.PUT("/novels/:id", novel.UpdateNovel)
 		protected.DELETE("/novels/:id", novel.DeleteNovel)
+		// 小说附属文档（设定集 / 大纲 / 人物 / 时间线 / 故事线 / 资料）
+		protected.GET("/novels/:id/documents", novel.ListDocuments)
+		protected.POST("/novels/:id/documents", novel.CreateDocument)
+		protected.PUT("/novels/:id/documents/:did", novel.UpdateDocument)
+		protected.DELETE("/novels/:id/documents/:did", novel.DeleteDocument)
 		protected.POST("/novels/:id/like", novel.ToggleNovelLike) // 小说点赞/取消
 		protected.POST("/novels/:id/chapters", novel.CreateChapter)
 		protected.PUT("/novels/:id/chapters/:num", novel.UpdateChapter)
@@ -263,6 +268,9 @@ func registerProtected(r *gin.Engine) {
 		// OC 角色卡 AI 生成 / 补全（借鉴作者工作台 AI 写作流，数据隔离）
 		protected.POST("/oc/ai-character", ochandler.AiGenerateCharacter)
 		protected.POST("/oc/characters/:cid/ai-fill", ochandler.AiFillCharacter)
+		// OC 世界书 AI 生成 + 快速创建「世界 + 角色」
+		protected.POST("/oc/ai-book", ochandler.AiGenerateBook)
+		protected.POST("/oc/quick-create", ochandler.AiQuickCreate)
 		protected.GET("/oc/books", ochandler.ListBooks)
 		protected.POST("/oc/books", ochandler.CreateBook)
 		protected.GET("/oc/books/:bid", ochandler.GetBook)
@@ -328,6 +336,8 @@ func registerProtected(r *gin.Engine) {
 		protected.POST("/author-ai/projects/:id/generate", authoraih.GenerateComponent)
 		protected.POST("/author-ai/projects/:id/generate-all", authoraih.GenerateAllMaterials)
 		protected.GET("/author-ai/projects/:id/timeline-check", authoraih.TimelineCheck)
+		// 文本 → 视图：格式化（推荐提示词路线，故事线/时间线/大纲）
+		protected.POST("/author-ai/projects/:id/format", authoraih.FormatComponent)
 		// ADRO 创作向：引子 → 拆解成独立细节卡 → 逐细节多轮微调
 		protected.GET("/author-ai/projects/:id/details", authoraih.ListDetails)
 		protected.POST("/author-ai/projects/:id/details", authoraih.CreateDetail)

@@ -169,7 +169,62 @@
           </div>
         </div>
       </el-card>
+
+      <!-- 设定集 / 文档（与小说绑定的资料） -->
+      <el-card class="editor-section">
+        <template #header>
+          <div class="section-header">
+            <span>设定集 / 文档（{{ documents.length }}）</span>
+            <div class="section-actions">
+              <el-button type="primary" size="small" @click="openDocCreate">
+                <el-icon><Plus /></el-icon>新建文档
+              </el-button>
+            </div>
+          </div>
+        </template>
+        <el-empty v-if="documents.length === 0" description="暂无文档：可放设定集、大纲、人物小传、时间线、故事线、资料等" />
+        <div v-else class="chapter-list">
+          <div v-for="d in documents" :key="d.id" class="chapter-item">
+            <el-tag size="small" effect="plain">{{ docKindLabel(d.kind) }}</el-tag>
+            <span class="ch-title">{{ d.title }}</span>
+            <el-tag size="small" :type="d.visibility === 'public' ? 'success' : 'info'" effect="plain">
+              {{ d.visibility === 'public' ? '公开' : '仅自己' }}
+            </el-tag>
+            <div class="ch-actions">
+              <el-button size="small" text @click="openDocEdit(d)">编辑</el-button>
+              <el-button size="small" text type="danger" @click="removeDoc(d)">删除</el-button>
+            </div>
+          </div>
+        </div>
+      </el-card>
     </template>
+
+    <!-- 文档编辑弹窗 -->
+    <el-dialog v-model="showDocDialog" :title="editingDoc ? '编辑文档' : '新建文档'" width="640px" destroy-on-close>
+      <el-form label-width="90px">
+        <el-form-item label="类型">
+          <el-select v-model="docForm.kind" style="width:240px">
+            <el-option v-for="k in DOC_KIND_OPTIONS" :key="k.value" :label="k.label" :value="k.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="标题" required>
+          <el-input v-model="docForm.title" maxlength="200" placeholder="如：世界观设定集" />
+        </el-form-item>
+        <el-form-item label="内容">
+          <el-input v-model="docForm.content" type="textarea" :rows="12" placeholder="设定集 / 资料正文" />
+        </el-form-item>
+        <el-form-item label="可见性">
+          <el-radio-group v-model="docForm.visibility">
+            <el-radio-button value="public">公开给读者</el-radio-button>
+            <el-radio-button value="private">仅自己可见</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showDocDialog = false">取消</el-button>
+        <el-button type="primary" :loading="docSaving" @click="saveDoc">保存</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 导入文件对话框 -->
     <el-dialog v-model="showImportDialog" title="导入文件" width="700px" destroy-on-close @closed="resetImport">
@@ -336,7 +391,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { novelApi, chapterApi, type Novel, type Chapter } from '@/api/novel';
+import { novelApi, chapterApi, documentApi, DOC_KIND_OPTIONS, docKindLabel, type Novel, type Chapter, type NovelDocument } from '@/api/novel';
 import { publicApi } from '@/api/admin';
 import { authApi } from '@/api/auth';
 import api from '@/api/index';
@@ -436,6 +491,63 @@ async function searchOrigin(q: string) {
 // 导入相关
 const showImportDialog = ref(false);
 const importing = ref(false);
+
+// ====== 设定集 / 文档（与小说绑定） ======
+const documents = ref<NovelDocument[]>([]);
+const showDocDialog = ref(false);
+const editingDoc = ref<NovelDocument | null>(null);
+const docSaving = ref(false);
+const docForm = reactive({ kind: 'setting', title: '', content: '', visibility: 'public' });
+
+async function loadDocuments() {
+  if (!novelId.value) return;
+  try {
+    const res = await documentApi.list(novelId.value);
+    documents.value = res.data.data?.list || [];
+  } catch { documents.value = []; }
+}
+function openDocCreate() {
+  editingDoc.value = null;
+  Object.assign(docForm, { kind: 'setting', title: '', content: '', visibility: 'public' });
+  showDocDialog.value = true;
+}
+function openDocEdit(d: NovelDocument) {
+  editingDoc.value = d;
+  Object.assign(docForm, { kind: d.kind, title: d.title, content: d.content, visibility: d.visibility });
+  showDocDialog.value = true;
+}
+async function saveDoc() {
+  if (!docForm.title.trim()) { ElMessage.warning('请填写标题'); return; }
+  if (!novelId.value) return;
+  docSaving.value = true;
+  try {
+    const payload = { ...docForm, title: docForm.title.trim() };
+    if (editingDoc.value) {
+      await documentApi.update(novelId.value, editingDoc.value.id, payload);
+      ElMessage.success('已保存');
+    } else {
+      await documentApi.create(novelId.value, payload);
+      ElMessage.success('已创建');
+    }
+    showDocDialog.value = false;
+    await loadDocuments();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  } finally { docSaving.value = false; }
+}
+async function removeDoc(d: NovelDocument) {
+  if (!novelId.value) return;
+  try {
+    await ElMessageBox.confirm(`确定删除「${d.title}」？`, '删除文档', { type: 'warning' });
+  } catch { return; }
+  try {
+    await documentApi.remove(novelId.value, d.id);
+    ElMessage.success('已删除');
+    await loadDocuments();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '删除失败');
+  }
+}
 const importPreviewing = ref(false);
 const uploadRef = ref();
 const importFile = ref<File | null>(null);
@@ -684,7 +796,10 @@ async function loadCategories() {
 onMounted(() => {
   loadCategories();
   loadSensitiveZones();
-  if (isEditing) loadNovel();
+  if (isEditing) {
+    loadNovel();
+    loadDocuments();
+  }
 });
 </script>
 

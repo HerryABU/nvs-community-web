@@ -98,3 +98,83 @@ func AiFillCharacter(c *gin.Context) {
 	}
 	infra.SuccessMessage(c, "AI 已补全角色卡", ch)
 }
+
+// AiGenerateBook POST /api/oc/ai-book
+// 从概念生成 OC 世界书（含条目）。
+func AiGenerateBook(c *gin.Context) {
+	uid := middleware.UserID(c)
+	if uid == 0 {
+		infra.Unauthorized(c, "请先登录")
+		return
+	}
+	if !ai.IsAiEnabled() {
+		infra.BadRequest(c, "平台 AI 未开启")
+		return
+	}
+	var in struct {
+		Concept           string `json:"concept"`
+		StyleDirective    string `json:"style_directive"`
+		ExtraRequirements string `json:"extra_requirements"`
+		GroupID           uint   `json:"group_id"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil {
+		infra.BadRequest(c, "参数错误")
+		return
+	}
+	if strings.TrimSpace(in.Concept) == "" {
+		infra.BadRequest(c, "请填写核心概念")
+		return
+	}
+	book, err := oc.GenerateWorldBook(uid, in.GroupID, oc.OcBookSeed{
+		Concept: in.Concept, StyleDirective: in.StyleDirective, ExtraRequirements: in.ExtraRequirements,
+	})
+	if err != nil {
+		infra.InternalError(c, err.Error())
+		return
+	}
+	infra.SuccessMessage(c, "AI 已生成世界书", book)
+}
+
+// AiQuickCreate POST /api/oc/quick-create
+// 一键生成「世界书 + N 张角色卡」，可选打包成 OC 组。
+func AiQuickCreate(c *gin.Context) {
+	uid := middleware.UserID(c)
+	if uid == 0 {
+		infra.Unauthorized(c, "请先登录")
+		return
+	}
+	if !ai.IsAiEnabled() {
+		infra.BadRequest(c, "平台 AI 未开启")
+		return
+	}
+	var in struct {
+		WorldConcept      string `json:"world_concept"`
+		WorldStyle        string `json:"world_style"`
+		CharacterConcept  string `json:"character_concept"`
+		StyleDirective    string `json:"style_directive"`
+		ExtraRequirements string `json:"extra_requirements"`
+		OcKind            string `json:"oc_kind"`
+		Species           string `json:"species"`
+		SpeciesTraits     string `json:"species_traits"`
+		AnthroType        string `json:"anthro_type"`
+		CharacterCount    int    `json:"character_count"`
+		GroupTitle        string `json:"group_title"`
+		GroupID           uint   `json:"group_id"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil {
+		infra.BadRequest(c, "参数错误")
+		return
+	}
+	res, err := oc.QuickCreate(uid, in.GroupID, oc.OcQuickSeed{
+		WorldConcept: in.WorldConcept, WorldStyle: in.WorldStyle,
+		CharacterConcept: in.CharacterConcept, StyleDirective: in.StyleDirective,
+		ExtraRequirements: in.ExtraRequirements,
+		OcKind:            in.OcKind, Species: in.Species, SpeciesTraits: in.SpeciesTraits, AnthroType: in.AnthroType,
+		CharacterCount: in.CharacterCount, GroupTitle: in.GroupTitle,
+	})
+	if err != nil {
+		infra.InternalError(c, err.Error())
+		return
+	}
+	infra.SuccessMessage(c, "快速创建完成", res)
+}

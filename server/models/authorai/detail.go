@@ -27,16 +27,17 @@ type Detail struct {
 
 func (Detail) TableName() string { return "authorai_details" }
 
-// DetailModule 四个素材模块（与 handler 的 CompSetting/CompCharacter/... 对齐）。
+// DetailModule 素材模块（与 handler 的 CompSetting/CompCharacter/... 对齐）。
 const (
 	ModSetting   = "setting"
 	ModCharacter = "character"
 	ModOutline   = "outline"
 	ModTimeline  = "timeline"
+	ModStoryline = "storyline" // 故事线（主线/支线，可多条、可交联）
 )
 
 // DetailModules 全部合法模块，用于校验与编译投影。
-var DetailModules = []string{ModSetting, ModCharacter, ModOutline, ModTimeline}
+var DetailModules = []string{ModSetting, ModCharacter, ModOutline, ModTimeline, ModStoryline}
 
 func ValidDetailModule(m string) bool {
 	for _, v := range DetailModules {
@@ -58,6 +59,8 @@ func ModuleLabel(m string) string {
 		return "大纲"
 	case ModTimeline:
 		return "大事年表 / 时间线"
+	case ModStoryline:
+		return "故事线（主线 / 支线）"
 	}
 	return m
 }

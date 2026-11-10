@@ -55,12 +55,27 @@
           <div class="aww-bar__sub">{{ currentModule?.hint }} · 每张卡独立保存 / 独立微调</div>
         </div>
         <div class="aww-bar__actions">
+          <el-radio-group v-if="view === 'outline'" v-model="displayMode" size="small">
+            <el-radio-button value="text">文本模式</el-radio-button>
+            <el-radio-button value="visual">视图模式</el-radio-button>
+          </el-radio-group>
+          <el-button v-if="view === 'outline'" size="small" :icon="MagicStick" :loading="formatLoading" @click="$emit('format-component', 'outline')">AI 格式化</el-button>
           <el-button size="small" :icon="Plus" @click="$emit('add-detail', view)">新增细节卡</el-button>
           <el-button size="small" type="primary" plain :icon="MagicStick" :loading="genLoading" @click="$emit('generate-module', view)">AI 补充本模块</el-button>
         </div>
       </div>
 
-      <div v-if="moduleDetails.length === 0" class="aww-empty">
+      <!-- 大纲视图模式：卡片即节点，点击回文本编辑（互转） -->
+      <div v-if="view === 'outline' && displayMode === 'visual'" class="aww-sl">
+        <div v-if="moduleDetails.length === 0" class="aww-empty is-sm"><p>还没有大纲卡片。</p></div>
+        <div v-for="(d, i) in moduleDetails" :key="d.id" class="aww-sl__ev" @click="openOutlineNode(d)">
+          <span class="aww-sl__seq">{{ i + 1 }}</span>
+          <span class="aww-sl__text">{{ d.title || '（无标题）' }}</span>
+          <span class="aww-sl__cross">{{ d.content.length }} 字</span>
+        </div>
+      </div>
+
+      <div v-else-if="moduleDetails.length === 0" class="aww-empty">
         <div class="aww-empty__art">{{ currentModule?.icon }}</div>
         <p>本模块还没有细节卡。点「AI 补充本模块」或「新增细节卡」开始。</p>
       </div>
@@ -97,11 +112,20 @@
           <div class="aww-bar__sub">按 [LOOP] 层级分轨道；锚点 [A] 与 ret / returnA 回溯会画成回环箭线</div>
         </div>
         <div class="aww-bar__actions">
+          <el-radio-group v-model="displayMode" size="small">
+            <el-radio-button value="text">文本模式</el-radio-button>
+            <el-radio-button value="visual">视图模式</el-radio-button>
+          </el-radio-group>
+          <el-button size="small" :icon="MagicStick" :loading="formatLoading" @click="$emit('format-component', 'timeline')">AI 格式化</el-button>
           <el-button size="small" :icon="Plus" @click="$emit('add-detail', 'timeline')">新增事件卡</el-button>
           <el-button size="small" type="primary" plain :icon="MagicStick" :loading="genLoading" @click="$emit('generate-module', 'timeline')">AI 生成时间线</el-button>
         </div>
       </div>
-      <div class="aww-board">
+      <!-- 视图模式：点线法（改文本即刷新） -->
+      <div v-if="displayMode === 'visual'" class="aww-visual-wrap">
+        <AiWriteVisuals :timeline="materialText.timeline" :characters="materialText.characters" />
+      </div>
+      <div v-else class="aww-board">
         <div v-for="(track, ti) in timelineTracks" :key="ti" class="aww-track">
           <div class="aww-track__label">
             <span class="aww-track__dot" :style="{ background: trackColor(ti) }" />
@@ -123,13 +147,76 @@
           </div>
         </div>
       </div>
-      <div class="aww-timeline-cards">
+      <div v-if="displayMode === 'text'" class="aww-timeline-cards">
         <article v-for="d in timelineDetails" :key="d.id" class="aww-card is-compact" :class="{ 'is-active': activeDetailId === d.id }">
           <header class="aww-card__head">
             <span class="aww-card__idx">⏱</span>
             <input v-model="d.title" class="aww-card__title" placeholder="事件 / 时间" @blur="$emit('save-detail', d)" />
           </header>
           <textarea v-model="d.content" class="aww-card__body" :rows="4" placeholder="时间线条目，可含 [LOOP:id] / [A] / ret" @blur="$emit('save-detail', d)" />
+          <footer class="aww-card__foot">
+            <span class="aww-card__count">{{ d.content.length }} 字</span>
+            <div class="aww-card__acts">
+              <button class="aww-card__refine" @click="$emit('refine-detail', d)">💬 微调</button>
+              <button @click="$emit('save-detail', d)">保存</button>
+              <button class="is-danger" @click="$emit('remove-detail', d)">删除</button>
+            </div>
+          </footer>
+        </article>
+      </div>
+    </section>
+
+    <!-- ===== 故事线（主线/支线，多线交织） ===== -->
+    <section v-else-if="view === 'storyline'" class="aww-view">
+      <div class="aww-bar">
+        <div>
+          <div class="aww-bar__title">🧵 故事线</div>
+          <div class="aww-bar__sub">多条主线/支线并存；[LINE:id|类型|标题] 起，[/LINE] 止；[CROSS:另一条线id] 标注交织</div>
+        </div>
+        <div class="aww-bar__actions">
+          <el-radio-group v-model="displayMode" size="small">
+            <el-radio-button value="text">文本模式</el-radio-button>
+            <el-radio-button value="visual">视图模式</el-radio-button>
+          </el-radio-group>
+          <el-button size="small" :icon="MagicStick" :loading="formatLoading" @click="$emit('format-component', 'storyline')">AI 格式化</el-button>
+          <el-button size="small" :icon="Plus" @click="$emit('add-detail', 'storyline')">新增故事线卡</el-button>
+          <el-button size="small" type="primary" plain :icon="MagicStick" :loading="genLoading" @click="$emit('generate-module', 'storyline')">AI 生成故事线</el-button>
+        </div>
+      </div>
+
+      <!-- 视图模式：多线泳道 -->
+      <div v-if="displayMode === 'visual'" class="aww-sl">
+        <div v-if="storylineLanes.length === 0" class="aww-empty is-sm"><p>还没有故事线，点「AI 生成故事线」或「新增故事线卡」开始。</p></div>
+        <div v-for="lane in storylineLanes" :key="lane.id" class="aww-sl__lane">
+          <div class="aww-sl__head" :class="'is-' + (lane.type === '主线' ? 'main' : 'sub')">
+            <span class="aww-sl__dot" />
+            <b>{{ lane.title || lane.id }}</b>
+            <el-tag size="small" effect="plain">{{ lane.type === '主线' ? '主线' : '支线' }}</el-tag>
+            <small>{{ lane.events.length }} 事件 · {{ lane.cross.length }} 处交织</small>
+          </div>
+          <div class="aww-sl__events">
+            <div v-for="(ev, i) in lane.events" :key="i" class="aww-sl__ev" @click="openStorylineEvent(ev)">
+              <span class="aww-sl__seq">{{ i + 1 }}</span>
+              <span class="aww-sl__text">{{ ev.text }}</span>
+              <span v-for="c in ev.cross" :key="'x' + c" class="aww-sl__cross" title="多线交汇">🔗 {{ c }}</span>
+              <span v-for="inf in ev.influence" :key="'i' + inf" class="aww-sl__cross is-influence" title="影响另一条线">➡️ {{ inf }}</span>
+              <span v-for="im in ev.impact" :key="'m' + im" class="aww-sl__cross is-impact" title="线内影响">💥 {{ im }}</span>
+              <span v-for="a in ev.anchors" :key="'a' + a + i" class="aww-sl__cross" title="时间锚点">⚓ {{ a }}</span>
+              <span v-if="ev.is_return" class="aww-sl__cross is-return" title="回溯">↩️ {{ ev.return_to }}</span>
+            </div>
+            <div v-if="lane.events.length === 0" class="aww-empty is-sm"><p>空故事线</p></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 文本模式：卡片编辑（与文本互相转换：改文本即刷新视图） -->
+      <div v-else class="aww-timeline-cards">
+        <article v-for="d in storylineDetails" :key="d.id" class="aww-card is-compact" :class="{ 'is-active': activeDetailId === d.id }">
+          <header class="aww-card__head">
+            <span class="aww-card__idx">🧵</span>
+            <input v-model="d.title" class="aww-card__title" placeholder="故事线标题（如 主线·顾昭的循环）" @blur="$emit('save-detail', d)" />
+          </header>
+          <textarea v-model="d.content" class="aww-card__body" :rows="5" placeholder="可含 [LINE:id|主线|标题] … [/LINE]、[A] 锚点、ret、[CROSS:另一条线id]" @blur="$emit('save-detail', d)" />
           <footer class="aww-card__foot">
             <span class="aww-card__count">{{ d.content.length }} 字</span>
             <div class="aww-card__acts">
@@ -217,7 +304,7 @@
 import { computed, ref, watch } from 'vue';
 import { Plus, MagicStick, Select } from '@element-plus/icons-vue';
 import AiWriteVisuals from '@/components/author/AiWriteVisuals.vue';
-import { DETAIL_MODULES, type AiWriteDetail, type AiWriteChapter, type DetailModule } from '@/api/authorai';
+import { DETAIL_MODULES, parseStorylines, type AiWriteDetail, type AiWriteChapter, type DetailModule } from '@/api/authorai';
 
 const props = defineProps<{
   view: string;
@@ -231,6 +318,7 @@ const props = defineProps<{
   totalWords: number;
   seedLoading: boolean;
   genLoading: boolean;
+  formatLoading: boolean;
   saving: boolean;
   chapterLoading: Record<number, { outline?: boolean; body?: boolean }>;
 }>();
@@ -243,6 +331,7 @@ const emit = defineEmits<{
   (e: 'remove-detail', d: AiWriteDetail): void;
   (e: 'refine-detail', d: AiWriteDetail): void;
   (e: 'generate-module', m: string): void;
+  (e: 'format-component', comp: string): void;
   (e: 'add-chapter'): void;
   (e: 'select-chapter', id: number): void;
   (e: 'save-chapter', ch: AiWriteChapter): void;
@@ -272,6 +361,32 @@ const timelineTracks = computed(() => {
   return tracks;
 });
 const trackColor = (i: number) => ['var(--primary-color)', 'var(--accent-color)', 'var(--aw-return, #06b6d4)'][i] || 'var(--text-muted)';
+
+// ===== 文本模式 / 视图模式 互相转换（时间线 / 故事线 / 大纲共用） =====
+const displayMode = ref<'text' | 'visual'>('text');
+watch(() => props.view, () => { displayMode.value = 'text'; });
+
+const storylineDetails = computed(() => props.details.filter((d) => d.module === 'storyline'));
+
+// 统一解析（与后端 server/models/authorai/storyline.go 同构）
+const storylineLanes = computed(() => {
+  const merged = storylineDetails.value.map((d) => d.content).join('\n');
+  return parseStorylines(merged);
+});
+
+// 视图模式点事件 → 回文本模式定位对应卡片（编辑即互转）
+function openStorylineEvent(ev: { text: string }) {
+  const d = storylineDetails.value.find((x) => x.content.includes(ev.text));
+  if (d) {
+    displayMode.value = 'text';
+    emit('refine-detail', d);
+  }
+}
+// 大纲视图模式点节点 → 回文本编辑
+function openOutlineNode(d: AiWriteDetail) {
+  displayMode.value = 'text';
+  emit('refine-detail', d);
+}
 
 function countOf(m: DetailModule) { return props.details.filter((d) => d.module === m).length; }
 function moduleIcon(m: string) { return DETAIL_MODULES.find((x) => x.value === m)?.icon || '·'; }

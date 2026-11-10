@@ -667,6 +667,17 @@ var builtinSeeds = []Template{
 		},
 	},
 	{
+		Key: "authorai-storyline", Title: "AI写作·故事线（主线/支线）", Scene: SceneAuthorAI, Category: "素材", Kind: KindChat,
+		Note:    "生成多条故事线（主线/支线）并标注跨线交织；格式约定便于前端泳道视图与时间线互转",
+		Content: "你正在为长篇中文小说《{{NovelTitle}}》{{TaskMode}}故事线（主线与支线）。\n\n风格基调：\n{{StyleDirective}}\n\n用户补充要求：\n{{ExtraRequirements}}\n\n已有故事线 / 大纲（若为「从零创作」可忽略；若已有请保持自洽）：\n{{ExistingContent}}\n\n【故事线结构约定——请严格使用，便于前端泳道视图与互转】\n1. 每条故事线用一行开头声明：[LINE:线id|类型|线标题]\n   - 线id 全局唯一（如 main、sub1、sub2）；类型只能是 主线 或 支线；\n   - 同一本书通常 1 条主线 + 至多 4 条支线。\n2. 事件：在 [LINE] 与 [/LINE] 之间，每行一个事件，格式「序号 事件简述（可含涉及人物/关键转折）」，按该线内顺序。\n3. 交织（多线交汇）：在交汇事件行末尾加 [CROSS:另一条线id]，可多个（逗号分隔）；也可在同一事件行里用「@线id」标注呼应。\n4. 影响（一条线的事件改变另一条线的走向）：在事件行末尾加 [INFLUENCE:目标线id|影响简述]，可多个（逗号分隔）；影响是有方向的（从本线指向目标线）。\n5. 线内标识：[LINE] 内可用 [A] 声明时间锚点、ret / returnA 回溯（与时间线约定一致）；也可用 [IMPACT:事件关键词] 标注该事件对本线后续的内在影响。\n6. 结尾用 [/LINE] 闭合该线。\n\n要求：\n- 每条线至少 5 个事件；主线完整（起承转合），支线相对独立但至少与主线有 1 处 [CROSS] 交织；\n- 事件要具体（人物 + 转折），不要空泛；\n- 只输出归一化后的故事线正文，不要输出解释或示例之外的说明。",
+		Vars: []TemplateVar{
+			{Name: "NovelTitle", Label: "作品名", MaxLen: 60},
+			{Name: "StyleDirective", Label: "风格基调", MaxLen: 400},
+			{Name: "ExtraRequirements", Label: "补充要求", MaxLen: 1000},
+			{Name: "ExistingContent", Label: "已有故事线/大纲", MaxLen: 4000},
+		},
+	},
+	{
 		Key: "authorai-body", Title: "AI写作·正文草稿", Scene: SceneAuthorAI, Category: "正文", Kind: KindChat,
 		Note:    "基于设定/人物/大纲续写一章正文；正文草稿作为独立落点",
 		Content: "你是一位专业的中文小说写作助手。请为长篇中文小说《{{NovelTitle}}》{{TaskMode}}一章正文，保持风格与设定一致，只输出正文。\n\n风格基调：\n{{StyleDirective}}\n\n用户补充要求：\n{{ExtraRequirements}}\n\n参考设定/人物/大纲：\n{{ExistingContent}}\n\n只输出正文。",
@@ -675,6 +686,16 @@ var builtinSeeds = []Template{
 			{Name: "StyleDirective", Label: "风格基调", MaxLen: 400},
 			{Name: "ExtraRequirements", Label: "补充要求", MaxLen: 1000},
 			{Name: "ExistingContent", Label: "参考设定/大纲", MaxLen: 4000},
+		},
+	},
+	// 文本 → 视图：把自由文本格式化为约定结构（推荐提示词路线）
+	{
+		Key: "authorai-format", Title: "AI写作·文本格式化（推荐提示词路线）", Scene: SceneAuthorAI, Category: "格式化", Kind: KindChat,
+		Note:    "把作者随手写的自由文本洗成约定结构（故事线/时间线/大纲），供前端视图模式渲染；不改变内容本身",
+		Content: "你在为长篇中文小说做**结构化整理**：把作者随手写的内容格式化为约定结构，供前端渲染视图。\n\n目标结构约定：\n{{Schema}}\n\n原始内容：\n{{ExistingContent}}\n\n要求：\n1. 只做结构化重写，不新增/删减事件与设定，不改变原有信息；\n2. 严格使用约定中的标识符（如 [LINE:]、[LOOP:]、[A]、ret、[CROSS:]、[INFLUENCE:]、[IMPACT:]）；\n3. 保留作者原意与语气，条目尽量具体；\n4. 只输出格式化后的正文，不要解释、不要标题、不要 Markdown 代码块。",
+		Vars: []TemplateVar{
+			{Name: "Schema", Label: "目标结构约定", Required: true, MaxLen: 2000},
+			{Name: "ExistingContent", Label: "原始内容", MaxLen: 6000},
 		},
 	},
 	// ===== ADRO 创作向：Anchor（引子）→ Deconstruct（拆卡）→ Recur（逐细节多轮微调）→ Output（改写落盘）=====
@@ -729,6 +750,17 @@ var builtinSeeds = []Template{
 			{Name: "ExistingContent", Label: "已有角色卡", Required: true, MaxLen: 6000},
 			{Name: "FurryHint", Label: "Furry 提示", MaxLen: 400},
 			{Name: "Focus", Label: "重点字段", MaxLen: 200},
+			{Name: "ExtraRequirements", Label: "补充要求", MaxLen: 1000},
+		},
+	},
+	// OC 世界书 AI 生成（快速创建「世界 + 角色」时先出世界书）
+	{
+		Key: "oc-worldbook", Title: "OC世界书·从概念生成", Scene: SceneOC, Category: "OC生成", Kind: KindChat,
+		Note:    "从核心概念生成一本结构化 OC 世界书（标题/简介/若干条目），供快速创建世界使用",
+		Content: "你是一位擅长「亚文化创作区 / OC 世界书」设计的设定师。请基于下面的概念与要求，设计一本**结构完整、可直接使用**的 OC 世界书。\n\n核心概念 / 灵感：{{Concept}}\n风格基调：{{StyleDirective}}\n用户补充要求：{{ExtraRequirements}}\n\n请只输出一个 JSON 对象（不要 Markdown 代码块、不要任何解释文字），字段如下：\n{\"title\":\"世界书标题（6-20字）\",\"summary\":\"一句话简介（20-80字）\",\"entries\":[{\"kind\":\"world|faction|place|rule|event 之一\",\"key\":\"主触发词（条目名，2-30字）\",\"content\":\"条目正文（设定描述，100-600字）\",\"secondary_keys\":\"次触发词（逗号分隔，可空）\",\"constant\":false,\"insertion_order\":100}]}\n\n要求：\n1. entries 至少 5 条、至多 12 条，覆盖 world/place/faction/rule/event 等多种类型；\n2. 每条 key 唯一，content 具体可感、与概念自洽；\n3. constant 仅对「世界基础法则/恒定设定」置 true，其余 false；\n4. insertion_order 用 100 的倍数递增（100、200…）；\n5. 只输出 JSON。",
+		Vars: []TemplateVar{
+			{Name: "Concept", Label: "核心概念", Required: true, MaxLen: 1000},
+			{Name: "StyleDirective", Label: "风格基调", MaxLen: 400},
 			{Name: "ExtraRequirements", Label: "补充要求", MaxLen: 1000},
 		},
 	},

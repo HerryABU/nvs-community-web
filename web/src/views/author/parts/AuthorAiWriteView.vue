@@ -61,6 +61,7 @@
         :total-words="totalWords"
         :seed-loading="seedLoading"
         :gen-loading="genLoading"
+        :format-loading="formatLoading"
         :saving="saving"
         :chapter-loading="chGen"
         @update:view="view = $event"
@@ -71,6 +72,7 @@
         @remove-detail="removeDetail"
         @refine-detail="selectDetail"
         @generate-module="generateModule"
+        @format-component="formatComponent"
         @add-chapter="createChapter"
         @select-chapter="activeChapterId = $event"
         @save-chapter="saveChapter"
@@ -143,6 +145,7 @@ const timelineWarn = ref<string[]>([]);
 const immersive = ref(false);
 const seedLoading = ref(false);
 const genLoading = ref(false);
+const formatLoading = ref(false);
 const saving = ref(false);
 const publishing = ref(false);
 const chGen = reactive<Record<number, { outline?: boolean; body?: boolean }>>({});
@@ -291,8 +294,8 @@ function selectDetail(d: AiWriteDetail) { activeDetail.value = d; }
 async function generateModule(m: string) {
   if (!current.value) return;
   // 注意后端常量是 CompCharacter = "character"（单数）；旧前端误传 "characters" 导致写回分支不匹配
-  const map: Record<string, 'setting' | 'character' | 'outline' | 'timeline'> = {
-    setting: 'setting', character: 'character', characters: 'character', outline: 'outline', timeline: 'timeline',
+  const map: Record<string, 'setting' | 'character' | 'outline' | 'timeline' | 'storyline'> = {
+    setting: 'setting', character: 'character', characters: 'character', outline: 'outline', timeline: 'timeline', storyline: 'storyline',
   };
   const component = map[m] || 'setting';
   genLoading.value = true;
@@ -308,6 +311,30 @@ async function generateModule(m: string) {
     }
   } catch (e: any) { ElMessage.error(e?.response?.data?.message || 'AI 生成失败'); }
   finally { genLoading.value = false; }
+}
+
+// 文本 → 视图：AI 格式化（推荐提示词路线），结果替换该模块细节卡真源（保持 detail → 投影一致）
+async function formatComponent(comp: string) {
+  if (!current.value) return;
+  const allowed = ['storyline', 'timeline', 'outline'];
+  if (!allowed.includes(comp)) return;
+  formatLoading.value = true;
+  try {
+    const res = await authorAiApi.format(current.value.id, comp as 'storyline' | 'timeline' | 'outline');
+    const content = res.data.data?.content || '';
+    if (!content.trim()) { ElMessage.warning('格式化结果为空'); return; }
+    const dets = details.value.filter((d) => d.module === comp);
+    for (const d of dets) await authorAiApi.removeDetail(current.value.id, d.id);
+    const titleMap: Record<string, string> = { storyline: '故事线', timeline: '时间线', outline: '大纲' };
+    await authorAiApi.createDetail(current.value.id, { module: comp as DetailModule, title: titleMap[comp] || '格式化', content });
+    await loadDetails();
+    await refreshProject();
+    ElMessage.success('格式化完成：文本已结构化，视图模式可查看');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '格式化失败');
+  } finally {
+    formatLoading.value = false;
+  }
 }
 
 // ── 右侧 Agent 微调（ADRO Recur → Output） ──
