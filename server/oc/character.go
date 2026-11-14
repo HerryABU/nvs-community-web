@@ -33,6 +33,7 @@ type CharacterInput struct {
 	CreatorNotes string
 	Greetings    string // JSON 数组字符串（备用开场）
 	BookID       uint   // 角色自带世界书
+	ProjectID    uint   // 归属 OC 项目（立项制）
 
 	Mood     int
 	Affinity int
@@ -140,12 +141,22 @@ func CreateCharacter(userID uint, in CharacterInput) (*Character, error) {
 	if len([]rune(in.Persona)) > MaxPersonaRunes {
 		return nil, errors.New("人设内容过长")
 	}
+	// 归入项目需项目编辑权
+	if in.ProjectID > 0 {
+		var p OcProject
+		if err := models.DB.Where("id = ? AND status = ?", in.ProjectID, "active").First(&p).Error; err != nil {
+			return nil, errors.New("项目不存在")
+		}
+		if !CanEditProject(&p, userID, false) {
+			return nil, errors.New("无权在该项目内创建角色")
+		}
+	}
 	review := ReviewApproved
 	if in.Visibility == VisPublic {
 		review = ReviewPending
 	}
 	c := &Character{
-		UserID: userID, Name: in.Name, AvatarURL: in.AvatarURL,
+		UserID: userID, Name: in.Name, AvatarURL: in.AvatarURL, ProjectID: in.ProjectID,
 		Persona: in.Persona, Appearance: in.Appearance, Speech: in.Speech, Tags: in.Tags,
 		Scenario: in.Scenario, FirstMessage: in.FirstMessage, MesExample: in.MesExample,
 		SystemPrompt: in.SystemPrompt, PostHistory: in.PostHistory,
@@ -220,12 +231,28 @@ func GetCharacterByID(id uint) (*Character, error) {
 
 // GetCharacter 读取（私有仅本人可见；公开需审核通过）
 func GetCharacter(id uint, viewerID uint, isAdmin bool) (*Character, error) {
+	return GetCharacterWithToken(id, viewerID, isAdmin, "")
+}
+
+// GetCharacterWithToken 读取（密码项目凭访问码）
+func GetCharacterWithToken(id uint, viewerID uint, isAdmin bool, token string) (*Character, error) {
 	var c Character
 	if err := models.DB.Where("id = ?", id).First(&c).Error; err != nil {
 		return nil, errors.New("角色卡不存在")
 	}
 	if c.Status != "active" && !isAdmin {
 		return nil, errors.New("角色卡已删除")
+	}
+	// 归属项目：项目不可见则角色不可见
+	if c.ProjectID > 0 {
+		var p OcProject
+		if err := models.DB.Where("id = ? AND status = ?", c.ProjectID, "active").First(&p).Error; err == nil {
+			if !CanViewProject(&p, viewerID, isAdmin, token) {
+				return nil, errors.New("该角色所属项目不可见")
+			}
+			fillAuthorNames([]*Character{&c})
+			return &c, nil
+		}
 	}
 	if c.Visibility == VisPublic {
 		if c.Review != ReviewApproved && c.UserID != viewerID && !isAdmin {

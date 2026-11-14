@@ -420,6 +420,9 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.GET("/sentiment/camp-analysis-global", sentiment.GetCampGlobalSetting)
 		adminGrp.PUT("/sentiment/camp-analysis-global", sentiment.SetCampGlobalSetting)
 		adminGrp.POST("/sentiment/camp-analyze", sentiment.AnalyzeCamp)
+		// 自动扫描：AI 读平台内容生成阵营标记（不依赖人工复制粘贴）
+		adminGrp.POST("/sentiment/camp-scan", sentiment.ScanCampMarks)
+		adminGrp.GET("/sentiment/camp-scan/status", sentiment.CampScanStatus)
 		adminGrp.POST("/sentiment/camp-marks", sentiment.CreateCampMark)
 		adminGrp.GET("/sentiment/camp-marks", sentiment.ListCampMarks)
 		adminGrp.GET("/sentiment/camp-graph", sentiment.GetCampGraph)

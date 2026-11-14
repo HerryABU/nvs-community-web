@@ -6,9 +6,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
+
+// dateNameRe 日归档命名：<date>.7z
+var dateNameRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}\.7z$`)
 
 func setup(t *testing.T) string {
 	t.Helper()
@@ -71,9 +75,22 @@ func TestRun_MonthlyTarGz(t *testing.T) {
 		names = append(names, hdr.Name)
 	}
 	joined := strings.Join(names, ",")
-	// 新层级：月 tar.gz 内是「周 tar.gz」（文件名含周信息，按日期分类）
-	if !strings.Contains(joined, "requests-2026W") && !strings.Contains(joined, "2026-11-01") {
+	// 新层级：月 tar.gz 内是「周 tar.gz」（文件名形如 2026W45.tar.gz，按周/日期分类）
+	if !strings.Contains(joined, "2026W") {
 		t.Fatalf("月归档内未按日期/周分类: %v", names)
+	}
+	// 日归档：同一天的所有类型打在一个 7z 里（daily/<date>.7z）
+	var daily string
+	for _, o := range out {
+		if strings.Contains(o, "daily") && strings.HasSuffix(filepath.Base(o), ".7z") {
+			daily = o
+		}
+	}
+	if daily == "" {
+		t.Fatalf("未生成日 7z 归档, outputs=%v", out)
+	}
+	if !dateNameRe.MatchString(filepath.Base(daily)) {
+		t.Fatalf("日归档命名应为 <date>.7z，实际 %s", filepath.Base(daily))
 	}
 }
 

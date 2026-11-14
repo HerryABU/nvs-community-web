@@ -100,14 +100,15 @@ type Character struct {
 	Speech     string `gorm:"type:text" json:"speech"`     // 说话风格（口吻/口头禅/句长）
 
 	// 酒馆 V2 对齐字段
-	Scenario     string `gorm:"type:text" json:"scenario"`         // 场景设定（ situational frame）
-	FirstMessage string `gorm:"type:text" json:"first_message"`    // 开场白（first_mes）
-	MesExample   string `gorm:"type:text" json:"mes_example"`      // 对话示例（mes_example，风格锚点）
-	SystemPrompt string `gorm:"type:text" json:"system_prompt"`    // 角色级系统提示（system_prompt）
-	PostHistory  string `gorm:"type:text" json:"post_history"`     // 历史后指令（post_history_instructions）
-	CreatorNotes string `gorm:"type:text" json:"creator_notes"`    // 创作者备注（不进提示词）
-	Greetings    string `gorm:"type:text" json:"greetings"`        // 备用开场（JSON 数组字符串）
-	BookID       uint   `gorm:"not null;default:0" json:"book_id"` // 角色自带世界书（character_book）
+	Scenario     string `gorm:"type:text" json:"scenario"`                  // 场景设定（ situational frame）
+	FirstMessage string `gorm:"type:text" json:"first_message"`             // 开场白（first_mes）
+	MesExample   string `gorm:"type:text" json:"mes_example"`               // 对话示例（mes_example，风格锚点）
+	SystemPrompt string `gorm:"type:text" json:"system_prompt"`             // 角色级系统提示（system_prompt）
+	PostHistory  string `gorm:"type:text" json:"post_history"`              // 历史后指令（post_history_instructions）
+	CreatorNotes string `gorm:"type:text" json:"creator_notes"`             // 创作者备注（不进提示词）
+	Greetings    string `gorm:"type:text" json:"greetings"`                 // 备用开场（JSON 数组字符串）
+	BookID       uint   `gorm:"not null;default:0" json:"book_id"`          // 角色自带世界书（character_book）
+	ProjectID    uint   `gorm:"not null;default:0;index" json:"project_id"` // 归属 OC 项目（立项制）
 
 	// 小团子式养成：角色状态（0~100）
 	Mood     int    `gorm:"not null;default:50" json:"mood"`    // 情绪
@@ -140,12 +141,13 @@ func (Character) TableName() string { return "oc_characters" }
 
 // WorldBook 世界书（条目化存储，等价酒馆的 Lorebook / World Info）
 type WorldBook struct {
-	ID      uint   `gorm:"primaryKey" json:"id"`
-	UserID  uint   `gorm:"not null;index" json:"user_id"`
-	GroupID uint   `gorm:"not null;default:0;index" json:"group_id"` // 0 = 个人世界书
-	Title   string `gorm:"size:128;not null" json:"title"`
-	Summary string `gorm:"type:text" json:"summary"`
-	Version int    `gorm:"not null;default:1" json:"version"`
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	UserID    uint   `gorm:"not null;index" json:"user_id"`
+	GroupID   uint   `gorm:"not null;default:0;index" json:"group_id"`   // 0 = 个人世界书
+	ProjectID uint   `gorm:"not null;default:0;index" json:"project_id"` // 归属 OC 项目（立项制）
+	Title     string `gorm:"size:128;not null" json:"title"`
+	Summary   string `gorm:"type:text" json:"summary"`
+	Version   int    `gorm:"not null;default:1" json:"version"`
 
 	// 书级检索与预算（酒馆 Lorebook 设置）
 	ScanDepth     int  `gorm:"not null;default:20" json:"scan_depth"`        // 扫描最近多少条发言
@@ -401,9 +403,13 @@ func NormalizeEntryKind(k string) string {
 
 // Migrate 建表（独立功能包，由 main 在主迁移后调用）
 func Migrate(db *gorm.DB) error {
-	return db.AutoMigrate(
+	if err := db.AutoMigrate(
 		&Character{}, &WorldBook{}, &WorldEntry{},
 		&GroupSetting{}, &Agent{}, &Flow{}, &Turn{}, &Window{}, &BudgetUsage{},
 		&OcGroup{}, &OcGroupMember{},
-	)
+	); err != nil {
+		return err
+	}
+	// 立项制：项目/成员/访问码/跨世界链接
+	return MigrateProjectModels(db)
 }

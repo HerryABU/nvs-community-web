@@ -77,7 +77,7 @@ func SearchAugmentBadWords(c *gin.Context) {
 	// 上游超时 180 秒：这是「检索 + 归纳出几十条规则」的一次重活，
 	// 实测单次就跑了 100 秒以上（原 120s 已贴着上限，稍微慢一点就整段失败）。
 	// 前端该请求的超时是 200s，与此对齐。
-	client := aiclient.NewClient(chatModel.BaseURL, apiKey, 180*time.Second)
+	_ = apiKey // 首选模型密钥已在上面校验；实际请求在候选循环内按模型取密钥
 
 	ctx := c.Request.Context()
 	systemPrompt := buildSearchAugmentSystemPrompt(req.Focus, mode == badwordSearchModeEndpoint)
@@ -105,34 +105,80 @@ func SearchAugmentBadWords(c *gin.Context) {
 		}
 	}
 
-	chatReq := aiclient.ChatRequest{
-		Ctx:         ctx,
-		Model:       chatModel.ModelID,
-		Messages:    []aiclient.Message{{Role: "system", Content: systemPrompt}, {Role: "user", Content: userPrompt}},
-		MaxTokens:   2048,
-		Temperature: 0.2,
-	}
-	// ── 4) Path 2：模型原生联网（请求里带联网检索参数）──
-	if mode == badwordSearchModeNative {
-		attachNativeSearch(&chatReq, chatModel)
-	}
-	content, _, _, cerr := client.Complete(chatReq)
-	if cerr != nil && chatReq.WebSearchOptions != nil && isUnsupportedSearchParamError(cerr) {
-		// 上游不认这个联网参数（部分网关直接 400）→ 去掉参数重试一次，降级为提示词模式
-		log.Printf("[badword-search] 上游不接受联网检索参数，降级为提示词模式：%v", cerr)
-		chatReq.Tools = nil
-		chatReq.WebSearchOptions = nil
-		mode = badwordSearchModePrompt
+	// ── 4) 请求对话模型归纳清单；渠道不可用时自动换下一个可用模型重试 ──
+	// 上游网关常见「No available channel for model X」：此时换一个已启用的对话模型即可，
+	// 不必让管理员手动重选（管理员并不清楚后端渠道分组细节）。
+	var content string
+	var cerr error
+	var retryClient *aiclient.Client
+	for _, m := range badwordChatCandidates(chatModel) {
+		mKey, kerr := acquireBadwordModelKey(m)
+		if kerr != nil {
+			log.Printf("[badword-search] 模型 %s 无可用密钥，跳过：%v", m.Name, kerr)
+			continue
+		}
+		client := aiclient.NewClient(m.BaseURL, mKey, 180*time.Second)
+		chatReq := aiclient.ChatRequest{
+			Ctx:         ctx,
+			Model:       m.ModelID,
+			Messages:    []aiclient.Message{{Role: "system", Content: systemPrompt}, {Role: "user", Content: userPrompt}},
+			MaxTokens:   2048,
+			Temperature: 0.2,
+		}
+		// Path 2：模型原生联网（请求里带联网检索参数）
+		if mode == badwordSearchModeNative {
+			attachNativeSearch(&chatReq, m)
+		}
 		content, _, _, cerr = client.Complete(chatReq)
+		if cerr != nil && chatReq.WebSearchOptions != nil && isUnsupportedSearchParamError(cerr) {
+			// 上游不认这个联网参数（部分网关直接 400）→ 去掉参数重试一次，降级为提示词模式
+			log.Printf("[badword-search] 上游不接受联网检索参数，降级为提示词模式：%v", cerr)
+			chatReq.Tools = nil
+			chatReq.WebSearchOptions = nil
+			mode = badwordSearchModePrompt
+			content, _, _, cerr = client.Complete(chatReq)
+		}
+		if cerr == nil {
+			chatModel = m
+			retryClient = client
+			searchNote = suffixSearchNote(searchNote, fmt.Sprintf("由 %s 归纳", m.Name))
+			break
+		}
+		if !isChannelUnavailableErr(cerr) {
+			// 非渠道问题（鉴权/参数/上游 4xx 等）：保留原始错误直接返回，换模型也没用
+			break
+		}
+		log.Printf("[badword-search] 模型 %s 渠道不可用，尝试下一个：%v", m.Name, cerr)
 	}
 	if cerr != nil {
-		infra.InternalError(c, "AI 检索失败："+cerr.Error())
+		infra.InternalError(c, "AI 检索失败："+cerr.Error()+
+			"（若持续提示无可用渠道，请在「AI 中台」检查模型渠道配置，或指定其他对话模型重试）")
 		return
 	}
 
 	items, perr := parseBadWordJSON(content)
+	if perr != nil && retryClient != nil && chatModel != nil {
+		// 模型偶尔不按 JSON 数组返回（加前言、换成对象、只吐半截、整段推理）。
+		// 用一句极简的纠正提示再问一次（仅一次），通常即可拿到纯 JSON。
+		log.Printf("[badword-search] 首次返回无法解析为清单，自动纠正重问：err=%v", perr)
+		fixReq := aiclient.ChatRequest{
+			Ctx: ctx, Model: chatModel.ModelID,
+			Messages: []aiclient.Message{
+				{Role: "system", Content: "你只能输出一个 JSON 数组，不允许输出任何分析过程、解释、Markdown 代码围栏或数组以外的文字。"},
+				{Role: "user", Content: "请把刚才的违禁词清单重新输出为纯 JSON 数组（元素含 name/pattern/category/tags/action 字段，action 固定 \"mark\"）。"},
+			},
+			MaxTokens: 2048, Temperature: 0.1,
+		}
+		if content2, _, _, cerr2 := retryClient.Complete(fixReq); cerr2 == nil {
+			items, perr = parseBadWordJSON(content2)
+			if perr == nil {
+				searchNote = suffixSearchNote(searchNote, "已自动纠正输出格式")
+			}
+		} else {
+			log.Printf("[badword-search] 纠正重问失败：%v", cerr2)
+		}
+	}
 	if perr != nil {
-		// 模型偶尔不按 JSON 数组返回（加前言、换成对象、只吐了半截）。
 		// 把原始返回记进服务端日志，便于定位；响应里只给可操作提示，不回显模型原文。
 		log.Printf("[badword-search] 模型返回无法解析为清单：err=%v raw=%s",
 			perr, truncateForLog(content, 800))
@@ -282,6 +328,53 @@ func pickBadwordChatModel(modelID uint) (*ai.AiModel, error) {
 		return nil, fmt.Errorf("未配置可用的对话模型，无法发起联网检索")
 	}
 	return m, nil
+}
+
+// badwordChatCandidates 候选对话模型：首选 + 其他已启用对话模型（最多 3 个，去重）。
+// 用于上游「无可用渠道」时自动换模型重试——管理员不需要知道后端渠道分组细节。
+func badwordChatCandidates(primary *ai.AiModel) []*ai.AiModel {
+	var out []*ai.AiModel
+	seen := map[uint]bool{}
+	if primary != nil {
+		out = append(out, primary)
+		seen[primary.ID] = true
+	}
+	list, err := ai.ListAiModelsByKind(ai.AiKindChat, true)
+	if err != nil {
+		return out
+	}
+	for i := range list {
+		m := &list[i]
+		if seen[m.ID] {
+			continue
+		}
+		seen[m.ID] = true
+		out = append(out, m)
+		if len(out) >= 3 {
+			break
+		}
+	}
+	return out
+}
+
+// isChannelUnavailableErr 是否「上游无可用渠道」类错误（换模型才有意义）
+func isChannelUnavailableErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := strings.ToLower(err.Error())
+	return strings.Contains(s, "no available channel") ||
+		strings.Contains(s, "no available model") ||
+		strings.Contains(s, "无可用渠道") ||
+		strings.Contains(s, "渠道不可用")
+}
+
+// suffixSearchNote 追加说明（分号连接）
+func suffixSearchNote(base, add string) string {
+	if strings.TrimSpace(base) == "" {
+		return add
+	}
+	return base + "；" + add
 }
 
 // resolveBadwordSearchModel 解析用于 /search 检索的模型与路径。

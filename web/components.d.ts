@@ -153,6 +153,7 @@ declare module 'vue' {
     NovelCard: typeof import('./src/components/novel/NovelCard.vue')['default']
     PhoneLoginForm: typeof import('./src/components/auth/PhoneLoginForm.vue')['default']
     PoliceBadge: typeof import('./src/components/site/PoliceBadge.vue')['default']
+    ProjectManager: typeof import('./src/components/oc/ProjectManager.vue')['default']
     PublishQuotaHint: typeof import('./src/components/common/PublishQuotaHint.vue')['default']
     QrScanDialog: typeof import('./src/components/group/QrScanDialog.vue')['default']
     ReadPermissionGate: typeof import('./src/components/readperm/ReadPermissionGate.vue')['default']

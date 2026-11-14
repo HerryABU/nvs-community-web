@@ -23,6 +23,11 @@
         <CharacterManager :group-id="0" :can-bind="false" :filter-kind="kindFilter" />
       </el-tab-pane>
 
+      <!-- ============ 项目 / 世界（立项制） ============ -->
+      <el-tab-pane label="项目 / 世界" name="projects">
+        <ProjectManager />
+      </el-tab-pane>
+
       <!-- ============ 世界书（个人 OC 设定集） ============ -->
       <el-tab-pane label="世界书" name="books">
         <WorldBookManager :group-id="0" />
@@ -261,6 +266,7 @@ import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import CharacterManager from '@/components/oc/CharacterManager.vue';
 import WorldBookManager from '@/components/oc/WorldBookManager.vue';
+import ProjectManager from '@/components/oc/ProjectManager.vue';
 import { ocApi, ocGroupApi, ocAiApi, type OcCharacter, type OcGroup, type OcGroupMember } from '@/api/oc';
 
 const router = useRouter();

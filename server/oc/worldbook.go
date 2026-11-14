@@ -13,12 +13,22 @@ import (
 	"nvs-server/security"
 )
 
-// CreateWorldBook 创建世界书
-func CreateWorldBook(userID, groupID uint, title, summary, visibility string) (*WorldBook, error) {
+// CreateWorldBook 创建世界书（可归入 OC 项目）
+func CreateWorldBook(userID, groupID, projectID uint, title, summary, visibility string) (*WorldBook, error) {
 	title = strings.TrimSpace(security.SanitizeUserContent(title))
 	summary = strings.TrimSpace(security.SanitizeUserContent(summary))
 	if title == "" {
 		return nil, errors.New("世界书标题不能为空")
+	}
+	// 归入项目需项目编辑权
+	if projectID > 0 {
+		var p OcProject
+		if err := models.DB.Where("id = ? AND status = ?", projectID, "active").First(&p).Error; err != nil {
+			return nil, errors.New("项目不存在")
+		}
+		if !CanEditProject(&p, userID, false) {
+			return nil, errors.New("无权在该项目内创建世界")
+		}
 	}
 	vis := NormalizeVisibility(visibility)
 	review := ReviewApproved
@@ -26,24 +36,44 @@ func CreateWorldBook(userID, groupID uint, title, summary, visibility string) (*
 		review = ReviewPending
 	}
 	b := &WorldBook{
-		UserID: userID, GroupID: groupID, Title: title,
+		UserID: userID, GroupID: groupID, ProjectID: projectID, Title: title,
 		Summary: summary, Version: 1, Visibility: vis, Review: review,
 		Status: "active", CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	if err := models.DB.Create(b).Error; err != nil {
 		return nil, err
 	}
+	if projectID > 0 {
+		recalcProjectWorldCount(projectID)
+	}
 	return b, nil
 }
 
 // GetWorldBook 读取（含条目）
 func GetWorldBook(id, viewerID uint, isAdmin bool) (*WorldBook, error) {
+	return GetWorldBookWithToken(id, viewerID, isAdmin, "")
+}
+
+// GetWorldBookWithToken 读取（含条目）；token 为密码项目的访问码
+func GetWorldBookWithToken(id, viewerID uint, isAdmin bool, token string) (*WorldBook, error) {
 	var b WorldBook
 	if err := models.DB.Where("id = ?", id).First(&b).Error; err != nil {
 		return nil, errors.New("世界书不存在")
 	}
 	if b.Status != "active" && !isAdmin {
 		return nil, errors.New("世界书已删除")
+	}
+	// 归属项目：项目不可见则世界不可见（密码项目凭访问码）
+	if b.ProjectID > 0 {
+		var p OcProject
+		if err := models.DB.Where("id = ? AND status = ?", b.ProjectID, "active").First(&p).Error; err == nil {
+			if !CanViewProject(&p, viewerID, isAdmin, token) {
+				return nil, errors.New("该世界所属项目不可见")
+			}
+			entries, _ := ListEntries(b.ID)
+			b.Entries = entries
+			return &b, nil
+		}
 	}
 	if b.Visibility == VisPublic {
 		if b.Review != ReviewApproved && b.UserID != viewerID && !isAdmin {
@@ -57,8 +87,8 @@ func GetWorldBook(id, viewerID uint, isAdmin bool) (*WorldBook, error) {
 	return &b, nil
 }
 
-// ListWorldBooks 列表（mine / public / group）
-func ListWorldBooks(userID uint, scope string, groupID uint) ([]WorldBook, error) {
+// ListWorldBooks 列表（mine / public / group / project）
+func ListWorldBooks(userID uint, scope string, groupID uint, projectID uint) ([]WorldBook, error) {
 	q := models.DB.Model(&WorldBook{}).Where("status = ?", "active")
 	switch scope {
 	case "mine":
@@ -67,6 +97,8 @@ func ListWorldBooks(userID uint, scope string, groupID uint) ([]WorldBook, error
 		q = q.Where("visibility = ? AND review = ?", VisPublic, ReviewApproved)
 	case "group":
 		q = q.Where("group_id = ?", groupID)
+	case "project":
+		q = q.Where("project_id = ?", projectID)
 	default:
 		q = q.Where("user_id = ? OR (visibility = ? AND review = ?) OR group_id = ?",
 			userID, VisPublic, ReviewApproved, groupID)
@@ -143,11 +175,28 @@ type EntryInput struct {
 	SortOrder      int
 }
 
+// CanEditBookByID 是否可编辑该世界（世界 owner / 所属项目成员（owner/editor）/ 平台）
+func CanEditBookByID(bookID, userID uint, isAdmin bool) (*WorldBook, error) {
+	var b WorldBook
+	if err := models.DB.Where("id = ? AND status = ?", bookID, "active").First(&b).Error; err != nil {
+		return nil, errors.New("世界书不存在")
+	}
+	if isAdmin || b.UserID == userID {
+		return &b, nil
+	}
+	if b.ProjectID > 0 {
+		r := ProjectRole(b.ProjectID, userID)
+		if r == ProjectRoleOwner || r == ProjectRoleEditor {
+			return &b, nil
+		}
+	}
+	return nil, errors.New("无权编辑该世界书")
+}
+
 // SaveEntryFull 完整字段保存条目（供接口层使用）
 func SaveEntryFull(userID, bookID, entryID uint, in EntryInput) (*WorldEntry, error) {
-	var b WorldBook
-	if err := models.DB.Where("id = ? AND user_id = ? AND status = ?", bookID, userID, "active").First(&b).Error; err != nil {
-		return nil, errors.New("世界书不存在或无权编辑")
+	if _, err := CanEditBookByID(bookID, userID, false); err != nil {
+		return nil, err
 	}
 	key := strings.TrimSpace(security.SanitizeUserContent(in.Key))
 	content := strings.TrimSpace(security.SanitizeUserContent(in.Content))
@@ -230,9 +279,8 @@ func SaveEntryFull(userID, bookID, entryID uint, in EntryInput) (*WorldEntry, er
 
 // SaveEntry 新增/更新条目（改动即触发版本号 +1）
 func SaveEntry(userID, bookID, entryID uint, kind, key, content string, sortOrder int) (*WorldEntry, error) {
-	var b WorldBook
-	if err := models.DB.Where("id = ? AND user_id = ? AND status = ?", bookID, userID, "active").First(&b).Error; err != nil {
-		return nil, errors.New("世界书不存在或无权编辑")
+	if _, err := CanEditBookByID(bookID, userID, false); err != nil {
+		return nil, err
 	}
 	key = strings.TrimSpace(security.SanitizeUserContent(key))
 	content = strings.TrimSpace(security.SanitizeUserContent(content))
@@ -271,9 +319,8 @@ func SaveEntry(userID, bookID, entryID uint, kind, key, content string, sortOrde
 
 // DeleteEntry 删除条目
 func DeleteEntry(userID, bookID, entryID uint) error {
-	var b WorldBook
-	if err := models.DB.Where("id = ? AND user_id = ?", bookID, userID).First(&b).Error; err != nil {
-		return errors.New("世界书不存在或无权编辑")
+	if _, err := CanEditBookByID(bookID, userID, false); err != nil {
+		return err
 	}
 	if err := models.DB.Where("id = ? AND book_id = ?", entryID, bookID).Delete(&WorldEntry{}).Error; err != nil {
 		return err

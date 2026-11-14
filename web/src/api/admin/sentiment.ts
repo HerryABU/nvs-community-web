@@ -155,6 +155,19 @@ export const sentimentApi = {
   createCampMark(data: Partial<CampMark>) {
     return api.post<{ code: number; data: CampMark }>('/admin/sentiment/camp-marks', data);
   },
+  /** 自动扫描：AI 读平台内容（评论/论坛/博客）生成阵营标记，不依赖人工复制粘贴 */
+  scanCampMarks(data: { targets?: string[]; limit?: number; since_hours?: number; model_id?: number; dry_run?: boolean }) {
+    return api.post<{
+      code: number;
+      data: { scanned: number; created: number; skipped: number; failed: number; dry_run: boolean };
+    }>('/admin/sentiment/camp-scan', data);
+  },
+  /** 上次扫描状态 */
+  campScanStatus() {
+    return api.get<{ code: number; data: { last: { at: string; scanned: number; created: number; skipped: number; failed: number } } }>(
+      '/admin/sentiment/camp-scan/status',
+    );
+  },
   /** 普通管理员提交「修改申请」：不直改，等站长批准 */
   requestUpdateCampMark(id: number, data: Partial<CampMark> & { reason?: string }) {
     return api.post(`/admin/sentiment/camp-marks/${id}/request-update`, data);

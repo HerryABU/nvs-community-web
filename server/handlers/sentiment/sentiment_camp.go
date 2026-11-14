@@ -1004,3 +1004,195 @@ func RejectDeleteRequest(c *gin.Context) {
 		"/admin/sentiment")
 	infra.Success(c, gin.H{"message": "已驳回"})
 }
+
+// ── 自动扫描：让 AI 自己读平台内容生成阵营标记（站长无需复制粘贴）──
+//
+// 过去阵营图谱靠「管理员复制争议文本 → 粘贴 → AI 分析」，内容来源完全依赖人工搬运；
+// 这里改为按目标（评论 / 论坛回帖 / 博客）自动拉取新内容，AI 批量标记，落库为待审，
+// 站长只需在审核台通过即可进图谱。幂等：同一内容已有任意阵营标记则跳过。
+
+type scanCandidate struct {
+	ContentType string
+	ContentID   uint
+	CommentID   uint
+	Text        string
+}
+
+// POST /api/admin/sentiment/camp-scan
+// body: { targets:["comment","forum","blog"], limit:10, since_hours:24, model_id:0, dry_run:false }
+func ScanCampMarks(c *gin.Context) {
+	if !admincommon.EnsureElevated(c) {
+		return
+	}
+	var in struct {
+		Targets    []string `json:"targets"`
+		Limit      int      `json:"limit"`
+		SinceHours int      `json:"since_hours"`
+		ModelID    uint     `json:"model_id"`
+		DryRun     bool     `json:"dry_run"`
+	}
+	_ = c.ShouldBindJSON(&in)
+	if len(in.Targets) == 0 {
+		in.Targets = []string{"comment", "forum", "blog"}
+	}
+	limit := in.Limit
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 20 {
+		limit = 20
+	}
+	sinceHours := in.SinceHours
+	if sinceHours <= 0 {
+		sinceHours = 24
+	}
+	since := time.Now().Add(-time.Duration(sinceHours) * time.Hour)
+
+	stat := struct {
+		Scanned int `json:"scanned"`
+		Created int `json:"created"`
+		Skipped int `json:"skipped"`
+		Failed  int `json:"failed"`
+		NoModel int `json:"no_model"`
+	}{}
+
+	for _, target := range in.Targets {
+		cands, err := scanCandidates(target, since, limit)
+		if err != nil {
+			stat.Failed += limit
+			continue
+		}
+		// 幂等：已有任意阵营标记的内容不再重复分析
+		keys := map[string]bool{}
+		if len(cands) > 0 {
+			ids := make([]uint, 0, len(cands))
+			for _, x := range cands {
+				ids = append(ids, x.ContentID)
+			}
+			var existing []store.CampMark
+			store.DB.Select("content_type, content_id").Where("content_type = ? AND content_id IN ?", target, ids).
+				Find(&existing)
+			for _, e := range existing {
+				keys[fmt.Sprintf("%s:%d", e.ContentType, e.ContentID)] = true
+			}
+		}
+		for _, cand := range cands {
+			stat.Scanned++
+			if keys[fmt.Sprintf("%s:%d", cand.ContentType, cand.ContentID)] {
+				stat.Skipped++
+				continue
+			}
+			text := strings.TrimSpace(cand.Text)
+			if text == "" || len([]rune(text)) < 8 {
+				stat.Skipped++ // 太短没有阵营判定价值
+				continue
+			}
+			if in.DryRun {
+				stat.Created++
+				continue
+			}
+			status := store.CampMarkPending
+			marks, _, _, aerr := camp.AnalyzeAndPersist(c.Request.Context(), text, in.ModelID,
+				cand.ContentType, cand.ContentID, cand.CommentID, status)
+			if aerr != nil {
+				stat.Failed++
+				continue
+			}
+			stat.Created += len(marks)
+		}
+	}
+
+	// 记录扫描状态（供前台展示「上次扫描」）
+	saveCampScanStatus(stat.Scanned, stat.Created, stat.Skipped, stat.Failed)
+
+	msg := fmt.Sprintf("扫描完成：检查 %d 条，生成 %d 条标记（跳过 %d，失败 %d），均进入待站长审核",
+		stat.Scanned, stat.Created, stat.Skipped, stat.Failed)
+	if in.DryRun {
+		msg = fmt.Sprintf("试扫完成（未落库）：检查 %d 条，预计生成 %d 条标记（跳过 %d）",
+			stat.Scanned, stat.Created, stat.Skipped)
+	}
+	infra.SuccessMessage(c, msg, gin.H{
+		"scanned": stat.Scanned, "created": stat.Created,
+		"skipped": stat.Skipped, "failed": stat.Failed, "dry_run": in.DryRun,
+	})
+}
+
+// GET /api/admin/sentiment/camp-scan/status
+func CampScanStatus(c *gin.Context) {
+	if !admincommon.EnsureElevated(c) {
+		return
+	}
+	type statusRow struct {
+		At      time.Time `json:"at"`
+		Scanned int       `json:"scanned"`
+		Created int       `json:"created"`
+		Skipped int       `json:"skipped"`
+		Failed  int       `json:"failed"`
+	}
+	var row statusRow
+	var raw models.PlatformConfig
+	if err := models.DB.Where("key = ?", "camp_scan_last").First(&raw).Error; err == nil {
+		_ = json.Unmarshal([]byte(raw.Value), &row)
+	}
+	infra.Success(c, gin.H{"last": row})
+}
+
+func saveCampScanStatus(scanned, created, skipped, failed int) {
+	raw, _ := json.Marshal(map[string]interface{}{
+		"at": time.Now(), "scanned": scanned, "created": created,
+		"skipped": skipped, "failed": failed,
+	})
+	_ = models.SetPlatformConfig("camp_scan_last", string(raw))
+}
+
+// scanCandidates 拉取某类内容里「自 since 起、未删除」的候选文本
+func scanCandidates(target string, since time.Time, limit int) ([]scanCandidate, error) {
+	switch target {
+	case "comment":
+		var list []models.Comment
+		err := models.DB.Select("id, content").Where("created_at > ?", since).
+			Order("id DESC").Limit(limit).Find(&list).Error
+		if err != nil {
+			return nil, err
+		}
+		out := make([]scanCandidate, 0, len(list))
+		for _, x := range list {
+			out = append(out, scanCandidate{ContentType: "comment", ContentID: x.ID, Text: x.Content})
+		}
+		return out, nil
+	case "forum":
+		var list []models.Post
+		err := models.DB.Select("id, content").Where("created_at > ?", since).
+			Order("id DESC").Limit(limit).Find(&list).Error
+		if err != nil {
+			return nil, err
+		}
+		out := make([]scanCandidate, 0, len(list))
+		for _, x := range list {
+			out = append(out, scanCandidate{ContentType: "forum", ContentID: x.ID, Text: x.Content})
+		}
+		return out, nil
+	case "blog":
+		type blogRow struct {
+			ID      uint
+			Summary string
+			Title   string
+		}
+		var list []blogRow
+		err := models.DB.Table("author_blogs").Select("id, summary, title").
+			Where("created_at > ?", since).Order("id DESC").Limit(limit).Find(&list).Error
+		if err != nil {
+			return nil, err
+		}
+		out := make([]scanCandidate, 0, len(list))
+		for _, x := range list {
+			t := x.Summary
+			if t == "" {
+				t = x.Title
+			}
+			out = append(out, scanCandidate{ContentType: "blog", ContentID: x.ID, Text: t})
+		}
+		return out, nil
+	}
+	return nil, fmt.Errorf("未知目标：%s", target)
+}

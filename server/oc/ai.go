@@ -171,7 +171,7 @@ func GenerateWorldBook(userID, groupID uint, seed OcBookSeed) (*WorldBook, error
 	if err := json.Unmarshal([]byte(extractJSON(res.Content)), &bj); err != nil || strings.TrimSpace(bj.Title) == "" {
 		return nil, fmt.Errorf("AI 生成的世界书无法解析")
 	}
-	book, err := CreateWorldBook(userID, groupID, bj.Title, bj.Summary, "private")
+	book, err := CreateWorldBook(userID, groupID, 0, bj.Title, bj.Summary, "private")
 	if err != nil {
 		return nil, err
 	}

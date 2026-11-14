@@ -142,10 +142,11 @@ func DeleteCharacter(c *gin.Context) {
 
 // ─── 世界书 ───
 
-// ListBooks GET /api/oc/books?scope=mine|public|group&group_id=
+// ListBooks GET /api/oc/books?scope=mine|public|group|project&group_id=&project_id=
 func ListBooks(c *gin.Context) {
 	gid := parseUint(c.Query("group_id"))
-	list, err := oc.ListWorldBooks(middleware.UserID(c), c.Query("scope"), gid)
+	pid := parseUint(c.Query("project_id"))
+	list, err := oc.ListWorldBooks(middleware.UserID(c), c.Query("scope"), gid, pid)
 	if err != nil {
 		infra.InternalError(c, "查询失败")
 		return
@@ -153,9 +154,10 @@ func ListBooks(c *gin.Context) {
 	infra.Success(c, gin.H{"list": list})
 }
 
-// GetBook GET /api/oc/books/:bid
+// GetBook GET /api/oc/books/:bid（密码项目可带 ?token= 访问）
 func GetBook(c *gin.Context) {
-	b, err := oc.GetWorldBook(parseUint(c.Param("bid")), middleware.UserID(c), isAdmin(c))
+	token := firstNonEmpty(c.Query("token"), c.GetHeader("X-Oc-Project-Token"))
+	b, err := oc.GetWorldBookWithToken(parseUint(c.Param("bid")), middleware.UserID(c), isAdmin(c), token)
 	if err != nil {
 		infra.Forbidden(c, err.Error())
 		return
@@ -167,13 +169,14 @@ func GetBook(c *gin.Context) {
 func CreateBook(c *gin.Context) {
 	var in struct {
 		Title, Summary, Visibility string
-		GroupID                    uint
+		GroupID                    uint `json:"group_id"`
+		ProjectID                  uint `json:"project_id"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
 		infra.BadRequest(c, "参数错误")
 		return
 	}
-	b, err := oc.CreateWorldBook(middleware.UserID(c), in.GroupID, in.Title, in.Summary, in.Visibility)
+	b, err := oc.CreateWorldBook(middleware.UserID(c), in.GroupID, in.ProjectID, in.Title, in.Summary, in.Visibility)
 	if err != nil {
 		infra.BadRequest(c, err.Error())
 		return

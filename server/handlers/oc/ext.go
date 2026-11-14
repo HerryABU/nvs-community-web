@@ -131,7 +131,7 @@ func ImportCard(c *gin.Context) {
 		if strings.TrimSpace(title) == "" {
 			title = parsed.Name + "·世界书"
 		}
-		book, berr := oc.CreateWorldBook(uid, 0, title, "从角色卡导入", "private")
+		book, berr := oc.CreateWorldBook(uid, 0, 0, title, "从角色卡导入", "private")
 		if berr == nil && book != nil {
 			bookID = book.ID
 			for _, e := range parsed.Book.Entries {
@@ -245,7 +245,7 @@ func ImportBook(c *gin.Context) {
 	if strings.TrimSpace(title) == "" {
 		title = "导入的世界书"
 	}
-	book, err := oc.CreateWorldBook(uid, 0, title, "从 Lorebook 导入", "private")
+	book, err := oc.CreateWorldBook(uid, 0, 0, title, "从 Lorebook 导入", "private")
 	if err != nil {
 		infra.BadRequest(c, "创建世界书失败")
 		return

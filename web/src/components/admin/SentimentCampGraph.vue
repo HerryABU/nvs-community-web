@@ -92,6 +92,10 @@
 
     <div class="camp-toolbar">
       <el-button size="small" :loading="loading" @click="load">刷新图谱</el-button>
+      <el-button size="small" type="success" plain :loading="scanning" @click="runScan">自动扫描内容</el-button>
+      <span class="camp-stat" v-if="scanStatus.last.at">
+        上次扫描 {{ formatScanTime }}：生成 {{ scanStatus.last.created }} 条标记
+      </span>
       <el-button size="small" type="primary" plain @click="showPrompt = !showPrompt">
         {{ showPrompt ? '收起' : '展开' }}AI 中立性提示词
       </el-button>
@@ -286,6 +290,48 @@ import { sentimentApi, type CampGraphData, type CampEdge, type DeleteRequest, ty
 const loading = ref(false);
 const marking = ref(false);
 const analyzing = ref(false);
+// ── 自动扫描：AI 读平台内容生成阵营标记 ──
+const scanning = ref(false);
+const scanStatus = reactive({
+  last: { at: '', scanned: 0, created: 0, skipped: 0, failed: 0 },
+});
+const formatScanTime = computed(() => {
+  const t = scanStatus.last.at;
+  return t ? t.slice(0, 16).replace('T', ' ') : '';
+});
+async function loadScanStatus() {
+  try {
+    const r = await sentimentApi.campScanStatus();
+    if (r.data?.data?.last?.at) scanStatus.last = r.data.data.last;
+  } catch {
+    /* 忽略 */
+  }
+}
+async function runScan() {
+  const ok = await ElMessageBox.confirm(
+    '将拉取最近 24 小时的新内容（评论 / 论坛 / 博客），逐条用 AI 标记阵营与语言格式，结果进入待审核（通过后自动进图谱）。是否继续？',
+    '自动扫描内容',
+    { type: 'info', confirmButtonText: '开始扫描', cancelButtonText: '取消' },
+  ).catch(() => false);
+  if (!ok) return;
+  scanning.value = true;
+  try {
+    const r = await sentimentApi.scanCampMarks({
+      targets: ['comment', 'forum', 'blog'],
+      limit: 10,
+      since_hours: 24,
+      model_id: analyzeModelID.value || undefined,
+      dry_run: false,
+    });
+    ElMessage.success(r.data?.message || '扫描完成');
+    await loadScanStatus();
+    await load();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '扫描失败');
+  } finally {
+    scanning.value = false;
+  }
+}
 const analyzeText = ref('');
 const analyzeSave = ref(true);
 const analyzeResult = ref('');
@@ -676,6 +722,7 @@ onMounted(async () => {
   load();
   loadChatModels();
   loadGlobalSetting();
+  loadScanStatus();
   try {
     const res = await sentimentApi.topicTags();
     if (res.data?.code === 0) topicTagsList.value = res.data.data.items || [];

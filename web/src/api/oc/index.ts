@@ -38,6 +38,43 @@ export interface OcCharacter {
   updated_at: string;
 }
 
+// OC 立项制：项目（世界观/企划）
+export interface OcProject {
+  id: number;
+  user_id: number;
+  title: string;
+  summary: string;
+  cover_url: string;
+  category: string;
+  visibility: 'private' | 'public' | 'password';
+  world_count: number;
+  member_count: number;
+  review: 'pending' | 'approved' | 'rejected';
+  status: string;
+  owner_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OcProjectMember {
+  id: number;
+  project_id: number;
+  user_id: number;
+  role: 'owner' | 'editor' | 'viewer';
+  username?: string;
+  nickname?: string;
+  avatar_url?: string;
+}
+
+export interface OcWorldLink {
+  id: number;
+  from_book_id: number;
+  to_book_id: number;
+  label: string;
+  from_title?: string;
+  to_title?: string;
+}
+
 export interface OcWorldEntry {
   id: number;
   book_id: number;
@@ -179,13 +216,16 @@ export const ocApi = {
   },
 
   // 世界书
-  listBooks(params: { scope?: string; group_id?: number } = {}) {
+  listBooks(params: { scope?: string; group_id?: number; project_id?: number; page_size?: number } = {}) {
     return api.get<{ code: number; data: { list: OcWorldBook[] } }>('/oc/books', { params });
   },
-  getBook(id: number) {
-    return api.get<{ code: number; data: OcWorldBook }>(`/oc/books/${id}`);
+  getBook(id: number, token?: string) {
+    return api.get<{ code: number; data: OcWorldBook }>(
+      `/oc/books/${id}`,
+      token ? { headers: { 'X-Oc-Project-Token': token } } : undefined,
+    );
   },
-  createBook(data: { title: string; summary?: string; visibility?: string; group_id?: number }) {
+  createBook(data: { title: string; summary?: string; visibility?: string; group_id?: number; project_id?: number }) {
     return api.post('/oc/books', data);
   },
   updateBook(id: number, data: { title?: string; summary?: string; visibility?: string }) {
@@ -371,5 +411,68 @@ export const ocAiApi = {
       '/oc/quick-create',
       data,
     );
+  },
+};
+
+// ==================== OC 立项制：项目 / 成员 / 密码访问 / 跨世界链接 ====================
+export const ocProjectApi = {
+  list(params: { scope?: string; category?: string; keyword?: string; page?: number; page_size?: number }) {
+    return api.get<{ code: number; data: { list: OcProject[]; total: number } }>('/oc/projects', { params });
+  },
+  get(id: number, token?: string) {
+    return api.get<{ code: number; data: OcProject }>(
+      `/oc/projects/${id}`,
+      token ? { headers: { 'X-Oc-Project-Token': token } } : undefined,
+    );
+  },
+  create(data: { title: string; summary?: string; cover_url?: string; category?: string; visibility: string; password?: string }) {
+    return api.post<{ code: number; data: OcProject }>('/oc/projects', data);
+  },
+  update(id: number, data: { title: string; summary?: string; cover_url?: string; category?: string; visibility: string; password?: string }) {
+    return api.put<{ code: number; data: OcProject }>(`/oc/projects/${id}`, data);
+  },
+  remove(id: number) {
+    return api.delete<{ code: number }>(`/oc/projects/${id}`);
+  },
+  /** 密码公开项目：校验密码换访问码 */
+  access(id: number, password: string) {
+    return api.post<{ code: number; data: { token: string } }>(`/oc/projects/${id}/access`, { password });
+  },
+  members(id: number) {
+    return api.get<{ code: number; data: { list: OcProjectMember[] } }>(`/oc/projects/${id}/members`);
+  },
+  addMember(id: number, username: string, role: string) {
+    return api.post<{ code: number; data: OcProjectMember }>(`/oc/projects/${id}/members`, { username, role });
+  },
+  updateMember(id: number, uid: number, role: string) {
+    return api.put<{ code: number }>(`/oc/projects/${id}/members/${uid}`, { role });
+  },
+  removeMember(id: number, uid: number) {
+    return api.delete<{ code: number }>(`/oc/projects/${id}/members/${uid}`);
+  },
+  worlds(id: number) {
+    return api.get<{ code: number; data: { list: OcWorldBook[] } }>(`/oc/projects/${id}/worlds`);
+  },
+  attachWorld(id: number, bookId: number) {
+    return api.post<{ code: number }>(`/oc/projects/${id}/worlds`, { book_id: bookId });
+  },
+  detachWorld(id: number, bookId: number) {
+    return api.delete<{ code: number }>(`/oc/projects/${id}/worlds/${bookId}`);
+  },
+  setCharacter(id: number, characterId: number) {
+    return api.post<{ code: number }>(`/oc/projects/${id}/characters`, { character_id: characterId });
+  },
+  listLinks(bookId: number) {
+    return api.get<{ code: number; data: { list: OcWorldLink[] } }>('/oc/world-links', { params: { book_id: bookId } });
+  },
+  addLink(fromBookId: number, toBookId: number, label: string) {
+    return api.post<{ code: number; data: OcWorldLink }>('/oc/world-links', {
+      from_book_id: fromBookId,
+      to_book_id: toBookId,
+      label,
+    });
+  },
+  removeLink(id: number) {
+    return api.delete<{ code: number }>(`/oc/world-links/${id}`);
   },
 };

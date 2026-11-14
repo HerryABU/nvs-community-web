@@ -1,10 +1,11 @@
-// Package logarchive 日志分层归档（按类型 log/<type>/<date>/ 分类）：
+// Package logarchive 日志分层归档（源目录按类型 log/<type>/<date>/ 分类）：
 //
-//	① 每天：每类打 1 个 7z（包内按日期目录组织）；
+//	① 每天：所有类型的当日日志打在一起，1 个 7z（包内按 类型/日期 组织）；
 //	② 每周后：把该周的日 7z 打包为 1 个 tar.gz；
 //	③ 每月后：把该月的周 tar.gz 打包为 1 个 tar.gz；
 //	④ 每年后：把全年的月 tar.gz 打包为 1 个 tar.xz。
 //
+// 即归档粒度是「日期」，不再按类型独立成包：请求日志与数据库日志同日同包。
 // 幂等：产物比源新则跳过。7z / tar / xz 缺失时对应层级降级跳过。
 package logarchive
 
@@ -53,121 +54,127 @@ func find7z() string {
 	return ""
 }
 
-// Run 执行分层归档，返回产物列表。单个失败不中断整体，错误汇总返回。
+// Run 执行分层归档，返回本次产物列表。单个失败不中断整体，错误汇总返回。
 func Run(opt Options) ([]string, error) {
 	opt = opt.normalize()
 	var outputs []string
 	var errs []string
 	addErr := func(format string, a ...interface{}) { errs = append(errs, fmt.Sprintf(format, a...)) }
 
-	types, err := listTypes(opt.LogDir)
+	// 收集所有「日期 → 当日有日志的类型目录」
+	dateTypes, dates, err := collectDates(opt.LogDir)
 	if err != nil {
 		return outputs, err
 	}
-	for _, typ := range types {
-		dates, err := listDates(filepath.Join(opt.LogDir, typ))
-		if err != nil || len(dates) == 0 {
-			continue
+	if len(dates) == 0 {
+		return outputs, nil
+	}
+
+	// ① 日 7z：同一天的所有类型打在一个包里
+	dailyOut := map[string]string{}
+	for _, d := range dates {
+		if opt.SevenZip == "" {
+			break
 		}
-		// ① 日 7z
-		dailyOut := map[string]string{}
-		for _, d := range dates {
-			if opt.SevenZip == "" {
-				break
-			}
-			src := filepath.Join(opt.LogDir, typ, d)
-			out := filepath.Join(opt.ArchiveDir, typ, "daily", fmt.Sprintf("%s-%s.7z", typ, d))
-			built := false
-			if stale(src, out) {
-				if err := pack7z(opt.SevenZip, out, src); err != nil {
-					addErr("daily %s: %v", out, err)
-				} else {
-					built = true
-				}
-			}
-			if fileExists(out) {
-				dailyOut[d] = out
-				if built {
-					outputs = append(outputs, out)
-				}
+		srcDirs := make([]string, 0, len(dateTypes[d]))
+		for _, typ := range dateTypes[d] {
+			srcDirs = append(srcDirs, filepath.Join(opt.LogDir, typ, d))
+		}
+		out := filepath.Join(opt.ArchiveDir, "daily", d+".7z")
+		built := false
+		if staleAny(srcDirs, out) {
+			if err := pack7zDirs(opt.SevenZip, out, srcDirs); err != nil {
+				addErr("daily %s: %v", out, err)
+			} else {
+				built = true
 			}
 		}
-		// ② 周 tar.gz（内容 = 该周各日的 7z）
-		weeklyOut := map[string]string{}
-		for _, w := range groupWeek(dates) {
-			srcs := pickExisting(dailyOut, w.dates)
-			if len(srcs) == 0 {
-				continue
-			}
-			out := filepath.Join(opt.ArchiveDir, typ, "weekly", fmt.Sprintf("%s-%s.tar.gz", typ, w.key))
-			built := false
-			if staleAny(srcs, out) {
-				if err := packFilesTarGz(out, srcs); err != nil {
-					addErr("weekly %s: %v", out, err)
-				} else {
-					built = true
-				}
-			}
-			if fileExists(out) {
-				weeklyOut[w.key] = out
-				if built {
-					outputs = append(outputs, out)
-				}
-			}
-		}
-		// ③ 月 tar.gz（内容 = 该月各周的 tar.gz）
-		monthlyOut := map[string]string{}
-		for _, m := range groupMonth(dates) {
-			var srcs []string
-			for _, wk := range weeklyOut {
-				if weekInMonth(filepath.Base(wk), m.key) {
-					srcs = append(srcs, wk)
-				}
-			}
-			if len(srcs) == 0 {
-				continue
-			}
-			out := filepath.Join(opt.ArchiveDir, typ, "monthly", fmt.Sprintf("%s-%s.tar.gz", typ, m.key))
-			built := false
-			if staleAny(srcs, out) {
-				if err := packFilesTarGz(out, srcs); err != nil {
-					addErr("monthly %s: %v", out, err)
-				} else {
-					built = true
-				}
-			}
-			if fileExists(out) {
-				monthlyOut[m.key] = out
-				if built {
-					outputs = append(outputs, out)
-				}
-			}
-		}
-		// ④ 年 tar.xz（内容 = 全年各月的 tar.gz）
-		for _, y := range groupYear(dates) {
-			var srcs []string
-			for _, mk := range monthlyOut {
-				if strings.HasPrefix(filepath.Base(mk), typ+"-"+y.key+"-") {
-					srcs = append(srcs, mk)
-				}
-			}
-			if len(srcs) == 0 {
-				continue
-			}
-			out := filepath.Join(opt.ArchiveDir, typ, "yearly", fmt.Sprintf("%s-%s.tar.xz", typ, y.key))
-			built := false
-			if staleAny(srcs, out) {
-				if err := packFilesTarXz(out, srcs); err != nil {
-					addErr("yearly %s: %v", out, err)
-				} else {
-					built = true
-				}
-			}
+		if fileExists(out) {
+			dailyOut[d] = out
 			if built {
 				outputs = append(outputs, out)
 			}
 		}
 	}
+
+	// ② 周 tar.gz（内容 = 该周各日的 7z）
+	weeklyOut := map[string]string{}
+	for _, w := range groupWeek(dates) {
+		srcs := pickExisting(dailyOut, w.dates)
+		if len(srcs) == 0 {
+			continue
+		}
+		out := filepath.Join(opt.ArchiveDir, "weekly", w.key+".tar.gz")
+		built := false
+		if staleAny(srcs, out) {
+			if err := packFilesTarGz(out, srcs); err != nil {
+				addErr("weekly %s: %v", out, err)
+			} else {
+				built = true
+			}
+		}
+		if fileExists(out) {
+			weeklyOut[w.key] = out
+			if built {
+				outputs = append(outputs, out)
+			}
+		}
+	}
+
+	// ③ 月 tar.gz（内容 = 该月各周的 tar.gz）
+	monthlyOut := map[string]string{}
+	for _, m := range groupMonth(dates) {
+		var srcs []string
+		for _, wk := range weeklyOut {
+			if weekInMonth(filepath.Base(wk), m.key) {
+				srcs = append(srcs, wk)
+			}
+		}
+		if len(srcs) == 0 {
+			continue
+		}
+		out := filepath.Join(opt.ArchiveDir, "monthly", m.key+".tar.gz")
+		built := false
+		if staleAny(srcs, out) {
+			if err := packFilesTarGz(out, srcs); err != nil {
+				addErr("monthly %s: %v", out, err)
+			} else {
+				built = true
+			}
+		}
+		if fileExists(out) {
+			monthlyOut[m.key] = out
+			if built {
+				outputs = append(outputs, out)
+			}
+		}
+	}
+
+	// ④ 年 tar.xz（内容 = 全年各月的 tar.gz）
+	for _, y := range groupYear(dates) {
+		var srcs []string
+		for _, mk := range monthlyOut {
+			if strings.HasPrefix(filepath.Base(mk), y.key+"-") {
+				srcs = append(srcs, mk)
+			}
+		}
+		if len(srcs) == 0 {
+			continue
+		}
+		out := filepath.Join(opt.ArchiveDir, "yearly", y.key+".tar.xz")
+		built := false
+		if staleAny(srcs, out) {
+			if err := packFilesTarXz(out, srcs); err != nil {
+				addErr("yearly %s: %v", out, err)
+			} else {
+				built = true
+			}
+		}
+		if built {
+			outputs = append(outputs, out)
+		}
+	}
+
 	if len(errs) > 0 {
 		return outputs, fmt.Errorf("%d 个归档失败: %s", len(errs), strings.Join(errs, "; "))
 	}
@@ -189,7 +196,31 @@ func pickExisting(m map[string]string, keys []string) []string {
 	return out
 }
 
-// weekRe 从归档名（如 requests-2026W45.tar.gz）提取年/周
+// collectDates 返回 日期 → 当日有日志的类型列表，以及排序后的日期列表
+func collectDates(logDir string) (map[string][]string, []string, error) {
+	types, err := listTypes(logDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	dateTypes := map[string][]string{}
+	for _, typ := range types {
+		dates, err := listDates(filepath.Join(logDir, typ))
+		if err != nil {
+			continue
+		}
+		for _, d := range dates {
+			dateTypes[d] = append(dateTypes[d], typ)
+		}
+	}
+	dates := make([]string, 0, len(dateTypes))
+	for d := range dateTypes {
+		dates = append(dates, d)
+	}
+	sort.Strings(dates)
+	return dateTypes, dates, nil
+}
+
+// weekRe 从归档名（如 2026W45.tar.gz）提取年/周
 var weekRe = regexp.MustCompile(`(\d{4})W(\d{1,2})`)
 
 // weekInMonth 判断周归档的归属月（按该周周一所在月）
@@ -340,18 +371,7 @@ func groupYear(dates []string) []yearGroup {
 	return out
 }
 
-func stale(srcDir, out string) bool {
-	si, err := os.Stat(srcDir)
-	if err != nil {
-		return false
-	}
-	oi, err := os.Stat(out)
-	if err != nil {
-		return true
-	}
-	return si.ModTime().After(oi.ModTime())
-}
-
+// staleAny 任一源目录比产物新 → 需要重建
 func staleAny(srcDirs []string, out string) bool {
 	oi, err := os.Stat(out)
 	if err != nil {
@@ -365,8 +385,9 @@ func staleAny(srcDirs []string, out string) bool {
 	return false
 }
 
-// pack7z 用 7z 打包单个日期目录：包内以日期目录为顶层（按日期分类）。
-func pack7z(sevenZip, out, srcDir string) error {
+// pack7zDirs 把多个「<type>/<date>」目录打进同一个 7z：
+// 包内结构为 <type>/<date>/...（类型/日期 两级分类）。
+func pack7zDirs(sevenZip, out string, srcDirs []string) error {
 	if err := os.MkdirAll(filepath.Dir(out), 0755); err != nil {
 		return err
 	}
@@ -375,15 +396,18 @@ func pack7z(sevenZip, out, srcDir string) error {
 		return err
 	}
 	defer os.RemoveAll(tmp)
-	dst := filepath.Join(tmp, filepath.Base(srcDir))
-	if err := copyTree(srcDir, dst); err != nil {
-		return err
+	for _, src := range srcDirs {
+		typ := filepath.Base(filepath.Dir(src)) // 类型 = 父目录名
+		dst := filepath.Join(tmp, typ, filepath.Base(src))
+		if err := copyTree(src, dst); err != nil {
+			return err
+		}
 	}
 	absOut, err := filepath.Abs(out)
 	if err != nil {
 		absOut = out
 	}
-	cmd := exec.Command(sevenZip, "a", "-t7z", "-mx=5", "-y", absOut, dst)
+	cmd := exec.Command(sevenZip, "a", "-t7z", "-mx=5", "-y", absOut, ".")
 	cmd.Dir = tmp
 	if b, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("7z: %v: %s", err, string(b))

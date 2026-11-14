@@ -103,7 +103,7 @@ func TestCharacterCRUD(t *testing.T) {
 func TestLorebookActivation(t *testing.T) {
 	setupOCDB(t)
 	u := mkOCUser(t, "oc_lore")
-	book, err := CreateWorldBook(u.ID, 0, "铁堡设定", "要塞城市", VisPrivate)
+	book, err := CreateWorldBook(u.ID, 0, 0, "铁堡设定", "要塞城市", VisPrivate)
 	if err != nil {
 		t.Fatal(err)
 	}
