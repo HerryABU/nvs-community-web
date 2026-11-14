@@ -827,6 +827,8 @@ const router = createRouter({
         { path: 'comments', name: 'me-comments', component: () => import('@/views/me/MeComments.vue') },
         { path: 'stats', name: 'me-stats', component: () => import('@/views/me/MeStats.vue') },
         { path: 'decorate', name: 'me-decorate', component: () => import('@/views/me/MeDecorate.vue') },
+        { path: 'bookshelf', name: 'me-bookshelf', component: () => import('@/views/me/Bookshelf.vue') },
+        { path: 'follows', name: 'me-follows', component: () => import('@/views/me/Follows.vue') },
       ],
     },
     {

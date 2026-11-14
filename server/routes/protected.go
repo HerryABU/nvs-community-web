@@ -368,6 +368,9 @@ func registerProtected(r *gin.Engine) {
 		protected.DELETE("/groups/:id", grouphandler.GroupDissolve)
 		protected.POST("/groups/:id/join", grouphandler.GroupJoin)
 		protected.POST("/group-join", grouphandler.GroupJoinByNo) // 按群号/邀请码加入（独立路径避通配冲突）
+		// 群聊（类微信/QQ 的即时聊天）
+		protected.GET("/groups/:id/chat", grouphandler.ListChat)
+		protected.POST("/groups/:id/chat", grouphandler.SendChat)
 		// 群成员：拉人/审核/角色/禁言/踢退
 		protected.GET("/groups/:id/members", grouphandler.GroupMembers)
 		protected.POST("/groups/:id/invite", grouphandler.GroupInvite)

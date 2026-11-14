@@ -13,26 +13,35 @@
       <router-link to="/federation" class="fed-more">查看全部友站 →</router-link>
     </div>
 
-    <div v-loading="loading" class="fed-grid">
-      <a
-        v-for="item in novels"
-        :key="item.site_id + '-' + item.remote_id"
-        class="fed-card"
-        :href="item.source_url"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        <div class="fed-cover">
-          <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" loading="lazy" />
-          <span v-else class="fed-cover-ph">📖</span>
-          <span v-if="item.site" class="fed-site-badge">{{ item.site.name }}</span>
+    <!-- 按类别分板块展示：不同类别出现在各自分区，而非一股脑混排 -->
+    <div v-loading="loading" class="fed-groups">
+      <section v-for="g in groups" :key="g.name" class="fed-group">
+        <h4 class="fed-group-title">
+          <span class="fed-group-name">{{ g.name }}</span>
+          <span class="fed-group-count">{{ g.items.length }} 部</span>
+        </h4>
+        <div class="fed-grid">
+          <a
+            v-for="item in g.items"
+            :key="item.site_id + '-' + item.remote_id"
+            class="fed-card"
+            :href="item.source_url"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <div class="fed-cover">
+              <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" loading="lazy" />
+              <span v-else class="fed-cover-ph">📖</span>
+              <span v-if="item.site" class="fed-site-badge">{{ item.site.name }}</span>
+            </div>
+            <div class="fed-card-body">
+              <h4 class="fed-card-title">{{ item.title }}</h4>
+              <p class="fed-card-author">{{ item.author || '佚名' }}</p>
+              <p v-if="item.summary" class="fed-card-summary">{{ item.summary }}</p>
+            </div>
+          </a>
         </div>
-        <div class="fed-card-body">
-          <h4 class="fed-card-title">{{ item.title }}</h4>
-          <p class="fed-card-author">{{ item.author || '佚名' }}<span v-if="item.category"> · {{ item.category }}</span></p>
-          <p v-if="item.summary" class="fed-card-summary">{{ item.summary }}</p>
-        </div>
-      </a>
+      </section>
     </div>
 
     <div v-if="!loading && novels.length === 0" class="fed-empty">
@@ -60,6 +69,17 @@ const { federationModes } = storeToRefs(appStore);
 
 const novels = ref<any[]>([]);
 const loading = ref(false);
+
+// 按类别分组（同类聚合、保持出现顺序）；无类别归入「其他」
+const groups = computed<{ name: string; items: any[] }[]>(() => {
+  const map = new Map<string, any[]>();
+  for (const it of novels.value) {
+    const name = (it.category || '').trim() || '其他';
+    if (!map.has(name)) map.set(name, []);
+    map.get(name)!.push(it);
+  }
+  return Array.from(map.entries()).map(([name, items]) => ({ name, items }));
+});
 
 // 嵌入模式：仅在站长开启「嵌入列表区块」时渲染（独立页入口另由 independent_enabled 控制）
 const visible = computed(() => !!federationModes.value.embed_enabled);
@@ -117,11 +137,31 @@ watch(visible, (v) => {
 }
 .fed-more:hover { text-decoration: underline; }
 
+.fed-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 80px;
+}
+.fed-group-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 0.92rem;
+  color: var(--text-color, #1a1a2e);
+  border-left: 3px solid var(--primary-color, #6366f1);
+  padding-left: 8px;
+}
+.fed-group-count {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--text-light, #999);
+}
 .fed-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 16px;
-  min-height: 80px;
 }
 .fed-card {
   display: flex;

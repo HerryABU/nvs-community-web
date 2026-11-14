@@ -66,6 +66,9 @@
               <el-dropdown-item v-if="authStore.isLoggedIn" @click="$router.push('/membership')">
                 <span class="nav-emoji">💎</span> 会员套餐
               </el-dropdown-item>
+              <el-dropdown-item v-if="authStore.isLoggedIn" @click="$router.push('/membership?redeem=1')">
+                <span class="nav-emoji">🎫</span> VIP 卡密兑换
+              </el-dropdown-item>
               <el-dropdown-item v-if="authStore.isLoggedIn" @click="$router.push('/bookshelf')">
                 <span class="nav-emoji">📚</span> 书架
               </el-dropdown-item>

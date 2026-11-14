@@ -571,6 +571,10 @@ func GetSiteInfo(c *gin.Context) {
 		"minor_mode":                string(models.GetMinorMode()),
 		"wechat_login_available":    config.WeChatAppID != "" && config.WeChatAppSecret != "" && config.WeChatCallback != "",
 		"national_realname_enabled": models.GetNationalRealNameConfig().Enabled,
+		// 朗读（TTS）配置：engine=browser(浏览器 Web Speech API，免费免计费) / cloud(云端 TTS)
+		"reader_tts_engine": models.GetPlatformConfig("reader_tts_engine"),
+		"reader_tts_voice":  models.GetPlatformConfig("reader_tts_voice"),
+		"reader_tts_rate":   models.GetPlatformConfig("reader_tts_rate"),
 	})
 }
 

@@ -262,7 +262,9 @@ async function fromSeed(seed: string, replace: boolean) {
 
 async function addDetail(m: string) {
   if (!current.value) return;
-  const mod = (m === 'timeline' || m === 'outline' || m === 'character' || m === 'setting') ? m : 'setting';
+  // 合法模块白名单（含 storyline，之前漏掉导致「新增故事线卡」落到 setting）
+  const valid: DetailModule[] = ['setting', 'character', 'outline', 'timeline', 'storyline'];
+  const mod = valid.includes(m as DetailModule) ? (m as DetailModule) : 'setting';
   try {
     const res = await authorAiApi.createDetail(current.value.id, { module: mod as DetailModule, title: '', content: '' });
     if (res.data.code === 0) { await loadDetails(); await refreshProject(); }

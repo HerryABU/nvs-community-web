@@ -128,7 +128,7 @@ const inputPlaceholder = computed(() => {
   return '说清你想怎么改，如「把主角的秘密改得更隐蔽，别提前暴露」';
 });
 const moduleLabel = computed(() => {
-  const map: Record<string, string> = { setting: '世界观 / 设定', character: '人物', outline: '大纲', timeline: '时间线' };
+  const map: Record<string, string> = { setting: '世界观 / 设定', character: '人物', outline: '大纲', timeline: '时间线', storyline: '故事线' };
   return props.detail ? map[props.detail.module] || props.detail.module : '';
 });
 

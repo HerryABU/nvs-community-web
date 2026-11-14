@@ -39,6 +39,8 @@
         <el-tab-pane label="博客" name="blogs" />
         <el-tab-pane label="留言" name="comments" />
         <el-tab-pane label="数据" name="stats" />
+        <el-tab-pane label="书架" name="bookshelf" />
+        <el-tab-pane label="关注" name="follows" />
         <el-tab-pane label="装扮" name="decorate" />
       </el-tabs>
 

@@ -56,11 +56,19 @@
           <el-icon><Collection /></el-icon><span class="desktop-only"> 精读</span>
         </el-button>
         <!-- 语音朗读（gap-audit #18）：服务端合成，产物落站内 uploads -->
-        <el-button text :loading="ttsLoading" :title="ttsPlaying ? '停止朗读' : '朗读本章（消耗免费额度/代币）'"
-          @click="toggleTTS">
-          <el-icon><Microphone /></el-icon>
-          <span class="desktop-only"> {{ ttsPlaying ? '停止' : '朗读' }}</span>
-        </el-button>
+        <el-dropdown trigger="click" @command="ttsEngineCommand">
+          <el-button text :loading="ttsLoading" :title="ttsPlaying ? '停止朗读' : '朗读本章'">
+            <el-icon><Microphone /></el-icon>
+            <span class="desktop-only"> {{ ttsPlaying ? '停止' : '朗读' }}</span>
+            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-item command="toggle">{{ ttsPlaying ? '停止朗读' : '开始朗读' }}</el-dropdown-item>
+            <el-dropdown-item divided disabled>选择引擎</el-dropdown-item>
+            <el-dropdown-item command="browser">浏览器朗读（免费）{{ ttsEngine === 'browser' ? ' ✓' : '' }}</el-dropdown-item>
+            <el-dropdown-item command="cloud">云端 TTS{{ ttsEngine === 'cloud' ? ' ✓' : '' }}</el-dropdown-item>
+          </template>
+        </el-dropdown>
       </template>
       <div class="reader-nav desktop-only" v-if="!isTrialExceeded">
         <el-button size="small" :disabled="chapterNum <= 1" @click="goChapter(chapterNum - 1)">
@@ -351,6 +359,7 @@ import { novelApi, chapterApi, type Chapter } from '@/api/novel';
 import { bookshelfApi } from '@/api/novel/bookshelf';
 import { readingApi, type ReadingNote } from '@/api/novel/reading';
 import { useAuthStore } from '@/stores/auth';
+import { useAppStore } from '@/stores/app';
 import { renderMarkdown, renderMermaidBlocks, renderChemfigBlocks } from '@/markdown/renderer';
 import CommentSection from '@/components/comment/CommentSection.vue';
 import SensitiveZoneGuard from '@/components/common/SensitiveZoneGuard.vue';
@@ -358,7 +367,7 @@ import { shouldShowGuard, markZoneConfirmed, setLastZone } from '@/utils/sensiti
 import { frameApi } from '@/api/home/frame';
 import { ElMessage } from 'element-plus';
 import { aiCostApi } from '@/api/admin/costrisk';
-import { ArrowLeft, List, Star, EditPen, Notebook, Microphone, Collection } from '@element-plus/icons-vue';
+import { ArrowLeft, List, Star, EditPen, Notebook, Microphone, Collection, ArrowDown } from '@element-plus/icons-vue';
 import ReadPermissionGate from '@/components/readperm/ReadPermissionGate.vue';
 import { parseReadPermDeny } from '@/api/readperm';
 import { isImageMode, type ChapterImage } from '@/api/novel/script';
@@ -604,6 +613,49 @@ const ttsQueue = ref<string[]>([]);
 let ttsAudio: HTMLAudioElement | null = null;
 let ttsCursor = 0;
 
+// 朗读引擎：browser=浏览器 Web Speech API（免费、免计费、无需登录）；cloud=云端 TTS（站长可配）
+const appStore = useAppStore();
+const ttsEngineOverride = ref('');
+const ttsEngine = computed<string>(() => ttsEngineOverride.value || (appStore.siteInfo?.reader_tts_engine as string) || 'cloud');
+
+function ttsEngineCommand(cmd: string) {
+  if (cmd === 'toggle') { toggleTTS(); return; }
+  if (cmd === 'browser' || cmd === 'cloud') {
+    ttsEngineOverride.value = cmd;
+    ElMessage.success(cmd === 'browser' ? '已切换：浏览器朗读（免费）' : '已切换：云端 TTS');
+  }
+}
+const ttsRate = computed<number>(() => {
+  const r = Number(appStore.siteInfo?.reader_tts_rate);
+  return r > 0 ? r : 1;
+});
+const ttsVoice = computed<string>(() => (appStore.siteInfo?.reader_tts_voice as string) || '');
+const browserTTSSupported = typeof window !== 'undefined' && 'speechSynthesis' in window;
+
+/** 浏览器 TTS：逐句朗读（无网络、无计费） */
+function playBrowserChunk(i: number) {
+  const queue = ttsQueue.value;
+  if (i >= queue.length) { stopTTS(); return; }
+  ttsCursor = i;
+  if (!browserTTSSupported) {
+    ElMessage.error('当前浏览器不支持语音朗读，可切换云端 TTS');
+    stopTTS();
+    return;
+  }
+  const u = new SpeechSynthesisUtterance(queue[i]);
+  u.lang = 'zh-CN';
+  u.rate = ttsRate.value;
+  const voiceName = ttsVoice.value;
+  if (voiceName) {
+    const v = window.speechSynthesis.getVoices().find((x) => x.name === voiceName || x.lang.startsWith('zh'));
+    if (v) u.voice = v;
+  }
+  u.onend = () => { if (ttsCursor === i) playBrowserChunk(i + 1); };
+  u.onerror = () => { stopTTS(); };
+  ttsPlaying.value = true;
+  window.speechSynthesis.speak(u);
+}
+
 /** 取可朗读的纯文本：剔除代码块/图片/HTML 标签/Markdown 标记（代码念出来没有意义） */
 function ttsPlainText(): string {
   const raw = chapter.value?.content || '';
@@ -646,6 +698,8 @@ function stopTTS() {
   ttsLoading.value = false;
   ttsQueue.value = [];
   ttsCursor = 0;
+  // 浏览器 TTS 也要停止
+  if (browserTTSSupported) window.speechSynthesis.cancel();
   if (ttsAudio) {
     ttsAudio.onended = null;
     ttsAudio.onerror = null;
@@ -682,8 +736,9 @@ async function playTTSAt(i: number) {
 
 async function toggleTTS() {
   if (ttsPlaying.value || ttsLoading.value) { stopTTS(); return; }
-  if (!authStore.isLoggedIn) {
-    ElMessage.warning('登录后才能使用朗读');
+  // 云端 TTS 需登录（计费）；浏览器 TTS 免费、无需登录
+  if (ttsEngine.value !== 'browser' && !authStore.isLoggedIn) {
+    ElMessage.warning('登录后才能使用云端朗读；可在设置中切换浏览器朗读');
     router.push('/login');
     return;
   }
@@ -692,7 +747,11 @@ async function toggleTTS() {
   const chunks = ttsSplit(text);
   if (!chunks.length) { ElMessage.warning('本章没有可朗读的正文'); return; }
   ttsQueue.value = chunks;
-  await playTTSAt(0);
+  if (ttsEngine.value === 'browser') {
+    playBrowserChunk(0);
+  } else {
+    await playTTSAt(0);
+  }
 }
 
 // 叙事形态：章节形态优先（script 话本 / mixed 散文与话本混排），未设置则继承作品

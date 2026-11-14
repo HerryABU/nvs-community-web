@@ -210,6 +210,10 @@
       </div>
 
       <!-- 文本模式：卡片编辑（与文本互相转换：改文本即刷新视图） -->
+      <div v-if="storylineDetails.length === 0" class="aww-empty">
+        <div class="aww-empty__art">🧵</div>
+        <p>还没有故事线卡。点「新增故事线卡」手写，或「AI 生成故事线」自动产出。</p>
+      </div>
       <div v-else class="aww-timeline-cards">
         <article v-for="d in storylineDetails" :key="d.id" class="aww-card is-compact" :class="{ 'is-active': activeDetailId === d.id }">
           <header class="aww-card__head">

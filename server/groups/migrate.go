@@ -14,5 +14,6 @@ func Migrate(db *gorm.DB) error {
 		&GroupFile{},
 		&UserGroupQuota{},
 		&GroupReadState{},
+		&GroupChatMessage{},
 	)
 }

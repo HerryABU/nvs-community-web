@@ -61,6 +61,16 @@ export interface GroupPost {
   author_avatar?: string;
 }
 
+/** 群聊消息（类微信/QQ 即时聊天） */
+export interface GroupChatMessage {
+  id: number;
+  group_id: number;
+  user_id: number;
+  content: string;
+  reply_to_id: number;
+  created_at: string;
+}
+
 export interface GroupFile {
   id: number;
   group_id: number;
@@ -121,6 +131,14 @@ export const groupApi = {
   /** 按群号 / 邀请码加入 */
   joinByNo(payload: { group_no: string; code?: string }) {
     return api.post<{ code: number; data: { status: string; group: Group } }>('/group-join', payload);
+  },
+  /** 群聊：最近消息 */
+  chatList(id: number) {
+    return api.get<{ code: number; data: { list: GroupChatMessage[] } }>(`/groups/${id}/chat`);
+  },
+  /** 群聊：发送消息 */
+  chatSend(id: number, data: { content: string; reply_to_id?: number }) {
+    return api.post<{ code: number; data: GroupChatMessage }>(`/groups/${id}/chat`, data);
   },
   /** 群号 / 邀请码预览（扫码或输入群号后先看信息） */
   lookup(no: string) {

@@ -44,6 +44,9 @@
       </div>
 
       <el-tabs v-else v-model="tab" class="gd-tabs">
+        <el-tab-pane label="聊天" name="chat">
+          <GroupChat :group-id="group.id" />
+        </el-tab-pane>
         <el-tab-pane label="帖子" name="posts">
           <GroupPosts
             ref="postsRef"
@@ -87,6 +90,7 @@ import { groupApi, type Group } from '@/api/group';
 import { useAuthStore } from '@/stores/auth';
 import { useGroupStream } from '@/composables/useGroupStream';
 import EmptyState from '@/components/common/EmptyState.vue';
+import GroupChat from '@/components/group/GroupChat.vue';
 import GroupPosts from '@/components/group/GroupPosts.vue';
 import GroupMembers from '@/components/group/GroupMembers.vue';
 import GroupFiles from '@/components/group/GroupFiles.vue';

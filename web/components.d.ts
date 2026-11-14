@@ -131,6 +131,7 @@ declare module 'vue' {
     FloorComments: typeof import('./src/components/comment/FloorComments.vue')['default']
     FlowPanel: typeof import('./src/components/oc/FlowPanel.vue')['default']
     ForgotPasswordDialog: typeof import('./src/components/auth/ForgotPasswordDialog.vue')['default']
+    GroupChat: typeof import('./src/components/group/GroupChat.vue')['default']
     GroupFiles: typeof import('./src/components/group/GroupFiles.vue')['default']
     GroupMembers: typeof import('./src/components/group/GroupMembers.vue')['default']
     GroupPosts: typeof import('./src/components/group/GroupPosts.vue')['default']

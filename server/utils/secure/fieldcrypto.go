@@ -14,10 +14,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"nvs-server/config"
 )
+
+// fieldCryptoKeyFile 独立字段加密密钥文件（与 JWT_SECRET 物理隔离）。
+// ⚠️ 除登录令牌外，任何「需要存储内容的加密」都不得用 JWT 密钥派生——
+// JWT 只用于认证，密钥泄露面必须彼此隔离。
+const fieldCryptoKeyFile = "data/.field_crypto.key"
 
 var (
 	// ErrFieldCryptoNoKey 未配置加密密钥
@@ -44,12 +50,42 @@ func getFieldCryptoKey() ([]byte, error) {
 		}
 	}
 	if key == nil {
-		// 缺省：由 JWT_SECRET 派生（32 字节）
-		sum := sha256.Sum256([]byte("nvs-field-crypto|" + config.JWTSecret))
-		key = sum[:]
+		// 缺省：独立随机密钥（持久化 data/.field_crypto.key），与 JWT 完全隔离
+		if k, err := loadOrCreateFieldKey(); err == nil && len(k) == 32 {
+			key = k
+		} else {
+			// 兼容历史密文：仅在无法生成独立密钥时回退 JWT 派生
+			key = jwtDerivedFieldKey()
+		}
 	}
 	fieldCryptoKey = key
 	return key, nil
+}
+
+// loadOrCreateFieldKey 读取/生成独立字段加密密钥（32 字节 hex，0600 持久化）
+func loadOrCreateFieldKey() ([]byte, error) {
+	if b, err := os.ReadFile(fieldCryptoKeyFile); err == nil {
+		if raw, err := hex.DecodeString(strings.TrimSpace(string(b))); err == nil && len(raw) == 32 {
+			return raw, nil
+		}
+	}
+	buf := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, buf); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll("data", 0700); err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(fieldCryptoKeyFile, []byte(hex.EncodeToString(buf)), 0600); err != nil {
+		return nil, err
+	}
+	return buf, nil
+}
+
+// jwtDerivedFieldKey 历史兼容用：JWT 派生密钥（仅用于解密旧密文）
+func jwtDerivedFieldKey() []byte {
+	sum := sha256.Sum256([]byte("nvs-field-crypto|" + config.JWTSecret))
+	return sum[:]
 }
 
 // fieldCryptoCandidates 返回可用的加密密钥候选（按优先级）。
@@ -59,12 +95,26 @@ func getFieldCryptoKey() ([]byte, error) {
 // 解密时按顺序尝试，因此历史密文不会因为启用保险箱而读不出来。
 func fieldCryptoCandidates() [][]byte {
 	var keys [][]byte
-	if k := loadTokenVaultKey(); len(k) == 32 {
+	seen := map[string]bool{}
+	add := func(k []byte) {
+		if len(k) != 32 {
+			return
+		}
+		sig := string(k)
+		if seen[sig] {
+			return
+		}
+		seen[sig] = true
 		keys = append(keys, k)
 	}
-	if k, err := getFieldCryptoKey(); err == nil && len(k) == 32 {
-		keys = append(keys, k)
+	// 1) 令牌保险箱密钥（站长自设，最高优先）
+	add(loadTokenVaultKey())
+	// 2) 独立字段密钥 / 显式 RealNameEncKey
+	if k, err := getFieldCryptoKey(); err == nil {
+		add(k)
 	}
+	// 3) 历史兼容：JWT 派生密钥（仅解密旧密文用，新加密不再使用）
+	add(jwtDerivedFieldKey())
 	return keys
 }
 

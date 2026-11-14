@@ -30,8 +30,10 @@
           <label>模型</label>
           <el-select v-model="form.model_id" size="small" :disabled="streaming" style="flex:1">
             <el-option v-for="m in status.models" :key="m.id" :label="modelLabel(m)" :value="m.id" />
+            <el-option v-if="!status.models.length" :value="0" disabled label="（无可用模型）" />
           </el-select>
         </div>
+        <p v-if="statusError" class="awl-status-error">{{ statusError }}</p>
 
         <!-- 动作 -->
         <div class="awl-row awl-actions">
@@ -298,15 +300,25 @@ watch(
   },
 );
 
+const statusError = ref('');
+
 async function loadStatus() {
+  statusError.value = '';
   try {
     const res = await aiApi.status();
     if (res.data.code === 0) {
       Object.assign(status, res.data.data);
       if (!form.model_id && status.models.length) form.model_id = status.models[0].id;
+      if (!status.ai_enabled) {
+        statusError.value = '平台 AI 未开启，请联系站长在「AI 设置」中开启后再使用。';
+      } else if (!status.models.length) {
+        statusError.value = '暂无可用对话模型，请联系站长在「AI 模型池」添加并启用 kind=chat 的模型。';
+      }
+    } else {
+      statusError.value = res.data.message || 'AI 状态获取失败';
     }
-  } catch {
-    /* ignore */
+  } catch (e: any) {
+    statusError.value = e?.response?.data?.message || 'AI 状态获取失败，请确认已登录后重试';
   }
 }
 
@@ -616,6 +628,7 @@ onBeforeUnmount(() => {
 }
 .awl-row { display: flex; align-items: center; gap: 10px; }
 .awl-row > label { width: 40px; font-size: 0.85rem; color: var(--text-muted, #6b7280); flex-shrink: 0; }
+.awl-status-error { margin: 2px 0 10px 50px; font-size: 0.74rem; line-height: 1.5; color: #f56c6c; }
 .awl-actions { align-items: flex-start; }
 .awl-action-grid { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
 .awl-action {
