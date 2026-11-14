@@ -24,6 +24,7 @@ import katex from 'katex';
 import DOMPurify from 'dompurify';
 import 'katex/dist/contrib/mhchem.mjs';
 import { normalizeLatexDelimiters } from './latex';
+import { decorateLinks } from '@/utils/externalLink';
 import { ElMessage } from 'element-plus';
 import { downloadTextFile, svgNodeToPngBlob, svgNodeToSvgText, triggerDownload, safeFileName } from '@/utils/svgExport';
 
@@ -349,7 +350,8 @@ export function renderMarkdown(content: string): string {
       throw new Error('Cherry 引擎不可用');
     }
     const html = engine.makeHtml(preprocessExpand(preprocessMD(preprocessChemfig(decoded)))) as string;
-    return sanitizeMarkdown(html);
+    // 站外链接高亮 + 风险标记（点击确认在 App.vue 全局守卫里统一处理）
+    return decorateLinks(sanitizeMarkdown(html));
   } catch (e) {
     console.error('[NVS] renderMarkdown error:', e);
     return `<pre>${content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`;

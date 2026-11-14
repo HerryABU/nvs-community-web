@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"nvs-server/aisafety"
+	"nvs-server/contentguard"
 	"nvs-server/crisis"
 	"nvs-server/handlers/badword"
 	"nvs-server/handlers/blacklist"
+	"nvs-server/handlers/contentrisk"
 	"nvs-server/handlers/export"
 	"nvs-server/handlers/forum"
 	"nvs-server/handlers/hctx"
@@ -221,6 +223,17 @@ func CreateComment(c *gin.Context) {
 	}
 	if req.ParentID != nil {
 		comment.ParentID = req.ParentID
+	}
+
+	// ── 内容风控闸门（编码混淆 / PII 泄露 / 异常外链）──
+	// block：拒绝发布并上报 AI + 管理员；review：先折叠不公开，等人工/AI 复核。
+	if d := contentguard.GuardText(cleaned, "comment"); d.Action != "allow" {
+		contentrisk.Report(c, d, userID, raw, "comment", 0)
+		if d.Action == "block" {
+			infra.Forbidden(c, "内容未通过安全检测："+d.Reason)
+			return
+		}
+		comment.ModerationStatus = "folded"
 	}
 
 	// ── 评论图片 AI 审核（落库前）──

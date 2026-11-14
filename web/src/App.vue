@@ -35,8 +35,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import { bindGlobalExternalGuard } from '@/utils/externalLink';
 import NavBar from '@/components/layout/NavBar.vue';
 import SiteFooter from '@/components/layout/SiteFooter.vue';
 import MinorGateDialog from '@/components/auth/MinorGateDialog.vue';
@@ -58,11 +59,19 @@ const isAdminRoute = computed(() => route.path.startsWith('/admin') || route.pat
 // 子组件（NavBar/Home）挂载后通过 ensure* 等待同一 promise，无竞态。
 appStore.bootstrap();
 
+let unbindExternalGuard: (() => void) | null = null;
+
 onMounted(() => {
   authStore.fetchUser();
   themeStore.applyTheme();
   // F12 自定义网站主题（alist 式）：拉取站点默认主题 +（已登录时）个人主题并注入 <style>
   themeStore.loadTheme();
+  // 外链安全守卫：内容区站外链接点击前弹「即将离开本站」确认
+  unbindExternalGuard = bindGlobalExternalGuard();
+});
+
+onUnmounted(() => {
+  unbindExternalGuard?.();
 });
 
 // ======== 未成年检测（F21.1） ========
@@ -107,6 +116,23 @@ watch(() => authStore.isLoggedIn, (logged) => {
   if (logged) checkMinorGate();
 }, { immediate: true });
 </script>
+
+<!-- 外链高亮（作用于各组件内容区链接，故非 scoped） -->
+<style>
+.ext-link {
+  color: var(--primary-color, #409eff);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ext-link.ext-risk {
+  color: #f56c6c;
+  text-decoration: underline wavy #f56c6c;
+}
+.ext-link.ext-risk::after {
+  content: ' ⚠';
+  font-size: 0.8em;
+}
+</style>
 
 <style scoped>
 #app-container {

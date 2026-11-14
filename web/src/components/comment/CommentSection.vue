@@ -162,6 +162,7 @@ import { authApi } from '@/api/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Fold, Expand, Picture } from '@element-plus/icons-vue';
 import { shouldShowGuard } from '@/utils/sensitiveZone';
+import { guardLeak } from '@/composables/useLeakGuard';
 import FloorComments from './FloorComments.vue';
 import MentionTextarea from './MentionTextarea.vue';
 import CommentNetworkDrawer from '@/views/comment/CommentNetworkDrawer.vue';
@@ -446,6 +447,10 @@ async function submitComment() {
   const allowed = await crossDomainCheck();
   if (!allowed) return;
 
+  // 敏感信息（PII）泄露提醒：命中需用户确认后才发送
+  const leakOk = await guardLeak(newComment.value.trim(), '评论');
+  if (!leakOk) return;
+
   submitting.value = true;
   try {
     const res = await commentApi.createComment({
@@ -524,6 +529,8 @@ async function handleReply(parentId: number | null, content: string) {
   if (!commentsEnabled.value) return;
   const allowed = await crossDomainCheck();
   if (!allowed) return;
+  const leakOk = await guardLeak(content, '评论');
+  if (!leakOk) return;
   try {
     const res = await commentApi.createComment({
       novel_id: props.blogId ? 0 : props.novelId,

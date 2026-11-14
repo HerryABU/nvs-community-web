@@ -1,8 +1,10 @@
 package forum
 
 import (
+	"nvs-server/contentguard"
 	"nvs-server/handlers/badword"
 	"nvs-server/handlers/blacklist"
+	"nvs-server/handlers/contentrisk"
 	"nvs-server/handlers/hctx"
 	"nvs-server/handlers/publish"
 	"nvs-server/models"
@@ -176,6 +178,15 @@ func CreateThread(c *gin.Context) {
 	raw := security.SanitizeUserContent(req.Content)
 	cleaned, badHits := badword.ProcessBadWords(raw, "forum")
 
+	// 内容风控闸门（编码混淆 / PII / 异常外链）：block 拒绝发布并上报
+	if d := contentguard.GuardText(cleaned, "forum"); d.Action != "allow" {
+		contentrisk.Report(c, d, userID, raw, "forum", 0)
+		if d.Action == "block" {
+			infra.Forbidden(c, "内容未通过安全检测："+d.Reason)
+			return
+		}
+	}
+
 	// 每日发文限额预检（§13.4；后台关闭时不生效）
 	threadWords := len([]rune(cleaned))
 	if !publish.EnforceDailyPublish(c, quota.PublishKindThread, threadWords) {
@@ -320,6 +331,15 @@ func CreatePost(c *gin.Context) {
 
 	raw := security.SanitizeUserContent(req.Content)
 	cleaned, badHits := badword.ProcessBadWords(raw, "forum")
+
+	// 内容风控闸门（编码混淆 / PII / 异常外链）：block 拒绝发布并上报
+	if d := contentguard.GuardText(cleaned, "forum"); d.Action != "allow" {
+		contentrisk.Report(c, d, userID, raw, "forum", 0)
+		if d.Action == "block" {
+			infra.Forbidden(c, "内容未通过安全检测："+d.Reason)
+			return
+		}
+	}
 
 	post := &models.Post{
 		ThreadID: uint(threadID),

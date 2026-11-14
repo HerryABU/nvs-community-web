@@ -99,6 +99,7 @@ import { renderMarkdown } from '@/markdown/renderer';
 import SensitiveZoneGuard from '@/components/common/SensitiveZoneGuard.vue';
 import FloorComments from '@/components/comment/FloorComments.vue';
 import { markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';
+import { guardLeak } from '@/composables/useLeakGuard';
 import { Lock } from '@element-plus/icons-vue';
 
 const route = useRoute();
@@ -267,6 +268,8 @@ onUnmounted(() => {
 // 底部输入框：不带 parent_id → 回复楼主，另起一层（脱离既有楼层）
 async function submitReply() {
   if (!replyContent.value.trim()) return;
+  const leakOk = await guardLeak(replyContent.value.trim(), '帖子回复');
+  if (!leakOk) return;
   replying.value = true;
   try {
     await forumApi.createPost(Number(route.params.id), { content: replyContent.value });
@@ -282,6 +285,8 @@ async function submitReply() {
 
 // 楼层内回复：parentId 为空=回复楼主开新楼；有值=挂靠该条所属的楼，展示为「X 回复 Y」
 async function handleReply(parentId: number | null, content: string) {
+  const leakOk = await guardLeak(content, '帖子回复');
+  if (!leakOk) return;
   try {
     await forumApi.createPost(Number(route.params.id), {
       content,
