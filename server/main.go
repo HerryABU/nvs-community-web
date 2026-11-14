@@ -27,6 +27,7 @@ import (
 	"nvs-server/handlers/badword"
 	moderationhandler "nvs-server/handlers/moderation"
 	"nvs-server/honeypot"
+	"nvs-server/logarchive"
 	"nvs-server/middleware"
 	"nvs-server/models"
 	_ "nvs-server/models/authorai" // 触发 authorai_projects 模型注册（作者工作台 AI 写作流，与中台分库）
@@ -167,6 +168,25 @@ func main() {
 
 	// 启动访问日志归档调度器（每日 sha256 + gzip + 只读 + 6个月保留，176号令合规）
 	siteops.StartLogArchiver()
+
+	// 日志分层归档：按类型（log/<type>/<date>/）打 天7z / 周7z / 月tar.gz。
+	// 启动即执行一次（新站替换后同样生效），随后每日定时归档。
+	go func() {
+		if outs, err := logarchive.Run(logarchive.Options{}); err == nil {
+			log.Printf("[logarchive] 启动归档完成，产出 %d 个归档", len(outs))
+		} else {
+			log.Printf("[logarchive] 启动归档失败: %v", err)
+		}
+	}()
+	go func() {
+		tk := time.NewTicker(24 * time.Hour)
+		defer tk.Stop()
+		for range tk.C {
+			if _, err := logarchive.Run(logarchive.Options{}); err != nil {
+				log.Printf("[logarchive] 定时归档失败: %v", err)
+			}
+		}
+	}()
 
 	// 🔀 站点路径前缀（URL_PREFIX）在 gin 外层剥离：必须先于路由匹配执行。
 	// 未配置前缀时该包装零开销直通。

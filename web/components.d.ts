@@ -11,6 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    ActivityHeatmap: typeof import('./src/components/me/ActivityHeatmap.vue')['default']
     AdminActiveHoursHeatmap: typeof import('./src/components/admin/AdminActiveHoursHeatmap.vue')['default']
     AdminApiAlert: typeof import('./src/components/admin/AdminApiAlert.vue')['default']
     AdminFilterBar: typeof import('./src/components/admin/AdminFilterBar.vue')['default']

@@ -318,6 +318,8 @@ func registerProtected(r *gin.Engine) {
 		protected.POST("/novels/:id/chapters/:num/branches", chaptervcshandler.CreateBranch)
 		protected.POST("/novels/:id/chapters/:num/merge", chaptervcshandler.MergeBranch)
 		protected.GET("/author/novels", author.GetMyNovels)
+		// 个人活跃热力图（近 N 天按天计数：评论/回复/发帖/群帖）
+		protected.GET("/users/me/activity-heat", author.UserActivityHeat)
 		protected.GET("/author/novels/:id/stats", author.GetNovelStats)
 		protected.GET("/author/banned-content", author.GetAuthorBannedContent)
 		protected.GET("/author/recycle", recycle.ListAuthorRecycle)             // 回收站：用户自删内容

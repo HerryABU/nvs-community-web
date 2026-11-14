@@ -44,6 +44,9 @@
       </el-col>
     </el-row>
 
+    <!-- 活跃日历（近一年创作/互动热力） -->
+    <ActivityHeatmap :days="365" />
+
     <!-- 我的服务：原先散落在导航栏下拉里的入口，统一收到个人中心（下拉只剩 5 项） -->
     <h2 class="me-section-title">我的服务</h2>
     <div class="me-services">
@@ -70,6 +73,7 @@
 import { computed, inject, ref, onMounted, type Ref } from 'vue';
 import { homeCustomizeApi } from '@/api/home/homeCustomize';
 import { useAuthStore } from '@/stores/auth';
+import ActivityHeatmap from '@/components/me/ActivityHeatmap.vue';
 
 const profile = inject<Ref<any>>('meProfile');
 const authStore = useAuthStore();

@@ -64,12 +64,13 @@
 
       <!-- 卡片栅格：复用 NovelCard，栅格间距与首页 HomeModuleSection.hms-grid 完全一致 -->
       <div v-else-if="novels.length" class="nv-grid">
-        <NovelCard
-          v-for="n in novels"
-          :key="n.id"
-          :novel="n"
-          @click="router.push(`/novel/${n.id}`)"
-        />
+        <div v-for="n in novels" :key="n._federated ? 'fed-' + n.id : 'local-' + n.id" class="nv-cell">
+          <span v-if="n._federated" class="nv-fed-badge">🌐 {{ n._site }}</span>
+          <NovelCard
+            :novel="n"
+            @click="n._federated ? openFed(n) : router.push(`/novel/${n.id}`)"
+          />
+        </div>
       </div>
 
       <!-- 空态 -->
@@ -103,6 +104,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { Search } from '@element-plus/icons-vue';
 import { novelApi, type Novel } from '@/api/novel';
+import { publicApi } from '@/api/admin';
 import { useAppStore } from '@/stores/app';
 import NovelCard from '@/components/novel/NovelCard.vue';
 import FederatedBlock from '@/components/federation/FederatedBlock.vue';
@@ -110,7 +112,29 @@ import FederatedBlock from '@/components/federation/FederatedBlock.vue';
 const router = useRouter();
 const route = useRoute();
 const appStore = useAppStore();
-const { categories } = storeToRefs(appStore);
+const { categories, federationModes } = storeToRefs(appStore);
+
+/** 联邦作品混入列表：与站内作品同列，仅加「外站」角标并跳转源站 */
+async function loadFederated(): Promise<Novel[]> {
+  if (!federationModes.value?.independent_enabled && !federationModes.value?.embed_enabled) return [];
+  try {
+    const res = await publicApi.getFederatedNovels({ page: 1, page_size: pageSize.value });
+    const list = res.data?.data?.list || [];
+    return list.map((it: any) => ({
+      id: it.remote_id,
+      title: it.title,
+      author: { nickname: it.author || '佚名' },
+      category: it.category || '',
+      cover_url: it.cover_url || '',
+      summary: it.summary || '',
+      _federated: true,
+      _site: it.site?.name || '友站',
+      source_url: it.source_url,
+    })) as Novel[];
+  } catch {
+    return [];
+  }
+}
 
 const novels = ref<Novel[]>([]);
 const total = ref(0);
@@ -123,17 +147,32 @@ const sortBy = ref<'featured' | 'created_at' | 'updated_at'>('featured');
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)));
 
+/** 打开联邦作品源站（新标签页） */
+function openFed(n: any) {
+  if (n.source_url) window.open(n.source_url, '_blank', 'noopener,noreferrer');
+}
+
 async function load() {
   loading.value = true;
   try {
-    const res = await novelApi.getNovels({
-      page: page.value,
-      page_size: pageSize.value,
-      category: category.value || undefined,
-      search: search.value || undefined,
-      sort_by: sortBy.value,
-    });
+    const [res, fed] = await Promise.all([
+      novelApi.getNovels({
+        page: page.value,
+        page_size: pageSize.value,
+        category: category.value || undefined,
+        search: search.value || undefined,
+        sort_by: sortBy.value,
+      }),
+      loadFederated(),
+    ]);
     novels.value = res.data?.data?.list || [];
+    // 联邦作品混入（去重：同 remote_id 不重复展示），站内优先
+    if (fed.length) {
+      const ids = new Set(novels.value.map((n) => String(n.id)));
+      for (const f of fed) {
+        if (!ids.has(String(f.id))) novels.value.push(f);
+      }
+    }
     total.value = res.data?.data?.total || 0;
   } catch {
     novels.value = [];
@@ -272,6 +311,20 @@ watch(() => route.fullPath, syncFromQuery);
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 18px;
   min-height: 200px;
+}
+.nv-cell { position: relative; }
+.nv-fed-badge {
+  position: absolute;
+  z-index: 2;
+  left: 8px;
+  top: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  color: #fff;
+  background: rgba(17, 24, 39, 0.78);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
 }
 .nv-skeleton-card {
   height: 300px;
