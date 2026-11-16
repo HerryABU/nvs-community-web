@@ -83,10 +83,16 @@ const router = createRouter({
       component: () => import('@/views/author/parts/AuthorAiWriteView.vue'),
       meta: { requiresAuth: true },
     },
-    // AI 写作 Agent 的内部页各自拥有真实路由：刷新/前后退保持所在视图
+    // AI 写作 Agent：内部页各自拥有真实路由，工程 id 走路径段（不进 query）
     {
       path: '/ai-write/:section',
       name: 'ai-write-section',
+      component: () => import('@/views/author/parts/AuthorAiWriteView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/ai-write/:projectId/:section',
+      name: 'ai-write-project-section',
       component: () => import('@/views/author/parts/AuthorAiWriteView.vue'),
       meta: { requiresAuth: true },
     },

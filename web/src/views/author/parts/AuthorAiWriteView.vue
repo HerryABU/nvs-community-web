@@ -149,6 +149,8 @@ const VALID_SECTIONS = [
   'overview', 'setting', 'character', 'outline', 'timeline',
   'storyline', 'chapters', 'visual', 'review', 'style',
 ];
+// 工程 id 走路径段：/ai-write/:projectId/:section（不再使用 ?project=）
+const projectId = computed(() => String(route.params.projectId || ''));
 const view = computed({
   get: () => {
     const s = String(route.params.section || 'overview');
@@ -157,10 +159,7 @@ const view = computed({
   set: (v: string) => {
     const section = VALID_SECTIONS.includes(v) ? v : 'overview';
     if (route.params.section === section) return;
-    router.push({
-      path: `/ai-write/${section}`,
-      query: route.query.project ? { project: String(route.query.project) } : {},
-    });
+    router.push(projectId.value ? `/ai-write/${projectId.value}/${section}` : `/ai-write/${section}`);
   },
 });
 const details = ref<AiWriteDetail[]>([]);
@@ -227,14 +226,23 @@ async function openProject(id: number) {
     current.value = res.data.data;
     activeDetail.value = null;
     await Promise.all([loadDetails(), loadChapters(), checkTimeline()]);
-    // 工程 id 进入 URL：内部页可深链、刷新后自动恢复工程
-    router.replace({ path: '/ai-write/overview', query: { project: String(id) } });
+    // 工程 id 进入路径：/ai-write/123/overview
+    router.replace(`/ai-write/${id}/overview`);
   } catch { ElMessage.error('打开工程失败'); }
 }
 
-// 深链恢复：/ai-write/style?project=123 刷新后自动打开工程并保持所在内部页
+// 深链恢复：/ai-write/123/style 刷新后自动打开工程并保持所在内部页
 async function restoreProjectFromRoute() {
-  const id = Number(route.query.project);
+  // 兼容旧链接 ?project=123 → 迁移到路径式
+  if (!route.params.projectId && route.query.project) {
+    const oldId = Number(route.query.project);
+    const section = view.value;
+    if (oldId) {
+      router.replace(`/ai-write/${oldId}/${section}`);
+      return;
+    }
+  }
+  const id = Number(route.params.projectId);
   if (!id || current.value?.id === id) return;
   try {
     const res = await authorAiApi.get(id);
@@ -501,7 +509,7 @@ onMounted(() => {
   restoreProjectFromRoute();
   window.addEventListener('keydown', onKeydown);
 });
-watch(() => route.query.project, () => restoreProjectFromRoute());
+watch(() => route.params.projectId, () => restoreProjectFromRoute());
 onUnmounted(() => { window.removeEventListener('keydown', onKeydown); document.body.classList.remove('ai-immersive'); });
 </script>
 
