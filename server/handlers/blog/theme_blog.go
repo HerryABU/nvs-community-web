@@ -7,6 +7,7 @@ package blog
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 
 	"nvs-server/handlers/hctx"
@@ -153,15 +154,10 @@ func ThemeBlogOverview(c *gin.Context) {
 }
 
 func parsePositive(s string) (uint, bool) {
-	n := 0
-	for _, r := range s {
-		if r < '0' || r > '9' {
-			return 0, false
-		}
-		n = n*10 + int(r-'0')
-		if n > 1<<31 {
-			return 0, false
-		}
+	// 用 ParseUint 而非 `n > 1<<31`：后者在 32 位平台（linux-armv7）会常量溢出
+	v, err := strconv.ParseUint(strings.TrimSpace(s), 10, 32)
+	if err != nil || v == 0 {
+		return 0, false
 	}
-	return uint(n), n > 0
+	return uint(v), true
 }
