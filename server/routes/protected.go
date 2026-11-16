@@ -27,6 +27,7 @@ import (
 	"nvs-server/handlers/compliance"
 	"nvs-server/handlers/data"
 	"nvs-server/handlers/export"
+	"nvs-server/handlers/feed"
 	"nvs-server/handlers/follow"
 	"nvs-server/handlers/forum"
 	"nvs-server/handlers/home"
@@ -543,6 +544,17 @@ func registerProtected(r *gin.Engine) {
 		protected.POST("/police/tickets/:id/assign", police.AssignTicket)
 		protected.POST("/police/tickets/:id/status", police.SetTicketStatus)
 		protected.POST("/police/tickets/:id/notes", police.AddTicketNote)
+
+		// 短视频 / 微文：发布、互动、轻量评论
+		protected.POST("/feed", feed.Create)
+		protected.PUT("/feed/:id", feed.Update)
+		protected.DELETE("/feed/:id", feed.Delete)
+		protected.POST("/feed/:id/like", feed.Like)
+		protected.POST("/feed/:id/favorite", feed.Favorite)
+		protected.POST("/feed/:id/share", feed.Share)
+		protected.POST("/feed/:id/comments", feed.CreateComment)
+		protected.DELETE("/feed-comments/:cid", feed.DeleteComment)
+		protected.POST("/feed-comments/:cid/like", feed.LikeComment)
 
 		// #65 作者端阅读权限下拉（随站长配置实时变化）
 		protected.GET("/read-permission/levels", readpermh.Levels)

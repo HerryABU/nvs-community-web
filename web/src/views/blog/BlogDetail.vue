@@ -94,7 +94,11 @@
           <!-- 头图（封面）：作者设置的封面优先展示为文章头图横幅 -->
           <img v-if="blog.cover_url" :src="blog.cover_url" class="blog-cover" alt="封面" />
 
-          <div class="blog-content markdown-body cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" v-html="htmlContent" ref="blogContentRef"></div>
+          <!-- 阅读器收边：外层卡片提供留白（正文的 cherry-previewer 会被全局样式清 padding，
+               所以留白必须放在外层容器上，参考小说 Reader.vue 的 .reader-content） -->
+          <div class="blog-paper">
+            <div class="blog-content markdown-body cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" v-html="htmlContent" ref="blogContentRef"></div>
+          </div>
 
           <!-- 自定义模板Footer区域（position=footer 的模版，渲染在正文下方） -->
           <div v-if="footerFrames.length > 0" class="template-zone template-footer">
@@ -403,9 +407,29 @@ onBeforeUnmount(() => {
 .bd-layout { display: flex; gap: 24px; align-items: flex-start; }
 .bd-main { flex: 1; min-width: 0; }
 
-/* 折叠目录后的全屏正文：行宽过宽时适度收窄，保持可读性 */
-.toc-collapsed .blog-content { max-width: 920px; margin-left: auto; margin-right: auto; }
-.toc-collapsed .blog-footer, .toc-collapsed .section-title, .toc-collapsed .blog-header { max-width: 920px; margin-left: auto; margin-right: auto; }
+/* 折叠目录后的全屏阅读：统一收窄到 860px，避免文字贴屏边 */
+.toc-collapsed .blog-paper,
+.toc-collapsed .blog-footer,
+.toc-collapsed .section-title,
+.toc-collapsed .blog-header,
+.toc-collapsed .template-zone { max-width: 860px; margin-left: auto; margin-right: auto; }
+
+/* 阅读器收边（参考小说 Reader.vue 的 .reader-content）：
+   正文 .blog-content 带 cherry-previewer，被 global-fix.css 强制 padding:0，
+   因此留白/背景/圆角全部放在外层 .blog-paper 上，不动全局样式。 */
+.blog-paper {
+  max-width: 860px;
+  margin: 0 auto 20px;
+  padding: 32px;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+[data-theme="dark"] .blog-paper {
+  background: #1e293b;
+  border-color: #334155;
+}
 
 .blog-header { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); }
 
@@ -516,6 +540,7 @@ onBeforeUnmount(() => {
     line-height: 1.45;
   }
   .blog-meta-line { flex-wrap: wrap; gap: 6px 12px; }
+  .blog-paper { max-width: 100%; padding: 20px 14px; margin-bottom: 14px; border-radius: 6px; }
   .blog-content { font-size: 0.95rem; }
   .blog-footer { flex-wrap: wrap; }
   .blog-footer .el-button { flex: 1; }

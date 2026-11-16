@@ -158,6 +158,15 @@ const router = createRouter({
       component: () => import('@/views/subculture/SubcultureView.vue'),
       meta: { requiresAuth: true },
     },
+    // 短视频（视频号式下滑）/ 微文（可贴图，类贴图号）/ 发布入口
+    { path: '/shorts', name: 'shorts', component: () => import('@/views/shorts/ShortsFeed.vue') },
+    { path: '/micro', name: 'micro', component: () => import('@/views/micro/MicroFeed.vue') },
+    {
+      path: '/feed/compose',
+      name: 'feed-compose',
+      component: () => import('@/views/feed/Compose.vue'),
+      meta: { requiresAuth: true },
+    },
     {
       path: '/forums',
       name: 'forums',

@@ -20,6 +20,7 @@ import (
 	"nvs-server/handlers/captcha"
 	"nvs-server/handlers/comment"
 	"nvs-server/handlers/compliance"
+	"nvs-server/handlers/feed"
 	"nvs-server/handlers/follow"
 	"nvs-server/handlers/forum"
 	"nvs-server/handlers/gate"
@@ -88,6 +89,10 @@ func registerPublic(r *gin.Engine) {
 		public.GET("/novels/:id/chapters/:num", novel.GetChapterContent)
 		public.GET("/novels/:id/chapters/:num/verify", novel.VerifyChapter)
 		public.GET("/comments", comment.GetComments)
+		// 短视频 / 微文（视频号 + 贴图号）公开浏览
+		public.GET("/feed", feed.List)
+		public.GET("/feed/:id", feed.Detail)
+		public.GET("/feed/:id/comments", feed.ListComments)
 		// 楼加密（入口限制）：单楼整读（公开，楼内校验密码）；验证/设密需登录态
 		public.GET("/comments/:id/detail", forum.GetFloorDetail)
 		public.GET("/reports/reasons", admingov.GetReportReasons)

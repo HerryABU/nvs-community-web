@@ -59,6 +59,8 @@ var knownSPARoots = map[string]bool{
 	"subculture": true, // 亚文化创作区（独立 OC 创作前台，与群组并列；刷新/深链需回退 index.html）
 	// 联邦独立页（友链式站点目录 + 跨站作品流；刷新/深链需回退 index.html）
 	"federation": true,
+	"shorts":     true, // 短视频（视频号式沉浸下滑）：深链/刷新需回退 index.html
+	"micro":      true, // 微文（贴图号式图文流）：深链/刷新需回退 index.html
 }
 
 // firstPathSegment 返回去前导斜杠后的路径首段，如 "novel/1"→"novel"，"admin"→"admin"

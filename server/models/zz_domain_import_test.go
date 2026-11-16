@@ -11,6 +11,7 @@ import (
 	_ "nvs-server/models/apikey"
 	_ "nvs-server/models/blog"
 	_ "nvs-server/models/commentstats"
+	_ "nvs-server/models/feed"
 	_ "nvs-server/models/platform"
 	_ "nvs-server/models/quota"
 	_ "nvs-server/models/search"
