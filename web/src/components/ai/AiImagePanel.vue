@@ -104,6 +104,20 @@
           </el-radio-group>
           <p v-if="isMJ" class="pd-hint">Midjourney 协议单次 1 张</p>
         </div>
+
+        <!-- AI 中台内部画廊：生成时可选直接公开 -->
+        <div class="pd-block">
+          <div class="pd-block-title">画廊公开</div>
+          <el-checkbox v-model="autoPublish">生成后公开到「灵感广场」</el-checkbox>
+          <el-input
+            v-if="autoPublish"
+            v-model="publishTitle"
+            size="small"
+            maxlength="128"
+            placeholder="公开标题（可选，默认取提示词）"
+          />
+          <p class="pd-hint">公开后访客可在 AI 中台「灵感广场」看到作品与提示词；随时可在下方作品流取消公开。</p>
+        </div>
       </div>
 
       <!-- 底部固定：费用 + 生成 -->
@@ -278,6 +292,9 @@ const ratio = ref('1:1');
 const style = ref('');
 const n = ref(1);
 const generating = ref(false);
+// 生成时可选公开到 AI 中台内部画廊（灵感广场）
+const autoPublish = ref(false);
+const publishTitle = ref('');
 const refImages = ref<string[]>([]);
 const lastImages = ref<string[]>([]);
 const lastCost = ref(0);
@@ -443,7 +460,25 @@ async function generate(confirmed = false) {
       lastFree.value = !!res.data.data.free;
       lastBalance.value = res.data.data.balance_after;
       await loadHistory();
-      ElMessage.success('生成成功');
+      // 用户可在生成时直接选择公开到 AI 中台内部画廊
+      if (autoPublish.value && res.data.data.task_id) {
+        try {
+          const pr = await aiHubApi.publishMedia(res.data.data.task_id, {
+            public: true,
+            title: publishTitle.value.trim() || prompt.value.trim().slice(0, 40),
+            style: style.value.trim() || '',
+          });
+          if (pr.data.code === 0) {
+            ElMessage.success('已生成并公开到「灵感广场」');
+          } else {
+            ElMessage.warning('生成成功，但公开失败：' + (pr.data.message || '未知原因'));
+          }
+        } catch {
+          ElMessage.warning('生成成功，但公开到画廊失败；可在下方作品流里手动发布');
+        }
+      } else {
+        ElMessage.success('生成成功');
+      }
     }
   } catch (e: any) {
     const code = e?.response?.data?.code;
