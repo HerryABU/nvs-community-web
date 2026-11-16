@@ -102,6 +102,7 @@ const navViews = [
   { key: 'timeline', label: '时间线看板', icon: '🕰️' },
   { key: 'storyline', label: '故事线', icon: '🧵' },
   { key: 'chapters', label: '正文 / 章节', icon: '✍️' },
+  { key: 'style', label: '风格基调', icon: '🎨' },
 ];
 const toolViews = [
   { key: 'visual', label: '可视化图谱', icon: '🕸️' },

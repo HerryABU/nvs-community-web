@@ -53,6 +53,7 @@
             <el-button @click="goMessage">私信</el-button>
           </template>
           <el-button text @click="goForum">讨论区</el-button>
+          <el-button text type="primary" @click="$router.push(`/blog-theme/${authorKey}`)">高级博客主题 →</el-button>
           <ReportButton
             v-if="authStore.isLoggedIn && !isSelf && authorId"
             target-type="user"

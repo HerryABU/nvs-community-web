@@ -44,21 +44,22 @@ func (HomeBlock) TableName() string { return "home_blocks" }
 
 // 区块类型常量
 const (
-	HomeBlockHero    = "hero"
-	HomeBlockNotice  = "notice"
-	HomeBlockModules = "modules"
-	HomeBlockBlogs   = "blogs"
-	HomeBlockForums  = "forums"
-	HomeBlockThreads = "threads"
-	HomeBlockCustom  = "custom"
-	HomeBlockLinks   = "links"
+	HomeBlockHero          = "hero"
+	HomeBlockNotice        = "notice"
+	HomeBlockModules       = "modules"
+	HomeBlockBlogs         = "blogs"
+	HomeBlockForums        = "forums"
+	HomeBlockThreads       = "threads"
+	HomeBlockCustom        = "custom"
+	HomeBlockLinks         = "links"
+	HomeBlockFeatureThemes = "feature_themes"
 )
 
 // validHomeBlockTypes 合法区块类型白名单
 var validHomeBlockTypes = map[string]bool{
 	HomeBlockHero: true, HomeBlockNotice: true, HomeBlockModules: true,
 	HomeBlockBlogs: true, HomeBlockForums: true, HomeBlockThreads: true,
-	HomeBlockCustom: true, HomeBlockLinks: true,
+	HomeBlockCustom: true, HomeBlockLinks: true, HomeBlockFeatureThemes: true,
 }
 
 // IsValidHomeBlockType 区块类型是否合法

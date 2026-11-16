@@ -22,7 +22,7 @@ func GetAuthorTheme(c *gin.Context) {
 	if !ok {
 		return
 	}
-	infra.Success(c, gin.H{"css": theme.GetAuthorTheme(id)})
+	infra.Success(c, gin.H{"css": theme.GetAuthorTheme(id), "blog_style": theme.GetAuthorBlogStyle(id)})
 }
 
 // UpdateAuthorTheme PUT /api/author/:id/theme（作者本人或管理员覆盖）
@@ -43,18 +43,21 @@ func UpdateAuthorTheme(c *gin.Context) {
 		return
 	}
 	var req struct {
-		CSS string `json:"css"`
+		CSS       string `json:"css"`
+		BlogStyle string `json:"blog_style"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		infra.BadRequest(c, "参数错误")
 		return
 	}
-	removed, err := theme.SetAuthorTheme(id, req.CSS)
+	removed, err := theme.SetAuthorThemeWithStyle(id, req.CSS, req.BlogStyle)
 	if err != nil {
 		infra.InternalError(c, "保存作者主题失败")
 		return
 	}
-	infra.Success(c, gin.H{"css": theme.GetAuthorTheme(id), "removed": removed})
+	infra.Success(c, gin.H{
+		"css": theme.GetAuthorTheme(id), "blog_style": theme.GetAuthorBlogStyle(id), "removed": removed,
+	})
 }
 
 // ParseAuthorID 解析路由中的作者 ID（uint），非法时直接响应 400。

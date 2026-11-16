@@ -20,7 +20,7 @@
           <el-button size="large" @click="$router.push('/collab')">
             <el-icon><UserFilled /></el-icon>协作
           </el-button>
-          <el-button size="large" @click="$router.push('/ai-write')">
+          <el-button size="large" @click="$router.push('/ai-write/overview')">
             <el-icon><MagicStick /></el-icon>AI 写作
           </el-button>
         </div>

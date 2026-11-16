@@ -13,6 +13,8 @@
         <BlockModules v-else-if="b.type === 'modules'" :config="b.config" />
         <!-- 最新博客 -->
         <BlockBlogs v-else-if="b.type === 'blogs'" :title="b.title" :config="b.config" />
+        <!-- 精选高级博客主题（作者自选 advanced 模板） -->
+        <BlockFeatureThemes v-else-if="b.type === 'feature_themes'" :title="b.title" :config="b.config" />
         <!-- 版块大厅 -->
         <BlockForums v-else-if="b.type === 'forums'" :title="b.title" :config="b.config" />
         <!-- 最新帖 -->
@@ -49,6 +51,7 @@ import BlockThreads from '@/components/home/BlockThreads.vue';
 import BlockCustom from '@/components/home/BlockCustom.vue';
 import BlockLinks from '@/components/home/BlockLinks.vue';
 import BlockCarousel from '@/components/home/BlockCarousel.vue';
+import BlockFeatureThemes from '@/components/home/BlockFeatureThemes.vue';
 
 const appStore = useAppStore();
 const { siteName, categories } = storeToRefs(appStore);

@@ -49,7 +49,11 @@
         @publish="publishNovel"
       />
 
+      <!-- 风格基调：独立内部路由 /ai-write/style -->
+      <AiWriteStylePanel v-if="view === 'style'" :project="current" @saved="current = $event" />
+
       <AiWriteWorkspace
+        v-else
         :view="view"
         :project-seed="current.seed_topic || ''"
         :details="details"
@@ -114,7 +118,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus } from '@element-plus/icons-vue';
 import {
@@ -125,6 +130,7 @@ import {
 import AiWriteSidebar from '@/components/author/aiwrite/AiWriteSidebar.vue';
 import AiWriteWorkspace from '@/components/author/aiwrite/AiWriteWorkspace.vue';
 import AiWriteAgentPanel from '@/components/author/aiwrite/AiWriteAgentPanel.vue';
+import AiWriteStylePanel from '@/components/author/aiwrite/AiWriteStylePanel.vue';
 
 // ── 工程列表 ──
 const loading = ref(false);
@@ -136,7 +142,27 @@ const projects = ref<AiWriteProject[]>([]);
 const current = ref<AiWriteProject | null>(null);
 
 // ── 工作台状态 ──
-const view = ref('overview');
+// 内部视图与真实路由双向绑定：/ai-write/:section，刷新与前进后退都能保持所在页
+const route = useRoute();
+const router = useRouter();
+const VALID_SECTIONS = [
+  'overview', 'setting', 'character', 'outline', 'timeline',
+  'storyline', 'chapters', 'visual', 'review', 'style',
+];
+const view = computed({
+  get: () => {
+    const s = String(route.params.section || 'overview');
+    return VALID_SECTIONS.includes(s) ? s : 'overview';
+  },
+  set: (v: string) => {
+    const section = VALID_SECTIONS.includes(v) ? v : 'overview';
+    if (route.params.section === section) return;
+    router.push({
+      path: `/ai-write/${section}`,
+      query: route.query.project ? { project: String(route.query.project) } : {},
+    });
+  },
+});
 const details = ref<AiWriteDetail[]>([]);
 const chapters = ref<AiWriteChapter[]>([]);
 const activeDetail = ref<AiWriteDetail | null>(null);
@@ -199,15 +225,30 @@ async function openProject(id: number) {
     const res = await authorAiApi.get(id);
     if (res.data.code !== 0) return;
     current.value = res.data.data;
-    view.value = 'overview';
     activeDetail.value = null;
     await Promise.all([loadDetails(), loadChapters(), checkTimeline()]);
+    // 工程 id 进入 URL：内部页可深链、刷新后自动恢复工程
+    router.replace({ path: '/ai-write/overview', query: { project: String(id) } });
   } catch { ElMessage.error('打开工程失败'); }
+}
+
+// 深链恢复：/ai-write/style?project=123 刷新后自动打开工程并保持所在内部页
+async function restoreProjectFromRoute() {
+  const id = Number(route.query.project);
+  if (!id || current.value?.id === id) return;
+  try {
+    const res = await authorAiApi.get(id);
+    if (res.data.code === 0) {
+      current.value = res.data.data;
+      await Promise.all([loadDetails(), loadChapters(), checkTimeline()]);
+    }
+  } catch { /* 深链失效时退回工程列表 */ }
 }
 
 function backToList() {
   current.value = null;
   setImmersive(false);
+  router.replace({ path: '/ai-write' });
   loadList();
 }
 
@@ -455,7 +496,12 @@ function onKeydown(e: KeyboardEvent) {
     view.value = 'overview';
   }
 }
-onMounted(() => { loadList(); window.addEventListener('keydown', onKeydown); });
+onMounted(() => {
+  loadList();
+  restoreProjectFromRoute();
+  window.addEventListener('keydown', onKeydown);
+});
+watch(() => route.query.project, () => restoreProjectFromRoute());
 onUnmounted(() => { window.removeEventListener('keydown', onKeydown); document.body.classList.remove('ai-immersive'); });
 </script>
 

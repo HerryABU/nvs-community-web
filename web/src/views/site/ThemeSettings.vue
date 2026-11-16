@@ -90,6 +90,13 @@
           此处的主题会在<b>你的作者主页与作品页</b>对访客生效（区别于上方仅你自己登录可见的「个人主题」）。同样经服务端消毒，仅支持安全 CSS。
         </el-alert>
         <el-form label-width="100px" class="theme-form" v-loading="authorLoading">
+          <el-form-item label="博客主题风格">
+            <el-radio-group v-model="authorBlogStyle">
+              <el-radio-button value="classic">简洁（默认）</el-radio-button>
+              <el-radio-button value="advanced">高级（独立主题页 + 首页推流）</el-radio-button>
+            </el-radio-group>
+            <span class="hint-text">选择「高级」后，你的博客会出现在首页「精选博客主题」中，访客可进入专属主页</span>
+          </el-form-item>
           <el-form-item label="作者主题 CSS">
             <el-input
               v-model="authorCss"
@@ -254,6 +261,7 @@ const authorLoading = ref(false);
 const authorSaving = ref(false);
 const authorCss = ref('');
 const authorRemoved = ref<string[]>([]);
+const authorBlogStyle = ref<'classic' | 'advanced'>('classic');
 
 async function reloadAuthor() {
   const id = authStore.user?.id;
@@ -262,6 +270,7 @@ async function reloadAuthor() {
   try {
     const r = await api.get(`/author/${id}/theme`);
     authorCss.value = r.data?.data?.css || '';
+    authorBlogStyle.value = r.data?.data?.blog_style === 'advanced' ? 'advanced' : 'classic';
   } catch {
     ElMessage.error('作者主题加载失败');
   } finally {
@@ -274,9 +283,10 @@ async function saveAuthor() {
   if (!id) return;
   authorSaving.value = true;
   try {
-    const r = await api.put(`/author/${id}/theme`, { css: authorCss.value });
+    const r = await api.put(`/author/${id}/theme`, { css: authorCss.value, blog_style: authorBlogStyle.value });
     if (r.data?.code === 0) {
       authorRemoved.value = r.data.data?.removed || [];
+      authorBlogStyle.value = r.data.data?.blog_style === 'advanced' ? 'advanced' : 'classic';
       ElMessage.success(authorRemoved.value.length ? '已保存（部分规则因安全风险被移除）' : '已保存，访客将在你的作者页看到');
     } else {
       ElMessage.error(r.data?.message || '保存失败');
@@ -293,9 +303,10 @@ async function resetAuthor() {
   if (!id) return;
   authorSaving.value = true;
   try {
-    const r = await api.put(`/author/${id}/theme`, { css: '' });
+    const r = await api.put(`/author/${id}/theme`, { css: '', blog_style: 'classic' });
     if (r.data?.code === 0) {
       authorCss.value = '';
+      authorBlogStyle.value = 'classic';
       authorRemoved.value = [];
       ElMessage.success('已清除作者主题');
     } else {

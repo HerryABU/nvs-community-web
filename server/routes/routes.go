@@ -61,6 +61,7 @@ var knownSPARoots = map[string]bool{
 	"federation": true,
 	"shorts":     true, // 短视频（视频号式沉浸下滑）：深链/刷新需回退 index.html
 	"micro":      true, // 微文（贴图号式图文流）：深链/刷新需回退 index.html
+	"blog-theme": true, // 高级博客主题页（作者自选 advanced）：深链/刷新需回退 index.html
 }
 
 // firstPathSegment 返回去前导斜杠后的路径首段，如 "novel/1"→"novel"，"admin"→"admin"

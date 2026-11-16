@@ -83,6 +83,13 @@ const router = createRouter({
       component: () => import('@/views/author/parts/AuthorAiWriteView.vue'),
       meta: { requiresAuth: true },
     },
+    // AI 写作 Agent 的内部页各自拥有真实路由：刷新/前后退保持所在视图
+    {
+      path: '/ai-write/:section',
+      name: 'ai-write-section',
+      component: () => import('@/views/author/parts/AuthorAiWriteView.vue'),
+      meta: { requiresAuth: true },
+    },
     {
       path: '/author/editor/:id?',
       name: 'editor',
@@ -161,6 +168,8 @@ const router = createRouter({
     // 短视频（视频号式下滑）/ 微文（可贴图，类贴图号）/ 发布入口
     { path: '/shorts', name: 'shorts', component: () => import('@/views/shorts/ShortsFeed.vue') },
     { path: '/micro', name: 'micro', component: () => import('@/views/micro/MicroFeed.vue') },
+    // 高级博客主题（作者可在 /settings/theme 自由选择 advanced 模板）
+    { path: '/blog-theme/:key', name: 'blog-theme', component: () => import('@/views/blog/BlogTheme.vue') },
     {
       path: '/feed/compose',
       name: 'feed-compose',

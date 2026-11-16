@@ -70,6 +70,7 @@ export const HOME_BLOCK_TYPES: { type: string; name: string; desc: string }[] = 
   { type: 'notice', name: '公告栏', desc: '滚动展示站点公告（置顶优先）' },
   { type: 'modules', name: '模块区', desc: '小说/博客/论坛模块顺序排列（主模块在前）' },
   { type: 'blogs', name: '最新博客', desc: '博客列表区块（可设条数与列表/网格视图）' },
+  { type: 'feature_themes', name: '精选博客主题', desc: '推流作者自选高级主题的博客主页卡片' },
   { type: 'forums', name: '版块大厅', desc: '论坛版块卡片列表' },
   { type: 'threads', name: '最新帖', desc: '全站公开论坛的最新讨论帖' },
   { type: 'custom', name: '自定义 HTML', desc: '管理员自定义 HTML 片段（服务端消毒）' },

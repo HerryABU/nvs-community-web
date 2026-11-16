@@ -58,6 +58,8 @@ func registerPolice(r *gin.Engine) {
 		r.GET("/api/search", novel.UnifiedSearch)
 		// 博客公开读取
 		r.GET("/api/blogs", blog.ListPublicBlogs) // 支持 category_id / tag 筛选
+		// 高级博客主题页（独立聚合接口，不影响 /api/blogs）
+		r.GET("/api/theme-blog/:key/overview", blog.ThemeBlogOverview)
 		r.GET("/api/blogs/:id", blog.GetBlog)
 		r.GET("/api/blogs/:id/likes", blog.GetBlogLikes)       // 博客点赞数+当前用户状态
 		r.GET("/api/blog-tags", blog.ListBlogTags)             // 全站标签云

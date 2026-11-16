@@ -7,7 +7,10 @@
         </router-link>
         的博客
       </h1>
-      <p class="bl-subtitle">共 {{ total }} 篇文章</p>
+      <p class="bl-subtitle">
+        共 {{ total }} 篇文章
+        · <router-link :to="`/blog-theme/${authorKey}`" style="color:var(--primary-color)">进入高级主题 →</router-link>
+      </p>
     </div>
 
     <div v-loading="loading" class="bl-list">

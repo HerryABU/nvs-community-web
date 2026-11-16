@@ -129,6 +129,8 @@ func registerPublic(r *gin.Engine) {
 		public.GET("/announcements", adminsite.ListAnnouncements)
 		// 自定义主页（F15）：公开区块列表 + 全站最新帖（论坛首页风格区块）
 		public.GET("/home-blocks", home.ListPublicHomeBlocks)
+		// 首页精选高级博客主题推流
+		public.GET("/feature-themes", home.ListFeatureThemes)
 		public.GET("/threads/latest", home.ListLatestThreads)
 		// 狂暴模式（F19）：SSE 评论实时流 + 公开状态查询（管理员开关，默认关）
 		public.GET("/live/stream", live.LiveStream)

@@ -22,6 +22,7 @@
           </div>
           <div class="bh-user-links">
             <router-link :to="`/author/${user.username}`" class="bh-link">作者主页 →</router-link>
+            <router-link :to="`/blog-theme/${user.username}`" class="bh-link">高级主题 →</router-link>
           </div>
         </div>
       </div>
