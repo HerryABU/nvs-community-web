@@ -106,6 +106,19 @@ func GenerateOCCharacter(userID uint, seed OcGenSeed) (*Character, error) {
 	if seed.BookID > 0 {
 		in.BookID = seed.BookID
 	}
+	// 无世界（散户）也走世界创建：自动建一本 solo 世界，角色不再"裸奔"
+	if in.BookID == 0 {
+		title := strings.TrimSpace(in.Name) + "的世界"
+		if title == "的世界" {
+			title = "我的散户世界"
+		}
+		b, berr := CreateWorldBookWithKind(userID, 0, in.ProjectID, title,
+			"AI 生成角色时自动创建的散户世界", VisPrivate, WorldKindSolo)
+		if berr != nil {
+			return nil, berr
+		}
+		in.BookID = b.ID
+	}
 	return CreateCharacter(userID, in)
 }
 

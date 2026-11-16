@@ -7,11 +7,12 @@
     </div>
 
     <el-tabs v-model="tab" class="oc-ws-tabs">
+      <!-- 先世界后角色：世界书放首位并作为默认页签 -->
+      <el-tab-pane label="世界书（先建）" name="books">
+        <WorldBookManager :group-id="0" />
+      </el-tab-pane>
       <el-tab-pane label="角色卡" name="characters">
         <CharacterManager :group-id="0" :can-bind="false" />
-      </el-tab-pane>
-      <el-tab-pane label="世界书" name="books">
-        <WorldBookManager :group-id="0" />
       </el-tab-pane>
       <el-tab-pane label="表情包" name="emotes">
         <EmoteManager />
@@ -26,7 +27,7 @@ import CharacterManager from '@/components/oc/CharacterManager.vue';
 import WorldBookManager from '@/components/oc/WorldBookManager.vue';
 import EmoteManager from '@/components/oc/EmoteManager.vue';
 
-const tab = ref('characters');
+const tab = ref('books');
 </script>
 
 <style scoped>

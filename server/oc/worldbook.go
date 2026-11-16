@@ -13,8 +13,13 @@ import (
 	"nvs-server/security"
 )
 
-// CreateWorldBook 创建世界书（可归入 OC 项目）
+// CreateWorldBook 创建世界书（可归入 OC 项目）；默认普通世界
 func CreateWorldBook(userID, groupID, projectID uint, title, summary, visibility string) (*WorldBook, error) {
+	return CreateWorldBookWithKind(userID, groupID, projectID, title, summary, visibility, WorldKindNormal)
+}
+
+// CreateWorldBookWithKind 创建世界书并可指定类型（normal / solo 散户世界）
+func CreateWorldBookWithKind(userID, groupID, projectID uint, title, summary, visibility, kind string) (*WorldBook, error) {
 	title = strings.TrimSpace(security.SanitizeUserContent(title))
 	summary = strings.TrimSpace(security.SanitizeUserContent(summary))
 	if title == "" {
@@ -36,7 +41,7 @@ func CreateWorldBook(userID, groupID, projectID uint, title, summary, visibility
 		review = ReviewPending
 	}
 	b := &WorldBook{
-		UserID: userID, GroupID: groupID, ProjectID: projectID, Title: title,
+		UserID: userID, GroupID: groupID, ProjectID: projectID, Kind: NormalizeWorldKind(kind), Title: title,
 		Summary: summary, Version: 1, Visibility: vis, Review: review,
 		Status: "active", CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}

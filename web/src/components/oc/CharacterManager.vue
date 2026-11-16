@@ -77,10 +77,16 @@
         </el-form-item>
         <el-row :gutter="12">
           <el-col :span="8">
-            <el-form-item label="自带世界书">
-              <el-select v-model="form.book_id" clearable placeholder="无">
-                <el-option v-for="b in books" :key="b.id" :label="b.title" :value="b.id" />
+            <el-form-item label="所属世界（必选）">
+              <el-select v-model="form.book_id" placeholder="请选择世界">
+                <el-option
+                  v-for="b in books"
+                  :key="b.id"
+                  :label="`${b.title}${b.kind === 'solo' ? '（散户世界）' : ''}`"
+                  :value="b.id"
+                />
               </el-select>
+              <div class="cm-hint">角色必须先归属一个世界；散户也需先创建散户世界</div>
             </el-form-item>
           </el-col>
           <el-col :span="8">
@@ -266,12 +272,17 @@ async function loadBooks() {
 }
 
 function openEditor(c?: OcCharacter) {
+  // 先世界后角色：没有任何世界时不打开角色编辑器，引导先去建世界（散户也可建 solo 世界）
+  if (!c && books.value.length === 0) {
+    ElMessage.warning('请先创建世界（散户也可创建「散户世界」），再创建角色');
+    return;
+  }
   Object.assign(form, c
     ? { ...c }
     : {
         id: undefined, name: '', avatar_url: '', persona: '', appearance: '', speech: '',
         scenario: '', first_message: '', mes_example: '', system_prompt: '',
-        book_id: 0, tags: '', emote_map: '', visibility: 'private',
+        book_id: books.value[0]?.id || 0, tags: '', emote_map: '', visibility: 'private',
         oc_kind: 'native', species: '', species_traits: '', anthro_type: '',
       });
   editorVisible.value = true;
@@ -309,6 +320,10 @@ async function openAvatarGen() {
 async function save() {
   if (!form.name?.trim()) {
     ElMessage.warning('请填写角色名');
+    return;
+  }
+  if (!form.book_id) {
+    ElMessage.warning('请先创建世界并选择所属世界（散户请选散户世界）');
     return;
   }
   saving.value = true;
@@ -350,6 +365,7 @@ onMounted(() => { load(); loadBooks(); });
 </script>
 
 <style scoped>
+.cm-hint { font-size: .75rem; color: var(--text-muted, #888); margin-top: 4px; line-height: 1.4; }
 .imp-row { display: flex; align-items: center; gap: 10px; margin: 10px 0 6px; }
 .imp-hint { color: var(--text-muted); font-size: 0.78rem; }
 .ocm-bar {

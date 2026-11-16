@@ -169,14 +169,15 @@ func GetBook(c *gin.Context) {
 func CreateBook(c *gin.Context) {
 	var in struct {
 		Title, Summary, Visibility string
-		GroupID                    uint `json:"group_id"`
-		ProjectID                  uint `json:"project_id"`
+		GroupID                    uint   `json:"group_id"`
+		ProjectID                  uint   `json:"project_id"`
+		Kind                       string `json:"kind"` // normal / solo（散户世界）
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
 		infra.BadRequest(c, "参数错误")
 		return
 	}
-	b, err := oc.CreateWorldBook(middleware.UserID(c), in.GroupID, in.ProjectID, in.Title, in.Summary, in.Visibility)
+	b, err := oc.CreateWorldBookWithKind(middleware.UserID(c), in.GroupID, in.ProjectID, in.Title, in.Summary, in.Visibility, in.Kind)
 	if err != nil {
 		infra.BadRequest(c, err.Error())
 		return

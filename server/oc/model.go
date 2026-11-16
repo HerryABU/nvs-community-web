@@ -60,6 +60,20 @@ const (
 	FlowStopped = "stopped"
 )
 
+// 世界类型：角色必须先归属一个世界；散户也走世界创建（solo）
+const (
+	WorldKindNormal = "normal"
+	WorldKindSolo   = "solo"
+)
+
+// NormalizeWorldKind 世界类型白名单（缺省 normal）
+func NormalizeWorldKind(k string) string {
+	if strings.EqualFold(strings.TrimSpace(k), WorldKindSolo) {
+		return WorldKindSolo
+	}
+	return WorldKindNormal
+}
+
 // 世界书条目分类
 const (
 	EntryWorld   = "world"
@@ -143,8 +157,9 @@ func (Character) TableName() string { return "oc_characters" }
 type WorldBook struct {
 	ID        uint   `gorm:"primaryKey" json:"id"`
 	UserID    uint   `gorm:"not null;index" json:"user_id"`
-	GroupID   uint   `gorm:"not null;default:0;index" json:"group_id"`   // 0 = 个人世界书
-	ProjectID uint   `gorm:"not null;default:0;index" json:"project_id"` // 归属 OC 项目（立项制）
+	GroupID   uint   `gorm:"not null;default:0;index" json:"group_id"`          // 0 = 个人世界书
+	ProjectID uint   `gorm:"not null;default:0;index" json:"project_id"`        // 归属 OC 项目（立项制）
+	Kind      string `gorm:"size:16;not null;default:normal;index" json:"kind"` // normal=普通世界 / solo=散户世界
 	Title     string `gorm:"size:128;not null" json:"title"`
 	Summary   string `gorm:"type:text" json:"summary"`
 	Version   int    `gorm:"not null;default:1" json:"version"`

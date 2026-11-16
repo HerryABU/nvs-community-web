@@ -101,6 +101,8 @@ export interface OcWorldBook {
   id: number;
   user_id: number;
   group_id: number;
+  project_id?: number;
+  kind?: 'normal' | 'solo'; // 普通世界 / 散户世界
   title: string;
   summary: string;
   version: number;
@@ -225,7 +227,7 @@ export const ocApi = {
       token ? { headers: { 'X-Oc-Project-Token': token } } : undefined,
     );
   },
-  createBook(data: { title: string; summary?: string; visibility?: string; group_id?: number; project_id?: number }) {
+  createBook(data: { title: string; summary?: string; visibility?: string; group_id?: number; project_id?: number; kind?: string }) {
     return api.post('/oc/books', data);
   },
   updateBook(id: number, data: { title?: string; summary?: string; visibility?: string }) {

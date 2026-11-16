@@ -56,12 +56,17 @@ func TestCharacterCRUD(t *testing.T) {
 	setupOCDB(t)
 	u := mkOCUser(t, "oc_u1")
 
-	c, err := CreateCharacter(u.ID, CharacterInput{
+	// 先有世界后有角色：无世界的角色必须被拒绝
+	if _, err := CreateCharacter(u.ID, CharacterInput{Name: "散户角色"}); err == nil {
+		t.Fatal("无世界的角色应被拒绝（散户也需先建 solo 世界）")
+	}
+
+	c, err := createCharacter(u.ID, CharacterInput{
 		Name: "青崖", Persona: "冷淡的守夜人", Speech: "短句、少形容词",
 		Scenario: "雨夜的城门", FirstMessage: "「这么晚，进城做什么？」",
 		MesExample: "{{user}}：你是谁？\n{{char}}：守夜的。",
 		Visibility: VisPrivate,
-	})
+	}, false)
 	if err != nil || c.Review != ReviewApproved {
 		t.Fatalf("创建私有角色卡失败: %+v err=%v", c, err)
 	}
@@ -165,7 +170,7 @@ func TestLorebookGroupAndBudget(t *testing.T) {
 func TestEmotionAndState(t *testing.T) {
 	setupOCDB(t)
 	u := mkOCUser(t, "oc_state")
-	c, err := CreateCharacter(u.ID, CharacterInput{Name: "小灯", Persona: "活泼", Mood: 50, Energy: 80})
+	c, err := createCharacter(u.ID, CharacterInput{Name: "小灯", Persona: "活泼", Mood: 50, Energy: 80}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +210,7 @@ func TestPublishFlowToNovel(t *testing.T) {
 	if _, err := SaveGroupSetting(1, GroupSetting{Enabled: true, Mode: ModeMixed}); err != nil {
 		t.Fatal(err)
 	}
-	char, _ := CreateCharacter(u.ID, CharacterInput{Name: "阿澈", Persona: "沉默", Visibility: VisPrivate})
+	char, _ := createCharacter(u.ID, CharacterInput{Name: "阿澈", Persona: "沉默", Visibility: VisPrivate}, false)
 	turns := []Turn{
 		{FlowID: f.ID, GroupID: 1, Seq: 1, CharacterID: char.ID, Content: "你来了。", Review: ReviewApproved},
 		{FlowID: f.ID, GroupID: 1, Seq: 2, CharacterID: char.ID, Content: "坐吧。", Review: ReviewApproved},

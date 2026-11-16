@@ -79,12 +79,32 @@
         <el-button type="primary" :loading="saving" @click="saveEntry">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 新建世界：先世界后角色；散户也走世界创建 -->
+    <el-dialog v-model="createDlg" title="新建世界（创建角色前必须先有世界）" width="460px">
+      <el-form label-width="86px">
+        <el-form-item label="世界标题">
+          <el-input v-model="newWorld.title" maxlength="128" placeholder="如：雾港纪事 / 我的散人设定" />
+        </el-form-item>
+        <el-form-item label="世界类型">
+          <el-radio-group v-model="newWorld.kind">
+            <el-radio-button value="normal">普通世界</el-radio-button>
+            <el-radio-button value="solo">散户世界</el-radio-button>
+          </el-radio-group>
+          <div class="wbm-hint">散户不推荐，但若需要，也会先建一本独立的散户世界，角色再绑定到它。</div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createDlg = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="saveNewWorld">创建世界</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ElMessage } from 'element-plus';
 import { ocApi, type OcWorldBook, type OcWorldEntry } from '@/api/oc';
 
 const props = defineProps<{ groupId: number }>();
@@ -132,13 +152,33 @@ async function loadEntries() {
   }
 }
 
-async function createBook() {
+const createDlg = ref(false);
+const newWorld = reactive({ title: '', kind: 'normal' });
+
+function createBook() {
+  newWorld.title = '';
+  newWorld.kind = 'normal';
+  createDlg.value = true;
+}
+
+async function saveNewWorld() {
+  const title = newWorld.title.trim();
+  if (!title) { ElMessage.warning('请填写世界标题'); return; }
+  saving.value = true;
   try {
-    const { value } = await ElMessageBox.prompt('世界书标题', '新建世界书', { inputPattern: /\S+/, inputErrorMessage: '请输入标题' });
-    await ocApi.createBook({ title: value, group_id: props.groupId || 0 });
-    ElMessage.success('已创建');
+    const b = await ocApi.createBook({
+      title, kind: newWorld.kind, group_id: props.groupId || 0,
+    });
+    createDlg.value = false;
+    ElMessage.success(newWorld.kind === 'solo' ? '已创建散户世界' : '已创建世界');
     await loadBooks();
-  } catch { /* 取消 */ }
+    const id = (b as any)?.data?.data?.id;
+    if (id) {
+      bookId.value = id;
+      await loadEntries();
+    }
+  } catch (e: any) { ElMessage.error(e?.response?.data?.message || '创建失败'); }
+  finally { saving.value = false; }
 }
 
 function openEntry(e?: OcWorldEntry) {
@@ -182,6 +222,7 @@ onMounted(loadBooks);
 </script>
 
 <style scoped>
+.wbm-hint { font-size: .75rem; color: var(--text-muted, #888); margin-top: 6px; line-height: 1.5; }
 .wbm-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .wbm-tip { font-size: 0.75rem; color: var(--text-muted); }
 .wbm-desc { margin-bottom: 10px; }

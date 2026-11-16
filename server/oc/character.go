@@ -17,34 +17,35 @@ import (
 
 // CharacterInput 角色卡入参（字段划分对齐酒馆 V2 + 小团子养成）
 type CharacterInput struct {
-	Name       string
-	AvatarURL  string
-	Persona    string
-	Appearance string
-	Speech     string
-	Tags       string
-	Visibility string
+	// ⚠️ 必须显式写 json tag：encoding/json 不会把 book_id 映射到 BookID
+	Name       string `json:"name"`
+	AvatarURL  string `json:"avatar_url"`
+	Persona    string `json:"persona"`
+	Appearance string `json:"appearance"`
+	Speech     string `json:"speech"`
+	Tags       string `json:"tags"`
+	Visibility string `json:"visibility"`
 
-	Scenario     string
-	FirstMessage string
-	MesExample   string
-	SystemPrompt string
-	PostHistory  string
-	CreatorNotes string
-	Greetings    string // JSON 数组字符串（备用开场）
-	BookID       uint   // 角色自带世界书
-	ProjectID    uint   // 归属 OC 项目（立项制）
+	Scenario     string `json:"scenario"`
+	FirstMessage string `json:"first_message"`
+	MesExample   string `json:"mes_example"`
+	SystemPrompt string `json:"system_prompt"`
+	PostHistory  string `json:"post_history"`
+	CreatorNotes string `json:"creator_notes"`
+	Greetings    string `json:"greetings"`  // JSON 数组字符串（备用开场）
+	BookID       uint   `json:"book_id"`    // 所属世界（创建角色前必须先建）
+	ProjectID    uint   `json:"project_id"` // 归属 OC 项目（立项制）
 
-	Mood     int
-	Affinity int
-	Energy   int
-	EmoteMap string // JSON：{"笑":"立绘URL"}
+	Mood     int    `json:"mood"`
+	Affinity int    `json:"affinity"`
+	Energy   int    `json:"energy"`
+	EmoteMap string `json:"emote_map"` // JSON：{"笑":"立绘URL"}
 
 	// #77 OC 分类与 furry 兼容
-	OcKind        string
-	Species       string
-	SpeciesTraits string
-	AnthroType    string
+	OcKind        string `json:"oc_kind"`
+	Species       string `json:"species"`
+	SpeciesTraits string `json:"species_traits"`
+	AnthroType    string `json:"anthro_type"`
 }
 
 func normalizeCharacterInput(in *CharacterInput) {
@@ -129,7 +130,25 @@ func sanitizeCharacter(in *CharacterInput) []security.BadWordHit {
 }
 
 // CreateCharacter 创建角色卡（公开需 pending 待审）
+// CreateCharacter 用户创建角色：必须先有世界（散户也需先建一个 solo 世界）
 func CreateCharacter(userID uint, in CharacterInput) (*Character, error) {
+	return createCharacter(userID, in, true)
+}
+
+// createCharacter requireWorld=false 供 AI/导入等内部路径使用（它们会先自动建世界）
+func createCharacter(userID uint, in CharacterInput, requireWorld bool) (*Character, error) {
+	if requireWorld {
+		if in.BookID == 0 {
+			return nil, errors.New("请先创建世界（散户请选择「散户世界」）再创建角色")
+		}
+		var b WorldBook
+		if err := models.DB.Where("id = ? AND status = ?", in.BookID, "active").First(&b).Error; err != nil {
+			return nil, errors.New("所属世界不存在")
+		}
+		if b.UserID != userID && b.Visibility != VisPublic {
+			return nil, errors.New("无权在该世界内创建角色")
+		}
+	}
 	normalizeCharacterInput(&in)
 	if in.Name == "" {
 		return nil, errors.New("角色名不能为空")
