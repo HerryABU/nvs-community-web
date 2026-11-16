@@ -40,6 +40,16 @@ export interface FeedComment {
 }
 
 export const feedApi = {
+  /** 当前微文图片上限（后台可调，默认 20） */
+  config() {
+    return api.get<{ code: number; data: { max_micro_images: number } }>('/feed-config');
+  },
+  /** 后台调节图片上限（1~50） */
+  setConfig(maxMicroImages: number) {
+    return api.put<{ code: number; data: { max_micro_images: number } }>('/admin/feed-config', {
+      max_micro_images: maxMicroImages,
+    });
+  },
   list(params: { kind?: string; scope?: string; author_id?: number; page?: number; page_size?: number } = {}) {
     return api.get<{ code: number; data: { list: FeedPost[]; total: number } }>('/feed', { params });
   },

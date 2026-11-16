@@ -55,6 +55,11 @@
           <el-switch v-model="vipEnabled" active-text="开启" inactive-text="关闭" />
           <span class="hint-text">关闭后，作者无法申请 VIP 付费功能</span>
         </el-form-item>
+        <el-form-item label="微文图片上限">
+          <el-input-number v-model="maxMicroImages" :min="1" :max="50" />
+          <el-button size="small" style="margin-left: 8px" :loading="savingFeedConfig" @click="saveFeedConfig">保存</el-button>
+          <span class="hint-text">单篇微文可上传图片数，默认 20（范围 1~50），发布页自动读取</span>
+        </el-form-item>
         <SectionHeader
           title="联网备案"
           subtitle="176号令 第七条第一项 · ICP / 公安 / 许可证"
@@ -110,6 +115,7 @@ import { useRouter } from 'vue-router';
 import { Setting, ArrowRight } from '@element-plus/icons-vue';
 import AdminHeader from '@/components/admin/AdminHeader.vue';
 import { adminApi } from '@/api/admin';
+import { feedApi } from '@/api/feed';
 import { ElMessage } from 'element-plus';
 
 const router = useRouter();
@@ -127,6 +133,24 @@ const envNote = ref('');
 const envError = ref('');
 // 首页主模块：novels / blogs / forums / combined，控制前台首页默认展示的内容模块
 const homeModule = ref<string>('novels');
+// 微文图片上限（后台可调）
+const maxMicroImages = ref(20);
+const savingFeedConfig = ref(false);
+async function loadFeedConfig() {
+  try {
+    const r = await feedApi.config();
+    maxMicroImages.value = r.data?.data?.max_micro_images || 20;
+  } catch { /* ignore */ }
+}
+async function saveFeedConfig() {
+  savingFeedConfig.value = true;
+  try {
+    const r = await feedApi.setConfig(maxMicroImages.value);
+    maxMicroImages.value = r.data?.data?.max_micro_images || maxMicroImages.value;
+    ElMessage.success('微文图片上限已保存');
+  } catch (e: any) { ElMessage.error(e?.response?.data?.message || '保存失败'); }
+  finally { savingFeedConfig.value = false; }
+}
 
 async function loadConfig() {
   try {
@@ -178,7 +202,7 @@ async function saveConfig() {
   finally { savingConfig.value = false; }
 }
 
-onMounted(loadConfig);
+onMounted(() => { loadConfig(); loadFeedConfig(); });
 </script>
 
 <style scoped>

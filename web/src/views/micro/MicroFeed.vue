@@ -31,7 +31,7 @@
         </button>
 
         <div v-if="p.images && p.images.length" class="mc-images" :class="`n${Math.min(p.images.length, 9)}`">
-          <img v-for="(im, i) in p.images.slice(0, 9)" :key="i" :src="media(im)" :alt="`图${i + 1}`" loading="lazy" @click="preview(im)" />
+          <img v-for="(im, i) in p.images.slice(0, maxImages)" :key="i" :src="media(im)" :alt="`图${i + 1}`" loading="lazy" @click="preview(im)" />
         </div>
 
         <div v-if="p.tags" class="mc-tags"><span v-for="t in p.tags.split(',').filter(Boolean)" :key="t">#{{ t.trim() }}</span></div>
@@ -94,6 +94,7 @@ const loading = ref(false);
 const page = ref(1);
 const hasMore = ref(true);
 const expanded = ref<Record<number, boolean>>({});
+const maxImages = ref(20);
 
 async function load(reset = false) {
   if (loading.value) return;
@@ -172,7 +173,11 @@ const previewVisible = ref(false);
 const previewUrl = ref('');
 function preview(u: string) { previewUrl.value = media(u); previewVisible.value = true; }
 
-onMounted(() => {
+onMounted(async () => {
+  try {
+    const r = await feedApi.config();
+    maxImages.value = r.data?.data?.max_micro_images || 20;
+  } catch { maxImages.value = 20; }
   const id = Number(route.query.id);
   if (id) loadSingle(id); else load(true);
 });
@@ -200,7 +205,7 @@ onMounted(() => {
 .mc-images img { width: 100%; height: 180px; object-fit: cover; cursor: zoom-in; display: block; }
 .mc-images.n1 img { height: 300px; object-fit: contain; background: var(--fill-color, #f5f5f5); }
 .mc-images.n2, .mc-images.n4 { grid-template-columns: repeat(2, 1fr); }
-.mc-images.n3, .mc-images.n5, .mc-images.n6, .mc-images.n7, .mc-images.n8, .mc-images.n9 { grid-template-columns: repeat(3, 1fr); }
+.mc-images:not(.n1):not(.n2):not(.n4) { grid-template-columns: repeat(3, 1fr); }
 .mc-tags { margin-top: 10px; display: flex; gap: 8px; color: var(--primary-color); font-size: 0.82rem; }
 .mc-actions { display: flex; gap: 22px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--fill-color, #f3f4f6); }
 .mc-actions button { border: none; background: transparent; color: var(--text-muted, #6b7280); cursor: pointer; font-size: 0.85rem; padding: 2px; }

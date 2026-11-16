@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"nvs-server/handlers/admincommon"
 	"nvs-server/handlers/badword"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models/feed"
@@ -230,6 +231,30 @@ func LikeComment(c *gin.Context) {
 	infra.Success(c, gin.H{"liked": liked})
 }
 
+// GET /api/feed-config 前端发布页读取当前图片上限（独立路径，避免与 /feed/:id 同级通配冲突）
+func Config(c *gin.Context) {
+	infra.Success(c, gin.H{"max_micro_images": feed.MaxMicroImages()})
+}
+
+// PUT /api/admin/feed-config 后台调节单篇微文图片上限（1~50）
+func SetConfig(c *gin.Context) {
+	if !admincommon.EnsureAdmin(c) {
+		return
+	}
+	var in struct {
+		MaxMicroImages int `json:"max_micro_images"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil || in.MaxMicroImages <= 0 {
+		infra.BadRequest(c, "参数错误：请给出 1~50 的整数")
+		return
+	}
+	if err := feed.SetMaxMicroImages(in.MaxMicroImages); err != nil {
+		infra.InternalError(c, "保存失败")
+		return
+	}
+	infra.SuccessMessage(c, "已保存", gin.H{"max_micro_images": feed.MaxMicroImages()})
+}
+
 // ── 工具 ──
 
 func parseUint(s string) uint {
@@ -260,7 +285,7 @@ func normalizeImages(list []string) []string {
 	for _, u := range list {
 		if u = normalizeUploadURL(u); u != "" {
 			out = append(out, u)
-			if len(out) >= 9 {
+			if len(out) >= feed.MaxMicroImages() {
 				break
 			}
 		}

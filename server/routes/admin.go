@@ -24,6 +24,7 @@ import (
 	"nvs-server/handlers/costrate"
 	"nvs-server/handlers/dbadmin"
 	"nvs-server/handlers/emergency"
+	"nvs-server/handlers/feed"
 	"nvs-server/handlers/gate"
 	"nvs-server/handlers/geo"
 	"nvs-server/handlers/home"
@@ -420,6 +421,8 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.GET("/sentiment/camp-analysis-global", sentiment.GetCampGlobalSetting)
 		adminGrp.PUT("/sentiment/camp-analysis-global", sentiment.SetCampGlobalSetting)
 		adminGrp.POST("/sentiment/camp-analyze", sentiment.AnalyzeCamp)
+		// 微文图片上限（后台可调节，默认 20）
+		adminGrp.PUT("/feed-config", feed.SetConfig)
 		// 自动扫描：AI 读平台内容生成阵营标记（不依赖人工复制粘贴）
 		adminGrp.POST("/sentiment/camp-scan", sentiment.ScanCampMarks)
 		adminGrp.GET("/sentiment/camp-scan/status", sentiment.CampScanStatus)

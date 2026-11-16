@@ -42,9 +42,9 @@
                   <img :src="media(u)" :alt="`图${i + 1}`" />
                   <button @click="images.splice(i, 1)">×</button>
                 </div>
-                <button v-if="images.length < 9" class="cp-add" @click="imageInput?.click()">＋</button>
+                <button v-if="images.length < maxImages" class="cp-add" @click="imageInput?.click()">＋</button>
               </div>
-              <div class="cp-hint">最多 9 张，单张 ≤10MB，上传后自动压缩转码。</div>
+              <div class="cp-hint">最多 {{ maxImages }} 张（后台可调），单张 ≤10MB，上传后自动压缩转码。</div>
             </div>
           </el-form-item>
         </template>
@@ -91,6 +91,7 @@ const videoUrl = ref('');
 const videoFile = ref<File | null>(null);
 const coverUrl = ref('');
 const images = ref<string[]>([]);
+const maxImages = ref(20);
 const uploading = ref(false);
 const publishing = ref(false);
 
@@ -135,7 +136,7 @@ async function onImagesPick(e: Event) {
   uploading.value = true;
   try {
     for (const f of files) {
-      if (images.value.length >= 9) break;
+      if (images.value.length >= maxImages.value) break;
       if (f.size > 10 * 1024 * 1024) { ElMessage.warning(`${f.name}超过 10MB，已跳过`); continue; }
       const fd = new FormData();
       fd.append('image', f);
@@ -174,7 +175,13 @@ async function publish() {
   finally { publishing.value = false; }
 }
 
-onMounted(() => { if (!auth.isLoggedIn) router.push('/login?redirect=/feed/compose'); });
+onMounted(async () => {
+  if (!auth.isLoggedIn) router.push('/login?redirect=/feed/compose');
+  try {
+    const r = await feedApi.config();
+    maxImages.value = r.data?.data?.max_micro_images || 20;
+  } catch { maxImages.value = 20; }
+});
 </script>
 
 <style scoped>

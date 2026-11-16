@@ -90,6 +90,7 @@ func registerPublic(r *gin.Engine) {
 		public.GET("/novels/:id/chapters/:num/verify", novel.VerifyChapter)
 		public.GET("/comments", comment.GetComments)
 		// 短视频 / 微文（视频号 + 贴图号）公开浏览
+		public.GET("/feed-config", feed.Config)
 		public.GET("/feed", feed.List)
 		public.GET("/feed/:id", feed.Detail)
 		public.GET("/feed/:id/comments", feed.ListComments)
