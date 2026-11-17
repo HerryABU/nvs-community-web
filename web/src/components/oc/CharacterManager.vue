@@ -165,6 +165,8 @@ import { ElMessage } from 'element-plus';
 import api from '@/api/index';
 import { appPrefix } from '@/utils/prefix';
 import { ocApi, type OcCharacter, type OcWorldBook } from '@/api/oc';
+import { uploadApi } from '@/api/social';
+import { usePasteImage } from '@/composables/usePasteImage';
 
 const props = defineProps<{ groupId: number; canBind: boolean; filterKind?: 'all' | 'native' | 'furry' }>();
 const emit = defineEmits<{ bound: [] }>();
@@ -188,6 +190,20 @@ const form = reactive<Partial<OcCharacter>>({
   scenario: '', first_message: '', mes_example: '', system_prompt: '',
   book_id: 0, tags: '', emote_map: '', visibility: 'private',
   oc_kind: 'native', species: '', species_traits: '', anthro_type: '',
+});
+
+// Ctrl+V 粘贴头像（编辑器打开期间生效）
+usePasteImage({
+  enabled: computed(() => editorVisible.value),
+  maxSizeMB: 10,
+  onImage: async (f) => {
+    try {
+      const r = await uploadApi.upload(f);
+      const url = (r.data?.data as any)?.url;
+      if (url) { form.avatar_url = url; ElMessage.success('头像已粘贴上传'); }
+    } catch (e: any) { ElMessage.error(e?.response?.data?.message || '头像上传失败'); }
+  },
+  onError: (m) => ElMessage.warning(m),
 });
 
 // ── 导入 / 导出（gap-audit #24）──

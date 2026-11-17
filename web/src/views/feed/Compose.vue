@@ -20,7 +20,7 @@
                 <el-button size="small" text type="danger" @click="videoUrl = ''; videoFile = null">移除</el-button>
               </div>
               <el-button v-else size="small" :loading="uploading" @click="videoInput?.click()">选择视频（MP4/WebM，≤50MB）</el-button>
-              <div class="cp-hint">视频上传后可再选一张封面，未选则用默认占位图。</div>
+              <div class="cp-hint">支持 Ctrl+V 粘贴封面图；未选则用默认占位图。</div>
             </div>
           </el-form-item>
           <el-form-item label="封面">
@@ -44,7 +44,7 @@
                 </div>
                 <button v-if="images.length < maxImages" class="cp-add" @click="imageInput?.click()">＋</button>
               </div>
-              <div class="cp-hint">最多 {{ maxImages }} 张（后台可调），单张 ≤10MB，上传后自动压缩转码。</div>
+              <div class="cp-hint">支持 Ctrl+V 粘贴图片。最多 {{ maxImages }} 张（后台可调），单张 ≤10MB。</div>
             </div>
           </el-form-item>
         </template>
@@ -64,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { feedApi } from '@/api/feed';
@@ -72,6 +72,7 @@ import { uploadApi } from '@/api/social';
 import { authApi } from '@/api/auth';
 import { getAppPrefix } from '@/utils/prefix';
 import { useAuthStore } from '@/stores/auth';
+import { usePasteImage } from '@/composables/usePasteImage';
 
 const route = useRoute();
 const router = useRouter();
@@ -118,9 +119,7 @@ async function onVideoPick(e: Event) {
   finally { uploading.value = false; }
 }
 
-async function onCoverPick(e: Event) {
-  const f = (e.target as HTMLInputElement).files?.[0];
-  if (!f) return;
+async function uploadCoverFile(f: File) {
   uploading.value = true;
   try {
     const fd = new FormData();
@@ -131,25 +130,44 @@ async function onCoverPick(e: Event) {
   finally { uploading.value = false; }
 }
 
-async function onImagesPick(e: Event) {
-  const files = Array.from((e.target as HTMLInputElement).files || []);
+async function onCoverPick(e: Event) {
+  const f = (e.target as HTMLInputElement).files?.[0];
+  if (f) await uploadCoverFile(f);
+}
+
+async function uploadMicroImage(f: File) {
+  if (images.value.length >= maxImages.value) return;
+  if (f.size > 10 * 1024 * 1024) { ElMessage.warning(`${f.name || '粘贴的图片'}超过 10MB，已跳过`); return; }
   uploading.value = true;
   try {
-    for (const f of files) {
-      if (images.value.length >= maxImages.value) break;
-      if (f.size > 10 * 1024 * 1024) { ElMessage.warning(`${f.name}超过 10MB，已跳过`); continue; }
-      const fd = new FormData();
-      fd.append('image', f);
-      const res = await authApi.uploadImage(fd);
-      const url = pickUrl(res);
-      if (url) images.value.push(url);
-    }
+    const fd = new FormData();
+    fd.append('image', f);
+    const res = await authApi.uploadImage(fd);
+    const url = pickUrl(res);
+    if (url) images.value.push(url);
   } catch (err: any) { ElMessage.error(err?.response?.data?.message || '图片上传失败'); }
-  finally {
-    uploading.value = false;
-    if (imageInput.value) imageInput.value.value = '';
-  }
+  finally { uploading.value = false; }
 }
+
+async function onImagesPick(e: Event) {
+  const files = Array.from((e.target as HTMLInputElement).files || []);
+  for (const f of files) await uploadMicroImage(f);
+  if (imageInput.value) imageInput.value.value = '';
+}
+
+// Ctrl+V 粘贴图片：微文进配图列表，短视频进封面
+usePasteImage({
+  enabled: computed(() => kind.value === 'micro'),
+  multiple: true, maxSizeMB: 10,
+  onImage: (f) => uploadMicroImage(f),
+  onError: (m) => ElMessage.warning(m),
+});
+usePasteImage({
+  enabled: computed(() => kind.value === 'video'),
+  maxSizeMB: 10,
+  onImage: (f) => uploadCoverFile(f),
+  onError: (m) => ElMessage.warning(m),
+});
 
 async function publish() {
   if (!auth.isLoggedIn) { ElMessage.warning('请先登录'); router.push('/login?redirect=/feed/compose'); return; }

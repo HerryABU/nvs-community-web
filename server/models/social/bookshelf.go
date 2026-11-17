@@ -49,14 +49,20 @@ func GetShelfList(userID uint, page, pageSize int) ([]BookShelf, int64, error) {
 	var items []BookShelf
 	var total int64
 
-	query := models.DB.Model(&BookShelf{}).Where("user_id = ?", userID)
+	// JOIN 只保留已发布且未软删的作品：避免"能加入但从看不到"的幽灵条目，
+	// 同时让 total 与可见条数同口径。
+	query := models.DB.Model(&BookShelf{}).
+		Joins("JOIN novels ON novels.id = bookshelf.novel_id AND novels.deleted_at IS NULL AND novels.status = ?", "published").
+		Where("bookshelf.user_id = ?", userID)
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	offset := (page - 1) * pageSize
-	if err := query.Preload("models.Novel").Preload("models.Novel.Author").
+	// ⚠️ Preload 参数是结构体字段名（"Novel"），不能写 "models.Novel"：
+	// social 域拆分时的机械替换曾让 /api/bookshelf 稳定 500。
+	if err := query.Preload("Novel").Preload("Novel.Author").
 		Order("added_at DESC").
 		Offset(offset).Limit(pageSize).
 		Find(&items).Error; err != nil {

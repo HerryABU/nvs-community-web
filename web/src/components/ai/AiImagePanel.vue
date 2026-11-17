@@ -266,6 +266,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Collection } from '@element-plus/icons-vue';
 import { aiHubApi, type AiHubModel, type AiHubStatus } from '@/api/ai/aiHub';
+import { usePasteImage } from '@/composables/usePasteImage';
 import AiPromptLibrary from '@/components/ai/AiPromptLibrary.vue';
 import AiImageExportDialog from '@/components/ai/AiImageExportDialog.vue';
 import StateBlock from '@/components/common/StateBlock.vue';
@@ -295,6 +296,15 @@ const generating = ref(false);
 // 生成时可选公开到 AI 中台内部画廊（灵感广场）
 const autoPublish = ref(false);
 const publishTitle = ref('');
+
+// Ctrl+V 直接粘贴参考图（仅混图/换脸模式）
+usePasteImage({
+  enabled: computed(() => mode.value !== 't2i'),
+  multiple: true,
+  maxSizeMB: 8,
+  onImage: (f) => handleRefFile(f),
+  onError: (m) => ElMessage.warning(m),
+});
 const refImages = ref<string[]>([]);
 const lastImages = ref<string[]>([]);
 const lastCost = ref(0);
@@ -396,7 +406,10 @@ function onPickRef(e: Event) {
   const input = e.target as HTMLInputElement;
   const f = input.files?.[0];
   input.value = '';
-  if (!f) return;
+  if (f) handleRefFile(f);
+}
+
+function handleRefFile(f: File) {
   if (f.size > 8 * 1024 * 1024) {
     ElMessage.warning('单张参考图上限 8MB');
     return;

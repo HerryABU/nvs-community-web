@@ -28,30 +28,30 @@
         <div v-else class="shelf-grid">
           <div v-for="item in items" :key="item.id" class="shelf-card" @click="goRead(item)">
             <div class="shelf-cover">
-              <img v-if="item.novel.cover_url" :src="item.novel.cover_url" :alt="item.novel.title" />
-              <div v-else class="cover-placeholder">{{ item.novel.title[0] }}</div>
+              <img v-if="item.novel?.cover_url" :src="item.novel?.cover_url" :alt="item.novel?.title" />
+              <div v-else class="cover-placeholder">{{ (item.novel?.title || '书')[0] }}</div>
             </div>
             <div class="shelf-info">
-              <h3 class="shelf-title">{{ item.novel.title }}</h3>
-              <p class="shelf-author">作者：{{ item.novel.author?.nickname || item.novel.author?.username || '未知' }}</p>
+              <h3 class="shelf-title">{{ item.novel?.title }}</h3>
+              <p class="shelf-author">作者：{{ item.novel?.author?.nickname || item.novel?.author?.username || '未知' }}</p>
               <div class="shelf-meta">
-                <span class="meta-tag">{{ item.novel.category }}</span>
-                <span>{{ item.novel.total_chapters }} 章</span>
-                <span>{{ formatWords(item.novel.total_words) }}</span>
+                <span class="meta-tag">{{ item.novel?.category }}</span>
+                <span>{{ item.novel?.total_chapters }} 章</span>
+                <span>{{ formatWords(item.novel?.total_words) }}</span>
               </div>
               <div class="shelf-progress" v-if="item.last_read_chapter > 0">
                 <el-progress
-                  :percentage="item.novel.total_chapters > 0 ? Math.round((item.last_read_chapter / item.novel.total_chapters) * 100) : 0"
+                  :percentage="item.novel?.total_chapters > 0 ? Math.round((item.last_read_chapter / item.novel?.total_chapters) * 100) : 0"
                   :stroke-width="6" :show-text="false"
                 />
-                <span class="progress-text">已读至第 {{ item.last_read_chapter }} 章（{{ item.last_read_chapter }}/{{ item.novel.total_chapters }}）</span>
+                <span class="progress-text">已读至第 {{ item.last_read_chapter }} 章（{{ item.last_read_chapter }}/{{ item.novel?.total_chapters }}）</span>
               </div>
               <div class="shelf-progress" v-else>
                 <span class="progress-text new-text">新添加到书架</span>
               </div>
               <div class="shelf-status">
-                <el-tag :type="item.novel.status === 'completed' ? 'success' : ''" size="small">
-                  {{ item.novel.status === 'completed' ? '已完结' : '连载中' }}
+                <el-tag :type="item.novel?.status === 'completed' ? 'success' : ''" size="small">
+                  {{ item.novel?.status === 'completed' ? '已完结' : '连载中' }}
                 </el-tag>
               </div>
             </div>
@@ -118,7 +118,8 @@ const followLoading = ref(false);
 const followPage = ref(1);
 const unfollowingId = ref(0);
 
-function formatWords(n: number): string {
+function formatWords(n?: number): string {
+  if (!n || n <= 0) return '0字';
   if (n >= 10000) return (n / 10000).toFixed(1) + '万字';
   if (n >= 1000) return (n / 1000).toFixed(1) + '千字';
   return n + '字';

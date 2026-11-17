@@ -56,7 +56,7 @@
             >删除</el-button>
           </span>
         </div>
-        <template v-if="!isFloorCollapsed(floor.id)"><div v-if="!floor.Locked" class="floor-content cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" :class="{ 'deleted-content': showDeleted(floor), 'is-collapsed': isLongText(floor.content) && !isTextExpanded(floor.id) }">
+        <template v-if="!isFloorCollapsed(floor.id)"><div v-if="!floor.locked" class="floor-content cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" :class="{ 'deleted-content': showDeleted(floor), 'is-collapsed': isLongText(floor.content) && !isTextExpanded(floor.id) }">
           <div v-if="showHeld(floor) && !isModerator" class="held-placeholder">🌿 该内容正在由人工复核，暂时不会公开</div>
           <div v-else-if="showDeleted(floor)" class="deleted-banner">⚠ 该内容已被删除，以下为警方取证留证（删除人：{{ floor.deleted_by === 'admin' ? '管理员' : floor.deleted_by === 'user' ? '用户自删' : '系统' }}）</div>
           <div v-else-if="floor.is_deleted && !isModerator" class="deleted-placeholder">[ 该内容已删除 ]</div>
@@ -64,7 +64,7 @@
         </div>
         <!-- 评论附图（站内存图）：与正文同区，图片本身也受内容风控约束（后端已审） -->
         <div
-          v-if="visibleImages(floor).length"
+          v-if="!floor.locked && visibleImages(floor).length"
           class="comment-images"
           :class="{ 'is-hidden': showHeld(floor) || showDeleted(floor) }"
         >
@@ -80,13 +80,15 @@
           />
         </div>
         <!-- 长文本折叠：阈值来自服务端（sentiments/config.fold_chars），前端不写死 -->
-        <div v-if="!floor.Locked && isLongText(floor.content)" class="text-fold">
+        <div v-if="!floor.locked && isLongText(floor.content)" class="text-fold">
           <el-button text size="small" @click="toggleTextExpand(floor.id)">
             {{ isTextExpanded(floor.id) ? '收起' : '展开全文' }}
           </el-button>
           <span class="text-fold-hint">共 {{ plainLen(floor.content) }} 字</span>
         </div>
-        <div v-else class="floor-locked">
+        <!-- ⚠️ 必须独立 v-if=floor.locked：原先的 v-else 挂在「长文本折叠」上，
+             导致所有未锁定的短文本楼层都错误显示密码输入框（解锁后控件仍在）。 -->
+        <div v-if="floor.locked" class="floor-locked">
           <div class="locked-icon"><el-icon><Lock /></el-icon></div>
           <div class="locked-text">该楼已加密，需要密码才能查看内容</div>
           <div v-if="authStore.isLoggedIn" class="locked-input">
