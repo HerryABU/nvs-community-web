@@ -28,6 +28,7 @@
             <div v-else class="gal-broken">无预览</div>
             <span class="gal-model">{{ it.model_name }}</span>
             <span v-if="it.kind === 'video'" class="gal-kind">视频</span>
+            <span v-if="aiLabelText" class="gal-ai-label">{{ aiLabelText }}</span>
           </div>
           <div class="gal-meta">
             <div class="gal-title">{{ it.title || '未命名作品' }}</div>
@@ -56,6 +57,7 @@ import { mediaUrl } from '@/utils/prefix';
 import { ElMessage } from 'element-plus';
 import { MagicStick } from '@element-plus/icons-vue';
 import { aiHubApi } from '@/api/ai/aiHub';
+import { aigcApi } from '@/api/ai/aigc';
 
 const emit = defineEmits<{ (e: 'remix', payload: { kind: string; prompt: string }): void }>();
 
@@ -76,6 +78,7 @@ const style = ref('');
 const styles = ref<string[]>([]);
 const list = ref<GalItem[]>([]);
 const total = ref(0);
+const aiLabelText = ref('AI生成');
 const page = ref(1);
 const loading = ref(false);
 const liked = new Set<number>();
@@ -129,7 +132,12 @@ async function like(it: GalItem) {
   }
 }
 
-onMounted(reload);
+onMounted(() => {
+  reload();
+  aigcApi.options().then((r) => {
+    aiLabelText.value = r.data?.data?.enabled ? (r.data?.data?.label_text || 'AI生成') : '';
+  }).catch(() => { aiLabelText.value = 'AI生成'; });
+});
 </script>
 
 <style scoped>
@@ -149,6 +157,7 @@ onMounted(reload);
 }
 .gal-media { position: relative; aspect-ratio: 1; background: var(--el-fill-color-light, #f5f7fa); }
 .gal-media img, .gal-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gal-ai-label { position: absolute; right: 8px; bottom: 8px; z-index: 2; background: rgba(0,0,0,.62); color: #fff; font-size: .72rem; line-height: 1; padding: 4px 8px; border-radius: 10px; pointer-events: none; }
 .gal-broken { display: flex; align-items: center; justify-content: center; height: 100%; color: #999; font-size: 0.8rem; }
 .gal-model {
   position: absolute; top: 8px; left: 8px; padding: 1px 8px; border-radius: 999px;

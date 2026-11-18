@@ -207,6 +207,8 @@
               loading="lazy"
               @click="preview(img)"
             />
+            <!-- 展示层显式标识：文案取平台配置；导出图仍由服务端烧录角标 + XMP -->
+            <span v-if="aiLabelText" class="pd-ai-label">{{ aiLabelText }}</span>
             <button
               type="button"
               class="pd-img-dl"
@@ -268,6 +270,7 @@ import { Collection } from '@element-plus/icons-vue';
 import { aiHubApi, type AiHubModel, type AiHubStatus } from '@/api/ai/aiHub';
 import { usePasteImage } from '@/composables/usePasteImage';
 import { mediaUrl } from '@/utils/prefix';
+import { aigcApi } from '@/api/ai/aigc';
 import AiPromptLibrary from '@/components/ai/AiPromptLibrary.vue';
 import AiImageExportDialog from '@/components/ai/AiImageExportDialog.vue';
 import StateBlock from '@/components/common/StateBlock.vue';
@@ -297,6 +300,8 @@ const generating = ref(false);
 // 生成时可选公开到 AI 中台内部画廊（灵感广场）
 const autoPublish = ref(false);
 const publishTitle = ref('');
+// 展示层 AIGC 显式标识（导出图另有服务端烧录）
+const aiLabelText = ref('AI生成');
 
 // Ctrl+V 直接粘贴参考图（仅混图/换脸模式）
 usePasteImage({
@@ -666,7 +671,12 @@ async function loadHistory() {
   } catch { /* ignore */ }
 }
 
-onMounted(loadHistory);
+onMounted(() => {
+  loadHistory();
+  aigcApi.options().then((r) => {
+    aiLabelText.value = r.data?.data?.enabled ? (r.data?.data?.label_text || 'AI生成') : '';
+  }).catch(() => { aiLabelText.value = 'AI生成'; });
+});
 </script>
 
 <style scoped>
@@ -1008,6 +1018,7 @@ onMounted(loadHistory);
 }
 .pd-card-images { display: grid; gap: 8px; justify-content: center; }
 .pd-img-wrap { position: relative; line-height: 0; }
+.pd-ai-label { position: absolute; right: 8px; bottom: 8px; z-index: 2; background: rgba(0,0,0,.62); color: #fff; font-size: .72rem; line-height: 1; padding: 4px 8px; border-radius: 10px; pointer-events: none; }
 .pd-img-dl {
   position: absolute;
   right: 6px;
