@@ -21,6 +21,7 @@ import (
 const (
 	KindVideo = "video"
 	KindMicro = "micro"
+	KindMusic = "music"
 
 	StatusDraft     = "draft"
 	StatusPending   = "pending"
@@ -36,6 +37,7 @@ type Post struct {
 	Title     string `gorm:"size:128;default:''" json:"title"`                       // 微文标题 / 视频标题
 	Content   string `gorm:"type:text" json:"content"`                               // 正文 / 视频描述
 	VideoURL  string `gorm:"size:512;default:''" json:"video_url"`                   // video：站内 /uploads 或外链
+	AudioURL  string `gorm:"size:512;default:''" json:"audio_url"`                   // music：音频地址
 	CoverURL  string `gorm:"size:512;default:''" json:"cover_url"`                   // 封面（视频/微文头图）
 	Images    string `gorm:"type:text;default:''" json:"images_raw,omitempty"`       // JSON 数组字符串（微文多图）
 	Tags      string `gorm:"size:256;default:''" json:"tags"`                        // 逗号分隔
@@ -119,8 +121,9 @@ func init() {
 }
 
 func NormalizeKind(k string) string {
-	if strings.EqualFold(strings.TrimSpace(k), KindVideo) {
-		return KindVideo
+	s := strings.ToLower(strings.TrimSpace(k))
+	if s == KindVideo || s == KindMusic {
+		return s
 	}
 	return KindMicro
 }
@@ -131,6 +134,7 @@ type PostInput struct {
 	Title    string
 	Content  string
 	VideoURL string
+	AudioURL string
 	CoverURL string
 	Images   []string
 	Tags     string
@@ -142,8 +146,12 @@ func CreatePost(userID uint, in PostInput) (*Post, error) {
 	kind := NormalizeKind(in.Kind)
 	content := strings.TrimSpace(in.Content)
 	video := strings.TrimSpace(in.VideoURL)
+	audio := strings.TrimSpace(in.AudioURL)
 	if kind == KindVideo && video == "" {
 		return nil, errors.New("请上传视频")
+	}
+	if kind == KindMusic && audio == "" {
+		return nil, errors.New("请上传音乐")
 	}
 	if kind == KindMicro && content == "" && len(in.Images) == 0 {
 		return nil, errors.New("微文需要正文或图片")
@@ -161,7 +169,7 @@ func CreatePost(userID uint, in PostInput) (*Post, error) {
 	}
 	p := &Post{
 		UserID: userID, Kind: kind, Title: strings.TrimSpace(in.Title), Content: content,
-		VideoURL: video, CoverURL: strings.TrimSpace(in.CoverURL), Images: images,
+		VideoURL: video, AudioURL: audio, CoverURL: strings.TrimSpace(in.CoverURL), Images: images,
 		Tags: strings.TrimSpace(in.Tags), Duration: in.Duration, Status: status,
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
@@ -182,6 +190,9 @@ func UpdatePost(userID uint, id uint, in PostInput) (*Post, error) {
 	p.Content = strings.TrimSpace(in.Content)
 	if in.VideoURL != "" {
 		p.VideoURL = strings.TrimSpace(in.VideoURL)
+	}
+	if in.AudioURL != "" {
+		p.AudioURL = strings.TrimSpace(in.AudioURL)
 	}
 	if in.CoverURL != "" {
 		p.CoverURL = strings.TrimSpace(in.CoverURL)
@@ -230,7 +241,7 @@ func ListPosts(kind, scope string, authorID, viewerID uint, page, pageSize int) 
 		pageSize = 20
 	}
 	q := models.DB.Model(&Post{}).Where("status = ?", StatusPublished)
-	if kind == KindVideo || kind == KindMicro {
+	if kind == KindVideo || kind == KindMicro || kind == KindMusic {
 		q = q.Where("kind = ?", kind)
 	}
 	switch scope {

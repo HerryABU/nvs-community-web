@@ -24,7 +24,7 @@
         <div v-for="it in list" :key="it.id" class="gal-card">
           <div class="gal-media">
             <video v-if="it.kind === 'video' && it.video" :src="it.video" controls preload="metadata" />
-            <img v-else-if="it.images.length" :src="it.images[0]" :alt="it.title" />
+            <img v-else-if="it.images.length" :src="mediaUrl(it.images[0])" :alt="it.title" />
             <div v-else class="gal-broken">无预览</div>
             <span class="gal-model">{{ it.model_name }}</span>
             <span v-if="it.kind === 'video'" class="gal-kind">视频</span>
@@ -52,6 +52,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { mediaUrl } from '@/utils/prefix';
 import { ElMessage } from 'element-plus';
 import { MagicStick } from '@element-plus/icons-vue';
 import { aiHubApi } from '@/api/ai/aiHub';

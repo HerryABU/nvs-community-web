@@ -5,6 +5,7 @@
       <el-radio-group v-model="kind" size="small">
         <el-radio-button value="video">短视频</el-radio-button>
         <el-radio-button value="micro">微文（可贴图）</el-radio-button>
+        <el-radio-button value="music">音乐</el-radio-button>
       </el-radio-group>
     </div>
 
@@ -32,6 +33,25 @@
           </el-form-item>
         </template>
 
+        <!-- 音乐（wav/mp3/m4a/ogg/mp4，≤50MB） -->
+        <template v-else-if="kind === 'music'">
+          <el-form-item label="音频">
+            <div class="cp-upload">
+              <input ref="audioInput" type="file" accept="audio/*,.wav,.mp3,.m4a,.ogg" hidden @change="onAudioPick" />
+              <audio v-if="audioUrl" :src="media(audioUrl)" controls style="width: 100%; max-width: 420px" />
+              <el-button v-else size="small" :loading="uploading" @click="audioInput?.click()">选择音频（≤50MB）</el-button>
+            </div>
+          </el-form-item>
+          <el-form-item label="封面">
+            <div class="cp-upload">
+              <input ref="musicCoverInput" type="file" accept="image/*" hidden @change="onMusicCoverPick" />
+              <img v-if="coverUrl" :src="media(coverUrl)" class="cp-cover" alt="封面" />
+              <el-button size="small" @click="musicCoverInput?.click()">{{ coverUrl ? '更换封面' : '上传封面（可选）' }}</el-button>
+              <div class="cp-hint">支持 Ctrl+V 粘贴封面图。</div>
+            </div>
+          </el-form-item>
+        </template>
+
         <!-- 微文多图 -->
         <template v-else>
           <el-form-item label="配图">
@@ -50,8 +70,27 @@
         </template>
 
         <el-form-item label="标题"><el-input v-model="title" maxlength="128" show-word-limit placeholder="可留空" /></el-form-item>
-        <el-form-item :label="kind === 'video' ? '描述' : '正文'">
-          <el-input v-model="content" type="textarea" :rows="6" maxlength="5000" show-word-limit :placeholder="kind === 'video' ? '说说这个视频…' : '写下你的想法…'" />
+        <el-form-item :label="kind === 'video' || kind === 'music' ? '描述' : '正文'">
+          <div class="cp-editor">
+            <div class="cp-editor-bar">
+              <el-radio-group v-model="mdMode" size="small">
+                <el-radio-button value="edit">编辑</el-radio-button>
+                <el-radio-button value="preview">Markdown 预览</el-radio-button>
+              </el-radio-group>
+              <span class="cp-hint">支持 **粗体**、# 标题、- 列表、&gt; 引用、```代码```、[链接](url)</span>
+            </div>
+            <el-input
+              v-if="mdMode === 'edit'"
+              v-model="content"
+              type="textarea"
+              :rows="7"
+              maxlength="5000"
+              show-word-limit
+              :placeholder="kind === 'micro' ? '写下你的想法…（支持 Markdown）' : '说说这个作品…（支持 Markdown）'"
+            />
+            <!-- 复用全站 Cherry 渲染器（已 DOMPurify），只做预览不引入编辑器 UI -->
+            <div v-else class="cp-md-preview cherry-markdown cherry-previewer" v-html="previewHtml" />
+          </div>
         </el-form-item>
         <el-form-item label="标签"><el-input v-model="tags" placeholder="逗号分隔，如：日常,手绘" /></el-form-item>
       </el-form>
@@ -64,7 +103,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { feedApi } from '@/api/feed';
@@ -84,11 +123,13 @@ function media(u?: string) {
   return prefix + (u.startsWith('/') ? u : '/' + u);
 }
 
-const kind = ref((route.query.kind as string) === 'video' ? 'video' : 'micro');
+const initialKind = String(route.query.kind || '');
+const kind = ref(['video', 'micro', 'music'].includes(initialKind) ? initialKind : 'micro');
 const title = ref('');
 const content = ref('');
 const tags = ref('');
 const videoUrl = ref('');
+const audioUrl = ref('');
 const videoFile = ref<File | null>(null);
 const coverUrl = ref('');
 const images = ref<string[]>([]);
@@ -97,8 +138,19 @@ const uploading = ref(false);
 const publishing = ref(false);
 
 const videoInput = ref<HTMLInputElement | null>(null);
+const audioInput = ref<HTMLInputElement | null>(null);
 const coverInput = ref<HTMLInputElement | null>(null);
+const musicCoverInput = ref<HTMLInputElement | null>(null);
 const imageInput = ref<HTMLInputElement | null>(null);
+
+// 轻量 Markdown：只借全站渲染器做预览，不引入 Cherry 编辑器 UI
+const mdMode = ref<'edit' | 'preview'>('edit');
+const previewHtml = ref('');
+watch([content, mdMode], async () => {
+  if (mdMode.value !== 'preview') return;
+  const { renderMarkdown } = await import('@/markdown/renderer');
+  previewHtml.value = renderMarkdown(content.value);
+}, { immediate: true });
 
 function pickUrl(res: any): string {
   const d = res?.data?.data ?? res?.data;
@@ -119,6 +171,19 @@ async function onVideoPick(e: Event) {
   finally { uploading.value = false; }
 }
 
+async function onAudioPick(e: Event) {
+  const f = (e.target as HTMLInputElement).files?.[0];
+  if (!f) return;
+  if (f.size > 50 * 1024 * 1024) { ElMessage.error('音频不能超过 50MB'); return; }
+  uploading.value = true;
+  try {
+    const res = await uploadApi.upload(f);
+    audioUrl.value = pickUrl(res);
+    if (!audioUrl.value) ElMessage.error('上传失败：未返回地址');
+  } catch (err: any) { ElMessage.error(err?.response?.data?.message || '音频上传失败'); }
+  finally { uploading.value = false; }
+}
+
 async function uploadCoverFile(f: File) {
   uploading.value = true;
   try {
@@ -131,6 +196,11 @@ async function uploadCoverFile(f: File) {
 }
 
 async function onCoverPick(e: Event) {
+  const f = (e.target as HTMLInputElement).files?.[0];
+  if (f) await uploadCoverFile(f);
+}
+
+async function onMusicCoverPick(e: Event) {
   const f = (e.target as HTMLInputElement).files?.[0];
   if (f) await uploadCoverFile(f);
 }
@@ -163,7 +233,7 @@ usePasteImage({
   onError: (m) => ElMessage.warning(m),
 });
 usePasteImage({
-  enabled: computed(() => kind.value === 'video'),
+  enabled: computed(() => kind.value === 'video' || kind.value === 'music'),
   maxSizeMB: 10,
   onImage: (f) => uploadCoverFile(f),
   onError: (m) => ElMessage.warning(m),
@@ -172,6 +242,7 @@ usePasteImage({
 async function publish() {
   if (!auth.isLoggedIn) { ElMessage.warning('请先登录'); router.push('/login?redirect=/feed/compose'); return; }
   if (kind.value === 'video' && !videoUrl.value) { ElMessage.warning('请先上传视频'); return; }
+  if (kind.value === 'music' && !audioUrl.value) { ElMessage.warning('请先上传音乐'); return; }
   if (kind.value === 'micro' && !content.value.trim() && images.value.length === 0) {
     ElMessage.warning('写点什么或上传一张图'); return;
   }
@@ -182,13 +253,14 @@ async function publish() {
       title: title.value,
       content: content.value,
       video_url: videoUrl.value,
+      audio_url: audioUrl.value,
       cover_url: coverUrl.value,
       images: images.value,
       tags: tags.value,
     });
     const id = res.data?.data?.id;
     ElMessage.success('发布成功');
-    router.push(kind.value === 'video' ? `/shorts?id=${id}` : `/micro?id=${id}`);
+    router.push(`/discover?id=${id}`);
   } catch (err: any) { ElMessage.error(err?.response?.data?.message || '发布失败'); }
   finally { publishing.value = false; }
 }
@@ -216,6 +288,9 @@ onMounted(async () => {
 .cp-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
 .cp-thumb button { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; border: none; background: #f56c6c; color: #fff; cursor: pointer; line-height: 18px; }
 .cp-add { width: 92px; height: 92px; border: 1px dashed var(--border-color, #d1d5db); border-radius: 6px; background: transparent; color: var(--text-muted, #6b7280); font-size: 1.5rem; cursor: pointer; }
+.cp-editor { width: 100%; }
+.cp-editor-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.cp-md-preview { min-height: 170px; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-soft, #f8fafc); line-height: 1.7; overflow-wrap: anywhere; }
 .cp-footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border-color); }
 @media (max-width: 768px) {
   .compose-page { padding: 14px 10px 30px; }

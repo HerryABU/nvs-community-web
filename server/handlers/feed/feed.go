@@ -58,6 +58,7 @@ func Create(c *gin.Context) {
 		Title    string   `json:"title"`
 		Content  string   `json:"content"`
 		VideoURL string   `json:"video_url"`
+		AudioURL string   `json:"audio_url"`
 		CoverURL string   `json:"cover_url"`
 		Images   []string `json:"images"`
 		Tags     string   `json:"tags"`
@@ -73,7 +74,7 @@ func Create(c *gin.Context) {
 	in.Tags = sanitize(in.Tags)
 	p, err := feed.CreatePost(uid, feed.PostInput{
 		Kind: in.Kind, Title: in.Title, Content: in.Content,
-		VideoURL: normalizeUploadURL(in.VideoURL), CoverURL: normalizeUploadURL(in.CoverURL),
+		VideoURL: normalizeUploadURL(in.VideoURL), AudioURL: normalizeUploadURL(in.AudioURL), CoverURL: normalizeUploadURL(in.CoverURL),
 		Images: normalizeImages(in.Images), Tags: in.Tags, Duration: in.Duration, Status: in.Status,
 	})
 	if err != nil {
@@ -95,6 +96,7 @@ func Update(c *gin.Context) {
 		Title    string   `json:"title"`
 		Content  string   `json:"content"`
 		VideoURL string   `json:"video_url"`
+		AudioURL string   `json:"audio_url"`
 		CoverURL string   `json:"cover_url"`
 		Images   []string `json:"images"`
 		Tags     string   `json:"tags"`
@@ -107,7 +109,7 @@ func Update(c *gin.Context) {
 	}
 	p, err := feed.UpdatePost(uid, parseUint(c.Param("id")), feed.PostInput{
 		Kind: in.Kind, Title: sanitize(in.Title), Content: sanitize(in.Content),
-		VideoURL: normalizeUploadURL(in.VideoURL), CoverURL: normalizeUploadURL(in.CoverURL),
+		VideoURL: normalizeUploadURL(in.VideoURL), AudioURL: normalizeUploadURL(in.AudioURL), CoverURL: normalizeUploadURL(in.CoverURL),
 		Images: normalizeImages(in.Images), Tags: sanitize(in.Tags), Duration: in.Duration, Status: in.Status,
 	})
 	if err != nil {

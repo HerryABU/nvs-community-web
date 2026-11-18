@@ -13,7 +13,7 @@
       <!-- 左：裁剪框（只采集坐标，不输出像素） -->
       <div class="aigc-stage-wrap">
         <div ref="stageEl" class="aigc-stage">
-          <img ref="imgEl" :src="imageUrl" alt="待导出原图" draggable="false" @load="onImgLoad" />
+          <img ref="imgEl" :src="mediaUrl(imageUrl)" alt="待导出原图" draggable="false" @load="onImgLoad" />
           <div
             v-if="ready"
             class="aigc-box"
@@ -114,6 +114,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from 'vue';
+import { mediaUrl } from '@/utils/prefix';
 import { ElMessage } from 'element-plus';
 import { aigcApi, type AigcOptions } from '@/api/ai/aigc';
 

@@ -174,6 +174,8 @@ const router = createRouter({
     // 短视频（视频号式下滑）/ 微文（可贴图，类贴图号）/ 发布入口
     { path: '/shorts', name: 'shorts', component: () => import('@/views/shorts/ShortsFeed.vue') },
     { path: '/micro', name: 'micro', component: () => import('@/views/micro/MicroFeed.vue') },
+    // 统一发现流（小红书式：图文 / 短视频 / 音乐）
+    { path: '/discover', name: 'discover', component: () => import('@/views/discover/Discover.vue') },
     // 高级博客主题（作者可在 /settings/theme 自由选择 advanced 模板）
     { path: '/blog-theme/:key', name: 'blog-theme', component: () => import('@/views/blog/BlogTheme.vue') },
     {

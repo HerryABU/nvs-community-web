@@ -202,7 +202,7 @@
           <!-- 下载必须走服务端出口管道：前端只发裁剪参数，角标与元数据都由 Go 端写 -->
           <div v-for="(img, i) in parseImages(t.result)" :key="i" class="pd-img-wrap">
             <img
-              :src="img"
+              :src="mediaUrl(img)"
               alt="AI 绘画结果"
               loading="lazy"
               @click="preview(img)"
@@ -226,7 +226,7 @@
 
     <!-- 大图预览：自建遮罩层（按需导入模式下 el-image-viewer 不会自动注册） -->
     <div v-if="previewVisible" class="pd-preview" @click="previewVisible = false">
-      <img :src="previewSrc" alt="预览" @click.stop />
+      <img :src="mediaUrl(previewSrc)" alt="预览" @click.stop />
       <button class="pd-preview-close" type="button" title="关闭" @click.stop="previewVisible = false">×</button>
     </div>
 
@@ -267,6 +267,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { Collection } from '@element-plus/icons-vue';
 import { aiHubApi, type AiHubModel, type AiHubStatus } from '@/api/ai/aiHub';
 import { usePasteImage } from '@/composables/usePasteImage';
+import { mediaUrl } from '@/utils/prefix';
 import AiPromptLibrary from '@/components/ai/AiPromptLibrary.vue';
 import AiImageExportDialog from '@/components/ai/AiImageExportDialog.vue';
 import StateBlock from '@/components/common/StateBlock.vue';
@@ -473,6 +474,20 @@ async function generate(confirmed = false) {
       lastFree.value = !!res.data.data.free;
       lastBalance.value = res.data.data.balance_after;
       await loadHistory();
+      // 本次结果立即进入作品流：BYOK 不落任务表、历史接口延迟/缓存时，
+      // 否则会出现「生成成功但页面上一直看不到图」。
+      const taskId = res.data.data.task_id;
+      if (!taskId || !history.value.some((h: any) => h.id === taskId)) {
+        history.value.unshift({
+          id: taskId || -(Date.now()),
+          kind: 'image',
+          result: JSON.stringify({ images: lastImages.value }),
+          prompt: prompt.value.trim(),
+          created_at: new Date().toISOString(),
+          like_count: 0, favorite_count: 0, comment_count: 0, share_count: 0,
+          is_public: false,
+        });
+      }
       // 用户可在生成时直接选择公开到 AI 中台内部画廊
       if (autoPublish.value && res.data.data.task_id) {
         try {

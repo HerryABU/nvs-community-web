@@ -5,10 +5,11 @@ import api from '@/api/index';
 export interface FeedPost {
   id: number;
   user_id: number;
-  kind: 'video' | 'micro';
+  kind: 'video' | 'micro' | 'music';
   title: string;
   content: string;
   video_url: string;
+  audio_url?: string;
   cover_url: string;
   images_raw?: string;
   images?: string[];
@@ -61,6 +62,7 @@ export const feedApi = {
     title?: string;
     content?: string;
     video_url?: string;
+    audio_url?: string;
     cover_url?: string;
     images?: string[];
     tags?: string;

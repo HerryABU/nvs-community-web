@@ -35,3 +35,13 @@ export function getAppPrefix(): string {
 
 // 模块加载即解析一次（脚本位于 base 标签之后执行，document.baseURI 已就绪）
 export const appPrefix: string = getAppPrefix();
+
+// 图片 URL 统一入口（AI 出图 / 画廊 / 导出弹窗共用）：
+//   · 绝对 URL / data: / blob: 原样放行（data URL 绝不能拼前缀，否则整张图裂掉）；
+//   · 站内相对路径补当前前缀，避免反代挂载（/go-nvs）下 <img> 请求漏前缀。
+export function mediaUrl(u?: string): string {
+  if (!u) return '';
+  if (/^(https?:|data:|blob:)/i.test(u)) return u;
+  const prefix = getAppPrefix();
+  return prefix + (u.startsWith('/') ? u : '/' + u);
+}
