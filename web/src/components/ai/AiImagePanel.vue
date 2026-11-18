@@ -132,7 +132,7 @@
           class="pd-generate"
           :loading="generating"
           :disabled="!prompt.trim()"
-          @click="generate"
+          @click="generate()"
         >
           生成 · {{ (currentModel?.price_call || 0) * n }} {{ status.token_name }}
         </el-button>
