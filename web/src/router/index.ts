@@ -171,10 +171,11 @@ const router = createRouter({
       component: () => import('@/views/subculture/SubcultureView.vue'),
       meta: { requiresAuth: true },
     },
-    // 短视频（视频号式下滑）/ 微文（可贴图，类贴图号）/ 发布入口
-    { path: '/shorts', name: 'shorts', component: () => import('@/views/shorts/ShortsFeed.vue') },
-    { path: '/micro', name: 'micro', component: () => import('@/views/micro/MicroFeed.vue') },
     // 统一发现流（小红书式：图文 / 短视频 / 音乐）
+    // 短视频、微文已合并进这里，不再各自成页；旧链接跳过去自动落在对应筛选上，
+    // 已收藏/外链的 /shorts、/micro 不会 404，也不会看到两套内容流。
+    { path: '/shorts', redirect: { path: '/discover', query: { kind: 'video' } } },
+    { path: '/micro', redirect: { path: '/discover', query: { kind: 'micro' } } },
     { path: '/discover', name: 'discover', component: () => import('@/views/discover/Discover.vue') },
     // 高级博客主题（作者可在 /settings/theme 自由选择 advanced 模板）
     { path: '/blog-theme/:key', name: 'blog-theme', component: () => import('@/views/blog/BlogTheme.vue') },

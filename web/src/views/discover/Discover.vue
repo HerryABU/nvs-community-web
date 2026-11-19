@@ -6,7 +6,7 @@
         <p class="discover-sub">图文 · 短视频 · 音乐，一起看</p>
       </div>
       <div class="discover-actions">
-        <el-radio-group v-model="scope" size="small" @change="reload">
+        <el-radio-group v-model="scope" size="small" @change="load(true)">
           <el-radio-button value="all">推荐</el-radio-button>
           <el-radio-button value="following">关注</el-radio-button>
           <el-radio-button value="mine">我的</el-radio-button>
@@ -16,13 +16,13 @@
     </div>
 
     <div class="discover-chips">
-      <button v-for="f in filters" :key="f.key" :class="{ active: filter === f.key }" @click="filter = f.key">
+      <button v-for="f in filters" :key="f.key" :class="{ active: filter === f.key }" @click="setFilter(f.key)">
         {{ f.label }}
       </button>
     </div>
 
     <div v-loading="loading" class="discover-grid">
-      <article v-for="p in visiblePosts" :key="p.id" class="ds-card" @click="openDetail(p)">
+      <article v-for="p in posts" :key="p.id" class="ds-card" @click="openDetail(p)">
         <div class="ds-cover">
           <img v-if="coverOf(p)" :src="mediaUrl(coverOf(p))" :alt="p.title || '封面'" loading="lazy" />
           <div v-else class="ds-cover-empty">{{ p.kind === 'music' ? '🎵' : p.kind === 'video' ? '🎬' : '✍️' }}</div>
@@ -47,7 +47,7 @@
       </article>
     </div>
 
-    <el-empty v-if="!loading && visiblePosts.length === 0" description="还没有内容，去发布第一条吧" :image-size="70" />
+    <el-empty v-if="!loading && posts.length === 0" :description="emptyText" :image-size="70" />
     <div v-if="hasMore && !loading" class="discover-more"><el-button size="small" @click="loadMore">加载更多</el-button></div>
 
     <!-- 详情：三种 kind 分别播放/展示 -->
@@ -95,13 +95,14 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { feedApi, type FeedPost, type FeedComment } from '@/api/feed';
 import { mediaUrl } from '@/utils/prefix';
 import { useAuthStore } from '@/stores/auth';
 
 const route = useRoute();
+const router = useRouter();
 const auth = useAuthStore();
 const myId = computed(() => auth.user?.id || 0);
 
@@ -111,13 +112,30 @@ const filters = [
   { key: 'video', label: '短视频' },
   { key: 'music', label: '音乐' },
 ];
+const KINDS = ['all', 'micro', 'video', 'music'];
 const filter = ref('all');
 const scope = ref('all');
 const posts = ref<FeedPost[]>([]);
 const loading = ref(false);
 const page = ref(1);
 const hasMore = ref(true);
-const visiblePosts = computed(() => filter.value === 'all' ? posts.value : posts.value.filter((p) => p.kind === filter.value));
+const emptyText = computed(() => {
+  const hit = filters.find((f) => f.key === filter.value);
+  return filter.value === 'all' ? '还没有内容，去发布第一条吧' : `还没有${hit?.label || ''}内容`;
+});
+
+/** 筛选落进 URL：刷新、分享、从旧 /shorts、/micro 跳过来都停在同一个视图 */
+function setFilter(k: string) {
+  const next = k === 'all' ? undefined : k;
+  const q: Record<string, any> = { ...route.query };
+  if (next) q.kind = next; else delete q.kind;
+  delete q.id;
+  router.replace({ path: '/discover', query: q });
+}
+function applyQuery() {
+  const k = String(route.query.kind || 'all');
+  filter.value = KINDS.includes(k) ? k : 'all';
+}
 const detailVisible = ref(false);
 const detail = ref<FeedPost | null>(null);
 const detailHtml = ref('');
@@ -135,14 +153,18 @@ async function load(reset = false) {
   if (reset) { page.value = 1; posts.value = []; hasMore.value = true; }
   loading.value = true;
   try {
-    const r = await feedApi.list({ scope: scope.value, page: page.value, page_size: 12 });
+    const r = await feedApi.list({
+      scope: scope.value,
+      kind: filter.value === 'all' ? undefined : filter.value,
+      page: page.value,
+      page_size: 12,
+    });
     const list = r.data?.data?.list || [];
     posts.value = reset ? list : [...posts.value, ...list];
     hasMore.value = list.length >= 12;
   } catch (e: any) { ElMessage.error(e?.response?.data?.message || '加载失败'); }
   finally { loading.value = false; }
 }
-function reload() { filter.value = 'all'; load(true); }
 function loadMore() { page.value++; load(); }
 
 async function openDetail(p: FeedPost) {
@@ -206,7 +228,13 @@ watch(() => route.query.id, async (v) => {
   } catch { /* ignore */ }
 }, { immediate: true });
 
-onMounted(() => { if (!route.query.id) load(true); });
+// 旧入口 /shorts、/micro 重定向到 ?kind=…，这里负责把筛选与 URL 对齐
+watch(() => route.query.kind, () => { applyQuery(); load(true); });
+
+onMounted(() => {
+  applyQuery();
+  if (!route.query.id) load(true);
+});
 </script>
 
 <style scoped>

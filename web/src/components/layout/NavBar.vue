@@ -63,12 +63,6 @@
               <el-dropdown-item @click="$router.push('/discover')">
                 <span class="nav-emoji">✨</span> 发现（图文/视频/音乐）
               </el-dropdown-item>
-              <el-dropdown-item @click="$router.push('/shorts')">
-                <span class="nav-emoji">🎬</span> 短视频
-              </el-dropdown-item>
-              <el-dropdown-item @click="$router.push('/micro')">
-                <span class="nav-emoji">🖼️</span> 微文 · 贴图
-              </el-dropdown-item>
               <el-dropdown-item @click="$router.push('/htmls')">
                 <span class="nav-emoji">🔌</span> 扩展应用
               </el-dropdown-item>
@@ -264,8 +258,6 @@
       <div class="mnav-item" @click="mnavGo('/subculture')"><span class="mnav-emoji">🎭</span> 亚文化创作区</div>
       <div class="mnav-item" @click="mnavGo('/blogs')"><el-icon><Document /></el-icon> 博客</div>
       <div class="mnav-item" @click="mnavGo('/discover')"><span class="mnav-emoji">✨</span> 发现</div>
-      <div class="mnav-item" @click="mnavGo('/shorts')"><span class="mnav-emoji">🎬</span> 短视频</div>
-      <div class="mnav-item" @click="mnavGo('/micro')"><span class="mnav-emoji">🖼️</span> 微文 · 贴图</div>
       <div class="mnav-item" @click="mnavGo('/htmls')"><span class="mnav-emoji">🔌</span> 扩展应用</div>
       <div class="mnav-item" v-if="liveEnabled" @click="mnavGo('/live')"><span class="mnav-emoji">📺</span> 直播</div>
       <div class="mnav-item" v-if="federatedSites.length" @click="mnavFederated"><span class="mnav-emoji">🌐</span> 互联站点</div>
