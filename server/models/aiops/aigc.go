@@ -5,6 +5,8 @@ import (
 	"nvs-server/models"
 	"strings"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // ==================== AIGC 内容标识（GB 45438—2025 / TC260 标识办法）====================
@@ -346,6 +348,132 @@ func ListAigcWaiverLogs(page, size int) ([]AigcWaiverLog, int64) {
 	var total int64
 	models.DB.Model(&AigcWaiverLog{}).Count(&total)
 	var list []AigcWaiverLog
+	models.DB.Order("id DESC").Offset((page - 1) * size).Limit(size).Find(&list)
+	return list, total
+}
+
+// ---------- 交付文件（烧录标识后的对外副本） ----------
+//
+// 与 AigcAsset 的区别：Asset 是**原图**（不带标识、只作管道输入），Delivery 是
+// **真正给用户的那份文件**——已烧角标 + 已写隐式字段，落盘后可被 HTTP 端点按需分发。
+//
+// 命名与去重：ObjectKey 是「源图哈希 + 导出参数 + 合规配置」的 SHA-256，
+// 因此
+//   · 文件名不可猜（64 位十六进制，且不含任何用户/任务信息）；
+//   · 同一张图被不同用户命中时，内容完全相同 → 同一 ObjectKey → **磁盘只存一份**。
+//
+// 访问控制不靠目录猜，靠 grants：只有被签发过 URL 的用户（或主动公开的作品）才有记录。
+
+// AigcDelivery 一份交付副本。ObjectKey 唯一，文件内容不可变。
+type AigcDelivery struct {
+	ID uint `gorm:"primaryKey" json:"id"`
+	// ObjectKey 内容寻址键（64 hex），同时是 URL 里的文件名主干
+	ObjectKey string `gorm:"size:64;not null;uniqueIndex" json:"object_key"`
+	// ProduceID 该内容的国家标准「内容编号」；同一内容复用同一编号
+	ProduceID string `gorm:"size:64;default:'';index" json:"produce_id"`
+	// SourceHash 源图 SHA-256（同一源图不同参数导出可据此归并）
+	SourceHash string `gorm:"size:64;default:'';index" json:"source_hash"`
+	FilePath   string `gorm:"size:512;not null" json:"-"`
+	Mime       string `gorm:"size:64;default:''" json:"mime"`
+	Ext        string `gorm:"size:8;default:''" json:"ext"`
+	Width      int    `gorm:"not null;default:0" json:"width"`
+	Height     int    `gorm:"not null;default:0" json:"height"`
+	SizeBytes  int64  `gorm:"not null;default:0" json:"size_bytes"`
+	// Labeled 是否真的烧了显式角标（降级交付原图时为 false）
+	Labeled bool `gorm:"not null;default:false" json:"labeled"`
+	// Public 是否被作者公开（公开作品允许匿名取图，取消发布后置回 false）
+	Public bool `gorm:"not null;default:false;index" json:"public"`
+	// Hits 命中次数（去重命中即 +1，用于估算省下的存储/带宽）
+	Hits      int64     `gorm:"not null;default:0" json:"hits"`
+	CreatedAt time.Time `gorm:"index" json:"created_at"`
+}
+
+func (AigcDelivery) TableName() string { return "aigc_deliveries" }
+
+// AigcDeliveryGrant 谁拿到过这份文件。key+user 唯一，重复签发只更新任务号。
+type AigcDeliveryGrant struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	ObjectKey string    `gorm:"size:64;not null;uniqueIndex:idx_aigc_grant"`
+	UserID    uint      `gorm:"not null;uniqueIndex:idx_aigc_grant;index" json:"user_id"`
+	TaskID    uint      `gorm:"not null;default:0" json:"task_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (AigcDeliveryGrant) TableName() string { return "aigc_delivery_grants" }
+
+// GetAigcDeliveryByKey 按内容键取交付记录
+func GetAigcDeliveryByKey(key string) (*AigcDelivery, error) {
+	var d AigcDelivery
+	if err := models.DB.Where("object_key = ?", key).First(&d).Error; err != nil {
+		return nil, err
+	}
+	return &d, nil
+}
+
+// CreateAigcDelivery 落一条交付记录。
+//
+// ⚠️ 与 CreateAigcExport 同样的坑：GORM 的 Create 跳过零值，Labeled/Public 的
+// 「正确值」常常是 false，必须用 map 回填一次，否则审计看起来「全都标了 / 全都公开了」。
+func CreateAigcDelivery(d *AigcDelivery) error {
+	if d.CreatedAt.IsZero() {
+		d.CreatedAt = time.Now()
+	}
+	if err := models.DB.Create(d).Error; err != nil {
+		return err
+	}
+	return models.DB.Model(&AigcDelivery{}).Where("id = ?", d.ID).Updates(map[string]interface{}{
+		"labeled": d.Labeled,
+		"public":  d.Public,
+	}).Error
+}
+
+// EnsureAigcDeliveryGrant 记录「某用户拥有某交付文件的访问权」（幂等）
+func EnsureAigcDeliveryGrant(key string, userID, taskID uint) {
+	if key == "" || userID == 0 {
+		return
+	}
+	g := AigcDeliveryGrant{ObjectKey: key, UserID: userID, TaskID: taskID, CreatedAt: time.Now()}
+	// 唯一冲突不算错误：并发出同一张图时两个请求都会来插一次
+	_ = models.DB.Where("object_key = ? AND user_id = ?", key, userID).FirstOrCreate(&g).Error
+}
+
+// HasAigcDeliveryGrant 该用户是否被授予过这份文件（公开作品另有 public 判定）
+func HasAigcDeliveryGrant(key string, userID uint) bool {
+	if key == "" || userID == 0 {
+		return false
+	}
+	var n int64
+	models.DB.Model(&AigcDeliveryGrant{}).
+		Where("object_key = ? AND user_id = ?", key, userID).Count(&n)
+	return n > 0
+}
+
+// BumpAigcDeliveryHits 去重命中计数（失败无所谓，纯统计）
+func BumpAigcDeliveryHits(key string) {
+	models.DB.Model(&AigcDelivery{}).Where("object_key = ?", key).
+		UpdateColumn("hits", gorm.Expr("hits + 1"))
+}
+
+// SetAigcDeliveryPublic 发布/取消发布时同步公开标记（按内容键或源图哈希都能定位）
+func SetAigcDeliveryPublic(key string, public bool) {
+	if key == "" {
+		return
+	}
+	models.DB.Model(&AigcDelivery{}).Where("object_key = ?", key).
+		UpdateColumn("public", public)
+}
+
+// ListAigcDeliveries 后台列表（占用空间统计用）
+func ListAigcDeliveries(page, size int) ([]AigcDelivery, int64) {
+	if page < 1 {
+		page = 1
+	}
+	if size <= 0 || size > 100 {
+		size = 20
+	}
+	var total int64
+	models.DB.Model(&AigcDelivery{}).Count(&total)
+	var list []AigcDelivery
 	models.DB.Order("id DESC").Offset((page - 1) * size).Limit(size).Find(&list)
 	return list, total
 }

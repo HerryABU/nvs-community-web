@@ -12,6 +12,8 @@ func Models() []interface{} {
 		&AigcAsset{},
 		&AigcExport{},
 		&AigcWaiverLog{},
+		&AigcDelivery{},
+		&AigcDeliveryGrant{},
 	}
 }
 

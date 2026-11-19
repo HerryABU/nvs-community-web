@@ -208,7 +208,7 @@
               @click="preview(img)"
             />
             <!-- 展示层显式标识：文案取平台配置；导出图仍由服务端烧录角标 + XMP -->
-            <span v-if="aiLabelText" class="pd-ai-label">{{ aiLabelText }}</span>
+            <span v-if="aiLabelText && !resultLabeled(t)" class="pd-ai-label">{{ aiLabelText }}</span>
             <button
               type="button"
               class="pd-img-dl"
@@ -313,6 +313,8 @@ usePasteImage({
 });
 const refImages = ref<string[]>([]);
 const lastImages = ref<string[]>([]);
+// 交付副本元信息（key / labeled）：进本地作品卡时一起带上，前端才知道要不要叠角标
+const lastItems = ref<any[]>([]);
 const lastCost = ref(0);
 const lastFree = ref(false);
 const lastBalance = ref(0);
@@ -399,6 +401,16 @@ async function doOptimizePrompt() {
   }
 }
 
+/** 结果是否已由服务端烧录显式标识（烧过就不再叠 CSS 角标，避免双重） */
+function resultLabeled(t: any): boolean {
+  try {
+    const items = JSON.parse(t?.result || '{}').items || [];
+    return items.length > 0 && items.every((x: any) => !!x.labeled);
+  } catch {
+    return false;
+  }
+}
+
 function parseImages(result: string): string[] {
   try {
     return JSON.parse(result).images || [];
@@ -473,6 +485,7 @@ async function generate(confirmed = false) {
     });
     if (res.data.code === 0) {
       lastImages.value = res.data.data.images || [];
+      lastItems.value = res.data.data.items || [];
       // 附件已随任务落库，清空避免串到下一次生成
       attachUrls.value = [];
       lastCost.value = res.data.data.cost;
@@ -486,7 +499,7 @@ async function generate(confirmed = false) {
         history.value.unshift({
           id: taskId || -(Date.now()),
           kind: 'image',
-          result: JSON.stringify({ images: lastImages.value }),
+          result: JSON.stringify({ images: lastImages.value, items: lastItems.value }),
           prompt: prompt.value.trim(),
           created_at: new Date().toISOString(),
           like_count: 0, favorite_count: 0, comment_count: 0, share_count: 0,

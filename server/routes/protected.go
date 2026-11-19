@@ -167,6 +167,8 @@ func registerProtected(r *gin.Engine) {
 		// 用户下载必须走这里 —— 服务端合成、烧显式角标、写隐式 AIGC 字段，前端不碰像素。
 		protected.GET("/ai/aigc/options", aimedia.AiAigcOptions)
 		protected.POST("/ai/aigc/export", security.RateLimit(20, 60), aimedia.AiAigcExport)
+		// 用内容键换新签名（历史里的取图地址过期时用；校验归属，猜键换不到票）
+		protected.POST("/ai/aigc/sign", security.RateLimit(60, 60), aimedia.AiAigcSign)
 
 		// AI 提示词库：平台预设（只读）+ 我的自定义（增删改）
 		protected.GET("/ai/prompts", aiworkbench.AiPromptList)

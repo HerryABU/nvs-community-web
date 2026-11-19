@@ -149,6 +149,9 @@ func registerPublic(r *gin.Engine) {
 		public.GET("/ai/styles", aimedia.AiStyleList)
 		// AI 生成内容标识（合规展示：只回模型名，不含内容）
 		public.GET("/ai/marks", aimedia.AiMarks)
+		// AIGC 交付副本取图：文件名是内容哈希（不可猜），准入靠 HMAC 签名，不需要登录态。
+		// 走签名而不是 AuthRequired，是因为 <img src> 发不出设备指纹头，会被判 401。
+		public.GET("/ai/aigc/file/:key", aimedia.AiAigcFile)
 		// 在线支付回调（§7.4）：网关异步通知（验签准入，无鉴权）+ 支付完成同步跳转
 		public.POST("/payment/notify/:channel", security.RateLimit(120, 60), payment.PaymentNotify)
 		public.GET("/payment/return/:channel", payment.PaymentReturn)

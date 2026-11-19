@@ -24,6 +24,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	aim "nvs-server/models/ai"
+	aiops "nvs-server/models/aiops"
 )
 
 // ==================== AI 出图：附件上传 + 历史导出（gap-audit #17）====================
@@ -321,6 +322,25 @@ func fetchMediaBytes(raw string) (*fetchedFile, []byte, string) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil, nil, "空地址"
+	}
+	// 站内交付副本（出图时已烧录标识）：按内容键直接读盘，不必再走一次 HTTP
+	if strings.HasPrefix(raw, aigcFileRoute) {
+		key := strings.TrimPrefix(raw, aigcFileRoute)
+		if i := strings.IndexAny(key, "?#"); i >= 0 {
+			key = key[:i]
+		}
+		if i := strings.IndexByte(key, '.'); i > 0 {
+			key = key[:i]
+		}
+		d, derr := aiops.GetAigcDeliveryByKey(key)
+		if derr != nil || d == nil {
+			return nil, nil, "交付副本不存在"
+		}
+		data, rerr := os.ReadFile(d.FilePath)
+		if rerr != nil {
+			return nil, nil, "交付副本已不在磁盘上"
+		}
+		return &fetchedFile{ext: safeExt(d.FilePath)}, data, ""
 	}
 	if strings.HasPrefix(raw, "/uploads/") {
 		rel := strings.TrimPrefix(path.Clean(raw), "/uploads/")

@@ -391,6 +391,10 @@ func AiHubMediaHistory(c *gin.Context) {
 		infra.InternalError(c, "查询失败")
 		return
 	}
+	// 交付副本的取图地址带过期签名，读历史时按当前用户重签一次（文件本身不动）
+	for i := range list {
+		list[i].Result = resignResult(list[i].Result, userID)
+	}
 	infra.Success(c, gin.H{"list": list, "total": total, "page": page})
 }
 

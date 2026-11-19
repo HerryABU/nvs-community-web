@@ -28,7 +28,7 @@
             <div v-else class="gal-broken">无预览</div>
             <span class="gal-model">{{ it.model_name }}</span>
             <span v-if="it.kind === 'video'" class="gal-kind">视频</span>
-            <span v-if="aiLabelText" class="gal-ai-label">{{ aiLabelText }}</span>
+            <span v-if="aiLabelText && !it.labeled" class="gal-ai-label">{{ aiLabelText }}</span>
           </div>
           <div class="gal-meta">
             <div class="gal-title">{{ it.title || '未命名作品' }}</div>
@@ -70,6 +70,8 @@ interface GalItem {
   style: string;
   likes: number;
   images: string[];
+  /** 交付图里已烧录显式标识，前端不再叠加角标 */
+  labeled?: boolean;
   video: string;
 }
 

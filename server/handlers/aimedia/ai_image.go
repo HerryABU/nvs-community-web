@@ -176,9 +176,16 @@ func AiHubImage(c *gin.Context) {
 			return
 		}
 		aicost.TouchUserAiKey(uk.ID)
+		// 自备密钥同样要生成合规交付副本：来源是「本站发起」，标识义务不因谁的密钥而转移
+		delivered := DeliverAIImages(userID, 0, byokModel, urls)
+		images := make([]string, len(delivered))
+		for i := range delivered {
+			images[i] = delivered[i].URL
+		}
 		infra.Success(c, gin.H{
 			"task_id":       0,
-			"images":        urls,
+			"images":        images,
+			"items":         delivered,
 			"cost":          0,
 			"free":          false,
 			"byok":          true,
@@ -302,12 +309,19 @@ func AiHubImage(c *gin.Context) {
 
 	rj, _ := json.Marshal(gin.H{"images": urls})
 	aim.UpdateAiMediaResult(task.ID, string(rj))
-	// AIGC 合规：原图原封不动落盘（不带任何标识），供用户下载时由服务端统一加标识。
-	// 异步做，失败只影响「能否导出」，不能把已扣费的出图判成失败。
-	SaveAigcOriginalsAsync(userID, task.ID, m.Name, urls)
+	// 前端拿到的就是这个文件的签名 URL —— 用户看到的、另存的本身就是合规版本。
+	// 这一步失败只影响「拿到的是上游地址还是站内副本」，不能把已扣费的出图判成失败。
+	delivered := DeliverAIImages(userID, task.ID, m.Name, urls)
+	images := make([]string, len(delivered))
+	for i := range delivered {
+		images[i] = delivered[i].URL
+	}
+	rj, _ = json.Marshal(gin.H{"images": images, "items": delivered})
+	aim.UpdateAiMediaResult(task.ID, string(rj))
 	infra.Success(c, gin.H{
 		"task_id":       task.ID,
-		"images":        urls,
+		"images":        images,
+		"items":         delivered,
 		"cost":          map[bool]int64{true: 0, false: m.PriceCall}[freeOK],
 		"free":          freeOK,
 		"balance_after": nb,

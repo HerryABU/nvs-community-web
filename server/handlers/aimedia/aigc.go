@@ -10,14 +10,12 @@ package aimedia
 //   · 豁免只免显式角标，隐式字段无条件写（FR-3.5/FR-6.3），并留独立日志（FR-6.4）。
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"image"
 	"nvs-server/utils/infra"
 	"os"
 	"path/filepath"
@@ -99,53 +97,8 @@ func readAigcSource(raw string) ([]byte, string, error) {
 	return data, raw, nil
 }
 
-// SaveAigcOriginalsAsync 出图成功后异步把原图落盘 + 记字节信息。
-// 失败只记日志：不能因为落盘失败把已经扣过费的出图判成失败。
-func SaveAigcOriginalsAsync(userID, taskID uint, modelName string, urls []string) {
-	if len(urls) == 0 {
-		return
-	}
-	go func() {
-		dir := aigcOriginalsDir()
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return
-		}
-		for idx, raw := range urls {
-			data, fromURL, err := readAigcSource(raw)
-			if err != nil || len(data) == 0 {
-				continue
-			}
-			cfgImg, format, derr := image.DecodeConfig(bytes.NewReader(data))
-			if derr != nil {
-				continue
-			}
-			sum := sha256.Sum256(data)
-			hexSum := hex.EncodeToString(sum[:])
-			ext := extForImageFormat(format)
-			name := hexSum[:16] + "." + ext
-			full := filepath.Join(dir, name)
-			if _, statErr := os.Stat(full); statErr != nil {
-				if werr := os.WriteFile(full, data, 0o644); werr != nil {
-					continue
-				}
-			}
-			_ = aiops.CreateAigcAsset(&aiops.AigcAsset{
-				UserID:    userID,
-				TaskID:    taskID,
-				Index:     idx,
-				Source:    aiops.AigcSourceAI,
-				ModelName: modelName,
-				FilePath:  full,
-				Mime:      "image/" + ext,
-				Width:     cfgImg.Width,
-				Height:    cfgImg.Height,
-				SizeBytes: int64(len(data)),
-				SHA256:    hexSum,
-				FromURL:   fromURL,
-			})
-		}
-	}()
-}
+// 原图落盘已并入 aigc_deliver.go（出图即同步落盘 + 生成交付副本），
+// 这里只保留「地址 → 字节」的读取能力供出口管道复用。
 
 func extForImageFormat(f string) string {
 	switch strings.ToLower(f) {
