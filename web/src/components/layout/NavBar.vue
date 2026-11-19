@@ -171,11 +171,8 @@
                 <el-dropdown-item @click="$router.push('/author/editor')">
                   <el-icon><Plus /></el-icon> 发布作品
                 </el-dropdown-item>
-                <el-dropdown-item @click="$router.push('/feed/compose?kind=video')">
-                  <span class="nav-emoji">🎬</span> 发短视频
-                </el-dropdown-item>
-                <el-dropdown-item @click="$router.push('/feed/compose?kind=micro')">
-                  <span class="nav-emoji">🖼️</span> 写微文
+                <el-dropdown-item @click="$router.push('/feed/compose')">
+                  <span class="nav-emoji">✨</span> 发布动态（图文 / 视频 / 音乐）
                 </el-dropdown-item>
                 <el-dropdown-item @click="$router.push('/author')">
                   <el-icon><HomeFilled /></el-icon> 作者工作台
@@ -292,6 +289,7 @@
           <span v-if="unreadCount > 0" class="mnav-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
         </div>
         <div class="mnav-item" @click="mnavGo('/author/editor')"><el-icon><Plus /></el-icon> 发布作品</div>
+        <div class="mnav-item" @click="mnavGo('/feed/compose')"><span class="mnav-emoji">✨</span> 发布动态</div>
         <div class="mnav-item" @click="mnavGo('/author')"><el-icon><HomeFilled /></el-icon> 作者工作台</div>
         <div class="mnav-item" @click="mnavGo('/ai')"><el-icon><MagicStick /></el-icon> AI 工作台</div>
         <div class="mnav-item" @click="mnavGo('/reading')"><el-icon><Notebook /></el-icon> 精读笔记</div>

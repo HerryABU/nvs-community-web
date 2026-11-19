@@ -25,7 +25,7 @@
       <article v-for="p in posts" :key="p.id" class="ds-card" @click="openDetail(p)">
         <div class="ds-cover">
           <img v-if="coverOf(p)" :src="mediaUrl(coverOf(p))" :alt="p.title || '封面'" loading="lazy" />
-          <div v-else class="ds-cover-empty">{{ p.kind === 'music' ? '🎵' : p.kind === 'video' ? '🎬' : '✍️' }}</div>
+          <div v-else class="ds-cover-empty" :class="p.kind">{{ p.kind === 'music' ? '🎵' : p.kind === 'video' ? '🎬' : '✍️' }}</div>
           <span v-if="p.kind === 'video'" class="ds-badge play">▶ 视频</span>
           <span v-else-if="p.kind === 'music'" class="ds-badge music">♫ 音乐</span>
           <span v-else-if="p.images?.length > 1" class="ds-badge">1/{{ p.images.length }}</span>
@@ -62,6 +62,7 @@
         <video v-if="detail.kind === 'video'" :src="mediaUrl(detail.video_url)" :poster="mediaUrl(detail.cover_url)" controls style="width: 100%; max-height: 460px" />
         <div v-else-if="detail.kind === 'music'" class="dd-music">
           <img v-if="detail.cover_url" :src="mediaUrl(detail.cover_url)" alt="封面" />
+          <div v-else class="dd-music-empty">♫<small>{{ detail.title || '无封面音频' }}</small></div>
           <audio :src="mediaUrl(detail.audio_url)" controls style="width: 100%" />
         </div>
         <div v-else-if="detail.images?.length" class="dd-images">
@@ -252,6 +253,13 @@ onMounted(() => {
 .ds-cover { position: relative; aspect-ratio: 4 / 3; background: var(--fill-color, #f0f2f5); }
 .ds-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ds-cover-empty { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 2.6rem; }
+/* 封面是可选字段：音频/无封面视频用类型渐变兜底，别让卡片看着像加载失败 */
+.ds-cover-empty.music { background: linear-gradient(135deg, #fce7f3, #ede9fe); }
+.ds-cover-empty.video { background: linear-gradient(135deg, #e0e7ff, #dbeafe); }
+.ds-cover-empty.micro { background: linear-gradient(135deg, #f1f5f9, #e2e8f0); }
+[data-theme="dark"] .ds-cover-empty.music { background: linear-gradient(135deg, #4c1d3d, #312e5f); }
+[data-theme="dark"] .ds-cover-empty.video { background: linear-gradient(135deg, #1e2a5a, #1e3a5f); }
+[data-theme="dark"] .ds-cover-empty.micro { background: linear-gradient(135deg, #1e293b, #273244); }
 .ds-badge { position: absolute; left: 10px; top: 10px; background: rgba(0,0,0,.6); color: #fff; font-size: .7rem; padding: 3px 8px; border-radius: 10px; }
 .ds-badge.play { background: rgba(91,110,245,.85); }
 .ds-badge.music { background: rgba(236,72,153,.85); }
@@ -272,6 +280,8 @@ onMounted(() => {
 .dd-author small { color: var(--text-muted, #888); }
 .dd-music { display: flex; flex-direction: column; gap: 12px; align-items: center; }
 .dd-music img { max-width: 280px; max-height: 280px; border-radius: 10px; object-fit: cover; }
+.dd-music-empty { width: 240px; height: 150px; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; font-size: 2rem; color: #fff; background: linear-gradient(135deg, #a78bfa, #f472b6); }
+.dd-music-empty small { font-size: .78rem; max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dd-images { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .dd-images img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; }
 .dd-content { margin: 14px 0; line-height: 1.8; font-size: .92rem; }

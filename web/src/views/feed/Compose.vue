@@ -24,7 +24,7 @@
               <div class="cp-hint">支持 Ctrl+V 粘贴封面图；未选则用默认占位图。</div>
             </div>
           </el-form-item>
-          <el-form-item label="封面">
+          <el-form-item label="封面（可选）">
             <div class="cp-upload">
               <input ref="coverInput" type="file" accept="image/*" hidden @change="onCoverPick" />
               <img v-if="coverUrl" :src="media(coverUrl)" class="cp-cover" alt="封面" />
@@ -38,16 +38,16 @@
           <el-form-item label="音频">
             <div class="cp-upload">
               <input ref="audioInput" type="file" accept="audio/*,.wav,.mp3,.m4a,.ogg" hidden @change="onAudioPick" />
-              <audio v-if="audioUrl" :src="media(audioUrl)" controls style="width: 100%; max-width: 420px" />
+              <audio v-if="audioUrl" :src="media(audioUrl)" controls class="cp-audio" />
               <el-button v-else size="small" :loading="uploading" @click="audioInput?.click()">选择音频（≤50MB）</el-button>
             </div>
           </el-form-item>
-          <el-form-item label="封面">
+          <el-form-item label="封面（可选）">
             <div class="cp-upload">
               <input ref="musicCoverInput" type="file" accept="image/*" hidden @change="onMusicCoverPick" />
               <img v-if="coverUrl" :src="media(coverUrl)" class="cp-cover" alt="封面" />
               <el-button size="small" @click="musicCoverInput?.click()">{{ coverUrl ? '更换封面' : '上传封面（可选）' }}</el-button>
-              <div class="cp-hint">支持 Ctrl+V 粘贴封面图。</div>
+              <div class="cp-hint">支持 Ctrl+V 粘贴封面图；不上传也能发，卡片会用音符占位。</div>
             </div>
           </el-form-item>
         </template>
@@ -279,9 +279,12 @@ onMounted(async () => {
 .compose-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .compose-head h2 { margin: 0; font-size: 1.25rem; }
 .compose-card { border-radius: 10px; }
-.cp-upload { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.cp-upload { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; width: 100%; }
 .cp-hint { font-size: 0.78rem; color: var(--text-muted, #6b7280); }
 .cp-preview { display: flex; flex-direction: column; gap: 6px; }
+/* 音频：必须给确定宽度。.cp-upload 若是 flex 项（宽度 auto），width:100% 会解析成 0，
+   播放条在页面上等于不存在（实测 rect 宽 0，能出声但看不到也点不到）。 */
+.cp-audio { width: 100%; max-width: 420px; min-width: 240px; }
 .cp-cover { width: 160px; height: 100px; object-fit: cover; border-radius: 6px; }
 .cp-grid { display: grid; grid-template-columns: repeat(4, 92px); gap: 8px; }
 .cp-thumb { position: relative; width: 92px; height: 92px; }
