@@ -62,6 +62,35 @@
           </div>
         </el-tab-pane>
 
+        <!-- ==================== 正文存储模式 ==================== -->
+        <el-tab-pane label="正文存储模式" name="storage">
+          <el-alert type="info" :closable="false" show-icon style="margin-bottom:16px">
+            <template #title>
+              混合模式（默认）：正文写文件，库内保留镜像；纯数据库模式：正文只写数据库，
+              适合高性能机器或无共享盘部署。切换会按用户分批热迁移，期间全站禁止写入，
+              前端会提示「上传功能正在维护中，请稍后」。
+            </template>
+          </el-alert>
+          <el-form label-width="110px" style="max-width:560px">
+            <el-form-item label="当前模式">
+              <el-tag :type="storageMode === 'database' ? 'success' : 'primary'">
+                {{ storageMode === 'database' ? '纯数据库模式' : '数据库 + 文件系统混合模式' }}
+              </el-tag>
+            </el-form-item>
+            <el-form-item label="切换为">
+              <el-radio-group v-model="targetStorageMode">
+                <el-radio-button value="hybrid">混合（默认）</el-radio-button>
+                <el-radio-button value="database">纯数据库</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" :loading="storageBusy" :disabled="job?.status === 'running'" @click="switchStorageMode">
+                开始切换并迁移正文
+              </el-button>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+
         <!-- ==================== 备份管理 ==================== -->
         <el-tab-pane label="备份管理" name="backup">
           <div class="admin-toolbar">
@@ -156,6 +185,44 @@ async function startMigrate() {
     ElMessage.error(e?.response?.data?.message || '迁移启动失败');
   } finally {
     migrating.value = false;
+  }
+}
+
+// ---------- 正文存储模式 ----------
+const storageMode = ref('hybrid');
+const targetStorageMode = ref<'hybrid' | 'database'>('hybrid');
+const storageBusy = ref(false);
+
+async function loadStorageMode() {
+  try {
+    const res = await adminApi.getStorageMode();
+    const d = res.data?.data;
+    if (d?.mode) {
+      storageMode.value = d.mode;
+      targetStorageMode.value = d.mode === 'database' ? 'database' : 'hybrid';
+    }
+  } catch { /* 页面仍可用 */ }
+}
+
+async function switchStorageMode() {
+  if (targetStorageMode.value === storageMode.value) {
+    ElMessage.warning('当前已是该模式');
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(
+      '切换期间全站禁止写入（前端会提示「上传功能正在维护中，请稍后」），系统会按用户分批迁移小说/博客正文。是否继续？',
+      '确认切换存储模式', { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消' },
+    );
+  } catch { return; }
+  storageBusy.value = true;
+  try {
+    const res = await adminApi.setStorageMode(targetStorageMode.value);
+    startPolling(res.data?.data?.job_id);
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '切换失败');
+  } finally {
+    storageBusy.value = false;
   }
 }
 
@@ -263,6 +330,7 @@ function startPolling(jobId: string) {
         // 本页没有独立的健康检查面板：曾有残留的 loadHealth() 调用（函数根本不存在），
         // 任务成功后走到这行会直接 ReferenceError，导致「任务完成」后列表不刷新。
         loadSched();
+        loadStorageMode();
         return;
       }
       if (job.value?.status === 'error') {
@@ -300,6 +368,7 @@ function fmtTime(t: string) {
 onMounted(() => {
   loadBackups();
   loadSched();
+  loadStorageMode();
 });
 onBeforeUnmount(stopPolling);
 </script>

@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 
+	"nvs-server/contentstore"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	"nvs-server/models/social"
@@ -61,11 +62,12 @@ func ExportNovel(c *gin.Context) {
 	for _, ch := range chapters {
 		// 读取章节内容文件
 		if ch.ContentPath != "" {
-			content, err := os.ReadFile(sanitize.ResolveContentPath(ch.ContentPath))
+			// 纯数据库模式下没有文件，走 ContentBlob
+			text, err := contentstore.Get(contentstore.RefChapter, ch.ID, sanitize.ResolveContentPath(ch.ContentPath))
 			if err == nil {
 				fileName := fmt.Sprintf("chapter_%04d.html", ch.ChapterNumber)
 				w, _ := zipWriter.Create(fileName)
-				w.Write(content)
+				w.Write([]byte(text))
 			}
 		}
 	}

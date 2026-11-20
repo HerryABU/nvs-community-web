@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"nvs-server/collab"
+	"nvs-server/contentstore"
 	"nvs-server/handlers/hctx"
 	"nvs-server/markdown"
 	"nvs-server/models"
@@ -99,11 +100,12 @@ func GetChapterContent(c *gin.Context) {
 	}
 
 	contentPath := sanitize.ResolveContentPath(chapter.ContentPath)
-	content, err := os.ReadFile(contentPath)
+	contentStr, err := contentstore.Get(contentstore.RefChapter, chapter.ID, contentPath)
 	if err != nil {
 		infra.InternalError(c, "读取章节内容失败")
 		return
 	}
+	content := []byte(contentStr)
 
 	// 重新计算哈希并校验
 	currentHash := ComputeSHA256(string(content))
@@ -205,14 +207,18 @@ func VerifyChapter(c *gin.Context) {
 	}
 
 	contentPath := sanitize.ResolveContentPath(chapter.ContentPath)
-	content, err := os.ReadFile(contentPath)
+	contentStr, err := contentstore.Get(contentstore.RefChapter, chapter.ID, contentPath)
 	if err != nil {
-		infra.InternalError(c, "读取文件失败")
+		infra.InternalError(c, "读取内容失败")
 		return
 	}
+	content := []byte(contentStr)
 
-	fileInfo, err := os.Stat(contentPath)
-	if err != nil {
+	// 纯数据库模式没有文件，文件大小/修改时间留空即可
+	var fileSize, modTime int64
+	if fi, e := os.Stat(contentPath); e == nil {
+		fileSize, modTime = fi.Size(), fi.ModTime().Unix()
+	} else if !contentstore.IsDatabase() {
 		infra.InternalError(c, "获取文件信息失败")
 		return
 	}
@@ -245,8 +251,8 @@ func VerifyChapter(c *gin.Context) {
 		"hash_current":       currentHash,
 		"hash_verified":      hashOk,
 		"signature_verified": signatureVerified,
-		"file_size":          fileInfo.Size(),
-		"modified_at":        fileInfo.ModTime().Unix(),
+		"file_size":          fileSize,
+		"modified_at":        modTime,
 		"message":            msg,
 	})
 }

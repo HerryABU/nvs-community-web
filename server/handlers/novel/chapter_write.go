@@ -18,6 +18,7 @@ import (
 	"nvs-server/chaptervcs"
 	"nvs-server/collab"
 	"nvs-server/config"
+	"nvs-server/contentstore"
 	"nvs-server/handlers/auth"
 	"nvs-server/handlers/badword"
 	"nvs-server/handlers/hctx"
@@ -25,6 +26,7 @@ import (
 	"nvs-server/handlers/realname"
 	"nvs-server/models"
 	"nvs-server/moderation"
+	"nvs-server/novelindex"
 	"nvs-server/security"
 
 	"github.com/gin-gonic/gin"
@@ -113,10 +115,13 @@ func CreateChapter(c *gin.Context) {
 	}
 
 	contentPath := filepath.Join(authorDir, fmt.Sprintf("%d.html", nextNum))
-	// 直接存储原始 Markdown 内容，前端 Cherry Markdown 负责渲染
-	if err := os.WriteFile(contentPath, []byte(req.Content), 0644); err != nil {
-		infra.InternalError(c, "写入文件失败")
-		return
+	// 直接存储原始 Markdown 内容，前端 Cherry Markdown 负责渲染。
+	// 纯数据库模式不落文件，正文在 CreateChapter 之后写 ContentBlob。
+	if !contentstore.IsDatabase() {
+		if err := os.WriteFile(contentPath, []byte(req.Content), 0644); err != nil {
+			infra.InternalError(c, "写入文件失败")
+			return
+		}
 	}
 
 	// 计算 SHA256 哈希
@@ -164,6 +169,8 @@ func CreateChapter(c *gin.Context) {
 		infra.InternalError(c, "创建章节失败")
 		return
 	}
+	// 正文镜像：混合模式文件+库，纯数据库模式只入库
+	_ = contentstore.Put(contentstore.RefChapter, chapter.ID, contentPath, req.Content)
 	// 发布流水记账（计入每日发文限额）：草稿不计，提审通过时再记
 	if status == models.ChapterStatusPublished {
 		quota.RecordPublish(userID, quota.PublishKindChapter, chapter.ID, wordCount)
@@ -294,11 +301,15 @@ func UpdateChapter(c *gin.Context) {
 	}
 
 	if req.Content != "" {
-		// 直接存储原始 Markdown 内容
-		if err := os.WriteFile(sanitize.ResolveContentPath(chapter.ContentPath), []byte(req.Content), 0644); err != nil {
-			infra.InternalError(c, "写入文件失败")
-			return
+		// 直接存储原始 Markdown 内容（纯数据库模式不落文件）
+		path := sanitize.ResolveContentPath(chapter.ContentPath)
+		if !contentstore.IsDatabase() {
+			if err := os.WriteFile(path, []byte(req.Content), 0644); err != nil {
+				infra.InternalError(c, "写入文件失败")
+				return
+			}
 		}
+		_ = contentstore.Put(contentstore.RefChapter, chapter.ID, path, req.Content)
 		chapter.ContentHash = ComputeSHA256(req.Content)
 		// 用作者签名密钥生成 HMAC-SHA256 防篡改签名
 		if author, err := models.GetUserByID(userID); err == nil && author.SigningKey != "" {
@@ -426,42 +437,9 @@ func renumberChapters(novelID uint, deletedNum int, dir string) {
 }
 
 func updateIndexJSON(authorID, novelID uint) {
-	chapters, err := models.GetChaptersByNovel(novelID)
-	if err != nil {
-		return
-	}
-
-	type IndexEntry struct {
-		Number int    `json:"number"`
-		Title  string `json:"title"`
-		Words  int    `json:"words"`
-	}
-	type IndexData struct {
-		NovelID   uint         `json:"novel_id"`
-		Chapters  []IndexEntry `json:"chapters"`
-		UpdatedAt string       `json:"updated_at"`
-	}
-
-	entries := make([]IndexEntry, len(chapters))
-	for i, ch := range chapters {
-		entries[i] = IndexEntry{
-			Number: ch.ChapterNumber,
-			Title:  ch.Title,
-			Words:  ch.WordCount,
-		}
-	}
-
-	dir := filepath.Join(config.NovelDataDir, "authors", fmt.Sprintf("%d", authorID), fmt.Sprintf("%d", novelID))
-	indexPath := filepath.Join(dir, "index.json")
-
-	data := IndexData{
-		NovelID:   novelID,
-		Chapters:  entries,
-		UpdatedAt: security.NowString(),
-	}
-
-	jsonBytes, _ := json.MarshalIndent(data, "", "  ")
-	os.WriteFile(indexPath, jsonBytes, 0644)
+	// index.json 同时写文件与库（novelindex 内部按存储模式决定是否落文件）。
+	// 标题也从 DB 取，修掉原先「章节一改 title 字段就丢失」的不一致。
+	novelindex.Write(authorID, novelID, "")
 }
 
 func stripHTML(html string) string {

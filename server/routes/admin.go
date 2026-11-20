@@ -570,6 +570,9 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.POST("/db/restore", dbadmin.AdminDBRestore)
 		adminGrp.GET("/db/backup-config", dbadmin.AdminDBBackupConfigGet)
 		adminGrp.PUT("/db/backup-config", dbadmin.AdminDBBackupConfigPut)
+		// 正文存储模式（纯数据库 / 数据库+文件系统混合），切换时按用户分批热迁移
+		adminGrp.GET("/db/storage-mode", dbadmin.AdminStorageModeGet)
+		adminGrp.POST("/db/storage-mode", dbadmin.AdminStorageModeSet)
 	}
 
 	// 警方取管台（police）：准管理员角色，仅可取证 / 查看软删除，无普通管理权

@@ -626,6 +626,13 @@ export const adminApi = {
   updateBackupConfig(data: { enabled?: boolean; interval?: number }) {
     return api.put('/admin/db/backup-config', data);
   },
+  // 正文存储模式：hybrid（默认，数据库+文件系统） / database（纯数据库）
+  getStorageMode() {
+    return api.get('/admin/db/storage-mode');
+  },
+  setStorageMode(mode: 'hybrid' | 'database') {
+    return api.post('/admin/db/storage-mode', { mode });
+  },
 };
 
 // 公开接口

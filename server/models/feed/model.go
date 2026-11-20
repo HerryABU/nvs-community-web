@@ -113,7 +113,7 @@ func (CommentLike) TableName() string { return "feed_comment_likes" }
 
 // Models 注册本域全部表
 func Models() []interface{} {
-	return []interface{}{&Post{}, &Like{}, &Favorite{}, &Comment{}, &CommentLike{}}
+	return []interface{}{&Post{}, &Like{}, &Favorite{}, &Comment{}, &CommentLike{}, &Tag{}}
 }
 
 func init() {
@@ -176,6 +176,8 @@ func CreatePost(userID uint, in PostInput) (*Post, error) {
 	if err := models.DB.Create(p).Error; err != nil {
 		return nil, err
 	}
+	// 倒排索引与正文同事务语义：失败只影响标签筛选，不影响已发布内容
+	_ = SyncPostTags(p.ID, p.Tags)
 	p.ImagesList = in.Images
 	return p, nil
 }
@@ -210,6 +212,7 @@ func UpdatePost(userID uint, id uint, in PostInput) (*Post, error) {
 	if err := models.DB.Save(&p).Error; err != nil {
 		return nil, err
 	}
+	_ = SyncPostTags(p.ID, p.Tags)
 	return &p, nil
 }
 
@@ -241,7 +244,8 @@ type ListOptions struct {
 	ViewerID  uint
 	Page      int
 	PageSize  int
-	HasImages bool // 只看带配图的内容（图片页用）
+	HasImages bool   // 只看带配图的内容（图片页用）
+	Tag       string // 按标签筛（走 feed_tags 倒排索引，不用 LIKE）
 }
 
 func ListPosts(opt ListOptions) ([]Post, int64, error) {
@@ -260,6 +264,10 @@ func ListPosts(opt ListOptions) ([]Post, int64, error) {
 	// 图片页：只要真的带图的内容（images 是 JSON 数组字符串，空数组要排除）
 	if opt.HasImages {
 		q = q.Where("images <> '' AND images <> '[]'")
+	}
+	if tag := strings.TrimSpace(opt.Tag); tag != "" {
+		EnsureTagIndex()
+		q = q.Where("id IN (?)", models.DB.Table("feed_tags").Select("post_id").Where("tag = ?", tag))
 	}
 	switch scope {
 	case "mine":

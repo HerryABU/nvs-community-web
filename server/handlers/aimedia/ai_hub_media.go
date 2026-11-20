@@ -225,11 +225,13 @@ func AiHubVideoStatus(c *gin.Context) {
 				infra.Success(c, gin.H{"task_id": task.ID, "status": aim.AiMediaRunning, "cost": task.Cost})
 				return
 			}
-			rj, _ := json.Marshal(gin.H{"video": videoURL})
+			// AIGC 标识：出结果即烧录交付副本（外部 ffmpeg，不内联）
+			marked, labeled := DeliverAIMedia(userID, task.ID, videoURL, aigcMediaVideo)
+			rj, _ := json.Marshal(gin.H{"video": marked, "labeled": labeled})
 			aim.UpdateAiMediaResult(task.ID, string(rj))
 			infra.Success(c, gin.H{
 				"task_id": task.ID, "status": aim.AiMediaSucceeded,
-				"result": task.Result, "video": videoURL, "cost": task.Cost,
+				"result": task.Result, "video": marked, "labeled": labeled, "cost": task.Cost,
 			})
 		case "failed", "error", "cancelled", "canceled":
 			msg := upErr
@@ -270,11 +272,13 @@ func AiHubVideoStatus(c *gin.Context) {
 			infra.Success(c, gin.H{"task_id": task.ID, "status": aim.AiMediaRunning, "cost": task.Cost})
 			return
 		}
-		rj, _ := json.Marshal(gin.H{"video": videoURL})
+		// AIGC 标识：出结果即烧录交付副本（外部 ffmpeg，不内联）
+		marked, labeled := DeliverAIMedia(userID, task.ID, videoURL, aigcMediaVideo)
+		rj, _ := json.Marshal(gin.H{"video": marked, "labeled": labeled})
 		aim.UpdateAiMediaResult(task.ID, string(rj))
 		infra.Success(c, gin.H{
 			"task_id": task.ID, "status": aim.AiMediaSucceeded,
-			"result": task.Result, "video": videoURL, "cost": task.Cost,
+			"result": task.Result, "video": marked, "labeled": labeled, "cost": task.Cost,
 		})
 	case "failed", "error", "cancelled", "canceled":
 		msg := upErr

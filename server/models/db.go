@@ -72,6 +72,10 @@ func AllModels() []interface{} {
 		&NovelCharacter{},
 		// 小说附属文档（设定集 / 大纲 / 人物 / 时间线 / 故事线 / 资料）
 		&NovelDocument{},
+		// 小说 index.json 的库内副本（纯数据库模式下读者端也从这里取清单）
+		&NovelIndex{},
+		// 小说/博客正文的库内副本（纯数据库模式唯一存储，混合模式镜像）
+		&ContentBlob{},
 		&Forum{}, &Thread{}, &Post{}, &ForumMute{}, &PlatformConfig{},
 		&Notification{}, // 站内消息通知
 		// 自建论坛额度：按人覆盖（管理员可削减/放开某人的建版数）

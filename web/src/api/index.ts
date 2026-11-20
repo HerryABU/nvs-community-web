@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { ElMessage } from 'element-plus';
 import { appPrefix } from '@/utils/prefix';
 import { reportAdminApiError, clearAdminApiError } from '@/utils/adminHealth';
 import { collectFingerprint } from '@/utils/fingerprint';
@@ -98,6 +99,9 @@ async function silentRefresh(): Promise<boolean> {
   }
 }
 
+// 热迁移期间写操作统一返回 423；同一时刻只提示一次，避免批量请求刷屏
+let maintenanceToastAt = 0;
+
 api.interceptors.response.use(
   (response) => {
     // 同一 API 分组内成功才算恢复：后台页会并发请求 /api/setup/status 等公共接口，
@@ -124,6 +128,13 @@ api.interceptors.response.use(
     if (response) {
       const { status, data } = response;
       switch (status) {
+        case 423: {
+          if (Date.now() - maintenanceToastAt > 10000) {
+            maintenanceToastAt = Date.now();
+            ElMessage.warning(data?.message || '上传功能正在维护中，请稍后');
+          }
+          break;
+        }
         case 401: {
           // 刷新端点自身 401 不再递归刷新，直接放行到下方拒绝逻辑
           const url = config?.url || '';

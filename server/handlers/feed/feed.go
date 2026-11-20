@@ -17,7 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// GET /api/feed?kind=video|micro|music&scope=all|following|mine&author_id=&page=&sort=hot&has_images=1
+// GET /api/feed?kind=video|micro|music&scope=all|following|mine&author_id=&page=&sort=hot&has_images=1&tag=空耳
 func List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -30,6 +30,7 @@ func List(c *gin.Context) {
 		Page:      page,
 		PageSize:  ps,
 		HasImages: c.Query("has_images") == "1",
+		Tag:       strings.TrimSpace(c.Query("tag")),
 	})
 	if err != nil {
 		infra.InternalError(c, "查询失败")

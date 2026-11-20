@@ -35,6 +35,7 @@ import (
 	"nvs-server/handlers/site"
 	"nvs-server/handlers/theme"
 	"nvs-server/handlers/web"
+	"nvs-server/maintenance"
 	"nvs-server/middleware"
 	"nvs-server/security"
 
@@ -50,6 +51,13 @@ func registerPublic(r *gin.Engine) {
 	public := r.Group("/api")
 	public.Use(middleware.OptionalAuth()) // 公开路由也识别登录态（管理员豁免/我的论坛等权限判断）
 	{
+		// 前端轮询：迁移期间展示「上传功能正在维护中」
+		public.GET("/maintenance", func(c *gin.Context) {
+			c.JSON(200, gin.H{"code": 0, "data": gin.H{
+				"enabled": maintenance.Enabled(),
+				"message": "上传功能正在维护中，请稍后",
+			}})
+		})
 		public.POST("/auth/register", security.RateLimit(10, 60), auth.Register) // 安全审计 M2：注册限流防批量灌号
 		// 注册门槛提示与预检（邀请码/设备指纹/账号年龄，gap-audit #14）
 		public.GET("/auth/register-hint", gate.RegisterGateHint)
@@ -85,6 +93,8 @@ func registerPublic(r *gin.Engine) {
 		public.GET("/wall-zone/:zone", adminsite.GetPublicZoneDetail)
 		public.GET("/novels", security.RateLimit(100, 60), novel.ListNovels)
 		public.GET("/novels/:id", novel.GetNovel)
+		// 章节清单的库内副本：纯数据库模式下不依赖 index.json 文件
+		public.GET("/novels/:id/index.json", novel.GetNovelIndex)
 		public.GET("/novels/:id/chapters", novel.GetChapters)
 		public.GET("/novels/:id/chapters/:num", novel.GetChapterContent)
 		public.GET("/novels/:id/chapters/:num/verify", novel.VerifyChapter)

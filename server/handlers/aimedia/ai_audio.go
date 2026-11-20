@@ -119,8 +119,10 @@ func Speech(c *gin.Context) {
 		infra.InternalError(c, "保存音频失败")
 		return
 	}
+	// AIGC 标识：音频写元数据（可见角标对音频无意义），同样走内容寻址 + 签名 URL
+	marked, labeled := DeliverAIMedia(uid, 0, url, aigcMediaAudio)
 	infra.Success(c, gin.H{
-		"url": url, "mime": mime, "size": len(data),
+		"url": marked, "labeled": labeled, "mime": mime, "size": len(data),
 		"model": m.Name, "kind": kind, "voice": voice,
 	})
 }

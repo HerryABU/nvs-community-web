@@ -27,7 +27,7 @@
           <h3 class="sw-title">{{ p.title || '未命名视频' }}</h3>
           <p v-if="p.content" class="sw-desc">{{ plain(p.content) }}</p>
           <div class="sw-tags" v-if="p.tags">
-            <span v-for="t in splitTags(p.tags)" :key="t">#{{ t }}</span>
+            <router-link v-for="t in splitTags(p.tags)" :key="t" :to="`/tag/${encodeURIComponent(t)}`">#{{ t }}</router-link>
           </div>
         </div>
 

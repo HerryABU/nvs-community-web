@@ -17,6 +17,7 @@ import (
 	"nvs-server/models"
 	"nvs-server/models/social"
 	"nvs-server/moderation"
+	"nvs-server/novelindex"
 	"nvs-server/readperm"
 	"nvs-server/security"
 
@@ -195,15 +196,8 @@ func CreateNovel(c *gin.Context) {
 	novelDir := filepath.Join(authorDir, fmt.Sprintf("%d", novel.ID))
 	os.MkdirAll(novelDir, 0755)
 
-	// 创建 index.json
-	indexPath := filepath.Join(novelDir, "index.json")
-	indexData := map[string]interface{}{
-		"novel_id": novel.ID,
-		"title":    novel.Title,
-		"chapters": []interface{}{},
-	}
-	indexBytes, _ := json.MarshalIndent(indexData, "", "  ")
-	os.WriteFile(indexPath, indexBytes, 0644)
+	// 创建 index.json（同时落库）；目录已由上面 MkdirAll 建好
+	novelindex.Write(novel.AuthorID, novel.ID, novel.Title)
 
 	// AI 内容审核（作品简介/标题也属于公开内容，与章节发布同等对待）
 	go moderation.ReviewOnWrite(moderation.ScopeNovel, novel.ID)
@@ -344,6 +338,9 @@ func UpdateNovel(c *gin.Context) {
 		novel.CategoryNames = loadCategoryNames(novel.ID)
 	}
 
+	// 标题改动要同步 index.json（旧实现只在建书/改章节时写，改书名后清单标题一直是旧的）
+	novelindex.Write(novel.AuthorID, novel.ID, novel.Title)
+
 	// 简介/标题改动后重新送检（否则改标题即可绕过首次审核）
 	go moderation.ReviewOnWrite(moderation.ScopeNovel, novel.ID)
 
@@ -389,6 +386,7 @@ func DeleteNovel(c *gin.Context) {
 	_ = models.DB.Unscoped().Model(&models.Novel{}).Where("id = ?", id).Update("deleted_by", "user")
 
 	// 合规留存：软删除，保留正文文件（不物理移除），审计可追溯原始内容
+	novelindex.Remove(uint(id)) // 库内副本随软删清理；文件保留供审计
 	infra.SuccessMessage(c, "删除成功", nil)
 }
 

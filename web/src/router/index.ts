@@ -185,6 +185,8 @@ const router = createRouter({
     { path: '/micro', name: 'micro', component: () => import('@/views/micro/MicroPage.vue') },
     // 唯一聚合入口：图文 / 短视频 / 音乐混排；筛选状态写进 URL
     { path: '/discover', name: 'discover', component: () => import('@/views/discover/Discover.vue') },
+    // 标签页：#空耳 #测试 点进去走服务端倒排索引；复用发现页渲染
+    { path: '/tag/:tag', name: 'tag-feed', component: () => import('@/views/discover/Discover.vue') },
     // 高级博客主题（作者可在 /settings/theme 自由选择 advanced 模板）
     { path: '/blog-theme/:key', name: 'blog-theme', component: () => import('@/views/blog/BlogTheme.vue') },
     {

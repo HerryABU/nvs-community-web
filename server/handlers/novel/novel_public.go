@@ -2,6 +2,7 @@ package novel
 
 import (
 	"fmt"
+	"net/http"
 	"nvs-server/handlers/adminsite"
 	"nvs-server/utils/infra"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	"nvs-server/handlers/gate"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
+	"nvs-server/novelindex"
 
 	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
@@ -247,6 +249,31 @@ func UnifiedSearch(c *gin.Context) {
 		"q": q, "novels": novels, "authors": authors, "blogs": blogs, "htmls": htmls,
 		"categories": categories, "topics": topics, "forums": forums,
 	})
+}
+
+// GET /api/novels/:id/index.json
+// 从库内副本取章节清单：纯数据库模式下没有静态文件，读者端走这个端点。
+// 老数据若还没有库内副本，按 DB 章节现场重建一次（之后就有副本了）。
+func GetNovelIndex(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		infra.BadRequest(c, "无效的作品 ID")
+		return
+	}
+	buf, ok := novelindex.Load(uint(id))
+	if !ok {
+		var n models.Novel
+		if models.DB == nil || models.DB.First(&n, uint(id)).Error != nil {
+			infra.NotFound(c, "作品不存在")
+			return
+		}
+		buf = novelindex.Write(n.AuthorID, n.ID, n.Title)
+	}
+	if len(buf) == 0 {
+		infra.InternalError(c, "生成章节清单失败")
+		return
+	}
+	c.Data(http.StatusOK, "application/json; charset=utf-8", buf)
 }
 
 // GET /api/novels/:id

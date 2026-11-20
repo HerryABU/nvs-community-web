@@ -2,7 +2,7 @@
   <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go" alt="Go">
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?style=flat&logo=vuedotjs" alt="Vue">
   <img src="https://img.shields.io/badge/SQLite-3-003B57?style=flat&logo=sqlite" alt="SQLite">
-  <img src="https://img.shields.io/badge/version-4.9.9-4F46E5?style=flat" alt="Version">
+  <img src="https://img.shields.io/badge/version-4.10.1-4F46E5?style=flat" alt="Version">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue?style=flat" alt="Platform">
   <img src="https://img.shields.io/badge/CPU-x86%20%7C%20ARM%20%7C%20MIPS64%20%7C%20RISC--V-orange?style=flat" alt="CPU">
   <img src="https://img.shields.io/badge/license-AGPL%20v3-blue.svg" alt="License">
@@ -143,6 +143,18 @@
 - 📲 **竖滑短视频** `/shorts`：全屏 scroll-snap 一条一条刷，进入自动播放、滑走自动暂停，右侧点赞/评论/分享/静音。
 - 🗂 旧频道页 `/videos`、`/images`、`/micro` 仅保留兼容历史链接，前端不再露出入口。
 - 🎯 **视频封面自动取帧**：发布时前端 canvas 从视频前段挑一帧（避开黑场）；服务端有 ffmpeg 时再兜底重抽，**只做外部命令调用、不内联不打包**（LGPL/GPL 与本项目 AGPL 的分发义务分开）。
+- 🏷 **标签筛选** `/tag/:tag`：发现流里的 `#空耳` `#测试` 等标签可直接点击进入，按服务端倒排索引精确筛选（不靠 LIKE 模糊匹配），URL 可分享。
+- 📑 **小说章节清单双写**：`index.json` 在文件与数据库各存一份（内容一致的 JSON 字节），`/api/novels/:id/index.json` 可直接从库读取；纯数据库模式下不依赖静态文件。
+
+### 存储模式与热迁移
+- 💾 **两种模式**：`hybrid`（默认，数据库 + 文件系统，正文写文件并留库内镜像）与 `database`（纯数据库，正文只入库）。在「后台 → 数据库管理 → 正文存储模式」切换。
+- 🔒 **迁移期禁写**：切换开始后全站写操作返回 423，前端提示「上传功能正在维护中，请稍后」；登录、迁移任务与进度查询保持可用。
+- 🧩 **按用户分批迁移**：先按用户分批处理（50 人一批），每人正文再按 20 条切割，进度在后台任务面板可见；小说 `index.json` 同步重建入库。
+
+### AIGC 标识（视频 / 音频）
+- 🎬 **AI 视频**：出结果即烧右下角「AI生成」角标并写 metadata，落地为内容寻址交付副本，取文件走签名 URL；无中文字体时降级为仅 metadata。
+- 🔊 **AI 音频**：写 AIGC metadata（可见角标对音频无意义），同样内容寻址、同图不重复存。
+- ⚖️ 全程只通过外部 ffmpeg 命令处理，**不内联、不打包、不静态链接**任何 ffmpeg / libav* 组件。
 
 ### 社区互动
 - 💬 **评论系统**

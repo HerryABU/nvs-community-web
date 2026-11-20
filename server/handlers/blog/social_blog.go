@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"nvs-server/config"
+	"nvs-server/contentstore"
 	"nvs-server/handlers/auth"
 	"nvs-server/handlers/badword"
 	datahandler "nvs-server/handlers/data"
@@ -222,7 +223,7 @@ func ImportBlogs(c *gin.Context) {
 		// 违禁词 mark 动作命中 → 写入待审标记记录
 		badword.FlagBadWords(badHits, "blog", blog.ID, userID, raw, title)
 		contentPath := filepath.Join(authorDir, fmt.Sprintf("%d.md", blog.ID))
-		if err := os.WriteFile(contentPath, []byte(content), 0644); err != nil {
+		if err := contentstore.Put(contentstore.RefBlog, blog.ID, contentPath, content); err != nil {
 			skipped++
 			continue
 		}
@@ -319,8 +320,8 @@ func CreateBlog(c *gin.Context) {
 	authorDir := filepath.Join(blogDataDir(), fmt.Sprintf("%d", userID))
 	os.MkdirAll(authorDir, 0755)
 	contentPath := filepath.Join(authorDir, fmt.Sprintf("%d.md", blog.ID))
-	if err := os.WriteFile(contentPath, []byte(content), 0644); err != nil {
-		infra.InternalError(c, "写入文件失败")
+	if err := contentstore.Put(contentstore.RefBlog, blog.ID, contentPath, content); err != nil {
+		infra.InternalError(c, "写入内容失败")
 		return
 	}
 
@@ -354,14 +355,15 @@ func CreateBlog(c *gin.Context) {
 
 // 辅助：从文件系统加载博客内容
 func loadBlogContent(blog *blogm.AuthorBlog) {
-	if blog.ContentPath == "" {
-		return
+	path := ""
+	if blog.ContentPath != "" {
+		path = sanitize.ResolveContentPath(blog.ContentPath)
 	}
-	data, err := os.ReadFile(sanitize.ResolveContentPath(blog.ContentPath))
-	if err != nil {
-		return
+	// 混合模式优先文件，纯数据库模式走 ContentBlob
+	text, err := contentstore.Get(contentstore.RefBlog, blog.ID, path)
+	if err == nil {
+		blog.Content = text
 	}
-	blog.Content = string(data)
 }
 
 // GET /api/blogs — 公开博客列表（支持分类过滤：category_id，传一级分类则包含其下二级）
@@ -528,8 +530,12 @@ func UpdateBlog(c *gin.Context) {
 		raw := content
 		var badHits []security.BadWordHit
 		content, badHits = badword.ProcessBadWords(raw, "blog")
-		if blog.ContentPath != "" {
-			os.WriteFile(sanitize.ResolveContentPath(blog.ContentPath), []byte(content), 0644)
+		{
+			path := ""
+			if blog.ContentPath != "" {
+				path = sanitize.ResolveContentPath(blog.ContentPath)
+			}
+			_ = contentstore.Put(contentstore.RefBlog, blog.ID, path, content)
 		}
 		contentHash := computeBlogHash(content)
 		blog.ContentHash = contentHash

@@ -76,7 +76,7 @@
         </div>
 
         <div v-if="tags.length" class="vd-tags">
-          <span v-for="t in tags" :key="t" class="vd-tag">#{{ t }}</span>
+          <router-link v-for="t in tags" :key="t" :to="tagPath(t)" class="vd-tag">#{{ t }}</router-link>
         </div>
 
         <section class="vd-comments">
@@ -131,6 +131,9 @@ import { postPath, POST_KIND_LABEL } from '@/utils/feedRoute';
 
 function kindLabel(kind?: string) {
   return POST_KIND_LABEL[kind || 'micro'] || '内容';
+}
+function tagPath(t: string) {
+  return `/tag/${encodeURIComponent(t)}`;
 }
 
 const route = useRoute();

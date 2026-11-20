@@ -62,6 +62,8 @@ export const feedApi = {
       sort?: string;
       /** 1=只要带配图的内容（图片频道用） */
       has_images?: number;
+      /** 标签精确筛选（走服务端倒排索引） */
+      tag?: string;
     } = {}
   ) {
     return api.get<{ code: number; data: { list: FeedPost[]; total: number } }>('/feed', { params });

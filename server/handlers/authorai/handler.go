@@ -5,20 +5,17 @@
 package authorai
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"nvs-server/aiclient"
-	"nvs-server/config"
 	"nvs-server/handlers/hctx"
 	"nvs-server/models"
 	aim "nvs-server/models/ai"
 	aihub "nvs-server/models/aihub"
 	authoraim "nvs-server/models/authorai"
+	"nvs-server/novelindex"
 	"nvs-server/prompttpl"
 	"nvs-server/utils/infra"
 
@@ -465,15 +462,8 @@ func PublishNovel(c *gin.Context) {
 		infra.InternalError(c, "生成小说失败")
 		return
 	}
-	// 维持与 CreateNovel 一致的文件落地（作者目录 + index.json），避免普通编辑器读取缺数据。
-	authorDir := filepath.Join(config.NovelDataDir, "authors", fmt.Sprintf("%d", userID))
-	novelDir := filepath.Join(authorDir, fmt.Sprintf("%d", nv.ID))
-	_ = os.MkdirAll(novelDir, 0755)
-	indexPath := filepath.Join(novelDir, "index.json")
-	indexData := map[string]interface{}{"novel_id": nv.ID, "title": nv.Title, "chapters": []interface{}{}}
-	if b, e := json.MarshalIndent(indexData, "", "  "); e == nil {
-		_ = os.WriteFile(indexPath, b, 0644)
-	}
+	// 与 CreateNovel 一致：index.json 同时落文件与库，避免普通编辑器/纯数据库模式读取缺数据。
+	novelindex.Write(userID, nv.ID, nv.Title)
 	p.NovelID = nv.ID
 	models.DB.Save(p)
 

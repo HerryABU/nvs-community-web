@@ -66,7 +66,7 @@ var knownSPARoots = map[string]bool{
 	// 内容为「发现」一个入口；详情按类型落到各自独立路由，刷新/深链都必须是 200。
 	// 旧频道页 /videos /images /micro 仅作历史链接兼容，不再出现在导航里。
 	"videos": true, "video": true, "images": true,
-	"image": true, "music": true,
+	"image": true, "music": true, "tag": true,
 }
 
 // firstPathSegment 返回去前导斜杠后的路径首段，如 "novel/1"→"novel"，"admin"→"admin"
@@ -96,8 +96,9 @@ func Register(r *gin.Engine) {
 	r.Use(gin.Logger(), middleware.HeaderLogger(), middleware.SecureRecovery())
 	r.Use(middleware.AccessLog()) // 合规：访问日志关联 user_id（按天滚动写入 logs/）
 	r.Use(gzip.Gzip(gzip.DefaultCompression))
-	r.Use(middleware.SandboxWriteProtect()) // 🔒 允许数据文件，拦截脚本
-	r.Use(middleware.CSRFGuard())           // 🔒 CSRF 防护：登录态写操作须带 X-Requested-With 头
+	r.Use(middleware.SandboxWriteProtect())   // 🔒 允许数据文件，拦截脚本
+	r.Use(middleware.CSRFGuard())             // 🔒 CSRF 防护：登录态写操作须带 X-Requested-With 头
+	r.Use(middleware.MaintenanceWriteGuard()) // 🔒 热迁移期间禁写（管理员迁移接口除外）
 
 	// 建站向导门禁：未完成安装时，除 /api/setup/* 与 /health 外，拦截所有业务 API（严防死守）
 	r.Use(func(c *gin.Context) {
