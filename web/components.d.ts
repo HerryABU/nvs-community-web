@@ -155,6 +155,7 @@ declare module 'vue' {
     NovelCard: typeof import('./src/components/novel/NovelCard.vue')['default']
     PhoneLoginForm: typeof import('./src/components/auth/PhoneLoginForm.vue')['default']
     PoliceBadge: typeof import('./src/components/site/PoliceBadge.vue')['default']
+    PostDetailDialog: typeof import('./src/components/feed/PostDetailDialog.vue')['default']
     ProjectManager: typeof import('./src/components/oc/ProjectManager.vue')['default']
     PublishQuotaHint: typeof import('./src/components/common/PublishQuotaHint.vue')['default']
     QrScanDialog: typeof import('./src/components/group/QrScanDialog.vue')['default']
@@ -176,6 +177,8 @@ declare module 'vue' {
     StarRating: typeof import('./src/components/novel/StarRating.vue')['default']
     StateBlock: typeof import('./src/components/common/StateBlock.vue')['default']
     StdMap: typeof import('./src/components/maps/StdMap.vue')['default']
+    SwipeFeed: typeof import('./src/components/feed/SwipeFeed.vue')['default']
+    VideoCard: typeof import('./src/components/feed/VideoCard.vue')['default']
     WeChatQRLogin: typeof import('./src/components/auth/WeChatQRLogin.vue')['default']
     WorldBookManager: typeof import('./src/components/oc/WorldBookManager.vue')['default']
   }

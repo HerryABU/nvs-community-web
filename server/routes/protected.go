@@ -554,6 +554,8 @@ func registerProtected(r *gin.Engine) {
 		protected.POST("/feed/:id/like", feed.Like)
 		protected.POST("/feed/:id/favorite", feed.Favorite)
 		protected.POST("/feed/:id/share", feed.Share)
+		// 重新抽帧封面：历史视频补齐 / 作者对自动封面不满意时手动重生（服务端调外部 ffmpeg）
+		protected.POST("/feed/:id/cover", feed.RegenerateCover)
 		protected.POST("/feed/:id/comments", feed.CreateComment)
 		protected.DELETE("/feed-comments/:cid", feed.DeleteComment)
 		protected.POST("/feed-comments/:cid/like", feed.LikeComment)

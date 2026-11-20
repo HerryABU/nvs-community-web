@@ -171,11 +171,15 @@ const router = createRouter({
       component: () => import('@/views/subculture/SubcultureView.vue'),
       meta: { requiresAuth: true },
     },
-    // 统一发现流（小红书式：图文 / 短视频 / 音乐）
-    // 短视频、微文已合并进这里，不再各自成页；旧链接跳过去自动落在对应筛选上，
-    // 已收藏/外链的 /shorts、/micro 不会 404，也不会看到两套内容流。
-    { path: '/shorts', redirect: { path: '/discover', query: { kind: 'video' } } },
-    { path: '/micro', redirect: { path: '/discover', query: { kind: 'micro' } } },
+    // 视频 / 图片 / 微文 三个独立频道（参考 B 站、视频号的频道页）
+    // 发现页仍然保留为聚合流，但不再承担"唯一入口"的角色。
+    { path: '/videos', name: 'videos', component: () => import('@/views/videos/VideosPage.vue') },
+    { path: '/video/:id', name: 'video-detail', component: () => import('@/views/videos/VideoDetail.vue') },
+    // 竖滑短视频（全屏 scroll-snap）：移动端从 /videos 进来默认走这个模式
+    { path: '/shorts', name: 'shorts', component: () => import('@/views/videos/ShortsPage.vue') },
+    { path: '/images', name: 'images', component: () => import('@/views/images/ImagesPage.vue') },
+    { path: '/micro', name: 'micro', component: () => import('@/views/micro/MicroPage.vue') },
+    // 统一发现流（图文 / 短视频 / 音乐混排）
     { path: '/discover', name: 'discover', component: () => import('@/views/discover/Discover.vue') },
     // 高级博客主题（作者可在 /settings/theme 自由选择 advanced 模板）
     { path: '/blog-theme/:key', name: 'blog-theme', component: () => import('@/views/blog/BlogTheme.vue') },

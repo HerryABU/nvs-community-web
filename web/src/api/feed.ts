@@ -51,7 +51,19 @@ export const feedApi = {
       max_micro_images: maxMicroImages,
     });
   },
-  list(params: { kind?: string; scope?: string; author_id?: number; page?: number; page_size?: number } = {}) {
+  list(
+    params: {
+      kind?: string;
+      scope?: string;
+      author_id?: number;
+      page?: number;
+      page_size?: number;
+      /** hot=按播放量/点赞排，空=最新 */
+      sort?: string;
+      /** 1=只要带配图的内容（图片频道用） */
+      has_images?: number;
+    } = {}
+  ) {
     return api.get<{ code: number; data: { list: FeedPost[]; total: number } }>('/feed', { params });
   },
   get(id: number) {

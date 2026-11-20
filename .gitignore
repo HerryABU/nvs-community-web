@@ -78,3 +78,10 @@ server.pid
 # 冒烟/探测脚本与截图（本地 Playwright 验证产物，勿入库）
 /web/*.mjs
 /web/*.png
+
+# 严禁把 ffmpeg / ffprobe 二进制放进仓库（LGPL/GPL 与本项目 AGPL 的分发义务冲突）
+# 服务端只允许「按路径调用外部命令」，由部署者自行安装；详见 server/mediacover/ffmpeg.go
+ffmpeg
+ffmpeg.exe
+ffprobe
+ffprobe.exe

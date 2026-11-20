@@ -232,17 +232,34 @@ func GetPost(id uint, viewerID uint) (*Post, error) {
 	return &p, nil
 }
 
-// ListPosts 列表（kind=video|micro，scope=all|following|mine，author_id 可选）
-func ListPosts(kind, scope string, authorID, viewerID uint, page, pageSize int) ([]Post, int64, error) {
+// ListOptions 列表查询条件（字段多了以后别再用一串位置参数，加一个就改所有调用点）
+type ListOptions struct {
+	Kind      string // video / micro / music；空=全部
+	Scope     string // all / following / mine
+	Sort      string // "" 最新 / hot 最热
+	AuthorID  uint   // 只看某个作者
+	ViewerID  uint
+	Page      int
+	PageSize  int
+	HasImages bool // 只看带配图的内容（图片页用）
+}
+
+func ListPosts(opt ListOptions) ([]Post, int64, error) {
+	page, pageSize := opt.Page, opt.PageSize
 	if page <= 0 {
 		page = 1
 	}
 	if pageSize <= 0 || pageSize > 50 {
 		pageSize = 20
 	}
+	kind, scope, authorID, viewerID := opt.Kind, opt.Scope, opt.AuthorID, opt.ViewerID
 	q := models.DB.Model(&Post{}).Where("status = ?", StatusPublished)
 	if kind == KindVideo || kind == KindMicro || kind == KindMusic {
 		q = q.Where("kind = ?", kind)
+	}
+	// 图片页：只要真的带图的内容（images 是 JSON 数组字符串，空数组要排除）
+	if opt.HasImages {
+		q = q.Where("images <> '' AND images <> '[]'")
 	}
 	switch scope {
 	case "mine":
@@ -259,7 +276,11 @@ func ListPosts(kind, scope string, authorID, viewerID uint, page, pageSize int) 
 		return nil, 0, err
 	}
 	var list []Post
-	if err := q.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error; err != nil {
+	order := "id DESC"
+	if opt.Sort == "hot" {
+		order = "view_count DESC, like_count DESC, id DESC"
+	}
+	if err := q.Order(order).Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error; err != nil {
 		return nil, 0, err
 	}
 	fillAuthors(listToPtrs(list))
@@ -273,6 +294,36 @@ func listToPtrs(list []Post) []*Post {
 		out[i] = &list[i]
 	}
 	return out
+}
+
+// SetCover 回填封面（自动抽帧完成后写入；只补空缺，不覆盖作者手动选的封面）
+func SetCover(postID uint, coverURL string) error {
+	return models.DB.Model(&Post{}).Where("id = ? AND cover_url = ?", postID, "").
+		UpdateColumn("cover_url", coverURL).Error
+}
+
+// ForceSetCover 强制写封面（重新抽帧时先清空，或后台改封面）
+func ForceSetCover(postID uint, coverURL string) error {
+	return models.DB.Model(&Post{}).Where("id = ?", postID).
+		UpdateColumn("cover_url", coverURL).Error
+}
+
+// SetDuration 回填视频时长（秒），已有值不覆盖
+func SetDuration(postID uint, seconds int) error {
+	if seconds <= 0 {
+		return nil
+	}
+	return models.DB.Model(&Post{}).Where("id = ? AND duration = 0", postID).
+		UpdateColumn("duration", seconds).Error
+}
+
+// GetPostByID 不过滤状态/可见性的原始查询（后台与内部任务用）
+func GetPostByID(id uint) (*Post, error) {
+	var p Post
+	if err := models.DB.First(&p, id).Error; err != nil {
+		return nil, err
+	}
+	return &p, nil
 }
 
 // IncrView 浏览量 +1（best effort）

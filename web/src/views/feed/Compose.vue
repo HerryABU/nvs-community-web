@@ -133,6 +133,7 @@ const audioUrl = ref('');
 const videoFile = ref<File | null>(null);
 const coverUrl = ref('');
 const images = ref<string[]>([]);
+const duration = ref(0);
 const maxImages = ref(20);
 const uploading = ref(false);
 const publishing = ref(false);
@@ -169,6 +170,87 @@ async function onVideoPick(e: Event) {
     if (!videoUrl.value) ElMessage.error('上传失败：未返回地址');
   } catch (err: any) { ElMessage.error(err?.response?.data?.message || '视频上传失败'); }
   finally { uploading.value = false; }
+  // 封面默认取视频画面（不是随机图）。抽帧失败也没关系：服务端有 ffmpeg 会补，没有就留占位。
+  await autoCoverFromVideo(f);
+}
+
+function seekTo(v: HTMLVideoElement, t: number) {
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      v.removeEventListener('seeked', done);
+      resolve();
+    };
+    v.addEventListener('seeked', done);
+    const dur = isFinite(v.duration) ? v.duration : 0;
+    v.currentTime = dur > 0 ? Math.min(t, Math.max(0, dur - 0.05)) : 0;
+    // 个别容器 seek 不触发事件，别把发布流程卡住
+    setTimeout(done, 1600);
+  });
+}
+
+/** 从视频前段挑一帧当封面：候选 0.1/0.4/0.9 秒，取平均亮度最高的一帧（避开黑场与淡入） */
+async function autoCoverFromVideo(file: File) {
+  if (coverUrl.value) return; // 作者已经自己选了封面就不动
+  const url = URL.createObjectURL(file);
+  const probe = document.createElement('video');
+  probe.src = url;
+  probe.muted = true;
+  probe.playsInline = true;
+  probe.preload = 'auto';
+  try {
+    await new Promise<void>((res, rej) => {
+      probe.onloadeddata = () => res();
+      probe.onerror = () => rej(new Error('decode'));
+      setTimeout(() => rej(new Error('timeout')), 15000);
+    });
+    if (isFinite(probe.duration)) duration.value = Math.round(probe.duration);
+    const cands = [0.1, 0.4, 0.9].filter((t) => !isFinite(probe.duration) || t < probe.duration);
+    const list = cands.length ? cands : [0];
+    let best: { blob: Blob; score: number } | null = null;
+    for (const t of list) {
+      await seekTo(probe, t);
+      const vw = probe.videoWidth || 0;
+      const vh = probe.videoHeight || 0;
+      if (!vw || !vh) continue;
+      const w = 640;
+      const h = Math.max(2, Math.round((w * vh) / vw));
+      const cv = document.createElement('canvas');
+      cv.width = w;
+      cv.height = h;
+      const ctx = cv.getContext('2d');
+      if (!ctx) continue;
+      ctx.drawImage(probe, 0, 0, w, h);
+      const blob = await new Promise<Blob | null>((r) => cv.toBlob(r, 'image/jpeg', 0.86));
+      if (!blob) continue;
+      const px = ctx.getImageData(0, 0, w, h).data;
+      let sum = 0;
+      let n = 0;
+      for (let i = 0; i + 2 < px.length; i += 4 * 53) {
+        sum += px[i] + px[i + 1] + px[i + 2];
+        n++;
+      }
+      const score = n ? sum / (n * 3) : 0;
+      if (!best || score > best.score) best = { blob, score };
+    }
+    if (best) {
+      uploading.value = true;
+      try {
+        // 走通用上传：原样保存 JPEG（头像接口会统一转 PNG，封面用不着，还更占空间）
+        const res = await uploadApi.upload(new File([best.blob], 'video-cover.jpg', { type: 'image/jpeg' }));
+        const u = pickUrl(res);
+        if (u && !coverUrl.value) coverUrl.value = u;
+      } catch { /* 服务端 ffmpeg 会兜底 */ }
+      finally { uploading.value = false; }
+    }
+  } catch {
+    /* 浏览器解不了这个编码（如无 H.264 的 chromium）就交给服务端 ffmpeg */
+  } finally {
+    URL.revokeObjectURL(url);
+    probe.removeAttribute('src');
+  }
 }
 
 async function onAudioPick(e: Event) {
@@ -257,10 +339,12 @@ async function publish() {
       cover_url: coverUrl.value,
       images: images.value,
       tags: tags.value,
+      duration: duration.value || 0,
     });
     const id = res.data?.data?.id;
     ElMessage.success('发布成功');
-    router.push(`/discover?id=${id}`);
+    // 跳到独立详情页：视频能直接在播放器里看、评论就在下面
+    router.push(`/video/${id}`);
   } catch (err: any) { ElMessage.error(err?.response?.data?.message || '发布失败'); }
   finally { publishing.value = false; }
 }

@@ -17,16 +17,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// GET /api/feed?kind=video|micro&scope=all|following|mine&author_id=&page=
+// GET /api/feed?kind=video|micro|music&scope=all|following|mine&author_id=&page=&sort=hot&has_images=1
 func List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	list, total, err := feed.ListPosts(
-		strings.TrimSpace(c.Query("kind")),
-		strings.TrimSpace(c.DefaultQuery("scope", "all")),
-		parseUint(c.Query("author_id")),
-		hctx.CurrentUserID(c), page, ps,
-	)
+	list, total, err := feed.ListPosts(feed.ListOptions{
+		Kind:      strings.TrimSpace(c.Query("kind")),
+		Scope:     strings.TrimSpace(c.DefaultQuery("scope", "all")),
+		Sort:      strings.TrimSpace(c.Query("sort")),
+		AuthorID:  parseUint(c.Query("author_id")),
+		ViewerID:  hctx.CurrentUserID(c),
+		Page:      page,
+		PageSize:  ps,
+		HasImages: c.Query("has_images") == "1",
+	})
 	if err != nil {
 		infra.InternalError(c, "查询失败")
 		return
@@ -80,6 +84,10 @@ func Create(c *gin.Context) {
 	if err != nil {
 		infra.BadRequest(c, err.Error())
 		return
+	}
+	// 视频没给封面：用 ffmpeg 抽一帧（外链视频/未安装 ffmpeg 时自动跳过）
+	if p.Kind == feed.KindVideo && p.CoverURL == "" {
+		AutoCoverAsync(p.ID, p.VideoURL)
 	}
 	infra.SuccessMessage(c, "发布成功", p)
 }
