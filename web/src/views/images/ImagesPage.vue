@@ -39,32 +39,30 @@
       <el-button size="small" @click="loadMore">加载更多</el-button>
     </div>
 
-    <PostDetailDialog v-model="dialog" :post="current" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { feedApi, type FeedPost } from '@/api/feed';
 import { mediaUrl } from '@/utils/prefix';
 import { formatCount } from '@/utils/feedFormat';
-import PostDetailDialog from '@/components/feed/PostDetailDialog.vue';
+import { postPath } from '@/utils/feedRoute';
 
+const router = useRouter();
 const posts = ref<FeedPost[]>([]);
 const loading = ref(false);
 const hasMore = ref(true);
 const page = ref(1);
 const cols = ref(4);
-const dialog = ref(false);
-const current = ref<FeedPost | null>(null);
 
 function excerpt(s?: string) {
   return (s || '').replace(/[#*`>\[\]]/g, '').trim().slice(0, 30);
 }
 function open(p: FeedPost) {
-  current.value = p;
-  dialog.value = true;
+  router.push(postPath(p));
 }
 
 async function load(reset = false) {

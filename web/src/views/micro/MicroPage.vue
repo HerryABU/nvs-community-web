@@ -44,27 +44,26 @@
       <el-button size="small" @click="loadMore">加载更多</el-button>
     </div>
 
-    <PostDetailDialog v-model="dialog" :post="current" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { feedApi, type FeedPost } from '@/api/feed';
 import { mediaUrl } from '@/utils/prefix';
 import { formatCount, formatWhen } from '@/utils/feedFormat';
-import PostDetailDialog from '@/components/feed/PostDetailDialog.vue';
+import { postPath } from '@/utils/feedRoute';
 
+const router = useRouter();
 const posts = ref<FeedPost[]>([]);
 const loading = ref(false);
 const hasMore = ref(true);
 const page = ref(1);
-const dialog = ref(false);
-const current = ref<FeedPost | null>(null);
 
 // 列表只显示纯文本摘要：真去渲染 Markdown 会把 5MB 的 Cherry 引擎拉进这个页面，
-// 而且截断后再渲染容易出现半截标签（详情弹窗里才是完整渲染）。
+// 而且截断后再渲染容易出现半截标签（完整渲染在独立详情页 /micro/:id）。
 function excerpt(s?: string) {
   return (s || '')
     .replace(/```[\s\S]*?```/g, ' ')
@@ -77,8 +76,7 @@ function excerpt(s?: string) {
 }
 
 function open(p: FeedPost) {
-  current.value = p;
-  dialog.value = true;
+  router.push(postPath(p));
 }
 
 async function load(reset = false) {

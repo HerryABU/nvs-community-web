@@ -2,8 +2,15 @@
   <div v-loading="loading" class="vdetail">
     <template v-if="post">
       <div class="vd-main">
-        <!-- 播放区：视频黑底播放器；音乐/图文走各自的呈现 -->
-        <div class="vd-stage" :class="{ 'is-video': post.kind === 'video' }">
+        <!-- 从发现页点进来，永远能回到唯一的聚合入口 -->
+        <router-link to="/discover" class="vd-back">← 返回发现</router-link>
+
+        <!-- 播放区：视频黑底播放器；音乐/图文走各自的呈现；纯文字微文不占黑块 -->
+        <div
+          v-if="post.kind === 'video' || post.kind === 'music' || (post.images?.length || 0) > 0"
+          class="vd-stage"
+          :class="{ 'is-video': post.kind === 'video' }"
+        >
           <video
             v-if="post.kind === 'video'"
             ref="player"
@@ -34,6 +41,8 @@
 
         <h1 class="vd-title">{{ post.title || '未命名内容' }}</h1>
         <div class="vd-meta">
+          <span class="vd-kind">{{ kindLabel(displayKind) }}</span>
+          <span>·</span>
           <span>{{ formatCount(post.view_count) }} 次浏览</span>
           <span>·</span>
           <span>{{ formatWhen(post.created_at) }}</span>
@@ -91,14 +100,14 @@
       <!-- 右栏：同作者/同类推荐（B 站式），移动端沉到底部 -->
       <aside class="vd-rail">
         <h3>相关推荐</h3>
-        <div v-for="r in rail" :key="r.id" class="vd-rail-item" @click="$router.push(`/video/${r.id}`)">
+        <div v-for="r in rail" :key="r.id" class="vd-rail-item" @click="$router.push(postPath(r))">
           <div class="vd-rail-cover">
-            <img v-if="r.cover_url" :src="mediaUrl(r.cover_url)" :alt="r.title" loading="lazy" />
-            <span v-else class="vd-rail-ph">🎬</span>
+            <img v-if="r.cover_url || r.images?.length" :src="mediaUrl(r.cover_url || r.images?.[0])" :alt="r.title" loading="lazy" />
+            <span v-else class="vd-rail-ph">{{ r.kind === 'music' ? '🎵' : r.kind === 'video' ? '🎬' : '✍️' }}</span>
             <span v-if="r.duration" class="vd-rail-dur">{{ formatDuration(r.duration) }}</span>
           </div>
           <div class="vd-rail-info">
-            <p>{{ r.title || '未命名视频' }}</p>
+            <p>{{ r.title || kindLabel(r.kind) }}</p>
             <small>{{ r.author_name || '用户' + r.user_id }} · {{ formatCount(r.view_count) }} 次浏览</small>
           </div>
         </div>
@@ -118,6 +127,11 @@ import { feedApi, type FeedPost, type FeedComment } from '@/api/feed';
 import { mediaUrl } from '@/utils/prefix';
 import { useAuthStore } from '@/stores/auth';
 import { formatCount, formatDuration, formatWhen } from '@/utils/feedFormat';
+import { postPath, POST_KIND_LABEL } from '@/utils/feedRoute';
+
+function kindLabel(kind?: string) {
+  return POST_KIND_LABEL[kind || 'micro'] || '内容';
+}
 
 const route = useRoute();
 const router = useRouter();
@@ -136,6 +150,12 @@ const player = ref<HTMLVideoElement | null>(null);
 const myId = computed(() => auth.user?.id || 0);
 const isMine = computed(() => !!post.value && post.value.user_id === myId.value);
 const longDesc = computed(() => (post.value?.content || '').length > 220);
+// 底层 kind 只有 video/micro/music；带图内容走 /image/:id，标签也应显示「图片」
+const displayKind = computed(() => {
+  if (route.name === 'image-detail') return 'image';
+  if (post.value?.kind === 'micro' && (post.value.images?.length || 0) > 0) return 'image';
+  return post.value?.kind || 'micro';
+});
 const previewList = computed(() => (post.value?.images || []).map((u) => mediaUrl(u)));
 const tags = computed(() =>
   (post.value?.tags || '')
@@ -254,6 +274,9 @@ watch(
 <style scoped>
 .vdetail { max-width: 1280px; margin: 0 auto; padding: 20px 18px 48px; display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 26px; }
 .vd-main { min-width: 0; }
+.vd-back { display: inline-block; margin-bottom: 14px; font-size: 0.85rem; color: var(--text-muted, #6b7280); text-decoration: none; }
+.vd-back:hover { color: var(--primary-color, #5b6ef5); }
+.vd-kind { color: var(--primary-color, #5b6ef5); }
 .vd-stage { background: #000; border-radius: 10px; overflow: hidden; }
 .vd-stage.is-video { aspect-ratio: 16 / 9; display: flex; align-items: center; justify-content: center; }
 .vd-stage video { width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
