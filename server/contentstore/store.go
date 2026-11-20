@@ -73,6 +73,13 @@ func Get(refType string, refID uint, path string) (string, error) {
 	}
 	var row models.ContentBlob
 	if err := models.DB.Where("ref_type = ? AND ref_id = ?", refType, refID).First(&row).Error; err != nil {
+		// 纯数据库模式下若历史迁移漏了某条，宁可临时读文件兜底，也不能让正文 500。
+		// 正常路径下不会走到这里；补齐库内副本后可重新切回纯数据库。
+		if path != "" {
+			if b, e := os.ReadFile(path); e == nil {
+				return string(b), nil
+			}
+		}
 		return "", err
 	}
 	return row.Content, nil

@@ -2,7 +2,7 @@
   <div class="shorts-page">
     <SwipeFeed />
     <div class="shorts-nav">
-      <router-link to="/videos">← 视频频道</router-link>
+      <router-link to="/discover">← 返回发现</router-link>
       <span class="tip">上下滑动切换 · 点击画面暂停</span>
     </div>
   </div>

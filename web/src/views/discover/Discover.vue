@@ -11,6 +11,8 @@
           <el-radio-button value="following">关注</el-radio-button>
           <el-radio-button value="mine">我的</el-radio-button>
         </el-radio-group>
+        <!-- 手机端短视频竖滑入口：B 站式一条一条刷；桌面端隐藏 -->
+        <el-button class="mobile-shorts-btn" size="small" @click="$router.push('/shorts')">📲 竖滑短视频</el-button>
         <el-button size="small" type="primary" @click="$router.push('/feed/compose')">＋ 发布</el-button>
       </div>
     </div>
@@ -30,6 +32,7 @@
           <span v-if="p.kind === 'video'" class="ds-badge play">▶ 视频</span>
           <span v-else-if="p.kind === 'music'" class="ds-badge music">♫ 音乐</span>
           <span v-else-if="p.images?.length > 1" class="ds-badge">1/{{ p.images.length }}</span>
+          <button v-if="p.kind === 'video'" class="ds-swipe-btn" @click.stop="$router.push('/shorts')">↕ 竖滑</button>
         </div>
         <div class="ds-body">
           <h3 class="ds-title">{{ p.title || (p.content || '').slice(0, 40) || '未命名' }}</h3>
@@ -193,6 +196,8 @@ watch(
 .discover-head h2 { margin: 0; font-size: 1.4rem; }
 .discover-sub { margin: 4px 0 0; font-size: .8rem; color: var(--text-muted, #6b7280); }
 .discover-actions { display: flex; gap: 8px; }
+.mobile-shorts-btn { display: inline-flex; }
+@media (min-width: 768px) { .mobile-shorts-btn { display: none !important; } }
 .discover-chips { display: flex; gap: 8px; margin-bottom: 18px; }
 .discover-chips button { border: 1px solid var(--border-color, #e5e7eb); background: var(--bg-card, #fff); color: var(--text-color, #222); border-radius: 18px; padding: 5px 14px; font-size: .83rem; cursor: pointer; }
 .discover-chips button.active { background: var(--primary-color, #5b6ef5); border-color: var(--primary-color); color: #fff; }
@@ -212,6 +217,12 @@ watch(
 .ds-badge { position: absolute; left: 10px; top: 10px; background: rgba(0,0,0,.6); color: #fff; font-size: .7rem; padding: 3px 8px; border-radius: 10px; }
 .ds-badge.play { background: rgba(91,110,245,.85); }
 .ds-badge.music { background: rgba(236,72,153,.85); }
+.ds-swipe-btn {
+  display: none; position: absolute; right: 8px; bottom: 8px;
+  background: rgba(0,0,0,.65); color: #fff; border: none; border-radius: 12px;
+  padding: 3px 9px; font-size: .72rem; cursor: pointer;
+}
+@media (max-width: 767px) { .ds-swipe-btn { display: block; } }
 .ds-body { padding: 13px 15px 11px; }
 .ds-title { margin: 0 0 6px; font-size: .98rem; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .ds-excerpt { margin: 0; font-size: .82rem; color: var(--text-muted, #6b7280); line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

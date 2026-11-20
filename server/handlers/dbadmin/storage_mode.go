@@ -16,6 +16,7 @@ import (
 	blogm "nvs-server/models/blog"
 	"nvs-server/novelindex"
 	"nvs-server/utils/infra"
+	"nvs-server/utils/sanitize"
 )
 
 const storageModeConfigKey = "storage_mode"
@@ -48,11 +49,8 @@ func AdminStorageModeSet(c *gin.Context) {
 		infra.BadRequest(c, "模式只能是 hybrid（数据库+文件系统）或 database（纯数据库）")
 		return
 	}
-	if mode == contentstore.Mode() && !maintenance.Enabled() {
-		infra.SuccessMessage(c, "当前已是该模式", gin.H{"job_id": ""})
-		return
-	}
-
+	// 同模式也允许重跑：历史数据在迁移后入库（例如老章节 author_id=0 曾被漏掉），
+	// 此时需要从文件/库镜像再扫一遍补齐，不能一句「当前已是该模式」就拒绝。
 	job := newJob("storage-mode")
 	go runStorageModeJob(job, mode)
 	infra.Success(c, gin.H{"job_id": job.ID})
@@ -76,6 +74,7 @@ func runStorageModeJob(job *dbJob, target string) {
 
 	users := collectContentUsers()
 	job.Detail["users"] = len(users)
+	job.Detail["missing_before"] = countMissingContent()
 	const userBatch = 50
 	const itemBatch = 20
 
@@ -106,6 +105,22 @@ func runStorageModeJob(job *dbJob, target string) {
 	}
 	job.Detail["mode"] = target
 	job.Detail["items"] = doneItems
+	job.Detail["missing_after"] = countMissingContent()
+}
+
+// countMissingContent 统计没有库内正文的内容条数（迁移修复效果可直接看出来）。
+func countMissingContent() int64 {
+	if models.DB == nil {
+		return 0
+	}
+	var chapters, blogs int64
+	_ = models.DB.Model(&models.Chapter{}).
+		Where("id NOT IN (SELECT ref_id FROM content_blobs WHERE ref_type = ?)", contentstore.RefChapter).
+		Count(&chapters).Error
+	_ = models.DB.Model(&blogm.AuthorBlog{}).
+		Where("id NOT IN (SELECT ref_id FROM content_blobs WHERE ref_type = ?)", contentstore.RefBlog).
+		Count(&blogs).Error
+	return chapters + blogs
 }
 
 func collectContentUsers() []uint {
@@ -113,10 +128,10 @@ func collectContentUsers() []uint {
 	out := []uint{}
 	if models.DB != nil {
 		var chapterUsers, blogUsers []uint
-		_ = models.DB.Model(&models.Chapter{}).Select("DISTINCT author_id").
-			Where("author_id > 0").Scan(&chapterUsers).Error
-		_ = models.DB.Model(&blogm.AuthorBlog{}).Select("DISTINCT author_id").
-			Where("author_id > 0").Scan(&blogUsers).Error
+		// ⚠️ 不能过滤 author_id > 0：老数据大量章节 author_id=0（作者信息只在 novel 上），
+		// 之前按 >0 分批导致 2040 章漏迁、切到纯数据库模式后正文读不出来。
+		_ = models.DB.Model(&models.Chapter{}).Select("DISTINCT author_id").Scan(&chapterUsers).Error
+		_ = models.DB.Model(&blogm.AuthorBlog{}).Select("DISTINCT author_id").Scan(&blogUsers).Error
 		for _, ids := range [][]uint{chapterUsers, blogUsers} {
 			for _, id := range ids {
 				if !seen[id] {
@@ -172,7 +187,7 @@ func migrateUserContent(uid uint, target string, chunk int) int {
 
 func chapterFilePath(ch models.Chapter) string {
 	if ch.ContentPath != "" {
-		return ch.ContentPath
+		return sanitize.ResolveContentPath(ch.ContentPath)
 	}
 	var n models.Novel
 	if models.DB.First(&n, ch.NovelID).Error != nil {
@@ -184,7 +199,7 @@ func chapterFilePath(ch models.Chapter) string {
 
 func blogFilePath(uid uint, b blogm.AuthorBlog) string {
 	if b.ContentPath != "" {
-		return b.ContentPath
+		return sanitize.ResolveContentPath(b.ContentPath)
 	}
 	return filepath.Join(filepath.Dir(config.NovelDataDir), "blogs",
 		strconv.FormatUint(uint64(uid), 10), fmt.Sprintf("%d.md", b.ID))
