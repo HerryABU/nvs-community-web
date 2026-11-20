@@ -207,6 +207,14 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - `softdel_posts` 及其余 `softdel_*` 留证表保持不动。
 - ⚠️ 回帖删除后不可解封恢复（物理删除），管理员「解封/恢复」对 post 类型仅清除封禁原因标记。
 
+### 数据表
+全部 **182 张表 / 2060 个字段** 已按业务域整理成两份专门文档：
+
+- [`DATABASE.md`](DATABASE.md)：分域总览（表名 / 用途 / 主要字段 / 行数 / 源码位置）+ 全局约定
+- [`DATABASE-SCHEMA.md`](DATABASE-SCHEMA.md)：逐表字段明细（由 `python scripts/gen-db-doc.py data/nvs.db` 自动生成）
+
+本节以下只列**经过设计、需要额外说明**的表与索引，其余按名自解释。
+
 ### 核心索引
 启动迁移自动创建缺失索引并清理被替代的旧索引：
 

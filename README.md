@@ -150,6 +150,10 @@
 - 💾 **两种模式**：`hybrid`（默认，数据库 + 文件系统，正文写文件并留库内镜像）与 `database`（纯数据库，正文只入库）。在「后台 → 数据库管理 → 正文存储模式」切换。
 - 🔒 **迁移期禁写**：切换开始后全站写操作返回 423，前端提示「上传功能正在维护中，请稍后」；登录、迁移任务与进度查询保持可用。
 - 🧩 **按用户分批迁移**：先按用户分批处理（50 人一批），每人正文再按 20 条切割，进度在后台任务面板可见；小说 `index.json` 同步重建入库。
+- 🩺 **入库健康自查**：「正文存储模式」页直接给出「已入库条数 / 正文真实字节 / 空源条数 / 缺副本条数」，
+  判断迁移成败看条数与字节，不看数据库文件体积（SQLite 复写页面不线性增长、重跑迁移幂等）。
+- 🗃 相关表结构（`content_blobs` / `novel_indexes` / `feed_tags` / `aigc_deliveries` 等）见
+  [`docs/content-storage-schema.md`](docs/content-storage-schema.md)。
 
 ### AIGC 标识（视频 / 音频）
 - 🎬 **AI 视频**：出结果即烧右下角「AI生成」角标并写 metadata，落地为内容寻址交付副本，取文件走签名 URL；无中文字体时降级为仅 metadata。
@@ -374,7 +378,9 @@ cd server && go build -ldflags="-s -w" -o nvs-server.exe . && cd ..
 | 功能细节、参数、边界条件 | [docs/FEATURES.md](docs/FEATURES.md) |
 | 所有接口 | [docs/API.md](docs/API.md) |
 | 所有环境变量 | [docs/CONFIG.md](docs/CONFIG.md) |
-| 目录结构 / 数据库表 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| 目录结构 / 分层约定 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| 全部数据表（182 张，按域） | [docs/DATABASE.md](docs/DATABASE.md) |
+| 逐表字段明细 | [docs/DATABASE-SCHEMA.md](docs/DATABASE-SCHEMA.md) |
 | 本地开发 / 构建 / 测试 / 发版 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) |
 
 ---
