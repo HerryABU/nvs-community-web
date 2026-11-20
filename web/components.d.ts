@@ -58,6 +58,7 @@ declare module 'vue' {
     ConflictResolveDialog: typeof import('./src/components/collab/ConflictResolveDialog.vue')['default']
     ContentRefPicker: typeof import('./src/components/frame/ContentRefPicker.vue')['default']
     DashboardCharts: typeof import('./src/components/admin/DashboardCharts.vue')['default']
+    DbJobProgress: typeof import('./src/components/admin/DbJobProgress.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElAside: typeof import('element-plus/es')['ElAside']
     ElAvatar: typeof import('element-plus/es')['ElAvatar']

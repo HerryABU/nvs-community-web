@@ -564,6 +564,7 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.POST("/db/migrate", dbadmin.AdminDBMigrate)
 		adminGrp.POST("/db/backup", dbadmin.AdminDBBackup)
 		adminGrp.GET("/db/job/:id", dbadmin.AdminDBJob)
+		adminGrp.GET("/db/jobs", dbadmin.AdminDBJobs)
 		adminGrp.GET("/db/backups", dbadmin.AdminDBListBackups)
 		adminGrp.DELETE("/db/backups/:name", dbadmin.AdminDBDeleteBackup)
 		adminGrp.GET("/db/backups/:name/download", dbadmin.AdminDBDownloadBackup)

@@ -65,7 +65,7 @@ func TestMigrateChaptersWithZeroAuthorID(t *testing.T) {
 		t.Fatalf("迁移前应有 1 条缺失: %d", n)
 	}
 
-	if n := migrateUserContent(0, contentstore.ModeDatabase, 20); n != 1 {
+	if n := migrateUserContent(0, contentstore.ModeDatabase, 20, nil); n != 1 {
 		t.Fatalf("应处理 1 条章节，实际 %d", n)
 	}
 	text, ok := contentstore.LoadDB(contentstore.RefChapter, ch.ID)

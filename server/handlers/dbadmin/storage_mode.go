@@ -65,7 +65,6 @@ func runStorageModeJob(job *dbJob, target string) {
 	maintenance.Begin()
 	defer maintenance.End()
 
-	job.TablesTotal = 2 // 用户批次 / 内容条目
 	defer func() {
 		if job.Status == "running" {
 			finishJob(job, "done", "存储模式已切换为 "+target)
@@ -73,11 +72,15 @@ func runStorageModeJob(job *dbJob, target string) {
 	}()
 
 	users := collectContentUsers()
+	job.TablesTotal = len(users)
 	job.Detail["users"] = len(users)
 	job.Detail["missing_before"] = countMissingContent()
+	setStage(job, "扫描内容", fmt.Sprintf("共发现 %d 个作者批次，正在统计待迁移正文", len(users)))
 	const userBatch = 50
 	const itemBatch = 20
 
+	totalItems := countContentItems()
+	job.Detail["total_items"] = totalItems
 	doneUsers, doneItems := 0, 0
 	for start := 0; start < len(users); start += userBatch {
 		end := start + userBatch
@@ -85,7 +88,12 @@ func runStorageModeJob(job *dbJob, target string) {
 			end = len(users)
 		}
 		for _, uid := range users[start:end] {
-			n := migrateUserContent(uid, target, itemBatch)
+			// 每切一块（20 条）就更新一次进度，首页进度条不会整段任务只跳一次
+			n := migrateUserContent(uid, target, itemBatch, func(handled int) {
+				setProgress(job, "迁移正文", fmt.Sprintf("作者 %d/%d：已处理 %d/%d 条正文 → %s",
+					doneUsers+1, len(users), doneItems+handled, totalItems, target),
+					doneItems+handled, totalItems)
+			})
 			doneItems += n
 		}
 		doneUsers = end
@@ -94,11 +102,15 @@ func runStorageModeJob(job *dbJob, target string) {
 		job.TablesDone = doneUsers
 		job.Rows = int64(doneItems)
 		jobsMu.Unlock()
+		setProgress(job, "迁移正文", fmt.Sprintf("已处理 %d/%d 个作者、%d/%d 条正文 → %s",
+			doneUsers, len(users), doneItems, totalItems, target), doneItems, totalItems)
 	}
 
 	// 小说 index.json 的库内副本也一并补齐（不依赖文件，纯数据库模式可读）
+	setStage(job, "重建小说索引", "正在把 index.json 同步进数据库")
 	rebuildNovelIndexes(job)
 
+	setStage(job, "切换存储模式", "正在写入 storage_mode 配置")
 	if err := models.SetPlatformConfig(storageModeConfigKey, target); err != nil {
 		finishJob(job, "error", "内容已迁移，但写入存储模式配置失败: "+err.Error())
 		return
@@ -106,6 +118,17 @@ func runStorageModeJob(job *dbJob, target string) {
 	job.Detail["mode"] = target
 	job.Detail["items"] = doneItems
 	job.Detail["missing_after"] = countMissingContent()
+}
+
+// countContentItems 待迁移正文总数（用于按条目而非按用户显示百分比）
+func countContentItems() int {
+	if models.DB == nil {
+		return 0
+	}
+	var chapters, blogs int64
+	_ = models.DB.Model(&models.Chapter{}).Count(&chapters).Error
+	_ = models.DB.Model(&blogm.AuthorBlog{}).Count(&blogs).Error
+	return int(chapters + blogs)
 }
 
 // countMissingContent 统计没有库内正文的内容条数（迁移修复效果可直接看出来）。
@@ -145,7 +168,7 @@ func collectContentUsers() []uint {
 }
 
 // migrateUserContent 返回本用户已处理的内容条数
-func migrateUserContent(uid uint, target string, chunk int) int {
+func migrateUserContent(uid uint, target string, chunk int, onProgress func(int)) int {
 	if chunk <= 0 {
 		chunk = 20
 	}
@@ -162,6 +185,9 @@ func migrateUserContent(uid uint, target string, chunk int) int {
 			migrateChapter(ch, target)
 			count++
 		}
+		if onProgress != nil {
+			onProgress(count)
+		}
 		if len(chapters) < chunk {
 			break
 		}
@@ -177,6 +203,9 @@ func migrateUserContent(uid uint, target string, chunk int) int {
 		for _, b := range blogs {
 			migrateBlog(uid, b, target)
 			count++
+		}
+		if onProgress != nil {
+			onProgress(count)
 		}
 		if len(blogs) < chunk {
 			break

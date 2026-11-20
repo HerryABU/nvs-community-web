@@ -4,12 +4,14 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"nvs-server/handlers/admincommon"
 	"nvs-server/utils/infra"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,17 +32,23 @@ var ServerStartTime = time.Now()
 // ---------- 后台任务（迁移/备份异步执行 + 轮询进度） ----------
 
 type dbJob struct {
-	ID          string                 `json:"id"`
-	Type        string                 `json:"type"`   // migrate | backup | restore
-	Status      string                 `json:"status"` // running | done | error
-	Message     string                 `json:"message"`
-	Table       string                 `json:"table"`
-	TablesDone  int                    `json:"tables_done"`
-	TablesTotal int                    `json:"tables_total"`
-	Rows        int64                  `json:"rows"`
-	Detail      map[string]interface{} `json:"detail"`
-	StartedAt   time.Time              `json:"started_at"`
-	FinishedAt  *time.Time             `json:"finished_at"`
+	ID          string `json:"id"`
+	Type        string `json:"type"`   // migrate | backup | restore
+	Status      string `json:"status"` // running | done | error
+	Message     string `json:"message"`
+	Table       string `json:"table"`
+	TablesDone  int    `json:"tables_done"`
+	TablesTotal int    `json:"tables_total"`
+	Rows        int64  `json:"rows"`
+	// Stage / Percent / StatusText 是给前端进度条与「内容状态」用的统一字段。
+	// 迁移 / 备份 / 恢复 / 存储模式切换都写这三个字段，前端只需一个组件即可展示。
+	Stage      string                 `json:"stage"`
+	Percent    int                    `json:"percent"`
+	StatusText string                 `json:"status_text"`
+	Detail     map[string]interface{} `json:"detail"`
+	StartedAt  time.Time              `json:"started_at"`
+	UpdatedAt  time.Time              `json:"updated_at"`
+	FinishedAt *time.Time             `json:"finished_at"`
 }
 
 var (
@@ -50,18 +58,57 @@ var (
 
 func newJob(typ string) *dbJob {
 	id := randomJobID()
-	job := &dbJob{ID: id, Type: typ, Status: "running", StartedAt: time.Now(), Detail: map[string]interface{}{}}
+	now := time.Now()
+	job := &dbJob{
+		ID: id, Type: typ, Status: "running", Stage: "准备中", Percent: 0,
+		StatusText: "任务已创建，等待执行", StartedAt: now, UpdatedAt: now,
+		Detail: map[string]interface{}{},
+	}
 	jobsMu.Lock()
 	jobs[id] = job
 	jobsMu.Unlock()
 	return job
 }
 
+// setStage 更新阶段与内容状态（不改变百分比）
+func setStage(job *dbJob, stage, text string) {
+	jobsMu.Lock()
+	job.Stage = stage
+	job.StatusText = text
+	job.UpdatedAt = time.Now()
+	jobsMu.Unlock()
+}
+
+// setProgress 更新阶段、百分比（0-100）与内容状态
+func setProgress(job *dbJob, stage, text string, done, total int) {
+	pct := 0
+	if total > 0 {
+		pct = done * 100 / total
+		if pct > 100 {
+			pct = 100
+		}
+	}
+	jobsMu.Lock()
+	job.Stage = stage
+	job.StatusText = text
+	job.Percent = pct
+	job.UpdatedAt = time.Now()
+	jobsMu.Unlock()
+}
+
 func finishJob(job *dbJob, status, message string) {
 	jobsMu.Lock()
 	job.Status = status
 	job.Message = message
+	job.StatusText = message
+	if status == "done" {
+		job.Stage = "完成"
+		job.Percent = 100
+	} else {
+		job.Stage = "失败"
+	}
 	now := time.Now()
+	job.UpdatedAt = now
 	job.FinishedAt = &now
 	jobsMu.Unlock()
 }
@@ -70,6 +117,22 @@ func getJob(id string) *dbJob {
 	jobsMu.Lock()
 	defer jobsMu.Unlock()
 	return jobs[id]
+}
+
+// listJobs 供管理员首页展示最近任务（含正在进行的进度）。
+// 返回副本，避免前端读到正在被后台写入的字段（map 只读，不深拷贝）。
+func listJobs(limit int) []dbJob {
+	jobsMu.Lock()
+	all := make([]dbJob, 0, len(jobs))
+	for _, j := range jobs {
+		all = append(all, *j)
+	}
+	jobsMu.Unlock()
+	sort.Slice(all, func(i, k int) bool { return all[i].StartedAt.After(all[k].StartedAt) })
+	if limit > 0 && len(all) > limit {
+		all = all[:limit]
+	}
+	return all
 }
 
 func randomJobID() string {
@@ -203,11 +266,13 @@ func AdminDBMigrate(c *gin.Context) {
 
 func runMigrationJob(job *dbJob, cfg models.DBConfig) {
 	// 1. 打开目标库并建表
+	setStage(job, "连接目标库", "正在连接 "+cfg.Driver+" 目标库")
 	target, err := models.OpenDB(cfg)
 	if err != nil {
 		finishJob(job, "error", "目标数据库连接失败: "+err.Error())
 		return
 	}
+	setStage(job, "建立表结构", "正在目标库执行 AutoMigrate")
 	if err := models.AutoMigrateAll(target); err != nil {
 		finishJob(job, "error", "目标数据库建表失败: "+err.Error())
 		return
@@ -228,6 +293,8 @@ func runMigrationJob(job *dbJob, cfg models.DBConfig) {
 		job.TablesDone = done
 		job.Rows = totalRows
 		jobsMu.Unlock()
+		setProgress(job, "复制数据", fmt.Sprintf("正在复制表 %s（%d/%d 张，%d 行）", t, done, len(tables), totalRows),
+			done, len(tables))
 	})
 	if err != nil {
 		finishJob(job, "error", err.Error())
@@ -235,18 +302,21 @@ func runMigrationJob(job *dbJob, cfg models.DBConfig) {
 	}
 
 	// 3. 持久化 .env
+	setStage(job, "写入配置", "正在把新连接配置加密落盘")
 	if err := writeDBEnv(cfg); err != nil {
 		finishJob(job, "error", "数据已复制，但写入 .env 失败: "+err.Error())
 		return
 	}
 
 	// 4. 热切换全局数据库连接
+	setStage(job, "切换连接", "正在原子替换全局数据库连接（无需重启）")
 	if err := models.ReconnectDatabase(cfg); err != nil {
 		finishJob(job, "error", "数据已复制，但切换连接失败: "+err.Error())
 		return
 	}
 
 	// 5. 服务端数据库（MySQL / PostgreSQL）模式重连 Redis，SQLite 模式禁用 Redis
+	setStage(job, "收尾", "正在重连缓存并校验连接")
 	if cfg.Driver == "mysql" || cfg.Driver == "postgres" {
 		infra.ConnectRedis(config.RedisHost, config.RedisPort, config.RedisPassword, config.RedisDB)
 	} else {
@@ -266,6 +336,7 @@ func AdminDBBackup(c *gin.Context) {
 	}
 	job := newJob("backup")
 	go func() {
+		setStage(job, "备份中", "正在导出数据库并写入备份文件…")
 		path, rows, err := siteops.DoBackup()
 		if err != nil {
 			finishJob(job, "error", "备份失败: "+err.Error())
@@ -288,6 +359,18 @@ func AdminDBJob(c *gin.Context) {
 		return
 	}
 	infra.Success(c, job)
+}
+
+// GET /api/admin/db/jobs — 最近任务列表（管理员首页进度卡片用）
+func AdminDBJobs(c *gin.Context) {
+	if !admincommon.EnsureAdmin(c) {
+		return
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+	infra.Success(c, gin.H{"list": listJobs(limit)})
 }
 
 // GET /api/admin/db/backups — 备份列表
@@ -359,6 +442,7 @@ func AdminDBRestore(c *gin.Context) {
 
 	job := newJob("restore")
 	go func() {
+		setStage(job, "恢复中", "正在校验备份文件并准备恢复 "+config.DBDriver)
 		switch config.DBDriver {
 		case "sqlite":
 			if !strings.HasSuffix(p, ".db") {
@@ -366,17 +450,20 @@ func AdminDBRestore(c *gin.Context) {
 				return
 			}
 			// 1. 关闭当前连接
+			setStage(job, "关闭旧连接", "正在关闭当前 SQLite 连接")
 			if models.DB != nil {
 				if sqlDB, e := models.DB.DB(); e == nil && sqlDB != nil {
 					_ = sqlDB.Close()
 				}
 			}
 			// 2. 覆盖当前 db 文件
+			setProgress(job, "覆盖数据文件", "正在写入 data/nvs.db", 1, 3)
 			if err := CopyFile(p, "data/nvs.db"); err != nil {
 				finishJob(job, "error", "恢复失败: "+err.Error())
 				return
 			}
 			// 3. 重连
+			setProgress(job, "重连数据库", "正在重新打开恢复后的数据库", 2, 3)
 			if err := models.ReconnectDatabase(models.DBConfig{Driver: "sqlite", Path: "data/nvs.db"}); err != nil {
 				finishJob(job, "error", "恢复后重连失败: "+err.Error())
 				return

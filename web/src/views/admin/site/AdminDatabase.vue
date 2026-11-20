@@ -2,6 +2,8 @@
   <div class="admin-page">
     <AdminHeader title="数据库管理" subtitle="SQLite ↔ MySQL ↔ PostgreSQL 迁移 · 多库备份" :icon="DataLine" />
     <div class="admin-page-body admin-panel">
+      <!-- 所有任务（引擎迁移 / 备份 / 恢复 / 正文存储迁移）共用同一进度组件，切 Tab 也不消失 -->
+      <DbJobProgress :job="job" />
       <el-tabs v-model="activeTab">
         <!-- ==================== 数据库迁移 ==================== -->
         <el-tab-pane label="数据库迁移" name="migrate">
@@ -45,21 +47,6 @@
               <el-button type="primary" :loading="migrating" @click="startMigrate">开始迁移</el-button>
             </el-form-item>
           </el-form>
-
-          <!-- 迁移进度 -->
-          <div v-if="job" class="job-box">
-            <div class="job-head">
-              <el-tag :type="job.status === 'done' ? 'success' : job.status === 'error' ? 'danger' : 'primary'">
-                {{ jobLabel(job.status) }}
-              </el-tag>
-              <span class="job-msg">{{ job.message }}</span>
-            </div>
-            <el-progress v-if="job.status === 'running' && job.tables_total > 0"
-              :percentage="Math.round((job.tables_done / job.tables_total) * 100)" />
-            <div v-if="job.status === 'running'" class="job-meta">
-              正在复制表 <b>{{ job.table }}</b>（{{ job.tables_done }}/{{ job.tables_total }} 张，{{ job.rows }} 行）
-            </div>
-          </div>
         </el-tab-pane>
 
         <!-- ==================== 正文存储模式 ==================== -->
@@ -143,6 +130,7 @@ import { adminApi } from '@/api/admin';
 import { apiPrefix } from '@/api/index';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import StateBlock from '@/components/common/StateBlock.vue';
+import DbJobProgress from '@/components/admin/DbJobProgress.vue';
 
 const activeTab = ref('migrate');
 
@@ -349,9 +337,6 @@ function stopPolling() {
 }
 
 // ---------- 工具函数 ----------
-function jobLabel(s: string) {
-  return { running: '运行中', done: '已完成', error: '失败' }[s] || s;
-}
 function fmtSize(n: number) {
   if (!n) return '0 B';
   const u = ['B', 'KB', 'MB', 'GB'];
@@ -365,10 +350,21 @@ function fmtTime(t: string) {
   return new Date(t).toLocaleString();
 }
 
+// 任务可能从别的页面（如管理员首页）发起，进本页要先取一次最近任务，
+// 否则会显示「暂无数据库任务」，而实际迁移正在进行。
+async function loadLatestJob() {
+  try {
+    const res = await adminApi.listDbJobs(1);
+    job.value = res.data?.data?.list?.[0] || null;
+    if (job.value?.status === 'running') startPolling(job.value.id);
+  } catch { /* ignore */ }
+}
+
 onMounted(() => {
   loadBackups();
   loadSched();
   loadStorageMode();
+  loadLatestJob();
 });
 onBeforeUnmount(stopPolling);
 </script>
@@ -380,9 +376,4 @@ onBeforeUnmount(stopPolling);
 .admin-page-body { background: var(--bg-color); border-radius: 12px; padding: 20px; }
 .sched { display: flex; align-items: center; color: var(--text-light); font-size: 0.9rem; }
 .muted { color: var(--text-muted); }
-.job-box { margin-top: 20px; padding: 16px; background: var(--bg-card, #fff); border: 1px solid var(--border-color); border-radius: 12px; }
-[data-theme="dark"] .job-box { background: #1e293b; border-color: #334155; }
-.job-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.job-msg { color: var(--text-light); }
-.job-meta { margin-top: 8px; color: var(--text-light); font-size: 0.88rem; }
 </style>

@@ -69,6 +69,25 @@
           </el-col>
         </el-row>
 
+        <!-- 数据库任务进度：迁移 / 备份 / 恢复 / 正文存储模式切换都在这里看 -->
+        <el-row :gutter="20" class="chart-row">
+          <el-col :xs="24">
+            <div class="hm-card db-job-card">
+              <div class="db-job-card-head">
+                <h4 class="chart-title">数据库任务进度</h4>
+                <el-link type="primary" @click="$router.push('/admin/database')">查看全部 →</el-link>
+              </div>
+              <DbJobProgress :job="latestDbJob" compact />
+              <div v-if="dbJobs.length > 1" class="db-job-others">
+                <span v-for="j in dbJobs.slice(1, 4)" :key="j.id">
+                  {{ j.type === 'storage-mode' ? '正文存储' : j.type === 'migrate' ? '迁移' : j.type === 'backup' ? '备份' : '恢复' }}
+                  · {{ j.stage || j.status }} · {{ j.percent || 0 }}%
+                </span>
+              </div>
+            </div>
+          </el-col>
+        </el-row>
+
         <!-- 趋势：左=用户增长，右=访问趋势（两张图数据不同） -->
         <el-row :gutter="20" class="chart-row">
           <el-col :xs="24" :md="12">
@@ -257,7 +276,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, watch } from 'vue';
+import { ref, reactive, onMounted, onBeforeUnmount, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { adminApi } from '@/api/admin';
 import { opsApi } from '@/api/admin/ops';
@@ -270,8 +289,23 @@ import DashboardCharts from '@/components/admin/DashboardCharts.vue';
 import StdMap from '@/components/maps/StdMap.vue';
 import AdminActiveHoursHeatmap from '@/components/admin/AdminActiveHoursHeatmap.vue';
 import StateBlock from '@/components/common/StateBlock.vue';
+import DbJobProgress from '@/components/admin/DbJobProgress.vue';
 
 const refreshing = ref(false);
+
+// 数据库任务进度：首页常驻，运行中每 2s 轮询（含阶段与内容状态）
+const dbJobs = ref<any[]>([]);
+const latestDbJob = computed(() => dbJobs.value[0] || null);
+let dbJobTimer: any = null;
+async function loadDbJobs() {
+  try {
+    const res = await adminApi.listDbJobs(10);
+    dbJobs.value = res.data?.data?.list || [];
+  } catch { /* 首页其它图表不受影响 */ }
+}
+function stopDbJobPolling() {
+  if (dbJobTimer) { clearInterval(dbJobTimer); dbJobTimer = null; }
+}
 
 const stats = reactive({ users: 0, novels: 0, comments: 0, forums: 0 });
 
@@ -654,11 +688,21 @@ async function loadDashboard() {
 
 async function refreshAll() {
   refreshing.value = true;
-  await loadDashboard();
+  await Promise.all([loadDashboard(), loadDbJobs()]);
   refreshing.value = false;
 }
 
-onMounted(() => { loadDashboard(); checkFiling(); loadVisitorTrend(); });
+onMounted(() => {
+  loadDashboard();
+  checkFiling();
+  loadVisitorTrend();
+  loadDbJobs();
+  dbJobTimer = setInterval(() => {
+    // 没有进行中的任务时降低轮询频率，避免首页长期空转
+    if (dbJobs.value.some((j) => j.status === 'running')) loadDbJobs();
+  }, 2000);
+});
+onBeforeUnmount(stopDbJobPolling);
 </script>
 
 <style scoped>
@@ -932,6 +976,11 @@ onMounted(() => { loadDashboard(); checkFiling(); loadVisitorTrend(); });
   border-color: rgba(71,85,105,0.3);
 }
 .hm-card .chart-title { margin-bottom: 6px; }
+
+/* 数据库任务进度卡片（首页） */
+.db-job-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.db-job-card-head .chart-title { margin: 0; }
+.db-job-others { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 0.76rem; color: var(--text-muted, #888); }
 
 /* 境内/境外/内网 三口径占比（放在地图上方，先给结论再看图） */
 .geo-sum {

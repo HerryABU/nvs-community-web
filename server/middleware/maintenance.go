@@ -24,7 +24,10 @@ func MaintenanceWriteGuard() gin.HandlerFunc {
 			return
 		}
 		p := c.Request.URL.Path
-		for _, prefix := range []string{"/api/admin/db/", "/api/auth/login", "/api/auth/refresh", "/api/auth/captcha"} {
+		// /api/batch 是前端埋点批量上报，不是内容写入；迁移期放行以免首页/bootstrap 刷一片 423
+		for _, prefix := range []string{
+			"/api/admin/db/", "/api/auth/login", "/api/auth/refresh", "/api/auth/captcha", "/api/batch",
+		} {
 			if strings.HasPrefix(p, prefix) {
 				c.Next()
 				return

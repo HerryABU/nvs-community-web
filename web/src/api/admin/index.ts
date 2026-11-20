@@ -611,6 +611,10 @@ export const adminApi = {
   getDbJob(id: string) {
     return api.get(`/admin/db/job/${id}`);
   },
+  // 最近任务（管理员首页进度卡片用，含运行中的百分比与内容状态）
+  listDbJobs(limit = 10) {
+    return api.get('/admin/db/jobs', { params: { limit } });
+  },
   getBackups() {
     return api.get('/admin/db/backups');
   },
