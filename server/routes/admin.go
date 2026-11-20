@@ -574,6 +574,8 @@ func registerAdminArea(r *gin.Engine) {
 		// 正文存储模式（纯数据库 / 数据库+文件系统混合），切换时按用户分批热迁移
 		adminGrp.GET("/db/storage-mode", dbadmin.AdminStorageModeGet)
 		adminGrp.POST("/db/storage-mode", dbadmin.AdminStorageModeSet)
+		// 入库健康自查：按条数/字节回答「正文到底进库没有」，不要看库文件体积
+		adminGrp.GET("/db/storage-health", dbadmin.AdminStorageHealth)
 	}
 
 	// 警方取管台（police）：准管理员角色，仅可取证 / 查看软删除，无普通管理权

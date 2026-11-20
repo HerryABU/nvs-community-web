@@ -637,6 +637,10 @@ export const adminApi = {
   setStorageMode(mode: 'hybrid' | 'database') {
     return api.post('/admin/db/storage-mode', { mode });
   },
+  // 正文入库健康自查（条数/字节/空源/缺失），不靠数据库文件体积判断迁移成败
+  getStorageHealth() {
+    return api.get('/admin/db/storage-health');
+  },
 };
 
 // 公开接口

@@ -72,10 +72,75 @@
             </el-form-item>
             <el-form-item>
               <el-button type="primary" :loading="storageBusy" :disabled="job?.status === 'running'" @click="switchStorageMode">
-                开始切换并迁移正文
+                {{ targetStorageMode === storageMode ? '重新扫描并补齐库内副本' : '开始切换并迁移正文' }}
               </el-button>
             </el-form-item>
           </el-form>
+
+          <!-- 入库健康自查：迁移是否成功看这里，不看数据库文件体积 -->
+          <div class="health" v-loading="healthLoading">
+            <div class="health-head">
+              <span class="health-title">入库健康自查</span>
+              <el-button link type="primary" size="small" @click="loadStorageHealth">重新统计</el-button>
+            </div>
+            <template v-if="health">
+              <div class="health-grid">
+                <div class="health-cell">
+                  <div class="hc-label">章节副本</div>
+                  <div class="hc-value">{{ health.chapter.blob }} / {{ health.chapter.total }}</div>
+                  <div class="hc-sub">已入库 / 章节总数</div>
+                </div>
+                <div class="health-cell">
+                  <div class="hc-label">博客副本</div>
+                  <div class="hc-value">{{ health.blog.blob }} / {{ health.blog.total }}</div>
+                  <div class="hc-sub">已入库 / 博客总数</div>
+                </div>
+                <div class="health-cell">
+                  <div class="hc-label">正文合计</div>
+                  <div class="hc-value">{{ fmtSize(health.content_bytes) }}</div>
+                  <div class="hc-sub">库内正文真实字节</div>
+                </div>
+                <div class="health-cell">
+                  <div class="hc-label">库文件占用</div>
+                  <div class="hc-value">{{ fmtSize(health.db_file_bytes) }}</div>
+                  <div class="hc-sub">含索引与访问日志</div>
+                </div>
+                <div class="health-cell">
+                  <div class="hc-label">源正文为空</div>
+                  <div class="hc-value">{{ health.chapter.empty }}</div>
+                  <div class="hc-sub">章节文件本身 0 字节</div>
+                </div>
+                <div class="health-cell">
+                  <div class="hc-label">缺副本</div>
+                  <div class="hc-value" :class="{ warn: health.chapter.missing > 0 }">{{ health.chapter.missing }}</div>
+                  <div class="hc-sub">需人工处理</div>
+                </div>
+              </div>
+              <el-alert v-if="health.chapter.missing === 0" type="success" :closable="false" show-icon
+                title="全部正文已有库内副本，可安全使用纯数据库模式" style="margin-top:12px" />
+              <template v-else>
+                <el-alert type="warning" :closable="false" show-icon style="margin-top:12px"
+                  :title="`有 ${health.chapter.missing} 条章节没有库内副本，纯数据库模式下这些章节会读不到正文`" />
+                <el-table :data="health.missing_sample" size="small" style="margin-top:8px">
+                  <el-table-column prop="id" label="章节 ID" width="100" />
+                  <el-table-column prop="novel_id" label="作品" width="80" />
+                  <el-table-column prop="chapter_number" label="章号" width="70" />
+                  <el-table-column prop="title" label="标题" min-width="140" show-overflow-tooltip />
+                  <el-table-column label="磁盘文件" width="110">
+                    <template #default="{ row }">
+                      <el-tag size="small" :type="row.file_exists ? 'success' : 'danger'">
+                        {{ row.file_exists ? '存在' : '已丢失' }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </template>
+              <p class="health-note">
+                为什么库文件体积可能几乎不变：SQLite 复写页面不按内容线性增长，且重复执行迁移是幂等的
+                （内容已在库内时不会再次写入）。判断是否迁移成功请看上表的副本条数与正文合计字节。
+              </p>
+            </template>
+          </div>
         </el-tab-pane>
 
         <!-- ==================== 备份管理 ==================== -->
@@ -180,6 +245,8 @@ async function startMigrate() {
 const storageMode = ref('hybrid');
 const targetStorageMode = ref<'hybrid' | 'database'>('hybrid');
 const storageBusy = ref(false);
+const health = ref<any>(null);
+const healthLoading = ref(false);
 
 async function loadStorageMode() {
   try {
@@ -192,21 +259,34 @@ async function loadStorageMode() {
   } catch { /* 页面仍可用 */ }
 }
 
-async function switchStorageMode() {
-  if (targetStorageMode.value === storageMode.value) {
-    ElMessage.warning('当前已是该模式');
-    return;
+// 入库健康自查：判断迁移成败看条数与字节，不看数据库文件体积
+// （SQLite 复写页面不线性增长，重跑迁移幂等，体积不变是正常的）
+async function loadStorageHealth() {
+  healthLoading.value = true;
+  try {
+    const res = await adminApi.getStorageHealth();
+    health.value = res.data?.data || null;
+  } catch { /* 忽略 */ } finally {
+    healthLoading.value = false;
   }
+}
+
+async function switchStorageMode() {
+  const same = targetStorageMode.value === storageMode.value;
   try {
     await ElMessageBox.confirm(
-      '切换期间全站禁止写入（前端会提示「上传功能正在维护中，请稍后」），系统会按用户分批迁移小说/博客正文。是否继续？',
-      '确认切换存储模式', { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消' },
+      same
+        ? '当前已是该模式。重新执行会全站禁止写入，并按作者重新扫描一遍补齐库内副本（修复历史漏迁）。是否继续？'
+        : '切换期间全站禁止写入（前端会提示「上传功能正在维护中，请稍后」），系统会按用户分批迁移小说/博客正文。是否继续？',
+      same ? '确认重新扫描补齐' : '确认切换存储模式',
+      { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消' },
     );
   } catch { return; }
   storageBusy.value = true;
   try {
     const res = await adminApi.setStorageMode(targetStorageMode.value);
     startPolling(res.data?.data?.job_id);
+    loadStorageHealth();
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '切换失败');
   } finally {
@@ -315,10 +395,10 @@ function startPolling(jobId: string) {
         stopPolling();
         ElMessage.success(job.value.message || '任务完成');
         loadBackups();
-        // 本页没有独立的健康检查面板：曾有残留的 loadHealth() 调用（函数根本不存在），
-        // 任务成功后走到这行会直接 ReferenceError，导致「任务完成」后列表不刷新。
         loadSched();
         loadStorageMode();
+        // 迁移/补齐结束后立刻刷新入库统计，条数与字节是判断成败的唯一依据
+        loadStorageHealth();
         return;
       }
       if (job.value?.status === 'error') {
@@ -364,6 +444,7 @@ onMounted(() => {
   loadBackups();
   loadSched();
   loadStorageMode();
+  loadStorageHealth();
   loadLatestJob();
 });
 onBeforeUnmount(stopPolling);
@@ -376,4 +457,15 @@ onBeforeUnmount(stopPolling);
 .admin-page-body { background: var(--bg-color); border-radius: 12px; padding: 20px; }
 .sched { display: flex; align-items: center; color: var(--text-light); font-size: 0.9rem; }
 .muted { color: var(--text-muted); }
+/* ===== 入库健康自查 ===== */
+.health { margin-top: 20px; padding-top: 16px; border-top: 1px dashed var(--border-color); }
+.health-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.health-title { font-weight: 600; color: var(--text-color); }
+.health-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.health-cell { background: var(--bg-soft, rgba(127, 127, 127, 0.06)); border-radius: 10px; padding: 10px 12px; }
+.hc-label { font-size: 0.8rem; color: var(--text-muted); }
+.hc-value { font-size: 1.15rem; font-weight: 600; color: var(--text-color); }
+.hc-value.warn { color: var(--el-color-danger, #f56c6c); }
+.hc-sub { font-size: 0.72rem; color: var(--text-muted); }
+.health-note { margin: 12px 0 0; font-size: 0.78rem; line-height: 1.6; color: var(--text-muted); }
 </style>
