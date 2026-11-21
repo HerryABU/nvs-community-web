@@ -28,6 +28,7 @@
       @canplay="buffering = false"
       @ended="onEnded"
       @volumechange="onVolumeChange"
+      @webkitendfullscreen="onWkFsEnd"
     />
 
     <DanmakuLayer
@@ -99,6 +100,17 @@
         </select>
         <button type="button" :title="dmOn ? '关闭弹幕' : '开启弹幕'" @click="toggleDanmaku">弹</button>
         <button type="button" title="全屏(f)" @click="toggleFull">{{ isFull ? '⤢' : '⛶' }}</button>
+        <!-- 横屏片专用：竖屏流里横屏片只能上下留黑边，点它把屏幕转过来铺满 -->
+        <button
+          v-if="canRotate"
+          type="button"
+          class="nvp-rot"
+          :class="{ on: rotating }"
+          :title="rotating ? '退出旋转(r)' : '旋转全屏(r)'"
+          @click="toggleRotate"
+        >
+          ⟳
+        </button>
       </div>
     </div>
   </div>
@@ -172,6 +184,8 @@ const volume = ref(1);
 const muted = ref(props.muted);
 const rate = ref(1);
 const isFull = ref(false);
+/** 是否处于「旋转全屏」（全屏 + 锁横屏）状态 */
+const rotating = ref(false);
 const hideCtrl = ref(false);
 const dragging = ref(false);
 
@@ -187,6 +201,8 @@ const sendOpen = ref(false);
 
 const pct = computed(() => (dur.value > 0 ? Math.min(100, (cur.value / dur.value) * 100) : 0));
 const bufPct = computed(() => (dur.value > 0 ? Math.min(100, (bufEnd.value / dur.value) * 100) : 0));
+/** 横屏片才给「旋转全屏」：竖屏片本来就铺满，转了反而上下留黑边 */
+const canRotate = computed(() => isWide.value);
 
 let rafId = 0;
 let hideTimer: number | null = null;
@@ -407,6 +423,88 @@ function toggleFull() {
 
 function onFsChange() {
   isFull.value = document.fullscreenElement === wrap.value;
+  // 用户按 Esc / 手势退出全屏：方向锁要一并释放，否则页面会一直卡在横屏
+  if (!document.fullscreenElement && rotating.value) releaseOrientation();
+}
+
+// ---------- 旋转全屏（横屏片专用） ----------
+function releaseOrientation() {
+  try {
+    (screen as any)?.orientation?.unlock?.();
+  } catch {
+    /* 部分浏览器没有 unlock 或不在锁定态 */
+  }
+  rotating.value = false;
+}
+
+function onWkFsEnd() {
+  // iOS：video.webkitEnterFullscreen 退出时不会触发 fullscreenchange
+  releaseOrientation();
+}
+
+/**
+ * 旋转全屏：把竖着拿的手机变成看横屏片的状态。
+ *
+ * 三条降级路径，按可靠性排序：
+ * 1) 元素全屏 + Screen Orientation Lock 锁 landscape —— Android Chrome / Edge / 桌面主路径；
+ * 2) iOS Safari 没有 Screen Orientation API、也不能对 div 全屏 —— 退回
+ *    `video.webkitEnterFullscreen()`，系统原生全屏会自动把横屏片转过来；
+ * 3) 都失败时至少进全屏（横屏片 contain 铺满宽度），并提示不支持。
+ */
+async function enterRotate() {
+  const el = wrap.value;
+  const v = video.value;
+  if (!el || !v) return;
+
+  const so = (screen as any)?.orientation;
+  const canElementFs = typeof el.requestFullscreen === 'function' && document.fullscreenEnabled;
+
+  // iOS 分支必须**同步**调用：webkitEnterFullscreen 依赖用户手势，
+  // 一旦经过 await 就丢 user activation，会被静默拒绝。
+  if (!canElementFs && typeof (v as any).webkitEnterFullscreen === 'function') {
+    (v as any).webkitEnterFullscreen();
+    rotating.value = true;
+    return;
+  }
+
+  let ok = false;
+  try {
+    if (!document.fullscreenElement && canElementFs) {
+      await el.requestFullscreen();
+    }
+    ok = !!document.fullscreenElement;
+  } catch {
+    /* 全屏被拒（iframe 缺 allowfullscreen / 手势缺失），继续尝试锁方向 */
+  }
+
+  if (so?.lock) {
+    try {
+      // 必须先进全屏才能锁方向；桌面浏览器通常直接 reject，忽略即可
+      await so.lock('landscape');
+      ok = true;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  rotating.value = ok;
+  if (!ok) ElMessage.warning('当前浏览器不支持旋转全屏，可手动横置手机');
+}
+
+async function exitRotate() {
+  releaseOrientation();
+  if (document.fullscreenElement) {
+    try {
+      await document.exitFullscreen?.();
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+function toggleRotate() {
+  if (rotating.value) exitRotate();
+  else enterRotate();
 }
 
 function wake(force = false) {
@@ -421,6 +519,9 @@ function wake(force = false) {
 function scheduleHide() {
   if (hideTimer) window.clearTimeout(hideTimer);
   if (!playing.value) return;
+  // 横屏片控制条常驻：竖屏流里横屏片上下本来就是黑边，控件不挡画面，
+  // 且「旋转全屏」按钮必须一直看得见，否则用户根本不知道该转屏。
+  if (canRotate.value) return;
   hideTimer = window.setTimeout(() => {
     hideCtrl.value = true;
   }, 2800);
@@ -479,6 +580,9 @@ function onKey(e: KeyboardEvent) {
     case 'f':
       toggleFull();
       break;
+    case 'r':
+      if (canRotate.value) toggleRotate();
+      break;
   }
 }
 
@@ -512,6 +616,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointerup', onSeekUp);
   if (hideTimer) window.clearTimeout(hideTimer);
   stopLoop();
+  // 离开页面（竖滑滑走 / 切路由）时别把屏幕方向锁带走
+  releaseOrientation();
   // 只 pause 不够：src 还在，移动端解码器不会被回收（竖滑翻几页就把解码器占满）。
   const v = video.value;
   if (v) {
@@ -543,6 +649,14 @@ watch(
     muted.value = m;
   },
 );
+
+// 片源信息晚到（metadata 才拿到宽高）：一变成横屏片就把控制条唤回来
+watch(canRotate, (w) => {
+  if (w) {
+    hideCtrl.value = false;
+    if (hideTimer) window.clearTimeout(hideTimer);
+  }
+});
 
 watch(
   () => props.preload,
@@ -820,6 +934,27 @@ function fmt(s: number) {
   padding: 1px 4px;
   cursor: pointer;
 }
+/* 旋转全屏：做成一枚小圆钮，压在控制条最右端（= 画面右下角） */
+.nvp-btns > button.nvp-rot {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  background: rgba(255, 255, 255, 0.18);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.88rem;
+  line-height: 1;
+}
+.nvp-btns > button.nvp-rot:active {
+  transform: scale(0.92);
+}
+.nvp-btns > button.nvp-rot.on {
+  background: var(--el-color-primary, #409eff);
+  border-color: transparent;
+}
 
 /* 沉浸模式：只留极简进度与自动隐藏的控制条 */
 .nvp.immersive .nvp-ctrl {
@@ -851,6 +986,12 @@ function fmt(s: number) {
     width: 54px;
     height: 54px;
     font-size: 20px;
+  }
+  /* 手指点击目标要够大 */
+  .nvp-btns > button.nvp-rot {
+    width: 28px;
+    height: 28px;
+    font-size: 0.95rem;
   }
 }
 </style>
