@@ -9,12 +9,13 @@
     <video
       ref="video"
       class="nvp-video"
+      :class="{ 'is-wide': isWide }"
       :src="src"
       :poster="poster"
       :loop="props.loop"
       :autoplay="autoplay"
       playsinline
-      preload="metadata"
+      :preload="preload"
       @click="toggle"
       @dblclick="toggleFull"
       @loadedmetadata="onMeta"
@@ -130,6 +131,11 @@ const props = withDefaults(
     active?: boolean;
     canSend?: boolean;
     durationHint?: number;
+    /**
+     * 预加载策略。竖滑页里当前条与「下一条」给 auto（提前缓冲），
+     * 其余给 metadata 甚至 none，避免十几条视频同时抢带宽与解码器。
+     */
+    preload?: 'none' | 'metadata' | 'auto';
   }>(),
   {
     src: '',
@@ -142,6 +148,7 @@ const props = withDefaults(
     active: true,
     canSend: true,
     durationHint: 0,
+    preload: 'metadata',
   },
 );
 
@@ -156,6 +163,8 @@ const dmLayer = ref<InstanceType<typeof DanmakuLayer> | null>(null);
 
 const playing = ref(false);
 const buffering = ref(false);
+/** 片源是否为横向（宽>高）。竖屏流里横屏片要完整显示、上下留黑边，不能裁切。 */
+const isWide = ref(false);
 const cur = ref(0);
 const dur = ref(props.durationHint || 0);
 const bufEnd = ref(0);
@@ -242,6 +251,8 @@ function onMeta() {
   if (!v) return;
   const d = Number.isFinite(v.duration) ? v.duration : 0;
   dur.value = d;
+  // 横屏判定：竖滑流里竖屏片铺满（cover），横屏片完整显示 + 上下黑边（contain）
+  isWide.value = v.videoWidth > 0 && v.videoHeight > 0 && v.videoWidth > v.videoHeight;
   emit('meta', d);
   v.volume = volume.value;
   v.muted = muted.value;
@@ -472,20 +483,42 @@ function onKey(e: KeyboardEvent) {
 }
 
 // ---------- 生命周期 ----------
+let keyBound = false;
+
+// 竖滑页里同时存在多个播放器实例，键盘监听只该由「当前这一条」持有，
+// 否则按一次空格会触发十几个 handler，白白卡一帧。
+function syncKeyBinding() {
+  const want = props.mode === 'detail' || props.active;
+  if (want && !keyBound) {
+    window.addEventListener('keydown', onKey);
+    keyBound = true;
+  } else if (!want && keyBound) {
+    window.removeEventListener('keydown', onKey);
+    keyBound = false;
+  }
+}
+
 onMounted(() => {
   document.addEventListener('fullscreenchange', onFsChange);
-  window.addEventListener('keydown', onKey);
+  syncKeyBinding();
   loadDanmaku();
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('fullscreenchange', onFsChange);
-  window.removeEventListener('keydown', onKey);
+  if (keyBound) window.removeEventListener('keydown', onKey);
+  keyBound = false;
   window.removeEventListener('pointermove', onSeekMove);
   window.removeEventListener('pointerup', onSeekUp);
   if (hideTimer) window.clearTimeout(hideTimer);
   stopLoop();
-  pause();
+  // 只 pause 不够：src 还在，移动端解码器不会被回收（竖滑翻几页就把解码器占满）。
+  const v = video.value;
+  if (v) {
+    v.pause();
+    v.removeAttribute('src');
+    v.load();
+  }
 });
 
 // immersive：父级切换当前条目时自动播停
@@ -493,6 +526,7 @@ watch(
   () => props.active,
   async (on) => {
     if (props.mode !== 'immersive') return;
+    syncKeyBinding();
     if (on) {
       play();
     } else {
@@ -507,6 +541,15 @@ watch(
   (m) => {
     if (video.value) video.value.muted = m;
     muted.value = m;
+  },
+);
+
+watch(
+  () => props.preload,
+  (p) => {
+    // 竖滑窗口滑动后，原本的「下一条」会升格为当前条：给它提权到 auto 开始缓冲
+    const v = video.value;
+    if (v && v.preload !== p) v.preload = p;
   },
 );
 
@@ -545,8 +588,15 @@ function fmt(s: number) {
   width: 100%;
   height: 100%;
   display: block;
+  /* 默认完整显示：详情页的 16:9 舞台与竖屏流里的横屏片都用 contain，
+     不会把画面左右裁掉；竖屏片在沉浸模式下另有一条 cover 规则覆盖 */
   object-fit: contain;
   background: #000;
+}
+/* 竖滑沉浸：竖屏片铺满整屏（短视频平台的做法），
+   横屏片（is-wide）继续用 contain —— 画面完整居中，上下是黑边 */
+.nvp.immersive .nvp-video:not(.is-wide) {
+  object-fit: cover;
 }
 .nvp-big {
   position: absolute;

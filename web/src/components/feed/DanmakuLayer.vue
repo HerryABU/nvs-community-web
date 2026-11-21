@@ -40,6 +40,7 @@ let topFree: number[] = [];
 let bottomFree: number[] = [];
 const STICKY_MS = 3000; // 顶部/底部固定弹幕停留时长
 const GAP_PX = 56; // 同轨两条弹幕的最小水平间距
+const MAX_LIVE = 60; // 同屏节点上限：每个弹幕都是独立合成层，无上限会拖垮移动端滚动
 
 function sortItems(list: FeedDanmaku[]) {
   return [...list].sort((a, b) => a.time_ms - b.time_ms || a.id - b.id);
@@ -91,6 +92,16 @@ function ensureTracks() {
 function clearNodes() {
   live.forEach((el) => el.remove());
   live.clear();
+}
+
+/** 超过同屏上限就丢最早的：宁可少几条，也别把滚动帧率拖下去 */
+function trimLive() {
+  while (live.size > MAX_LIVE) {
+    const first = live.values().next().value as HTMLElement | undefined;
+    if (!first) return;
+    first.remove();
+    live.delete(first);
+  }
 }
 
 /** 从头重建：换视频 / 数据更新时调用 */
@@ -173,6 +184,7 @@ function spawn(d: FeedDanmaku, now: number) {
     // 先落位再挂动画类：动画一旦开始就按最终样式跑，避免出现一帧错位
     node.classList.add('dm-sticky');
     live.add(node);
+    trimLive();
     node.addEventListener('animationend', () => {
       node.remove();
       live.delete(node);
@@ -197,6 +209,7 @@ function spawn(d: FeedDanmaku, now: number) {
   scrollFree[track] = now + gapMs;
 
   live.add(node);
+  trimLive();
   node.addEventListener('animationend', () => {
     node.remove();
     live.delete(node);

@@ -8,51 +8,61 @@
       @touchend.passive="onTouchEnd"
     >
       <section v-for="(p, idx) in posts" :key="p.id" class="sw-item" :data-idx="idx">
-        <!-- 自绘播放器：无原生控件，弹幕 + 极简控制条 -->
+        <!-- 只有「当前 ±窗口」的条目才挂真实播放器：
+             移动端同时存在十几个 <video> 会占满硬件解码器，滚动直接掉到个位数帧率 -->
         <VideoPlayer
+          v-if="inWindow(idx)"
           class="sw-player"
           :src="mediaUrl(p.video_url)"
           :poster="mediaUrl(p.cover_url)"
           :post-id="p.id"
           :muted="muted"
           :active="idx === activeIdx"
-          :can-send="true"
+          :preload="preloadOf(idx)"
           mode="immersive"
         />
+        <!-- 窗口外：封面占位，等高占位保证 scroll-snap 与滚动位置不跳 -->
+        <div v-else class="sw-ph">
+          <img v-if="p.cover_url" :src="mediaUrl(p.cover_url)" alt="" loading="lazy" decoding="async" />
+          <span class="sw-ph-ic">▶</span>
+        </div>
+
         <div class="sw-mask" />
 
-        <div class="sw-info">
-          <div class="sw-author">
-            <el-avatar :size="30" :src="mediaUrl(p.avatar_url)">{{ (p.author_name || '?')[0] }}</el-avatar>
-            <b>@{{ p.author_name || '用户' + p.user_id }}</b>
+        <template v-if="inWindow(idx)">
+          <div class="sw-info">
+            <div class="sw-author">
+              <el-avatar :size="30" :src="mediaUrl(p.avatar_url)">{{ (p.author_name || '?')[0] }}</el-avatar>
+              <b>@{{ p.author_name || '用户' + p.user_id }}</b>
+            </div>
+            <h3 class="sw-title">{{ p.title || '未命名视频' }}</h3>
+            <p v-if="p.content" class="sw-desc">{{ plain(p.content) }}</p>
+            <div class="sw-tags" v-if="p.tags">
+              <router-link v-for="t in splitTags(p.tags)" :key="t" :to="`/tag/${encodeURIComponent(t)}`">#{{ t }}</router-link>
+            </div>
           </div>
-          <h3 class="sw-title">{{ p.title || '未命名视频' }}</h3>
-          <p v-if="p.content" class="sw-desc">{{ plain(p.content) }}</p>
-          <div class="sw-tags" v-if="p.tags">
-            <router-link v-for="t in splitTags(p.tags)" :key="t" :to="`/tag/${encodeURIComponent(t)}`">#{{ t }}</router-link>
+
+          <div class="sw-rail">
+            <button class="sw-act" :class="{ on: p.liked }" @click.stop="like(p)">
+              <span class="sw-ic">♥</span>
+              <small>{{ formatCount(p.like_count) }}</small>
+            </button>
+            <button class="sw-act" @click.stop="openDetail(p)">
+              <span class="sw-ic">💬</span>
+              <small>{{ formatCount(p.comment_count) }}</small>
+            </button>
+            <button class="sw-act" @click.stop="share(p)">
+              <span class="sw-ic">↗</span>
+              <small>分享</small>
+            </button>
+            <button class="sw-act" @click.stop="toggleMute">
+              <span class="sw-ic">{{ muted ? '🔇' : '🔊' }}</span>
+              <small>{{ muted ? '静音' : '有声' }}</small>
+            </button>
           </div>
-        </div>
+        </template>
 
-        <div class="sw-rail">
-          <button class="sw-act" :class="{ on: p.liked }" @click.stop="like(p)">
-            <span class="sw-ic">♥</span>
-            <small>{{ formatCount(p.like_count) }}</small>
-          </button>
-          <button class="sw-act" @click.stop="openDetail(p)">
-            <span class="sw-ic">💬</span>
-            <small>{{ formatCount(p.comment_count) }}</small>
-          </button>
-          <button class="sw-act" @click.stop="share(p)">
-            <span class="sw-ic">↗</span>
-            <small>分享</small>
-          </button>
-          <button class="sw-act" @click.stop="toggleMute">
-            <span class="sw-ic">{{ muted ? '🔇' : '🔊' }}</span>
-            <small>{{ muted ? '静音' : '有声' }}</small>
-          </button>
-        </div>
-
-        <div v-if="idx === 0 && muted" class="sw-hint">点击画面播放 · 右下角开声音</div>
+        <div v-if="idx === 0 && muted && inWindow(idx)" class="sw-hint">点击画面播放 · 右下角开声音</div>
       </section>
 
       <div v-if="loading" class="sw-loading">加载中…</div>
@@ -74,12 +84,20 @@ import VideoPlayer from './VideoPlayer.vue';
 /**
  * 竖滑短视频（沉浸式）
  *
- * 播放由「当前可见的第几条」驱动，不再依赖 IntersectionObserver：
- * 观察器在后台标签/动态高度下容易漏回调，导致「滑到下一条还在播上一条」。
- * 现在 scroll 里按 scrollTop / 单条高度 取整即可，稳定且和 scroll-snap 一一对应。
+ * 三条规则决定流畅度：
+ * 1) **播放器窗口化**：只有 `active-1 … active+2` 这几条挂真实 <video>，其余渲染封面占位。
+ *    DOM 与硬件解码器数量恒定（≤4），翻多少页都不会累积。
+ * 2) **预缓存下一条**：当前条与下一条 `preload=auto`，浏览器用 Range 提前缓冲首段，
+ *    滑过去基本秒开；其余只取 metadata。配合服务端 /uploads 的长缓存，回看不再走网络。
+ * 3) **滚动只做常量时间的事**：scroll 用 rAF 合并，按 `scrollTop/单条高度` 取整判断当前条，
+ *    不读 scrollHeight、不用 IntersectionObserver（后台标签会漏回调）。
  */
 const router = useRouter();
 const auth = useAuthStore();
+
+const PAGE_SIZE = 6;
+const WIN_BEFORE = 1; // 往回保留 1 条：滑回去能立刻续播，不用重新缓冲
+const WIN_AFTER = 2; // 往前挂 2 条：下一条已就绪，下下条开始预取
 
 const posts = ref<FeedPost[]>([]);
 const loading = ref(false);
@@ -89,6 +107,16 @@ const page = ref(1);
 const scroller = ref<HTMLElement | null>(null);
 const isMobile = ref(false);
 const activeIdx = ref(0);
+
+function inWindow(idx: number) {
+  return idx >= activeIdx.value - WIN_BEFORE && idx <= activeIdx.value + WIN_AFTER;
+}
+
+function preloadOf(idx: number) {
+  if (idx === activeIdx.value) return 'auto' as const;
+  if (idx === activeIdx.value + 1) return 'auto' as const; // 预缓存下一条
+  return 'metadata' as const;
+}
 
 function plain(s: string) {
   return (s || '').replace(/[#*`>[\]]/g, '').slice(0, 90);
@@ -108,14 +136,15 @@ async function load(reset = false) {
     posts.value = [];
     hasMore.value = true;
     activeIdx.value = 0;
+  } else if (!hasMore.value) {
+    return;
   }
-  if (!hasMore.value && !reset) return;
   loading.value = true;
   try {
-    const r = await feedApi.list({ kind: 'video', page: page.value, page_size: 6 });
+    const r = await feedApi.list({ kind: 'video', page: page.value, page_size: PAGE_SIZE });
     const list = r.data?.data?.list || [];
     posts.value = reset ? list : [...posts.value, ...list];
-    hasMore.value = list.length >= 6;
+    hasMore.value = list.length >= PAGE_SIZE;
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '加载失败');
   } finally {
@@ -125,23 +154,33 @@ async function load(reset = false) {
   }
 }
 
+/** 只在「真的换了一条」时才翻页，避免滚动过程里反复自增页码 */
+function maybeLoadMore() {
+  if (loading.value || !hasMore.value) return;
+  if (activeIdx.value < posts.value.length - 2) return;
+  page.value += 1;
+  load();
+}
+
 function syncActive() {
   const el = scroller.value;
   if (!el) return;
   const h = el.clientHeight || 1;
-  const idx = Math.round(el.scrollTop / h);
-  activeIdx.value = Math.max(0, Math.min(posts.value.length - 1, idx));
+  const idx = Math.max(0, Math.min(posts.value.length - 1, Math.round(el.scrollTop / h)));
+  if (idx === activeIdx.value) return;
+  activeIdx.value = idx;
+  maybeLoadMore();
 }
 
+// ---------- 滚动：rAF 合并 ----------
+let rafPending = false;
 function onScroll() {
-  const el = scroller.value;
-  if (!el) return;
-  syncActive();
-  // 触底前预取下一页（还剩不到两屏时）
-  if (el.scrollTop + el.clientHeight * 2 >= el.scrollHeight && hasMore.value && !loading.value) {
-    page.value++;
-    load();
-  }
+  if (rafPending) return;
+  rafPending = true;
+  requestAnimationFrame(() => {
+    rafPending = false;
+    syncActive();
+  });
 }
 
 // ---------- 手势兜底 ----------
@@ -257,17 +296,54 @@ onBeforeUnmount(unlockPageScroll);
   align-items: center;
   justify-content: center;
   background: #000;
+  /* 单条自成渲染边界：内部重绘不外溢到相邻条目 */
+  contain: layout paint style;
 }
 .sw-player {
   width: 100%;
   height: 100%;
 }
-.mobile .sw-player :deep(.nvp-video) {
-  object-fit: cover;
-}
+/* 注意：不要在这里强制 object-fit。竖屏/横屏由 VideoPlayer 按 videoWidth/videoHeight
+   自行决定（竖屏片 cover 铺满、横屏片 contain 留上下黑边），全局强制 cover 会把横屏片裁掉。 */
 /* 桌面端竖滑限制成竖屏比例，居中显示，避免大屏上一条视频占满整宽 */
 .swipe-feed:not(.mobile) .sw-player {
   max-width: 480px;
+}
+
+/* 窗口外占位：只画封面，不建解码器 */
+.sw-ph {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+.sw-ph img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.72;
+}
+.swipe-feed:not(.mobile) .sw-ph img {
+  max-width: 480px;
+}
+.sw-ph-ic {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  padding-left: 3px;
 }
 
 .sw-mask {

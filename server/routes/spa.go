@@ -51,7 +51,21 @@ func registerStaticAndSPA(r *gin.Engine) {
 	proxyGroup.Any("/:authorId/:projectName/*path", middleware.NamedProxyHandler())
 
 	// 上传资源静态文件
-	r.StaticFS("/uploads", gin.Dir(config.UploadDir, false))
+	//
+	// 与 SPA 资源不同，这里不能用 gin.StaticFS：它不给 Cache-Control，
+	// 浏览器每次进竖滑页都要对视频回源做条件校验（移动端网络下就是「滑一下卡一下」）。
+	// 文件名是随机串且内容不可变，因此给长缓存；http.FileServer 自带
+	// Range / Last-Modified / If-Modified-Since / If-Range，拖动进度与断点续传不受影响。
+	uploadsHandler := func() gin.HandlerFunc {
+		fileServer := http.StripPrefix("/uploads", http.FileServer(gin.Dir(config.UploadDir, false)))
+		return func(c *gin.Context) {
+			c.Header("Cache-Control", "public, max-age=604800")
+			c.Header("X-Content-Type-Options", "nosniff")
+			fileServer.ServeHTTP(c.Writer, c.Request)
+		}
+	}()
+	r.GET("/uploads/*filepath", uploadsHandler)
+	r.HEAD("/uploads/*filepath", uploadsHandler)
 
 	// 嵌入的前端 (SPA)
 	// 注意：`-tags nodist` 构建（CI 后端 job / 新克隆跑测试）不含真实前端产物，
