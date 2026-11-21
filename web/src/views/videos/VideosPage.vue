@@ -3,7 +3,10 @@
     <!-- 竖滑模式：整屏沉浸，导航栏以下全占 -->
     <div v-if="mode === 'swipe'" class="vp-swipe">
       <SwipeFeed />
-      <button class="vp-switch" @click="setMode('grid')">▦ 切到网格</button>
+      <div class="vp-swipe-nav">
+        <button class="vp-switch" @click="$router.back()">← 返回</button>
+        <button class="vp-switch" @click="setMode('grid')">▦ 切到网格</button>
+      </div>
     </div>
 
     <template v-else>
@@ -99,8 +102,8 @@ onMounted(() => {
 .videos-page { max-width: 1240px; margin: 0 auto; padding: 20px 18px 48px; }
 .videos-page.is-swipe { max-width: none; padding: 0; height: calc(100vh - 60px); background: #000; }
 .vp-swipe { position: relative; height: 100%; }
+.vp-swipe-nav { position: absolute; right: 14px; top: 12px; z-index: 3; display: flex; gap: 8px; }
 .vp-switch {
-  position: absolute; right: 14px; top: 12px; z-index: 3;
   background: rgba(255, 255, 255, 0.16); color: #fff; border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 14px; padding: 5px 12px; font-size: 0.78rem; cursor: pointer;
   backdrop-filter: blur(4px);
@@ -118,5 +121,21 @@ onMounted(() => {
   .videos-page { padding: 12px 10px 32px; }
   .vp-grid { grid-template-columns: repeat(2, 1fr); gap: 16px 10px; }
   .videos-page.is-swipe { padding: 0; }
+}
+/* 手机端竖滑同样整屏覆盖：去掉 calc(100vh - 60px) 对头部高度的猜测 */
+@media (max-width: 767px) {
+  .videos-page.is-swipe {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    height: 100%;
+    margin: 0;
+    z-index: 200;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+@supports (height: 100dvh) {
+  @media (max-width: 767px) {
+    .videos-page.is-swipe { bottom: auto; height: 100dvh; }
+  }
 }
 </style>

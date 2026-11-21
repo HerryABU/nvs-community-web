@@ -141,6 +141,8 @@
 - ✨ **唯一入口：发现** `/discover`：图文 / 短视频 / 音乐混排，支持推荐/关注/我的与类型筛选（写进 URL）。导航不再单列「视频 / 图片 / 微文」入口。
 - 📺 **视频详情** `/video/:id`、**🎵 音乐详情** `/music/:id`、**🖼 图片详情** `/image/:id`、**📝 微文详情** `/micro/:id`：四条**真实路由**，共用完整页组件（大播放器 / 音频 / 灯箱 / 全文 + 作者栏 + Markdown 简介 + 评论 + 相关推荐），可深链、刷新、分享；**不是弹窗或嵌套层**。
 - 📲 **竖滑短视频** `/shorts`：全屏 scroll-snap 一条一条刷，进入自动播放、滑走自动暂停，右侧点赞/评论/分享/静音。
+- 🎛 **自绘播放器（不用浏览器原生 controls）**：进度条可拖拽并显示缓冲、播放/暂停、时间、音量、0.75–2x 倍速、弹幕开关、全屏；键盘 `空格` `←/→` `↑/↓` `m` `f` 全部可用，播放时控制条 2.8s 自动隐藏、移动即唤醒。
+- 💬 **视频弹幕**：独立 `feed_danmaku` 表（不混评论、不计入评论数），按 `time_ms` 与播放进度逐帧对齐上屏（rAF 驱动，不依赖 `timeupdate` 的 4 次/秒）；滚动 / 顶部 / 底部三种模式、`#rrggbb` 自定义颜色、轨道自动避让；暂停时弹幕动画同步静止，拖回前面自动重排游标；发弹幕立即上屏、单条 80 字、60 秒 30 条限流。
 - 🗂 旧频道页 `/videos`、`/images`、`/micro` 仅保留兼容历史链接，前端不再露出入口。
 - 🎯 **视频封面自动取帧**：发布时前端 canvas 从视频前段挑一帧（避开黑场）；服务端有 ffmpeg 时再兜底重抽，**只做外部命令调用、不内联不打包**（LGPL/GPL 与本项目 AGPL 的分发义务分开）。
 - 🏷 **标签筛选** `/tag/:tag`：发现流里的 `#空耳` `#测试` 等标签可直接点击进入，按服务端倒排索引精确筛选（不靠 LIKE 模糊匹配），URL 可分享。
@@ -379,7 +381,7 @@ cd server && go build -ldflags="-s -w" -o nvs-server.exe . && cd ..
 | 所有接口 | [docs/API.md](docs/API.md) |
 | 所有环境变量 | [docs/CONFIG.md](docs/CONFIG.md) |
 | 目录结构 / 分层约定 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| 全部数据表（182 张，按域） | [docs/DATABASE.md](docs/DATABASE.md) |
+| 全部数据表（183 张，按域） | [docs/DATABASE.md](docs/DATABASE.md) |
 | 逐表字段明细 | [docs/DATABASE-SCHEMA.md](docs/DATABASE-SCHEMA.md) |
 | 本地开发 / 构建 / 测试 / 发版 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) |
 

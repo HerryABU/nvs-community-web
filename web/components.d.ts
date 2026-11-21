@@ -57,6 +57,7 @@ declare module 'vue' {
     CommentSection: typeof import('./src/components/comment/CommentSection.vue')['default']
     ConflictResolveDialog: typeof import('./src/components/collab/ConflictResolveDialog.vue')['default']
     ContentRefPicker: typeof import('./src/components/frame/ContentRefPicker.vue')['default']
+    DanmakuLayer: typeof import('./src/components/feed/DanmakuLayer.vue')['default']
     DashboardCharts: typeof import('./src/components/admin/DashboardCharts.vue')['default']
     DbJobProgress: typeof import('./src/components/admin/DbJobProgress.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
@@ -179,6 +180,7 @@ declare module 'vue' {
     StdMap: typeof import('./src/components/maps/StdMap.vue')['default']
     SwipeFeed: typeof import('./src/components/feed/SwipeFeed.vue')['default']
     VideoCard: typeof import('./src/components/feed/VideoCard.vue')['default']
+    VideoPlayer: typeof import('./src/components/feed/VideoPlayer.vue')['default']
     WeChatQRLogin: typeof import('./src/components/auth/WeChatQRLogin.vue')['default']
     WorldBookManager: typeof import('./src/components/oc/WorldBookManager.vue')['default']
   }

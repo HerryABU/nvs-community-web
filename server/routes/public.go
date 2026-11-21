@@ -104,6 +104,8 @@ func registerPublic(r *gin.Engine) {
 		public.GET("/feed", feed.List)
 		public.GET("/feed/:id", feed.Detail)
 		public.GET("/feed/:id/comments", feed.ListComments)
+		// 弹幕：未登录也能看（弹幕本身就是公共氛围的一部分）
+		public.GET("/feed/:id/danmaku", feed.ListDanmaku)
 		// 楼加密（入口限制）：单楼整读（公开，楼内校验密码）；验证/设密需登录态
 		public.GET("/comments/:id/detail", forum.GetFloorDetail)
 		public.GET("/reports/reasons", admingov.GetReportReasons)

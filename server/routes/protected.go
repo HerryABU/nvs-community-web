@@ -557,6 +557,9 @@ func registerProtected(r *gin.Engine) {
 		// 重新抽帧封面：历史视频补齐 / 作者对自动封面不满意时手动重生（服务端调外部 ffmpeg）
 		protected.POST("/feed/:id/cover", feed.RegenerateCover)
 		protected.POST("/feed/:id/comments", feed.CreateComment)
+		// 弹幕：发得太快会刷屏，单独限流 60 秒 30 条
+		protected.POST("/feed/:id/danmaku", security.RateLimit(30, 60), feed.CreateDanmaku)
+		protected.DELETE("/feed/danmaku/:did", feed.DeleteDanmaku)
 		protected.DELETE("/feed-comments/:cid", feed.DeleteComment)
 		protected.POST("/feed-comments/:cid/like", feed.LikeComment)
 

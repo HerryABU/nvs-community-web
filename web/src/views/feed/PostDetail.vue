@@ -11,15 +11,14 @@
           class="vd-stage"
           :class="{ 'is-video': post.kind === 'video' }"
         >
-          <video
+          <VideoPlayer
             v-if="post.kind === 'video'"
-            ref="player"
             :src="mediaUrl(post.video_url)"
             :poster="mediaUrl(post.cover_url)"
-            controls
-            playsinline
-            preload="metadata"
-            @loadedmetadata="onMeta"
+            :post-id="post.id"
+            :duration-hint="post.duration"
+            mode="detail"
+            @meta="onMeta"
           />
           <div v-else-if="post.kind === 'music'" class="vd-music">
             <img v-if="post.cover_url" :src="mediaUrl(post.cover_url)" alt="封面" />
@@ -128,6 +127,7 @@ import { mediaUrl } from '@/utils/prefix';
 import { useAuthStore } from '@/stores/auth';
 import { formatCount, formatDuration, formatWhen } from '@/utils/feedFormat';
 import { postPath, POST_KIND_LABEL } from '@/utils/feedRoute';
+import VideoPlayer from '@/components/feed/VideoPlayer.vue';
 
 function kindLabel(kind?: string) {
   return POST_KIND_LABEL[kind || 'micro'] || '内容';
@@ -148,7 +148,7 @@ const descHtml = ref('');
 const descOpen = ref(false);
 const rail = ref<FeedPost[]>([]);
 const authorPosts = ref<FeedPost[]>([]);
-const player = ref<HTMLVideoElement | null>(null);
+
 
 const myId = computed(() => auth.user?.id || 0);
 const isMine = computed(() => !!post.value && post.value.user_id === myId.value);
@@ -167,11 +167,10 @@ const tags = computed(() =>
     .filter(Boolean)
 );
 
-function onMeta() {
+function onMeta(duration: number) {
   // 视频没存时长时，用播放器解析出来的补一次展示（不写库，避免每看一次都打接口）
-  const v = player.value;
-  if (v && post.value && !post.value.duration && isFinite(v.duration)) {
-    post.value.duration = Math.round(v.duration);
+  if (post.value && !post.value.duration && Number.isFinite(duration) && duration > 0) {
+    post.value.duration = Math.round(duration);
   }
 }
 

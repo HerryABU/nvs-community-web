@@ -8,10 +8,44 @@
 import json
 import os
 import re
+import sqlite3
 import subprocess
+import sys
 
 ROOT = r"C:\Users\QBZ95\Desktop\tools\codes\nvs"
-SCHEMA = json.load(open(r"C:\tmp\schema.json", encoding="utf-8"))
+
+
+def load_schema(db_path):
+    """直接从 SQLite 读表结构（表 / 字段 / 索引 / 行数）。
+
+    以前是从 C:\\tmp\\schema.json 快照读，容易忘记刷新导致新增表进不了文档；
+    现在以「库即为真相」，参数给哪个库就读哪个库。
+    """
+    con = sqlite3.connect(db_path)
+    schema = {}
+    names = [
+        r[0]
+        for r in con.execute(
+            "select name from sqlite_master where type='table' and name not like 'sqlite_%' order by name"
+        )
+    ]
+    for name in names:
+        cols = []
+        for cid, cname, ctype, notnull, _dflt, pk in con.execute(f'PRAGMA table_info("{name}")'):
+            cols.append({"n": cname, "t": (ctype or "").upper(), "nn": bool(notnull), "pk": pk})
+        idx = []
+        for row in con.execute(f'PRAGMA index_list("{name}")'):
+            idx.append(row[1])
+        try:
+            rows = con.execute(f'select count(*) from "{name}"').fetchone()[0]
+        except sqlite3.Error:
+            rows = 0
+        schema[name] = {"cols": cols, "rows": rows, "idx": idx}
+    con.close()
+    return schema
+
+
+SCHEMA = {}
 
 # ---------------------------------------------------------------- 域划分
 DOMAINS = [
@@ -33,7 +67,7 @@ DOMAINS = [
     ]),
     ("内容流（发现）", "图文/视频/音乐/微文动态、评论、点赞收藏、标签倒排", [
         "feed_posts", "feed_comments", "feed_comment_likes", "feed_likes",
-        "feed_favorites", "feed_tags",
+        "feed_favorites", "feed_tags", "feed_danmaku",
     ]),
     ("论坛", "版块、主题、楼层、禁言与建版配额", [
         "forums", "threads", "posts", "forum_mutes", "user_forum_quotas",
@@ -152,6 +186,7 @@ PURPOSE = {
     "feed_likes": "动态点赞",
     "feed_favorites": "动态收藏",
     "feed_tags": "标签倒排索引（唯一索引 post_id+tag）",
+    "feed_danmaku": "视频弹幕（按 time_ms 绑时间轴，独立于评论计数）",
     # 论坛
     "forums": "版块：类型、分区、关联对象、层级",
     "threads": "主题帖：置顶/锁定/浏览量",
@@ -311,6 +346,7 @@ KEY_FIELDS = {
     "content_blobs": "(ref_type,ref_id) 主键 / content / content_hash",
     "novel_indexes": "novel_id 主键 / data / hash",
     "feed_tags": "(post_id,tag) 唯一 / tag 索引",
+    "feed_danmaku": "(post_id,time_ms) 联合索引 / status 索引",
     "aigc_deliveries": "object_key 唯一 / produce_id / labeled / public",
     "aigc_delivery_grants": "(object_key,user_id) 唯一",
     "platform_configs": "key 主键 / value",
@@ -358,6 +394,12 @@ def col_note(col, indexes):
 
 
 def main():
+    global SCHEMA
+    db = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "data", "nvs.db")
+    if not os.path.exists(db):
+        raise SystemExit(f"!! 找不到数据库：{db}\n用法：python scripts/gen-db-doc.py <nvs.db>")
+    SCHEMA = load_schema(db)
+
     sources = collect_sources()
     assigned = []
     for _name, _desc, tables in DOMAINS:
@@ -428,7 +470,7 @@ def main():
     # ---------------- 明细
     S = []
     S.append("# 数据表字段明细\n")
-    S.append("> 由 `scripts/gen_db_doc.py` 依据实际库结构 + 模型自动生成，**请勿手工修改**；")
+    S.append("> 由 `scripts/gen-db-doc.py` 依据实际库结构 + 模型自动生成，**请勿手工修改**；")
     S.append("> 改模型后重新生成即可。用途说明见 [`DATABASE.md`](DATABASE.md)。\n")
     S.append(f"共 {len(SCHEMA)} 张表、{total_cols} 个字段。\n")
     for name, desc, tables in DOMAINS:

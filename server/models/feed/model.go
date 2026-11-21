@@ -113,7 +113,7 @@ func (CommentLike) TableName() string { return "feed_comment_likes" }
 
 // Models 注册本域全部表
 func Models() []interface{} {
-	return []interface{}{&Post{}, &Like{}, &Favorite{}, &Comment{}, &CommentLike{}, &Tag{}}
+	return []interface{}{&Post{}, &Like{}, &Favorite{}, &Comment{}, &CommentLike{}, &Tag{}, &Danmaku{}}
 }
 
 func init() {

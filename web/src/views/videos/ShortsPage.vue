@@ -24,4 +24,21 @@ import SwipeFeed from '@/components/feed/SwipeFeed.vue';
 }
 .shorts-nav .tip { color: rgba(255, 255, 255, 0.7); font-size: 0.74rem; }
 @media (max-width: 768px) { .shorts-nav .tip { display: none; } }
+
+/* 手机端整屏覆盖：不依赖祖先高度，也不会被外层页面抢走手势。
+   真机上 100vh 常大于可视区（地址栏），所以优先用 100dvh。 */
+@media (max-width: 767px) {
+  .shorts-page {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    height: 100%;
+    z-index: 200;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+@supports (height: 100dvh) {
+  @media (max-width: 767px) {
+    .shorts-page { bottom: auto; height: 100dvh; }
+  }
+}
 </style>

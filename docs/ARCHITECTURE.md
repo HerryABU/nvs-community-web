@@ -208,7 +208,7 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - ⚠️ 回帖删除后不可解封恢复（物理删除），管理员「解封/恢复」对 post 类型仅清除封禁原因标记。
 
 ### 数据表
-全部 **182 张表 / 2060 个字段** 已按业务域整理成两份专门文档：
+全部 **183 张表 / 2069 个字段** 已按业务域整理成两份专门文档：
 
 - [`DATABASE.md`](DATABASE.md)：分域总览（表名 / 用途 / 主要字段 / 行数 / 源码位置）+ 全局约定
 - [`DATABASE-SCHEMA.md`](DATABASE-SCHEMA.md)：逐表字段明细（由 `python scripts/gen-db-doc.py data/nvs.db` 自动生成）
@@ -231,6 +231,15 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 | forum_mutes | `idx_forum_mutes_forum_user` | 论坛内禁言查询 |
 
 （chapters 由唯一复合索引 `uk_novel_chapter(novel_id, chapter_number)` 覆盖，无需重复索引；follows / bookshelf / ratings / federated_novels 已有等价索引。）
+
+### 视频弹幕（feed_danmaku）
+- **单独建表，不混 `feed_comments`**：弹幕绑在视频时间轴（`time_ms`）上、量大、读多写少，且不应计入评论数、不进楼中楼列表。
+- **联合索引 `idx_danmaku_post_time(post_id, time_ms)`**：按视频 + 时间窗拉取（`from_ms`/`to_ms` 闭区间），一次加载整片弹幕；`status` 单列索引用于隐藏/审核。
+- **只存纯文本**：`content` 上限 80 字（列宽 255 字节），前端用 `textContent` 写入而非 `v-html`，天然免疫 XSS；颜色仅接受 `#rrggbb`。
+- **时间点校验**：写入时校验目标必须是 `kind=video` 且处于发布态，`time_ms` 不得超过 `(duration+5)*1000`（时长未知时放行，允许先发后取元数据）。
+- **配额**：单次拉取上限 3000 条；发送走 60 秒 30 条限流。
+- **渲染**：前端 `components/feed/DanmakuLayer.vue` 由 rAF 逐帧对齐 `currentTime`（`timeupdate` 仅 4 次/秒，会成串冒出），轨道分配按「同轨上一条尾巴让出间距」的时刻判定；暂停时把 CSS 动画 `animation-play-state` 置 `paused`，回退超过 0.8 秒清屏并按二分重算游标。
+- **播放器**：`components/feed/VideoPlayer.vue` 自绘控制条（`controls` 属性关闭），详情页与竖滑沉浸模式共用同一组件。
 
 ### 预留表 / 字段（功能未开发）
 以下表与字段当前仅建表占位，**无业务代码**，请勿误用：

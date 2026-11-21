@@ -9,7 +9,7 @@
 python scripts/gen-db-doc.py data/nvs.db
 ```
 
-当前共 **182 张表 / 2060 个字段**（行数为本机测试站实测，仅用于判断「有没有数据」，不代表生产规模）。
+当前共 **183 张表 / 2069 个字段**（行数为本机测试站实测，仅用于判断「有没有数据」，不代表生产规模）。
 
 ## 全局约定
 
@@ -30,7 +30,7 @@ python scripts/gen-db-doc.py data/nvs.db
 | [账号与用户](#domain-1) | 13 | 注册、登录、审计、关注、私信、通知、黑名单 |
 | [小说与创作](#domain-2) | 16 | 作品、章节、版本、协作、角色卡、阅读进度、评分、购买 |
 | [作者博客](#domain-3) | 11 | 博客文章、分类、标签、话题、点赞收藏、作者主页主题 |
-| [内容流（发现）](#domain-4) | 6 | 图文/视频/音乐/微文动态、评论、点赞收藏、标签倒排 |
+| [内容流（发现）](#domain-4) | 7 | 图文/视频/音乐/微文动态、评论、点赞收藏、标签倒排 |
 | [论坛](#domain-5) | 5 | 版块、主题、楼层、禁言与建版配额 |
 | [群组](#domain-6) | 8 | 群组、成员、群帖、群聊、群文件、已读位置、建群配额 |
 | [OC 角色扮演](#domain-7) | 16 | OC 角色卡、世界书、创作项目、AI 群组与剧情流 |
@@ -54,7 +54,7 @@ python scripts/gen-db-doc.py data/nvs.db
 | 表名 | 用途 | 主要字段 | 行数 | 源码 |
 | --- | --- | --- | --- | --- |
 | `users` | 账号主体：邮箱/密码哈希、昵称头像、角色、会员等级、状态 | role / member_level / status | 22 | `server/models/user.go` |
-| `user_audit_logs` | 用户操作审计：登录、改密、提权等，含 IP/UA 与结果 | id / user_id / action / ip | 514 | `server/models/apikey/user_audit.go` |
+| `user_audit_logs` | 用户操作审计：登录、改密、提权等，含 IP/UA 与结果 | id / user_id / action / ip | 521 | `server/models/apikey/user_audit.go` |
 | `refresh_states` | 当前有效的 refresh token 版本，用于强制下线 | user_id / active_jti / updated_at | 17 | `—（无模型定义）` |
 | `checkin_records` | 每日签到与连签奖励 | id / user_id / date / streak | 2 | `server/models/siteops/site_ops.go` |
 | `follows` | 关注关系，is_special 标记特别关注 | id / follower_id / followed_id / created_at | 0 | `server/models/social/follow.go` |
@@ -126,6 +126,7 @@ python scripts/gen-db-doc.py data/nvs.db
 | `feed_likes` | 动态点赞 | id / post_id / user_id / created_at | 0 | `server/models/feed/model.go` |
 | `feed_favorites` | 动态收藏 | id / post_id / user_id / created_at | 0 | `server/models/feed/model.go` |
 | `feed_tags` | 标签倒排索引（唯一索引 post_id+tag） | (post_id,tag) 唯一 / tag 索引 | 38 | `server/models/feed/tag.go` |
+| `feed_danmaku` | 视频弹幕（按 time_ms 绑时间轴，独立于评论计数） | (post_id,time_ms) 联合索引 / status 索引 | 5 | `server/models/feed/danmaku.go` |
 
 <a id="domain-5"></a>
 
@@ -291,7 +292,7 @@ OC 角色卡、世界书、创作项目、AI 群组与剧情流。
 | `bad_word_flags` | 敏感词命中标记与处置状态 | id / content_type / content_id / user_id | 2 | `server/models/security/badword.go` |
 | `xss_rules` | XSS 过滤规则 | id / name / pattern / action | 0 | `server/models/security/xss_rule.go` |
 | `honeypot_sessions` | 蜜罐会话（来源 IP、UA 归一、事件计数） | id / h_id / src_ip / ua_norm | 15 | `server/honeypot/model.go` |
-| `honeypot_events` | 蜜罐事件（诱饵、方法、路径、指纹） | id / session_id / kind / decoy | 367 | `server/honeypot/model.go` |
+| `honeypot_events` | 蜜罐事件（诱饵、方法、路径、指纹） | id / session_id / kind / decoy | 368 | `server/honeypot/model.go` |
 | `honeypot_fingerprints` | 蜜罐采集的浏览器指纹（canvas/WebGL/字体） | id / session_id / canvas / web_gl | 0 | `server/honeypot/fingerprint.go` |
 | `honeypot_settings` | 蜜罐开关与采集粒度 | id / enabled / level / record_ua | 1 | `server/honeypot/model.go` |
 | `blacklist_ips` | IP 黑名单（含到期时间） | id / ip / reason / expires_at | 0 | `server/models/platform/platform.go` |
@@ -307,10 +308,10 @@ OC 角色卡、世界书、创作项目、AI 群组与剧情流。
 | `sentiment_delete_requests` | 舆情触发的删除申请 | id / action / target_type / target_id | 0 | `server/sentiment/store/models.go` |
 | `api_keys` | API Key（哈希、前缀、角色、每分钟配额、IP 白名单） | id / user_id / name / role | 0 | `server/models/apikey/api_key.go` |
 | `api_key_alarms` | API Key 异常告警与确认 | id / kind / key_id / user_id | 0 | `server/models/apikey/api_key_alarm.go` |
-| `api_access_logs` | API 访问日志（身份、路径、状态码、IP） | id / identity_type / identity_id / key_prefix | 109 | `server/models/apikey/api_key.go` |
+| `api_access_logs` | API 访问日志（身份、路径、状态码、IP） | id / identity_type / identity_id / key_prefix | 117 | `server/models/apikey/api_key.go` |
 | `user_api_policies` | 用户限流策略与 Key 封禁状态 | id / user_id / quota_per_min / window_secs | 0 | `server/models/apikey/api_key.go` |
 | `rage_configs` | 限流/长连接参数（批量间隔、并发、WS/MQTT 开关） | id / enabled / batch_interval_sec / batch_size | 1 | `server/models/siteops/rage_config.go` |
-| `channel_balance_samples` | 上游渠道余额采样（用于额度预警） | id / base_url / remaining / used | 574 | `server/models/aicost/channel_balance_sample.go` |
+| `channel_balance_samples` | 上游渠道余额采样（用于额度预警） | id / base_url / remaining / used | 576 | `server/models/aicost/channel_balance_sample.go` |
 
 <a id="domain-14"></a>
 
@@ -364,7 +365,7 @@ OC 角色卡、世界书、创作项目、AI 群组与剧情流。
 
 | 表名 | 用途 | 主要字段 | 行数 | 源码 |
 | --- | --- | --- | --- | --- |
-| `web_access_logs` | 全站访问日志（UA 族、路径、IP、身份） | id / user_id / identity_type / ua_family | 40974 | `server/models/quota/web_access.go` |
+| `web_access_logs` | 全站访问日志（UA 族、路径、IP、身份） | id / user_id / identity_type / ua_family | 41517 | `server/models/quota/web_access.go` |
 | `zone_access_logs` | 分区进入日志（zone、IP、UA） | id / user_id / zone / entered_at | 5 | `server/models/platform/zone_access.go` |
 
 <a id="domain-17"></a>

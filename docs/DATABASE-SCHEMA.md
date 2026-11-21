@@ -1,9 +1,9 @@
 # 数据表字段明细
 
-> 由 `scripts/gen_db_doc.py` 依据实际库结构 + 模型自动生成，**请勿手工修改**；
+> 由 `scripts/gen-db-doc.py` 依据实际库结构 + 模型自动生成，**请勿手工修改**；
 > 改模型后重新生成即可。用途说明见 [`DATABASE.md`](DATABASE.md)。
 
-共 182 张表、2060 个字段。
+共 183 张表、2069 个字段。
 
 ## 账号与用户
 
@@ -23,40 +23,40 @@
 | `bio` | TEXT |  |
 | `role` | TEXT |  |
 | `signing_key` | TEXT |  |
-| `real_name_verified` | numeric |  |
+| `real_name_verified` | NUMERIC |  |
 | `registration_ip` | TEXT |  |
 | `last_login_ip` | TEXT |  |
-| `last_login_at` | datetime |  |
+| `last_login_at` | DATETIME |  |
 | `login_fail_count` | INTEGER |  |
-| `locked_until` | datetime |  |
-| `muted_until` | datetime |  |
+| `locked_until` | DATETIME |  |
+| `muted_until` | DATETIME |  |
 | `mute_reason` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
-| `deleted_at` | datetime | 软删除 |
-| `personalized_recommend` | numeric |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
+| `deleted_at` | DATETIME | 软删除 |
+| `personalized_recommend` | NUMERIC |  |
 | `police_granted_by` | TEXT |  |
-| `police_granted_at` | datetime |  |
+| `police_granted_at` | DATETIME |  |
 | `phone` | TEXT |  |
 | `real_name` | TEXT |  |
 | `id_card_hash` | TEXT | 哈希 |
 | `id_card_masked` | TEXT |  |
-| `real_name_at` | datetime |  |
-| `birth_date` | datetime |  |
-| `minor_protected` | numeric |  |
+| `real_name_at` | DATETIME |  |
+| `birth_date` | DATETIME |  |
+| `minor_protected` | NUMERIC |  |
 | `we_chat_open_id` | TEXT |  |
 | `we_chat_union_id` | TEXT |  |
-| `require_follow_to_message` | numeric |  |
-| `member_until` | datetime |  |
-| `risk_youth_mental` | numeric |  |
-| `risk_youth_mental_until` | datetime |  |
+| `require_follow_to_message` | NUMERIC |  |
+| `member_until` | DATETIME |  |
+| `risk_youth_mental` | NUMERIC |  |
+| `risk_youth_mental_until` | DATETIME |  |
 | `member_level` | INTEGER |  |
 
 索引：`idx_users_member_until`、`idx_users_we_chat_open_id`、`idx_users_id_card_hash`、`idx_users_phone`、`idx_users_username`、`idx_users_email`、`idx_users_deleted_at`
 
 ### `user_audit_logs`
 
-用户操作审计：登录、改密、提权等，含 IP/UA 与结果（行数 514）
+用户操作审计：登录、改密、提权等，含 IP/UA 与结果（行数 521）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -67,7 +67,7 @@
 | `user_agent` | TEXT |  |
 | `detail` | TEXT |  |
 | `result` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_user_audit_user_time`、`idx_user_audit_logs_action`
 
@@ -92,7 +92,7 @@
 | `date` | TEXT |  |
 | `streak` | INTEGER |  |
 | `reward` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`uk_checkin_user_date`
 
@@ -105,8 +105,8 @@
 | `id` | INTEGER | 主键 |
 | `follower_id` | INTEGER |  |
 | `followed_id` | INTEGER |  |
-| `created_at` | datetime | 时间 |
-| `is_special` | numeric |  |
+| `created_at` | DATETIME | 时间 |
+| `is_special` | NUMERIC |  |
 
 索引：`idx_follows_followed`、`idx_follows_follower`、`uk_follow`、`idx_follower`、`idx_followed`
 
@@ -120,11 +120,11 @@
 | `sender_id` | INTEGER |  |
 | `receiver_id` | INTEGER |  |
 | `content` | TEXT |  |
-| `read_at` | datetime |  |
-| `recalled` | numeric |  |
-| `deleted_by_sender` | numeric |  |
-| `deleted_by_receiver` | numeric |  |
-| `created_at` | datetime | 时间 |
+| `read_at` | DATETIME |  |
+| `recalled` | NUMERIC |  |
+| `deleted_by_sender` | NUMERIC |  |
+| `deleted_by_receiver` | NUMERIC |  |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_msg_pair`、`idx_msg_sender`、`idx_msg_receiver`、`idx_messages_created_at`
 
@@ -142,8 +142,8 @@
 | `title` | TEXT |  |
 | `content` | TEXT |  |
 | `link` | TEXT |  |
-| `read` | numeric |  |
-| `created_at` | datetime | 时间 |
+| `read` | NUMERIC |  |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_notifications_user_read_created`、`idx_notifications_type`
 
@@ -158,7 +158,7 @@
 | `blocked_user_id` | INTEGER |  |
 | `mode` | TEXT |  |
 | `reason` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_blacklists_user_id`、`idx_blacklists_pair`、`idx_blacklists_blocked_user_id`
 
@@ -172,7 +172,7 @@
 | `user_id` | INTEGER |  |
 | `target_type` | TEXT |  |
 | `target_id` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_hidden_user`
 
@@ -192,8 +192,8 @@
 | `status` | TEXT |  |
 | `handler_id` | INTEGER |  |
 | `verdict` | TEXT |  |
-| `resolved_at` | datetime |  |
-| `created_at` | datetime | 时间 |
+| `resolved_at` | DATETIME |  |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_reports_reporter_id`、`idx_reports_target`、`idx_reports_status`
 
@@ -207,10 +207,10 @@
 | `user_id` | INTEGER |  |
 | `total_reports` | INTEGER |  |
 | `malicious_count` | INTEGER |  |
-| `reporting_banned` | numeric |  |
+| `reporting_banned` | NUMERIC |  |
 | `ban_reason` | TEXT |  |
-| `banned_at` | datetime |  |
-| `updated_at` | datetime | 时间 |
+| `banned_at` | DATETIME |  |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_malicious_reporters_user_id`
 
@@ -226,7 +226,7 @@
 | `ip` | TEXT |  |
 | `ua_hash` | TEXT | 哈希 |
 | `source` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_gate_device_bindings_device_id`、`idx_gate_device_bindings_user_id`、`idx_gate_device_bindings_ip`、`idx_gate_device_bindings_created_at`
 
@@ -242,8 +242,8 @@
 | `max_uses` | INTEGER |  |
 | `used` | INTEGER |  |
 | `note` | TEXT |  |
-| `expires_at` | datetime |  |
-| `created_at` | datetime | 时间 |
+| `expires_at` | DATETIME |  |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_gate_invites_created_by`、`idx_gate_invites_code`
 
@@ -259,10 +259,10 @@
 | `author_id` | INTEGER |  |
 | `title` | TEXT |  |
 | `category` | TEXT |  |
-| `tags` | json |  |
+| `tags` | JSON |  |
 | `summary` | TEXT |  |
 | `cover_url` | TEXT |  |
-| `price_per_chapter` | decimal(10,2) |  |
+| `price_per_chapter` | DECIMAL(10,2) |  |
 | `status` | TEXT |  |
 | `source_type` | TEXT |  |
 | `creation_method` | TEXT |  |
@@ -270,11 +270,11 @@
 | `total_chapters` | INTEGER |  |
 | `view_count` | INTEGER |  |
 | `ban_reason` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
-| `deleted_at` | datetime | 软删除 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
+| `deleted_at` | DATETIME | 软删除 |
 | `deleted_by` | TEXT |  |
-| `wall_enabled` | numeric |  |
+| `wall_enabled` | NUMERIC |  |
 | `mode` | TEXT |  |
 | `read_permission` | TEXT |  |
 | `paid_price` | INTEGER |  |
@@ -283,7 +283,7 @@
 | `derivative_origin_title` | TEXT |  |
 | `derivative_origin_author` | TEXT |  |
 | `derivative_external_source` | TEXT |  |
-| `comments_enabled` | numeric |  |
+| `comments_enabled` | NUMERIC |  |
 | `like_count` | INTEGER |  |
 
 索引：`idx_novels_deleted_at`、`idx_novels_derivative_origin_id`、`idx_novels_read_permission`、`idx_novels_mode`、`idx_novels_category`、`idx_novels_author_status`
@@ -316,15 +316,15 @@
 | `word_count` | INTEGER |  |
 | `status` | TEXT |  |
 | `ban_reason` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
-| `deleted_at` | datetime | 软删除 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
+| `deleted_at` | DATETIME | 软删除 |
 | `deleted_by` | TEXT |  |
 | `mode` | TEXT |  |
 | `source_flow_id` | INTEGER |  |
 | `author_id` | INTEGER |  |
 | `review_note` | TEXT |  |
-| `images` | json |  |
+| `images` | JSON |  |
 
 索引：`idx_chapters_author_id`、`idx_chapters_source_flow_id`、`idx_chapters_status`、`idx_chapters_novel_id`、`uk_novel_chapter`、`idx_chapters_deleted_at`
 
@@ -349,9 +349,9 @@
 | `word_count` | INTEGER |  |
 | `message` | TEXT |  |
 | `author_id` | INTEGER |  |
-| `force` | numeric |  |
-| `deleted` | numeric |  |
-| `created_at` | datetime | 时间 |
+| `force` | NUMERIC |  |
+| `deleted` | NUMERIC |  |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_ch_ver`、`idx_chapter_versions_novel_id`、`idx_chapter_versions_author_id`
 
@@ -368,8 +368,8 @@
 | `from_ver` | INTEGER |  |
 | `from_branch` | TEXT |  |
 | `author_id` | INTEGER |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_branch`
 
@@ -384,15 +384,15 @@
 | `user_id` | INTEGER |  |
 | `role` | TEXT |  |
 | `status` | TEXT |  |
-| `can_publish` | numeric |  |
-| `can_review` | numeric |  |
-| `can_edit_others` | numeric |  |
+| `can_publish` | NUMERIC |  |
+| `can_review` | NUMERIC |  |
+| `can_edit_others` | NUMERIC |  |
 | `revenue_share_bp` | INTEGER |  |
 | `revenue_note` | TEXT |  |
 | `byline_order` | INTEGER |  |
 | `invited_by` | INTEGER |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_novel_collaborators_user_id`、`idx_novel_collaborators_status`、`idx_novel_collab`
 
@@ -409,7 +409,7 @@
 | `target_user_id` | INTEGER |  |
 | `before` | TEXT |  |
 | `after` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_novel_collab_audits_novel_id`、`idx_novel_collab_audits_actor_id`、`idx_novel_collab_audits_action`
 
@@ -427,8 +427,8 @@
 | `side` | TEXT |  |
 | `intro` | TEXT |  |
 | `sort_order` | INTEGER |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_novel_characters_novel_id`
 
@@ -446,8 +446,8 @@
 | `sort_order` | INTEGER |  |
 | `visibility` | TEXT |  |
 | `status` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_novel_doc_novel`
 
@@ -460,7 +460,7 @@
 | `id` | INTEGER | 主键 |
 | `novel_id` | INTEGER |  |
 | `user_id` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`uk_novel_like`、`idx_novel_like_novel`、`idx_novel_likes_user_id`
 
@@ -473,7 +473,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `novel_id` | INTEGER | 主键 |
 | `data` | TEXT |  |
 | `hash` | TEXT |  |
-| `updated_at` | datetime | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_novel_indexes_hash`
 
@@ -487,7 +487,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `user_id` | INTEGER |  |
 | `novel_id` | INTEGER |  |
 | `last_read_chapter` | INTEGER |  |
-| `added_at` | datetime |  |
+| `added_at` | DATETIME |  |
 
 索引：`idx_bookshelf_user`、`uk_user_novel`、`idx_bookshelf_user_id`、`idx_bookshelf_novel_id`
 
@@ -506,8 +506,8 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `selected_text` | TEXT |  |
 | `anchor` | INTEGER |  |
 | `visibility` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_reading_notes_user_novel`、`idx_note_user_novel`、`idx_reading_notes_visibility`
 
@@ -525,7 +525,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `thought_depth` | INTEGER |  |
 | `community_reputation` | INTEGER |  |
 | `update_stability` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_ratings_user_novel`、`idx_ratings_novel`、`uk_user_novel_rating`、`idx_ratings_novel_id`
 
@@ -540,7 +540,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `content_type` | TEXT |  |
 | `content_id` | INTEGER |  |
 | `price` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`uk_content_purchase`、`idx_content_purchases_user_id`
 
@@ -559,19 +559,19 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `quote_text` | TEXT |  |
 | `quote_offset` | INTEGER |  |
 | `parent_id` | INTEGER |  |
-| `is_markdown` | numeric |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
-| `deleted_at` | datetime | 软删除 |
+| `is_markdown` | NUMERIC |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
+| `deleted_at` | DATETIME | 软删除 |
 | `deleted_by` | TEXT |  |
 | `root_id` | INTEGER |  |
 | `floor_no` | INTEGER |  |
 | `reply_to_user_id` | INTEGER |  |
-| `has_password` | numeric |  |
+| `has_password` | NUMERIC |  |
 | `password_hash` | TEXT | 哈希 |
 | `created_micro` | INTEGER |  |
 | `mentions_raw` | TEXT |  |
-| `flagged_minor` | numeric |  |
+| `flagged_minor` | NUMERIC |  |
 | `moderation_status` | TEXT |  |
 | `region` | TEXT |  |
 | `images_raw` | TEXT |  |
@@ -592,11 +592,11 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `content_path` | TEXT |  |
 | `content_hash` | TEXT | 哈希 |
 | `summary` | TEXT |  |
-| `is_pinned` | numeric |  |
+| `is_pinned` | NUMERIC |  |
 | `view_count` | INTEGER |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
-| `deleted_at` | datetime | 软删除 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
+| `deleted_at` | DATETIME | 软删除 |
 | `category_id` | INTEGER |  |
 | `like_count` | INTEGER |  |
 | `deleted_by` | TEXT |  |
@@ -604,7 +604,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `paid_price` | INTEGER |  |
 | `favorite_count` | INTEGER |  |
 | `cover_url` | TEXT |  |
-| `comments_enabled` | numeric |  |
+| `comments_enabled` | NUMERIC |  |
 
 索引：`idx_author_blogs_read_permission`、`idx_blog_category`、`idx_author_blogs_created`、`idx_author_blogs_author`、`idx_author_blog`、`idx_author_blogs_is_pinned`、`idx_author_blogs_deleted_at`
 
@@ -618,7 +618,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `parent_id` | INTEGER |  |
 | `name` | TEXT |  |
 | `sort_order` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 | `created_by` | INTEGER |  |
 | `status` | TEXT |  |
 | `reject_reason` | TEXT |  |
@@ -634,7 +634,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `id` | INTEGER | 主键 |
 | `name` | TEXT |  |
 | `created_by` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_blog_tags_name`
 
@@ -657,7 +657,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `name` | TEXT |  |
 | `description` | TEXT |  |
 | `created_by` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_blog_topics_name`
 
@@ -679,7 +679,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `id` | INTEGER | 主键 |
 | `blog_id` | INTEGER |  |
 | `user_id` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`uk_blog_like`、`idx_blog_like_blog`、`idx_blog_likes_user_id`
 
@@ -692,7 +692,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `id` | INTEGER | 主键 |
 | `blog_id` | INTEGER |  |
 | `user_id` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`uk_blog_fav`、`idx_blog_fav_blog`、`idx_blog_favorites_user_id`
 
@@ -704,7 +704,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | --- | --- | --- |
 | `author_id` | INTEGER | 主键 |
 | `css` | TEXT |  |
-| `updated_at` | datetime | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `blog_style` | TEXT |  |
 
 ### `author_home_customize`
@@ -717,12 +717,12 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `raw_html` | TEXT |  |
 | `safe_html` | TEXT |  |
 | `public_html` | TEXT |  |
-| `review_status` | varchar(16) |  |
-| `had_issues` | numeric |  |
+| `review_status` | VARCHAR(16) |  |
+| `had_issues` | NUMERIC |  |
 | `review_note` | TEXT |  |
 | `reviewed_by` | INTEGER |  |
-| `reviewed_at` | datetime |  |
-| `updated_at` | datetime | 时间 |
+| `reviewed_at` | DATETIME |  |
+| `updated_at` | DATETIME | 时间 |
 
 ### `user_home_customize`
 
@@ -732,7 +732,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | --- | --- | --- |
 | `user_id` | INTEGER | 主键 |
 | `raw_html` | TEXT |  |
-| `updated_at` | datetime | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 ## 内容流（发现）
 
@@ -760,8 +760,8 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `favorite_count` | INTEGER |  |
 | `share_count` | INTEGER |  |
 | `view_count` | INTEGER |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `audio_url` | TEXT |  |
 
 索引：`idx_feed_user`、`idx_feed_kind`、`idx_feed_posts_status`
@@ -778,7 +778,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `parent_id` | INTEGER |  |
 | `content` | TEXT |  |
 | `like_count` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_feed_comments_parent_id`、`idx_feed_comment`、`idx_feed_comments_user_id`
 
@@ -791,7 +791,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `id` | INTEGER | 主键 |
 | `comment_id` | INTEGER |  |
 | `user_id` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_feed_clike`
 
@@ -804,7 +804,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `id` | INTEGER | 主键 |
 | `post_id` | INTEGER |  |
 | `user_id` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_feed_like`
 
@@ -817,7 +817,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `id` | INTEGER | 主键 |
 | `post_id` | INTEGER |  |
 | `user_id` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_feed_fav`
 
@@ -830,9 +830,27 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `id` | INTEGER | 主键 |
 | `post_id` | INTEGER |  |
 | `tag` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_feed_tag_post_tag`、`idx_feed_tag_post`、`idx_feed_tag_name`
+
+### `feed_danmaku`
+
+视频弹幕（按 time_ms 绑时间轴，独立于评论计数）（行数 5）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | INTEGER | 主键 |
+| `post_id` | INTEGER |  |
+| `user_id` | INTEGER |  |
+| `content` | TEXT |  |
+| `time_ms` | INTEGER |  |
+| `mode` | TEXT |  |
+| `color` | TEXT |  |
+| `status` | TEXT |  |
+| `created_at` | DATETIME | 时间 |
+
+索引：`idx_danmaku_post_time`、`idx_feed_danmaku_user_id`、`idx_feed_danmaku_status`
 
 ## 论坛
 
@@ -852,13 +870,13 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `sort_order` | INTEGER |  |
 | `thread_count` | INTEGER |  |
 | `creator_id` | INTEGER |  |
-| `is_public` | numeric |  |
+| `is_public` | NUMERIC |  |
 | `password_hash` | TEXT | 哈希 |
 | `room_code` | TEXT |  |
 | `review_status` | TEXT |  |
 | `review_note` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `deleted_at` | datetime | 软删除 |
+| `created_at` | DATETIME | 时间 |
+| `deleted_at` | DATETIME | 软删除 |
 
 索引：`idx_forums_creator_id`、`idx_forums_room_code`、`idx_forums_review_status`、`idx_forums_deleted_at`、`idx_forums_type`、`idx_forums_parent_id`
 
@@ -873,13 +891,13 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `user_id` | INTEGER |  |
 | `title` | TEXT |  |
 | `content` | TEXT |  |
-| `is_pinned` | numeric |  |
-| `is_locked` | numeric |  |
+| `is_pinned` | NUMERIC |  |
+| `is_locked` | NUMERIC |  |
 | `view_count` | INTEGER |  |
 | `post_count` | INTEGER |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
-| `deleted_at` | datetime | 软删除 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
+| `deleted_at` | DATETIME | 软删除 |
 
 索引：`idx_threads_forum_created`、`idx_threads_user_id`、`idx_threads_deleted_at`
 
@@ -893,8 +911,8 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `thread_id` | INTEGER |  |
 | `user_id` | INTEGER |  |
 | `content` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `parent_id` | INTEGER |  |
 | `root_id` | INTEGER |  |
 | `floor_no` | INTEGER |  |
@@ -911,10 +929,10 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `id` | INTEGER | 主键 |
 | `forum_id` | INTEGER |  |
 | `user_id` | INTEGER |  |
-| `muted_until` | datetime |  |
+| `muted_until` | DATETIME |  |
 | `reason` | TEXT |  |
-| `admin_ban` | numeric |  |
-| `created_at` | datetime | 时间 |
+| `admin_ban` | NUMERIC |  |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_forum_mutes_forum_user`
 
@@ -928,8 +946,8 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `user_id` | INTEGER |  |
 | `max_forums` | INTEGER |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_user_forum_quotas_user_id`
 
@@ -953,19 +971,19 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `cover_url` | TEXT |  |
 | `member_limit` | INTEGER |  |
 | `post_limit` | INTEGER |  |
-| `review_first` | numeric |  |
+| `review_first` | NUMERIC |  |
 | `status` | TEXT |  |
 | `member_count` | INTEGER |  |
 | `post_count` | INTEGER |  |
 | `announcement` | TEXT |  |
 | `announcement_by` | INTEGER |  |
-| `announcement_at` | datetime |  |
-| `allow_member_invite` | numeric |  |
-| `ai_enabled` | numeric |  |
+| `announcement_at` | DATETIME |  |
+| `allow_member_invite` | NUMERIC |  |
+| `ai_enabled` | NUMERIC |  |
 | `ai_agent_id` | INTEGER |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
-| `deleted_at` | datetime | 软删除 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
+| `deleted_at` | DATETIME | 软删除 |
 
 索引：`idx_groups_category`、`idx_groups_visibility`、`idx_groups_status`、`idx_groups_deleted_at`、`idx_groups_owner_id`、`idx_groups_group_no`、`idx_groups_name`
 
@@ -980,10 +998,10 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `user_id` | INTEGER |  |
 | `role` | TEXT |  |
 | `status` | TEXT |  |
-| `muted_till` | datetime |  |
+| `muted_till` | DATETIME |  |
 | `note` | TEXT |  |
-| `joined_at` | datetime |  |
-| `updated_at` | datetime | 时间 |
+| `joined_at` | DATETIME |  |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_group_member`、`idx_group_member_user`、`idx_group_members_status`
 
@@ -1000,10 +1018,10 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `content` | TEXT |  |
 | `status` | TEXT |  |
 | `reply_cnt` | INTEGER |  |
-| `ai_assisted` | numeric |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
-| `deleted_at` | datetime | 软删除 |
+| `ai_assisted` | NUMERIC |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
+| `deleted_at` | DATETIME | 软删除 |
 
 索引：`idx_group_posts_group_id`、`idx_group_posts_user_id`、`idx_group_posts_status`、`idx_group_posts_deleted_at`
 
@@ -1019,8 +1037,8 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `user_id` | INTEGER |  |
 | `content` | TEXT |  |
 | `status` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `deleted_at` | datetime | 软删除 |
+| `created_at` | DATETIME | 时间 |
+| `deleted_at` | DATETIME | 软删除 |
 
 索引：`idx_group_post_replies_group_id`、`idx_group_post_replies_post_id`、`idx_group_post_replies_user_id`、`idx_group_post_replies_status`、`idx_group_post_replies_deleted_at`
 
@@ -1035,7 +1053,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `user_id` | INTEGER |  |
 | `content` | TEXT |  |
 | `reply_to_id` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_gcm_group`、`idx_group_chat_messages_user_id`
 
@@ -1054,8 +1072,8 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `sha256` | TEXT |  |
 | `storage_path` | TEXT |  |
 | `status` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `deleted_at` | datetime | 软删除 |
+| `created_at` | DATETIME | 时间 |
+| `deleted_at` | DATETIME | 软删除 |
 
 索引：`idx_group_files_sha256`、`idx_group_files_status`、`idx_group_files_deleted_at`、`idx_group_files_group_id`、`idx_group_files_uploader_id`
 
@@ -1068,9 +1086,9 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `id` | INTEGER | 主键 |
 | `group_id` | INTEGER |  |
 | `user_id` | INTEGER |  |
-| `last_read_at` | datetime |  |
+| `last_read_at` | DATETIME |  |
 | `last_read_post_id` | INTEGER |  |
-| `updated_at` | datetime | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_group_read`
 
@@ -1084,7 +1102,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `user_id` | INTEGER |  |
 | `max_groups` | INTEGER |  |
 | `note` | TEXT |  |
-| `updated_at` | datetime | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_user_group_quotas_user_id`
 
@@ -1119,8 +1137,8 @@ OC 角色卡：人设、外观、口吻、场景（行数 1）
 | `visibility` | TEXT |  |
 | `review` | TEXT |  |
 | `status` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `oc_kind` | TEXT |  |
 | `species` | TEXT |  |
 | `species_traits` | TEXT |  |
@@ -1140,7 +1158,7 @@ OC 表情包（行数 0）
 | `key` | TEXT |  |
 | `url` | TEXT |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_oc_emotes_user_id`、`idx_oc_emotes_key`
 
@@ -1158,13 +1176,13 @@ OC 表情包（行数 0）
 | `version` | INTEGER |  |
 | `scan_depth` | INTEGER |  |
 | `token_budget` | INTEGER |  |
-| `recursive_scan` | numeric |  |
-| `is_official` | numeric |  |
+| `recursive_scan` | NUMERIC |  |
+| `is_official` | NUMERIC |  |
 | `visibility` | TEXT |  |
 | `review` | TEXT |  |
 | `status` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `project_id` | INTEGER |  |
 | `kind` | TEXT |  |
 
@@ -1182,21 +1200,21 @@ OC 表情包（行数 0）
 | `key` | TEXT |  |
 | `content` | TEXT |  |
 | `secondary_keys` | TEXT |  |
-| `selective` | numeric |  |
+| `selective` | NUMERIC |  |
 | `logic` | INTEGER |  |
-| `constant` | numeric |  |
-| `enabled` | numeric |  |
+| `constant` | NUMERIC |  |
+| `enabled` | NUMERIC |  |
 | `probability` | INTEGER |  |
-| `case_sensitive` | numeric |  |
-| `whole_word` | numeric |  |
+| `case_sensitive` | NUMERIC |  |
+| `whole_word` | NUMERIC |  |
 | `insertion_order` | INTEGER |  |
 | `priority` | INTEGER |  |
 | `position` | INTEGER |  |
 | `depth` | INTEGER |  |
 | `group` | TEXT |  |
 | `sort_order` | INTEGER |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_oc_world_entries_book_id`、`idx_oc_world_entries_kind`、`idx_oc_world_entries_key`
 
@@ -1210,7 +1228,7 @@ OC 表情包（行数 0）
 | `from_book_id` | INTEGER |  |
 | `to_book_id` | INTEGER |  |
 | `label` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_oc_world_links_from_book_id`、`idx_oc_world_links_to_book_id`
 
@@ -1232,8 +1250,8 @@ OC 创作项目（可见性、访问密码）（行数 0）
 | `member_count` | INTEGER |  |
 | `review` | TEXT |  |
 | `status` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_oc_projects_user_id`、`idx_oc_projects_title`、`idx_oc_projects_visibility`、`idx_oc_projects_review`
 
@@ -1247,7 +1265,7 @@ OC 创作项目（可见性、访问密码）（行数 0）
 | `project_id` | INTEGER |  |
 | `user_id` | INTEGER |  |
 | `role` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_ocpm`
 
@@ -1260,8 +1278,8 @@ OC 创作项目（可见性、访问密码）（行数 0）
 | `id` | INTEGER | 主键 |
 | `project_id` | INTEGER |  |
 | `token` | TEXT |  |
-| `expires_at` | datetime |  |
-| `created_at` | datetime | 时间 |
+| `expires_at` | DATETIME |  |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_oc_project_access_project_id`、`idx_oc_project_access_token`、`idx_oc_project_access_expires_at`
 
@@ -1281,8 +1299,8 @@ OC 群组（AI 角色群聊）（行数 1）
 | `visibility` | TEXT |  |
 | `review` | TEXT |  |
 | `status` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_oc_groups_user_id`、`idx_oc_groups_name`、`idx_oc_groups_visibility`、`idx_oc_groups_review`
 
@@ -1294,7 +1312,7 @@ OC 群审计等级、窗口大小与时机（行数 1）
 | --- | --- | --- |
 | `id` | INTEGER | 主键 |
 | `group_id` | INTEGER |  |
-| `enabled` | numeric |  |
+| `enabled` | NUMERIC |  |
 | `mode` | TEXT |  |
 | `audit_level` | TEXT |  |
 | `audit_timing` | TEXT |  |
@@ -1303,11 +1321,11 @@ OC 群审计等级、窗口大小与时机（行数 1）
 | `daily_budget` | INTEGER |  |
 | `flow_budget` | INTEGER |  |
 | `max_turns` | INTEGER |  |
-| `auto_run` | numeric |  |
-| `red_team_enabled` | numeric |  |
+| `auto_run` | NUMERIC |  |
+| `red_team_enabled` | NUMERIC |  |
 | `red_team_note` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_oc_group_settings_group_id`
 
@@ -1321,7 +1339,7 @@ OC 群审计等级、窗口大小与时机（行数 1）
 | `group_id` | INTEGER |  |
 | `character_id` | INTEGER |  |
 | `sort_order` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_ocgm`
 
@@ -1337,10 +1355,10 @@ OC 群审计等级、窗口大小与时机（行数 1）
 | `model_id` | INTEGER |  |
 | `template_id` | INTEGER |  |
 | `strategy` | TEXT |  |
-| `enabled` | numeric |  |
+| `enabled` | NUMERIC |  |
 | `budget` | INTEGER |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_oc_agents_group_id`、`idx_oc_agents_character_id`
 
@@ -1360,8 +1378,8 @@ OC 群审计等级、窗口大小与时机（行数 1）
 | `turn_count` | INTEGER |  |
 | `max_turns` | INTEGER |  |
 | `stop_reason` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_oc_flows_group_id`、`idx_oc_flows_status`
 
@@ -1387,7 +1405,7 @@ OC 群审计等级、窗口大小与时机（行数 1）
 | `emotion` | TEXT |  |
 | `review` | TEXT |  |
 | `window_id` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_oc_turns_flow_id`、`idx_oc_turns_group_id`、`idx_oc_turns_seq`、`idx_oc_turns_review`、`idx_oc_turns_window_id`
 
@@ -1407,7 +1425,7 @@ OC 群审计等级、窗口大小与时机（行数 1）
 | `result` | TEXT |  |
 | `hits` | TEXT |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_oc_windows_flow_id`、`idx_oc_windows_group_id`
 
@@ -1422,7 +1440,7 @@ OC 群每日预算消耗（行数 0）
 | `day` | TEXT |  |
 | `cost` | INTEGER |  |
 | `turns` | INTEGER |  |
-| `updated_at` | datetime | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_oc_budget`
 
@@ -1437,9 +1455,9 @@ OC 群每日预算消耗（行数 0）
 | `id` | INTEGER | 主键 |
 | `name` | TEXT |  |
 | `sort_order` | INTEGER |  |
-| `enabled` | numeric |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `enabled` | NUMERIC |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `prefix` | TEXT |  |
 
 索引：`idx_ai_vendors_prefix`、`idx_ai_vendors_name`
@@ -1461,19 +1479,19 @@ OC 群每日预算消耗（行数 0）
 | `price_call` | INTEGER |  |
 | `max_tokens` | INTEGER |  |
 | `temperature` | REAL |  |
-| `enabled` | numeric |  |
+| `enabled` | NUMERIC |  |
 | `priority` | INTEGER |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `api_kind` | TEXT |  |
 | `provider_hint` | TEXT |  |
 | `vendor` | TEXT |  |
-| `thinking` | numeric |  |
+| `thinking` | NUMERIC |  |
 | `alias` | TEXT |  |
 | `channel` | TEXT |  |
 | `category_tags` | TEXT |  |
-| `user_visible` | numeric |  |
+| `user_visible` | NUMERIC |  |
 | `version` | TEXT |  |
 | `sub_version` | TEXT |  |
 | `token_user_id` | TEXT |  |
@@ -1487,8 +1505,8 @@ OC 群每日预算消耗（行数 0）
 | `rate_real_amount` | REAL |  |
 | `rate_virtual_amount` | REAL |  |
 | `rate_real_currency` | TEXT |  |
-| `search_endpoint` | numeric |  |
-| `search_native` | numeric |  |
+| `search_endpoint` | NUMERIC |  |
+| `search_native` | NUMERIC |  |
 
 索引：`idx_ai_models_sub_version`、`idx_ai_models_version`、`idx_ai_models_channel`、`idx_ai_models_vendor`、`idx_ai_models_kind`
 
@@ -1503,12 +1521,12 @@ OC 群每日预算消耗（行数 0）
 | `label` | TEXT |  |
 | `key_enc` | TEXT | 密文 |
 | `weight` | INTEGER |  |
-| `enabled` | numeric |  |
+| `enabled` | NUMERIC |  |
 | `fail_count` | INTEGER |  |
-| `last_fail_at` | datetime |  |
-| `last_used_at` | datetime |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `last_fail_at` | DATETIME |  |
+| `last_used_at` | DATETIME |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_ai_model_keys_model_id`
 
@@ -1524,15 +1542,15 @@ OC 群每日预算消耗（行数 0）
 | `key_enc` | TEXT | 密文 |
 | `fingerprint` | TEXT |  |
 | `weight` | INTEGER |  |
-| `enabled` | numeric |  |
+| `enabled` | NUMERIC |  |
 | `fail_count` | INTEGER |  |
 | `success_total` | INTEGER |  |
 | `fail_total` | INTEGER |  |
-| `last_fail_at` | datetime |  |
-| `last_used_at` | datetime |  |
+| `last_fail_at` | DATETIME |  |
+| `last_used_at` | DATETIME |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_channel_key_url`
 
@@ -1552,16 +1570,16 @@ OC 群每日预算消耗（行数 0）
 | `model_key_enc` | TEXT | 密文 |
 | `model_key_fp` | TEXT |  |
 | `model_key_tail` | TEXT |  |
-| `enabled` | numeric |  |
-| `last_checked_at` | datetime |  |
-| `last_ok` | numeric |  |
+| `enabled` | NUMERIC |  |
+| `last_checked_at` | DATETIME |  |
+| `last_ok` | NUMERIC |  |
 | `last_models` | INTEGER |  |
 | `last_balance` | REAL |  |
 | `last_used` | REAL |  |
 | `last_currency` | TEXT |  |
 | `last_error` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_ai_channel_accounts_base_url`
 
@@ -1575,7 +1593,7 @@ OC 群每日预算消耗（行数 0）
 | `price_in` | INTEGER |  |
 | `price_out` | INTEGER |  |
 | `price_call` | INTEGER |  |
-| `updated_at` | datetime | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 ### `ai_prompts`
 
@@ -1589,11 +1607,11 @@ OC 群每日预算消耗（行数 0）
 | `category` | TEXT |  |
 | `title` | TEXT |  |
 | `content` | TEXT |  |
-| `builtin` | numeric |  |
+| `builtin` | NUMERIC |  |
 | `sort_order` | INTEGER |  |
 | `used_count` | INTEGER |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_ai_prompt_user`、`idx_ai_prompts_kind`
 
@@ -1612,12 +1630,12 @@ OC 群每日预算消耗（行数 0）
 | `content` | TEXT |  |
 | `variables` | TEXT |  |
 | `version` | INTEGER |  |
-| `enabled` | numeric |  |
+| `enabled` | NUMERIC |  |
 | `priority` | INTEGER |  |
-| `builtin` | numeric |  |
+| `builtin` | NUMERIC |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_ai_prompt_templates_key`、`idx_ai_prompt_templates_scene`、`idx_ai_prompt_templates_category`、`idx_ai_prompt_templates_enabled`
 
@@ -1633,7 +1651,7 @@ OC 群每日预算消耗（行数 0）
 | `content` | TEXT |  |
 | `variables` | TEXT |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_ai_prompt_template_versions_template_id`
 
@@ -1647,9 +1665,9 @@ OC 群每日预算消耗（行数 0）
 | `kind` | TEXT |  |
 | `name` | TEXT |  |
 | `sort_order` | INTEGER |  |
-| `enabled` | numeric |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `enabled` | NUMERIC |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_ai_styles_kind`
 
@@ -1671,10 +1689,10 @@ OC 群每日预算消耗（行数 0）
 | `cost` | INTEGER |  |
 | `status` | TEXT |  |
 | `price_snapshot` | TEXT |  |
-| `free_quota` | numeric |  |
+| `free_quota` | NUMERIC |  |
 | `error` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `settled_at` | datetime |  |
+| `created_at` | DATETIME | 时间 |
+| `settled_at` | DATETIME |  |
 | `latency_ms` | INTEGER |  |
 
 索引：`idx_ai_call_logs_model_id`、`idx_ai_call_logs_status`、`idx_ai_call_user`
@@ -1691,17 +1709,17 @@ OC 群每日预算消耗（行数 0）
 | `agent_name` | TEXT |  |
 | `model_id` | INTEGER |  |
 | `title` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `third_conv_id` | TEXT |  |
 | `share_token` | TEXT |  |
-| `shared_at` | datetime |  |
-| `locked` | numeric |  |
-| `locked_at` | datetime |  |
+| `shared_at` | DATETIME |  |
+| `locked` | NUMERIC |  |
+| `locked_at` | DATETIME |  |
 | `lock_reason` | TEXT |  |
 | `locked_by` | INTEGER |  |
-| `contaminated` | numeric |  |
-| `contaminated_at` | datetime |  |
+| `contaminated` | NUMERIC |  |
+| `contaminated_at` | DATETIME |  |
 | `active_leaf_id` | INTEGER |  |
 
 索引：`idx_ai_chat_sessions_contaminated`、`idx_ai_chat_sessions_locked`、`idx_ai_chat_sessions_agent_id`、`idx_ai_session_user`
@@ -1720,9 +1738,9 @@ OC 群每日预算消耗（行数 0）
 | `tokens_out` | INTEGER |  |
 | `cost` | INTEGER |  |
 | `call_log_id` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 | `parent_id` | INTEGER |  |
-| `safety_blocked` | numeric |  |
+| `safety_blocked` | NUMERIC |  |
 | `reasoning` | TEXT |  |
 
 索引：`idx_ai_chat_messages_parent_id`、`idx_ai_msg_session`
@@ -1746,14 +1764,14 @@ OC 群每日预算消耗（行数 0）
 | `cost` | INTEGER |  |
 | `call_log_id` | INTEGER |  |
 | `error` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `attachments` | TEXT |  |
-| `is_public` | numeric |  |
+| `is_public` | NUMERIC |  |
 | `title` | TEXT |  |
 | `style` | TEXT |  |
 | `likes` | INTEGER |  |
-| `refunded` | numeric |  |
+| `refunded` | NUMERIC |  |
 
 索引：`idx_ai_media_tasks_is_public`、`idx_ai_media_tasks_style`、`idx_ai_media_user`、`idx_ai_media_tasks_kind`、`idx_ai_media_tasks_status`
 
@@ -1769,11 +1787,11 @@ OC 群每日预算消耗（行数 0）
 | `description` | TEXT |  |
 | `system_prompt` | TEXT |  |
 | `greeting` | TEXT |  |
-| `builtin` | numeric |  |
-| `enabled` | numeric |  |
+| `builtin` | NUMERIC |  |
+| `enabled` | NUMERIC |  |
 | `sort_order` | INTEGER |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `category` | TEXT |  |
 | `used_count` | INTEGER |  |
 | `upstream` | TEXT |  |
@@ -1805,10 +1823,10 @@ OC 群每日预算消耗（行数 0）
 | `status` | TEXT |  |
 | `review_note` | TEXT |  |
 | `reviewer_id` | INTEGER |  |
-| `reviewed_at` | datetime |  |
+| `reviewed_at` | DATETIME |  |
 | `agent_id` | INTEGER |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_agent_submissions_user_id`、`idx_agent_submissions_status`
 
@@ -1822,7 +1840,7 @@ OC 群每日预算消耗（行数 0）
 | `target_type` | TEXT |  |
 | `target_id` | INTEGER |  |
 | `ai_model` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_ai_mark_target`
 
@@ -1840,16 +1858,16 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | `trigger` | TEXT |  |
 | `model_id` | INTEGER |  |
 | `model_name` | TEXT |  |
-| `jailbroken` | numeric |  |
+| `jailbroken` | NUMERIC |  |
 | `score` | INTEGER |  |
 | `categories` | TEXT |  |
 | `reason` | TEXT |  |
-| `blocked` | numeric |  |
-| `released` | numeric |  |
+| `blocked` | NUMERIC |  |
+| `released` | NUMERIC |  |
 | `latency_ms` | INTEGER |  |
-| `failed` | numeric |  |
+| `failed` | NUMERIC |  |
 | `raw_reply` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_ai_judge_logs_created_at`、`idx_ai_judge_logs_user_id`、`idx_ai_judge_logs_session_id`、`idx_ai_judge_logs_jailbroken`
 
@@ -1860,9 +1878,9 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` | INTEGER | 主键 |
-| `enabled` | numeric |  |
-| `guard_input` | numeric |  |
-| `guard_output` | numeric |  |
+| `enabled` | NUMERIC |  |
+| `guard_input` | NUMERIC |  |
+| `guard_output` | NUMERIC |  |
 | `input_block_score` | INTEGER |  |
 | `output_block_score` | INTEGER |  |
 | `review_score` | INTEGER |  |
@@ -1876,47 +1894,47 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | `cooldown_minutes` | INTEGER |  |
 | `score_decay_hours` | INTEGER |  |
 | `scan_context_turns` | INTEGER |  |
-| `skip_first_turn` | numeric |  |
-| `protect_system` | numeric |  |
-| `allow_fiction_relief` | numeric |  |
-| `allow_harm_relief` | numeric |  |
-| `record_excerpt` | numeric |  |
+| `skip_first_turn` | NUMERIC |  |
+| `protect_system` | NUMERIC |  |
+| `allow_fiction_relief` | NUMERIC |  |
+| `allow_harm_relief` | NUMERIC |  |
+| `record_excerpt` | NUMERIC |  |
 | `excerpt_chars` | INTEGER |  |
 | `system_guard_prompt` | TEXT |  |
 | `refusal_text` | TEXT |  |
 | `cooldown_text` | TEXT |  |
 | `watch_notice_text` | TEXT |  |
 | `extra_terms` | TEXT |  |
-| `judge_enabled` | numeric |  |
+| `judge_enabled` | NUMERIC |  |
 | `judge_model_id` | INTEGER |  |
 | `judge_every_turns` | INTEGER |  |
-| `judge_on_suspect` | numeric |  |
-| `judge_review_blocks` | numeric |  |
+| `judge_on_suspect` | NUMERIC |  |
+| `judge_review_blocks` | NUMERIC |  |
 | `judge_block_score` | INTEGER |  |
 | `judge_release_score` | INTEGER |  |
 | `judge_max_chars` | INTEGER |  |
 | `judge_timeout_sec` | INTEGER |  |
-| `judge_fail_open` | numeric |  |
+| `judge_fail_open` | NUMERIC |  |
 | `judge_max_turns` | INTEGER |  |
 | `judge_prompt` | TEXT |  |
 | `schema_version` | INTEGER |  |
-| `updated_at` | datetime | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `refusal_jailbreak_text` | TEXT |  |
-| `terminate_on_block` | numeric |  |
+| `terminate_on_block` | NUMERIC |  |
 | `terminate_score` | INTEGER |  |
 | `terminate_mode` | TEXT |  |
 | `session_terminated_text` | TEXT |  |
 | `contaminated_notice_text` | TEXT |  |
 | `moderate_blocked_text` | TEXT |  |
-| `minor_crisis_enabled` | numeric |  |
+| `minor_crisis_enabled` | NUMERIC |  |
 | `minor_crisis_hotline` | TEXT |  |
 | `minor_crisis_comfort` | TEXT |  |
 | `minor_observation_hours` | INTEGER |  |
 | `minor_crisis_prompt` | TEXT |  |
-| `guard_leak` | numeric |  |
+| `guard_leak` | NUMERIC |  |
 | `image_moderation_prompt` | TEXT |  |
-| `image_gen_guard` | numeric |  |
-| `image_output_guard` | numeric |  |
+| `image_gen_guard` | NUMERIC |  |
+| `image_output_guard` | NUMERIC |  |
 | `image_output_prompt` | TEXT |  |
 | `appease_display_mode` | TEXT |  |
 | `appease_replace_text` | TEXT |  |
@@ -1942,7 +1960,7 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | `excerpt` | TEXT |  |
 | `model_id` | INTEGER |  |
 | `session_id` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_ai_safety_events_user_id`、`idx_ai_safety_events_direction`、`idx_ai_safety_events_action`、`idx_ai_safety_events_created_at`
 
@@ -1957,11 +1975,11 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | `risk_score` | INTEGER |  |
 | `block_count` | INTEGER |  |
 | `hit_count` | INTEGER |  |
-| `watch_until` | datetime |  |
-| `cooldown_until` | datetime |  |
-| `last_hit_at` | datetime |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `watch_until` | DATETIME |  |
+| `cooldown_until` | DATETIME |  |
+| `last_hit_at` | DATETIME |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 ### `ai_bot_usages`
 
@@ -1973,7 +1991,7 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | `user_id` | INTEGER |  |
 | `day` | TEXT |  |
 | `calls_used` | INTEGER |  |
-| `updated_at` | datetime | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_ai_bot_usage`
 
@@ -1989,8 +2007,8 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | `chapter_id` | INTEGER |  |
 | `content` | TEXT |  |
 | `tokens` | INTEGER |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_ai_memory`
 
@@ -2014,8 +2032,8 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | `style_detail` | TEXT |  |
 | `body_draft` | TEXT |  |
 | `status` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `setting_input` | TEXT |  |
 | `character_input` | TEXT |  |
 | `outline_input` | TEXT |  |
@@ -2039,8 +2057,8 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | `content` | TEXT |  |
 | `sort_order` | INTEGER |  |
 | `status` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_authorai_detail_project`、`idx_authorai_detail_module`
 
@@ -2057,8 +2075,8 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | `outline` | TEXT |  |
 | `body` | TEXT |  |
 | `status` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_authorai_chapter_project`
 
@@ -2083,7 +2101,7 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | `size_bytes` | INTEGER |  |
 | `sha256` | TEXT |  |
 | `from_url` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_aigc_assets_user_id`、`idx_aigc_assets_task_id`、`idx_aigc_assets_source`、`idx_aigc_assets_created_at`
 
@@ -2103,10 +2121,10 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | `width` | INTEGER |  |
 | `height` | INTEGER |  |
 | `size_bytes` | INTEGER |  |
-| `labeled` | numeric |  |
-| `public` | numeric |  |
+| `labeled` | NUMERIC |  |
+| `public` | NUMERIC |  |
 | `hits` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_aigc_deliveries_produce_id`、`idx_aigc_deliveries_source_hash`、`idx_aigc_deliveries_public`、`idx_aigc_deliveries_created_at`、`idx_aigc_deliveries_object_key`
 
@@ -2120,7 +2138,7 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | `object_key` | TEXT |  |
 | `user_id` | INTEGER |  |
 | `task_id` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_aigc_grant`、`idx_aigc_delivery_grants_user_id`
 
@@ -2138,15 +2156,15 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | `format` | TEXT |  |
 | `width` | INTEGER |  |
 | `height` | INTEGER |  |
-| `waived` | numeric |  |
-| `labeled` | numeric |  |
+| `waived` | NUMERIC |  |
+| `labeled` | NUMERIC |  |
 | `label_text` | TEXT |  |
 | `label_font_size` | INTEGER |  |
 | `content_producer` | TEXT |  |
 | `reserved_code1` | TEXT |  |
-| `prompt_attached` | numeric |  |
+| `prompt_attached` | NUMERIC |  |
 | `aigc_json` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_aigc_exports_created_at`、`idx_aigc_exports_user_id`、`idx_aigc_exports_asset_id`、`idx_aigc_exports_produce_id`
 
@@ -2160,7 +2178,7 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | `user_id` | INTEGER |  |
 | `user_name` | TEXT |  |
 | `produce_id` | TEXT |  |
-| `request_time` | datetime |  |
+| `request_time` | DATETIME |  |
 | `agreement_version` | TEXT |  |
 | `input_text` | TEXT |  |
 | `input_hash` | TEXT | 哈希 |
@@ -2168,7 +2186,7 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | `deny_reason` | TEXT |  |
 | `ip` | TEXT |  |
 | `ua` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_aigc_waiver_logs_user_id`、`idx_aigc_waiver_logs_produce_id`、`idx_aigc_waiver_logs_created_at`
 
@@ -2189,7 +2207,7 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | `ref_id` | INTEGER |  |
 | `remark` | TEXT |  |
 | `price_snapshot` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_token_ledger_user`、`idx_token_ledger_type`、`idx_token_ledger_ref_id`
 
@@ -2201,7 +2219,7 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | --- | --- | --- |
 | `user_id` | INTEGER | 主键 |
 | `balance` | INTEGER |  |
-| `updated_at` | datetime | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 ### `recharge_orders`
 
@@ -2219,11 +2237,11 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | `status` | TEXT |  |
 | `pay_url` | TEXT |  |
 | `transaction_id` | TEXT |  |
-| `expires_at` | datetime |  |
-| `paid_at` | datetime |  |
+| `expires_at` | DATETIME |  |
+| `paid_at` | DATETIME |  |
 | `notify_raw` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `member_days` | INTEGER |  |
 
 索引：`idx_recharge_orders_user_id`、`idx_recharge_orders_status`、`idx_recharge_orders_transaction_id`、`idx_recharge_orders_expires_at`、`idx_recharge_orders_created_at`、`idx_recharge_orders_order_no`
@@ -2240,7 +2258,7 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | `method` | TEXT |  |
 | `account` | TEXT |  |
 | `status` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_withdrawal_requests_user_id`
 
@@ -2258,10 +2276,10 @@ AI 审核判定日志（触发点、模型、结论）（行数 35）
 | `batch_id` | TEXT |  |
 | `created_by` | INTEGER |  |
 | `used_by` | INTEGER |  |
-| `used_at` | datetime |  |
-| `expires_at` | datetime |  |
+| `used_at` | DATETIME |  |
+| `expires_at` | DATETIME |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_card_keys_code_hash`、`idx_card_keys_status`、`idx_card_keys_batch_id`
 
@@ -2280,10 +2298,10 @@ VIP 卡密（等级、天数、批次）（行数 1）
 | `batch_id` | TEXT |  |
 | `created_by` | INTEGER |  |
 | `used_by` | INTEGER |  |
-| `used_at` | datetime |  |
-| `expires_at` | datetime |  |
+| `used_at` | DATETIME |  |
+| `expires_at` | DATETIME |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_vip_cards_code_hash`、`idx_vip_cards_level`、`idx_vip_cards_status`、`idx_vip_cards_batch_id`
 
@@ -2297,8 +2315,8 @@ VIP 申请与审核（行数 0）
 | `user_id` | INTEGER |  |
 | `status` | TEXT |  |
 | `reason` | TEXT |  |
-| `reviewed_at` | datetime |  |
-| `created_at` | datetime | 时间 |
+| `reviewed_at` | DATETIME |  |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_vip_applications_user_id`
 
@@ -2317,9 +2335,9 @@ VIP 申请与审核（行数 0）
 | `payload` | TEXT |  |
 | `status` | TEXT |  |
 | `handled_by` | INTEGER |  |
-| `handled_at` | datetime |  |
+| `handled_at` | DATETIME |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_payment_risk_events_order_no`、`idx_payment_risk_events_user_id`、`idx_payment_risk_events_score`、`idx_payment_risk_events_decision`、`idx_payment_risk_events_status`、`idx_payment_risk_events_created_at`
 
@@ -2334,7 +2352,7 @@ VIP 申请与审核（行数 0）
 | `novel_id` | INTEGER |  |
 | `amount` | REAL |  |
 | `type` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_earnings_records_user_id`
 
@@ -2350,7 +2368,7 @@ VIP 申请与审核（行数 0）
 | `ref_id` | INTEGER | 主键 |
 | `content` | TEXT |  |
 | `content_hash` | TEXT | 哈希 |
-| `updated_at` | datetime | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 ### `user_htmls`
 
@@ -2371,24 +2389,24 @@ VIP 申请与审核（行数 0）
 | `zip_path` | TEXT |  |
 | `port` | INTEGER |  |
 | `project_name` | TEXT |  |
-| `is_active` | numeric |  |
-| `allow_wasm` | numeric |  |
-| `is_public` | numeric |  |
-| `is_downloadable` | numeric |  |
+| `is_active` | NUMERIC |  |
+| `allow_wasm` | NUMERIC |  |
+| `is_public` | NUMERIC |  |
+| `is_downloadable` | NUMERIC |  |
 | `thumb_url` | TEXT |  |
 | `review_status` | TEXT |  |
 | `review_note` | TEXT |  |
 | `scan_warnings` | TEXT |  |
 | `run_mode` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
-| `deleted_at` | datetime | 软删除 |
-| `is_extracted` | numeric |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
+| `deleted_at` | DATETIME | 软删除 |
+| `is_extracted` | NUMERIC |  |
 | `quarantine_path` | TEXT |  |
-| `scan_blocked` | numeric |  |
+| `scan_blocked` | NUMERIC |  |
 | `scan_block_reason` | TEXT |  |
 | `reviewed_by` | INTEGER |  |
-| `reviewed_at` | datetime |  |
+| `reviewed_at` | DATETIME |  |
 | `blog_id` | INTEGER |  |
 | `frame_width` | INTEGER |  |
 | `frame_height` | INTEGER |  |
@@ -2406,8 +2424,8 @@ HTML 空间配额覆盖（按用户）（行数 0）
 | `max_projects` | INTEGER |  |
 | `max_total_size_mb` | INTEGER |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_html_quota_overrides_user_id`
 
@@ -2421,8 +2439,8 @@ HTML 空间配额覆盖（按用户）（行数 0）
 | `user_id` | INTEGER |  |
 | `quota` | INTEGER |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `quota_size_mb` | INTEGER |  |
 
 索引：`idx_user_web_quotas_user_id`
@@ -2441,9 +2459,9 @@ HTML 空间配额覆盖（按用户）（行数 0）
 | `reason` | TEXT |  |
 | `review_note` | TEXT |  |
 | `reviewed_by` | INTEGER |  |
-| `reviewed_at` | datetime |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `reviewed_at` | DATETIME |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_web_quota_requests_status`、`idx_web_quota_requests_user_id`、`idx_web_quota_requests_target_type`、`idx_web_quota_requests_target_id`
 
@@ -2458,8 +2476,8 @@ HTML 空间配额覆盖（按用户）（行数 0）
 | `count` | INTEGER |  |
 | `word_cap` | INTEGER |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_user_publish_quotas_user_id`
 
@@ -2474,7 +2492,7 @@ HTML 空间配额覆盖（按用户）（行数 0）
 | `kind` | TEXT |  |
 | `word_count` | INTEGER |  |
 | `target_id` | INTEGER |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_publish_user_day`、`idx_user_publish_logs_kind`、`idx_user_publish_logs_target_id`
 
@@ -2491,21 +2509,21 @@ HTML 空间配额覆盖（按用户）（行数 0）
 | `description` | TEXT |  |
 | `file_path` | TEXT |  |
 | `thumb_url` | TEXT |  |
-| `is_active` | numeric |  |
-| `is_public` | numeric |  |
+| `is_active` | NUMERIC |  |
+| `is_public` | NUMERIC |  |
 | `tags` | TEXT |  |
 | `version` | INTEGER |  |
-| `has_controls` | numeric |  |
-| `uses_novel_api` | numeric |  |
+| `has_controls` | NUMERIC |  |
+| `uses_novel_api` | NUMERIC |  |
 | `sandbox_level` | TEXT |  |
 | `frame_type` | TEXT |  |
 | `review_status` | TEXT |  |
 | `review_note` | TEXT |  |
 | `scan_warnings` | TEXT |  |
 | `run_mode` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
-| `deleted_at` | datetime | 软删除 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
+| `deleted_at` | DATETIME | 软删除 |
 | `frame_width` | INTEGER |  |
 | `frame_height` | INTEGER |  |
 | `position` | TEXT |  |
@@ -2524,8 +2542,8 @@ AI 免费额度配置（每日次数与 Token）（行数 0）
 | `daily_calls` | INTEGER |  |
 | `daily_tokens` | INTEGER |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_user_ai_free_quotas_user_id`
 
@@ -2540,7 +2558,7 @@ AI 免费额度当日用量（行数 11）
 | `day` | TEXT |  |
 | `calls_used` | INTEGER |  |
 | `tokens_used` | INTEGER |  |
-| `updated_at` | datetime | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_ai_free_usage`
 
@@ -2556,11 +2574,11 @@ AI 免费额度当日用量（行数 11）
 | `base_url` | TEXT |  |
 | `key_enc` | TEXT | 密文 |
 | `model_id` | TEXT |  |
-| `enabled` | numeric |  |
-| `is_default` | numeric |  |
-| `last_used_at` | datetime |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `enabled` | NUMERIC |  |
+| `is_default` | NUMERIC |  |
+| `last_used_at` | DATETIME |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_user_ai_keys_user_id`
 
@@ -2579,10 +2597,10 @@ AI 免费额度当日用量（行数 11）
 | `action` | TEXT |  |
 | `replacement` | TEXT |  |
 | `scope` | TEXT |  |
-| `enabled` | numeric |  |
+| `enabled` | NUMERIC |  |
 | `description` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `category` | TEXT |  |
 | `tags` | TEXT |  |
 
@@ -2601,8 +2619,8 @@ AI 免费额度当日用量（行数 11）
 | `matched_words` | TEXT |  |
 | `status` | TEXT |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_bad_word_flags_content_type`、`idx_bad_word_flags_user_id`、`idx_bad_word_flags_status`
 
@@ -2617,10 +2635,10 @@ XSS 过滤规则（行数 0）
 | `pattern` | TEXT |  |
 | `action` | TEXT |  |
 | `replacement` | TEXT |  |
-| `enabled` | numeric |  |
+| `enabled` | NUMERIC |  |
 | `description` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 ### `honeypot_sessions`
 
@@ -2637,15 +2655,15 @@ XSS 过滤规则（行数 0）
 | `country` | TEXT |  |
 | `event_count` | INTEGER |  |
 | `max_risk` | INTEGER |  |
-| `banned` | numeric |  |
-| `first_seen` | datetime |  |
-| `last_seen` | datetime |  |
+| `banned` | NUMERIC |  |
+| `first_seen` | DATETIME |  |
+| `last_seen` | DATETIME |  |
 
 索引：`idx_honeypot_sessions_last_seen`、`idx_honeypot_sessions_h_id`、`idx_honeypot_sessions_src_ip`、`idx_honeypot_sessions_max_risk`
 
 ### `honeypot_events`
 
-蜜罐事件（诱饵、方法、路径、指纹）（行数 367）
+蜜罐事件（诱饵、方法、路径、指纹）（行数 368）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -2663,7 +2681,7 @@ XSS 过滤规则（行数 0）
 | `body_snippet` | TEXT |  |
 | `risk` | INTEGER |  |
 | `action` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_honeypot_events_session_id`、`idx_honeypot_events_kind`、`idx_honeypot_events_path`、`idx_honeypot_events_created_at`
 
@@ -2692,7 +2710,7 @@ XSS 过滤规则（行数 0）
 | `tls_ver` | TEXT |  |
 | `web_rtc_ips` | TEXT |  |
 | `raw` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_honeypot_fingerprints_session_id`、`idx_honeypot_fingerprints_ja3`、`idx_honeypot_fingerprints_created_at`
 
@@ -2703,21 +2721,21 @@ XSS 过滤规则（行数 0）
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` | INTEGER | 主键 |
-| `enabled` | numeric |  |
+| `enabled` | NUMERIC |  |
 | `level` | TEXT |  |
-| `record_ua` | numeric |  |
-| `record_referer` | numeric |  |
-| `record_xff` | numeric |  |
-| `record_query` | numeric |  |
-| `record_headers` | numeric |  |
-| `record_body_snippet` | numeric |  |
+| `record_ua` | NUMERIC |  |
+| `record_referer` | NUMERIC |  |
+| `record_xff` | NUMERIC |  |
+| `record_query` | NUMERIC |  |
+| `record_headers` | NUMERIC |  |
+| `record_body_snippet` | NUMERIC |  |
 | `body_snippet_limit` | INTEGER |  |
 | `header_allowlist` | TEXT |  |
-| `auto_ban` | numeric |  |
+| `auto_ban` | NUMERIC |  |
 | `ban_minutes` | INTEGER |  |
 | `delay_ms` | INTEGER |  |
 | `retention_days` | INTEGER |  |
-| `updated_at` | datetime | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `annotation` | TEXT |  |
 | `custom_decoys` | TEXT |  |
 | `decoy_profile` | TEXT |  |
@@ -2731,8 +2749,8 @@ IP 黑名单（含到期时间）（行数 0）
 | `id` | INTEGER | 主键 |
 | `ip` | TEXT |  |
 | `reason` | TEXT |  |
-| `expires_at` | datetime |  |
-| `created_at` | datetime | 时间 |
+| `expires_at` | DATETIME |  |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_blacklist_ips_ip`
 
@@ -2743,18 +2761,18 @@ IP 黑名单（含到期时间）（行数 0）
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` | INTEGER | 主键 |
-| `enabled` | numeric |  |
+| `enabled` | NUMERIC |  |
 | `model_id` | INTEGER |  |
-| `novel_blog_on_write` | numeric |  |
-| `forum_comment_batch` | numeric |  |
+| `novel_blog_on_write` | NUMERIC |  |
+| `forum_comment_batch` | NUMERIC |  |
 | `batch_interval_hours` | INTEGER |  |
-| `auto_hide_on_fail` | numeric |  |
+| `auto_hide_on_fail` | NUMERIC |  |
 | `malicious_threshold` | INTEGER |  |
 | `recheck_report_count` | INTEGER |  |
 | `stop_review_after` | INTEGER |  |
-| `hide_from_reporter` | numeric |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `hide_from_reporter` | NUMERIC |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 ### `moderation_records`
 
@@ -2770,17 +2788,17 @@ IP 黑名单（含到期时间）（行数 0）
 | `model_id` | INTEGER |  |
 | `model_name` | TEXT |  |
 | `verdict` | TEXT |  |
-| `compliant` | numeric |  |
+| `compliant` | NUMERIC |  |
 | `reason` | TEXT |  |
 | `categories` | TEXT |  |
 | `report_count` | INTEGER |  |
-| `re_triggered` | numeric |  |
-| `created_at` | datetime | 时间 |
+| `re_triggered` | NUMERIC |  |
+| `created_at` | DATETIME | 时间 |
 | `review_status` | TEXT |  |
 | `review_action` | TEXT |  |
 | `reviewer_id` | INTEGER |  |
 | `review_note` | TEXT |  |
-| `reviewed_at` | datetime |  |
+| `reviewed_at` | DATETIME |  |
 
 索引：`idx_moderation_records_review_status`、`idx_mod_target`
 
@@ -2791,12 +2809,12 @@ IP 黑名单（含到期时间）（行数 0）
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` | INTEGER | 主键 |
-| `enabled` | numeric |  |
+| `enabled` | NUMERIC |  |
 | `block_risk` | TEXT |  |
 | `flag_risk` | TEXT |  |
-| `flood_block` | numeric |  |
-| `learn_from_ai` | numeric |  |
-| `search_enabled` | numeric |  |
+| `flood_block` | NUMERIC |  |
+| `learn_from_ai` | NUMERIC |  |
+| `search_enabled` | NUMERIC |  |
 | `search_model_id` | INTEGER |  |
 | `search_path` | TEXT |  |
 | `search_query` | TEXT |  |
@@ -2804,11 +2822,11 @@ IP 黑名单（含到期时间）（行数 0）
 | `recency_days` | INTEGER |  |
 | `auto_update_hour` | INTEGER |  |
 | `daily_quota` | INTEGER |  |
-| `require_review` | numeric |  |
+| `require_review` | NUMERIC |  |
 | `min_confidence` | INTEGER |  |
 | `fold_chars` | INTEGER |  |
 | `schema_version` | INTEGER |  |
-| `updated_at` | datetime | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 ### `sentiment_terms`
 
@@ -2827,10 +2845,10 @@ IP 黑名单（含到期时间）（行数 0）
 | `hit_count` | INTEGER |  |
 | `confidence` | INTEGER |  |
 | `review_cycle_days` | INTEGER |  |
-| `reviewed_at` | datetime |  |
+| `reviewed_at` | DATETIME |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_sentiment_terms_word`、`idx_sentiment_terms_cat`、`idx_sentiment_terms_source`、`idx_sentiment_terms_status`
 
@@ -2849,7 +2867,7 @@ IP 黑名单（含到期时间）（行数 0）
 | `note` | TEXT |  |
 | `before` | TEXT |  |
 | `after` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_sentiment_term_audits_term_id`、`idx_sentiment_term_audits_created_at`
 
@@ -2872,7 +2890,7 @@ IP 黑名单（含到期时间）（行数 0）
 | `variant_words` | TEXT |  |
 | `flood` | TEXT |  |
 | `reason` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_sentiment_hits_content_id`、`idx_sentiment_hits_comment_id`、`idx_sentiment_hits_user_id`、`idx_sentiment_hits_decision`、`idx_sentiment_hits_risk`、`idx_sentiment_hits_groups`、`idx_sentiment_hits_created_at`、`idx_sentiment_hits_content_type`
 
@@ -2890,15 +2908,15 @@ IP 黑名单（含到期时间）（行数 0）
 | `base_risk` | TEXT |  |
 | `risk` | TEXT |  |
 | `public_opinion_score` | INTEGER |  |
-| `public_opinion_high` | numeric |  |
+| `public_opinion_high` | NUMERIC |  |
 | `source` | TEXT |  |
 | `confidence` | INTEGER |  |
 | `review_status` | TEXT |  |
 | `policy` | TEXT |  |
 | `reviewed_by` | INTEGER |  |
-| `reviewed_at` | datetime |  |
-| `updated_at` | datetime | 时间 |
-| `created_at` | datetime | 时间 |
+| `reviewed_at` | DATETIME |  |
+| `updated_at` | DATETIME | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_sentiment_topic`、`idx_sentiment_content_topics_public_opinion_high`、`idx_sentiment_content_topics_review_status`
 
@@ -2921,7 +2939,7 @@ IP 黑名单（含到期时间）（行数 0）
 | `confidence` | INTEGER |  |
 | `note` | TEXT |  |
 | `source` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 | `status` | TEXT |  |
 
 索引：`idx_sentiment_camp_marks_status`、`idx_sentiment_camp_marks_content_type`、`idx_sentiment_camp_marks_content_id`、`idx_sentiment_camp_marks_comment_id`、`idx_sentiment_camp_marks_user_id`、`idx_sentiment_camp_marks_camp_id`、`idx_sentiment_camp_marks_lang_format`、`idx_sentiment_camp_marks_created_at`
@@ -2935,11 +2953,11 @@ IP 黑名单（含到期时间）（行数 0）
 | `id` | INTEGER | 主键 |
 | `content_type` | TEXT |  |
 | `content_id` | INTEGER |  |
-| `enabled` | numeric |  |
+| `enabled` | NUMERIC |  |
 | `operator_id` | INTEGER |  |
 | `operator` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_camp_target`
 
@@ -2961,8 +2979,8 @@ IP 黑名单（含到期时间）（行数 0）
 | `after` | TEXT |  |
 | `status` | TEXT |  |
 | `reviewer_id` | INTEGER |  |
-| `reviewed_at` | datetime |  |
-| `created_at` | datetime | 时间 |
+| `reviewed_at` | DATETIME |  |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_sentiment_delete_requests_status`、`idx_sentiment_delete_requests_created_at`、`idx_sentiment_delete_requests_action`、`idx_sentiment_delete_requests_target_type`、`idx_sentiment_delete_requests_target_id`、`idx_sentiment_delete_requests_requester_id`
 
@@ -2980,15 +2998,15 @@ API Key（哈希、前缀、角色、每分钟配额、IP 白名单）（行数 
 | `key_prefix` | TEXT |  |
 | `quota_per_min` | INTEGER |  |
 | `allowed_ips` | TEXT |  |
-| `expires_at` | datetime |  |
-| `last_used_at` | datetime |  |
-| `is_active` | numeric |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `expires_at` | DATETIME |  |
+| `last_used_at` | DATETIME |  |
+| `is_active` | NUMERIC |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `total_calls` | INTEGER |  |
-| `is_banned` | numeric |  |
+| `is_banned` | NUMERIC |  |
 | `ban_reason` | TEXT |  |
-| `banned_at` | datetime |  |
+| `banned_at` | DATETIME |  |
 | `banned_by` | INTEGER |  |
 
 索引：`idx_api_keys_user_id`、`idx_api_keys_key_hash`
@@ -3004,17 +3022,17 @@ API Key 异常告警与确认（行数 0）
 | `key_id` | INTEGER |  |
 | `user_id` | INTEGER |  |
 | `detail` | TEXT |  |
-| `acked` | numeric |  |
+| `acked` | NUMERIC |  |
 | `acked_by` | INTEGER |  |
-| `acked_at` | datetime |  |
+| `acked_at` | DATETIME |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_api_key_alarms_kind`、`idx_api_key_alarms_key_id`、`idx_api_key_alarms_user_id`、`idx_api_key_alarms_acked`、`idx_api_key_alarms_created_at`
 
 ### `api_access_logs`
 
-API 访问日志（身份、路径、状态码、IP）（行数 109）
+API 访问日志（身份、路径、状态码、IP）（行数 117）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3028,7 +3046,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `request_ip` | TEXT |  |
 | `user_agent` | TEXT |  |
 | `bot_reason` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_api_access_logs_identity_type`、`idx_api_access_logs_created_at`
 
@@ -3043,12 +3061,12 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `quota_per_min` | INTEGER |  |
 | `window_secs` | INTEGER |  |
 | `max_keys` | INTEGER |  |
-| `keys_banned` | numeric |  |
+| `keys_banned` | NUMERIC |  |
 | `ban_reason` | TEXT |  |
-| `ban_until` | datetime |  |
+| `ban_until` | DATETIME |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_user_api_policies_user_id`
 
@@ -3059,22 +3077,22 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` | INTEGER | 主键 |
-| `enabled` | numeric |  |
+| `enabled` | NUMERIC |  |
 | `batch_interval_sec` | INTEGER |  |
 | `batch_size` | INTEGER |  |
 | `max_conns` | INTEGER |  |
-| `updated_at` | datetime | 时间 |
-| `ws_enabled` | numeric |  |
-| `mqtt_enabled` | numeric |  |
+| `updated_at` | DATETIME | 时间 |
+| `ws_enabled` | NUMERIC |  |
+| `mqtt_enabled` | NUMERIC |  |
 | `mqtt_bind` | TEXT |  |
 | `mqtt_port` | INTEGER |  |
-| `grpc_enabled` | numeric |  |
+| `grpc_enabled` | NUMERIC |  |
 | `grpc_bind` | TEXT |  |
 | `grpc_port` | INTEGER |  |
 
 ### `channel_balance_samples`
 
-上游渠道余额采样（用于额度预警）（行数 574）
+上游渠道余额采样（用于额度预警）（行数 576）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3084,8 +3102,8 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `used` | REAL |  |
 | `granted` | REAL |  |
 | `currency` | TEXT |  |
-| `supported` | numeric |  |
-| `sampled_at` | datetime | 时间 |
+| `supported` | NUMERIC |  |
+| `sampled_at` | DATETIME | 时间 |
 
 索引：`idx_channel_balance_samples_base_url`、`idx_channel_balance_samples_sampled_at`
 
@@ -3111,11 +3129,11 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `evidence` | TEXT |  |
 | `requester_id` | INTEGER |  |
 | `handler_id` | INTEGER |  |
-| `due_at` | datetime |  |
-| `closed_at` | datetime |  |
+| `due_at` | DATETIME |  |
+| `closed_at` | DATETIME |  |
 | `result` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_police_tickets_priority`、`idx_police_tickets_status`、`idx_police_tickets_subject_user_id`、`idx_police_tickets_requester_id`、`idx_police_tickets_handler_id`、`idx_police_tickets_no`、`idx_police_tickets_kind`
 
@@ -3131,7 +3149,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `action` | TEXT |  |
 | `from_to` | TEXT |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_police_ticket_logs_ticket_id`、`idx_police_ticket_logs_created_at`
 
@@ -3150,9 +3168,9 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `status` | TEXT |  |
 | `reviewer_id` | INTEGER |  |
 | `review_note` | TEXT |  |
-| `reviewed_at` | datetime |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `reviewed_at` | DATETIME |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_police_evidence_requests_no`、`idx_police_evidence_requests_requester_id`、`idx_police_evidence_requests_target_user_id`、`idx_police_evidence_requests_status`
 
@@ -3167,7 +3185,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `actor_id` | INTEGER |  |
 | `action` | TEXT |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_police_evidence_request_logs_evidence_request_id`
 
@@ -3187,12 +3205,12 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `evidence_refs` | TEXT |  |
 | `status` | TEXT |  |
 | `handled_by` | INTEGER |  |
-| `handled_at` | datetime |  |
+| `handled_at` | DATETIME |  |
 | `note` | TEXT |  |
-| `first_seen` | datetime |  |
-| `last_event` | datetime |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `first_seen` | DATETIME |  |
+| `last_event` | DATETIME |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_supervised_users_status`、`idx_supervised_users_user_id`、`idx_supervised_users_tier`、`idx_supervised_users_source`
 
@@ -3209,7 +3227,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `action` | TEXT |  |
 | `from_to` | TEXT |  |
 | `note` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_supervise_logs_supervised_id`、`idx_supervise_logs_user_id`、`idx_supervise_logs_created_at`
 
@@ -3228,7 +3246,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `snippet` | TEXT |  |
 | `action` | TEXT |  |
 | `reason` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_crisis_events_source`、`idx_crisis_events_content_id`、`idx_crisis_user_created`
 
@@ -3246,7 +3264,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `source` | TEXT |  |
 | `summary` | TEXT |  |
 | `snapshot` | TEXT |  |
-| `deleted_at` | datetime | 软删除 |
+| `deleted_at` | DATETIME | 软删除 |
 
 索引：`idx_softdel_users_deleted_by`、`idx_softdel_users_original_id`
 
@@ -3264,7 +3282,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `source` | TEXT |  |
 | `summary` | TEXT |  |
 | `snapshot` | TEXT |  |
-| `deleted_at` | datetime | 软删除 |
+| `deleted_at` | DATETIME | 软删除 |
 
 索引：`idx_softdel_novels_original_id`、`idx_softdel_novels_deleted_by`
 
@@ -3282,7 +3300,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `source` | TEXT |  |
 | `summary` | TEXT |  |
 | `snapshot` | TEXT |  |
-| `deleted_at` | datetime | 软删除 |
+| `deleted_at` | DATETIME | 软删除 |
 
 索引：`idx_softdel_chapters_original_id`、`idx_softdel_chapters_deleted_by`
 
@@ -3300,7 +3318,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `source` | TEXT |  |
 | `summary` | TEXT |  |
 | `snapshot` | TEXT |  |
-| `deleted_at` | datetime | 软删除 |
+| `deleted_at` | DATETIME | 软删除 |
 
 索引：`idx_softdel_blogs_original_id`、`idx_softdel_blogs_deleted_by`
 
@@ -3318,7 +3336,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `source` | TEXT |  |
 | `summary` | TEXT |  |
 | `snapshot` | TEXT |  |
-| `deleted_at` | datetime | 软删除 |
+| `deleted_at` | DATETIME | 软删除 |
 
 索引：`idx_softdel_posts_original_id`、`idx_softdel_posts_deleted_by`
 
@@ -3336,7 +3354,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `source` | TEXT |  |
 | `summary` | TEXT |  |
 | `snapshot` | TEXT |  |
-| `deleted_at` | datetime | 软删除 |
+| `deleted_at` | DATETIME | 软删除 |
 
 索引：`idx_softdel_comments_original_id`、`idx_softdel_comments_deleted_by`
 
@@ -3354,7 +3372,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `source` | TEXT |  |
 | `summary` | TEXT |  |
 | `snapshot` | TEXT |  |
-| `deleted_at` | datetime | 软删除 |
+| `deleted_at` | DATETIME | 软删除 |
 
 索引：`idx_softdel_threads_original_id`、`idx_softdel_threads_deleted_by`
 
@@ -3372,7 +3390,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `source` | TEXT |  |
 | `summary` | TEXT |  |
 | `snapshot` | TEXT |  |
-| `deleted_at` | datetime | 软删除 |
+| `deleted_at` | DATETIME | 软删除 |
 
 索引：`idx_softdel_forums_original_id`、`idx_softdel_forums_deleted_by`
 
@@ -3390,7 +3408,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `target_type` | TEXT |  |
 | `target_id` | INTEGER |  |
 | `detail` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 ### `vulnerabilities`
 
@@ -3405,9 +3423,9 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `status` | TEXT |  |
 | `affected` | TEXT |  |
 | `reported_by` | TEXT |  |
-| `fixed_at` | datetime |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `fixed_at` | DATETIME |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 ## 站点运营
 
@@ -3420,7 +3438,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `id` | INTEGER | 主键 |
 | `key` | TEXT |  |
 | `value` | TEXT |  |
-| `updated_at` | datetime | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_platform_configs_key`
 
@@ -3432,7 +3450,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | --- | --- | --- |
 | `key` | TEXT | 主键 |
 | `value` | TEXT |  |
-| `updated_at` | datetime | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 ### `announcements`
 
@@ -3443,12 +3461,12 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `id` | INTEGER | 主键 |
 | `title` | TEXT |  |
 | `content` | TEXT |  |
-| `pinned` | numeric |  |
-| `published` | numeric |  |
+| `pinned` | NUMERIC |  |
+| `published` | NUMERIC |  |
 | `created_by` | INTEGER |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
-| `deleted_at` | datetime | 软删除 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
+| `deleted_at` | DATETIME | 软删除 |
 
 ### `carousels`
 
@@ -3462,11 +3480,11 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `link_url` | TEXT |  |
 | `target` | TEXT |  |
 | `sort_order` | INTEGER |  |
-| `enabled` | numeric |  |
-| `start_at` | datetime |  |
-| `end_at` | datetime |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `enabled` | NUMERIC |  |
+| `start_at` | DATETIME |  |
+| `end_at` | DATETIME |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 ### `nav_menus`
 
@@ -3481,12 +3499,12 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `url` | TEXT |  |
 | `target` | TEXT |  |
 | `sort_order` | INTEGER |  |
-| `visible` | numeric |  |
-| `require_login` | numeric |  |
-| `admin_only` | numeric |  |
+| `visible` | NUMERIC |  |
+| `require_login` | NUMERIC |  |
+| `admin_only` | NUMERIC |  |
 | `badge` | TEXT |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_nav_menus_parent_id`、`idx_nav_menus_sort_order`
 
@@ -3501,10 +3519,10 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `title` | TEXT |  |
 | `config` | TEXT |  |
 | `sort_order` | INTEGER |  |
-| `enabled` | numeric |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
-| `deleted_at` | datetime | 软删除 |
+| `enabled` | NUMERIC |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
+| `deleted_at` | DATETIME | 软删除 |
 
 索引：`idx_home_blocks_type`、`idx_home_blocks_sort_order`、`idx_home_blocks_deleted_at`
 
@@ -3516,7 +3534,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | --- | --- | --- |
 | `id` | INTEGER | 主键 |
 | `css` | TEXT |  |
-| `updated_at` | datetime | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `custom_js` | TEXT |  |
 | `custom_js_mode` | TEXT |  |
 | `custom_js_delay` | INTEGER |  |
@@ -3531,7 +3549,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `id` | INTEGER | 主键 |
 | `user_id` | INTEGER |  |
 | `css` | TEXT |  |
-| `updated_at` | datetime | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `custom_js` | TEXT |  |
 | `custom_js_mode` | TEXT |  |
 | `custom_js_delay` | INTEGER |  |
@@ -3549,7 +3567,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `user_id` | INTEGER |  |
 | `result_count` | INTEGER |  |
 | `source` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_search_logs_query`、`idx_search_logs_user_id`、`idx_search_logs_created_at`
 
@@ -3557,7 +3575,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 
 ### `web_access_logs`
 
-全站访问日志（UA 族、路径、IP、身份）（行数 40974）
+全站访问日志（UA 族、路径、IP、身份）（行数 41517）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3575,9 +3593,9 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `status_code` | INTEGER |  |
 | `size` | INTEGER |  |
 | `latency_ms` | INTEGER |  |
-| `is_bot` | numeric |  |
+| `is_bot` | NUMERIC |  |
 | `bot_reason` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 | `os_name` | TEXT |  |
 | `os_version` | TEXT |  |
 | `browser_name` | TEXT |  |
@@ -3598,10 +3616,10 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `id` | INTEGER | 主键 |
 | `user_id` | INTEGER |  |
 | `zone` | TEXT |  |
-| `entered_at` | datetime |  |
+| `entered_at` | DATETIME |  |
 | `ip` | TEXT |  |
 | `user_agent` | TEXT |  |
-| `created_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
 
 索引：`idx_zone_access_user_zone`、`idx_zone_access_logs_entered_at`
 
@@ -3619,10 +3637,10 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `api_url` | TEXT |  |
 | `description` | TEXT |  |
 | `status` | TEXT |  |
-| `last_sync_at` | datetime |  |
+| `last_sync_at` | DATETIME |  |
 | `novel_count` | INTEGER |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 
 索引：`idx_federated_sites_status`
 
@@ -3641,7 +3659,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `summary` | TEXT |  |
 | `cover_url` | TEXT |  |
 | `source_url` | TEXT |  |
-| `cached_at` | datetime |  |
+| `cached_at` | DATETIME |  |
 
 索引：`idx_federated_novels_remote`、`idx_federated_novels_site`、`idx_federated_novels_site_id`、`idx_federated_novels_remote_id`
 
@@ -3662,11 +3680,11 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `issuer_url` | TEXT |  |
 | `quota_per_min` | INTEGER |  |
 | `allowed_ips` | TEXT |  |
-| `expires_at` | datetime |  |
-| `last_used_at` | datetime |  |
-| `is_active` | numeric |  |
-| `created_at` | datetime | 时间 |
-| `updated_at` | datetime | 时间 |
+| `expires_at` | DATETIME |  |
+| `last_used_at` | DATETIME |  |
+| `is_active` | NUMERIC |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
 | `total_calls` | INTEGER |  |
 
 索引：`idx_federated_peer_keys_site_id`、`idx_federated_peer_keys_direction`、`idx_federated_peer_keys_key_hash`
@@ -3684,8 +3702,8 @@ API 访问日志（身份、路径、状态码、IP）（行数 109）
 | `user_agent` | TEXT |  |
 | `endpoint` | TEXT |  |
 | `count` | INTEGER |  |
-| `first_seen` | datetime |  |
-| `last_seen` | datetime |  |
+| `first_seen` | DATETIME |  |
+| `last_seen` | DATETIME |  |
 | `key_prefix` | TEXT |  |
 | `issuer` | TEXT |  |
 

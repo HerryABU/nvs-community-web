@@ -40,6 +40,19 @@ export interface FeedComment {
   avatar_url?: string;
 }
 
+/** 视频弹幕：time_ms 是出现的视频时间点（毫秒） */
+export interface FeedDanmaku {
+  id: number;
+  post_id: number;
+  user_id: number;
+  content: string;
+  time_ms: number;
+  mode: 'scroll' | 'top' | 'bottom';
+  color: string;
+  created_at: string;
+  author_name?: string;
+}
+
 export const feedApi = {
   /** 当前微文图片上限（后台可调，默认 20） */
   config() {
@@ -114,5 +127,19 @@ export const feedApi = {
   },
   likeComment(cid: number) {
     return api.post<{ code: number; data: { liked: boolean } }>(`/feed-comments/${cid}/like`);
+  },
+  // ---------- 弹幕 ----------
+  /** 拉弹幕：from/to 为毫秒时间窗，to 省略表示不设上限 */
+  danmaku(id: number, params: { from?: number; to?: number; limit?: number } = {}) {
+    return api.get<{ code: number; data: { list: FeedDanmaku[]; total: number } }>(`/feed/${id}/danmaku`, {
+      params,
+    });
+  },
+  /** 发弹幕：time_ms 是当前播放位置（毫秒） */
+  sendDanmaku(id: number, data: { content: string; time_ms: number; mode?: string; color?: string }) {
+    return api.post<{ code: number; data: { id: number; time_ms: number } }>(`/feed/${id}/danmaku`, data);
+  },
+  deleteDanmaku(did: number) {
+    return api.delete<{ code: number }>(`/feed/danmaku/${did}`);
   },
 };
