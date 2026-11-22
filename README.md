@@ -254,6 +254,8 @@
 - 🌍 **世界级运行时目录**：站长维护 Java / Go / Node / Python / .NET 等语言版本，标记编译型或解释型；平台只登记版本，不负责安装
 - 📦 **源码与编译产物托管**：源码模式或编译版（源码 + 可执行文件），编译型语言默认强制附源码，站长可全局关闭并逐项目豁免
 - 🛡 **先审后外**：新项目一律草稿 + 私有，提交后须站长审核源码与产物；通过后才可公开并申请 `/<前缀>/` 路由，内容变更自动退回待审
+- 🔐 **源码按授权可见**：公开项目 ≠ 公开源码；默认拒绝，需所有者开共享开关或逐用户审批，可随时撤销
+- 📱 **移动端适配**：窄屏下头部换行、次要列隐藏、弹窗自适应屏宽
 - 🔀 **gatewayhub 路径级反代内核**：前缀直接挂根路径（`/order-svc/`），最长前缀匹配、HTML/CSS/JS 前缀改写、Set-Cookie 收紧、自算 ETag、跳数守卫（508）、WebSocket 透传；SSRF/自指防护
 - 🧭 **三块后台管理页**：运行时管理 / 项目管理与审核 / 反向代理管理；前台「我的自托管项目」+「自托管广场」
 - ⚙️ **安全边界**：平台不在本机执行用户代码（`LocalExec` 预留且恒关），作者自带服务；TLS 由外层网关终止
@@ -394,7 +396,7 @@ cd server && go build -ldflags="-s -w" -o nvs-server.exe . && cd ..
 | 所有接口 | [docs/API.md](docs/API.md) |
 | 所有环境变量 | [docs/CONFIG.md](docs/CONFIG.md) |
 | 目录结构 / 分层约定 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| 全部数据表（188 张，按域） | [docs/DATABASE.md](docs/DATABASE.md) |
+| 全部数据表（189 张，按域） | [docs/DATABASE.md](docs/DATABASE.md) |
 | 逐表字段明细 | [docs/DATABASE-SCHEMA.md](docs/DATABASE-SCHEMA.md) |
 | 本地开发 / 构建 / 测试 / 发版 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) |
 

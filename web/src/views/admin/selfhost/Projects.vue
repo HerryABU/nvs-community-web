@@ -22,30 +22,30 @@
       </template>
 
       <el-table :data="projects" v-loading="loading" stripe>
-        <el-table-column label="ID" width="70" prop="id" />
+        <el-table-column v-if="!isMobile" label="ID" width="70" prop="id" />
         <el-table-column label="项目" min-width="180">
           <template #default="{ row }">
             <div class="ap-name">{{ row.name }}</div>
             <div class="ap-slug">{{ row.slug }} · {{ row.language }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="作者" width="90" prop="user_id" />
-        <el-table-column label="模式" width="100">
+        <el-table-column v-if="!isMobile" label="作者" width="90" prop="user_id" />
+        <el-table-column v-if="!isMobile" label="模式" width="100">
           <template #default="{ row }">{{ row.mode === 'compiled' ? '编译版' : '源码' }}</template>
         </el-table-column>
         <el-table-column label="源码" width="120">
           <template #default="{ row }">
-            <el-link v-if="row.source_file" type="primary" :href="selfhostApi.fileUrl(row.id, 'source')" target="_blank">查看</el-link>
+            <el-link v-if="row.source_file" type="primary" @click="download(row, 'source')">查看</el-link>
             <span v-else class="ap-mute">未上传</span>
           </template>
         </el-table-column>
         <el-table-column label="可执行文件" width="120">
           <template #default="{ row }">
-            <el-link v-if="row.binary_file" type="primary" :href="selfhostApi.fileUrl(row.id, 'binary')" target="_blank">查看</el-link>
+            <el-link v-if="row.binary_file" type="primary" @click="download(row, 'binary')">查看</el-link>
             <span v-else class="ap-mute">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="服务地址" min-width="200" show-overflow-tooltip prop="upstream" />
+        <el-table-column v-if="!isMobile" label="服务地址" min-width="200" show-overflow-tooltip prop="upstream" />
         <el-table-column label="状态" width="110">
           <template #default="{ row }"><el-tag :type="statusType(row.review_status)" size="small">{{ statusText(row.review_status) }}</el-tag></template>
         </el-table-column>
@@ -62,7 +62,7 @@
       <el-empty v-if="!loading && !projects.length" description="没有符合条件的项目" />
     </el-card>
 
-    <el-dialog v-model="reviewVisible" :title="reviewApprove ? '通过审核' : '驳回项目'" width="520px" destroy-on-close>
+    <el-dialog v-model="reviewVisible" :title="reviewApprove ? '通过审核' : '驳回项目'" :width="isMobile ? '94%' : '520px'" destroy-on-close>
       <el-form label-width="110px">
         <el-form-item label="审核意见"><el-input v-model="reviewNote" type="textarea" :rows="3" /></el-form-item>
         <el-form-item v-if="reviewApprove" label="源码豁免">
@@ -82,7 +82,9 @@
 import { ref, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { selfhostApi, type SelfHostProject } from '@/api/selfhost';
+import { useIsMobile } from '@/utils/mobile';
 
+const isMobile = useIsMobile();
 const loading = ref(false);
 const keyword = ref('');
 const status = ref('');
@@ -104,6 +106,14 @@ async function load() {
     ElMessage.error(e?.response?.data?.message || '加载失败');
   } finally {
     loading.value = false;
+  }
+}
+
+async function download(row: SelfHostProject, kind: 'source' | 'binary') {
+  try {
+    await selfhostApi.downloadFile(row.id, kind, kind === 'source' ? row.source_name : row.binary_name);
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '下载失败');
   }
 }
 
@@ -153,3 +163,10 @@ onMounted(load);
 .ap-slug, .ap-mute { font-size: 12px; color: var(--el-text-color-secondary); }
 .ap-hint { font-size: 12px; color: var(--el-text-color-secondary); }
 </style>
+
+@media (max-width: 767px) {
+  .ap-wrap { padding: 8px; }
+  .ap-head { flex-direction: column; align-items: stretch; gap: 10px; }
+  .ap-tools { flex-wrap: wrap; }
+  .ap-tools .el-input, .ap-tools .el-select { width: 100% !important; }
+}

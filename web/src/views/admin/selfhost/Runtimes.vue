@@ -14,13 +14,13 @@
         <el-table-column label="语言" width="120" prop="language" />
         <el-table-column label="版本" width="120" prop="version" />
         <el-table-column label="名称" min-width="160" prop="label" />
-        <el-table-column label="类型" width="120">
+        <el-table-column v-if="!isMobile" label="类型" width="120">
           <template #default="{ row }">{{ row.kind === 'compiled' ? '编译型（须提供源码）' : '解释型' }}</template>
         </el-table-column>
         <el-table-column label="启用" width="90">
           <template #default="{ row }"><el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '停用' }}</el-tag></template>
         </el-table-column>
-        <el-table-column label="安装提示" min-width="220" show-overflow-tooltip prop="install_hint" />
+        <el-table-column v-if="!isMobile" label="安装提示" min-width="220" show-overflow-tooltip prop="install_hint" />
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openEditor(row)">编辑</el-button>
@@ -31,7 +31,7 @@
       <el-empty v-if="!loading && !runtimes.length" description="还没有运行时版本" />
     </el-card>
 
-    <el-dialog v-model="visible" :title="form.id ? '编辑运行时' : '新增运行时'" width="600px" destroy-on-close>
+    <el-dialog v-model="visible" :title="form.id ? '编辑运行时' : '新增运行时'" :width="isMobile ? '94%' : '600px'" destroy-on-close>
       <el-form :model="form" label-width="110px">
         <el-form-item label="语言标识" required><el-input v-model="form.language" placeholder="java / go / node / python" /></el-form-item>
         <el-form-item label="版本号" required><el-input v-model="form.version" placeholder="21 / 1.26 / 22" /></el-form-item>
@@ -60,7 +60,9 @@
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { selfhostApi, type SelfHostRuntime } from '@/api/selfhost';
+import { useIsMobile } from '@/utils/mobile';
 
+const isMobile = useIsMobile();
 const loading = ref(false);
 const saving = ref(false);
 const visible = ref(false);
@@ -118,3 +120,10 @@ onMounted(load);
 .ar-title { font-size: 18px; font-weight: 700; }
 .ar-sub { font-size: 12px; color: var(--el-text-color-secondary); }
 </style>
+
+@media (max-width: 767px) {
+  .ar-wrap { padding: 8px; }
+  .ar-head { flex-direction: column; align-items: stretch; gap: 10px; }
+  .ar-head .el-button { width: 100%; }
+  :deep(.el-form-item__label) { padding-bottom: 2px; }
+}

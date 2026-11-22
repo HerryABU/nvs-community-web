@@ -99,28 +99,31 @@ func (Runtime) TableName() string { return "selfhost_runtimes" }
 // Project 自托管项目。source_file / binary_file 是相对 SelfHostDir 的安全路径，
 // 由后端生成，绝不接受客户端传入。
 type Project struct {
-	ID           uint           `gorm:"primaryKey" json:"id"`
-	UserID       uint           `gorm:"not null;index" json:"user_id"`
-	Name         string         `gorm:"size:128;not null" json:"name"`
-	Slug         string         `gorm:"size:64;not null;uniqueIndex" json:"slug"`
-	Description  string         `gorm:"size:512;default:''" json:"description"`
-	Language     string         `gorm:"size:32;not null;index" json:"language"`
-	RuntimeID    uint           `gorm:"not null;index;default:0" json:"runtime_id"`
-	Mode         string         `gorm:"size:16;not null;default:source;index" json:"mode"`
-	SourceFile   string         `gorm:"size:512;default:''" json:"source_file"`
-	BinaryFile   string         `gorm:"size:512;default:''" json:"binary_file"`
-	SourceName   string         `gorm:"size:256;default:''" json:"source_name"` // 原始文件名（仅展示）
-	BinaryName   string         `gorm:"size:256;default:''" json:"binary_name"`
-	BuildCommand string         `gorm:"size:512;default:''" json:"build_command"`
-	StartCommand string         `gorm:"size:512;default:''" json:"start_command"`
-	Upstream     string         `gorm:"size:512;default:''" json:"upstream"` // 作者自带服务的 http(s)://host:port/root
-	Visibility   string         `gorm:"size:16;default:private;index" json:"visibility"`
-	ReviewStatus string         `gorm:"size:16;default:draft;index" json:"review_status"`
-	ReviewNote   string         `gorm:"size:512;default:''" json:"review_note"`
-	ReviewedBy   uint           `gorm:"default:0" json:"reviewed_by"`
-	ReviewedAt   *time.Time     `json:"reviewed_at"`
-	SourceWaived bool           `gorm:"default:false" json:"source_waived"` // 管理员逐项目豁免源码要求
-	LocalExec    bool           `gorm:"default:false" json:"local_exec"`    // 预留，当前恒 false
+	ID           uint       `gorm:"primaryKey" json:"id"`
+	UserID       uint       `gorm:"not null;index" json:"user_id"`
+	Name         string     `gorm:"size:128;not null" json:"name"`
+	Slug         string     `gorm:"size:64;not null;uniqueIndex" json:"slug"`
+	Description  string     `gorm:"size:512;default:''" json:"description"`
+	Language     string     `gorm:"size:32;not null;index" json:"language"`
+	RuntimeID    uint       `gorm:"not null;index;default:0" json:"runtime_id"`
+	Mode         string     `gorm:"size:16;not null;default:source;index" json:"mode"`
+	SourceFile   string     `gorm:"size:512;default:''" json:"source_file"`
+	BinaryFile   string     `gorm:"size:512;default:''" json:"binary_file"`
+	SourceName   string     `gorm:"size:256;default:''" json:"source_name"` // 原始文件名（仅展示）
+	BinaryName   string     `gorm:"size:256;default:''" json:"binary_name"`
+	BuildCommand string     `gorm:"size:512;default:''" json:"build_command"`
+	StartCommand string     `gorm:"size:512;default:''" json:"start_command"`
+	Upstream     string     `gorm:"size:512;default:''" json:"upstream"` // 作者自带服务的 http(s)://host:port/root
+	Visibility   string     `gorm:"size:16;default:private;index" json:"visibility"`
+	ReviewStatus string     `gorm:"size:16;default:draft;index" json:"review_status"`
+	ReviewNote   string     `gorm:"size:512;default:''" json:"review_note"`
+	ReviewedBy   uint       `gorm:"default:0" json:"reviewed_by"`
+	ReviewedAt   *time.Time `json:"reviewed_at"`
+	SourceWaived bool       `gorm:"default:false" json:"source_waived"` // 管理员逐项目豁免源码要求
+	LocalExec    bool       `gorm:"default:false" json:"local_exec"`    // 预留，当前恒 false
+	// 文件共享开关：默认 false。公开项目 ≠ 公开源码，下载必须另有授权。
+	SourceShared bool           `gorm:"default:false" json:"source_shared"`
+	BinaryShared bool           `gorm:"default:false" json:"binary_shared"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
@@ -161,10 +164,27 @@ type ReviewLog struct {
 
 func (ReviewLog) TableName() string { return "selfhost_review_logs" }
 
+// FileGrant 单个用户对单个项目某类文件的访问授权。
+// 一次性授权（approved）长期有效，可由所有者/管理员撤销；默认没有任何授权。
+type FileGrant struct {
+	ID         uint       `gorm:"primaryKey" json:"id"`
+	ProjectID  uint       `gorm:"not null;index" json:"project_id"`
+	UserID     uint       `gorm:"not null;index" json:"user_id"`
+	Kind       string     `gorm:"size:16;not null" json:"kind"` // source | binary | all
+	Status     string     `gorm:"size:16;default:pending;index" json:"status"`
+	Note       string     `gorm:"size:512;default:''" json:"note"`
+	ReviewedBy uint       `gorm:"default:0" json:"reviewed_by"`
+	ReviewedAt *time.Time `json:"reviewed_at"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
+}
+
+func (FileGrant) TableName() string { return "selfhost_file_grants" }
+
 // ─── 迁移 ───
 
 func Migrate(db *gorm.DB) error {
-	if err := db.AutoMigrate(&Runtime{}, &Project{}, &Route{}, &ReviewLog{}); err != nil {
+	if err := db.AutoMigrate(&Runtime{}, &Project{}, &Route{}, &ReviewLog{}, &FileGrant{}); err != nil {
 		return err
 	}
 	// 默认强制提供源码。必须在 DB 就绪后写，不能放 init()（那时 models.DB 还是 nil）。

@@ -592,6 +592,12 @@ func registerProtected(r *gin.Engine) {
 		protected.PUT("/selfhost/projects/:id/visibility", selfhosthandler.SetVisibility)
 		protected.POST("/selfhost/projects/:id/files/:kind", selfhosthandler.UploadFile)
 		protected.GET("/selfhost/projects/:id/files/:kind", selfhosthandler.DownloadFile)
+		// 源码/产物访问授权：默认拒绝，需共享开关或逐用户审批
+		protected.POST("/selfhost/projects/:id/access", selfhosthandler.RequestAccess)
+		protected.PUT("/selfhost/projects/:id/sharing", selfhosthandler.SetSharing)
+		protected.GET("/selfhost/access-requests", selfhosthandler.MyGrants)
+		protected.POST("/selfhost/grants/:id/review", selfhosthandler.ReviewAccess)
+		protected.DELETE("/selfhost/grants/:id", selfhosthandler.RevokeAccess)
 	}
 
 	// 管理员路由

@@ -29,16 +29,16 @@
       </el-form>
 
       <el-table :data="routes" v-loading="loading" stripe>
-        <el-table-column label="ID" width="70" prop="id" />
+        <el-table-column v-if="!isMobile" label="ID" width="70" prop="id" />
         <el-table-column label="对外前缀" min-width="160">
           <template #default="{ row }"><code>{{ base }}{{ row.prefix }}/</code></template>
         </el-table-column>
-        <el-table-column label="项目" width="100" prop="project_id" />
+        <el-table-column v-if="!isMobile" label="项目" width="100" prop="project_id" />
         <el-table-column label="上游地址" min-width="230" show-overflow-tooltip prop="target" />
-        <el-table-column label="去前缀" width="90">
+        <el-table-column v-if="!isMobile" label="去前缀" width="90">
           <template #default="{ row }">{{ row.strip_prefix ? '是' : '否' }}</template>
         </el-table-column>
-        <el-table-column label="超时" width="90">
+        <el-table-column v-if="!isMobile" label="超时" width="90">
           <template #default="{ row }">{{ row.timeout }}s</template>
         </el-table-column>
         <el-table-column label="状态" width="110">
@@ -46,7 +46,7 @@
             <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '运行中' : '已停止' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="错误" min-width="160" show-overflow-tooltip prop="last_error" />
+        <el-table-column v-if="!isMobile" label="错误" min-width="160" show-overflow-tooltip prop="last_error" />
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button link :type="row.enabled ? 'warning' : 'success'" @click="toggle(row)">{{ row.enabled ? '停止' : '启用' }}</el-button>
@@ -58,7 +58,7 @@
       <div class="aroute-sum" v-if="total">共 {{ total }} 条路由，{{ active }} 条启用中</div>
     </el-card>
 
-    <el-dialog v-model="visible" title="新建/保存路由" width="620px" destroy-on-close>
+    <el-dialog v-model="visible" title="新建/保存路由" :width="isMobile ? '94%' : '620px'" destroy-on-close>
       <el-form :model="form" label-width="110px">
         <el-form-item label="项目" required>
           <el-select v-model="form.project_id" filterable placeholder="仅显示已通过审核的项目" style="width: 100%">
@@ -82,7 +82,9 @@
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { selfhostApi, type SelfHostRoute, type SelfHostProject } from '@/api/selfhost';
+import { useIsMobile } from '@/utils/mobile';
 
+const isMobile = useIsMobile();
 const loading = ref(false);
 const visible = ref(false);
 const keyword = ref('');
@@ -174,3 +176,12 @@ onMounted(load);
 .aroute-hint { font-size: 12px; color: var(--el-text-color-secondary); margin-left: 8px; }
 .aroute-sum { margin-top: 10px; font-size: 12px; color: var(--el-text-color-secondary); }
 </style>
+
+@media (max-width: 767px) {
+  .aroute-wrap { padding: 8px; }
+  .aroute-head { flex-direction: column; align-items: stretch; gap: 10px; }
+  .aroute-tools { flex-wrap: wrap; }
+  .aroute-tools .el-input { width: 100% !important; }
+  .aroute-config { display: flex; flex-direction: column; align-items: stretch; }
+  :deep(.el-form-item__label) { padding-bottom: 2px; }
+}

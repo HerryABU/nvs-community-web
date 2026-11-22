@@ -24,6 +24,38 @@ func isAdmin(c *gin.Context) bool {
 	return r == "admin" || r == "super"
 }
 
+// projectView 在前端需要的权限位；嵌套结构体在 JSON 里会展开成同层字段。
+type projectView struct {
+	selfhost.Project
+	CanSource bool `json:"can_source"`
+	CanBinary bool `json:"can_binary"`
+}
+
+// decorate 给列表补权限位。共享开关注入到 Project 本身，逐用户授权从库里批量取。
+func decorate(c *gin.Context, list []selfhost.Project) []projectView {
+	out := make([]projectView, 0, len(list))
+	ids := make([]uint, 0, len(list))
+	for _, p := range list {
+		ids = append(ids, p.ID)
+	}
+	grants := selfhost.ApprovedGrantKinds(middleware.UserID(c), ids)
+	admin := isAdmin(c)
+	viewer := middleware.UserID(c)
+	for _, p := range list {
+		canSource, canBinary := selfhost.PermissionsFor(&p, viewer, admin)
+		if g := grants[p.ID]; g != nil {
+			if g["source"] || g["all"] {
+				canSource = true
+			}
+			if g["binary"] || g["all"] {
+				canBinary = true
+			}
+		}
+		out = append(out, projectView{Project: p, CanSource: canSource, CanBinary: canBinary})
+	}
+	return out
+}
+
 // ─── 运行时目录（登录用户只读） ───
 
 // GET /api/selfhost/runtimes
@@ -45,7 +77,7 @@ func ListMyProjects(c *gin.Context) {
 		infra.InternalError(c, "项目列表读取失败")
 		return
 	}
-	infra.Success(c, gin.H{"projects": list, "total": total})
+	infra.Success(c, gin.H{"projects": decorate(c, list), "total": total})
 }
 
 // POST /api/selfhost/projects
@@ -91,7 +123,18 @@ func GetProject(c *gin.Context) {
 		return
 	}
 	logs, _ := selfhost.ListReviewLogs(id)
-	infra.Success(c, gin.H{"project": p, "logs": logs, "config": selfhost.ConfigSummary()})
+	viewer := middleware.UserID(c)
+	canSource, canBinary := selfhost.PermissionsFor(p, viewer, isAdmin(c))
+	data := gin.H{
+		"project": p, "logs": logs, "config": selfhost.ConfigSummary(),
+		"can_source": canSource, "can_binary": canBinary,
+		"my_grants": selfhost.GrantStatusFor(id, viewer),
+	}
+	if isAdmin(c) || viewer == p.UserID {
+		grants, _ := selfhost.ListProjectGrants(id)
+		data["grants"] = grants
+	}
+	infra.Success(c, data)
 }
 
 // DELETE /api/selfhost/projects/:id
@@ -196,29 +239,27 @@ func UploadFile(c *gin.Context) {
 	infra.SuccessMessage(c, "文件已上传，重新提交审核后生效", gin.H{"file": rel})
 }
 
-// GET /api/selfhost/projects/:id/files/:kind  仅本人/管理员/已通过公开项目可下载
+// GET /api/selfhost/projects/:id/files/:kind
+// 默认拒绝：只有所有者/管理员，或显式共享/逐用户获批才能下载。
 func DownloadFile(c *gin.Context) {
 	id := parseUint(c.Param("id"))
 	kind := c.Param("kind")
+	if kind != "source" && kind != "binary" {
+		infra.BadRequest(c, "文件类型不合法")
+		return
+	}
 	p, err := selfhost.GetProjectRaw(id)
 	if err != nil {
 		infra.NotFound(c, "项目不存在")
 		return
 	}
-	allowed := isAdmin(c) || (middleware.UserID(c) != 0 && p.UserID == middleware.UserID(c)) ||
-		(p.ReviewStatus == selfhost.ReviewApproved && p.Visibility == selfhost.VisPublic)
-	if !allowed {
-		infra.Forbidden(c, "该项目文件尚未公开")
+	if !selfhost.CanDownload(p, middleware.UserID(c), isAdmin(c), kind) {
+		infra.Forbidden(c, "无权下载该项目的文件；请先向所有者申请授权")
 		return
 	}
-	rel := p.SourceFile
-	name := p.SourceName
+	rel, name := p.SourceFile, p.SourceName
 	if kind == "binary" {
 		rel, name = p.BinaryFile, p.BinaryName
-	}
-	if kind != "source" && kind != "binary" {
-		infra.BadRequest(c, "文件类型不合法")
-		return
 	}
 	abs, err := selfhost.AbsStoredPath(rel)
 	if err != nil {
@@ -241,7 +282,79 @@ func Plaza(c *gin.Context) {
 		infra.InternalError(c, "广场读取失败")
 		return
 	}
-	infra.Success(c, gin.H{"projects": list, "total": total})
+	infra.Success(c, gin.H{"projects": decorate(c, list), "total": total})
+}
+
+// ─── 文件访问授权 ───
+
+// POST /api/selfhost/projects/:id/access  {kind, note}
+func RequestAccess(c *gin.Context) {
+	var in struct {
+		Kind string `json:"kind"`
+		Note string `json:"note"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil {
+		infra.BadRequest(c, "参数错误")
+		return
+	}
+	g, err := selfhost.RequestGrant(parseUint(c.Param("id")), middleware.UserID(c), in.Kind, in.Note)
+	if err != nil {
+		infra.BadRequest(c, err.Error())
+		return
+	}
+	infra.SuccessMessage(c, "申请已提交，等待项目所有者审批", g)
+}
+
+// GET /api/selfhost/access-requests  我的申请
+func MyGrants(c *gin.Context) {
+	list, err := selfhost.ListMyGrants(middleware.UserID(c))
+	if err != nil {
+		infra.InternalError(c, "申请列表读取失败")
+		return
+	}
+	infra.Success(c, gin.H{"grants": list})
+}
+
+// POST /api/selfhost/grants/:id/review  {approve}
+func ReviewAccess(c *gin.Context) {
+	var in struct {
+		Approve bool `json:"approve"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil {
+		infra.BadRequest(c, "参数错误")
+		return
+	}
+	if err := selfhost.ReviewGrant(parseUint(c.Param("id")), middleware.UserID(c), in.Approve); err != nil {
+		infra.BadRequest(c, err.Error())
+		return
+	}
+	infra.SuccessMessage(c, "已处理", nil)
+}
+
+// DELETE /api/selfhost/grants/:id
+func RevokeAccess(c *gin.Context) {
+	if err := selfhost.RevokeGrant(parseUint(c.Param("id")), middleware.UserID(c)); err != nil {
+		infra.BadRequest(c, err.Error())
+		return
+	}
+	infra.SuccessMessage(c, "授权已撤销", nil)
+}
+
+// PUT /api/selfhost/projects/:id/sharing  {source_shared, binary_shared}
+func SetSharing(c *gin.Context) {
+	var in struct {
+		SourceShared bool `json:"source_shared"`
+		BinaryShared bool `json:"binary_shared"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil {
+		infra.BadRequest(c, "参数错误")
+		return
+	}
+	if err := selfhost.SetSharing(parseUint(c.Param("id")), middleware.UserID(c), in.SourceShared, in.BinaryShared, isAdmin(c)); err != nil {
+		infra.BadRequest(c, err.Error())
+		return
+	}
+	infra.SuccessMessage(c, "共享设置已保存", nil)
 }
 
 // ─── 管理端：运行时 ───
@@ -308,7 +421,7 @@ func AdminListProjects(c *gin.Context) {
 		infra.InternalError(c, "项目列表读取失败")
 		return
 	}
-	infra.Success(c, gin.H{"projects": list, "total": total})
+	infra.Success(c, gin.H{"projects": decorate(c, list), "total": total})
 }
 
 type reviewInput struct {

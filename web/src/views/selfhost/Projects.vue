@@ -9,6 +9,7 @@
           </div>
           <div class="sh-actions">
             <el-input v-model="keyword" placeholder="搜索项目" clearable style="width: 200px" @keyup.enter="load()" />
+            <el-button @click="openMyGrants()">我的授权</el-button>
             <el-button type="primary" @click="openEditor()">新建项目</el-button>
           </div>
         </div>
@@ -29,16 +30,16 @@
         <el-table-column label="运行时" width="150">
           <template #default="{ row }">{{ row.language }} {{ row.runtime?.version || '' }}</template>
         </el-table-column>
-        <el-table-column label="模式" width="110">
+        <el-table-column v-if="!isMobile" label="模式" width="110">
           <template #default="{ row }">{{ row.mode === 'compiled' ? '编译版' : '源码' }}</template>
         </el-table-column>
         <el-table-column label="审核" width="130">
           <template #default="{ row }"><el-tag :type="statusType(row.review_status)" size="small">{{ statusText(row.review_status) }}</el-tag></template>
         </el-table-column>
-        <el-table-column label="可见" width="100">
+        <el-table-column v-if="!isMobile" label="可见" width="100">
           <template #default="{ row }">{{ row.visibility === 'public' ? '公开' : '私有' }}</template>
         </el-table-column>
-        <el-table-column label="更新时间" width="170">
+        <el-table-column v-if="!isMobile" label="更新时间" width="170">
           <template #default="{ row }">{{ fmt(row.updated_at) }}</template>
         </el-table-column>
         <el-table-column label="操作" min-width="290" fixed="right">
@@ -56,7 +57,7 @@
       <el-empty v-if="!loading && !projects.length" description="还没有项目，点「新建项目」开始" />
     </el-card>
 
-    <el-dialog v-model="editorVisible" :title="form.id ? '编辑项目' : '新建项目'" width="640px" destroy-on-close>
+    <el-dialog v-model="editorVisible" :title="form.id ? '编辑项目' : '新建项目'" :width="isMobile ? '94%' : '640px'" destroy-on-close>
       <el-form :model="form" label-width="110px">
         <el-form-item label="项目名称" required><el-input v-model="form.name" maxlength="128" /></el-form-item>
         <el-form-item label="项目标识" required>
@@ -87,7 +88,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="detailVisible" title="文件与审核记录" width="720px" destroy-on-close>
+    <el-dialog v-model="detailVisible" title="文件与审核记录" :width="isMobile ? '94%' : '720px'" destroy-on-close>
       <template v-if="detail">
         <el-descriptions :column="2" border size="small">
           <el-descriptions-item label="项目">{{ detail.name }}</el-descriptions-item>
@@ -102,7 +103,7 @@
             </el-upload>
             <div v-if="detail.source_name" class="sh-hint">
               已上传：{{ detail.source_name }}
-              <el-link type="primary" :href="selfhostApi.fileUrl(detail.id, 'source')" target="_blank">下载</el-link>
+              <el-link type="primary" @click="downloadFile(detail, 'source')">下载</el-link>
             </div>
           </div>
           <div class="sh-upload">
@@ -112,9 +113,41 @@
             </el-upload>
             <div v-if="detail.binary_name" class="sh-hint">
               已上传：{{ detail.binary_name }}
-              <el-link type="primary" :href="selfhostApi.fileUrl(detail.id, 'binary')" target="_blank">下载</el-link>
+              <el-link type="primary" @click="downloadFile(detail, 'binary')">下载</el-link>
             </div>
           </div>
+        </div>
+        <el-divider content-position="left">文件共享与授权</el-divider>
+        <div class="sh-sharing">
+          <div class="sh-share-row">
+            <span>允许已登录用户查看源码</span>
+            <el-switch v-model="sharingSource" @change="saveSharing()" />
+          </div>
+          <div class="sh-share-row">
+            <span>允许已登录用户下载可执行文件</span>
+            <el-switch v-model="sharingBinary" @change="saveSharing()" />
+          </div>
+          <div class="sh-hint">默认全部关闭。公开项目不等于公开源码；也可以只给指定用户单独授权。</div>
+        </div>
+        <div v-if="grants.length" class="sh-grants">
+          <div class="sh-log-title">访问申请（{{ grants.length }}）</div>
+          <el-table :data="grants" size="small">
+            <el-table-column label="用户" width="90" prop="user_id" />
+            <el-table-column label="类型" width="90">
+              <template #default="{ row }">{{ row.kind === 'source' ? '源码' : row.kind === 'binary' ? '可执行文件' : '全部' }}</template>
+            </el-table-column>
+            <el-table-column label="用途" min-width="160" show-overflow-tooltip prop="note" />
+            <el-table-column label="状态" width="90">
+              <template #default="{ row }"><el-tag size="small" :type="grantType(row.status)">{{ grantText(row.status) }}</el-tag></template>
+            </el-table-column>
+            <el-table-column label="操作" width="140">
+              <template #default="{ row }">
+                <el-button v-if="row.status === 'pending'" link type="primary" @click="review(row.id, true)">批准</el-button>
+                <el-button v-if="row.status === 'pending'" link @click="review(row.id, false)">拒绝</el-button>
+                <el-button v-if="row.status === 'approved'" link type="danger" @click="revoke(row.id)">撤销</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
         </div>
         <div class="sh-log-title">审核记录</div>
         <el-timeline>
@@ -125,14 +158,30 @@
         <el-empty v-if="!logs.length" description="暂无审核记录" :image-size="50" />
       </template>
     </el-dialog>
+
+    <el-dialog v-model="myGrantsVisible" title="我的文件访问授权" :width="isMobile ? '94%' : '560px'" destroy-on-close>
+      <el-table :data="myGrants" size="small">
+        <el-table-column label="项目" min-width="120" prop="project_id" />
+        <el-table-column label="类型" width="90">
+          <template #default="{ row }">{{ row.kind === 'source' ? '源码' : row.kind === 'binary' ? '可执行文件' : '全部' }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }"><el-tag size="small" :type="grantType(row.status)">{{ grantText(row.status) }}</el-tag></template>
+        </el-table-column>
+        <el-table-column label="说明" min-width="160" show-overflow-tooltip prop="note" />
+      </el-table>
+      <el-empty v-if="!myGrants.length" description="还没有申请记录" :image-size="50" />
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { selfhostApi, type SelfHostProject, type SelfHostRuntime, type SelfHostReviewLog } from '@/api/selfhost';
+import { selfhostApi, type SelfHostProject, type SelfHostRuntime, type SelfHostReviewLog, type SelfHostGrant } from '@/api/selfhost';
+import { useIsMobile } from '@/utils/mobile';
 
+const isMobile = useIsMobile();
 const keyword = ref('');
 const loading = ref(false);
 const saving = ref(false);
@@ -142,11 +191,18 @@ const editorVisible = ref(false);
 const detailVisible = ref(false);
 const detail = ref<SelfHostProject | null>(null);
 const logs = ref<SelfHostReviewLog[]>([]);
+const grants = ref<SelfHostGrant[]>([]);
+const myGrants = ref<SelfHostGrant[]>([]);
+const myGrantsVisible = ref(false);
+const sharingSource = ref(false);
+const sharingBinary = ref(false);
 const form = reactive<Partial<SelfHostProject>>({});
 
 const statusText = (s: string) => ({ draft: '草稿', pending: '待审核', approved: '已通过', rejected: '已驳回', suspended: '已停止' } as Record<string, string>)[s] || s;
 const statusType = (s: string) => ({ draft: 'info', pending: 'warning', approved: 'success', rejected: 'danger', suspended: 'danger' } as Record<string, string>)[s] || 'info';
 const actionText = (a: string) => ({ submit: '提交审核', approved: '审核通过', rejected: '审核驳回', suspend: '停止项目', restore: '恢复项目' } as Record<string, string>)[a] || a;
+const grantText = (s: string) => ({ pending: '待审批', approved: '已批准', rejected: '已拒绝' } as Record<string, string>)[s] || s;
+const grantType = (s: string) => ({ pending: 'warning', approved: 'success', rejected: 'info' } as Record<string, string>)[s] || 'info';
 const fmt = (s?: string) => (s ? new Date(s).toLocaleString('zh-CN') : '—');
 // 路由前缀由后台在审核通过后配置，项目列表里只展示约定路径。
 const routePrefix = (row: SelfHostProject) => (row.route?.prefix ? `${row.route.prefix}/` : '未配置代理路径');
@@ -196,6 +252,9 @@ async function openDetail(row: SelfHostProject) {
     const res = await selfhostApi.getProject(row.id);
     detail.value = res.data.data.project;
     logs.value = res.data.data.logs || [];
+    grants.value = res.data.data.grants || [];
+    sharingSource.value = !!detail.value.source_shared;
+    sharingBinary.value = !!detail.value.binary_shared;
     detailVisible.value = true;
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '读取失败');
@@ -243,6 +302,56 @@ async function remove(id: number) {
   }
 }
 
+async function downloadFile(p: SelfHostProject | null, kind: 'source' | 'binary') {
+  if (!p) return;
+  try {
+    await selfhostApi.downloadFile(p.id, kind, kind === 'source' ? p.source_name : p.binary_name);
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '下载失败');
+  }
+}
+
+async function saveSharing() {
+  if (!detail.value) return;
+  try {
+    await selfhostApi.setSharing(detail.value.id, sharingSource.value, sharingBinary.value);
+    detail.value.source_shared = sharingSource.value;
+    detail.value.binary_shared = sharingBinary.value;
+    ElMessage.success('共享设置已保存');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  }
+}
+
+async function review(id: number, approve: boolean) {
+  try {
+    await selfhostApi.reviewGrant(id, approve);
+    if (detail.value) await openDetail(detail.value);
+    ElMessage.success('已处理');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
+async function revoke(id: number) {
+  try {
+    await selfhostApi.revokeGrant(id);
+    if (detail.value) await openDetail(detail.value);
+    ElMessage.success('已撤销');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
+async function openMyGrants() {
+  try {
+    myGrants.value = (await selfhostApi.myGrants()).data.data.grants || [];
+    myGrantsVisible.value = true;
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '读取失败');
+  }
+}
+
 onMounted(load);
 </script>
 
@@ -259,4 +368,18 @@ onMounted(load);
 .sh-upload { flex: 1; }
 .sh-upload-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
 .sh-log-title { font-weight: 600; margin: 12px 0; }
+.sh-sharing { background: var(--el-fill-color-lighter); border-radius: 8px; padding: 12px; }
+.sh-share-row { display: flex; justify-content: space-between; align-items: center; min-height: 36px; font-size: 13px; }
+.sh-grants { margin-top: 12px; }
+
+@media (max-width: 767px) {
+  .sh-wrap { padding: 8px; }
+  .sh-head { flex-direction: column; align-items: stretch; gap: 10px; }
+  .sh-actions { flex-wrap: wrap; }
+  .sh-actions .el-input { width: 100% !important; }
+  .sh-uploads { flex-direction: column; gap: 12px; }
+  .sh-sharing { padding: 8px; }
+  :deep(.el-form-item__label) { padding-bottom: 2px; }
+  :deep(.el-descriptions__label) { width: 72px; }
+}
 </style>

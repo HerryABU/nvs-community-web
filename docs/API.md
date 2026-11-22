@@ -381,7 +381,12 @@
 | POST | `/api/selfhost/projects/:id/submit` | JWT | 提交审核（校验源码/产物/upstream） |
 | PUT | `/api/selfhost/projects/:id/visibility` | JWT | `private` ↔ `public`（仅已通过可公开） |
 | POST | `/api/selfhost/projects/:id/files/:kind?name=` | JWT | 上传 `source` / `binary` 文件 |
-| GET | `/api/selfhost/projects/:id/files/:kind` | JWT/公开 | 下载源码或产物（本人/管理员/已审核公开项目） |
+| GET | `/api/selfhost/projects/:id/files/:kind` | JWT + 授权 | 下载源码/产物（仅本人/管理员/共享开启/逐用户获批；需设备指纹头） |
+| POST | `/api/selfhost/projects/:id/access` | JWT | 申请文件访问 `{kind, note}` |
+| GET | `/api/selfhost/access-requests` | JWT | 我的申请 |
+| POST | `/api/selfhost/grants/:id/review` | JWT | 所有者审批 `{approve}` |
+| DELETE | `/api/selfhost/grants/:id` | JWT | 撤销授权 |
+| PUT | `/api/selfhost/projects/:id/sharing` | JWT | 共享开关 `{source_shared, binary_shared}` |
 | GET | `/api/selfhost/plaza` | — | 广场：仅已审核 + 公开项目 |
 | GET | `/api/admin/selfhost/runtimes` | 管理员 | 全部运行时 |
 | POST / PUT / DELETE | `/api/admin/selfhost/runtimes[/:id]` | 管理员 | 运行时目录 CRUD |

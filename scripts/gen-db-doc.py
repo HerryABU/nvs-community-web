@@ -83,7 +83,7 @@ DOMAINS = [
         "oc_windows", "oc_budget_usage",
     ]),
     ("自托管", "运行时版本目录、源码/编译产物项目、审核留痕、反向代理路由", [
-        "selfhost_runtimes", "selfhost_projects", "selfhost_review_logs", "selfhost_routes",
+        "selfhost_runtimes", "selfhost_projects", "selfhost_review_logs", "selfhost_routes", "selfhost_file_grants",
     ]),
     ("AI 中台", "厂商、模型、密钥池、提示词、调用计费、会话、媒体验成、安全闸", [
         "ai_vendors", "ai_models", "ai_model_keys", "ai_channel_keys", "ai_channel_accounts",
@@ -213,6 +213,7 @@ PURPOSE = {
     "selfhost_projects": "自托管项目（源码模式/编译版、源码与可执行文件、upstream、审核状态）",
     "selfhost_review_logs": "自托管项目审核留痕（提交/通过/驳回/停止/恢复）",
     "selfhost_routes": "自托管反向代理路由（前缀最长匹配、upstream、启停与超时）",
+    "selfhost_file_grants": "自托管文件访问授权（源码/产物，默认拒绝，所有者逐用户审批）",
     "oc_emotes": "OC 表情包",
     "oc_world_books": "世界书（扫描深度、Token 预算）",
     "oc_world_entries": "世界书条目（关键词、二次关键词、逻辑）",
