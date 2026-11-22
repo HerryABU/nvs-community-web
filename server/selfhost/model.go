@@ -88,6 +88,7 @@ type Runtime struct {
 	InstallHint string    `gorm:"type:text" json:"install_hint"`
 	DownloadURL string    `gorm:"size:512;default:''" json:"download_url"`
 	Checksum    string    `gorm:"size:128;default:''" json:"checksum"`
+	ExecPath    string    `gorm:"size:512;default:''" json:"exec_path"` // 管理员登记的可执行文件位置（扫描所得或手动填写）
 	Enabled     bool      `gorm:"default:true;index" json:"enabled"`
 	Sort        int       `gorm:"default:0" json:"sort"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -191,7 +192,13 @@ func Migrate(db *gorm.DB) error {
 	if models.GetPlatformConfig(SourceRequiredConfigKey) == "" {
 		_ = models.SetPlatformConfig(SourceRequiredConfigKey, "1")
 	}
-	return nil
+	if err := MigrateDirect(db); err != nil {
+		return err
+	}
+	if err := MigrateUsage(db); err != nil {
+		return err
+	}
+	return MigrateRuntimeRequests(db)
 }
 
 // ─── 规则 ───
@@ -470,6 +477,7 @@ func UpdateRuntime(id uint, in Runtime) (*Runtime, error) {
 	}
 	r.Language, r.Version, r.Label, r.Kind = in.Language, in.Version, in.Label, in.Kind
 	r.InstallHint, r.DownloadURL, r.Checksum = in.InstallHint, in.DownloadURL, in.Checksum
+	r.ExecPath = in.ExecPath
 	r.Enabled, r.Sort = in.Enabled, in.Sort
 	if err := models.DB.Save(r).Error; err != nil {
 		return nil, err
@@ -630,8 +638,15 @@ func SubmitForReview(id, userID uint) error {
 	if p.Mode == ModeCompiled && p.BinaryFile == "" && SourceRequired(p.Language, p.SourceWaived) {
 		return errors.New("编译版项目需同时提供可执行文件")
 	}
+	// 可执行文件必须有启动参数/命令，否则运维与隔离检测都无从下手。
+	if p.BinaryFile != "" && strings.TrimSpace(p.StartCommand) == "" {
+		return errors.New("上传可执行文件的项目必须填写启动参数（启动命令）")
+	}
 	if p.Upstream == "" {
 		return errors.New("请先填写作者自带服务地址")
+	}
+	if err := isolationBlocks(p.ID); err != nil {
+		return err
 	}
 	p.ReviewStatus = ReviewPending
 	p.ReviewNote = ""
@@ -732,6 +747,9 @@ func UpsertRoute(in Route) (*Route, error) {
 	if p.ReviewStatus != ReviewApproved {
 		return nil, errors.New("项目尚未审核通过，不能建立对外路由")
 	}
+	if err := isolationBlocks(in.ProjectID); err != nil {
+		return nil, err
+	}
 	if in.Timeout < 1 || in.Timeout > 120 {
 		in.Timeout = 10
 	}
@@ -761,6 +779,11 @@ func SetRouteEnabled(id uint, enabled bool) (*Route, error) {
 	}
 	if enabled && p.ReviewStatus != ReviewApproved {
 		return nil, errors.New("项目未审核通过或已被停止，不能启用路由")
+	}
+	if enabled {
+		if err := isolationBlocks(r.ProjectID); err != nil {
+			return nil, err
+		}
 	}
 	r.Enabled = enabled
 	r.Status = RouteStopped

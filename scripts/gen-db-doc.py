@@ -84,6 +84,7 @@ DOMAINS = [
     ]),
     ("自托管", "运行时版本目录、源码/编译产物项目、审核留痕、反向代理路由", [
         "selfhost_runtimes", "selfhost_projects", "selfhost_review_logs", "selfhost_routes", "selfhost_file_grants",
+        "selfhost_direct_routes", "selfhost_port_maps", "selfhost_usage_daily", "selfhost_runtime_requests",
     ]),
     ("AI 中台", "厂商、模型、密钥池、提示词、调用计费、会话、媒体验成、安全闸", [
         "ai_vendors", "ai_models", "ai_model_keys", "ai_channel_keys", "ai_channel_accounts",
@@ -214,6 +215,10 @@ PURPOSE = {
     "selfhost_review_logs": "自托管项目审核留痕（提交/通过/驳回/停止/恢复）",
     "selfhost_routes": "自托管反向代理路由（前缀最长匹配、upstream、启停与超时）",
     "selfhost_file_grants": "自托管文件访问授权（源码/产物，默认拒绝，所有者逐用户审批）",
+    "selfhost_direct_routes": "管理员端口直派路由（路径→本机端口，GWh 同款，免审核）",
+    "selfhost_port_maps": "四层 TCP 端口映射（监听端口→目标主机:端口）",
+    "selfhost_usage_daily": "自托管项目按天流量统计（请求数、上下行字节）",
+    "selfhost_runtime_requests": "用户申请缺失运行时（管理员可改语言/版本后落地）",
     "oc_emotes": "OC 表情包",
     "oc_world_books": "世界书（扫描深度、Token 预算）",
     "oc_world_entries": "世界书条目（关键词、二次关键词、逻辑）",

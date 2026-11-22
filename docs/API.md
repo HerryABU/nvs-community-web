@@ -400,3 +400,25 @@
 | GET / PUT | `/api/admin/selfhost/config` | 管理员 | `source_required` 全局开关 |
 
 代理路径：`/<prefix>/*`（路径级，前缀挂在根路径，与 gatewayhub 一致；仅审核通过且启用的路由生效，未命中才落入 SPA 回退）。
+
+### 端口直派 / TCP 映射 / 用量（管理员）
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| GET / POST | `/api/admin/selfhost/direct-routes` | 端口直派列表 / 保存 `{prefix, port, root_path, enabled}` |
+| PUT | `/api/admin/selfhost/direct-routes/:id/toggle` | 启停 `{enabled}` |
+| DELETE | `/api/admin/selfhost/direct-routes/:id` | 删除 |
+| GET / POST | `/api/admin/selfhost/port-maps` | TCP 映射列表 / 保存 `{listen_port, target_host, target_port, enabled}` |
+| PUT | `/api/admin/selfhost/port-maps/:id/toggle` | 启停 `{enabled}` |
+| DELETE | `/api/admin/selfhost/port-maps/:id` | 删除 |
+| GET | `/api/admin/selfhost/usage` | 全站项目请求数 / 上下行字节 / 占用体积 |
+| GET | `/api/admin/selfhost/isolation` | 空间隔离自检问题列表 |
+| GET | `/api/selfhost/plaza/all?type=all\|selfhost\|html` | 自托管项目 + 扩展应用统一广场 |
+
+### 运行时扫描与申请
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/api/admin/selfhost/runtimes/scan` | 扫描 PATH，返回 `{candidates:[{language,version,label,kind,exec_path,note}]}` |
+| POST / GET | `/api/selfhost/runtime-requests` | 用户提交/查看自己的运行时申请 |
+| GET | `/api/admin/selfhost/runtime-requests` | 管理员查看申请 |
+| POST | `/api/admin/selfhost/runtime-requests/:id/review` | `{approve, language, version, exec_path, note}`；批准时可按管理员给的版本落地 |

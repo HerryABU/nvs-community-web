@@ -121,6 +121,9 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: '自托管运行时管理', desc: '语言与版本目录（Java/Go/Node…）· 编译型或解释型 · 平台不负责安装', path: '/admin/selfhost/runtimes', icon: Cpu, color: 'var(--gradient-blue)' },
       { title: '自托管项目管理', desc: '源码与可执行文件复核 · 通过/驳回/停止 · 源码豁免', path: '/admin/selfhost/projects', icon: Box, color: 'var(--gradient-purple)' },
       { title: '反向代理管理', desc: '最长前缀匹配 · 上游与超时 · 一键启停 · 强制源码开关', path: '/admin/selfhost/routes', icon: Connection, color: 'var(--gradient-success)' },
+      { title: '端口直派', desc: '管理员直接把路径指派到本机端口（GWh 同款），保存即热加载', path: '/admin/selfhost/direct-routes', icon: Aim, color: 'var(--gradient-blue)' },
+      { title: 'TCP 端口映射', desc: '四层转发：监听端口 → 目标主机端口', path: '/admin/selfhost/port-maps', icon: Connection, color: 'var(--gradient-purple)' },
+      { title: '用量与隔离', desc: '项目上下行流量 / 占用体积 · 跨空间访问自检', path: '/admin/selfhost/usage', icon: DataAnalysis, color: 'var(--gradient-amber)' },
     ],
   },
   {

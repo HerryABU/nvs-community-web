@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"nvs-server/middleware"
 	"nvs-server/models"
+	softdel "nvs-server/models/softdel"
 	"nvs-server/selfhost"
 	"nvs-server/utils/infra"
 )
@@ -27,8 +28,9 @@ func isAdmin(c *gin.Context) bool {
 // projectView 在前端需要的权限位；嵌套结构体在 JSON 里会展开成同层字段。
 type projectView struct {
 	selfhost.Project
-	CanSource bool `json:"can_source"`
-	CanBinary bool `json:"can_binary"`
+	CanSource    bool  `json:"can_source"`
+	CanBinary    bool  `json:"can_binary"`
+	StorageBytes int64 `json:"storage_bytes"`
 }
 
 // decorate 给列表补权限位。共享开关注入到 Project 本身，逐用户授权从库里批量取。
@@ -51,7 +53,7 @@ func decorate(c *gin.Context, list []selfhost.Project) []projectView {
 				canBinary = true
 			}
 		}
-		out = append(out, projectView{Project: p, CanSource: canSource, CanBinary: canBinary})
+		out = append(out, projectView{Project: p, CanSource: canSource, CanBinary: canBinary, StorageBytes: selfhost.StorageBytes(&p)})
 	}
 	return out
 }
@@ -128,6 +130,7 @@ func GetProject(c *gin.Context) {
 	data := gin.H{
 		"project": p, "logs": logs, "config": selfhost.ConfigSummary(),
 		"can_source": canSource, "can_binary": canBinary,
+		"usage":     selfhost.ProjectUsage(id),
 		"my_grants": selfhost.GrantStatusFor(id, viewer),
 	}
 	if isAdmin(c) || viewer == p.UserID {
@@ -357,6 +360,121 @@ func SetSharing(c *gin.Context) {
 	infra.SuccessMessage(c, "共享设置已保存", nil)
 }
 
+// PlazaAll 统一广场：自托管项目 + 已公开扩展应用（扩展应用归并入口）。
+func PlazaAll(c *gin.Context) {
+	keyword := strings.TrimSpace(c.Query("keyword"))
+	kind := c.Query("type") // all | selfhost | html
+
+	entries := make([]gin.H, 0)
+	if kind == "" || kind == "all" || kind == "selfhost" {
+		projects, _, err := selfhost.ListPublic(keyword, "")
+		if err == nil {
+			for _, v := range decorate(c, projects) {
+				url := ""
+				if v.Route != nil && v.Route.Enabled {
+					url = v.Route.Prefix + "/"
+				}
+				version := ""
+				if v.Runtime != nil {
+					version = v.Runtime.Version
+				}
+				author := ""
+				if v.User != nil {
+					author = v.User.Username
+				}
+				entries = append(entries, gin.H{
+					"type": "selfhost", "id": v.ID, "title": v.Name,
+					"description": v.Description, "language": v.Language,
+					"version": version, "author": author, "url": url,
+					"created_at": v.CreatedAt, "updated_at": v.UpdatedAt,
+					"can_source": v.CanSource, "can_binary": v.CanBinary,
+					"source_name": v.SourceName, "binary_name": v.BinaryName,
+				})
+			}
+		}
+	}
+	if kind == "" || kind == "all" || kind == "html" {
+		var htmls []softdel.UserHTML
+		q := models.DB.Model(&softdel.UserHTML{}).Where("is_public = ? AND is_active = ?", true, true)
+		if keyword != "" {
+			q = q.Where("name LIKE ? OR description LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+		}
+		q.Preload("User").Order("updated_at DESC").Limit(100).Find(&htmls)
+		for _, h := range htmls {
+			author := ""
+			if h.User != nil {
+				author = h.User.Username
+			}
+			entries = append(entries, gin.H{
+				"type": "html", "id": h.ID, "title": h.Name,
+				"description": h.Description, "language": "HTML", "version": "ZIP",
+				"author": author, "url": "/app/" + strconv.FormatUint(uint64(h.ID), 10),
+				"created_at": h.CreatedAt, "updated_at": h.UpdatedAt,
+				"can_source": false, "can_binary": false,
+			})
+		}
+	}
+	infra.Success(c, gin.H{"entries": entries, "total": len(entries)})
+}
+
+// ─── 运行时申请 ───
+
+func CreateRuntimeRequest(c *gin.Context) {
+	var in selfhost.RuntimeRequest
+	if err := c.ShouldBindJSON(&in); err != nil {
+		infra.BadRequest(c, "参数错误")
+		return
+	}
+	r, err := selfhost.CreateRuntimeRequest(middleware.UserID(c), in)
+	if err != nil {
+		infra.BadRequest(c, err.Error())
+		return
+	}
+	infra.SuccessMessage(c, "已提交给管理员", r)
+}
+
+func MyRuntimeRequests(c *gin.Context) {
+	list, err := selfhost.ListMyRuntimeRequests(middleware.UserID(c))
+	if err != nil {
+		infra.InternalError(c, "申请列表读取失败")
+		return
+	}
+	infra.Success(c, gin.H{"requests": list})
+}
+
+func AdminListRuntimeRequests(c *gin.Context) {
+	list, err := selfhost.ListRuntimeRequests(c.Query("status"))
+	if err != nil {
+		infra.InternalError(c, "申请列表读取失败")
+		return
+	}
+	infra.Success(c, gin.H{"requests": list})
+}
+
+func AdminReviewRuntimeRequest(c *gin.Context) {
+	var in struct {
+		Approve  bool   `json:"approve"`
+		Language string `json:"language"`
+		Version  string `json:"version"`
+		ExecPath string `json:"exec_path"`
+		Note     string `json:"note"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil {
+		infra.BadRequest(c, "参数错误")
+		return
+	}
+	r, err := selfhost.ReviewRuntimeRequest(parseUint(c.Param("id")), middleware.UserID(c), in.Approve, in.Language, in.Version, in.ExecPath, in.Note)
+	if err != nil {
+		infra.BadRequest(c, err.Error())
+		return
+	}
+	infra.SuccessMessage(c, "已处理", r)
+}
+
+func AdminScanRuntimes(c *gin.Context) {
+	infra.Success(c, gin.H{"candidates": selfhost.ScanPathRuntimes()})
+}
+
 // ─── 管理端：运行时 ───
 
 func AdminListRuntimes(c *gin.Context) {
@@ -459,6 +577,126 @@ func AdminSuspend(c *gin.Context) {
 		return
 	}
 	infra.SuccessMessage(c, "已更新项目状态", nil)
+}
+
+// GET /api/admin/selfhost/isolation  空间隔离自检
+func AdminIsolation(c *gin.Context) {
+	infra.Success(c, gin.H{"issues": selfhost.CheckIsolation()})
+}
+
+// GET /api/admin/selfhost/usage  全站项目流量与体积
+func AdminUsage(c *gin.Context) {
+	list, err := selfhost.ListUsage()
+	if err != nil {
+		infra.InternalError(c, "用量统计失败")
+		return
+	}
+	infra.Success(c, gin.H{"usage": list})
+}
+
+// ─── 管理端：TCP 端口映射 ───
+
+func AdminListPortMaps(c *gin.Context) {
+	list, err := selfhost.ListPortMaps()
+	if err != nil {
+		infra.InternalError(c, "端口映射读取失败")
+		return
+	}
+	out := make([]gin.H, 0, len(list))
+	for _, p := range list {
+		out = append(out, gin.H{
+			"id": p.ID, "listen_port": p.ListenPort, "target_host": p.TargetHost,
+			"target_port": p.TargetPort, "enabled": p.Enabled, "description": p.Description,
+			"last_error": p.LastError, "running": selfhost.PortMapRunning(p.ID),
+			"created_at": p.CreatedAt, "updated_at": p.UpdatedAt,
+		})
+	}
+	infra.Success(c, gin.H{"maps": out})
+}
+
+func AdminSavePortMap(c *gin.Context) {
+	var in selfhost.PortMap
+	if err := c.ShouldBindJSON(&in); err != nil {
+		infra.BadRequest(c, "参数错误")
+		return
+	}
+	p, err := selfhost.SavePortMap(in)
+	if err != nil {
+		infra.BadRequest(c, err.Error())
+		return
+	}
+	infra.SuccessMessage(c, "映射已保存并生效", p)
+}
+
+func AdminTogglePortMap(c *gin.Context) {
+	var in struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil {
+		infra.BadRequest(c, "参数错误")
+		return
+	}
+	if err := selfhost.TogglePortMap(parseUint(c.Param("id")), in.Enabled); err != nil {
+		infra.InternalError(c, "操作失败")
+		return
+	}
+	infra.SuccessMessage(c, "状态已更新", nil)
+}
+
+func AdminDeletePortMap(c *gin.Context) {
+	if err := selfhost.DeletePortMap(parseUint(c.Param("id"))); err != nil {
+		infra.InternalError(c, "删除失败")
+		return
+	}
+	infra.SuccessMessage(c, "映射已删除", nil)
+}
+
+// ─── 管理端：端口直派 ───
+
+func AdminListDirectRoutes(c *gin.Context) {
+	list, err := selfhost.ListDirectRoutes()
+	if err != nil {
+		infra.InternalError(c, "直派路由读取失败")
+		return
+	}
+	infra.Success(c, gin.H{"routes": list, "base": ""})
+}
+
+func AdminSaveDirectRoute(c *gin.Context) {
+	var in selfhost.DirectRoute
+	if err := c.ShouldBindJSON(&in); err != nil {
+		infra.BadRequest(c, "参数错误")
+		return
+	}
+	r, err := selfhost.SaveDirectRoute(in)
+	if err != nil {
+		infra.BadRequest(c, err.Error())
+		return
+	}
+	infra.SuccessMessage(c, "已指派并热加载", r)
+}
+
+func AdminToggleDirectRoute(c *gin.Context) {
+	var in struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil {
+		infra.BadRequest(c, "参数错误")
+		return
+	}
+	if err := selfhost.ToggleDirectRoute(parseUint(c.Param("id")), in.Enabled); err != nil {
+		infra.InternalError(c, "操作失败")
+		return
+	}
+	infra.SuccessMessage(c, "状态已更新", nil)
+}
+
+func AdminDeleteDirectRoute(c *gin.Context) {
+	if err := selfhost.DeleteDirectRoute(parseUint(c.Param("id"))); err != nil {
+		infra.InternalError(c, "删除失败")
+		return
+	}
+	infra.SuccessMessage(c, "已删除", nil)
 }
 
 // ─── 管理端：反向代理 ───

@@ -29,7 +29,13 @@ type Manager struct {
 	multi      []string // 含 "/" 的多级前缀，按长度降序
 	warnSig    string
 	selfSig    string
+	traffic    TrafficFunc // 每请求完成后上报 {prefix, 上行, 下行}
 }
+
+// TrafficFunc 由宿主（NVS）注入，用于按代理前缀累计流量。
+type TrafficFunc func(prefix string, up, down int64)
+
+func (m *Manager) SetTrafficReporter(fn TrafficFunc) { m.traffic = fn }
 
 func NewManager(baseDomain string, self SelfInfo) *Manager {
 	return &Manager{

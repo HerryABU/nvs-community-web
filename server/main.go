@@ -428,6 +428,11 @@ func initDatabase() error {
 		return err
 	}
 	selfhost.InitManager()
+	// 四层 TCP 端口映射：启动监听并在每次 CRUD 后热重载
+	if err := selfhost.MigratePortMaps(models.DB); err != nil {
+		return err
+	}
+	selfhost.StartPortMaps()
 	// 蜜罐（独立功能包）：等级与日志策略 + 会话/事件/指纹
 	// 设 NVS_HONEYPOT_DB_PATH 则使用独立库（与业务库物理隔离，后台仍可读）
 	if err := honeypot.Bootstrap(models.DB); err != nil {

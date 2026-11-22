@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -63,6 +64,11 @@ func (m *Manager) Handle(c *gin.Context) {
 func (m *Manager) serve(c *gin.Context, entry *Entry, p *httputil.ReverseProxy, prefix, path, clientIP string) {
 	sw := &statusWriter{ResponseWriter: c.Writer, status: http.StatusOK}
 	req := c.Request
+	// 请求体计数：转发会消费 Body，必须在交给 ReverseProxy 之前包一层。
+	bodyCounter := &countingBody{ReadCloser: req.Body}
+	if req.Body != nil {
+		req.Body = bodyCounter
+	}
 
 	// 自指/嵌套链式转发：超过上限直接 508，不把请求推给自己。
 	hops, ok := m.hops.Next(req.Header)
@@ -84,6 +90,21 @@ func (m *Manager) serve(c *gin.Context, entry *Entry, p *httputil.ReverseProxy, 
 		defer cancel()
 		p.ServeHTTP(sw, req.WithContext(ctx))
 	}
+	if m.traffic != nil {
+		m.traffic(prefix, bodyCounter.n, sw.bytes)
+	}
+}
+
+// countingBody 统计转发给后端的请求体字节数（上行）。
+type countingBody struct {
+	io.ReadCloser
+	n int64
+}
+
+func (b *countingBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	b.n += int64(n)
+	return n, err
 }
 
 // isUpgrade 判断是否为 WebSocket 等协议升级请求。

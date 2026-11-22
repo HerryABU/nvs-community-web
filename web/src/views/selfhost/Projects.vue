@@ -9,6 +9,8 @@
           </div>
           <div class="sh-actions">
             <el-input v-model="keyword" placeholder="搜索项目" clearable style="width: 200px" @keyup.enter="load()" />
+            <el-button @click="$router.push('/htmls')">扩展应用管理</el-button>
+            <el-button @click="openMyRuntimeRequests()">运行时申请</el-button>
             <el-button @click="openMyGrants()">我的授权</el-button>
             <el-button type="primary" @click="openEditor()">新建项目</el-button>
           </div>
@@ -80,7 +82,10 @@
           <div class="sh-hint">填你自己服务器上的地址；不能指向平台本机 localhost/127.0.0.1。</div>
         </el-form-item>
         <el-form-item label="构建命令"><el-input v-model="form.build_command" placeholder="如 mvn -q package" /></el-form-item>
-        <el-form-item label="启动命令"><el-input v-model="form.start_command" placeholder="如 java -jar app.jar --port 9000" /></el-form-item>
+        <el-form-item label="启动命令" required>
+          <el-input v-model="form.start_command" placeholder="如 java -jar app.jar --port 9000" />
+          <div class="sh-hint">上传可执行文件的项目必须填写启动参数，否则无法提交审核。</div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="editorVisible = false">取消</el-button>
@@ -94,6 +99,11 @@
           <el-descriptions-item label="项目">{{ detail.name }}</el-descriptions-item>
           <el-descriptions-item label="状态">{{ statusText(detail.review_status) }}</el-descriptions-item>
           <el-descriptions-item label="审核意见" :span="2">{{ detail.review_note || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="占用体积">{{ mb(detail.storage_bytes) }} MB</el-descriptions-item>
+          <el-descriptions-item label="启动参数">{{ detail.start_command || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="代理流量" :span="2">
+            上行 {{ mb(detail.usage?.bytes_up) }} MB · 下行 {{ mb(detail.usage?.bytes_down) }} MB · {{ detail.usage?.requests || 0 }} 次请求
+          </el-descriptions-item>
         </el-descriptions>
         <div class="sh-uploads">
           <div class="sh-upload">
@@ -159,6 +169,35 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="runtimeRequestVisible" title="申请缺失的运行时" :width="isMobile ? '94%' : '520px'" destroy-on-close>
+      <p class="sh-hint">没有你需要的语言/版本？提交给管理员。管理员会查看你的程序或代码说明，按原样添加或给出更合适的版本。</p>
+      <el-form label-width="100px">
+        <el-form-item label="语言" required><el-input v-model="rqLanguage" placeholder="如 java / node / go" /></el-form-item>
+        <el-form-item label="版本号" required><el-input v-model="rqVersion" placeholder="如 21 / 22 / 1.26" /></el-form-item>
+        <el-form-item label="说明"><el-input v-model="rqNote" type="textarea" :rows="3" maxlength="1000" placeholder="说明用途，或贴上代码需要的最低版本" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="runtimeRequestVisible = false">取消</el-button>
+        <el-button type="primary" @click="doRuntimeRequest()">提交申请</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="runtimeRequestsVisible" title="我的运行时申请" :width="isMobile ? '94%' : '640px'" destroy-on-close>
+      <el-table :data="runtimeRequests" size="small">
+        <el-table-column label="语言" width="100" prop="language" />
+        <el-table-column label="版本" width="100" prop="version" />
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }"><el-tag size="small" :type="row.status === 'approved' ? 'success' : row.status === 'pending' ? 'warning' : 'info'">{{ row.status === 'approved' ? '已批准' : row.status === 'pending' ? '待处理' : '已驳回' }}</el-tag></template>
+        </el-table-column>
+        <el-table-column label="最终版本" min-width="120">
+          <template #default="{ row }">{{ row.final_language ? `${row.final_language} ${row.final_version}` : '—' }}</template>
+        </el-table-column>
+        <el-table-column label="管理员意见" min-width="180" show-overflow-tooltip prop="admin_note" />
+      </el-table>
+      <el-empty v-if="!runtimeRequests.length" description="暂无申请" :image-size="50" />
+      <template #footer><el-button type="primary" @click="runtimeRequestVisible = true">新建申请</el-button></template>
+    </el-dialog>
+
     <el-dialog v-model="myGrantsVisible" title="我的文件访问授权" :width="isMobile ? '94%' : '560px'" destroy-on-close>
       <el-table :data="myGrants" size="small">
         <el-table-column label="项目" min-width="120" prop="project_id" />
@@ -178,7 +217,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { selfhostApi, type SelfHostProject, type SelfHostRuntime, type SelfHostReviewLog, type SelfHostGrant } from '@/api/selfhost';
+import { selfhostApi, type SelfHostProject, type SelfHostRuntime, type SelfHostReviewLog, type SelfHostGrant, type RuntimeRequest } from '@/api/selfhost';
 import { useIsMobile } from '@/utils/mobile';
 
 const isMobile = useIsMobile();
@@ -194,6 +233,12 @@ const logs = ref<SelfHostReviewLog[]>([]);
 const grants = ref<SelfHostGrant[]>([]);
 const myGrants = ref<SelfHostGrant[]>([]);
 const myGrantsVisible = ref(false);
+const runtimeRequestVisible = ref(false);
+const runtimeRequestsVisible = ref(false);
+const runtimeRequests = ref<RuntimeRequest[]>([]);
+const rqLanguage = ref('');
+const rqVersion = ref('');
+const rqNote = ref('');
 const sharingSource = ref(false);
 const sharingBinary = ref(false);
 const form = reactive<Partial<SelfHostProject>>({});
@@ -204,6 +249,7 @@ const actionText = (a: string) => ({ submit: '提交审核', approved: '审核�
 const grantText = (s: string) => ({ pending: '待审批', approved: '已批准', rejected: '已拒绝' } as Record<string, string>)[s] || s;
 const grantType = (s: string) => ({ pending: 'warning', approved: 'success', rejected: 'info' } as Record<string, string>)[s] || 'info';
 const fmt = (s?: string) => (s ? new Date(s).toLocaleString('zh-CN') : '—');
+const mb = (n?: number) => ((Number(n) || 0) / 1048576).toFixed(2);
 // 路由前缀由后台在审核通过后配置，项目列表里只展示约定路径。
 const routePrefix = (row: SelfHostProject) => (row.route?.prefix ? `${row.route.prefix}/` : '未配置代理路径');
 
@@ -229,6 +275,10 @@ function openEditor(row?: SelfHostProject) {
 async function save() {
   if (!form.name || !form.slug) {
     ElMessage.warning('请填写项目名称与标识');
+    return;
+  }
+  if (form.mode === 'compiled' && !(form.start_command || '').trim()) {
+    ElMessage.warning('编译版项目必须填写启动参数');
     return;
   }
   saving.value = true;
@@ -340,6 +390,32 @@ async function revoke(id: number) {
     ElMessage.success('已撤销');
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '操作失败');
+  }
+}
+
+function openRuntimeRequest() {
+  rqLanguage.value = '';
+  rqVersion.value = '';
+  rqNote.value = '';
+  runtimeRequestVisible.value = true;
+}
+
+async function doRuntimeRequest() {
+  try {
+    await selfhostApi.createRuntimeRequest({ language: rqLanguage.value, version: rqVersion.value, note: rqNote.value });
+    runtimeRequestVisible.value = false;
+    ElMessage.success('已提交给管理员');
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '提交失败');
+  }
+}
+
+async function openMyRuntimeRequests() {
+  try {
+    runtimeRequests.value = (await selfhostApi.myRuntimeRequests()).data.data.requests || [];
+    runtimeRequestsVisible.value = true;
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '读取失败');
   }
 }
 

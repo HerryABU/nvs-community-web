@@ -12,6 +12,7 @@ export interface SelfHostRuntime {
   install_hint: string;
   download_url: string;
   checksum: string;
+  exec_path?: string;
   enabled: boolean;
   sort: number;
 }
@@ -53,6 +54,8 @@ export interface SelfHostProject {
   local_exec: boolean;
   source_shared?: boolean;
   binary_shared?: boolean;
+  storage_bytes?: number;
+  usage?: Pick<UsageRow, "requests" | "bytes_up" | "bytes_down" | "days">;
   // 服务端按当前登录用户计算，前端不要自行推断
   can_source?: boolean;
   can_binary?: boolean;
@@ -61,6 +64,95 @@ export interface SelfHostProject {
   runtime?: SelfHostRuntime | null;
   created_at: string;
   updated_at: string;
+}
+
+
+export interface RuntimeCandidate {
+  language: string;
+  version: string;
+  label: string;
+  kind: 'compiled' | 'interpreted';
+  exec_path: string;
+  note: string;
+}
+
+export interface RuntimeRequest {
+  id: number;
+  user_id: number;
+  project_id: number;
+  language: string;
+  version: string;
+  note: string;
+  status: 'pending' | 'approved' | 'rejected';
+  final_language: string;
+  final_version: string;
+  admin_note: string;
+  reviewed_by: number;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
+export interface PlazaEntry {
+  type: 'selfhost' | 'html';
+  id: number;
+  title: string;
+  description: string;
+  language: string;
+  version: string;
+  author: string;
+  url: string;
+  created_at: string;
+  updated_at: string;
+  can_source?: boolean;
+  can_binary?: boolean;
+  source_name?: string;
+  binary_name?: string;
+}
+
+export interface DirectRoute {
+  id: number;
+  prefix: string;
+  port: number;
+  root_path: string;
+  target_url?: string;
+  enabled: boolean;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PortMap {
+  id: number;
+  listen_port: number;
+  target_host: string;
+  target_port: number;
+  enabled: boolean;
+  description: string;
+  last_error: string;
+  running: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UsageRow {
+  project_id: number;
+  name: string;
+  slug: string;
+  owner_id: number;
+  storage_bytes: number;
+  requests: number;
+  bytes_up: number;
+  bytes_down: number;
+  days: number;
+}
+
+export interface IsolationIssue {
+  project_id: number;
+  name: string;
+  slug: string;
+  upstream: string;
+  reason: string;
+  level: 'block' | 'warn';
 }
 
 export interface SelfHostGrant {
@@ -151,6 +243,21 @@ export const selfhostApi = {
   },
 
   // ─── 管理端 ───
+  scanRuntimes() {
+    return api.post<{ code: number; data: { candidates: RuntimeCandidate[] } }>('/admin/selfhost/runtimes/scan');
+  },
+  createRuntimeRequest(payload: Partial<RuntimeRequest>) {
+    return api.post<{ code: number; data: RuntimeRequest }>('/selfhost/runtime-requests', payload);
+  },
+  myRuntimeRequests() {
+    return api.get<{ code: number; data: { requests: RuntimeRequest[] } }>('/selfhost/runtime-requests');
+  },
+  adminRuntimeRequests(status = '') {
+    return api.get<{ code: number; data: { requests: RuntimeRequest[] } }>('/admin/selfhost/runtime-requests', { params: { status } });
+  },
+  adminReviewRuntimeRequest(id: number, payload: Partial<RuntimeRequest> & { approve: boolean; exec_path?: string }) {
+    return api.post<{ code: number; data: unknown }>(`/admin/selfhost/runtime-requests/${id}/review`, payload);
+  },
   adminListRuntimes() {
     return api.get<{ code: number; data: { runtimes: SelfHostRuntime[] } }>('/admin/selfhost/runtimes');
   },
@@ -182,6 +289,39 @@ export const selfhostApi = {
   },
   adminDeleteRoute(id: number) {
     return api.delete<{ code: number }>(`/admin/selfhost/routes/${id}`);
+  },
+  plazaAll(keyword = '', type = 'all') {
+    return api.get<{ code: number; data: { entries: PlazaEntry[]; total: number } }>('/selfhost/plaza/all', { params: { keyword, type } });
+  },
+  adminDirectRoutes() {
+    return api.get<{ code: number; data: { routes: DirectRoute[]; base: string } }>('/admin/selfhost/direct-routes');
+  },
+  adminSaveDirectRoute(payload: Partial<DirectRoute>) {
+    return api.post<{ code: number; data: DirectRoute }>('/admin/selfhost/direct-routes', payload);
+  },
+  adminToggleDirectRoute(id: number, enabled: boolean) {
+    return api.put<{ code: number }>(`/admin/selfhost/direct-routes/${id}/toggle`, { enabled });
+  },
+  adminDeleteDirectRoute(id: number) {
+    return api.delete<{ code: number }>(`/admin/selfhost/direct-routes/${id}`);
+  },
+  adminPortMaps() {
+    return api.get<{ code: number; data: { maps: PortMap[] } }>('/admin/selfhost/port-maps');
+  },
+  adminSavePortMap(payload: Partial<PortMap>) {
+    return api.post<{ code: number; data: PortMap }>('/admin/selfhost/port-maps', payload);
+  },
+  adminTogglePortMap(id: number, enabled: boolean) {
+    return api.put<{ code: number }>(`/admin/selfhost/port-maps/${id}/toggle`, { enabled });
+  },
+  adminDeletePortMap(id: number) {
+    return api.delete<{ code: number }>(`/admin/selfhost/port-maps/${id}`);
+  },
+  adminUsage() {
+    return api.get<{ code: number; data: { usage: UsageRow[] } }>('/admin/selfhost/usage');
+  },
+  adminIsolation() {
+    return api.get<{ code: number; data: { issues: IsolationIssue[] } }>('/admin/selfhost/isolation');
   },
   adminConfig() {
     return api.get<{ code: number; data: { source_required: boolean; local_exec: boolean; note: string } }>('/admin/selfhost/config');

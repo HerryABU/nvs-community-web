@@ -22,14 +22,24 @@ import (
 const ProxyBase = "/sh"
 
 var (
-	proxyOnce sync.Once
-	proxyMgr  *proxycore.Manager
+	proxyOnce      sync.Once
+	proxyMgr       *proxycore.Manager
+	trafficMu      sync.RWMutex
+	prefixProjects = map[string]uint{} // 代理前缀 → 项目 id（直派路由不在其中）
 )
 
 func manager() *proxycore.Manager {
 	proxyOnce.Do(func() {
 		port, _ := strconv.Atoi(config.ServerPort)
 		proxyMgr = proxycore.NewManager("", proxycore.SelfInfo{Port: port, MaxHops: 5})
+		proxyMgr.SetTrafficReporter(func(prefix string, up, down int64) {
+			trafficMu.RLock()
+			pid := prefixProjects[prefix]
+			trafficMu.RUnlock()
+			if pid != 0 {
+				RecordTraffic(pid, up, down)
+			}
+		})
 	})
 	return proxyMgr
 }
@@ -44,7 +54,9 @@ func InvalidateRoutes() {
 		return
 	}
 	core := make([]proxycore.Route, 0, len(routes))
+	nextPrefixes := make(map[string]uint, len(routes))
 	for _, r := range routes {
+		nextPrefixes[strings.TrimPrefix(r.Prefix, "/")] = r.ProjectID
 		core = append(core, proxycore.Route{
 			ID:      r.ID,
 			Prefix:  strings.TrimPrefix(r.Prefix, "/"), // NVS 库里带 /，GWh 模型不带
@@ -53,6 +65,23 @@ func InvalidateRoutes() {
 			Status:  proxycore.StatusActive,
 		})
 	}
+	// 管理员直接指派的本机端口路由（无需项目审核，只由管理员配置）。
+	direct, _ := ListEnabledDirectRoutes()
+	for _, d := range direct {
+		target := d.TargetURL
+		if target == "" {
+			target = "http://127.0.0.1:" + strconv.Itoa(d.Port)
+			if d.RootPath != "" {
+				target += d.RootPath
+			}
+		}
+		core = append(core, proxycore.Route{
+			Prefix: strings.TrimPrefix(d.Prefix, "/"), Target: target, Timeout: 10, Status: proxycore.StatusActive,
+		})
+	}
+	trafficMu.Lock()
+	prefixProjects = nextPrefixes
+	trafficMu.Unlock()
 	if err := manager().Load(core); err != nil {
 		log.Printf("[selfhost] 代理路由热加载失败: %v", err)
 		return

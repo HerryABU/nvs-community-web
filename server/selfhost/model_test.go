@@ -104,7 +104,8 @@ func TestReviewGateAndProxyTable(t *testing.T) {
 	if err := AttachFile(p, "binary", relBin, "app.jar"); err != nil {
 		t.Fatalf("挂可执行文件失败: %v", err)
 	}
-	if err := models.DB.Model(&Project{}).Where("id = ?", p.ID).Update("upstream", "http://svc.example.com:8080").Error; err != nil {
+	if err := models.DB.Model(&Project{}).Where("id = ?", p.ID).
+		Updates(map[string]interface{}{"upstream": "http://svc.example.com:8080", "start_command": "java -jar app.jar --port 9000"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := SubmitForReview(p.ID, owner); err != nil {

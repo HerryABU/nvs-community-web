@@ -193,6 +193,8 @@ func registerPublic(r *gin.Engine) {
 		public.GET("/sandbox-vfs/:htmlId/list", sandbox.VFSList)
 		// 自托管广场：只返回审核通过且公开的项目
 		public.GET("/selfhost/plaza", selfhosthandler.Plaza)
+		// 统一广场：自托管项目 + 扩展应用
+		public.GET("/selfhost/plaza/all", selfhosthandler.PlazaAll)
 	}
 
 }

@@ -445,6 +445,24 @@ const router = createRouter({
       meta: { requiresAuth: true, requiresAdmin: true },
     },
     {
+      path: '/admin/selfhost/direct-routes',
+      name: 'admin-selfhost-direct-routes',
+      component: () => import('@/views/admin/selfhost/DirectRoutes.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
+      path: '/admin/selfhost/port-maps',
+      name: 'admin-selfhost-port-maps',
+      component: () => import('@/views/admin/selfhost/PortMaps.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
+      path: '/admin/selfhost/usage',
+      name: 'admin-selfhost-usage',
+      component: () => import('@/views/admin/selfhost/Usage.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
       path: '/admin/home-customize-review',
       name: 'admin-home-customize-review',
       component: () => import('@/views/admin/site/AdminHomeCustomizeReview.vue'),

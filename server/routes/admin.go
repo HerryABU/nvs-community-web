@@ -581,6 +581,9 @@ func registerAdminArea(r *gin.Engine) {
 
 	// 自托管管理：运行时版本目录 / 项目审核 / 反向代理路由 / 全局开关
 	{
+		adminGrp.POST("/selfhost/runtimes/scan", selfhosthandler.AdminScanRuntimes)
+		adminGrp.GET("/selfhost/runtime-requests", selfhosthandler.AdminListRuntimeRequests)
+		adminGrp.POST("/selfhost/runtime-requests/:id/review", selfhosthandler.AdminReviewRuntimeRequest)
 		adminGrp.GET("/selfhost/runtimes", selfhosthandler.AdminListRuntimes)
 		adminGrp.POST("/selfhost/runtimes", selfhosthandler.AdminCreateRuntime)
 		adminGrp.PUT("/selfhost/runtimes/:id", selfhosthandler.AdminUpdateRuntime)
@@ -592,6 +595,16 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.POST("/selfhost/routes", selfhosthandler.AdminSaveRoute)
 		adminGrp.PUT("/selfhost/routes/:id/toggle", selfhosthandler.AdminToggleRoute)
 		adminGrp.DELETE("/selfhost/routes/:id", selfhosthandler.AdminDeleteRoute)
+		adminGrp.GET("/selfhost/isolation", selfhosthandler.AdminIsolation)
+		adminGrp.GET("/selfhost/usage", selfhosthandler.AdminUsage)
+		adminGrp.GET("/selfhost/port-maps", selfhosthandler.AdminListPortMaps)
+		adminGrp.POST("/selfhost/port-maps", selfhosthandler.AdminSavePortMap)
+		adminGrp.PUT("/selfhost/port-maps/:id/toggle", selfhosthandler.AdminTogglePortMap)
+		adminGrp.DELETE("/selfhost/port-maps/:id", selfhosthandler.AdminDeletePortMap)
+		adminGrp.GET("/selfhost/direct-routes", selfhosthandler.AdminListDirectRoutes)
+		adminGrp.POST("/selfhost/direct-routes", selfhosthandler.AdminSaveDirectRoute)
+		adminGrp.PUT("/selfhost/direct-routes/:id/toggle", selfhosthandler.AdminToggleDirectRoute)
+		adminGrp.DELETE("/selfhost/direct-routes/:id", selfhosthandler.AdminDeleteDirectRoute)
 		adminGrp.GET("/selfhost/config", selfhosthandler.AdminConfig)
 		adminGrp.PUT("/selfhost/config", selfhosthandler.AdminSaveConfig)
 	}

@@ -208,7 +208,7 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - ⚠️ 回帖删除后不可解封恢复（物理删除），管理员「解封/恢复」对 post 类型仅清除封禁原因标记。
 
 ### 数据表
-全部 **189 张表 / 2147 个字段** 已按业务域整理成两份专门文档：
+全部 **193 张表 / 2188 个字段** 已按业务域整理成两份专门文档：
 
 - [`DATABASE.md`](DATABASE.md)：分域总览（表名 / 用途 / 主要字段 / 行数 / 源码位置）+ 全局约定
 - [`DATABASE-SCHEMA.md`](DATABASE-SCHEMA.md)：逐表字段明细（由 `python scripts/gen-db-doc.py data/nvs.db` 自动生成）
@@ -273,3 +273,18 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 | vip_applications | 整表 | 预留 | VIP 会员申请体系，暂未开发 |
 | earnings_records | 整表 | 预留 | 作者收益记录，暂未开发 |
 | withdrawal_requests | 整表 | 预留 | 提现申请流程，暂未开发 |
+
+### 端口直派、TCP 映射、用量与空间隔离
+- **端口直派 `selfhost_direct_routes`**：管理员填对外前缀 + 本机端口（+ 可选后端根路径），保存即写入内存路由表，与项目审核解耦；上游固定为 `127.0.0.1:<port>`，同样走 proxycore 的最长前缀/改写/508 跳数守卫。保留段校验与项目路由共用。
+- **TCP 端口映射 `selfhost_port_maps`**：`server/selfhost/portmap` 的运行时在 Gin 之外监听端口，双向 `io.Copy` + `CloseWrite` 转发；`Reload()` 只变更新增/修改/删除的监听，监听失败回写 `last_error`。禁止与平台自身端口冲突、禁止 127.0.0.1 同端口自环。仅管理员可配置。
+- **用量 `selfhost_usage_daily`**：proxycore 在请求体与响应写入处计数，按代理前缀归属到项目，按天累计请求数/上下行字节；体积由源码包+可执行文件实际落盘字节实时求和。`GET /api/admin/selfhost/usage` 给全站报表。
+- **空间隔离**：`CheckIsolation()` 在提交审核、建/启用路由前阻断三类跨空间配置——上游指向本机回环、指向平台自身端口、与其他项目上游完全相同或指向另一个项目的代理前缀；后台「用量与隔离」页提供自检列表。
+- **启动参数**：上传可执行文件的项目必须填写 `start_command`，前后端双向校验；无启动参数无法提交审核。
+
+### 运行时扫描与申请闭环
+- `Runtime.ExecPath` 保存可执行位置：`POST /api/admin/selfhost/runtimes/scan` 由管理员点击触发，扫描 PATH 中的 java/go/node/python/php/dotnet/rust/gcc/maven，固定命令表、不走 shell、3 秒超时、输出截断；结果可一键添加，也可在运行时表单里手动填写路径。
+- `selfhost_runtime_requests`：用户提交缺失的语言+版本与用途说明；管理员看到程序/代码说明后 `POST .../review`，可以按原样批准，也可以**直接修改语言/版本与可执行路径**再落地为运行时；被驳回的记录保留管理员意见。
+- 前台运行时下拉由 `GET /api/selfhost/runtimes` 提供（仅启用项），用户页有「运行时申请」入口。
+
+- **自指与嵌套**：管理员直派可填 `target_url`（如 `http://127.0.0.1:8000/other`），实现 GWh 同款的路径别名/嵌套转发；`X-GatewayHub-Hops` 每跳 +1，超过 5 跳返回 508，死配置不会变成请求生成器。用户项目路由仍禁止 localhost/回环，避免审核后借代理访问平台自身。
+- **Java 验收样本**：`C://Users//QBZ95//Desktop//tools//tests//spt//sports-2.6.8.jar` 用 `java -jar ... --server.port=19102` 启动，PATH 扫描能识别到 Temurin JDK 21.0.10；直派 `/sports-qa/` 指向 19102 可正常访问，别名 `/alias-qa/` → `/sports-qa/` 走两跳仍 200，`/loop-qa/` 自环返回 508。

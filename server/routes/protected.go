@@ -583,6 +583,8 @@ func registerProtected(r *gin.Engine) {
 
 		// 自托管：运行时只读 + 我的项目（源码/产物上传、提交审核）
 		protected.GET("/selfhost/runtimes", selfhosthandler.ListRuntimes)
+		protected.POST("/selfhost/runtime-requests", selfhosthandler.CreateRuntimeRequest)
+		protected.GET("/selfhost/runtime-requests", selfhosthandler.MyRuntimeRequests)
 		protected.GET("/selfhost/projects", selfhosthandler.ListMyProjects)
 		protected.POST("/selfhost/projects", selfhosthandler.CreateProject)
 		protected.GET("/selfhost/projects/:id", selfhosthandler.GetProject)

@@ -3,34 +3,46 @@
     <div class="plaza-head">
       <div>
         <h2>自托管广场</h2>
-        <p>以下项目均由作者自行部署，源码与产物已经站长审核；点击访问其服务。</p>
+        <p>自托管项目与自定义 HTML 扩展应用统一展示；自托管源码与产物默认需授权才能查看。</p>
       </div>
-      <el-input v-model="keyword" placeholder="搜索项目" clearable style="width: 240px" @keyup.enter="load()" />
+      <el-input v-model="keyword" placeholder="搜索项目 / 应用" clearable style="width: 240px" @keyup.enter="load()" />
     </div>
 
+    <el-tabs v-model="type" class="plaza-tabs" @tab-change="load()">
+      <el-tab-pane label="全部" name="all" />
+      <el-tab-pane label="自托管项目" name="selfhost" />
+      <el-tab-pane label="扩展应用" name="html" />
+    </el-tabs>
+
     <el-row :gutter="16" v-loading="loading">
-      <el-col v-for="p in projects" :key="p.id" :xs="24" :sm="12" :md="8" :lg="6">
+      <el-col v-for="e in entries" :key="`${e.type}-${e.id}`" :xs="24" :sm="12" :md="8" :lg="6">
         <el-card class="plaza-card" shadow="hover">
-          <div class="plaza-title">{{ p.name }}</div>
-          <div class="plaza-meta">
-            <el-tag size="small">{{ p.language }} {{ p.runtime?.version || '' }}</el-tag>
-            <el-tag size="small" type="info">{{ p.mode === 'compiled' ? '编译版' : '源码' }}</el-tag>
+          <div class="plaza-title">
+            {{ e.title }}
+            <el-tag size="small" :type="e.type === 'html' ? 'warning' : 'primary'" class="plaza-type">
+              {{ e.type === 'html' ? '扩展应用' : '自托管' }}
+            </el-tag>
           </div>
-          <div class="plaza-desc">{{ p.description || '暂无简介' }}</div>
+          <div class="plaza-meta">
+            <el-tag size="small" effect="plain">{{ e.language }} {{ e.version }}</el-tag>
+            <span v-if="e.author" class="plaza-author">@{{ e.author }}</span>
+          </div>
+          <div class="plaza-desc">{{ e.description || '暂无简介' }}</div>
           <div class="plaza-actions">
-            <el-button v-if="p.route" type="primary" size="small" :href="`${p.route.prefix}/`" tag="a" target="_blank">访问服务</el-button>
-            <el-button v-if="p.can_source" size="small" @click="download(p, 'source')">查看源码</el-button>
-            <el-button v-else-if="authStore.isLoggedIn" size="small" @click="openRequest(p, 'source')">申请源码</el-button>
-            <el-button v-if="p.binary_file && p.can_binary" size="small" @click="download(p, 'binary')">可执行文件</el-button>
-            <el-button v-else-if="p.binary_file && authStore.isLoggedIn" size="small" @click="openRequest(p, 'binary')">申请产物</el-button>
+            <el-button v-if="e.url" type="primary" size="small" tag="a" :href="e.url" target="_blank">
+              {{ e.type === 'html' ? '运行应用' : '访问服务' }}
+            </el-button>
+            <template v-if="e.type === 'selfhost'">
+              <el-button v-if="e.can_source" size="small" @click="download(e, 'source')">查看源码</el-button>
+              <el-button v-else-if="authStore.isLoggedIn" size="small" @click="openRequest(e, 'source')">申请源码</el-button>
+              <el-button v-if="e.binary_name && e.can_binary" size="small" @click="download(e, 'binary')">可执行文件</el-button>
+              <el-button v-else-if="e.binary_name && authStore.isLoggedIn" size="small" @click="openRequest(e, 'binary')">申请产物</el-button>
+            </template>
           </div>
         </el-card>
       </el-col>
     </el-row>
-    <el-empty v-if="!loading && !projects.length" description="还没有通过审核的公开项目" />
-    <div class="plaza-pager" v-if="total > pageSize">
-      <el-pagination layout="prev, pager, next" :total="total" :page-size="pageSize" v-model:current-page="page" @current-change="load()" />
-    </div>
+    <el-empty v-if="!loading && !entries.length" description="还没有公开的项目或应用" />
 
     <el-dialog v-model="requestVisible" title="申请文件访问权限" :width="isMobile ? '94%' : '480px'" destroy-on-close>
       <p class="plaza-tip">源码与可执行文件默认不公开。提交申请后由项目所有者审批，未获批准无法下载。</p>
@@ -55,27 +67,24 @@ import { ref, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import { useAuthStore } from '@/stores/auth';
 import { useIsMobile } from '@/utils/mobile';
-import { selfhostApi, type SelfHostProject } from '@/api/selfhost';
+import { selfhostApi, type PlazaEntry } from '@/api/selfhost';
 
 const authStore = useAuthStore();
 const isMobile = useIsMobile();
 const requestVisible = ref(false);
-const requestProject = ref<SelfHostProject | null>(null);
+const requestEntry = ref<PlazaEntry | null>(null);
 const requestKind = ref<'source' | 'binary'>('source');
 const requestNote = ref('');
 const keyword = ref('');
+const type = ref('all');
 const loading = ref(false);
-const projects = ref<SelfHostProject[]>([]);
-const total = ref(0);
-const page = ref(1);
-const pageSize = 12;
+const entries = ref<PlazaEntry[]>([]);
 
 async function load() {
   loading.value = true;
   try {
-    const res = await selfhostApi.plaza(keyword.value);
-    projects.value = res.data.data.projects || [];
-    total.value = res.data.data.total || 0;
+    const res = await selfhostApi.plazaAll(keyword.value, type.value);
+    entries.value = res.data.data.entries || [];
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '加载失败');
   } finally {
@@ -83,25 +92,25 @@ async function load() {
   }
 }
 
-async function download(p: SelfHostProject, kind: 'source' | 'binary') {
+async function download(e: PlazaEntry, kind: 'source' | 'binary') {
   try {
-    await selfhostApi.downloadFile(p.id, kind, kind === 'source' ? p.source_name : p.binary_name);
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.message || '下载失败');
+    await selfhostApi.downloadFile(e.id, kind, kind === 'source' ? e.source_name || '' : e.binary_name || '');
+  } catch (err: any) {
+    ElMessage.error(err?.response?.data?.message || '下载失败');
   }
 }
 
-function openRequest(p: SelfHostProject, kind: 'source' | 'binary') {
-  requestProject.value = p;
+function openRequest(e: PlazaEntry, kind: 'source' | 'binary') {
+  requestEntry.value = e;
   requestKind.value = kind;
   requestNote.value = '';
   requestVisible.value = true;
 }
 
 async function doRequest() {
-  if (!requestProject.value) return;
+  if (!requestEntry.value) return;
   try {
-    await selfhostApi.requestAccess(requestProject.value.id, requestKind.value, requestNote.value);
+    await selfhostApi.requestAccess(requestEntry.value.id, requestKind.value, requestNote.value);
     requestVisible.value = false;
     ElMessage.success('申请已提交，等待项目所有者审批');
   } catch (e: any) {
@@ -114,15 +123,17 @@ onMounted(load);
 
 <style scoped>
 .plaza-wrap { padding: 20px; }
-.plaza-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.plaza-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .plaza-head h2 { margin: 0 0 4px; }
 .plaza-head p { margin: 0; color: var(--el-text-color-secondary); font-size: 13px; }
+.plaza-tabs { margin-bottom: 8px; }
 .plaza-card { margin-bottom: 16px; min-height: 170px; }
 .plaza-title { font-weight: 700; font-size: 16px; margin-bottom: 8px; }
-.plaza-meta { display: flex; gap: 6px; margin-bottom: 10px; }
+.plaza-type { margin-left: 6px; }
+.plaza-meta { display: flex; gap: 6px; align-items: center; margin-bottom: 10px; }
+.plaza-author { font-size: 12px; color: var(--el-text-color-secondary); }
 .plaza-desc { font-size: 13px; color: var(--el-text-color-regular); min-height: 40px; }
 .plaza-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
-.plaza-pager { display: flex; justify-content: center; margin-top: 12px; }
 .plaza-tip { font-size: 13px; color: var(--el-text-color-secondary); line-height: 1.6; margin: 0 0 12px; }
 
 @media (max-width: 767px) {
