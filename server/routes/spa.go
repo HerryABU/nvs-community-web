@@ -18,6 +18,7 @@ import (
 	"nvs-server/honeypot"
 	"nvs-server/middleware"
 	"nvs-server/models"
+	"nvs-server/selfhost"
 	"nvs-server/utils/infra"
 	"strings"
 
@@ -26,6 +27,10 @@ import (
 
 // 静态资源与 SPA 回退。frontendFS 被 NoRoute 闭包捕获，故两者同函数。
 func registerStaticAndSPA(r *gin.Engine) {
+	// 自托管反向代理：独立 /sh 段，只有审核通过且启用的路由才转发。
+	// 必须在 SPA 回退之前注册，且不能用 NoRoute 兜底（那会把错误配置当前端路由返回 200）。
+	r.Any(selfhost.ProxyBase+"/*path", selfhost.Handler)
+
 	// ==================== 静态文件服务 ====================
 
 	// 注意：小说正文不再以 StaticFS 直链暴露。章节内容统一经 GetChapterContent

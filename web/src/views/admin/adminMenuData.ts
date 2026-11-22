@@ -113,6 +113,17 @@ export const adminMenuCategories: AdminMenuCategory[] = [
     ],
   },
   {
+    key: 'selfhost',
+    title: '自托管',
+    icon: Connection,
+    color: 'var(--gradient-teal)',
+    items: [
+      { title: '自托管运行时管理', desc: '语言与版本目录（Java/Go/Node…）· 编译型或解释型 · 平台不负责安装', path: '/admin/selfhost/runtimes', icon: Cpu, color: 'var(--gradient-blue)' },
+      { title: '自托管项目管理', desc: '源码与可执行文件复核 · 通过/驳回/停止 · 源码豁免', path: '/admin/selfhost/projects', icon: Box, color: 'var(--gradient-purple)' },
+      { title: '反向代理管理', desc: '最长前缀匹配 · 上游与超时 · 一键启停 · 强制源码开关', path: '/admin/selfhost/routes', icon: Connection, color: 'var(--gradient-success)' },
+    ],
+  },
+  {
     key: 'algo',
     title: '算法与推荐',
     icon: DataAnalysis,

@@ -82,6 +82,9 @@ DOMAINS = [
         "oc_group_settings", "oc_group_members", "oc_agents", "oc_flows", "oc_turns",
         "oc_windows", "oc_budget_usage",
     ]),
+    ("自托管", "运行时版本目录、源码/编译产物项目、审核留痕、反向代理路由", [
+        "selfhost_runtimes", "selfhost_projects", "selfhost_review_logs", "selfhost_routes",
+    ]),
     ("AI 中台", "厂商、模型、密钥池、提示词、调用计费、会话、媒体验成、安全闸", [
         "ai_vendors", "ai_models", "ai_model_keys", "ai_channel_keys", "ai_channel_accounts",
         "ai_category_prices", "ai_prompts", "ai_prompt_templates", "ai_prompt_template_versions",
@@ -205,6 +208,11 @@ PURPOSE = {
     # OC
     "oc_characters": "OC 角色卡：人设、外观、口吻、场景",
     "oc_character_arts": "角色形象图库（立绘/表情/设定参考/场景 + 强调特征）",
+    # 自托管
+    "selfhost_runtimes": "自托管运行时版本目录（语言/版本/编译型或解释型，站长维护）",
+    "selfhost_projects": "自托管项目（源码模式/编译版、源码与可执行文件、upstream、审核状态）",
+    "selfhost_review_logs": "自托管项目审核留痕（提交/通过/驳回/停止/恢复）",
+    "selfhost_routes": "自托管反向代理路由（前缀最长匹配、upstream、启停与超时）",
     "oc_emotes": "OC 表情包",
     "oc_world_books": "世界书（扫描深度、Token 预算）",
     "oc_world_entries": "世界书条目（关键词、二次关键词、逻辑）",

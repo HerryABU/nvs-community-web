@@ -367,3 +367,31 @@
 | GET | `/app/:htmlId` | — | 虚拟沙盒入口（全屏运行，隐藏真实路径） |
 | GET | `/app/:htmlId/*` | — | 虚拟沙盒静态资源 |
 | ANY | `/sandbox/proxy/:uid/:name/*` | — | 命名端口反向代理 |
+
+### 🖥️ 自托管（源码/产物托管 · 审核 · 反向代理）
+
+| 方法 | 端点 | 认证 | 说明 |
+|------|------|------|------|
+| GET | `/api/selfhost/runtimes` | JWT | 运行时版本目录（仅启用的） |
+| GET | `/api/selfhost/projects` | JWT | 我的项目 |
+| POST | `/api/selfhost/projects` | JWT | 建项目 `{name, slug, runtime_id, mode, upstream, ...}` |
+| GET | `/api/selfhost/projects/:id` | JWT | 项目详情 + 审核记录 |
+| PUT | `/api/selfhost/projects/:id` | JWT | 改项目；已过审/待审会退回草稿 |
+| DELETE | `/api/selfhost/projects/:id` | JWT | 删除项目及落盘文件 |
+| POST | `/api/selfhost/projects/:id/submit` | JWT | 提交审核（校验源码/产物/upstream） |
+| PUT | `/api/selfhost/projects/:id/visibility` | JWT | `private` ↔ `public`（仅已通过可公开） |
+| POST | `/api/selfhost/projects/:id/files/:kind?name=` | JWT | 上传 `source` / `binary` 文件 |
+| GET | `/api/selfhost/projects/:id/files/:kind` | JWT/公开 | 下载源码或产物（本人/管理员/已审核公开项目） |
+| GET | `/api/selfhost/plaza` | — | 广场：仅已审核 + 公开项目 |
+| GET | `/api/admin/selfhost/runtimes` | 管理员 | 全部运行时 |
+| POST / PUT / DELETE | `/api/admin/selfhost/runtimes[/:id]` | 管理员 | 运行时目录 CRUD |
+| GET | `/api/admin/selfhost/projects` | 管理员 | 全站项目（可按 `status`/`keyword` 过滤） |
+| POST | `/api/admin/selfhost/projects/:id/review` | 管理员 | `{approve, note, waive_source}` |
+| POST | `/api/admin/selfhost/projects/:id/suspend` | 管理员 | `{suspend, note}` |
+| GET | `/api/admin/selfhost/routes` | 管理员 | 路由列表 + 启用统计 |
+| POST | `/api/admin/selfhost/routes` | 管理员 | 新建/保存路由，立即热加载 |
+| PUT | `/api/admin/selfhost/routes/:id/toggle` | 管理员 | `{enabled}` 启停 |
+| DELETE | `/api/admin/selfhost/routes/:id` | 管理员 | 删除路由 |
+| GET / PUT | `/api/admin/selfhost/config` | 管理员 | `source_required` 全局开关 |
+
+代理路径：`/sh/<prefix>/*`（独立段，仅审核通过且启用的路由生效；不落入 SPA 回退）。

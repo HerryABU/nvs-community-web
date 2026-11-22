@@ -66,6 +66,12 @@
               <el-dropdown-item @click="$router.push('/htmls')">
                 <span class="nav-emoji">🔌</span> 扩展应用
               </el-dropdown-item>
+              <el-dropdown-item @click="$router.push('/selfhost/plaza')">
+                <span class="nav-emoji">🖥️</span> 自托管广场
+              </el-dropdown-item>
+              <el-dropdown-item v-if="authStore.isLoggedIn" @click="$router.push('/selfhost/projects')">
+                <span class="nav-emoji">📦</span> 我的自托管项目
+              </el-dropdown-item>
               <el-dropdown-item v-if="authStore.isLoggedIn" @click="$router.push('/membership')">
                 <span class="nav-emoji">💎</span> 会员套餐
               </el-dropdown-item>
@@ -256,6 +262,8 @@
       <div class="mnav-item" @click="mnavGo('/blogs')"><el-icon><Document /></el-icon> 博客</div>
       <div class="mnav-item" @click="mnavGo('/discover')"><span class="mnav-emoji">✨</span> 发现（图文/视频/音乐）</div>
       <div class="mnav-item" @click="mnavGo('/htmls')"><span class="mnav-emoji">🔌</span> 扩展应用</div>
+      <div class="mnav-item" @click="mnavGo('/selfhost/plaza')"><span class="mnav-emoji">🖥️</span> 自托管广场</div>
+      <div v-if="authStore.isLoggedIn" class="mnav-item" @click="mnavGo('/selfhost/projects')"><span class="mnav-emoji">📦</span> 我的自托管项目</div>
       <div class="mnav-item" v-if="liveEnabled" @click="mnavGo('/live')"><span class="mnav-emoji">📺</span> 直播</div>
       <div class="mnav-item" v-if="federatedSites.length" @click="mnavFederated"><span class="mnav-emoji">🌐</span> 互联站点</div>
       <div class="mnav-item" v-if="federatedIndependentEnabled" @click="mnavGo('/federation')"><span class="mnav-emoji">🤝</span> 联邦互联页</div>

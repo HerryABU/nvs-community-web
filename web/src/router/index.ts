@@ -427,6 +427,24 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/selfhost/runtimes',
+      name: 'admin-selfhost-runtimes',
+      component: () => import('@/views/admin/selfhost/Runtimes.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
+      path: '/admin/selfhost/projects',
+      name: 'admin-selfhost-projects',
+      component: () => import('@/views/admin/selfhost/Projects.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
+      path: '/admin/selfhost/routes',
+      name: 'admin-selfhost-routes',
+      component: () => import('@/views/admin/selfhost/Routes.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
       path: '/admin/home-customize-review',
       name: 'admin-home-customize-review',
       component: () => import('@/views/admin/site/AdminHomeCustomizeReview.vue'),
@@ -921,6 +939,17 @@ const router = createRouter({
       path: '/plaza',
       name: 'html-plaza',
       component: () => import('@/views/site/HtmlPlaza.vue'),
+    },
+    {
+      path: '/selfhost/projects',
+      name: 'selfhost-projects',
+      component: () => import('@/views/selfhost/Projects.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/selfhost/plaza',
+      name: 'selfhost-plaza',
+      component: () => import('@/views/selfhost/Plaza.vue'),
     },
     {
       path: '/htmls',

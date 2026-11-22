@@ -195,6 +195,7 @@ var (
 	// User custom content
 	UserFrameDir string
 	UserHTMLDir  string
+	SelfHostDir  string // 自托管项目源码/编译产物落盘根目录
 
 	// Server
 	ServerPort string
@@ -296,6 +297,7 @@ func Init() {
 
 	UserFrameDir = getEnv("USER_FRAME_DIR", "./data/userframe")
 	UserHTMLDir = getEnv("USER_HTML_DIR", "./data/userhtml")
+	SelfHostDir = getEnv("SELFHOST_DIR", "./data/selfhost")
 
 	ServerPort = getEnv("SERVER_PORT", "8080")
 

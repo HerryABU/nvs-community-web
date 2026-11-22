@@ -43,6 +43,7 @@ import (
 	"nvs-server/scriptmode"
 	"nvs-server/security"
 	"nvs-server/security/sms"
+	"nvs-server/selfhost"
 	sentimentstore "nvs-server/sentiment/store"
 	"nvs-server/sentiment/updater"
 	"nvs-server/supervise"
@@ -418,6 +419,11 @@ func initDatabase() error {
 	if err := oc.Migrate(models.DB); err != nil {
 		return err
 	}
+	// 自托管：运行时目录 / 项目 / 代理路由 / 审核留痕
+	if err := selfhost.Migrate(models.DB); err != nil {
+		return err
+	}
+	selfhost.InitManager()
 	// 蜜罐（独立功能包）：等级与日志策略 + 会话/事件/指纹
 	// 设 NVS_HONEYPOT_DB_PATH 则使用独立库（与业务库物理隔离，后台仍可读）
 	if err := honeypot.Bootstrap(models.DB); err != nil {

@@ -208,7 +208,7 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - ⚠️ 回帖删除后不可解封恢复（物理删除），管理员「解封/恢复」对 post 类型仅清除封禁原因标记。
 
 ### 数据表
-全部 **184 张表 / 2081 个字段** 已按业务域整理成两份专门文档：
+全部 **188 张表 / 2135 个字段** 已按业务域整理成两份专门文档：
 
 - [`DATABASE.md`](DATABASE.md)：分域总览（表名 / 用途 / 主要字段 / 行数 / 源码位置）+ 全局约定
 - [`DATABASE-SCHEMA.md`](DATABASE-SCHEMA.md)：逐表字段明细（由 `python scripts/gen-db-doc.py data/nvs.db` 自动生成）
@@ -249,6 +249,16 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - **形象图库 `oc_character_arts`**：一张角色卡可挂多张图，`kind` 白名单 `portrait/emote/ref/scene`；`project_id` 从角色回填（不信任前端）；每张图可写 `traits`（这张图强调的外貌特征），与角色卡的 `appearance`/`persona` 一起构成「样子 + 性格」。图片地址复用 `ValidateEmoteURL` 的协议白名单（拒 `javascript:`/`data:`），本体仍走既有上传接口。
 - **写权限**：角色所有者 / 项目 owner·editor / 平台管理员（`canEditArt`）；世界聚合查询 `GET /api/oc/projects/:pid/arts` 先验项目可见性。
 - **世界书条目提交必须用 camelCase**：`SaveEntry` 的绑定结构体没有 json tag，`encoding/json` 只做大小写不敏感字段名匹配，`secondary_keys` / `insertion_order` 这类 snake_case 会被静默丢弃（已修）。
+
+### 自托管：运行时目录 / 项目托管 / 反向代理
+- **安全边界**：平台**不在本机执行用户代码**。作者自带服务（`upstream` 填自己的 `host:port`），平台只做源码/编译产物托管、人工审核与反向代理。`Project.LocalExec` 是预留字段，当前恒 `false`，接口不接受置真。
+- **四张表**：`selfhost_runtimes`（语言/版本/编译型或解释型，站长维护，平台不负责安装）→ `selfhost_projects`（源码模式 / 编译版，`source_file`/`binary_file` 落 `data/selfhost/<uid>/<pid>/`，`review_status`、`visibility`、作者自带 `upstream`）→ `selfhost_routes`（一个项目一条对外前缀路由）→ `selfhost_review_logs`（提交/通过/驳回/停止/恢复留痕）。
+- **审核门禁**：新项目一律 `draft` + `private`；`SubmitForReview` 再验一次源码与可执行文件；只有 `approved` 才能设公开、才能建/启用代理路由。项目内容或文件一改就退回 `draft`（先审后改绕过防护）。站长可停止项目，路由随之立即失效。
+- **源码强制规则**：`platform_configs.selfhost_source_required`（默认 `1`，DB 优先于 env）。`SourceRequired(lang, waived)` 按运行时 `kind` 与语言白名单（Java/Go/.NET/Rust/C/C++…）判定；管理员可在审核时逐项目 `source_waived=true` 豁免。后台「反向代理管理」页有全局开关。
+- **SSRF 边界**：`ValidateUpstream` 只收 http/https，拒 `localhost`、`127/8`、`::1`、`169.254/16` 与裸端口写法；代理表加载时再用 `target.IsSelf(selfPort)` 挡「指向本平台监听端口」的路由，配合跳数守卫（超 5 跳返回 508）。
+- **反代核心来自 gatewayhub v1.6.0**（同作者、同为 AGPL-3.0）：`server/selfhost/rewrite`（前缀 shim / HTML·CSS·JS 字面量改写 / Set-Cookie Path 收紧 / 自算 ETag）、`hopguard`、`target` 三个包只依赖标准库，连同单元测试整体移植。对外固定前缀 `/sh/<项目前缀>/`，独立段避免与静态段同级通配冲突；Gin 上显式注册 `r.Any("/sh/*path")`，**不靠 NoRoute 兜底**（那会把错误配置当前端路由返回 200）。TLS 由外层网关终止，平台自身不碰证书。
+- **热加载**：路由增删改与审核状态变化时 `InvalidateRoutes()` 重建内存表；`SortedEnabledRoutes()` 只返回「已审核通过 + 已启用」的路由，并按前缀长度降序，避免 `/a` 抢掉 `/a/b`。WebSocket 升级请求跳过超时，避免长连接被掐断。
+- **后台三块独立页**：`/admin/selfhost/runtimes`、`/admin/selfhost/projects`、`/admin/selfhost/routes`；前台 `/selfhost/projects`（我的项目 + 文件上传 + 提交审核）与 `/selfhost/plaza`（仅已审核公开项目）。
 
 ### 预留表 / 字段（功能未开发）
 以下表与字段当前仅建表占位，**无业务代码**，请勿误用：

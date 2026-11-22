@@ -32,6 +32,7 @@ import (
 	"nvs-server/handlers/payment"
 	"nvs-server/handlers/rating"
 	"nvs-server/handlers/sandbox"
+	selfhosthandler "nvs-server/handlers/selfhost"
 	"nvs-server/handlers/site"
 	"nvs-server/handlers/theme"
 	"nvs-server/handlers/web"
@@ -190,6 +191,8 @@ func registerPublic(r *gin.Engine) {
 		public.POST("/sandbox-vfs/:htmlId/write", sandbox.VFSWrite)
 		public.DELETE("/sandbox-vfs/:htmlId/delete", sandbox.VFSDelete)
 		public.GET("/sandbox-vfs/:htmlId/list", sandbox.VFSList)
+		// 自托管广场：只返回审核通过且公开的项目
+		public.GET("/selfhost/plaza", selfhosthandler.Plaza)
 	}
 
 }

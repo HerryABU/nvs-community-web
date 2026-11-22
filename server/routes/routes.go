@@ -40,7 +40,7 @@ var knownSPARoots = map[string]bool{
 	"admin": true, "author": true, "blog": true, "blogs": true,
 	"bookshelf": true, "category": true, "comment-network": true, "docs": true, "forum": true,
 	"forums": true, "frames": true, "htmls": true, "install": true,
-	"login": true, "novel": true, "plaza": true, "register": true,
+	"login": true, "novel": true, "plaza": true, "register": true, "selfhost": true,
 	"reports": true, "run": true, "settings": true, "setup": true,
 	"thread": true, "wasm": true, "pay": true,
 	"groups": true, "group": true,

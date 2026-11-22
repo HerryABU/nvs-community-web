@@ -36,6 +36,7 @@ import (
 	readpermh "nvs-server/handlers/readperm"
 	"nvs-server/handlers/recycle"
 	securityhandler "nvs-server/handlers/security"
+	selfhosthandler "nvs-server/handlers/selfhost"
 	"nvs-server/handlers/sentiment"
 	"nvs-server/handlers/site"
 	"nvs-server/handlers/theme"
@@ -576,6 +577,23 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.POST("/db/storage-mode", dbadmin.AdminStorageModeSet)
 		// 入库健康自查：按条数/字节回答「正文到底进库没有」，不要看库文件体积
 		adminGrp.GET("/db/storage-health", dbadmin.AdminStorageHealth)
+	}
+
+	// 自托管管理：运行时版本目录 / 项目审核 / 反向代理路由 / 全局开关
+	{
+		adminGrp.GET("/selfhost/runtimes", selfhosthandler.AdminListRuntimes)
+		adminGrp.POST("/selfhost/runtimes", selfhosthandler.AdminCreateRuntime)
+		adminGrp.PUT("/selfhost/runtimes/:id", selfhosthandler.AdminUpdateRuntime)
+		adminGrp.DELETE("/selfhost/runtimes/:id", selfhosthandler.AdminDeleteRuntime)
+		adminGrp.GET("/selfhost/projects", selfhosthandler.AdminListProjects)
+		adminGrp.POST("/selfhost/projects/:id/review", selfhosthandler.AdminReview)
+		adminGrp.POST("/selfhost/projects/:id/suspend", selfhosthandler.AdminSuspend)
+		adminGrp.GET("/selfhost/routes", selfhosthandler.AdminListRoutes)
+		adminGrp.POST("/selfhost/routes", selfhosthandler.AdminSaveRoute)
+		adminGrp.PUT("/selfhost/routes/:id/toggle", selfhosthandler.AdminToggleRoute)
+		adminGrp.DELETE("/selfhost/routes/:id", selfhosthandler.AdminDeleteRoute)
+		adminGrp.GET("/selfhost/config", selfhosthandler.AdminConfig)
+		adminGrp.PUT("/selfhost/config", selfhosthandler.AdminSaveConfig)
 	}
 
 	// 警方取管台（police）：准管理员角色，仅可取证 / 查看软删除，无普通管理权

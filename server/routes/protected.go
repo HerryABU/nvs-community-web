@@ -46,6 +46,7 @@ import (
 	"nvs-server/handlers/recycle"
 	"nvs-server/handlers/scriptpreview"
 	securityhandler "nvs-server/handlers/security"
+	selfhosthandler "nvs-server/handlers/selfhost"
 	"nvs-server/handlers/theme"
 	"nvs-server/handlers/token"
 	"nvs-server/handlers/upload"
@@ -579,6 +580,18 @@ func registerProtected(r *gin.Engine) {
 		// #67 付费内容解锁：代币购买 + 解锁状态查询
 		protected.POST("/readperm/purchase", security.RateLimit(10, 60), readpermh.Purchase)
 		protected.GET("/readperm/purchase/status", readpermh.PurchaseStatus)
+
+		// 自托管：运行时只读 + 我的项目（源码/产物上传、提交审核）
+		protected.GET("/selfhost/runtimes", selfhosthandler.ListRuntimes)
+		protected.GET("/selfhost/projects", selfhosthandler.ListMyProjects)
+		protected.POST("/selfhost/projects", selfhosthandler.CreateProject)
+		protected.GET("/selfhost/projects/:id", selfhosthandler.GetProject)
+		protected.PUT("/selfhost/projects/:id", selfhosthandler.UpdateProject)
+		protected.DELETE("/selfhost/projects/:id", selfhosthandler.DeleteProject)
+		protected.POST("/selfhost/projects/:id/submit", selfhosthandler.SubmitForReview)
+		protected.PUT("/selfhost/projects/:id/visibility", selfhosthandler.SetVisibility)
+		protected.POST("/selfhost/projects/:id/files/:kind", selfhosthandler.UploadFile)
+		protected.GET("/selfhost/projects/:id/files/:kind", selfhosthandler.DownloadFile)
 	}
 
 	// 管理员路由

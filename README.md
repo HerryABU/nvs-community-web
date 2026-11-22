@@ -250,6 +250,14 @@
 - 📱 **刘海屏安全区**（导航栏、正文、阅读器工具条三处偏移同步）
 - 🖥️ **后台窄屏可用**（侧栏自动折叠、顶栏精简、图表下拉命中区放大）
 
+### 🖥️ 自托管（源码托管 · 审核 · 反向代理）
+- 🌍 **世界级运行时目录**：站长维护 Java / Go / Node / Python / .NET 等语言版本，标记编译型或解释型；平台只登记版本，不负责安装
+- 📦 **源码与编译产物托管**：源码模式或编译版（源码 + 可执行文件），编译型语言默认强制附源码，站长可全局关闭并逐项目豁免
+- 🛡 **先审后外**：新项目一律草稿 + 私有，提交后须站长审核源码与产物；通过后才可公开并申请 `/sh/<前缀>/` 路由，内容变更自动退回待审
+- 🔀 **gatewayhub 反代内核**：最长前缀匹配、HTML/CSS/JS 前缀改写、Set-Cookie 收紧、自算 ETag、跳数守卫（508）、WebSocket 透传；SSRF/自指防护
+- 🧭 **三块后台管理页**：运行时管理 / 项目管理与审核 / 反向代理管理；前台「我的自托管项目」+「自托管广场」
+- ⚙️ **安全边界**：平台不在本机执行用户代码（`LocalExec` 预留且恒关），作者自带服务；TLS 由外层网关终止
+
 ### 🎨 自定义 HTML-UI 美化
 
 ### 📦 自定义 HTML 托管（扩展应用）
@@ -273,7 +281,7 @@
 | 缓存 | Redis 7（可选，MySQL 模式推荐） |
 | 实时 | SSE（每业务域独立 Hub；单向广播、过反代简单、Cookie 鉴权无需 token 进 URL） |
 | 存储 | 文件系统（HTML + JSON） + 内存 VFS（沙盒虚拟文件系统） |
-| 扩展 | 自定义 HTML-UI 模板 · ZIP 托管 · WASM · 端口代理 · 虚拟路径 |
+| 扩展 | 自定义 HTML-UI 模板 · ZIP 托管 · WASM · 端口代理 · 虚拟路径 · 自托管（源码/产物 + 审核 + `/sh` 反向代理） |
 | 安全 | 内容扫描（23条规则）· 动态 XSS 规则引擎 · 违禁词库（标记/删除/替换 + 关键词/正则）· 软删除（8表）· 审计日志 · 访问日志关联 user_id · 日志完整性保护 · 日志脱敏 · 滑块验证码 · CSRF · ZIP炸弹检测 · CSP · iframe sandbox · 目录锁定 · 数据库配置 AES-256 加密 |
 | 质量 | `make check`（SPA 白名单 + 组件解析审计 + go build/vet/test + 前端 build）· Playwright-core 四档宽度与功能级真浏览器验收 · 仓库内 git hooks · GitHub Actions（CI + 多平台 Release） |
 | 构建 | Go `embed` 前端 → 单二进制文件 |
@@ -386,7 +394,7 @@ cd server && go build -ldflags="-s -w" -o nvs-server.exe . && cd ..
 | 所有接口 | [docs/API.md](docs/API.md) |
 | 所有环境变量 | [docs/CONFIG.md](docs/CONFIG.md) |
 | 目录结构 / 分层约定 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| 全部数据表（184 张，按域） | [docs/DATABASE.md](docs/DATABASE.md) |
+| 全部数据表（188 张，按域） | [docs/DATABASE.md](docs/DATABASE.md) |
 | 逐表字段明细 | [docs/DATABASE-SCHEMA.md](docs/DATABASE-SCHEMA.md) |
 | 本地开发 / 构建 / 测试 / 发版 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) |
 
