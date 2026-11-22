@@ -68,3 +68,7 @@ func Handler(c *gin.Context) { manager().Handle(c) }
 
 // RouteCount 当前内存表中的路由数（管理页展示用）。
 func LoadedRouteCount() int { return manager().Count() }
+
+// HasRoutePrefix 判断首段是否属于已注册的路径级代理路由（含多级前缀的首段）。
+// 供外层部署前缀剥离避让：业务路由首段不能被当成反代前缀吃掉。
+func HasRoutePrefix(first string) bool { return manager().HasPathPrefix(first) }

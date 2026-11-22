@@ -191,3 +191,7 @@ func Register(r *gin.Engine) {
 	registerPolice(r)
 	registerStaticAndSPA(r)
 }
+
+// KnownSPARoot 供外层「部署前缀智能剥离」避让：这些首段是 NVS 自己的业务/页面路由，
+// 绝不能被当成反代前缀吃掉（与 GWh 的 reservedFirstSegments + HasPathPrefix 同语义）。
+func KnownSPARoot(seg string) bool { return knownSPARoots[seg] }

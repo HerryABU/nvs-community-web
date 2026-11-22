@@ -191,7 +191,11 @@ func main() {
 
 	// 🔀 站点路径前缀（URL_PREFIX）在 gin 外层剥离：必须先于路由匹配执行。
 	// 未配置前缀时该包装零开销直通。
-	rootHandler := middleware.StripURLPrefixHandler(config.URLPrefix, r)
+	// 同时兼容「反代透传部署前缀」：与 GWh 的 stripDeployPrefix 同语义，
+	// 首段是平台页面/API/代理路由时不剥，其余多段路径才判定为部署前缀。
+	rootHandler := middleware.SmartStripURLPrefixHandler(config.URLPrefix, func(seg string) bool {
+		return routes.KnownSPARoot(seg) || selfhost.HasRoutePrefix(seg)
+	}, r)
 	srv := &http.Server{Addr: listenAddr, Handler: rootHandler}
 	log.Println("前端已内嵌，无需额外启动 Nginx 或 npm run dev（支持路径前缀挂载，如 /go-nvs/login）")
 

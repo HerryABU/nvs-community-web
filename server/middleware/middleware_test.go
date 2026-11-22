@@ -330,3 +330,40 @@ func TestInjectPrefixIntoHTML(t *testing.T) {
 		t.Fatal("前缀中的 </script> 应被转义")
 	}
 }
+
+// TestSmartStripURLPrefixHandler 校验 GWh 同款「特殊转发剥离」：
+// 反代透传部署前缀时智能剥掉，遇到保留字/业务首段则不剥。
+func TestSmartStripURLPrefixHandler(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(r.URL.Path))
+	})
+	business := func(seg string) bool {
+		return seg == "login" || seg == "selfhost" || seg == "java-order"
+	}
+	h := SmartStripURLPrefixHandler("", business, inner)
+	cases := []struct{ in, want string }{
+		{"/go-nvs/login", "/login"},               // 透传部署前缀 → 剥
+		{"/go-nvs/java-order/x", "/java-order/x"}, // 业务代理路由首段 → 不剥
+		{"/go-nvs/api/health", "/api/health"},     // 首段非保留字 → 判定为部署前缀，剥后落到 /api
+		{"/api/health", "/api/health"},
+		{"/login", "/login"},                     // 无第二段 → 不剥
+		{"/unknown-prefix/", "/unknown-prefix/"}, // 仅尾斜杠不算第二段 → 不剥
+		{"/", "/"},
+	}
+	for _, tc := range cases {
+		req := httptest.NewRequest("GET", tc.in, nil)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		if got := w.Body.String(); got != tc.want {
+			t.Errorf("strip(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+	// 配置前缀优先于启发式：即使首段是业务路由也照样剥。
+	h2 := SmartStripURLPrefixHandler("/gw", business, inner)
+	req := httptest.NewRequest("GET", "/gw/java-order/x", nil)
+	w := httptest.NewRecorder()
+	h2.ServeHTTP(w, req)
+	if got := w.Body.String(); got != "/java-order/x" {
+		t.Errorf("配置前缀应优先剥离, got %q", got)
+	}
+}

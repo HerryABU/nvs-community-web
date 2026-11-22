@@ -32,6 +32,62 @@ func StripURLPrefixHandler(prefix string, next http.Handler) http.Handler {
 	})
 }
 
+// 与 GWh 的 reservedFirstSegments 一致：这些首段是平台自己的资源/接口，永不剥离。
+var stripReservedFirst = map[string]bool{
+	"api": true, "assets": true, "static": true, "favicon": true,
+	"uploads": true, "sandbox": true, "health": true, "hp": true,
+}
+
+// SmartStripURLPrefixHandler 在 StripURLPrefixHandler 之上补 GWh 的「特殊转发剥离」。
+//
+// 两种反代拓扑都要能工作：
+//  1. 反代已剥前缀：请求是干净路径 /api、/java-order/login，首段为保留字或业务路由，不剥；
+//  2. 反代**透传**前缀：请求是 /{name}/api、/{name}/java-order/login，
+//     仅当首段既非保留字、非前端 SPA 根段、非自托管路径级代理路由，且路径含第二段时，
+//     把该段判定为部署前缀并剥掉。
+//
+// 配置前缀优先级最高：URL_PREFIX 显式命中时无条件剥离（兼容原有固定前缀行为）。
+// 必须包在 gin 引擎外层——gin 的路由匹配在中间件链之前，内层改 URL.Path 不会重新路由。
+func SmartStripURLPrefixHandler(prefix string, isBusiness func(string) bool, next http.Handler) http.Handler {
+	configured := strings.TrimRight(prefix, "/")
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		// 1) 已配置的固定前缀：与旧行为完全一致，优先剥。
+		if configured != "" && configured != "/" {
+			if p == configured {
+				r.URL.Path = "/"
+				next.ServeHTTP(w, r)
+				return
+			}
+			if strings.HasPrefix(p, configured+"/") {
+				r.URL.Path = strings.TrimPrefix(p, configured)
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+		// 2) 未命中配置前缀：按 GWh 的启发式智能剥离。
+		seg, rest := firstPathSeg(p)
+		// ⚠️ 尾斜杠时 rest 也是 "/"，必须要求第二段**非空**，否则
+		// /unknown-prefix/ 会被剥成首页（未审核路由/未知前缀误返回 200）。
+		if seg != "" && strings.Trim(rest, "/") != "" && !stripReservedFirst[seg] && (isBusiness == nil || !isBusiness(seg)) {
+			r.URL.Path = rest
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// firstPathSeg 切分路径首段与剩余部分（rest 恒以 / 开头；无第二段时 rest 为空）。
+func firstPathSeg(p string) (string, string) {
+	t := strings.TrimPrefix(p, "/")
+	if t == "" {
+		return "", ""
+	}
+	if i := strings.Index(t, "/"); i >= 0 {
+		return t[:i], "/" + t[i+1:]
+	}
+	return t, ""
+}
+
 // InjectPrefixIntoHTML 向 index.html 注入站点路径前缀支持（反向代理挂载场景）：
 //  1. 资源引用改写（主方案）：非空前缀时，把 Vite 相对资源引用 ./assets/xxx
 //     直接改写为 {prefix}/assets/xxx —— 首屏 js/css、modulepreload 的 URL 在 HTML
