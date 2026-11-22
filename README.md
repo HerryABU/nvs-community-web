@@ -125,6 +125,8 @@
 - 👥 **多人协作**
 - 🗂 **章节版本控制**
 - 🎭 **OC 模式（与群组解耦）** — OC 角色卡 / 世界书 / 表情包为个人资产，独立于群组；前台新增独立「亚文化创作区」入口（内含 OC，兼容 furry 系）
+- 🌍 **世界详情页** `/subculture/world/:id` — 立项（创建世界）后进入独立路由：角色、形象图库、世界书设计、成员与跨世界链接都在里面；新建世界会自动补一本同名世界书，角色直接可建
+- 🖼 **角色形象图库** — 一个角色可挂多张「样子」：立绘 / 表情 / 设定参考（兽设三视图、服饰）/ 场景；每张图可标注这张图强调的外貌特征，配合角色卡的「样子 + 性格」一起看，支持 AI 一键出设定稿
 - 🧩 **OC 组（阵容）** — 将多个 OC 角色卡编成一组，支持「我的 / 公开」两级可见性、成员增删与排序、平台审核
 - 🤝 **群组召唤 OC / OC 组** — 群组可召唤单个 OC 以人设发群帖，亦可召唤整组 OC 依次登场（均注入 furry 物种 / 特征 / 拟人型设定）
 - 🤖 **OC AI 加强版** — 复用作者工作台 AI 写作流的 `prompttpl` + `aicall` 模式，从灵感生成完整 OC 角色卡、或补全润色已有角色（兼容 furry 物种 / 特征 / 拟人型）
@@ -384,7 +386,7 @@ cd server && go build -ldflags="-s -w" -o nvs-server.exe . && cd ..
 | 所有接口 | [docs/API.md](docs/API.md) |
 | 所有环境变量 | [docs/CONFIG.md](docs/CONFIG.md) |
 | 目录结构 / 分层约定 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| 全部数据表（183 张，按域） | [docs/DATABASE.md](docs/DATABASE.md) |
+| 全部数据表（184 张，按域） | [docs/DATABASE.md](docs/DATABASE.md) |
 | 逐表字段明细 | [docs/DATABASE-SCHEMA.md](docs/DATABASE-SCHEMA.md) |
 | 本地开发 / 构建 / 测试 / 发版 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) |
 

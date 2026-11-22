@@ -20,6 +20,7 @@ export interface OcCharacter {
   creator_notes: string;
   greetings: string;
   book_id: number;
+  project_id?: number; // 归属 OC 项目（世界）
   mood: number;
   affinity: number;
   energy: number;
@@ -34,6 +35,22 @@ export interface OcCharacter {
   review: 'pending' | 'approved' | 'rejected';
   status: string;
   author_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// 角色形象图（立绘 / 表情 / 设定参考 / 场景）——世界页「形象图库」用
+export interface OcCharacterArt {
+  id: number;
+  character_id: number;
+  project_id: number;
+  user_id: number;
+  url: string;
+  title: string;
+  kind: 'portrait' | 'emote' | 'ref' | 'scene';
+  traits: string; // 本图强调的外貌特征（银发、断角、左眼疤…）
+  note: string;
+  sort: number;
   created_at: string;
   updated_at: string;
 }
@@ -201,7 +218,9 @@ export const ocApi = {
   },
 
   // 角色卡
-  listCharacters(params: { scope?: string; keyword?: string; page?: number; page_size?: number } = {}) {
+  listCharacters(
+    params: { scope?: string; keyword?: string; project_id?: number; page?: number; page_size?: number } = {},
+  ) {
     return api.get<{ code: number; data: { list: OcCharacter[]; total: number } }>('/oc/characters', { params });
   },
   getCharacter(id: number) {
@@ -215,6 +234,26 @@ export const ocApi = {
   },
   deleteCharacter(id: number) {
     return api.delete(`/oc/characters/${id}`);
+  },
+
+  // 角色形象图库
+  listCharacterArts(characterId: number) {
+    return api.get<{ code: number; data: { list: OcCharacterArt[] } }>(`/oc/characters/${characterId}/arts`);
+  },
+  createCharacterArt(characterId: number, data: Partial<OcCharacterArt>) {
+    return api.post<{ code: number; data: OcCharacterArt }>(`/oc/characters/${characterId}/arts`, data);
+  },
+  updateCharacterArt(id: number, data: Partial<OcCharacterArt>) {
+    return api.put<{ code: number; data: OcCharacterArt }>(`/oc/character-arts/${id}`, data);
+  },
+  deleteCharacterArt(id: number) {
+    return api.delete(`/oc/character-arts/${id}`);
+  },
+  /** 世界下全部形象图（一次拉全，前端按角色分组） */
+  listProjectArts(projectId: number, token?: string) {
+    return api.get<{ code: number; data: { list: OcCharacterArt[] } }>(`/oc/projects/${projectId}/arts`, {
+      params: token ? { token } : undefined,
+    });
   },
 
   // 世界书
@@ -236,7 +275,13 @@ export const ocApi = {
   deleteBook(id: number) {
     return api.delete(`/oc/books/${id}`);
   },
-  saveEntry(bookId: number, data: Partial<OcWorldEntry> & { id?: number }) {
+  /**
+   * 保存世界书条目。
+   * ⚠️ 后端 binding 结构体**没有 json tag**，encoding/json 只做大小写不敏感的字段名匹配，
+   * 所以必须传 camelCase（secondaryKeys / caseSensitive / wholeWord / insertionOrder），
+   * 传 snake_case（secondary_keys）会被静默丢弃。
+   */
+  saveEntry(bookId: number, data: Record<string, any>) {
     return api.post(`/oc/books/${bookId}/entries`, data);
   },
   deleteEntry(bookId: number, entryId: number) {

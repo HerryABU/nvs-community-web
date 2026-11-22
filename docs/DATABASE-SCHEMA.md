@@ -3,7 +3,7 @@
 > 由 `scripts/gen-db-doc.py` 依据实际库结构 + 模型自动生成，**请勿手工修改**；
 > 改模型后重新生成即可。用途说明见 [`DATABASE.md`](DATABASE.md)。
 
-共 183 张表、2069 个字段。
+共 184 张表、2081 个字段。
 
 ## 账号与用户
 
@@ -56,7 +56,7 @@
 
 ### `user_audit_logs`
 
-用户操作审计：登录、改密、提权等，含 IP/UA 与结果（行数 521）
+用户操作审计：登录、改密、提权等，含 IP/UA 与结果（行数 544）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -286,7 +286,7 @@
 | `comments_enabled` | NUMERIC |  |
 | `like_count` | INTEGER |  |
 
-索引：`idx_novels_deleted_at`、`idx_novels_derivative_origin_id`、`idx_novels_read_permission`、`idx_novels_mode`、`idx_novels_category`、`idx_novels_author_status`
+索引：`idx_novels_author_status`、`idx_novels_deleted_at`、`idx_novels_derivative_origin_id`、`idx_novels_read_permission`、`idx_novels_mode`、`idx_novels_category`
 
 ### `novel_categories`
 
@@ -836,7 +836,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 
 ### `feed_danmaku`
 
-视频弹幕（按 time_ms 绑时间轴，独立于评论计数）（行数 5）
+视频弹幕（按 time_ms 绑时间轴，独立于评论计数）（行数 7）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -1110,7 +1110,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 
 ### `oc_characters`
 
-OC 角色卡：人设、外观、口吻、场景（行数 1）
+OC 角色卡：人设、外观、口吻、场景（行数 4）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -1147,6 +1147,27 @@ OC 角色卡：人设、外观、口吻、场景（行数 1）
 
 索引：`idx_oc_characters_project_id`、`idx_oc_characters_user_id`、`idx_oc_characters_name`、`idx_oc_characters_visibility`、`idx_oc_characters_review`
 
+### `oc_character_arts`
+
+角色形象图库（立绘/表情/设定参考/场景 + 强调特征）（行数 2）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | INTEGER | 主键 |
+| `character_id` | INTEGER |  |
+| `project_id` | INTEGER |  |
+| `user_id` | INTEGER |  |
+| `url` | TEXT |  |
+| `title` | TEXT |  |
+| `kind` | TEXT |  |
+| `traits` | TEXT |  |
+| `note` | TEXT |  |
+| `sort` | INTEGER |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
+
+索引：`idx_oc_character_arts_character_id`、`idx_oc_character_arts_project_id`、`idx_oc_character_arts_user_id`
+
 ### `oc_emotes`
 
 OC 表情包（行数 0）
@@ -1164,7 +1185,7 @@ OC 表情包（行数 0）
 
 ### `oc_world_books`
 
-世界书（扫描深度、Token 预算）（行数 15）
+世界书（扫描深度、Token 预算）（行数 20）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -1190,7 +1211,7 @@ OC 表情包（行数 0）
 
 ### `oc_world_entries`
 
-世界书条目（关键词、二次关键词、逻辑）（行数 0）
+世界书条目（关键词、二次关键词、逻辑）（行数 1）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -1234,7 +1255,7 @@ OC 表情包（行数 0）
 
 ### `oc_projects`
 
-OC 创作项目（可见性、访问密码）（行数 0）
+OC 创作项目（可见性、访问密码）（行数 6）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -1257,7 +1278,7 @@ OC 创作项目（可见性、访问密码）（行数 0）
 
 ### `oc_project_members`
 
-项目成员与角色（行数 0）
+项目成员与角色（行数 6）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -2642,7 +2663,7 @@ XSS 过滤规则（行数 0）
 
 ### `honeypot_sessions`
 
-蜜罐会话（来源 IP、UA 归一、事件计数）（行数 15）
+蜜罐会话（来源 IP、UA 归一、事件计数）（行数 16）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -2663,7 +2684,7 @@ XSS 过滤规则（行数 0）
 
 ### `honeypot_events`
 
-蜜罐事件（诱饵、方法、路径、指纹）（行数 368）
+蜜罐事件（诱饵、方法、路径、指纹）（行数 370）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3092,7 +3113,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 117）
 
 ### `channel_balance_samples`
 
-上游渠道余额采样（用于额度预警）（行数 576）
+上游渠道余额采样（用于额度预警）（行数 810）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3575,7 +3596,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 117）
 
 ### `web_access_logs`
 
-全站访问日志（UA 族、路径、IP、身份）（行数 41517）
+全站访问日志（UA 族、路径、IP、身份）（行数 45548）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3691,7 +3712,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 117）
 
 ### `federated_inbound`
 
-入站请求统计（来源、端点、计数）（行数 15）
+入站请求统计（来源、端点、计数）（行数 16）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |

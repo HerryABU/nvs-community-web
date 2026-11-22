@@ -4,8 +4,8 @@
       <h1 class="subc-title">亚文化创作区</h1>
       <el-tag size="small" type="info">独立创作空间 · 兼容 Furry</el-tag>
       <span class="subc-tip">
-        这里与「群组」完全独立：你可以管理自己的 OC 角色卡、把多张角色卡打包成「OC 组（阵容）」，
-        并用 AI 助手快速生成 / 补全角色。OC 组可被任意群组的「召唤 OC 组」调用。
+        这里与「群组」完全独立：先在「世界」里立项（创建后进入独立的世界页面，可放角色、形象图库与世界书），
+        也可以直接管理 OC 角色卡、把多张卡打包成「OC 组（阵容）」，并用 AI 助手快速生成 / 补全角色。
       </span>
     </div>
 
@@ -23,8 +23,8 @@
         <CharacterManager :group-id="0" :can-bind="false" :filter-kind="kindFilter" />
       </el-tab-pane>
 
-      <!-- ============ 项目 / 世界（立项制） ============ -->
-      <el-tab-pane label="项目 / 世界" name="projects">
+      <!-- ============ 世界（立项制：创建后进入独立的世界路由） ============ -->
+      <el-tab-pane label="世界" name="projects">
         <ProjectManager />
       </el-tab-pane>
 

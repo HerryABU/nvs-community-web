@@ -71,13 +71,23 @@ func SaveSetting(c *gin.Context) {
 
 // ─── 角色卡 ───
 
-// ListCharacters GET /api/oc/characters?scope=mine|public|usable
+// ListCharacters GET /api/oc/characters?scope=mine|public|usable|project&project_id=
+//
+// 带 project_id 时先验项目可见性：scope=project 会返回世界内全部角色（含成员创建的），
+// 若不验就能靠猜 id 列出别人私有世界里的角色。
 func ListCharacters(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	list, total, err := oc.ListCharacters(middleware.UserID(c), c.Query("scope"), c.Query("keyword"), page, ps)
+	pid := parseUint(c.Query("project_id"))
+	if pid > 0 {
+		if _, err := oc.GetProject(pid, middleware.UserID(c), isAdmin(c), projectToken(c)); err != nil {
+			infra.Forbidden(c, err.Error())
+			return
+		}
+	}
+	list, total, err := oc.ListCharacters(middleware.UserID(c), c.Query("scope"), c.Query("keyword"), pid, page, ps)
 	if err != nil {
-		infra.InternalError(c, "查询失败")
+		infra.BadRequest(c, err.Error())
 		return
 	}
 	infra.Success(c, gin.H{"list": list, "total": total})

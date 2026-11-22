@@ -2,6 +2,7 @@
   <div class="ocm-wrap" v-loading="loading">
     <div class="ocm-bar">
       <el-radio-group v-model="scope" size="small" @change="load">
+        <el-radio-button v-if="projectId" value="project">本世界角色</el-radio-button>
         <el-radio-button value="mine">我的角色</el-radio-button>
         <el-radio-button value="public">角色库</el-radio-button>
       </el-radio-group>
@@ -24,6 +25,9 @@
               <span v-else class="ocm-tip">私有</span>
             </div>
           </div>
+        </div>
+        <div v-if="c.species_traits || c.appearance" class="ocm-look">
+          <span class="ocm-look-k">样子</span>{{ (c.species_traits || c.appearance || '').slice(0, 46) }}
         </div>
         <div class="ocm-persona">{{ c.persona || '（未填人设）' }}</div>
         <div class="ocm-state">
@@ -168,12 +172,19 @@ import { ocApi, type OcCharacter, type OcWorldBook } from '@/api/oc';
 import { uploadApi } from '@/api/social';
 import { usePasteImage } from '@/composables/usePasteImage';
 
-const props = defineProps<{ groupId: number; canBind: boolean; filterKind?: 'all' | 'native' | 'furry' }>();
-const emit = defineEmits<{ bound: [] }>();
+const props = defineProps<{
+  groupId: number;
+  canBind: boolean;
+  filterKind?: 'all' | 'native' | 'furry';
+  /** 限定在世界（OC 项目）内：列表只出本世界角色，新建角色自动归属该世界 */
+  projectId?: number;
+}>();
+const emit = defineEmits<{ bound: []; changed: [] }>();
 
 const loading = ref(false);
 const saving = ref(false);
-const scope = ref<'mine' | 'public'>('mine');
+/** 世界内默认看「本世界角色」（含其他成员创建的），个人库默认看「我的角色」 */
+const scope = ref<'mine' | 'public' | 'project'>(props.projectId ? 'project' : 'mine');
 const keyword = ref('');
 const list = ref<OcCharacter[]>([]);
 const books = ref<OcWorldBook[]>([]);
@@ -271,7 +282,11 @@ function exportCard(c: any) {
 async function load() {
   loading.value = true;
   try {
-    const res = await ocApi.listCharacters({ scope: scope.value, keyword: keyword.value });
+    const res = await ocApi.listCharacters({
+      scope: scope.value,
+      keyword: keyword.value,
+      project_id: props.projectId || undefined,
+    });
     list.value = res.data.data?.list || [];
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '加载失败');
@@ -282,7 +297,10 @@ async function load() {
 
 async function loadBooks() {
   try {
-    const res = await ocApi.listBooks({ scope: 'mine' });
+    // 世界内只列本世界的世界书（角色必须先归属本世界）
+    const res = props.projectId
+      ? await ocApi.listBooks({ scope: 'project', project_id: props.projectId })
+      : await ocApi.listBooks({ scope: 'mine' });
     books.value = res.data.data?.list || [];
   } catch { /* 世界书不可用不影响角色编辑 */ }
 }
@@ -298,7 +316,8 @@ function openEditor(c?: OcCharacter) {
     : {
         id: undefined, name: '', avatar_url: '', persona: '', appearance: '', speech: '',
         scenario: '', first_message: '', mes_example: '', system_prompt: '',
-        book_id: books.value[0]?.id || 0, tags: '', emote_map: '', visibility: 'private',
+        book_id: books.value[0]?.id || 0, project_id: props.projectId || undefined,
+        tags: '', emote_map: '', visibility: 'private',
         oc_kind: 'native', species: '', species_traits: '', anthro_type: '',
       });
   editorVisible.value = true;
@@ -349,6 +368,8 @@ async function save() {
     ElMessage.success('已保存');
     editorVisible.value = false;
     await load();
+    // 世界页的形象图库要按最新角色分组，必须通知父级重取
+    emit('changed');
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '保存失败');
   } finally {
@@ -361,6 +382,7 @@ async function remove(c: OcCharacter) {
     await ocApi.deleteCharacter(c.id);
     ElMessage.success('已删除');
     await load();
+    emit('changed');
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '删除失败');
   }
@@ -378,6 +400,10 @@ async function bindAgent(c: OcCharacter) {
 }
 
 onMounted(() => { load(); loadBooks(); });
+
+// 世界页会先自动补默认世界书，那时本组件可能已经加载过一次（拿到空列表）；
+// 父级拿到书之后要能让我们重新取一次，否则「新建角色卡」会被误判为没有世界。
+defineExpose({ reload: load, reloadBooks: loadBooks });
 </script>
 
 <style scoped>
@@ -403,5 +429,13 @@ onMounted(() => { load(); loadBooks(); });
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
 .ocm-state { display: flex; gap: 10px; font-size: 0.75rem; color: var(--text-muted); }
+.ocm-look {
+  font-size: 0.78rem; color: var(--text-muted); line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.ocm-look-k {
+  display: inline-block; margin-right: 6px; padding: 0 5px; border-radius: 4px;
+  background: var(--fill-color, #f3f4f6); color: var(--text-muted); font-size: 0.7rem;
+}
 .ocm-actions { display: flex; gap: 4px; flex-wrap: wrap; border-top: 1px solid var(--border-color); padding-top: 6px; }
 </style>

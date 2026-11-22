@@ -77,8 +77,8 @@ DOMAINS = [
         "group_chat_messages", "group_files", "group_read_states", "user_group_quotas",
     ]),
     ("OC 角色扮演", "OC 角色卡、世界书、创作项目、AI 群组与剧情流", [
-        "oc_characters", "oc_emotes", "oc_world_books", "oc_world_entries", "oc_world_links",
-        "oc_projects", "oc_project_members", "oc_project_access", "oc_groups",
+        "oc_characters", "oc_character_arts", "oc_emotes", "oc_world_books", "oc_world_entries",
+        "oc_world_links", "oc_projects", "oc_project_members", "oc_project_access", "oc_groups",
         "oc_group_settings", "oc_group_members", "oc_agents", "oc_flows", "oc_turns",
         "oc_windows", "oc_budget_usage",
     ]),
@@ -204,6 +204,7 @@ PURPOSE = {
     "user_group_quotas": "用户建群配额",
     # OC
     "oc_characters": "OC 角色卡：人设、外观、口吻、场景",
+    "oc_character_arts": "角色形象图库（立绘/表情/设定参考/场景 + 强调特征）",
     "oc_emotes": "OC 表情包",
     "oc_world_books": "世界书（扫描深度、Token 预算）",
     "oc_world_entries": "世界书条目（关键词、二次关键词、逻辑）",

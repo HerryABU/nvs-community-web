@@ -422,6 +422,7 @@ func Migrate(db *gorm.DB) error {
 		&Character{}, &WorldBook{}, &WorldEntry{},
 		&GroupSetting{}, &Agent{}, &Flow{}, &Turn{}, &Window{}, &BudgetUsage{},
 		&OcGroup{}, &OcGroupMember{},
+		&CharacterArt{},
 	); err != nil {
 		return err
 	}

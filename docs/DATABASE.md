@@ -9,7 +9,7 @@
 python scripts/gen-db-doc.py data/nvs.db
 ```
 
-当前共 **183 张表 / 2069 个字段**（行数为本机测试站实测，仅用于判断「有没有数据」，不代表生产规模）。
+当前共 **184 张表 / 2081 个字段**（行数为本机测试站实测，仅用于判断「有没有数据」，不代表生产规模）。
 
 ## 全局约定
 
@@ -33,7 +33,7 @@ python scripts/gen-db-doc.py data/nvs.db
 | [内容流（发现）](#domain-4) | 7 | 图文/视频/音乐/微文动态、评论、点赞收藏、标签倒排 |
 | [论坛](#domain-5) | 5 | 版块、主题、楼层、禁言与建版配额 |
 | [群组](#domain-6) | 8 | 群组、成员、群帖、群聊、群文件、已读位置、建群配额 |
-| [OC 角色扮演](#domain-7) | 16 | OC 角色卡、世界书、创作项目、AI 群组与剧情流 |
+| [OC 角色扮演](#domain-7) | 17 | OC 角色卡、世界书、创作项目、AI 群组与剧情流 |
 | [AI 中台](#domain-8) | 23 | 厂商、模型、密钥池、提示词、调用计费、会话、媒体验成、安全闸 |
 | [AI 写作 Agent](#domain-9) | 3 | 写作工程（设定/人物/时间线/大纲）与生成章节草稿 |
 | [AIGC 合规](#domain-10) | 5 | 原图资产、内容寻址交付副本、取图授权、导出与豁免留痕 |
@@ -54,7 +54,7 @@ python scripts/gen-db-doc.py data/nvs.db
 | 表名 | 用途 | 主要字段 | 行数 | 源码 |
 | --- | --- | --- | --- | --- |
 | `users` | 账号主体：邮箱/密码哈希、昵称头像、角色、会员等级、状态 | role / member_level / status | 22 | `server/models/user.go` |
-| `user_audit_logs` | 用户操作审计：登录、改密、提权等，含 IP/UA 与结果 | id / user_id / action / ip | 521 | `server/models/apikey/user_audit.go` |
+| `user_audit_logs` | 用户操作审计：登录、改密、提权等，含 IP/UA 与结果 | id / user_id / action / ip | 544 | `server/models/apikey/user_audit.go` |
 | `refresh_states` | 当前有效的 refresh token 版本，用于强制下线 | user_id / active_jti / updated_at | 17 | `—（无模型定义）` |
 | `checkin_records` | 每日签到与连签奖励 | id / user_id / date / streak | 2 | `server/models/siteops/site_ops.go` |
 | `follows` | 关注关系，is_special 标记特别关注 | id / follower_id / followed_id / created_at | 0 | `server/models/social/follow.go` |
@@ -126,7 +126,7 @@ python scripts/gen-db-doc.py data/nvs.db
 | `feed_likes` | 动态点赞 | id / post_id / user_id / created_at | 0 | `server/models/feed/model.go` |
 | `feed_favorites` | 动态收藏 | id / post_id / user_id / created_at | 0 | `server/models/feed/model.go` |
 | `feed_tags` | 标签倒排索引（唯一索引 post_id+tag） | (post_id,tag) 唯一 / tag 索引 | 38 | `server/models/feed/tag.go` |
-| `feed_danmaku` | 视频弹幕（按 time_ms 绑时间轴，独立于评论计数） | (post_id,time_ms) 联合索引 / status 索引 | 5 | `server/models/feed/danmaku.go` |
+| `feed_danmaku` | 视频弹幕（按 time_ms 绑时间轴，独立于评论计数） | (post_id,time_ms) 联合索引 / status 索引 | 7 | `server/models/feed/danmaku.go` |
 
 <a id="domain-5"></a>
 
@@ -167,13 +167,14 @@ OC 角色卡、世界书、创作项目、AI 群组与剧情流。
 
 | 表名 | 用途 | 主要字段 | 行数 | 源码 |
 | --- | --- | --- | --- | --- |
-| `oc_characters` | OC 角色卡：人设、外观、口吻、场景 | id / user_id / name / avatar_url | 1 | `server/oc/model.go` |
+| `oc_characters` | OC 角色卡：人设、外观、口吻、场景 | id / user_id / name / avatar_url | 4 | `server/oc/model.go` |
+| `oc_character_arts` | 角色形象图库（立绘/表情/设定参考/场景 + 强调特征） | id / character_id / project_id / user_id | 2 | `server/oc/art.go` |
 | `oc_emotes` | OC 表情包 | id / user_id / key / url | 0 | `server/oc/emote.go` |
-| `oc_world_books` | 世界书（扫描深度、Token 预算） | id / user_id / group_id / title | 15 | `server/oc/model.go` |
-| `oc_world_entries` | 世界书条目（关键词、二次关键词、逻辑） | id / book_id / kind / key | 0 | `server/oc/model.go` |
+| `oc_world_books` | 世界书（扫描深度、Token 预算） | id / user_id / group_id / title | 20 | `server/oc/model.go` |
+| `oc_world_entries` | 世界书条目（关键词、二次关键词、逻辑） | id / book_id / kind / key | 1 | `server/oc/model.go` |
 | `oc_world_links` | 世界书之间的引用链 | id / from_book_id / to_book_id / label | 0 | `server/oc/project.go` |
-| `oc_projects` | OC 创作项目（可见性、访问密码） | id / user_id / title / summary | 0 | `server/oc/project.go` |
-| `oc_project_members` | 项目成员与角色 | id / project_id / user_id / role | 0 | `server/oc/project.go` |
+| `oc_projects` | OC 创作项目（可见性、访问密码） | id / user_id / title / summary | 6 | `server/oc/project.go` |
+| `oc_project_members` | 项目成员与角色 | id / project_id / user_id / role | 6 | `server/oc/project.go` |
 | `oc_project_access` | 项目访问令牌（带过期时间） | id / project_id / token / expires_at | 0 | `server/oc/project.go` |
 | `oc_groups` | OC 群组（AI 角色群聊） | id / user_id / name / summary | 1 | `server/oc/ocgroup.go` |
 | `oc_group_settings` | OC 群审计等级、窗口大小与时机 | id / group_id / enabled / mode | 1 | `server/oc/model.go` |
@@ -291,8 +292,8 @@ OC 角色卡、世界书、创作项目、AI 群组与剧情流。
 | `bad_words` | 敏感词库（匹配方式、处置动作、作用域） | id / name / match_type / pattern | 72 | `server/models/security/badword.go` |
 | `bad_word_flags` | 敏感词命中标记与处置状态 | id / content_type / content_id / user_id | 2 | `server/models/security/badword.go` |
 | `xss_rules` | XSS 过滤规则 | id / name / pattern / action | 0 | `server/models/security/xss_rule.go` |
-| `honeypot_sessions` | 蜜罐会话（来源 IP、UA 归一、事件计数） | id / h_id / src_ip / ua_norm | 15 | `server/honeypot/model.go` |
-| `honeypot_events` | 蜜罐事件（诱饵、方法、路径、指纹） | id / session_id / kind / decoy | 368 | `server/honeypot/model.go` |
+| `honeypot_sessions` | 蜜罐会话（来源 IP、UA 归一、事件计数） | id / h_id / src_ip / ua_norm | 16 | `server/honeypot/model.go` |
+| `honeypot_events` | 蜜罐事件（诱饵、方法、路径、指纹） | id / session_id / kind / decoy | 370 | `server/honeypot/model.go` |
 | `honeypot_fingerprints` | 蜜罐采集的浏览器指纹（canvas/WebGL/字体） | id / session_id / canvas / web_gl | 0 | `server/honeypot/fingerprint.go` |
 | `honeypot_settings` | 蜜罐开关与采集粒度 | id / enabled / level / record_ua | 1 | `server/honeypot/model.go` |
 | `blacklist_ips` | IP 黑名单（含到期时间） | id / ip / reason / expires_at | 0 | `server/models/platform/platform.go` |
@@ -311,7 +312,7 @@ OC 角色卡、世界书、创作项目、AI 群组与剧情流。
 | `api_access_logs` | API 访问日志（身份、路径、状态码、IP） | id / identity_type / identity_id / key_prefix | 117 | `server/models/apikey/api_key.go` |
 | `user_api_policies` | 用户限流策略与 Key 封禁状态 | id / user_id / quota_per_min / window_secs | 0 | `server/models/apikey/api_key.go` |
 | `rage_configs` | 限流/长连接参数（批量间隔、并发、WS/MQTT 开关） | id / enabled / batch_interval_sec / batch_size | 1 | `server/models/siteops/rage_config.go` |
-| `channel_balance_samples` | 上游渠道余额采样（用于额度预警） | id / base_url / remaining / used | 576 | `server/models/aicost/channel_balance_sample.go` |
+| `channel_balance_samples` | 上游渠道余额采样（用于额度预警） | id / base_url / remaining / used | 810 | `server/models/aicost/channel_balance_sample.go` |
 
 <a id="domain-14"></a>
 
@@ -365,7 +366,7 @@ OC 角色卡、世界书、创作项目、AI 群组与剧情流。
 
 | 表名 | 用途 | 主要字段 | 行数 | 源码 |
 | --- | --- | --- | --- | --- |
-| `web_access_logs` | 全站访问日志（UA 族、路径、IP、身份） | id / user_id / identity_type / ua_family | 41517 | `server/models/quota/web_access.go` |
+| `web_access_logs` | 全站访问日志（UA 族、路径、IP、身份） | id / user_id / identity_type / ua_family | 45548 | `server/models/quota/web_access.go` |
 | `zone_access_logs` | 分区进入日志（zone、IP、UA） | id / user_id / zone / entered_at | 5 | `server/models/platform/zone_access.go` |
 
 <a id="domain-17"></a>
@@ -379,4 +380,4 @@ OC 角色卡、世界书、创作项目、AI 群组与剧情流。
 | `federated_sites` | 联邦站点登记（API 地址、状态、同步时间） | id / name / url / api_url | 0 | `server/models/platform/platform_federated.go` |
 | `federated_novels` | 联邦作品缓存（远端 ID 映射） | id / site_id / remote_id / title | 0 | `server/models/platform/platform_federated.go` |
 | `federated_peer_keys` | 联邦对端密钥（方向、哈希、密文） | id / site_id / direction / peer_name | 0 | `server/models/apikey/api_key.go` |
-| `federated_inbound` | 入站请求统计（来源、端点、计数） | id / name / url / ip | 15 | `server/models/platform/platform_federated.go` |
+| `federated_inbound` | 入站请求统计（来源、端点、计数） | id / name / url / ip | 16 | `server/models/platform/platform_federated.go` |

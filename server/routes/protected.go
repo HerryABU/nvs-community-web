@@ -268,6 +268,12 @@ func registerProtected(r *gin.Engine) {
 		protected.GET("/oc/characters/:cid", ochandler.GetCharacter)
 		protected.PUT("/oc/characters/:cid", ochandler.UpdateCharacter)
 		protected.DELETE("/oc/characters/:cid", ochandler.DeleteCharacter)
+		// 角色形象图库（立绘/表情/设定参考/场景；世界详情页按角色分组展示）
+		protected.GET("/oc/characters/:cid/arts", ochandler.ListCharacterArts)
+		protected.POST("/oc/characters/:cid/arts", ochandler.CreateCharacterArt)
+		protected.PUT("/oc/character-arts/:aid", ochandler.UpdateCharacterArt)
+		protected.DELETE("/oc/character-arts/:aid", ochandler.DeleteCharacterArt)
+		protected.GET("/oc/projects/:pid/arts", ochandler.ListProjectArts)
 		// OC 角色卡 AI 生成 / 补全（借鉴作者工作台 AI 写作流，数据隔离）
 		protected.POST("/oc/ai-character", ochandler.AiGenerateCharacter)
 		protected.POST("/oc/characters/:cid/ai-fill", ochandler.AiFillCharacter)

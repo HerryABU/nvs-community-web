@@ -285,7 +285,10 @@ func GetCharacterWithToken(id uint, viewerID uint, isAdmin bool, token string) (
 }
 
 // ListCharacters 我的角色卡 + 可选公开库
-func ListCharacters(userID uint, scope string, keyword string, page, pageSize int) ([]Character, int64, error) {
+//
+// projectID > 0 时只返回归属该世界（OC 项目）的角色 —— 世界详情页要用它做归属隔离；
+// 传 0 表示不按世界过滤（个人 OC 库 / 公开库的默认行为）。
+func ListCharacters(userID uint, scope string, keyword string, projectID uint, page, pageSize int) ([]Character, int64, error) {
 	if page <= 0 {
 		page = 1
 	}
@@ -298,8 +301,18 @@ func ListCharacters(userID uint, scope string, keyword string, page, pageSize in
 		q = q.Where("visibility = ? AND review = ?", VisPublic, ReviewApproved)
 	case "mine":
 		q = q.Where("user_id = ?", userID)
+	case "project":
+		// 世界内全部角色（含其他成员创建的）：可见性由「能否进入该项目」保证，
+		// handler 在带 project_id 时已先验项目可见性。
+		if projectID == 0 {
+			return nil, 0, errors.New("缺少世界 id")
+		}
+		q = q.Where("project_id = ?", projectID)
 	default: // usable：我的 + 已公开过审的
 		q = q.Where("user_id = ? OR (visibility = ? AND review = ?)", userID, VisPublic, ReviewApproved)
+	}
+	if projectID > 0 {
+		q = q.Where("project_id = ?", projectID)
 	}
 	if kw := strings.TrimSpace(keyword); kw != "" {
 		q = q.Where("name LIKE ?", "%"+kw+"%")

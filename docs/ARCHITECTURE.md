@@ -208,7 +208,7 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - ⚠️ 回帖删除后不可解封恢复（物理删除），管理员「解封/恢复」对 post 类型仅清除封禁原因标记。
 
 ### 数据表
-全部 **183 张表 / 2069 个字段** 已按业务域整理成两份专门文档：
+全部 **184 张表 / 2081 个字段** 已按业务域整理成两份专门文档：
 
 - [`DATABASE.md`](DATABASE.md)：分域总览（表名 / 用途 / 主要字段 / 行数 / 源码位置）+ 全局约定
 - [`DATABASE-SCHEMA.md`](DATABASE-SCHEMA.md)：逐表字段明细（由 `python scripts/gen-db-doc.py data/nvs.db` 自动生成）
@@ -240,6 +240,15 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - **配额**：单次拉取上限 3000 条；发送走 60 秒 30 条限流。
 - **渲染**：前端 `components/feed/DanmakuLayer.vue` 由 rAF 逐帧对齐 `currentTime`（`timeupdate` 仅 4 次/秒，会成串冒出），轨道分配按「同轨上一条尾巴让出间距」的时刻判定；暂停时把 CSS 动画 `animation-play-state` 置 `paused`，回退超过 0.8 秒清屏并按二分重算游标。
 - **播放器**：`components/feed/VideoPlayer.vue` 自绘控制条（`controls` 属性关闭），详情页与竖滑沉浸模式共用同一组件。
+
+### 亚文化创作区：世界（立项制）与角色形象图库
+- **两层容器**：`oc_projects`（世界/企划，顶层）→ `oc_world_books`（世界书，可多本）→ `oc_world_entries`（按键触发的设定条目）；角色卡 `oc_characters` 同时挂 `project_id`（归属世界）与 `book_id`（归属世界书）。
+- **世界有自己的路由**：`/subculture/world/:id`（`views/subculture/WorldDetail.vue`），分五个区块——角色 / 形象图库 / 世界书 / 成员与跨世界链接 / 设置。列表页（`components/oc/ProjectManager.vue`）只负责创建与进入，不再用抽屉承载详情，避免两套 UI 维护同一批数据。
+- **默认世界书**：角色必须归属世界书，而新世界初始没有任何书；世界页在 `worlds.length === 0` 时自动补一本同名书（失败静默，只读成员建不了）。补完后要通知 `CharacterManager` 重取书列表（`defineExpose({ reloadBooks })`），否则「新建角色卡」会被误判成「还没有世界」。
+- **角色按世界过滤**：`GET /api/oc/characters?scope=project&project_id=N`。`scope=project` 返回世界内全部角色（含其他成员创建的），因此 **handler 必须先用 `oc.GetProject` 验项目可见性**，否则可以靠猜 id 列出别人私有世界里的角色。
+- **形象图库 `oc_character_arts`**：一张角色卡可挂多张图，`kind` 白名单 `portrait/emote/ref/scene`；`project_id` 从角色回填（不信任前端）；每张图可写 `traits`（这张图强调的外貌特征），与角色卡的 `appearance`/`persona` 一起构成「样子 + 性格」。图片地址复用 `ValidateEmoteURL` 的协议白名单（拒 `javascript:`/`data:`），本体仍走既有上传接口。
+- **写权限**：角色所有者 / 项目 owner·editor / 平台管理员（`canEditArt`）；世界聚合查询 `GET /api/oc/projects/:pid/arts` 先验项目可见性。
+- **世界书条目提交必须用 camelCase**：`SaveEntry` 的绑定结构体没有 json tag，`encoding/json` 只做大小写不敏感字段名匹配，`secondary_keys` / `insertion_order` 这类 snake_case 会被静默丢弃（已修）。
 
 ### 预留表 / 字段（功能未开发）
 以下表与字段当前仅建表占位，**无业务代码**，请勿误用：

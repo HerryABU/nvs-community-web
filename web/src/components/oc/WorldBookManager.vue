@@ -197,7 +197,28 @@ async function saveEntry() {
   }
   saving.value = true;
   try {
-    await ocApi.saveEntry(bookId.value, form);
+    // 后端 binding 结构体无 json tag，只做大小写不敏感字段名匹配：
+    // 必须传 camelCase，snake_case（secondary_keys / insertion_order）会被静默丢掉。
+    await ocApi.saveEntry(bookId.value, {
+      id: form.id,
+      kind: form.kind,
+      key: form.key,
+      content: form.content,
+      secondaryKeys: form.secondary_keys,
+      selective: form.selective,
+      logic: form.logic,
+      constant: form.constant,
+      enabled: form.enabled,
+      probability: form.probability,
+      caseSensitive: form.case_sensitive,
+      wholeWord: form.whole_word,
+      insertionOrder: form.insertion_order,
+      priority: form.priority,
+      position: form.position,
+      depth: form.depth,
+      group: form.group,
+      sortOrder: form.sort_order,
+    });
     ElMessage.success('已保存');
     dlg.value = false;
     await loadEntries();

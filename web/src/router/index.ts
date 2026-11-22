@@ -171,6 +171,14 @@ const router = createRouter({
       component: () => import('@/views/subculture/SubcultureView.vue'),
       meta: { requiresAuth: true },
     },
+    // 世界详情：立项之后自己的地方——角色 / 形象图库 / 世界书 / 成员与跨世界链接。
+    // 必须是真实路由（可刷新、可分享），而不是列表页里的抽屉。
+    {
+      path: '/subculture/world/:id',
+      name: 'subculture-world',
+      component: () => import('@/views/subculture/WorldDetail.vue'),
+      meta: { requiresAuth: true },
+    },
     // 内容详情：按 kind 分成 4 条真实路由，共用同一个完整页组件（不是弹窗/嵌套层）。
     // 只有「发现」一个前端入口，点卡片后按类型落到各自路由，可深链/刷新/分享。
     { path: '/video/:id', name: 'video-detail', component: () => import('@/views/feed/PostDetail.vue') },
