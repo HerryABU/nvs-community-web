@@ -256,7 +256,8 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - **审核门禁**：新项目一律 `draft` + `private`；`SubmitForReview` 再验一次源码与可执行文件；只有 `approved` 才能设公开、才能建/启用代理路由。项目内容或文件一改就退回 `draft`（先审后改绕过防护）。站长可停止项目，路由随之立即失效。
 - **源码强制规则**：`platform_configs.selfhost_source_required`（默认 `1`，DB 优先于 env）。`SourceRequired(lang, waived)` 按运行时 `kind` 与语言白名单（Java/Go/.NET/Rust/C/C++…）判定；管理员可在审核时逐项目 `source_waived=true` 豁免。后台「反向代理管理」页有全局开关。
 - **SSRF 边界**：`ValidateUpstream` 只收 http/https，拒 `localhost`、`127/8`、`::1`、`169.254/16` 与裸端口写法；代理表加载时再用 `target.IsSelf(selfPort)` 挡「指向本平台监听端口」的路由，配合跳数守卫（超 5 跳返回 508）。
-- **反代核心来自 gatewayhub v1.6.0**（同作者、同为 AGPL-3.0）：`server/selfhost/rewrite`（前缀 shim / HTML·CSS·JS 字面量改写 / Set-Cookie Path 收紧 / 自算 ETag）、`hopguard`、`target` 三个包只依赖标准库，连同单元测试整体移植。对外固定前缀 `/sh/<项目前缀>/`，独立段避免与静态段同级通配冲突；Gin 上显式注册 `r.Any("/sh/*path")`，**不靠 NoRoute 兜底**（那会把错误配置当前端路由返回 200）。TLS 由外层网关终止，平台自身不碰证书。
+- **反代核心来自 gatewayhub v1.6.0**（同作者、同为 AGPL-3.0）：`server/selfhost/proxycore` 整体移植 GWh 的 `manager/match/entry/handler/helper`（最长前缀匹配、`Upsert/Remove` 热加载、双 Transport 连接池、32KB buffer pool、508 跳数守卫、WebSocket 免超时、502/504 统一错误、statusWriter），加上 `rewrite`（前缀 shim / HTML·CSS·JS 字面量改写 / Set-Cookie Path 收紧 / 自算 ETag）、`hopguard`、`target`。除 `gin` 外只依赖标准库，**连同 GWh 的原始单元测试整体搬入并通过**。与 GWh 一样是**路径级反向代理**：前缀直接挂在根路径（如 `/java-order/...`、`/team/app/...`），在 `NoRoute` 里先 `Matchable()` 再交给 `proxycore.Manager.Handle()`，未命中才走 NVS 原有的严格 SPA 回退。TLS 由外层网关终止，平台自身不碰证书。
+- **保留段**：代理首段不能是 API / 静态资源 / 前端 SPA 根段（`ValidatePrefix` 里 `reservedProxyPrefixes`），否则会劫持后台与页面。
 - **热加载**：路由增删改与审核状态变化时 `InvalidateRoutes()` 重建内存表；`SortedEnabledRoutes()` 只返回「已审核通过 + 已启用」的路由，并按前缀长度降序，避免 `/a` 抢掉 `/a/b`。WebSocket 升级请求跳过超时，避免长连接被掐断。
 - **后台三块独立页**：`/admin/selfhost/runtimes`、`/admin/selfhost/projects`、`/admin/selfhost/routes`；前台 `/selfhost/projects`（我的项目 + 文件上传 + 提交审核）与 `/selfhost/plaza`（仅已审核公开项目）。
 

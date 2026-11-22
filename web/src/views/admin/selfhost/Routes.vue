@@ -15,7 +15,7 @@
       </template>
 
       <el-alert type="warning" :closable="false" show-icon class="aroute-notice">
-        对外路径形如 <code>{{ base }}/前缀/</code>。平台不终止 TLS，HTTPS 请由外层网关承担。
+        对外路径形如 <code>{{ base }}/示例前缀/</code>（前缀挂在根路径，与 gatewayhub 一致）。平台不终止 TLS，HTTPS 请由外层网关承担。
       </el-alert>
 
       <el-form inline class="aroute-config">
@@ -105,7 +105,7 @@ async function load() {
     routes.value = r.data.data.routes || [];
     total.value = r.data.data.total || 0;
     active.value = r.data.data.active || 0;
-    base.value = r.data.data.base || '/sh';
+    base.value = r.data.data.base || '';
     approvedProjects.value = p.data.data.projects || [];
     sourceRequired.value = cfg.data.data.source_required;
   } catch (e: any) {

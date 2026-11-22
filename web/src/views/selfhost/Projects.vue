@@ -149,7 +149,7 @@ const statusType = (s: string) => ({ draft: 'info', pending: 'warning', approved
 const actionText = (a: string) => ({ submit: '提交审核', approved: '审核通过', rejected: '审核驳回', suspend: '停止项目', restore: '恢复项目' } as Record<string, string>)[a] || a;
 const fmt = (s?: string) => (s ? new Date(s).toLocaleString('zh-CN') : '—');
 // 路由前缀由后台在审核通过后配置，项目列表里只展示约定路径。
-const routePrefix = (row: SelfHostProject) => (row.route?.prefix ? `/sh${row.route.prefix}/` : '未配置代理路径');
+const routePrefix = (row: SelfHostProject) => (row.route?.prefix ? `${row.route.prefix}/` : '未配置代理路径');
 
 async function load() {
   loading.value = true;

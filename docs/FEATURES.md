@@ -400,7 +400,7 @@ Markdown/富文本编辑器支持 `[expand title="标题"]...[/expand]` 语法�
 
 **反向代理**
 
-- 对外路径：`/sh/<项目前缀>/`，例如 `/sh/order-svc/`；前缀支持多级（`/team/app`），按**最长前缀**匹配。
+- 对外路径：`/<项目前缀>/`，例如 `/order-svc/`；前缀支持多级（`/team/app`），按**最长前缀**匹配，与 gatewayhub 完全一致。平台保留段（API / 静态资源 / 前端页面）不能用作前缀。
 - 移植自同作者项目 gatewayhub v1.6.0（AGPL-3.0）的改写内核：HTML/CSS/JS 根相对路径改写、运行期前缀 shim、`<base>` 注入、Set-Cookie `Path` 收紧、按改写后字节自算 ETag、自指路由跳数守卫（超限 508）、WebSocket 升级跳过超时。
 - 只转发「审核通过 + 路由启用」的项目；upstream 只收 http/https，拒绝 `localhost` / `127.0.0.1` / `169.254.x.x` / 裸端口，加载时再挡指向本平台端口的地址。
 - 平台自身不终止 TLS，HTTPS 由外层 nginx / 反向代理负责；外层只需把 `/sh/` 前缀透传。

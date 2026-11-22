@@ -224,12 +224,33 @@ func ValidateSlug(s string) error {
 	return nil
 }
 
+// reservedProxyPrefixes 不能被代理路由占用：与 Gin 显式路由、静态资源或前端 SPA 根段冲突时，
+// NoRoute 会被代理抢先命中，导致后台/API/前端页面被劫持。新增前端根段时也要同步这里。
+var reservedProxyPrefixes = map[string]bool{
+	"api": true, "uploads": true, "sandbox": true, "health": true, "assets": true, "hp": true,
+	"admin": true, "author": true, "blog": true, "blogs": true, "bookshelf": true,
+	"category": true, "comment-network": true, "docs": true, "forum": true, "forums": true,
+	"frames": true, "htmls": true, "install": true, "login": true, "novel": true,
+	"novels": true, "plaza": true, "register": true, "selfhost": true, "reports": true,
+	"run": true, "settings": true, "setup": true, "thread": true, "wasm": true, "pay": true,
+	"groups": true, "group": true, "about": true, "ai": true, "api-spider": true,
+	"feed": true, "me": true, "messages": true, "my-keys": true, "police-console": true,
+	"police": true, "reading": true, "topics": true, "user": true, "wallet": true,
+	"membership": true, "collab": true, "live": true, "oc": true, "ai-write": true,
+	"subculture": true, "federation": true, "shorts": true, "micro": true,
+	"blog-theme": true, "discover": true,
+}
+
 func ValidatePrefix(s string) error {
 	if !prefixRe.MatchString(s) || strings.HasSuffix(s, "/") {
 		return errors.New("代理前缀格式不合法（示例 /demo 或 /team/app）")
 	}
 	if strings.Contains(s, "//") || strings.Contains(s, "..") {
 		return errors.New("代理前缀不能包含 // 或 ..")
+	}
+	first := strings.SplitN(strings.TrimPrefix(s, "/"), "/", 2)[0]
+	if reservedProxyPrefixes[first] {
+		return errors.New("该首段属于平台保留路径（API / 静态资源 / 前端页面），不能用作代理前缀")
 	}
 	return nil
 }
@@ -763,9 +784,19 @@ func SortedEnabledRoutes() ([]Route, error) {
 	if err != nil {
 		return nil, err
 	}
-	// 最长前缀优先，避免 /a 抢掉 /a/b。
-	sort.Slice(list, func(i, j int) bool { return len(list[i].Prefix) > len(list[j].Prefix) })
-	return list, nil
+	// 纵深防御：历史数据里若有保留段前缀（ValidatePrefix 上线前写入的），加载时再挡一次，
+	// 避免 NoRoute 抢走 API/静态资源/前端页面。
+	out := list[:0]
+	for _, r := range list {
+		first := strings.SplitN(strings.TrimPrefix(r.Prefix, "/"), "/", 2)[0]
+		if reservedProxyPrefixes[first] {
+			continue
+		}
+		out = append(out, r)
+	}
+	// 最长前缀优先；proxycore 内部也不依赖此顺序（matchPath 取最长）。
+	sort.Slice(out, func(i, j int) bool { return len(out[i].Prefix) > len(out[j].Prefix) })
+	return out, nil
 }
 
 func RouteCount() (int64, int64, error) {

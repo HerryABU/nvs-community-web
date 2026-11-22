@@ -27,9 +27,8 @@ import (
 
 // 静态资源与 SPA 回退。frontendFS 被 NoRoute 闭包捕获，故两者同函数。
 func registerStaticAndSPA(r *gin.Engine) {
-	// 自托管反向代理：独立 /sh 段，只有审核通过且启用的路由才转发。
-	// 必须在 SPA 回退之前注册，且不能用 NoRoute 兜底（那会把错误配置当前端路由返回 200）。
-	r.Any(selfhost.ProxyBase+"/*path", selfhost.Handler)
+	// 自托管反向代理与 gatewayhub 一样是路径级代理：前缀挂在根路径上，
+	// 由下面的 NoRoute 先判 Matchable 再转发，不占用任何显式 Gin 路由段。
 
 	// ==================== 静态文件服务 ====================
 
@@ -103,6 +102,13 @@ func registerStaticAndSPA(r *gin.Engine) {
 		path := c.Request.URL.Path
 		// 蜜罐：可疑探路（.php/.env/admin/backup…）静默记录，不改变响应
 		honeypot.ProbeNotFound(c)
+
+		// 0) 路径级反向代理：与 gatewayhub 的 NoRoute 接入方式一致。
+		//    只有命中「已审核 + 已启用」路由表的前缀才转发；未命中继续走下面的严格 SPA 回退。
+		if selfhost.Matchable(path, c.Request.Host) {
+			selfhost.Handler(c)
+			return
+		}
 
 		// 1) 未匹配路由的 /api/* 一律 404（JSON），绝不落入 SPA fallback。
 		//    防止任意 /api/xxx（含被反向代理污染的前缀，如 /api/go-nvs/...，以及 ../ 穿越）被当作前端路由返回 200。

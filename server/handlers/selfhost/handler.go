@@ -357,7 +357,7 @@ func AdminListRoutes(c *gin.Context) {
 		return
 	}
 	total, active, _ := selfhost.RouteCount()
-	infra.Success(c, gin.H{"routes": list, "total": total, "active": active, "base": selfhost.ProxyBase})
+	infra.Success(c, gin.H{"routes": list, "total": total, "active": active, "base": ""})
 }
 
 func AdminSaveRoute(c *gin.Context) {

@@ -394,4 +394,4 @@
 | DELETE | `/api/admin/selfhost/routes/:id` | 管理员 | 删除路由 |
 | GET / PUT | `/api/admin/selfhost/config` | 管理员 | `source_required` 全局开关 |
 
-代理路径：`/sh/<prefix>/*`（独立段，仅审核通过且启用的路由生效；不落入 SPA 回退）。
+代理路径：`/<prefix>/*`（路径级，前缀挂在根路径，与 gatewayhub 一致；仅审核通过且启用的路由生效，未命中才落入 SPA 回退）。
