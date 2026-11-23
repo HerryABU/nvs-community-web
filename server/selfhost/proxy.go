@@ -32,6 +32,7 @@ func manager() *proxycore.Manager {
 	proxyOnce.Do(func() {
 		port, _ := strconv.Atoi(config.ServerPort)
 		proxyMgr = proxycore.NewManager("", proxycore.SelfInfo{Port: port, MaxHops: 5})
+		proxyMgr.SetPlainBody(true) // NVS 全局 gin gzip 统一压缩
 		proxyMgr.SetTrafficReporter(func(prefix string, up, down int64) {
 			trafficMu.RLock()
 			pid := prefixProjects[prefix]
@@ -45,7 +46,10 @@ func manager() *proxycore.Manager {
 }
 
 // InitManager 启动时装一次；之后每次路由/审核变化调 InvalidateRoutes() 热加载。
-func InitManager() { InvalidateRoutes() }
+func InitManager() {
+	ReloadIsoServices()
+	InvalidateRoutes()
+}
 
 func InvalidateRoutes() {
 	routes, err := SortedEnabledRoutes()
@@ -90,14 +94,27 @@ func InvalidateRoutes() {
 }
 
 // Matchable 供 NoRoute 先判「这是代理路由」还是「前端 SPA 路由」。
-func Matchable(path, host string) bool { return manager().Matchable(path, host) }
+func Matchable(path, host string) bool {
+	if IsoEngine().Matches(path) {
+		return true
+	}
+	return manager().Matchable(path, host)
+}
 
 // Handler 供 NoRoute 命中后转发；与 GWh 的 proxy.Manager.Handle 完全同构。
-func Handler(c *gin.Context) { manager().Handle(c) }
+func Handler(c *gin.Context) {
+	if IsoEngine().Matches(c.Request.URL.Path) {
+		IsoEngine().ServeHTTP(c.Writer, c.Request)
+		return
+	}
+	manager().Handle(c)
+}
 
 // RouteCount 当前内存表中的路由数（管理页展示用）。
 func LoadedRouteCount() int { return manager().Count() }
 
 // HasRoutePrefix 判断首段是否属于已注册的路径级代理路由（含多级前缀的首段）。
 // 供外层部署前缀剥离避让：业务路由首段不能被当成反代前缀吃掉。
-func HasRoutePrefix(first string) bool { return manager().HasPathPrefix(first) }
+func HasRoutePrefix(first string) bool {
+	return IsoEngine().HasPrefix(first) || manager().HasPathPrefix(first)
+}

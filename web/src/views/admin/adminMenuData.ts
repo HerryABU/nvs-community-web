@@ -124,6 +124,7 @@ export const adminMenuCategories: AdminMenuCategory[] = [
       { title: '端口直派', desc: '管理员直接把路径指派到本机端口（GWh 同款），保存即热加载', path: '/admin/selfhost/direct-routes', icon: Aim, color: 'var(--gradient-blue)' },
       { title: 'TCP 端口映射', desc: '四层转发：监听端口 → 目标主机端口', path: '/admin/selfhost/port-maps', icon: Connection, color: 'var(--gradient-purple)' },
       { title: '用量与隔离', desc: '项目上下行流量 / 占用体积 · 跨空间访问自检', path: '/admin/selfhost/usage', icon: DataAnalysis, color: 'var(--gradient-amber)' },
+      { title: '路径隔离代理', desc: 'pass-through / strip / isolated 三种模式，GWh 同款', path: '/admin/selfhost/iso-services', icon: Operation, color: 'var(--gradient-indigo)' },
     ],
   },
   {

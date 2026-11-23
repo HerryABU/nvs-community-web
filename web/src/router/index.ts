@@ -463,6 +463,12 @@ const router = createRouter({
       meta: { requiresAuth: true, requiresAdmin: true },
     },
     {
+      path: '/admin/selfhost/iso-services',
+      name: 'admin-selfhost-iso-services',
+      component: () => import('@/views/admin/selfhost/IsoServices.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
       path: '/admin/home-customize-review',
       name: 'admin-home-customize-review',
       component: () => import('@/views/admin/site/AdminHomeCustomizeReview.vue'),

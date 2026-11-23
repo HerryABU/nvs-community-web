@@ -259,6 +259,7 @@
 - 🎯 **端口直派与 TCP 映射**：管理员直接把路径指派到本机端口（GWh 同款），或配置四层端口映射，保存即热加载
 - 📊 **项目用量与隔离**：按项目统计上下行流量与占用体积；提交审核/启用路由前做跨空间访问检测
 - 🧩 **扩展应用归并广场**：自托管项目与自定义 HTML 应用统一在自托管广场展示与筛选
+- 🔀 **GWh 完整吞并 · 三种去头模式**：pass-through 原样透传 / strip 剥前缀可改写 / isolated 剥前缀只改头；整包移植 gatewayhub 隔离引擎（Cookie 帽子、熔断、指标、审计、gzip 跨跳改写、跳数守卫），原始单测全过
 - 🔀 **gatewayhub 路径级反代内核**：前缀直接挂根路径（`/order-svc/`），最长前缀匹配、HTML/CSS/JS 前缀改写、Set-Cookie 收紧、自算 ETag、跳数守卫（508）、WebSocket 透传；SSRF/自指防护
 - 🧭 **三块后台管理页**：运行时管理 / 项目管理与审核 / 反向代理管理；前台「我的自托管项目」+「自托管广场」
 - ⚙️ **安全边界**：平台不在本机执行用户代码（`LocalExec` 预留且恒关），作者自带服务；TLS 由外层网关终止
@@ -399,7 +400,7 @@ cd server && go build -ldflags="-s -w" -o nvs-server.exe . && cd ..
 | 所有接口 | [docs/API.md](docs/API.md) |
 | 所有环境变量 | [docs/CONFIG.md](docs/CONFIG.md) |
 | 目录结构 / 分层约定 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| 全部数据表（193 张，按域） | [docs/DATABASE.md](docs/DATABASE.md) |
+| 全部数据表（194 张，按域） | [docs/DATABASE.md](docs/DATABASE.md) |
 | 逐表字段明细 | [docs/DATABASE-SCHEMA.md](docs/DATABASE-SCHEMA.md) |
 | 本地开发 / 构建 / 测试 / 发版 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) |
 

@@ -134,6 +134,51 @@ export interface PortMap {
   updated_at: string;
 }
 
+export interface IsoService {
+  id: number;
+  name: string;
+  target: string;
+  mode: 'pass-through' | 'strip' | 'isolated';
+  timeout: number;
+  enabled: boolean;
+  description: string;
+  cookie_hat?: string;
+  html_rewrite?: boolean;
+  known_abs_prefixes?: string;
+  host_mode?: 'keep' | 'rewrite';
+  no_full_compat?: boolean;
+  max_rewrite_bytes?: number;
+  drop_foreign_cookies?: boolean;
+  passthrough_location_prefix?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IsoSnapshot {
+  name: string;
+  prefix: string;
+  target: string;
+  mode: string;
+  enabled: boolean;
+  cookie_hat: string;
+  html_rewrite: boolean;
+  known_abs_prefixes?: string[];
+  timeout: number;
+  host_mode: string;
+  no_full_compat: boolean;
+  breaker: Record<string, unknown>;
+  metrics: Record<string, unknown>;
+}
+
+export interface IsoAuditEntry {
+  timestamp?: string;
+  service?: string;
+  kind?: string;
+  path?: string;
+  detail?: string;
+  [key: string]: unknown;
+}
+
 export interface UsageRow {
   project_id: number;
   name: string;
@@ -304,6 +349,24 @@ export const selfhostApi = {
   },
   adminDeleteDirectRoute(id: number) {
     return api.delete<{ code: number }>(`/admin/selfhost/direct-routes/${id}`);
+  },
+  adminIsoServices() {
+    return api.get<{ code: number; data: { services: IsoService[]; snapshot: IsoSnapshot[]; enabled: boolean; count: number; warnings: string[]; audit_file: string } }>('/admin/selfhost/iso-services');
+  },
+  adminIsoMetrics() {
+    return api.get<{ code: number; data: { metrics: Record<string, unknown>[] } }>('/admin/selfhost/iso-metrics');
+  },
+  adminIsoAudit(limit = 200) {
+    return api.get<{ code: number; data: { entries: IsoAuditEntry[] } }>('/admin/selfhost/iso-audit', { params: { limit } });
+  },
+  adminSaveIsoService(payload: Partial<IsoService>) {
+    return api.post<{ code: number; data: IsoService }>('/admin/selfhost/iso-services', payload);
+  },
+  adminToggleIsoService(id: number, enabled: boolean) {
+    return api.put<{ code: number }>(`/admin/selfhost/iso-services/${id}/toggle`, { enabled });
+  },
+  adminDeleteIsoService(id: number) {
+    return api.delete<{ code: number }>(`/admin/selfhost/iso-services/${id}`);
   },
   adminPortMaps() {
     return api.get<{ code: number; data: { maps: PortMap[] } }>('/admin/selfhost/port-maps');

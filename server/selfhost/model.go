@@ -198,7 +198,10 @@ func Migrate(db *gorm.DB) error {
 	if err := MigrateUsage(db); err != nil {
 		return err
 	}
-	return MigrateRuntimeRequests(db)
+	if err := MigrateRuntimeRequests(db); err != nil {
+		return err
+	}
+	return MigrateIsoServices(db)
 }
 
 // ─── 规则 ───

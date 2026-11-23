@@ -11,7 +11,7 @@ import (
 	"nvs-server/selfhost/target"
 )
 
-// bufferPool 复用 io.Copy 缓冲区，减少高并发下的内存分配与 GC 压力（GWh 原样）。
+// bufferPool 复用 io.Copy 缓冲区，减少高并发下的内存分配与 GC 压力。
 var bufferPool = sync.Pool{
 	New: func() any {
 		b := make([]byte, 32*1024)
@@ -24,14 +24,16 @@ type poolBuffer struct{}
 func (poolBuffer) Get() []byte  { return *bufferPool.Get().(*[]byte) }
 func (poolBuffer) Put(b []byte) { bufferPool.Put(&b) }
 
-// Entry 路由表条目：同一后端地址共享一个 Transport 连接池。
-// 路径模式（Proxy，剥离前缀 + 响应重写）与子域名模式（SubProxy，零重写纯透明）各自独立。
+// Entry 路由表条目：同一后端地址共享一个 Transport 连接池，
+// 路径模式（Proxy，剥离前缀 + 响应重写）与子域名模式（SubProxy，零重写纯透明）各自独立的 ReverseProxy。
 type Entry struct {
 	Route    Route
 	Parsed   target.Parsed
 	Proxy    *httputil.ReverseProxy // 路径模式
 	SubProxy *httputil.ReverseProxy // 子域名模式
-	Self     bool                   // target 指向网关自身；只用于告警，合法性由 hopguard 保证
+	// Self 表示 target 指向网关自身（自指路由）。仅用于告警与日志，
+	// 不改变转发行为：合法性由 hopguard 的跳数上限保证。
+	Self bool
 }
 
 func (m *Manager) buildEntry(r Route) (*Entry, error) {
@@ -43,7 +45,7 @@ func (m *Manager) buildEntry(r Route) (*Entry, error) {
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	// 两条链路共享同一 Transport，复用后端连接池。
+	// 两个代理共享同一 Transport，复用后端连接池
 	transport := &http.Transport{
 		DialContext:           (&net.Dialer{Timeout: timeout, KeepAlive: 30 * time.Second}).DialContext,
 		MaxIdleConns:          256,
@@ -57,12 +59,24 @@ func (m *Manager) buildEntry(r Route) (*Entry, error) {
 	entry.Self = target.IsSelf(p, m.self.Port, m.baseDomain)
 
 	// 路径模式：剥离 /prefix 前缀 + 响应内容重写（加回前缀、注入 <base>）
-	rw := rewrite.New(r.Prefix, p.Root, p.Host)
+	rw := m.newRewriter(r.Prefix, p.Root, p.Host)
 	entry.Proxy = &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
-			// 记录网关侧原始路径（外链 CSS 相对化需要推算基准目录）
-			req = rewrite.WithGWPath(req, req.URL.Path)
-			rest := sanitizeRest(req.URL.Path, r.Prefix)
+			// 记录网关侧原始路径（外链 CSS 相对化需要推算基准目录）；
+			// Handle 已写入完整原始路径时不覆盖，避免链式剥离后丢失外层前缀。
+			if _, hasRest := restFrom(req); !hasRest {
+				req = rewrite.WithGWPath(req, req.URL.Path)
+			}
+			// 嵌套链：把对外前缀逐跳累加，最内层据此算出完整链
+			// （/a → /b → /c 三层时，后端资源必须落在 /a/b/c/ 下）。
+			inbound := rewrite.SanitizeChain(req.Header.Get(rewrite.PrefixChainHeader))
+			rewrite.WithInboundChain(req, inbound)
+			req.Header.Set(rewrite.PrefixChainHeader, rewrite.JoinChain(inbound, r.Prefix))
+			// 多段服务名链已在 Handler 里逐段剥好；普通单跳按本条目前缀剥离。
+			rest, chained := restFrom(req)
+			if !chained {
+				rest = sanitizeRest(req.URL.Path, r.Prefix)
+			}
 			applyForwardHeaders(req, p)
 			req.URL.Path = target.JoinPath(p.Root, rest)
 			// 仅接受 gzip，便于在 ModifyResponse 中解压重写后再压缩
@@ -75,11 +89,12 @@ func (m *Manager) buildEntry(r Route) (*Entry, error) {
 		ErrorHandler:   m.errorHandler,
 	}
 
-	// 子域名模式：前缀在 Host 头里，路径即后端根路径，零重写、零解压，纯透明转发。
+	// 子域名模式：前缀在 Host 头里，路径即后端根路径，零重写、零解压，纯透明转发（速度=源站）
 	entry.SubProxy = &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
 			applyForwardHeaders(req, p)
 			req.URL.Path = target.JoinPath(p.Root, req.URL.Path)
+			// 不设置 Accept-Encoding：保留原始值，让后端按需 gzip/br，网关零解压透传
 		},
 		Transport:     transport,
 		FlushInterval: -1,

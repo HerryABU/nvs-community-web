@@ -475,6 +475,86 @@ func AdminScanRuntimes(c *gin.Context) {
 	infra.Success(c, gin.H{"candidates": selfhost.ScanPathRuntimes()})
 }
 
+// ─── 管理端：三种代理类型的隔离服务 ───
+
+func AdminListIsoServices(c *gin.Context) {
+	list, err := selfhost.ListIsoServices()
+	if err != nil {
+		infra.InternalError(c, "隔离服务读取失败")
+		return
+	}
+	e := selfhost.IsoEngine()
+	tbl := e.Table()
+	warnings := e.Warnings()
+	if warnings == nil {
+		warnings = []string{}
+	}
+	infra.Success(c, gin.H{
+		"services":   list,
+		"snapshot":   e.Snapshot(), // GWh 同款：配置 + 熔断 + 指标
+		"enabled":    e.Active(),
+		"count":      e.Count(),
+		"source":     tbl.Source,
+		"hash":       tbl.Hash,
+		"loaded_at":  tbl.LoadedAt,
+		"warnings":   warnings,
+		"audit_file": e.AuditPath(),
+	})
+}
+
+// GET /api/admin/selfhost/iso-metrics  隔离链路指标（GWh 同款）
+func AdminIsoMetrics(c *gin.Context) {
+	infra.Success(c, gin.H{"metrics": selfhost.IsoEngine().Metrics()})
+}
+
+// GET /api/admin/selfhost/iso-audit  最近审计记录（GWh 同款，默认 200 条）
+func AdminIsoAudit(c *gin.Context) {
+	n := 200
+	if v := c.Query("limit"); v != "" {
+		if x, err := strconv.Atoi(v); err == nil && x > 0 && x <= 2000 {
+			n = x
+		}
+	}
+	infra.Success(c, gin.H{"entries": selfhost.IsoEngine().AuditRecent(n)})
+}
+
+func AdminSaveIsoService(c *gin.Context) {
+	var in selfhost.IsoService
+	if err := c.ShouldBindJSON(&in); err != nil {
+		infra.BadRequest(c, "参数错误")
+		return
+	}
+	s, err := selfhost.SaveIsoService(in)
+	if err != nil {
+		infra.BadRequest(c, err.Error())
+		return
+	}
+	infra.SuccessMessage(c, "已保存并热加载", s)
+}
+
+func AdminToggleIsoService(c *gin.Context) {
+	var in struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil {
+		infra.BadRequest(c, "参数错误")
+		return
+	}
+	if err := selfhost.ToggleIsoService(parseUint(c.Param("id")), in.Enabled); err != nil {
+		infra.InternalError(c, "操作失败")
+		return
+	}
+	infra.SuccessMessage(c, "状态已更新", nil)
+}
+
+func AdminDeleteIsoService(c *gin.Context) {
+	if err := selfhost.DeleteIsoService(parseUint(c.Param("id"))); err != nil {
+		infra.InternalError(c, "删除失败")
+		return
+	}
+	infra.SuccessMessage(c, "已删除", nil)
+}
+
 // ─── 管理端：运行时 ───
 
 func AdminListRuntimes(c *gin.Context) {

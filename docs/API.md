@@ -422,3 +422,12 @@
 | POST / GET | `/api/selfhost/runtime-requests` | 用户提交/查看自己的运行时申请 |
 | GET | `/api/admin/selfhost/runtime-requests` | 管理员查看申请 |
 | POST | `/api/admin/selfhost/runtime-requests/:id/review` | `{approve, language, version, exec_path, note}`；批准时可按管理员给的版本落地 |
+
+### 路径隔离代理（GWh 完整引擎）
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| GET / POST | `/api/admin/selfhost/iso-services` | 服务列表（含引擎快照/熔断/指标/审计路径）/ 保存（三模式 + Cookie 帽 + 改写 + Host 策略） |
+| PUT | `/api/admin/selfhost/iso-services/:id/toggle` | 启停（热加载） |
+| DELETE | `/api/admin/selfhost/iso-services/:id` | 删除 |
+| GET | `/api/admin/selfhost/iso-metrics` | 每服务请求/失败指标 |
+| GET | `/api/admin/selfhost/iso-audit?limit=200` | 最近审计记录 |

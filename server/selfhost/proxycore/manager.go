@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"nvs-server/selfhost/hopguard"
+	"nvs-server/selfhost/rewrite"
 )
 
 // SelfInfo 描述网关自身，用于识别自指路由并限制链式转发跳数。
@@ -30,6 +31,19 @@ type Manager struct {
 	warnSig    string
 	selfSig    string
 	traffic    TrafficFunc // 每请求完成后上报 {prefix, 上行, 下行}
+	plainBody  bool        // 宿主已有全局 gzip 中间件时，改写后输出明文由宿主压缩
+}
+
+// SetPlainBody 让所有响应改写器输出未压缩正文。
+// NVS 全局挂了 gin-contrib/gzip，它会把上游已压缩响应的 Content-Encoding/ETag 头剥掉
+// 却保留压缩字节，导致客户端拿到无法解压的正文；交给它统一压缩即可。
+func (m *Manager) SetPlainBody(v bool) { m.plainBody = v }
+
+func (m *Manager) newRewriter(prefix, root, host string) *rewrite.Rewriter {
+	if m.plainBody {
+		return rewrite.NewPlain(prefix, root, host)
+	}
+	return rewrite.New(prefix, root, host)
 }
 
 // TrafficFunc 由宿主（NVS）注入，用于按代理前缀累计流量。

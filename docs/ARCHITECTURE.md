@@ -208,7 +208,7 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - ⚠️ 回帖删除后不可解封恢复（物理删除），管理员「解封/恢复」对 post 类型仅清除封禁原因标记。
 
 ### 数据表
-全部 **193 张表 / 2188 个字段** 已按业务域整理成两份专门文档：
+全部 **194 张表 / 2205 个字段** 已按业务域整理成两份专门文档：
 
 - [`DATABASE.md`](DATABASE.md)：分域总览（表名 / 用途 / 主要字段 / 行数 / 源码位置）+ 全局约定
 - [`DATABASE-SCHEMA.md`](DATABASE-SCHEMA.md)：逐表字段明细（由 `python scripts/gen-db-doc.py data/nvs.db` 自动生成）
@@ -288,3 +288,15 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 
 - **自指与嵌套**：管理员直派可填 `target_url`（如 `http://127.0.0.1:8000/other`），实现 GWh 同款的路径别名/嵌套转发；`X-GatewayHub-Hops` 每跳 +1，超过 5 跳返回 508，死配置不会变成请求生成器。用户项目路由仍禁止 localhost/回环，避免审核后借代理访问平台自身。
 - **Java 验收样本**：`C://Users//QBZ95//Desktop//tools//tests//spt//sports-2.6.8.jar` 用 `java -jar ... --server.port=19102` 启动，PATH 扫描能识别到 Temurin JDK 21.0.10；直派 `/sports-qa/` 指向 19102 可正常访问，别名 `/alias-qa/` → `/sports-qa/` 走两跳仍 200，`/loop-qa/` 自环返回 508。
+
+### GWh 完整吞并：三种去头模式与隔离引擎
+- **整包移植**：`server/selfhost/isolation/` 是 gatewayhub `internal/isolation` 的完整移植（engine 517 行 + response 322 行 + breaker/config/cookie/diag/forward/matcher/metrics/respond，含 11 个原始单测全过）；`server/selfhost/accesslog/` 与 `target/backend.go` 一并移植。导入路径 `gatewayhub/internal/*` → `nvs-server/selfhost/*`。
+- **三种模式**（`isolation/config/mode.go`，与 GWh 语义完全一致）：
+  - `pass-through`：原样透传 `/{服务名}/...`，后端自己认前缀；只做头层修正，不改 body。
+  - `strip`：剥离 `/{服务名}` 前缀（空则置 `/`，`path.Clean` 防越界、保留尾斜杠），**允许**响应体字面量改写。
+  - `isolated`：剥离前缀，但**响应体一个字节都不改**（降级模式，仅头层 Cookie/Location 修正）。
+  - `ModeParse` 收敛常见别名（passthrough/pass/transparent、prefix-strip、isolate/isolation/headers-only）。
+- **完整能力**：Cookie 帽子（`{服务名}__` 前缀防跨服务串号）、外来 Cookie 丢弃、Location 前缀补齐、HTML/JS/CSS 绝对链接改写（br/zstd 不解压原样透传、gzip 逐跳解包重压、ETag 带跳级 scope）、熔断（breaker）、每服务指标、审计日志、跳数守卫（自指/嵌套 >5 跳 508）、自指重定向环检测。
+- **NVS 接入**：`selfhost_iso_services` 表存配置（含 cookie_hat/html_rewrite/host_mode/known_abs_prefixes/max_rewrite_bytes 等），`isoEngineTable()` 映射成 `config.Table` 快照，`engine.Engine.Reload()` 热加载；`Matchable()/Handler()/HasRoutePrefix()` 由完整引擎驱动。`MaxRewriteBytes<=0` 归一到 GWh 默认 2MB。
+- **管理接口**：列表带运行状态快照（熔断/指标）、`/api/admin/selfhost/iso-metrics`、`/api/admin/selfhost/iso-audit`；后台「路径隔离代理」页展示审计与命中数，配置表单可改全部高级字段。
+- ⚠️ 旧的 215 行简化 `selfhost/iso/` 已移除，不再有双实现。
