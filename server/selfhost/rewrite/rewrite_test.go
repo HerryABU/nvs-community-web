@@ -452,3 +452,23 @@ func TestHTMLAttrSkipsDeferred(t *testing.T) {
 		t.Errorf("普通 src 应改写为文档相对\n%s", out)
 	}
 }
+
+// TestNestedChainUpdatesShim 跨系统嵌套时，外层必须用完整链更新内层已注入的 shim，
+// 否则 <base href="/outer/"> 与 var P="/inner" 不一致，相对资源解析错位。
+func TestNestedChainUpdatesShim(t *testing.T) {
+	// 内层（GWh）已经改写并注入 P="/inner"。
+	inner := `<html><head><base href="/inner/"><script data-gateway-prefix-shim="1">(function(){ var P="/inner"; })()</script></head><body><img src="./logo.png"></body></html>`
+	// 外层（NVS）知道完整链 outer/inner。
+	rw := New("outer/inner", "", "backend:8080")
+	out := []byte(rw.injectShim(inner))
+	s := string(out)
+	if n := strings.Count(s, "data-gateway-prefix-shim"); n != 1 {
+		t.Fatalf("shim 应恰好一个，got %d\n%s", n, s)
+	}
+	if !strings.Contains(s, `var P="/outer/inner"`) {
+		t.Errorf("shim 前缀未更新为完整链:\n%s", s)
+	}
+	if strings.Contains(s, `var P="/inner"`) {
+		t.Errorf("仍残留内层局部前缀:\n%s", s)
+	}
+}

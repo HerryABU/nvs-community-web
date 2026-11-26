@@ -300,3 +300,9 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - **NVS 接入**：`selfhost_iso_services` 表存配置（含 cookie_hat/html_rewrite/host_mode/known_abs_prefixes/max_rewrite_bytes 等），`isoEngineTable()` 映射成 `config.Table` 快照，`engine.Engine.Reload()` 热加载；`Matchable()/Handler()/HasRoutePrefix()` 由完整引擎驱动。`MaxRewriteBytes<=0` 归一到 GWh 默认 2MB。
 - **管理接口**：列表带运行状态快照（熔断/指标）、`/api/admin/selfhost/iso-metrics`、`/api/admin/selfhost/iso-audit`；后台「路径隔离代理」页展示审计与命中数，配置表单可改全部高级字段。
 - ⚠️ 旧的 215 行简化 `selfhost/iso/` 已移除，不再有双实现。
+
+### 跨系统嵌套代理（NVS ↔ GWh）
+- **问题**：`NVS(/gwh/) → GWh(/go-nvs/) → 后端` 这类双向嵌套里，内层网关会先注入 shim（P=局部前缀）与 `<base href=局部>`；外层若因「已有 shim」就跳过，页面会留下 base=`/gwh/` 与 P=`/go-nvs` 不一致，相对资源解析到 `/gwh/assets` 而不是 `/gwh/go-nvs/assets`，整站 404。
+- **修复**：`rewrite.injectShim` 遇到已注入的 shim 时不再跳过，而是用 `shimBlockRe` 整块替换为**当前完整链**的前缀（`<base>` 本就是覆盖式改写）。GWh 侧 `internal/proxy/rewrite/shim.go` 同步修复，两边行为一致。
+- **完整链传递**：`X-GatewayHub-Prefix-Chain` 请求侧逐跳累加、响应侧由最内层写回，跨进程 HTTP 实测 `NVS→GWh→NVS` 得到 `/gwh/go-nvs`、反向得到 `/go-nvs/gwh`；两侧 shim 与 base 始终一致。跳数守卫 `X-GatewayHub-Hops` 超 5 跳 508。
+- **openlist**：`data-src`（vite legacy）不由静态改写处理（避免二次拼前缀），靠 shim 运行期 hook；`base_path: '/'` 由 `PrepareHTML` 改成网关前缀。NVS 与 GWh 对 `/opls/` 的输出逐字节一致。

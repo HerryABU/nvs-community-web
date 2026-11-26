@@ -202,3 +202,56 @@ func TestRealSelfHopGzip(t *testing.T) {
 		t.Error("跨跳后出现重复服务名")
 	}
 }
+
+// TestCrossProcessChain 模拟 NVS → 另一个网关进程 → 后端 的跨 HTTP 嵌套。
+// 内层网关会自己注入 shim/base（局部前缀），外层必须用完整链更新，
+// 且请求侧链头必须跨进程传递，最终页面的 <base> 与 shim P 都是 /outer/inner。
+func TestCrossProcessChain(t *testing.T) {
+	html := `<!doctype html><html><head></head><body><script src="/assets/app.js"></script></body></html>`
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = io.WriteString(w, html)
+	}))
+	defer backend.Close()
+
+	// 内层网关（如 GWh）：一条 inner 路由指向后端，自己会改写并注入 shim。
+	innerMgr := newTestManager("", activeRoute("inner", backend.URL))
+	innerGin := gin.New()
+	innerGin.NoRoute(func(c *gin.Context) {
+		if !innerMgr.Matchable(c.Request.URL.Path, c.Request.Host) {
+			c.String(http.StatusNotFound, "nf")
+			return
+		}
+		innerMgr.Handle(c)
+	})
+	innerSrv := httptest.NewServer(innerGin)
+	defer innerSrv.Close()
+
+	// 外层（NVS）：outer 路由指向内层网关进程。
+	outerMgr := newTestManager("", activeRoute("outer", innerSrv.URL))
+	outerGin := gin.New()
+	outerGin.NoRoute(func(c *gin.Context) {
+		if !outerMgr.Matchable(c.Request.URL.Path, c.Request.Host) {
+			c.String(http.StatusNotFound, "nf")
+			return
+		}
+		outerMgr.Handle(c)
+	})
+
+	req := httptest.NewRequest("GET", "/outer/inner/", nil)
+	w := httptest.NewRecorder()
+	outerGin.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("跨进程嵌套应 200，got %d body=%s", w.Code, w.Body.String())
+	}
+	text := w.Body.String()
+	if !strings.Contains(text, `<base href="/outer/inner/">`) {
+		t.Errorf("<base> 应为完整链 /outer/inner/，实际: %s", text[:minLen(text, 200)])
+	}
+	if !strings.Contains(text, `P="/outer/inner"`) {
+		t.Errorf("shim 应为完整链 /outer/inner，实际: %s", text[:minLen(text, 200)])
+	}
+	if n := strings.Count(text, "data-gateway-prefix-shim"); n != 1 {
+		t.Errorf("shim 应恰好一个，got %d", n)
+	}
+}
