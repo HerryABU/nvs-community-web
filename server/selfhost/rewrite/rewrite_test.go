@@ -472,3 +472,35 @@ func TestNestedChainUpdatesShim(t *testing.T) {
 		t.Errorf("仍残留内层局部前缀:\n%s", s)
 	}
 }
+
+// TestPlainModeDropsContentLength 宿主有全局 gzip 时（NVS），plain 模式必须删掉 CL：
+// gin-contrib/gzip 会把压缩前的 Size 回填成 CL，浏览器按它解压缩字节直接
+// ERR_CONTENT_LENGTH_MISMATCH（openlist 的 JSON API 白屏现场）。
+func TestPlainModeDropsContentLength(t *testing.T) {
+	// JSON：早退分支
+	resp := &http.Response{
+		Header:        http.Header{"Content-Type": []string{"application/json"}, "Content-Length": []string{"60"}},
+		ContentLength: 60,
+		Body:          io.NopCloser(strings.NewReader(`{"ok":true}`)),
+	}
+	rw := NewPlain("opls", "", "127.0.0.1:5244")
+	if err := rw.Modify(resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Header.Get("Content-Length") != "" || resp.ContentLength != -1 {
+		t.Errorf("plain JSON 应删 CL: header=%q cl=%d", resp.Header.Get("Content-Length"), resp.ContentLength)
+	}
+
+	// gzip 编码但解不开（br）：早退分支
+	resp2 := &http.Response{
+		Header:        http.Header{"Content-Type": []string{"application/json"}, "Content-Encoding": []string{"br"}, "Content-Length": []string{"60"}},
+		ContentLength: 60,
+		Body:          io.NopCloser(strings.NewReader("x")),
+	}
+	if err := rw.Modify(resp2); err != nil {
+		t.Fatal(err)
+	}
+	if resp2.Header.Get("Content-Length") != "" {
+		t.Errorf("plain br 应删 CL: %q", resp2.Header.Get("Content-Length"))
+	}
+}

@@ -595,6 +595,7 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.POST("/selfhost/routes", selfhosthandler.AdminSaveRoute)
 		adminGrp.PUT("/selfhost/routes/:id/toggle", selfhosthandler.AdminToggleRoute)
 		adminGrp.DELETE("/selfhost/routes/:id", selfhosthandler.AdminDeleteRoute)
+		adminGrp.POST("/selfhost/iso-probe", selfhosthandler.AdminProbeIsoMode)
 		adminGrp.GET("/selfhost/iso-services", selfhosthandler.AdminListIsoServices)
 		adminGrp.GET("/selfhost/iso-metrics", selfhosthandler.AdminIsoMetrics)
 		adminGrp.GET("/selfhost/iso-audit", selfhosthandler.AdminIsoAudit)

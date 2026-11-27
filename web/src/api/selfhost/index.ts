@@ -353,6 +353,9 @@ export const selfhostApi = {
   adminIsoServices() {
     return api.get<{ code: number; data: { services: IsoService[]; snapshot: IsoSnapshot[]; enabled: boolean; count: number; warnings: string[]; audit_file: string } }>('/admin/selfhost/iso-services');
   },
+  adminProbeIsoMode(target: string, service = '') {
+    return api.post<{ code: number; data: { mode: 'pass-through' | 'strip' | 'isolated'; reason: string; signals: string[]; confidence: string } }>('/admin/selfhost/iso-probe', { target, service });
+  },
   adminIsoMetrics() {
     return api.get<{ code: number; data: { metrics: Record<string, unknown>[] } }>('/admin/selfhost/iso-metrics');
   },

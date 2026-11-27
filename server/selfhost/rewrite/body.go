@@ -124,6 +124,16 @@ func writeBody(resp *http.Response, b []byte, enc bodyEncoding) {
 		buf.Write(b)
 	}
 	resp.Body = io.NopCloser(bytes.NewReader(buf.Bytes()))
+	if enc == encIdentity {
+		// 明文输出必须让 Content-Length 消失：宿主若带全局 gzip（NVS 的
+		// gin-contrib/gzip）会重新压缩，而它的 defer 用压缩前的 Size 回填 CL，
+		// 浏览器按那个 CL 解压缩后的字节就报 ERR_CONTENT_LENGTH_MISMATCH
+		// （openlist 的 JSON API 实测：CL=60、实际 15 字节截断 gzip → 页面白屏）。
+		// 删掉 CL 后 gzip 中间件走自己的缓冲/计数路径，未压缩时则由 net/http 用 chunked。
+		resp.ContentLength = -1
+		resp.Header.Del("Content-Length")
+		return
+	}
 	resp.ContentLength = int64(buf.Len())
 	resp.Header.Set("Content-Length", strconv.Itoa(buf.Len()))
 }

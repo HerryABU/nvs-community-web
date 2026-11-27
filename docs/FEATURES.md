@@ -463,3 +463,5 @@ NVS 挂在子路径（如 `/gateway/`）时，无论外层反代是「已剥前�
 **跨系统嵌套代理（NVS 与 GWh 互转）**
 
 管理员可把 GWh 挂到 NVS 前缀下（如 `/gwh/ → :8088`），GWh 也能把 NVS 挂回自己的前缀。多层嵌套时每一跳都累加 `X-GatewayHub-Prefix-Chain`，页面里的 `<base>` 与运行期前缀脚本始终使用**完整链**，资源路径不会错位。openlist 这类把自身挂在站点根的应用，由 `base_path` 改写 + 运行期前缀兜底处理，NVS 与 GWh 表现一致。
+
+**三种去头模式智能识别**：新增隔离服务时点「智能识别模式」，系统只读探测后端根路径，依据 302 跳转、内联 base_path 声明与根相对资源，自动推荐 pass-through / strip / isolated 并给出证据。openlist 实测识别为 strip（高置信）。GWh 侧行为一致。

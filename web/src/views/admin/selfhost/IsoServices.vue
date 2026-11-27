@@ -83,7 +83,15 @@
             <el-option label="strip：剥前缀，允许改写响应体" value="strip" />
             <el-option label="isolated：剥前缀，只做头层修正（不改 body）" value="isolated" />
           </el-select>
+          <el-button link type="primary" :loading="probing" :disabled="!form.target" class="is-probe-btn" @click="smartProbe()">
+            🔍 智能识别模式
+          </el-button>
         </el-form-item>
+        <el-alert v-if="probeResult" :type="probeResult.mode === form.mode ? 'success' : 'warning'" :closable="false" class="is-probe-result">
+          <template #title>识别结果：{{ probeResult.mode }}（{{ probeResult.confidence }} 置信度）</template>
+          <div>{{ probeResult.reason }}</div>
+          <div v-if="probeResult.signals.length" class="is-hint">证据：{{ probeResult.signals.join(' · ') }}</div>
+        </el-alert>
         <el-form-item label="超时（秒）"><el-input-number v-model="form.timeout" :min="1" :max="120" /></el-form-item>
         <el-form-item label="Host 策略">
           <el-select v-model="form.host_mode" style="width: 100%">
@@ -132,6 +140,24 @@ const snapshot = ref<IsoSnapshot[]>([]);
 const audit = ref<IsoAuditEntry[]>([]);
 const warnings = ref<string[]>([]);
 const form = reactive<Partial<IsoService>>({});
+const probing = ref(false);
+const probeResult = ref<{ mode: string; reason: string; signals: string[]; confidence: string } | null>(null);
+
+async function smartProbe() {
+  if (!form.target) return;
+  probing.value = true;
+  probeResult.value = null;
+  try {
+    const r = (await selfhostApi.adminProbeIsoMode(form.target, form.name || '')).data.data;
+    probeResult.value = r;
+    form.mode = r.mode as IsoService['mode'];
+    ElMessage.success(`已识别并填入：${r.mode}`);
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '识别失败');
+  } finally {
+    probing.value = false;
+  }
+}
 const modeText = (m: string) => ({ 'pass-through': '原样透传', strip: '剥前缀+改写', isolated: '仅头层修正' } as Record<string, string>)[m] || m;
 const modeType = (m: string) => ({ 'pass-through': 'info', strip: 'primary', isolated: 'warning' } as Record<string, string>)[m] || 'info';
 const num = (v: unknown) => Number(v || 0).toLocaleString('zh-CN');
@@ -162,6 +188,7 @@ async function load() {
 }
 function openEditor(row?: IsoService) {
   Object.keys(form).forEach((k) => delete (form as any)[k]);
+  probeResult.value = null;
   Object.assign(form, row ? { ...row } : {
     name: '', target: '', mode: 'strip', timeout: 10, description: '', enabled: true,
     host_mode: 'keep', cookie_hat: '', html_rewrite: false, known_abs_prefixes: '',
@@ -205,6 +232,8 @@ onMounted(load);
 .is-title { font-size: 18px; font-weight: 700; }
 .is-sub { font-size: 12px; color: var(--el-text-color-secondary); }
 .is-hint { font-size: 12px; color: var(--el-text-color-secondary); margin-left: 8px; }
+.is-probe-btn { margin-left: 8px; }
+.is-probe-result { margin-bottom: 12px; }
 .is-hit { display: block; font-size: 11px; color: var(--el-text-color-secondary); }
 .is-alert { margin-bottom: 12px; }
 .is-row { margin-top: 12px; }

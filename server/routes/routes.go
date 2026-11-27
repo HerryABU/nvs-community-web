@@ -20,6 +20,7 @@ import (
 	"nvs-server/honeypot"
 	"nvs-server/middleware"
 	"nvs-server/security"
+	"nvs-server/selfhost"
 	"nvs-server/version"
 	"regexp"
 	"strings"
@@ -95,7 +96,11 @@ func Register(r *gin.Engine) {
 	_ = r.SetTrustedProxies(config.TrustedProxies)
 	r.Use(gin.Logger(), middleware.HeaderLogger(), middleware.SecureRecovery())
 	r.Use(middleware.AccessLog()) // 合规：访问日志关联 user_id（按天滚动写入 logs/）
-	r.Use(gzip.Gzip(gzip.DefaultCompression))
+	// 全局 gzip 跳过反向代理路径：代理响应若带上游 Content-Length，gin-contrib/gzip
+	// 会在 defer 里用「压缩前的 Size」回填 CL，浏览器按它解压缩字节就报
+	// ERR_CONTENT_LENGTH_MISMATCH（openlist 的 JSON/JS 并发加载时随机失败 → 白屏）。
+	// 代理层自己按 GWh 方式处理 gzip（解压→改写→重压），不依赖全局中间件。
+	r.Use(conditionalGzip())
 	r.Use(middleware.SandboxWriteProtect())   // 🔒 允许数据文件，拦截脚本
 	r.Use(middleware.CSRFGuard())             // 🔒 CSRF 防护：登录态写操作须带 X-Requested-With 头
 	r.Use(middleware.MaintenanceWriteGuard()) // 🔒 热迁移期间禁写（管理员迁移接口除外）
@@ -195,3 +200,18 @@ func Register(r *gin.Engine) {
 // KnownSPARoot 供外层「部署前缀智能剥离」避让：这些首段是 NVS 自己的业务/页面路由，
 // 绝不能被当成反代前缀吃掉（与 GWh 的 reservedFirstSegments + HasPathPrefix 同语义）。
 func KnownSPARoot(seg string) bool { return knownSPARoots[seg] }
+
+// conditionalGzip 对反向代理路径跳过全局 gzip：
+// 代理响应自带上游 Content-Length，gin-contrib/gzip 的 defer 用压缩前 Size 回填 CL，
+// 浏览器按错 CL 解压缩字节 → ERR_CONTENT_LENGTH_MISMATCH（openlist 并发加载白屏）。
+// 代理层自己按 GWh 方式处理压缩（解压→改写→重压），不依赖全局中间件。
+func conditionalGzip() gin.HandlerFunc {
+	gz := gzip.Gzip(gzip.DefaultCompression)
+	return func(c *gin.Context) {
+		if selfhost.Matchable(c.Request.URL.Path, c.Request.Host) {
+			c.Next()
+			return
+		}
+		gz(c)
+	}
+}

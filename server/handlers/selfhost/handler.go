@@ -6,12 +6,15 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"nvs-server/middleware"
 	"nvs-server/models"
 	softdel "nvs-server/models/softdel"
 	"nvs-server/selfhost"
+	"nvs-server/selfhost/isolation/probe"
+	"nvs-server/selfhost/target"
 	"nvs-server/utils/infra"
 )
 
@@ -516,6 +519,28 @@ func AdminIsoAudit(c *gin.Context) {
 		}
 	}
 	infra.Success(c, gin.H{"entries": selfhost.IsoEngine().AuditRecent(n)})
+}
+
+// POST /api/admin/selfhost/iso-probe  智能识别后端该用哪种去头模式。
+func AdminProbeIsoMode(c *gin.Context) {
+	var in struct {
+		Target  string `json:"target" binding:"required"`
+		Service string `json:"service"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil {
+		infra.BadRequest(c, "请填写目标地址")
+		return
+	}
+	if _, err := target.ParseBackend(in.Target); err != nil {
+		infra.BadRequest(c, "目标地址必须是 http/https URL")
+		return
+	}
+	res, err := probe.Detect(in.Target, in.Service, 5*time.Second)
+	if err != nil {
+		infra.BadRequest(c, "探测失败："+err.Error())
+		return
+	}
+	infra.Success(c, res)
 }
 
 func AdminSaveIsoService(c *gin.Context) {

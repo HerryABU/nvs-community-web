@@ -95,12 +95,23 @@ func (rw *Rewriter) Modify(resp *http.Response) error {
 	isJS := mt == "application/javascript" || mt == "text/javascript" ||
 		mt == "application/x-javascript" || mt == "application/ecmascript" || mt == "text/ecmascript"
 	if !isHTML && !isCSS && !isJS {
+		// plain 模式下宿主有全局 gzip：JSON（openlist 的 /api/public/*）原样透传时
+		// 必须删掉上游 CL，否则 gin gzip 用压缩前的 Size 回填，浏览器按错的 CL
+		// 解压截断 gzip → ERR_CONTENT_LENGTH_MISMATCH → 前端拿不到数据。
+		if rw.plain {
+			resp.ContentLength = -1
+			resp.Header.Del("Content-Length")
+		}
 		return nil // 二进制 / JSON / 其他：直接透传
 	}
 
 	// 解不开的编码（br / zstd / 多段编码）必须一个字节都不碰：
 	// 后面 writeBody 会按 enc 重打包，若 enc 判断错就会把压缩字节当明文发给浏览器。
 	if _, ok := encodingOf(resp.Header.Get("Content-Encoding")); !ok {
+		if rw.plain {
+			resp.ContentLength = -1
+			resp.Header.Del("Content-Length")
+		}
 		return nil
 	}
 
@@ -111,6 +122,10 @@ func (rw *Rewriter) Modify(resp *http.Response) error {
 		// 读流失败时把已读到的字节还回去，不能让客户端收到被掏空的响应。
 		if len(raw) > 0 {
 			resp.Body = io.NopCloser(bytes.NewReader(raw))
+		}
+		if rw.plain {
+			resp.ContentLength = -1
+			resp.Header.Del("Content-Length")
 		}
 		return nil // 解压失败则原样透传
 	}

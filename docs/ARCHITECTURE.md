@@ -306,3 +306,9 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - **修复**：`rewrite.injectShim` 遇到已注入的 shim 时不再跳过，而是用 `shimBlockRe` 整块替换为**当前完整链**的前缀（`<base>` 本就是覆盖式改写）。GWh 侧 `internal/proxy/rewrite/shim.go` 同步修复，两边行为一致。
 - **完整链传递**：`X-GatewayHub-Prefix-Chain` 请求侧逐跳累加、响应侧由最内层写回，跨进程 HTTP 实测 `NVS→GWh→NVS` 得到 `/gwh/go-nvs`、反向得到 `/go-nvs/gwh`；两侧 shim 与 base 始终一致。跳数守卫 `X-GatewayHub-Hops` 超 5 跳 508。
 - **openlist**：`data-src`（vite legacy）不由静态改写处理（避免二次拼前缀），靠 shim 运行期 hook；`base_path: '/'` 由 `PrepareHTML` 改成网关前缀。NVS 与 GWh 对 `/opls/` 的输出逐字节一致。
+
+### 三种去头模式智能识别
+- **问题**：同一个 openlist，配成 strip 还是 pass-through 取决于后端是否自己配了 base path；选错的症状是白屏或 302 自环，人工试错成本高。
+- **探测包** `server/selfhost/isolation/probe`：只读请求后端根路径（不跟随 302），据三类信号判定——302 Location 带服务名前缀 / 内联 `base_path` 非根 / `<base href>` 带前缀 ⇒ `pass-through`（后端已认前缀）；HTML 且 `base_path='/'` + 根相对资源 ⇒ `strip`（网关剥前缀并改写）；非 HTML 或信号不足 ⇒ `isolated`（最保守）。返回 `mode/reason/signals/confidence`。
+- **接口** `POST /api/admin/selfhost/iso-probe`；后台「路径隔离代理」页新增服务时可点「智能识别模式」，自动填入推荐模式并展示证据。GWh 侧同款探测包与 `/api/isolation/probe`，隔离页每行可一键识别。
+- **全局 gzip 与代理**：代理路径跳过全局 `gin-contrib/gzip`（`routes.conditionalGzip`），由代理层自己解压→改写→重压。gin-contrib/gzip 在 defer 用压缩前 Size 回填 CL，会让浏览器按错误 CL 解压缩字节（`ERR_CONTENT_LENGTH_MISMATCH`），openlist 并发加载曾因此白屏。

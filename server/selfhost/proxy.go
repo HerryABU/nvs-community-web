@@ -32,7 +32,8 @@ func manager() *proxycore.Manager {
 	proxyOnce.Do(func() {
 		port, _ := strconv.Atoi(config.ServerPort)
 		proxyMgr = proxycore.NewManager("", proxycore.SelfInfo{Port: port, MaxHops: 5})
-		proxyMgr.SetPlainBody(true) // NVS 全局 gin gzip 统一压缩
+		// 代理路径已由 routes.conditionalGzip 跳过全局 gzip，这里按 GWh 方式
+		// 自己解压→改写→重压（plain=false），避免 gin-contrib/gzip 的 CL 回填竞态。
 		proxyMgr.SetTrafficReporter(func(prefix string, up, down int64) {
 			trafficMu.RLock()
 			pid := prefixProjects[prefix]
