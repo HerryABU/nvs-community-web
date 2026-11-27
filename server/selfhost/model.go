@@ -146,6 +146,8 @@ type Route struct {
 	Timeout     int       `gorm:"default:10" json:"timeout"` // 秒，1..120
 	Enabled     bool      `gorm:"default:false;index" json:"enabled"`
 	Status      string    `gorm:"size:16;default:stopped;index" json:"status"`
+	CookieHat   string    `gorm:"size:64;default:''" json:"cookie_hat"` // GWh 同款帽子（请求侧脱帽 + 响应侧加帽）
+	DropForeign bool      `gorm:"default:false" json:"drop_foreign_cookies"`
 	LastError   string    `gorm:"size:512;default:''" json:"last_error"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`

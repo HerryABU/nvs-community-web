@@ -9,7 +9,7 @@
 python scripts/gen-db-doc.py data/nvs.db
 ```
 
-当前共 **194 张表 / 2205 个字段**（行数为本机测试站实测，仅用于判断「有没有数据」，不代表生产规模）。
+当前共 **194 张表 / 2209 个字段**（行数为本机测试站实测，仅用于判断「有没有数据」，不代表生产规模）。
 
 ## 全局约定
 
@@ -55,7 +55,7 @@ python scripts/gen-db-doc.py data/nvs.db
 | 表名 | 用途 | 主要字段 | 行数 | 源码 |
 | --- | --- | --- | --- | --- |
 | `users` | 账号主体：邮箱/密码哈希、昵称头像、角色、会员等级、状态 | role / member_level / status | 22 | `server/models/user.go` |
-| `user_audit_logs` | 用户操作审计：登录、改密、提权等，含 IP/UA 与结果 | id / user_id / action / ip | 675 | `server/models/apikey/user_audit.go` |
+| `user_audit_logs` | 用户操作审计：登录、改密、提权等，含 IP/UA 与结果 | id / user_id / action / ip | 691 | `server/models/apikey/user_audit.go` |
 | `refresh_states` | 当前有效的 refresh token 版本，用于强制下线 | user_id / active_jti / updated_at | 17 | `—（无模型定义）` |
 | `checkin_records` | 每日签到与连签奖励 | id / user_id / date / streak | 2 | `server/models/siteops/site_ops.go` |
 | `follows` | 关注关系，is_special 标记特别关注 | id / follower_id / followed_id / created_at | 0 | `server/models/social/follow.go` |
@@ -195,15 +195,15 @@ OC 角色卡、世界书、创作项目、AI 群组与剧情流。
 | 表名 | 用途 | 主要字段 | 行数 | 源码 |
 | --- | --- | --- | --- | --- |
 | `selfhost_runtimes` | 自托管运行时版本目录（语言/版本/编译型或解释型，站长维护） | id / language / version / label | 9 | `server/selfhost/model.go` |
-| `selfhost_projects` | 自托管项目（源码模式/编译版、源码与可执行文件、upstream、审核状态） | id / user_id / name / slug | 21 | `server/selfhost/model.go` |
-| `selfhost_review_logs` | 自托管项目审核留痕（提交/通过/驳回/停止/恢复） | id / project_id / operator_id / action | 35 | `server/selfhost/model.go` |
-| `selfhost_routes` | 自托管反向代理路由（前缀最长匹配、upstream、启停与超时） | id / project_id / prefix / target | 16 | `server/selfhost/model.go` |
+| `selfhost_projects` | 自托管项目（源码模式/编译版、源码与可执行文件、upstream、审核状态） | id / user_id / name / slug | 23 | `server/selfhost/model.go` |
+| `selfhost_review_logs` | 自托管项目审核留痕（提交/通过/驳回/停止/恢复） | id / project_id / operator_id / action | 4 | `server/selfhost/model.go` |
+| `selfhost_routes` | 自托管反向代理路由（前缀最长匹配、upstream、启停与超时） | id / project_id / prefix / target | 2 | `server/selfhost/model.go` |
 | `selfhost_file_grants` | 自托管文件访问授权（源码/产物，默认拒绝，所有者逐用户审批） | id / project_id / user_id / kind | 0 | `server/selfhost/model.go` |
-| `selfhost_direct_routes` | 管理员端口直派路由（路径→本机端口，GWh 同款，免审核） | id / prefix / port / root_path | 7 | `server/selfhost/direct.go` |
+| `selfhost_direct_routes` | 管理员端口直派路由（路径→本机端口，GWh 同款，免审核） | id / prefix / port / root_path | 5 | `server/selfhost/direct.go` |
 | `selfhost_port_maps` | 四层 TCP 端口映射（监听端口→目标主机:端口） | id / listen_port / target_host / target_port | 1 | `server/selfhost/portmap.go` |
-| `selfhost_usage_daily` | 自托管项目按天流量统计（请求数、上下行字节） | id / project_id / day / requests | 6 | `server/selfhost/usage.go` |
+| `selfhost_usage_daily` | 自托管项目按天流量统计（请求数、上下行字节） | id / project_id / day / requests | 8 | `server/selfhost/usage.go` |
 | `selfhost_runtime_requests` | 用户申请缺失运行时（管理员可改语言/版本后落地） | id / user_id / project_id / language | 5 | `server/selfhost/runtime_request.go` |
-| `selfhost_iso_services` | 路径隔离代理服务（pass-through / strip / isolated 三种模式） | id / name / target / mode | 9 | `server/selfhost/iso_service.go` |
+| `selfhost_iso_services` | 路径隔离代理服务（pass-through / strip / isolated 三种模式） | id / name / target / mode | 20 | `server/selfhost/iso_service.go` |
 
 <a id="domain-9"></a>
 
@@ -313,7 +313,7 @@ OC 角色卡、世界书、创作项目、AI 群组与剧情流。
 | `bad_word_flags` | 敏感词命中标记与处置状态 | id / content_type / content_id / user_id | 2 | `server/models/security/badword.go` |
 | `xss_rules` | XSS 过滤规则 | id / name / pattern / action | 0 | `server/models/security/xss_rule.go` |
 | `honeypot_sessions` | 蜜罐会话（来源 IP、UA 归一、事件计数） | id / h_id / src_ip / ua_norm | 16 | `server/honeypot/model.go` |
-| `honeypot_events` | 蜜罐事件（诱饵、方法、路径、指纹） | id / session_id / kind / decoy | 511 | `server/honeypot/model.go` |
+| `honeypot_events` | 蜜罐事件（诱饵、方法、路径、指纹） | id / session_id / kind / decoy | 531 | `server/honeypot/model.go` |
 | `honeypot_fingerprints` | 蜜罐采集的浏览器指纹（canvas/WebGL/字体） | id / session_id / canvas / web_gl | 0 | `server/honeypot/fingerprint.go` |
 | `honeypot_settings` | 蜜罐开关与采集粒度 | id / enabled / level / record_ua | 1 | `server/honeypot/model.go` |
 | `blacklist_ips` | IP 黑名单（含到期时间） | id / ip / reason / expires_at | 0 | `server/models/platform/platform.go` |
@@ -329,10 +329,10 @@ OC 角色卡、世界书、创作项目、AI 群组与剧情流。
 | `sentiment_delete_requests` | 舆情触发的删除申请 | id / action / target_type / target_id | 0 | `server/sentiment/store/models.go` |
 | `api_keys` | API Key（哈希、前缀、角色、每分钟配额、IP 白名单） | id / user_id / name / role | 0 | `server/models/apikey/api_key.go` |
 | `api_key_alarms` | API Key 异常告警与确认 | id / kind / key_id / user_id | 0 | `server/models/apikey/api_key_alarm.go` |
-| `api_access_logs` | API 访问日志（身份、路径、状态码、IP） | id / identity_type / identity_id / key_prefix | 177 | `server/models/apikey/api_key.go` |
+| `api_access_logs` | API 访问日志（身份、路径、状态码、IP） | id / identity_type / identity_id / key_prefix | 127 | `server/models/apikey/api_key.go` |
 | `user_api_policies` | 用户限流策略与 Key 封禁状态 | id / user_id / quota_per_min / window_secs | 0 | `server/models/apikey/api_key.go` |
 | `rage_configs` | 限流/长连接参数（批量间隔、并发、WS/MQTT 开关） | id / enabled / batch_interval_sec / batch_size | 1 | `server/models/siteops/rage_config.go` |
-| `channel_balance_samples` | 上游渠道余额采样（用于额度预警） | id / base_url / remaining / used | 878 | `server/models/aicost/channel_balance_sample.go` |
+| `channel_balance_samples` | 上游渠道余额采样（用于额度预警） | id / base_url / remaining / used | 1008 | `server/models/aicost/channel_balance_sample.go` |
 
 <a id="domain-15"></a>
 
@@ -368,7 +368,7 @@ OC 角色卡、世界书、创作项目、AI 群组与剧情流。
 
 | 表名 | 用途 | 主要字段 | 行数 | 源码 |
 | --- | --- | --- | --- | --- |
-| `platform_configs` | 平台配置键值（storage_mode、阅读权限、开关等） | key 主键 / value | 60 | `server/models/platform_config.go` |
+| `platform_configs` | 平台配置键值（storage_mode、阅读权限、开关等） | key 主键 / value | 68 | `server/models/platform_config.go` |
 | `system_settings` | 系统设置键值 | key / value / updated_at | 1 | `server/models/siteops/system_setting.go` |
 | `announcements` | 站内公告（置顶、发布状态） | id / title / content / pinned | 1 | `server/models/siteops/announcement.go` |
 | `carousels` | 首页轮播图（投放时间、目标） | id / title / image_url / link_url | 0 | `server/models/siteops/site_ops.go` |
@@ -386,7 +386,7 @@ OC 角色卡、世界书、创作项目、AI 群组与剧情流。
 
 | 表名 | 用途 | 主要字段 | 行数 | 源码 |
 | --- | --- | --- | --- | --- |
-| `web_access_logs` | 全站访问日志（UA 族、路径、IP、身份） | id / user_id / identity_type / ua_family | 56909 | `server/models/quota/web_access.go` |
+| `web_access_logs` | 全站访问日志（UA 族、路径、IP、身份） | id / user_id / identity_type / ua_family | 58419 | `server/models/quota/web_access.go` |
 | `zone_access_logs` | 分区进入日志（zone、IP、UA） | id / user_id / zone / entered_at | 5 | `server/models/platform/zone_access.go` |
 
 <a id="domain-18"></a>

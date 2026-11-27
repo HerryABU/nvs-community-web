@@ -208,7 +208,7 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - ⚠️ 回帖删除后不可解封恢复（物理删除），管理员「解封/恢复」对 post 类型仅清除封禁原因标记。
 
 ### 数据表
-全部 **194 张表 / 2205 个字段** 已按业务域整理成两份专门文档：
+全部 **194 张表 / 2209 个字段** 已按业务域整理成两份专门文档：
 
 - [`DATABASE.md`](DATABASE.md)：分域总览（表名 / 用途 / 主要字段 / 行数 / 源码位置）+ 全局约定
 - [`DATABASE-SCHEMA.md`](DATABASE-SCHEMA.md)：逐表字段明细（由 `python scripts/gen-db-doc.py data/nvs.db` 自动生成）
@@ -312,3 +312,9 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - **探测包** `server/selfhost/isolation/probe`：只读请求后端根路径（不跟随 302），据三类信号判定——302 Location 带服务名前缀 / 内联 `base_path` 非根 / `<base href>` 带前缀 ⇒ `pass-through`（后端已认前缀）；HTML 且 `base_path='/'` + 根相对资源 ⇒ `strip`（网关剥前缀并改写）；非 HTML 或信号不足 ⇒ `isolated`（最保守）。返回 `mode/reason/signals/confidence`。
 - **接口** `POST /api/admin/selfhost/iso-probe`；后台「路径隔离代理」页新增服务时可点「智能识别模式」，自动填入推荐模式并展示证据。GWh 侧同款探测包与 `/api/isolation/probe`，隔离页每行可一键识别。
 - **全局 gzip 与代理**：代理路径跳过全局 `gin-contrib/gzip`（`routes.conditionalGzip`），由代理层自己解压→改写→重压。gin-contrib/gzip 在 defer 用压缩前 Size 回填 CL，会让浏览器按错误 CL 解压缩字节（`ERR_CONTENT_LENGTH_MISMATCH`），openlist 并发加载曾因此白屏。
+
+### GWh 同款 cookie 帽子（全代理路径）
+- **隔离引擎**（`selfhost_iso_services`）早已支持完整帽子；本次把同一能力扩展到**普通路径代理**（`selfhost_routes` 与 `selfhost_direct_routes` 新增 `cookie_hat` / `drop_foreign_cookies` 字段），NVS 与 GWh 两边代码一致。
+- **成对启用**：`proxycore.buildEntry` 的 Director 请求侧 `cookie.RewriteRequest` 只脱本服务帽、按 `drop_foreign` 丢外域；ModifyResponse 响应侧 `cookie.RewriteSetCookies` 加帽 + 收紧 Path + 保留 HttpOnly/Secure/SameSite/Expires 等属性。响应侧先把 Set-Cookie 摘出再交给 rw.Modify，避免与 tightenSetCookies 的旧副本清理叠加成 4 条。
+- **未配置时**保持普通代理原行为（只收紧 Path、不改名），因为改名而不同时脱帽会让后端读不到自己刚下的 cookie。GWh 原始设计亦如此。
+- **验证**：真浏览器 + curl 6/6（请求侧只脱本服务帽、响应侧加帽、Path 收紧、属性保留），隔离引擎帽子 6/6；openlist 与嵌套回归全过。

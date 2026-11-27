@@ -3,7 +3,7 @@
 > 由 `scripts/gen-db-doc.py` 依据实际库结构 + 模型自动生成，**请勿手工修改**；
 > 改模型后重新生成即可。用途说明见 [`DATABASE.md`](DATABASE.md)。
 
-共 194 张表、2205 个字段。
+共 194 张表、2209 个字段。
 
 ## 账号与用户
 
@@ -56,7 +56,7 @@
 
 ### `user_audit_logs`
 
-用户操作审计：登录、改密、提权等，含 IP/UA 与结果（行数 675）
+用户操作审计：登录、改密、提权等，含 IP/UA 与结果（行数 691）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -286,7 +286,7 @@
 | `comments_enabled` | NUMERIC |  |
 | `like_count` | INTEGER |  |
 
-索引：`idx_novels_category`、`idx_novels_author_status`、`idx_novels_deleted_at`、`idx_novels_derivative_origin_id`、`idx_novels_read_permission`、`idx_novels_mode`
+索引：`idx_novels_deleted_at`、`idx_novels_derivative_origin_id`、`idx_novels_read_permission`、`idx_novels_mode`、`idx_novels_category`、`idx_novels_author_status`
 
 ### `novel_categories`
 
@@ -1491,7 +1491,7 @@ OC 群每日预算消耗（行数 0）
 
 ### `selfhost_projects`
 
-自托管项目（源码模式/编译版、源码与可执行文件、upstream、审核状态）（行数 21）
+自托管项目（源码模式/编译版、源码与可执行文件、upstream、审核状态）（行数 23）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -1527,7 +1527,7 @@ OC 群每日预算消耗（行数 0）
 
 ### `selfhost_review_logs`
 
-自托管项目审核留痕（提交/通过/驳回/停止/恢复）（行数 35）
+自托管项目审核留痕（提交/通过/驳回/停止/恢复）（行数 4）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -1542,7 +1542,7 @@ OC 群每日预算消耗（行数 0）
 
 ### `selfhost_routes`
 
-自托管反向代理路由（前缀最长匹配、upstream、启停与超时）（行数 16）
+自托管反向代理路由（前缀最长匹配、upstream、启停与超时）（行数 2）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -1557,6 +1557,8 @@ OC 群每日预算消耗（行数 0）
 | `last_error` | TEXT |  |
 | `created_at` | DATETIME | 时间 |
 | `updated_at` | DATETIME | 时间 |
+| `cookie_hat` | TEXT |  |
+| `drop_foreign` | NUMERIC |  |
 
 索引：`idx_selfhost_routes_project_id`、`idx_selfhost_routes_prefix`、`idx_selfhost_routes_enabled`、`idx_selfhost_routes_status`
 
@@ -1581,7 +1583,7 @@ OC 群每日预算消耗（行数 0）
 
 ### `selfhost_direct_routes`
 
-管理员端口直派路由（路径→本机端口，GWh 同款，免审核）（行数 7）
+管理员端口直派路由（路径→本机端口，GWh 同款，免审核）（行数 5）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -1594,6 +1596,8 @@ OC 群每日预算消耗（行数 0）
 | `created_at` | DATETIME | 时间 |
 | `updated_at` | DATETIME | 时间 |
 | `target_url` | TEXT |  |
+| `cookie_hat` | TEXT |  |
+| `drop_foreign` | NUMERIC |  |
 
 索引：`idx_selfhost_direct_routes_prefix`、`idx_selfhost_direct_routes_enabled`
 
@@ -1617,7 +1621,7 @@ OC 群每日预算消耗（行数 0）
 
 ### `selfhost_usage_daily`
 
-自托管项目按天流量统计（请求数、上下行字节）（行数 6）
+自托管项目按天流量统计（请求数、上下行字节）（行数 8）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -1657,7 +1661,7 @@ OC 群每日预算消耗（行数 0）
 
 ### `selfhost_iso_services`
 
-路径隔离代理服务（pass-through / strip / isolated 三种模式）（行数 9）
+路径隔离代理服务（pass-through / strip / isolated 三种模式）（行数 20）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -2900,7 +2904,7 @@ XSS 过滤规则（行数 0）
 
 ### `honeypot_events`
 
-蜜罐事件（诱饵、方法、路径、指纹）（行数 511）
+蜜罐事件（诱饵、方法、路径、指纹）（行数 531）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3269,7 +3273,7 @@ API Key 异常告警与确认（行数 0）
 
 ### `api_access_logs`
 
-API 访问日志（身份、路径、状态码、IP）（行数 177）
+API 访问日志（身份、路径、状态码、IP）（行数 127）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3329,7 +3333,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 177）
 
 ### `channel_balance_samples`
 
-上游渠道余额采样（用于额度预警）（行数 878）
+上游渠道余额采样（用于额度预警）（行数 1008）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3668,7 +3672,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 177）
 
 ### `platform_configs`
 
-平台配置键值（storage_mode、阅读权限、开关等）（行数 60）
+平台配置键值（storage_mode、阅读权限、开关等）（行数 68）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3812,7 +3816,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 177）
 
 ### `web_access_logs`
 
-全站访问日志（UA 族、路径、IP、身份）（行数 56909）
+全站访问日志（UA 族、路径、IP、身份）（行数 58419）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |

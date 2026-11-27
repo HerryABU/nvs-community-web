@@ -45,6 +45,11 @@
           <el-input v-model="form.target_url" placeholder="可选。自指/嵌套用，如 http://127.0.0.1:8000/other" />
           <div class="dr-hint">填写后优先于「端口 + 根路径」。自指由跳数守卫保护，超过 5 跳返回 508。</div>
         </el-form-item>
+        <el-form-item label="Cookie 帽子">
+          <el-input v-model="form.cookie_hat" placeholder="可选，如 app__（GWh 同款：请求侧脱帽 + 响应侧加帽）" />
+          <div class="dr-hint">留空则只收紧 Path、不改名；填写后必须成对启用，后端才能读到自己下的 cookie。</div>
+        </el-form-item>
+        <el-form-item label="丢弃外来 Cookie"><el-switch v-model="form.drop_foreign_cookies" /></el-form-item>
         <el-form-item label="说明"><el-input v-model="form.description" type="textarea" :rows="2" /></el-form-item>
         <el-form-item label="立即启用"><el-switch v-model="form.enabled" /></el-form-item>
       </el-form>
@@ -80,7 +85,7 @@ async function load() {
 }
 function openEditor(row?: DirectRoute) {
   Object.keys(form).forEach((k) => delete (form as any)[k]);
-  Object.assign(form, row ? { ...row } : { prefix: '', port: 8080, root_path: '', target_url: '', description: '', enabled: true });
+  Object.assign(form, row ? { ...row } : { prefix: '', port: 8080, root_path: '', target_url: '', cookie_hat: '', drop_foreign_cookies: false, description: '', enabled: true });
   visible.value = true;
 }
 async function save() {

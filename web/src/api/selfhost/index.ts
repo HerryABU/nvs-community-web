@@ -115,6 +115,8 @@ export interface DirectRoute {
   port: number;
   root_path: string;
   target_url?: string;
+  cookie_hat?: string;
+  drop_foreign_cookies?: boolean;
   enabled: boolean;
   description: string;
   created_at: string;

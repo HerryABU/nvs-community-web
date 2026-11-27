@@ -19,6 +19,8 @@ type DirectRoute struct {
 	Port        int       `gorm:"not null" json:"port"` // 本机端口 1..65535
 	RootPath    string    `gorm:"size:256;default:''" json:"root_path"`
 	TargetURL   string    `gorm:"size:512;default:''" json:"target_url"` // 可选完整目标；管理员可用它配置自指/嵌套路由
+	CookieHat   string    `gorm:"size:64;default:''" json:"cookie_hat"`  // GWh 同款 cookie 帽子前缀（如 app__）
+	DropForeign bool      `gorm:"default:false" json:"drop_foreign_cookies"`
 	Enabled     bool      `gorm:"default:true;index" json:"enabled"`
 	Description string    `gorm:"size:512;default:''" json:"description"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -64,6 +66,7 @@ func SaveDirectRoute(in DirectRoute) (*DirectRoute, error) {
 		return nil, errors.New("端口必须在 1-65535 之间")
 	}
 	in.RootPath = normalizeRootPath(in.RootPath)
+	in.CookieHat = strings.TrimSpace(in.CookieHat)
 	in.TargetURL = strings.TrimSpace(in.TargetURL)
 	if in.TargetURL != "" {
 		p, err := target.Parse(in.TargetURL)

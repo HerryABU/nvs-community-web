@@ -255,3 +255,48 @@ func TestCrossProcessChain(t *testing.T) {
 		t.Errorf("shim 应恰好一个，got %d", n)
 	}
 }
+
+// TestProxyCookieHat 普通路径代理的 GWh 同款 cookie 帽子：
+// 请求侧只脱本服务帽并丢弃外域，响应侧加帽 + 收紧 Path + 保留属性。
+func TestProxyCookieHat(t *testing.T) {
+	var gotCookie string
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotCookie = r.Header.Get("Cookie")
+		w.Header().Add("Set-Cookie", "session=abc; Path=/; HttpOnly; SameSite=Lax")
+		w.Header().Add("Set-Cookie", "theme=dark; Path=/")
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = io.WriteString(w, "ok")
+	}))
+	defer backend.Close()
+
+	m := newTestManager("", Route{Prefix: "app", Target: backend.URL, Timeout: 5, Status: StatusActive, CookieHat: "app__", DropForeign: true})
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.NoRoute(func(c *gin.Context) {
+		if !m.Matchable(c.Request.URL.Path, c.Request.Host) {
+			c.String(http.StatusNotFound, "nf")
+			return
+		}
+		m.Handle(c)
+	})
+	req := httptest.NewRequest("GET", "/app/x", nil)
+	req.Header.Set("Cookie", "app__session=1; other__x=2; plain=3")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("应 200，got %d", w.Code)
+	}
+	if gotCookie != "session=1" {
+		t.Errorf("请求侧应只脱本服务帽并丢外域，got %q", gotCookie)
+	}
+	sc := w.Header().Values("Set-Cookie")
+	if len(sc) != 2 {
+		t.Fatalf("Set-Cookie 条数应 2，got %d: %v", len(sc), sc)
+	}
+	if !strings.Contains(sc[0], "app__session=abc") || !strings.Contains(sc[0], "Path=/app") {
+		t.Errorf("响应侧应加帽并收紧 Path: %s", sc[0])
+	}
+	if !strings.Contains(sc[0], "HttpOnly") || !strings.Contains(sc[0], "SameSite=Lax") {
+		t.Errorf("应保留属性: %s", sc[0])
+	}
+}

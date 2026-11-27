@@ -63,11 +63,12 @@ func InvalidateRoutes() {
 	for _, r := range routes {
 		nextPrefixes[strings.TrimPrefix(r.Prefix, "/")] = r.ProjectID
 		core = append(core, proxycore.Route{
-			ID:      r.ID,
-			Prefix:  strings.TrimPrefix(r.Prefix, "/"), // NVS 库里带 /，GWh 模型不带
-			Target:  r.Target,
-			Timeout: r.Timeout,
-			Status:  proxycore.StatusActive,
+			ID:        r.ID,
+			Prefix:    strings.TrimPrefix(r.Prefix, "/"), // NVS 库里带 /，GWh 模型不带
+			Target:    r.Target,
+			Timeout:   r.Timeout,
+			Status:    proxycore.StatusActive,
+			CookieHat: r.CookieHat, DropForeign: r.DropForeign,
 		})
 	}
 	// 管理员直接指派的本机端口路由（无需项目审核，只由管理员配置）。
@@ -82,6 +83,7 @@ func InvalidateRoutes() {
 		}
 		core = append(core, proxycore.Route{
 			Prefix: strings.TrimPrefix(d.Prefix, "/"), Target: target, Timeout: 10, Status: proxycore.StatusActive,
+			CookieHat: d.CookieHat, DropForeign: d.DropForeign,
 		})
 	}
 	trafficMu.Lock()

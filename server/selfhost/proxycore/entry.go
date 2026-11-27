@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"nvs-server/selfhost/isolation/cookie"
 	"nvs-server/selfhost/rewrite"
 	"nvs-server/selfhost/target"
 )
@@ -79,14 +80,41 @@ func (m *Manager) buildEntry(r Route) (*Entry, error) {
 			}
 			applyForwardHeaders(req, p)
 			req.URL.Path = target.JoinPath(p.Root, rest)
+			// GWh 同款 cookie 帽子：请求侧只脱本服务帽，别家帽子按策略丢弃/保留。
+			// 必须与响应侧加帽成对启用，否则后端读不到自己刚下的 cookie。
+			if r.CookieHat != "" {
+				cookie.RewriteRequest(req.Header, r.CookieHat, r.DropForeign)
+			}
 			// 仅接受 gzip，便于在 ModifyResponse 中解压重写后再压缩
 			req.Header.Set("Accept-Encoding", "gzip")
 		},
-		Transport:      transport,
-		ModifyResponse: rw.Modify,
-		FlushInterval:  -1,
-		BufferPool:     poolBuffer{},
-		ErrorHandler:   m.errorHandler,
+		Transport: transport,
+		ModifyResponse: func(resp *http.Response) error {
+			// 帽子模式下先把 Set-Cookie 摘出来：rw.Modify 的 tightenSetCookies 会
+			// 生成「旧副本清理」的过期 cookie，若之后再加帽会把清理项也加帽，
+			// 变成 4 条（2 有效 + 2 过期）。交给 cookie.RewriteSetCookies 统一处理。
+			var cookies []string
+			if r.CookieHat != "" {
+				cookies = resp.Header.Values("Set-Cookie")
+				resp.Header.Del("Set-Cookie")
+			}
+			if err := rw.Modify(resp); err != nil {
+				return err
+			}
+			if len(cookies) == 0 {
+				return nil
+			}
+			res := cookie.RewriteSetCookies(cookies, cookie.SetCookieOptions{
+				Hat: r.CookieHat, Prefix: "/" + r.Prefix, BackendRoot: p.Root,
+			})
+			for _, v := range res.Values {
+				resp.Header.Add("Set-Cookie", v)
+			}
+			return nil
+		},
+		FlushInterval: -1,
+		BufferPool:    poolBuffer{},
+		ErrorHandler:  m.errorHandler,
 	}
 
 	// 子域名模式：前缀在 Host 头里，路径即后端根路径，零重写、零解压，纯透明转发（速度=源站）
