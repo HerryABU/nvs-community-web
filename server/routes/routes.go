@@ -101,9 +101,13 @@ func Register(r *gin.Engine) {
 	// ERR_CONTENT_LENGTH_MISMATCH（openlist 的 JSON/JS 并发加载时随机失败 → 白屏）。
 	// 代理层自己按 GWh 方式处理 gzip（解压→改写→重压），不依赖全局中间件。
 	r.Use(conditionalGzip())
-	r.Use(middleware.SandboxWriteProtect())   // 🔒 允许数据文件，拦截脚本
-	r.Use(middleware.CSRFGuard())             // 🔒 CSRF 防护：登录态写操作须带 X-Requested-With 头
-	r.Use(middleware.MaintenanceWriteGuard()) // 🔒 热迁移期间禁写（管理员迁移接口除外）
+	r.Use(middleware.SandboxWriteProtect()) // 🔒 允许数据文件，拦截脚本
+	// 平台自身的 CSRF / 维护门禁只管 NVS 自己的接口：反向代理请求是转发给
+	// 后端应用的，浏览器带的是 NVS 登录 cookie，后端（如 openlist）既不需要
+	// X-Requested-With 也认不了这个头，全局拦截会把 /opls/* 的写操作全拒掉。
+	// GWh 没有这两层中间件，反代路径跳过即与 GWh 行为一致。
+	r.Use(skipProxy(middleware.CSRFGuard()))             // 🔒 CSRF 防护：登录态写操作须带 X-Requested-With 头
+	r.Use(skipProxy(middleware.MaintenanceWriteGuard())) // 🔒 热迁移期间禁写（管理员迁移接口除外）
 
 	// 建站向导门禁：未完成安装时，除 /api/setup/* 与 /health 外，拦截所有业务 API（严防死守）
 	r.Use(func(c *gin.Context) {
@@ -213,5 +217,18 @@ func conditionalGzip() gin.HandlerFunc {
 			return
 		}
 		gz(c)
+	}
+}
+
+// skipProxy 让反向代理路径跳过平台自身的全局中间件（CSRF / 维护写保护）。
+// 这些中间件针对 NVS 自己的接口设计；反代请求由后端应用自行鉴权，
+// GWh 也没有这些层，跳过即与 GWh 对齐。
+func skipProxy(next gin.HandlerFunc) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if selfhost.Matchable(c.Request.URL.Path, c.Request.Host) {
+			c.Next()
+			return
+		}
+		next(c)
 	}
 }

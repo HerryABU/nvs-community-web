@@ -318,3 +318,8 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - **成对启用**：`proxycore.buildEntry` 的 Director 请求侧 `cookie.RewriteRequest` 只脱本服务帽、按 `drop_foreign` 丢外域；ModifyResponse 响应侧 `cookie.RewriteSetCookies` 加帽 + 收紧 Path + 保留 HttpOnly/Secure/SameSite/Expires 等属性。响应侧先把 Set-Cookie 摘出再交给 rw.Modify，避免与 tightenSetCookies 的旧副本清理叠加成 4 条。
 - **未配置时**保持普通代理原行为（只收紧 Path、不改名），因为改名而不同时脱帽会让后端读不到自己刚下的 cookie。GWh 原始设计亦如此。
 - **验证**：真浏览器 + curl 6/6（请求侧只脱本服务帽、响应侧加帽、Path 收紧、属性保留），隔离引擎帽子 6/6；openlist 与嵌套回归全过。
+
+### 反代路径跳过平台全局中间件（与 GWh 对齐）
+- NVS 自带的 `CSRFGuard`（登录态写操作须带 X-Requested-With）与 `MaintenanceWriteGuard`（热迁移禁写）只针对 NVS 自己的接口。GWh 没有这两层中间件。
+- 反代请求带着 NVS 的登录 cookie 访问后端应用（如 openlist 的 `/opls/api/auth/login`），会被 CSRFGuard 全局拦截并返回 403「缺少 CSRF 防护头」——后端既不需要也认不了这个头。用 `routes.skipProxy()` 让代理路径跳过这两层，由后端自行鉴权；NVS 自身 API 仍受完整保护。
+- 同类的还有 `conditionalGzip()`：代理路径跳过全局 gzip，避免 CL 回填竞态。三者一致，凡 GWh 没有的全局中间件都不该作用于反代路径。
