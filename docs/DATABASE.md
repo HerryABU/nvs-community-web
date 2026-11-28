@@ -55,7 +55,7 @@ python scripts/gen-db-doc.py data/nvs.db
 | 表名 | 用途 | 主要字段 | 行数 | 源码 |
 | --- | --- | --- | --- | --- |
 | `users` | 账号主体：邮箱/密码哈希、昵称头像、角色、会员等级、状态 | role / member_level / status | 22 | `server/models/user.go` |
-| `user_audit_logs` | 用户操作审计：登录、改密、提权等，含 IP/UA 与结果 | id / user_id / action / ip | 738 | `server/models/apikey/user_audit.go` |
+| `user_audit_logs` | 用户操作审计：登录、改密、提权等，含 IP/UA 与结果 | id / user_id / action / ip | 757 | `server/models/apikey/user_audit.go` |
 | `refresh_states` | 当前有效的 refresh token 版本，用于强制下线 | user_id / active_jti / updated_at | 16 | `—（无模型定义）` |
 | `checkin_records` | 每日签到与连签奖励 | id / user_id / date / streak | 2 | `server/models/siteops/site_ops.go` |
 | `follows` | 关注关系，is_special 标记特别关注 | id / follower_id / followed_id / created_at | 0 | `server/models/social/follow.go` |
@@ -111,7 +111,7 @@ python scripts/gen-db-doc.py data/nvs.db
 | `blog_favorites` | 博客收藏 | id / blog_id / user_id / created_at | 0 | `server/models/blog/blog_category.go` |
 | `author_themes` | 作者主页主题：CSS 与博客样式 | author_id / css / updated_at / blog_style | 0 | `server/models/theme/author_theme.go` |
 | `author_home_customize` | 作者主页自定义 HTML（审核后公开） | author_id / raw_html / safe_html / public_html | 0 | `server/models/theme/home_customize.go` |
-| `user_home_customize` | 用户个人主页自定义 HTML | user_id / raw_html / updated_at | 0 | `server/models/theme/home_customize.go` |
+| `user_home_customize` | 用户个人主页自定义 HTML | user_id / raw_html / updated_at | 1 | `server/models/theme/home_customize.go` |
 
 <a id="domain-4"></a>
 
@@ -313,7 +313,7 @@ OC 角色卡、世界书、创作项目、AI 群组与剧情流。
 | `bad_word_flags` | 敏感词命中标记与处置状态 | id / content_type / content_id / user_id | 2 | `server/models/security/badword.go` |
 | `xss_rules` | XSS 过滤规则 | id / name / pattern / action | 0 | `server/models/security/xss_rule.go` |
 | `honeypot_sessions` | 蜜罐会话（来源 IP、UA 归一、事件计数） | id / h_id / src_ip / ua_norm | 16 | `server/honeypot/model.go` |
-| `honeypot_events` | 蜜罐事件（诱饵、方法、路径、指纹） | id / session_id / kind / decoy | 558 | `server/honeypot/model.go` |
+| `honeypot_events` | 蜜罐事件（诱饵、方法、路径、指纹） | id / session_id / kind / decoy | 561 | `server/honeypot/model.go` |
 | `honeypot_fingerprints` | 蜜罐采集的浏览器指纹（canvas/WebGL/字体） | id / session_id / canvas / web_gl | 0 | `server/honeypot/fingerprint.go` |
 | `honeypot_settings` | 蜜罐开关与采集粒度 | id / enabled / level / record_ua | 1 | `server/honeypot/model.go` |
 | `blacklist_ips` | IP 黑名单（含到期时间） | id / ip / reason / expires_at | 0 | `server/models/platform/platform.go` |
@@ -329,10 +329,10 @@ OC 角色卡、世界书、创作项目、AI 群组与剧情流。
 | `sentiment_delete_requests` | 舆情触发的删除申请 | id / action / target_type / target_id | 0 | `server/sentiment/store/models.go` |
 | `api_keys` | API Key（哈希、前缀、角色、每分钟配额、IP 白名单） | id / user_id / name / role | 0 | `server/models/apikey/api_key.go` |
 | `api_key_alarms` | API Key 异常告警与确认 | id / kind / key_id / user_id | 0 | `server/models/apikey/api_key_alarm.go` |
-| `api_access_logs` | API 访问日志（身份、路径、状态码、IP） | id / identity_type / identity_id / key_prefix | 125 | `server/models/apikey/api_key.go` |
+| `api_access_logs` | API 访问日志（身份、路径、状态码、IP） | id / identity_type / identity_id / key_prefix | 132 | `server/models/apikey/api_key.go` |
 | `user_api_policies` | 用户限流策略与 Key 封禁状态 | id / user_id / quota_per_min / window_secs | 0 | `server/models/apikey/api_key.go` |
 | `rage_configs` | 限流/长连接参数（批量间隔、并发、WS/MQTT 开关） | id / enabled / batch_interval_sec / batch_size | 1 | `server/models/siteops/rage_config.go` |
-| `channel_balance_samples` | 上游渠道余额采样（用于额度预警） | id / base_url / remaining / used | 1066 | `server/models/aicost/channel_balance_sample.go` |
+| `channel_balance_samples` | 上游渠道余额采样（用于额度预警） | id / base_url / remaining / used | 1072 | `server/models/aicost/channel_balance_sample.go` |
 
 <a id="domain-15"></a>
 
@@ -386,7 +386,7 @@ OC 角色卡、世界书、创作项目、AI 群组与剧情流。
 
 | 表名 | 用途 | 主要字段 | 行数 | 源码 |
 | --- | --- | --- | --- | --- |
-| `web_access_logs` | 全站访问日志（UA 族、路径、IP、身份） | id / user_id / identity_type / ua_family | 61239 | `server/models/quota/web_access.go` |
+| `web_access_logs` | 全站访问日志（UA 族、路径、IP、身份） | id / user_id / identity_type / ua_family | 62302 | `server/models/quota/web_access.go` |
 | `zone_access_logs` | 分区进入日志（zone、IP、UA） | id / user_id / zone / entered_at | 5 | `server/models/platform/zone_access.go` |
 
 <a id="domain-18"></a>

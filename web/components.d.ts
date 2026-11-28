@@ -148,6 +148,7 @@ declare module 'vue' {
     HomeModuleSection: typeof import('./src/components/home/HomeModuleSection.vue')['default']
     HomeNoticeBar: typeof import('./src/components/home/HomeNoticeBar.vue')['default']
     HomeSearchResults: typeof import('./src/components/home/HomeSearchResults.vue')['default']
+    HomeVisualEditor: typeof import('./src/components/me/HomeVisualEditor.vue')['default']
     LiveBadge: typeof import('./src/components/comment/LiveBadge.vue')['default']
     MentionTextarea: typeof import('./src/components/comment/MentionTextarea.vue')['default']
     MessageChat: typeof import('./src/components/message/MessageChat.vue')['default']

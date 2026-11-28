@@ -68,7 +68,18 @@
         脚本不会对其他访客生效，请仅书写你本人信任的内容。
       </el-alert>
 
+      <el-radio-group v-model="myMode" size="small" class="dec-mode-switch">
+        <el-radio-button value="visual">🖼 可视化装修</el-radio-button>
+        <el-radio-button value="code">&lt;/&gt; 代码编辑</el-radio-button>
+      </el-radio-group>
+      <HomeVisualEditor
+        v-if="myMode === 'visual'"
+        :model-value="myRaw"
+        @update:model-value="(v: string) => (myRaw = v)"
+        @generate="(html: string) => onVisualGenerated(html)"
+      />
       <el-input
+        v-else
         v-model="myRaw"
         type="textarea"
         :rows="10"
@@ -167,6 +178,7 @@ import { authApi } from '@/api/auth';
 import { homeCustomizeApi, type AuthorSubmitResult } from '@/api/home/homeCustomize';
 import { editorKeydownHandler, HTML_TOKENS } from '@/utils/editorShortcuts';
 import { ElMessage } from 'element-plus';
+import HomeVisualEditor from '@/components/me/HomeVisualEditor.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -215,6 +227,8 @@ async function onAvatarChange(e: Event) {
 }
 
 const myRaw = ref('');
+const myMode = ref<'visual' | 'code'>('visual');
+function onVisualGenerated(html: string) { myRaw.value = html; ElMessage.success('已生成到代码框，点击「保存我的装扮」生效'); }
 const authorRaw = ref('');
 const authorFullPage = ref(false);
 const savingMy = ref(false);
@@ -426,4 +440,5 @@ onMounted(load);
 .dec-mode-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .dec-mode-label { font-size: 0.85rem; color: var(--text-color); }
 .dec-mode-tip { font-size: 0.76rem; color: var(--text-light, #888); }
+.dec-mode-switch { margin-bottom: 12px; }
 </style>

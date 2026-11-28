@@ -352,3 +352,9 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - `author_home_customize.full_page` 控制展示方式：false=原行为（自定义 HTML 仅作作者主页顶部 160px 封面）；true=审核通过的完整 HTML **替换整个 /author/:id 公开页布局**，默认资料头隐藏，作者本人保留浮动「编辑我的主页」入口。
 - 整页内容依旧走 `SanitizeCustomHTML` 消毒（剥脚本/危险 CSS/事件属性）与审核流，绝不发布原始脚本。
 - 编辑入口 `/me/decorate`，审核台 `/admin/home-customize-review`。
+
+### 个人主页可视化装修
+- `/me/decorate` 的「我的主页装扮」区新增「可视化装修 / 代码编辑」切换（默认可视化）。
+- `components/me/HomeVisualEditor.vue`：预设模板（极光紫/深海蓝/森林绿/暖阳橙/素白纸）、背景色/图、文字色、对齐、圆角、阴影、模块勾选与排序；生成全内联样式的 HTML（公开页/整页模式下无 scoped CSS 也正常显示），写入 user_home_customize（仅本人可见，允许原始 HTML）。
+- 与代码框双向兼容：「生成到代码框」写入 myRaw，「从代码框读取」尽力解析 hve-hero 配置；代码模式可直接编辑。
+- ⚠️ 坑：按钮不要写 `@click="emit('generate')"`（会直接 emit 空 payload 而非调用生成函数）；函数名也不要与 emit 名 `generate` 同名（Vue 模板会把 `@click="generate"` 编译成 `$emit('generate')`），用 `onGenerateClick`。
