@@ -14,6 +14,7 @@ export interface MyHomeCustomize {
     raw_html: string;
     safe_html: string;
     public_html: string;
+    full_page: boolean;
     review_status: string; // pending / approved / rejected
     had_issues: boolean;
     review_note: string;
@@ -54,11 +55,11 @@ export const homeCustomizeApi = {
   },
   // 作者公开主页（公开）：返回已通过审核的对外可见片段；无/未通过返回空串
   getAuthorHomeCustomize(authorId: number | string) {
-    return api.get<{ code: number; data: { public_html: string } }>(`/author/${authorId}/home-customize`);
+    return api.get<{ code: number; data: { public_html: string; full_page: boolean } }>(`/author/${authorId}/home-customize`);
   },
   // 提交作者公开主页（作者本人或管理员）：服务端消毒 + 置 pending；预检出问题通知站长
-  updateAuthorHomeCustomize(authorId: number | string, rawHtml: string) {
-    return api.put<{ code: number; data: AuthorSubmitResult }>(`/author/${authorId}/home-customize`, { raw_html: rawHtml });
+  updateAuthorHomeCustomize(authorId: number | string, rawHtml: string, fullPage = false) {
+    return api.put<{ code: number; data: AuthorSubmitResult }>(`/author/${authorId}/home-customize`, { raw_html: rawHtml, full_page: fullPage });
   },
   // 审核队列（仅管理员）：列出全部作者公开主页提交（可按 review_status 过滤）；含原文 raw_html
   listReviews(status?: string) {

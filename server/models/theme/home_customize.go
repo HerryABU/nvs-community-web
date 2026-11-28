@@ -55,6 +55,7 @@ type AuthorHomeCustomize struct {
 	SafeHTML     string     `gorm:"type:text" json:"safe_html"`                            // 服务端消毒后片段
 	PublicHTML   string     `gorm:"type:text" json:"public_html"`                          // 对外可见（approved 时等于 safe_html）
 	ReviewStatus string     `gorm:"type:varchar(16);default:pending" json:"review_status"` // pending/approved/rejected
+	FullPage     bool       `gorm:"default:false" json:"full_page"`                        // true=整页替换作者主页，false=仅封面
 	HadIssues    bool       `gorm:"default:false" json:"had_issues"`                       // 自动化预检是否发现被移除项
 	ReviewNote   string     `gorm:"type:text" json:"review_note"`
 	ReviewedBy   uint       `gorm:"default:0" json:"reviewed_by"`
@@ -76,9 +77,21 @@ func GetApprovedAuthorHomeCustomize(authorID uint) string {
 	return t.PublicHTML
 }
 
+// GetApprovedAuthorHomeCustomizeFull 读取已通过审核的完整记录（含整页模式开关）。
+func GetApprovedAuthorHomeCustomizeFull(authorID uint) (string, bool) {
+	if authorID == 0 {
+		return "", false
+	}
+	var t AuthorHomeCustomize
+	if err := models.DB.Where("author_id = ? AND review_status = ?", authorID, "approved").First(&t).Error; err != nil {
+		return "", false
+	}
+	return t.PublicHTML, t.FullPage
+}
+
 // SubmitAuthorHomeCustomize 作者提交：消毒 + 置 pending + 记录是否预检发现问题。
 // 返回 (safe_html, removed, hadIssues, error)。通知站长由 handler 负责（模型层不耦合推送）。
-func SubmitAuthorHomeCustomize(authorID uint, raw string) (safe string, removed []string, hadIssues bool, err error) {
+func SubmitAuthorHomeCustomize(authorID uint, raw string, fullPage bool) (safe string, removed []string, hadIssues bool, err error) {
 	if authorID == 0 {
 		return "", nil, false, nil
 	}
@@ -92,6 +105,7 @@ func SubmitAuthorHomeCustomize(authorID uint, raw string) (safe string, removed 
 		t.PublicHTML = ""
 		t.ReviewStatus = "pending"
 		t.HadIssues = had
+		t.FullPage = fullPage
 		t.ReviewNote = ""
 		t.ReviewedBy = 0
 		t.ReviewedAt = nil
@@ -100,7 +114,7 @@ func SubmitAuthorHomeCustomize(authorID uint, raw string) (safe string, removed 
 	} else {
 		err = models.DB.Create(&AuthorHomeCustomize{
 			AuthorID: authorID, RawHTML: raw, SafeHTML: safe, PublicHTML: "",
-			ReviewStatus: "pending", HadIssues: had, UpdatedAt: now,
+			ReviewStatus: "pending", HadIssues: had, FullPage: fullPage, UpdatedAt: now,
 		}).Error
 	}
 	return safe, removed, had, err

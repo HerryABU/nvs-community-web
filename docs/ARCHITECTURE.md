@@ -208,7 +208,7 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - ⚠️ 回帖删除后不可解封恢复（物理删除），管理员「解封/恢复」对 post 类型仅清除封禁原因标记。
 
 ### 数据表
-全部 **197 张表 / 2244 个字段** 已按业务域整理成两份专门文档：
+全部 **197 张表 / 2249 个字段** 已按业务域整理成两份专门文档：
 
 - [`DATABASE.md`](DATABASE.md)：分域总览（表名 / 用途 / 主要字段 / 行数 / 源码位置）+ 全局约定
 - [`DATABASE-SCHEMA.md`](DATABASE-SCHEMA.md)：逐表字段明细（由 `python scripts/gen-db-doc.py data/nvs.db` 自动生成）
@@ -346,3 +346,9 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - 单独评估后升级：katex 0.17→0.19、mermaid 11.17→12.4（Node≥22.12，本机满足）。
 - 跨大版本联动升级（vite 5→8 / vue-router 4→5 / pinia 2→4 / typescript 5→7 / vue-tsc 2→3）需整体迁移，未做。
 - XSS 防御双层验证：后端 `security.SanitizeUserContent` 白名单转义危险标签，前端 Cherry + DOMPurify 兜底。真浏览器 6 类载荷（script/img.onerror/javascript:链接/svg.onload/iframe/details.ontoggle）均未执行，DOM 无危险标签/事件属性。
+
+### 自定义个人主页（home-customize）整页模式
+- 双作用域：`user_home_customize`（本人自看，允许原始 HTML）、`author_home_customize`（对外公开，必须消毒 + 站长审核）。
+- `author_home_customize.full_page` 控制展示方式：false=原行为（自定义 HTML 仅作作者主页顶部 160px 封面）；true=审核通过的完整 HTML **替换整个 /author/:id 公开页布局**，默认资料头隐藏，作者本人保留浮动「编辑我的主页」入口。
+- 整页内容依旧走 `SanitizeCustomHTML` 消毒（剥脚本/危险 CSS/事件属性）与审核流，绝不发布原始脚本。
+- 编辑入口 `/me/decorate`，审核台 `/admin/home-customize-review`。

@@ -97,7 +97,7 @@
       </div>
       <el-alert type="warning" :closable="false" show-icon class="dec-hint">
         <template #title>对外可见 · 需消毒与审核</template>
-        他人访问你的作者主页时会看到这段内容（作为主页<b>封面</b>展示）。提交后服务端会<b>自动消毒</b>（剥离脚本 / 危险 CSS），
+        他人访问你的作者主页时会看到这段内容。提交后服务端会<b>自动消毒</b>（剥离脚本 / 危险 CSS），
         并进入<b>站长 / 管理员审核</b>队列。若预检发现需清理的内容，原文会一并送站长复核。
       </el-alert>
 
@@ -109,12 +109,20 @@
         <span v-if="review.author.review_note" class="dec-status-note">站长意见：{{ review.author.review_note }}</span>
       </div>
 
+      <div class="dec-mode-row">
+        <span class="dec-mode-label">展示方式：</span>
+        <el-radio-group v-model="authorFullPage" size="small">
+          <el-radio-button :value="false">封面模式（顶部 160px）</el-radio-button>
+          <el-radio-button :value="true">整页模式（替换整个主页）</el-radio-button>
+        </el-radio-group>
+        <span class="dec-mode-tip">整页模式下，审核通过的内容将完全替换作者主页的公开布局。</span>
+      </div>
       <el-input
         v-model="authorRaw"
         type="textarea"
         :rows="10"
         class="dec-editor"
-        placeholder="在此编写对外展示的作者主页片段（将自动消毒后送审）"
+        placeholder="在此编写对外展示的作者主页内容（将自动消毒后送审）"
         @keydown="onAuthorKeydown"
       />
       <div class="dec-foot">
@@ -208,6 +216,7 @@ async function onAvatarChange(e: Event) {
 
 const myRaw = ref('');
 const authorRaw = ref('');
+const authorFullPage = ref(false);
 const savingMy = ref(false);
 const submittingAuthor = ref(false);
 
@@ -249,6 +258,7 @@ async function load() {
       myRaw.value = d.my_raw_html || '';
       Object.assign(review.author, d.author || {});
       authorRaw.value = d.author?.raw_html || '';
+      authorFullPage.value = !!d.author?.full_page;
       authorSafePreview.value = d.author?.safe_html || '';
     }
   } catch { /* 装扮接口不可用不阻断资料编辑 */ }
@@ -300,7 +310,7 @@ async function submitAuthor() {
   submittingAuthor.value = true;
   submitResult.value = null;
   try {
-    const res = await homeCustomizeApi.updateAuthorHomeCustomize(authorId.value, authorRaw.value);
+    const res = await homeCustomizeApi.updateAuthorHomeCustomize(authorId.value, authorRaw.value, authorFullPage.value);
     if (res.data.code === 0) {
       const r = res.data.data;
       submitResult.value = r;
@@ -413,4 +423,7 @@ onMounted(load);
   .prof-avatar-col { width: 100%; }
   .prof-fields { width: 100%; }
 }
+.dec-mode-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.dec-mode-label { font-size: 0.85rem; color: var(--text-color); }
+.dec-mode-tip { font-size: 0.76rem; color: var(--text-light, #888); }
 </style>

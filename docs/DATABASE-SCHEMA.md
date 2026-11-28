@@ -3,7 +3,7 @@
 > 由 `scripts/gen-db-doc.py` 依据实际库结构 + 模型自动生成，**请勿手工修改**；
 > 改模型后重新生成即可。用途说明见 [`DATABASE.md`](DATABASE.md)。
 
-共 197 张表、2244 个字段。
+共 197 张表、2249 个字段。
 
 ## 账号与用户
 
@@ -56,7 +56,7 @@
 
 ### `user_audit_logs`
 
-用户操作审计：登录、改密、提权等，含 IP/UA 与结果（行数 710）
+用户操作审计：登录、改密、提权等，含 IP/UA 与结果（行数 738）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -286,7 +286,7 @@
 | `comments_enabled` | NUMERIC |  |
 | `like_count` | INTEGER |  |
 
-索引：`idx_novels_read_permission`、`idx_novels_mode`、`idx_novels_category`、`idx_novels_author_status`、`idx_novels_deleted_at`、`idx_novels_derivative_origin_id`
+索引：`idx_novels_deleted_at`、`idx_novels_derivative_origin_id`、`idx_novels_read_permission`、`idx_novels_mode`、`idx_novels_category`、`idx_novels_author_status`
 
 ### `novel_categories`
 
@@ -725,6 +725,7 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `reviewed_by` | INTEGER |  |
 | `reviewed_at` | DATETIME |  |
 | `updated_at` | DATETIME | 时间 |
+| `full_page` | NUMERIC |  |
 
 ### `user_home_customize`
 
@@ -1566,6 +1567,8 @@ OC 群每日预算消耗（行数 0）
 | `cookie_hat` | TEXT |  |
 | `drop_foreign` | NUMERIC |  |
 | `tls_skip_verify` | NUMERIC |  |
+| `sdk_origin_auth` | NUMERIC |  |
+| `wx_appid` | TEXT |  |
 
 索引：`idx_selfhost_routes_project_id`、`idx_selfhost_routes_prefix`、`idx_selfhost_routes_enabled`、`idx_selfhost_routes_status`
 
@@ -1590,7 +1593,7 @@ OC 群每日预算消耗（行数 0）
 
 ### `selfhost_direct_routes`
 
-管理员端口直派路由（路径→本机端口，GWh 同款，免审核）（行数 10）
+管理员端口直派路由（路径→本机端口，GWh 同款，免审核）（行数 12）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -1606,6 +1609,8 @@ OC 群每日预算消耗（行数 0）
 | `cookie_hat` | TEXT |  |
 | `drop_foreign` | NUMERIC |  |
 | `tls_skip_verify` | NUMERIC |  |
+| `sdk_origin_auth` | NUMERIC |  |
+| `wx_appid` | TEXT |  |
 
 索引：`idx_selfhost_direct_routes_prefix`、`idx_selfhost_direct_routes_enabled`
 
@@ -2912,7 +2917,7 @@ XSS 过滤规则（行数 0）
 
 ### `honeypot_events`
 
-蜜罐事件（诱饵、方法、路径、指纹）（行数 536）
+蜜罐事件（诱饵、方法、路径、指纹）（行数 558）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3281,7 +3286,7 @@ API Key 异常告警与确认（行数 0）
 
 ### `api_access_logs`
 
-API 访问日志（身份、路径、状态码、IP）（行数 123）
+API 访问日志（身份、路径、状态码、IP）（行数 125）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3341,7 +3346,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 123）
 
 ### `channel_balance_samples`
 
-上游渠道余额采样（用于额度预警）（行数 1060）
+上游渠道余额采样（用于额度预警）（行数 1066）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3824,7 +3829,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 123）
 
 ### `web_access_logs`
 
-全站访问日志（UA 族、路径、IP、身份）（行数 59557）
+全站访问日志（UA 族、路径、IP、身份）（行数 61239）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3965,7 +3970,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 123）
 
 ### `polls`
 
-议题投票（载体类型/ID、作者、状态）（行数 1）
+议题投票（载体类型/ID、作者、状态）（行数 6）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3986,7 +3991,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 123）
 
 ### `poll_options`
 
-投票选项（标签、排序、票数）（行数 2）
+投票选项（标签、排序、票数）（行数 12）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -4000,7 +4005,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 123）
 
 ### `poll_votes`
 
-用户投票记录（用户/选项，可覆盖）（行数 1）
+用户投票记录（用户/选项，可覆盖）（行数 6）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |

@@ -40,6 +40,7 @@ func GetMyHomeCustomize(c *gin.Context) {
 			"raw_html":      pub.RawHTML,
 			"safe_html":     pub.SafeHTML,
 			"public_html":   pub.PublicHTML,
+			"full_page":     pub.FullPage,
 			"review_status": pub.ReviewStatus,
 			"had_issues":    pub.HadIssues,
 			"review_note":   pub.ReviewNote,
@@ -56,7 +57,8 @@ func UpdateMyHomeCustomize(c *gin.Context) {
 		return
 	}
 	var req struct {
-		RawHTML string `json:"raw_html"`
+		RawHTML  string `json:"raw_html"`
+		FullPage bool   `json:"full_page"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		infra.BadRequest(c, "参数错误")
@@ -76,7 +78,8 @@ func GetAuthorHomeCustomize(c *gin.Context) {
 	if !ok {
 		return
 	}
-	infra.Success(c, gin.H{"public_html": theme.GetApprovedAuthorHomeCustomize(id)})
+	html, full := theme.GetApprovedAuthorHomeCustomizeFull(id)
+	infra.Success(c, gin.H{"public_html": html, "full_page": full})
 }
 
 // UpdateAuthorHomeCustomize PUT /api/author/:id/home-customize（作者本人或管理员）
@@ -96,13 +99,14 @@ func UpdateAuthorHomeCustomize(c *gin.Context) {
 		return
 	}
 	var req struct {
-		RawHTML string `json:"raw_html"`
+		RawHTML  string `json:"raw_html"`
+		FullPage bool   `json:"full_page"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		infra.BadRequest(c, "参数错误")
 		return
 	}
-	safe, removed, hadIssues, err := theme.SubmitAuthorHomeCustomize(id, req.RawHTML)
+	safe, removed, hadIssues, err := theme.SubmitAuthorHomeCustomize(id, req.RawHTML, req.FullPage)
 	if err != nil {
 		infra.InternalError(c, "提交失败")
 		return

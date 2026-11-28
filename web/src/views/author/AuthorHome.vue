@@ -1,5 +1,9 @@
 <template>
-  <div class="page-container author-home" v-loading="loading">
+  <div v-if="fullPage && publicHtml" class="author-home-fullpage-wrap">
+    <el-button v-if="isSelf" class="ah-fullpage-edit" type="primary" size="small" @click="$router.push('/me/decorate')">编辑我的主页</el-button>
+    <div class="author-home-fullpage" v-html="publicHtml" />
+  </div>
+  <div v-else class="page-container author-home" v-loading="loading">
     <template v-if="author">
       <!-- ===== 封面：作者装扮（消毒 + 站长审核通过）优先，否则渐变底 ===== -->
       <div class="ah-cover" :class="{ 'is-custom': !!publicHtml }">
@@ -196,6 +200,7 @@ const data = ref<any>({});
 
 // 作者公开主页装扮（已消毒 + 审核通过的对外片段）
 const publicHtml = ref('');
+const fullPage = ref(false);
 
 // 内容分栏
 const activeTab = ref<'works' | 'blogs' | 'stats' | 'comments'>('works');
@@ -279,7 +284,10 @@ async function load() {
 async function loadPublicHtml() {
   try {
     const res = await homeCustomizeApi.getAuthorHomeCustomize(authorId.value);
-    if (res.data.code === 0) publicHtml.value = res.data.data.public_html || '';
+    if (res.data.code === 0) {
+      publicHtml.value = res.data.data.public_html || '';
+      fullPage.value = !!res.data.data.full_page;
+    }
   } catch { /* 无装扮或审核未通过：用渐变底 */ }
 }
 
@@ -364,6 +372,12 @@ onMounted(load);
 </script>
 
 <style scoped>
+/* 整页自定义：审核通过且作者选择整页模式时，自定义 HTML 完全替换公开主页布局 */
+.author-home-fullpage-wrap { position: relative; min-height: 60vh; }
+.ah-fullpage-edit { position: fixed; right: 20px; bottom: 20px; z-index: 50; box-shadow: 0 4px 16px rgba(0,0,0,.2); }
+.author-home-fullpage { min-height: 60vh; }
+.author-home-fullpage :deep(img) { max-width: 100%; }
+
 /* ===== 封面 ===== */
 .ah-cover {
   position: relative;

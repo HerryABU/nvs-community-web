@@ -431,3 +431,10 @@
 | DELETE | `/api/admin/selfhost/iso-services/:id` | 删除 |
 | GET | `/api/admin/selfhost/iso-metrics` | 每服务请求/失败指标 |
 | GET | `/api/admin/selfhost/iso-audit?limit=200` | 最近审计记录 |
+
+## 自定义个人主页（home-customize）
+- `GET /api/me/home-customize` — 本人装扮原始 HTML + 作者公开主页提交/审核状态（含 `full_page`）。
+- `PUT /api/me/home-customize` — 保存本人装扮（不消毒，仅本人可见）。
+- `GET /api/author/:id/home-customize` — 公开：已审核通过的 `public_html` 与 `full_page`。
+- `PUT /api/author/:id/home-customize` — 作者本人或管理员提交公开主页：`{raw_html, full_page}`，服务端消毒后送审。
+- `GET /api/admin/home-customize/reviews` / `POST /api/admin/home-customize/reviews/:id/review` — 站长审核队列与通过/驳回。
