@@ -93,6 +93,8 @@ type Comment struct {
 	ParentID  uint      `gorm:"not null;default:0;index" json:"parent_id"`
 	Content   string    `gorm:"type:text;not null" json:"content"`
 	LikeCount int       `gorm:"not null;default:0" json:"like_count"`
+	PollID    uint      `gorm:"default:0;index" json:"poll_id,omitempty"`
+	ShowVote  bool      `gorm:"default:false" json:"show_vote"`
 	CreatedAt time.Time `json:"created_at"`
 
 	AuthorName string `gorm:"-" json:"author_name,omitempty"`

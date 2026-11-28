@@ -1,6 +1,7 @@
 package proxycore
 
 import (
+	"crypto/tls"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -48,6 +49,12 @@ func (m *Manager) buildEntry(r Route) (*Entry, error) {
 	}
 	// 两个代理共享同一 Transport，复用后端连接池
 	transport := &http.Transport{
+		TLSClientConfig: func() *tls.Config {
+			if !r.TLSSkipVerify {
+				return nil
+			}
+			return &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}
+		}(),
 		DialContext:           (&net.Dialer{Timeout: timeout, KeepAlive: 30 * time.Second}).DialContext,
 		MaxIdleConns:          256,
 		MaxIdleConnsPerHost:   64,
@@ -70,7 +77,8 @@ func (m *Manager) buildEntry(r Route) (*Entry, error) {
 			}
 			// 嵌套链：把对外前缀逐跳累加，最内层据此算出完整链
 			// （/a → /b → /c 三层时，后端资源必须落在 /a/b/c/ 下）。
-			inbound := rewrite.SanitizeChain(req.Header.Get(rewrite.PrefixChainHeader))
+			// 安全边界：只信任带本网关 X-GatewayHub-Hops 的链头，客户端伪造的一律丢弃
+			inbound := rewrite.SanitizeChain(rewrite.TrustedChain(req))
 			rewrite.WithInboundChain(req, inbound)
 			req.Header.Set(rewrite.PrefixChainHeader, rewrite.JoinChain(inbound, r.Prefix))
 			// 多段服务名链已在 Handler 里逐段剥好；普通单跳按本条目前缀剥离。

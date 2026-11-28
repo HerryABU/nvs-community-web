@@ -8,6 +8,8 @@
       <el-button size="small" type="primary" @click="$router.push('/feed/compose?kind=micro')">＋ 写微文</el-button>
     </header>
 
+    <FederatedBlock kind="micro" :limit="6" />
+
     <div v-loading="loading" class="mp-list">
       <article v-for="p in posts" :key="p.id" class="mp-card" @click="open(p)">
         <div class="mp-body" :class="{ 'no-cover': !p.images?.length }">
@@ -55,6 +57,7 @@ import { feedApi, type FeedPost } from '@/api/feed';
 import { mediaUrl } from '@/utils/prefix';
 import { formatCount, formatWhen } from '@/utils/feedFormat';
 import { postPath } from '@/utils/feedRoute';
+import FederatedBlock from '@/components/federation/FederatedBlock.vue';
 
 const router = useRouter();
 const posts = ref<FeedPost[]>([]);

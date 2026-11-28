@@ -42,6 +42,12 @@
         <div v-html="renderMarkdown(thread.content)"></div>
       </div>
 
+      <div class="thread-polls">
+        <PollCard v-for="p in polls" :key="p.id" :id="p.id" :author-id="thread.user_id" />
+        <el-button v-if="canStartPoll" link type="primary" size="small" @click="pollEditorVisible = true">🗳️ 发起投票</el-button>
+        <PollEditor v-model="pollEditorVisible" target-kind="forum" :target-id="Number(route.params.id)" @created="onPollCreated" />
+      </div>
+
       <!-- 回复列表（楼层模型：楼 + 楼内可折叠回复，与作品/博客/作者评论区同构） -->
       <h2 class="section-title" style="margin-top: 32px">回复（{{ total }}）</h2>
       <div class="post-list">
@@ -101,12 +107,23 @@ import FloorComments from '@/components/comment/FloorComments.vue';
 import { markZoneConfirmed, setLastZone } from '@/utils/sensitiveZone';
 import { guardLeak } from '@/composables/useLeakGuard';
 import { Lock } from '@element-plus/icons-vue';
+import PollCard from '@/components/poll/PollCard.vue';
+import PollEditor from '@/components/poll/PollEditor.vue';
+import { pollApi } from '@/api/poll';
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const loading = ref(false);
 const thread = ref<any>(null);
+const polls = ref<any[]>([]);
+const pollEditorVisible = ref(false);
+const canStartPoll = computed(() => !!authStore.isLoggedIn && !!thread.value && authStore.user?.id === thread.value.user_id);
+async function loadPolls() {
+  try { const r = await pollApi.list('forum', Number(route.params.id)); polls.value = r.data?.data || []; }
+  catch { polls.value = []; }
+}
+function onPollCreated(id: number) { if (id) polls.value.unshift({ id }); }
 const lockedForum = ref<any>(null);
 const posts = ref<any[]>([]);
 const total = ref(0);
@@ -209,6 +226,7 @@ async function load(reset = true) {
     }
     lockedForum.value = null;
     thread.value = d.thread;
+    loadPolls();
     checkSensitiveForum();
     if (reset) {
       posts.value = d.posts || [];

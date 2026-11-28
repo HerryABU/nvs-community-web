@@ -38,6 +38,7 @@ import (
 	"nvs-server/handlers/ops"
 	"nvs-server/handlers/payment"
 	"nvs-server/handlers/police"
+	"nvs-server/handlers/poll"
 	"nvs-server/handlers/port"
 	"nvs-server/handlers/publish"
 	"nvs-server/handlers/rating"
@@ -216,6 +217,11 @@ func registerProtected(r *gin.Engine) {
 		protected.GET("/reading/notes/mine", reading.ListAllMyNotes)
 		protected.PATCH("/reading/notes/:id", reading.UpdateReadingNote)
 		protected.DELETE("/reading/notes/:id", reading.DeleteReadingNote)
+		// 议题投票：作者发起/终止、读者投票
+		protected.POST("/polls", poll.Create)
+		protected.POST("/polls/:id/vote", security.RateLimit(30, 60), poll.Vote)
+		protected.POST("/polls/:id/close", poll.Close)
+		protected.GET("/polls", poll.ListByTarget)
 		protected.POST("/comments", security.RateLimit(20, 60), comment.CreateComment)
 		protected.DELETE("/comments/:id", comment.DeleteComment)
 		// 楼加密（入口限制）：验证访问密码 / 设置·修改·解除密码（限速防爆破）

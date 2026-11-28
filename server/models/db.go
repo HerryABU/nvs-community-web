@@ -66,6 +66,8 @@ var BlogFeedProvider func(ids []uint, window int) ([]FeedItem, int64, error)
 func AllModels() []interface{} {
 	list := []interface{}{
 		&User{}, &Novel{}, &NovelCategory{}, &Chapter{}, &Comment{},
+		// 议题投票（博客/微文/论坛等载体可挂载）
+		&Poll{}, &PollOption{}, &PollVote{},
 		// 小说点赞记录（novel_likes，与 blog_likes 对称）
 		&NovelLike{},
 		// 作品角色表（话本气泡体的角色管理：头像/主题色/默认左右）

@@ -15,6 +15,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"nvs-server/config"
+	"nvs-server/models"
+	platformmodel "nvs-server/models/platform"
 	"nvs-server/selfhost/proxycore"
 )
 
@@ -68,7 +70,7 @@ func InvalidateRoutes() {
 			Target:    r.Target,
 			Timeout:   r.Timeout,
 			Status:    proxycore.StatusActive,
-			CookieHat: r.CookieHat, DropForeign: r.DropForeign,
+			CookieHat: r.CookieHat, DropForeign: r.DropForeign, TLSSkipVerify: r.TLSSkipVerify,
 		})
 	}
 	// 管理员直接指派的本机端口路由（无需项目审核，只由管理员配置）。
@@ -83,7 +85,24 @@ func InvalidateRoutes() {
 		}
 		core = append(core, proxycore.Route{
 			Prefix: strings.TrimPrefix(d.Prefix, "/"), Target: target, Timeout: 10, Status: proxycore.StatusActive,
-			CookieHat: d.CookieHat, DropForeign: d.DropForeign,
+			CookieHat: d.CookieHat, DropForeign: d.DropForeign, TLSSkipVerify: d.TLSSkipVerify,
+		})
+	}
+	// 联邦站点的外站路径反代：/fed/<siteID>/... → 源站根，复用 proxycore 的
+	// 前缀剥离、响应改写、shim/base 注入、gzip 与跳数守卫（与 GWh 外站反代一致）。
+	var fedSites []platformmodel.FederatedSite
+	models.DB.Where("status = ?", "active").Find(&fedSites)
+	for _, fs := range fedSites {
+		upstream := strings.TrimRight(fs.APIURL, "/")
+		upstream = strings.TrimSuffix(upstream, "/api")
+		if upstream == "" {
+			continue
+		}
+		core = append(core, proxycore.Route{
+			Prefix:  "fed/" + strconv.Itoa(int(fs.ID)),
+			Target:  upstream,
+			Timeout: 15,
+			Status:  proxycore.StatusActive,
 		})
 	}
 	trafficMu.Lock()

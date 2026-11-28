@@ -21,19 +21,29 @@ type FederatedSite struct {
 
 func (FederatedSite) TableName() string { return "federated_sites" }
 
-// FederatedNovel 从远程站点同步来的作品缓存
+// FederatedNovel 从远程站点同步来的作品缓存（通用联邦条目）。
+// 历史表名保留 federated_novels（避免旧库迁移），但通过 Kind 承载多类型内容：
+// novel / blog / forum / micro / subculture。
 type FederatedNovel struct {
-	ID        uint           `gorm:"primaryKey" json:"id"`
-	SiteID    uint           `gorm:"not null;index" json:"site_id"`
-	RemoteID  uint           `gorm:"not null;index" json:"remote_id"`
-	Title     string         `gorm:"size:256;not null" json:"title"`
-	Category  string         `gorm:"size:64" json:"category"`
-	Author    string         `gorm:"size:128" json:"author"`
-	Summary   string         `gorm:"type:text" json:"summary"`
-	CoverURL  string         `gorm:"size:512" json:"cover_url"`
-	SourceURL string         `gorm:"size:512" json:"source_url"`
-	CachedAt  time.Time      `json:"cached_at"`
-	Site      *FederatedSite `gorm:"foreignKey:SiteID" json:"site,omitempty"`
+	ID       uint   `gorm:"primaryKey" json:"id"`
+	SiteID   uint   `gorm:"not null;index" json:"site_id"`
+	RemoteID uint   `gorm:"not null;index" json:"remote_id"`
+	Kind     string `gorm:"size:24;default:novel;index:idx_fed_kind,cmpAfter:site_id" json:"kind"`
+	Title    string `gorm:"size:256;not null" json:"title"`
+	Category string `gorm:"size:64" json:"category"`
+	Author   string `gorm:"size:128" json:"author"`
+	Summary  string `gorm:"type:text" json:"summary"`
+	CoverURL string `gorm:"size:512" json:"cover_url"`
+	// SourceURL 保留原始外链（兼容旧联邦页）；条目点击优先走 ProxyPath 本站反代。
+	SourceURL string `gorm:"size:512" json:"source_url"`
+	// ProxyPath 本站反代路径，如 /fed/3/novel/12（由 proxycore 动态路由转发到源站）。
+	ProxyPath string `gorm:"size:512" json:"proxy_path"`
+	// OriginSite 原始站点名；SourceChain 是完整来源链（如 "A / B / C"），HopCount 为跳数。
+	OriginSite  string         `gorm:"size:128;default:''" json:"origin_site"`
+	SourceChain string         `gorm:"size:512;default:''" json:"source_chain"`
+	HopCount    int            `gorm:"default:0" json:"hop_count"`
+	CachedAt    time.Time      `json:"cached_at"`
+	Site        *FederatedSite `gorm:"foreignKey:SiteID" json:"site,omitempty"`
 }
 
 func (FederatedNovel) TableName() string { return "federated_novels" }

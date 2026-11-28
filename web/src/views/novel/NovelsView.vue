@@ -53,7 +53,7 @@
     </div>
 
     <!-- 联邦嵌入区块（站长开启「嵌入列表区块」时显示跨站作品） -->
-    <FederatedBlock title="来自联邦站点的作品" :limit="8" />
+    <FederatedBlock kind="novel" :limit="8" />
 
     <!-- 结果区 -->
     <div v-loading="loading" class="nv-body">

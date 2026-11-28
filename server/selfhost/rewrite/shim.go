@@ -119,15 +119,15 @@ const prefixShimTemplate = `(function(){
   }catch(e){}
 })();`
 
-// shimScriptRe 用于判断页面里是否已经注入过（例如后端自己在 <head> 里回显了上游 HTML）。
-var shimScriptRe = regexp.MustCompile(`data-gateway-prefix-shim`)
+// 判断"是否已注入 shim"必须匹配**完整的 script 标签**，不能只匹配字符串：
+// 后端页面若在注释或 JS 字符串里提到 data-gateway-prefix-shim（很常见——前端自己
+// 检测代理环境），旧写法会误判成"已注入"而完全跳过 shim，fetch 全部漏前缀。
+// 直接用 shimBlockRe（下方定义），不再单独维护一个松散的正则。
 
-// shimBlockRe 匹配完整的 shim script 块，用于跨系统嵌套时**更新**内层注入的前缀。
-//
-// 场景：NVS(/gwh/) → GWh(/go-nvs/) → 后端。GWh 内层注入 P="/go-nvs"，
-// 外层 NVS 的完整链是 /gwh/go-nvs。若外层仅因「已有 shim」就跳过，页面会留下
-// <base href="/gwh/"> 与 P="/go-nvs" 不一致，浏览器把相对资源解析到 /gwh/assets
-// 而不是 /gwh/go-nvs/assets，整站 404。故外层必须用完整链整块替换。
+// shimBlockRe 匹配完整的 shim script 块，跨系统嵌套时用它把内层注入的局部前缀
+// 更新成外层知道的完整链：NVS(/gwh/) → GWh(/go-nvs/) 这类双向代理下，
+// 若外层只因「已有 shim」就跳过，页面会留下 base=/gwh/ 与 P=/go-nvs 不一致，
+// 相对资源被解析到 /gwh/assets 而不是 /gwh/go-nvs/assets，整站 404。
 var shimBlockRe = regexp.MustCompile(`(?s)<script[^>]*data-gateway-prefix-shim[^>]*>.*?</script>`)
 
 // prefixShim 生成带具体前缀的注入片段。
@@ -146,18 +146,21 @@ func (rw *Rewriter) prefixShim() string {
 
 // injectShim 把兜底脚本插到 <head> 之后。
 // 必须早于任何应用脚本执行，故与 <base> 一起注入在 head 开头。
-// 已注入过时不再新增，但会**更新**为当前前缀：跨系统嵌套时内层写的 P 只是
-// 局部前缀，外层知道完整链，必须覆盖，否则 base 与 shim 不一致导致资源 404。
+// 已有 shim 时不再新增，但会更新为当前前缀（跨系统嵌套时内层只写了局部前缀）。
 func (rw *Rewriter) injectShim(s string) string {
+	// 先把内层注入的 shim 整块摘掉：它必须在 <head> 开头重新插入，
+	// 否则内层 shim 若位于 body 尾部，外层原地替换后仍晚于应用脚本执行，
+	// 应用启动时的 fetch 就已经漏掉前缀了。
 	shim := rw.prefixShim()
-	if shimScriptRe.MatchString(s) {
-		if shim == "" {
-			return s
-		}
-		return shimBlockRe.ReplaceAllString(s, shim)
-	}
 	if shim == "" {
 		return s
+	}
+	if shimBlockRe.MatchString(s) {
+		// 前缀没变就原样返回：PrepareHTML 的幂等判定依赖「不额外制造命中」。
+		if shimBlockRe.FindString(s) == shim {
+			return s
+		}
+		s = shimBlockRe.ReplaceAllString(s, "")
 	}
 	if headTagRe.MatchString(s) {
 		return headTagRe.ReplaceAllStringFunc(s, func(m string) string {

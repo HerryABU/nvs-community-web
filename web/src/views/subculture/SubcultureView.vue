@@ -9,6 +9,8 @@
       </span>
     </div>
 
+    <FederatedBlock kind="subculture" :limit="6" />
+
     <el-tabs v-model="tab" class="subc-tabs">
       <!-- ============ 角色库 ============ -->
       <el-tab-pane label="OC 角色库" name="chars">
@@ -267,6 +269,7 @@ import { ElMessage } from 'element-plus';
 import CharacterManager from '@/components/oc/CharacterManager.vue';
 import WorldBookManager from '@/components/oc/WorldBookManager.vue';
 import ProjectManager from '@/components/oc/ProjectManager.vue';
+import FederatedBlock from '@/components/federation/FederatedBlock.vue';
 import { ocApi, ocGroupApi, ocAiApi, type OcCharacter, type OcGroup, type OcGroupMember } from '@/api/oc';
 
 const router = useRouter();

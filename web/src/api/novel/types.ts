@@ -101,6 +101,10 @@ export interface Comment {
   crisis?: CommentCrisis;
   /** 评论附图（站内存图，/uploads/images/…）：仅站内路径，最多 9 张 */
   images?: string[];
+  /** 议题投票：评论者选择公开时展示其投票选项 */
+  poll_id?: number;
+  show_vote?: boolean;
+  vote_labels?: string[];
   created_at: string;
 }
 

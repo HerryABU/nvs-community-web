@@ -14,17 +14,18 @@ import (
 )
 
 type DirectRoute struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Prefix      string    `gorm:"size:128;not null;uniqueIndex" json:"prefix"`
-	Port        int       `gorm:"not null" json:"port"` // 本机端口 1..65535
-	RootPath    string    `gorm:"size:256;default:''" json:"root_path"`
-	TargetURL   string    `gorm:"size:512;default:''" json:"target_url"` // 可选完整目标；管理员可用它配置自指/嵌套路由
-	CookieHat   string    `gorm:"size:64;default:''" json:"cookie_hat"`  // GWh 同款 cookie 帽子前缀（如 app__）
-	DropForeign bool      `gorm:"default:false" json:"drop_foreign_cookies"`
-	Enabled     bool      `gorm:"default:true;index" json:"enabled"`
-	Description string    `gorm:"size:512;default:''" json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	Prefix        string    `gorm:"size:128;not null;uniqueIndex" json:"prefix"`
+	Port          int       `gorm:"not null" json:"port"` // 本机端口 1..65535
+	RootPath      string    `gorm:"size:256;default:''" json:"root_path"`
+	TargetURL     string    `gorm:"size:512;default:''" json:"target_url"` // 可选完整目标；管理员可用它配置自指/嵌套路由
+	CookieHat     string    `gorm:"size:64;default:''" json:"cookie_hat"`  // GWh 同款 cookie 帽子前缀（如 app__）
+	DropForeign   bool      `gorm:"default:false" json:"drop_foreign_cookies"`
+	TLSSkipVerify bool      `gorm:"default:false" json:"tls_insecure_skip_verify"`
+	Enabled       bool      `gorm:"default:true;index" json:"enabled"`
+	Description   string    `gorm:"size:512;default:''" json:"description"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 func (DirectRoute) TableName() string { return "selfhost_direct_routes" }

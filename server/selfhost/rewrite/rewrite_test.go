@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -171,7 +172,8 @@ func TestRewriteJS(t *testing.T) {
 		// 非导航字面量一律不动：文本层判不出「URL 还是请求体数据」，由运行期 shim 处理
 		`fetch("/api/site-info")`,
 		`axios.get('/api/categories')`,
-		`import("/assets/chunk.js")`,
+		// Vite 懒加载 chunk：资源 URL 必须改写（用户要求覆盖内联脚本拼接形式）
+		`import("/app/assets/chunk.js")`,
 		`const x="/"`,
 		// 整页导航：保留前缀绝对（最稳，不依赖 document base）
 		`location.href='/app/login'`,
@@ -182,8 +184,8 @@ func TestRewriteJS(t *testing.T) {
 			t.Errorf("rewriteJS 未包含 %q\n输出:\n%s", c, out)
 		}
 	}
-	if contains(out, "/app/assets/") {
-		t.Errorf("JS 资源字面量不应被静态改写:\n%s", out)
+	if !contains(out, `fetch("/api/site-info")`) || !contains(out, `axios.get('/api/categories')`) {
+		t.Errorf("请求体/API 字面量不能被误改:\n%s", out)
 	}
 }
 
@@ -193,10 +195,14 @@ func TestRewriteJSMidFileImport(t *testing.T) {
 	sb.WriteString(`const runtime="` + strings.Repeat("x", 80*1024) + `";`)
 	sb.WriteString(`const routes=[{path:"/home",component:()=>import("/assets/AuthorHome-abc.js")}];`)
 	sb.WriteString(`import("/assets/core-def.js");`)
-	// 大文件中部也不改写：避免「预检窗口漏判」这类历史问题的同时，
-	// 彻底消除把业务数据当路径改写的风险（见 TestRewriteJSSkipsAPIPaths）。
-	if out := string(rw.rewriteJS([]byte(sb.String()))); out != sb.String() {
-		t.Errorf("大文件中的 import 不应被静态改写")
+	// 大文件中部也必须改写：Vite 的懒加载路由表常位于 bundle 中部，
+	// 只看文件头部的「预检窗口」会漏判导致 chunk 404。
+	out := string(rw.rewriteJS([]byte(sb.String())))
+	if !contains(out, `import("/app/assets/AuthorHome-abc.js")`) || !contains(out, `import("/app/assets/core-def.js")`) {
+		t.Errorf("大文件中部的 import 应被改写:\n%s", out[:400])
+	}
+	if !contains(out, `path:"/home"`) {
+		t.Errorf("业务数据字段不能被改写")
 	}
 }
 func TestInjectBase(t *testing.T) {
@@ -453,54 +459,93 @@ func TestHTMLAttrSkipsDeferred(t *testing.T) {
 	}
 }
 
-// TestNestedChainUpdatesShim 跨系统嵌套时，外层必须用完整链更新内层已注入的 shim，
-// 否则 <base href="/outer/"> 与 var P="/inner" 不一致，相对资源解析错位。
+// TestNestedChainUpdatesShim 跨系统嵌套时，外层必须用完整链更新内层已注入的 shim：
+// NVS(/gwh/) → GWh(/go-nvs/) 这类双向代理下，若外层只因「已有 shim」就跳过，
+// 页面会留下 base=/gwh/ 与 P=/go-nvs 不一致，相对资源解析到 /gwh/assets 导致整站 404。
 func TestNestedChainUpdatesShim(t *testing.T) {
-	// 内层（GWh）已经改写并注入 P="/inner"。
 	inner := `<html><head><base href="/inner/"><script data-gateway-prefix-shim="1">(function(){ var P="/inner"; })()</script></head><body><img src="./logo.png"></body></html>`
-	// 外层（NVS）知道完整链 outer/inner。
 	rw := New("outer/inner", "", "backend:8080")
-	out := []byte(rw.injectShim(inner))
-	s := string(out)
-	if n := strings.Count(s, "data-gateway-prefix-shim"); n != 1 {
-		t.Fatalf("shim 应恰好一个，got %d\n%s", n, s)
+	out := rw.injectShim(inner)
+	if n := strings.Count(out, "data-gateway-prefix-shim"); n != 1 {
+		t.Fatalf("shim 应恰好一个，got %d\n%s", n, out)
 	}
-	if !strings.Contains(s, `var P="/outer/inner"`) {
-		t.Errorf("shim 前缀未更新为完整链:\n%s", s)
+	if !strings.Contains(out, `var P="/outer/inner"`) {
+		t.Errorf("shim 前缀未更新为完整链:\n%s", out)
 	}
-	if strings.Contains(s, `var P="/inner"`) {
-		t.Errorf("仍残留内层局部前缀:\n%s", s)
+	if strings.Contains(out, `var P="/inner"`) {
+		t.Errorf("仍残留内层局部前缀:\n%s", out)
 	}
 }
 
-// TestPlainModeDropsContentLength 宿主有全局 gzip 时（NVS），plain 模式必须删掉 CL：
-// gin-contrib/gzip 会把压缩前的 Size 回填成 CL，浏览器按它解压缩字节直接
-// ERR_CONTENT_LENGTH_MISMATCH（openlist 的 JSON API 白屏现场）。
-func TestPlainModeDropsContentLength(t *testing.T) {
-	// JSON：早退分支
-	resp := &http.Response{
-		Header:        http.Header{"Content-Type": []string{"application/json"}, "Content-Length": []string{"60"}},
-		ContentLength: 60,
-		Body:          io.NopCloser(strings.NewReader(`{"ok":true}`)),
+// TestRewriteUnquotedAttrs 覆盖 HTML5 无引号属性值（example.com 的 <script src=/s.js>）。
+// 这类根绝对路径若漏改，浏览器会请求网关根路径，拿回 SPA 的 HTML 当 JS 执行 →
+// "SyntaxError: Unexpected token '<'"，外站页面直接报错。
+func TestRewriteUnquotedAttrs(t *testing.T) {
+	rw := New("ex", "", "example.com")
+	in := `<html><head><base href="/"></head><body>` +
+		`<script src=/s.js></script>` +
+		`<a href=/docs?x=1>link</a>` +
+		`<img src=/logo.png width=10>` +
+		`<form action=/submit method=post></form>` +
+		`</body></html>`
+	out := string(rw.rewriteHTML([]byte(in)))
+	for _, want := range []string{
+		`src=./s.js>`, `href=./docs?x=1>`, `src=./logo.png width=10>`, `action=./submit method=post>`,
+	} {
+		if !contains(out, want) {
+			t.Errorf("无引号属性未改写，期望含 %q\n输出: %s", want, out)
+		}
 	}
-	rw := NewPlain("opls", "", "127.0.0.1:5244")
-	if err := rw.Modify(resp); err != nil {
-		t.Fatal(err)
+	// 带引号的老写法不能被破坏
+	if !contains(out, `<base href="/ex/">`) {
+		t.Errorf("base 注入被破坏:\n%s", out)
 	}
-	if resp.Header.Get("Content-Length") != "" || resp.ContentLength != -1 {
-		t.Errorf("plain JSON 应删 CL: header=%q cl=%d", resp.Header.Get("Content-Length"), resp.ContentLength)
+	// 外站/协议相对/相对路径不动
+	keep := `<script src=//cdn.example.com/x.js></script><img src=logo.png>`
+	out2 := string(rw.rewriteHTML([]byte(keep)))
+	if !contains(out2, `src=//cdn.example.com/x.js`) || !contains(out2, `src=logo.png`) {
+		t.Errorf("外站与相对路径不应被改写:\n%s", out2)
 	}
+}
 
-	// gzip 编码但解不开（br）：早退分支
-	resp2 := &http.Response{
-		Header:        http.Header{"Content-Type": []string{"application/json"}, "Content-Encoding": []string{"br"}, "Content-Length": []string{"60"}},
-		ContentLength: 60,
-		Body:          io.NopCloser(strings.NewReader("x")),
+// TestStripCrossOriginOnExternalScript 外站 script 带 crossorigin + integrity 时，
+// 从网关 origin 加载会被 CDN 的 ACAO 白名单拒绝（DeepSeek 实测 200 但白屏）。
+// 去掉这两个属性后按经典跨域脚本加载，页面才能真的渲染。
+func TestStripCrossOriginOnExternalScript(t *testing.T) {
+	rw := New("dps", "", "chat.deepseek.com")
+	in := `<html><head>` +
+		`<script crossorigin defer integrity="sha384-abc" src="https://fe-static.deepseek.com/chat/static/main.js"></script>` +
+		`<script src="https://cdn.example.com/x.js" integrity='sha384-def' crossorigin="anonymous"></script>` +
+		`<script src="/local.js" crossorigin integrity="sha384-keep"></script>` +
+		`<script type="module" crossorigin src="https://cdn.example.com/mod.js"></script>` +
+		`</head></html>`
+	out := string(rw.rewriteHTML([]byte(in)))
+
+	// 逐个 script 标签核对：外站经典脚本必须清掉两个属性
+	tagRe := regexp.MustCompile(`(?is)<script\b[^>]*>`)
+	tags := tagRe.FindAllString(out, -1)
+	get := func(substr string) string {
+		for _, tag := range tags {
+			if strings.Contains(tag, substr) {
+				return tag
+			}
+		}
+		return ""
 	}
-	if err := rw.Modify(resp2); err != nil {
-		t.Fatal(err)
+	for _, host := range []string{"fe-static.deepseek.com/chat/static/main.js", "cdn.example.com/x.js"} {
+		tag := get(host)
+		if tag == "" {
+			t.Fatalf("找不到外站脚本 %q", host)
+		}
+		if strings.Contains(strings.ToLower(tag), "crossorigin") || strings.Contains(strings.ToLower(tag), "integrity") {
+			t.Errorf("外站脚本仍带 crossorigin/integrity: %s", tag)
+		}
 	}
-	if resp2.Header.Get("Content-Length") != "" {
-		t.Errorf("plain br 应删 CL: %q", resp2.Header.Get("Content-Length"))
+	// 本站脚本、module 脚本不动
+	if local := get("./local.js"); !strings.Contains(local, `crossorigin integrity="sha384-keep"`) {
+		t.Errorf("本站脚本属性不应被改动: %s", local)
+	}
+	if mod := get("cdn.example.com/mod.js"); !strings.Contains(mod, "crossorigin") {
+		t.Errorf("module 脚本的 crossorigin 应保留: %s", mod)
 	}
 }

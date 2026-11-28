@@ -8,6 +8,9 @@
         第{{ comment.chapter_number }}章
       </span>
     </div>
+    <div v-if="comment.show_vote && comment.vote_labels?.length" class="comment-vote-badge">
+      🗳️ TA 投了：{{ comment.vote_labels.join('、') }}
+    </div>
     <div v-if="comment.quote_text" class="comment-quote">
       「{{ comment.quote_text }}」
     </div>
@@ -192,6 +195,7 @@ function doReply() {
 .child-comments {
   margin-top: 4px;
 }
+.comment-vote-badge { display: inline-block; margin: 2px 0; padding: 2px 8px; border-radius: 999px; background: rgba(99,102,241,0.1); color: var(--primary-color, #6366f1); font-size: 0.74rem; }
 </style>
 
 <style>
@@ -234,4 +238,5 @@ function doReply() {
     padding-left: 10px;
   }
 }
+.comment-vote-badge { display: inline-block; margin: 2px 0; padding: 2px 8px; border-radius: 999px; background: rgba(99,102,241,0.1); color: var(--primary-color, #6366f1); font-size: 0.74rem; }
 </style>

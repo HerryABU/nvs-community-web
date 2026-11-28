@@ -208,7 +208,7 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - ⚠️ 回帖删除后不可解封恢复（物理删除），管理员「解封/恢复」对 post 类型仅清除封禁原因标记。
 
 ### 数据表
-全部 **194 张表 / 2209 个字段** 已按业务域整理成两份专门文档：
+全部 **197 张表 / 2244 个字段** 已按业务域整理成两份专门文档：
 
 - [`DATABASE.md`](DATABASE.md)：分域总览（表名 / 用途 / 主要字段 / 行数 / 源码位置）+ 全局约定
 - [`DATABASE-SCHEMA.md`](DATABASE-SCHEMA.md)：逐表字段明细（由 `python scripts/gen-db-doc.py data/nvs.db` 自动生成）
@@ -323,3 +323,14 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - NVS 自带的 `CSRFGuard`（登录态写操作须带 X-Requested-With）与 `MaintenanceWriteGuard`（热迁移禁写）只针对 NVS 自己的接口。GWh 没有这两层中间件。
 - 反代请求带着 NVS 的登录 cookie 访问后端应用（如 openlist 的 `/opls/api/auth/login`），会被 CSRFGuard 全局拦截并返回 403「缺少 CSRF 防护头」——后端既不需要也认不了这个头。用 `routes.skipProxy()` 让代理路径跳过这两层，由后端自行鉴权；NVS 自身 API 仍受完整保护。
 - 同类的还有 `conditionalGzip()`：代理路径跳过全局 gzip，避免 CL 回填竞态。三者一致，凡 GWh 没有的全局中间件都不该作用于反代路径。
+
+### 联邦内容按类型嵌入 + 多跳连网
+- 联邦缓存表 `federated_novels`（保留表名）通过 `kind` 承载 novel/blog/forum/micro/subculture 五类；条目带 `source_chain`/`hop_count`/`origin_site` 表达多跳来源。
+- `GET /api/federated/items?kind=&page=&page_size=` 输出本站各类公开内容 + `sites`（本站互联站点清单），供友站递归发现；`SyncFederatedSite` 递归拉取友站的友站，按 URL 去重、最大 3 跳，失败回退旧 `/api/novels`。
+- 联邦条目点击走**本站路径反代** `/fed/<siteID>/...`（proxycore 动态注册路由 → 源站，前缀剥离/shim/base/gzip/跳数守卫全部复用），不直接跳外链；与 GWh 外站反代一致。
+- 前端 `FederatedBlock.vue` 按 kind 渲染成融入列表的轻量条目（源站角标 + 跳数），小说/博客/论坛/微文/亚文化各自列表页嵌入；独立联邦页保留。
+
+### 议题投票（poll）
+- 三张表：`polls`（载体 target_kind/target_id、作者、状态 open/closed、多选/匿名）、`poll_options`（票数冗余计数）、`poll_votes`（用户投票，可覆盖）。
+- 作者可在编辑时插入或详情页补发（`PollEditor`），`PollCard` 展示/投票/终止；博客、微文、论坛帖子三类详情页均已挂载。
+- 评论可关联投票并勾选「公开我的投票」：comments/feed_comments/threads 三套评论各自加 `poll_id`/`show_vote`，公开时后端填 `vote_labels` 在评论项展示「TA 投了 X」。

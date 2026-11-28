@@ -30,6 +30,7 @@ import (
 	"nvs-server/handlers/novel"
 	"nvs-server/handlers/ops"
 	"nvs-server/handlers/payment"
+	"nvs-server/handlers/poll"
 	"nvs-server/handlers/rating"
 	"nvs-server/handlers/sandbox"
 	selfhosthandler "nvs-server/handlers/selfhost"
@@ -100,6 +101,7 @@ func registerPublic(r *gin.Engine) {
 		public.GET("/novels/:id/chapters/:num", novel.GetChapterContent)
 		public.GET("/novels/:id/chapters/:num/verify", novel.VerifyChapter)
 		public.GET("/comments", comment.GetComments)
+		public.GET("/polls/:id", poll.Get)
 		// 短视频 / 微文（视频号 + 贴图号）公开浏览
 		public.GET("/feed-config", feed.Config)
 		public.GET("/feed", feed.List)

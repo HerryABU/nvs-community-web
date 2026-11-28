@@ -358,7 +358,9 @@ type Post struct {
 	FloorNo     int       `gorm:"default:0;index:idx_posts_floor" json:"floor_no"`
 	ReplyCount  int       `gorm:"default:0" json:"reply_count"` // 楼内回复数（顶层回帖有效）
 	Username    string    `gorm:"-" json:"username,omitempty"`
-	ReplyToName string    `gorm:"-" json:"reply_to_name,omitempty"` // 被回复者昵称（展示「X 回复 Y」）
+	ReplyToName string    `gorm:"-" json:"reply_to_name,omitempty"`
+	PollID      uint      `gorm:"default:0;index" json:"poll_id,omitempty"`
+	ShowVote    bool      `gorm:"default:false" json:"show_vote"` // 被回复者昵称（展示「X 回复 Y」）
 	CreatedAt   time.Time `gorm:"index:idx_posts_thread_created,priority:2" json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	User        *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`

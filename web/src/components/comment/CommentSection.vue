@@ -62,6 +62,7 @@
             <el-icon><Picture /></el-icon> 附图
           </el-button>
         </el-upload>
+        <el-checkbox v-if="pollId" v-model="showMyVote" size="small" style="margin-right: 6px">公开我的投票</el-checkbox>
         <el-button type="primary" size="small" :loading="submitting" @click="submitComment">
           发表评论
         </el-button>
@@ -174,6 +175,7 @@ const props = defineProps<{
   novelCategory?: string;
   blogId?: number;
   ownerId?: number; // 主内容作者 id（楼层里给其评论打「楼主」标）；留空则不显示徽标
+  pollId?: number; // 若该内容有投票，评论可公开自己投的选项
 }>();
 
 // loaded(total)：评论总数变化时通知父组件（如博客详情页统计条数）
@@ -235,6 +237,7 @@ const comments = ref<Comment[]>([]);
 // 评论区开关：后端 GetComments 返回 comments_enabled（默认 true），false=作者已关闭评论区
 const commentsEnabled = ref(true);
 const newComment = ref('');
+const showMyVote = ref(false);
 const submitting = ref(false);
 // 附图（评论图片）：上传后先本地预览，提交时随 content 一起送；后端只收 /uploads/images/ 前缀
 const pendingImages = ref<string[]>([]);
@@ -459,6 +462,8 @@ async function submitComment() {
       chapter_number: props.chapterNumber,
       content: newComment.value.trim(),
       images: pendingImages.value.length ? pendingImages.value : undefined,
+      poll_id: props.pollId || 0,
+      show_vote: props.pollId ? showMyVote.value : false,
     });
     newComment.value = '';
     pendingImages.value = [];

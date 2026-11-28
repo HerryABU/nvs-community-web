@@ -3,7 +3,7 @@
 > 由 `scripts/gen-db-doc.py` 依据实际库结构 + 模型自动生成，**请勿手工修改**；
 > 改模型后重新生成即可。用途说明见 [`DATABASE.md`](DATABASE.md)。
 
-共 194 张表、2209 个字段。
+共 197 张表、2244 个字段。
 
 ## 账号与用户
 
@@ -56,7 +56,7 @@
 
 ### `user_audit_logs`
 
-用户操作审计：登录、改密、提权等，含 IP/UA 与结果（行数 691）
+用户操作审计：登录、改密、提权等，含 IP/UA 与结果（行数 710）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -73,7 +73,7 @@
 
 ### `refresh_states`
 
-当前有效的 refresh token 版本，用于强制下线（行数 17）
+当前有效的 refresh token 版本，用于强制下线（行数 16）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -286,7 +286,7 @@
 | `comments_enabled` | NUMERIC |  |
 | `like_count` | INTEGER |  |
 
-索引：`idx_novels_deleted_at`、`idx_novels_derivative_origin_id`、`idx_novels_read_permission`、`idx_novels_mode`、`idx_novels_category`、`idx_novels_author_status`
+索引：`idx_novels_read_permission`、`idx_novels_mode`、`idx_novels_category`、`idx_novels_author_status`、`idx_novels_deleted_at`、`idx_novels_derivative_origin_id`
 
 ### `novel_categories`
 
@@ -575,8 +575,10 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `moderation_status` | TEXT |  |
 | `region` | TEXT |  |
 | `images_raw` | TEXT |  |
+| `poll_id` | INTEGER |  |
+| `show_vote` | NUMERIC |  |
 
-索引：`idx_comments_flagged_minor`、`idx_comments_has_password`、`idx_comments_reply_to_user_id`、`idx_comments_created_micro`、`idx_comments_floor`、`idx_comments_root`、`idx_comments_blog`、`idx_comments_novel_created`、`idx_comments_blog_id`、`idx_comments_parent`、`idx_comments_deleted_at`、`idx_comments_user_id`
+索引：`idx_comments_poll_id`、`idx_comments_flagged_minor`、`idx_comments_has_password`、`idx_comments_reply_to_user_id`、`idx_comments_created_micro`、`idx_comments_floor`、`idx_comments_root`、`idx_comments_blog`、`idx_comments_novel_created`、`idx_comments_blog_id`、`idx_comments_parent`、`idx_comments_deleted_at`、`idx_comments_user_id`
 
 ## 作者博客
 
@@ -779,8 +781,10 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `content` | TEXT |  |
 | `like_count` | INTEGER |  |
 | `created_at` | DATETIME | 时间 |
+| `poll_id` | INTEGER |  |
+| `show_vote` | NUMERIC |  |
 
-索引：`idx_feed_comments_parent_id`、`idx_feed_comment`、`idx_feed_comments_user_id`
+索引：`idx_feed_comments_poll_id`、`idx_feed_comments_parent_id`、`idx_feed_comment`、`idx_feed_comments_user_id`
 
 ### `feed_comment_likes`
 
@@ -917,8 +921,10 @@ index.json 的库内副本（与文件同字节 + Hash）（行数 16）
 | `root_id` | INTEGER |  |
 | `floor_no` | INTEGER |  |
 | `reply_count` | INTEGER |  |
+| `poll_id` | INTEGER |  |
+| `show_vote` | NUMERIC |  |
 
-索引：`idx_posts_floor`、`idx_posts_root`、`idx_posts_parent`、`idx_posts_user`、`idx_posts_thread_created`、`idx_posts_user_id`
+索引：`idx_posts_poll_id`、`idx_posts_floor`、`idx_posts_root`、`idx_posts_parent`、`idx_posts_user`、`idx_posts_thread_created`、`idx_posts_user_id`
 
 ### `forum_mutes`
 
@@ -1559,6 +1565,7 @@ OC 群每日预算消耗（行数 0）
 | `updated_at` | DATETIME | 时间 |
 | `cookie_hat` | TEXT |  |
 | `drop_foreign` | NUMERIC |  |
+| `tls_skip_verify` | NUMERIC |  |
 
 索引：`idx_selfhost_routes_project_id`、`idx_selfhost_routes_prefix`、`idx_selfhost_routes_enabled`、`idx_selfhost_routes_status`
 
@@ -1583,7 +1590,7 @@ OC 群每日预算消耗（行数 0）
 
 ### `selfhost_direct_routes`
 
-管理员端口直派路由（路径→本机端口，GWh 同款，免审核）（行数 5）
+管理员端口直派路由（路径→本机端口，GWh 同款，免审核）（行数 10）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -1598,6 +1605,7 @@ OC 群每日预算消耗（行数 0）
 | `target_url` | TEXT |  |
 | `cookie_hat` | TEXT |  |
 | `drop_foreign` | NUMERIC |  |
+| `tls_skip_verify` | NUMERIC |  |
 
 索引：`idx_selfhost_direct_routes_prefix`、`idx_selfhost_direct_routes_enabled`
 
@@ -2904,7 +2912,7 @@ XSS 过滤规则（行数 0）
 
 ### `honeypot_events`
 
-蜜罐事件（诱饵、方法、路径、指纹）（行数 531）
+蜜罐事件（诱饵、方法、路径、指纹）（行数 536）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3273,7 +3281,7 @@ API Key 异常告警与确认（行数 0）
 
 ### `api_access_logs`
 
-API 访问日志（身份、路径、状态码、IP）（行数 127）
+API 访问日志（身份、路径、状态码、IP）（行数 123）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3333,7 +3341,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 127）
 
 ### `channel_balance_samples`
 
-上游渠道余额采样（用于额度预警）（行数 1008）
+上游渠道余额采样（用于额度预警）（行数 1024）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3816,7 +3824,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 127）
 
 ### `web_access_logs`
 
-全站访问日志（UA 族、路径、IP、身份）（行数 58419）
+全站访问日志（UA 族、路径、IP、身份）（行数 59549）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3868,7 +3876,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 127）
 
 ### `federated_sites`
 
-联邦站点登记（API 地址、状态、同步时间）（行数 0）
+联邦站点登记（API 地址、状态、同步时间）（行数 1）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3901,8 +3909,13 @@ API 访问日志（身份、路径、状态码、IP）（行数 127）
 | `cover_url` | TEXT |  |
 | `source_url` | TEXT |  |
 | `cached_at` | DATETIME |  |
+| `kind` | TEXT |  |
+| `proxy_path` | TEXT |  |
+| `origin_site` | TEXT |  |
+| `source_chain` | TEXT |  |
+| `hop_count` | INTEGER |  |
 
-索引：`idx_federated_novels_remote`、`idx_federated_novels_site`、`idx_federated_novels_site_id`、`idx_federated_novels_remote_id`
+索引：`idx_fed_kind`、`idx_federated_novels_remote`、`idx_federated_novels_site`、`idx_federated_novels_site_id`、`idx_federated_novels_remote_id`
 
 ### `federated_peer_keys`
 
@@ -3932,7 +3945,7 @@ API 访问日志（身份、路径、状态码、IP）（行数 127）
 
 ### `federated_inbound`
 
-入站请求统计（来源、端点、计数）（行数 16）
+入站请求统计（来源、端点、计数）（行数 17）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -3949,3 +3962,52 @@ API 访问日志（身份、路径、状态码、IP）（行数 127）
 | `issuer` | TEXT |  |
 
 索引：`idx_federated_inbound_ip`
+
+### `polls`
+
+议题投票（载体类型/ID、作者、状态）（行数 1）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | INTEGER | 主键 |
+| `target_kind` | TEXT |  |
+| `target_id` | INTEGER |  |
+| `author_id` | INTEGER |  |
+| `question` | TEXT |  |
+| `description` | TEXT |  |
+| `multiple` | NUMERIC |  |
+| `anonymous` | NUMERIC |  |
+| `status` | TEXT |  |
+| `closed_at` | DATETIME |  |
+| `created_at` | DATETIME | 时间 |
+| `updated_at` | DATETIME | 时间 |
+
+索引：`idx_polls_status`、`idx_poll_target`、`idx_polls_author_id`
+
+### `poll_options`
+
+投票选项（标签、排序、票数）（行数 2）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | INTEGER | 主键 |
+| `poll_id` | INTEGER |  |
+| `label` | TEXT |  |
+| `sort` | INTEGER |  |
+| `votes` | INTEGER |  |
+
+索引：`idx_poll_options_poll_id`
+
+### `poll_votes`
+
+用户投票记录（用户/选项，可覆盖）（行数 1）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | INTEGER | 主键 |
+| `poll_id` | INTEGER |  |
+| `option_id` | INTEGER |  |
+| `user_id` | INTEGER |  |
+| `created_at` | DATETIME | 时间 |
+
+索引：`idx_poll_vote`、`idx_poll_votes_option_id`

@@ -100,6 +100,13 @@
             <div class="blog-content markdown-body cherry-markdown cherry-previewer" data-code-block-theme="default" data-inline-code-theme="red" v-html="htmlContent" ref="blogContentRef"></div>
           </div>
 
+          <!-- 议题投票：正文下方，作者可发起/终止，读者可投票 -->
+          <div class="blog-polls">
+            <PollCard v-for="p in polls" :key="p.id" :id="p.id" :author-id="blogAuthorId" />
+            <el-button v-if="canStartPoll" link type="primary" size="small" @click="pollEditorVisible = true">🗳️ 发起投票</el-button>
+            <PollEditor v-model="pollEditorVisible" target-kind="blog" :target-id="contentId" @created="onPollCreated" />
+          </div>
+
           <!-- 自定义模板Footer区域（position=footer 的模版，渲染在正文下方） -->
           <div v-if="footerFrames.length > 0" class="template-zone template-footer">
             <div v-for="f in footerFrames" :key="f.id" class="template-frame-wrapper">
@@ -133,7 +140,7 @@
 
           <!-- 评论区 -->
           <h2 class="section-title" style="margin-top: 40px">评论（{{ commentTotal }}）</h2>
-          <CommentSection :novel-id="0" :novel-category="''" :blog-id="blog.id" :owner-id="blog.author_id" @loaded="(n: number) => commentTotal = n" />
+          <CommentSection :novel-id="0" :novel-category="''" :blog-id="blog.id" :owner-id="blog.author_id" :poll-id="polls[0]?.id || 0" @loaded="(n: number) => commentTotal = n" />
         </div>
 
         <!-- 右侧目录（CSDN 式可折叠，仅 md 且有标题时显示） -->
@@ -180,6 +187,9 @@ import { ElMessage } from 'element-plus';
 import { CaretTop, Check, Fold, Expand } from '@element-plus/icons-vue';
 import ReadPermissionGate from '@/components/readperm/ReadPermissionGate.vue';
 import { parseReadPermDeny } from '@/api/readperm';
+import PollCard from '@/components/poll/PollCard.vue';
+import PollEditor from '@/components/poll/PollEditor.vue';
+import { pollApi } from '@/api/poll';
 
 const route = useRoute();
 // AI 生成标识（详情页徽标）
@@ -187,6 +197,17 @@ const { label: aiMarkLabel, load: loadAiMark } = useAiMark();
 const router = useRouter();
 const authStore = useAuthStore();
 const blog = ref<any>(null);
+const polls = ref<any[]>([]);
+const pollEditorVisible = ref(false);
+const blogAuthorId = computed(() => blog.value?.author_id || 0);
+const canStartPoll = computed(() => !!authStore.isLoggedIn && !!blog.value && authStore.user?.id === blog.value.author_id);
+async function loadPolls() {
+  try {
+    const r = await pollApi.list('blog', Number(route.params.blogId || route.params.id || 0));
+    polls.value = r.data?.data || [];
+  } catch { polls.value = []; }
+}
+function onPollCreated(id: number) { if (id) polls.value.unshift({ id }); }
 const htmlContent = ref('');
 const loading = ref(false);
 // #65 权限拒绝状态
@@ -380,6 +401,7 @@ onMounted(async () => {
       });
       loadLikes();
       loadFrames();
+      loadPolls();
     }
   } catch (e) {
     const deny = parseReadPermDeny(e);

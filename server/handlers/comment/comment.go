@@ -79,6 +79,19 @@ func GetComments(c *gin.Context) {
 	if cfg, cerr := sentimentstore.GetConfig(); cerr == nil && cfg != nil {
 		foldChars = cfg.FoldChars
 	}
+	// 议题投票：评论者选择公开时，填充其在该投票里投的选项名（只读展示，未公开的不查不返回）。
+	for i := range pg.List {
+		cm := &pg.List[i]
+		if !cm.ShowVote || cm.PollID == 0 {
+			continue
+		}
+		var labels []string
+		models.DB.Table("poll_options").
+			Joins("JOIN poll_votes ON poll_votes.option_id = poll_options.id").
+			Where("poll_votes.poll_id = ? AND poll_votes.user_id = ?", cm.PollID, cm.UserID).
+			Pluck("poll_options.label", &labels)
+		cm.VoteLabels = labels
+	}
 	infra.Success(c, gin.H{
 		"fold_chars":       foldChars,
 		"comments_enabled": commentsEnabled,
@@ -115,7 +128,9 @@ func CreateComment(c *gin.Context) {
 		Content       string   `json:"content" binding:"required"`
 		QuoteText     string   `json:"quote_text"`
 		ParentID      *uint    `json:"parent_id"`
-		Images        []string `json:"images"` // 评论图片：仅允许站内上传路径 /uploads/images/...
+		Images        []string `json:"images"`  // 评论图片：仅允许站内上传路径 /uploads/images/...
+		PollID        uint     `json:"poll_id"` // 议题投票：评论可关联投票并公开自己投的选项
+		ShowVote      bool     `json:"show_vote"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		infra.BadRequest(c, "请填写评论内容")
@@ -218,6 +233,7 @@ func CreateComment(c *gin.Context) {
 		CreatedMicro: time.Now().UnixMicro(),
 		// IP 属地：只存展示名（省 / 国家），不落原始 IP；内网与解析失败留空不展示
 		Region: ipgeo.DisplayName(c.ClientIP()),
+		PollID: req.PollID, ShowVote: req.ShowVote,
 		// @ 提及存储（JSON）；解析失败/用户不存在已在上游过滤
 		MentionsRaw: models.MentionsToRaw(mentions),
 	}

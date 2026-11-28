@@ -157,6 +157,8 @@ declare module 'vue' {
     NovelCard: typeof import('./src/components/novel/NovelCard.vue')['default']
     PhoneLoginForm: typeof import('./src/components/auth/PhoneLoginForm.vue')['default']
     PoliceBadge: typeof import('./src/components/site/PoliceBadge.vue')['default']
+    PollCard: typeof import('./src/components/poll/PollCard.vue')['default']
+    PollEditor: typeof import('./src/components/poll/PollEditor.vue')['default']
     ProjectManager: typeof import('./src/components/oc/ProjectManager.vue')['default']
     PublishQuotaHint: typeof import('./src/components/common/PublishQuotaHint.vue')['default']
     QrScanDialog: typeof import('./src/components/group/QrScanDialog.vue')['default']

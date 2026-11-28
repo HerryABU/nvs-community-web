@@ -255,7 +255,7 @@ func registerAdminArea(r *gin.Engine) {
 		adminGrp.POST("/sites", adminsite.CreateFederatedSite)
 		adminGrp.PUT("/sites/:id", adminsite.UpdateFederatedSite)
 		adminGrp.DELETE("/sites/:id", adminsite.DeleteFederatedSite)
-		adminGrp.POST("/sites/:id/sync", adminsite.SyncFederatedSite)
+		adminGrp.POST("/sites/:id/sync", adminsite.SyncFederatedSiteRecursive)
 		// 联邦站点 API Key（双向可见：本站签发给对方 / 对方签发给本站）
 		adminGrp.GET("/sites/:id/keys", adminsite.ListFederatedSiteKeys)
 		adminGrp.POST("/sites/:id/keys/inbound", adminsite.CreateFederatedInboundKey)

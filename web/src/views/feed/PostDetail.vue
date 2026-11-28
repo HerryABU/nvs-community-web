@@ -74,6 +74,12 @@
           </button>
         </div>
 
+        <div v-if="post?.kind === 'micro'" class="vd-polls">
+          <PollCard v-for="p in polls" :key="p.id" :id="p.id" :author-id="post.user_id" />
+          <el-button v-if="isMine && post" link type="primary" size="small" @click="pollEditorVisible = true">🗳️ 发起投票</el-button>
+          <PollEditor v-model="pollEditorVisible" target-kind="micro" :target-id="post.id" @created="onPollCreated" />
+        </div>
+
         <div v-if="tags.length" class="vd-tags">
           <router-link v-for="t in tags" :key="t" :to="tagPath(t)" class="vd-tag">#{{ t }}</router-link>
         </div>
@@ -128,6 +134,9 @@ import { useAuthStore } from '@/stores/auth';
 import { formatCount, formatDuration, formatWhen } from '@/utils/feedFormat';
 import { postPath, POST_KIND_LABEL } from '@/utils/feedRoute';
 import VideoPlayer from '@/components/feed/VideoPlayer.vue';
+import PollCard from '@/components/poll/PollCard.vue';
+import PollEditor from '@/components/poll/PollEditor.vue';
+import { pollApi } from '@/api/poll';
 
 function kindLabel(kind?: string) {
   return POST_KIND_LABEL[kind || 'micro'] || '内容';
@@ -141,6 +150,14 @@ const router = useRouter();
 const auth = useAuthStore();
 
 const post = ref<FeedPost | null>(null);
+const polls = ref<any[]>([]);
+const pollEditorVisible = ref(false);
+async function loadPolls() {
+  if (!post.value) return;
+  try { const r = await pollApi.list('micro', post.value.id); polls.value = r.data?.data || []; }
+  catch { polls.value = []; }
+}
+function onPollCreated(id: number) { if (id) polls.value.unshift({ id }); }
 const loading = ref(false);
 const comments = ref<FeedComment[]>([]);
 const commentInput = ref('');
@@ -184,6 +201,7 @@ async function load(id: number) {
     const r = await feedApi.get(id);
     post.value = r.data?.data || null;
     if (!post.value) return;
+    loadPolls();
     if (post.value.content) {
       const { renderMarkdown } = await import('@/markdown/renderer');
       descHtml.value = renderMarkdown(post.value.content);

@@ -46,6 +46,10 @@ type Comment struct {
 	// IP 属地（公开展示，与主流社区口径一致）：国内只到省份、境外只到国家。
 	// 存的是「展示名」而不是原始 IP，避免把精确位置落库与下发；旧数据为空串不展示。
 	Region string `gorm:"size:32;default:''" json:"region,omitempty"`
+	// 议题投票：评论可关联一个投票，并决定是否对外展示自己投的选项
+	PollID     uint     `gorm:"default:0;index" json:"poll_id,omitempty"`
+	ShowVote   bool     `gorm:"default:false" json:"show_vote"`
+	VoteLabels []string `gorm:"-" json:"vote_labels,omitempty"` // 运行时填充：公开投票的选项名
 	// @ 提及：存储 JSON 数组 [{"name":"foo","user_id":5}]；运行时由 AfterFind/MentionsRefs 解析到 Mentions
 	MentionsRaw string       `gorm:"type:text;default:''" json:"-"`
 	Mentions    []MentionRef `gorm:"-" json:"mentions,omitempty"` // 解析后的提及列表（展示/跳转用）

@@ -665,6 +665,9 @@ export const publicApi = {
   getFederatedNovels(params?: { page?: number; page_size?: number; site_id?: number }) {
     return api.get('/federated/novels', { params });
   },
+  getFederatedItems(params?: { page?: number; page_size?: number; kind?: string }) {
+    return api.get<{ code: number; data: { list: any[]; total: number } }>('/federated/items', { params });
+  },
   getCategories() {
     return api.get<string[]>('/categories');
   },

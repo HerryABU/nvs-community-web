@@ -135,6 +135,7 @@ DOMAINS = [
     ]),
     ("联邦", "联邦站点、作品缓存、对端密钥、入站请求", [
         "federated_sites", "federated_novels", "federated_peer_keys", "federated_inbound",
+        "polls", "poll_options", "poll_votes",
     ]),
 ]
 
@@ -352,6 +353,10 @@ PURPOSE = {
     "federated_novels": "联邦作品缓存（远端 ID 映射）",
     "federated_peer_keys": "联邦对端密钥（方向、哈希、密文）",
     "federated_inbound": "入站请求统计（来源、端点、计数）",
+    # 议题投票
+    "polls": "议题投票（载体类型/ID、作者、状态）",
+    "poll_options": "投票选项（标签、排序、票数）",
+    "poll_votes": "用户投票记录（用户/选项，可覆盖）",
 }
 
 # 关键字段补充说明（可选，覆盖到就写进「主要字段」列）

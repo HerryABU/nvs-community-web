@@ -50,6 +50,7 @@ func registerPolice(r *gin.Engine) {
 	// 远程站点公开接口
 	{
 		r.GET("/api/federated/novels", adminsite.ListFederatedNovels)
+		r.GET("/api/federated/items", adminsite.ListFederatedItems)
 		r.GET("/api/federated/sites", adminsite.ListPublicSites)
 		r.GET("/api/site-info", adminsite.GetSiteInfo)
 		// 精读：公开笔记（游客可看公开批注）

@@ -27,7 +27,7 @@
     </div>
 
     <!-- 联邦嵌入区块（站长开启「嵌入列表区块」时显示跨站作品） -->
-    <FederatedBlock title="来自联邦站点的作品" :limit="6" />
+    <FederatedBlock kind="forum" :limit="6" />
 
     <el-tabs v-model="tab" @tab-change="onTab">
       <el-tab-pane label="发现群组" name="discover" />

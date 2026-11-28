@@ -7,6 +7,7 @@ package rewrite
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -37,7 +38,7 @@ type gwPathKey struct{}
 // path.go（路径运算与判定）、html.go（HTML/CSS 字面量）、script.go（JS 字面量）、
 // body.go（响应体编解码）与本文件（对外唯一的 Rewriter + 编排）。
 type Rewriter struct {
-	plain  bool   // 宿主已有全局 gzip 时输出明文，由宿主统一压缩
+	plain  bool   // 兼容旧调用：宿主已有全局 gzip 时输出明文（当前已停用）
 	prefix string // 网关对外前缀，如 "java-order"
 	root   string // 后端根路径，如 "" 或 "/api/v1"
 	host   string // 后端 host，用于重写指向后端的绝对重定向
@@ -48,9 +49,7 @@ func New(prefix, root, host string) *Rewriter {
 	return &Rewriter{prefix: prefix, root: root, host: host}
 }
 
-// NewPlain 解压改写后输出未压缩正文，由宿主统一的 gzip 中间件压缩。
-// NVS 全局 gin-contrib/gzip 会剥掉已有 Content-Encoding/ETag 却保留压缩字节，
-// 所以代理层必须交明文给它。
+// NewPlain 兼容旧调用（当前 proxycore 不再使用，改由代理层自己压缩）。
 func NewPlain(prefix, root, host string) *Rewriter {
 	rw := New(prefix, root, host)
 	rw.plain = true
@@ -77,7 +76,13 @@ func (rw *Rewriter) Modify(resp *http.Response) error {
 	if outermost {
 		defer resp.Header.Del(PrefixChainHeader) // 任何分支都不能把内部头漏给浏览器
 	}
-	rw = &Rewriter{prefix: full, root: rw.root, host: rw.host, plain: rw.plain}
+	audit := AuditOf(resp.Request)
+	if audit != nil {
+		audit.Chain = full
+		audit.Status = resp.StatusCode
+		defer func() { audit.Status = resp.StatusCode }()
+	}
+	rw = &Rewriter{prefix: full, root: rw.root, host: rw.host}
 
 	// 重定向 Location（无需读 body）
 	if loc := resp.Header.Get("Location"); loc != "" {
@@ -95,23 +100,13 @@ func (rw *Rewriter) Modify(resp *http.Response) error {
 	isJS := mt == "application/javascript" || mt == "text/javascript" ||
 		mt == "application/x-javascript" || mt == "application/ecmascript" || mt == "text/ecmascript"
 	if !isHTML && !isCSS && !isJS {
-		// plain 模式下宿主有全局 gzip：JSON（openlist 的 /api/public/*）原样透传时
-		// 必须删掉上游 CL，否则 gin gzip 用压缩前的 Size 回填，浏览器按错的 CL
-		// 解压截断 gzip → ERR_CONTENT_LENGTH_MISMATCH → 前端拿不到数据。
-		if rw.plain {
-			resp.ContentLength = -1
-			resp.Header.Del("Content-Length")
-		}
 		return nil // 二进制 / JSON / 其他：直接透传
 	}
 
 	// 解不开的编码（br / zstd / 多段编码）必须一个字节都不碰：
 	// 后面 writeBody 会按 enc 重打包，若 enc 判断错就会把压缩字节当明文发给浏览器。
 	if _, ok := encodingOf(resp.Header.Get("Content-Encoding")); !ok {
-		if rw.plain {
-			resp.ContentLength = -1
-			resp.Header.Del("Content-Length")
-		}
+		audit.MarkSkip("unsupported_encoding")
 		return nil
 	}
 
@@ -119,30 +114,32 @@ func (rw *Rewriter) Modify(resp *http.Response) error {
 	// 不能用有限窗口预检，否则 SPA 的路由懒加载 chunk（import 在文件中部）会被漏判导致 404。
 	decoded, raw, enc, err := readBody(resp)
 	if err != nil {
-		// 读流失败时把已读到的字节还回去，不能让客户端收到被掏空的响应。
-		if len(raw) > 0 {
+		// 超限分支已在 readBody 里拼回「已读字节 + 剩余流」，
+		// 这里再覆盖成 raw 会把 chunked 尾包丢掉 —— 绝不能这么做。
+		if !errors.Is(err, ErrBodyTooLarge) && len(raw) > 0 {
 			resp.Body = io.NopCloser(bytes.NewReader(raw))
 		}
-		if rw.plain {
-			resp.ContentLength = -1
-			resp.Header.Del("Content-Length")
+		if errors.Is(err, ErrBodyTooLarge) {
+			audit.MarkSkip("too_large")
+		} else {
+			audit.MarkSkip("decode_failed")
 		}
-		return nil // 解压失败则原样透传
+		return nil // 超限 / 解压失败：原样透传，不改写
 	}
 
 	switch {
 	case isHTML:
 		// HTML 总是重写（至少注入 <base> 欺骗前端路由）
-		decoded = rw.rewriteHTML(decoded)
+		out := rw.rewriteHTML(decoded)
+		audit.MarkHit("html", 1)
+		decoded = out
 	case isCSS:
 		if !needsCSSRewrite(decoded) {
-			if rw.plain && enc != encIdentity {
-				writeBody(resp, decoded, encIdentity)
-			} else {
-				resp.Body = io.NopCloser(bytes.NewReader(raw))
-			}
+			audit.MarkSkip("no_hit")
+			resp.Body = io.NopCloser(bytes.NewReader(raw))
 			return nil
 		}
+		audit.MarkHit("css", 1)
 		// 外链 CSS：url()/@import 相对「CSS 文件自身位置」解析，需要网关侧 CSS 请求路径
 		cssPath := ""
 		if resp.Request != nil {
@@ -155,13 +152,11 @@ func (rw *Rewriter) Modify(resp *http.Response) error {
 		}
 	default: // JS
 		if !needsJSRewrite(decoded) {
-			if rw.plain && enc != encIdentity {
-				writeBody(resp, decoded, encIdentity)
-			} else {
-				resp.Body = io.NopCloser(bytes.NewReader(raw))
-			}
+			audit.MarkSkip("no_hit")
+			resp.Body = io.NopCloser(bytes.NewReader(raw))
 			return nil
 		}
+		audit.MarkHit("js", 1)
 		decoded = rw.rewriteJS(decoded)
 	}
 	// 完整前缀链写回响应头，供外层继续改写（最外层由上面的 defer 摘掉）。
@@ -175,18 +170,25 @@ func (rw *Rewriter) Modify(resp *http.Response) error {
 	if MarkRewrittenScope(resp.Request, resp, decoded, rw.prefix) {
 		return nil
 	}
-	if rw.plain {
-		enc = encIdentity
-	}
 	writeBody(resp, decoded, enc)
 	return nil
 }
 
 func (rw *Rewriter) rewriteLocation(loc string) string {
+	// 后端被攻陷或配置错误时可能回 javascript:/data: 的 Location；
+	// 网关不能替它把这种跳转透给浏览器（响应头注入 / XSS）。
+	if s := strings.ToLower(strings.TrimSpace(loc)); strings.HasPrefix(s, "javascript:") ||
+		strings.HasPrefix(s, "data:") || strings.HasPrefix(s, "vbscript:") {
+		return "/"
+	}
 	if strings.HasPrefix(loc, "//") {
 		return loc
 	}
 	if u, err := url.Parse(loc); err == nil && u.IsAbs() {
+		scheme := strings.ToLower(u.Scheme)
+		if scheme != "http" && scheme != "https" {
+			return "/"
+		}
 		if strings.EqualFold(u.Host, rw.host) {
 			// 指向后端自身的绝对重定向，转为网关路径
 			p := u.Path

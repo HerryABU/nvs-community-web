@@ -138,19 +138,20 @@ func (Project) TableName() string { return "selfhost_projects" }
 
 // Route 反向代理路由（一个项目一条，后台独立管理页维护）。
 type Route struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	ProjectID   uint      `gorm:"not null;uniqueIndex" json:"project_id"`
-	Prefix      string    `gorm:"size:128;not null;uniqueIndex" json:"prefix"` // /demo、/a/b
-	Target      string    `gorm:"size:512;not null" json:"target"`
-	StripPrefix bool      `gorm:"default:true" json:"strip_prefix"`
-	Timeout     int       `gorm:"default:10" json:"timeout"` // 秒，1..120
-	Enabled     bool      `gorm:"default:false;index" json:"enabled"`
-	Status      string    `gorm:"size:16;default:stopped;index" json:"status"`
-	CookieHat   string    `gorm:"size:64;default:''" json:"cookie_hat"` // GWh 同款帽子（请求侧脱帽 + 响应侧加帽）
-	DropForeign bool      `gorm:"default:false" json:"drop_foreign_cookies"`
-	LastError   string    `gorm:"size:512;default:''" json:"last_error"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	ProjectID     uint      `gorm:"not null;uniqueIndex" json:"project_id"`
+	Prefix        string    `gorm:"size:128;not null;uniqueIndex" json:"prefix"` // /demo、/a/b
+	Target        string    `gorm:"size:512;not null" json:"target"`
+	StripPrefix   bool      `gorm:"default:true" json:"strip_prefix"`
+	Timeout       int       `gorm:"default:10" json:"timeout"` // 秒，1..120
+	Enabled       bool      `gorm:"default:false;index" json:"enabled"`
+	Status        string    `gorm:"size:16;default:stopped;index" json:"status"`
+	CookieHat     string    `gorm:"size:64;default:''" json:"cookie_hat"` // GWh 同款帽子（请求侧脱帽 + 响应侧加帽）
+	DropForeign   bool      `gorm:"default:false" json:"drop_foreign_cookies"`
+	TLSSkipVerify bool      `gorm:"default:false" json:"tls_insecure_skip_verify"`
+	LastError     string    `gorm:"size:512;default:''" json:"last_error"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 func (Route) TableName() string { return "selfhost_routes" }

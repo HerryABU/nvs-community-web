@@ -19,6 +19,7 @@ import (
 	"nvs-server/config"
 	"nvs-server/models"
 	"nvs-server/security"
+	"nvs-server/selfhost"
 	"nvs-server/version"
 
 	"github.com/gin-gonic/gin"
@@ -244,6 +245,7 @@ func CreateFederatedSite(c *gin.Context) {
 		infra.InternalError(c, "添加失败")
 		return
 	}
+	selfhost.InvalidateRoutes()
 	infra.Success(c, site)
 }
 
