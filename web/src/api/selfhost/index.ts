@@ -26,6 +26,11 @@ export interface SelfHostRoute {
   timeout: number;
   enabled: boolean;
   status: string;
+  cookie_hat?: string;
+  drop_foreign_cookies?: boolean;
+  tls_insecure_skip_verify?: boolean;
+  sdk_origin_auth?: boolean;
+  wx_appid?: string;
   last_error: string;
 }
 
@@ -117,6 +122,9 @@ export interface DirectRoute {
   target_url?: string;
   cookie_hat?: string;
   drop_foreign_cookies?: boolean;
+  tls_insecure_skip_verify?: boolean;
+  sdk_origin_auth?: boolean;
+  wx_appid?: string;
   enabled: boolean;
   description: string;
   created_at: string;

@@ -332,7 +332,7 @@ OC 角色卡、世界书、创作项目、AI 群组与剧情流。
 | `api_access_logs` | API 访问日志（身份、路径、状态码、IP） | id / identity_type / identity_id / key_prefix | 123 | `server/models/apikey/api_key.go` |
 | `user_api_policies` | 用户限流策略与 Key 封禁状态 | id / user_id / quota_per_min / window_secs | 0 | `server/models/apikey/api_key.go` |
 | `rage_configs` | 限流/长连接参数（批量间隔、并发、WS/MQTT 开关） | id / enabled / batch_interval_sec / batch_size | 1 | `server/models/siteops/rage_config.go` |
-| `channel_balance_samples` | 上游渠道余额采样（用于额度预警） | id / base_url / remaining / used | 1024 | `server/models/aicost/channel_balance_sample.go` |
+| `channel_balance_samples` | 上游渠道余额采样（用于额度预警） | id / base_url / remaining / used | 1060 | `server/models/aicost/channel_balance_sample.go` |
 
 <a id="domain-15"></a>
 
@@ -386,7 +386,7 @@ OC 角色卡、世界书、创作项目、AI 群组与剧情流。
 
 | 表名 | 用途 | 主要字段 | 行数 | 源码 |
 | --- | --- | --- | --- | --- |
-| `web_access_logs` | 全站访问日志（UA 族、路径、IP、身份） | id / user_id / identity_type / ua_family | 59549 | `server/models/quota/web_access.go` |
+| `web_access_logs` | 全站访问日志（UA 族、路径、IP、身份） | id / user_id / identity_type / ua_family | 59557 | `server/models/quota/web_access.go` |
 | `zone_access_logs` | 分区进入日志（zone、IP、UA） | id / user_id / zone / entered_at | 5 | `server/models/platform/zone_access.go` |
 
 <a id="domain-18"></a>

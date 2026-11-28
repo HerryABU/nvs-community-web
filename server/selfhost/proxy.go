@@ -70,7 +70,7 @@ func InvalidateRoutes() {
 			Target:    r.Target,
 			Timeout:   r.Timeout,
 			Status:    proxycore.StatusActive,
-			CookieHat: r.CookieHat, DropForeign: r.DropForeign, TLSSkipVerify: r.TLSSkipVerify,
+			CookieHat: r.CookieHat, DropForeign: r.DropForeign, TLSSkipVerify: r.TLSSkipVerify, SDKOriginAuth: r.SDKOriginAuth, WXAppid: r.WXAppid,
 		})
 	}
 	// 管理员直接指派的本机端口路由（无需项目审核，只由管理员配置）。
@@ -85,7 +85,7 @@ func InvalidateRoutes() {
 		}
 		core = append(core, proxycore.Route{
 			Prefix: strings.TrimPrefix(d.Prefix, "/"), Target: target, Timeout: 10, Status: proxycore.StatusActive,
-			CookieHat: d.CookieHat, DropForeign: d.DropForeign, TLSSkipVerify: d.TLSSkipVerify,
+			CookieHat: d.CookieHat, DropForeign: d.DropForeign, TLSSkipVerify: d.TLSSkipVerify, SDKOriginAuth: d.SDKOriginAuth, WXAppid: d.WXAppid,
 		})
 	}
 	// 联邦站点的外站路径反代：/fed/<siteID>/... → 源站根，复用 proxycore 的

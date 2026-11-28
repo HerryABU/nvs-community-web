@@ -334,3 +334,9 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - 三张表：`polls`（载体 target_kind/target_id、作者、状态 open/closed、多选/匿名）、`poll_options`（票数冗余计数）、`poll_votes`（用户投票，可覆盖）。
 - 作者可在编辑时插入或详情页补发（`PollEditor`），`PollCard` 展示/投票/终止；博客、微文、论坛帖子三类详情页均已挂载。
 - 评论可关联投票并勾选「公开我的投票」：comments/feed_comments/threads 三套评论各自加 `poll_id`/`show_vote`，公开时后端填 `vote_labels` 在评论项展示「TA 投了 X」。
+
+### 第三方 SDK 登录在反代域名下可用（同步 GWh 41e1abd/e8be8d5/3ba0e5e）
+- `fixOAuth()`：第三方登录 SDK（微信/Apple）把本站回调 URL 嵌在第三方域名的 `redirect_uri` 查询参数里；shim 只改这一个 OAuth 标准参数，同源时补网关前缀，其它参数（state/业务数据）一律不碰。
+- `sdk_origin_auth`：开启后 shim 把 `redirect_uri` 的 origin 换成后端原站（`NewWithOrigin` 注入 `O_AUTH`），让开放平台域名白名单通过（登录在原站完成）。`Modify` 重建 Rewriter 时必须带上 origin，否则嵌套链下静默失效。
+- `wx_appid`：shim 在 `<head>` 最先预设 `window.WxLogin` 的 setter，SDK 赋值时包装构造函数，把 appid 换成官方值（分层欺骗 + SDK 透传，外链 JS 不改）；微信登录在反代域名下可正常渲染二维码。
+- 三层路由（selfhost_routes / selfhost_direct_routes / GWh models.Route）均带 `sdk_origin_auth` / `wx_appid` 字段，控制台可配。

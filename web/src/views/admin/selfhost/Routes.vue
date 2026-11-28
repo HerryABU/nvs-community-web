@@ -69,6 +69,11 @@
         <el-form-item label="上游地址" required><el-input v-model="form.target" placeholder="https://your-host:9000" /></el-form-item>
         <el-form-item label="去掉前缀"><el-switch v-model="form.strip_prefix" /></el-form-item>
         <el-form-item label="超时（秒）"><el-input-number v-model="form.timeout" :min="1" :max="120" /></el-form-item>
+        <el-form-item label="Cookie 帽子"><el-input v-model="form.cookie_hat" placeholder="可选，如 app__" /></el-form-item>
+        <el-form-item label="丢弃外来 Cookie"><el-switch v-model="form.drop_foreign_cookies" /></el-form-item>
+        <el-form-item label="自签 HTTPS"><el-switch v-model="form.tls_insecure_skip_verify" /></el-form-item>
+        <el-form-item label="SDK 登录回原站"><el-switch v-model="form.sdk_origin_auth" /></el-form-item>
+        <el-form-item label="微信官方 AppID"><el-input v-model="form.wx_appid" placeholder="可选，如 wx932d4fdaf46d5611" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="visible = false">取消</el-button>

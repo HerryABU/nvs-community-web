@@ -68,6 +68,12 @@ func (m *Manager) buildEntry(r Route) (*Entry, error) {
 
 	// 路径模式：剥离 /prefix 前缀 + 响应内容重写（加回前缀、注入 <base>）
 	rw := m.newRewriter(r.Prefix, p.Root, p.Host)
+	if r.SDKOriginAuth && p.Scheme != "" && p.Host != "" {
+		rw = rewrite.NewWithOrigin(r.Prefix, p.Root, p.Host, p.Scheme+"://"+p.Host)
+	}
+	if r.WXAppid != "" {
+		rw.SetWXAppid(r.WXAppid)
+	}
 	entry.Proxy = &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
 			// 记录网关侧原始路径（外链 CSS 相对化需要推算基准目录）；

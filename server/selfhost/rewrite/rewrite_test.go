@@ -549,3 +549,83 @@ func TestStripCrossOriginOnExternalScript(t *testing.T) {
 		t.Errorf("module 脚本的 crossorigin 应保留: %s", mod)
 	}
 }
+
+// TestShimOAuthCallbackFix 微信/Apple 等第三方登录 SDK 把本站回调 URL 嵌在
+// 第三方域名 URL 的 redirect_uri 参数里，且常漏掉网关前缀 → 微信回
+// "redirect_uri 参数错误"、回调打到网关根 404。shim 必须定向修复。
+func TestShimOAuthCallbackFix(t *testing.T) {
+	rw := New("dps", "", "chat.deepseek.com")
+	shim := rw.prefixShim()
+	if shim == "" {
+		t.Fatal("shim 未生成")
+	}
+	for _, snippet := range []string{
+		"fixOAuth",                         // OAuth 回调修复函数存在
+		`searchParams.get("redirect_uri")`, // 只读 redirect_uri，不碰 state 等数据
+		`uu.origin===location.origin`,      // 本站 URL 不被当第三方处理
+		`r.origin!==location.origin`,       // 外站回调不误改
+	} {
+		if !strings.Contains(shim, snippet) {
+			t.Errorf("shim 缺少 OAuth 回调修复片段 %q", snippet)
+		}
+	}
+}
+
+// TestShimSDKOriginAuth 回源模式：注入原站 origin，fixOAuth 用 O_AUTH 替换回调域名，
+// 让微信/Apple 开放平台白名单通过。默认（New）必须注入 null，不回源。
+func TestShimSDKOriginAuth(t *testing.T) {
+	plain := New("dps", "", "chat.deepseek.com").prefixShim()
+	if !strings.Contains(plain, "var O_AUTH=null") {
+		t.Errorf("默认模式应注入 null（不回源）: %s", plain[:min(200, len(plain))])
+	}
+	withOrigin := NewWithOrigin("dps", "", "chat.deepseek.com", "https://chat.deepseek.com").prefixShim()
+	if !strings.Contains(withOrigin, `var O_AUTH=\"https://chat.deepseek.com\"`) &&
+		!strings.Contains(withOrigin, `var O_AUTH="https://chat.deepseek.com"`) {
+		t.Errorf("回源模式应注入原站 origin: %s", withOrigin[:min(220, len(withOrigin))])
+	}
+	if !strings.Contains(withOrigin, "O_AUTH+r.pathname") {
+		t.Error("fixOAuth 应使用 O_AUTH 替换回调 origin")
+	}
+}
+
+// TestModifyKeepsSDKOrigin 嵌套链改写会重建 Rewriter（prefix 换完整链），
+// 必须把 origin（SDK 回源配置）带上，否则回源开关在 Modify 后被悄悄丢掉。
+func TestModifyKeepsSDKOrigin(t *testing.T) {
+	rw := NewWithOrigin("a", "", "backend:80", "https://origin.example.com")
+	html := `<html><head><title>x</title></head><body>hi</body></html>`
+	resp := &http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"Content-Type": []string{"text/html"}},
+		Body:       io.NopCloser(strings.NewReader(html)),
+		Request:    &http.Request{Header: http.Header{}},
+	}
+	if err := rw.Modify(resp); err != nil {
+		t.Fatalf("Modify failed: %v", err)
+	}
+	out, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(out), `var O_AUTH="https://origin.example.com"`) {
+		t.Errorf("Modify 重建 Rewriter 后丢失 origin（回源开关失效）:\n%s", string(out)[:min(400, len(out))])
+	}
+}
+
+// TestShimWXAppidHook 分层欺骗 + SDK 透传：shim 预设 WxLogin setter，
+// 在 SDK 初始化时替换 appid 与 redirect_uri（SDK 本身仍从原 CDN 正常加载）。
+func TestShimWXAppidHook(t *testing.T) {
+	plain := New("dps", "", "chat.deepseek.com").prefixShim()
+	if !strings.Contains(plain, "var WX_APPID=null") {
+		t.Error("未配置 appid 时应注入 null（hook 代码存在但 if 不成立，不执行）")
+	}
+	rw := NewWithOrigin("dps", "", "chat.deepseek.com", "https://chat.deepseek.com")
+	rw.SetWXAppid("wx932d4fdaf46d5611")
+	shim := rw.prefixShim()
+	for _, snippet := range []string{
+		`var WX_APPID="wx932d4fdaf46d5611"`,
+		`Object.defineProperty(window,"WxLogin"`,
+		`opts.appid=WX_APPID`,
+		`opts.redirect_uri=fixOAuth(opts.redirect_uri)`,
+	} {
+		if !strings.Contains(shim, snippet) {
+			t.Errorf("shim 缺少 WxLogin hook 片段 %q", snippet)
+		}
+	}
+}

@@ -300,3 +300,57 @@ func TestProxyCookieHat(t *testing.T) {
 		t.Errorf("应保留属性: %s", sc[0])
 	}
 }
+
+// TestProxySDKShim 路由开启 SDK 回原站 + 微信 appid 时，反代响应里的 shim 必须
+// 注入 O_AUTH（原站 origin）与 WxLogin hook（官方 appid），让第三方登录在反代域名下可用。
+func TestProxySDKShim(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = io.WriteString(w, `<html><head><script>window.WxLogin=function(){};</script></head><body>ok</body></html>`)
+	}))
+	defer backend.Close()
+
+	m := newTestManager("", Route{
+		Prefix: "sdk", Target: backend.URL, Timeout: 5, Status: StatusActive,
+		SDKOriginAuth: true, WXAppid: "wx932official",
+	})
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.NoRoute(func(c *gin.Context) {
+		if !m.Matchable(c.Request.URL.Path, c.Request.Host) {
+			c.String(404, "nf")
+			return
+		}
+		m.Handle(c)
+	})
+	req := httptest.NewRequest("GET", "/sdk/", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("应 200，got %d", w.Code)
+	}
+	body := gunzipBody(t, w.Body.Bytes(), w.Header().Get("Content-Encoding"))
+	if !strings.Contains(body, "var O_AUTH=") || !strings.Contains(body, "wx932official") {
+		t.Errorf("shim 未注入 SDK 回源/微信 appid hook:/n%s", body[:minLen(body, 400)])
+	}
+	if !strings.Contains(body, `Object.defineProperty(window,"WxLogin"`) {
+		t.Errorf("shim 未预设 WxLogin setter:/n%s", body[:minLen(body, 400)])
+	}
+}
+
+func gunzipBody(t *testing.T, b []byte, enc string) string {
+	t.Helper()
+	if strings.Contains(enc, "gzip") {
+		gr, err := gzip.NewReader(bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := io.ReadAll(gr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(out)
+	}
+	return string(b)
+}

@@ -38,10 +38,12 @@ type gwPathKey struct{}
 // path.go（路径运算与判定）、html.go（HTML/CSS 字面量）、script.go（JS 字面量）、
 // body.go（响应体编解码）与本文件（对外唯一的 Rewriter + 编排）。
 type Rewriter struct {
-	plain  bool   // 兼容旧调用：宿主已有全局 gzip 时输出明文（当前已停用）
 	prefix string // 网关对外前缀，如 "java-order"
 	root   string // 后端根路径，如 "" 或 "/api/v1"
 	host   string // 后端 host，用于重写指向后端的绝对重定向
+	origin string // SDK 回调回源的原站 origin（如 https://chat.deepseek.com）；空=补网关前缀
+	// wxAppid 非空时，shim hook WxLogin 构造参数，把 appid 换成该官方值。
+	wxAppid string
 }
 
 // New 创建改写器：prefix 为网关对外前缀（如 java-order），root 为后端根路径，host 为后端 host。
@@ -49,11 +51,21 @@ func New(prefix, root, host string) *Rewriter {
 	return &Rewriter{prefix: prefix, root: root, host: host}
 }
 
-// NewPlain 兼容旧调用（当前 proxycore 不再使用，改由代理层自己压缩）。
+// NewWithOrigin 额外指定「SDK 回调回源」的原站 origin。
+// 仅当路由开启 sdk_origin_auth 时使用：第三方 OAuth 的 redirect_uri 会换成该 origin，
+// 让开放平台域名白名单通过（登录在原站完成）。origin 必须是 scheme://host 形式。
+func NewWithOrigin(prefix, root, host, origin string) *Rewriter {
+	return &Rewriter{prefix: prefix, root: root, host: host, origin: origin}
+}
+
+// NewWithSpoofHost 在创建改写器时指定「分层欺骗」使用的后端 host。
+// 仅当路由开启 spoof_hostname 时调用；它让前端环境判定以为自己跑在官方域名。
+// SetWXAppid 设置微信登录欺骗用的官方 appid（分层欺骗的一部分）。
+func (rw *Rewriter) SetWXAppid(appid string) { rw.wxAppid = appid }
+
+// NewPlain 保留兼容（proxycore 当前不使用；改由代理层自己压缩）。
 func NewPlain(prefix, root, host string) *Rewriter {
-	rw := New(prefix, root, host)
-	rw.plain = true
-	return rw
+	return New(prefix, root, host)
 }
 
 func (rw *Rewriter) gatewayPath() string {
@@ -82,7 +94,8 @@ func (rw *Rewriter) Modify(resp *http.Response) error {
 		audit.Status = resp.StatusCode
 		defer func() { audit.Status = resp.StatusCode }()
 	}
-	rw = &Rewriter{prefix: full, root: rw.root, host: rw.host}
+	// 注意：必须带上 origin（SDK 回源）与 spoofHost（分层欺骗），否则嵌套链/链首重建会丢开关。
+	rw = &Rewriter{prefix: full, root: rw.root, host: rw.host, origin: rw.origin, wxAppid: rw.wxAppid}
 
 	// 重定向 Location（无需读 body）
 	if loc := resp.Header.Get("Location"); loc != "" {

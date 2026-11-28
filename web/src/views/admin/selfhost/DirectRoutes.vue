@@ -50,6 +50,9 @@
           <div class="dr-hint">留空则只收紧 Path、不改名；填写后必须成对启用，后端才能读到自己下的 cookie。</div>
         </el-form-item>
         <el-form-item label="丢弃外来 Cookie"><el-switch v-model="form.drop_foreign_cookies" /></el-form-item>
+        <el-form-item label="自签 HTTPS"><el-switch v-model="form.tls_insecure_skip_verify" /><div class="dr-hint">后端用自签证书时开启（仅网关→后端这一段）。</div></el-form-item>
+        <el-form-item label="SDK 登录回原站"><el-switch v-model="form.sdk_origin_auth" /><div class="dr-hint">第三方 OAuth 回调改走原站域名，绕过开放平台域名白名单。</div></el-form-item>
+        <el-form-item label="微信官方 AppID"><el-input v-model="form.wx_appid" placeholder="可选，如 wx932d4fdaf46d5611" /><div class="dr-hint">配合上一项：shim 拦截 WxLogin 并把 appid 换成官方值。</div></el-form-item>
         <el-form-item label="说明"><el-input v-model="form.description" type="textarea" :rows="2" /></el-form-item>
         <el-form-item label="立即启用"><el-switch v-model="form.enabled" /></el-form-item>
       </el-form>
@@ -85,7 +88,7 @@ async function load() {
 }
 function openEditor(row?: DirectRoute) {
   Object.keys(form).forEach((k) => delete (form as any)[k]);
-  Object.assign(form, row ? { ...row } : { prefix: '', port: 8080, root_path: '', target_url: '', cookie_hat: '', drop_foreign_cookies: false, description: '', enabled: true });
+  Object.assign(form, row ? { ...row } : { prefix: '', port: 8080, root_path: '', target_url: '', cookie_hat: '', drop_foreign_cookies: false, tls_insecure_skip_verify: false, sdk_origin_auth: false, wx_appid: '', description: '', enabled: true });
   visible.value = true;
 }
 async function save() {

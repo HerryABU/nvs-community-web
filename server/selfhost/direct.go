@@ -22,6 +22,8 @@ type DirectRoute struct {
 	CookieHat     string    `gorm:"size:64;default:''" json:"cookie_hat"`  // GWh 同款 cookie 帽子前缀（如 app__）
 	DropForeign   bool      `gorm:"default:false" json:"drop_foreign_cookies"`
 	TLSSkipVerify bool      `gorm:"default:false" json:"tls_insecure_skip_verify"`
+	SDKOriginAuth bool      `gorm:"default:false" json:"sdk_origin_auth"`
+	WXAppid       string    `gorm:"size:64;default:''" json:"wx_appid"`
 	Enabled       bool      `gorm:"default:true;index" json:"enabled"`
 	Description   string    `gorm:"size:512;default:''" json:"description"`
 	CreatedAt     time.Time `json:"created_at"`

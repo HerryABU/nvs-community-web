@@ -36,11 +36,71 @@ import (
 // 已钩住的 Element.setAttribute 与 HTMLScriptElement/Link/Image 的属性 setter。
 const prefixShimTemplate = `(function(){
   var P=__P__;
+  var O_AUTH=__O__;
+  var WX_APPID=__A__;
   if(!P||P==="/")return;
   var PS=P+"/";
   window.__GATEWAY_PREFIX__=P;
+  // 分层欺骗 + SDK 透传：wxLogin.js 从原 CDN 正常加载（透传），只在它把
+  // window.WxLogin 赋值时拦截并包装构造参数 —— 把 appid 换成官方值、回调
+  // 交给 fixOAuth 处理。DeepSeek 实测：反代地址是 IP，前端判为 dev 环境用
+  // 测试 appid(wx58…) → 微信拒；换成官方 appid(wx932…) 后二维码正常。
+  // 预设 setter：shim 在 <head> 最先执行，此时 SDK 尚未加载。
+  if(WX_APPID){
+    try{
+      var _wx;
+      Object.defineProperty(window,"WxLogin",{configurable:true,
+        get:function(){return _wx},
+        set:function(fn){
+          if(typeof fn!=="function"){_wx=fn;return}
+          _wx=function(opts){
+            try{
+              if(opts&&typeof opts==="object"){
+                opts.appid=WX_APPID;
+                if(typeof opts.redirect_uri==="string")opts.redirect_uri=fixOAuth(opts.redirect_uri);
+              }
+            }catch(e){}
+            return fn.apply(this,arguments);
+          };
+        }});
+    }catch(e){}
+  }
+  // 修 OAuth 回调地址：第三方登录 SDK（微信 wxLogin 等）把本站回调 URL
+  // 嵌在「第三方域名 URL」的 redirect_uri 查询参数里。前端常用
+  // location.origin + "/api/oauth/callback" 拼出 http://gw/api/...，
+  // 漏掉网关前缀 → 微信回 "redirect_uri 参数错误"、回调打到网关根 404。
+  // 只改 redirect_uri 这一个参数，且仅当它的 origin 与本站相同；
+  // 其它查询参数（state / 业务数据）一律不碰，避免污染数据。
+  function fixOAuth(u){
+    try{
+      var uu=new URL(u);
+      if(uu.origin===location.origin)return u;
+      var ru=uu.searchParams.get("redirect_uri");
+      if(!ru)return u;
+      var r;
+      try{r=new URL(ru,location.href)}catch(e){return u}
+      if(r.origin!==location.origin)return u;
+      // 回源模式：把回调换成原站 origin，让微信/Apple 开放平台的
+      // 域名白名单校验通过（登录流程在原站完成），路径保持后端原始路径。
+      if(O_AUTH){
+        uu.searchParams.set("redirect_uri",O_AUTH+r.pathname+(r.search||"")+(r.hash||""));
+        return uu.toString();
+      }
+      var fixed=fix(r.pathname+(r.search||"")+(r.hash||""));
+      if(fixed===r.pathname+(r.search||"")+(r.hash||""))return u;
+      uu.searchParams.set("redirect_uri",location.origin+fixed);
+      return uu.toString();
+    }catch(e){return u}
+  }
   function fix(u){
     if(typeof u!=="string"||!u)return u;
+    // 第三方域名的完整 URL 原样放行，但要先修里面的 OAuth 回调参数。
+    if(u.charCodeAt(0)!==47){
+      try{
+        var abs=new URL(u,location.href);
+        if(abs.origin!==location.origin)return fixOAuth(u);
+      }catch(e){}
+    }
     // 同源绝对 URL 先剥回站点内路径。
     // vite 的 __vitePreload 用 new URL(dep, import.meta.url) 解析依赖，dep 是根相对
     // 的 "/assets/x.css"，new URL 会把它规约成 http://gw/assets/x.css —— 已经带上
@@ -141,6 +201,22 @@ func (rw *Rewriter) prefixShim() string {
 		return ""
 	}
 	js := strings.Replace(prefixShimTemplate, "__P__", string(enc), 1)
+	// __O__ 是「SDK 回调回源」的原站 origin；未开启时注入空串（JS 里 falsy，走补前缀逻辑）。
+	originJSON := []byte("null")
+	if rw.origin != "" {
+		if encO, err := json.Marshal(rw.origin); err == nil {
+			originJSON = encO
+		}
+	}
+	js = strings.Replace(js, "__O__", string(originJSON), 1)
+	// __A__ 是微信登录欺骗用的官方 appid；空则注入 null（不 hook WxLogin）。
+	appidJSON := []byte("null")
+	if rw.wxAppid != "" {
+		if encA, err := json.Marshal(rw.wxAppid); err == nil {
+			appidJSON = encA
+		}
+	}
+	js = strings.Replace(js, "__A__", string(appidJSON), 1)
 	return "<script data-gateway-prefix-shim=\"1\">" + js + "</script>"
 }
 

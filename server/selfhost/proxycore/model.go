@@ -13,7 +13,9 @@ type Route struct {
 	// 为空时保持普通代理行为（只收紧 Path、不改名），避免后端读不到自己下的 cookie。
 	CookieHat     string
 	DropForeign   bool
-	TLSSkipVerify bool // 网关→后端自签 HTTPS 时跳过证书校验（默认严格）
+	TLSSkipVerify bool   // 网关→后端自签 HTTPS 时跳过证书校验（默认严格）
+	SDKOriginAuth bool   // 第三方 OAuth 回调回原站域名（开放平台白名单）
+	WXAppid       string // 微信登录官方 appid（分层欺骗）
 }
 
 // StatusActive 与 GWh 的 models.StatusActive 语义一致。

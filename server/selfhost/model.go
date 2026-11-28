@@ -149,6 +149,8 @@ type Route struct {
 	CookieHat     string    `gorm:"size:64;default:''" json:"cookie_hat"` // GWh 同款帽子（请求侧脱帽 + 响应侧加帽）
 	DropForeign   bool      `gorm:"default:false" json:"drop_foreign_cookies"`
 	TLSSkipVerify bool      `gorm:"default:false" json:"tls_insecure_skip_verify"`
+	SDKOriginAuth bool      `gorm:"default:false" json:"sdk_origin_auth"`
+	WXAppid       string    `gorm:"size:64;default:''" json:"wx_appid"`
 	LastError     string    `gorm:"size:512;default:''" json:"last_error"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
