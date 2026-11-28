@@ -41,6 +41,10 @@ func ListFederatedItems(c *gin.Context) {
 		pageSize = 50
 	}
 	kind := strings.TrimSpace(c.Query("kind"))
+	if !platform.IsValidFedKind(kind) {
+		infra.BadRequest(c, "未知的联邦内容类型")
+		return
+	}
 
 	items, total := collectFederatedItems(kind, page, pageSize, strings.TrimRight(selfPublicURL(c), "/"))
 

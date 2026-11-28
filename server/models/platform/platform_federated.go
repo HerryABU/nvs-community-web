@@ -48,6 +48,15 @@ type FederatedNovel struct {
 
 func (FederatedNovel) TableName() string { return "federated_novels" }
 
+// IsValidFedKind 联邦内容类型白名单。空串表示"全部"（仅用于联邦独立页与同步发现）。
+func IsValidFedKind(kind string) bool {
+	switch kind {
+	case "", "novel", "blog", "forum", "micro", "subculture", "sites":
+		return true
+	}
+	return false
+}
+
 // FederatedInbound 入站联邦连接记录 —— 记录「谁连接了我」。
 // 当远程站点访问本站公开联邦接口（/api/federated/novels 等）时，登记对方身份，
 // 让被连的一方也能看到是哪个站点在同步/连接自己。

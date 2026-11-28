@@ -16,12 +16,11 @@
         </SectionHeader>
 
         <!-- 联邦嵌入区块（站长开启「嵌入列表区块」时显示跨站作品） -->
-        <FederatedBlock kind="blog" :limit="6" />
-
         <div v-loading="loading" class="bl-list" style="min-height: 200px">
           <EmptyState v-if="!loading && blogs.length === 0" icon="📭" text="该分类下暂无博客文章" />
 
-          <div v-for="blog in blogs" :key="blog.id" class="bl-card" @click="$router.push(`/author/${blog.author_id}/blogs/${blog.id}`)">
+          <div v-for="blog in blogs" :key="blog._federated ? 'fed-' + blog.id : 'local-' + blog.id" class="bl-card" @click="openBlog(blog)">
+            <span v-if="blog._federated" class="bl-fed-badge">🌐 {{ blog._site }}</span>
             <!-- 作者信息行 -->
             <div class="bl-author-row">
               <el-avatar :size="32" :src="blog.author?.avatar_url" @click.stop="$router.push(`/author/${blog.author_id}`)">
@@ -81,9 +80,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
+import { loadFederated as loadFedItems, mergeFederated, fedHref } from '@/utils/federation';
 import { blogApi } from '@/api/social';
-import FederatedBlock from '@/components/federation/FederatedBlock.vue';
 
 const route = useRoute();
 
@@ -91,6 +90,7 @@ const blogs = ref<any[]>([]);
 const total = ref(0);
 const page = ref(1);
 const pageSize = 12;
+const router = useRouter();
 const loading = ref(false);
 const previewLength = 100;
 
@@ -129,12 +129,24 @@ async function loadCategories() {
   } catch { /* ignore */ }
 }
 
+function openBlog(blog: any) {
+  if (blog._federated) { window.open(blog.source_url, '_blank', 'noopener'); return; }
+  router.push(`/author/${blog.author_id}/blogs/${blog.id}`);
+}
+
 async function loadBlogs() {
   loading.value = true;
   try {
     const res = await blogApi.listPublic(page.value, pageSize, undefined, currentTag.value || undefined);
     if (res.data.code === 0) {
-      blogs.value = res.data.data.list || [];
+      const local = res.data.data.list || [];
+      const fed = await loadFedItems('blog', 6);
+      blogs.value = mergeFederated(local, fed, (f: any) => ({
+        id: f.id, author_id: 0, author: { nickname: f.author || '友站作者' },
+        title: f.title, summary: f.summary, cover_url: f.cover_url,
+        category: f.category, created_at: '', view_count: 0, like_count: 0,
+        _federated: true, _site: f.site_name, source_url: fedHref(f),
+      }));
       total.value = res.data.data.total || 0;
     }
   } catch { /* ignore */ }
@@ -285,4 +297,6 @@ onMounted(() => {
   .bl-preview { flex-direction: column; gap: 8px; }
   .bl-cover-img { width: 100%; height: auto; max-height: 160px; object-fit: cover; }
 }
+
+.fed-badge, .bl-fed-badge, .th-fed-badge { display:inline-block; margin:0 6px 4px 0; padding:1px 8px; border-radius:999px; background:rgba(99,102,241,.12); color:var(--primary-color,#6366f1); font-size:.72rem; }
 </style>

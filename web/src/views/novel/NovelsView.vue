@@ -53,8 +53,6 @@
     </div>
 
     <!-- 联邦嵌入区块（站长开启「嵌入列表区块」时显示跨站作品） -->
-    <FederatedBlock kind="novel" :limit="8" />
-
     <!-- 结果区 -->
     <div v-loading="loading" class="nv-body">
       <!-- 骨架：与首页同款卡片占位 -->
@@ -105,9 +103,9 @@ import { storeToRefs } from 'pinia';
 import { Search } from '@element-plus/icons-vue';
 import { novelApi, type Novel } from '@/api/novel';
 import { publicApi } from '@/api/admin';
+import { loadFederated as loadFedItems, fedHref } from '@/utils/federation';
 import { useAppStore } from '@/stores/app';
 import NovelCard from '@/components/novel/NovelCard.vue';
-import FederatedBlock from '@/components/federation/FederatedBlock.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -116,24 +114,18 @@ const { categories, federationModes } = storeToRefs(appStore);
 
 /** 联邦作品混入列表：与站内作品同列，仅加「外站」角标并跳转源站 */
 async function loadFederated(): Promise<Novel[]> {
-  if (!federationModes.value?.independent_enabled && !federationModes.value?.embed_enabled) return [];
-  try {
-    const res = await publicApi.getFederatedNovels({ page: 1, page_size: pageSize.value });
-    const list = res.data?.data?.list || [];
-    return list.map((it: any) => ({
-      id: it.remote_id,
-      title: it.title,
-      author: { nickname: it.author || '佚名' },
-      category: it.category || '',
-      cover_url: it.cover_url || '',
-      summary: it.summary || '',
-      _federated: true,
-      _site: it.site?.name || '友站',
-      source_url: it.source_url,
-    })) as Novel[];
-  } catch {
-    return [];
-  }
+  const fed = await loadFedItems('novel', pageSize.value);
+  return fed.map((f) => ({
+    id: f.id,
+    title: f.title,
+    author: { nickname: f.author || '佚名' },
+    category: f.category || '',
+    cover_url: f.cover_url || '',
+    summary: f.summary || '',
+    _federated: true,
+    _site: f.site_name,
+    source_url: fedHref(f),
+  })) as Novel[];
 }
 
 const novels = ref<Novel[]>([]);

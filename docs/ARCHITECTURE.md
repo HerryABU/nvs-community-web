@@ -358,3 +358,10 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - `components/me/HomeVisualEditor.vue`：预设模板（极光紫/深海蓝/森林绿/暖阳橙/素白纸）、背景色/图、文字色、对齐、圆角、阴影、模块勾选与排序；生成全内联样式的 HTML（公开页/整页模式下无 scoped CSS 也正常显示），写入 user_home_customize（仅本人可见，允许原始 HTML）。
 - 与代码框双向兼容：「生成到代码框」写入 myRaw，「从代码框读取」尽力解析 hve-hero 配置；代码模式可直接编辑。
 - ⚠️ 坑：按钮不要写 `@click="emit('generate')"`（会直接 emit 空 payload 而非调用生成函数）；函数名也不要与 emit 名 `generate` 同名（Vue 模板会把 `@click="generate"` 编译成 `$emit('generate')`），用 `onGenerateClick`。
+
+### 联邦条目真正嵌入各类型列表（取消独立区块）
+- 删除所有页面的 `<FederatedBlock>` 独立区块；联邦条目在各类型列表的**数据加载阶段**混入，带「🌐 站点名」角标，点击走本站反代路径 `/fed/<siteID>/...`。
+- `utils/federation.ts` 统一：`loadFederated(kind)` 调 `/api/federated/novels?kind=`（服务端 kind 白名单过滤 + 前端二次校验），`mergeFederated` 用 kind+id 复合键去重、站内优先。
+- 覆盖：小说（NovelsView）、博客（BlogList）、论坛帖子（ForumDetail）、微文（MicroPage）、亚文化（ProjectManager 世界 Tab + CharacterManager 角色库默认 Tab）。**博客列表只会出现 blog 类型**，不会混入 novel。
+- 联邦 API 更新：`/api/federated/novels` 新增 `kind` 参数（不传默认 novel，兼容旧友站；非法值 400）；`IsValidFedKind` 白名单。`/api/federated/items` 为本站内容输出给友站（另一种语义）。
+- ⚠️ 语义区分：items=本站自有内容输出；novels=本站缓存的联邦内容展示。前端列表必须用 novels。

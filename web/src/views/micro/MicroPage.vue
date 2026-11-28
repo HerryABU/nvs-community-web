@@ -8,13 +8,11 @@
       <el-button size="small" type="primary" @click="$router.push('/feed/compose?kind=micro')">＋ 写微文</el-button>
     </header>
 
-    <FederatedBlock kind="micro" :limit="6" />
-
     <div v-loading="loading" class="mp-list">
-      <article v-for="p in posts" :key="p.id" class="mp-card" @click="open(p)">
+      <article v-for="p in posts" :key="p._federated ? 'fed-' + p.id : 'local-' + p.id" class="mp-card" @click="openPost(p)">
         <div class="mp-body" :class="{ 'no-cover': !p.images?.length }">
           <div class="mp-text">
-            <h2>{{ p.title || '无标题' }}</h2>
+            <h2><span v-if="p._federated" class="fed-badge">🌐 {{ p._site }}</span>{{ p.title || '无标题' }}</h2>
             <p class="mp-excerpt">{{ excerpt(p.content) }}</p>
             <div class="mp-foot">
               <el-avatar :size="20" :src="mediaUrl(p.avatar_url)">{{ (p.author_name || '?')[0] }}</el-avatar>
@@ -56,8 +54,8 @@ import { ElMessage } from 'element-plus';
 import { feedApi, type FeedPost } from '@/api/feed';
 import { mediaUrl } from '@/utils/prefix';
 import { formatCount, formatWhen } from '@/utils/feedFormat';
+import { loadFederated as loadFedItems, mergeFederated, fedHref } from '@/utils/federation';
 import { postPath } from '@/utils/feedRoute';
-import FederatedBlock from '@/components/federation/FederatedBlock.vue';
 
 const router = useRouter();
 const posts = ref<FeedPost[]>([]);
@@ -78,6 +76,10 @@ function excerpt(s?: string) {
     .slice(0, 180);
 }
 
+function openPost(p: any) {
+  if (p._federated) { window.open(p.source_url, '_blank', 'noopener'); return; }
+  open(p);
+}
 function open(p: FeedPost) {
   router.push(postPath(p));
 }
@@ -93,7 +95,20 @@ async function load(reset = false) {
   try {
     const r = await feedApi.list({ kind: 'micro', page: page.value, page_size: 10 });
     const list = r.data?.data?.list || [];
-    posts.value = reset ? list : [...posts.value, ...list];
+    const base = reset ? list : [...posts.value, ...list];
+    // 联邦微文只在第一页混入，且只取 micro 类型
+    if (reset) {
+      const fed = await loadFedItems('micro', 6);
+      posts.value = mergeFederated(base, fed, (f: any) => ({
+        id: f.id, kind: 'micro', title: f.title, content: f.summary,
+        user_id: 0, author_name: f.author || '友站作者', avatar_url: '',
+        images: f.cover_url ? [f.cover_url] : [], created_at: '',
+        like_count: 0, comment_count: 0, view_count: 0,
+        _federated: true, _site: f.site_name, source_url: fedHref(f),
+      })) as any;
+    } else {
+      posts.value = base;
+    }
     hasMore.value = list.length >= 10;
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '加载失败');
@@ -137,4 +152,6 @@ onMounted(() => load(true));
   .mp-body { grid-template-columns: 1fr; }
   .mp-thumbs { grid-template-columns: repeat(3, 1fr); }
 }
+
+.fed-badge, .bl-fed-badge, .th-fed-badge { display:inline-block; margin:0 6px 4px 0; padding:1px 8px; border-radius:999px; background:rgba(99,102,241,.12); color:var(--primary-color,#6366f1); font-size:.72rem; }
 </style>

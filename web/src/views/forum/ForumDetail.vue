@@ -130,9 +130,9 @@
 
       <!-- 帖子列表 -->
       <div class="thread-list">
-        <div v-for="t in threads" :key="t.id" class="thread-item" @click="$router.push(`/thread/${t.id}`)">
+        <div v-for="t in threads" :key="t._federated ? 'fed-' + t.id : 'local-' + t.id" class="thread-item" @click="openThread(t)">
           <div class="thread-main">
-            <h3>{{ t.title }}</h3>
+            <h3><span v-if="t._federated" class="th-fed-badge">🌐 {{ t._site }}</span>{{ t.title }}</h3>
             <div class="thread-meta">
               <span>{{ t.user?.username || '匿名' }}</span>
               <span>{{ formatTime(t.created_at) }}</span>
@@ -155,6 +155,7 @@ import { useAuthStore } from '@/stores/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { markZoneConfirmed } from '@/utils/sensitiveZone';
 import api from '@/api';
+import { loadFederated as loadFedItems, mergeFederated, fedHref } from '@/utils/federation';
 import SensitiveZoneGuard from '@/components/common/SensitiveZoneGuard.vue';
 
 const route = useRoute();
@@ -205,6 +206,10 @@ async function unmuteUser(m: any) {
 const loading = ref(false);
 const forum = ref<any>(null);
 const threads = ref<any[]>([]);
+function openThread(t: any) {
+  if (t._federated) { window.open(t.source_url, '_blank', 'noopener'); return; }
+  router.push(`/thread/${t.id}`);
+}
 const subForums = ref<any[]>([]);
 const showNewThread = ref(false);
 const newTitle = ref('');
@@ -259,7 +264,13 @@ async function load() {
     locked.value = !!d.locked;
     lockType.value = d.lock_type || '';
     lockZone.value = d.zone || '';
-    threads.value = d.threads || [];
+    const local = d.threads || [];
+    const fed = await loadFedItems('forum', 6);
+    threads.value = mergeFederated(local, fed, (f: any) => ({
+      id: f.id, title: f.title, user: { username: f.author || '友站作者' },
+      created_at: '', view_count: 0, post_count: 0,
+      _federated: true, _site: f.site_name, source_url: fedHref(f),
+    }));
     subForums.value = d.sub_forums || [];
   } catch (e) {
     console.error(e);
@@ -474,6 +485,8 @@ onMounted(load);
     flex-wrap: wrap;
   }
 }
+
+.fed-badge, .bl-fed-badge, .th-fed-badge { display:inline-block; margin:0 6px 4px 0; padding:1px 8px; border-radius:999px; background:rgba(99,102,241,.12); color:var(--primary-color,#6366f1); font-size:.72rem; }
 </style>
 
 <style>
@@ -515,4 +528,6 @@ onMounted(load);
 [data-theme="dark"] .sub-forum-meta {
   color: #64748b;
 }
+
+.fed-badge, .bl-fed-badge, .th-fed-badge { display:inline-block; margin:0 6px 4px 0; padding:1px 8px; border-radius:999px; background:rgba(99,102,241,.12); color:var(--primary-color,#6366f1); font-size:.72rem; }
 </style>

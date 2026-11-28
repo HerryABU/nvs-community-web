@@ -13,11 +13,11 @@
     </div>
 
     <div class="ocm-grid">
-      <div v-for="c in displayList" :key="c.id" class="ocm-card">
+      <div v-for="c in displayList" :key="c._federated ? 'fed-' + c.id : 'local-' + c.id" class="ocm-card">
         <div class="ocm-head">
           <el-avatar :size="42" :src="c.avatar_url || ''">{{ (c.name || '?')[0] }}</el-avatar>
           <div class="ocm-title">
-            <div class="ocm-name">{{ c.name }}</div>
+            <div class="ocm-name"><span v-if="c._federated" class="fed-badge">🌐 {{ c._site }}</span>{{ c.name }}</div>
             <div class="ocm-sub">
               <el-tag v-if="c.visibility === 'public'" size="small" :type="c.review === 'approved' ? 'success' : 'warning'">
                 {{ c.review === 'approved' ? '已公开' : '待审核' }}
@@ -170,6 +170,7 @@ import api from '@/api/index';
 import { appPrefix } from '@/utils/prefix';
 import { ocApi, type OcCharacter, type OcWorldBook } from '@/api/oc';
 import { uploadApi } from '@/api/social';
+import { loadFederated as loadFedItems, mergeFederated, fedHref } from '@/utils/federation';
 import { usePasteImage } from '@/composables/usePasteImage';
 
 const props = defineProps<{
@@ -287,7 +288,13 @@ async function load() {
       keyword: keyword.value,
       project_id: props.projectId || undefined,
     });
-    list.value = res.data.data?.list || [];
+    const local = res.data.data?.list || [];
+    const fed = await loadFedItems('subculture', 6);
+    list.value = mergeFederated(local, fed, (f: any) => ({
+      id: f.id, name: f.title, description: f.summary, avatar_url: f.cover_url,
+      visibility: 'public', review: 'approved',
+      _federated: true, _site: f.site_name, source_url: fedHref(f),
+    })) as any;
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '加载失败');
   } finally {
@@ -438,4 +445,6 @@ defineExpose({ reload: load, reloadBooks: loadBooks });
   background: var(--fill-color, #f3f4f6); color: var(--text-muted); font-size: 0.7rem;
 }
 .ocm-actions { display: flex; gap: 4px; flex-wrap: wrap; border-top: 1px solid var(--border-color); padding-top: 6px; }
+
+.fed-badge { display:inline-block; margin-right:6px; padding:1px 8px; border-radius:999px; background:rgba(99,102,241,.12); color:var(--primary-color,#6366f1); font-size:.72rem; }
 </style>

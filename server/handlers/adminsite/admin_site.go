@@ -487,7 +487,17 @@ func ListFederatedNovels(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	siteID, _ := strconv.ParseUint(c.Query("site_id"), 10, 64)
-	query := models.DB.Model(&platform.FederatedNovel{})
+	// kind 精确过滤：不传时只返回 novel（兼容旧联邦页/旧友站），
+	// 传入时必须是已知类型——杜绝「博客列表混进小说」。
+	kind := strings.TrimSpace(c.Query("kind"))
+	if kind == "" {
+		kind = "novel"
+	}
+	if !platform.IsValidFedKind(kind) {
+		infra.BadRequest(c, "未知的联邦内容类型")
+		return
+	}
+	query := models.DB.Model(&platform.FederatedNovel{}).Where("kind = ?", kind)
 	if siteID > 0 {
 		query = query.Where("site_id = ?", siteID)
 	}

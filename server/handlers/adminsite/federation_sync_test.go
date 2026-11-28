@@ -102,3 +102,16 @@ func testDB(t *testing.T) *gorm.DB {
 	}
 	return db
 }
+
+func TestFedKindWhitelist(t *testing.T) {
+	for _, k := range []string{"", "novel", "blog", "forum", "micro", "subculture", "sites"} {
+		if !platform.IsValidFedKind(k) {
+			t.Errorf("合法类型 %q 被拒", k)
+		}
+	}
+	for _, k := range []string{"NOVEL", "article", "video", "javascript:alert(1)", "novel, blog"} {
+		if platform.IsValidFedKind(k) {
+			t.Errorf("非法类型 %q 被放行", k)
+		}
+	}
+}

@@ -17,7 +17,7 @@
 
     <!-- 项目卡片 -->
     <div class="opm-grid">
-      <div v-for="p in projects" :key="p.id" class="opm-card" @click="enterProject(p)">
+      <div v-for="p in projects" :key="p._federated ? 'fed-' + p.id : 'local-' + p.id" class="opm-card" @click="openProject(p)">
         <div class="opm-cover">
           <img v-if="p.cover_url" :src="mediaUrl(p.cover_url)" :alt="p.title" loading="lazy" />
           <span v-else class="opm-cover-ph">🗺️</span>
@@ -26,7 +26,7 @@
           </el-tag>
         </div>
         <div class="opm-body">
-          <div class="opm-title">{{ p.title }}</div>
+          <div class="opm-title"><span v-if="p._federated" class="fed-badge">🌐 {{ p._site }}</span>{{ p.title }}</div>
           <div class="opm-meta">
             <span v-if="p.category" class="opm-cat">{{ p.category }}</span>
             <span class="opm-dim">世界 {{ p.world_count }} · 成员 {{ p.member_count }}</span>
@@ -104,6 +104,7 @@ import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { ocProjectApi, type OcProject } from '@/api/oc';
 import { mediaUrl } from '@/utils/prefix';
+import { loadFederated as loadFedItems, mergeFederated, fedHref } from '@/utils/federation';
 import { useAuthStore } from '@/stores/auth';
 
 /**
@@ -156,7 +157,13 @@ async function load() {
       page: 1,
       page_size: 50,
     });
-    projects.value = res.data?.data?.list || [];
+    const local = res.data?.data?.list || [];
+    const fed = await loadFedItems('subculture', 6);
+    projects.value = mergeFederated(local, fed, (f: any) => ({
+      id: f.id, title: f.title, name: f.title, summary: f.summary,
+      cover_url: f.cover_url, visibility: 'public',
+      _federated: true, _site: f.site_name, source_url: fedHref(f),
+    })) as any;
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '加载项目失败');
   } finally {
@@ -289,4 +296,6 @@ onMounted(load);
 .opm-foot { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding-top: 6px; }
 .opm-owner { font-size: 0.78rem; color: var(--text-muted, #6b7280); }
 .opm-actions { display: flex; gap: 2px; }
+
+.fed-badge, .bl-fed-badge, .th-fed-badge { display:inline-block; margin:0 6px 4px 0; padding:1px 8px; border-radius:999px; background:rgba(99,102,241,.12); color:var(--primary-color,#6366f1); font-size:.72rem; }
 </style>

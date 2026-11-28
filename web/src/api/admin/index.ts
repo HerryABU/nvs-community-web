@@ -662,7 +662,7 @@ export const publicApi = {
   },  getFederatedSites() {
     return api.get('/federated/sites');
   },
-  getFederatedNovels(params?: { page?: number; page_size?: number; site_id?: number }) {
+  getFederatedNovels(params?: { page?: number; page_size?: number; site_id?: number; kind?: string }) {
     return api.get('/federated/novels', { params });
   },
   getFederatedItems(params?: { page?: number; page_size?: number; kind?: string }) {
