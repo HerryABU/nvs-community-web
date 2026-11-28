@@ -340,3 +340,9 @@ Deconstruct 拆解 → Recur 循环 → Output 输出）会把一条合成链拆
 - `sdk_origin_auth`：开启后 shim 把 `redirect_uri` 的 origin 换成后端原站（`NewWithOrigin` 注入 `O_AUTH`），让开放平台域名白名单通过（登录在原站完成）。`Modify` 重建 Rewriter 时必须带上 origin，否则嵌套链下静默失效。
 - `wx_appid`：shim 在 `<head>` 最先预设 `window.WxLogin` 的 setter，SDK 赋值时包装构造函数，把 appid 换成官方值（分层欺骗 + SDK 透传，外链 JS 不改）；微信登录在反代域名下可正常渲染二维码。
 - 三层路由（selfhost_routes / selfhost_direct_routes / GWh models.Route）均带 `sdk_origin_auth` / `wx_appid` 字段，控制台可配。
+
+### 前端依赖更新与 XSS 防御验证（2026-11-28）
+- Wanted 级更新（遵守 `^` 语义，向后兼容）：cherry-markdown 0.11.9→0.11.14、vue 3.5.39→3.5.46、axios 1.18.1→1.21.1、element-plus 2.14.3→2.14.9、mermaid 11.16→11.17.2、tiptap 全套 3.27.3→3.35.1、vue-echarts 8.0.1→8.3.2、vue-router 4.6.4→4.6.5、3d-force-graph、smiles-drawer、turndown、vite-plugin-compression2。
+- 单独评估后升级：katex 0.17→0.19、mermaid 11.17→12.4（Node≥22.12，本机满足）。
+- 跨大版本联动升级（vite 5→8 / vue-router 4→5 / pinia 2→4 / typescript 5→7 / vue-tsc 2→3）需整体迁移，未做。
+- XSS 防御双层验证：后端 `security.SanitizeUserContent` 白名单转义危险标签，前端 Cherry + DOMPurify 兜底。真浏览器 6 类载荷（script/img.onerror/javascript:链接/svg.onload/iframe/details.ontoggle）均未执行，DOM 无危险标签/事件属性。
